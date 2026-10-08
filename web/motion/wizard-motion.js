@@ -165,7 +165,7 @@
    */
   function moons(host, opts = {}) {
     const el = document.createElement('div'); el.className = 'wm-moons'; host.appendChild(el);
-    const R = opts.radius || 50;
+    const R = opts.radius || Math.round((host.offsetWidth || 84) / 2 + 10);
     const esc = s => String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     return {
       el,

@@ -21,7 +21,7 @@ const ok = (c, name, info = '') => { c ? pass++ : fail++; console.log(`${c ? 'PA
   const cdp = await ctx.newCDPSession(p);
   const shots = (n) => p.screenshot({ path: `qa-live/livemode/${n}.png` });
   require('fs').mkdirSync('qa-live/livemode', { recursive: true });
-  await p.goto(BASE + '/wizard-os-home-preview/', { waitUntil: 'load' });
+  await p.goto(BASE + '/wizard-os-home-preview/?demo=1', { waitUntil: 'load' });
   await p.evaluate(() => { try { localStorage.removeItem('livemode.cred'); } catch (e) {} });
   await p.waitForFunction(() => window.__wos && window.LiveMode && window.LiveMode.ambient, null, { timeout: 20000 });
   await p.evaluate(() => { if (document.querySelector('#coach') && !document.querySelector('#coach').hidden) document.querySelector('#coachGo')?.click(); window.__wos.goDesk(window.__wos.HOME); });
@@ -29,7 +29,7 @@ const ok = (c, name, info = '') => { c ? pass++ : fail++; console.log(`${c ? 'PA
   const st = () => p.evaluate(() => ({ on: LiveMode.on, ambient: LiveMode.ambient, card: !!LiveMode.card, ideas: LiveMode.ideas, words: LiveMode.words, hint: LiveMode.hint, moons: LiveMode.moons.map(m => m.shown || m.state), via: LiveMode.signedVia, native: LiveMode.native, idx: __wos.idx, url: location.href, back: (window.__backLog || []).slice(-4) }));
   let s = await st();
   ok(s.on && s.ambient, 'preview opens Wizard OS Home with Live Mode listening', JSON.stringify(s));
-  ok(await p.isVisible('#lmPill') && /preview/i.test(await p.textContent('#lmPill')), 'clear "preview · simulated listening" label');
+  ok(await p.isVisible('#lmPill') && /demo/i.test(await p.textContent('#lmPill')), 'demo mode is clearly labelled "demo · simulated"');
   ok(s.words > 0, 'faint words drift around the orb', JSON.stringify(s));
   ok(/spread two fingers/.test(s.hint), 'Home hint: spread two fingers', s.hint);
 
@@ -103,6 +103,11 @@ const ok = (c, name, info = '') => { c ? pass++ : fail++; console.log(`${c ? 'PA
   const p2 = await ctx.newPage(); await p2.goto(BASE + '/wizard-os-home/', { waitUntil: 'load' });
   await p2.waitForFunction(() => window.__wos, null, { timeout: 20000 }); await p2.waitForTimeout(1200);
   ok(await p2.evaluate(() => !window.LiveMode.on && !document.querySelector('#lmPill')), 'live /wizard-os-home/ stays without Live Mode');
+  // Without ?demo=1 Live Mode is quiet: no pill, no simulated words or cards, no coaching hint, nothing over the UI.
+  const p3 = await ctx.newPage(); await p3.goto(BASE + '/wizard-os-home-preview/', { waitUntil: 'load' });
+  await p3.waitForFunction(() => window.__wos && window.LiveMode, null, { timeout: 20000 }); await p3.waitForTimeout(11000);
+  const quiet = await p3.evaluate(() => ({ on: LiveMode.on, demo: LiveMode.demo, pill: !!document.querySelector('#lmPill'), words: LiveMode.words, card: !!LiveMode.card, hint: LiveMode.hint }));
+  ok(quiet.on && !quiet.demo && !quiet.pill && !quiet.words && !quiet.card && !quiet.hint, 'preview without ?demo=1 is quiet: no pill, no simulated words or card, no hint', JSON.stringify(quiet));
   console.log(`${pass}/${pass + fail} passed`);
   await b.close(); process.exit(fail ? 1 : 0);
 })().catch(e => { console.log('Error', e); process.exit(2); });

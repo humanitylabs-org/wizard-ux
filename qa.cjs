@@ -103,7 +103,7 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   const d = await page.evaluate(() => { const s = window.__wos, dk = s.desks[s.idx]; return { idx: s.idx, wins: dk.wins.map(x => s.wins[x].app + ':' + (s.wins[x].appId || '')) }; });
   check('search+enter opens CineQueue as a window, tiled beside the review', d.wins.includes('frame:cinequeue') && d.wins.length === 2, JSON.stringify(d));
   const ob = await page.locator('#orbWrap').boundingBox();
-  check('orb stays big and centred with apps open', Math.abs(ob.x + ob.width / 2 - 393 / 2) < 3 && ob.width >= 80, JSON.stringify(ob));
+  check('orb stays centred in the nav bar with apps open', Math.abs(ob.x + ob.width / 2 - 393 / 2) < 3 && ob.width >= 40 && ob.width <= 48, JSON.stringify(ob));
   await page.waitForTimeout(2500); await shot('09b-cinequeue-desk');
 
   // swipe down -> inbox (from the home desk, where the big orb lives)

@@ -3,7 +3,7 @@ const { chromium } = require('/home/telos/node_modules/playwright');
 const { execSync } = require('child_process');
 const OUT = '/home/telos/apps/wizard-os-home/qa-live/android';
 require('fs').mkdirSync(OUT, { recursive: true });
-const adb = c => execSync(`ssh -o ConnectTimeout=8 thales 'export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools; ${c}'`, { encoding: 'utf8' });
+const adb = c => execSync(`ssh -o ConnectTimeout=8 thales 'export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools; export ANDROID_SERIAL=emulator-5554; ${c}'`, { encoding: 'utf8' });
 const back = () => adb('adb shell input keyevent 4');
 const top = () => (adb('adb shell dumpsys activity activities | grep -m1 topResumedActivity') || '').trim();
 const shot = n => { adb(`adb exec-out screencap -p > /tmp/wos-${n}.png`); execSync(`scp -q thales:/tmp/wos-${n}.png ${OUT}/${n}.png`); };
@@ -20,6 +20,8 @@ const ok = (c, name, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS'
   // Never send anything from QA.
   await p.route('**/*', r => ['GET', 'HEAD'].includes(r.request().method()) || r.request().url().endsWith('/wizard/thread-seen') ? r.continue() : r.abort());
   await p.reload(); await p.waitForFunction(() => window.__wos?.live?.ok, null, { timeout: 40000 });
+  await p.evaluate(() => { window.__pl = []; const hook = (w, n) => w.addEventListener('popstate', e => window.__pl.push(n + ':' + JSON.stringify(e.state) + ':h' + history.length), true);
+    hook(window, 'top'); document.querySelectorAll('iframe').forEach((f, i) => { try { hook(f.contentWindow, f.contentWindow.location.pathname + f.contentWindow.location.hash); } catch (e) {} }); });
   const cdp = await p.context().newCDPSession(p);
   const tapEl = async sel => {
     const bb = await p.locator(sel).first().boundingBox();
@@ -28,7 +30,7 @@ const ok = (c, name, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS'
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await p.waitForTimeout(900);
   };
-  const st = () => p.evaluate(() => { const s = __wos, c = Object.values(s.wins).find(w => w.app === 'chats'); return { idx: s.idx, thread: c?.thread || null, sheet: s.sheet, back: s.back, toast: document.querySelector('#toast')?.classList.contains('show') ? document.querySelector('#toast').innerText : '' }; });
+  const st = () => p.evaluate(() => { const s = __wos, c = Object.values(s.wins).find(w => w.app === 'chats'); return { idx: s.idx, thread: c?.thread || null, sheet: s.sheet, back: s.back, pl: (window.__pl || []).slice(-5), h: history.length, toast: document.querySelector('#toast')?.classList.contains('show') ? document.querySelector('#toast').innerText : '' }; });
   console.log('chrome', await p.evaluate(() => navigator.userAgent.match(/Chrome\/[\d.]+/)[0]), 'CloseWatcher' , await p.evaluate(() => 'CloseWatcher' in window));
   if (await p.isVisible('#coach')) await tapEl('#coachGo');
   await p.evaluate(() => { const c = Object.values(__wos.wins).find(w => w.app === 'chats'); if (c?.thread) __wos.onBack(); __wos.goDesk(1); }); await p.waitForTimeout(1200);

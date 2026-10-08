@@ -19,6 +19,9 @@
   const q = new URLSearchParams(location.search);
   // On in the isolated preview path, or with ?livemode=1; the live shell stays untouched.
   const ON = /\/wizard-os-home-preview\//.test(location.pathname) || q.get('livemode') === '1';
+  // Simulated listening, the Live pill and coaching hints only run on an explicit ?demo=1.
+  // Without it Live Mode is quiet: real feed events, the card, moons and spread-for-ideas only.
+  const DEMO = q.get('demo') === '1';
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const wos = () => W.__wos;
@@ -26,7 +29,7 @@
 
   let words = null, hintUI = null;
   const LM = W.LiveMode = {
-    on: ON, ambient: false, card: null, ideas: 0, moons: [], log: [], signing: false, signedVia: '',
+    on: ON, demo: DEMO, ambient: false, card: null, ideas: 0, moons: [], log: [], signing: false, signedVia: '',
     get words() { return words ? words.count : 0; }, get hint() { return hintUI ? hintUI.text : ''; },
   };
   if (!ON || !M) { LM.back = () => null; LM.feed = () => {}; LM.addMoon = () => {}; LM.setAmbient = () => {}; return; }
@@ -35,7 +38,7 @@
   const shell = $('#device') || document.body;
   shell.insertAdjacentHTML('beforeend', `
     <canvas id="lmWords" class="wm-words lm-words" aria-hidden="true"></canvas>
-    <button id="lmPill" class="wm-pill lm-pill" aria-label="Live Mode: listening. Tap to pause"><i></i><span>Live</span><small>preview · simulated listening</small></button>
+    ${DEMO ? '<button id="lmPill" class="wm-pill lm-pill" aria-label="Live Mode demo: listening. Tap to pause"><i></i><span>Live</span><small>demo · simulated</small></button>' : ''}
     <div id="lmLayer" class="wm-layer lm-layer" aria-live="polite">
       <div id="lmCard" class="wm-card" role="dialog" aria-label="Wizard noticed">
         <button class="lm-x" data-lm="dismiss" aria-label="Not now">✕</button>
@@ -59,7 +62,7 @@
   hintUI = M.hint($('#lmHint'));
   const orbFx = M.orb(orbWrap);
   const cardFx = M.card($('#lmCard'), $('#lmLayer'));
-  const moonFx = orbWrap ? M.moons(orbWrap) : { set() {} };
+  const moonFx = orbWrap ? M.moons(orbWrap, { radius: Math.round((orbWrap.offsetWidth || 44) / 2 + 13) }) : { set() {} };
   moonFx.el && (moonFx.el.id = 'lmMoons');
 
   /* ---------- hints: one plain pulsing line for every step ---------- */
@@ -67,17 +70,17 @@
     if (LM.card) return hintUI.show('touch the print to send', 'card', 0, true);
     if (LM.ideas) return hintUI.show(LM.ideas === 1 ? 'spread again for detail · Back to return' : 'Back to return home', 'ideas');
     const w = wos(); if (!w) return;
-    if (w.idx === w.HOME && !w.desks[w.HOME].wins.length && !w.sheet) return hintUI.show('spread two fingers \u00b7 today\u2019s ideas', 'home');
+    if (DEMO && w.idx === w.HOME && !w.desks[w.HOME].wins.length && !w.sheet) return hintUI.show('spread two fingers \u00b7 today\u2019s ideas', 'home');
     hintUI.clear();
   }
 
   /* ---------- ambient state on the orb ---------- */
   LM.setAmbient = on => {
     LM.ambient = !!on; orbFx.set(on ? 'live' : '');
-    $('#lmPill').classList.toggle('paused', !on); $('#lmPill span').textContent = on ? 'Live' : 'Paused';
-    on ? sim.start() : sim.stop(); ambientHint();
+    const pill = $('#lmPill'); if (pill) { pill.classList.toggle('paused', !on); pill.querySelector('span').textContent = on ? 'Live' : 'Paused'; }
+    on && DEMO ? sim.start() : sim.stop(); ambientHint();
   };
-  $('#lmPill').addEventListener('click', () => { LM.setAmbient(!LM.ambient); M.haptic('soft'); });
+  $('#lmPill')?.addEventListener('click', () => { LM.setAmbient(!LM.ambient); M.haptic('soft'); });
 
   /* ---------- the "Wizard noticed" card ---------- */
   function openCard(item) {
@@ -179,6 +182,6 @@
   LM.simulate = () => LM.feed({ type: 'action', source: 'preview', ...ACTIONS[sim.n++ % ACTIONS.length] });
 
   // Start once the shell is up.
-  const boot = () => { if (!wos()) return setTimeout(boot, 200); LM.setAmbient(true); setInterval(ambientHint, 1500); LM._simT = setTimeout(() => LM.simulate(), 9000); };
+  const boot = () => { if (!wos()) return setTimeout(boot, 200); setInterval(ambientHint, 1500); if (DEMO) { LM.setAmbient(true); LM._simT = setTimeout(() => LM.simulate(), 9000); } };
   boot();
 })();

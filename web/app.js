@@ -472,6 +472,10 @@
   }
   function renderFrame(w) {
     const a = APP[w.appId] || {};
+    if (w.appId === 'mizel') return `<div class="mizel-split"><div class="rec-strip">${recStripHtml()}</div>${renderFrameCore(w, a)}</div>`;
+    return renderFrameCore(w, a);
+  }
+  function renderFrameCore(w, a) {
     return `<div class="frame-wrap"><div class="frame-coming"><span class="glyph" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}</span><h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} src="${esc(w.url || a.url || '/')}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe>
       <div class="frame-fallback"><span class="glyph" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}</span><h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
   }
@@ -480,7 +484,7 @@
   function probeFrame(f, url) {
     const wrap = f.closest('.frame-wrap'); if (!wrap) return;
     fetch(url, { method: 'HEAD', cache: 'no-store', credentials: 'same-origin' }).then(r => {
-      if (r.ok) { if (wrap.classList.contains('coming')) { wrap.classList.remove('coming'); f.src = url; } }
+      if (r.ok) { if (wrap.classList.contains('coming')) { wrap.classList.remove('coming'); try { f.contentWindow.location.replace(url); } catch (e) { f.src = url; } } }
       else { wrap.classList.add('coming'); setTimeout(() => { if (f.isConnected) probeFrame(f, url); }, 60000); }
     }).catch(() => setTimeout(() => { if (f.isConnected) probeFrame(f, url); }, 60000));
   }
@@ -492,7 +496,8 @@
       if (!win || win.__wosTamed || !win.history) return;
       win.__wosTamed = true;
       const h = win.history, push = h.pushState.bind(h), rep = h.replaceState.bind(h);
-      h.pushState = function (st, t, u) { return (win.navigator.userActivation?.isActive ? push : rep)(st, t, u); };
+      h.pushState = function (st, t, u) { const r = (win.navigator.userActivation?.isActive ? push : rep)(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
+      h.replaceState = function (st, t, u) { const r = rep(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
     } catch (e) {}
   }
   function watchEarly(f) {
@@ -515,7 +520,13 @@
         let ok = false, why = '';
         try { const doc = f.contentDocument; why = doc ? doc.location.href : 'nodoc'; ok = !!doc && doc.location.href !== 'about:blank'; } catch (e) { ok = false; why = 'x:' + e.name; }
         (window.__frameLog = window.__frameLog || []).push(why);
-        if (why === 'about:blank') return;
+        if (why === 'about:blank') {
+          // A frame that had a real page and is back on blank was traversed by the Back key (cross-document, so no
+          // popstate fires). That press belongs to the shell: take the step and restore the app in place.
+          if (f._lastUrl) { const u = f._lastUrl; f._lastUrl = ''; onBack(); if (Date.now() >= exitUntil) ensureGuard(true); try { f.contentWindow.location.replace(u); } catch (e) {} }
+          return;
+        }
+        if (ok) { try { f._lastUrl = f.contentWindow.location.href; } catch (e) {} }
         wrap?.classList.toggle('blocked', !ok);
         if (ok) bridgeFrame(f);
       });
@@ -529,7 +540,24 @@
     // A hosted app may keep its own history guard. During the exit window the shell owns Back:
     // any Back that lands on a frame entry keeps unwinding until Wizard OS really leaves.
     tameHistory(win);
-    try { win.addEventListener('popstate', e => { if (Date.now() < exitUntil) { e.stopImmediatePropagation(); history.back(); } }, true); } catch (e) {}
+    // A hosted app may push its own Back guard at boot (same URL) before the shell can tame it. Popping such an
+    // entry is the user pressing Back: the shell takes that step and the app never sees it. Popping a real in-app
+    // navigation (the URL changes) stays the app's own back step.
+    try { win.__wosHref = win.location.href; } catch (e) {}
+    try { win.addEventListener('popstate', e => {
+      if (Date.now() < exitUntil) { e.stopImmediatePropagation(); history.back(); return; }
+      let same = false; try { same = win.location.href === win.__wosHref; win.__wosHref = win.location.href; } catch (x) {}
+      // The app keeps its own back step only when it is the focused window on the desk in view, nothing is
+      // open over it, and the pop really changed its page. Anything else (an app on another desk, a boot-time
+      // guard, a stray hash entry) is the user's Back for the shell, so a Back is never silently swallowed.
+      const wid = f.closest('.win')?.dataset.win;
+      const mine = !same && wid && desks[idx]?.focus === wid && desks[idx].wins.includes(wid) && !sheet && !menuFor && V.state === 'idle' && !document.querySelector('.peek.open') && !window.LiveMode?.card;
+      if (mine) return;
+      e.stopImmediatePropagation();
+      guardOn = history.state?.wos === 'guard'; // the shell's own guard is still under the popped app entry
+      onBack();
+      if (Date.now() >= exitUntil) ensureGuard(true);
+    }, true); } catch (e) {}
     try { bindWinPinch(win.document, id); } catch (e) {}
     armFrameBack(f, win);
   }
@@ -1102,6 +1130,23 @@
     const c = e.target.closest('[data-cmd]'); if (c) { closeSheets(); runUtterance(c.dataset.cmd, 'command', true); }
   });
 
+  // Mizel.ai recordings: the bridge opens one "🎙 …" thread per recording; they live in the shade as their own source.
+  const isRec = n => /^\s*\u{1F399}/u.test(n?.title || '');
+  const REC_WORKING = new Set(['submitting', 'queued', 'running', 'stopping']);
+  function recState(s) { if (REC_WORKING.has(s.status)) return { k: 'run', g: '⏳', t: 'Follow-ups running' };
+    if (/\u2705/u.test(s.preview || '')) return { k: 'done', g: '✅', t: 'Ready for review' };
+    if (s.status === 'failed' || s.status === 'interrupted') return { k: 'fail', g: '⚠', t: 'Needs a look' };
+    return { k: 'sum', g: '◦', t: 'Summary ready' }; }
+  function recStripHtml() {
+    const rows = (LIVE?.sessions || []).filter(x => isRec(x) && !x.archived && !x.hidden)
+      .sort((p, q) => (Date.parse(q.activityAt || q.updatedAt) || 0) - (Date.parse(p.activityAt || p.updatedAt) || 0)).slice(0, 10);
+    const items = rows.map(r => { const st = recState(r); const t = r.title.replace(/^\s*\u{1F399}\uFE0F?\s*/u, '');
+      return `<button class="rec-row ${st.k}${LIVE.isNew(r) ? ' new' : ''}" data-rec="${esc(r.id)}" title="${esc(st.t)}"><span class="rt">${esc(ago(r.activityAt || r.updatedAt))}</span><span class="rn">${esc(t)}</span><span class="rs" aria-label="${esc(st.t)}">${st.g}</span></button>`; }).join('');
+    return `<div class="rec-h"><b>◉ Recordings</b><span>${rows.length ? rows.length + ' latest' : ''}</span></div><div class="rec-list">${items || '<div class="rec-empty">New recordings land here and in the shade.</div>'}</div>`;
+  }
+  function refreshRecStrips() { const h = recStripHtml(); document.querySelectorAll('.rec-strip').forEach(el => { if (el.innerHTML !== h) el.innerHTML = h; }); }
+  document.addEventListener('click', e => { const r = e.target.closest('[data-rec]'); if (!r) return; e.stopPropagation(); vib(6); openWizardThread(r.dataset.rec); }, true);
+
   const GROUPS = [
     { g: 'working', name: 'Working', c: 'var(--violet-2)' },
     { g: 'ready', name: 'Unread', c: 'var(--green)' },
@@ -1109,8 +1154,8 @@
   ];
   function noteHtml(n, g) {
     const sub = g === 'working' ? (n.status === 'queued' ? 'Queued' : 'Archimedes is on it') : g === 'needs' ? (n.status === 'waiting_for_approval' ? 'Waiting for your approval' : n.status === 'failed' || n.status === 'interrupted' ? 'Stopped · needs a look' : 'Needs you') : (n.preview || '');
-    return `<button class="note ${g === 'working' ? 'working' : ''}" data-note="${esc(n.id)}" data-g="${g}"><span class="ic emo">${emoOf(n.id)}</span>
-      <span class="bd"><span class="tp"><span class="src">Chats</span><span class="tm">${esc(ago(g === 'working' ? (n.lastUserAt || n.updatedAt) : (n.lastAssistantAt || n.activityAt || n.updatedAt)))}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(clip(sub, 120))}</span></span></button>`;
+    return `<button class="note ${g === 'working' ? 'working' : ''}" data-note="${esc(n.id)}" data-g="${g}">${isRec(n) ? '<span class="ic rec">◉</span>' : `<span class="ic emo">${emoOf(n.id)}</span>`}
+      <span class="bd"><span class="tp"><span class="src${isRec(n) ? ' mizel' : ''}">${isRec(n) ? 'Mizel.ai' : 'Chats'}</span><span class="tm">${esc(ago(g === 'working' ? (n.lastUserAt || n.updatedAt) : (n.lastAssistantAt || n.activityAt || n.updatedAt)))}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(clip(sub, 120))}</span></span></button>`;
   }
   function renderInbox() {
     const L = live();
@@ -1144,7 +1189,7 @@
   function renderMoons() {
     const L = live();
     const m = [...L.needs.map(() => 'var(--amber)'), ...L.working.map(() => 'var(--violet-2)'), ...L.ready.map(() => 'var(--green)')].slice(0, 8);
-    $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = 60;
+    $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
     const badge = L.needs.length + L.ready.length;
     $('#orbBadge').textContent = badge > 99 ? '99+' : String(badge || '');
@@ -1152,7 +1197,7 @@
   }
   // One place reacts to live changes: reads anywhere, new replies, finished runs.
   if (LIVE) LIVE.onChange(() => {
-    renderMoons(); refreshHome(); markVisibleThreadsSeen();
+    renderMoons(); refreshHome(); markVisibleThreadsSeen(); refreshRecStrips();
     if (sheet === 'inbox') renderInbox(); if (sheet === 'launcher') renderLauncher($('#search').value);
     for (const id of Object.keys(W)) {
       const w = W[id]; if (w.app !== 'chats') continue;
@@ -1625,8 +1670,9 @@
   }
   function dropGuard() { if (guardOn) { guardOn = false; ignorePop++; history.back(); } }
   addEventListener('popstate', e => {
-    if (e.state?.wos === 'guard') return; // forward onto our own guard
-    guardOn = false;
+    // Landing on a guard entry means the Back key popped something stacked above it (a hosted app's entry or a
+    // second guard). We never navigate forward, so every pop is a user Back: never swallow one.
+    guardOn = e.state?.wos === 'guard';
     if (ignorePop) { ignorePop--; return; }
     if (Date.now() < exitUntil) { history.back(); return; } // second Back: leave
     onBack();

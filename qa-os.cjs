@@ -45,7 +45,12 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     ok(s.idx === 2 && s.desks[2].wins.length === 0, 'boots on Home; Home holds no app');
     ok(s.desks[1].wins.some(w => w.app === 'chats'), 'Chats starts as a window on desk 2 (closable, not pinned)');
     ok(s.back.watchers >= 1, 'Back watcher armed at boot', JSON.stringify(s.back));
-    ok(await p.locator('.orb-wrap').evaluate(e => Math.round(e.getBoundingClientRect().width)) === 84, 'orb is 84px (20% smaller than 104)');
+    { const g = await p.evaluate(() => { const r = s => document.querySelector(s).getBoundingClientRect(); const o = r('#orbWrap'), d = r('#dock');
+        const vis = [...document.querySelectorAll('.desk .tiles, .desk .home')].filter(e => { const b = e.getBoundingClientRect(); return b.width && b.left > -5 && b.left < innerWidth - 5; }).map(e => e.getBoundingClientRect().bottom);
+        return { orb: Math.round(o.width), dockH: Math.round(d.height), dockTop: Math.round(d.top), contentBottom: Math.round(Math.max(0, ...vis)) }; });
+      ok(g.orb <= 48 && g.orb >= 40, 'orb is nav-bar sized (40-48px)', JSON.stringify(g));
+      ok(g.dockH <= 72, 'bottom nav bar is slim (≤72px)', JSON.stringify(g));
+      ok(g.contentBottom <= g.dockTop + 1, 'content ends above the nav bar (no overlap)', JSON.stringify(g)); }
     await p.evaluate(() => __wos.goDesk(1)); await p.waitForTimeout(900);
     const orbBox = await p.locator('#orbWrap').boundingBox();
     ok(Math.abs(orbBox.x + orbBox.width / 2 - 206) < 3, 'orb stays centred with an app open', JSON.stringify(orbBox));

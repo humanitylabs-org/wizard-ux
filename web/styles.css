@@ -663,6 +663,70 @@ svg { display: block; }
 .scrub .sc-label { position: absolute; bottom: 30px; white-space: nowrap; padding: 6px 12px; border-radius: 99px; background: rgba(10, 6, 24, .88); border: 1px solid var(--line-2); font-size: 13px; font-weight: 650; opacity: 0; transform: translateY(6px); transition: opacity 160ms, transform 160ms; pointer-events: none; }
 .scrub.on .sc-label { opacity: 1; transform: none; }
 
+/* ================= Orb as a permanent bottom navigation bar (James, 9 Oct) =================
+ * One slim bar owns the bottom edge: content always ends above it, nothing floats over content.
+ * Orb 44px in the centre, desk dots beside it, the scrub handle is the bar's bottom edge. */
+:root { --dock-h: 66px; --orb: 44px; }
+.dock { height: calc(var(--dock-h) + var(--safe-b)); padding: 0 0 calc(16px + var(--safe-b)); gap: 18px; align-items: center;
+  background: rgba(8, 5, 18, .94); border-top: 1px solid rgba(205, 190, 255, .10); }
+.dock::before { display: none; }
+.orb-wrap { width: var(--orb); height: var(--orb); flex: 0 0 var(--orb); margin-top: 6px; }
+.orb { inset: -18%; width: 136%; height: 136%; }
+.orb-halo { inset: -14%; filter: blur(9px); opacity: calc(.16 + var(--energy, .2) * .4); }
+.orb-ring { inset: -4px; }
+.orb-ring::before { inset: -4px; } .orb-ring::after { display: none; }
+.moons { inset: -9px; } .moons i { width: 5px; height: 5px; margin: -2.5px; }
+.orb-badge { top: -4px; right: -10px; min-width: 17px; height: 17px; padding: 0 5px; font-size: 10.5px; }
+.timer { bottom: auto; top: -26px; }
+.hold-hint { top: -46px; }
+.desk-dots { width: 64px; gap: 11px; margin-top: 6px; }
+/* scrubber = the bar's bottom edge (like Android's gesture handle); full-width hit zone below the orb */
+.scrub { bottom: var(--safe-b); height: 16px; width: 200px; margin-left: -100px; }
+.scrub i { height: 3px; width: 40px; }
+.scrub .sc-label { bottom: calc(var(--dock-h) + 6px); }
+/* everything above the bar ends at its top edge */
+.desk { padding-bottom: calc(var(--dock-h) + var(--safe-b) + 10px); }
+.tiles { bottom: calc(var(--dock-h) + var(--safe-b) + 8px); }
+.tiles.has-full { bottom: calc(var(--dock-h) + var(--safe-b)); }
+.launcher, .inbox { bottom: calc(var(--dock-h) + var(--safe-b) + 8px); }
+.desk-label { bottom: calc(var(--dock-h) + var(--safe-b) + 10px); }
+/* voice controls fan out above the bar */
+.arc { bottom: calc(var(--safe-b) + var(--dock-h) - 14px); width: 50px; height: 50px; margin: 0 0 -25px -25px; }
+.voice.on .arc-left  { transform: translate(-84px, -54px) scale(1); }
+.voice.on .arc-mid   { transform: translate(0, -84px) scale(1); }
+.voice.on .arc-right { transform: translate(84px, -54px) scale(1); }
+.transcript { bottom: calc(var(--safe-b) + var(--dock-h) + 130px); }
+.voice.cmd .transcript { bottom: calc(var(--safe-b) + var(--dock-h) + 40px); }
+/* first-run coach matches the bar */
+.coach-orb { bottom: calc(10px + var(--safe-b)); width: 52px; height: 52px; margin-left: -26px; }
+.coach .c-left, .coach .c-right { bottom: 26px; }
+.coach .c-up { bottom: 100px; }
+.coach .c-down { display: none; }
+.coach p { bottom: 160px; }
+.coach-go { bottom: 330px; }
+
+/* ---------- Mizel.ai recordings: shade source + strip on the Mizel desk ---------- */
+.note .ic.rec { background: rgba(63, 224, 255, .14); color: #3fe0ff; font-size: 18px; box-shadow: inset 0 0 0 1px rgba(63, 224, 255, .35); }
+.note .tp .src.mizel { color: #3fe0ff; }
+.mizel-split { position: absolute; inset: 0; display: flex; flex-direction: column; background: #0c0a18; }
+.mizel-split .frame-wrap { position: relative; inset: auto; flex: 1; min-height: 0; }
+.rec-strip { flex: 0 0 auto; max-height: 34%; display: flex; flex-direction: column; padding: 8px 10px 6px; border-bottom: 1px solid rgba(63, 224, 255, .18);
+  background: linear-gradient(180deg, rgba(63, 224, 255, .07), rgba(63, 224, 255, .02)); }
+.rec-h { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px 6px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.rec-h b { color: #3fe0ff; font-weight: 800; }
+.rec-list { overflow-y: auto; display: grid; gap: 4px; scrollbar-width: none; }
+.rec-list::-webkit-scrollbar { display: none; }
+.rec-row { display: grid; grid-template-columns: 44px 1fr 22px; align-items: center; gap: 8px; min-height: 36px; padding: 6px 8px; border-radius: 12px; text-align: left; color: var(--ink); background: rgba(205, 190, 255, .05); border: 1px solid transparent; font: inherit; }
+.rec-row:active { background: rgba(63, 224, 255, .14); }
+.rec-row.new { border-color: rgba(63, 224, 255, .35); }
+.rec-row .rt { font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.rec-row .rn { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rec-row.new .rn { font-weight: 800; }
+.rec-row .rs { text-align: center; font-size: 14px; }
+.rec-row.run .rs { animation: pip 1.6s ease-in-out infinite; }
+.rec-row.sum .rs { color: #3fe0ff; }
+.rec-empty { padding: 8px 4px; font-size: 13px; color: var(--ink-3); }
+
 /* ================= Live Mode (preview slice) =================
  * Motion and components come from the shared kit (motion/wizard-motion.css).
  * Only Wizard OS placement and layering live here. */
