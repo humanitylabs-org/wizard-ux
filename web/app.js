@@ -1724,6 +1724,16 @@
   { const n = new Date(); $('#clock').textContent = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; }
   if (!store.get('coached', false)) { $('#coach').hidden = false; }
   $('#coachGo').addEventListener('click', () => { $('#coach').hidden = true; store.set('coached', true); shock(); });
+  // Native shell (Wizard OS Android app): the app hands every hardware/gesture Back to the shell. A step that
+  // undoes something returns its name; at the true root the shell stays put and says so. The app never exits
+  // on Back (James's rule), so there is no "press again to exit" in native mode.
+  window.__wosNativeBack = () => {
+    const did = backStep();
+    window.__backLog = (window.__backLog || []).concat(did ? 'native:' + did : 'native:root').slice(-30);
+    if (!did) toast('⌂', "You're home", 1200);
+    return did || 'root';
+  };
+  if (/WizardOS-Android\//.test(navigator.userAgent)) document.documentElement.classList.add('native-app');
   window.__wos = {
     live: LIVE, openPeek, closePeek, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
