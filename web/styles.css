@@ -15,6 +15,7 @@
   --green: #4ff0b0;
   --red: #ff6b86;
   --dock-h: 148px;
+  --sb: 0px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
   --ease: cubic-bezier(.2, .9, .25, 1);
@@ -61,6 +62,7 @@ svg { display: block; }
 
 /* Status bar */
 .statusbar {
+  display: none !important;
   position: absolute; top: 0; left: 0; right: 0; z-index: 60; height: calc(34px + var(--safe-t));
   padding: calc(10px + var(--safe-t)) 26px 0; display: flex; justify-content: space-between;
   font-size: 13px; font-weight: 650; letter-spacing: .02em; color: rgba(243, 239, 255, .9); pointer-events: none;
@@ -69,7 +71,7 @@ svg { display: block; }
 .sb-right svg { width: 16px; height: 12px; }
 .batt { width: 24px; height: 11px; border: 1.5px solid currentColor; border-radius: 3.5px; padding: 1.5px; opacity: .9; }
 .batt i { display: block; height: 100%; width: 72%; background: currentColor; border-radius: 1.5px; }
-@media (min-width: 560px) and (min-height: 700px) { .statusbar { padding-top: 16px; } }
+@media (min-width: 560px) and (min-height: 700px) { .statusbar { padding-top: 16px; display: flex !important; } :root { --sb: 34px; } }
 
 /* Desks */
 .desks { position: absolute; inset: 0; z-index: 1; overflow: hidden; }
@@ -77,7 +79,7 @@ svg { display: block; }
 .track.anim { transition: transform 520ms var(--ease); }
 .desk {
   position: relative; flex: 0 0 100%; height: 100%; overflow: hidden;
-  padding: calc(52px + var(--safe-t)) 18px calc(var(--dock-h) + var(--safe-b));
+  padding: calc(var(--sb) + 18px + var(--safe-t)) 18px calc(var(--dock-h) + var(--safe-b));
   transition: opacity 400ms, filter 400ms;
 }
 .desk-scroll { height: 100%; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; touch-action: pan-y; overscroll-behavior: contain; padding-bottom: 12px;
@@ -456,3 +458,70 @@ svg { display: block; }
 [data-voice="listen"] .desk > *, [data-voice="paused"] .desk > *, [data-voice="command"] .desk > *,
 [data-voice="think"] .desk > * { opacity: .3; filter: blur(2px) saturate(.8); }
 [data-voice="listen"] .hint-row, [data-voice="paused"] .hint-row, [data-voice="command"] .hint-row, [data-voice="think"] .hint-row { opacity: 0; }
+
+/* ---------- app desks: Wizard and other apps run live inside a desk ---------- */
+.desk.app-desk { padding: calc(var(--sb) + var(--safe-t)) 0 0; }
+.frame-wrap { position: relative; height: 100%; border-radius: 0; overflow: hidden; background: #0f1014; }
+@media (min-width: 560px) and (min-height: 700px) { .frame-wrap { border-radius: 0 0 46px 46px; } }
+.appframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #0f1014; color-scheme: dark; }
+.frame-fallback { position: absolute; inset: 0; display: none; place-content: center; justify-items: center; gap: 10px; text-align: center; padding: 0 34px; background: var(--bg); }
+.frame-wrap.blocked .frame-fallback { display: grid; }
+.frame-wrap.blocked .appframe { visibility: hidden; }
+.frame-fallback .glyph { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; font-size: 30px; background: linear-gradient(140deg, var(--g1, #6b46ff), var(--g2, #ff5ccf)); box-shadow: 0 10px 30px rgba(120, 70, 255, .35); }
+.frame-fallback h3 { margin: 8px 0 0; font-size: 19px; }
+.frame-fallback p { margin: 0 0 8px; color: var(--ink-2); }
+.frame-fallback a.cta { text-decoration: none; }
+/* while the orb listens, the live app dims like any other desk */
+[data-voice="listen"] .app-desk .frame-wrap, [data-voice="paused"] .app-desk .frame-wrap, [data-voice="command"] .app-desk .frame-wrap, [data-voice="think"] .app-desk .frame-wrap { opacity: .35; filter: blur(2px); }
+
+/* ---------- compact orb ---------- */
+.dock { transition: transform 420ms var(--spring); }
+.orb-wrap { transition: width 360ms var(--spring), height 360ms var(--spring), flex-basis 360ms var(--spring), transform 360ms var(--spring); }
+.dock::before { transition: opacity 300ms; }
+.desk-dots { transition: opacity 260ms; }
+.device.mini .dock { transform: translateX(var(--mx)); bottom: calc(29px - var(--safe-b)); }
+.device.mini .dock::before { opacity: 0; }
+.device.mini .desk-dots { opacity: 0; pointer-events: none; }
+.device.mini .orb-wrap { width: 50px; height: 50px; flex-basis: 50px; }
+.device.mini .moons { inset: -14px; }
+.device.mini .moons i { width: 4px; height: 4px; margin: -2px; }
+.device.mini .orb-halo { opacity: .55; }
+.device.mini .timer { bottom: -22px; }
+.device.mini .voice .arc { left: calc(50% + var(--mx)); bottom: 110px; }
+.device.mini[data-side="right"] .voice.on .arc-left  { transform: translate(-108px, 6px) scale(1); }
+.device.mini[data-side="right"] .voice.on .arc-mid   { transform: translate(-82px, -72px) scale(1); }
+.device.mini[data-side="right"] .voice.on .arc-right { transform: translate(0, -104px) scale(1); }
+.device.mini[data-side="left"] .voice.on .arc-left  { transform: translate(0, -104px) scale(1); }
+.device.mini[data-side="left"] .voice.on .arc-mid   { transform: translate(82px, -72px) scale(1); }
+.device.mini[data-side="left"] .voice.on .arc-right { transform: translate(108px, 6px) scale(1); }
+.device.mini .desk-label { bottom: 160px; }
+.device.mini .voice .transcript { bottom: 240px; }
+.device.mini .voice.cmd .transcript { bottom: 160px; }
+/* tucked: slides into the edge; a slim glowing tab brings it back */
+.device.mini.tucked .dock { transform: translateX(calc(var(--mx) * 1.9)); pointer-events: none; }
+.device.mini.tucked .orb-wrap { pointer-events: none; }
+.orb-tab { position: absolute; z-index: 52; bottom: 78px; width: 22px; height: 64px; display: none; padding: 0; border: 0; background: transparent; }
+.orb-tab i { position: absolute; top: 8px; bottom: 8px; width: 5px; border-radius: 99px; background: linear-gradient(180deg, var(--violet-2), var(--pink)); box-shadow: 0 0 14px var(--violet); }
+.device.mini.tucked .orb-tab { display: block; }
+.device[data-side="right"] .orb-tab { right: 0; } .device[data-side="right"] .orb-tab i { right: 4px; }
+.device[data-side="left"] .orb-tab { left: 0; } .device[data-side="left"] .orb-tab i { left: 4px; }
+
+/* unread badge on the orb */
+.orb-badge { position: absolute; top: 2px; right: 0; z-index: 3; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; display: grid; place-items: center;
+  font-size: 11px; font-weight: 850; color: #160b05; background: var(--amber); box-shadow: 0 0 0 2px rgba(5, 3, 12, .9), 0 0 14px rgba(255, 190, 85, .6); pointer-events: none; }
+.orb-badge[hidden] { display: none; }
+.device.mini .orb-badge { top: -4px; right: -6px; transform: scale(.85); }
+
+/* live inbox bits */
+.note .ic.emo, .lrow .ic.emo { background: rgba(205, 190, 255, .08); font-size: 18px; }
+.ibx-empty { margin: 10px 4px 14px; padding: 16px; border-radius: 18px; text-align: center; color: var(--ink-2); background: rgba(205, 190, 255, .05); border: 1px solid var(--line); }
+.ibx-all { color: var(--green); font-weight: 800; font-size: 12px; }
+.note .sb { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* this desk's controls, at the foot of the launcher */
+.deskbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 2px 10px; padding: 9px 10px 9px 14px; border-radius: 16px; background: rgba(205, 190, 255, .06); border: 1px solid var(--line); font-size: 12px; color: var(--ink-2); }
+.deskbar b { color: var(--ink); }
+.deskbar > span:first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.deskbar .acts { display: flex; gap: 6px; flex: 0 0 auto; }
+.deskbar button { padding: 6px 10px; border-radius: 99px; border: 1px solid var(--line-2); font-size: 12px; font-weight: 750; color: var(--ink); }
+.summary + .cta, .zlayer .cta[data-wizthread] { display: block; width: 100%; margin-top: 12px; }

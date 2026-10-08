@@ -8,16 +8,29 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   const extra = process.env.QA_RESOLVE ? ['--host-resolver-rules=' + process.env.QA_RESOLVE] : [];
   const browser = await chromium.launch({ args: [...extra, '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, permissions: ['microphone'] });
+  // Never send a real message from QA: capture Hermes writes and answer them locally.
+  const sent = [];
+  await ctx.route('**/wizard/hermes/**', route => {
+    const r = route.request(), m = r.method(), u = new URL(r.url());
+    if (m === 'GET' || m === 'HEAD') return route.continue();
+    sent.push({ m, path: u.pathname, body: r.postDataJSON?.() ?? null, idem: r.headers()['idempotency-key'] || '' });
+    if (u.pathname.endsWith('/api/sessions')) return route.fulfill({ status: 200, json: { session: { id: (r.postDataJSON() || {}).id } } });
+    if (u.pathname.endsWith('/v1/runs')) return route.fulfill({ status: 202, json: { run_id: 'qa_run', status: 'queued' } });
+    return route.abort();
+  });
+  await ctx.route('**/wizard/thread-seen', route => route.request().method() === 'GET' ? route.continue() : route.fulfill({ status: 200, json: {} }));
   const page = await ctx.newPage();
   const errors = [], external = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-  page.on('console', m => { if (m.type() === 'error' && !/422/.test(m.text())) errors.push('console: ' + m.text()); });
-  page.on('request', r => { const u = new URL(r.url()); if (!BASE.startsWith(u.origin)) external.push(r.url()); });
+  // Shell-only errors: hosted apps (CineQueue posters, Wizard) have their own lifecycles.
+  page.on('console', m => { if (m.type() === 'error' && !/422/.test(m.text()) && (!m.location().url || m.location().url.includes('/wizard-os-home/'))) errors.push('console: ' + m.text() + ' @' + m.location().url); });
+  page.on('request', r => { const u = new URL(r.url()); if (!BASE.startsWith(u.origin) && r.frame() === page.mainFrame()) external.push(r.url()); });
   const results = [];
   const check = (name, ok, extra = '') => { results.push({ name, ok: !!ok, extra }); console.log((ok ? 'PASS ' : 'FAIL ') + name + (extra ? ' — ' + extra : '')); };
   const shot = async n => { await page.screenshot({ path: `${OUT}/${n}.png` }); await page.waitForTimeout(400); };
 
-  await page.goto(BASE, { waitUntil: 'networkidle' });
+  await page.goto(BASE, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.__wos && window.__wos.live && (window.__wos.live.ok || window.__wos.live.error), null, { timeout: 30000 });
   await page.waitForTimeout(600);
   check('coach shows first run', await page.isVisible('#coach'));
   await shot('00-coach');
@@ -29,9 +42,12 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   check('dots 2 left / 2 right on home', dots[0] === 2 && dots[1] === 2, JSON.stringify(dots));
   await shot('01-home');
 
-  const orb = await page.locator('#orbWrap').boundingBox();
-  const cx = orb.x + orb.width / 2, cy = orb.y + orb.height / 2;
+  let cx = 0, cy = 0;
+  // The orb moves (big on home desks, compact on app desks): re-measure before each gesture.
+  async function locateOrb() { await page.waitForTimeout(450); const o = await page.locator('#orbWrap').boundingBox(); cx = o.x + o.width / 2; cy = o.y + o.height / 2; }
+  await locateOrb();
   async function drag(dx, dy, steps = 10) {
+    await locateOrb();
     const cdp = await ctx.newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] });
     for (let i = 1; i <= steps; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx + dx * i / steps, y: cy + dy * i / steps }] }); await page.waitForTimeout(16); }
@@ -86,9 +102,12 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   await shot('09-launcher-search');
   await page.press('#search', 'Enter'); await page.waitForTimeout(800);
   const d = await page.evaluate(() => ({ idx: window.__wos.idx, d: window.__wos.desks[window.__wos.idx] }));
-  check('search+enter opens CineQueue on a desk', d.d.kind === 'app' && d.d.app === 'cinequeue', JSON.stringify(d));
+  check('search+enter opens CineQueue live on a desk', d.d.kind === 'frame' && d.d.app === 'cinequeue', JSON.stringify(d));
+  check('app desk shrinks the orb', await page.evaluate(() => document.querySelector('#device').classList.contains('mini')));
+  await page.waitForTimeout(2500); await shot('09b-cinequeue-desk');
 
-  // swipe down -> inbox
+  // swipe down -> inbox (from the home desk, where the big orb lives)
+  await page.evaluate(() => window.__wos.goDesk(2, true)); await page.waitForTimeout(600);
   await drag(0, 260);
   check('swipe down opens inbox', await page.evaluate(() => document.querySelector('#inbox').classList.contains('open')));
   await shot('10-inbox');
@@ -97,7 +116,7 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
 
   // go home, tap orb -> recording with arc
   await page.evaluate(() => window.__wos.goDesk(2, true)); await page.waitForTimeout(600);
-  await page.touchscreen.tap(cx, cy); await page.waitForTimeout(1600);
+  await locateOrb(); await page.touchscreen.tap(cx, cy); await page.waitForTimeout(1600);
   check('tap orb starts recording', await page.evaluate(() => window.__wos.voice === 'listen'), await page.evaluate(() => window.__wos.voice));
   check('arc buttons visible', await page.evaluate(() => document.querySelector('#voice').classList.contains('on')));
   check('timer counting', (await page.textContent('#timer')) !== '0:00', await page.textContent('#timer'));
@@ -123,12 +142,16 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   await page.evaluate(() => window.__wos.runUtterance('what should I prioritize for the Wizard OS launch next week?', 'auto', true));
   await page.waitForFunction(() => /Archimedes/.test(document.querySelector('#txRouteText').textContent), null, { timeout: 30000 });
   await page.waitForTimeout(500);
+  await page.waitForTimeout(1200);
   const ad = await page.evaluate(() => window.__wos.desks[4]);
-  check('reasoning request routes to agent on empty desk', ad.kind === 'agent', await page.textContent('#txRouteText'));
+  const run = sent.find(s => s.path.endsWith('/v1/runs')), ses = sent.find(s => s.path.endsWith('/api/sessions'));
+  check('reasoning request creates a real Wizard thread request', !!ses && ses.body?.source === 'wizard-mobile' && /^wizard_\d+_[0-9a-f]{12}$/.test(ses.body?.id || ''), JSON.stringify(ses?.body));
+  check('run admitted with idempotency key and same session', !!run && run.body?.session_id === ses?.body?.id && run.idem.length >= 32 && /prioritize/.test(run.body?.input || ''), JSON.stringify(run?.body));
+  check('empty desk becomes that Wizard thread', ad.kind === 'wizard' && ad.session === ses?.body?.id, JSON.stringify(ad));
   await shot('14-agent');
 
   // hold for command (fake mic)
-  await page.evaluate(() => window.__wos.goDesk(2, true)); await page.waitForTimeout(800);
+  await page.evaluate(() => window.__wos.goDesk(2, true)); await page.waitForTimeout(800); await locateOrb();
   const cdp = await ctx.newCDPSession(page);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] });
   await page.waitForTimeout(900);

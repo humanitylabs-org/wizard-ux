@@ -6,6 +6,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const vib = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
   const D = window.WIZ_DATA || { threads: [], projects: {} };
+  const LIVE = window.WizLive;
   const S = window.WIZ_SUMM || { days: {}, weeks: {}, month: '' };
   const device = $('#device');
   const TODAY = (D.generated || '2026-10-08').slice(0, 10);
@@ -44,7 +45,7 @@
   const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
 
   /* ---------------- apps ---------------- */
-  const P = 'https://private.wizard001.com';
+  const P = ''; // same origin: Wizard apps can run inside a desk
   const APPS = [
     // Wizard OS views
     { id: 'v-day', kind: 'view', name: 'Day in review', icon: '☀', g: ['#ff8a5c', '#ff5ccf'], view: 'day', desc: 'What we did yesterday, by project, person and call' },
@@ -106,7 +107,7 @@
     set(k, v) { try { localStorage.setItem('wos.' + k, JSON.stringify(v)); } catch (e) {} },
   };
   const defaultDesks = () => [
-    { kind: 'wizard' },
+    { kind: 'wizard', pinned: true },
     { kind: 'review', z: { level: 'day', day: YESTERDAY } },
     { kind: 'home' },
     { kind: 'maps', dest: 'ICONSIAM, Bangkok', mode: 'dir' },
@@ -114,24 +115,23 @@
   ];
   let desks = store.get('desks', null);
   if (!Array.isArray(desks) || desks.length !== DESKS_N || desks[HOME]?.kind !== 'home') desks = defaultDesks();
+  // v2: the Wizard chat list is pinned to desk 1 (one-time migration).
+  if (!store.get('v2', false)) { desks[0] = { kind: 'wizard', pinned: true }; store.set('v2', true); }
+  desks.forEach(d => { if (d.kind === 'agent') Object.assign(d, { kind: 'wizard', session: d.session || null }); });
   let idx = store.get('idx', HOME); if (!(idx >= 0 && idx < DESKS_N)) idx = HOME;
   const save = () => { store.set('desks', desks); store.set('idx', idx); };
 
-  // Inbox seeded from real recent thread titles; states are simulated for the prototype.
-  const recent = D.threads.filter(t => t.day >= YESTERDAY).sort((a, b) => (b.day + b.t).localeCompare(a.day + a.t));
-  const pick = (i, fb) => recent[i] || { title: fb, id: null, p: 'wizard-os', t: '09:00', day: TODAY };
-  let inbox = [
-    { id: 'n1', g: 'needs', ...seedThread(pick(1, 'Approve release')), sub: 'Your call: which variant ships' },
-    { id: 'n2', g: 'needs', ...seedThread(pick(4, 'Review draft')), sub: 'Draft ready; one decision left' },
-    { id: 'r1', g: 'ready', ...seedThread(pick(2, 'Report ready')), sub: 'Verified result ready to read' },
-    { id: 'r2', g: 'ready', ...seedThread(pick(5, 'Preview ready')), sub: 'Preview published privately' },
-    { id: 'r3', g: 'ready', ...seedThread(pick(7, 'Summary ready')), sub: 'Summary finished' },
-    { id: 'w1', g: 'working', title: 'Wizard OS home — this prototype', sub: 'Archimedes is building and testing', p: 'wizard-os', tm: 'now', thread: null },
-    { id: 'p1', g: 'phone', src: 'Calendar', icon: '📅', gr: ['#3f8cff', '#8f63ff'], title: 'Nothing else today after 19:00', sub: 'Your evening is clear', tm: '18:00' },
-    { id: 'p2', g: 'phone', src: 'Grab', icon: 'G', gr: ['#00b14f', '#0a5c32'], title: 'Your food is 8 min away', sub: 'Simulated Android notification', tm: '17:52' },
-    { id: 'p3', g: 'phone', src: 'Telegram', icon: '✈', gr: ['#2aabee', '#1868a8'], title: 'Archimedes', sub: 'Morning projects brief delivered', tm: '07:02' },
-  ];
-  function seedThread(t) { return { title: t.title, p: t.p, tm: t.t, thread: t.id, src: D.projects[t.p] || 'Wizard' }; }
+  /* Live Wizard state: inbox, unread, working come from the real Wizard backend. */
+  // Thread emojis are Wizard's own (same-origin storage), read fresh each render.
+  let EMO = {}, emoAt = 0;
+  const emoOf = id => { if (Date.now() - emoAt > 2000) { try { EMO = JSON.parse(localStorage.getItem('wizard.thread-emojis.v1') || '{}'); } catch (e) {} emoAt = Date.now(); } return EMO[`direct:${id}`] || '✦'; };
+  const live = () => (LIVE && LIVE.ok ? LIVE.groups() : { needs: [], ready: [], working: [] });
+  const ago = iso => {
+    const t = Date.parse(iso || ''); if (!isFinite(t)) return '';
+    const m = Math.round((Date.now() - t) / 6e4);
+    if (m < 1) return 'now'; if (m < 60) return m + 'm'; if (m < 24 * 60) return Math.round(m / 60) + 'h';
+    const d = new Date(t + 7 * 36e5); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()}`;
+  };
 
   /* ---------------- desks ---------------- */
   const track = $('#track');
@@ -139,10 +139,10 @@
     switch (d.kind) {
       case 'home': return 'Home';
       case 'review': return { month: 'Month in review', week: 'Week in review', day: 'Day in review', group: 'Day in review', thread: 'Thread' }[d.z?.level] || 'Review';
-      case 'wizard': return 'Wizard';
+      case 'wizard': return d.session ? (LIVE?.session(d.session)?.title || 'Wizard thread') : 'Wizard';
+      case 'frame': return APP[d.app]?.name || 'App';
       case 'app': return APP[d.app]?.name || 'App';
       case 'maps': return 'Maps';
-      case 'agent': return 'Archimedes';
       default: return 'Empty';
     }
   }
@@ -155,23 +155,24 @@
     switch (d.kind) {
       case 'home': return renderHome();
       case 'review': return renderReviewShell(i);
-      case 'wizard': return renderWizard();
+      case 'wizard': return renderWizard(d, i);
+      case 'frame': return renderFrame(d, i);
       case 'app': return renderApp(d);
       case 'maps': return renderMaps(d);
-      case 'agent': return renderAgent(d);
       default: return renderEmpty(i);
     }
   }
   function buildDesks() {
-    track.innerHTML = desks.map((d, i) => `<section class="desk" data-desk="${i}" aria-label="Desk ${i + 1}: ${esc(deskTitle(d))}">${renderDesk(i)}</section>`).join('');
+    track.innerHTML = desks.map((d, i) => `<section class="desk${isAppDesk(d) ? ' app-desk' : ''}" data-desk="${i}" aria-label="Desk ${i + 1}: ${esc(deskTitle(d))}">${renderDesk(i)}</section>`).join('');
     desks.forEach((d, i) => { if (d.kind === 'review') mountReview(i, null); });
-    placeTrack(0, false); renderDots(); renderMoons();
+    watchFrames(track); placeTrack(0, false); renderDots(); renderMoons(); updateMini();
   }
   function refreshDesk(i) {
     const el = track.children[i]; if (!el) return;
     el.innerHTML = renderDesk(i); el.setAttribute('aria-label', `Desk ${i + 1}: ${deskTitle(desks[i])}`);
+    el.classList.toggle('app-desk', isAppDesk(desks[i]));
     if (desks[i].kind === 'review') mountReview(i, null);
-    renderDots(); save();
+    watchFrames(el); renderDots(); save(); updateMini();
   }
   function placeTrack(dx, anim) {
     track.classList.toggle('anim', !!anim);
@@ -181,7 +182,7 @@
   let labelT = 0;
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(DESKS_N - 1, n));
-    const moved = n !== idx; idx = n; placeTrack(0, true); renderDots(); save();
+    const moved = n !== idx; idx = n; placeTrack(0, true); renderDots(); save(); updateMini();
     if (moved) vib(8);
     if (!silent) {
       const L = $('#deskLabel'); L.innerHTML = `Desk ${idx + 1} · <b>${esc(deskTitle(desks[idx]))}</b>`; L.classList.add('show'); document.body.classList.add('labeling');
@@ -195,6 +196,7 @@
   }
   $('#dock').addEventListener('click', e => { const b = e.target.closest('[data-goto]'); if (b) goDesk(+b.dataset.goto); });
 
+  const isAppDesk = d => d.kind === 'wizard' || d.kind === 'frame';
   /* Open something on a desk. Home stays home: opening from Home lands on the nearest empty desk. */
   function openOnDesk(obj) {
     let target = idx;
@@ -213,7 +215,8 @@
       openReview(a.view, extra?.date); return true;
     }
     if (a.id === 'maps') { openOnDesk({ kind: 'maps', dest: extra?.query || '', mode: extra?.query ? 'search' : 'home' }); return true; }
-    if (a.id === 'wizard') { openOnDesk({ kind: 'wizard' }); return true; }
+    if (a.id === 'wizard') { const w = desks.findIndex(d => d.kind === 'wizard' && !d.session); if (w >= 0) { goDesk(w); return true; } openOnDesk({ kind: 'wizard' }); return true; }
+    if (a.kind === 'wizard' && a.url) { openOnDesk({ kind: 'frame', app: a.id }); return true; }
     openOnDesk({ kind: 'app', app: a.id, query: extra?.query || '' });
     return true;
   }
@@ -226,19 +229,19 @@
 
   /* ---------------- home desk ---------------- */
   function renderHome() {
-    const needs = inbox.filter(n => n.g === 'needs').length, working = inbox.filter(n => n.g === 'working').length, ready = inbox.filter(n => n.g === 'ready').length;
+    const L = live(), needs = L.needs.length, working = L.working.length, ready = L.ready.length;
     const yd = byDay[YESTERDAY] || [];
     const now = new Date();
     return `<div class="home">
       <div class="home-top">
         <div class="home-date" id="homeDate">${DOWL[now.getDay()]} · ${now.getDate()} ${MON[now.getMonth()]}</div>
         <div class="home-time" id="homeTime">${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}</div>
-        <div class="home-line"><b>${needs} need you</b>, ${ready} ready for review, ${working} agent${working === 1 ? '' : 's'} working.</div>
+        <div class="home-line">${LIVE.ok ? `<b>${needs} need${needs === 1 ? 's' : ''} you</b>, ${ready} unread, ${working} working.` : LIVE.error === 'access' ? 'Sign in to Wizard to see your threads.' : 'Connecting to Wizard…'}</div>
       </div>
       <div class="home-spacer"></div>
       <div class="constellation">
-        <button class="now-card" style="--c:var(--amber)" data-act="inbox"><span class="pip"></span><span class="meta"><span class="k">Needs you</span><span class="v">${esc(inbox.find(n => n.g === 'needs')?.title || 'Nothing waiting')}</span></span><span class="n">${needs}</span></button>
-        <button class="now-card" style="--c:var(--violet-2)" data-act="inbox"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span><span class="v">${esc(inbox.find(n => n.g === 'working')?.title || 'Idle')}</span></span><span class="n">${working}</span></button>
+        <button class="now-card" style="--c:var(--amber)" data-act="inbox" data-k="needs"><span class="pip"></span><span class="meta"><span class="k">Needs you</span><span class="v">${esc(L.needs[0]?.title || L.ready[0]?.title || 'Nothing waiting')}</span></span><span class="n">${needs + ready}</span></button>
+        <button class="now-card" style="--c:var(--violet-2)" data-act="inbox"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span><span class="v">${esc(L.working[0]?.title || 'Idle')}</span></span><span class="n">${working}</span></button>
         <button class="now-card" style="--c:var(--pink)" data-act="yesterday"><span class="pip"></span><span class="meta"><span class="k">Yesterday</span><span class="v">${esc(clip(S.days[YESTERDAY] || `${yd.length} threads`, 70))}</span></span><span class="n">${yd.length}</span></button>
       </div>
       <div class="hint-row">
@@ -261,12 +264,49 @@
       <h3>Empty desk</h3><p>Tap the orb and say what belongs here.<br>Hold it for a quick command.</p>
       <button class="say" data-say="Open Signal Feed">Open Signal Feed</button><button class="say" data-say="Zoom out to the month">Zoom out to the month</button></div></div>`;
   }
-  function renderWizard() {
-    const t = D.threads.filter(x => x.day === TODAY && /launcher|wizard os|home/i.test(x.title))[0];
-    return `<div class="desk-scroll thread">${head('✦', '#6b46ff', '#c04dff', 'Wizard', 'App · one thread open')}
-      <div class="bubble u"><span class="who">You · ${esc(t?.t || '17:40')}</span>Mock me up an extremely sick UX for this. Floating orb, arc controls, desks, swipe up for apps, down for the inbox, pinch to zoom the reviews. Impress me.</div>
-      <div class="bubble a"><span class="who">Archimedes</span>Built it. You’re standing in it: this desk is the Wizard app, running as one app inside Wizard OS. Swipe the orb left or right to change desks. Tap it and speak.</div>
-      <div class="bubble a"><span class="typing"><i></i><i></i><i></i></span></div></div>`;
+  function renderWizard(d, i) {
+    const src = d.open ? LIVE.chatUrl(d.open) : d.session ? LIVE.chatUrl(d.session) : '/wizard/?view=work';
+    delete d.open;
+    return `<div class="frame-wrap" data-frame="${i}"><iframe class="appframe" src="${esc(src)}" title="Wizard" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe>
+      <div class="frame-fallback"><span class="glyph" style="--g1:#6b46ff;--g2:#c04dff">✦</span><h3>Wizard didn’t load</h3><p>Open it on its own, then come back.</p><a class="cta" href="/wizard/" target="_blank" rel="noopener">Open Wizard</a></div></div>`;
+  }
+  function renderFrame(d, i) {
+    const a = APP[d.app] || {};
+    return `<div class="frame-wrap" data-frame="${i}"><iframe class="appframe" src="${esc(a.url || '/')}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe>
+      <div class="frame-fallback"><span class="glyph" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}</span><h3>${esc(a.name)} can’t run inside a desk yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a><button class="cta ghost" data-act="clear">Clear this desk</button></div></div>`;
+  }
+  // A blocked frame lands on an inaccessible error document; show the fallback card instead.
+  function watchFrames(root) {
+    $$('iframe.appframe', root).forEach(f => {
+      if (f._watched) return; f._watched = true;
+      const wrap = f.closest('.frame-wrap');
+      f.addEventListener('load', () => {
+        // Same-origin docs are readable; a refused frame lands on an unreadable error page.
+        let ok = false, why = '';
+        try { const doc = f.contentDocument; why = doc ? doc.location.href : 'nodoc'; ok = !!doc && doc.location.href !== 'about:blank'; } catch (e) { ok = false; why = 'x:' + e.name; }
+        (window.__frameLog = window.__frameLog || []).push(why);
+        if (why === 'about:blank') return; // initial blank document, the real load follows
+        wrap?.classList.toggle('blocked', !ok);
+        if (ok) bridgeFrame(f);
+      });
+    });
+  }
+  // The orb's gestures belong to the shell; nothing inside the frame needs a bridge yet,
+  // but Wizard opening a thread from its own list should count as a read here too.
+  function bridgeFrame(f) {
+    try {
+      f.contentWindow.addEventListener('storage', () => {});
+      f.contentWindow.addEventListener('popstate', () => LIVE && LIVE.refresh());
+    } catch (e) {}
+  }
+  function wizardDesk() { let w = desks.findIndex(d => d.kind === 'wizard' && d.pinned); if (w < 0) w = desks.findIndex(d => d.kind === 'wizard' && !d.session); return w; }
+  /* Open a real thread in the pinned Wizard desk; reading it there clears it everywhere. */
+  function openWizardThread(id) {
+    if (!id) return;
+    LIVE.markSeen(id);
+    let w = wizardDesk();
+    if (w < 0) { w = openOnDesk({ kind: 'wizard', pinned: true, open: id }); return; }
+    desks[w].open = id; refreshDesk(w); goDesk(w);
   }
   function renderApp(d) {
     const a = APP[d.app] || {};
@@ -297,12 +337,6 @@
       <a class="cta" href="${esc(link)}" rel="noopener">${d.mode === 'dir' ? 'Start navigation in Maps' : 'Open in Maps'}</a>
       <button class="cta ghost" data-act="clear">Clear this desk</button></div>`;
   }
-  function renderAgent(d) {
-    return `<div class="desk-scroll thread">${head('✦', '#8f63ff', '#ff5ccf', 'Archimedes', 'New thread from voice')}
-      <div class="bubble u"><span class="who">You · just now</span>${esc(d.text)}</div>
-      ${d.reply ? `<div class="bubble a"><span class="who">Archimedes</span>${esc(d.reply)}</div>` : '<div class="bubble a"><span class="typing"><i></i><i></i><i></i></span></div>'}</div>`;
-  }
-
   /* ---------------- review (semantic zoom) ---------------- */
   const LEVELS = ['month', 'week', 'day', 'group', 'thread'];
   const LNAME = { month: 'Month', week: 'Week', day: 'Day', group: 'Focus', thread: 'Thread' };
@@ -370,7 +404,7 @@
       return `<div class="summary"><div class="eyebrow"><span class="spark" style="background:${PCOL[t.p]}"></span>${esc(fmtDay(z.day))} · ${esc(t.t)} · ${esc(t.src)}</div><h3>${esc(t.title)}</h3>
         <div class="chips"><span class="chip"><i class="pdot" style="color:${PCOL[t.p]};background:${PCOL[t.p]}"></i>${esc(D.projects[t.p])}</span><span class="chip">${t.n} messages</span>${(t.people || []).map(p => `<span class="chip">${esc(p)}</span>`).join('')}</div></div>
         ${t.u ? `<div class="bubble u"><span class="who">You</span>${esc(t.u)}</div>` : ''}${t.a ? `<div class="bubble a"><span class="who">Archimedes</span>${esc(t.a)}</div>` : ''}
-        ${!t.u && !t.a ? '<div class="bubble a"><span class="who">Archimedes</span>The transcript lives in Hermes. The real build streams it in here, one more zoom level down.</div>' : '<div class="sec-title"><span>Opening exchange · full transcript lives in Hermes</span></div>'}`;
+        <button class="cta" data-wizthread="${esc(z.id)}">Open the full thread in Wizard</button>`;
     }
     return '';
   }
@@ -483,15 +517,38 @@
     const cr = e.target.closest('[data-crumb]');
     if (cr) { const ch = track.children[i].querySelector('.review')._chain; const k = +cr.dataset.crumb; if (k < ch.length - 1) setZ(i, ch[k], 'out'); return; }
     const say = e.target.closest('[data-say]'); if (say) return runUtterance(say.dataset.say, 'auto');
+    const wt = e.target.closest('[data-wizthread]'); if (wt) return openWizardThread(wt.dataset.wizthread);
     const act = e.target.closest('[data-act]')?.dataset.act;
-    if (act === 'clear') { desks[i] = { kind: 'empty' }; refreshDesk(i); toast('◌', 'Desk cleared'); }
+    if (act === 'clear') clearDesk(i);
     else if (act === 'inbox') openSheet('inbox');
     else if (act === 'yesterday') openReview('day', YESTERDAY);
   });
 
+  function clearDesk(i) {
+    if (i === HOME) return;
+    if (desks[i].pinned) { toast('📌', `Desk ${i + 1} is pinned to Wizard`); return; }
+    desks[i] = { kind: 'empty' }; refreshDesk(i); toast('◌', 'Desk cleared');
+  }
+
   /* ---------------- sheets ---------------- */
   const launcher = $('#launcher'), inboxEl = $('#inbox');
   let sheet = null;
+  /* ---------------- compact orb for app desks ----------------
+   * Home-type desks get the big centred orb. A desk running an app (Wizard,
+   * CineQueue…) shrinks it to a corner bubble: same gestures, out of the way.
+   * Tuck slides it into a thin edge tab; tap the tab to bring it back. */
+  function updateMini() {
+    const d = desks[idx] || {};
+    const mini = isAppDesk(d) && !sheet;
+    const side = d.side || (d.kind === 'wizard' ? 'left' : 'right');
+    device.classList.toggle('mini', mini);
+    device.classList.toggle('tucked', mini && !!d.tucked);
+    device.dataset.side = side;
+    device.style.setProperty('--mx', `${(device.clientWidth / 2 - 44) * (side === 'right' ? 1 : -1)}px`);
+  }
+  addEventListener('resize', () => updateMini());
+  function setOrbPlace(change) { const d = desks[idx]; if (!isAppDesk(d)) return; Object.assign(d, change); save(); updateMini(); vib(8); }
+  $('#orbTab').addEventListener('click', () => setOrbPlace({ tucked: false }));
   const sheetOpen = () => !!sheet;
   function openSheet(which, q) {
     closeSheets(true);
@@ -499,14 +556,14 @@
     if (which === 'launcher') { renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
     else { renderInbox(); inboxEl.classList.add('open'); }
     [launcher, inboxEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
-    vib(6);
+    vib(6); updateMini();
   }
   function closeSheets(quiet) {
     if (!sheet && quiet) return;
     sheet = null; device.classList.remove('sheet-open');
     launcher.classList.remove('open'); inboxEl.classList.remove('open');
     [launcher, inboxEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
-    $('#search').blur();
+    $('#search').blur(); updateMini();
   }
   $('#scrim').addEventListener('click', () => closeSheets());
 
@@ -517,21 +574,27 @@
     q = q.trim();
     if (!q) {
       const recentIds = store.get('recent', ['v-day', 'cinequeue', 'maps', 'signal-feed']).filter(id => APP[id]).slice(0, 4);
-      body.innerHTML = `
+      body.innerHTML = `${deskBar()}
         <div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
         <div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>
         <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => a.kind === 'wizard').length}</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'wizard').map(appTile).join('')}</div></div>
-        <div class="lgroup"><h4>Android <span>native</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'native').map(appTile).join('')}</div></div>`;
+        <div class="lgroup"><h4>Android <span>native</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'native').map(appTile).join('')}</div></div>${deskBar(true)}`;
       body.scrollTop = body.scrollHeight;
       return;
     }
     const n = norm(q);
     const hits = APPS.map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
-    const th = D.threads.filter(t => norm(t.title).includes(n)).slice(-4).reverse();
+    const th = (LIVE.ok ? LIVE.sessions.filter(x => !x.hidden && norm(x.title).includes(n)) : []).slice(0, 5);
     body.innerHTML = `${hits.length ? `<div class="lgroup"><h4>Apps &amp; views</h4>${hits.slice(0, 7).map((a, k) => appRow(a, k === 0)).join('')}</div>` : ''}
-      ${th.length ? `<div class="lgroup"><h4>Threads</h4>${th.map(t => `<button class="lrow" data-thread="${t.id}"><span class="ic" style="--g1:${PCOL[t.p]};--g2:#2a1a5a">${PICON[t.p]}</span><span class="nm">${esc(t.title)}<small>${fmtDay(t.day)} · ${esc(D.projects[t.p])}</small></span><span class="kind view">Thread</span></button>`).join('')}</div>` : ''}
+      ${th.length ? `<div class="lgroup"><h4>Threads</h4>${th.map(t => `<button class="lrow" data-thread="${esc(t.id)}"><span class="ic emo">${emoOf(t.id)}</span><span class="nm">${esc(t.title)}<small>${esc(ago(t.lastAssistantAt || t.updatedAt))}${LIVE.isNew(t) ? ' · unread' : ''}</small></span><span class="kind view">Wizard</span></button>`).join('')}</div>` : ''}
       <div class="lgroup"><h4>Command</h4><button class="lrow ${hits.length ? '' : 'sel'}" data-cmd="${esc(q)}"><span class="ic" style="--g1:#0fb8d8;--g2:#2a3a8a">⚡</span><span class="nm">“${esc(q)}”<small>Run through the fast router</small></span><span class="kind cmd">Run</span></button></div>`;
     body.scrollTop = body.scrollHeight;
+  }
+  // This desk's controls sit right above the search bar, nearest the thumb.
+  function deskBar(show) {
+    if (!show || idx === HOME) return '';
+    const d = desks[idx];
+    return `<div class="deskbar"><span><b>Desk ${idx + 1}</b> · ${esc(deskTitle(d))}${d.pinned ? ' · pinned' : ''}</span><span class="acts">${isAppDesk(d) ? '<button data-act="orb-side">Orb ⇄</button><button data-act="orb-tuck">Tuck orb</button><button data-act="reload-current">Reload</button>' : ''}${d.kind === 'empty' || d.pinned ? '' : '<button data-act="clear-current">Clear</button>'}</span></div>`;
   }
   $('#search').addEventListener('input', e => renderLauncher(e.target.value));
   $('#searchForm').addEventListener('submit', e => {
@@ -547,7 +610,12 @@
   }
   launcher.addEventListener('click', e => {
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
-    const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openThread(t.dataset.thread); }
+    const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }
+    const da = e.target.closest('[data-act]')?.dataset.act;
+    if (da === 'clear-current') { closeSheets(); return clearDesk(idx); }
+    if (da === 'reload-current') { closeSheets(); return refreshDesk(idx); }
+    if (da === 'orb-side') { closeSheets(); const d = desks[idx]; return setOrbPlace({ side: (d.side || (d.kind === 'wizard' ? 'left' : 'right')) === 'left' ? 'right' : 'left' }); }
+    if (da === 'orb-tuck') { closeSheets(); toast('◐', 'Orb tucked · tap the edge tab to bring it back', 2600); return setOrbPlace({ tucked: true }); }
     const c = e.target.closest('[data-cmd]'); if (c) { closeSheets(); runUtterance(c.dataset.cmd, 'command', true); }
   });
   function openThread(id) {
@@ -558,45 +626,56 @@
   }
 
   const GROUPS = [
-    { g: 'phone', name: 'Phone', c: '#8aa0c8' },
     { g: 'working', name: 'Working', c: 'var(--violet-2)' },
-    { g: 'ready', name: 'Ready for review', c: 'var(--green)' },
+    { g: 'ready', name: 'Unread', c: 'var(--green)' },
     { g: 'needs', name: 'Needs you', c: 'var(--amber)' },
   ];
+  function noteHtml(n, g) {
+    const sub = g === 'working' ? (n.status === 'queued' ? 'Queued' : 'Archimedes is on it') : g === 'needs' ? (n.status === 'waiting_for_approval' ? 'Waiting for your approval' : n.status === 'failed' || n.status === 'interrupted' ? 'Stopped · needs a look' : 'Needs you') : (n.preview || '');
+    return `<button class="note ${g === 'working' ? 'working' : ''}" data-note="${esc(n.id)}" data-g="${g}"><span class="ic emo">${emoOf(n.id)}</span>
+      <span class="bd"><span class="tp"><span class="src">Wizard</span><span class="tm">${esc(ago(g === 'working' ? (n.lastUserAt || n.updatedAt) : (n.lastAssistantAt || n.activityAt || n.updatedAt)))}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(clip(sub, 120))}</span></span></button>`;
+  }
   function renderInbox() {
+    const L = live();
+    let html = '<div class="push"></div>';
+    if (!LIVE.ok) html += `<div class="ibx-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open Wizard once, then come back.' : 'Connecting to Wizard…'}</div>`;
     // Most urgent sits lowest: closest to the thumb and the orb.
-    $('#inboxBody').innerHTML = `<div class="push"></div>` + GROUPS.map(G => {
-      const items = inbox.filter(n => n.g === G.g); if (!items.length) return '';
-      return `<div class="ibx-h" style="--c:${G.c}"><h4><i></i>${G.name}</h4><span>${items.length}</span></div>` + items.map(n =>
-        `<button class="note ${n.g === 'working' ? 'working' : ''} ${n.fresh ? 'fresh' : ''}" data-note="${n.id}"><span class="ic" style="--g1:${n.gr ? n.gr[0] : PCOL[n.p] || '#6b46ff'};--g2:${n.gr ? n.gr[1] : '#2a1a5a'}">${n.icon || PICON[n.p] || '✦'}</span>
-          <span class="bd"><span class="tp"><span class="src">${esc(n.src || D.projects[n.p] || 'Wizard')}</span><span class="tm">${esc(n.tm || '')}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(n.sub || '')}</span></span></button>`).join('');
-    }).join('') + `<div class="sec-title" style="justify-content:center;margin:10px 0 4px"><span>Swipe right to clear · states simulated</span></div>`;
-    inbox.forEach(n => n.fresh = false);
+    for (const G of GROUPS) {
+      const items = L[G.g]; if (!items.length) continue;
+      html += `<div class="ibx-h" style="--c:${G.c}"><h4><i></i>${G.name}</h4><span>${items.length}${G.g === 'ready' && items.length > 1 ? ' · <button class="ibx-all" data-allread>Mark all read</button>' : ''}</span></div>` + items.slice(0, 40).map(n => noteHtml(n, G.g)).join('');
+    }
+    if (LIVE.ok && !L.needs.length && !L.ready.length && !L.working.length) html += `<div class="ibx-empty"><b>All clear.</b> Nothing unread, nothing running.</div>`;
+    html += `<div class="sec-title" style="justify-content:center;margin:10px 0 4px"><span>Tap to open · swipe right to mark read</span></div>`;
+    $('#inboxBody').innerHTML = html;
     const b = $('#inboxBody'); b.scrollTop = b.scrollHeight;
   }
-  // tap opens, swipe right dismisses
+  // tap opens the real thread, swipe right marks it read everywhere
   let ns = null;
   inboxEl.addEventListener('pointerdown', e => { const el = e.target.closest('.note'); if (el) ns = { el, x: e.clientX, y: e.clientY, dx: 0 }; });
   inboxEl.addEventListener('pointermove', e => { if (!ns) return; ns.dx = e.clientX - ns.x; if (Math.abs(e.clientY - ns.y) > 20 && Math.abs(ns.dx) < 20) { ns.el.style.transform = ''; ns = null; return; } if (ns.dx > 0) ns.el.style.transform = `translateX(${ns.dx}px)`; });
   inboxEl.addEventListener('pointerup', () => {
     if (!ns) return; const { el, dx } = ns; ns = null;
-    const id = el.dataset.note;
-    if (dx > 90) { el.classList.add('gone'); vib(8); setTimeout(() => { inbox = inbox.filter(n => n.id !== id); renderInbox(); renderMoons(); refreshHome(); }, 240); return; }
+    const id = el.dataset.note, g = el.dataset.g;
+    if (dx > 90 && g !== 'working') { el.classList.add('gone'); vib(8); setTimeout(() => { LIVE.markSeen(id); toast('✓', 'Marked read'); }, 200); return; }
     el.style.transform = '';
-    if (Math.abs(dx) < 8) {
-      const n = inbox.find(x => x.id === id); if (!n) return;
-      if (n.thread) { closeSheets(); openThread(n.thread); }
-      else if (n.agentDesk != null) { closeSheets(); goDesk(n.agentDesk); }
-    }
+    if (Math.abs(dx) < 8) { closeSheets(true); openWizardThread(id); }
   });
   inboxEl.addEventListener('pointercancel', () => { if (ns) ns.el.style.transform = ''; ns = null; });
+  inboxEl.addEventListener('click', e => { if (e.target.closest('[data-allread]')) { LIVE.markSeen(live().ready.map(s => s.id)); vib(8); toast('✓', 'All marked read'); } });
   const refreshHome = () => { if (desks[HOME].kind === 'home') { const el = track.children[HOME]; if (el) el.innerHTML = renderHome(); } };
 
+  // Moons orbit the orb: one per running agent (violet) or thread that needs you (amber).
   function renderMoons() {
-    const m = inbox.filter(n => n.g === 'working' || n.g === 'needs').slice(0, 6);
-    $('#moons').innerHTML = m.map((n, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = 74; const c = n.g === 'working' ? 'var(--violet-2)' : 'var(--amber)';
+    const L = live();
+    const m = [...L.needs.map(() => 'var(--amber)'), ...L.working.map(() => 'var(--violet-2)'), ...L.ready.map(() => 'var(--green)')].slice(0, 8);
+    $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = 74;
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
+    const badge = L.needs.length + L.ready.length;
+    $('#orbBadge').textContent = badge > 99 ? '99+' : String(badge || '');
+    $('#orbBadge').hidden = !badge;
   }
+  // One place reacts to live changes: reads in Wizard, new replies, finished runs.
+  if (LIVE) LIVE.onChange(() => { renderMoons(); refreshHome(); if (sheet === 'inbox') renderInbox(); if (sheet === 'launcher') renderLauncher($('#search').value); });
 
   /* ---------------- toast ---------------- */
   let toastT = 0;
@@ -826,23 +905,19 @@
     }
     openSheet('launcher', text); return false;
   }
-  function toAgent(text, label, summary) {
+  async function toAgent(text, label, summary) {
     showRouted('agent', label); setVoice('agent'); vib(10);
-    const id = 'a' + Date.now();
-    let deskI = null;
-    if (desks[idx].kind === 'empty') { deskI = idx; desks[idx] = { kind: 'agent', text, busy: true }; refreshDesk(idx); }
-    inbox.push({ id, g: 'working', title: summary || clip(text, 60), sub: 'Archimedes is on it', p: 'wizard-os', tm: 'now', fresh: true, agentDesk: deskI });
-    renderMoons(); refreshHome(); renderDots();
     setTimeout(() => { setVoice('idle'); }, 1200);
-    txHide(2400);
-    toast('✦', 'Sent to Archimedes · <b>prototype, not delivered</b>', 2600);
-    setTimeout(() => {
-      const n = inbox.find(x => x.id === id); if (!n) return;
-      n.g = 'ready'; n.sub = 'Prototype reply ready'; n.fresh = true; n.tm = 'just now';
-      if (deskI != null && desks[deskI].kind === 'agent') { desks[deskI].busy = false; desks[deskI].reply = 'In the real build this request goes to me in Wizard and this desk becomes our thread. Here it stayed on your phone.'; refreshDesk(deskI); }
-      renderMoons(); refreshHome(); renderDots(); if (sheet === 'inbox') renderInbox();
-      toast('✓', 'Ready for review · swipe down on the orb', 2400);
-    }, 6500);
+    txHide(2600);
+    try {
+      const { sessionId } = await LIVE.send(text);
+      toast('✦', 'Sent to Archimedes · <b>new Wizard thread</b>', 2600);
+      // An empty desk becomes that thread; otherwise it lands in Working.
+      if (desks[idx].kind === 'empty') { desks[idx] = { kind: 'wizard', session: sessionId }; refreshDesk(idx); }
+      renderMoons(); refreshHome(); renderDots();
+    } catch (e) {
+      toast('!', e.status === 403 ? 'Wizard sign-in needed · not sent' : 'Couldn’t reach Wizard · not sent', 3200);
+    }
   }
 
   /* ---------------- orb gestures ---------------- */
@@ -954,8 +1029,9 @@
 
   /* ---------------- boot ---------------- */
   buildDesks(); setVoice('idle');
+  if (LIVE) LIVE.refresh();
   { const n = new Date(); $('#clock').textContent = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; }
   if (!store.get('coached', false)) { $('#coach').hidden = false; }
   $('#coachGo').addEventListener('click', () => { $('#coach').hidden = true; store.set('coached', true); shock(); });
-  window.__wos = { goDesk, openSheet, closeSheets, runUtterance, zoomIn: () => zoomIn(idx), zoomOut: () => zoomOut(idx), get idx() { return idx; }, get desks() { return desks; }, get voice() { return V.state; }, startVoice, finishVoice, cancelVoice, execute, reset() { localStorage.clear(); location.reload(); } };
+  window.__wos = { live: LIVE, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, zoomIn: () => zoomIn(idx), zoomOut: () => zoomOut(idx), get idx() { return idx; }, get desks() { return desks; }, get voice() { return V.state; }, startVoice, finishVoice, cancelVoice, execute, reset() { Object.keys(localStorage).filter(k => k.startsWith("wos.")).forEach(k => localStorage.removeItem(k)); location.reload(); } };
 })();
