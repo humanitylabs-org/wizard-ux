@@ -15,8 +15,8 @@ android {
         applicationId 'ai.wizards.os'
         minSdk 28
         targetSdk 35
-        versionCode 1
-        versionName '0.1.0'
+        versionCode 2
+        versionName '0.2.0'
         buildConfigField 'String', 'HOME_URL', '"https://private.wizard001.com/wizard-os-home/"'
         buildConfigField 'String', 'ORIGIN', '"https://private.wizard001.com"'
     }
@@ -40,6 +40,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // QA build: installs beside the real app (own id) and allows WebView inspection over adb.
+            applicationIdSuffix '.qa'
+            versionNameSuffix '-qa'
+        }
         release {
             minifyEnabled false
             if (wosSigningReady) signingConfig signingConfigs.release
