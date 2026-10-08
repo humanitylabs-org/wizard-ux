@@ -545,7 +545,7 @@
     // navigation (the URL changes) stays the app's own back step.
     try { win.__wosHref = win.location.href; } catch (e) {}
     try { win.addEventListener('popstate', e => {
-      if (Date.now() < dropUntil) { e.stopImmediatePropagation(); ignorePop = 0; return; } // the shell's guard drop landed here
+      if (Date.now() < dropUntil) { e.stopImmediatePropagation(); ignorePop = 0; dropUntil = 0; return; } // the shell's guard drop landed here
       if (Date.now() < exitUntil) { e.stopImmediatePropagation(); history.back(); return; }
       let same = false; try { same = win.location.href === win.__wosHref; win.__wosHref = win.location.href; } catch (x) {}
       // The app keeps its own back step only when it is the focused window on the desk in view, nothing is
@@ -1681,8 +1681,8 @@
     // Landing on a guard entry means the Back key popped something stacked above it (a hosted app's entry or a
     // second guard). We never navigate forward, so every pop is a user Back: never swallow one.
     guardOn = e.state?.wos === 'guard';
-    if (ignorePop) { ignorePop--; return; }
-    if (Date.now() < dropUntil) return; // our own guard drop surfacing late
+    if (ignorePop) { ignorePop--; dropUntil = 0; return; }
+    if (Date.now() < dropUntil) { dropUntil = 0; return; } // our own guard drop surfacing late (counts once)
     if (Date.now() < exitUntil) { history.back(); return; } // second Back: leave
     onBack();
     // A consumed step re-arms at once, so the next Back (even with no tap in
