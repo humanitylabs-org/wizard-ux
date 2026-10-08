@@ -1738,6 +1738,8 @@
   // Assistant handoff (side-key app → Wizard OS). 'listen' opens the orb listening; 'say' shows the words as a
   // draft that James sends with one tap — another app can never make Archimedes act on its own.
   window.__wosHandoff = h => {
+    // A side-button handoff means James already knows the gestures: clear the first-run coach so the draft is visible.
+    if (!$("#coach").hidden) { $("#coach").hidden = true; store.set("coached", true); }
     if (!h || typeof h !== 'object') return false;
     closeSheets(); if (idx !== HOME) goDesk(HOME);
     if (h.action === 'listen') { if (V.state === 'idle') startVoice('auto'); return true; }
