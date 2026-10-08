@@ -141,6 +141,8 @@ void main(){
   let ok = false;
   if (gl) { try { init(); ok = true; } catch (e) { console.warn('orb shader', e); } }
   if (!ok) { canvas.hidden = true; fallback.hidden = false; }
+  // A lost WebGL context leaves a blank (sometimes white) canvas on Android: show the PNG orb instead.
+  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); gl = null; canvas.hidden = true; fallback.hidden = false; });
   requestAnimationFrame(frame);
 
   window.Orb = {

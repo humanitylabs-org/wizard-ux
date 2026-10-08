@@ -82,7 +82,7 @@
 
   /* ---------- drifting words around the orb ---------- */
   let floaters = [], DPR = 1, CW = 0, CH = 0;
-  const rs = () => { DPR = Math.min(W.devicePixelRatio || 1, 2.5); CW = innerWidth; CH = innerHeight; C.width = CW * DPR; C.height = CH * DPR; X.setTransform(DPR, 0, 0, DPR, 0, 0); };
+  const rs = () => { DPR = Math.min(W.devicePixelRatio || 1, 2); CW = innerWidth; CH = innerHeight; C.width = Math.round(CW * DPR); C.height = Math.round(CH * DPR); X.setTransform(DPR, 0, 0, DPR, 0, 0); };
   rs(); addEventListener('resize', rs);
   function orbXY() { const r = $('#orbWrap')?.getBoundingClientRect(); return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : { x: CW / 2, y: CH - 90 }; }
   function spawnWord(text, hot) {
@@ -97,6 +97,8 @@
     const calm = floaters.filter(f => !f.hot); if (calm.length > 4) floaters.splice(floaters.indexOf(calm[0]), 1);
   }
   function draw() {
+    // Android Chrome can drop and restore a 2D canvas (memory pressure), which resets its transform: reapply every frame.
+    if (C.width !== Math.round(CW * DPR)) rs(); else X.setTransform(DPR, 0, 0, DPR, 0, 0);
     X.clearRect(0, 0, CW, CH);
     const busy = wos()?.voice && wos().voice !== 'idle';
     X.textAlign = 'center';
