@@ -53,6 +53,7 @@
       lastUserAt, lastAssistantAt,
       updatedAt: lastUserAt ?? iso(item.wizard_started_at ?? item.updated_at ?? item.last_active ?? item.started_at),
       activityAt: optIso(item.wizard_activity_at) || optIso(item.last_active),
+      runId: String(item.wizard_run_id || ''),
       preview, previewRole: latest?.role === 'assistant' ? 'assistant' : latest?.role === 'user' ? 'user' : undefined,
       previewAt: latestAt,
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
@@ -193,15 +194,57 @@
     },
     session(id) { return this.sessions.find(s => s.id === id) || null; },
     chatUrl(id) { return id ? `/wizard/?session=${encodeURIComponent(id)}` : '/wizard/?view=work'; },
-    /* A real Archimedes request: same admission path the Wizard app uses. */
-    async send(input) {
+    /* A real Archimedes request: same admission path the Wizard app uses.
+     * `instructions` rides as Hermes's per-run ephemeral system prompt: the agent
+     * sees which view James was looking at, the thread itself stays clean. */
+    async send(input, opts = {}) {
       const id = `wizard_${Date.now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
       await req('/wizard/hermes/api/sessions', { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id }) });
-      const r = await req('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify({ session_id: id, input }) });
+      const body = { session_id: id, input };
+      if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
+      const r = await req('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
       const run = await r.json().catch(() => ({}));
-      this.sessions.unshift({ id, runtime: 'direct', title: input.slice(0, 60), status: 'running', updatedAt: new Date().toISOString(), preview: input, source: 'wizard-mobile' });
+      const runId = run.run_id || run.id || '';
+      this.sessions.unshift({ id, runtime: 'direct', title: input.slice(0, 60), status: 'running', runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: input, source: 'wizard-mobile' });
       this.emit(); setTimeout(() => this.refresh(), 4000);
-      return { sessionId: id, runId: run.run_id || run.id || '' };
+      return { sessionId: id, runId };
+    },
+    /* Reply inside an existing thread: steer the live run, or start a new run. */
+    async reply(id, input, opts = {}) {
+      const s = this.session(id);
+      if (s && WORKING.has(s.status) && s.runId) {
+        try {
+          await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}/steer`, { method: 'POST', headers: J, body: JSON.stringify({ input }) });
+          return { steered: true, runId: s.runId };
+        } catch (e) { if (![404, 409, 410].includes(e.status)) throw e; }
+      }
+      const body = { session_id: id, input };
+      if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
+      const r = await req('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
+      const run = await r.json().catch(() => ({}));
+      const runId = run.run_id || run.id || '';
+      if (s) Object.assign(s, { status: 'running', runId, lastUserAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      this.emit(); setTimeout(() => this.refresh(), 3000);
+      return { steered: false, runId };
+    },
+    /* Full message history of one thread (oldest first), paged like Wizard. */
+    async messages(id) {
+      const rows = [];
+      for (let offset = 0; offset < 5000; offset += 500) {
+        const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard`)).json();
+        const page = p.data || p.messages || p.items || [];
+        rows.push(...page);
+        const n = Number(p.pagination?.returned ?? page.length);
+        if (!isFinite(n) || n < 500 || !page.length) break;
+      }
+      return rows;
+    },
+    async sessionInfo(id) {
+      const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}`)).json();
+      const s = normalize(p.session || p); if (!s) return null;
+      const i = this.sessions.findIndex(x => x.id === id);
+      if (i >= 0) this.sessions[i] = { ...this.sessions[i], ...s }; else this.sessions.push(s);
+      return s;
     },
   };
   // Wizard (in its desk, or another tab) writes the same key when a chat is opened.

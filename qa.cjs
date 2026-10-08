@@ -54,21 +54,17 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(650);
   }
-  // swipe orb left -> next desk (maps desk 4)
+  // swipe orb left -> next desk (yesterday's review window lives on desk 4 on first run)
   await drag(-150, 0);
   check('swipe left moves to desk 4', await page.evaluate(() => window.__wos.idx === 3));
   const dots2 = await page.evaluate(() => [document.querySelectorAll('#dotsL .ddot').length, document.querySelectorAll('#dotsR .ddot').length]);
   check('dots 3 left / 1 right on desk 4', dots2[0] === 3 && dots2[1] === 1, JSON.stringify(dots2));
-  await shot('02-desk4-maps');
-  await drag(150, 0); await drag(150, 0);
-  let at = await page.evaluate(() => window.__wos.idx);
-  if (at !== 1) { console.log('  note: swipe sequence ended at desk', at + 1, '- retrying once'); for (let k = 0; k < 3 && at > 1; k++) { await drag(150, 0); at = await page.evaluate(() => window.__wos.idx); } }
-  check('swipe right twice to desk 2 (review)', at === 1, 'idx=' + at);
   await shot('03-review-day');
+  let at = await page.evaluate(() => window.__wos.idx);
 
   // pinch out on review -> week
   async function pinch(scale) {
-    const st = await page.locator('.desk[data-desk="1"] .zstage').boundingBox();
+    const st = await page.locator('.desk[data-desk="3"] .zstage').boundingBox();
     const mx = st.x + st.width / 2, my = st.y + 220, d0 = scale > 1 ? 40 : 150, d1 = d0 * scale;
     const cdp = await ctx.newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: mx - d0 / 2, y: my, id: 1 }, { x: mx + d0 / 2, y: my, id: 2 }] });
@@ -76,22 +72,22 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(700);
   }
-  const lvl = () => page.evaluate(() => window.__wos.desks[1].z.level);
+  const lvl = () => page.evaluate(() => { const w = window.__wos.wins; const id = window.__wos.desks[3].wins.find(x => w[x].app === 'review'); return w[id].z.level; });
   await pinch(0.35); check('pinch in-to-out: day -> week', (await lvl()) === 'week', await lvl());
   await shot('04-review-week');
   await pinch(0.35); check('pinch: week -> month', (await lvl()) === 'month', await lvl());
   await shot('05-review-month');
   await pinch(3.2); check('pinch open: month -> week', (await lvl()) === 'week', await lvl());
   // tap a day card to dive
-  await page.locator('.desk[data-desk="1"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="3"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
   check('tap dives week -> day', (await lvl()) === 'day', await lvl());
-  await page.locator('.desk[data-desk="1"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="3"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
   check('tap dives day -> focus', (await lvl()) === 'group', await lvl());
   await shot('06-review-focus');
-  await page.locator('.desk[data-desk="1"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="3"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
   check('tap dives focus -> thread', (await lvl()) === 'thread', await lvl());
   await shot('07-review-thread');
-  await page.locator('.desk[data-desk="1"] .crumb [data-crumb="0"]').click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="3"] .crumb [data-crumb="0"]').click(); await page.waitForTimeout(700);
   check('breadcrumb jumps back to month', (await lvl()) === 'month', await lvl());
 
   // swipe up -> launcher
@@ -101,9 +97,10 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   await page.fill('#search', 'cine'); await page.waitForTimeout(200);
   await shot('09-launcher-search');
   await page.press('#search', 'Enter'); await page.waitForTimeout(800);
-  const d = await page.evaluate(() => ({ idx: window.__wos.idx, d: window.__wos.desks[window.__wos.idx] }));
-  check('search+enter opens CineQueue live on a desk', d.d.kind === 'frame' && d.d.app === 'cinequeue', JSON.stringify(d));
-  check('app desk shrinks the orb', await page.evaluate(() => document.querySelector('#device').classList.contains('mini')));
+  const d = await page.evaluate(() => { const s = window.__wos, dk = s.desks[s.idx]; return { idx: s.idx, wins: dk.wins.map(x => s.wins[x].app + ':' + (s.wins[x].appId || '')) }; });
+  check('search+enter opens CineQueue as a window, tiled beside the review', d.wins.includes('frame:cinequeue') && d.wins.length === 2, JSON.stringify(d));
+  const ob = await page.locator('#orbWrap').boundingBox();
+  check('orb stays big and centred with apps open', Math.abs(ob.x + ob.width / 2 - 393 / 2) < 3 && ob.width >= 80, JSON.stringify(ob));
   await page.waitForTimeout(2500); await shot('09b-cinequeue-desk');
 
   // swipe down -> inbox (from the home desk, where the big orb lives)
@@ -127,27 +124,29 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   await page.click('#arcCancel'); await page.waitForTimeout(400);
   check('cancel returns idle', await page.evaluate(() => window.__wos.voice === 'idle'));
 
+  console.log('  route before router test:', await page.evaluate(() => localStorage.getItem('wos.route')));
   // Typed command through real router (DeepSeek Flash) — natural phrasing not caught by local parser
   await page.evaluate(() => window.__wos.runUtterance('can you get me to the Bangkok airport', 'auto', true));
   await page.waitForFunction(() => /DeepSeek|on-device|Archimedes/.test(document.querySelector('#txRouteText').textContent) && !/Routing/.test(document.querySelector('#txRouteText').textContent), null, { timeout: 30000 });
   await page.waitForTimeout(300);
   const rt = await page.textContent('#txRouteText');
-  const md = await page.evaluate(() => window.__wos.desks[window.__wos.idx]);
-  check('router -> maps directions', md.kind === 'maps' && md.mode === 'dir', rt + ' ' + JSON.stringify(md));
+  const md = await page.evaluate(() => { const s = window.__wos; return s.desks[s.idx].wins.map(x => s.wins[x]).find(w => w.app === 'maps') || null; });
+  check('router -> maps directions', md && md.mode === 'dir', rt + ' ' + JSON.stringify(md));
   await shot('13-voice-maps');
   await page.waitForTimeout(2200);
 
   // agent route
-  await page.evaluate(() => { window.__wos.desks[4] = { kind: 'empty' }; window.__wos.goDesk(4, true); }); await page.waitForTimeout(500);
+  await page.evaluate(() => { const s = window.__wos; [...s.desks[4].wins].forEach(id => s.closeWin(id)); s.goDesk(4, true); }); await page.waitForTimeout(500);
   await page.evaluate(() => window.__wos.runUtterance('what should I prioritize for the Wizard OS launch next week?', 'auto', true));
   await page.waitForFunction(() => /Archimedes/.test(document.querySelector('#txRouteText').textContent), null, { timeout: 30000 });
   await page.waitForTimeout(500);
   await page.waitForTimeout(1200);
-  const ad = await page.evaluate(() => window.__wos.desks[4]);
+  const ad = await page.evaluate(() => { const s = window.__wos; return s.desks[4].wins.map(x => s.wins[x]); });
   const run = sent.find(s => s.path.endsWith('/v1/runs')), ses = sent.find(s => s.path.endsWith('/api/sessions'));
   check('reasoning request creates a real Wizard thread request', !!ses && ses.body?.source === 'wizard-mobile' && /^wizard_\d+_[0-9a-f]{12}$/.test(ses.body?.id || ''), JSON.stringify(ses?.body));
   check('run admitted with idempotency key and same session', !!run && run.body?.session_id === ses?.body?.id && run.idem.length >= 32 && /prioritize/.test(run.body?.input || ''), JSON.stringify(run?.body));
-  check('empty desk becomes that Wizard thread', ad.kind === 'wizard' && ad.session === ses?.body?.id, JSON.stringify(ad));
+  check('the reply opens as a Chats window on that thread', ad.some(w => w.app === 'chats' && w.thread === ses?.body?.id), JSON.stringify(ad));
+  check('send carries view context for Archimedes', typeof run?.body?.instructions === 'string' && /Wizard OS/.test(run.body.instructions), (run?.body?.instructions || '').slice(0, 160));
   await shot('14-agent');
 
   // hold for command (fake mic)

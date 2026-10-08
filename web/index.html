@@ -53,7 +53,7 @@
         <div class="orb-ring"></div>
         <div class="orb-shock"></div>
         <div id="moons" class="moons"></div>
-        <canvas id="orb" class="orb" width="220" height="220" aria-label="Wizard orb. Tap to talk, hold for a command, swipe up for apps, down for inbox, sideways for desks." role="button" tabindex="0"></canvas>
+        <canvas id="orb" class="orb" width="220" height="220" aria-label="Wizard orb. Tap to talk, hold for a command and slide sideways to aim it at a desk, swipe up for apps, down for inbox, sideways for desks." role="button" tabindex="0"></canvas>
         <img id="orbFallback" class="orb-fallback" src="robert-thread-orb.png" alt="" hidden>
         <span id="timer" class="timer">0:00</span>
         <span id="holdHint" class="hold-hint">Command</span>
@@ -78,7 +78,7 @@
       <div class="sheet-grip"></div>
     </section>
 
-    <button id="orbTab" class="orb-tab" aria-label="Bring the orb back"><i></i></button>
+    <div id="wmenu" class="wmenu" role="menu"></div>
 
     <div id="scrim" class="scrim"></div>
 
@@ -89,7 +89,7 @@
         <span class="c c-down">↓<b>Inbox</b></span>
         <span class="c c-left">←<b>Desk</b></span>
         <span class="c c-right"><b>Desk</b>→</span>
-        <p><b>Tap</b> to talk to Archimedes<br><b>Hold</b> for a quick command<br><b>Pinch</b> any review to zoom in and out</p>
+        <p><b>Tap</b> to talk · the app in front hears it too<br><b>Hold</b> for a command · slide to aim it at a desk<br><b>Pinch</b> a window to fill the screen</p>
         <button id="coachGo" class="coach-go">Enter</button>
       </div>
     </div>

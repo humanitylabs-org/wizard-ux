@@ -54,6 +54,9 @@ If it is a direct phone/UI command, reply {"route":"command","action":ACTION,...
 - maps_search {"query": text}
 - play_music {"query": text}
 - clear_desk {}
+- close_window {}                    close the window in front
+- fullscreen {"on": true|false}     make the window in front fill the screen, or tile it again
+- move_window {"to": "next"|"prev"|1-5}
 - search {"query": text}
 If it needs reasoning, memory, writing, research, decisions, or a conversation with the agent, reply {"route":"agent","summary": short restatement}.
 If it opens an app AND asks for follow-up work inside it ("open CineQueue and add Dune"), reply
@@ -170,6 +173,20 @@ class Handler(SimpleHTTPRequestHandler):
         system = ROUTER_SYSTEM % (", ".join(apps) or "Wizard", today)
         if force:
             system += "\nThe user held the orb for COMMAND mode: prefer a command; use agent only if no command fits."
+        view = payload.get("view") if isinstance(payload.get("view"), dict) else None
+        if view and not force:
+            vname = str(view.get("name", ""))[:80].replace("\n", " ")
+            vkind = str(view.get("kind", ""))[:40].replace("\n", " ")
+            system += (
+                f"\n\nCONTEXT: the window in front is {vname!r} ({vkind}). The user may be talking TO that window."
+                "\nReply {\"route\":\"view\"} when the utterance continues or answers what is on that window:"
+                " confirmations and refusals (\"yes\", \"go ahead\", \"do it\", \"no, wait\"), corrections,"
+                " follow-ups that use \"this\", \"that\", \"it\", or refer to its topic, and replies to a question it asked."
+                "\nKeep {\"route\":\"command\"} for phone/UI commands (open/close apps, desks, maps, music, zoom)."
+                "\nUse {\"route\":\"agent\"} only for a NEW request clearly unrelated to that window."
+                "\nExamples with a chat thread in front: \"Yes go ahead with that\" -> view; \"Make the headline shorter\" -> view;"
+                " \"Open CineQueue\" -> command; \"What's the weather tomorrow\" -> agent."
+            )
         req_body = {
             "model": ROUTER_MODEL,
             "temperature": 0,
@@ -195,7 +212,9 @@ class Handler(SimpleHTTPRequestHandler):
             cmd = json.loads(m.group(0)) if m else {}
         except json.JSONDecodeError:
             cmd = {}
-        if cmd.get("route") not in ("command", "agent"):
+        if cmd.get("route") == "view" and not (view and not force):
+            cmd = {"route": "agent", "summary": text}
+        if cmd.get("route") not in ("command", "agent", "view"):
             cmd = {"route": "agent", "summary": text}
         return self._json(200, {"cmd": cmd, "ms": ms, "model": ROUTER_MODEL})
 

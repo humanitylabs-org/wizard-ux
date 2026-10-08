@@ -1,0 +1,214 @@
+// QA for the rebuilt shell: Back never exits, windows tile/move/close, Chats native, view-aware voice.
+// Runs against the live origin through the Thales tunnel. Every Hermes/Wizard write is intercepted.
+const { chromium } = require('/home/telos/node_modules/playwright');
+const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
+const OUT = process.env.QA_OUT || '/home/telos/apps/wizard-os-home/qa-live';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:18443';
+let pass = 0, fail = 0;
+const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
+
+async function boot(b, { noCloseWatcher = false } = {}) {
+  const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true });
+  const writes = [];
+  await ctx.route('**/*', r => {
+    const q = r.request(), u = q.url();
+    if (q.method() !== 'GET' && /\/wizard\/(hermes|thread-seen)/.test(u)) {
+      writes.push({ m: q.method(), u: u.replace(/^https:\/\/[^/]+/, ''), body: q.postData() || '' });
+      if (/\/api\/sessions$/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ session: { id: 'qa-fake-session' } }) });
+      if (/\/v1\/runs$/.test(u)) return r.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ run_id: 'qa-fake-run', status: 'queued' }) });
+      return r.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    }
+    return r.continue();
+  });
+  const p = await ctx.newPage();
+  const errs = []; p.on('pageerror', e => errs.push(String(e)));
+  await p.addInitScript(nc => { try { localStorage.setItem('wos.coached', 'true'); } catch (e) {} if (nc) { try { delete window.CloseWatcher; } catch (e) {} window.CloseWatcher = undefined; } }, noCloseWatcher);
+  await p.goto('about:blank');
+  await p.goto(URL_, { waitUntil: 'load' });
+  await p.waitForFunction(() => window.__wos && window.__wos.live && window.__wos.live.ok, null, { timeout: 30000 });
+  await p.waitForTimeout(800);
+  return { ctx, p, writes, errs };
+}
+const state = p => p.evaluate(() => ({ idx: __wos.idx, url: location.pathname, sheet: __wos.sheet, desks: __wos.desks.map(d => ({ wins: d.wins.map(id => ({ app: __wos.wins[id].app, thread: __wos.wins[id].thread || null })), full: d.full, focus: d.focus })), back: __wos.back }));
+const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.waitForTimeout(500); };
+
+(async () => {
+  const b = await chromium.launch({ args: ['--host-resolver-rules=' + RESOLVE] });
+
+  /* ---------- 1. The repro: open a thread, press Back (CloseWatcher path = Android Back in Chrome 120+) ---------- */
+  {
+    const { ctx, p, writes, errs } = await boot(b);
+    let s = await state(p);
+    ok(s.idx === 2 && s.desks[2].wins.length === 0, 'boots on Home; Home holds no app');
+    ok(s.desks[1].wins.some(w => w.app === 'chats'), 'Chats starts as a window on desk 2 (closable, not pinned)');
+    ok(s.back.watchers >= 1, 'Back watcher armed at boot', JSON.stringify(s.back));
+    ok(await p.locator('.orb-wrap').evaluate(e => Math.round(e.getBoundingClientRect().width)) === 84, 'orb is 84px (20% smaller than 104)');
+    await p.evaluate(() => __wos.goDesk(1)); await p.waitForTimeout(900);
+    const orbBox = await p.locator('#orbWrap').boundingBox();
+    ok(Math.abs(orbBox.x + orbBox.width / 2 - 206) < 3, 'orb stays centred with an app open', JSON.stringify(orbBox));
+    ok(await p.locator('.tabbar, .wizard-tabs, nav.tabs').count() === 0, 'Chats has no bottom tabs');
+    await tap(p, '.ch-row'); await p.waitForTimeout(1500);
+    s = await state(p);
+    const thread = s.desks[1].wins[0].thread;
+    ok(!!thread, 'tapping a row opens the thread inside the Chats window');
+    ok(await p.locator('.msg').count() > 0, 'thread renders real messages');
+    await p.screenshot({ path: OUT + '/40-thread-open.png' });
+    await p.keyboard.press('Escape'); await p.waitForTimeout(500);
+    s = await state(p);
+    ok(s.url.includes('wizard-os-home') && s.desks[1].wins[0].thread === null && s.idx === 1, 'Back from a thread returns to the thread list (app stays open)', JSON.stringify(s));
+    await p.keyboard.press('Escape'); await p.waitForTimeout(700);
+    s = await state(p);
+    ok(s.url.includes('wizard-os-home') && s.idx === 2, 'next Back goes to the Home desk', JSON.stringify({ idx: s.idx, log: s.back.log }));
+    await p.keyboard.press('Escape'); await p.waitForTimeout(400);
+    s = await state(p);
+    const warned = await p.locator('#toast').textContent();
+    ok(s.url.includes('wizard-os-home') && /again to exit/i.test(warned), 'Back on Home only warns: “Press back again to exit”', warned);
+    await p.waitForTimeout(2400);
+    s = await state(p);
+    ok(s.url.includes('wizard-os-home') && !s.back.exitArmed && s.back.watchers >= 1, 'warning expires after 2 s and Back re-arms', JSON.stringify(s.back));
+    // Many Backs in a row (no taps in between) must each be consumed, never leak to the browser.
+    await p.evaluate(() => { __wos.goDesk(0); }); await p.waitForTimeout(300);
+    await p.locator('.desk').nth(0).tap({ position: { x: 200, y: 300 } }).catch(() => {});
+    await p.evaluate(() => { __wos.openSheet('launcher'); }); await p.waitForTimeout(300);
+    for (let k = 0; k < 2; k++) { await p.keyboard.press('Escape'); await p.waitForTimeout(350); }
+    s = await state(p);
+    ok(s.url.includes('wizard-os-home') && s.idx === 2 && !s.sheet, 'sheet → Home in two Backs without any tap between', JSON.stringify({ idx: s.idx, log: s.back.log }));
+    // Double Back on Home really exits (the only way out).
+    await p.keyboard.press('Escape'); await p.waitForTimeout(250);
+    await p.goBack().catch(() => {}); await p.waitForTimeout(600);
+    ok(p.url() === 'about:blank', 'second Back within 2 s exits (only way out)', p.url());
+    ok(errs.length === 0, 'no page errors (CloseWatcher run)', errs.join(' | '));
+    ok(!writes.some(w => /\/v1\/runs|\/api\/sessions$/.test(w.u)), 'no messages sent during Back test');
+    await ctx.close();
+  }
+
+  /* ---------- 2. Same repro on browsers without CloseWatcher (history guard path) ---------- */
+  {
+    const { ctx, p, errs } = await boot(b, { noCloseWatcher: true });
+    await p.evaluate(() => __wos.goDesk(1)); await p.waitForTimeout(700);
+    await tap(p, '.ch-row'); await p.waitForTimeout(1200);
+    let s = await state(p);
+    ok(s.back.guardOn, 'history guard pushed after a tap', JSON.stringify(s.back));
+    await p.goBack(); await p.waitForTimeout(700);
+    s = await state(p);
+    ok(s.url.includes('wizard-os-home') && s.desks[1].wins[0].thread === null, 'history Back from a thread stays in the app → thread list', JSON.stringify({ url: s.url, log: s.back.log }));
+    await tap(p, '.ch-search');
+    await p.goBack(); await p.waitForTimeout(700);
+    s = await state(p);
+    ok(s.url.includes('wizard-os-home') && s.idx === 2, 'history Back → Home desk', JSON.stringify({ idx: s.idx, log: s.back.log }));
+    await p.locator('.home-line').tap().catch(() => {});
+    await p.waitForTimeout(300);
+    await p.goBack(); await p.waitForTimeout(700);
+    ok(p.url().includes('wizard-os-home') && /again to exit/i.test(await p.locator('#toast').textContent()), 'history Back on Home warns and stays', p.url());
+    await p.goBack(); await p.waitForTimeout(700);
+    ok(p.url() === 'about:blank', 'second history Back exits', p.url());
+    ok(errs.length === 0, 'no page errors (history run)', errs.join(' | '));
+    await ctx.close();
+  }
+
+  /* ---------- 3. Windows: tile, focus, full screen, move, close; Chats is just an app ---------- */
+  {
+    const { ctx, p, writes, errs } = await boot(b);
+    await p.evaluate(() => __wos.goDesk(1)); await p.waitForTimeout(500);
+    await p.evaluate(() => __wos.execute({ action: 'open_view', view: 'week' }, 'open week')); await p.waitForTimeout(900);
+    let s = await state(p);
+    ok(s.desks[1].wins.length === 2 && s.desks[1].wins.map(w => w.app).join() === 'chats,review', 'opening an app on a busy desk tiles it beside Chats');
+    ok(await p.locator('.desk').nth(1).locator('.tiles').getAttribute('data-n') === '2', 'two tiles laid out');
+    await p.screenshot({ path: OUT + '/41-tiled-2.png' });
+    await p.evaluate(() => __wos.execute({ action: 'open_app', app: 'CineQueue' }, 'open cinequeue')); await p.waitForTimeout(1500);
+    await p.screenshot({ path: OUT + '/42-tiled-3.png' });
+    s = await state(p);
+    ok(s.desks[1].wins.length === 3, 'third app tiles too (master + stack)');
+    // Double-tap a title bar → full screen; Back → tiles again.
+    const cdp = await ctx.newCDPSession(p);
+    const bb = await p.locator('.desk').nth(1).locator('.win').nth(0).locator('.wbar .wt').boundingBox();
+    const tp = async () => { const pt = [{ x: bb.x + bb.width / 2, y: bb.y + bb.height / 2, id: 1 }]; await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt }); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); };
+    await tp(); await p.waitForTimeout(140); await tp(); await p.waitForTimeout(600);
+    s = await state(p);
+    ok(s.desks[1].full === true, 'double-tap title bar → full screen', JSON.stringify(s.desks[1]));
+    await p.screenshot({ path: OUT + '/43-full.png' });
+    await p.keyboard.press('Escape'); await p.waitForTimeout(500);
+    s = await state(p);
+    ok(s.desks[1].full === false && s.idx === 1, 'Back from full screen returns to tiles (same desk)', JSON.stringify({ full: s.desks[1].full, idx: s.idx, log: s.back.log }));
+    // Pinch out on a tile → full screen; pinch in → tiles.
+    const w0 = await p.locator('.desk').nth(1).locator('.win').nth(0).boundingBox();
+    const pinch = async (box, from, to) => {
+      const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+      const pts = d => [{ x: cx - d, y: cy, id: 1 }, { x: cx + d, y: cy, id: 2 }];
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(from) });
+      for (let k = 1; k <= 6; k++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(from + (to - from) * k / 6) }); await p.waitForTimeout(30); }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await p.waitForTimeout(600);
+    };
+    await pinch(w0, 30, 120);
+    s = await state(p);
+    ok(s.desks[1].full === true, 'pinch out on a window → full screen');
+    const wf = await p.locator('.desk').nth(1).locator('.win.full').boundingBox();
+    await pinch(wf, 130, 40);
+    s = await state(p);
+    ok(s.desks[1].full === false, 'pinch in → back to tiles');
+    // Move Chats to desk 5 via its menu; close CineQueue.
+    const chatWin = p.locator('.desk').nth(1).locator('.win.app-chats');
+    await chatWin.locator('[data-wact="menu"]').tap(); await p.waitForTimeout(300);
+    ok(await p.locator('#wmenu.open').count() === 1, 'window menu opens');
+    await p.locator('#wmenu [data-mact="right"]').tap(); await p.waitForTimeout(700);
+    s = await state(p);
+    ok(s.desks[2].wins.some(w => w.app === 'chats') || s.desks.findIndex(d => d.wins.some(w => w.app === 'chats')) === 2, 'menu → move Chats one desk right', JSON.stringify(s.desks.map(d => d.wins.map(w => w.app))));
+    ok(s.idx === 2, 'view follows the moved window');
+    await p.evaluate(() => __wos.goDesk(1)); await p.waitForTimeout(700);
+    const fr = p.locator('.desk').nth(1).locator('.win.app-frame');
+    await fr.locator('[data-wact="close"]').tap(); await p.waitForTimeout(600);
+    s = await state(p);
+    ok(!s.desks[1].wins.some(w => w.app === 'frame'), 'close button closes a window');
+    // Chats can be closed entirely and reopened from the launcher.
+    const ci = s.desks.findIndex(d => d.wins.some(w => w.app === 'chats'));
+    await p.evaluate(i => __wos.goDesk(i), ci); await p.waitForTimeout(500);
+    await p.locator('.desk').nth(ci).locator('.win.app-chats [data-wact="close"]').tap(); await p.waitForTimeout(600);
+    s = await state(p);
+    ok(!s.desks.some(d => d.wins.some(w => w.app === 'chats')), 'Chats can be closed like any app');
+    await p.evaluate(() => __wos.openSheet('launcher')); await p.waitForTimeout(400);
+    await p.locator('#launcher [data-app="wizard"]').first().tap(); await p.waitForTimeout(800);
+    s = await state(p);
+    ok(s.desks[s.idx].wins.some(w => w.app === 'chats'), 'Chats reopens from the launcher on the current desk');
+    ok(errs.length === 0, 'no page errors (windows run)', errs.join(' | '));
+    await ctx.close();
+  }
+
+  /* ---------- 4. View-aware voice + aimed commands (sends intercepted) ---------- */
+  {
+    const { ctx, p, writes, errs } = await boot(b);
+    await p.evaluate(() => __wos.goDesk(1)); await p.waitForTimeout(500);
+    await tap(p, '.ch-row'); await p.waitForTimeout(1200);
+    const ctxText = await p.evaluate(() => __wos.viewContext(null, 'voice'));
+    ok(/Window in front: Chats thread/.test(ctxText), 'orb knows the window in front', ctxText.slice(0, 160));
+    const v = await p.evaluate(() => __wos.viewOf(__wos.desks[1].focus));
+    ok(v && v.mode === 'auto', 'a Chats thread is an auto-routing view');
+    // Speech meant for the thread: a reply goes into that thread (steer or new run), carrying the view context.
+    writes.length = 0;
+    await p.evaluate(() => __wos.handleText('Yes, go ahead with that plan', 'auto', false, 0, null));
+    await p.waitForTimeout(4000);
+    const run = writes.find(w => /\/v1\/runs/.test(w.u));
+    const body = run ? JSON.parse(run.body || '{}') : {};
+    const tid = await p.evaluate(() => __wos.wins[__wos.desks[1].focus].thread);
+    ok(run && (body.session_id === tid || /\/steer$/.test(run.u)), 'a reply to the thread in front goes into that thread', JSON.stringify({ u: run?.u, sid: body.session_id, tid }));
+    ok(run && /Wizard OS context/.test(body.instructions || '') && !/Wizard OS context/.test(JSON.stringify(body.input)), 'view context rides as instructions, not in the message text');
+    // A general request goes to Archimedes as a new thread, with the view noted.
+    writes.length = 0;
+    await p.evaluate(() => __wos.handleText('Research the best e-ink tablets for reading PDFs', 'auto', false, 0, null));
+    await p.waitForTimeout(4000);
+    const created = writes.find(w => /\/api\/sessions$/.test(w.u));
+    ok(!!created, 'unrelated request opens a new thread for Archimedes', JSON.stringify(writes.map(w => w.u)));
+    // Hold + slide right: the command lands on the next desk.
+    const before = await state(p);
+    await p.evaluate(() => __wos.handleText('open week in review', 'command', false, 0, 2));
+    await p.waitForTimeout(900);
+    const after = await state(p);
+    ok(after.desks[2].wins.some(w => w.app === 'review') && after.idx === 2, 'hold + slide right opens the command on the next desk', JSON.stringify(after.desks.map(d => d.wins.map(w => w.app))));
+    ok(errs.length === 0, 'no page errors (voice run)', errs.join(' | '));
+    await p.screenshot({ path: OUT + '/44-aimed.png' });
+    await ctx.close();
+  }
+
+  await b.close();
+  console.log(`${pass}/${pass + fail} passed`);
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.log('Error', e); process.exit(2); });
