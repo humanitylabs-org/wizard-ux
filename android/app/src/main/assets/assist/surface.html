@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Wizard</title>
+<link rel="stylesheet" href="wizard-motion.css">
+<style>
+  :root{--wm-bottom:150px}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:#000;color:#f3efff;overflow:hidden;font-family:system-ui,sans-serif;
+    user-select:none;-webkit-user-select:none;touch-action:none}
+  #c{position:absolute;inset:0;width:100%;height:100%}
+  #words{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  #lock{position:absolute;top:calc(env(safe-area-inset-top) + 18px);left:0;right:0;text-align:center;
+    font:600 11px/1 system-ui;letter-spacing:.2em;color:#7d74a3;text-transform:uppercase}
+  #top{position:absolute;top:13%;left:0;right:0;text-align:center;font:500 12px/1 system-ui;letter-spacing:.24em;
+    color:#b99bff;text-transform:uppercase;opacity:0;transition:opacity .5s}
+  #top.on{opacity:1}
+  #orbHit{position:absolute;left:50%;top:40%;width:150px;height:150px;transform:translate(-50%,-50%);border-radius:50%}
+  /* no backdrop blur anywhere (Android WebView can leave the canvas white) */
+  .wm-card{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(20,14,40,.97)!important}
+  .wm-layer.open{background:radial-gradient(130% 80% at 50% 100%,rgba(30,16,70,.55),rgba(5,3,12,.35) 65%,rgba(5,3,12,.2))}
+  .wm-card.err{border-color:rgba(255,190,85,.45)!important}
+  .wm-card.err .wm-k{color:#ffbe55}
+  .acts{display:flex;gap:10px;justify-content:center;margin-top:16px}
+  .acts button{flex:1;padding:12px 10px;border-radius:999px;border:1px solid rgba(185,168,255,.35);background:rgba(122,92,255,.16);
+    color:#f3efff;font:500 14px system-ui}
+  .acts button.ghost{background:none;color:#b9b0d8}
+  .chip{position:absolute;width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:rgba(185,168,255,.08);border:1px solid rgba(185,168,255,.25);opacity:0;pointer-events:none;
+    transition:opacity .3s}
+  .chip.on{opacity:1;pointer-events:auto}
+  .chip svg{width:24px;height:24px}
+  #unlockC{left:12%;bottom:calc(env(safe-area-inset-bottom) + 104px)}
+  #cancelC{right:12%;bottom:calc(env(safe-area-inset-bottom) + 104px)}
+  .chip small{position:absolute;top:62px;font:500 11px system-ui;color:#7d74a3;white-space:nowrap}
+  #hint{bottom:calc(env(safe-area-inset-bottom) + 28px)}
+  .wm-zoom{padding:calc(env(safe-area-inset-top) + 70px) 8% 40px}
+  .zl-h{font:600 11px/1 system-ui;letter-spacing:.2em;text-transform:uppercase;color:#b99bff;margin-bottom:14px}
+  .empty{color:#7d74a3;font-size:15px;padding:14px 0}
+
+  /* ---------- CORNER: unlocked, only the orb in a small bottom-right window ---------- */
+  body.corner,body.corner html{background:transparent}
+  html.corner{background:transparent}
+  body.corner #lock,body.corner #top,body.corner .chip,body.corner #hint,body.corner #words,body.corner #layer,body.corner #zl{display:none!important}
+  body.corner #orbHit{left:auto;right:0;top:0;width:132px;height:100%;transform:none;border-radius:0}
+  #bub{display:none;position:absolute;left:4px;right:136px;top:50%;transform:translateY(-50%) translateX(12px);opacity:0;
+    padding:11px 14px;border-radius:18px;background:rgba(20,14,40,.96);border:1px solid rgba(185,168,255,.35);
+    box-shadow:0 6px 28px rgba(0,0,0,.45);transition:opacity .28s,transform .28s}
+  body.corner #bub{display:block}
+  #bub.on{opacity:1;transform:translateY(-50%)}
+  #bub b{display:block;font:600 10px/1 system-ui;letter-spacing:.16em;text-transform:uppercase;color:#b99bff;margin-bottom:6px}
+  #bub.err b{color:#ffbe55}
+  #bub span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font:400 14px/1.32 system-ui;color:#f3efff}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<canvas id="words" class="wm-words"></canvas>
+<div id="lock">🔒 locked</div>
+<div id="top"></div>
+<div id="orbHit"></div>
+
+<div class="wm-layer" id="layer">
+  <div class="wm-card" id="card">
+    <div class="wm-k" id="k"></div>
+    <div class="wm-m" id="m"></div>
+    <div class="wm-s" id="s"></div>
+    <div class="acts" id="acts"></div>
+  </div>
+</div>
+
+<button class="chip" id="unlockC" aria-label="Unlock the phone"><svg viewBox="0 0 24 24" fill="none" stroke="#cfc4ff" stroke-width="1.6" stroke-linecap="round"><rect x="6" y="11" width="12" height="9" rx="2"/><path d="M8.5 11V8a3.5 3.5 0 0 1 6.8-1.2"/></svg><small>unlock</small></button>
+<button class="chip" id="cancelC" aria-label="Cancel"><svg viewBox="0 0 24 24" fill="none" stroke="#cfc4ff" stroke-width="1.6" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg><small>cancel</small></button>
+
+<div class="wm-zoom" id="zl"><div class="zl-h">What you told the Wizard</div><div id="zlist"></div></div>
+<div class="wm-hint" id="hint"></div>
+<div id="bub"><b id="bubK"></b><span id="bubT"></span></div>
+
+<script src="wizard-motion.js"></script>
+<script>
+/* Wizard over the lock screen — native surface (Wizard Lock test build).
+   Motion: shared Wizard Motion Kit v1 (words, card, hint, spread, haptics, tones) + the Live Mode canvas orb.
+   Native bridge: window.WizardNative (send, cancel, listen, unlock, items, openWizard, close, log, corner, full).
+   Shapes: 'full' over the lock screen; 'corner' (unlocked) = only the orb, bottom-right. */
+const M = window.WizardMotion, N = window.WizardNative || {
+  send(){}, cancel(){}, listen(){}, unlock(){}, items(){return '[]'}, openWizard(){}, close(){}, log(){}, locked(){return true}};
+const $ = id => document.getElementById(id);
+const hint = M.hint($('hint')), card = M.card($('card'), $('layer'));
+const S = { state:'idle', locked:true, level:0, heard:'', ms:0 };
+window.__wl = S;
+
+/* ---------- canvas orb (Live Mode) ---------- */
+const C=$('c'),X=C.getContext('2d');let Wd,Ht,D=1;
+function rs(){D=Math.min(devicePixelRatio||1,2);Wd=innerWidth;Ht=innerHeight;C.width=Wd*D;C.height=Ht*D}
+rs();addEventListener('resize',rs);
+let P=[],mode='calm',glow=.6,ripples=[],lv=0;
+for(let i=0;i<110;i++)P.push({x:Math.random(),y:Math.random(),vx:(Math.random()-.5)*.0006,vy:(Math.random()-.5)*.0006,s:Math.random()*1.6+.3});
+let MODE='full';
+const orbXY=()=>MODE==='corner'?({x:Wd-66,y:Ht/2}):({x:Wd/2,y:Ht*.40});
+function draw(t){
+  X.setTransform(D,0,0,D,0,0);X.clearRect(0,0,Wd,Ht);
+  const {x:ox,y:oy}=orbXY(),breathe=Math.sin(t/1400)*.5+.5;
+  if(MODE==='corner'){drawCorner(t,ox,oy,breathe);requestAnimationFrame(draw);return}
+  for(const p of P){
+    if(mode==='gather'){p.vx+=(.5-p.x)*.00009;p.vy+=(.40-p.y)*.00009;p.vx*=.96;p.vy*=.96}
+    else if(mode!=='burst'){p.vx+=(Math.random()-.5)*.00003;p.vy+=(Math.random()-.5)*.00003;p.vx*=.995;p.vy*=.995}
+    p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x+=1;if(p.x>1)p.x-=1;if(p.y<0)p.y+=1;if(p.y>1)p.y-=1;
+    X.fillStyle=`rgba(185,168,255,${.12+.32*breathe*p.s/2})`;X.beginPath();X.arc(p.x*Wd,p.y*Ht,p.s,0,7);X.fill()}
+  const target=S.state==='listen'?Math.max(.18,S.level):0;lv+=(target-lv)*.18;
+  if(S.state==='listen'){X.beginPath();const amp=3+30*lv;
+    for(let x=0;x<=Wd;x+=4){const y=oy+Math.sin(x/34+t/300)*amp*Math.sin(x/Wd*Math.PI)*(.55+.45*Math.sin(t/650+x/80));x?X.lineTo(x,y):X.moveTo(x,y)}
+    X.strokeStyle=`rgba(143,99,255,${.25+.5*lv})`;X.lineWidth=1.4;X.stroke()}
+  const r=28*(.85+.25*breathe)*(1+.45*lv);
+  const g=X.createRadialGradient(ox,oy,0,ox,oy,r*3.2);
+  g.addColorStop(0,`rgba(233,226,255,${.9*glow})`);g.addColorStop(.25,`rgba(122,92,255,${.7*glow})`);g.addColorStop(1,'rgba(122,92,255,0)');
+  X.fillStyle=g;X.beginPath();X.arc(ox,oy,r*3.2,0,7);X.fill();
+  ripples=ripples.filter(rp=>{rp.r+=4;rp.a*=.955;X.strokeStyle=`rgba(${rp.c||'185,168,255'},${rp.a})`;X.lineWidth=2;X.beginPath();X.arc(ox,oy,rp.r,0,7);X.stroke();return rp.a>.02});
+  requestAnimationFrame(draw)}
+/* Corner orb: same orb, smaller; the waveform becomes a ring that breathes with your voice. */
+function drawCorner(t,ox,oy,breathe){
+  const target=S.state==='listen'?Math.max(.15,S.level):0;lv+=(target-lv)*.2;
+  const r=15*(.88+.2*breathe)*(1+.5*lv);
+  const g=X.createRadialGradient(ox,oy,0,ox,oy,r*3.4);
+  g.addColorStop(0,`rgba(233,226,255,${.95*glow})`);g.addColorStop(.28,`rgba(122,92,255,${.75*glow})`);g.addColorStop(1,'rgba(122,92,255,0)');
+  X.fillStyle=g;X.beginPath();X.arc(ox,oy,r*3.4,0,7);X.fill();
+  if(S.state==='listen'||S.state==='think'){
+    const base=r*2.1;X.beginPath();
+    for(let a=0;a<=Math.PI*2+.01;a+=Math.PI/48){
+      const w=S.state==='think'?2*Math.sin(t/120+a*3):(2+16*lv)*Math.sin(a*5+t/170)*(.6+.4*Math.sin(a*3-t/260));
+      const rr=base+w,x=ox+Math.cos(a)*rr,y=oy+Math.sin(a)*rr;a?X.lineTo(x,y):X.moveTo(x,y)}
+    X.strokeStyle=S.state==='think'?'rgba(185,168,255,.55)':`rgba(160,120,255,${.35+.5*lv})`;X.lineWidth=1.6;X.stroke()}
+  ripples=ripples.filter(rp=>{rp.r+=2.4;rp.a*=.94;X.strokeStyle=`rgba(${rp.c||'185,168,255'},${rp.a})`;X.lineWidth=2;X.beginPath();X.arc(ox,oy,rp.r,0,7);X.stroke();return rp.a>.03&&rp.r<64});
+}
+requestAnimationFrame(draw);
+const words = M.words($('words'), { anchor: orbXY, lanes:[.56,.61,.66,.71], max:5 });
+
+/* ---------- helpers ---------- */
+let idleTimer=0;
+function idleClose(ms){clearTimeout(idleTimer);idleTimer=setTimeout(()=>{if(S.state==='card'||S.state==='idle')N.close()},ms)}
+function setTop(t){$('top').textContent=t||'';$('top').classList.toggle('on',!!t)}
+function chips(on){['unlockC','cancelC'].forEach(id=>$(id).classList.toggle('on',on));$('unlockC').style.display=S.locked?'':'none'}
+function setCard(k,m,s,acts,cls){
+  $('k').textContent=k;$('m').textContent=m;$('s').textContent=s||'';
+  $('card').classList.toggle('err',cls==='err');
+  const a=$('acts');a.innerHTML='';
+  (acts||[]).forEach(([label,fn,ghost])=>{const b=document.createElement('button');b.textContent=label;if(ghost)b.className='ghost';
+    b.addEventListener('click',e=>{e.stopPropagation();fn()});a.appendChild(b)});
+  card.rise();
+}
+
+let bubT=0;
+function bubble(k,t,cls,wide=true){
+  clearTimeout(bubT);$('bubK').textContent=k;$('bubT').textContent=t;$('bub').classList.toggle('err',cls==='err');
+  N.corner&&N.corner(wide);setTimeout(()=>$('bub').classList.add('on'),60);
+}
+function bubbleOff(){$('bub').classList.remove('on');clearTimeout(bubT);bubT=setTimeout(()=>{if(MODE==='corner'&&S.state!=='card')N.corner&&N.corner(false)},300)}
+const inCorner=()=>MODE==='corner';
+
+/* ---------- called by native ---------- */
+const W = window.W = {
+  setMode(m){
+    MODE=m==='corner'?'corner':'full';
+    document.body.classList.toggle('corner',MODE==='corner');document.documentElement.classList.toggle('corner',MODE==='corner');
+    document.documentElement.style.background=document.body.style.background=MODE==='corner'?'transparent':'#000';
+    rs();
+  },
+  begin(){
+    clearTimeout(idleTimer);
+    if(inCorner()){$('bub').classList.remove('on');N.corner&&N.corner(false)}
+    if(card.open)card.sink();$('zl').classList.remove('on','deep');
+    S.state='listen';S.heard='';mode='calm';glow=.9;ripples.push({r:18,a:.5});
+    M.haptic('press');M.chime([523,.9,.07]);
+    setTop('listening');chips(true);
+    hint.show('talk · tap the orb or pause to send','listen',0,true);
+  },
+  level(v){S.level=+v||0},
+  onSending(via){
+    S.state='think';mode='gather';glow=1;chips(false);setTop('');
+    M.haptic('notice');M.chime('notice');ripples.push({r:20,a:.6});
+    hint.show('sending to Wizard voice…','send',0,true);
+  },
+  onHeard(text,ms){
+    S.state='card';S.heard=text;S.ms=ms;mode='calm';glow=.5;
+    if(inCorner()){ripples.push({r:12,a:.7,c:'79,240,176'});M.chime('sent');M.haptic('sent');
+      bubble('Heard you · tap to open',text);idleClose(7000);return}
+    text.split(/\s+/).slice(0,10).forEach((w,i)=>setTimeout(()=>words.add(w),i*110));
+    setTimeout(()=>{words.hot('✓');words.gather()},1300);
+    ripples.push({r:16,a:.6,c:'79,240,176'});M.chime('sent');M.haptic('sent');
+    setTimeout(()=>{
+      setCard('Heard you', '“'+text+'”', 'saved for Archimedes · '+(ms/1000).toFixed(1)+' s',
+        [['Talk again',()=>N.listen()],['Open in Wizard',()=>W.openWizard(),true]]);
+      hint.show('back to the lock screen · or talk again','card',0,true);
+      idleClose(12000);
+    },900);
+  },
+  onNothing(){
+    S.state='idle';mode='calm';glow=.5;chips(false);setTop('');
+    if(inCorner()){bubble('Didn’t catch that','hold the side button to try again','err');idleClose(2800);return}
+    hint.show('didn’t catch that · hold the side button to try again','none',0,true);idleClose(3500);
+  },
+  onError(kind,msg){
+    S.state='card';mode='calm';glow=.4;chips(false);setTop('');M.haptic('error');
+    if(inCorner()){bubble(kind==='mic'?'Microphone':'Couldn’t send',msg,'err');idleClose(6000);return}
+    setCard(kind==='mic'?'Microphone':'Couldn’t send', msg, kind==='net'?'what you said wasn’t kept':'',
+      [['Try again',()=>N.listen()]],'err');
+    hint.show('back to the lock screen','err',0,true);idleClose(10000);
+  },
+  lockState(locked){S.locked=!!locked;$('lock').textContent=locked?'🔒 locked':'unlocked';
+    if(S.state==='listen')chips(true)},
+  onUnlocked(){
+    if(!S.locked&&inCorner())return;
+    S.locked=false;$('lock').textContent='unlocked';$('unlockC').style.display='none';
+    M.chime('open');
+    if(W._after){const f=W._after;W._after=null;f();return}
+    // Unlocked mid-talk: shrink to the corner orb and keep listening; the phone is yours again.
+    if(card.open)card.sink();
+    if(S.state==='card'&&S.heard){N.corner&&N.corner(true);setTimeout(()=>bubble('Heard you · tap to open',S.heard),80);idleClose(7000)}
+    else N.corner&&N.corner(false);
+  },
+  reset(){clearTimeout(idleTimer);$('bub').classList.remove('on');if(card.open)card.sink();S.state='idle';S.heard='';setTop('');chips(false)},
+  onUnlockCancelled(){W._after=null;if(S.state==='listen')hint.show('still locked · still listening','unlock',2200,true)},
+  openWizard(){N.openWizard(S.heard||'')},
+  showList(){
+    if(S.locked){W._after=W.showList;N.unlock();return}
+    let items=[];try{items=JSON.parse(N.items()||'[]')}catch(e){}
+    const fmt=t=>new Date(t).toLocaleString([], {weekday:'short',hour:'2-digit',minute:'2-digit'});
+    $('zlist').innerHTML=items.length?items.slice(0,12).map(i=>`<div class="wm-zi"><div class="t"></div><small></small></div>`).join(''):'<div class="empty">Nothing yet. Hold the side button and talk.</div>';
+    [...$('zlist').children].forEach((el,i)=>{if(!items[i])return;el.querySelector('.t').textContent=items[i].text;el.querySelector('small').textContent=fmt(items[i].at)});
+    if(card.open)card.sink();
+    N.full&&N.full();
+    clearTimeout(idleTimer);S.state='list';$('zl').classList.add('on');M.chime('open');
+    hint.show('spread again for times · back closes','list',0,true);
+  },
+  back(){
+    if(S.state==='list'){$('zl').classList.remove('on','deep');S.state=card.open?'card':'idle';
+      if(!S.locked){N.close();return 'handled'}
+      hint.show('back to the lock screen','b',0,true);idleClose(6000);return 'handled'}
+    if(S.state==='listen'){N.cancel();return ''}
+    return '';
+  },
+};
+
+/* ---------- gestures ---------- */
+$('orbHit').addEventListener('click',()=>{if(S.state==='listen'){N.send()}else if(inCorner()&&S.state!=='think'){N.listen()}});
+$('bub').addEventListener('click',e=>{e.stopPropagation();if(S.state==='card'&&S.heard)W.openWizard();else N.close()});
+$('cancelC').addEventListener('click',e=>{e.stopPropagation();N.cancel();W.onNothing();hint.show('cancelled','c',0,true)});
+$('unlockC').addEventListener('click',e=>{e.stopPropagation();N.unlock()});
+M.spread(document.body,{onOut(){ if(inCorner())return; if(S.state==='list'){$('zl').classList.add('deep');return} if(S.state!=='listen'&&S.state!=='think')W.showList() },
+  onIn(){ if(S.state==='list')W.back() }});
+document.addEventListener('pointerdown',()=>{M.sound.unlock()},{capture:true});
+hint.show('hold the side button and talk','start',0,true);
+if(location.hash==='#corner')W.setMode('corner'); // browser preview of the corner shape
+</script>
+</body>
+</html>
