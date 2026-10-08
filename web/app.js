@@ -545,6 +545,7 @@
     // navigation (the URL changes) stays the app's own back step.
     try { win.__wosHref = win.location.href; } catch (e) {}
     try { win.addEventListener('popstate', e => {
+      if (Date.now() < dropUntil) { e.stopImmediatePropagation(); ignorePop = 0; return; } // the shell's guard drop landed here
       if (Date.now() < exitUntil) { e.stopImmediatePropagation(); history.back(); return; }
       let same = false; try { same = win.location.href === win.__wosHref; win.__wosHref = win.location.href; } catch (x) {}
       // The app keeps its own back step only when it is the focused window on the desk in view, nothing is
@@ -1669,12 +1670,19 @@
     if (guardOn || Date.now() < exitUntil || (!force && !navigator.userActivation?.isActive)) return;
     history.pushState({ wos: 'guard' }, ''); guardOn = true;
   }
-  function dropGuard() { if (guardOn) { guardOn = false; ignorePop++; history.back(); } }
+  // Only step back over our own guard entry. If the current entry is not the guard (it was already consumed, or
+  // Chrome treats it as skippable), going back would leave the page, so the warning just stays put instead.
+  // The pop this causes can land in the top page OR in a hosted frame (Topics, Meetings), and may fire in several
+  // frames at once. Every pop inside the next half second is ours, never the user's second Back: worst case a very
+  // fast double Back stays in the app, which is the safe direction.
+  var dropUntil = 0; // var: frame listeners defined earlier may read it during boot
+  function dropGuard() { const g = guardOn && history.state?.wos === 'guard'; guardOn = false; if (g) { ignorePop++; dropUntil = Date.now() + 500; history.back(); } }
   addEventListener('popstate', e => {
     // Landing on a guard entry means the Back key popped something stacked above it (a hosted app's entry or a
     // second guard). We never navigate forward, so every pop is a user Back: never swallow one.
     guardOn = e.state?.wos === 'guard';
     if (ignorePop) { ignorePop--; return; }
+    if (Date.now() < dropUntil) return; // our own guard drop surfacing late
     if (Date.now() < exitUntil) { history.back(); return; } // second Back: leave
     onBack();
     // A consumed step re-arms at once, so the next Back (even with no tap in
