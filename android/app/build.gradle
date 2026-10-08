@@ -40,6 +40,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // QA build: installs beside the real app (own id) and allows WebView inspection over adb.
+            applicationIdSuffix '.qa'
+            versionNameSuffix '-qa'
+        }
         release {
             minifyEnabled false
             if (wosSigningReady) signingConfig signingConfigs.release

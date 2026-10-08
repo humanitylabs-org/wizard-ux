@@ -72,6 +72,7 @@ public class MainActivity extends Activity {
     }
 
     private void buildWebView() {
+        if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true); // QA build only
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(5, 3, 12));
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
