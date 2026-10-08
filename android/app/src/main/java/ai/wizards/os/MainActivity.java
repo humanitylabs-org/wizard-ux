@@ -43,6 +43,11 @@ public class MainActivity extends Activity {
     private static final int REQ_MIC = 41;
     private static final int REQ_FILE = 42;
 
+    static final String ACTION_LISTEN = "ai.wizards.os.action.LISTEN";
+    static final String ACTION_SAY = "ai.wizards.os.action.SAY";
+    private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+    private String pendingHandoff; // JSON handed to window.__wosHandoff once the shell is ready
+    private int handoffTries;
     private WebView web;
     private FrameLayout root;
     private PermissionRequest pendingMic;
@@ -69,6 +74,7 @@ public class MainActivity extends Activity {
         if (state != null) web.restoreState(state);
         if (web.getUrl() == null) web.loadUrl(startUrl(getIntent()));
         installBack();
+        queueHandoff(getIntent());
     }
 
     private void buildWebView() {
@@ -184,7 +190,35 @@ public class MainActivity extends Activity {
         setIntent(intent);
         Uri data = intent.getData();
         if (data != null && Origin.isShell(data)) web.loadUrl(data.toString());
+        queueHandoff(intent);
     }
+
+    /* ---------------- Assistant handoff (the side-key app opens Wizard OS) ----------------
+     * LISTEN opens the orb listening. SAY carries words (EXTRA_TEXT) that appear as a draft James sends with one
+     * tap; nothing is ever sent on another app's behalf. */
+    void queueHandoff(Intent intent) {
+        if (intent == null) return;
+        String json = Handoff.json(intent.getAction(), intent.getStringExtra(Intent.EXTRA_TEXT));
+        if (json == null) return;
+        intent.setAction(Intent.ACTION_MAIN); // a handoff runs once, not again on rotation/restore
+        pendingHandoff = json;
+        handoffTries = 0;
+        main.removeCallbacks(deliverHandoff);
+        main.post(deliverHandoff);
+    }
+
+    private final Runnable deliverHandoff = new Runnable() {
+        @Override
+        public void run() {
+            if (pendingHandoff == null || web == null) return;
+            final String json = pendingHandoff;
+            web.evaluateJavascript("(window.__wosHandoff ? window.__wosHandoff(" + json + ") : false)", r -> {
+                if ("true".equals(r)) { if (json.equals(pendingHandoff)) pendingHandoff = null; return; }
+                if (++handoffTries < 60) main.postDelayed(this, 300); // shell still loading: retry for ~18 s
+                else pendingHandoff = null;
+            });
+        }
+    };
 
     private void openOutside(Uri u) {
         try {

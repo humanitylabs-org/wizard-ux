@@ -25,6 +25,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Assistant handoff: the side-key assistant opens Wizard OS listening, or with words as a draft. -->
+            <intent-filter>
+                <action android:name="ai.wizards.os.action.LISTEN" />
+                <action android:name="ai.wizards.os.action.SAY" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
             <!-- Opening a Wizard OS link lands in the app rather than a browser tab. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />

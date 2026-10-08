@@ -1619,6 +1619,7 @@
   const watchers = new Set();
   function backStep() {
     if (V.state !== 'idle') { cancelVoice(true); return 'voice'; }
+    if (document.querySelector('#txChips [data-handoff]')) { $('#txChips').innerHTML = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
     if (closePeek()) return 'peek';
     if (menuFor) { closeMenu(); return 'menu'; }
@@ -1734,6 +1735,22 @@
     return did || 'root';
   };
   if (/WizardOS-Android\//.test(navigator.userAgent)) document.documentElement.classList.add('native-app');
+  // Assistant handoff (side-key app → Wizard OS). 'listen' opens the orb listening; 'say' shows the words as a
+  // draft that James sends with one tap — another app can never make Archimedes act on its own.
+  window.__wosHandoff = h => {
+    if (!h || typeof h !== 'object') return false;
+    closeSheets(); if (idx !== HOME) goDesk(HOME);
+    if (h.action === 'listen') { if (V.state === 'idle') startVoice('auto'); return true; }
+    const text = String(h.text || '').trim().slice(0, 2000);
+    if (h.action !== 'say' || !text) return false;
+    if (V.state !== 'idle') cancelVoice(true);
+    clearTimeout(txHideT);
+    txShow(text, 'From the side button · tap Send', '', '◉');
+    $('#txChips').innerHTML = `<button data-sim="${esc(text)}" data-handoff="send">Send</button><button data-handoff="drop">Dismiss</button>`;
+    window.__backLog = (window.__backLog || []).concat('handoff:say').slice(-30);
+    return true;
+  };
+  $('#txChips').addEventListener('click', e => { if (e.target.closest('[data-handoff="drop"]')) { $('#txChips').innerHTML = ''; txHide(0); } });
   window.__wos = {
     live: LIVE, openPeek, closePeek, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
