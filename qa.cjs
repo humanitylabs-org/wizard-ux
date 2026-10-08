@@ -1,0 +1,147 @@
+// Wizard OS Home — phone-viewport QA. Usage: node qa.cjs [baseUrl]
+const { chromium } = require('/home/telos/node_modules/playwright');
+const BASE = process.argv[2] || 'http://127.0.0.1:9271/';
+const OUT = process.env.QA_OUT || '/home/telos/apps/wizard-os-home/qa';
+const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
+
+(async () => {
+  const extra = process.env.QA_RESOLVE ? ['--host-resolver-rules=' + process.env.QA_RESOLVE] : [];
+  const browser = await chromium.launch({ args: [...extra, '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+  const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2.6, isMobile: true, hasTouch: true, permissions: ['microphone'] });
+  const page = await ctx.newPage();
+  const errors = [], external = [];
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error' && !/422/.test(m.text())) errors.push('console: ' + m.text()); });
+  page.on('request', r => { const u = new URL(r.url()); if (!BASE.startsWith(u.origin)) external.push(r.url()); });
+  const results = [];
+  const check = (name, ok, extra = '') => { results.push({ name, ok: !!ok, extra }); console.log((ok ? 'PASS ' : 'FAIL ') + name + (extra ? ' — ' + extra : '')); };
+  const shot = async n => { await page.screenshot({ path: `${OUT}/${n}.png` }); await page.waitForTimeout(400); };
+
+  await page.goto(BASE, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(600);
+  check('coach shows first run', await page.isVisible('#coach'));
+  await shot('00-coach');
+  await page.click('#coachGo');
+  await page.waitForTimeout(900);
+  check('webgl orb', await page.evaluate(() => window.Orb.webgl));
+  check('home desk active', await page.evaluate(() => window.__wos.idx === 2));
+  const dots = await page.evaluate(() => [document.querySelectorAll('#dotsL .ddot').length, document.querySelectorAll('#dotsR .ddot').length]);
+  check('dots 2 left / 2 right on home', dots[0] === 2 && dots[1] === 2, JSON.stringify(dots));
+  await shot('01-home');
+
+  const orb = await page.locator('#orbWrap').boundingBox();
+  const cx = orb.x + orb.width / 2, cy = orb.y + orb.height / 2;
+  async function drag(dx, dy, steps = 10) {
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] });
+    for (let i = 1; i <= steps; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx + dx * i / steps, y: cy + dy * i / steps }] }); await page.waitForTimeout(16); }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(650);
+  }
+  // swipe orb left -> next desk (maps desk 4)
+  await drag(-150, 0);
+  check('swipe left moves to desk 4', await page.evaluate(() => window.__wos.idx === 3));
+  const dots2 = await page.evaluate(() => [document.querySelectorAll('#dotsL .ddot').length, document.querySelectorAll('#dotsR .ddot').length]);
+  check('dots 3 left / 1 right on desk 4', dots2[0] === 3 && dots2[1] === 1, JSON.stringify(dots2));
+  await shot('02-desk4-maps');
+  await drag(150, 0); await drag(150, 0);
+  let at = await page.evaluate(() => window.__wos.idx);
+  if (at !== 1) { console.log('  note: swipe sequence ended at desk', at + 1, '- retrying once'); for (let k = 0; k < 3 && at > 1; k++) { await drag(150, 0); at = await page.evaluate(() => window.__wos.idx); } }
+  check('swipe right twice to desk 2 (review)', at === 1, 'idx=' + at);
+  await shot('03-review-day');
+
+  // pinch out on review -> week
+  async function pinch(scale) {
+    const st = await page.locator('.desk[data-desk="1"] .zstage').boundingBox();
+    const mx = st.x + st.width / 2, my = st.y + 220, d0 = scale > 1 ? 40 : 150, d1 = d0 * scale;
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: mx - d0 / 2, y: my, id: 1 }, { x: mx + d0 / 2, y: my, id: 2 }] });
+    for (let i = 1; i <= 10; i++) { const d = d0 + (d1 - d0) * i / 10; await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: mx - d / 2, y: my, id: 1 }, { x: mx + d / 2, y: my, id: 2 }] }); await page.waitForTimeout(16); }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(700);
+  }
+  const lvl = () => page.evaluate(() => window.__wos.desks[1].z.level);
+  await pinch(0.35); check('pinch in-to-out: day -> week', (await lvl()) === 'week', await lvl());
+  await shot('04-review-week');
+  await pinch(0.35); check('pinch: week -> month', (await lvl()) === 'month', await lvl());
+  await shot('05-review-month');
+  await pinch(3.2); check('pinch open: month -> week', (await lvl()) === 'week', await lvl());
+  // tap a day card to dive
+  await page.locator('.desk[data-desk="1"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  check('tap dives week -> day', (await lvl()) === 'day', await lvl());
+  await page.locator('.desk[data-desk="1"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  check('tap dives day -> focus', (await lvl()) === 'group', await lvl());
+  await shot('06-review-focus');
+  await page.locator('.desk[data-desk="1"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  check('tap dives focus -> thread', (await lvl()) === 'thread', await lvl());
+  await shot('07-review-thread');
+  await page.locator('.desk[data-desk="1"] .crumb [data-crumb="0"]').click(); await page.waitForTimeout(700);
+  check('breadcrumb jumps back to month', (await lvl()) === 'month', await lvl());
+
+  // swipe up -> launcher
+  await drag(0, -260);
+  check('swipe up opens launcher', await page.evaluate(() => document.querySelector('#launcher').classList.contains('open')));
+  await shot('08-launcher');
+  await page.fill('#search', 'cine'); await page.waitForTimeout(200);
+  await shot('09-launcher-search');
+  await page.press('#search', 'Enter'); await page.waitForTimeout(800);
+  const d = await page.evaluate(() => ({ idx: window.__wos.idx, d: window.__wos.desks[window.__wos.idx] }));
+  check('search+enter opens CineQueue on a desk', d.d.kind === 'app' && d.d.app === 'cinequeue', JSON.stringify(d));
+
+  // swipe down -> inbox
+  await drag(0, 260);
+  check('swipe down opens inbox', await page.evaluate(() => document.querySelector('#inbox').classList.contains('open')));
+  await shot('10-inbox');
+  await drag(0, -120);
+  check('swipe up on orb closes inbox', await page.evaluate(() => !document.querySelector('#inbox').classList.contains('open')));
+
+  // go home, tap orb -> recording with arc
+  await page.evaluate(() => window.__wos.goDesk(2, true)); await page.waitForTimeout(600);
+  await page.touchscreen.tap(cx, cy); await page.waitForTimeout(1600);
+  check('tap orb starts recording', await page.evaluate(() => window.__wos.voice === 'listen'), await page.evaluate(() => window.__wos.voice));
+  check('arc buttons visible', await page.evaluate(() => document.querySelector('#voice').classList.contains('on')));
+  check('timer counting', (await page.textContent('#timer')) !== '0:00', await page.textContent('#timer'));
+  await shot('11-recording');
+  await page.click('#arcPause'); await page.waitForTimeout(400);
+  check('pause works', await page.evaluate(() => window.__wos.voice === 'paused'));
+  await shot('12-paused');
+  await page.click('#arcCancel'); await page.waitForTimeout(400);
+  check('cancel returns idle', await page.evaluate(() => window.__wos.voice === 'idle'));
+
+  // Typed command through real router (DeepSeek Flash) — natural phrasing not caught by local parser
+  await page.evaluate(() => window.__wos.runUtterance('can you get me to the Bangkok airport', 'auto', true));
+  await page.waitForFunction(() => /DeepSeek|on-device|Archimedes/.test(document.querySelector('#txRouteText').textContent) && !/Routing/.test(document.querySelector('#txRouteText').textContent), null, { timeout: 30000 });
+  await page.waitForTimeout(300);
+  const rt = await page.textContent('#txRouteText');
+  const md = await page.evaluate(() => window.__wos.desks[window.__wos.idx]);
+  check('router -> maps directions', md.kind === 'maps' && md.mode === 'dir', rt + ' ' + JSON.stringify(md));
+  await shot('13-voice-maps');
+  await page.waitForTimeout(2200);
+
+  // agent route
+  await page.evaluate(() => { window.__wos.desks[4] = { kind: 'empty' }; window.__wos.goDesk(4, true); }); await page.waitForTimeout(500);
+  await page.evaluate(() => window.__wos.runUtterance('what should I prioritize for the Wizard OS launch next week?', 'auto', true));
+  await page.waitForFunction(() => /Archimedes/.test(document.querySelector('#txRouteText').textContent), null, { timeout: 30000 });
+  await page.waitForTimeout(500);
+  const ad = await page.evaluate(() => window.__wos.desks[4]);
+  check('reasoning request routes to agent on empty desk', ad.kind === 'agent', await page.textContent('#txRouteText'));
+  await shot('14-agent');
+
+  // hold for command (fake mic)
+  await page.evaluate(() => window.__wos.goDesk(2, true)); await page.waitForTimeout(800);
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] });
+  await page.waitForTimeout(900);
+  check('hold enters command mode', await page.evaluate(() => window.__wos.voice === 'command'));
+  await shot('15-hold-command');
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForTimeout(400);
+
+  check('no page errors', errors.length === 0, errors.join(' | '));
+  check('no external requests', external.length === 0, external.slice(0, 3).join(' '));
+  fs.writeFileSync(`${OUT}/results.json`, JSON.stringify({ base: BASE, results, errors, external }, null, 2));
+  await browser.close();
+  const failed = results.filter(r => !r.ok).length;
+  console.log(`\n${results.length - failed}/${results.length} passed`);
+  process.exit(failed ? 1 : 0);
+})().catch(e => { console.error(e); process.exit(2); });

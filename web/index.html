@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#05030c">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Wizard OS</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png" type="image/png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="device" class="device">
+    <canvas id="stars" class="stars" aria-hidden="true"></canvas>
+    <div class="nebula" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="lean" aria-hidden="true"></div>
+
+    <header class="statusbar" aria-hidden="true">
+      <span id="clock">18:00</span>
+      <span class="sb-right">
+        <svg viewBox="0 0 18 12"><path d="M1 11h2V8H1zm4 0h2V6H5zm4 0h2V4H9zm4 0h2V1h-2z" fill="currentColor"/></svg>
+        <svg viewBox="0 0 16 12"><path d="M8 11.5 1 4a10 10 0 0 1 14 0z" fill="currentColor"/></svg>
+        <span class="batt"><i></i></span>
+      </span>
+    </header>
+
+    <main id="desks" class="desks" aria-live="polite">
+      <div id="track" class="track"></div>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="deskLabel" class="desk-label" aria-hidden="true"></div>
+
+    <!-- Voice layer: transcript + arc controls -->
+    <div id="voice" class="voice" aria-hidden="true">
+      <div id="transcript" class="transcript">
+        <div class="tx-route"><b id="txRouteIcon">✦</b><span id="txRouteText">Listening…</span></div>
+        <p id="txText"></p>
+        <div id="txChips" class="tx-chips"></div>
+      </div>
+      <button id="arcCancel" class="arc arc-left" aria-label="Cancel recording"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg><small>Cancel</small></button>
+      <button id="arcPause" class="arc arc-mid" aria-label="Pause recording"><svg viewBox="0 0 24 24" class="i-pause"><path d="M8 5v14M16 5v14"/></svg><svg viewBox="0 0 24 24" class="i-play"><path d="M7 5l12 7-12 7z"/></svg><small>Pause</small></button>
+      <button id="arcRoute" class="arc arc-right" aria-label="Change route"><b id="routeGlyph">A</b><small id="routeLabel">Auto</small></button>
+    </div>
+
+    <!-- Dock -->
+    <div id="dock" class="dock">
+      <div id="dotsL" class="desk-dots left"></div>
+      <div id="orbWrap" class="orb-wrap">
+        <div class="orb-halo"></div>
+        <div class="orb-ring"></div>
+        <div class="orb-shock"></div>
+        <div id="moons" class="moons"></div>
+        <canvas id="orb" class="orb" width="220" height="220" aria-label="Wizard orb. Tap to talk, hold for a command, swipe up for apps, down for inbox, sideways for desks." role="button" tabindex="0"></canvas>
+        <img id="orbFallback" class="orb-fallback" src="robert-thread-orb.png" alt="" hidden>
+        <span id="timer" class="timer">0:00</span>
+        <span id="holdHint" class="hold-hint">Command</span>
+      </div>
+      <div id="dotsR" class="desk-dots right"></div>
+    </div>
+
+    <!-- Launcher (swipe up) -->
+    <section id="launcher" class="sheet launcher" aria-label="Apps and views">
+      <div class="sheet-grip"></div>
+      <div id="launcherBody" class="launcher-body"></div>
+      <form id="searchForm" class="search" autocomplete="off">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search" type="search" placeholder="Search, or type a command" enterkeyhint="go" spellcheck="false">
+      </form>
+    </section>
+
+    <!-- Inbox (swipe down) -->
+    <section id="inbox" class="sheet inbox" aria-label="Inbox">
+      <div id="inboxBody" class="inbox-body"></div>
+      <div class="sheet-grip"></div>
+    </section>
+
+    <div id="scrim" class="scrim"></div>
+
+    <div id="coach" class="coach" hidden>
+      <div class="coach-card">
+        <div class="coach-orb"></div>
+        <span class="c c-up">↑<b>Apps &amp; views</b></span>
+        <span class="c c-down">↓<b>Inbox</b></span>
+        <span class="c c-left">←<b>Desk</b></span>
+        <span class="c c-right"><b>Desk</b>→</span>
+        <p><b>Tap</b> to talk to Archimedes<br><b>Hold</b> for a quick command<br><b>Pinch</b> any review to zoom in and out</p>
+        <button id="coachGo" class="coach-go">Enter</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="summaries.js"></script>
+  <script src="orb.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
