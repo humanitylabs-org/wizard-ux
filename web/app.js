@@ -299,9 +299,10 @@
     const i = deskOf(id); if (i < 0 || desks[i].focus === id) return;
     desks[i].focus = id; applyLayout(i); save();
   }
+  let fullAt = 0;
   function setFull(id, on) {
     const i = deskOf(id); if (i < 0) return;
-    const d = desks[i]; d.focus = id; d.full = !!on; applyLayout(i); save(); vib(on ? 10 : 6);
+    const d = desks[i]; d.focus = id; d.full = !!on; fullAt = performance.now(); applyLayout(i); save(); vib(on ? 10 : 6);
   }
   function clearDesk(i) {
     if (!desks[i].wins.length) return;
@@ -818,7 +819,9 @@
     if (wa === 'full') { const d = desks[deskOf(id)]; return setFull(id, !(d.full && d.focus === id)); }
     if (wa === 'menu') return openMenu(id);
     if (e.target.closest('.wbar')) {
-      const now = performance.now();
+      // Use the input timestamp, not handling time: a busy page (an app loading in
+      // another tile) must not turn a quick double-tap into two single taps.
+      const now = e.timeStamp || performance.now();
       if (lastBarTap.id === id && now - lastBarTap.t < 450) { lastBarTap = { id: '', t: 0 }; const d = desks[deskOf(id)]; return setFull(id, !(d.full && d.focus === id)); }
       lastBarTap = { id, t: now }; return;
     }
@@ -835,6 +838,13 @@
       if (e.target.closest('[data-chback]')) return chatsBack(w);
       if (e.target.closest('[data-chnew]')) return openChat(id, '__new__');
     }
+  });
+  track.addEventListener('dblclick', e => {
+    const bar = e.target.closest('.wbar'); if (!bar || e.target.closest('[data-wact]')) return;
+    const id = bar.closest('.win')?.dataset.win; if (!id || lastBarTap.t === -1) return;
+    const d = desks[deskOf(id)]; if (!d) return;
+    // The click handler may already have toggled on the second tap; only act if it did not.
+    if (!(d.full && d.focus === id) && performance.now() - fullAt > 600) setFull(id, true);
   });
   track.addEventListener('submit', e => {
     const f = e.target.closest('[data-chform]'); if (!f) return;
@@ -892,9 +902,11 @@
     }, { passive: true, capture: true });
     root.addEventListener('touchmove', e => {
       if (!p || e.touches.length !== 2) return;
+      // Two fingers on a window belong to the shell: keep a scrolling list from eating the pinch.
+      if (e.cancelable) e.preventDefault();
       p.s = dist(e.touches[0], e.touches[1]) / p.d0;
       const we = winEl(p.id); if (we) we.style.setProperty('--pinch', String(Math.max(.9, Math.min(1.06, 1 + (p.s - 1) * .25))));
-    }, { passive: true, capture: true });
+    }, { passive: false, capture: true });
     const end = () => {
       if (!p) return; const q = p; p = null;
       const we = winEl(q.id); if (we) we.style.removeProperty('--pinch');
@@ -1059,7 +1071,7 @@
   }
 
   /* ---------------- voice ---------------- */
-  const V = { state: 'idle', kind: 'auto', route: store.get('route', 'auto'), rec: null, stream: null, chunks: [], ac: null, an: null, t0: 0, acc: 0, raf: 0, sim: false, stopAsked: false, cancelled: false, simText: '' };
+  const V = { state: 'idle', kind: 'auto', route: store.get('routeV', 0) >= 2 ? store.get('route', 'auto') : (store.set('routeV', 2), store.set('route', 'auto'), 'auto'), rec: null, stream: null, chunks: [], ac: null, an: null, t0: 0, acc: 0, raf: 0, sim: false, stopAsked: false, cancelled: false, simText: '' };
   const voiceEl = $('#voice'), tx = $('#transcript');
   function setVoice(s) {
     V.state = s; device.dataset.voice = s;
@@ -1097,6 +1109,7 @@
     if (V.state !== 'idle' && V.state !== 'think') V.raf = requestAnimationFrame(tick);
   }
   async function startVoice(kind) {
+    V.onAt = performance.now();
     if (V.state !== 'idle') return;
     clearTimeout(txHideT);
     Object.assign(V, { kind, target: null, chunks: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '' });
@@ -1165,6 +1178,9 @@
       txShow('', 'Transcription failed', 'agent', '!'); $('#txText').textContent = String(err.message || err).slice(0, 120); txHide(3200);
     }
   }
+  // The tap that starts recording must not also press an arc button: the arc fans out
+  // from under the finger, so the same tap's click would land on it mid-animation.
+  $('#voice').addEventListener('click', e => { if (e.target.closest('.arc') && performance.now() - (V.onAt || 0) < 450) { e.stopPropagation(); e.preventDefault(); } }, true);
   $('#arcCancel').addEventListener('click', () => cancelVoice());
   $('#arcPause').addEventListener('click', () => {
     if (V.state === 'listen') { V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} setVoice('paused'); $('#txRouteText').textContent = 'Paused'; vib(6); }
@@ -1496,8 +1512,8 @@
   function disarmAll() { for (const w of [...watchers]) { watchers.delete(w); try { w.destroy(); } catch (e) {} } topWatcher = null; $$('iframe.appframe').forEach(f => { try { f.contentWindow._wosWatcher = null; } catch (e) {} }); }
   function rearmFrames() { $$('iframe.appframe').forEach(f => { try { const w = f.contentWindow; if (w && w.document.readyState !== 'loading') armFrameBack(f, w); } catch (e) {} }); }
   // History guard: only pushed during a user gesture, so Chrome never skips it.
-  function ensureGuard() {
-    if (guardOn || Date.now() < exitUntil || !navigator.userActivation?.isActive) return;
+  function ensureGuard(force) {
+    if (guardOn || Date.now() < exitUntil || (!force && !navigator.userActivation?.isActive)) return;
     history.pushState({ wos: 'guard' }, ''); guardOn = true;
   }
   function dropGuard() { if (guardOn) { guardOn = false; ignorePop++; history.back(); } }
@@ -1507,6 +1523,9 @@
     if (ignorePop) { ignorePop--; return; }
     if (Date.now() < exitUntil) { history.back(); return; } // second Back: leave
     onBack();
+    // A consumed step re-arms at once, so the next Back (even with no tap in
+    // between) is caught too. After the exit warning nothing is re-armed.
+    if (Date.now() >= exitUntil) ensureGuard(true);
   });
   // Every touch is a user activation: refresh the watchers and the guard then.
   // (Touch only grants activation on pointerup/click, so listen to all three.)

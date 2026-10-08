@@ -124,7 +124,7 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   await page.click('#arcCancel'); await page.waitForTimeout(400);
   check('cancel returns idle', await page.evaluate(() => window.__wos.voice === 'idle'));
 
-  console.log('  route before router test:', await page.evaluate(() => localStorage.getItem('wos.route')));
+  check('tapping the orb leaves the route on Auto', await page.evaluate(() => localStorage.getItem('wos.route')) === '"auto"', await page.evaluate(() => localStorage.getItem('wos.route')));
   // Typed command through real router (DeepSeek Flash) — natural phrasing not caught by local parser
   await page.evaluate(() => window.__wos.runUtterance('can you get me to the Bangkok airport', 'auto', true));
   await page.waitForFunction(() => /DeepSeek|on-device|Archimedes/.test(document.querySelector('#txRouteText').textContent) && !/Routing/.test(document.querySelector('#txRouteText').textContent), null, { timeout: 30000 });

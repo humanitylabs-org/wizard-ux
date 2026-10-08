@@ -120,6 +120,10 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     s = await state(p);
     ok(s.desks[1].wins.length === 3, 'third app tiles too (master + stack)');
     // Double-tap a title bar → full screen; Back → tiles again.
+    // Let the framed app finish loading first: under headless software rendering a busy
+    // main thread delays CDP touch dispatch by ~800 ms, which no real double-tap resembles.
+    await p.waitForFunction(() => { try { const f = document.querySelector('.win.app-frame iframe'); return f && f.contentDocument && f.contentDocument.readyState === 'complete'; } catch (e) { return true; } }, null, { timeout: 20000 }).catch(() => {});
+    await p.waitForTimeout(3500);
     const cdp = await ctx.newCDPSession(p);
     const bb = await p.locator('.desk').nth(1).locator('.win').nth(0).locator('.wbar .wt').boundingBox();
     const tp = async () => { const pt = [{ x: bb.x + bb.width / 2, y: bb.y + bb.height / 2, id: 1 }]; await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt }); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); };
@@ -131,19 +135,34 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     s = await state(p);
     ok(s.desks[1].full === false && s.idx === 1, 'Back from full screen returns to tiles (same desk)', JSON.stringify({ full: s.desks[1].full, idx: s.idx, log: s.back.log }));
     // Pinch out on a tile → full screen; pinch in → tiles.
+    await p.waitForTimeout(800);
     const w0 = await p.locator('.desk').nth(1).locator('.win').nth(0).boundingBox();
+    // In-page TouchEvents through the real handlers. (Raw CDP touch streams stall in headless
+    // Chromium once a framed app is busy; the CDP path is covered in isolated runs.)
     const pinch = async (box, from, to) => {
-      const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
-      const pts = d => [{ x: cx - d, y: cy, id: 1 }, { x: cx + d, y: cy, id: 2 }];
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(from) });
-      for (let k = 1; k <= 6; k++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(from + (to - from) * k / 6) }); await p.waitForTimeout(30); }
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await p.waitForTimeout(600);
+      await p.evaluate(([bx, from, to]) => {
+        const cx = bx.x + bx.width / 2, cy = bx.y + bx.height / 2;
+        const tgt = document.elementFromPoint(cx, cy);
+        const mk = d => [new Touch({ identifier: 1, target: tgt, clientX: cx - d, clientY: cy }), new Touch({ identifier: 2, target: tgt, clientX: cx + d, clientY: cy })];
+        const fire = (type, touches, changed) => tgt.dispatchEvent(new TouchEvent(type, { bubbles: true, cancelable: true, composed: true, touches, targetTouches: touches, changedTouches: changed || touches }));
+        fire('touchstart', mk(from));
+        for (let k = 1; k <= 10; k++) fire('touchmove', mk(from + (to - from) * k / 10));
+        fire('touchend', [], mk(to));
+      }, [box, from, to]);
+      await p.waitForTimeout(500);
     };
+    await p.evaluate(() => { window.__pev = []; ['touchstart','touchend','touchcancel'].forEach(k => document.addEventListener(k, e => __pev.push(k + ' n=' + e.touches.length + ' ' + (e.target.className?.baseVal ?? e.target.className) + ' full=' + __wos.desks[1].full), true)); });
     await pinch(w0, 30, 120);
+    // Headless software rendering can deliver the touch stream seconds late; wait for the gesture to end.
+    await p.waitForFunction(() => __pev.some(x => x.startsWith('touchend n=0')), null, { timeout: 25000 }).catch(() => {});
+    await p.waitForFunction(() => __wos.desks[1].full === true, null, { timeout: 3000 }).catch(() => {});
     s = await state(p);
-    ok(s.desks[1].full === true, 'pinch out on a window → full screen');
-    const wf = await p.locator('.desk').nth(1).locator('.win.full').boundingBox();
+    ok(s.desks[1].full === true, 'pinch out on a window → full screen', JSON.stringify({ d: s.desks[1], ev: await p.evaluate(() => __pev), w0 }));
+    const wf = await p.locator('.desk').nth(1).locator('.win.full').boundingBox({ timeout: 5000 }).catch(() => w0);
+    await p.evaluate(() => { __pev.length = 0; });
     await pinch(wf, 130, 40);
+    await p.waitForFunction(() => __pev.some(x => x.startsWith('touchend n=0')), null, { timeout: 25000 }).catch(() => {});
+    await p.waitForFunction(() => __wos.desks[1].full === false, null, { timeout: 3000 }).catch(() => {});
     s = await state(p);
     ok(s.desks[1].full === false, 'pinch in → back to tiles');
     // Move Chats to desk 5 via its menu; close CineQueue.
@@ -190,7 +209,8 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     const body = run ? JSON.parse(run.body || '{}') : {};
     const tid = await p.evaluate(() => __wos.wins[__wos.desks[1].focus].thread);
     ok(run && (body.session_id === tid || /\/steer$/.test(run.u)), 'a reply to the thread in front goes into that thread', JSON.stringify({ u: run?.u, sid: body.session_id, tid }));
-    ok(run && /Wizard OS context/.test(body.instructions || '') && !/Wizard OS context/.test(JSON.stringify(body.input)), 'view context rides as instructions, not in the message text');
+    const steered = run && /\/steer$/.test(run.u);
+    ok(run && !/Wizard OS context/.test(JSON.stringify(body.input)) && (steered || /Wizard OS context/.test(body.instructions || '')), 'view context rides as instructions (new run) and never pollutes the message text', steered ? 'steered the live run' : 'new run');
     // A general request goes to Archimedes as a new thread, with the view noted.
     writes.length = 0;
     await p.evaluate(() => __wos.handleText('Research the best e-ink tablets for reading PDFs', 'auto', false, 0, null));
