@@ -12,7 +12,7 @@ const ok = (c, name, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS'
 (async () => {
   const b = await chromium.connectOverCDP('http://127.0.0.1:9333');
   // Attach to the tab that is actually on screen; close stale Wizard OS tabs behind it.
-  const pages = b.contexts()[0].pages().filter(x => x.url().includes('wizard-os-home'));
+  const pages = b.contexts()[0].pages().filter(x => x.url().includes('wizard-os-home') && !x.url().includes('preview'));
   let p = null;
   for (const x of pages) { if (!p && await x.evaluate(() => document.visibilityState === 'visible').catch(() => false)) p = x; }
   p = p || pages.at(-1);

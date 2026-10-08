@@ -526,6 +526,10 @@
     let win; try { win = f.contentWindow; } catch (e) { return; }
     try { if (W[id]) { W[id].url = win.location.pathname + win.location.search; save(); } } catch (e) {}
     try { win.document.addEventListener('pointerdown', () => { focusWin(id); armBack(); }, true); } catch (e) {}
+    // A hosted app may keep its own history guard. During the exit window the shell owns Back:
+    // any Back that lands on a frame entry keeps unwinding until Wizard OS really leaves.
+    tameHistory(win);
+    try { win.addEventListener('popstate', e => { if (Date.now() < exitUntil) { e.stopImmediatePropagation(); history.back(); } }, true); } catch (e) {}
     try { bindWinPinch(win.document, id); } catch (e) {}
     armFrameBack(f, win);
   }
@@ -1570,6 +1574,7 @@
   const watchers = new Set();
   function backStep() {
     if (V.state !== 'idle') { cancelVoice(true); return 'voice'; }
+    const lm = window.LiveMode?.back?.(); if (lm) return lm;
     if (closePeek()) return 'peek';
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet) { closeSheets(); return 'sheet'; }
@@ -1676,7 +1681,7 @@
   window.__wos = {
     live: LIVE, openPeek, closePeek, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
-    get idx() { return idx; }, get desks() { return desks; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
+    HOME, get idx() { return idx; }, get desks() { return desks; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
     startVoice, finishVoice, cancelVoice,
     reset() { Object.keys(localStorage).filter(k => k.startsWith('wos.')).forEach(k => localStorage.removeItem(k)); location.reload(); },
