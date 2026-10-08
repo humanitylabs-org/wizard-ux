@@ -39,5 +39,54 @@
                 <data android:scheme="https" android:host="private.wizard001.com" android:pathPrefix="/wizard-os-home/" />
             </intent-filter>
         </activity>
+
+        <!-- ===== Side-button assistant (feature/side-button-assistant) =====
+             Hold the side button: locked phone = full Wizard over the real keyguard (showWhenLocked);
+             unlocked phone = a small orb in the corner, in Android's own assistant window, so the
+             app underneath keeps every touch outside the orb. Requires Wizard OS as the
+             digital assistant app (Settings > Apps > Default apps > Digital assistant app). -->
+        <activity
+            android:name=".assist.AssistLockActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="ai.wizards.os.assist"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+            android:theme="@style/Theme.WizardOS.AssistSurface">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".assist.AssistSetupActivity"
+            android:exported="true"
+            android:label="Side button"
+            android:theme="@style/Theme.WizardOS" />
+        <service
+            android:name=".assist.WizardVoiceService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/assist_voice" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".assist.WizardSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <service
+            android:name=".assist.WizardRecognitionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+            <meta-data android:name="android.speech" android:resource="@xml/assist_recognition" />
+        </service>
     </application>
 </manifest>
