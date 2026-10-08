@@ -21,7 +21,10 @@ async function boot(b, { noCloseWatcher = false } = {}) {
     return r.continue();
   });
   const p = await ctx.newPage();
-  const errs = []; p.on('pageerror', e => errs.push(String(e)));
+  // Only the shell's own errors count; a hosted app (e.g. Topics mid-deploy) is not the shell.
+  const errs = [], foreign = [];
+  p.on('pageerror', e => { const st = String(e.stack || ''); (/wizard-os-home\//.test(st) || !/https?:\/\//.test(st) ? errs : foreign).push(String(e) + ' @ ' + (st.match(/https?:\/\/[^\s)]+/) || [''])[0]); });
+  p.on('close', () => { if (foreign.length) console.log('  (hosted-app errors, not the shell):', foreign.slice(0, 3).join(' | ')); });
   await p.addInitScript(nc => { try { localStorage.setItem('wos.coached', 'true'); } catch (e) {} if (nc) { try { delete window.CloseWatcher; } catch (e) {} window.CloseWatcher = undefined; } }, noCloseWatcher);
   await p.goto('about:blank');
   await p.goto(URL_, { waitUntil: 'load' });
@@ -225,6 +228,56 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     ok(after.desks[2].wins.some(w => w.app === 'review') && after.idx === 2, 'hold + slide right opens the command on the next desk', JSON.stringify(after.desks.map(d => d.wins.map(w => w.app))));
     ok(errs.length === 0, 'no page errors (voice run)', errs.join(' | '));
     await p.screenshot({ path: OUT + '/44-aimed.png' });
+    await ctx.close();
+  }
+
+  /* ---------- 5. Desk dots, peek stack, scrubber, Home → Topics → Mizel ---------- */
+  {
+    const { ctx, p, errs } = await boot(b);
+    let s = await state(p);
+    const apps = s.desks.map(d => d.wins.map(w => w.app));
+    const ids = await p.evaluate(() => __wos.desks.map(d => d.wins.map(id => __wos.wins[id].appId || __wos.wins[id].app)));
+    ok(ids[3][0] === 'topics' && ids[4][0] === 'mizel', 'layout: Home, then Topics, then Mizel', JSON.stringify(ids));
+    ok(ids[1].includes('chats'), 'Chats still one desk left of Home', JSON.stringify(ids));
+    // Topics isn't published yet: its window shows a "coming" card, never an error page.
+    await p.evaluate(() => __wos.goDesk(3)); await p.waitForTimeout(1500);
+    const topics = await p.evaluate(() => { const w = document.querySelectorAll('.desk')[3].querySelector('.frame-wrap'); const f = w?.querySelector('iframe'); let href = ''; try { href = f.contentWindow.location.href; } catch (e) {} return { coming: w?.classList.contains('coming'), href }; });
+    ok(topics.coming || /wizard-topics-preview/.test(topics.href), 'Topics desk: on-its-way card until published, then the live app', JSON.stringify(topics));
+    await p.screenshot({ path: OUT + '/50-topics-coming.png' });
+    await p.evaluate(() => __wos.goDesk(2)); await p.waitForTimeout(700);
+    // Tap a dot → that desk.
+    await p.locator('#dotsR [data-goto="4"]').tap(); await p.waitForTimeout(700);
+    s = await state(p); ok(s.idx === 4, 'tap a dot → jumps straight to that desk', 'idx=' + s.idx);
+    await p.screenshot({ path: OUT + '/51-mizel.png' });
+    // Long-press a dot → peek stack.
+    const dot = await p.locator('#dotsL [data-goto="1"]').boundingBox();
+    const cdp = await ctx.newCDPSession(p);
+    const pt = [{ x: dot.x + dot.width / 2, y: dot.y + dot.height / 2, id: 1 }];
+    await p.evaluate(() => { window.__dev = []; ['pointerdown','pointerup','pointercancel','pointerleave','click','contextmenu'].forEach(k => document.getElementById('dock').addEventListener(k, e => __dev.push(k + '@' + Math.round(performance.now())), true)); });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt });
+    await p.waitForTimeout(700);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await p.waitForFunction(() => document.querySelector('#peek.open'), null, { timeout: 5000 }).catch(() => {});
+    await p.waitForTimeout(500);
+    s = await state(p);
+    ok(await p.locator('#peek.open .pk-card').count() === 5 && s.idx === 4, 'long-press a dot → peek every desk as cards (no jump)', 'idx=' + s.idx + ' ' + JSON.stringify(await p.evaluate(() => ({ dev: __dev, peek: document.getElementById('peek')?.className, cards: document.querySelectorAll('#peek .pk-card').length, back: __wos.back.log.slice(-4) }))));
+    await p.screenshot({ path: OUT + '/52-peek.png' });
+    await p.keyboard.press('Escape'); await p.waitForFunction(() => !document.querySelector('#peek.open'), null, { timeout: 4000 }).catch(() => {});
+    ok(await p.locator('#peek.open').count() === 0 && (await state(p)).idx === 4, 'Back closes the peek, stays on the desk');
+    await p.evaluate(() => __wos.openPeek(4)); await p.waitForTimeout(900);
+    await p.locator('#peek [data-peek="1"]').click(); await p.waitForTimeout(700);
+    ok((await state(p)).idx === 1, 'tap a card → that desk');
+    // Scrubber: hold the strip under the orb, nudge right desk by desk, release lands.
+    const sc = await p.locator('#scrub').boundingBox();
+    const sx = sc.x + sc.width / 2, sy = sc.y + sc.height / 2;
+    await p.mouse.move(sx, sy); await p.mouse.down(); await p.waitForTimeout(250);
+    const seen = [];
+    for (let k = 1; k <= 3; k++) { await p.mouse.move(sx + k * 27, sy, { steps: 3 }); await p.waitForTimeout(120); seen.push(await p.evaluate(() => __wos.idx)); }
+    await p.screenshot({ path: OUT + '/53-scrub.png' });
+    await p.mouse.up(); await p.waitForTimeout(600);
+    s = await state(p);
+    ok(JSON.stringify(seen) === '[2,3,4]' && s.idx === 4, 'scrubber steps one desk per small nudge, release lands', JSON.stringify({ seen, idx: s.idx }));
+    ok(errs.length === 0, 'no page errors (dots/peek/scrub)', errs.join(' | '));
     await ctx.close();
   }
 

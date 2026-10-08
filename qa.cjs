@@ -54,17 +54,20 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(650);
   }
-  // swipe orb left -> next desk (yesterday's review window lives on desk 4 on first run)
+  // swipe orb left -> next desk (Topics), dots follow
   await drag(-150, 0);
-  check('swipe left moves to desk 4', await page.evaluate(() => window.__wos.idx === 3));
+  check('swipe left moves to desk 4 (Topics)', await page.evaluate(() => window.__wos.idx === 3));
   const dots2 = await page.evaluate(() => [document.querySelectorAll('#dotsL .ddot').length, document.querySelectorAll('#dotsR .ddot').length]);
   check('dots 3 left / 1 right on desk 4', dots2[0] === 3 && dots2[1] === 1, JSON.stringify(dots2));
+  // Yesterday's review window lives on desk 1; tap its dot.
+  await page.locator('#dotsL [data-goto="0"]').tap(); await page.waitForTimeout(800);
+  check('review window lives on desk 1', await page.evaluate(() => window.__wos.idx === 0 && window.__wos.desks[0].wins.some(id => window.__wos.wins[id].app === 'review')));
   await shot('03-review-day');
   let at = await page.evaluate(() => window.__wos.idx);
 
   // pinch out on review -> week
   async function pinch(scale) {
-    const st = await page.locator('.desk[data-desk="3"] .zstage').boundingBox();
+    const st = await page.locator('.desk[data-desk="0"] .zstage').boundingBox();
     const mx = st.x + st.width / 2, my = st.y + 220, d0 = scale > 1 ? 40 : 150, d1 = d0 * scale;
     const cdp = await ctx.newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: mx - d0 / 2, y: my, id: 1 }, { x: mx + d0 / 2, y: my, id: 2 }] });
@@ -72,22 +75,22 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(700);
   }
-  const lvl = () => page.evaluate(() => { const w = window.__wos.wins; const id = window.__wos.desks[3].wins.find(x => w[x].app === 'review'); return w[id].z.level; });
+  const lvl = () => page.evaluate(() => { const w = window.__wos.wins; const id = window.__wos.desks[0].wins.find(x => w[x].app === "review"); return w[id].z.level; });
   await pinch(0.35); check('pinch in-to-out: day -> week', (await lvl()) === 'week', await lvl());
   await shot('04-review-week');
   await pinch(0.35); check('pinch: week -> month', (await lvl()) === 'month', await lvl());
   await shot('05-review-month');
   await pinch(3.2); check('pinch open: month -> week', (await lvl()) === 'week', await lvl());
   // tap a day card to dive
-  await page.locator('.desk[data-desk="3"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="0"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
   check('tap dives week -> day', (await lvl()) === 'day', await lvl());
-  await page.locator('.desk[data-desk="3"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="0"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
   check('tap dives day -> focus', (await lvl()) === 'group', await lvl());
   await shot('06-review-focus');
-  await page.locator('.desk[data-desk="3"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="0"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
   check('tap dives focus -> thread', (await lvl()) === 'thread', await lvl());
   await shot('07-review-thread');
-  await page.locator('.desk[data-desk="3"] .crumb [data-crumb="0"]').click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="0"] .crumb [data-crumb="0"]').click(); await page.waitForTimeout(700);
   check('breadcrumb jumps back to month', (await lvl()) === 'month', await lvl());
 
   // swipe up -> launcher

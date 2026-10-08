@@ -252,7 +252,7 @@ svg { display: block; }
 /* ---------- Dock / orb ---------- */
 .dock {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 50; height: calc(var(--dock-h) + var(--safe-b));
-  padding-bottom: calc(14px + var(--safe-b));
+  padding-bottom: calc(28px + var(--safe-b));
   display: flex; align-items: center; justify-content: center; gap: 22px; pointer-events: none;
 }
 .dock::before { content: ""; position: absolute; inset: -40px 0 0; z-index: -1; pointer-events: none; background: linear-gradient(to top, rgba(5, 3, 12, .92) 20%, rgba(5, 3, 12, 0)); }
@@ -629,3 +629,36 @@ svg { display: block; }
 .win .pinch-hint { bottom: 8px; }
 /* desk label sits above the orb, clear of the tiles */
 .desk-label { bottom: calc(var(--dock-h) + var(--safe-b) - 6px); }
+
+/* ---------- coming-soon frame (app published from another thread) ---------- */
+.frame-coming { display: none; position: absolute; inset: 0; z-index: 2; place-content: center; text-align: center; padding: 0 26px; background: radial-gradient(120% 80% at 50% 30%, rgba(63, 224, 255, .08), transparent 60%), #0c0a18; }
+.frame-wrap.coming .frame-coming { display: grid; justify-items: center; }
+.frame-wrap.coming .appframe { visibility: hidden; }
+.frame-coming .glyph { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; font-size: 30px; background: linear-gradient(135deg, var(--g1), var(--g2)); box-shadow: 0 10px 30px rgba(63, 224, 255, .2); margin-bottom: 16px; }
+.frame-coming h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
+.frame-coming p { margin: 0; max-width: 30ch; color: var(--ink-3); font-size: 14px; line-height: 1.45; }
+
+/* ---------- desk peek: long-press a dot → every desk as a card stack ---------- */
+.peek { position: absolute; inset: 0; z-index: 70; display: flex; flex-direction: column; justify-content: center; background: rgba(5, 3, 12, .72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); opacity: 0; pointer-events: none; transition: opacity 220ms var(--ease); }
+.peek.open { opacity: 1; pointer-events: auto; }
+.pk-stack { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 30px calc(50% - 105px); scrollbar-width: none; perspective: 900px; }
+.pk-stack::-webkit-scrollbar { display: none; }
+.pk-card { flex: 0 0 210px; height: 360px; scroll-snap-align: center; display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 26px; text-align: left; color: var(--ink);
+  background: linear-gradient(180deg, rgba(40, 28, 80, .75), rgba(14, 10, 30, .85)); border: 1px solid var(--line-2); box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+  transform: translateY(40px) rotateY(calc(var(--k) * -6deg)) scale(.92); transition: transform 360ms var(--spring); }
+.peek.open .pk-card { transform: translateY(0) rotateY(calc(var(--k) * -6deg)) scale(1); }
+.pk-card.here { border-color: var(--violet-2); box-shadow: 0 0 0 1px var(--violet-2), 0 24px 60px rgba(143, 99, 255, .35); }
+.pk-card > b { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.pk-body { flex: 1; display: grid; gap: 6px; min-height: 0; }
+.pk-n0, .pk-n1 { grid-template-rows: 1fr; } .pk-n2 { grid-template-rows: 1fr 1fr; } .pk-n3, .pk-n4 { grid-template: 1fr 1fr / 1fr 1fr; }
+.pk-win { display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 10px; border-radius: 16px; background: rgba(205, 190, 255, .07); border: 1px solid var(--line); font-size: 13px; font-weight: 650; overflow: hidden; }
+.pk-win i { font-style: normal; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, var(--g1), var(--g2)); font-size: 15px; }
+.pk-empty { display: grid; place-items: center; border-radius: 16px; border: 1px dashed var(--line-2); color: var(--ink-3); font-size: 13px; }
+.pk-hint { text-align: center; color: var(--ink-3); font-size: 13px; margin: 6px 0 0; }
+
+/* ---------- scrubber strip under the orb ---------- */
+.scrub { position: absolute; left: 50%; bottom: calc(2px + var(--safe-b)); width: 190px; height: 26px; margin-left: -95px; pointer-events: auto; touch-action: none; display: grid; place-items: center; }
+.scrub i { width: 46px; height: 4px; border-radius: 99px; background: rgba(205, 190, 255, .28); transition: width 220ms var(--spring), background 220ms; }
+.scrub.on i { width: 150px; background: linear-gradient(90deg, var(--violet), var(--pink)); box-shadow: 0 0 14px var(--violet); }
+.scrub .sc-label { position: absolute; bottom: 30px; white-space: nowrap; padding: 6px 12px; border-radius: 99px; background: rgba(10, 6, 24, .88); border: 1px solid var(--line-2); font-size: 13px; font-weight: 650; opacity: 0; transform: translateY(6px); transition: opacity 160ms, transform 160ms; pointer-events: none; }
+.scrub.on .sc-label { opacity: 1; transform: none; }

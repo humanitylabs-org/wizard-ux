@@ -67,6 +67,8 @@
     { id: 'thai-cram', kind: 'wizard', name: 'Thai Cram', icon: 'ก', g: ['#ff6b86', '#3f6bff'], url: P + '/thai-cram/', desc: 'Thai flashcards' },
     { id: 'console', kind: 'wizard', name: 'Console', icon: '⌘', g: ['#3a3f58', '#151827'], url: P + '/console/', desc: 'Terminals' },
     { id: 'model-performance', kind: 'wizard', name: 'Model Perf', icon: '📈', g: ['#3fe0ff', '#8f63ff'], url: P + '/model-performance/', desc: 'Model routing and cost' },
+    { id: 'topics', kind: 'wizard', name: 'Topics', icon: '◇', g: ['#3fe0ff', '#8f63ff'], url: P + '/wizard-topics-preview/', probe: true, desc: 'Threads grouped by topic' },
+    { id: 'mizel', kind: 'wizard', name: 'Mizel', icon: '◉', g: ['#3fe0ff', '#2f8cff'], url: P + '/meetings/#/', desc: 'Meeting recorder' },
     { id: 'shopping', kind: 'wizard', name: 'Shopping', icon: '🛍', g: ['#ff8a5c', '#ff5ccf'], url: P + '/shopping-assistant/', desc: 'Researched buys' },
     { id: 'storyboard', kind: 'wizard', name: 'Storyboards', icon: '🎞', g: ['#ffbe55', '#8f63ff'], url: P + '/storyboard-review/', desc: 'Storyboard review' },
     { id: 'golden-frog', kind: 'wizard', name: 'Golden Frog', icon: '🐸', g: ['#ffd65c', '#4ff0b0'], url: P + '/golden-frog-review/', desc: 'Golden Frog review' },
@@ -118,9 +120,27 @@
     W = {}; desks = Array.from({ length: DESKS_N }, () => ({ wins: [], focus: null, full: false }));
     // First run: Chats sits one desk to the left of Home, yesterday's review one to the right.
     const c = { id: newId(), app: 'chats', thread: null }; W[c.id] = c; desks[HOME - 1].wins.push(c.id); desks[HOME - 1].focus = c.id;
-    const r = { id: newId(), app: 'review', z: { level: 'day', day: YESTERDAY } }; W[r.id] = r; desks[HOME + 1].wins.push(r.id); desks[HOME + 1].focus = r.id;
+    const r = { id: newId(), app: 'review', z: { level: 'day', day: YESTERDAY } }; W[r.id] = r; desks[0].wins.push(r.id); desks[0].focus = r.id;
+    layoutV2();
+  }
+  // James's layout: Home = latest, swipe left = Topics, the desk after = Mizel.
+  function layoutV2() {
+    const put = (i, w) => {
+      if (Object.values(W).some(x => x.app === w.app && x.appId === w.appId)) return;
+      const d = desks[i]; if (d.wins.length >= MAXW) return;
+      const id = newId(); W[id] = { id, ...w }; d.wins.unshift(id); d.focus = id; d.full = false;
+    };
+    // An older review window on the Topics desk moves to desk 1 so Topics gets the desk.
+    const t = desks[HOME + 1];
+    t.wins.filter(id => W[id]?.app === 'review').forEach(id => {
+      if (desks[0].wins.length < MAXW) { t.wins = t.wins.filter(x => x !== id); desks[0].wins.push(id); desks[0].focus = desks[0].focus || id; if (t.focus === id) t.focus = t.wins[0] || null; }
+    });
+    put(HOME + 1, { app: 'frame', appId: 'topics' });
+    put(HOME + 2, { app: 'frame', appId: 'mizel' });
+    store.set('layoutV', 2);
   }
   if (!W || typeof W !== 'object' || !Array.isArray(desks) || desks.length !== DESKS_N || desks.some(d => !d || !Array.isArray(d.wins))) freshLayout();
+  else if (store.get('layoutV', 0) < 2) layoutV2();
   desks.forEach(d => {
     d.wins = d.wins.filter(id => W[id]).slice(0, MAXW);
     if (!d.wins.includes(d.focus)) d.focus = d.wins[d.wins.length - 1] || null;
@@ -258,7 +278,58 @@
     $('#dotsL').innerHTML = Array.from({ length: idx }, (_, i) => mk(i)).join('');
     $('#dotsR').innerHTML = Array.from({ length: DESKS_N - 1 - idx }, (_, k) => mk(idx + 1 + k)).join('');
   }
-  $('#dock').addEventListener('click', e => { const b = e.target.closest('[data-goto]'); if (b) goDesk(+b.dataset.goto); });
+  /* Dots: tap = jump to that desk. Long-press any dot = peek every desk as a
+   * stack of cards (Android recents feel); tap a card to land there. */
+  let dotHold = null, peekEl = null, peekJustOpened = 0;
+  $('#dock').addEventListener('pointerdown', e => {
+    const b = e.target.closest('[data-goto]'); if (!b) return;
+    dotHold = setTimeout(() => { dotHold = null; openPeek(+b.dataset.goto); }, 420);
+  });
+  const endDotHold = () => { clearTimeout(dotHold); dotHold = null; };
+  $('#dock').addEventListener('pointerup', endDotHold); $('#dock').addEventListener('pointercancel', endDotHold); $('#dock').addEventListener('pointerleave', endDotHold);
+  $('#dock').addEventListener('click', e => {
+    const b = e.target.closest('[data-goto]'); if (!b) return;
+    if (Date.now() - peekJustOpened < 600) return;
+    goDesk(+b.dataset.goto);
+  });
+  $('#dock').addEventListener('contextmenu', e => { if (e.target.closest('[data-goto]')) e.preventDefault(); });
+  function deskCard(i) {
+    const d = desks[i];
+    const wins = d.wins.map(id => W[id]).filter(Boolean);
+    const body = wins.length ? wins.map(w => { const a = winApp(w); return `<span class="pk-win"><i style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</i>${esc(winTitle(w))}</span>`; }).join('')
+      : `<span class="pk-empty">${i === HOME ? 'Home · latest' : 'Empty desk'}</span>`;
+    return `<button class="pk-card${i === idx ? ' here' : ''}" data-peek="${i}" style="--k:${i - idx}"><b>Desk ${i + 1}</b><span class="pk-body pk-n${Math.min(wins.length, 4)}">${body}</span></button>`;
+  }
+  function openPeek(focusI) {
+    if (!peekEl) { peekEl = document.createElement('div'); peekEl.id = 'peek'; peekEl.className = 'peek'; device.appendChild(peekEl);
+      // The finger lifting off the long-pressed dot fires a click on this overlay: ignore it.
+      peekEl.addEventListener('click', e => { if (Date.now() - peekJustOpened < 700) return; const c = e.target.closest('[data-peek]'); closePeek(); if (c) goDesk(+c.dataset.peek); }); }
+    peekEl.innerHTML = `<div class="pk-stack">${desks.map((_, i) => deskCard(i)).join('')}</div><p class="pk-hint">Tap a desk to go there</p>`;
+    void peekEl.offsetWidth; peekEl.classList.add('open');
+    const c = peekEl.querySelector(`[data-peek="${focusI}"]`); c?.scrollIntoView({ inline: 'center', block: 'nearest' });
+    peekJustOpened = Date.now(); vib(14);
+  }
+  function closePeek() { if (!peekEl || !peekEl.classList.contains('open')) return false; peekEl.classList.remove('open'); return true; }
+
+  /* Scrubber: the strip just below the orb. Touch, hold, and drag sideways;
+   * every small nudge steps one desk (haptic tick), release lands. */
+  const scrub = document.createElement('div'); scrub.id = 'scrub'; scrub.className = 'scrub';
+  scrub.innerHTML = '<i></i><span class="sc-label"></span>'; $('#dock').appendChild(scrub);
+  let SC = null; const SC_STEP = 26;
+  scrub.addEventListener('pointerdown', e => {
+    e.preventDefault(); scrub.setPointerCapture(e.pointerId);
+    SC = { x: e.clientX, start: idx, at: idx, live: false, t: setTimeout(() => { if (SC) { SC.live = true; scrub.classList.add('on'); scLabel(); vib(10); } }, 140) };
+  });
+  scrub.addEventListener('pointermove', e => {
+    if (!SC) return; const dx = e.clientX - SC.x;
+    if (!SC.live && Math.abs(dx) > 10) { clearTimeout(SC.t); SC.live = true; scrub.classList.add('on'); }
+    if (!SC.live) return;
+    const n = Math.max(0, Math.min(DESKS_N - 1, SC.start + Math.round(dx / SC_STEP)));
+    if (n !== SC.at) { SC.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(); }
+  });
+  function scLabel() { scrub.querySelector('.sc-label').textContent = `Desk ${SC.at + 1} · ${deskTitle(SC.at)}`; }
+  const scEnd = () => { if (!SC) return; clearTimeout(SC.t); const live = SC.live; const at = SC.at; SC = null; scrub.classList.remove('on'); if (live) goDesk(at, true); };
+  scrub.addEventListener('pointerup', scEnd); scrub.addEventListener('pointercancel', scEnd);
 
   /* ---------------- window operations ---------------- */
   // Opens on the current desk (tiled next to what is there) unless a desk is given,
@@ -401,15 +472,45 @@
   }
   function renderFrame(w) {
     const a = APP[w.appId] || {};
-    return `<div class="frame-wrap"><iframe class="appframe" src="${esc(w.url || a.url || '/')}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe>
+    return `<div class="frame-wrap"><div class="frame-coming"><span class="glyph" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}</span><h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} src="${esc(w.url || a.url || '/')}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe>
       <div class="frame-fallback"><span class="glyph" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}</span><h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
   }
   // A refused frame lands on an unreadable error document: show the fallback card.
   // Readable (same-origin) frames get the shell's Back handling, pinch, and voice hooks.
+  function probeFrame(f, url) {
+    const wrap = f.closest('.frame-wrap'); if (!wrap) return;
+    fetch(url, { method: 'HEAD', cache: 'no-store', credentials: 'same-origin' }).then(r => {
+      if (r.ok) { if (wrap.classList.contains('coming')) { wrap.classList.remove('coming'); f.src = url; } }
+      else { wrap.classList.add('coming'); setTimeout(() => { if (f.isConnected) probeFrame(f, url); }, 60000); }
+    }).catch(() => setTimeout(() => { if (f.isConnected) probeFrame(f, url); }, 60000));
+  }
+  /* Hosted apps must not pad the Back stack: a history entry an app pushes
+   * without the user touching it (router boot, redirects) becomes a replace.
+   * Patched as early as the new document exists, before its module scripts run. */
+  function tameHistory(win) {
+    try {
+      if (!win || win.__wosTamed || !win.history) return;
+      win.__wosTamed = true;
+      const h = win.history, push = h.pushState.bind(h), rep = h.replaceState.bind(h);
+      h.pushState = function (st, t, u) { return (win.navigator.userActivation?.isActive ? push : rep)(st, t, u); };
+    } catch (e) {}
+  }
+  function watchEarly(f) {
+    let last = null, n = 0;
+    const tick = () => {
+      if (!f.isConnected) return;
+      try { const w = f.contentWindow; if (w && w !== last && w.location.href !== 'about:blank') { last = w; tameHistory(w); } } catch (e) {}
+      if (++n < 4000) setTimeout(tick, 4);
+    };
+    tick();
+    f.addEventListener('load', () => { n = 0; tick(); });
+  }
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
+      watchEarly(f);
       const wrap = f.closest('.frame-wrap');
+      if (f.dataset.probe) { wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
       f.addEventListener('load', () => {
         let ok = false, why = '';
         try { const doc = f.contentDocument; why = doc ? doc.location.href : 'nodoc'; ok = !!doc && doc.location.href !== 'about:blank'; } catch (e) { ok = false; why = 'x:' + e.name; }
@@ -1469,6 +1570,7 @@
   const watchers = new Set();
   function backStep() {
     if (V.state !== 'idle') { cancelVoice(true); return 'voice'; }
+    if (closePeek()) return 'peek';
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet) { closeSheets(); return 'sheet'; }
     const d = desks[idx], f = W[d.focus];
@@ -1572,7 +1674,7 @@
   if (!store.get('coached', false)) { $('#coach').hidden = false; }
   $('#coachGo').addEventListener('click', () => { $('#coach').hidden = true; store.set('coached', true); shock(); });
   window.__wos = {
-    live: LIVE, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
+    live: LIVE, openPeek, closePeek, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
     get idx() { return idx; }, get desks() { return desks; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
