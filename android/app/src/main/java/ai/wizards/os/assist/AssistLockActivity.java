@@ -6,9 +6,7 @@ import ai.wizards.os.R;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.KeyguardManager;
-import android.content.ClipData;
 import android.content.BroadcastReceiver;
-import android.content.ClipboardManager;
 import android.content.IntentFilter;
 import android.content.Context;
 import android.content.Intent;
@@ -28,7 +26,6 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Toast;
 
 import org.json.JSONObject;
 
@@ -50,7 +47,6 @@ import java.io.File;
 public class AssistLockActivity extends Activity implements VoiceCapture.View {
     static final String TAG = "WizardOSAssist";
     private static final String SURFACE = "file:///android_asset/assist/surface.html";
-    private static final String WIZARD_APP = "ai.wizards.os";
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private WebView web;
@@ -292,17 +288,21 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
             requestUnlock();
             return;
         }
-        ClipboardManager cb = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        if (cb != null && text != null && !text.isEmpty()) cb.setPrimaryClip(ClipData.newPlainText("Wizard", text));
-        Intent launch = getPackageManager().getLaunchIntentForPackage(WIZARD_APP);
-        if (launch == null) {
-            Toast.makeText(this, "Wizard isn’t installed · copied", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        Toast.makeText(this, "Copied · paste it into a Wizard thread", Toast.LENGTH_SHORT).show();
         Log.i(TAG, "open wizard");
-        startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        startActivity(sayIntent(this, text));
         closeSurface();
+    }
+
+    /**
+     * Opens Wizard OS with the words as a draft (ai.wizards.os.action.SAY). Wizard OS shows the
+     * draft and James sends it with one tap; nothing is ever sent from here.
+     */
+    static Intent sayIntent(Context c, String text) {
+        Intent i = new Intent("ai.wizards.os.action.SAY")
+                .setClassName(c.getPackageName(), "ai.wizards.os.MainActivity")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (text != null && !text.trim().isEmpty()) i.putExtra(Intent.EXTRA_TEXT, text.trim());
+        return i;
     }
 
     /* ------------------------------------------------------------------ bridge */

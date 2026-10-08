@@ -2,8 +2,6 @@ package ai.wizards.os.assist;
 
 import android.annotation.SuppressLint;
 import android.app.KeyguardManager;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
@@ -28,7 +26,6 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.widget.Toast;
 
 import org.json.JSONObject;
 
@@ -259,15 +256,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     }
 
     private void openWizard(String text) {
-        ClipboardManager cb = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
-        if (cb != null && text != null && !text.isEmpty()) cb.setPrimaryClip(ClipData.newPlainText("Wizard", text));
-        Intent launch = getContext().getPackageManager().getLaunchIntentForPackage("ai.wizards.os");
-        if (launch == null) {
-            Toast.makeText(getContext(), "Wizard isn’t installed · copied", Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(getContext(), "Copied · paste it into a Wizard thread", Toast.LENGTH_SHORT).show();
-            startAssistantActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        }
+        Log.i(TAG, "open wizard (draft)");
+        startAssistantActivity(AssistLockActivity.sayIntent(getContext(), text));
         hide();
     }
 
