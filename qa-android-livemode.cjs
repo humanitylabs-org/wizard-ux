@@ -38,7 +38,7 @@ const ok = (c, m, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 
   ok(s.card && /touch the print/.test(s.hint), '"Wizard noticed" card rises with its hint', JSON.stringify(s));
   shot('lm-1-card');
   // Real tap on the print (trusted touch through adb) → real Android biometric sheet.
-  const r = await p.evaluate(() => { const e = document.querySelector('.lm-print').getBoundingClientRect(); return { x: e.left + e.width / 2, y: e.top + e.height / 2, dpr: devicePixelRatio, vh: innerHeight, sh: screen.height }; });
+  const r = await p.evaluate(() => { const e = document.querySelector('#lmPrint').getBoundingClientRect(); return { x: e.left + e.width / 2, y: e.top + e.height / 2, dpr: devicePixelRatio, vh: innerHeight, sh: screen.height }; });
   // Chrome's toolbar sits above the web viewport; the gesture bar sits below. Find the viewport's top on screen.
   const [, SW, SH] = adb('adb shell wm size').match(/(\d+)x(\d+)/).map(Number);
   const nb = adb('adb shell dumpsys window | grep -m1 -o "navigationBars frame=.[0-9,]*.\\[[0-9,]*\\]" || true').match(/frame=\[\d+,(\d+)\]/);

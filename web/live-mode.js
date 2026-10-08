@@ -1,18 +1,18 @@
-/* Wizard OS — Live Mode (preview slice).
+/* Wizard OS — Live Mode (preview slice), built on the shared Wizard Motion Kit (motion/wizard-motion.js).
  *
  * The orb is Live Mode's ears: in ambient listening, faint words drift up around it.
- * When speech carries an action, a "Wizard noticed" card rises from the orb; the
- * thumb signs it through the phone's own fingerprint sheet (WebAuthn platform
- * authenticator), it is sent to Archimedes, and it becomes a moon (violet working,
- * green done). Spreading two fingers on Home shows today's ideas; spread again for detail.
+ * When speech carries an action, a "Wizard noticed" card rises from the orb; a quick tap or
+ * a ~300 ms hold on the thumbprint (a UX mockup, no real fingerprint) signs it, it is sent to
+ * Archimedes, and it becomes a moon (violet working, green done). Spreading two fingers on
+ * Home shows today's ideas; spread again for detail.
  *
  * Seams (stable, for the Mizel live-mode thread to plug its real feed into):
- *   LiveMode.feed({ type: 'words', text })                     drifting speech
+ *   LiveMode.feed({ type: 'words', text })                        drifting speech
  *   LiveMode.feed({ type: 'action', title, said, detail, source }) rises a card
- *   LiveMode.addMoon({ title, sessionId?, source })             a moon that tracks a thread
- *   LiveMode.setAmbient(true|false)                              orb ambient state
+ *   LiveMode.addMoon({ title, sessionId?, source })                a moon that tracks a thread
+ *   LiveMode.setAmbient(true|false)                                 orb ambient state
  * Until that feed exists, a simulated feed runs behind a visible "preview" label, and
- * preview actions never reach Archimedes (the fingerprint sheet is real; the send is not).
+ * preview actions never reach Archimedes.
  */
 (function () {
   const W = window;
@@ -21,169 +21,99 @@
   const ON = /\/wizard-os-home-preview\//.test(location.pathname) || q.get('livemode') === '1';
   const $ = s => document.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const vib = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
   const wos = () => W.__wos;
+  const M = W.WizardMotion;
 
-  let raf = 0;
+  let words = null, hintUI = null;
   const LM = W.LiveMode = {
-    on: ON, ambient: false, card: null, ideas: 0, moons: [], log: [], signing: false,
-    signedVia: '',
-    get words() { try { return floaters.length; } catch (e) { return 0; } }, get hint() { try { return hintEl.textContent; } catch (e) { return ''; } },
+    on: ON, ambient: false, card: null, ideas: 0, moons: [], log: [], signing: false, signedVia: '',
+    get words() { return words ? words.count : 0; }, get hint() { return hintUI ? hintUI.text : ''; },
   };
-  if (!ON) { LM.back = () => null; LM.feed = () => {}; LM.addMoon = () => {}; LM.setAmbient = () => {}; return; }
+  if (!ON || !M) { LM.back = () => null; LM.feed = () => {}; LM.addMoon = () => {}; LM.setAmbient = () => {}; return; }
 
   /* ---------- DOM: word layer, card layer above the orb, moons, hint, ideas ---------- */
   const shell = $('#device') || document.body;
   shell.insertAdjacentHTML('beforeend', `
-    <canvas id="lmWords" class="lm-words" aria-hidden="true"></canvas>
-    <button id="lmPill" class="lm-pill" aria-label="Live Mode: listening. Tap to pause"><i></i><span>Live</span><small>preview · simulated listening</small></button>
-    <div id="lmLayer" class="lm-layer" aria-live="polite">
-      <div id="lmCard" class="lm-card" role="dialog" aria-label="Wizard noticed">
+    <canvas id="lmWords" class="wm-words lm-words" aria-hidden="true"></canvas>
+    <button id="lmPill" class="wm-pill lm-pill" aria-label="Live Mode: listening. Tap to pause"><i></i><span>Live</span><small>preview · simulated listening</small></button>
+    <div id="lmLayer" class="wm-layer lm-layer" aria-live="polite">
+      <div id="lmCard" class="wm-card" role="dialog" aria-label="Wizard noticed">
         <button class="lm-x" data-lm="dismiss" aria-label="Not now">✕</button>
-        <div class="k">Wizard noticed</div>
-        <div class="m" id="lmTitle"></div>
-        <div class="s" id="lmSaid"></div>
-        <button id="lmPrint" class="lm-print" aria-label="Touch the print to send">
+        <div class="wm-k">Wizard noticed</div>
+        <div class="wm-m" id="lmTitle"></div>
+        <div class="wm-s" id="lmSaid"></div>
+        <button id="lmPrint" aria-label="Touch the print to send">
           <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="rgba(185,168,255,.18)" stroke-width="3"/>
             <circle id="lmRing" cx="50" cy="50" r="46" fill="none" stroke="#b9a8ff" stroke-width="3" stroke-linecap="round" stroke-dasharray="289" stroke-dashoffset="289" transform="rotate(-90 50 50)"/>
             <g fill="none" stroke="#9d7bff" stroke-width="2.4" stroke-linecap="round"><path d="M36 62c0-12 5-22 14-22s14 10 14 22"/><path d="M42 66c0-10 2-18 8-18s8 8 8 18"/><path d="M50 56v14"/><path d="M30 56c1-16 9-26 20-26s19 10 20 26"/></g></svg>
         </button>
       </div>
     </div>
-    <div id="lmHint" class="lm-hint"></div>
-    <section id="lmIdeas" class="lm-ideas" aria-label="Today's ideas"><div class="lm-ideas-top"><span class="k">Today</span><h2>Ideas</h2></div><div id="lmIdeasList" class="lm-ideas-list"></div></section>`);
-  $('#orbWrap')?.insertAdjacentHTML('beforeend', '<div id="lmMoons" class="lm-moons"></div>');
+    <div id="lmHint" class="wm-hint lm-hint"></div>
+    <section id="lmIdeas" class="wm-zoom lm-ideas" aria-label="Today's ideas"><div class="lm-ideas-top"><span class="k">Today</span><h2>Ideas</h2></div><div id="lmIdeasList"></div></section>`);
   shell.classList.add('lm-on');
-  const C = $('#lmWords'), X = C.getContext('2d'), card = $('#lmCard'), hintEl = $('#lmHint'), ring = $('#lmRing'), ideasEl = $('#lmIdeas');
+  const ideasEl = $('#lmIdeas'), orbWrap = $('#orbWrap');
+  const orbXY = () => { const r = orbWrap?.getBoundingClientRect(); return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : { x: innerWidth / 2, y: innerHeight - 90 }; };
 
-  /* ---------- sound (prototype chimes), made on first gesture ---------- */
-  let A = null, master = null;
-  const audio = () => { if (A) return; try { A = new (W.AudioContext || W.webkitAudioContext)(); master = A.createGain(); master.gain.value = .35; master.connect(A.destination); } catch (e) {} };
-  addEventListener('pointerdown', audio, { once: true, capture: true });
-  function chime(f = 660, d = 1.6, v = .16) {
-    if (!A) return; const t = A.currentTime;
-    [1, 1.5, 2].forEach((m, i) => { const o = A.createOscillator(), g = A.createGain(); o.type = 'sine'; o.frequency.value = f * m;
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v / (i + 1), t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + d);
-      o.connect(g).connect(master); o.start(t); o.stop(t + d); });
-  }
+  words = M.words($('#lmWords'), { anchor: orbXY, dim: () => wos()?.voice && wos().voice !== 'idle' });
+  hintUI = M.hint($('#lmHint'));
+  const orbFx = M.orb(orbWrap);
+  const cardFx = M.card($('#lmCard'), $('#lmLayer'));
+  const moonFx = orbWrap ? M.moons(orbWrap) : { set() {} };
+  moonFx.el && (moonFx.el.id = 'lmMoons');
 
   /* ---------- hints: one plain pulsing line for every step ---------- */
-  let hintKey = '', holdUntil = 0;
-  function hint(key, text) { hintKey = key; if (key === 'sent') holdUntil = Date.now() + 3500; hintEl.textContent = text || ''; hintEl.classList.toggle('on', !!text); hintEl.dataset.k = key; }
   function ambientHint() {
-    if (Date.now() < holdUntil && !LM.card) return;
-    if (LM.card) return hint('card', 'touch the print to send');
-    if (LM.ideas) return hint('ideas', LM.ideas === 1 ? 'spread again for detail · Back to return' : 'Back to return home');
+    if (LM.card) return hintUI.show('touch the print to send', 'card', 0, true);
+    if (LM.ideas) return hintUI.show(LM.ideas === 1 ? 'spread again for detail · Back to return' : 'Back to return home', 'ideas');
     const w = wos(); if (!w) return;
-    if (w.idx === w.HOME && !w.desks[w.HOME].wins.length && !w.sheet) return hint('home', 'spread two fingers \u00b7 today\u2019s ideas');
-    hint('', '');
+    if (w.idx === w.HOME && !w.desks[w.HOME].wins.length && !w.sheet) return hintUI.show('spread two fingers \u00b7 today\u2019s ideas', 'home');
+    hintUI.clear();
   }
-
-  /* ---------- drifting words around the orb ---------- */
-  let floaters = [], DPR = 1, CW = 0, CH = 0;
-  const rs = () => { DPR = Math.min(W.devicePixelRatio || 1, 2); CW = innerWidth; CH = innerHeight; C.width = Math.round(CW * DPR); C.height = Math.round(CH * DPR); X.setTransform(DPR, 0, 0, DPR, 0, 0); };
-  rs(); addEventListener('resize', rs);
-  function orbXY() { const r = $('#orbWrap')?.getBoundingClientRect(); return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : { x: CW / 2, y: CH - 90 }; }
-  function spawnWord(text, hot) {
-    const o = orbXY(), side = Math.random() < .5 ? -1 : 1;
-    if (hot) floaters.push({ w: text, x: o.x, y: o.y - 120, vx: 0, vy: -.15, life: 20, hot: true });
-    else {
-      // Few and spaced: pick the free lane in the open wallpaper band, furthest from words already showing.
-      const lanes = [.34, .39, .44, .49, .54], used = floaters.filter(f => !f.hot).map(f => f.y / CH);
-      const lane = lanes.map(l => [l, Math.min(1, ...used.map(u => Math.abs(u - l)))]).sort((a, b) => b[1] - a[1])[0][0];
-      floaters.push({ w: text, x: CW * (.3 + Math.random() * .4), y: CH * lane, vx: side * (.08 + Math.random() * .08), vy: -.08, life: 0, hot: false });
-    }
-    const calm = floaters.filter(f => !f.hot); if (calm.length > 4) floaters.splice(floaters.indexOf(calm[0]), 1);
-  }
-  function draw() {
-    // Android Chrome can drop and restore a 2D canvas (memory pressure), which resets its transform: reapply every frame.
-    if (C.width !== Math.round(CW * DPR)) rs(); else X.setTransform(DPR, 0, 0, DPR, 0, 0);
-    X.clearRect(0, 0, CW, CH);
-    const busy = wos()?.voice && wos().voice !== 'idle';
-    X.textAlign = 'center';
-    floaters = floaters.filter(f => {
-      f.life++; f.x += f.vx; f.y += f.vy;
-      const o = orbXY();
-      if (f.gather) { f.x += (o.x - f.x) * .08; f.y += (o.y - f.y) * .08; }
-      const a = Math.min(1, f.life / 40) * Math.max(0, 1 - (f.life - 300) / 120) * (busy ? .25 : 1);
-      X.font = f.hot ? '500 16px system-ui, sans-serif' : '300 14px system-ui, sans-serif';
-      X.fillStyle = f.hot ? `rgba(233,226,255,${a})` : `rgba(170,158,215,${a * .5})`;
-      X.fillText(f.w, Math.max(X.measureText(f.w).width / 2 + 12, Math.min(CW - X.measureText(f.w).width / 2 - 12, f.x)), f.y);
-      return f.life < 420 && f.y > -20 && !(f.gather && Math.hypot(o.x - f.x, o.y - f.y) < 12);
-    });
-    requestAnimationFrame(draw);
-  }
-  requestAnimationFrame(draw);
 
   /* ---------- ambient state on the orb ---------- */
   LM.setAmbient = on => {
-    LM.ambient = !!on; const ow = $('#orbWrap'); if (ow) ow.dataset.ambient = on ? 'live' : '';
+    LM.ambient = !!on; orbFx.set(on ? 'live' : '');
     $('#lmPill').classList.toggle('paused', !on); $('#lmPill span').textContent = on ? 'Live' : 'Paused';
     on ? sim.start() : sim.stop(); ambientHint();
   };
-  $('#lmPill').addEventListener('click', () => { LM.setAmbient(!LM.ambient); vib(8); });
+  $('#lmPill').addEventListener('click', () => { LM.setAmbient(!LM.ambient); M.haptic('soft'); });
 
   /* ---------- the "Wizard noticed" card ---------- */
   function openCard(item) {
     LM.card = item; LM.log.push('card');
     $('#lmTitle').textContent = item.title; $('#lmSaid').textContent = item.said ? `\u201c${item.said}\u201d` : 'from what you just said';
-    ring.style.strokeDashoffset = 289; card.classList.remove('gone', 'sent'); card.dataset.src = item.source || 'feed';
-    const o = orbXY(); $('#lmLayer').style.setProperty('--oy', `${o.y}px`);
-    requestAnimationFrame(() => { $('#lmLayer').classList.add('open'); card.classList.add('on'); });
-    chime(523, 2.2, .12); vib(30); ambientHint();
+    sign.reset(); $('#lmCard').dataset.src = item.source || 'feed';
+    cardFx.rise(); M.chime('notice'); M.haptic('notice'); ambientHint();
   }
   function closeCard(sent) {
     if (!LM.card) return false;
-    LM.card = null; LM.signing = false; cancelAnimationFrame(raf); card.classList.remove('on'); card.classList.add(sent ? 'sent' : 'gone');
-    setTimeout(() => { $('#lmLayer').classList.remove('open'); card.classList.remove('gone', 'sent'); }, 900);
-    ambientHint(); return true;
+    LM.card = null; LM.signing = false; sign.reset(); cardFx.sink(sent); ambientHint(); return true;
   }
-  card.addEventListener('click', e => { if (e.target.closest('[data-lm="dismiss"]')) { closeCard(false); vib(8); } });
+  $('#lmCard').addEventListener('click', e => { if (e.target.closest('[data-lm="dismiss"]')) { closeCard(false); M.haptic('soft'); } });
 
   /* ---------- signing: a UX mockup thumbprint (James: no real fingerprint / WebAuthn) ----------
    * A quick tap or a ~300 ms hold fills the ring and signs. The whole print area is the target. */
-  const print = $('#lmPrint');
-  const HOLD_MS = 300;
-  let hs = 0, down = false;
-  const setRing = p => { ring.style.strokeDashoffset = 289 * (1 - p); };
-  const fill = (from, ms, via) => {
-    const t0 = performance.now();
-    const step = () => {
-      const p = Math.min(1, from + (performance.now() - t0) / ms * (1 - from)); setRing(p);
-      if (p < 1) raf = requestAnimationFrame(step); else { LM.signing = false; LM.signedVia = via; signed(); }
-    };
-    cancelAnimationFrame(raf); raf = requestAnimationFrame(step);
-  };
-  print.addEventListener('pointerdown', e => {
-    e.stopPropagation(); e.preventDefault();
-    if (!LM.card || LM.signing) return;
-    down = true; hs = performance.now(); vib(12); print.classList.add('pressing');
-    LM.signing = true; fill(0, HOLD_MS, 'hold');
+  const sign = M.signRing($('#lmPrint'), $('#lmRing'), {
+    holdMs: 300, enabled: () => !!LM.card,
+    onSign: via => { LM.signing = false; LM.signedVia = via; signed(); },
   });
-  const up = () => {
-    if (!down) return; down = false; print.classList.remove('pressing');
-    // Released early: it was a tap. Finish the fill quickly and sign anyway.
-    if (LM.signing && performance.now() - hs < HOLD_MS) { const p = Math.min(1, (performance.now() - hs) / HOLD_MS); fill(p, 140, 'tap'); }
-  };
-  ['pointerup', 'pointercancel'].forEach(ev => print.addEventListener(ev, up));
-  print.addEventListener('click', e => e.stopPropagation());
-  print.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && LM.card && !LM.signing) { e.preventDefault(); LM.signing = true; fill(0, 160, 'tap'); } });
+  $('#lmPrint').addEventListener('pointerdown', () => { if (LM.card) LM.signing = true; });
 
   async function signed() {
     const item = LM.card; if (!item) return;
-    ring.style.strokeDashoffset = 0; chime(784, 2.6, .18); vib([20, 40, 60]);
+    M.chime('sent');
     const moon = LM.addMoon({ title: item.title, source: item.source });
     closeCard(true); LM.log.push('sent');
-    if (item.source === 'preview') { moon.state = 'working'; setTimeout(() => { moon.state = 'done'; renderMoons(); }, 6000); hint('sent', 'preview \u00b7 not sent to Archimedes \u00b7 watch its moon'); }
+    if (item.source === 'preview') { moon.state = 'working'; setTimeout(() => { moon.state = 'done'; renderMoons(); }, 6000); hintUI.show('preview \u00b7 not sent to Archimedes \u00b7 watch its moon', 'sent', 3500); }
     else {
       try {
         const ctx = `Sent from Wizard OS Live Mode: James signed this with the thumbprint after Wizard noticed it in live speech.${item.said ? ` He said: "${item.said}".` : ''}${item.detail ? ` Detail: ${item.detail}` : ''}`;
         const r = await wos().live.send(item.title, { instructions: ctx });
-        moon.sessionId = r.sessionId; hint('sent', 'sent to Archimedes \u00b7 watch its moon');
-      } catch (err) { moon.state = 'failed'; hint('sent', 'couldn\u2019t send \u00b7 it\u2019s kept as a moon, tap to retry'); moon.retry = item; }
+        moon.sessionId = r.sessionId; hintUI.show('sent to Archimedes \u00b7 watch its moon', 'sent', 3500);
+      } catch (err) { moon.state = 'failed'; moon.retry = item; hintUI.show('couldn\u2019t send \u00b7 it\u2019s kept as a moon', 'sent', 3500); M.haptic('error'); }
     }
-    renderMoons(); setTimeout(ambientHint, 3200);
+    renderMoons(); setTimeout(ambientHint, 3600);
   }
 
   /* ---------- moons: sent actions orbit the orb ---------- */
@@ -193,11 +123,7 @@
     const s = wos()?.live?.session?.(m.sessionId); if (!s) return m.state;
     return ['running', 'queued', 'started', 'submitting', 'working'].includes(s.status) ? 'working' : 'done';
   }
-  function renderMoons() {
-    const el = $('#lmMoons'); if (!el) return;
-    el.innerHTML = LM.moons.map((m, k) => { const st = moonState(m); m.shown = st; const a = (k / Math.max(LM.moons.length, 1)) * Math.PI * 2 + Math.PI / 4, r = 50;
-      return `<i class="lm-moon ${st}" data-moon="${m.id}" title="${esc(m.title)}" style="transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
-  }
+  function renderMoons() { moonFx.set(LM.moons.map(m => { m.shown = moonState(m); return { id: m.id, title: m.title, state: m.shown }; })); }
   setInterval(renderMoons, 3000);
 
   /* ---------- spread on Home: today's ideas (one level deeper per spread) ---------- */
@@ -216,19 +142,14 @@
   }
   function openIdeas(level) {
     LM.ideas = Math.min(2, level); LM.log.push('ideas' + LM.ideas);
-    $('#lmIdeasList').innerHTML = todayIdeas().map(x => `<button class="zi" ${x.id ? `data-thread="${esc(x.id)}"` : ''} style="--c:${x.c}"><span class="t">${esc(x.t)}</span><small>${esc(x.d)}</small></button>`).join('');
-    ideasEl.classList.add('on'); ideasEl.classList.toggle('deep', LM.ideas >= 2); chime(440, 1.6, .08); vib(10); ambientHint();
+    $('#lmIdeasList').innerHTML = todayIdeas().map(x => `<button class="wm-zi" ${x.id ? `data-thread="${esc(x.id)}"` : ''} style="--c:${x.c}"><span class="t">${esc(x.t)}</span><small>${esc(x.d)}</small></button>`).join('');
+    ideasEl.classList.add('on'); ideasEl.classList.toggle('deep', LM.ideas >= 2); M.chime('open'); ambientHint();
   }
   function closeIdeas() { if (!LM.ideas) return false; if (LM.ideas === 2) { LM.ideas = 1; ideasEl.classList.remove('deep'); ambientHint(); return 'ideas-shallow'; } LM.ideas = 0; ideasEl.classList.remove('on', 'deep'); ambientHint(); return 'ideas'; }
   ideasEl.addEventListener('click', e => { const b = e.target.closest('[data-thread]'); if (b) { LM.ideas = 1; closeIdeas(); wos().openWizardThread(b.dataset.thread); } else if (LM.ideas === 1) openIdeas(2); });
   LM.openIdeas = openIdeas;
-  let d0 = 0;
-  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
   const onHome = () => { const w = wos(); return w && w.idx === w.HOME && !w.desks[w.HOME].wins.length && !w.sheet && !LM.card; };
-  addEventListener('touchstart', e => { if (e.touches.length === 2 && (onHome() || LM.ideas)) d0 = dist(e.touches); }, { passive: true, capture: true });
-  addEventListener('touchmove', e => { if (!d0 || e.touches.length !== 2) return; const dd = dist(e.touches) - d0;
-    if (dd > 50) { d0 = 0; openIdeas(LM.ideas + 1); } else if (dd < -50 && LM.ideas) { d0 = 0; closeIdeas(); } }, { passive: true, capture: true });
-  addEventListener('touchend', () => { d0 = 0; }, { capture: true });
+  M.spread(W, { enabled: () => onHome() || !!LM.ideas, onOut: () => openIdeas(LM.ideas + 1), onIn: () => { if (LM.ideas) closeIdeas(); } });
 
   /* ---------- Back: card → closed; deep ideas → shallow → Home ---------- */
   LM.back = () => { if (LM.card) { closeCard(false); return 'live-card'; } return closeIdeas() || null; };
@@ -236,12 +157,11 @@
   /* ---------- the feed ---------- */
   LM.feed = ev => {
     if (!ev) return;
-    if (ev.type === 'words' && LM.ambient) spawnWord(ev.text);
+    if (ev.type === 'words' && LM.ambient) words.add(ev.text);
     if (ev.type === 'action') {
       if (LM.card) return; // one card at a time
-      const hot = { w: ev.said ? `\u2026${ev.said}\u2026` : ev.title, gather: false };
-      spawnWord(hot.w, true); const f = floaters[floaters.length - 1];
-      setTimeout(() => { if (f) f.gather = true; $('#orbWrap')?.classList.add('lm-noticed'); setTimeout(() => $('#orbWrap')?.classList.remove('lm-noticed'), 1200); }, 1400);
+      words.hot(ev.said ? `\u2026${ev.said}\u2026` : ev.title);
+      setTimeout(() => { words.gather(); orbFx.notice(); }, 1400);
       setTimeout(() => openCard({ title: ev.title, said: ev.said, detail: ev.detail, source: ev.source || 'feed' }), 2400);
     }
   };

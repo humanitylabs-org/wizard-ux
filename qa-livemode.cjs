@@ -61,12 +61,13 @@ const ok = (c, name, info = '') => { c ? pass++ : fail++; console.log(`${c ? 'PA
   s = await st(); ok(s.moons[0] === 'done', 'moon turns green when done', JSON.stringify(s.moons));
 
   // Hold ~300 ms fills the ring and signs.
-  await p.evaluate(() => LiveMode.simulate());
+  await p.evaluate(() => { LiveMode.pauseSim(); LiveMode.simulate(); });
   await p.waitForFunction(() => LiveMode.card, null, { timeout: 6000 }); await p.waitForTimeout(1300);
+  const m0 = (await st()).moons.length;
   { const bb = await p.locator('#lmPrint').boundingBox(); await p.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await p.mouse.down();
     await p.waitForTimeout(150); const mid = await p.evaluate(() => getComputedStyle(document.querySelector('#lmRing') || document.querySelector('.lm-print circle:last-child')).strokeDashoffset);
-    await p.waitForTimeout(350); s = await st(); await p.mouse.up();
-    ok(!s.card && s.via === 'hold' && s.moons.length === 2, 'a ~300 ms hold fills the ring and signs (no release needed)', JSON.stringify({ via: s.via, mid })); }
+    await p.waitForFunction(() => !LiveMode.card, null, { timeout: 1500 }).catch(() => {}); s = await st(); await p.mouse.up();
+    ok(!s.card && s.via === 'hold' && s.moons.length === m0 + 1, 'a ~300 ms hold fills the ring and signs (no release needed)', JSON.stringify({ via: s.via, mid, card: s.card, moons: s.moons })); }
   await p.waitForTimeout(800);
   // A real (non-preview) feed item goes to Archimedes as a thread (intercepted here).
   await p.evaluate(() => LiveMode.feed({ type: 'action', title: 'QA live-mode item', said: 'qa test', source: 'mizel-live' }));
