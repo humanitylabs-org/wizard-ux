@@ -28,7 +28,7 @@ async function boot(b) {
       return r.fulfill({ status: 200, contentType: ct, body: require('fs').readFileSync(p) });
     }
     if (q.method() !== 'GET') writes.push(u.pathname);
-    if (/\/api\/transcribe$/.test(u.pathname)) { await new Promise(res => { slowSend = res; setTimeout(res, 5000); }); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'something for archimedes about the week', ms: 300 }) }).catch(() => {}); }
+    if (/\/api\/transcribe$/.test(u.pathname)) { await new Promise(res => { slowSend = res; setTimeout(res, 20000); }); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'something for archimedes about the week', ms: 300 }) }).catch(() => {}); }
     if (/\/api\/route$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ms: 5, cmd: { route: 'agent' } }) });
     if (/\/hermes\/api\/sessions$/.test(u.pathname) && q.method() === 'GET') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: THREADS, has_more: false }) });
     if (/\/wizard\/thread-seen$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ state: { initializedAt: Date.now(), threads: {} } }) });
@@ -42,7 +42,7 @@ async function boot(b) {
   await p.goto(URL_, { waitUntil: 'load' });
   await p.waitForFunction(() => window.__wos && window.__wos.live && window.__wos.live.ok, null, { timeout: 30000 });
   await p.waitForTimeout(800);
-  return { ctx, p, errs, writes };
+  return { ctx, p, errs, writes, release: () => slowSend && slowSend() };
 }
 async function tapOrb(p, wait = 1500) { const o = await p.locator('#orbWrap').boundingBox(); await p.touchscreen.tap(o.x + o.width / 2, o.y + o.height / 2); await p.waitForTimeout(wait); }
 // Visual state of whatever is on screen: every desk/window layer that is visible must be undimmed.
@@ -73,7 +73,7 @@ async function drag(ctx, p, x, y, dy) {
 
 (async () => {
   const b = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
-  const { ctx, p, errs } = await boot(b);
+  const { ctx, p, errs, release } = await boot(b);
   // Home desk with the Chats window, which lists threads.
   await p.evaluate(() => window.__wos.goDesk(1, true)); await p.waitForTimeout(900);
   const sh = await scroller(p);
@@ -135,6 +135,7 @@ async function drag(ctx, p, x, y, dy) {
     const after = await p.evaluate(el => el.isConnected ? el.scrollTop : -1, sh2).then(async v => v >= 0 ? v : p.evaluate(el => el && el.scrollTop, await scroller(p)));
     ok(after !== before && (await look(p)).voice === 'think', 'sending: touch scroll still works mid-send', `${before}→${after}`);
   }
+  release(); // let the held transcribe answer now (fixture holds it so 'mid-send' is real under load)
   await p.waitForTimeout(6000);
   s = await look(p);
   ok(s.voice === 'idle' && s.dim.length === 0, 'after send: back to idle, nothing dimmed', JSON.stringify(s));
