@@ -42,9 +42,13 @@ public class MainActivity extends Activity {
     static final String UA_TAG = " WizardOS-Android/" + BuildConfig.VERSION_NAME;
     private static final int REQ_MIC = 41;
     private static final int REQ_FILE = 42;
+    private static final int REQ_SIDE_MIC = 43;
 
     static final String ACTION_LISTEN = "ai.wizards.os.action.LISTEN";
     static final String ACTION_SAY = "ai.wizards.os.action.SAY";
+    /** Opens Wizard OS on the side-button switch (Android's assistant settings gear lands here). */
+    public static final String ACTION_SIDE_BUTTON = "ai.wizards.os.action.SIDE_BUTTON";
+    private boolean sideSetupActive; // the user tapped Turn on and is in the system picker
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private String pendingHandoff; // JSON handed to window.__wosHandoff once the shell is ready
     private int handoffTries;
@@ -198,7 +202,8 @@ public class MainActivity extends Activity {
      * tap; nothing is ever sent on another app's behalf. */
     void queueHandoff(Intent intent) {
         if (intent == null) return;
-        String json = Handoff.json(intent.getAction(), intent.getStringExtra(Intent.EXTRA_TEXT));
+        String json = ACTION_SIDE_BUTTON.equals(intent.getAction()) ? "{\"action\":\"side-button\"}"
+                : Handoff.json(intent.getAction(), intent.getStringExtra(Intent.EXTRA_TEXT));
         if (json == null) return;
         intent.setAction(Intent.ACTION_MAIN); // a handoff runs once, not again on rotation/restore
         pendingHandoff = json;
@@ -259,6 +264,12 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
+        if (code == REQ_SIDE_MIC) {
+            boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+            if (ok) continueSideButton();
+            else { Toast.makeText(this, "The side button needs the microphone", Toast.LENGTH_LONG).show(); pushSideButton(); }
+            return;
+        }
         if (code != REQ_MIC || pendingMic == null) return;
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
             pendingMic.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
@@ -290,6 +301,39 @@ public class MainActivity extends Activity {
         super.onResume();
         web.onResume();
         web.evaluateJavascript("window.dispatchEvent(new Event('wos-native-resume'))", null);
+        pushSideButton();
+        if (sideSetupActive) {
+            sideSetupActive = false;
+            if (SideButton.assistant(this)) Toast.makeText(this, "Side button is on. Hold it to talk.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /* ---------------- Side button switch ----------------
+     * One tap in Wizard OS: ask for the mic in place, then land on the one system page Android keeps for itself
+     * (the assistant pick). Coming back, the shell is told the new state and the switch updates on its own. */
+    void pushSideButton() {
+        if (web == null) return;
+        web.evaluateJavascript("(window.__wosSideButton && window.__wosSideButton(" + SideButton.status(this) + "))", null);
+    }
+
+    void startSideButton() {
+        if (!SideButton.mic(this)) { requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_SIDE_MIC); return; }
+        continueSideButton();
+    }
+
+    private void continueSideButton() {
+        if (!SideButton.assistant(this)) {
+            sideSetupActive = true;
+            if (SideButton.openAssistantPage(this)) {
+                Toast.makeText(this, "Pick Wizard OS, then come back", Toast.LENGTH_LONG).show();
+                return;
+            }
+            sideSetupActive = false;
+            Toast.makeText(this, "This phone has no assistant setting", Toast.LENGTH_LONG).show();
+        } else if (!SideButton.openSideKeyPage(this)) {
+            Toast.makeText(this, "Wizard OS is your assistant. Hold the side button to talk.", Toast.LENGTH_LONG).show();
+        }
+        pushSideButton();
     }
 
     @Override
@@ -309,6 +353,22 @@ public class MainActivity extends Activity {
     final class Bridge {
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }
+
+        /** {"mic","assistant","used","samsung","step"}: what the side-button switch should show. */
+        @JavascriptInterface
+        public String sideButton() { return SideButton.status(MainActivity.this); }
+
+        /** The Turn on tap. Does the next missing step; the result comes back through window.__wosSideButton. */
+        @JavascriptInterface
+        public void setupSideButton() { runOnUiThread(MainActivity.this::startSideButton); }
+
+        /** Samsung's own Side button page (or Android's gesture page), for "not opening Wizard?". */
+        @JavascriptInterface
+        public void sideButtonSettings() {
+            runOnUiThread(() -> {
+                if (!SideButton.openSideKeyPage(MainActivity.this)) SideButton.openAssistantPage(MainActivity.this);
+            });
+        }
 
         @JavascriptInterface
         public void haptic(int ms) {

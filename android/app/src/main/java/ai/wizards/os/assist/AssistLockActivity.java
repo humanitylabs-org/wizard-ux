@@ -78,6 +78,7 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
         if (Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);
         keyguard = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         capture = VoiceCapture.get(this);
+        if (Intent.ACTION_ASSIST.equals(getIntent().getAction())) ai.wizards.os.SideButton.markUsed(this);
         capture.attach(this);
 
         web = new WebView(this);

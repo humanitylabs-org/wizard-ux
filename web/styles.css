@@ -125,6 +125,9 @@ svg { display: block; }
 .now-card .k { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--c); }
 .now-card .v { font-size: 15px; font-weight: 560; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 .now-card .n { font-size: 22px; font-weight: 300; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.side-card { margin-top: 9px; }
+.side-card .side-go { flex: 0 0 auto; padding: 8px 15px; border-radius: 99px; background: linear-gradient(140deg, #8f63ff, #ff5ccf); color: #fff; font-size: 14px; font-weight: 700; box-shadow: 0 6px 18px rgba(143, 99, 255, .4); }
+.side-card .side-x { flex: 0 0 auto; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; color: var(--ink-3); font-size: 13px; }
 .hint-row { margin: 14px 2px 2px; display: flex; gap: 8px; flex-wrap: wrap; }
 .say { padding: 7px 11px; border-radius: 99px; border: 1px dashed var(--line-2); font-size: 13px; color: var(--ink-2); }
 .say::before { content: "“"; color: var(--violet-2); }

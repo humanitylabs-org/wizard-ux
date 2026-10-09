@@ -29,6 +29,7 @@
             <intent-filter>
                 <action android:name="ai.wizards.os.action.LISTEN" />
                 <action android:name="ai.wizards.os.action.SAY" />
+                <action android:name="ai.wizards.os.action.SIDE_BUTTON" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <!-- Opening a Wizard OS link lands in the app rather than a browser tab. -->
@@ -64,8 +65,10 @@
         <activity
             android:name=".assist.AssistSetupActivity"
             android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
             android:label="Side button"
-            android:theme="@style/Theme.WizardOS" />
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <service
             android:name=".assist.WizardVoiceService"
             android:exported="true"
