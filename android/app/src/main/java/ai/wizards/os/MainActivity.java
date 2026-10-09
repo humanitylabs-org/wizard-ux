@@ -14,6 +14,7 @@ import android.os.Vibrator;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
+import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -120,6 +121,11 @@ public class MainActivity extends Activity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
                 if (req.isForMainFrame()) showOffline(String.valueOf(err.getDescription()));
+            }
+
+            @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                setKeepAwake(false);
             }
 
             @Override
@@ -424,6 +430,12 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
+    /** FLAG_KEEP_SCREEN_ON while the web orb records; cleared on every page load so a reload can't leave it stuck. */
+    void setKeepAwake(boolean on) {
+        if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
     /** Small, read-mostly bridge: the shell can ask for a haptic tick and learn it runs natively. */
     final class Bridge {
         @JavascriptInterface
@@ -487,6 +499,10 @@ public class MainActivity extends Activity {
         public void appUnsent(int failed, String firstText) {
             ai.wizards.os.everywhere.EverywhereService.appUnsent(MainActivity.this, failed, firstText == null ? "" : firstText);
         }
+
+        /** The orb is recording (or transcribing): keep the screen from locking until it says otherwise. */
+        @JavascriptInterface
+        public void keepAwake(boolean on) { runOnUiThread(() -> setKeepAwake(on)); }
 
         @JavascriptInterface
         public void haptic(int ms) {

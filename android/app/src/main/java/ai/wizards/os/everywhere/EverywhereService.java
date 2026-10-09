@@ -448,7 +448,17 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         pushState();
     }
 
+    /** The orb's window keeps the screen on while it listens, so a screen timeout can't cut the take short (0.5.1). */
+    private void syncAwake() {
+        if (lp == null || web == null) return;
+        int f = listening ? (lp.flags | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) : (lp.flags & ~WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (f == lp.flags) return;
+        lp.flags = f;
+        try { if (attached) wm.updateViewLayout(web, lp); } catch (RuntimeException ignored) { }
+    }
+
     private void pushState() {
+        syncAwake();
         if (!pageReady) return;
         int failed = 0;
         for (EverywhereOutbox.Item it : outbox.unsent()) if ("failed".equals(it.state)) failed++;

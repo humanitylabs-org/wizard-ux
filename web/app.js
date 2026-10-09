@@ -1529,8 +1529,30 @@
   /* ---------------- voice ---------------- */
   const V = { state: 'idle', kind: 'auto', route: store.get('routeV', 0) >= 2 ? store.get('route', 'auto') : (store.set('routeV', 2), store.set('route', 'auto'), 'auto'), rec: null, stream: null, chunks: [], ac: null, an: null, t0: 0, acc: 0, raf: 0, sim: false, stopAsked: false, cancelled: false, simText: '' };
   const voiceEl = $('#voice'), tx = $('#transcript');
+  // Keep the screen on while the orb records or transcribes: a screen lock mid-dictation pauses the WebView and loses the take.
+  // Native shell (0.5.1+) sets FLAG_KEEP_SCREEN_ON; browsers and PWAs use the Screen Wake Lock API.
+  const AWAKE = { want: false, lock: null };
+  function keepAwake(on) {
+    on = !!on;
+    if (AWAKE.want === on) return;
+    AWAKE.want = on;
+    try { if (window.WizardOSNative && typeof window.WizardOSNative.keepAwake === 'function') { window.WizardOSNative.keepAwake(on); return; } } catch (e) {}
+    if (on) requestWakeLock();
+    else { const l = AWAKE.lock; AWAKE.lock = null; try { l && l.release(); } catch (e) {} }
+  }
+  async function requestWakeLock() {
+    if (!AWAKE.want || AWAKE.lock || document.hidden || !navigator.wakeLock) return;
+    try {
+      const l = await navigator.wakeLock.request('screen');
+      if (!AWAKE.want) { l.release(); return; }
+      AWAKE.lock = l; l.addEventListener('release', () => { if (AWAKE.lock === l) AWAKE.lock = null; });
+    } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) requestWakeLock(); });
+  window.__wosAwake = () => AWAKE.want; // QA probe
   function setVoice(s) {
     V.state = s; device.dataset.voice = s;
+    keepAwake(s === 'listen' || s === 'paused' || s === 'command' || s === 'think');
     Orb.setMode({ idle: 'idle', listen: 'listen', command: 'command', paused: 'paused', think: 'think', done: 'done', agent: 'agent' }[s] || 'idle');
     voiceEl.classList.toggle('on', s === 'listen' || s === 'paused');
     voiceEl.classList.toggle('cmd', s === 'command' || (V.kind === 'command' && s !== 'idle'));
