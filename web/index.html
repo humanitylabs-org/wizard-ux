@@ -1,7 +1,8 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-shell="phone">
 <head>
   <meta charset="utf-8">
+  <script src="core/shell.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#05030c">
@@ -10,7 +11,9 @@
   <link rel="manifest" href="manifest.webmanifest">
   <script src="pwa-install.js" data-pwa-name="Wizard OS" data-pwa-origin="https://private.wizard001.com"></script>
   <link rel="icon" href="icon-192.png" type="image/png">
+  <link rel="stylesheet" href="core/base.css">
   <link rel="stylesheet" href="motion/wizard-motion.css">
+  <link rel="stylesheet" href="core/chats.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -104,10 +107,14 @@
     </div>
   </div>
 
+  <script src="core/core.js"></script>
+  <script src="core/apps.js"></script>
   <script src="data.js"></script>
   <script src="summaries.js"></script>
   <script src="live.js"></script>
   <script src="outbox.js"></script>
+  <script src="core/chats.js"></script>
+  <script src="core/bridge.js"></script>
   <script src="orb.js"></script>
   <script src="app.js"></script>
   <script src="motion/wizard-motion.js"></script>

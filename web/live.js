@@ -4,6 +4,7 @@
  * so opening a chat anywhere clears it everywhere. */
 (() => {
   'use strict';
+  if (document.documentElement.dataset.leaving) return; // core/shell.js is switching to the other shell
   const SEEN_BASE = 'wizard.thread-seen.v1';
   const SCOPE = 'wizard-account-local';
   const SEEN_KEY = `${SEEN_BASE}:${SCOPE}`;

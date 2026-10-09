@@ -42,14 +42,28 @@ Wizard UX holds no agent state of its own. Threads, runs and files live in Herme
 
 ## What's in this repo
 
+One codebase, two shells. Shared code lives in `web/core/` (plus `live.js` and `outbox.js`). Each shell has its own entry page and loads only its own code, so the phone never downloads the desktop shell and the desktop never downloads the orb. `core/shell.js` picks the shell by **device, not window width**: a touch phone or the Android app gets the phone shell; anything with a mouse or trackpad, or Wizard for Mac, gets the desktop shell. Override per device with `?shell=phone`, `?shell=desktop`, or `?shell=auto`.
+
 ```
 web/            The Wizard UX itself (plain JS, no build step)
-  index.html      shell markup
-  app.js          desks, launcher, inbox shade, zoomable reviews, Back stack
-  live.js         Chats: thread list, thread view, send / steer / attach
-  live-mode.js    Live Mode (hands-free conversation; demo only for now)
-  orb.js          the orb: listen, transcribe, route
-  motion/         Wizard Motion Kit (shared animations, also used by Android)
+  core/           SHARED by both shells
+    shell.js        picks phone or desktop before anything else loads
+    core.js         helpers (escape, relative time, per-shell storage)
+    apps.js         the app registry and app search (each shell asks for its own list)
+    chats.js/.css   Chats: thread list, thread view, composer, attachments, voice notes, unsent bubbles
+    voice.js        mic capture + transcription for shells without their own voice UI
+    bridge.js       native bridge v0: wizard:orb / open / dictation / back events (spec: wizard-os/spec/NATIVE_BRIDGE.md)
+    base.css        colour tokens, resets, shared keyframes
+  live.js         SHARED: live Wizard data (threads, read state, sends)
+  outbox.js       SHARED: durable outbox (saved before send, retried)
+  index.html      PHONE shell entry
+  app.js          phone: desks, launcher, inbox shade, zoomable reviews, Back stack
+  orb.js          phone: the orb (listen, transcribe, route)
+  styles.css      phone: orb, desks, sheets
+  live-mode.js    phone: Live Mode (hands-free conversation; demo only for now)
+  motion/         phone: Wizard Motion Kit (shared animations, also used by Android)
+  desktop.html    DESKTOP shell entry
+  desktop/        desktop: Omarchy-style workspaces, auto-tiling windows, ⌘K palette, keys, voice key, inbox drawer
   pwa-install.js  per-app PWA install banners
   sw.js, manifest.webmanifest
 server.py       Small loopback server: serves web/, plus two endpoints

@@ -1,0 +1,73 @@
+/* Wizard UX core: native bridge v0 (spec: humanitylabs-org/wizard-os spec/NATIVE_BRIDGE.md).
+ *
+ * Native shells (Wizard for Mac, the Android app) drive the UX with DOM events on window instead of
+ * clicking CSS selectors. Each Wizard UX shell registers what those events mean for it:
+ *
+ *   WizCore.bridge.handle({ orb, open, dictation, back })
+ *
+ *   wizard:orb        {action:'toggle'}  → orb(detail) returns 'voice' | 'sent' | 'busy' | 'none'
+ *                                          the answer goes back as wizard:orb-state {state}
+ *   wizard:open       {path}             → open(path): /wizard/, /apps, /files, /meetings, ?session=<id>, any app URL
+ *   wizard:dictation  {text}             → dictation(text): insert at the composer cursor
+ *   wizard:back                          → back(): one in-app step; never exits at the root
+ *
+ * Contract additions (v0.1, both optional for shells):
+ *   - The UX announces itself once ready: window event wizard:ready {shell, version, events}
+ *     and window.wizardUX = {shell, version, events}, so a shell can skip its selector fallback.
+ *   - wizard:orb also accepts {action:'start'|'send'|'cancel'} for push-to-talk style shells.
+ *   - wizard:open also accepts {app:'<id or name>'} or {thread:'<session id>'}.
+ *
+ * Page → native calls (app.info, meeting.*) go through WizCore.bridge.call(method, params).
+ */
+(() => {
+  'use strict';
+  const H = {};
+  const VERSION = 'wux-bridge-0.1';
+  const EVENTS = ['wizard:orb', 'wizard:open', 'wizard:dictation', 'wizard:back'];
+  const answer = state => window.dispatchEvent(new CustomEvent('wizard:orb-state', { detail: { state } }));
+  const detail = e => {
+    const d = e.detail;
+    if (typeof d === 'string') { try { return JSON.parse(d); } catch (err) { return { path: d, text: d }; } }
+    return d || {};
+  };
+  window.addEventListener('wizard:orb', async e => {
+    if (!H.orb) return answer('none');
+    let st = 'none';
+    try { st = (await H.orb(detail(e))) || 'none'; } catch (err) { console.error(err); st = 'none'; }
+    answer(st);
+  });
+  window.addEventListener('wizard:open', e => { const d = detail(e); try { H.open && H.open(d.path || '', d); } catch (err) { console.error(err); } });
+  window.addEventListener('wizard:dictation', e => { const d = detail(e); try { H.dictation && H.dictation(String(d.text || '')); } catch (err) { console.error(err); } });
+  window.addEventListener('wizard:back', () => { try { H.back && H.back(); } catch (err) { console.error(err); } });
+
+  /* page → native */
+  let seq = 0; const waiting = new Map();
+  const prevReply = window.wizardNativeReply;
+  window.wizardNativeReply = msg => {
+    const m = typeof msg === 'string' ? JSON.parse(msg) : msg;
+    const w = waiting.get(m && m.id);
+    if (w) { waiting.delete(m.id); m.error ? w.reject(new Error(m.error)) : w.resolve(m.result); return; }
+    if (typeof prevReply === 'function') prevReply(msg);
+  };
+  function call(method, params = {}) {
+    const mac = window.webkit?.messageHandlers?.wizardNative, droid = window.WizardNative;
+    if (!mac && !droid) return Promise.reject(new Error('no native shell'));
+    const id = 'wux-' + (++seq);
+    return new Promise((resolve, reject) => {
+      waiting.set(id, { resolve, reject });
+      setTimeout(() => { if (waiting.delete(id)) reject(new Error('native timeout')); }, 15000);
+      if (mac) mac.postMessage({ id, method, params }); else droid.postMessage(JSON.stringify({ id, method, params }));
+    });
+  }
+  const native = () => (window.webkit?.messageHandlers?.wizardNative ? 'mac' : window.WizardNative || window.WizardOSNative ? 'android' : '');
+
+  window.WizCore = window.WizCore || {};
+  window.WizCore.bridge = {
+    VERSION, EVENTS, call, native,
+    handle(h) {
+      Object.assign(H, h);
+      window.wizardUX = { shell: window.WIZ_SHELL || '', version: VERSION, events: EVENTS };
+      window.dispatchEvent(new CustomEvent('wizard:ready', { detail: window.wizardUX }));
+    },
+  };
+})();
