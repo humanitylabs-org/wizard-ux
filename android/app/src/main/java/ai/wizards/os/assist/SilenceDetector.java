@@ -6,9 +6,19 @@ package ai.wizards.os.assist;
  * The side button cannot tell an app when it is released (Android consumes KEYCODE_POWER before
  * any app sees it), so "let go to send" is replaced by: tap the orb, hold the button again, or
  * pause. This class is the "pause" part. Pure Java so it can be unit-tested off-device.
+ *
+ * Two thresholds (0.6.3, James: "it ends the recording too aggressively"):
+ *  - {@link #speechThreshold()} decides that real speech has started, so a cough or a bump never
+ *    counts as "you said something".
+ *  - {@link #voiceThreshold()} is lower and decides that you are still talking. Trailing words are
+ *    often soft ("…pretty nice"); before 0.6.3 they counted as silence, nudged the noise floor up,
+ *    and the pause timer ran out while the last word was still being spoken.
  */
 public final class SilenceDetector {
     public enum Result { CONTINUE, SEND, NOTHING_HEARD }
+
+    /** How long you can stop talking before the side button sends by itself. 2400 ms before 0.6.3. */
+    public static final long SIDE_PAUSE_MS = 3600;
 
     private final long silenceMs;
     private final long noSpeechMs;
@@ -26,7 +36,7 @@ public final class SilenceDetector {
     }
 
     public static SilenceDetector standard() {
-        return new SilenceDetector(2400, 9000, 180_000);
+        return new SilenceDetector(SIDE_PAUSE_MS, 9000, 180_000);
     }
 
     /** Typing with your voice: people pause mid-sentence while writing, so wait longer before finishing. */
@@ -34,9 +44,14 @@ public final class SilenceDetector {
         return new SilenceDetector(3800, 12000, 300_000);
     }
 
-    /** Amplitude threshold that counts as speech, given the tracked noise floor. */
+    /** Amplitude threshold that counts as the start of speech, given the tracked noise floor. */
     int speechThreshold() {
         return (int) Math.max(1800, floor * 3.0);
+    }
+
+    /** Lower threshold that counts as "still talking" once speech has started (soft trailing words). */
+    int voiceThreshold() {
+        return (int) Math.max(700, floor * 1.8);
     }
 
     public boolean heardSpeech() {
@@ -70,11 +85,12 @@ public final class SilenceDetector {
         long dt = Math.max(0, Math.min(500, now - lastAt));
         lastAt = now;
         boolean loud = amp >= speechThreshold();
-        if (loud) {
-            speechMs += dt;
+        boolean voiced = loud || (heardSpeech() && amp >= voiceThreshold());
+        if (loud) speechMs += dt;
+        if (voiced) {
             quietSince = -1;
         } else {
-            // Track the room's noise floor only from quiet samples so speech never raises it.
+            // Track the room's noise floor only from truly quiet samples so speech never raises it.
             floor = floor * 0.95 + Math.max(200, amp) * 0.05;
             if (quietSince < 0) quietSince = now;
         }
