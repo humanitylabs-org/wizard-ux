@@ -428,6 +428,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         int wx = Math.max(0, Math.min(s.x - w, cx - ox)), wy = Math.max(0, Math.min(s.y - w, cy - oy));
         if (!expanded) { wx = cx - size / 2; wy = cy - size / 2; }
         lp.width = w; lp.height = w; lp.x = wx; lp.y = wy;
+        if (keyboardOpen && !expanded) Log.i(TAG, "placed over keyboard y=" + wy + " bottom=" + (wy + w) + " imeTop=" + imeTop);
         if (attached) try { wm.updateViewLayout(web, lp); } catch (Exception ignored) { }
         js("E.layout({ox:" + px(cx - wx) + ",oy:" + px(cy - wy) + ",dx:" + dx + ",dy:" + dy + "})");
     }

@@ -321,7 +321,10 @@ with (BASE / 'worker.lock').open('a') as lock:
             sx('input keyevent KEYCODE_BACK'); sx('input keyevent KEYCODE_BACK'); time.sleep(1)
         check('a real app with a text field and the keyboard is open', opened, top())
         kb = wait_log('keyboard open', 6)
+        wait_log('keyboard open imeTop=', 12)   # the keyboard's top edge arrives once it has slid up
+        wait_log('placed over keyboard', 6)
         time.sleep(1.5)
+        print('  placement:', logs('placed over keyboard|keyboard (open|closed)'))
         bk = bubble(); shot('09-keyboard-mic')
         tops = re.findall(r'imeTop=(\d+)', logs('keyboard open'))
         ime_top = int(tops[-1]) if tops else None

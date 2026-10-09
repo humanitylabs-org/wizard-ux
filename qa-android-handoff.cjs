@@ -1,6 +1,6 @@
 // Assistant handoff QA on the Thales emulator: the side-key app's intents reach the running Wizard OS app.
-//  - SAY shows the words as a draft with Send/Dismiss, and sends NOTHING on its own.
-//  - Back drops the draft (and never leaves the app).
+//  - SAY sends the words by itself, exactly like talking to the orb (no draft, no Send tap) — James, 0.6.0.
+//  - Back afterwards never leaves the app.
 //  - LISTEN opens the orb listening with a live mic.
 // Intents are fired with adb exactly as the side-key app would; Hermes/Wizard writes are failed by CDP Fetch.
 const { execSync } = require('child_process');
@@ -55,21 +55,21 @@ const fire = (action, text) => execSync(`ssh thales bash /tmp/thales-fire.sh ${a
   await sleep(2500);
   check('Wizard OS comes to the front', top().includes(PKG));
   ws.close(); ({ ws, ev } = await attach());
-  const d = await ev(`({ text: document.querySelector('#txText')?.textContent, route: document.querySelector('#txRouteText')?.textContent, shown: document.querySelector('#voice')?.classList.contains('tx'), btns: [...document.querySelectorAll('#txChips [data-handoff]')].map(b => b.textContent), idx: window.__wos.idx, home: window.__wos.HOME, voice: window.__wos.voice })`);
-  check('the words appear as a draft on Home', d.shown && d.text === SAID && d.idx === d.home, JSON.stringify({ text: d.text, idx: d.idx }));
-  check('draft offers Send and Dismiss (nothing auto-sent)', d.btns.join('|') === 'Send|Dismiss' && /tap Send/.test(d.route || ''), d.btns.join('|'));
-  await sleep(2500);
-  check('no message sent while the draft waits', !writes.some(w => /\/v1\/runs|\/messages|\/sessions/.test(w)), writes.join(', ') || 'none');
+  await sleep(3000);
+  const runs = writes.filter(w => /\/v1\/runs|\/sessions/.test(w));
+  check('the words are sent by themselves (no draft, no Send tap)', runs.length >= 1, writes.join(', ') || 'none');
+  const d = await ev(`({ btns: document.querySelectorAll('#txChips [data-handoff]').length, log: (window.__wos.back?.log || window.__backLog || []).slice(-3) })`);
+  check('no Send/Dismiss draft is shown', d.btns === 0, JSON.stringify(d));
   sh('shell input keyevent 4'); await sleep(1000);
-  const after = await ev(`({ btns: document.querySelectorAll('#txChips [data-handoff]').length, log: (window.__wos.back.log || []).slice(-1)[0] })`);
-  check('Back drops the draft and stays in the app', after.btns === 0 && after.log === 'native:draft' && top().includes(PKG), after.log);
+  check('Back stays in the app', top().includes(PKG));
+  const sent = writes.length;
 
   fire('LISTEN'); await sleep(2500);
   const v = await ev(`window.__wos.voice`);
   check('LISTEN opens the orb listening', /listen|rec|hear/i.test(v || ''), v);
   sh('shell input keyevent 4'); await sleep(900);
   check('Back stops listening and stays in the app', (await ev(`window.__wos.voice`)) === 'idle' && top().includes(PKG));
-  check('QA attempted zero sends to Archimedes', !writes.some(w => /\/v1\/runs/.test(w)), writes.join(', ') || 'none');
+  check('LISTEN alone sends nothing more', writes.filter(w => /\/v1\/runs/.test(w)).length === writes.slice(0, sent).filter(w => /\/v1\/runs/.test(w)).length, writes.slice(sent).join(', ') || 'none');
   ws.close();
   const pass = results.filter(Boolean).length;
   console.log(`${pass}/${results.length} passed`);
