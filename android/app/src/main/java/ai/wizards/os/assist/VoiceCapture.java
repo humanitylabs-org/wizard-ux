@@ -96,6 +96,13 @@ final class VoiceCapture {
             emitError("mic", "Open Wizard OS once and allow the microphone.");
             return;
         }
+        if (!ai.wizards.os.MicOwner.tryAcquire(ai.wizards.os.MicOwner.SIDE)) { // one mic owner: a meeting may be recording
+            String why = ai.wizards.os.MicOwner.reason(ai.wizards.os.MicOwner.SIDE);
+            Log.i(TAG, "start refused: mic held by " + ai.wizards.os.MicOwner.holder());
+            android.widget.Toast.makeText(app, why, android.widget.Toast.LENGTH_LONG).show();
+            emitError("mic", why);
+            return;
+        }
         try {
             recording = new File(app.getCacheDir(), "wizard-lock-" + SystemClock.elapsedRealtime() + ".m4a");
             MediaRecorder r = Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(app) : new MediaRecorder();
@@ -113,6 +120,7 @@ final class VoiceCapture {
         } catch (Exception e) {
             dropRecorder();
             if (qa == null) {
+                ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.SIDE);
                 Log.w(TAG, "recorder failed", e);
                 emitError("mic", "The microphone is busy. Try again in a moment.");
                 return;
@@ -188,6 +196,7 @@ final class VoiceCapture {
             }
             r.release();
         }
+        ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.SIDE);
         final File qa = qaAudio;
         final File audio = qa != null ? qa : recording;
         recording = null;
@@ -303,6 +312,7 @@ final class VoiceCapture {
         main.removeCallbacks(meter);
         if (qaSend != null) main.removeCallbacks(qaSend);
         dropRecorder();
+        ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.SIDE);
         if (recording != null) {
             //noinspection ResultOfMethodCallIgnored
             recording.delete();
