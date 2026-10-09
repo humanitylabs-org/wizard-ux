@@ -272,6 +272,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT);
         lp.gravity = Gravity.TOP | Gravity.START;
+        lp.setTitle("WizardEverywhere");
         Point s = screen();
         int[] def = EverywherePolicy.defaultPosition(size, s.x, s.y, margin);
         int[] p = EverywherePolicy.clamp(prefs(this).getInt("x", def[0]), prefs(this).getInt("y", def[1]), size, s.x, s.y, margin);

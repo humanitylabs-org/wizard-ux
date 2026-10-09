@@ -158,15 +158,9 @@ def wait_shell(pg):
 def bubble():
     """Bounds of the floating button: Android's window list (an overlay window of our package), else the UI dump."""
     for blk in sx('dumpsys window windows').split('Window #')[1:]:
-        if PKG in blk.split('\n', 1)[0] and 'APPLICATION_OVERLAY' in blk:
+        if 'WizardEverywhere' in blk.split('\n', 1)[0]:
             m = re.search(r'(?:mFrame|frame)=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]', blk)
             if m and 'mViewVisibility=0x8' not in blk and 'mViewVisibility=0x4' not in blk: return tuple(map(int, m.groups()))
-    xml = ui()
-    for m in re.finditer(r'<node [^>]*?>', xml):
-        n = m.group(0)
-        if 'Wizard Everywhere' in n:
-            b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n)
-            if b: return tuple(map(int, b.groups()))
     return None
 def wait_bubble(want, secs=8):
     t0 = time.time()
@@ -215,7 +209,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         shot('01-settings-off')
         pg.ev("document.querySelector('[data-st=everywhere]').click()"); time.sleep(3)
         t = top(); shot('02-overlay-page')
-        check('turning it on opens Android’s “Display over other apps” page', 'ManageOverlay' in t or 'Settings' in t or 'AppDrawOverlay' in t, t)
+        check('turning it on opens Android’s “Display over other apps” page', any(k in t for k in ('ManageOverlay', 'AppDrawOverlay', 'SpaActivity', 'com.android.settings')), t)
         # Flip the toggle the way a person does: tap the switch on the system page.
         tapped = tap_text(r'Allow display over other apps|Allow permission|Permit drawing')
         time.sleep(1.5)
@@ -236,11 +230,11 @@ with (BASE / 'worker.lock').open('a') as lock:
         b = wait_bubble(True)
         sw, shh = map(int, re.search(r'(\d+)x(\d+)', sx('wm size')).groups())
         shot('04-launcher-bubble')
-        check('floating button appears on the home screen, bottom right', b and b[0] > sw * 0.6 and b[1] > shh * 0.5, (b, sw, shh))
-        # Over another app
-        sx('am start -W -a android.settings.SETTINGS'); time.sleep(2.5)
-        b2 = wait_bubble(True); shot('05-over-settings')
-        check('floating button floats over another app', b2 is not None, top())
+        check('floating button appears on the home screen, lower right above the dock', b and b[0] > sw * 0.6 and shh * 0.5 < b[1] and b[3] < shh * 0.82, (b, sw, shh))
+        # Over another app (Android's own Settings hides every app's overlays by design, so use the dialer)
+        sx('am start -W -a android.intent.action.DIAL'); time.sleep(3)
+        b2 = wait_bubble(True); shot('05-over-dialer')
+        check('floating button floats over another app', b2 is not None and 'dialer' in top().lower(), (b2, top()))
         # Drag it to the left middle; it snaps to the left edge and stays there.
         cx, cy = (b2[0] + b2[2]) // 2, (b2[1] + b2[3]) // 2
         sx(f'input swipe {cx} {cy} {sw // 3} {shh // 2} 700'); time.sleep(1.5)

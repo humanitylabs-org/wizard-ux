@@ -50,9 +50,9 @@ public final class EverywherePolicy {
         return c;
     }
 
-    /** Default: bottom right, clear of the navigation bar, like Archimedes Anywhere. */
+    /** Default: lower right, above the dock and search bar, like Archimedes Anywhere. */
     static int[] defaultPosition(int size, int screenW, int screenH, int margin) {
-        return snap(screenW, screenH - size - margin * 8, size, screenW, screenH, margin);
+        return snap(screenW, Math.round(screenH * 0.70f) - size / 2, size, screenW, screenH, margin);
     }
 
     static String clip(String s, int n) {

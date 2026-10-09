@@ -51,6 +51,7 @@ public class EverywherePolicyTest {
         int[] p = EverywherePolicy.defaultPosition(150, 1080, 2400, 20);
         assertEquals(1080 - 150 - 20, p[0]);
         assertTrue(p[1] > 2400 / 2);
+        assertTrue("clear of the dock and search bar", p[1] + 150 < 2400 - 400);
     }
 
     @Test public void clipsLongText() {
