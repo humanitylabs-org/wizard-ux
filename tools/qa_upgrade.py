@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upgrade smoke (runs on Thales): install the 0.4.0 release, upgrade to the 0.5.0 release in place, launch it,
+"""Upgrade smoke (runs on Thales): install the OLD release, upgrade to the NEW release in place, launch it,
 confirm it is the same app (data kept), it starts, the shell loads, and nothing crashes. Always stops the emulator.
 usage: qa_upgrade.py OLD_APK NEW_APK"""
 import fcntl, os, pathlib, re, subprocess, sys, time, uuid
@@ -33,21 +33,21 @@ with (BASE / 'worker.lock').open('a') as lock:
             time.sleep(3)
         time.sleep(8); sx('input keyevent KEYCODE_WAKEUP'); sx('wm dismiss-keyguard')
         o1 = sh(ADB, '-s', S, 'install', old).strip().splitlines()[-1]
-        check('0.4.0 installs', o1 == 'Success', o1)
+        check('old release installs', o1 == 'Success', o1)
         sx(f'am start -W -n {PKG}/.MainActivity'); time.sleep(6)
         sx(f"run-as {PKG} true"); first = sx(f'dumpsys package {PKG} | grep firstInstallTime').strip()
         o2 = sh(ADB, '-s', S, 'install', '-r', new).strip().splitlines()[-1]
         ver = re.search(r'versionName=\S+', sx(f'dumpsys package {PKG}')).group(0)
-        check('0.5.0 installs over 0.4.0 (same signer, data kept)', o2 == 'Success' and ver == 'versionName=0.5.0' and sx(f'dumpsys package {PKG} | grep firstInstallTime').strip() == first, (o2, ver))
+        check('new release installs over the old one (same signer, data kept)', o2 == 'Success' and ver == 'versionName=' + os.environ.get('WOS_NEW', '0.6.0') and sx(f'dumpsys package {PKG} | grep firstInstallTime').strip() == first, (o2, ver))
         sx('logcat -c')
         sx(f'am start -W -n {PKG}/.MainActivity'); time.sleep(8)
-        check('0.5.0 launches into Wizard OS', PKG in top(), top())
+        check('new release launches into Wizard OS', PKG in top(), top())
         (job / 'after.png').write_bytes(sh(ADB, '-s', S, 'exec-out', 'screencap', '-p', binary=True))
         sx('input keyevent KEYCODE_HOME'); time.sleep(3)
         crashed = sx('logcat -d -b crash')
         check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
         perms = sx(f'dumpsys package {PKG} | grep -E "SYSTEM_ALERT_WINDOW|POST_NOTIFICATIONS|FOREGROUND_SERVICE_SPECIAL_USE" | head -5')
-        check('0.5.0 declares overlay + notifications + special-use service', 'SYSTEM_ALERT_WINDOW' in perms and 'POST_NOTIFICATIONS' in perms, perms.strip()[:300])
+        check('declares overlay + notifications + voice typing (accessibility) service', 'SYSTEM_ALERT_WINDOW' in perms and 'POST_NOTIFICATIONS' in perms and 'WizardKeyboardService' in sx(f'dumpsys package {PKG}'), perms.strip()[:300])
         check('Everywhere stays off until switched on in Settings', 'EverywhereService' not in sx('dumpsys activity services ' + PKG))
     finally:
         if em: sh(ADB, '-s', S, 'emu', 'kill'); em.wait(40)
