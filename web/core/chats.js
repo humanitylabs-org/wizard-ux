@@ -35,7 +35,7 @@ window.WizCore.chats = function createChats(H) {
 
   const CH = {}; // per window: { q, rows, turns, loadedFor, loading, pending, err, at }
   const ch = id => (CH[id] = CH[id] || { q: '', turns: null, loadedFor: '', pending: [], at: 0 });
-  const INTERNAL = ['[IMPORTANT: Background process ', '[ASYNC DELEGATION BATCH COMPLETE', '[CONTEXT COMPACTION', '[CONTEXT SUMMARY]:', '[PRIOR CONTEXT', '[Your active task list was preserved', '[Your previous agent loop was paused', '[James requested recovery', '[OUT-OF-BAND', '[SYSTEM:'];
+  const INTERNAL = ['[IMPORTANT: Background process ', '[ASYNC DELEGATION BATCH COMPLETE', '[Wizard follow-through]', '[CONTEXT COMPACTION', '[CONTEXT SUMMARY]:', '[PRIOR CONTEXT', '[Your active task list was preserved', '[Your previous agent loop was paused', '[James requested recovery', '[OUT-OF-BAND', '[SYSTEM:'];
   const msgText = c => typeof c === 'string' ? c : Array.isArray(c) ? c.map(p => typeof p === 'string' ? p : p?.text || '').join('\n') : c && typeof c === 'object' ? String(c.text || c.content || '') : '';
   function chipFiles(s) {
     const out = [];
@@ -53,7 +53,7 @@ window.WizCore.chats = function createChats(H) {
     .replace(/\n*\[Browser dogfooding policy[\s\S]*$/, '')
     .replace(/<\s*\/?\s*helm_attachments\s*>/gi, '')
     .trim();
-  // One turn = what James said, the work in between, and the final answer.
+  // One turn = what the owner said, the work in between, and the final answer.
   function toTurns(rows) {
     const out = []; let cur = null;
     for (const m of rows) {
@@ -112,7 +112,7 @@ window.WizCore.chats = function createChats(H) {
     const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = s.status === 'waiting_for_approval' || s.status === 'failed' || s.status === 'interrupted';
     return `<button class="ch-row${isNew ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span>
       <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      <span class="pv">${working ? '<i class="st working"></i>Working · ' : needs ? '<i class="st needs"></i>' : isNew ? '<i class="st unread"></i>' : ''}${esc(clip(s.preview || '', 110))}</span></span></button>`;
+      <span class="pv">${working ? `<i class="st working"></i>${s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working'} · ` : needs ? '<i class="st needs"></i>' : isNew ? '<i class="st unread"></i>' : ''}${esc(clip(s.preview || '', 110))}</span></span></button>`;
   }
   function renderChatList(w, el) {
     const c = ch(w.id), n = norm(c.q);
@@ -242,7 +242,7 @@ window.WizCore.chats = function createChats(H) {
   function renderThread(w, el) {
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
     const working = !!s && WORKING_ST.has(s.status);
-    const sub = isNew ? 'Starts a new thread with Archimedes' : working ? 'Archimedes is working' : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
+    const sub = isNew ? `Starts a new thread with ${window.WizConfig.agent()}` : working ? (s.waitingOn === 'helper' ? `A helper is finishing this for ${window.WizConfig.agent()}` : `${window.WizConfig.agent()} is working`) : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
     const turns = c.loadedFor === w.thread ? c.turns || [] : null;
     let msgs;
     const pend = pendingFor(w);
@@ -258,7 +258,7 @@ window.WizCore.chats = function createChats(H) {
     el.innerHTML = `<div class="ch-thread">
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span class="emo">${isNew ? '✎' : emoOf(w.thread)}</span><div class="ti"><b>${esc(winTitle(w))}</b><small>${esc(sub)}</small></div></div>
       <div class="ch-msgs">${msgs}</div>
-      <form class="ch-compose" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? 'Steer Archimedes…' : 'Message Archimedes'}" enterkeyhint="enter">${esc(draft)}</textarea><button type="submit" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
+      <form class="ch-compose" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(window.WizConfig.agent())}…` : `Message ${esc(window.WizConfig.agent())}`}" enterkeyhint="enter">${esc(draft)}</textarea><button type="submit" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     const nb = el.querySelector('.ch-msgs');
     nb.scrollTop = atBottom ? nb.scrollHeight : (box ? box.scrollTop : nb.scrollHeight);
@@ -332,7 +332,9 @@ window.WizCore.chats = function createChats(H) {
     // Saved on the phone first; the outbox delivers it (and retries) from here.
     const it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : w.thread, steerRunId, text, audio,
       instructions: viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid, how, source: 'chat' });
-    if (isNew && W[wid]) { W[wid].thread = it.sessionId; save(); c.loadedFor = ''; }
+    // A new thread is delegated in the background: the window steps back to the list instead of
+    // opening the thread, and the thread appears there (Working) once it is admitted.
+    if (isNew && W[wid]) { W[wid].thread = null; save(); c.loadedFor = ''; toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600); }
     renderChats(W[wid]); applyLayout(deskOf(wid));
   }
   const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });

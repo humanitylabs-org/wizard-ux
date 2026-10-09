@@ -68,12 +68,13 @@
     W = {}; desks = Array.from({ length: DESKS_N }, () => ({ wins: [], focus: null, full: false }));
     // First run: Chats sits one desk to the left of Home, yesterday's review one to the right.
     const c = { id: newId(), app: 'chats', thread: null }; W[c.id] = c; desks[HOME - 1].wins.push(c.id); desks[HOME - 1].focus = c.id;
-    const r = { id: newId(), app: 'review', z: { level: 'day', day: YESTERDAY } }; W[r.id] = r; desks[0].wins.push(r.id); desks[0].focus = r.id;
+    const r = { id: newId(), app: 'review', z: { level: 'day', day: YESTERDAY } }; if (APP['v-day']) { W[r.id] = r; desks[0].wins.push(r.id); desks[0].focus = r.id; }
     layoutV2();
   }
-  // James's layout: Home = latest, swipe left = Topics, the desk after = Mizel.
+  // Default layout: Home = latest, then Topics and Mizel desks when this Wizard has those apps.
   function layoutV2() {
     const put = (i, w) => {
+      if (w.app === 'frame' && !APP[w.appId]) return; // that app isn't on this Wizard
       if (Object.values(W).some(x => x.app === w.app && x.appId === w.appId)) return;
       const d = desks[i]; if (d.wins.length >= MAXW) return;
       const id = newId(); W[id] = { id, ...w }; d.wins.unshift(id); d.focus = id; d.full = false;
@@ -107,7 +108,7 @@
     const t = Date.parse(iso || ''); if (!isFinite(t)) return '';
     const m = Math.round((Date.now() - t) / 6e4);
     if (m < 1) return 'now'; if (m < 60) return m + 'm'; if (m < 24 * 60) return Math.round(m / 60) + 'h';
-    const d = new Date(t + 7 * 36e5); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()}`;
+    const d = window.WizConfig.dayParts(t); return `${DOW[d.dow]} ${d.d}`;
   };
 
   /* ---------------- window model ---------------- */
@@ -131,7 +132,7 @@
   const CHATS_APP = { name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'] };
   function winApp(w) {
     if (w.app === 'chats') return CHATS_APP;
-    if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'];
+    if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'] || { name: 'Review', icon: '◐', g: ['#444a60', '#22263a'] };
     if (w.app === 'maps') return APP.maps;
     return APP[w.appId] || { name: 'App', icon: '◇', g: ['#444a60', '#22263a'] };
   }
@@ -485,7 +486,7 @@
         <button class="st-row" data-st="side" ${native ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(side)}</small></span><span class="st-go">›</span></button>
       </div>
       <div class="st-group"><h4>Wizard</h4>
-        <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · private.wizard001.com</small></span></div>
+        <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · ${esc(location.host)}</small></span></div>
       </div>`;
   }
   function openSettings(focusUnsent) {
@@ -540,8 +541,8 @@
     const now = new Date();
     return `<div class="home">${gearBtn()}
       <div class="home-top">
-        <div class="home-date" id="homeDate">${DOWL[now.getDay()]} · ${now.getDate()} ${MON[now.getMonth()]}</div>
-        <div class="home-time" id="homeTime">${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}</div>
+        <div class="home-date" id="homeDate">${(() => { const p = window.WizConfig.dayParts(now.getTime()); return `${DOWL[p.dow]} · ${p.d} ${MON[p.m - 1]}`; })()}</div>
+        <div class="home-time" id="homeTime">${window.WizConfig.hm()}</div>
         <div class="home-line">${LIVE.ok ? `<b>${needs} need${needs === 1 ? 's' : ''} you</b>, ${ready} unread, ${working} working.` : LIVE.error === 'access' ? 'Sign in to Wizard to see your threads.' : 'Connecting to Wizard…'}</div>
       </div>
       <div class="home-spacer"></div>
@@ -562,7 +563,7 @@
   }
   setInterval(() => {
     const now = new Date(), t = $('#homeTime'), c = $('#clock');
-    const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const hm = window.WizConfig.hm();
     if (t) t.textContent = hm; if (c) c.textContent = hm;
   }, 5000);
   const refreshHome = force => { if (!desks[HOME].wins.length) { const g = track.children[HOME]?.querySelector('.glance'); if (g) g.innerHTML = renderHome(); } };
@@ -648,7 +649,7 @@
       f.addEventListener('load', () => {
         let ok = false, why = '';
         try { const doc = f.contentDocument; why = doc ? doc.location.href : 'nodoc'; ok = !!doc && doc.location.href !== 'about:blank'; } catch (e) { ok = false; why = 'x:' + e.name; }
-        (window.__frameLog = window.__frameLog || []).push(why);
+        window.__frameLog = (window.__frameLog || []).concat(why).slice(-40); // bounded: the shell may run for weeks
         if (why === 'about:blank') {
           // A frame that had a real page and is back on blank was traversed by the Back key (cross-document, so no
           // popstate fires). That press belongs to the shell: take the step and restore the app in place.
@@ -773,7 +774,7 @@
       const t = byId[z.id] || {};
       return `<div class="summary"><div class="eyebrow"><span class="spark" style="background:${PCOL[t.p]}"></span>${esc(fmtDay(z.day))} · ${esc(t.t)} · ${esc(t.src)}</div><h3>${esc(t.title)}</h3>
         <div class="chips"><span class="chip"><i class="pdot" style="color:${PCOL[t.p]};background:${PCOL[t.p]}"></i>${esc(D.projects[t.p])}</span><span class="chip">${t.n} messages</span>${(t.people || []).map(p => `<span class="chip">${esc(p)}</span>`).join('')}</div></div>
-        ${t.u ? `<div class="bubble u"><span class="who">You</span>${esc(t.u)}</div>` : ''}${t.a ? `<div class="bubble a"><span class="who">Archimedes</span>${esc(t.a)}</div>` : ''}
+        ${t.u ? `<div class="bubble u"><span class="who">You</span>${esc(t.u)}</div>` : ''}${t.a ? `<div class="bubble a"><span class="who">${window.WizConfig.agent()}</span>${esc(t.a)}</div>` : ''}
         <button class="cta" data-wizthread="${esc(z.id)}">Open the full thread in Wizard</button>`;
     }
     return '';
@@ -1024,16 +1025,17 @@
     const body = $('#launcherBody');
     q = q.trim();
     if (!q) {
-      const recentIds = store.get('recent', ['wizard', 'v-day', 'cinequeue', 'signal-feed']).filter(id => APP[id]).slice(0, 4);
+      const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native').slice(0, 4);
       body.innerHTML = `<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
         <div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>
         <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats').length}</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats').map(appTile).join('')}</div></div>
-        <div class="lgroup"><h4>Android <span>native</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'native').map(appTile).join('')}</div></div>${deskBar()}`;
+        ${deskBar()}`;
       body.scrollTop = body.scrollHeight;
       return;
     }
     const n = norm(q);
-    const hits = APPS.map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
+    // Android apps stay voice-only ("open Maps" still routes); they never clutter the launcher.
+    const hits = APPS.filter(a => a.kind !== 'native').map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
     const th = (LIVE.ok ? LIVE.sessions.filter(x => !x.hidden && norm(x.title).includes(n)) : []).slice(0, 5);
     body.innerHTML = `${hits.length ? `<div class="lgroup"><h4>Apps &amp; views</h4>${hits.slice(0, 7).map((a, k) => appRow(a, k === 0)).join('')}</div>` : ''}
       ${th.length ? `<div class="lgroup"><h4>Threads</h4>${th.map(t => `<button class="lrow" data-thread="${esc(t.id)}"><span class="ic emo">${emoOf(t.id)}</span><span class="nm">${esc(t.title)}<small>${esc(ago(t.lastAssistantAt || t.updatedAt))}${LIVE.isNew(t) ? ' · unread' : ''}</small></span><span class="kind view">Chats</span></button>`).join('')}</div>` : ''}
@@ -1098,7 +1100,7 @@
     { g: 'needs', name: 'Needs you', c: 'var(--amber)' },
   ];
   function noteHtml(n, g) {
-    const sub = g === 'working' ? (n.status === 'queued' ? 'Queued' : 'Archimedes is on it') : g === 'needs' ? (n.status === 'waiting_for_approval' ? 'Waiting for your approval' : n.status === 'failed' || n.status === 'interrupted' ? 'Stopped · needs a look' : 'Needs you') : (n.preview || '');
+    const sub = g === 'working' ? (n.status === 'queued' ? 'Queued' : `${window.WizConfig.agent()} is on it`) : g === 'needs' ? (n.status === 'waiting_for_approval' ? 'Waiting for your approval' : n.status === 'failed' || n.status === 'interrupted' ? 'Stopped · needs a look' : 'Needs you') : (n.preview || '');
     return `<button class="note ${g === 'working' ? 'working' : ''}" data-note="${esc(n.id)}" data-g="${g}">${isRec(n) ? '<span class="ic rec">◉</span>' : `<span class="ic emo">${emoOf(n.id)}</span>`}
       <span class="bd"><span class="tp"><span class="src${isRec(n) ? ' mizel' : ''}">${isRec(n) ? 'Mizel.ai' : 'Chats'}</span><span class="tm">${esc(ago(g === 'working' ? (n.lastUserAt || n.updatedAt) : (n.lastAssistantAt || n.activityAt || n.updatedAt)))}</span></span><span class="ti">${esc(n.title)}</span><span class="sb">${esc(clip(sub, 120))}</span></span></button>`;
   }
@@ -1173,7 +1175,7 @@
   }
 
   /* ---------------- voice ---------------- */
-  const V = { state: 'idle', kind: 'auto', route: store.get('routeV', 0) >= 2 ? store.get('route', 'auto') : (store.set('routeV', 2), store.set('route', 'auto'), 'auto'), rec: null, stream: null, chunks: [], ac: null, an: null, t0: 0, acc: 0, raf: 0, sim: false, stopAsked: false, cancelled: false, simText: '' };
+  const V = { state: 'idle', kind: 'auto', route: store.get('routeV', 0) >= 2 ? store.get('route', 'auto') : (store.set('routeV', 2), store.set('route', 'auto'), 'auto'), rec: null, stream: null, chunks: [], parts: [], ac: null, an: null, t0: 0, acc: 0, raf: 0, sim: false, stopAsked: false, cancelled: false, simText: '' };
   const voiceEl = $('#voice'), tx = $('#transcript');
   // Keep the screen on while the orb records or transcribes: a screen lock mid-dictation pauses the WebView and loses the take.
   // Native shell (0.5.1+) sets FLAG_KEEP_SCREEN_ON; browsers and PWAs use the Screen Wake Lock API.
@@ -1283,7 +1285,7 @@
     V.onAt = performance.now();
     if (V.state !== 'idle') return;
     clearTimeout(txHideT);
-    Object.assign(V, { kind, target: null, chunks: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, target: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
     // No status card while recording: the orb, timer and arc already say it. Hold-for-command keeps
@@ -1292,34 +1294,54 @@
     else { txHide(0); if (!store.get('voiceTipSeen', false)) { store.set('voiceTipSeen', true); txPill('✦', 'Listening · tap the orb again to send', 'tip'); txHide(3200); } }
     V.raf = requestAnimationFrame(tick);
     try {
-      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
-      V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      if (V.cancelled || V.state === 'idle') { stopStream(); return; }
-      const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
-      const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
-      const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
-      V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
-      V.rec.ondataavailable = e => { if (e.data && e.data.size) V.chunks.push(e.data); };
-      V.rec.onstop = onRecStop;
-      V.rec.start(250);
+      if (!(await openRec())) return;
       if (V.stopAsked) finishVoice();
     } catch (err) {
       V.sim = true;
       txShow('', '', '', '✦');
       $('#txRouteText').textContent = kind === 'command' ? 'No mic here · tap a command' : 'No mic here · tap a line to simulate';
       const ex = kind === 'command'
-        ? ['Open CineQueue', 'Zoom out', 'Next desk', 'Directions to Bangkok airport']
+        ? ['Open CineQueue', 'Zoom out', 'Next desk', 'Directions to the airport']
         : ['Show me yesterday', 'Directions to Iconsiam', 'Play something chill on Spotify', 'What did we ship on Wizard this week?'];
       $('#txChips').innerHTML = `<span class="lbl">Try</span>` + ex.map(x => `<button data-sim="${esc(x)}">${esc(x)}</button>`).join('');
       if (V.stopAsked) { cancelVoice(true); }
     }
   }
   $('#txChips').addEventListener('click', e => { const b = e.target.closest('[data-sim]'); if (!b) return; const k = V.kind; cancelVoice(true); runUtterance(b.dataset.sim, k); });
+  // Only a tap (or Cancel) ends a take. If Android takes the mic away (a call, another app, the system), the
+  // part recorded so far is kept and the take pauses: tap the orb to send it, or Pause to carry on recording.
+  async function openRec() {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
+    V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (V.cancelled || V.state === 'idle') { stopStream(); return false; }
+    const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
+    const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
+    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
+    const rec = V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
+    V.mime = rec.mimeType || mime || 'audio/webm';
+    rec.ondataavailable = e => { if (e.data && e.data.size) V.chunks.push(e.data); };
+    rec.onstop = () => (V.state === 'think' ? onRecStop() : onRecInterrupted(rec));
+    // A track ended by the system stops the recorder too; onstop handles it.
+    V.stream.getAudioTracks().forEach(tr => tr.addEventListener('ended', () => { try { rec.state !== 'inactive' && rec.stop(); } catch (e) {} }));
+    rec.start(250);
+    return true;
+  }
+  function onRecInterrupted(rec) {
+    if (V.cancelled || V.rec !== rec || (V.state !== 'listen' && V.state !== 'paused' && V.state !== 'command')) return;
+    if (V.chunks.length) V.parts.push(new Blob(V.chunks, { type: V.mime || 'audio/webm' }));
+    V.chunks = [];
+    if (V.state !== 'paused') V.acc += performance.now() - V.t0;
+    stopStream(); V.rec = null; Orb.setLevel(0);
+    setVoice('paused');
+    $('#txRouteText').textContent = 'Mic interrupted · kept · tap the orb to send';
+    toast('⏸', 'Mic interrupted · your recording is kept');
+  }
   function stopStream() { try { V.stream && V.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { V.ac && V.ac.close(); } catch (e) {} V.stream = null; V.ac = null; V.an = null; }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
     if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
+    if (!V.rec && V.parts.length) { setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core'); onRecStop(); return; }
     if (!V.rec) { V.stopAsked = true; return; }
     if (V.state !== 'paused') V.acc += performance.now() - V.t0;
     setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core');
@@ -1333,19 +1355,22 @@
     if (!quiet) { toast('✕', 'Discarded'); vib(12); }
   }
   async function onRecStop() {
-    const blob = new Blob(V.chunks, { type: V.rec?.mimeType || 'audio/webm' });
+    const last = V.chunks.length ? new Blob(V.chunks, { type: V.mime || V.rec?.mimeType || 'audio/webm' }) : null;
+    const blobs = V.parts.concat(last && last.size ? [last] : []);
+    V.parts = []; V.chunks = [];
+    const blob = blobs[0] || new Blob([], { type: V.mime || 'audio/webm' });
+    const size = blobs.reduce((n, b) => n + b.size, 0);
     stopStream(); V.rec = null; Orb.setLevel(0);
     if (V.cancelled) return;
-    if (V.acc < 450 || blob.size < 1200) { setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
+    if (V.acc < 450 || size < 1200) { setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
     try {
-      const fd = new FormData();
-      const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
-      fd.append('file', blob, `voice.${ext}`); fd.append('language', 'en');
-      fd.append('prompt', 'Wizard OS voice command. Names: Archimedes, Wizard, Hermes, Iconsiam, Siam Paragon, Sukhumvit, Suvarnabhumi, Don Mueang, Thonglor, Asok, Grab, LINE, ' + APPS.map(a => a.name).slice(0, 40).join(', '));
-      const r = await fetch('api/transcribe', { method: 'POST', body: fd });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-      const text = (j.text || '').trim();
+      const words = []; const j = { ms: 0 };
+      const prompt = window.WizConfig.voicePrompt(APPS.map(a => a.name).slice(0, 40));
+      for (const part of blobs) {   // more than one part only after the mic was interrupted mid-take
+        const jj = await window.WizConfig.transcribe(part, { prompt, language: 'en' });
+        words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
+      }
+      const text = words.filter(Boolean).join(' ').trim();
       if (!text) { setVoice('idle'); txHide(); toast('◌', 'No speech detected'); return; }
       handleText(text, V.kind, false, j.ms, V.target);
     } catch (err) {
@@ -1353,8 +1378,11 @@
       setVoice('idle');
       const aim = V.target, f = desks[idx].focus, fw = W[f];
       const files = takeFiles();
-      if (aim == null && fw?.app === 'chats' && fw.thread) { ch(f).files = [...(ch(f).files || []), ...files]; sendChat(f, '', 'voice, aimed at this thread', blob); }
-      else toAgent('', 'Saved · sends when Wizard is reachable', { audio: blob, desk: aim, source: 'orb', files });
+      (blobs.length ? blobs : [blob]).forEach((part, i) => {
+        const fl = i === 0 ? files : [];   // attached files ride with the first part only
+        if (aim == null && fw?.app === 'chats' && fw.thread) { ch(f).files = [...(ch(f).files || []), ...fl]; sendChat(f, '', 'voice, aimed at this thread', part); }
+        else toAgent('', 'Saved · sends when Wizard is reachable', { audio: part, desk: aim, source: 'orb', files: fl });
+      });
       txPill('↻', 'Saved · sends when Wizard is back', 'agent', 'Couldn’t reach Wizard · recording saved, will send'); txHide(2600);
     }
   }
@@ -1364,6 +1392,10 @@
   $('#arcCancel').addEventListener('click', () => cancelVoice());
   $('#arcPause').addEventListener('click', () => {
     if (V.state === 'listen') { V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} setVoice('paused'); vib(6); }
+    else if (V.state === 'paused' && !V.rec && V.parts.length) {   // after a mic interruption: carry on with a fresh part
+      V.t0 = performance.now(); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6);
+      openRec().catch(() => { V.acc += performance.now() - V.t0; setVoice('paused'); toast('⏸', 'The mic is busy · tap the orb to send what you have'); });
+    }
     else if (V.state === 'paused') { V.t0 = performance.now(); try { V.rec && V.rec.resume(); } catch (e) {} setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
   });
   // The file picker is a separate screen on Android: pause the take while it is open, resume on return.
@@ -1400,16 +1432,16 @@
     if (w.app === 'maps') return { id, mode: '', kind: 'maps', name: winTitle(w) };
     return { id, mode: '', kind: 'app', name: winTitle(w) };
   }
-  // Rides as the run's ephemeral system note: Archimedes knows the view, the thread stays clean.
+  // Rides as the run's ephemeral system note: the agent knows the view, the thread stays clean.
   function viewContext(id, how = 'voice') {
     const d = desks[idx], v = viewOf(id || d.focus);
     const others = d.wins.filter(x => x !== (id || d.focus)).map(x => winTitle(W[x]));
     const z = v?.z ? ` at ${v.z.level} level${v.z.day ? ` (${v.z.day})` : v.z.week ? ` (week of ${v.z.week})` : ''}` : '';
     return [
-      `[Wizard OS context] James sent this by ${how} from Wizard OS, his phone shell.`,
-      v ? `Window in front: ${v.name} (${v.kind}${v.url ? `, ${v.url}` : ''})${z}.` : `He was on desk ${idx + 1} with no window open.`,
+      `[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by ${how} from Wizard UX on their phone.`,
+      v ? `Window in front: ${v.name} (${v.kind}${v.url ? `, ${v.url}` : ''})${z}.` : `They were on desk ${idx + 1} with no window open.`,
       others.length ? `Also open on this desk: ${others.join(', ')}.` : '',
-      'When he says "this", "here", or "it", he likely means that window. Use this as background only.',
+      'When they say "this", "here", or "it", they likely mean that window. Use this as background only.',
     ].filter(Boolean).join(' ');
   }
   function deliverToView(v, text) {
@@ -1461,7 +1493,7 @@
     if (files.length) {
       const fw = W[desks[idx].focus];
       if (target == null && fw?.app === 'chats' && fw.thread) { ch(fw.id).files = [...(ch(fw.id).files || []), ...files]; setVoice('idle'); txPill('✦', 'Sent with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendChat(fw.id, text, 'voice, aimed at this thread'); }
-      return toAgent(text, 'To Archimedes · with files' + sttNote, { ...opts, files });
+      return toAgent(text, `To ${window.WizConfig.agent()} · with files` + sttNote, { ...opts, files });
     }
     const t0 = performance.now();
     const loc = localParse(text);
@@ -1472,10 +1504,16 @@
     }
     // A capturing view takes a tap utterance as-is.
     if (kind !== 'command' && v?.mode === 'capture' && target == null) return toView(v, text, `To ${v.name}${sttNote}`);
+    // An open thread owns what James says: unless it is a phone command (or aimed at another desk), it goes
+    // into that thread (steering the live run), never a new thread. New threads start from the list or New chat.
+    const intoThread = kind !== 'command' && target == null && v?.kind === 'chat thread';
+    const toAgentOrThread = label => intoThread ? toView(v, text, `To this thread${sttNote}`) : toAgent(text, label, opts);
     setVoice('think'); if (isPill()) tx.dataset.detail = 'Routing · DeepSeek Flash'; else $('#txRouteText').textContent = 'Routing · DeepSeek Flash';
     try {
       const view = v && v.mode && kind !== 'command' && target == null ? { name: v.name, kind: v.kind } : null;
-      const r = await fetch('api/route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: kind === 'command' ? 'command' : '', view, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
+      const routeUrl = window.WizConfig.endpoint('route');
+      if (!routeUrl) return toAgentOrThread(`To ${window.WizConfig.agent()}${sttNote}`);
+      const r = await fetch(routeUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: kind === 'command' ? 'command' : '', view, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'router');
       const c = j.cmd || {};
@@ -1483,17 +1521,17 @@
       if (c.route === 'command') {
         showRouted('command', `Command · DeepSeek Flash · ${j.ms} ms${sttNote}`);
         const ran = finishCmd(c, text, opts);
-        if (c.then_agent) setTimeout(() => toAgent(String(c.then_agent), `Opened ${c.app || 'app'} · follow-up to Archimedes`, opts), 1500);
+        if (c.then_agent) setTimeout(() => toAgent(String(c.then_agent), `Opened ${c.app || 'app'} · follow-up to ${window.WizConfig.agent()}`, opts), 1500);
         return ran;
       }
-      return toAgent(text, `To Archimedes · routed in ${j.ms} ms${sttNote}`, opts);
+      return toAgentOrThread(`To ${window.WizConfig.agent()} · routed in ${j.ms} ms${sttNote}`);
     } catch (e) {
-      return toAgent(text, 'Router offline · sent to Archimedes', opts);
+      return toAgentOrThread(`Router offline · sent to ${window.WizConfig.agent()}`);
     }
   }
   function showRouted(kind, label) {
     if (isPill()) {
-      const short = kind === 'agent' ? (/^Saved/.test(label) ? 'Saved · sends when Wizard is back' : 'Sent to Archimedes')
+      const short = kind === 'agent' ? (/^Saved/.test(label) ? 'Saved · sends when Wizard is back' : `Sent to ${window.WizConfig.agent()}`)
         : kind === 'view' ? 'Sent ' + label.split(' · ')[0].replace(/^To /, 'to ')
         : ($('#txText').textContent || 'Done');
       return txPill(kind === 'command' ? '⚡' : kind === 'view' ? '◧' : '✦', short, kind, label);
@@ -1510,7 +1548,7 @@
   function toView(v, text, label) {
     showRouted('view', label); setVoice('done'); vib([8, 40, 8]);
     const ok = deliverToView(v, text);
-    if (!ok) return toAgent(text, `${v.name} didn’t take it · sent to Archimedes`);
+    if (!ok) return toAgent(text, `${v.name} didn’t take it · sent to ${window.WizConfig.agent()}`);
     focusWin(v.id);
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
     txHide(isPill() ? 1200 : 1500);
@@ -1550,19 +1588,16 @@
     }
     openSheet('launcher', text); return false;
   }
-  /* A new request to Archimedes. The reply opens in Chats on this desk (or the desk
-   * James swiped toward), tiled beside whatever is already there. */
+  /* A new request to Archimedes. It is delegated in the background: James stays exactly where he is
+   * (no Chats window opens, no desk switch, no thread takes focus). The new thread shows up in Chats,
+   * Working and the Inbox like any other, and he opens it when he chooses. */
   async function toAgent(text, label, opts = {}) {
     showRouted('agent', label); setVoice('agent'); vib(10);
     setTimeout(() => { setVoice('idle'); }, 1200);
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice');
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    const it = await OUTBOX.enqueue({ kind: 'new', text, instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
-    const t = opts.desk == null ? idx : opts.desk;
-    const wid = desks[t].wins.find(x => W[x].app === 'chats');
-    if (wid) { if (t !== idx) goDesk(t); focusWin(wid); openChat(wid, it.sessionId); }
-    else openWin({ app: 'chats', thread: it.sessionId }, opts);
+    await OUTBOX.enqueue({ kind: 'new', text, instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
     renderMoons(); refreshHome(); renderDots();
   }
   OUTBOX?.onSent((it, res) => {
@@ -1570,7 +1605,7 @@
       LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });
       LIVE.markSeen(it.sessionId);
     } else if (LIVE) { const s = LIVE.session(it.sessionId); if (s && !res.steered) Object.assign(s, { status: 'running', runId: res.runId, lastUserAt: new Date().toISOString() }); }
-    if (it.attempts) toast('✦', res.steered ? 'Delivered · steering the live run' : 'Delivered to Archimedes', 2000);
+    if (it.attempts) toast('✦', res.steered ? 'Delivered · steering the live run' : `Delivered to ${window.WizConfig.agent()}`, 2000);
     // First-try orb sends were already confirmed by the pill above the orb: no second banner.
     else if (res.steered) toast('✦', 'Sent · steering the live run', 1800);
     LIVE?.emit(); setTimeout(() => LIVE?.refresh(), 3000);
@@ -1671,7 +1706,32 @@
   const EXIT_MS = 2000;
   let exitUntil = 0, exitT = 0, guardOn = false, ignorePop = 0;
   const watchers = new Set();
-  function backStep() {
+  // A hosted app that keeps its screens in app state (Legacy Wizard: thread → list, viewers, sheets) has no frame
+  // history to walk. It exposes its own Back as window.__wizardCloseOverlay() — the hook its Android app calls.
+  // That hook answers true even at its own root, so the shell compares a small layout signature after React
+  // settles: if nothing moved, the press was a no-op in the app and the shell takes the step instead.
+  function frameSig(win) {
+    try { const d = win.document; return [win.location.href, d.querySelectorAll('[role="dialog"],[aria-modal="true"],.open').length,
+      [...d.querySelectorAll('h1,[aria-label^="Back"]')].map(e => e.getAttribute('aria-label') || e.textContent).join('|')].join('#'); } catch (e) { return ''; }
+  }
+  function hostedBack(f) {
+    let win; try { win = winEl(f.id)?.querySelector('iframe')?.contentWindow; } catch (e) { return null; }
+    let hook; try { hook = win && win.__wizardCloseOverlay; } catch (e) { return null; }
+    if (typeof hook !== 'function') return null;
+    const before = frameSig(win);
+    let r; try { r = hook.call(win); } catch (e) { return null; }
+    if (r === false) return null;
+    const fid = f.id;
+    setTimeout(() => {
+      if (frameSig(win) !== before) return;
+      // The app was already at its root: take the shell step now (without asking the app again).
+      const did = backStep(fid);
+      window.__backLog = (window.__backLog || []).concat('hosted-noop:' + (did || 'root')).slice(-30);
+      if (!did) toast('⌂', "You're home", 1200);
+    }, 180);
+    return 'hosted';
+  }
+  function backStep(skipHosted) {
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
     if (document.querySelector('#txChips [data-handoff]')) { $('#txChips').innerHTML = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
@@ -1681,6 +1741,7 @@
     const d = desks[idx], f = W[d.focus];
     if (f) {
       if (f.app === 'chats' && f.thread) { chatsBack(f); return 'thread'; }
+      if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
       if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { nav.back(); return 'frame'; } }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }
       if (d.full) { setFull(f.id, false); return 'tile'; }
@@ -1783,7 +1844,8 @@
   /* ---------------- boot ---------------- */
   buildDesks(); setVoice('idle'); armBack();
   if (LIVE) LIVE.refresh();
-  { const n = new Date(); $('#clock').textContent = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; }
+  $('#clock').textContent = window.WizConfig.hm();
+  window.addEventListener('wizard:config', () => { const t = $('#homeTime'), c = $('#clock'), hm = window.WizConfig.hm(); if (t) t.textContent = hm; if (c) c.textContent = hm; });
   if (!store.get('coached', false)) { $('#coach').hidden = false; }
   $('#coachGo').addEventListener('click', () => { $('#coach').hidden = true; store.set('coached', true); shock(); });
   // Native shell (Wizard OS Android app): the app hands every hardware/gesture Back to the shell. A step that

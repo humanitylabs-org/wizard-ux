@@ -9,31 +9,8 @@
     { id: 'v-week', kind: 'view', name: 'Week in review', icon: '◐', g: ['#8f63ff', '#ff5ccf'], view: 'week', desc: 'Seven days, one compression level up' },
     { id: 'v-month', kind: 'view', name: 'Month in review', icon: '◯', g: ['#3f6bff', '#8f63ff'], view: 'month', desc: 'The arc of the last four weeks' },
     { id: 'v-inbox', kind: 'view', name: 'Inbox', icon: '⬇', g: ['#ffbe55', '#ff6b86'], view: 'inbox', desc: 'Needs you, ready for review, working' },
-    // Wizard apps (live private apps)
-    { id: 'wizard', kind: 'chats', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'], desc: 'Your threads with Archimedes' },
-    { id: 'cinequeue', kind: 'wizard', name: 'CineQueue', icon: '🎬', g: ['#ff5c7a', '#7a2bff'], url: '/cinequeue/', desc: 'Your watch queue' },
-    { id: 'signal-feed', kind: 'wizard', name: 'Signal Feed', icon: '◎', g: ['#ff5ccf', '#5c3bff'], url: '/signal-feed/', desc: 'High-signal feed' },
-    { id: 'wizard-signal', kind: 'wizard', name: 'Wizard Signal', icon: '📡', g: ['#a74dff', '#ff5ccf'], url: '/wizard-signal/', desc: 'Social signal' },
-    { id: 'reader', kind: 'wizard', name: 'Reader', icon: '📖', g: ['#e9b46b', '#8a4dff'], url: '/reader/', desc: 'Long-form reading' },
-    { id: 'recall', kind: 'wizard', name: 'Recall', icon: '◉', g: ['#3fe0ff', '#3f6bff'], url: '/recall/', desc: 'Voice memory' },
-    { id: 'capture', kind: 'wizard', name: 'Capture', icon: '✚', g: ['#4ff0b0', '#2f8cff'], url: '/capture/', desc: 'Drop anything in' },
-    { id: 'idea-queue', kind: 'wizard', name: 'Idea Queue', icon: '💡', g: ['#ffd65c', '#ff8a5c'], url: '/idea-queue/', desc: 'Ideas waiting their moment' },
-    { id: 'files', kind: 'wizard', name: 'Files', icon: '🗂', g: ['#8aa0c8', '#4a5a8a'], url: '/files/', desc: 'Browse the server' },
-    { id: 'iching', kind: 'wizard', name: 'I Ching', icon: '☯', g: ['#d8c39a', '#6a4a2a'], url: '/iching/', desc: 'Cast and read' },
-    { id: 'trackhunt', kind: 'wizard', name: 'TrackHunt', icon: '♫', g: ['#4ff0b0', '#0d8a6a'], url: '/trackhunt/', desc: 'Find tracks' },
-    { id: 'thai-cram', kind: 'wizard', name: 'Thai Cram', icon: 'ก', g: ['#ff6b86', '#3f6bff'], url: '/thai-cram/', desc: 'Thai flashcards' },
-    { id: 'console', kind: 'wizard', name: 'Console', icon: '⌘', g: ['#3a3f58', '#151827'], url: '/console/', desc: 'Terminals' },
-    { id: 'model-performance', kind: 'wizard', name: 'Model Perf', icon: '📈', g: ['#3fe0ff', '#8f63ff'], url: '/model-performance/', desc: 'Model routing and cost' },
-    { id: 'topics', kind: 'wizard', name: 'Topics', icon: '◇', g: ['#3fe0ff', '#8f63ff'], url: '/wizard-topics-preview/', probe: true, desc: 'Threads grouped by topic' },
-    { id: 'mizel', kind: 'wizard', name: 'Mizel', icon: '◉', g: ['#3fe0ff', '#2f8cff'], url: '/meetings/#/', desc: 'Meeting recorder' },
-    { id: 'shopping', kind: 'wizard', name: 'Shopping', icon: '🛍', g: ['#ff8a5c', '#ff5ccf'], url: '/shopping-assistant/', desc: 'Researched buys' },
-    { id: 'storyboard', kind: 'wizard', name: 'Storyboards', icon: '🎞', g: ['#ffbe55', '#8f63ff'], url: '/storyboard-review/', desc: 'Storyboard review' },
-    { id: 'golden-frog', kind: 'wizard', name: 'Golden Frog', icon: '🐸', g: ['#ffd65c', '#4ff0b0'], url: '/golden-frog-review/', desc: 'Golden Frog review' },
-    { id: 'live', kind: 'wizard', name: 'Archimedes Live', icon: '🎙', g: ['#ff5ccf', '#3fe0ff'], url: '/archimedes-live/', desc: 'Realtime voice' },
-    { id: 'social', kind: 'wizard', name: 'Wizard Social', icon: '⚇', g: ['#7c5cff', '#3fe0ff'], url: '/wizard-social/', desc: 'Private social' },
-    { id: 'alerts', kind: 'wizard', name: 'Alerts', icon: '⚠', g: ['#ff6b86', '#8a2b4a'], url: '/alerts/', desc: 'System alerts' },
-    // Desktop only: the legacy Wizard client stays one keystroke away while Wizard UX catches up.
-    { id: 'legacy-wizard', kind: 'wizard', name: 'Wizard (legacy)', icon: '◈', g: ['#7c5cff', '#3a2a7a'], url: '/wizard/', desktopOnly: true, desc: 'The old chat app, for anything not ported yet' },
+    // Chats: the one built-in Wizard app. Everything else comes from the box (GET /wizard/v1/apps).
+    { id: 'wizard', kind: 'chats', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'], desc: 'Your threads with your Wizard' },
     // Android natives (real intents on Android Chrome)
     { id: 'maps', kind: 'native', name: 'Maps', icon: '📍', g: ['#34a853', '#4285f4'], href: 'https://www.google.com/maps', desc: 'Google Maps' },
     { id: 'camera', kind: 'native', name: 'Camera', icon: '📷', g: ['#4a4f63', '#1b1e2b'], href: 'intent:#Intent;action=android.media.action.STILL_IMAGE_CAMERA;end', desc: 'Camera' },
@@ -49,22 +26,63 @@
   ];
   // Platform: 'mobile' gets everything except desktop-only entries; 'desktop' drops Android intents and
   // the review views (semantic-zoom review still lives in the phone shell; it moves to core next).
-  function appsFor(shell) {
+  function appsFor(shell, list = ALL) {
     const nativeSide = !!(window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function');
-    return ALL.filter(a => {
+    // The review views read this owner's own history export (data.js); without it they have nothing to show.
+    const hasHistory = !!(window.WIZ_DATA && Array.isArray(window.WIZ_DATA.threads) && window.WIZ_DATA.threads.length);
+    return list.filter(a => {
+      if (a.kind === 'view' && a.view !== 'inbox' && !hasHistory) return false;
       if (a.id === 'side-button' && !nativeSide) return false;
       if (shell === 'desktop') return a.kind !== 'native' && !(a.kind === 'view' && a.view !== 'inbox');
       return !a.desktopOnly;
     });
   }
+  /* Installed Wizard apps (apps.json) and the owner's own links (launcher.json), from the Agent Service.
+   * Cached on the device so the launcher paints instantly; refreshed at start and on focus. */
+  const REMOTE_KEY = 'wux.apps.v1';
+  const PALETTE = [['#6b46ff', '#c04dff'], ['#3fe0ff', '#3f6bff'], ['#ff5ccf', '#5c3bff'], ['#4ff0b0', '#2f8cff'], ['#ffbe55', '#ff6b86'], ['#ff8a5c', '#ff5ccf']];
+  const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
+  const toTile = a => ({
+    id: String(a.id), kind: 'wizard', name: String(a.name || a.id), icon: a.icon || String(a.name || a.id).trim().charAt(0).toUpperCase(),
+    g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id), url: a.url || '', desc: a.desc || '',
+    ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '',
+  });
+  let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
+  const listeners = new Set();
+  async function loadRemote() {
+    try {
+      if (window.WizConfig?.ready) await window.WizConfig.ready;
+      const url = window.WizConfig?.endpoint('apps');
+      if (!url) return;
+      const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok) return;
+      const list = ((await r.json()).apps || []).filter(a => a && a.id && a.url && a.id !== 'wizard');
+      try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); } catch (e) {}
+      REMOTE = list.map(toTile);
+      listeners.forEach(fn => fn());
+    } catch (e) {}
+  }
+  loadRemote();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
+
   function registry(shell) {
-    const APPS = appsFor(shell);
-    const APP = Object.fromEntries(APPS.map(a => [a.id, a]));
+    // One live array per shell, updated in place, so existing references stay valid.
+    const APPS = [], APP = {};
+    const rebuild = () => {
+      const chats = ALL.findIndex(a => a.kind === 'chats');
+      const merged = [...ALL.slice(0, chats + 1), ...REMOTE.filter(r => !ALL.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
+      const list = appsFor(shell, merged);
+      APPS.splice(0, APPS.length, ...list);
+      for (const k of Object.keys(APP)) delete APP[k];
+      for (const a of APPS) APP[a.id] = a;
+      window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
+    };
+    rebuild(); listeners.add(rebuild);
   function findApp(q) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
       if (!q) return null;
-      const alias = { wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', 'yesterday': 'v-day', 'day review': 'v-day', 'day in review': 'v-day', 'week review': 'v-week', 'month review': 'v-month', notifications: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'v-inbox', terminal: 'console', music: 'spotify', ideas: 'idea-queue' };
-      if (alias[q]) return APP[alias[q]];
+      const alias = { wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', 'yesterday': 'v-day', 'day review': 'v-day', 'day in review': 'v-day', 'week review': 'v-week', 'month review': 'v-month', notifications: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'v-inbox', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel' };
+      if (alias[q] && APP[alias[q]]) return APP[alias[q]];
       let best = null, bs = 0;
       for (const a of APPS) {
         const n = norm(a.name);

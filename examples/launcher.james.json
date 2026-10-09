@@ -1,0 +1,136 @@
+{
+ "links": [
+  {
+   "id": "wizard-signal",
+   "name": "Wizard Signal",
+   "icon": "📡",
+   "colors": [
+    "#a74dff",
+    "#ff5ccf"
+   ],
+   "url": "/wizard-signal/",
+   "desc": "Your feed, your algorithm"
+  },
+  {
+   "id": "wisdom",
+   "name": "Wisdom",
+   "icon": "📖",
+   "colors": [
+    "#e9b46b",
+    "#8a4dff"
+   ],
+   "url": "/wizard-signal/#wisdom",
+   "desc": "Collections reader: Steve Jobs biography and more"
+  },
+  {
+   "id": "shopping",
+   "name": "Wizard Shopping",
+   "icon": "🛍",
+   "colors": [
+    "#ff8a5c",
+    "#ff5ccf"
+   ],
+   "url": "/wizard-shopping/",
+   "desc": "For You swipe feed and Browse"
+  },
+  {
+   "id": "mizel",
+   "name": "Mizel",
+   "icon": "◉",
+   "colors": [
+    "#3fe0ff",
+    "#2f8cff"
+   ],
+   "url": "/meetings/#/",
+   "desc": "Meeting recorder"
+  },
+  {
+   "id": "topics",
+   "name": "Topics",
+   "icon": "◇",
+   "colors": [
+    "#3fe0ff",
+    "#8f63ff"
+   ],
+   "url": "/wizard-topics-preview/",
+   "desc": "Topic watches"
+  },
+  {
+   "id": "trackhunt",
+   "name": "TrackHunt",
+   "icon": "♫",
+   "colors": [
+    "#4ff0b0",
+    "#0d8a6a"
+   ],
+   "url": "/trackhunt/",
+   "desc": "Find tracks"
+  },
+  {
+   "id": "cinequeue",
+   "name": "CineQueue",
+   "icon": "🎬",
+   "colors": [
+    "#ff5c7a",
+    "#7a2bff"
+   ],
+   "url": "/cinequeue/",
+   "desc": "Your watch queue"
+  },
+  {
+   "id": "social",
+   "name": "Wizard Social",
+   "icon": "⚇",
+   "colors": [
+    "#7c5cff",
+    "#3fe0ff"
+   ],
+   "url": "/wizard-social/",
+   "desc": "Private social"
+  },
+  {
+   "id": "files",
+   "name": "Files",
+   "icon": "🗂",
+   "colors": [
+    "#8aa0c8",
+    "#4a5a8a"
+   ],
+   "url": "/files/",
+   "desc": "Browse the server"
+  },
+  {
+   "id": "iching",
+   "name": "I Ching",
+   "icon": "☯",
+   "colors": [
+    "#d8c39a",
+    "#6a4a2a"
+   ],
+   "url": "/iching/",
+   "desc": "Cast and read"
+  },
+  {
+   "id": "console",
+   "name": "Console",
+   "icon": "⌘",
+   "colors": [
+    "#3a3f58",
+    "#151827"
+   ],
+   "url": "/console/",
+   "desc": "Terminals"
+  },
+  {
+   "id": "legacy-wizard",
+   "name": "Wizard (legacy)",
+   "icon": "◈",
+   "colors": [
+    "#7c5cff",
+    "#3a2a7a"
+   ],
+   "url": "/wizard/",
+   "desc": "The old chat app, for anything not ported yet"
+  }
+ ]
+}

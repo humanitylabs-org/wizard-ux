@@ -74,6 +74,7 @@
       requestAt: userAt || lastUserAt,
       assignedAt: optIso(item.wizard_assigned_at),
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
+      waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
     };
   }
 
@@ -157,8 +158,8 @@
 
   /* ---- Work sections: exact port of wizard-mobile src/workSections.ts ---- */
   const DAY = 864e5;
-  const DAY_SHIFT = (7 - 6) * 36e5; // Bangkok work day starts 06:00 (UTC+7 year-round)
-  const workDayStart = (now = Date.now()) => Math.floor((now + DAY_SHIFT) / DAY) * DAY - DAY_SHIFT;
+  // The owner's day: their time zone and day_starts_at from Wizard OS settings (WizConfig).
+  const workDayStart = (now = Date.now()) => window.WizConfig.dayStart(now);
   const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
   const isErr = s => s.status === 'failed' || s.status === 'interrupted';
   const needsApproval = s => s.status === 'waiting_for_approval';

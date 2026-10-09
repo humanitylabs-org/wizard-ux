@@ -2,6 +2,7 @@ package ai.wizards.os.everywhere;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.accessibilityservice.InputMethod;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ComponentName;
@@ -22,6 +23,7 @@ import android.view.Display;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
+import android.view.inputmethod.SurroundingText;
 
 import java.io.ByteArrayOutputStream;
 import java.util.List;
@@ -42,6 +44,7 @@ public class WizardKeyboardService extends AccessibilityService {
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final KeyboardSignal signal = new KeyboardSignal();
+    private AccessibilityNodeInfo lastFocusedNode;
     private boolean lastReported;
     private int lastImeTop = -1;
 
@@ -99,7 +102,7 @@ public class WizardKeyboardService extends AccessibilityService {
         if (t == AccessibilityEvent.TYPE_VIEW_FOCUSED || t == AccessibilityEvent.TYPE_VIEW_CLICKED
                 || t == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
             AccessibilityNodeInfo n = e.getSource();
-            if (n != null && n.isEditable() && !ownPackage(n)) signal.editorEvidence(SystemClock.uptimeMillis());
+            if (n != null && n.isEditable() && !ownPackage(n)) { signal.editorEvidence(SystemClock.uptimeMillis()); lastFocusedNode = n; }
         }
         check();
     }
@@ -154,40 +157,180 @@ public class WizardKeyboardService extends AccessibilityService {
 
     /* ------------------------------------------------------------------ typing */
 
-    /** Types the words where the cursor is. Returns false when no field would take them (caller copies instead). */
-    public boolean insertText(String words) {
-        if (words == null || words.trim().isEmpty()) return false;
+    /**
+     * Types the words where the cursor is: Archimedes Anywhere's insertText, copied verbatim. Strategy 1 is the
+     * accessibility InputConnection (commitText at the cursor, works in Obsidian/WebViews/everything on Android 13+),
+     * verified by re-reading the field; strategy 2 is a clipboard paste that restores the old clipboard.
+     * Never replaces the whole field (ACTION_SET_TEXT rewrote Obsidian documents).
+     */
+    public boolean insertText(String text) {
+        // Find target for capitalization context
         AccessibilityNodeInfo target = findEditable();
-        if (target == null) { Log.w(TAG, "insert: no editable field"); return false; }
-        CharSequence cur = target.getText();
-        String existing = cur == null ? "" : cur.toString();
-        // An empty field reports its hint as its text on some apps.
-        CharSequence hint = Build.VERSION.SDK_INT >= 26 ? target.getHintText() : null;
-        if (target.isShowingHintText() || (hint != null && existing.equals(hint.toString()))) existing = "";
-        int start = target.getTextSelectionStart(), end = target.getTextSelectionEnd();
-        if (start < 0 || start > existing.length()) start = existing.length();
-        if (end < start || end > existing.length()) end = start;
-        String before = existing.substring(0, start);
-        String piece = DictationText.fit(before, existing.substring(end), words);
-        String next = before + piece + existing.substring(end);
-        Bundle args = new Bundle();
-        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, next);
-        boolean ok = target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
-        if (ok) {
-            int caret = before.length() + piece.length();
-            Bundle sel = new Bundle();
-            sel.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, caret);
-            sel.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, caret);
-            target.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, sel);
-            Log.i(TAG, "typed " + piece.length() + " chars");
-            return true;
+        if (target == null) target = lastFocusedNode;
+
+        // Trim leading whitespace
+        text = text.stripLeading();
+
+        // Get the field text BEFORE insertion (via accessibility node) for verification
+        String fieldTextBefore = null;
+        AccessibilityNodeInfo verifyNode = target;
+        if (verifyNode != null && verifyNode.getText() != null) {
+            fieldTextBefore = verifyNode.getText().toString();
         }
-        // Some fields (web views, custom editors) refuse SET_TEXT: paste instead.
-        ClipboardManager cb = getSystemService(ClipboardManager.class);
-        cb.setPrimaryClip(ClipData.newPlainText("Wizard", piece));
+
+        // Strategy 1: InputConnection (API 33+) — works in ALL apps including Obsidian
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                InputMethod inputMethod = getInputMethod();
+                if (inputMethod != null) {
+                    InputMethod.AccessibilityInputConnection ic = inputMethod.getCurrentInputConnection();
+                    if (ic != null) {
+                        // Get surrounding text for context-aware behavior
+                        SurroundingText surrounding = ic.getSurroundingText(50, 50, 0);
+                        
+                        if (surrounding != null) {
+                            CharSequence before = surrounding.getText().subSequence(
+                                0, surrounding.getSelectionStart());
+                            CharSequence after = surrounding.getText().subSequence(
+                                surrounding.getSelectionEnd(), surrounding.getText().length());
+                            
+                            // Smart leading space: if cursor is right after a word character
+                            // (no space between), prepend a space
+                            if (before.length() > 0) {
+                                char lastBefore = before.charAt(before.length() - 1);
+                                if (Character.isLetterOrDigit(lastBefore) || lastBefore == ')' || lastBefore == '"') {
+                                    text = " " + text;
+                                }
+                            }
+                            
+                            // Context-aware capitalization
+                            text = adjustCapitalizationFromContext(
+                                before.toString(), text);
+                            
+                            // Smart trailing space: don't add if next char is space/punctuation
+                            if (text.endsWith(" ") && after.length() > 0) {
+                                char nextChar = after.charAt(0);
+                                if (nextChar == ' ' || nextChar == '.' || nextChar == ',' 
+                                    || nextChar == '!' || nextChar == '?' || nextChar == ';'
+                                    || nextChar == ':' || nextChar == ')') {
+                                    text = text.stripTrailing();
+                                }
+                            }
+                        } else {
+                            // No surrounding text — capitalize first letter
+                            text = capitalizeFirst(text);
+                        }
+                        
+                        ic.commitText(text, 1, null);
+                        
+                        // Verify insertion via accessibility node (not InputConnection which may be stale)
+                        try {
+                            Thread.sleep(100); // Wait for field to update
+                        } catch (InterruptedException ie) { /* ignore */ }
+                        
+                        // Re-find the editable node to get fresh text
+                        AccessibilityNodeInfo freshNode = findEditable();
+                        if (freshNode == null) freshNode = lastFocusedNode;
+                        String fieldTextAfter = null;
+                        if (freshNode != null) {
+                            freshNode.refresh(); // Force refresh from the view
+                            if (freshNode.getText() != null) {
+                                fieldTextAfter = freshNode.getText().toString();
+                            }
+                        }
+                        
+                        // If we can verify and text didn't change, commitText silently failed
+                        if (fieldTextBefore != null && fieldTextAfter != null 
+                                && fieldTextBefore.equals(fieldTextAfter)) {
+                            Log.w(TAG, "commitText silently failed — field text unchanged. Falling through to clipboard.");
+                            throw new Exception("Stale InputConnection — field text unchanged after commitText");
+                        }
+                        
+                        return true;
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "InputConnection strategy failed: " + e.getMessage());
+                // Fall through to clipboard method
+            }
+        }
+
+        // Strategy 2: Clipboard paste (fallback for older Android or when IME unavailable)
+        if (target == null) return false;
+        android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
+                getSystemService(CLIPBOARD_SERVICE);
+        android.content.ClipData oldClip = clipboard.getPrimaryClip();
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Wizard", text));
         boolean pasted = target.performAction(AccessibilityNodeInfo.ACTION_PASTE);
-        Log.i(TAG, "set_text refused; paste=" + pasted);
+        if (oldClip != null) {
+            final android.content.ClipData saved = oldClip;
+            main.postDelayed(() -> {
+                try { clipboard.setPrimaryClip(saved); } catch (Exception ignored) {}
+            }, 500);
+        } else {
+            main.postDelayed(() -> {
+                try { clipboard.setPrimaryClip(android.content.ClipData.newPlainText("", "")); } catch (Exception ignored) {}
+            }, 500);
+        }
         return pasted;
+    }
+
+    /**
+     * Capitalize based on text before cursor (from InputConnection).
+     * Works universally — Obsidian, Telegram, browsers, everything.
+     */
+    private String adjustCapitalizationFromContext(String before, String text) {
+        if (text == null || text.isEmpty()) return text;
+        
+        boolean shouldCapitalize = false;
+        
+        if (before == null || before.isEmpty()) {
+            shouldCapitalize = true; // Start of field
+        } else {
+            // Find last meaningful character before cursor
+            int lookBack = before.length() - 1;
+            while (lookBack >= 0 && before.charAt(lookBack) == ' ') lookBack--;
+            
+            if (lookBack < 0) {
+                shouldCapitalize = true; // Only spaces
+            } else {
+                char lastChar = before.charAt(lookBack);
+                shouldCapitalize = (lastChar == '.' || lastChar == '!' || lastChar == '?' 
+                    || lastChar == '\n' || lastChar == '\r'
+                    || lastChar == '-' || lastChar == '*' || lastChar == '•');
+            }
+        }
+        
+        // Find first letter
+        int firstLetter = -1;
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isLetter(text.charAt(i))) {
+                firstLetter = i;
+                break;
+            }
+        }
+        if (firstLetter < 0) return text;
+        
+        char c = text.charAt(firstLetter);
+        if (shouldCapitalize && Character.isLowerCase(c)) {
+            return text.substring(0, firstLetter) + Character.toUpperCase(c) + text.substring(firstLetter + 1);
+        } else if (!shouldCapitalize && Character.isUpperCase(c)) {
+            return text.substring(0, firstLetter) + Character.toLowerCase(c) + text.substring(firstLetter + 1);
+        }
+        return text;
+    }
+
+    private String capitalizeFirst(String text) {
+        if (text == null || text.isEmpty()) return text;
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isLetter(text.charAt(i))) {
+                if (Character.isLowerCase(text.charAt(i))) {
+                    return text.substring(0, i) + Character.toUpperCase(text.charAt(i)) + text.substring(i + 1);
+                }
+                break;
+            }
+        }
+        return text;
     }
 
     private AccessibilityNodeInfo findEditable() {

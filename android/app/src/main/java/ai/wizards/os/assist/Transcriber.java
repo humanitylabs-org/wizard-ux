@@ -34,7 +34,8 @@ public final class Transcriber {
     public static Result transcribe(File audio, String origin, String prompt) throws IOException {
         byte[] data = readAll(audio);
         Multipart mp = new Multipart();
-        mp.file("file", "voice.m4a", "audio/mp4", data).field("language", "en").field("prompt", prompt);
+        mp.file("file", "voice.m4a", "audio/mp4", data).field("language", "en");
+        if (prompt != null && !prompt.isEmpty()) mp.field("prompt", prompt); // dictation sends none, as Archimedes Anywhere
         byte[] body = mp.finish();
         long t0 = System.nanoTime();
         HttpURLConnection c = (HttpURLConnection) new URL(origin + "/wizard-os-home/api/transcribe").openConnection();

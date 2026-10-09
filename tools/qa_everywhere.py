@@ -24,7 +24,7 @@ notification appear when Wizard is down, Retry from the notification delivers it
 leaves Wizard OS.
 """
 import fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
-import urllib.request
+import shlex, urllib.parse, urllib.request
 P = pathlib.Path
 BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
 apk = P(sys.argv[1]); PKG = sys.argv[2]; old = P(sys.argv[3]) if len(sys.argv) > 3 else None
@@ -99,15 +99,16 @@ srv = http.server.ThreadingHTTPServer(('127.0.0.1', FAKE), Fake)
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 
 class Page:
-    """Raw CDP to the app's WebView; every Wizard write from the WebView is failed (never reaches Wizard)."""
-    def __init__(self):
-        pid = sx(f'pidof {PKG}').strip()
-        sh(ADB, '-s', S, 'forward', f'tcp:{DEVTOOLS}', f'localabstract:webview_devtools_remote_{pid}')
+    """Raw CDP to the app's WebView; every Wizard write from the WebView is failed (never reaches Wizard).
+    Page(sock='chrome_devtools_remote', match='data:', fetch=False) drives Chrome instead (the editor test)."""
+    def __init__(self, sock=None, match='wizard-os-home', fetch=True):
+        if sock is None: sock = 'webview_devtools_remote_' + sx(f'pidof {PKG}').strip()
+        sh(ADB, '-s', S, 'forward', f'tcp:{DEVTOOLS}', f'localabstract:{sock}')
         page = None
         for _ in range(40):
             try:
                 l = json.load(urllib.request.urlopen(f'http://127.0.0.1:{DEVTOOLS}/json/list', timeout=3))
-                page = next((x for x in l if x.get('type') == 'page' and 'wizard-os-home' in x.get('url', '')), None)
+                page = next((x for x in l if x.get('type') == 'page' and match in x.get('url', '')), None)
             except Exception: pass
             if page: break
             time.sleep(0.7)
@@ -123,7 +124,7 @@ class Page:
         buf = b''
         while b'\r\n\r\n' not in buf: buf += self.s.recv(4096)
         self.buf = buf.split(b'\r\n\r\n', 1)[1]
-        self.call('Fetch.enable', patterns=[{'urlPattern': '*/hermes/*'}, {'urlPattern': '*/v1/*'}, {'urlPattern': '*/wizard/*'}])
+        if fetch: self.call('Fetch.enable', patterns=[{'urlPattern': '*/hermes/*'}, {'urlPattern': '*/v1/*'}, {'urlPattern': '*/wizard/*'}])
     def _send(self, obj):
         data = json.dumps(obj).encode(); hdr = bytearray([0x81]); mask = os.urandom(4); n = len(data)
         if n < 126: hdr.append(0x80 | n)
@@ -175,6 +176,20 @@ def bubble():
             m = re.search(r'(?:mFrame|frame)=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]', blk)
             if m and 'mViewVisibility=0x8' not in blk and 'mViewVisibility=0x4' not in blk: return tuple(map(int, m.groups()))
     return None
+def controls():
+    """0.6.2: Cancel · Pause · Screen are their own small windows (WizOrbCtl-*), so nothing else around the orb is touchable."""
+    out = {}
+    for blk in sx('dumpsys window windows').split('Window #')[1:]:
+        head = blk.split('\n', 1)[0]
+        m0 = re.search(r'WizOrbCtl-(\w+)', head)
+        if not m0: continue
+        m = re.search(r'(?:mFrame|frame)=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]', blk)
+        if m and 'mViewVisibility=0x8' not in blk and 'mViewVisibility=0x4' not in blk: out[m0.group(1)] = tuple(map(int, m.groups()))
+    return out
+def ours_at(x, y, frames):
+    """Is any Wizard Everywhere window (orb or button) under this point?"""
+    return any(f and f[0] <= x < f[2] and f[1] <= y < f[3] for f in frames)
+def mid(f): return ((f[0] + f[2]) // 2, (f[1] + f[3]) // 2)
 def wait_bubble(want, secs=8):
     t0 = time.time()
     while time.time() - t0 < secs:
@@ -353,13 +368,22 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('floating orb draws the shared Wizard orb', 'everywhere page ready' in lg, lg)
         cx, cy = (b4[0] + b4[2]) // 2, (b4[1] + b4[3]) // 2
         dxs = -1 if cx > sw / 2 else 1; dys = -1 if cy > shh * 0.42 else 1
-        PAUSE = (cx + dxs * dp(74), cy + dys * dp(74)); CANCEL = (cx, cy + dys * dp(104)); SHOT = (cx + dxs * dp(104), cy)
+        PAUSE = (cx + dxs * dp(54), cy + dys * dp(54)); CANCEL = (cx, cy + dys * dp(76)); SHOT = (cx + dxs * dp(76), cy)
         # 1. Talk, Pause, carry on, Cancel: nothing is sent.
         stage_audio(); sx('logcat -c')
         sx(f'input tap {cx} {cy}'); time.sleep(1.2)
-        bx = bubble()
-        check('tap starts listening and the controls open around the orb', 'listening' in logs('listening') and bx and (bx[2] - bx[0]) > dp(200), (logs('listening'), bx))
+        cs = controls()
+        if len(cs) == 3: PAUSE, CANCEL, SHOT = mid(cs['pause']), mid(cs['cancel']), mid(cs['screen'])
         sx(f'input tap {PAUSE[0]} {PAUSE[1]}'); time.sleep(1.0); shot('07-paused')
+        bx = bubble()
+        check('tap starts listening and Cancel · Pause · Screen open around the orb', 'listening' in logs('listening') and set(cs) == {'cancel', 'pause', 'screen'}, (logs('listening'), cs))
+        check('the orb is smaller (about 64 dp) and stays that size while talking', bx and dp(56) <= (bx[2] - bx[0]) <= dp(72), bx)
+        # Touches around the orb reach the app below: only the orb and the three buttons are windows.
+        gaps = [(cx + dxs * dp(38), cy + dys * dp(100)), (cx + dxs * dp(100), cy + dys * dp(38)), (cx + dxs * dp(100), cy + dys * dp(100)),
+                (cx + dxs * dp(20), cy + dys * dp(45))]
+        frames = [bx] + list(cs.values())
+        blocked = [g for g in gaps if ours_at(*g, frames)]
+        check('the space between and around the buttons is not ours: taps there reach the app underneath', not blocked and len(cs) == 3, (blocked, bx, cs))
         check('Pause pauses the recording', 'paused' in logs(': paused'), logs('paused|resumed'))
         time.sleep(3)  # the QA recording would have finished by now if Pause didn't hold it
         check('while paused it does not send', STATE['transcribe'] == 0 and 'listening' in logs('listening'), STATE['transcribe'])
@@ -374,8 +398,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('Pause again carries on', 'resumed' in logs('resumed'), logs('paused|resumed'))
         sx(f'input tap {CANCEL[0]} {CANCEL[1]}'); time.sleep(3.5)
         check('Cancel throws it away: nothing sent', 'cancelled' in logs('cancelled') and STATE['transcribe'] == 0 and not STATE['runs'], (logs('cancelled'), STATE['transcribe']))
-        b5 = wait_bubble(True, 4)
-        check('the orb shrinks back after Cancel', b5 and (b5[2] - b5[0]) < dp(120), b5)
+        b5 = wait_bubble(True, 4); time.sleep(0.5)
+        check('Cancel closes the buttons (only the orb is left)', b5 and not controls(), (b5, controls()))
         # 0.6.1: going quiet never sends from the floating orb. Real recorder (no staged audio), silent room.
         sx('logcat -c'); sx(f'input tap {cx} {cy}'); time.sleep(1.5)
         real = 'listening' in logs('listening')
@@ -391,7 +415,9 @@ with (BASE / 'worker.lock').open('a') as lock:
         pg.ev("window.__wos.startVoice('auto')"); time.sleep(2)
         sx('input keyevent KEYCODE_HOME'); time.sleep(3)
         bc = wait_bubble(True, 6); shot('07d-carry')
-        check('leave the app mid-recording → the floating orb shows it is still recording', bc and (bc[2] - bc[0]) > dp(200) and 'app voice listen' in logs('app voice'), (bc, logs('app voice')))
+        cc = controls()
+        check('leave the app mid-recording → the floating orb shows it is still recording', bc and 'cancel' in cc and 'pause' in cc and 'app voice listen' in logs('app voice'), (bc, cc, logs('app voice')))
+        if 'pause' in cc: PAUSE, CANCEL = mid(cc['pause']), mid(cc['cancel'])
         time.sleep(6)
         check('…and the app recording keeps going in the background (no auto-send on quiet)', pg.ev("window.__wos.voice") == 'listen', pg.ev("window.__wos.voice"))
         PA2, CA2 = PAUSE, CANCEL   # the orb stays where it was left; the fan opens around it
@@ -456,6 +482,57 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('the words are typed into the field', 'dictation typed' in dl and typed, (dl, typed))
         check('voice typing sends nothing to Wizard', len(STATE['runs']) == runs_before, len(STATE['runs']))
         for _ in range(3): sx('input keyevent KEYCODE_BACK'); time.sleep(1)
+        sx('input keyevent KEYCODE_HOME'); time.sleep(3)
+        # 4b. 0.6.2: a markdown note in a rich editor (Obsidian-style contenteditable, in Chrome). The words land at the
+        # cursor and nothing else in the note changes: no reformatting, no lost lines (Archimedes Anywhere's insert path).
+        NOTE = '# Shopping\n\n- eggs\n- milk\n\nCall the shop.'
+        html = ('<html><head><meta name=viewport content="width=device-width"></head><body style="font:18px sans-serif">'
+                '<div id=ed contenteditable=true style="white-space:pre-wrap;border:1px solid #888;min-height:300px;padding:8px"></div>'
+                '<script>const ed=document.getElementById("ed");ed.textContent=' + json.dumps(NOTE) + ';</script></body></html>')
+        sx('am set-debug-app --persistent com.android.chrome')
+        sh(ADB, '-s', S, 'shell', "echo '_ --disable-fre --no-default-browser-check --no-first-run' > /data/local/tmp/chrome-command-line")
+        sx('am force-stop com.android.chrome'); time.sleep(1)
+        sh(ADB, '-s', S, 'shell', 'am start -W -n com.android.chrome/com.google.android.apps.chrome.Main -a android.intent.action.VIEW -d ' + shlex.quote('data:text/html,' + urllib.parse.quote(html)))
+        time.sleep(4)
+        for _ in range(3):
+            if not tap_text(r'^(No thanks|No Thanks|Use without an account|Accept & continue|Got it)$'): break
+            time.sleep(1.5)
+        ed = None
+        try:
+            ed = Page(sock='chrome_devtools_remote', match='data:', fetch=False)
+            # Cursor at the end of "- eggs" (the editor's own caret, as if tapped there), keyboard up.
+            ed.ev("""(() => { const ed = document.getElementById('ed'); ed.focus(); const t = ed.firstChild; const at = t.data.indexOf('- eggs') + 6;
+              const r = document.createRange(); r.setStart(t, at); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return at; })()""")
+        except Exception as e:
+            print('  editor page:', e)
+        eb = ed and ed.ev("(() => { const r = document.getElementById('ed').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height - 30]; })()")
+        if eb and not ime_shown():
+            # A tap on the editor itself (sent through Chrome, so it can't miss) puts the keyboard up; then the caret
+            # goes back after "- eggs" (the tap moved it).
+            for typ in ('touchStart', 'touchEnd'):
+                ed.call('Input.dispatchTouchEvent', type=typ, touchPoints=[] if typ == 'touchEnd' else [{'x': eb[0], 'y': eb[1]}])
+            time.sleep(2.5)
+            ed.ev("""(() => { const ed = document.getElementById('ed'); const t = ed.firstChild; const at = t.data.indexOf('- eggs') + 6;
+              const r = document.createRange(); r.setStart(t, at); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return at; })()""")
+        wait_log('keyboard open', 8); wait_log('placed over keyboard', 8); time.sleep(1.5)
+        be = bubble(); shot('10b-editor-before')
+        check('a rich-text note editor is open with the keyboard up', bool(ed) and ime_shown() and be is not None, (bool(ed), ime_shown(), be))
+        if ed and be:
+            stage_audio(); sx('logcat -c')
+            sx(f'input tap {(be[0] + be[2]) // 2} {(be[1] + be[3]) // 2}'); time.sleep(1)
+            dl2 = wait_log('dictation (typed|copied)', 40); time.sleep(1.5)
+            after = ed.ev("document.getElementById('ed').innerText")
+            shot('10c-editor-typed')
+            n = STATE['transcribe']
+            print('  editor note after:', json.dumps(after))
+            # Archimedes Anywhere's rules: mid-sentence words start lower-case, a space joins them to the word before.
+            want_line = ('- eggs wizard everywhere qa message number %d' % n)
+            lines = (after or '').replace('\r', '').split('\n')
+            check('voice typing in a note editor inserts at the cursor', 'dictation typed' in dl2 and any(l.strip().lower() == want_line for l in lines), (dl2, after))
+            check('…and the rest of the note is untouched (heading, list, blank lines, last line)',
+                  [l for l in lines if l.strip() and 'everywhere qa message' not in l.lower()] == ['# Shopping', '- milk', 'Call the shop.'] and (after or '').count('\n') == NOTE.count('\n'), after)
+            ed.close()
+        sx('am force-stop com.android.chrome'); sx('am clear-debug-app')
         sx('input keyevent KEYCODE_HOME'); time.sleep(3)
         bh = wait_bubble(True)
         check('keyboard gone → the orb returns to where it was left', bh and abs(bh[0] - b4[0]) < 12 and abs(bh[1] - b4[1]) < 12, (bh, b4))
