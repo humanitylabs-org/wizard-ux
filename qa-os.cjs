@@ -221,12 +221,13 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     ok(run && (body.session_id === tid || /\/steer$/.test(run.u)), 'a reply to the thread in front goes into that thread', JSON.stringify({ u: run?.u, sid: body.session_id, tid }));
     const steered = run && /\/steer$/.test(run.u);
     ok(run && !/Wizard OS context/.test(JSON.stringify(body.input)) && (steered || /Wizard OS context/.test(body.instructions || '')), 'view context rides as instructions (new run) and never pollutes the message text', steered ? 'steered the live run' : 'new run');
-    // A general request goes to Archimedes as a new thread, with the view noted.
+    // With a thread open, even a new-sounding request stays in that thread (James, 9 Oct 2026: steering must
+    // never spawn a thread). New threads start from the list or New chat; qa-thread-voice.cjs covers both.
     writes.length = 0;
     await p.evaluate(() => __wos.handleText('Research the best e-ink tablets for reading PDFs', 'auto', false, 0, null));
     await p.waitForTimeout(4000);
     const created = writes.find(w => /\/api\/sessions$/.test(w.u));
-    ok(!!created, 'unrelated request opens a new thread for Archimedes', JSON.stringify(writes.map(w => w.u)));
+    ok(!created, 'with a thread open, a new-sounding request stays in that thread', JSON.stringify(writes.map(w => w.u)));
     // Hold + slide right: the command lands on the next desk.
     const before = await state(p);
     await p.evaluate(() => __wos.handleText('open week in review', 'command', false, 0, 2));
