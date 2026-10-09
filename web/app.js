@@ -1503,11 +1503,15 @@
     }
     // A capturing view takes a tap utterance as-is.
     if (kind !== 'command' && v?.mode === 'capture' && target == null) return toView(v, text, `To ${v.name}${sttNote}`);
+    // An open thread owns what James says: unless it is a phone command (or aimed at another desk), it goes
+    // into that thread (steering the live run), never a new thread. New threads start from the list or New chat.
+    const intoThread = kind !== 'command' && target == null && v?.kind === 'chat thread';
+    const toAgentOrThread = label => intoThread ? toView(v, text, `To this thread${sttNote}`) : toAgent(text, label, opts);
     setVoice('think'); if (isPill()) tx.dataset.detail = 'Routing · DeepSeek Flash'; else $('#txRouteText').textContent = 'Routing · DeepSeek Flash';
     try {
       const view = v && v.mode && kind !== 'command' && target == null ? { name: v.name, kind: v.kind } : null;
       const routeUrl = window.WizConfig.endpoint('route');
-      if (!routeUrl) return toAgent(text, `To ${window.WizConfig.agent()}${sttNote}`, opts);
+      if (!routeUrl) return toAgentOrThread(`To ${window.WizConfig.agent()}${sttNote}`);
       const r = await fetch(routeUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: kind === 'command' ? 'command' : '', view, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'router');
@@ -1519,9 +1523,9 @@
         if (c.then_agent) setTimeout(() => toAgent(String(c.then_agent), `Opened ${c.app || 'app'} · follow-up to ${window.WizConfig.agent()}`, opts), 1500);
         return ran;
       }
-      return toAgent(text, `To ${window.WizConfig.agent()} · routed in ${j.ms} ms${sttNote}`, opts);
+      return toAgentOrThread(`To ${window.WizConfig.agent()} · routed in ${j.ms} ms${sttNote}`);
     } catch (e) {
-      return toAgent(text, `Router offline · sent to ${window.WizConfig.agent()}`, opts);
+      return toAgentOrThread(`Router offline · sent to ${window.WizConfig.agent()}`);
     }
   }
   function showRouted(kind, label) {
@@ -1583,19 +1587,16 @@
     }
     openSheet('launcher', text); return false;
   }
-  /* A new request to Archimedes. The reply opens in Chats on this desk (or the desk
-   * James swiped toward), tiled beside whatever is already there. */
+  /* A new request to Archimedes. It is delegated in the background: James stays exactly where he is
+   * (no Chats window opens, no desk switch, no thread takes focus). The new thread shows up in Chats,
+   * Working and the Inbox like any other, and he opens it when he chooses. */
   async function toAgent(text, label, opts = {}) {
     showRouted('agent', label); setVoice('agent'); vib(10);
     setTimeout(() => { setVoice('idle'); }, 1200);
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice');
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    const it = await OUTBOX.enqueue({ kind: 'new', text, instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
-    const t = opts.desk == null ? idx : opts.desk;
-    const wid = desks[t].wins.find(x => W[x].app === 'chats');
-    if (wid) { if (t !== idx) goDesk(t); focusWin(wid); openChat(wid, it.sessionId); }
-    else openWin({ app: 'chats', thread: it.sessionId }, opts);
+    await OUTBOX.enqueue({ kind: 'new', text, instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
     renderMoons(); refreshHome(); renderDots();
   }
   OUTBOX?.onSent((it, res) => {
