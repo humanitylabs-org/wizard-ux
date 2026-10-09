@@ -63,6 +63,10 @@
     visible: () => ws[cur].wins,
     editUnsent: it => editUnsent(it),
     newChatHint: `Type below and press ${CMD}Enter, or press ${MOD}V and talk.`,
+    owner: id => String(id).replace(/::list$/, ''),
+    // A private-origin link in a message opens as a window on this workspace; the shell never navigates away.
+    openLink: (url, title) => !!newWin({ app: 'frame', appId: 'link', url, title }),
+    changed: () => { for (const id of Object.keys(W)) if (W[id].app === 'chats') syncChatsPane(id); },
   });
 
   /* ---------------- windows ---------------- */
@@ -181,7 +185,7 @@
     const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
     const w = known ? (openThread(it.sessionId), focused()) : newChat();
     if (!w) return;
-    const c = CHATS.ch(w.id); c.draft = it.text || ''; c.files = (it.files || []).filter(f => f !== it.audioFile).map(f => ({ ...f, key: Math.random().toString(36).slice(2) }));
+    CHATS.setDraft(w.id, it.text || '', (it.files || []).filter(f => f !== it.audioFile));
     OUTBOX.remove(it.id); CHATS.renderChats(w); syncChatsPane(w.id);
   }
 
@@ -348,7 +352,8 @@
     if (w?.app === 'chats') {
       // Rows in the list pane open in this window's thread pane.
       const row = e.target.closest('[data-chopen]');
-      if (row && e.target.closest('.pane-list')) { e.stopPropagation(); CHATS.openChat(id, row.dataset.chopen); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
+      if (row && e.target.closest('.pane-list') && CHATS.justPressed()) { e.stopPropagation(); return; } // a long-press/right-click just opened the actions sheet
+      if (row && e.target.closest('.pane-list') && !e.target.closest('.ch-sheet')) { e.stopPropagation(); CHATS.openChat(id, row.dataset.chopen); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
       if (e.target.closest('.pane-list [data-chnew]')) { e.stopPropagation(); CHATS.openChat(id, '__new__'); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
       const cid = e.target.closest('[data-chats]')?.dataset.chats; if (cid && CHATS.click(e, cid)) { syncChatsPane(id); return; }
     }
@@ -612,6 +617,7 @@
     if (!pal.hidden) { closePalette(); return 'palette'; }
     if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
+    const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     if (VOICE.state === 'listen') { if (vMode === 'dictate') dictate('cancel'); else talk('cancel'); return 'voice'; }
     const f = focused();
     if (f?.app === 'chats' && f.thread) { CHATS.chatsBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return 'thread'; }
@@ -673,7 +679,7 @@
       const w = W[id]; if (w.app !== 'chats') continue;
       const el = winEl(id); if (!el) continue;
       const lp = el.querySelector(`[data-chats="${id}::list"]`);
-      if (lp && !lp.contains(document.activeElement)) CHATS.renderChatList(listWin(id), lp);
+      if (lp && !lp.contains(document.activeElement) && !CHATS.holdList(id + '::list')) CHATS.renderChatList(listWin(id), lp);
       if (w.thread) CHATS.loadThread(w);
       syncChatsPane(id);
     }

@@ -127,6 +127,10 @@
     visible: () => desks[idx].wins,
     editUnsent: it => editUnsent(it),
     newChatHint: 'Type below, or tap the orb and talk.',
+    // A private-origin link in a message opens in a window on this desk: the shell never navigates away.
+    openLink: (url, title) => !!openWin({ app: 'frame', appId: 'link', url, title }),
+    overlay: open => { if (open) { closeMenu(); armBack(); } },
+    vib: ms => vib(ms),
   });
   const { CH, ch, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, refreshCompose, toggleVoice, markVisibleThreadsSeen, MIC_SVG } = CHATS;
   const CHATS_APP = { name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'] };
@@ -134,7 +138,7 @@
     if (w.app === 'chats') return CHATS_APP;
     if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'] || { name: 'Review', icon: '◐', g: ['#444a60', '#22263a'] };
     if (w.app === 'maps') return APP.maps;
-    return APP[w.appId] || { name: 'App', icon: '◇', g: ['#444a60', '#22263a'] };
+    return APP[w.appId] || { name: w.title || 'App', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
   function winTitle(w) {
     if (!w) return '';
@@ -512,7 +516,7 @@
     let wid = desks[idx].wins.find(x => W[x].app === 'chats');
     if (!wid) { const w = openWin({ app: 'chats', thread: null }); if (!w) return; wid = w.id; }
     focusWin(wid); openChat(wid, known ? it.sessionId : '__new__');
-    const c = ch(wid); c.draft = it.text || ''; c.files = (it.files || []).filter(f => f !== it.audioFile).map(f => ({ ...f, key: Math.random().toString(36).slice(2) }));
+    CHATS.setDraft(wid, it.text || '', (it.files || []).filter(f => f !== it.audioFile));
     OUTBOX.remove(it.id);
     renderChats(W[wid]);
     setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 50);
@@ -601,7 +605,7 @@
       <a class="cta" href="${esc(link)}" rel="noopener">${w.mode === 'dir' ? 'Start navigation in Maps' : 'Open in Maps'}</a></div>`;
   }
   function renderFrame(w) {
-    const a = APP[w.appId] || {};
+    const a = APP[w.appId] || winApp(w);
     if (w.appId === 'mizel') return `<div class="mizel-split"><div class="rec-strip">${recStripHtml()}</div>${renderFrameCore(w, a)}</div>`;
     return renderFrameCore(w, a);
   }
@@ -1155,7 +1159,7 @@
     for (const id of Object.keys(W)) {
       const w = W[id]; if (w.app !== 'chats') continue;
       const el = track.querySelector(`[data-chats="${id}"]`); if (!el) continue;
-      if (!w.thread) { if (!el.contains(document.activeElement)) renderChatList(w, el); }
+      if (!w.thread) { if (!el.contains(document.activeElement) && !CHATS.holdList(id)) renderChatList(w, el); }
       else loadThread(w);
     }
     desks.forEach((_, i) => applyLayout(i));
@@ -1708,6 +1712,7 @@
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
     if (document.querySelector('#txChips [data-handoff]')) { $('#txChips').innerHTML = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
+    const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     if (closePeek()) return 'peek';
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet) { closeSheets(); return 'sheet'; }
@@ -1882,6 +1887,7 @@
     HOME, get idx() { return idx; }, get desks() { return desks; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
     startVoice, finishVoice, cancelVoice, outbox: OUTBOX, openSettings, unsentAll, renderSettings,
+    chat: CHATS.KIT, get viewer() { return CHATS.KIT.viewer.state; }, chatState: id => CH[id], threadAct: CHATS.threadAct, openRowSheet: CHATS.openRowSheet,
     reset() { Object.keys(localStorage).filter(k => k.startsWith('wos.')).forEach(k => localStorage.removeItem(k)); location.reload(); },
   };
 })();

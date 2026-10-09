@@ -51,6 +51,7 @@ web/            The Wizard UX itself (plain JS, no build step)
     core.js         helpers (escape, relative time, per-shell storage)
     apps.js         the app registry and app search (each shell asks for its own list)
     chats.js/.css   Chats: thread list, thread view, composer, attachments, voice notes, unsent bubbles
+    chat-kit.js     Chats basics: message parsing (photos, <helm_attachments>), full Markdown, media viewer, copy/share, drafts, times
     voice.js        mic capture + transcription for shells without their own voice UI
     bridge.js       native bridge v0: wizard:orb / open / dictation / back events (spec: wizard-os/spec/NATIVE_BRIDGE.md)
     base.css        colour tokens, resets, shared keyframes
