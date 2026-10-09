@@ -481,7 +481,7 @@
         <p class="st-note">Every message is saved on this phone before it’s sent, and retried until Wizard accepts it.</p></div>
       <div class="st-group"><h4>Assistant</h4>
         <button class="st-row" data-st="everywhere" ${evNative ? '' : 'disabled'}><span class="st-ic">✦</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
-        ${evNative && evOn && typeof window.WizardOSNative.voiceTypingSettings === 'function' ? `<button class="st-row" data-st="typing"><span class="st-ic">⌨</span><span class="st-tx"><b>Voice typing &amp; screenshots</b><small>${esc(ev?.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Turn on Accessibility → Wizard OS so the orb types into any app and can attach screenshots')}</small></span>${ev?.keyboard ? '<span class="sw on"><i></i></span>' : '<span class="st-go">›</span>'}</button>` : ''}
+        ${evNative && evOn && typeof window.WizardOSNative.voiceTypingSettings === 'function' ? `<button class="st-row" data-st="typing"><span class="st-ic">⌨</span><span class="st-tx" id="stTyping"><b>Voice typing &amp; screenshots</b><small>${esc(ev?.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Off · tap to set up: the orb types into any app and attaches screenshots')}</small></span>${ev?.keyboard ? '<span class="sw on"><i></i></span>' : '<span class="st-go">›</span>'}</button>` : ''}
         <button class="st-row" data-st="side" ${native ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(side)}</small></span><span class="st-go">›</span></button>
       </div>
       <div class="st-group"><h4>Wizard</h4>
@@ -1196,8 +1196,23 @@
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) requestWakeLock(); });
   window.__wosAwake = () => AWAKE.want; // QA probe
+  // Tell the native shell what the orb is doing, so leaving Wizard OS mid-recording shows the floating orb
+  // (timer, Pause, Cancel, tap to send). Never auto-sends: going quiet only ever pauses nothing.
+  function voiceElapsed() { return Math.round((V.acc || 0) + (V.state === 'listen' || V.state === 'command' ? performance.now() - (V.t0 || performance.now()) : 0)); }
+  function reportVoice(s) {
+    try { const n = window.WizardOSNative; if (n && typeof n.appVoice === 'function') n.appVoice(s, voiceElapsed()); } catch (e) {}
+  }
+  // The floating orb's controls while Wizard OS is in the background.
+  window.__wosVoiceCmd = cmd => {
+    if (V.state !== 'listen' && V.state !== 'paused' && V.state !== 'command') return false;
+    if (cmd === 'send') finishVoice();
+    else if (cmd === 'cancel') cancelVoice();
+    else if (cmd === 'pause') $('#arcPause').click();
+    return true;
+  };
   function setVoice(s) {
     V.state = s; device.dataset.voice = s;
+    reportVoice(s);
     keepAwake(s === 'listen' || s === 'paused' || s === 'command' || s === 'think');
     Orb.setMode({ idle: 'idle', listen: 'listen', command: 'command', paused: 'paused', think: 'think', done: 'done', agent: 'agent' }[s] || 'idle');
     voiceEl.classList.toggle('on', s === 'listen' || s === 'paused');

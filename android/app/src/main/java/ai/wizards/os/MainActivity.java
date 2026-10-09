@@ -53,11 +53,15 @@ public class MainActivity extends Activity {
     public static final String ACTION_SETTINGS = "ai.wizards.os.action.SETTINGS";
     public static final String ACTION_UNSENT = "ai.wizards.os.action.UNSENT";
     public static final String ACTION_THREAD = "ai.wizards.os.action.THREAD";
+    /** The floating orb's Screen button (voice typing / screenshots not set up yet) opens the setup dialog. */
+    public static final String ACTION_ACCESSIBILITY = "ai.wizards.os.action.ACCESSIBILITY";
     public static final String EXTRA_THREAD = "ai.wizards.os.extra.THREAD";
     private static final int REQ_EVERYWHERE = 44;
     private static java.lang.ref.WeakReference<MainActivity> current = new java.lang.ref.WeakReference<>(null);
     private boolean everywhereSetup; // James is on Android's "Display over other apps" page
     private boolean sideSetupActive; // the user tapped Turn on and is in the system picker
+    private boolean a11ySetup;       // James is on Android's Accessibility / App info page for voice typing
+    private android.app.AlertDialog a11yDialog;
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private String pendingHandoff; // JSON handed to window.__wosHandoff once the shell is ready
     private int handoffTries;
@@ -87,6 +91,10 @@ public class MainActivity extends Activity {
         if (state != null) web.restoreState(state);
         if (web.getUrl() == null) web.loadUrl(startUrl(getIntent()));
         installBack();
+        ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(cmd -> main.post(() -> {
+            if (web != null) web.evaluateJavascript("(window.__wosVoiceCmd && window.__wosVoiceCmd(" + Handoff.quote(cmd) + "))", null);
+        }));
+        if (ACTION_ACCESSIBILITY.equals(getIntent().getAction())) { getIntent().setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); }
         queueHandoff(getIntent());
     }
 
@@ -208,6 +216,7 @@ public class MainActivity extends Activity {
         setIntent(intent);
         Uri data = intent.getData();
         if (data != null && Origin.isShell(data)) web.loadUrl(data.toString());
+        if (ACTION_ACCESSIBILITY.equals(intent.getAction())) { intent.setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); return; }
         queueHandoff(intent);
     }
 
@@ -339,7 +348,9 @@ public class MainActivity extends Activity {
             boolean ok = ai.wizards.os.everywhere.EverywhereService.overlayAllowed(this);
             if (ok) ai.wizards.os.everywhere.EverywhereService.ensureRunning(this);
             Toast.makeText(this, ok ? "Wizard Everywhere is on. It shows when you leave Wizard OS." : "Wizard Everywhere needs “Display over other apps”", Toast.LENGTH_LONG).show();
+            if (ok) main.postDelayed(() -> offerAccessibility(true), 350);
         }
+        if (a11ySetup) { a11ySetup = false; main.postDelayed(() -> offerAccessibility(false), 350); }
         pushEverywhere();
         web.evaluateJavascript("window.dispatchEvent(new Event('wos-native-resume'))", null);
         pushSideButton();
@@ -379,7 +390,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
-        web.onPause();
+        // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).
+        if (!ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
         CookieManager.getInstance().flush();
         super.onPause();
     }
@@ -420,12 +432,90 @@ public class MainActivity extends Activity {
         } else {
             ai.wizards.os.everywhere.EverywhereService.ensureRunning(this);
             Toast.makeText(this, "Wizard Everywhere is on. It shows when you leave Wizard OS.", Toast.LENGTH_LONG).show();
+            offerAccessibility(true);
         }
         pushEverywhere();
     }
 
+    /* ---------------- Voice typing & screenshots (Accessibility → Wizard OS) ----------------
+     * One dialog, one button, the next step only. Sideloaded on Android 13+, the switch is greyed out as a
+     * "Restricted setting": the dialog walks through tap-the-grey-row-once → App info ⋮ → Allow restricted settings
+     * → switch on, re-checking each time James comes back. */
+    void offerAccessibility(boolean firstAsk) {
+        if (isFinishing() || isDestroyed()) return;
+        if (a11yDialog != null && a11yDialog.isShowing()) a11yDialog.dismiss();
+        ai.wizards.os.everywhere.AccessibilitySetup.Step step = ai.wizards.os.everywhere.AccessibilitySetup.step(this);
+        android.util.Log.i("WizardOS", "accessibility setup step=" + step + " first=" + firstAsk);
+        pushEverywhere();
+        if (step == ai.wizards.os.everywhere.AccessibilitySetup.Step.DONE) {
+            if (!firstAsk) Toast.makeText(this, "Voice typing & screenshots are on", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String title, msg, go; final Intent target;
+        switch (step) {
+            case TAP_ONCE:
+                title = "Turn on voice typing & screenshots";
+                msg = "Lets the orb type what you say into any app and attach screenshots.\n\n"
+                    + "On the next screen tap “Wizard OS voice typing” and turn it on.\n\n"
+                    + "If Android says “Restricted setting” or “App was denied access”, that’s expected for apps installed "
+                    + "outside the Play Store: tap OK, come back here, and I’ll take you to the unlock.";
+                go = "Open Accessibility";
+                target = ai.wizards.os.everywhere.AccessibilitySetup.accessibilityPage(this);
+                break;
+            case ALLOW_RESTRICTED:
+                title = "Unlock it for Wizard OS";
+                msg = "Android locks this for apps installed outside the Play Store.\n\n"
+                    + "On the next screen tap ⋮ (top right) → Allow restricted settings, confirm, then come back here. "
+                    + "I’ll take you straight to the switch.";
+                go = "Open App info";
+                target = ai.wizards.os.everywhere.AccessibilitySetup.appInfoPage(this);
+                break;
+            default:
+                title = "Turn on voice typing & screenshots";
+                msg = "Lets the orb type what you say into any app and attach screenshots.\n\n"
+                    + "On the next screen: “Wizard OS voice typing” → turn it on → Allow. Then come back."
+                    + (ai.wizards.os.everywhere.AccessibilitySetup.stage(this) >= ai.wizards.os.everywhere.AccessibilitySetup.STAGE_UNLOCK_VISITED
+                        ? "\n\nStill greyed out? App info → ⋮ → Allow restricted settings." : "");
+                go = "Open Accessibility";
+                target = ai.wizards.os.everywhere.AccessibilitySetup.accessibilityPage(this);
+        }
+        a11yDialog = new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(title)
+                .setMessage(msg)
+                .setPositiveButton(go, (d, w) -> {
+                    a11ySetup = true;
+                    ai.wizards.os.everywhere.AccessibilitySetup.reached(this,
+                            step == ai.wizards.os.everywhere.AccessibilitySetup.Step.ALLOW_RESTRICTED
+                                    ? ai.wizards.os.everywhere.AccessibilitySetup.STAGE_UNLOCK_VISITED
+                                    : ai.wizards.os.everywhere.AccessibilitySetup.STAGE_A11Y_VISITED);
+                    try { startActivity(target); }
+                    catch (ActivityNotFoundException e) {
+                        a11ySetup = false;
+                        try { startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS)); } catch (Exception ignored) { }
+                    }
+                })
+                .setNegativeButton("Not now", null)
+                .create();
+        if (step != ai.wizards.os.everywhere.AccessibilitySetup.Step.ALLOW_RESTRICTED
+                && ai.wizards.os.everywhere.AccessibilitySetup.stage(this) >= ai.wizards.os.everywhere.AccessibilitySetup.STAGE_UNLOCK_VISITED) {
+            a11yDialog.setButton(android.app.AlertDialog.BUTTON_NEUTRAL, "App info", (d, w) -> {
+                a11ySetup = true;
+                try { startActivity(ai.wizards.os.everywhere.AccessibilitySetup.appInfoPage(this)); } catch (Exception ignored) { }
+            });
+        }
+        if (step == ai.wizards.os.everywhere.AccessibilitySetup.Step.ALLOW_RESTRICTED) {
+            a11yDialog.setButton(android.app.AlertDialog.BUTTON_NEUTRAL, "Accessibility", (d, w) -> {
+                a11ySetup = true;
+                try { startActivity(ai.wizards.os.everywhere.AccessibilitySetup.accessibilityPage(this)); } catch (Exception ignored) { }
+            });
+        }
+        a11yDialog.show();
+    }
+
     @Override
     protected void onDestroy() {
+        ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(null);
+        if (ai.wizards.os.everywhere.EverywhereService.appIsRecording()) ai.wizards.os.everywhere.EverywhereService.appVoiceState(this, "idle", 0);
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
     }
@@ -472,17 +562,12 @@ public class MainActivity extends Activity {
         /** Messages from the floating button that Wizard has not accepted yet (no paths, no bodies). */
         /** Android's Accessibility page, to switch on voice typing + screenshots for Wizard Everywhere. */
         @JavascriptInterface
-        public void voiceTypingSettings() {
-            runOnUiThread(() -> {
-                try {
-                    Intent i = new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    // Samsung/AOSP open straight on our row when they get the component name.
-                    String cn = new android.content.ComponentName(MainActivity.this, ai.wizards.os.everywhere.WizardKeyboardService.class).flattenToString();
-                    Bundle b = new Bundle(); b.putString(":settings:fragment_args_key", cn);
-                    i.putExtra(":settings:fragment_args_key", cn).putExtra(":settings:show_fragment_args", b);
-                    startActivity(i);
-                } catch (Exception e) { android.util.Log.w("WizardOS", "accessibility settings: " + e); }
-            });
+        public void voiceTypingSettings() { runOnUiThread(() -> offerAccessibility(false)); }
+
+        /** "listen" | "paused" | "think" | "idle" + elapsed ms: leaving Wizard OS mid-take shows the floating orb. */
+        @JavascriptInterface
+        public void appVoice(String state, long elapsedMs) {
+            ai.wizards.os.everywhere.EverywhereService.appVoiceState(MainActivity.this, String.valueOf(state), elapsedMs);
         }
 
         @JavascriptInterface
