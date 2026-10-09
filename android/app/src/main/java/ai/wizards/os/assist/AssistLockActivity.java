@@ -146,6 +146,13 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
     protected void onResume() {
         super.onResume();
         pushLockState();
+        ai.wizards.os.everywhere.EverywhereService.setSurfaceInFront(this, true);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        ai.wizards.os.everywhere.EverywhereService.setSurfaceInFront(this, false);
     }
 
     @Override

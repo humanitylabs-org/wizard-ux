@@ -75,7 +75,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     static final String ACTION_FRONT = "ai.wizards.os.everywhere.FRONT";
     static final String ACTION_RETRY = "ai.wizards.os.everywhere.RETRY";
     static final String ACTION_KEYBOARD = "ai.wizards.os.everywhere.KEYBOARD";
-    static final String EXTRA_FRONT = "front", EXTRA_KB = "kb", EXTRA_IME_TOP = "imeTop";
+    static final String EXTRA_FRONT = "front", EXTRA_KB = "kb", EXTRA_IME_TOP = "imeTop", EXTRA_SURFACE = "surface";
     static final String CH_RUNNING = "everywhere";
     static final String CH_UNSENT = "unsent";
     static final String CH_REPLIES = "replies";
@@ -84,6 +84,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     static final int MAX_SHOTS = 4;
 
     private static boolean appInFront;
+    /** The side-button surface is showing: it has its own orb, so the floating one steps aside. */
+    private static boolean surfaceInFront;
     private static boolean keyboardOpen;
     private static int imeTop = -1;
 
@@ -127,6 +129,14 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (!enabled(c) || !overlayAllowed(c)) return;
         try { c.startForegroundService(new Intent(c, EverywhereService.class).setAction(ACTION_START)); }
         catch (Exception e) { Log.w(TAG, "could not start Everywhere: " + e.getMessage()); }
+    }
+
+    /** The side-button surface tells the orb when it opens / closes, so two orbs never show at once. */
+    public static void setSurfaceInFront(Context c, boolean front) {
+        surfaceInFront = front;
+        if (!enabled(c) || !overlayAllowed(c)) return;
+        try { c.startService(new Intent(c, EverywhereService.class).setAction(ACTION_FRONT).putExtra(EXTRA_SURFACE, front)); }
+        catch (Exception ignored) { }
     }
 
     /** Wizard OS tells the orb when it comes to the front / leaves, so the orb hides while the app is open. */
@@ -261,7 +271,10 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         String a = intent == null ? ACTION_START : String.valueOf(intent.getAction());
         if (!startForegroundSafe(listening)) { stopSelf(); return START_NOT_STICKY; }
         if (ACTION_STOP.equals(a) || !enabled(this) || !overlayAllowed(this)) { shutdown(); return START_NOT_STICKY; }
-        if (ACTION_FRONT.equals(a)) appInFront = intent.getBooleanExtra(EXTRA_FRONT, appInFront);
+        if (ACTION_FRONT.equals(a)) {
+            if (intent.hasExtra(EXTRA_FRONT)) appInFront = intent.getBooleanExtra(EXTRA_FRONT, appInFront);
+            if (intent.hasExtra(EXTRA_SURFACE)) surfaceInFront = intent.getBooleanExtra(EXTRA_SURFACE, surfaceInFront);
+        }
         if (ACTION_RETRY.equals(a)) { outbox.retry("*"); getSystemService(NotificationManager.class).cancel(N_UNSENT); }
         if (ACTION_KEYBOARD.equals(a)) {
             keyboardOpen = intent.getBooleanExtra(EXTRA_KB, keyboardOpen);
@@ -327,9 +340,9 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     /* ------------------------------------------------------------------ the orb window */
 
     private void syncBubble() {
-        boolean show = EverywherePolicy.bubbleVisible(enabled(this), overlayAllowed(this), appInFront) || listening;
+        boolean show = EverywherePolicy.bubbleVisible(enabled(this), overlayAllowed(this), appInFront || surfaceInFront) || listening;
         if (show) attach(); else detach();
-        Log.i(TAG, "bubble " + (show ? "shown" : "hidden") + " (appInFront=" + appInFront + ", keyboard=" + keyboardOpen + ")");
+        Log.i(TAG, "bubble " + (show ? "shown" : "hidden") + " (appInFront=" + appInFront + ", surface=" + surfaceInFront + ", keyboard=" + keyboardOpen + ")");
     }
 
     @SuppressLint({"ClickableViewAccessibility", "SetJavaScriptEnabled", "JavascriptInterface"})
@@ -427,6 +440,10 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         int oy = expanded ? (dy < 0 ? w - size / 2 : size / 2) : size / 2;
         int wx = Math.max(0, Math.min(s.x - w, cx - ox)), wy = Math.max(0, Math.min(s.y - w, cy - oy));
         if (!expanded) { wx = cx - size / 2; wy = cy - size / 2; }
+        if (keyboardOpen && imeTop > 0 && !expanded && wy + w > imeTop - margin) {
+            wy = Math.max(margin, imeTop - margin - w);   // over a keyboard the orb never covers the keys
+            cy = wy + size / 2;
+        }
         lp.width = w; lp.height = w; lp.x = wx; lp.y = wy;
         if (keyboardOpen && !expanded) Log.i(TAG, "placed over keyboard y=" + wy + " bottom=" + (wy + w) + " imeTop=" + imeTop);
         if (attached) try { wm.updateViewLayout(web, lp); } catch (Exception ignored) { }

@@ -349,6 +349,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         runs_before = len(STATE['runs'])
         sx(f'am start -W -a android.intent.action.ASSIST -n {PKG}/ai.wizards.os.assist.AssistLockActivity --es qa_audio qa_side.m4a --el qa_autosend_ms 2500')
         time.sleep(2); shot('11-side-listening')
+        check('the floating orb steps aside while the side-button surface is up (one orb at a time)', not bubble(), bubble())
         t0 = time.time()
         while time.time() - t0 < 45 and len(STATE['runs']) == runs_before: time.sleep(1)
         time.sleep(2); shot('12-side-sent')
