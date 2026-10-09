@@ -201,6 +201,28 @@
     return p.state || state;
   }
 
+  /* ---- thread actions: Done / Close & file / Defer / Restore (controller.ts fileSession, setThreadDeferred, restoreSession) ----
+   * Applied to the list at once (optimistic) and kept over refreshes until the write settles; a failed write puts
+   * the thread back. Restoring an archived thread remembers when, in the key Wizard uses, so it lands in Ready. */
+  const RESTORED_KEY = 'wizard.mobile.restored-threads.v1';
+  const OVER = new Map(); // id -> { archived?, deferred?, restoredAt? } while a write is in flight
+  const readRestored = () => { try { const v = JSON.parse(localStorage.getItem(RESTORED_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; } };
+  const writeRestored = v => { try { localStorage.setItem(RESTORED_KEY, JSON.stringify(v)); } catch (e) {} };
+  function applyLocal(s) {
+    const r = readRestored()[s.id];
+    if (r && !s.deferred) {
+      const latest = Math.max(...[s.lastUserAt, s.lastAssistantAt, s.activityAt].map(v => Date.parse(v ?? '')).filter(isFinite));
+      if (s.archived || (isFinite(latest) && latest >= Date.parse(r))) { const all = readRestored(); delete all[s.id]; writeRestored(all); }
+      else if (!s.restoredAt || Date.parse(r) > Date.parse(s.restoredAt)) s.restoredAt = r;
+    }
+    const o = OVER.get(s.id); if (o) Object.assign(s, o.patch);
+    // A Stop James asked for shows as “Stopping…” until Wizard reports the run settled (max 2 min).
+    const st = s.runId && STOPPING.get(s.runId);
+    if (st) { if (!WORKING.has(s.status) || Date.now() - st > 120000) STOPPING.delete(s.runId); else s.status = 'stopping'; }
+  }
+  const STOPPING = new Map();
+  const commandId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+
   /* ---- store ---- */
   const L = {
     ok: false, error: '', sessions: [], seen: readLocal(), deferred: {}, at: 0, listeners: new Set(), loading: null,
@@ -230,6 +252,7 @@
       if (this.loading) return this.loading;
       this.loading = (async () => {
         try {
+          const started = Date.now();
           const full = !this.fullAt || Date.now() - this.fullAt > FULL_EVERY;
           const [got, deferred, remote] = await Promise.all([fetchSessions(full), fetchDispositions(), fetchSeen().catch(() => null)]);
           let sessions = got.sessions;
@@ -239,7 +262,10 @@
             const d = deferred[keyOf(s)];
             delete s.deferred; delete s.restoredAt;
             if (d) { if (d.deferred) s.deferred = true; else s.restoredAt = d.updatedAt; }
+            applyLocal(s);
           }
+          // A settled action stays applied until a list read that started after it lands.
+          for (const [k, o] of OVER) if (o.settled && o.settled < started) OVER.delete(k);
           this.sessions = sessions; this.deferred = deferred;
           let merged = merge(readLocal(), merge(this.seen, remote));
           if (!merged) { // first run anywhere: everything currently visible counts as read
@@ -320,7 +346,66 @@
       const s = normalize(p.session || p); if (!s) return null;
       const i = this.sessions.findIndex(x => x.id === id);
       if (i >= 0) this.sessions[i] = { ...this.sessions[i], ...s }; else this.sessions.push(s);
+      applyLocal(this.sessions[i >= 0 ? i : this.sessions.length - 1]);
       return s;
+    },
+    /* ---- thread actions ---- */
+    busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
+    async _act(id, patch, write) {
+      const s = this.session(id); if (!s || this.busy(id)) return false;
+      const snap = { archived: s.archived, deferred: s.deferred, restoredAt: s.restoredAt };
+      const entry = { patch }; OVER.set(id, entry); Object.assign(s, patch); this.emit();
+      try { await write(s); entry.settled = Date.now(); this.emit(); setTimeout(() => this.refresh(), 50); return true; }
+      catch (e) {
+        if (OVER.get(id) === entry) OVER.delete(id);
+        const c = this.session(id);
+        if (c) { Object.assign(c, snap); if (snap.deferred === undefined) delete c.deferred; if (snap.restoredAt === undefined) delete c.restoredAt; }
+        this.emit(); return false;
+      }
+    },
+    // Done: archive the thread (PATCH archived). Close & file: the Helm filing route, idempotent by command id.
+    archive(id, { file = false } = {}) {
+      return this._act(id, { archived: true, deferred: false }, async s => {
+        const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
+        if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
+        let r = await fetch('/wizard/filings', { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ session_id: id, client_command_id: commandId(), runtime: s.runtime || 'direct' }) });
+        const until = Date.now() + 10 * 60000; let wait = 500;
+        while (r.status === 202 && Date.now() < until) {
+          await new Promise(res => setTimeout(res, wait)); wait = Math.min(2000, wait + 250);
+          r = await fetch(`/wizard/filings/${encodeURIComponent(id)}/status`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ runtime: s.runtime || 'direct' }) });
+        }
+        if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+      });
+    },
+    async _defer(id, deferred) {
+      const s = this.session(id); if (!s) throw new Error('gone');
+      const p = await (await req('/wizard/thread-dispositions', { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', deferred }) })).json();
+      if (p?.record?.deferred !== deferred || !isFinite(Date.parse(p.record.updatedAt))) throw new Error('Thread disposition was not saved.');
+      this.deferred[keyOf(s)] = p.record;
+      return p.record;
+    },
+    defer(id) { return this._act(id, { deferred: true }, () => this._defer(id, true)); },
+    // Restore: a deferred thread comes back to Work; an archived (or aged-out) one is un-archived and lands in Ready.
+    restore(id) {
+      const s = this.session(id); if (!s) return Promise.resolve(false);
+      const at = new Date().toISOString();
+      if (s.deferred && !s.archived) return this._act(id, { deferred: false, restoredAt: at }, () => this._defer(id, false));
+      return this._act(id, { archived: false, deferred: false, restoredAt: at }, async () => {
+        await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: false }) });
+        writeRestored({ ...readRestored(), [id]: at });
+      });
+    },
+    /* ---- the live run: status, approval, stop (api.ts run/approve/stop) ---- */
+    async run(runId) { return (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}`)).json(); },
+    async approve(runId, choice, requestId) {
+      const body = { choice }; if (requestId) body.request_id = requestId;
+      await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/approval`, { method: 'POST', headers: J, body: JSON.stringify(body) });
+    },
+    async stop(runId) {
+      await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop`, { method: 'POST' });
+      STOPPING.set(runId, Date.now());
+      const s = this.sessions.find(x => x.runId === runId); if (s) { applyLocal(s); this.emit(); }
+      setTimeout(() => this.refresh(), 2500);
     },
   };
   // Wizard (in its desk, or another tab) writes the same key when a chat is opened.
