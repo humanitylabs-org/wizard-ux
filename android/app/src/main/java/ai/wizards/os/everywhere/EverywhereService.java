@@ -292,8 +292,12 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     }
 
     private Point screen() {
-        android.graphics.Rect b = wm.getCurrentWindowMetrics().getBounds();
-        return new Point(b.width(), b.height());
+        if (Build.VERSION.SDK_INT >= 30) {
+            android.graphics.Rect b = wm.getCurrentWindowMetrics().getBounds();
+            return new Point(b.width(), b.height());
+        }
+        android.util.DisplayMetrics m = getResources().getDisplayMetrics();
+        return new Point(m.widthPixels, m.heightPixels);
     }
 
     private void refreshBadge() {
