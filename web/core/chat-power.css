@@ -81,11 +81,13 @@
 .ch-compose button.ch-fromfiles { width: 32px; margin-left: -4px; background: none; border: 0; }
 .ch-compose button.ch-fromfiles svg { width: 19px; height: 19px; fill: none; stroke: var(--ink-3); stroke-width: 1.8; stroke-linejoin: round; }
 .ch-top .ch-files-b svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
-.fi-top { display: flex; align-items: center; gap: 8px; padding: 2px 4px 8px; }
+.fi-top { display: flex; align-items: center; gap: 8px; padding: 2px 4px 8px; flex: 0 0 auto; }
 .fi-top .ch-sheet-t { flex: 1; padding: 0 6px; }
+.fi-top b { font-size: 16px; font-weight: 750; padding-left: 4px; }
+.fi-top small { flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink-3); }
 .ch-sheet-b .fi-x { width: 34px; height: 34px; padding: 0; justify-content: center; border-radius: 50%; }
 .fi-q { margin: 0 4px 8px; flex: 0 0 auto; }
-.fi-kinds { display: flex; gap: 6px; padding: 0 4px 8px; overflow-x: auto; scrollbar-width: none; }
+.fi-kinds { display: flex; flex: 0 0 auto; gap: 6px; padding: 0 4px 8px; overflow-x: auto; scrollbar-width: none; }
 .ch-sheet-b .fi-kinds button { width: auto; flex: 0 0 auto; padding: 6px 12px; border-radius: 14px; font-size: 13px; font-weight: 650; color: var(--ink-2); background: rgba(205, 190, 255, .06); border: 1px solid var(--line); }
 .ch-sheet-b .fi-kinds button.on { color: #fff; background: rgba(143, 99, 255, .4); border-color: transparent; }
 .fi-list { overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 1; }

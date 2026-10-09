@@ -404,6 +404,8 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await p.waitForFunction(() => document.querySelectorAll('.ch-psheet [data-fiattach]').length > 0, null, { timeout: 15000 }).catch(() => {});
     const fl = await p.evaluate(() => ({ rows: [...document.querySelectorAll('.ch-psheet [data-fiid]')].map(x => x.dataset.fiid), head: document.querySelector('.ch-psheet .fi-top small')?.textContent }));
     ok(realFiles.length > 0 && fl.rows.length === Math.min(200, realFiles.length) && fl.rows[0] === realFiles[0].id, '#23 phone: Files lists the real /wizard/files, newest first', { got: fl.rows.length, want: realFiles.length, head: fl.head });
+    const lay = await p.evaluate(() => { const t = document.querySelector('.ch-psheet .fi-kinds button'), x = document.querySelector('.ch-psheet .fi-x'), b = document.querySelector('.ch-psheet .fi-b'); const tr = t.getBoundingClientRect(), xr = x.getBoundingClientRect(), br = b.getBoundingClientRect(); return { tabH: Math.round(tr.height), xRight: Math.round(br.right - xr.right) }; });
+    ok(lay.tabH >= 28 && lay.xRight < 30, '#23 phone: filter tabs keep their height and Close sits at the right edge', lay);
     await p.screenshot({ path: `${OUT}/phone-09-files-sheet.png` });
     await p.click('.ch-psheet [data-fikind="voice"]'); await sleep(200);
     const voiceN = await p.evaluate(() => document.querySelectorAll('.ch-psheet [data-fiid]').length);
