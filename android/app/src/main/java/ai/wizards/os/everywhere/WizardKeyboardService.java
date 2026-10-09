@@ -117,9 +117,13 @@ public class WizardKeyboardService extends AccessibilityService {
         report(signal.keyboardMode(ime, SystemClock.uptimeMillis()));
     }
 
+    private int reportedTop = -1;
+
     private void report(boolean kb) {
-        if (kb == lastReported) return;
+        // Also re-report when the keyboard's top edge becomes known or moves (it slides up after the field focuses).
+        if (kb == lastReported && (!kb || Math.abs(lastImeTop - reportedTop) < 8)) return;
         lastReported = kb;
+        reportedTop = lastImeTop;
         Log.i(TAG, "keyboard " + (kb ? "open" : "closed") + (lastImeTop >= 0 ? " imeTop=" + lastImeTop : ""));
         EverywhereService.keyboardChanged(this, kb, lastImeTop);
     }

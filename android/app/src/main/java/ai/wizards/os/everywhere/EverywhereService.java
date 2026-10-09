@@ -619,6 +619,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             if (recorder != null) try { recorder.resume(); } catch (IllegalStateException e) { Log.w(TAG, "resume failed", e); return; }
             paused = false;
             detector.resume(now);
+            if (recorder == null) { main.removeCallbacks(qaAutoFinish); main.postDelayed(qaAutoFinish, 2500); } // QA: 2.5 s more after carrying on
         }
         Log.i(TAG, paused ? "paused" : "resumed");
         buzz(10);
@@ -634,8 +635,11 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     }
 
     /** Screen: hide the orb, capture what is behind it, attach it to this message (up to four). */
+    private boolean shotPending, finishAfterShot;
+
     private void screenshot() {
-        if (!listening || dictating) return;
+        Log.i(TAG, "screenshot requested listening=" + listening + " dictating=" + dictating);
+        if (!listening || dictating || shotPending) return;
         if (shots.size() >= MAX_SHOTS) { toast("Four screenshots already attached"); return; }
         WizardKeyboardService k = WizardKeyboardService.get();
         if (k == null || Build.VERSION.SDK_INT < 30) {
@@ -643,19 +647,25 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             return;
         }
         if (web != null) web.setAlpha(0f);
+        shotPending = true;
         main.postDelayed(() -> k.screenshot(png -> main.post(() -> {
+            shotPending = false;
             if (web != null) web.setAlpha(1f);
             if (!listening) return;
-            if (png == null || png.length == 0) { toast("This screen blocked capture"); return; }
-            shots.add(png);
-            Log.i(TAG, "screenshot attached " + shots.size() + " bytes=" + png.length);
-            toast("Screenshot attached (" + shots.size() + "/" + MAX_SHOTS + ")");
+            if (png == null || png.length == 0) { Log.w(TAG, "screenshot empty"); toast("This screen blocked capture"); }
+            else {
+                shots.add(png);
+                Log.i(TAG, "screenshot attached " + shots.size() + " bytes=" + png.length);
+                toast("Screenshot attached (" + shots.size() + "/" + MAX_SHOTS + ")");
+            }
             pushState();
+            if (finishAfterShot) { finishAfterShot = false; finish(); }
         })), 160);
     }
 
     private void finish() {
         if (!listening) return;
+        if (shotPending) { finishAfterShot = true; return; } // the screenshot being taken rides along
         if (paused && recorder != null) try { recorder.resume(); } catch (IllegalStateException ignored) { }
         listening = false; paused = false;
         main.removeCallbacks(meter);
@@ -697,7 +707,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     }
 
     private void discard() {
-        listening = false; paused = false; dictating = false;
+        listening = false; paused = false; dictating = false; finishAfterShot = false;
         main.removeCallbacks(meter);
         main.removeCallbacks(qaAutoFinish);
         dropRecorder();
