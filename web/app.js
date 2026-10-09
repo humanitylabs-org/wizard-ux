@@ -486,6 +486,7 @@
       </div>
       <div class="st-group"><h4>Wizard</h4>
         <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · private.wizard001.com</small></span></div>
+        ${window.WosDevice?.settingsHtml?.() || ''}
       </div>`;
   }
   function openSettings(focusUnsent) {
@@ -1196,6 +1197,42 @@
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) requestWakeLock(); });
   window.__wosAwake = () => AWAKE.want; // QA probe
+  // Native shell (0.7.0, native parity): the orb records in Android's foreground-service recorder
+  // (WizardOSDevice), so a take keeps going with the screen off or the app in the background, and
+  // survives an app kill on disk. Browsers/PWAs and older shells keep the in-page MediaRecorder.
+  // When James leaves the app mid-take, the floating orb (Everywhere) shows and drives this same take
+  // through __wosVoiceCmd below; it never starts a second recorder.
+  const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : null; };
+  function nativeBlob(id) {
+    const dev = DEV(), parts = []; let off = 0;
+    for (let k = 0; k < 4000 && off >= 0; k++) {
+      let c = null; try { c = JSON.parse(dev.recRead(id, off)); } catch (e) {}
+      if (!c) break;
+      const bin = atob(c.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      parts.push(u); off = c.next;
+    }
+    return new Blob(parts, { type: 'audio/aac' });
+  }
+  /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
+  function nativeFinish(id, stopped) {
+    const dev = DEV(); let meta = null;
+    try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (e) {}
+    V.native = null;
+    if (!meta) { setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
+    V.acc = Math.max(V.acc, Number(meta.ms) || 0);
+    onRecStop(nativeBlob(id), id);
+  }
+  const recDone = id => { try { id && DEV()?.recDone(id); } catch (e) {} };
+  /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
+  function nativeResume(a) {
+    if (V.state !== 'idle' || !a?.id) return false;
+    Object.assign(V, { native: a.id, kind: a.kind === 'command' ? 'command' : 'auto', target: null, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
+    renderVoiceFiles();
+    setVoice(a.paused ? 'paused' : 'listen');
+    txPill('✦', 'Still recording · tap orb to send', 'agent'); txHide(2600);
+    V.raf = requestAnimationFrame(tick);
+    return true;
+  }
   // Tell the native shell what the orb is doing, so leaving Wizard OS mid-recording shows the floating orb
   // (timer, Pause, Cancel, tap to send). Never auto-sends: going quiet only ever pauses nothing.
   function voiceElapsed() { return Math.round((V.acc || 0) + (V.state === 'listen' || V.state === 'command' ? performance.now() - (V.t0 || performance.now()) : 0)); }
@@ -1275,8 +1312,11 @@
       const a = new Uint8Array(V.an.fftSize); V.an.getByteTimeDomainData(a);
       let s = 0; for (let k = 0; k < a.length; k++) { const v = (a[k] - 128) / 128; s += v * v; }
       Orb.setLevel(V.state === 'paused' ? 0 : Math.min(1, Math.sqrt(s / a.length) * 4.2));
+    } else if (V.native) {
+      if (performance.now() - (V.lvlAt || 0) > 90) { V.lvlAt = performance.now(); try { V.lvl = DEV().recLevel() / 100; } catch (e) {} }
+      Orb.setLevel(V.state === 'paused' ? 0 : Math.min(1, (V.lvl || 0) * 1.6));
     } else if (V.sim) Orb.setLevel(V.state === 'paused' ? 0 : .25 + .25 * Math.sin(performance.now() / 160) * Math.sin(performance.now() / 410));
-    tx.style.setProperty('--lvl', (V.an || V.sim) ? 0.4 : 0);
+    tx.style.setProperty('--lvl', (V.an || V.sim || V.native) ? 0.4 : 0);
     if (V.state !== 'idle' && V.state !== 'think') V.raf = requestAnimationFrame(tick);
   }
   async function startVoice(kind) {
@@ -1291,6 +1331,10 @@
     if (kind === 'command') txShow('', 'Command · release to run', 'command', '⚡');
     else { txHide(0); if (!store.get('voiceTipSeen', false)) { store.set('voiceTipSeen', true); txPill('✦', 'Listening · tap the orb again to send', 'tip'); txHide(3200); } }
     V.raf = requestAnimationFrame(tick);
+    V.native = null;
+    const dev = DEV();
+    if (dev) { let id = ''; try { id = dev.recStart(kind === 'command' ? 'command' : 'auto') || ''; } catch (e) {}
+      if (id) { V.native = id; reportVoice(V.state); if (V.stopAsked) finishVoice(); return; } } // '' = no mic permission yet: the page asks below
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
       V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -1320,6 +1364,11 @@
     if (V.state === 'idle' || V.state === 'think') return;
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
     if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
+    if (V.native) {
+      if (V.state !== 'paused') V.acc += performance.now() - V.t0;
+      setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core');
+      return nativeFinish(V.native, false);
+    }
     if (!V.rec) { V.stopAsked = true; return; }
     if (V.state !== 'paused') V.acc += performance.now() - V.t0;
     setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core');
@@ -1327,34 +1376,37 @@
   }
   function cancelVoice(quiet) {
     V.cancelled = true;
+    if (V.native) { try { DEV().recCancel(V.native); } catch (e) {} V.native = null; }
     try { V.rec && V.rec.state !== 'inactive' && (V.rec.onstop = null, V.rec.stop()); } catch (e) {}
     stopStream(); V.rec = null; V.sim = false; cancelAnimationFrame(V.raf); Orb.setLevel(0);
     setVoice('idle'); txHide(quiet ? 0 : 0);
     if (!quiet) { toast('✕', 'Discarded'); vib(12); }
   }
-  async function onRecStop() {
-    const blob = new Blob(V.chunks, { type: V.rec?.mimeType || 'audio/webm' });
+  async function onRecStop(nblob, nid) {
+    const blob = nblob instanceof Blob ? nblob : new Blob(V.chunks, { type: V.rec?.mimeType || 'audio/webm' });
+    nid = nblob instanceof Blob ? nid : '';
     stopStream(); V.rec = null; Orb.setLevel(0);
-    if (V.cancelled) return;
-    if (V.acc < 450 || blob.size < 1200) { setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
+    if (V.cancelled) { recDone(nid); return; }
+    if (V.acc < 450 || blob.size < 1200) { recDone(nid); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
     try {
       const fd = new FormData();
-      const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
+      const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : blob.type.includes('aac') ? 'aac' : 'webm';
       fd.append('file', blob, `voice.${ext}`); fd.append('language', 'en');
       fd.append('prompt', 'Wizard OS voice command. Names: Archimedes, Wizard, Hermes, Iconsiam, Siam Paragon, Sukhumvit, Suvarnabhumi, Don Mueang, Thonglor, Asok, Grab, LINE, ' + APPS.map(a => a.name).slice(0, 40).join(', '));
       const r = await fetch('api/transcribe', { method: 'POST', body: fd });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
       const text = (j.text || '').trim();
-      if (!text) { setVoice('idle'); txHide(); toast('◌', 'No speech detected'); return; }
-      handleText(text, V.kind, false, j.ms, V.target);
+      if (!text) { recDone(nid); setVoice('idle'); txHide(); toast('◌', 'No speech detected'); return; }
+      // The words are what gets sent from here; the take is deleted once they are handled (or in the outbox).
+      Promise.resolve(handleText(text, V.kind, false, j.ms, V.target)).finally(() => recDone(nid));
     } catch (err) {
       // Never lose a recording: it goes to the outbox, which transcribes and sends it when Wizard is back.
       setVoice('idle');
       const aim = V.target, f = desks[idx].focus, fw = W[f];
       const files = takeFiles();
-      if (aim == null && fw?.app === 'chats' && fw.thread) { ch(f).files = [...(ch(f).files || []), ...files]; sendChat(f, '', 'voice, aimed at this thread', blob); }
-      else toAgent('', 'Saved · sends when Wizard is reachable', { audio: blob, desk: aim, source: 'orb', files });
+      if (aim == null && fw?.app === 'chats' && fw.thread) { ch(f).files = [...(ch(f).files || []), ...files]; Promise.resolve(sendChat(f, '', 'voice, aimed at this thread', blob)).then(() => recDone(nid)); }
+      else Promise.resolve(toAgent('', 'Saved · sends when Wizard is reachable', { audio: blob, desk: aim, source: 'orb', files })).then(() => recDone(nid));
       txPill('↻', 'Saved · sends when Wizard is back', 'agent', 'Couldn’t reach Wizard · recording saved, will send'); txHide(2600);
     }
   }
@@ -1363,8 +1415,8 @@
   $('#voice').addEventListener('click', e => { if (e.target.closest('.arc') && performance.now() - (V.onAt || 0) < 450) { e.stopPropagation(); e.preventDefault(); } }, true);
   $('#arcCancel').addEventListener('click', () => cancelVoice());
   $('#arcPause').addEventListener('click', () => {
-    if (V.state === 'listen') { V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} setVoice('paused'); vib(6); }
-    else if (V.state === 'paused') { V.t0 = performance.now(); try { V.rec && V.rec.resume(); } catch (e) {} setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
+    if (V.state === 'listen') { V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} try { V.native && DEV().recPause(true); } catch (e) {} setVoice('paused'); vib(6); }
+    else if (V.state === 'paused') { V.t0 = performance.now(); try { V.rec && V.rec.resume(); } catch (e) {} try { V.native && DEV().recPause(false); } catch (e) {} setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
   });
   // The file picker is a separate screen on Android: pause the take while it is open, resume on return.
   $('#arcAttach').addEventListener('click', () => {
@@ -1675,6 +1727,7 @@
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
     if (document.querySelector('#txChips [data-handoff]')) { $('#txChips').innerHTML = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
+    const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
     if (closePeek()) return 'peek';
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet) { closeSheets(); return 'sheet'; }
@@ -1848,6 +1901,8 @@
     HOME, get idx() { return idx; }, get desks() { return desks; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
     startVoice, finishVoice, cancelVoice, outbox: OUTBOX, openSettings, unsentAll, renderSettings,
+    // web/device.js (share, recovery, update banner, hot reload) works through these.
+    chatState: ch, addFiles: CHATS.addFiles, uploadFile: CHATS.uploadFile, renderChats, refreshCompose, toAgent, toast, txShow, txHide, setVoice, nativeFinish, nativeResume, get V() { return V; },
     reset() { Object.keys(localStorage).filter(k => k.startsWith('wos.')).forEach(k => localStorage.removeItem(k)); location.reload(); },
   };
 })();

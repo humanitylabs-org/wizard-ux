@@ -76,14 +76,14 @@
 
   async function transcribe(it) {
     const fd = new FormData();
-    const ext = /mp4|m4a/.test(it.audioType || '') ? 'm4a' : /ogg/.test(it.audioType || '') ? 'ogg' : 'webm';
+    const ext = /mp4|m4a/.test(it.audioType || '') ? 'm4a' : /ogg/.test(it.audioType || '') ? 'ogg' : /aac/.test(it.audioType || '') ? 'aac' : 'webm';
     fd.append('file', it.audio, `voice.${ext}`); fd.append('language', 'en');
     fd.append('prompt', 'Wizard OS voice request to Archimedes. Names: Archimedes, Wizard, Hermes, Miguel, Thales, Mizel.');
     const r = await call('/wizard-os-home/api/transcribe', { method: 'POST', body: fd });
     return String((await r.json()).text || '').trim();
   }
   async function uploadAudio(it) {
-    const ext = /mp4|m4a/.test(it.audioType || '') ? 'm4a' : /ogg/.test(it.audioType || '') ? 'ogg' : 'webm';
+    const ext = /mp4|m4a/.test(it.audioType || '') ? 'm4a' : /ogg/.test(it.audioType || '') ? 'ogg' : /aac/.test(it.audioType || '') ? 'aac' : 'webm';
     const name = `wizard-voice-${new Date(it.createdAt).toISOString().replace(/[:.]/g, '-')}.${ext}`;
     const r = await call('/wizard/files/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': name, 'X-Wizard-Mime': it.audioType || 'audio/webm' }, body: it.audio });
     const f = (await r.json()).file || {};
