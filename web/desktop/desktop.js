@@ -305,8 +305,8 @@
     if (!LIVE?.ok) st.innerHTML = `<span class="off">${LIVE?.error === 'access' ? 'Sign in to Wizard' : 'Connecting…'}</span>`;
     else st.innerHTML = `${L.needs.length ? `<span title="Needs you"><i class="st needs"></i>${L.needs.length}</span>` : ''}<span title="Unread"><i class="st unread"></i>${L.ready.length}</span>${L.working.length ? `<span title="Working"><i class="st working"></i>${L.working.length}</span>` : ''}`;
   }
-  function tickClock() { const n = new Date(); $('#clock').textContent = n.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) + '  ' + n.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-  setInterval(tickClock, 15000); tickClock();
+  function tickClock() { const C = window.WizConfig; $('#clock').textContent = C.dateLabel() + '  ' + C.hm(); }
+  setInterval(tickClock, 15000); tickClock(); window.addEventListener('wizard:config', tickClock);
   $('#wsList').addEventListener('click', e => { const b = e.target.closest('[data-ws]'); if (b) goWs(+b.dataset.ws); });
   $('#logo').addEventListener('click', () => openPalette());
   $('#status').addEventListener('click', () => toggleInbox());
@@ -323,8 +323,8 @@
     const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
     const quick = ['wizard', 'mizel', 'cinequeue', 'reader', 'files', 'console', 'legacy-wizard'].map(id => APP[id]).filter(Boolean);
     return `<div class="home-in">
-      <div class="home-time">${n.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-      <div class="home-date">${n.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })} · Workspace ${i + 1}</div>
+      <div class="home-time">${window.WizConfig.hm()}</div>
+      <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })} · Workspace ${i + 1}</div>
       <div class="home-line">${LIVE?.ok ? `<b>${L.needs.length} need${L.needs.length === 1 ? 's' : ''} you</b>, ${L.ready.length} unread, ${L.working.length} working.` : 'Connecting to Wizard…'}</div>
       <div class="home-cols"><div class="home-card"><h4>Needs you · Unread</h4>${rows(L.needs.concat(L.ready))}</div><div class="home-card"><h4>Working</h4>${rows(L.working)}</div></div>
       <div class="home-apps">${quick.map(a => `<button class="app-chip" data-app="${a.id}"><i style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</i>${esc(a.name)}</button>`).join('')}</div>

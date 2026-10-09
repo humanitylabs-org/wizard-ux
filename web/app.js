@@ -541,8 +541,8 @@
     const now = new Date();
     return `<div class="home">${gearBtn()}
       <div class="home-top">
-        <div class="home-date" id="homeDate">${DOWL[now.getDay()]} · ${now.getDate()} ${MON[now.getMonth()]}</div>
-        <div class="home-time" id="homeTime">${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}</div>
+        <div class="home-date" id="homeDate">${(() => { const p = window.WizConfig.dayParts(now.getTime()); return `${DOWL[p.dow]} · ${p.d} ${MON[p.m - 1]}`; })()}</div>
+        <div class="home-time" id="homeTime">${window.WizConfig.hm()}</div>
         <div class="home-line">${LIVE.ok ? `<b>${needs} need${needs === 1 ? 's' : ''} you</b>, ${ready} unread, ${working} working.` : LIVE.error === 'access' ? 'Sign in to Wizard to see your threads.' : 'Connecting to Wizard…'}</div>
       </div>
       <div class="home-spacer"></div>
@@ -563,7 +563,7 @@
   }
   setInterval(() => {
     const now = new Date(), t = $('#homeTime'), c = $('#clock');
-    const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const hm = window.WizConfig.hm();
     if (t) t.textContent = hm; if (c) c.textContent = hm;
   }, 5000);
   const refreshHome = force => { if (!desks[HOME].wins.length) { const g = track.children[HOME]?.querySelector('.glance'); if (g) g.innerHTML = renderHome(); } };
@@ -1780,7 +1780,8 @@
   /* ---------------- boot ---------------- */
   buildDesks(); setVoice('idle'); armBack();
   if (LIVE) LIVE.refresh();
-  { const n = new Date(); $('#clock').textContent = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`; }
+  $('#clock').textContent = window.WizConfig.hm();
+  window.addEventListener('wizard:config', () => { const t = $('#homeTime'), c = $('#clock'), hm = window.WizConfig.hm(); if (t) t.textContent = hm; if (c) c.textContent = hm; });
   if (!store.get('coached', false)) { $('#coach').hidden = false; }
   $('#coachGo').addEventListener('click', () => { $('#coach').hidden = true; store.set('coached', true); shock(); });
   // Native shell (Wizard OS Android app): the app hands every hardware/gesture Back to the shell. A step that

@@ -117,5 +117,8 @@
   C.ready = load();
   // Settings can change while the app is open (the owner renames the agent): refresh on focus.
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+  // Clock text in the owner's zone (settings timezone, else the device's own).
+  C.hm = (t = Date.now()) => { try { return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: C.timeZone() || undefined }).format(t); } catch (e) { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; } };
+  C.dateLabel = (t = Date.now(), opts = { weekday: 'short', day: 'numeric', month: 'short' }) => { try { return new Intl.DateTimeFormat(undefined, { ...opts, timeZone: C.timeZone() || undefined }).format(t); } catch (e) { return new Date(t).toLocaleDateString(undefined, opts); } };
   window.WizConfig = C;
 })();
