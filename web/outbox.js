@@ -13,6 +13,7 @@
  */
 (() => {
   'use strict';
+  if (document.documentElement.dataset.leaving) return; // core/shell.js is switching to the other shell
   const DB = 'wos-outbox', STORE = 'items';
   const BACKOFF = [2000, 5000, 15000, 30000, 60000, 120000];
   const AUTO_TRIES = BACKOFF.length; // then it waits for James (or for the network to come back)

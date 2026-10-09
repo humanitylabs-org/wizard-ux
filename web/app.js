@@ -1,6 +1,7 @@
 /* Wizard OS — home shell prototype */
 (() => {
   'use strict';
+  if (document.documentElement.dataset.leaving) return; // core/shell.js is switching to the other shell
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -46,66 +47,9 @@
   const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
 
   /* ---------------- apps ---------------- */
-  const P = ''; // same origin: Wizard apps can run inside a desk
-  const APPS = [
-    // Wizard OS views
-    { id: 'v-day', kind: 'view', name: 'Day in review', icon: '☀', g: ['#ff8a5c', '#ff5ccf'], view: 'day', desc: 'What we did yesterday, by project, person and call' },
-    { id: 'v-week', kind: 'view', name: 'Week in review', icon: '◐', g: ['#8f63ff', '#ff5ccf'], view: 'week', desc: 'Seven days, one compression level up' },
-    { id: 'v-month', kind: 'view', name: 'Month in review', icon: '◯', g: ['#3f6bff', '#8f63ff'], view: 'month', desc: 'The arc of the last four weeks' },
-    { id: 'v-inbox', kind: 'view', name: 'Inbox', icon: '⬇', g: ['#ffbe55', '#ff6b86'], view: 'inbox', desc: 'Needs you, ready for review, working' },
-    // Wizard apps (live private apps)
-    { id: 'wizard', kind: 'chats', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'], desc: 'Your threads with Archimedes' },
-    { id: 'cinequeue', kind: 'wizard', name: 'CineQueue', icon: '🎬', g: ['#ff5c7a', '#7a2bff'], url: P + '/cinequeue/', desc: 'Your watch queue' },
-    { id: 'signal-feed', kind: 'wizard', name: 'Signal Feed', icon: '◎', g: ['#ff5ccf', '#5c3bff'], url: P + '/signal-feed/', desc: 'High-signal feed' },
-    { id: 'wizard-signal', kind: 'wizard', name: 'Wizard Signal', icon: '📡', g: ['#a74dff', '#ff5ccf'], url: P + '/wizard-signal/', desc: 'Social signal' },
-    { id: 'reader', kind: 'wizard', name: 'Reader', icon: '📖', g: ['#e9b46b', '#8a4dff'], url: P + '/reader/', desc: 'Long-form reading' },
-    { id: 'recall', kind: 'wizard', name: 'Recall', icon: '◉', g: ['#3fe0ff', '#3f6bff'], url: P + '/recall/', desc: 'Voice memory' },
-    { id: 'capture', kind: 'wizard', name: 'Capture', icon: '✚', g: ['#4ff0b0', '#2f8cff'], url: P + '/capture/', desc: 'Drop anything in' },
-    { id: 'idea-queue', kind: 'wizard', name: 'Idea Queue', icon: '💡', g: ['#ffd65c', '#ff8a5c'], url: P + '/idea-queue/', desc: 'Ideas waiting their moment' },
-    { id: 'files', kind: 'wizard', name: 'Files', icon: '🗂', g: ['#8aa0c8', '#4a5a8a'], url: P + '/files/', desc: 'Browse the server' },
-    { id: 'iching', kind: 'wizard', name: 'I Ching', icon: '☯', g: ['#d8c39a', '#6a4a2a'], url: P + '/iching/', desc: 'Cast and read' },
-    { id: 'trackhunt', kind: 'wizard', name: 'TrackHunt', icon: '♫', g: ['#4ff0b0', '#0d8a6a'], url: P + '/trackhunt/', desc: 'Find tracks' },
-    { id: 'thai-cram', kind: 'wizard', name: 'Thai Cram', icon: 'ก', g: ['#ff6b86', '#3f6bff'], url: P + '/thai-cram/', desc: 'Thai flashcards' },
-    { id: 'console', kind: 'wizard', name: 'Console', icon: '⌘', g: ['#3a3f58', '#151827'], url: P + '/console/', desc: 'Terminals' },
-    { id: 'model-performance', kind: 'wizard', name: 'Model Perf', icon: '📈', g: ['#3fe0ff', '#8f63ff'], url: P + '/model-performance/', desc: 'Model routing and cost' },
-    { id: 'topics', kind: 'wizard', name: 'Topics', icon: '◇', g: ['#3fe0ff', '#8f63ff'], url: P + '/wizard-topics-preview/', probe: true, desc: 'Threads grouped by topic' },
-    { id: 'mizel', kind: 'wizard', name: 'Mizel', icon: '◉', g: ['#3fe0ff', '#2f8cff'], url: P + '/meetings/#/', desc: 'Meeting recorder' },
-    { id: 'shopping', kind: 'wizard', name: 'Shopping', icon: '🛍', g: ['#ff8a5c', '#ff5ccf'], url: P + '/shopping-assistant/', desc: 'Researched buys' },
-    { id: 'storyboard', kind: 'wizard', name: 'Storyboards', icon: '🎞', g: ['#ffbe55', '#8f63ff'], url: P + '/storyboard-review/', desc: 'Storyboard review' },
-    { id: 'golden-frog', kind: 'wizard', name: 'Golden Frog', icon: '🐸', g: ['#ffd65c', '#4ff0b0'], url: P + '/golden-frog-review/', desc: 'Golden Frog review' },
-    { id: 'live', kind: 'wizard', name: 'Archimedes Live', icon: '🎙', g: ['#ff5ccf', '#3fe0ff'], url: P + '/archimedes-live/', desc: 'Realtime voice' },
-    { id: 'social', kind: 'wizard', name: 'Wizard Social', icon: '⚇', g: ['#7c5cff', '#3fe0ff'], url: P + '/wizard-social/', desc: 'Private social' },
-    { id: 'alerts', kind: 'wizard', name: 'Alerts', icon: '⚠', g: ['#ff6b86', '#8a2b4a'], url: P + '/alerts/', desc: 'System alerts' },
-    // Android natives (real intents on Android Chrome)
-    { id: 'maps', kind: 'native', name: 'Maps', icon: '📍', g: ['#34a853', '#4285f4'], href: 'https://www.google.com/maps', desc: 'Google Maps' },
-    { id: 'camera', kind: 'native', name: 'Camera', icon: '📷', g: ['#4a4f63', '#1b1e2b'], href: 'intent:#Intent;action=android.media.action.STILL_IMAGE_CAMERA;end', desc: 'Camera' },
-    { id: 'phone', kind: 'native', name: 'Phone', icon: '📞', g: ['#4ff0b0', '#13805a'], href: 'tel:', desc: 'Dialer' },
-    { id: 'messages', kind: 'native', name: 'Messages', icon: '💬', g: ['#3f8cff', '#1b4ab8'], href: 'sms:', desc: 'SMS' },
-    { id: 'spotify', kind: 'native', name: 'Spotify', icon: '🎧', g: ['#1ed760', '#0b5c2b'], href: 'intent://#Intent;package=com.spotify.music;end', desc: 'Music' },
-    { id: 'telegram', kind: 'native', name: 'Telegram', icon: '✈', g: ['#2aabee', '#1868a8'], href: 'intent://#Intent;package=org.telegram.messenger;end', desc: 'Telegram' },
-    { id: 'line', kind: 'native', name: 'LINE', icon: 'L', g: ['#06c755', '#04773a'], href: 'intent://#Intent;package=jp.naver.line.android;end', desc: 'LINE' },
-    { id: 'grab', kind: 'native', name: 'Grab', icon: 'G', g: ['#00b14f', '#0a5c32'], href: 'intent://#Intent;package=com.grabtaxi.passenger;end', desc: 'Rides and food' },
-    { id: 'chrome', kind: 'native', name: 'Chrome', icon: '◍', g: ['#fbbc05', '#ea4335'], href: 'https://www.google.com/', desc: 'Browser' },
-    { id: 'side-button', kind: 'native', name: 'Side button', icon: '◉', g: ['#8f63ff', '#ff5ccf'], desc: 'Hold the side button to talk to Wizard' },
-    { id: 'settings', kind: 'native', name: 'Settings', icon: '⚙', g: ['#6a7088', '#2a2f42'], href: 'intent:#Intent;action=android.settings.SETTINGS;end', desc: 'Android settings' },
-  ];
-  // The side-button switch only exists inside the Wizard OS Android app (0.4.0+).
-  if (!(window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function')) APPS.splice(APPS.findIndex(a => a.id === 'side-button'), 1);
-  const APP = Object.fromEntries(APPS.map(a => [a.id, a]));
-  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9ก-๙ ]+/g, ' ').replace(/\s+/g, ' ').trim();
-  function findApp(q) {
-    q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
-    if (!q) return null;
-    const alias = { wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', 'yesterday': 'v-day', 'day review': 'v-day', 'day in review': 'v-day', 'week review': 'v-week', 'month review': 'v-month', notifications: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'v-inbox', terminal: 'console', music: 'spotify', ideas: 'idea-queue' };
-    if (alias[q]) return APP[alias[q]];
-    let best = null, bs = 0;
-    for (const a of APPS) {
-      const n = norm(a.name);
-      let s = n === q ? 100 : n.startsWith(q) ? 80 : n.includes(q) ? 60 : q.includes(n) && n.length > 3 ? 50 : 0;
-      if (s > bs) { bs = s; best = a; }
-    }
-    return bs >= 50 ? best : null;
-  }
+  // The registry lives in core/apps.js (shared with the desktop shell); the phone gets its own list.
+  const { APPS, APP, findApp } = window.WizCore.apps('mobile');
+  const norm = window.WizCore.norm;
 
   /* ---------------- state ---------------- */
   const store = {
@@ -168,6 +112,22 @@
 
   /* ---------------- window model ---------------- */
   const track = $('#track');
+  /* ---------------- Chats ----------------
+   * The Chats client (list, thread, composer, attachments, voice notes, unsent bubbles) is shared with
+   * the desktop shell: web/core/chats.js. The phone hands it windows on desks. */
+  const CHATS = window.WizCore.chats({
+    win: id => W[id],
+    root: () => track,
+    save: () => save(),
+    layout: id => applyLayout(deskOf(id)),
+    toast: (...a) => toast(...a),
+    title: w => winTitle(w),
+    viewContext: (id, how) => viewContext(id, how),
+    visible: () => desks[idx].wins,
+    editUnsent: it => editUnsent(it),
+    newChatHint: 'Type below, or tap the orb and talk.',
+  });
+  const { CH, ch, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, refreshCompose, toggleVoice, markVisibleThreadsSeen, MIC_SVG } = CHATS;
   const CHATS_APP = { name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'] };
   function winApp(w) {
     if (w.app === 'chats') return CHATS_APP;
@@ -708,325 +668,6 @@
   function frameNav(id) { try { return winEl(id)?.querySelector('iframe')?.contentWindow?.navigation || null; } catch (e) { return null; } }
   function frameHref(id) { try { const l = winEl(id)?.querySelector('iframe')?.contentWindow?.location; return l ? l.pathname + l.search : ''; } catch (e) { return ''; } }
 
-  /* ---------------- Chats: a native Wizard client on the Wizard API ----------------
-   * No tabs, no second orb: notifications and apps live in the OS now. A list of
-   * threads, a thread view, and a composer. Reading here is Wizard's own read state. */
-  const CH = {}; // per window: { q, rows, turns, loadedFor, loading, pending, err, at }
-  const ch = id => (CH[id] = CH[id] || { q: '', turns: null, loadedFor: '', pending: [], at: 0 });
-  const INTERNAL = ['[IMPORTANT: Background process ', '[ASYNC DELEGATION BATCH COMPLETE', '[CONTEXT COMPACTION', '[CONTEXT SUMMARY]:', '[PRIOR CONTEXT', '[Your active task list was preserved', '[Your previous agent loop was paused', '[James requested recovery', '[OUT-OF-BAND', '[SYSTEM:'];
-  const msgText = c => typeof c === 'string' ? c : Array.isArray(c) ? c.map(p => typeof p === 'string' ? p : p?.text || '').join('\n') : c && typeof c === 'object' ? String(c.text || c.content || '') : '';
-  function chipFiles(s) {
-    const out = [];
-    for (const m of String(s).matchAll(/\[WIZARD_FILE_CHIPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILE_CHIPS_V1\]/g)) {
-      try { for (const f of JSON.parse(m[1])) out.push({ id: /^[A-Za-z0-9._:-]+$/.test(String(f.id || '')) ? String(f.id) : '', name: String(f.filename || f.name || 'file'), mime: String(f.mime || ''), bytes: Number(f.bytes) || 0 }); } catch (e) {}
-    }
-    return out;
-  }
-  const cleanMsg = s => String(s || '')
-    .replace(/\[WIZARD_FILES_V1\][\s\S]*?\[\/WIZARD_FILES_V1\]/g, '')
-    .replace(/\[WIZARD_FILE_CHIPS_V1\][\s\S]*?\[\/WIZARD_FILE_CHIPS_V1\]/g, '')
-    .replace(/\[WIZARD_CLOSE_AND_FILE_V1\][\s\S]*?\[\/WIZARD_CLOSE_AND_FILE_V1\]/g, '')
-    .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, '')
-    .replace(/^\[Workspace::v1: [^\]\r\n]+\]\s*/, '')
-    .replace(/\n*\[Browser dogfooding policy[\s\S]*$/, '')
-    .replace(/<\s*\/?\s*helm_attachments\s*>/gi, '')
-    .trim();
-  // One turn = what James said, the work in between, and the final answer.
-  function toTurns(rows) {
-    const out = []; let cur = null;
-    for (const m of rows) {
-      const kind = m.display_kind || '';
-      const raw = msgText(m.display_content ?? m.content);
-      if (m.role === 'user') {
-        if (kind || INTERNAL.some(p => raw.trimStart().startsWith(p))) { if (cur) cur.steps++; continue; }
-        const files = chipFiles(raw);
-        let t = cleanMsg(raw);
-        if (files.length && /^Please use the attached (file|files)\.$/.test(t)) t = '';
-        if (!t && !files.length) continue;
-        cur = { u: { text: t, files, at: m.timestamp }, a: null, notes: [], steps: 0 }; out.push(cur);
-      } else if (m.role === 'assistant') {
-        const t = cleanMsg(raw);
-        if (!cur) { cur = { u: null, a: null, notes: [], steps: 0 }; out.push(cur); }
-        if (!t) { cur.steps++; continue; }
-        if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
-        if (cur.a) cur.notes.push(cur.a.text);
-        cur.a = { text: t, at: m.timestamp };
-      } else if (cur) cur.steps++;
-    }
-    return out;
-  }
-  function md(src) {
-    const blocks = [];
-    let s = String(src || '').replace(/```[^\n]*\n([\s\S]*?)```/g, (_, c) => { blocks.push(c); return `\u0000${blocks.length - 1}\u0000`; });
-    let h = esc(s)
-      .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
-      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-      .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
-    let out = '', list = null, para = [];
-    const flushP = () => { if (para.length) { out += `<p>${para.join('<br>')}</p>`; para = []; } };
-    const flushL = () => { if (list) { out += `</${list}>`; list = null; } };
-    for (const ln of h.split('\n')) {
-      let m;
-      if (/^\s*\u0000\d+\u0000\s*$/.test(ln)) { flushP(); flushL(); out += ln.trim(); continue; }
-      if ((m = ln.match(/^#{1,4}\s+(.*)$/))) { flushP(); flushL(); out += `<h4>${m[1]}</h4>`; continue; }
-      if ((m = ln.match(/^\s*[-*•]\s+(.*)$/))) { flushP(); if (list !== 'ul') { flushL(); out += '<ul>'; list = 'ul'; } out += `<li>${m[1]}</li>`; continue; }
-      if ((m = ln.match(/^\s*\d+[.)]\s+(.*)$/))) { flushP(); if (list !== 'ol') { flushL(); out += '<ol>'; list = 'ol'; } out += `<li>${m[1]}</li>`; continue; }
-      if (/^\s*\|.*\|\s*$/.test(ln)) { if (/^\s*\|[\s:|-]+\|\s*$/.test(ln)) continue; flushP(); flushL(); out += `<div class="trow">${ln.trim().slice(1, -1).split('|').map(c => `<span>${c.trim()}</span>`).join('')}</div>`; continue; }
-      if (!ln.trim()) { flushP(); flushL(); continue; }
-      flushL(); para.push(ln);
-    }
-    flushP(); flushL();
-    return out.replace(/\u0000(\d+)\u0000/g, (_, k) => `<pre>${esc(blocks[+k])}</pre>`);
-  }
-  const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
-  // Same sections, order and day boundaries as Wizard's Work view.
-  const SECTIONS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['yesterday', 'Yesterday'], ['pastWeek', 'Past week'], ['deferred', 'Deferred'], ['archive', 'Archive']];
-  const SEC_OPEN_KEY = 'wos.chats.sections.v1';
-  const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false };
-  let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
-  const SEC_PAGE = 40;
-  function chatRow(s) {
-    const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = s.status === 'waiting_for_approval' || s.status === 'failed' || s.status === 'interrupted';
-    return `<button class="ch-row${isNew ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span>
-      <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      <span class="pv">${working ? '<i class="st working"></i>Working · ' : needs ? '<i class="st needs"></i>' : isNew ? '<i class="st unread"></i>' : ''}${esc(clip(s.preview || '', 110))}</span></span></button>`;
-  }
-  function renderChatList(w, el) {
-    const c = ch(w.id), n = norm(c.q);
-    const all = LIVE.ok ? LIVE.sessions.filter(s => !s.hidden) : [];
-    const hit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
-    const groups = LIVE.workGroups(hit);
-    c.more = c.more || {};
-    const head = `<div class="ch-top"><label class="ch-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-chsearch placeholder="Search threads" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false"></label><button class="ch-new" data-chnew aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
-    let body;
-    if (!LIVE.ok) body = `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
-    else if (!hit.length) body = `<div class="ch-empty">No threads match “${esc(c.q)}”.</div>`;
-    else body = SECTIONS.map(([k, label]) => {
-      const list = groups[k];
-      if (!list.length && (k === 'errors' || n)) return '';
-      // While searching, every section with a hit opens so nothing is buried.
-      const open = n ? true : secOpen[k];
-      const newN = k === 'ready' ? list.filter(s => LIVE.isNew(s)).length : 0;
-      const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
-      return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length}</small>${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${list.length ? shown.map(chatRow).join('') : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
-    }).join('');
-    const scroll = el.querySelector('.ch-scroll')?.scrollTop || 0;
-    el.innerHTML = `<div class="ch-list">${head}<div class="ch-scroll">${body}</div></div>`;
-    const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = scroll;
-  }
-  function toggleSection(w, k) {
-    secOpen = { ...secOpen, [k]: !secOpen[k] };
-    try { localStorage.setItem(SEC_OPEN_KEY, JSON.stringify(secOpen)); } catch (e) {}
-    const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderChatList(w, el);
-  }
-  /* ---- attachments: the same Wizard Files upload + wizard_file_ids contract Wizard uses ---- */
-  const MAX_FILES = 8, MAX_BYTES = 64 * 1024 * 1024;
-  const fileKind = f => /^audio\//.test(f.mime || '') || /^wizard-voice-/.test(f.name || '') ? 'voice' : /^image\//.test(f.mime || '') ? 'image' : 'file';
-  const fsize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
-  const fileUrl = id => `/wizard/files/${encodeURIComponent(id)}/content`;
-  async function uploadFile(file) {
-    if (file.size > MAX_BYTES) throw Object.assign(new Error('That file is larger than the 64 MB upload limit.'), { user: true });
-    const r = await fetch('/wizard/files/upload', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
-      headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': file.name || 'upload', 'X-Wizard-Mime': file.type || 'application/octet-stream' }, body: file });
-    if (!r.ok) throw Object.assign(new Error(r.status === 413 ? 'That file is too large for Wizard Files.' : `Wizard Files is unavailable (${r.status}).`), { status: r.status, user: true });
-    const f = (await r.json()).file || {};
-    if (!f.id) throw new Error('Wizard Files returned an invalid upload receipt.');
-    return { id: String(f.id), name: String(f.filename || file.name), mime: String(f.mime || file.type || ''), bytes: Number(f.bytes) || file.size };
-  }
-  async function addFiles(wid, list) {
-    const c = ch(wid); c.files = c.files || [];
-    for (const file of [...list]) {
-      if (c.files.length >= MAX_FILES) { toast('!', `Up to ${MAX_FILES} files per message`, 2400); break; }
-      const local = { key: Math.random().toString(36).slice(2), name: file.name, mime: file.type, bytes: file.size, uploading: true, preview: /^image\//.test(file.type) ? URL.createObjectURL(file) : '' };
-      c.files.push(local); refreshCompose(wid);
-      try { Object.assign(local, await uploadFile(file), { uploading: false }); }
-      catch (e) { c.files = c.files.filter(x => x !== local); toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
-      refreshCompose(wid);
-    }
-  }
-  function attachTray(c) {
-    const files = c.files || [];
-    if (!files.length) return '';
-    return `<div class="ch-tray">${files.map(f => `<span class="ch-att${f.uploading ? ' up' : ''}" data-attkey="${esc(f.key)}">${f.preview ? `<img src="${esc(f.preview)}" alt="">` : `<span class="ic">${fileKind(f) === 'voice' ? MIC_SVG : CLIP_SVG}</span>`}<span class="nm">${esc(fileKind(f) === 'voice' ? 'Voice note' : f.name)}<small>${f.uploading ? 'Uploading…' : esc(fsize(f.bytes))}</small></span><button type="button" data-attrm="${esc(f.key)}" aria-label="Remove">×</button></span>`).join('')}</div>`;
-  }
-  function refreshCompose(wid) {
-    const el = track.querySelector(`[data-chats="${wid}"]`); const form = el?.querySelector('[data-chform]'); if (!form) return;
-    const c = ch(wid), old = form.querySelector('.ch-tray');
-    const html = attachTray(c);
-    if (old) old.outerHTML = html || ''; else if (html) form.insertAdjacentHTML('afterbegin', html);
-    const busy = (c.files || []).some(f => f.uploading);
-    form.querySelector('[type=submit]').disabled = busy;
-  }
-  const MIC_SVG = '<svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg>';
-  const CLIP_SVG = '<svg viewBox="0 0 24 24"><path d="m9.5 17.5 7.7-7.7a3 3 0 0 0-4.2-4.2l-8 8a5 5 0 0 0 7.1 7.1l8-8"/></svg>';
-  const PLAY_SVG = '<svg viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></svg>';
-  /* ---- voice notes: mic + "Voice note" + length, tap to play (Telegram-style) ---- */
-  const DUR_KEY = 'wos.voice-durations.v1';
-  let DUR = (() => { try { return JSON.parse(localStorage.getItem(DUR_KEY) || '{}'); } catch (e) { return {}; } })();
-  const mmss = s => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-  const durLoading = new Set();
-  function loadDuration(id) {
-    if (!id || DUR[id] != null || durLoading.has(id)) return; durLoading.add(id);
-    const a = new Audio(); a.preload = 'metadata';
-    const done = d => { durLoading.delete(id); if (isFinite(d) && d > 0) { DUR[id] = d; try { localStorage.setItem(DUR_KEY, JSON.stringify(DUR)); } catch (e) {} for (const n of document.querySelectorAll(`[data-vnote="${CSS.escape(id)}"] .vd`)) n.textContent = mmss(d); } a.src = ''; };
-    a.addEventListener('loadedmetadata', () => {
-      if (isFinite(a.duration)) return done(a.duration);
-      // Some m4a files report Infinity until the end is probed.
-      a.addEventListener('timeupdate', function f() { a.removeEventListener('timeupdate', f); done(a.duration); a.currentTime = 0; });
-      a.currentTime = 1e7;
-    });
-    a.addEventListener('error', () => durLoading.delete(id));
-    a.src = fileUrl(id);
-  }
-  let player = null; // { id, audio }
-  function toggleVoice(id) {
-    if (player && player.id === id) { if (player.audio.paused) player.audio.play().catch(() => {}); else player.audio.pause(); return; }
-    if (player) { player.audio.pause(); paintVoice(player.id, false, 0); }
-    const audio = new Audio(fileUrl(id)); player = { id, audio };
-    audio.addEventListener('timeupdate', () => { const d = DUR[id] || audio.duration; paintVoice(id, !audio.paused, isFinite(d) && d ? audio.currentTime / d : 0, audio.currentTime); });
-    audio.addEventListener('play', () => paintVoice(id, true));
-    audio.addEventListener('pause', () => paintVoice(id, false));
-    audio.addEventListener('ended', () => { paintVoice(id, false, 0); player = null; });
-    audio.addEventListener('error', () => { paintVoice(id, false, 0); player = null; toast('!', 'Couldn’t play this voice note', 2400); });
-    audio.play().catch(() => {});
-  }
-  function paintVoice(id, playing, frac, t) {
-    for (const n of document.querySelectorAll(`[data-vnote="${CSS.escape(id)}"]`)) {
-      n.classList.toggle('playing', !!playing);
-      if (frac != null) n.style.setProperty('--p', String(Math.min(1, frac)));
-      const vd = n.querySelector('.vd'); if (vd && t != null && playing) vd.textContent = mmss(t); else if (vd && !playing && DUR[id]) vd.textContent = mmss(DUR[id]);
-    }
-  }
-  function fileChip(f) {
-    const k = fileKind(f);
-    if (k === 'voice' && f.id) { loadDuration(f.id); return `<button type="button" class="vnote" data-vnote="${esc(f.id)}" aria-label="Play voice note"><span class="vp">${PLAY_SVG}<i></i></span><span class="vw"><span class="vt">${MIC_SVG}Voice note</span><span class="vbar"><b></b></span></span><span class="vd">${DUR[f.id] ? mmss(DUR[f.id]) : ''}</span></button>`; }
-    if (k === 'voice') return `<span class="fchip">${MIC_SVG} Voice note</span>`;
-    if (k === 'image' && f.id) return `<a class="fimg" href="${esc(fileUrl(f.id))}" target="_blank" rel="noopener"><img src="${esc(fileUrl(f.id))}" alt="${esc(f.name)}" loading="lazy"></a>`;
-    return f.id ? `<a class="fchip" href="${esc(fileUrl(f.id))}" target="_blank" rel="noopener">${CLIP_SVG} ${esc(f.name)}</a>` : `<span class="fchip">${CLIP_SVG} ${esc(f.name)}</span>`;
-  }
-  function turnHtml(tn, last, working) {
-    let h = '';
-    if (tn.u) h += `<div class="msg u"><div class="bub">${tn.u.files.length ? `<div class="fchips">${tn.u.files.map(fileChip).join('')}</div>` : ''}${tn.u.text ? md(tn.u.text) : ''}</div></div>`;
-    const live = last && working;
-    if (tn.steps || tn.notes.length || live) {
-      const label = live ? (tn.notes.length ? esc(clip(tn.notes[tn.notes.length - 1], 90)) : 'Working') : `Worked through ${tn.steps} step${tn.steps === 1 ? '' : 's'}`;
-      h += `<details class="steps${live ? ' live' : ''}"><summary>${live ? '<i class="dots"><b></b><b></b><b></b></i>' : '◇'} ${label}</summary>${tn.notes.map(x => `<div class="note-line">${md(x)}</div>`).join('')}</details>`;
-    }
-    if (tn.a) h += `<div class="msg a"><div class="bub">${md(tn.a.text)}</div></div>`;
-    return h;
-  }
-  function renderThread(w, el) {
-    const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
-    const working = !!s && WORKING_ST.has(s.status);
-    const sub = isNew ? 'Starts a new thread with Archimedes' : working ? 'Archimedes is working' : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
-    const turns = c.loadedFor === w.thread ? c.turns || [] : null;
-    let msgs;
-    const pend = pendingFor(w);
-    if (isNew && !pend.length) msgs = `<div class="ch-empty"><b>New chat</b><br>Type below, or tap the orb and talk.</div>`;
-    else if (!turns && !isNew && !pend.length) msgs = `<div class="ch-empty">${c.err ? esc(c.err) : 'Loading thread…'}</div>`;
-    else msgs = (turns || []).slice(-60).map((tn, k, arr) => turnHtml(tn, k === arr.length - 1, working)).join('')
-      + pend.map(pendingHtml).join('')
-      + (pend.some(p => p.state !== 'failed') && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
-    const box = el.querySelector('.ch-msgs');
-    const atBottom = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 80;
-    const draft = el.querySelector('textarea')?.value || c.draft || '';
-    const hadFocus = el.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA';
-    el.innerHTML = `<div class="ch-thread">
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span class="emo">${isNew ? '✎' : emoOf(w.thread)}</span><div class="ti"><b>${esc(winTitle(w))}</b><small>${esc(sub)}</small></div></div>
-      <div class="ch-msgs">${msgs}</div>
-      <form class="ch-compose" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? 'Steer Archimedes…' : 'Message Archimedes'}" enterkeyhint="enter">${esc(draft)}</textarea><button type="submit" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
-    </div>`;
-    const nb = el.querySelector('.ch-msgs');
-    nb.scrollTop = atBottom ? nb.scrollHeight : (box ? box.scrollTop : nb.scrollHeight);
-    if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
-    growTa(el.querySelector('textarea'));
-  }
-  /* ---- durable outbox: every message is saved on the phone before it is sent ---- */
-  function pendingFor(w) {
-    if (!OUTBOX || !w.thread) return [];
-    return OUTBOX.forThread(w.thread === '__new__' ? '' : w.thread, w.thread === '__new__' ? w.id : '');
-  }
-  function pendingState(p) {
-    if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`;
-    if (p.state === 'waiting') return `<span class="pst wait">${esc(p.error || 'Couldn’t reach Wizard')} · retrying</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>`;
-    if (p.state === 'sent') return '<span class="pst ok">Sent</span>';
-    return '<span class="pst">Sending…</span>';
-  }
-  function pendingHtml(p) {
-    const files = (p.files || []).filter(f => f !== p.audioFile);
-    const voice = p.audio || p.audioFile ? `<span class="fchip">${MIC_SVG} Voice note${p.text ? '' : ' · words come when it sends'}</span>` : '';
-    return `<div class="msg u pending ${p.state}" data-ob="${esc(p.id)}"><div class="bub">${files.length || voice ? `<div class="fchips">${voice}${files.map(fileChip).join('')}</div>` : ''}${p.text ? md(p.text) : ''}</div><div class="pmeta">${pendingState(p)}</div></div>`;
-  }
-  function renderChats(w) {
-    const el = track.querySelector(`[data-chats="${w.id}"]`); if (!el) return;
-    if (w.thread) { renderThread(w, el); loadThread(w); } else renderChatList(w, el);
-  }
-  async function loadThread(w, force) {
-    const c = ch(w.id); if (!w.thread || w.thread === '__new__' || c.loading) return;
-    const s = LIVE.session(w.thread);
-    const fresh = c.loadedFor === w.thread && Date.now() - c.at < (s && WORKING_ST.has(s.status) ? 3500 : 15000);
-    if (fresh && !force) return;
-    c.loading = true;
-    try {
-      const rows = await LIVE.messages(w.thread);
-      if (!W[w.id] || W[w.id].thread !== w.thread) return;
-      const turns = toTurns(rows);
-      const sig = JSON.stringify(turns.slice(-3));
-      let changed = c.loadedFor !== w.thread || sig !== c.sig;
-      Object.assign(c, { turns, loadedFor: w.thread, at: Date.now(), err: '', sig });
-      // A sent message has landed once a recent user turn in the thread matches it.
-      const sent = OUTBOX ? OUTBOX.forThread(w.thread).filter(p => p.state === 'sent') : [];
-      if (sent.length) {
-        const us = turns.filter(t => t.u).slice(-4).map(t => t.u);
-        const landed = p => us.some(u => ((p.files || []).length && p.files.some(f => (u.files || []).some(x => x.id === f.id)))
-          || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
-        let gone = false;
-        for (const p of sent) if (landed(p)) { OUTBOX.landed(p.id); gone = true; }
-        if (gone) changed = true;
-      }
-      if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && W[w.id].thread === w.thread) renderThread(W[w.id], el); }
-    } catch (e) { c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now(); }
-    finally { c.loading = false; }
-  }
-  function openChat(wid, sid) {
-    const w = W[wid]; if (!w) return;
-    w.thread = sid; save();
-    if (sid !== '__new__') LIVE.markSeen(sid);
-    renderChats(w); applyLayout(deskOf(wid));
-  }
-  function chatsBack(w) { w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
-  async function sendChat(wid, text, how = 'typing in the Chats window', audio = null) {
-    const w = W[wid]; text = String(text || '').trim(); if (!w) return;
-    const c = ch(wid);
-    const files = (c.files || []).filter(f => f.id && !f.uploading);
-    if (!text && !files.length && !audio) return;
-    if ((c.files || []).some(f => f.uploading)) { toast('…', 'Still uploading · send when it finishes', 2000); return; }
-    const isNew = w.thread === '__new__';
-    const s = isNew ? null : LIVE.session(w.thread);
-    const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
-    c.draft = ''; c.files = [];
-    // Saved on the phone first; the outbox delivers it (and retries) from here.
-    const it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : w.thread, steerRunId, text, audio,
-      instructions: viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid, how, source: 'chat' });
-    if (isNew && W[wid]) { W[wid].thread = it.sessionId; save(); c.loadedFor = ''; }
-    renderChats(W[wid]); applyLayout(deskOf(wid));
-  }
-  const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
-  picker.setAttribute('data-chfile', '');
-  document.body.appendChild(picker);
-  let pickFor = '';
-  picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
-  function growTa(ta) { if (!ta) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; }
-  // While a thread is on screen, new replies count as read (same rule as Wizard).
-  function markVisibleThreadsSeen() {
-    if (!LIVE?.ok || document.hidden) return;
-    for (const id of desks[idx].wins) {
-      const w = W[id]; if (w?.app !== 'chats' || !w.thread || w.thread === '__new__') continue;
-      const s = LIVE.session(w.thread); if (s && LIVE.isNew(s)) LIVE.markSeen(w.thread);
-    }
-  }
   /* Open a real thread: in a Chats window on this desk, else any Chats window, else a new one here. */
   function openWizardThread(id, opts = {}) {
     if (!id) return;
@@ -1245,18 +886,7 @@
       if (cr) { const chn = $('.review', we)._chain; const k = +cr.dataset.crumb; if (k < chn.length - 1) setZ(id, chn[k], 'out'); return; }
       const wt = e.target.closest('[data-wizthread]'); if (wt) return openWizardThread(wt.dataset.wizthread);
     }
-    if (w.app === 'chats') {
-      const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); return toast('↻', 'Sending again', 1400); }
-      const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) editUnsent(it); return; }
-      const o = e.target.closest('[data-chopen]'); if (o) return openChat(id, o.dataset.chopen);
-      if (e.target.closest('[data-chback]')) return chatsBack(w);
-      if (e.target.closest('[data-chnew]')) return openChat(id, '__new__');
-      const sec = e.target.closest('[data-sectoggle]'); if (sec) return toggleSection(w, sec.dataset.sectoggle);
-      const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; return renderChatList(w, track.querySelector(`[data-chats="${id}"]`)); }
-      if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; return picker.click(); }
-      const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); return refreshCompose(id); }
-      const v = e.target.closest(".vnote[data-vnote]"); if (v) { e.preventDefault(); return toggleVoice(v.dataset.vnote); }
-    }
+    if (w.app === 'chats' && CHATS.click(e, id)) return;
   });
   track.addEventListener('dblclick', e => {
     const bar = e.target.closest('.wbar'); if (!bar || e.target.closest('[data-wact]')) return;
@@ -1265,21 +895,7 @@
     // The click handler may already have toggled on the second tap; only act if it did not.
     if (!(d.full && d.focus === id) && performance.now() - fullAt > 600) setFull(id, true);
   });
-  track.addEventListener('submit', e => {
-    const f = e.target.closest('[data-chform]'); if (!f) return;
-    e.preventDefault(); const id = f.closest('.win')?.dataset.win; const ta = $('textarea', f);
-    const text = ta.value; const c = ch(id);
-    if (!text.trim() && !(c.files || []).some(f => f.id)) return;
-    if ((c.files || []).some(f => f.uploading)) { toast('…', 'Still uploading · send when it finishes', 2000); return; }
-    ta.value = ''; sendChat(id, text);
-  });
-  track.addEventListener('input', e => {
-    if (e.target.matches('[data-chsearch]')) { const id = e.target.closest('.win').dataset.win; ch(id).q = e.target.value; const el = track.querySelector(`[data-chats="${id}"] .ch-scroll`); if (el) { renderChatList(W[id], track.querySelector(`[data-chats="${id}"]`)); const inp = track.querySelector(`[data-chats="${id}"] [data-chsearch]`); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } }
-    if (e.target.matches('.ch-compose textarea')) { growTa(e.target); const id = e.target.closest('.win').dataset.win; ch(id).draft = e.target.value; }
-  });
-  track.addEventListener('keydown', e => {
-    if (e.target.matches('.ch-compose textarea') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.target.form.requestSubmit(); }
-  });
+  CHATS.bind(track);
 
   /* Window menu: full screen, move to a neighbouring desk, close. */
   const menuEl = $('#wmenu');
@@ -2102,6 +1718,31 @@
     return true;
   };
   $('#txChips').addEventListener('click', e => { if (e.target.closest('[data-handoff="drop"]')) { $('#txChips').innerHTML = ''; txHide(0); } });
+  // Native bridge v0 (core/bridge.js): the same events drive the phone and the desktop shell.
+  window.WizCore.bridge?.handle({
+    orb(d) {
+      const a = d.action || 'toggle';
+      if (a === 'cancel') { if (V.state !== 'idle') cancelVoice(true); return 'none'; }
+      if (V.state === 'think' || V.state === 'agent' || V.state === 'done') return 'busy';
+      if (V.state === 'idle') { if (a === 'send') return 'none'; closeSheets(); startVoice('auto'); return 'voice'; }
+      if (a === 'start') return 'voice';
+      finishVoice(); return 'sent';
+    },
+    open(path, d) {
+      closeSheets();
+      const sid = d.thread || (String(path).match(/[?&]session=([^&#]+)/) || [])[1];
+      if (sid) { openWizardThread(decodeURIComponent(sid)); return; }
+      if (/^\/?apps\/?$/.test(path)) { openSheet('launcher'); return; }
+      const a = d.app ? findApp(d.app) || APP[d.app] : /^\/wizard\/?$/.test(path) ? APP.wizard : APPS.find(x => x.url && path && x.url.replace(/[#?].*$/, '') === String(path).replace(/[#?].*$/, ''));
+      if (a) openApp(a); else if (path) toast('◇', `No app for ${path}`, 1800);
+    },
+    dictation(text) {
+      const f = W[desks[idx].focus];
+      if (f?.app === 'chats' && f.thread && CHATS.insertText(f.id, text)) return;
+      const el = document.activeElement; if (el && /^(TEXTAREA|INPUT)$/.test(el.tagName)) { el.setRangeText(text, el.selectionStart, el.selectionEnd, 'end'); el.dispatchEvent(new Event('input', { bubbles: true })); }
+    },
+    back() { window.__wosNativeBack(); },
+  });
   window.__wos = {
     live: LIVE, openPeek, closePeek, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
