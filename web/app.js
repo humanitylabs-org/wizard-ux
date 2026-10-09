@@ -147,6 +147,12 @@
     const f = W[d.focus] || W[d.wins[0]];
     return d.wins.length > 1 ? `${winTitle(f)} +${d.wins.length - 1}` : winTitle(f);
   }
+  // Short name for the bottom label and scrubber: the app ("Chats"), never a long thread title.
+  function deskName(i) {
+    const d = desks[i]; if (!d.wins.length) return i === HOME ? 'Home' : 'Empty';
+    const f = W[d.focus] || W[d.wins[0]], n = f.app === 'frame' || f.app === 'maps' || f.app === 'chats' ? winApp(f).name : winTitle(f);
+    return d.wins.length > 1 ? `${n} +${d.wins.length - 1}` : n;
+  }
   const deskOf = id => desks.findIndex(d => d.wins.includes(id));
   const winEl = id => track.querySelector(`.win[data-win="${id}"]`);
   const focusedWin = () => W[desks[idx].focus] || null;
@@ -230,7 +236,7 @@
     n = Math.max(0, Math.min(DESKS_N - 1, n));
     const moved = n !== idx; idx = n; placeTrack(0, true); renderDots(); save();
     if (moved) vib(8);
-    if (!silent) announce(`Desk ${idx + 1} · <b>${esc(deskTitle(idx))}</b>`);
+    if (!silent) announce(`Desk ${idx + 1} · <b>${esc(deskName(idx))}</b>`);
     markVisibleThreadsSeen();
   }
   function announce(html) {
@@ -253,10 +259,34 @@
   $('#dock').addEventListener('pointerup', endDotHold); $('#dock').addEventListener('pointercancel', endDotHold); $('#dock').addEventListener('pointerleave', endDotHold);
   $('#dock').addEventListener('click', e => {
     const b = e.target.closest('[data-goto]'); if (!b) return;
-    if (Date.now() - peekJustOpened < 600) return;
+    if (Date.now() - peekJustOpened < 600 || Date.now() - dockSwiped < 400) return;
     goDesk(+b.dataset.goto);
   });
   $('#dock').addEventListener('contextmenu', e => { if (e.target.closest('[data-goto]')) e.preventDefault(); });
+  /* Swipe anywhere on the bottom bar to change desks: the orb has its own gestures, the
+   * scrubber its own; everything else in the bar (dots, gaps, edges) is a desk swipe. */
+  let DS = null, dockSwiped = 0;
+  $('#dock').addEventListener('pointerdown', e => {
+    if (e.target.closest('#orbWrap, #scrub') || sheet) return;
+    DS = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, h: false };
+  });
+  $('#dock').addEventListener('pointermove', e => {
+    if (!DS || e.pointerId !== DS.id) return;
+    const dx = e.clientX - DS.x, dy = e.clientY - DS.y;
+    if (!DS.h) { if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return; DS.h = true; endDotHold(); try { $('#dock').setPointerCapture(e.pointerId); } catch (_) {} }
+    let d = dx; if ((idx === 0 && d > 0) || (idx === DESKS_N - 1 && d < 0)) d *= .28;
+    placeTrack(d * 1.1, false);
+  });
+  const dockEnd = e => {
+    if (!DS || e.pointerId !== DS.id) return; const s = DS; DS = null;
+    if (!s.h) return;
+    const dx = e.clientX - s.x, v = dx / ((performance.now() - s.t) || 1);
+    dockSwiped = Date.now();
+    if (e.type !== 'pointercancel' && (dx < -60 || v < -.5)) goDesk(idx + 1);
+    else if (e.type !== 'pointercancel' && (dx > 60 || v > .5)) goDesk(idx - 1);
+    else placeTrack(0, true);
+  };
+  $('#dock').addEventListener('pointerup', dockEnd); $('#dock').addEventListener('pointercancel', dockEnd);
   function deskCard(i) {
     const d = desks[i];
     const wins = d.wins.map(id => W[id]).filter(Boolean);
@@ -291,7 +321,7 @@
     const n = Math.max(0, Math.min(DESKS_N - 1, SC.start + Math.round(dx / SC_STEP)));
     if (n !== SC.at) { SC.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(); }
   });
-  function scLabel() { scrub.querySelector('.sc-label').textContent = `Desk ${SC.at + 1} · ${deskTitle(SC.at)}`; }
+  function scLabel() { scrub.querySelector('.sc-label').textContent = `Desk ${SC.at + 1} · ${deskName(SC.at)}`; }
   const scEnd = () => { if (!SC) return; clearTimeout(SC.t); const live = SC.live; const at = SC.at; SC = null; scrub.classList.remove('on'); if (live) goDesk(at, true); };
   scrub.addEventListener('pointerup', scEnd); scrub.addEventListener('pointercancel', scEnd);
 
@@ -309,7 +339,7 @@
     const w = { id: newId(), ...obj }; W[w.id] = w;
     const d = desks[t]; d.wins.push(w.id); d.focus = w.id; d.full = false;
     renderDesk(t); save(); renderDots();
-    if (t !== idx) goDesk(t); else announce(`Opened <b>${esc(winTitle(w))}</b>`);
+    if (t !== idx) goDesk(t); else announce(`Opened <b>${esc(winApp(w).name)}</b>`);
     return w;
   }
   function closeWin(id) {
@@ -327,7 +357,7 @@
     const f = desks[from]; f.wins = f.wins.filter(x => x !== id); if (f.focus === id) { f.focus = f.wins[f.wins.length - 1] || null; f.full = false; } if (!f.wins.length) f.full = false;
     const d = desks[to]; d.wins.push(id); d.focus = id; d.full = false;
     renderDesk(from); renderDesk(to); save(); renderDots(); goDesk(to, true);
-    announce(`Moved to desk ${to + 1} · <b>${esc(winTitle(W[id]))}</b>`);
+    announce(`Moved to desk ${to + 1} · <b>${esc(winApp(W[id]).name)}</b>`);
     return true;
   }
   function focusWin(id) {
@@ -1174,12 +1204,32 @@
     voiceEl.classList.toggle('cmd', s === 'command' || (V.kind === 'command' && s !== 'idle'));
     voiceEl.setAttribute('aria-hidden', String(s === 'idle'));
   }
-  function setRouteBtn() {
-    const b = $('#arcRoute'); b.dataset.route = V.route;
-    $('#routeGlyph').textContent = V.route === 'auto' ? 'A' : '✦';
-    $('#routeLabel').textContent = V.route === 'auto' ? 'Auto' : 'Agent';
+  // The Auto/Agent toggle is gone: the router always decides (commands run, the rest goes to Archimedes).
+  V.route = 'auto';
+  // Third arc button: attach a photo or file to this take. It rides along with what you say.
+  V.files = [];
+  const voicePicker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
+  document.body.appendChild(voicePicker);
+  function renderVoiceFiles() {
+    const n = V.files.length, b = $('#arcAttach');
+    b.classList.toggle('has', n > 0); b.classList.toggle('busy', V.files.some(f => f.uploading));
+    $('#attachCount').textContent = n ? String(n) : '';
+    $('#attachLabel').textContent = V.files.some(f => f.uploading) ? 'Uploading' : n ? (n === 1 ? '1 file' : `${n} files`) : 'Attach';
   }
-  setRouteBtn();
+  voicePicker.addEventListener('change', async () => {
+    const list = [...voicePicker.files]; voicePicker.value = '';
+    for (const file of list) {
+      if (V.state === 'idle') break;
+      if (V.files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); break; }
+      const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true };
+      V.files.push(f); renderVoiceFiles();
+      try { Object.assign(f, await CHATS.uploadFile(file), { uploading: false }); }
+      catch (e) { V.files = V.files.filter(x => x !== f); toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
+      renderVoiceFiles();
+    }
+  });
+  // Files that finished uploading, in the shape the outbox sends as wizard_file_ids.
+  const takeFiles = () => V.files.filter(f => f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes }));
   function txShow(text, label, cls, icon) {
     tx.className = 'transcript ' + (cls || '');
     $('#txRouteIcon').textContent = icon || '✦';
@@ -1218,11 +1268,13 @@
     V.onAt = performance.now();
     if (V.state !== 'idle') return;
     clearTimeout(txHideT);
-    Object.assign(V, { kind, target: null, chunks: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '' });
+    Object.assign(V, { kind, target: null, chunks: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
-    const label = kind === 'command' ? 'Command · release to run' : V.route === 'agent' ? 'To Archimedes · tap orb to send' : 'Listening · tap orb to send';
-    txShow('', label, kind === 'command' ? 'command' : '', kind === 'command' ? '⚡' : '✦');
+    // No status card while recording: the orb, timer and arc already say it. Hold-for-command keeps
+    // its card (it shows where the command will land). First tap ever: a one-time tip, then never again.
+    if (kind === 'command') txShow('', 'Command · release to run', 'command', '⚡');
+    else { txHide(0); if (!store.get('voiceTipSeen', false)) { store.set('voiceTipSeen', true); txPill('✦', 'Listening · tap the orb again to send', 'tip'); txHide(3200); } }
     V.raf = requestAnimationFrame(tick);
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
@@ -1238,6 +1290,7 @@
       if (V.stopAsked) finishVoice();
     } catch (err) {
       V.sim = true;
+      txShow('', '', '', '✦');
       $('#txRouteText').textContent = kind === 'command' ? 'No mic here · tap a command' : 'No mic here · tap a line to simulate';
       const ex = kind === 'command'
         ? ['Open CineQueue', 'Zoom out', 'Next desk', 'Directions to Bangkok airport']
@@ -1250,7 +1303,8 @@
   function stopStream() { try { V.stream && V.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { V.ac && V.ac.close(); } catch (e) {} V.stream = null; V.ac = null; V.an = null; }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
-    if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'Tap a line above to simulate'); return; }
+    if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
+    if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
     if (!V.rec) { V.stopAsked = true; return; }
     if (V.state !== 'paused') V.acc += performance.now() - V.t0;
     setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core');
@@ -1283,8 +1337,9 @@
       // Never lose a recording: it goes to the outbox, which transcribes and sends it when Wizard is back.
       setVoice('idle');
       const aim = V.target, f = desks[idx].focus, fw = W[f];
-      if (aim == null && fw?.app === 'chats' && fw.thread) sendChat(f, '', 'voice, aimed at this thread', blob);
-      else toAgent('', 'Saved · sends when Wizard is reachable', { audio: blob, desk: aim, source: 'orb' });
+      const files = takeFiles();
+      if (aim == null && fw?.app === 'chats' && fw.thread) { ch(f).files = [...(ch(f).files || []), ...files]; sendChat(f, '', 'voice, aimed at this thread', blob); }
+      else toAgent('', 'Saved · sends when Wizard is reachable', { audio: blob, desk: aim, source: 'orb', files });
       txPill('↻', 'Saved · sends when Wizard is back', 'agent', 'Couldn’t reach Wizard · recording saved, will send'); txHide(2600);
     }
   }
@@ -1293,13 +1348,17 @@
   $('#voice').addEventListener('click', e => { if (e.target.closest('.arc') && performance.now() - (V.onAt || 0) < 450) { e.stopPropagation(); e.preventDefault(); } }, true);
   $('#arcCancel').addEventListener('click', () => cancelVoice());
   $('#arcPause').addEventListener('click', () => {
-    if (V.state === 'listen') { V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} setVoice('paused'); $('#txRouteText').textContent = 'Paused'; vib(6); }
-    else if (V.state === 'paused') { V.t0 = performance.now(); try { V.rec && V.rec.resume(); } catch (e) {} setVoice('listen'); $('#txRouteText').textContent = V.route === 'agent' ? 'To Archimedes · tap orb to send' : 'Listening · tap orb to send'; V.raf = requestAnimationFrame(tick); vib(6); }
+    if (V.state === 'listen') { V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} setVoice('paused'); vib(6); }
+    else if (V.state === 'paused') { V.t0 = performance.now(); try { V.rec && V.rec.resume(); } catch (e) {} setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
   });
-  $('#arcRoute').addEventListener('click', () => {
-    V.route = V.route === 'auto' ? 'agent' : 'auto'; store.set('route', V.route); setRouteBtn(); vib(6);
-    if (V.state === 'listen' || V.state === 'paused') $('#txRouteText').textContent = V.route === 'agent' ? 'Straight to Archimedes' : 'Auto: commands run, the rest goes to Archimedes';
+  // The file picker is a separate screen on Android: pause the take while it is open, resume on return.
+  $('#arcAttach').addEventListener('click', () => {
+    if (V.state !== 'listen' && V.state !== 'paused') return;
+    if (V.state === 'listen') { $('#arcPause').click(); V.pickPaused = true; }
+    voicePicker.click();
   });
+  const pickerBack = () => { if (!V.pickPaused) return; V.pickPaused = false; if (V.state === 'paused') $('#arcPause').click(); };
+  voicePicker.addEventListener('change', pickerBack); voicePicker.addEventListener('cancel', pickerBack);
 
   /* Typed or simulated utterance, same pipeline as voice */
   async function runUtterance(text, kind, typed) {
@@ -1382,7 +1441,13 @@
     const opts = target == null ? {} : { desk: target };
     $('#txText').textContent = text;
     const v = viewOf(desks[idx].focus);
-    if (kind !== 'command' && V.route === 'agent') return toAgent(text, 'Straight to Archimedes' + sttNote, opts);
+    // Attached files mean "look at this": skip command routing and send words + files together.
+    const files = typed ? [] : takeFiles();
+    if (files.length) {
+      const fw = W[desks[idx].focus];
+      if (target == null && fw?.app === 'chats' && fw.thread) { ch(fw.id).files = [...(ch(fw.id).files || []), ...files]; setVoice('idle'); txPill('✦', 'Sent with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendChat(fw.id, text, 'voice, aimed at this thread'); }
+      return toAgent(text, 'To Archimedes · with files' + sttNote, { ...opts, files });
+    }
     const t0 = performance.now();
     const loc = localParse(text);
     if (loc) {
@@ -1478,7 +1543,7 @@
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice');
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    const it = await OUTBOX.enqueue({ kind: 'new', text, instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb' });
+    const it = await OUTBOX.enqueue({ kind: 'new', text, instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
     const t = opts.desk == null ? idx : opts.desk;
     const wid = desks[t].wins.find(x => W[x].app === 'chats');
     if (wid) { if (t !== idx) goDesk(t); focusWin(wid); openChat(wid, it.sessionId); }
@@ -1505,7 +1570,6 @@
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
-    if (V.state === 'think' || V.state === 'agent' || V.state === 'done') return;
     e.preventDefault(); orbWrap.setPointerCapture(e.pointerId); closeMenu();
     G = { x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
@@ -1526,7 +1590,8 @@
       $('#txRouteText').textContent = G.aim == null ? 'Command · release to run' : `Command · opens on desk ${G.aim + 1}`;
       return;
     }
-    if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14 && V.state === 'idle') {
+    // Swipes work in every voice state: recording or sending never locks navigation.
+    if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14) {
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
     }
     if (G.mode === 'h' && !sheet) {
@@ -1555,6 +1620,7 @@
       if (sheet) return closeSheets();
       if (V.state === 'idle') return startVoice('auto');
       if (V.state === 'listen' || V.state === 'paused') { shock(); return finishVoice(); }
+      return; // sending: a tap on the orb does nothing until the take is handed off
     } else if (g.mode === 'hold') {
       if (cancelled) return cancelVoice(true);
       V.target = g.aim;
@@ -1591,7 +1657,7 @@
   let exitUntil = 0, exitT = 0, guardOn = false, ignorePop = 0;
   const watchers = new Set();
   function backStep() {
-    if (V.state !== 'idle') { cancelVoice(true); return 'voice'; }
+    // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
     if (document.querySelector('#txChips [data-handoff]')) { $('#txChips').innerHTML = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
     if (closePeek()) return 'peek';

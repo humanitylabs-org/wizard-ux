@@ -302,9 +302,13 @@ body {
 .voice.on .arc-left  { transform: translate(-86px, -66px) scale(1); transition-delay: 30ms; }
 .voice.on .arc-mid   { transform: translate(0, -106px) scale(1); }
 .voice.on .arc-right { transform: translate(86px, -66px) scale(1); transition-delay: 60ms; }
-.arc-right[data-route="agent"] { color: var(--violet-2); }
-.arc-right[data-route="command"] { color: var(--cyan); border-color: rgba(63, 224, 255, .45); }
-.arc-right[data-route="auto"] { color: #fff; }
+.arc-right { color: #fff; }
+/* Attach: count badge once a file rides along; a soft pulse while it uploads. */
+.arc-count { position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px; display: none; place-items: center;
+  font: 800 10.5px/1 system-ui; font-style: normal; background: var(--violet-2); color: #140b2c; }
+.arc-right.has .arc-count { display: grid; }
+.arc-right.has { border-color: rgba(205, 190, 255, .6); background: rgba(80, 52, 170, .55); }
+.arc-right.busy svg { animation: blink 1s ease-in-out infinite; }
 .voice.cmd .arc-mid, .voice.cmd .arc-right { opacity: 0; pointer-events: none; transform: translate(0, -60px) scale(.3); }
 .voice.cmd .arc-left { opacity: 0; pointer-events: none; }
 
@@ -715,3 +719,14 @@ body {
 .transcript.brief .tx-route b { flex: none; border-radius: 50%; }
 .transcript.brief.agent .tx-route b { background: rgba(255, 110, 199, .2); color: var(--pink); }
 .transcript.brief.command .tx-route b { color: var(--cyan); }
+
+/* Recording never locks the screen: the whole bottom bar takes desk swipes (James, 9 Oct).
+ * Windows end above the bar, so making it touchable covers nothing. */
+.dock { pointer-events: auto; touch-action: none; }
+/* One-time first-use tip ("tap the orb again to send"), sits above the arc so it never covers a button. */
+.voice .transcript.brief.tip { bottom: calc(var(--safe-b) + var(--dock-h) + 104px); }
+.transcript.brief.tip .tx-route b { background: rgba(143, 99, 255, .25); color: var(--violet-2); }
+/* Bottom label is short (Desk 2 · Chats); cap it so it can never run off the screen. */
+.desk-label { max-width: calc(100% - 48px); overflow: hidden; text-overflow: ellipsis; }
+/* While recording the timer owns the top of the orb: the unread badge steps aside so the time is readable. */
+.device[data-voice="listen"] .orb-badge, .device[data-voice="paused"] .orb-badge, .device[data-voice="command"] .orb-badge { opacity: 0; }
