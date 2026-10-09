@@ -120,6 +120,8 @@ public final class Updater {
         appCtx = a.getApplicationContext();
         main.removeCallbacks(backgroundInstall);
         cancelNotice(a);
+        DeviceBridge b = bridge; // whatever happened in the background (job, refusal), the page shows it now
+        if (b != null) b.emit("update", state.toString());
         if (wantsInstall && a.getPackageManager().canRequestPackageInstalls()) { wantsInstall = false; install(a); return; }
         if (System.currentTimeMillis() - lastCheck > 30 * 60_000L) check(a, null);
         else if (verified != null) advance(a, false, null); // e.g. came back from a recording: show the ready banner
@@ -281,10 +283,14 @@ public final class Updater {
         return cm != null && cm.getActiveNetwork() != null && !cm.isActiveNetworkMetered();
     }
 
-    /** Android will let this commit through without asking: API 31+, installs allowed, and we installed the current one. */
+    /**
+     * Android should let this commit through without asking: API 31+ and "Install unknown apps" allowed. Then a
+     * USER_ACTION_NOT_REQUIRED session is silent when Wizard OS is the installer of record / update owner, or updates
+     * itself while declaring UPDATE_PACKAGES_WITHOUT_USER_ACTION (both true here). If Android still wants a confirm
+     * (older rules, OEM policy) the session says so (STATUS_PENDING_USER_ACTION) and we show Android's screen.
+     */
     static boolean silentPossible(Context c) {
-        if (Build.VERSION.SDK_INT < 31 || !c.getPackageManager().canRequestPackageInstalls()) return false;
-        return c.getPackageName().equals(installerOfRecord(c));
+        return Build.VERSION.SDK_INT >= 31 && c.getPackageManager().canRequestPackageInstalls();
     }
 
     @SuppressWarnings("deprecation")
@@ -298,8 +304,16 @@ public final class Updater {
         } catch (PackageManager.NameNotFoundException | RuntimeException e) { return null; }
     }
 
-    /** The one signing certificate an update must carry (build.gradle: the Wizard OS key; QA builds: Thales's debug key). */
-    static String pinnedSigner(Context c) { return BuildConfig.UPDATE_SIGNER; }
+    /**
+     * The one signing certificate an update must carry. Release: the Wizard OS key, built in (build.gradle). QA builds
+     * (UPDATE_SIGNER empty): the debug key this build was signed with; each Thales build job has its own, and the
+     * QA fixtures (debug, qanext, qalater) come from the same job.
+     */
+    static String pinnedSigner(Context c) {
+        if (!BuildConfig.UPDATE_SIGNER.isEmpty() || !BuildConfig.DEBUG) return BuildConfig.UPDATE_SIGNER;
+        Set<String> me = installedSigners(c);
+        return me.size() == 1 ? me.iterator().next() : "";
+    }
 
     static Set<String> installedSigners(Context c) {
         try { return signers(c.getPackageManager().getPackageInfo(c.getPackageName(), PackageManager.GET_SIGNING_CERTIFICATES).signingInfo); }

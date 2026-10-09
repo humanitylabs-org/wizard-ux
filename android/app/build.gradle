@@ -46,8 +46,8 @@ android {
             // QA build: installs beside the real app (own id) and allows WebView inspection over adb.
             applicationIdSuffix '.qa'
             versionNameSuffix '-qa'
-            // QA builds update only from builds signed with Thales's Android debug key (the emulator QA fixtures).
-            buildConfigField 'String', 'UPDATE_SIGNER', '"f91f6be0c48a69bb48902ed1b0f391c1ca358235f5f37823e43fa17d962c9371"'
+            // QA builds pin their own debug key at runtime (each Thales build job has its own; see Updater.pinnedSigner).
+            buildConfigField 'String', 'UPDATE_SIGNER', '""'
         }
         release {
             minifyEnabled false

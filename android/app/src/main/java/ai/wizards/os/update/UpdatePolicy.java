@@ -105,8 +105,7 @@ public final class UpdatePolicy {
      * @param unmetered  the active network is unmetered (Wi-Fi)
      * @param front      Wizard OS is on screen
      * @param recording  any Wizard OS recording is running (native recorder, orb, floating orb, side button)
-     * @param silentOk   Android will install without asking (API 31+, "Install unknown apps" allowed, and Wizard OS
-     *                   installed the version that is running now)
+     * @param silentOk   Android should install without asking (API 31+ and "Install unknown apps" allowed)
      * @param tapped     James tapped Update / the ready banner
      */
     public static Step next(boolean newer, boolean verified, boolean unmetered, boolean front, boolean recording,
