@@ -109,7 +109,10 @@ public class MeetingRecorderService extends Service {
      * Closes any session the journal says was open when the process died: adopt its chunk files, queue a stop with
      * reason process_death, tell James. Never restarts the microphone. Safe to call from anywhere, any time.
      */
-    public static void recover(Context ctx) {
+    public static void recover(Context ctx) { recover(ctx, true); }
+
+    /** {@code scheduleJob} false from inside the upload job itself (rescheduling the running job would restart it). */
+    static void recover(Context ctx, boolean scheduleJob) {
         Context c = ctx.getApplicationContext();
         if (live != null) return;
         MizelStore s = MizelHub.store(c);
@@ -125,7 +128,7 @@ public class MeetingRecorderService extends Service {
         }
         MizelUploader up = MizelUploader.get(c);
         up.kick();
-        if (any || up.outstanding()) MizelUploadJob.schedule(c);
+        if (scheduleJob && (any || up.outstanding())) MizelUploadJob.schedule(c);
         if (any) MizelHub.pushState(c);
     }
 

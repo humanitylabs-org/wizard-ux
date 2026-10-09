@@ -278,6 +278,8 @@ def open_host(pg):
     pg.ev(f"window.__stale=1; location.href='{ORIGIN}/mizel-qa/host.html'")
     return pg.pump(25, lambda: pg.ev("(!window.__stale && window.R && R.frames.same && R.frames.foreign && R.frames['same-reply']) ? true : false"), 0.5)
 
+SCHED_ERR = []
+
 def nodes(xml):
     out = []
     for m in re.finditer(r'<node [^>]*?>', xml):
@@ -507,9 +509,9 @@ with (BASE / 'worker.lock').open('a') as lock:
         time.sleep(1.5)
         st = mz(pg, 'status')
         check('pause', 'notification Pause action pauses the meeting', tapped and st['status']['paused'], st)
-        t_p = time.time()
+        t_p = time.time() - (st['status']['pausedMs'] / 1000.0 if st.get('status') else 0)   # when the pause began
         got = wait_for(lambda: ST['stops'].get(B), 60, 1)
-        check('pause', 'paused 20 s (QA timeout) → stops by itself with reason pause_timeout', got and got['body'].get('reason') == 'pause_timeout' and 17 <= got['t'] - t_p <= 40, {'after_s': got and round(got['t'] - t_p, 1), 'body': got and got['body']})
+        check('pause', 'paused 20 s (QA timeout) → stops by itself with reason pause_timeout', got and got['body'].get('reason') == 'pause_timeout' and 19 <= got['t'] - t_p <= 40, {'after_s': got and round(got['t'] - t_p, 1), 'body': got and got['body']})
         verify_meeting('pause', B, 'pause_timeout', 2)
 
         # ------------------------------------------------ (d) one mic owner
@@ -586,32 +588,42 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(6)
         pg = Page(); pg.pump(3); open_host(pg)
         r = mz(pg, 'start', E); pg.pump(13)
-        sx(f'am force-stop {PKG}'); pg.close(); pg = None; time.sleep(5)
-        none_yet = E not in ST['stops']
-        sx('logcat -c'); t_k = time.time()
-        sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity')
+        pg.close(); pg = None
+        t_k = time.time(); sx(f'am force-stop {PKG}'); time.sleep(8)
+        early = ST['stops'].get(E)
+        dl = sx('logcat -d | grep -E "ai.wizards.os.qa|WizardMizel" | grep -vE "level|AudioRecord read" | tail -200')
+        save('death-forcestop-logcat.txt', dl)
+        SCHED_ERR.append(dl.count('could not schedule upload job'))
+        t_o = time.time(); sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity')
         got = wait_for(lambda: ST['stops'].get(E), 60, 1)
-        check('death', 'after force-stop, opening the app closes the meeting with process_death', none_yet and got and got['body'].get('reason') == 'process_death', {'after_s': got and round(got['t'] - t_k, 1)})
+        check('death', 'after force-stop the meeting is closed with process_death (by a restart or the next app open)', got and got['body'].get('reason') == 'process_death',
+              {'after_force_stop_s': got and round(got['t'] - t_k, 1), 'before_app_reopen': bool(early), 'reopen_to_stop_s': got and round(got['t'] - t_o, 1)})
         verify_meeting('death', E, 'process_death', 2)
 
         # ------------------------------------------------ (g) Back: nested view → Back → still open
         time.sleep(4); pg = Page(); pg.pump(3)
         pg.ev("new Promise(r => { const t0=Date.now(); const t = () => (window.__wos || Date.now()-t0>20000) ? r() : setTimeout(t, 200); t(); })")
-        pg.ev("window.dispatchEvent(new CustomEvent('wizard:open', {detail: {app: 'mizel'}}))"); pg.pump(4)
         stq = "JSON.stringify({idx: window.__wos.idx, home: window.__wos.HOME, sheet: window.__wos.sheet, log: (window.__wos.back.log || []).slice(-3)})"
-        before = json.loads(pg.ev(stq))
-        shot('08-back-before')
+        # nested 1: an overlay sheet (the launcher) → Back closes it
+        pg.ev("window.__wos.openSheet('launcher')"); pg.pump(2)
+        before = json.loads(pg.ev(stq)); shot('08-back-sheet-before')
         sx('input keyevent KEYCODE_BACK'); time.sleep(2); pg.pump(2)
-        after = json.loads(pg.ev(stq))
-        shot('09-back-after')
-        stepped = after['log'] and after['log'][-1].startswith('native:') and after['log'][-1] != 'native:root'
-        check('back', 'Mizel window open (desk ' + str(before['idx']) + ') → Back takes one in-app step; app still open', PKG in top() and before['idx'] != before['home'] and stepped, {'before': before, 'after': after, 'top': top()[:120]})
+        after = json.loads(pg.ev(stq)); shot('09-back-sheet-after')
+        check('back', 'launcher sheet open → Back closes the sheet; app still open', PKG in top() and before['sheet'] and not after['sheet'], {'before': before, 'after': after, 'top': top()[:100]})
+        # nested 2: another desk (the Mizel app window lives off Home) → Back returns Home
+        pg.ev("window.__wos.goDesk(window.__wos.HOME + 1)"); pg.pump(2)
+        before = json.loads(pg.ev(stq)); shot('10-back-desk-before')
+        sx('input keyevent KEYCODE_BACK'); time.sleep(2); pg.pump(2)
+        after = json.loads(pg.ev(stq)); shot('11-back-desk-after')
+        check('back', 'Mizel desk open → Back returns to Home; app still open', PKG in top() and before['idx'] != before['home'] and after['idx'] == after['home'], {'before': before, 'after': after, 'top': top()[:100]})
         for i in range(3): sx('input keyevent KEYCODE_BACK'); time.sleep(1.2)
         pg.pump(2)
         check('back', 'repeated Back at the root never leaves Wizard OS', PKG in top() and pg.ev("location.pathname").startswith('/wizard-os-home'), top()[:100])
         open_host(pg); sx('input keyevent KEYCODE_BACK'); time.sleep(2.5); pg.pump(3)
         check('back', 'Back from a nested private page returns to the shell, app still open', PKG in top() and pg.ev("location.pathname").startswith('/wizard-os-home'), pg.ev('location.href'))
 
+        SCHED_ERR.append(sx('logcat -d -s WizardMizel:*', timeout=60).count('could not schedule upload job'))
+        check('death', 'upload job never trips the JobScheduler schedule() rate limit (no self-rescheduling loop)', sum(SCHED_ERR) == 0, SCHED_ERR)
         crash = sh(ADB, '-s', S, 'logcat', '-d', '-b', 'crash')
         check('setup', 'no app crashes in the crash buffer', PKG not in crash, crash[-400:])
         summary['writes_blocked_from_webview'] = pg.writes if pg else []

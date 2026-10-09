@@ -24,6 +24,8 @@ public class MizelUploadJob extends JobService {
         try {
             JobScheduler js = c.getSystemService(JobScheduler.class);
             if (js == null) return;
+            // Scheduling the same id again cancels a pending/running job and starts over: never replace one.
+            if (js.getPendingJob(JOB_ID) != null) return;
             JobInfo job = new JobInfo.Builder(JOB_ID, new ComponentName(c, MizelUploadJob.class))
                     .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                     .setBackoffCriteria(30_000, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
@@ -36,7 +38,7 @@ public class MizelUploadJob extends JobService {
     @Override
     public boolean onStartJob(JobParameters params) {
         Log.i(MizelHub.TAG, "upload job started");
-        MeetingRecorderService.recover(this);
+        MeetingRecorderService.recover(this, false);
         MizelUploader up = MizelUploader.get(this);
         up.kick();
         final long t0 = System.currentTimeMillis();
