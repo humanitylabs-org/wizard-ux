@@ -127,6 +127,9 @@
     visible: () => desks[idx].wins,
     editUnsent: it => editUnsent(it),
     newChatHint: 'Type below, or tap the orb and talk.',
+    // The composer's mic (#13): the orb's own recorder, pinned to this thread.
+    recordReply: (wid, sid) => recordReply(wid, sid),
+    recordingFor: () => (V.replyTo && (V.state === 'listen' || V.state === 'paused') ? V.replyTo.sid : ''),
     // A private-origin link in a message opens in a window on this desk: the shell never navigates away.
     openLink: (url, title) => !!openWin({ app: 'frame', appId: 'link', url, title }),
     overlay: open => { if (open) { closeMenu(); armBack(); } },
@@ -492,7 +495,19 @@
       <div class="st-group"><h4>Wizard</h4>
         <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · ${esc(location.host)}</small></span></div>
         ${window.WosDevice?.settingsHtml?.() || ''}
-      </div>`;
+        ${window.WosFiles ? `<button class="st-row" data-st="files"><span class="st-ic">▤</span><span class="st-tx"><b>Files</b><small>Everything in Wizard Files · preview, attach to a chat</small></span><span class="st-go">›</span></button>` : ''}
+      </div>
+      ${window.WosUsage ? window.WosUsage.html() : ''}`;
+    // AI usage (#24): read when Settings opens, painted in place when it lands.
+    if (window.WosUsage && !window.WosUsage.loading && (!window.WosUsage.snap || Date.now() - window.WosUsage.at > 60e3)) window.WosUsage.load().then(paintUsage);
+  }
+  function paintUsage() { const g = $('#settingsBody [data-usage]'); if (g && sheet === 'settings') g.outerHTML = window.WosUsage.html(); }
+  function openFilesScreen() {
+    closeSheets(true);
+    let wid = desks[idx].wins.find(x => W[x].app === 'chats');
+    if (!wid) { const w = openWin({ app: 'chats', thread: null }); if (!w) return; wid = w.id; }
+    focusWin(wid); renderChats(W[wid]);
+    setTimeout(() => CHATS.PW?.openFiles(wid), 30);
   }
   function openSettings(focusUnsent) {
     openSheet('settings');
@@ -1022,6 +1037,8 @@
     if (st === 'typing' && NATIVE() && window.WizardOSNative.voiceTypingSettings) { window.WizardOSNative.voiceTypingSettings(); return; }
     if (st === 'everywhere' && NATIVE() && typeof window.WizardOSNative.setEverywhere === 'function') { let on = false; try { on = JSON.parse(window.WizardOSNative.everywhere()).enabled; } catch (x) {} window.WizardOSNative.setEverywhere(!on); setTimeout(renderSettings, 250); vib(8); }
     if (st === 'side') { closeSheets(true); sideButtonTap(true); }
+    if (st === 'files') return openFilesScreen();
+    if (e.target.closest('[data-usage-refresh]')) { window.WosUsage?.load(true).then(paintUsage); paintUsage(); }
   });
 
   function appTile(a) { return `<button class="lapp" data-app="${a.id}"><span class="ic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}${a.kind === 'native' ? '<span class="badge">APK</span>' : ''}</span><span class="nm">${esc(a.name)}</span></button>`; }
@@ -1231,7 +1248,7 @@
   /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
   function nativeResume(a) {
     if (V.state !== 'idle' || !a?.id) return false;
-    Object.assign(V, { native: a.id, kind: a.kind === 'command' ? 'command' : 'auto', target: null, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
+    Object.assign(V, { native: a.id, kind: a.kind === 'command' ? 'command' : 'auto', target: null, replyTo: replyTake(a.id), chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
     txPill('✦', 'Still recording · tap orb to send', 'agent'); txHide(2600);
@@ -1254,6 +1271,7 @@
   };
   function setVoice(s) {
     V.state = s; device.dataset.voice = s;
+    CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
     reportVoice(s);
     keepAwake(s === 'listen' || s === 'paused' || s === 'command' || s === 'think');
     Orb.setMode({ idle: 'idle', listen: 'listen', command: 'command', paused: 'paused', think: 'think', done: 'done', agent: 'agent' }[s] || 'idle');
@@ -1324,11 +1342,38 @@
     tx.style.setProperty('--lvl', (V.an || V.sim || V.native) ? 0.4 : 0);
     if (V.state !== 'idle' && V.state !== 'think') V.raf = requestAnimationFrame(tick);
   }
+  /* The composer mic (#13): start a take that belongs to one thread; tap again (mic or orb) to send it there.
+   * The pin survives a page reload during a native take (keyed by the take id), so it can never land elsewhere. */
+  const REPLY_KEY = 'wos.reply-take.v1';
+  function replyTake(id, val) {
+    try {
+      if (id === null) { localStorage.removeItem(REPLY_KEY); return null; }
+      if (val) { localStorage.setItem(REPLY_KEY, JSON.stringify({ id, ...val })); return val; }
+      const r = JSON.parse(localStorage.getItem(REPLY_KEY) || 'null');
+      return r && r.id === id && r.sid ? { wid: W[r.wid] ? r.wid : '', sid: r.sid } : null;
+    } catch (e) { return null; }
+  }
+  window.__wosReplyTake = id => replyTake(id);
+  function recordReply(wid, sid) {
+    if (V.state === 'think') return 'busy';
+    if (V.state === 'listen' || V.state === 'paused') {
+      // Tapping a composer mic while a voice reply records sends it, always to the thread it was started in.
+      if (V.replyTo) { shock(); finishVoice(); return 'sent'; }
+      return 'busy';
+    }
+    if (V.state !== 'idle' || !sid) return 'busy';
+    startVoice('auto');
+    V.replyTo = { wid, sid };
+    if (V.native) replyTake(V.native, { wid, sid });
+    CHATS.PW?.paintMic(true, sid);
+    txPill('✦', 'Voice reply · tap the mic or the orb to send', 'agent'); txHide(2200);
+    return 'recording';
+  }
   async function startVoice(kind) {
     V.onAt = performance.now();
     if (V.state !== 'idle') return;
     clearTimeout(txHideT);
-    Object.assign(V, { kind, target: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, target: null, replyTo: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
     // No status card while recording: the orb, timer and arc already say it. Hold-for-command keeps
@@ -1400,7 +1445,7 @@
     try { V.rec.state !== 'inactive' && V.rec.stop(); } catch (e) { onRecStop(); }
   }
   function cancelVoice(quiet) {
-    V.cancelled = true;
+    V.cancelled = true; if (V.replyTo) { replyTake(null); V.replyTo = null; }
     if (V.native) { try { DEV().recCancel(V.native); } catch (e) {} V.native = null; }
     try { V.rec && V.rec.state !== 'inactive' && (V.rec.onstop = null, V.rec.stop()); } catch (e) {}
     stopStream(); V.rec = null; V.sim = false; cancelAnimationFrame(V.raf); Orb.setLevel(0);
@@ -1417,7 +1462,15 @@
     const size = blobs.reduce((n, b) => n + b.size, 0);
     stopStream(); V.rec = null; Orb.setLevel(0);
     if (V.cancelled) { recDone(nid); return; }
-    if (V.acc < 450 || size < 1200) { recDone(nid); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
+    if (V.acc < 450 || size < 1200) { recDone(nid); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
+    // A voice reply from a thread's composer goes to that thread, as recorded: no routing, no commands,
+    // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
+    if (V.replyTo) {
+      const rt = V.replyTo, files = takeFiles(); V.replyTo = null; replyTake(null);
+      setVoice('idle'); txPill('✦', 'Voice reply · saved to this thread', 'agent'); txHide(1800);
+      Promise.all(blobs.map((part, i) => Promise.resolve(CHATS.sendVoiceTo(rt.wid, rt.sid, part, i === 0 ? files : [])).catch(() => {}))).finally(() => recDone(nid));
+      return;
+    }
     try {
       const words = []; const j = { ms: 0 };
       const prompt = window.WizConfig.voicePrompt(APPS.map(a => a.name).slice(0, 40));

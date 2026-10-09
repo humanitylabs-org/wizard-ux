@@ -109,8 +109,10 @@
     if (!J(d.recClaim(t.id))) return;
     const blob = readBlob(off => d.recRead(t.id, off), 'audio/aac');
     if (blob.size < 600) { d.recDone(t.id); return; }
-    const it = await OUTBOX.enqueue({ kind: 'new', text: '', audio: blob, source: 'orb', how,
-      instructions: (window.WizConfig.owner() ? window.WizConfig.owner() + ' recorded' : 'The owner recorded') + ' this with the Wizard OS orb on their Android phone' + (how === 'recovered' ? '; the recording was interrupted and recovered' : '') + '. The original recording is attached as a voice note.' });
+    // A voice reply started from a thread's composer mic stays that thread's, even when it ended outside the page.
+    const pin = window.__wosReplyTake?.(t.id); if (pin) window.__wosReplyTake(null);
+    const it = await OUTBOX.enqueue({ kind: pin ? 'reply' : 'new', sessionId: pin ? pin.sid : '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
+      instructions: (window.WizConfig.owner() ? window.WizConfig.owner() + ' recorded' : 'The owner recorded') + ' this with the Wizard OS orb on their Android phone' + (pin ? ' as a voice reply in this thread' : '') + (how === 'recovered' ? '; the recording was interrupted and recovered' : '') + '. The original recording is attached as a voice note.' });
     d.recDone(t.id);
     log('rec:sent', t.id, it.id, how);
     toast('✦', how === 'recovered' ? `Recording sent to ${window.WizConfig.agent()}` : 'Sending your recording', 2000);
@@ -216,7 +218,7 @@
 
   /* ================= #22 web hot-reload that keeps drafts ================= */
   const ASSETS = ['index.html', 'app.js', 'live.js', 'outbox.js', 'device.js', 'orb.js', 'live-mode.js', 'styles.css',
-    'core/core.js', 'core/apps.js', 'core/chats.js', 'core/bridge.js', 'core/shell.js', 'core/base.css', 'core/chats.css'];
+    'core/core.js', 'core/apps.js', 'core/chats.js', 'core/chat-power.js', 'core/chat-models.js', 'core/chat-work.js', 'core/chat-errors.js', 'core/files.js', 'core/usage.js', 'core/bridge.js', 'core/shell.js', 'core/base.css', 'core/chats.css', 'core/chat-power.css'];
   const DRAFTS = 'wos.drafts.v1';
   let print0 = '', webPending = false, lastCheck = 0;
   async function fingerprint() {

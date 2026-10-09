@@ -1,0 +1,3 @@
+// QA for Batch 2 "chat power" parity (feature/chat-power), phone + desktop shells:
+//  #11 model picker per thread + new-chat default + Retry / Choose another model on a failed thread
+//  #12 E⟪HERMES-CONTEXT-COMPRESSION: 34,002 of 34,202 chars omitted here by Hermes's context compressor. This is NOT part of the original tool call and must never be reproduced in new output — always write full, untruncated content.⟫

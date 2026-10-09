@@ -64,6 +64,9 @@
     editUnsent: it => editUnsent(it),
     newChatHint: `Type below and press ${CMD}Enter, or press ${MOD}V and talk.`,
     owner: id => String(id).replace(/::list$/, ''),
+    // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
+    recordReply: (wid, sid) => recordReply(wid, sid),
+    recordingFor: () => (vReply && VOICE.state === 'listen' ? vReply.sid : ''),
     // A private-origin link in a message opens as a window on this workspace; the shell never navigates away.
     openLink: (url, title) => !!newWin({ app: 'frame', appId: 'link', url, title }),
     changed: () => { for (const id of Object.keys(W)) if (W[id].app === 'chats') syncChatsPane(id); },
@@ -406,6 +409,8 @@
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
       { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
       { kind: 'cmd', name: 'Inbox', icon: '⬇', keys: `${MOD}I`, run: () => openInbox() },
+      ...(window.WosFiles ? [{ kind: 'cmd', name: 'Files', icon: '▤', run: () => openFiles() }] : []),
+      ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
       { kind: 'cmd', name: 'Close window', icon: '✕', keys: `${MOD}W`, run: () => focused() && closeWin(focused().id) },
       { kind: 'cmd', name: 'Full window', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Keyboard shortcuts', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
@@ -462,6 +467,26 @@
     openThread(it.sessionId);
   }
 
+  /* Wizard Files (#23): the shared Files sheet, in a Chats window (attaches to its open thread, else starts a new chat). */
+  function openFiles() {
+    let w = ws[cur].wins.map(id => W[id]).find(x => x.app === 'chats') || findWin(x => x.app === 'chats');
+    if (!w) w = newWin({ app: 'chats', thread: null });
+    focusWin(w.id);
+    setTimeout(() => CHATS.PW?.openFiles(w.thread ? w.id : w.id + '::list'), 30);
+  }
+  /* AI usage (#24): the same panel as the phone's Settings, in a card. */
+  const usageEl = document.createElement('div');
+  usageEl.className = 'keys usage-ov'; usageEl.hidden = true;
+  usageEl.innerHTML = '<div class="keys-card" role="dialog" aria-label="AI usage"><div class="keys-head"><b>AI usage</b><small>Quota left on each subscription, and when it resets.</small><button class="x" data-close="usage" aria-label="Close">✕</button></div><div class="usage-body" data-usage-host></div></div>';
+  document.body.appendChild(usageEl);
+  const paintUsage = () => { if (!usageEl.hidden) usageEl.querySelector('[data-usage-host]').innerHTML = window.WosUsage.html(); };
+  function openUsage() { usageEl.hidden = false; paintUsage(); window.WosUsage.load(Date.now() - (window.WosUsage.at || 0) > 60e3).then(paintUsage); }
+  function closeUsage() { if (usageEl.hidden) return false; usageEl.hidden = true; return true; }
+  usageEl.addEventListener('click', e => {
+    if (e.target === usageEl || e.target.closest('[data-close]')) return closeUsage();
+    if (e.target.closest('[data-usage-refresh]')) { window.WosUsage.load(true).then(paintUsage); paintUsage(); }
+  });
+
   /* ---------------- inbox drawer ---------------- */
   const ib = $('#inbox');
   let ibSel = 0;
@@ -503,10 +528,11 @@
    * otherwise starts a new thread. Audio goes through the durable outbox: transcribed there,
    * kept as a voice note, retried if the network drops. */
   const pill = $('#voicePill'), mic = $('#micBtn');
-  let vTarget = null, vTimer = 0, vMode = 'talk', dTarget = null;
+  let vTarget = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null;
   const VOICE = C.voice({
     onState: st => {
       pill.hidden = st === 'idle'; pill.classList.toggle('think', st === 'think'); mic.classList.toggle('on', st !== 'idle');
+      CHATS.PW?.paintMic(st === 'listen' && !!vReply, vReply?.sid || '');
       $('#clock').hidden = st !== 'idle';
       pill.classList.toggle('dict', vMode === 'dictate');
       $('#voiceKey').textContent = vMode === 'dictate' ? 'Right ⌥' : 'Right ⌘';
@@ -520,24 +546,38 @@
   });
   async function talk(action = 'toggle') {
     if (VOICE.state === 'think') return 'busy';
-    if (action === 'cancel') { if (VOICE.state !== 'idle') { VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
+    if (action === 'cancel') { if (VOICE.state !== 'idle') { vReply = null; VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
     if (VOICE.state === 'idle') {
       if (action === 'send') return 'none';
-      vMode = 'talk';
+      vMode = 'talk'; vReply = null;
       const f = focused(); vTarget = f?.app === 'chats' && f.thread ? f.id : null;
       $('#voiceTime').textContent = '0:00';
       try { await VOICE.start(); } catch (e) { toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
       return 'voice';
     }
     if (action === 'start') return 'voice';
+    const rp = vReply; vReply = null; // the thread a composer-mic take belongs to, fixed before anything else runs
     const r = await VOICE.finish({ transcribe: false });
     if (!r || !r.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
     const w = vTarget && W[vTarget];
+    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
     if (w && w.thread) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob);
     else ask('', 'voice', r.blob);
     toast('✦', `Sent to ${window.WizConfig.agent()}`, 1400);
     return 'sent';
+  }
+
+  // Composer mic: tap to record a reply to this thread, tap again (or Right ⌘) to send it there. The thread is
+  // fixed when recording starts, so switching threads mid-take can't send it somewhere else.
+  async function recordReply(wid, sid) {
+    if (VOICE.state === 'think') return 'busy';
+    if (VOICE.state === 'listen') { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
+    if (!sid) return 'busy';
+    vMode = 'talk'; vTarget = wid; vReply = { wid, sid };
+    $('#voiceTime').textContent = '0:00';
+    try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
+    return 'recording';
   }
 
   // Dictation (Right ⌥): speech to text where you're typing. In a text field the words go in at the cursor;
@@ -616,6 +656,7 @@
   function escStep() {
     if (!pal.hidden) { closePalette(); return 'palette'; }
     if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }
+    if (closeUsage()) return 'usage';
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     if (VOICE.state === 'listen') { if (vMode === 'dictate') dictate('cancel'); else talk('cancel'); return 'voice'; }
@@ -741,6 +782,7 @@
   window.__wux = {
     shell: 'desktop', get ws() { return ws; }, get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS,
     goWs, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openInbox, talk, ask, escStep, viewContext,
+    openFiles, openUsage, recordReply,
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
 })();

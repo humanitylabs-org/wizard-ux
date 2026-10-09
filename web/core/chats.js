@@ -65,23 +65,26 @@ window.WizCore.chats = function createChats(H) {
     const hit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
     const groups = LIVE.workGroups(hit);
     c.more = c.more || {};
-    const head = `<div class="ch-top"><label class="ch-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-chsearch placeholder="Search threads" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false"></label><button class="ch-new" data-chnew aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
+    const head = `<div class="ch-top"><label class="ch-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-chsearch placeholder="Search threads" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false"></label>${PW?.FOLDER_SVG && window.WosFiles ? `<button class="ch-new ch-files-b" data-chfiles aria-label="Files">${PW.FOLDER_SVG}</button>` : ''}<button class="ch-new" data-chnew aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
     let body;
     if (!LIVE.ok) body = `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
     else if (!hit.length) body = `<div class="ch-empty">No threads match “${esc(c.q)}”.</div>`;
     else body = SECTIONS.map(([k, label]) => {
-      const list = groups[k];
-      if (!list.length && (k === 'errors' || n)) return '';
+      const list = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k];
+      // Errors also holds failed background work and voice notes that didn't send (chat-power.js #12).
+      const extra = PW && k === 'errors' && !n ? PW.errorsExtra() : { n: 0, html: '' };
+      if (!list.length && !extra.n && (k === 'errors' || n)) return '';
       // While searching, every section with a hit opens so nothing is buried.
       const open = n ? true : secOpen[k];
       const newN = k === 'ready' ? list.filter(s => LIVE.isNew(s)).length : 0;
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
-      return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length}</small>${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${list.length ? shown.map(chatRow).join('') : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
+      return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
+        ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s))).join('') + extra.html : shown.map(chatRow).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
     }).join('');
     const scroll = el.querySelector('.ch-scroll')?.scrollTop || 0;
     el.innerHTML = `<div class="ch-list">${head}<div class="ch-scroll">${body}</div></div>`;
     const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = scroll;
+    PW?.paint(w.id, el);
   }
   function toggleSection(w, k) {
     secOpen = { ...secOpen, [k]: !secOpen[k] };
@@ -202,7 +205,9 @@ window.WizCore.chats = function createChats(H) {
     let h = '';
     if (tn.u) h += `<div class="msg u"><div class="bub">${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
     const live = last && working;
-    if (tn.steps || tn.notes.length || live) {
+    const wk = PW ? PW.workHtml(c, tn, live) : null; // the work receipt (chat-work.js #17)
+    if (wk != null) h += wk;
+    else if (tn.steps || tn.notes.length || live) {
       const label = live ? (tn.notes.length ? esc(clip(tn.notes[tn.notes.length - 1], 90)) : 'Working') : `Worked through ${tn.steps} step${tn.steps === 1 ? '' : 's'}`;
       h += `<details class="steps${live ? ' live' : ''}"><summary>${live ? '<i class="dots"><b></b><b></b><b></b></i>' : '◇'} ${label}</summary>${tn.notes.map(x => `<div class="note-line">${md(x)}</div>`).join('')}</details>`;
     }
@@ -326,19 +331,24 @@ window.WizCore.chats = function createChats(H) {
     const draft = oldTa && el.dataset.draftFor === dkey ? oldTa.value : (c.draftFor === dkey ? c.draft || '' : loadDraft(w));
     const hadFocus = el.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA';
     const canStop = working && !!s?.runId && s.status !== 'stopping';
+    PW?.ensureModels();
+    const chip = PW ? PW.modelChip(w, s) : '';
+    const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     el.innerHTML = `<div class="ch-thread">
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span class="emo">${isNew ? '✎' : emoOf(w.thread)}</span><div class="ti"><b>${esc(winTitle(w))}</b><small>${esc(sub)}</small></div>${acts.length ? `<div class="ch-acts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${a === 'file' ? 'File' : ACT[a].label}</span></button>`).join('')}</div>` : ''}</div>
-      <div class="ch-msgs">${msgs}</div>
-      <form class="ch-compose" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(window.WizConfig.agent())}…` : `Message ${esc(window.WizConfig.agent())}`}" enterkeyhint="enter">${esc(draft)}</textarea>${canStop ? '<button type="button" class="ch-stop" data-chstop aria-label="Stop Archimedes"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>' : ''}<button type="submit" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span class="emo">${isNew ? '✎' : emoOf(w.thread)}</span><div class="ti"><b>${esc(winTitle(w))}</b><small>${esc(sub)}${chip}</small></div>${acts.length ? `<div class="ch-acts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${a === 'file' ? 'File' : ACT[a].label}</span></button>`).join('')}</div>` : ''}</div>
+      <div class="ch-msgs">${msgs}${fail}</div>${PW ? PW.latestBtn() : ''}
+      <form class="ch-compose" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button>${PW ? PW.filesBtn() : ''}<textarea rows="1" placeholder="${working ? `Steer ${esc(window.WizConfig.agent())}…` : `Message ${esc(window.WizConfig.agent())}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? '<button type="button" class="ch-stop" data-chstop aria-label="Stop Archimedes"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>' : ''}<button type="submit" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
     const nb = el.querySelector('.ch-msgs');
     if (keep) nb.scrollTop = nb.scrollHeight - keep.h + keep.top;
+    else if (PW && PW.position(w, el, nb, { keep, atBottom, box, turns, working })) {} // reading position (#18)
     else nb.scrollTop = atBottom ? nb.scrollHeight : (box ? box.scrollTop : nb.scrollHeight);
     // Photos load after layout: keep a thread that was at the bottom pinned to the bottom.
     if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
     growTa(el.querySelector('textarea'));
+    PW?.paint(w.id, el);
   }
   /* ---- drafts: one per thread (and one for a new chat), kept across reloads ---- */
   const draftKey = w => w.thread === '__new__' ? 'new' : 'direct:' + w.thread;
@@ -448,6 +458,7 @@ window.WizCore.chats = function createChats(H) {
     if (w.thread) saveDraft(wid);
     closeRowSheet();
     const c = ch(wid); c.approval = null;
+    PW?.opened(wid, sid);
     w.thread = sid; save(); loadDraft(w);
     if (sid !== '__new__') LIVE.markSeen(sid);
     renderChats(w); applyLayout(deskOf(wid));
@@ -464,8 +475,10 @@ window.WizCore.chats = function createChats(H) {
     const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
     KIT.drafts.clear(draftKey(w)); c.draft = ''; c.files = [];
     // Saved on the phone first; the outbox delivers it (and retries) from here.
+    const nm = isNew && PW ? PW.newModel(c) : null; // a model picked for this new chat (#11)
     const it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : w.thread, steerRunId, text, audio,
-      instructions: viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid, how, source: 'chat' });
+      instructions: viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid, how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
+    c.follow = true; if (nm) c.newModel = null;
     if (isNew && W[wid]) { W[wid].thread = it.sessionId; save(); c.loadedFor = ''; c.draftFor = draftKey(W[wid]); }
     renderChats(W[wid]); applyLayout(deskOf(wid));
   }
@@ -491,6 +504,7 @@ window.WizCore.chats = function createChats(H) {
     const w = H.win(id); if (!w) return false;
     const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); H.toast('↻', 'Sending again', 1400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
+    if (PW && PW.click(e, id)) return true;
     if (justPressed() && e.target.closest('[data-chopen]')) return true; // a long-press/swipe just opened the actions sheet
     const o = e.target.closest('[data-chopen]'); if (o) { openChat(id, o.dataset.chopen); return true; }
     if (e.target.closest('[data-chback]')) { chatsBack(w); return true; }
@@ -541,6 +555,7 @@ window.WizCore.chats = function createChats(H) {
       if (e.target.matches('.ch-compose textarea') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.target.form.requestSubmit(); }
     });
     bindGestures(root);
+    PW?.bind(root);
   }
   /* Words from outside (dictation, a native shell) go in at the composer's cursor. */
   function insertText(id, text) {
@@ -553,9 +568,9 @@ window.WizCore.chats = function createChats(H) {
   const forget = id => { delete CH[id]; };
   function justPressed() { return Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
-  const holdList = id => rowSheet?.wid === id || (!!lp && lp.wid === id);
+  const holdList = id => rowSheet?.wid === id || (!!lp && lp.wid === id) || !!PW?.holds(id);
   // Back / Esc: the media viewer, then the actions sheet. Returns what it closed, or ''.
-  const closeOverlay = () => (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : '');
+  const closeOverlay = () => (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : '');
   // Put words (and already-uploaded files) back into a composer, e.g. editing an unsent message.
   function setDraft(wid, text, files) {
     const w = W[wid], c = ch(wid); if (!w) return;
@@ -563,7 +578,9 @@ window.WizCore.chats = function createChats(H) {
     c.draftFor = draftKey(w); saveDraft(wid);
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
-  return { CH, ch, click, bind, insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, uploadFile,
+  // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, openChat, refreshCompose, saveDraft, closeRowSheet }) : null;
+  return { CH, ch, click, bind, PW, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft };
 };

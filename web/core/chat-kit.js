@@ -85,7 +85,7 @@
   // One turn = what the owner said (words, photos, files), the work in between, the answer and anything the agent sent.
   function parseRows(rows) {
     const out = []; let cur = null;
-    const newTurn = u => { cur = { u, a: null, notes: [], steps: 0, media: [], at: u?.at }; out.push(cur); return cur; };
+    const newTurn = u => { cur = { u, a: null, notes: [], steps: 0, media: [], at: u?.at, work: [] }; out.push(cur); return cur; };
     for (const m of rows || []) {
       const kind = m.display_kind || '';
       const content = m.display_content ?? m.content;
@@ -104,6 +104,7 @@
         const h = helm(cleanText(raw));
         const t = h.text;
         if (!cur) newTurn(null);
+        noteWork(cur, m, at);
         for (const a of h.attachments) if (!cur.media.some(x => x.id === a.id)) cur.media.push(a);
         for (const u of imagesOf(m, content)) if (!cur.media.some(x => x.url === u)) cur.media.push({ id: u.slice(-24), name: 'Image', mime: 'image/*', kind: 'image', url: u });
         if (h.attachments.length && !cur.mediaAt) cur.mediaAt = at;
@@ -111,9 +112,18 @@
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
         if (cur.a) cur.notes.push(cur.a.text);
         cur.a = { text: t, at };
-      } else if (cur) cur.steps++;
+      } else if (cur) { cur.steps++; noteWork(cur, m, at); }
     }
     return out;
+  }
+  // What the work between a request and its answer was made of (the work receipt reads this, chat-work.js):
+  // named tool calls (display_label from the Agent Service), their results, the plan and clarify questions.
+  function noteWork(cur, m, at) {
+    const calls = Array.isArray(m.tool_calls) ? m.tool_calls.map(c => ({ id: String(c?.id || ''), label: String(c?.display_label || c?.function?.name || ''), question: c?.question || null })).filter(c => c.id || c.label) : [];
+    const ev = { at, role: m.role, kind: m.display_kind || '' };
+    if (calls.length) ev.calls = calls;
+    if (m.role === 'tool') { ev.callId = String(m.tool_call_id || ''); if (Array.isArray(m.plan)) ev.plan = m.plan; if (m.question && typeof m.question === 'object') ev.question = m.question; }
+    if (cur.work.length < 2000) cur.work.push(ev);
   }
 
   /* ================= Markdown (GFM subset, no raw HTML) ================= */

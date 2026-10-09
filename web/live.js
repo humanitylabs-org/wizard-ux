@@ -75,6 +75,10 @@
       assignedAt: optIso(item.wizard_assigned_at),
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
+      // The thread's model route (chat-models.js shows and changes it).
+      model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
+      // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
+      request: userText,
     };
   }
 
