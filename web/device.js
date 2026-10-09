@@ -10,7 +10,8 @@
  *      to a new chat or an existing thread (through the outbox like every send).
  *  #21 Reply notifications: every send the outbox delivers is handed to the native reply watcher, which posts
  *      "Archimedes replied" while Wizard OS is in the background; a tap opens that thread.
- *  #22 Updates: banner when a newer signed APK is published (native download → verify → installer), and a
+ *  #22 Updates: newer signed APKs download + install by themselves (one "Update ready · tap to restart" banner while
+ *      Wizard OS is in front, nothing mid-recording), and a
  *      web hot-reload that keeps chat drafts.
  */
 (() => {
@@ -188,11 +189,14 @@
   let upd = null, updHidden = 0;
   const UPD_TEXT = {
     available: u => [`Wizard OS ${u.version} is available`, 'Update'],
-    ready: u => [`Wizard OS ${u.version} is downloaded`, 'Install'],
+    // Downloaded + verified in the background; installs by itself once Wizard OS is in the background, or now on tap.
+    ready: () => ['Update ready · tap to restart', 'Restart'],
     downloading: u => [`Downloading ${u.version}… ${u.progress || 0}%`, ''],
     verifying: u => [`Checking ${u.version}…`, ''],
-    installing: () => ['Opening Android’s installer…', ''],
+    installing: () => ['Restarting into the update…', ''],
+    confirm: u => [`Finish installing ${u.version} in Android’s installer`, 'Again'],
     installer: u => [`Finish installing ${u.version} in Android’s installer`, 'Again'],
+    deferred: () => ['Update ready · installs after this recording', ''],
     permission: () => ['Allow Wizard OS to install updates, then come back', 'Allow'],
     error: u => [u.message || 'Update failed', 'Retry'],
   };
@@ -204,8 +208,9 @@
       el = document.createElement('div'); el.id = 'dvUpdate'; el.className = 'dv-update'; el.setAttribute('role', 'status');
       ($('#device') || document.body).appendChild(el);
       el.addEventListener('click', e => {
-        if (e.target.closest('[data-upd="go"]')) { DEV()?.updateInstall(); log('update:install'); }
-        if (e.target.closest('[data-upd="later"]')) { updHidden = upd?.versionCode || 1; renderUpdate(); }
+        if (e.target.closest('[data-upd="later"]')) { updHidden = upd?.versionCode || 1; renderUpdate(); return; }
+        // The whole "Update ready · tap to restart" banner is the button; elsewhere only the button acts.
+        if (e.target.closest('[data-upd="go"]') || upd?.state === 'ready') { DEV()?.updateInstall(); log('update:install'); }
       });
     }
     const [msg, btn] = t(u);
@@ -306,7 +311,7 @@
       const n = J(d.notifications()) || {};
       const u = upd || J(d.updateState()) || {};
       const ver = u.installed || (J(d.updateState()) || {}).installed || '';
-      const sub = u.state === 'available' || u.state === 'ready' ? `${u.version} is available · tap to update` : u.state === 'current' ? 'Up to date' : u.state === 'offline' ? 'Couldn’t check · tap to try again' : 'Tap to check for updates';
+      const sub = u.state === 'ready' ? `${u.version} is ready · tap to restart` : u.state === 'available' ? `${u.version} is available · tap to update` : u.state === 'error' ? `${u.message || 'Update failed'} · tap to retry` : u.state === 'deferred' ? `${u.version} installs after this recording` : u.state === 'current' ? 'Up to date' : u.state === 'offline' ? 'Couldn’t check · tap to try again' : 'Tap to check for updates';
       return `<div class="st-row static"><span class="st-ic">◉</span><span class="st-tx"><b>Recording</b><small>Keeps going with the screen off or in another app · Stop and Send in the notification</small></span></div>
         <div class="st-row static"><span class="st-ic">✉</span><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
         <button class="st-row" data-dvupd><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
@@ -316,7 +321,7 @@
   document.addEventListener('click', e => {
     if (!e.target.closest('[data-dvupd]')) return;
     const d = DEV(); if (!d) return;
-    if (upd && (upd.state === 'available' || upd.state === 'ready' || upd.state === 'error' || upd.state === 'installer' || upd.state === 'permission')) d.updateInstall(); else { d.updateCheck(); toast('↻', 'Checking for updates', 1400); }
+    if (upd && (upd.state === 'available' || upd.state === 'ready' || upd.state === 'error' || upd.state === 'installer' || upd.state === 'confirm' || upd.state === 'permission')) d.updateInstall(); else { d.updateCheck(); toast('↻', 'Checking for updates', 1400); }
   });
 
   function boot() {
