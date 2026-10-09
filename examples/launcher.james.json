@@ -56,6 +56,17 @@
    "desc": "Topic watches"
   },
   {
+   "id": "trackhunt",
+   "name": "TrackHunt",
+   "icon": "♫",
+   "colors": [
+    "#4ff0b0",
+    "#0d8a6a"
+   ],
+   "url": "/trackhunt/",
+   "desc": "Find tracks"
+  },
+  {
    "id": "cinequeue",
    "name": "CineQueue",
    "icon": "🎬",
