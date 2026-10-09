@@ -167,6 +167,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await p.click(await S('[data-chmodel]')); await sleep(400);
     const sh = await p.evaluate(() => { const s = document.querySelector('.ch-psheet.ch-msheet'); return s && { rows: s.querySelectorAll('[data-mpick]').length, on: [...s.querySelectorAll('[data-mpick]')].findIndex(x => x.classList.contains('on')), title: s.querySelector('.ch-sheet-t')?.textContent, more: !!s.querySelector('[data-mall]') }; });
     ok(sh && sh.rows >= 2 && sh.on >= 0 && /Model for this thread/.test(sh.title), '#11 phone: tapping the chip opens the picker with the current model ticked', sh);
+    await sleep(350);
     await p.screenshot({ path: `${OUT}/phone-01-model-picker.png` });
     await back();
     ok(!(await sheetOpen()) && (await thread()) === 'qa_pw_ready' && (await backLog()) === 'chat-sheet', '#11 phone: Back closes the model picker and stays in the thread', await backLog());
@@ -406,6 +407,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     ok(realFiles.length > 0 && fl.rows.length === Math.min(200, realFiles.length) && fl.rows[0] === realFiles[0].id, '#23 phone: Files lists the real /wizard/files, newest first', { got: fl.rows.length, want: realFiles.length, head: fl.head });
     const lay = await p.evaluate(() => { const t = document.querySelector('.ch-psheet .fi-kinds button'), x = document.querySelector('.ch-psheet .fi-x'), b = document.querySelector('.ch-psheet .fi-b'); const tr = t.getBoundingClientRect(), xr = x.getBoundingClientRect(), br = b.getBoundingClientRect(); return { tabH: Math.round(tr.height), xRight: Math.round(br.right - xr.right) }; });
     ok(lay.tabH >= 28 && lay.xRight < 30, '#23 phone: filter tabs keep their height and Close sits at the right edge', lay);
+    await sleep(350);
     await p.screenshot({ path: `${OUT}/phone-09-files-sheet.png` });
     await p.click('.ch-psheet [data-fikind="voice"]'); await sleep(200);
     const voiceN = await p.evaluate(() => document.querySelectorAll('.ch-psheet [data-fiid]').length);
@@ -501,6 +503,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     ok(chip && /^Opus/.test(chip), '#11 desktop: the thread header shows the model chip', chip);
     await d.click('.pane-main [data-chmodel]'); await sleep(400);
     ok(await d.evaluate(() => document.querySelectorAll('.ch-psheet [data-mpick]').length >= 2), '#11 desktop: the chip opens the model picker');
+    await sleep(350);
     await d.screenshot({ path: `${OUT}/desktop-01-model-picker.png` });
     const pick = await d.evaluate(() => { const rows = [...document.querySelectorAll('.ch-psheet [data-mpick]')]; const i = rows.findIndex(x => !x.classList.contains('on')); const o = WosModels.visible('claude-opus-5-5', 'anthropic')[+rows[i].dataset.mpick]; return { i, value: o.value }; });
     let n0 = writes.length;
@@ -534,6 +537,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await d.evaluate(() => __wux.openFiles());
     await d.waitForFunction(() => document.querySelectorAll('.ch-psheet [data-fiattach]').length > 0, null, { timeout: 15000 }).catch(() => {});
     ok(await d.evaluate(() => document.querySelectorAll('.ch-psheet [data-fiid]').length > 0), '#23 desktop: Files opens with the real Wizard Files');
+    await sleep(350);
     await d.screenshot({ path: `${OUT}/desktop-04-files.png` });
     await esc();
     ok(!(await d.evaluate(() => !!document.querySelector('.ch-psheet'))) && (await dThread()) === 'qa_pw_ready', '#23 desktop: Esc closes Files and keeps the thread');
