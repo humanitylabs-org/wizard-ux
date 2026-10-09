@@ -57,7 +57,6 @@ svg { display: block; }
 .nebula i:nth-child(3) { width: 90%; height: 40%; left: 0; bottom: -2%; background: radial-gradient(closest-side, rgba(60, 120, 255, .28), transparent); animation-duration: 37s; }
 @keyframes drift { to { transform: translate3d(6%, -4%, 0) scale(1.12); } }
 .lean { position: absolute; inset: 0; pointer-events: none; z-index: 30; opacity: 0; transition: opacity 300ms; }
-.device[data-voice="listen"] .lean { opacity: 1; background: radial-gradient(90% 55% at 50% 100%, rgba(143, 99, 255, .28), transparent 70%); }
 .device[data-voice="command"] .lean { opacity: 1; background: radial-gradient(90% 55% at 50% 100%, rgba(63, 224, 255, .25), transparent 70%); }
 
 /* Status bar */
@@ -341,7 +340,8 @@ svg { display: block; }
   -webkit-backdrop-filter: blur(20px) saturate(1.4); backdrop-filter: blur(20px) saturate(1.4);
   box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
 }
-.voice.tx .transcript { opacity: 1; transform: none; pointer-events: auto; }
+.voice.tx .transcript { opacity: 1; transform: none; pointer-events: none; }
+.voice.tx .transcript:has(.tx-chips:not(:empty)) { pointer-events: auto; }
 .voice.cmd .transcript { bottom: calc(var(--safe-b) + 172px); }
 .tx-route { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; color: var(--violet-2); }
 .tx-route b { width: 20px; height: 20px; border-radius: 7px; display: grid; place-items: center; background: rgba(143, 99, 255, .2); font-size: 11px; }
@@ -456,10 +456,9 @@ svg { display: block; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
-/* voice focus: quiet the desk so the arc + transcript read cleanly */
+/* Voice never fades or covers the screen: James taps the orb, then keeps scrolling and tapping
+   while it records and sends. The desk stays at full strength; only the hint row steps aside. */
 .desk > * { transition: opacity 260ms var(--ease), filter 260ms var(--ease); }
-[data-voice="listen"] .desk > *, [data-voice="paused"] .desk > *, [data-voice="command"] .desk > *,
-[data-voice="think"] .desk > * { opacity: .3; filter: blur(2px) saturate(.8); }
 [data-voice="listen"] .hint-row, [data-voice="paused"] .hint-row, [data-voice="command"] .hint-row, [data-voice="think"] .hint-row { opacity: 0; }
 
 /* unread badge on the orb */
@@ -533,8 +532,7 @@ svg { display: block; }
 .tiles[data-n="4"] .ch-row .pv, .tiles[data-n="3"] .win:not(:first-child) .ch-row .pv { -webkit-line-clamp: 1; }
 .tiles[data-n="4"] .zoom-rail, .tiles[data-n="4"] .pinch-hint { display: none; }
 
-/* voice: windows step back so the arc reads */
-[data-voice="listen"] .tiles, [data-voice="paused"] .tiles, [data-voice="command"] .tiles, [data-voice="think"] .tiles { opacity: .32; filter: blur(2px) saturate(.8); }
+/* voice: windows stay live and undimmed (see "Voice never fades" above) */
 .tiles { transition: opacity 260ms var(--ease), filter 260ms var(--ease), inset 380ms var(--ease); }
 /* hold + slide: the neighbour desk this command will open on lights up */
 .device.aiming .orb-wrap::after { opacity: 1; color: var(--cyan); }
