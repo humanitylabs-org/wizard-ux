@@ -130,6 +130,20 @@ const FIX = {
       s = await st(); if (s.open) { await back(); await p.waitForTimeout(600); s = await st(); }
       ok(!s.open && p.url() === shellUrl, `${shell}: Back closes ${path}, Wizard stays open`, JSON.stringify(s));
     }
+    // 7b. Phone: the sheet opens at about three-quarters height (the thread stays visible above); ⤢ goes full.
+    if (phone) {
+      await tapLink(ORIGIN + '/qa-page/two/'); await p.waitForTimeout(700);
+      const h = () => p.evaluate(() => { const pn = document.querySelector('.linksheet .ls-panel').getBoundingClientRect(), dv = document.querySelector('#device').getBoundingClientRect(); return Math.round(pn.height / dv.height * 100); });
+      const h0 = await h();
+      await p.click('.linksheet [data-ls="full"]'); await p.waitForTimeout(500);
+      const h1 = await h();
+      ok(h0 >= 60 && h0 <= 72 && h1 >= 82, 'phone: sheet opens at ~3/4 (thread visible above), ⤢ makes it full', JSON.stringify({ h0, h1 }));
+      await p.screenshot({ path: `${SHOTS}/ls-phone-full.png` });
+      await p.click('.linksheet [data-ls="full"]'); await p.waitForTimeout(400);
+      await p.screenshot({ path: `${SHOTS}/ls-phone-34.png` });
+      await back(); await p.waitForTimeout(600);
+      s = await st(); ok(!s.open, 'phone: one Back closes it', JSON.stringify(s));
+    }
     // 8. James's case: a link INSIDE an embedded app (a window on the desk) to another app or _blank must
     //    never replace Wizard; it opens in the sheet, and ONE Back returns to the app window.
     {

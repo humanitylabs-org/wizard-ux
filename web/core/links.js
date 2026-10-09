@@ -43,6 +43,7 @@
         <span class="ls-grip" aria-hidden="true"></span>
         <button class="ls-back" data-ls="back" aria-label="Back" hidden>‹</button>
         <span class="ls-title"><b></b><small></small></span>
+        <button class="ls-full" data-ls="full" aria-label="Full screen" title="Full screen">⤢</button>
         <button class="ls-keep" data-ls="keep" title="Keep as a window on this desk">Keep</button>
         ${NATIVE ? '' : '<button class="ls-out" data-ls="out" aria-label="Open in browser" title="Open in browser">↗</button>'}
         <button class="ls-x" data-ls="close" aria-label="Close">✕</button>
@@ -70,7 +71,7 @@
       onChange && onChange(true);
     }
     function close() {
-      if (!open) return false; open = false;
+      if (!open) return false; open = false; el.classList.remove('full'); { const fb = el.querySelector('[data-ls="full"]'); if (fb) { fb.textContent = '⤢'; fb.setAttribute('aria-label', 'Full screen'); } }
       el.classList.remove('open'); panel.style.transform = '';
       hideT = setTimeout(() => { if (!open) { el.hidden = true; stack = []; try { frame.contentWindow.location.replace('about:blank'); } catch (e) {} } }, 260);
       onChange && onChange(false);
@@ -143,6 +144,7 @@
     el.addEventListener('click', e => {
       const b = e.target.closest('[data-ls]'); if (!b) return;
       const k = b.dataset.ls, c = cur();
+      if (k === 'full') { const on = !el.classList.contains('full'); el.classList.toggle('full', on); b.textContent = on ? '⤡' : '⤢'; b.setAttribute('aria-label', on ? 'Smaller' : 'Full screen'); return; }
       if (k === 'close') close();
       else if (k === 'back') back();
       else if (k === 'out' && c) external(abs(c.url));
