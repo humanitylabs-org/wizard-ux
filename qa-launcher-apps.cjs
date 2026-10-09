@@ -7,7 +7,7 @@ const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:1
 const W = process.env.QA_WEB_DIR;
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, x); } };
-const WANT = { 'wizard-signal': '/wizard-signal/', wisdom: '/wizard-signal/#wisdom', shopping: '/wizard-shopping/', mizel: '/meetings/#/', trackhunt: '/trackhunt/' };
+const WANT = { 'wizard-signal': '/wizard-signal/', wisdom: '/wizard-signal/#wisdom', shopping: '/wizard-shopping/', mizel: '/meetings/#/', trackhunt: '/trackhunt/', 'legacy-wizard': '/wizard/' };
 const RETIRED = ['/shopping-assistant/', '/reader/', '/signal-feed/', '/recall/', '/capture/', '/idea-queue/', '/storyboard-review/', '/golden-frog-review/'];
 
 (async () => {
