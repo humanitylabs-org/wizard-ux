@@ -29,7 +29,7 @@
 
   let words = null, hintUI = null;
   const LM = W.LiveMode = {
-    on: ON, demo: DEMO, ambient: false, card: null, ideas: 0, moons: [], log: [], signing: false, signedVia: '',
+    on: ON, demo: DEMO, ambient: false, card: null, ideas: 0, moons: [], log: [], logAdd(x) { this.log.push(x); if (this.log.length > 60) this.log.splice(0, this.log.length - 60); }, signing: false, signedVia: '',
     get words() { return words ? words.count : 0; }, get hint() { return hintUI ? hintUI.text : ''; },
   };
   if (!ON || !M) { LM.back = () => null; LM.feed = () => {}; LM.addMoon = () => {}; LM.setAmbient = () => {}; return; }
@@ -84,7 +84,7 @@
 
   /* ---------- the "Wizard noticed" card ---------- */
   function openCard(item) {
-    LM.card = item; LM.log.push('card');
+    LM.card = item; LM.logAdd('card');
     $('#lmTitle').textContent = item.title; $('#lmSaid').textContent = item.said ? `\u201c${item.said}\u201d` : 'from what you just said';
     sign.reset(); $('#lmCard').dataset.src = item.source || 'feed';
     cardFx.rise(); M.chime('notice'); M.haptic('notice'); ambientHint();
@@ -107,7 +107,7 @@
     const item = LM.card; if (!item) return;
     M.chime('sent');
     const moon = LM.addMoon({ title: item.title, source: item.source });
-    closeCard(true); LM.log.push('sent');
+    closeCard(true); LM.logAdd('sent');
     if (item.source === 'preview') { moon.state = 'working'; setTimeout(() => { moon.state = 'done'; renderMoons(); }, 6000); hintUI.show(`preview \u00b7 not sent to ${window.WizConfig.agent()} \u00b7 watch its moon`, 'sent', 3500); }
     else {
       try {
@@ -144,7 +144,7 @@
     return all.length ? all : [{ t: 'Nothing yet today', d: 'Talk with Live Mode on and ideas collect here.', c: 'var(--ink-3)' }];
   }
   function openIdeas(level) {
-    LM.ideas = Math.min(2, level); LM.log.push('ideas' + LM.ideas);
+    LM.ideas = Math.min(2, level); LM.logAdd('ideas' + LM.ideas);
     $('#lmIdeasList').innerHTML = todayIdeas().map(x => `<button class="wm-zi" ${x.id ? `data-thread="${esc(x.id)}"` : ''} style="--c:${x.c}"><span class="t">${esc(x.t)}</span><small>${esc(x.d)}</small></button>`).join('');
     ideasEl.classList.add('on'); ideasEl.classList.toggle('deep', LM.ideas >= 2); M.chime('open'); ambientHint();
   }

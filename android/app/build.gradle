@@ -15,8 +15,8 @@ android {
         applicationId 'ai.wizards.os'
         minSdk 28
         targetSdk 35
-        versionCode 11
-        versionName '0.7.0'
+        versionCode 14
+        versionName '0.8.0'
         buildConfigField 'String', 'HOME_URL', '"https://private.wizard001.com/wizard-os-home/"'
         buildConfigField 'String', 'ORIGIN', '"https://private.wizard001.com"'
         // The one certificate (SHA-256) an in-app update must be signed with: the Wizard OS release key.
@@ -97,7 +97,9 @@ androidComponents {
 }
 
 dependencies {
+    // window.wizardMizelPort: WebViewCompat.addWebMessageListener (origin-scoped page ⇄ native port).
+    implementation 'androidx.webkit:webkit:1.12.1'
     testImplementation 'junit:junit:4.13.2'
-    // Real org.json for JVM unit tests (android.jar's copy is a stub there). Test classpath only.
+    // org.json is an Android stub on the JVM; the real one lets the Mizel journal/protocol tests run off-device.
     testImplementation 'org.json:json:20240303'
 }

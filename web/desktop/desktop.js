@@ -285,6 +285,7 @@
         const doc = f.contentDocument; if (!doc || doc.__wuxHooked) return; doc.__wuxHooked = true;
         doc.addEventListener('pointerdown', () => focusWin(el.dataset.win, { scroll: false }), true);
         doc.addEventListener('keydown', e => onKey(e, true), true);
+        try { const w0 = W[el.dataset.win]; if (LINKS && window.WizLinks?.guardFrame) window.WizLinks.guardFrame(f.contentWindow, (w0 && ((APP[w0.appId] || {}).url || w0.url)) || f.contentWindow.location.pathname, LINKS); } catch (e) {}
       } catch (e) {}
     });
   }
@@ -498,12 +499,13 @@
   palList.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) palRun(+b.dataset.i, { fresh: e.shiftKey }); });
   pal.addEventListener('pointerdown', e => { if (e.target === pal) closePalette(); });
 
-  /* Ask Archimedes from anywhere: a new thread, through the durable outbox, opened beside what you're doing. */
+  /* Ask Archimedes from anywhere: a new thread, through the durable outbox, delegated in the background.
+   * Nothing opens or takes focus; the thread shows up in Chats and the Inbox when James wants it. */
   async function ask(text, how = 'typing in the desktop launcher', audio = null) {
     text = String(text || '').trim(); if (!text && !audio) return;
     const ctx = viewContext(ws[cur].focus, how);
-    const it = await OUTBOX.enqueue({ kind: 'new', text, audio, instructions: ctx, source: 'orb', how });
-    openThread(it.sessionId);
+    await OUTBOX.enqueue({ kind: 'new', text, audio, instructions: ctx, source: 'orb', how });
+    if (!audio) toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600);
   }
 
   /* Wizard Files (#23): the shared Files sheet, in a Chats window (attaches to its open thread, else starts a new chat). */
@@ -710,6 +712,7 @@
   // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
     if (!pal.hidden) { closePalette(); return 'palette'; }
+    if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }
     if (closeUsage()) return 'usage';
     if (setEl && !setEl.hidden) { closeSettings(); return 'settings'; }
@@ -728,6 +731,9 @@
     // ⌘K / Ctrl+K, ⌥Space: palette, from anywhere (even while typing).
     if ((e.metaKey || e.ctrlKey) && !e.altKey && (k === 'k' || k === 'K')) return hit(() => (pal.hidden ? openPalette() : closePalette()));
     if (alt && code === 'Space') return hit(() => (pal.hidden ? openPalette() : closePalette()));
+    // Link pane: ⌘Enter keeps it as a window, ⌘⇧Enter opens it in the browser.
+    if (LINKS && LINKS.isOpen() && (e.metaKey || e.ctrlKey) && k === 'Enter') return hit(() => LINKS.el.querySelector(shift ? '[data-ls="out"]' : '[data-ls="keep"]')?.click());
+    if (k === 'Escape' && LINKS && LINKS.isOpen() && fromFrame) { const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } return; }
     if (k === 'Escape') { if (fromFrame && pal.hidden && keysEl.hidden && ib.hidden && VOICE.state !== 'listen') return; const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
     if (!pal.hidden) return; // the palette owns the keyboard while open
     if (setEl && !setEl.hidden && !(e.altKey && code === 'Comma')) return; // so does Settings (⌥, closes it)
@@ -841,6 +847,12 @@
 
   /* ---------------- deep links + boot ---------------- */
   render();
+  // In-app browser (core/links.js): links tapped in Wizard open in a right-half pane.
+  const LINKS = window.WizLinks ? window.WizLinks.mount({
+    parent: document.body, mode: 'pane',
+    onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a, { fresh: false }); else newWin({ app: 'frame', url, title }); },
+  }) : null;
+  if (LINKS) window.WizLinks.intercept(document.body, LINKS);
   LIVE?.refresh();
   /* Deep links (core/deeplink.js): ?session= opens the thread in a Chats window, ?view= a screen, ?video= the player.
    * Back/Esc then walks thread → list → stays; the page is never left. */
@@ -866,6 +878,7 @@
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
   window.__wux = {
+    get links() { return LINKS; },
     shell: 'desktop', get ws() { return ws; }, get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS,
     goWs, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openInbox, talk, ask, escStep, viewContext,
     openFiles, openUsage, recordReply,

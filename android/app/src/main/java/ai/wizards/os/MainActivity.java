@@ -72,6 +72,7 @@ public class MainActivity extends Activity {
     private boolean showingError;
     /** Native-parity features (background recorder, share, reply notifications, in-app update): device/DeviceBridge. */
     private ai.wizards.os.device.DeviceBridge device;
+    private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
 
     @Override
     protected void onCreate(Bundle state) {
@@ -120,6 +121,8 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new Bridge(), "WizardOSNative");
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         web.addJavascriptInterface(device, "WizardOSDevice");
+        if (mizel != null) mizel.detach();
+        mizel = ai.wizards.os.mizel.MizelBridge.install(web, BuildConfig.ORIGIN);
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -211,7 +214,7 @@ public class MainActivity extends Activity {
 
     String startUrl(Intent intent) {
         Uri data = intent == null ? null : intent.getData();
-        if (data != null && Origin.isShell(data)) return data.toString();
+        if (data != null && Origin.isInApp(data)) return data.toString();
         return ai.wizards.os.device.AppState.homeUrl(this); // HOME_URL; QA builds may point at a fake Wizard
     }
 
@@ -220,7 +223,7 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         Uri data = intent.getData();
-        if (data != null && Origin.isShell(data)) web.loadUrl(data.toString());
+        if (data != null && Origin.isInApp(data)) web.loadUrl(data.toString());
         if (ACTION_ACCESSIBILITY.equals(intent.getAction())) { intent.setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); return; }
         queueHandoff(intent);
         device.onIntent(intent);
@@ -338,6 +341,7 @@ public class MainActivity extends Activity {
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, true); // the floating button hides while Wizard OS is open
         ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
         device.onStart();
+        ai.wizards.os.mizel.MeetingRecorderService.recover(this); // a meeting cut off by a process death is closed and uploaded
     }
 
     @Override
@@ -345,6 +349,30 @@ public class MainActivity extends Activity {
         device.onStop();
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, false); // …and comes back when James leaves
         super.onStop();
+    }
+
+    private boolean immersive;
+    /** Sticky immersive: the system bars hide, a swipe from the edge shows them briefly over the app. */
+    @SuppressWarnings("deprecation")
+    void applyImmersive(boolean on) {
+        immersive = on;
+        if (Build.VERSION.SDK_INT >= 30) {
+            android.view.WindowInsetsController c = getWindow().getInsetsController();
+            if (c == null) return;
+            if (on) {
+                c.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                c.hide(WindowInsets.Type.systemBars());
+            } else c.show(WindowInsets.Type.systemBars());
+        } else {
+            View d = getWindow().getDecorView();
+            d.setSystemUiVisibility(on ? (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) : 0);
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && immersive) applyImmersive(true); // a dialog or the shade can bring the bars back
     }
 
     @Override
@@ -526,6 +554,7 @@ public class MainActivity extends Activity {
         if (device != null) device.onDestroy();
         ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(null);
         if (ai.wizards.os.everywhere.EverywhereService.appIsRecording()) ai.wizards.os.everywhere.EverywhereService.appVoiceState(this, "idle", 0);
+        if (mizel != null) { mizel.detach(); mizel = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
     }
@@ -598,6 +627,10 @@ public class MainActivity extends Activity {
         /** The orb is recording (or transcribing): keep the screen from locking until it says otherwise. */
         @JavascriptInterface
         public void keepAwake(boolean on) { runOnUiThread(() -> setKeepAwake(on)); }
+
+        /** Full-screen window in the shell: hide Android's status and navigation bars too (edge swipe peeks them). */
+        @JavascriptInterface
+        public void immersive(boolean on) { runOnUiThread(() -> applyImmersive(on)); }
 
         @JavascriptInterface
         public void haptic(int ms) {

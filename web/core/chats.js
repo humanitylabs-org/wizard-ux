@@ -531,7 +531,9 @@ window.WizCore.chats = function createChats(H) {
     const it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : w.thread, steerRunId, text, audio,
       instructions: viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid, how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
     c.follow = true; if (nm) c.newModel = null;
-    if (isNew && W[wid]) { W[wid].thread = it.sessionId; save(); c.loadedFor = ''; c.draftFor = draftKey(W[wid]); }
+    // A new thread is delegated in the background: the window steps back to the list instead of
+    // opening the thread, and the thread appears there (Working) once it is admitted.
+    if (isNew && W[wid]) { W[wid].thread = null; save(); c.loadedFor = ''; c.draftFor = ''; toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600); }
     renderChats(W[wid]); applyLayout(deskOf(wid));
   }
   const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
