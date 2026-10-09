@@ -479,10 +479,10 @@
   }
   function renderSettings() {
     readNativeUnsent();
-    const all = unsentAll(), native = NATIVE();
-    let ev = null; try { ev = native && window.WizardOSNative.everywhere ? JSON.parse(window.WizardOSNative.everywhere()) : null; } catch (e) {}
+    const all = unsentAll(), native = NATIVE(), evNative = native && typeof window.WizardOSNative.setEverywhere === 'function';
+    let ev = null; try { ev = evNative ? JSON.parse(window.WizardOSNative.everywhere()) : null; } catch (e) {}
     const evOn = !!ev?.enabled;
-    const evSub = !native ? 'Works in the Wizard OS Android app' : evOn ? (ev.overlay ? 'On · floats over other apps, hides while Wizard OS is open' : 'Needs “Display over other apps”') : 'A floating Wizard button over your other apps. Tap to talk, drag to move.';
+    const evSub = !native ? 'Works in the Wizard OS Android app' : !evNative ? 'Update the Wizard OS app (0.5.0) to turn this on' : evOn ? (ev.overlay ? 'On · floats over other apps, hides while Wizard OS is open' : 'Needs “Display over other apps”') : 'A floating Wizard button over your other apps. Tap to talk, drag to move.';
     const side = !native ? 'Works in the Wizard OS Android app' : !SIDE ? '' : SIDE.step === 'press' || SIDE.step === 'ready' ? 'On · hold the side button to talk' : 'Hold the side button to talk, even when locked';
     $('#settingsBody').innerHTML = `
       <h3 class="st-title">Settings</h3>
@@ -490,7 +490,7 @@
         ${all.length ? all.map(unsentRow).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">Everything you’ve said reached Wizard.</div>'}
         <p class="st-note">Every message is saved on this phone before it’s sent, and retried until Wizard accepts it.</p></div>
       <div class="st-group"><h4>Assistant</h4>
-        <button class="st-row" data-st="everywhere" ${native ? '' : 'disabled'}><span class="st-ic">✦</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
+        <button class="st-row" data-st="everywhere" ${evNative ? '' : 'disabled'}><span class="st-ic">✦</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
         <button class="st-row" data-st="side" ${native ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(side)}</small></span><span class="st-go">›</span></button>
       </div>
       <div class="st-group"><h4>Wizard</h4>
@@ -503,8 +503,8 @@
   }
   function unsentAction(id, origin, a) {
     if (origin === 'everywhere') {
-      if (a === 'retry') window.WizardOSNative.retryUnsent(id);
-      if (a === 'delete') window.WizardOSNative.deleteUnsent(id);
+      if (a === 'retry' && window.WizardOSNative?.retryUnsent) window.WizardOSNative.retryUnsent(id);
+      if (a === 'delete' && window.WizardOSNative?.deleteUnsent) window.WizardOSNative.deleteUnsent(id);
       setTimeout(onUnsentChange, 300); return;
     }
     const it = OUTBOX.get(id); if (!it) return;
@@ -1364,9 +1364,9 @@
   settingsEl.addEventListener('click', e => {
     if (e.target.closest('[data-stclose]')) return closeSheets();
     const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
-    if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); return setTimeout(onUnsentChange, 300); }
+    if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); return setTimeout(onUnsentChange, 300); }
     const st = e.target.closest('[data-st]')?.dataset.st;
-    if (st === 'everywhere' && NATIVE()) { let on = false; try { on = JSON.parse(window.WizardOSNative.everywhere()).enabled; } catch (x) {} window.WizardOSNative.setEverywhere(!on); setTimeout(renderSettings, 250); vib(8); }
+    if (st === 'everywhere' && NATIVE() && typeof window.WizardOSNative.setEverywhere === 'function') { let on = false; try { on = JSON.parse(window.WizardOSNative.everywhere()).enabled; } catch (x) {} window.WizardOSNative.setEverywhere(!on); setTimeout(renderSettings, 250); vib(8); }
     if (st === 'side') { closeSheets(true); sideButtonTap(true); }
   });
 
@@ -1486,7 +1486,7 @@
   inboxEl.addEventListener('click', e => {
     if (e.target.closest('[data-allread]')) { LIVE.markSeen(live().ready.map(s => s.id)); vib(8); toast('✓', 'All marked read'); return; }
     const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
-    if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); setTimeout(onUnsentChange, 300); }
+    if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); setTimeout(onUnsentChange, 300); }
   });
 
   // Moons orbit the orb: one per running agent (violet) or thread that needs you (amber).
