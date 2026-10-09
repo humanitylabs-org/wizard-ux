@@ -16,7 +16,7 @@
   if (document.documentElement.dataset.leaving) return; // core/shell.js is switching to the other shell
   const DB = 'wos-outbox', STORE = 'items';
   const BACKOFF = [2000, 5000, 15000, 30000, 60000, 120000];
-  const AUTO_TRIES = BACKOFF.length; // then it waits for James (or for the network to come back)
+  const AUTO_TRIES = BACKOFF.length; // then it waits for the owner (or for the network to come back)
   const J = { 'Content-Type': 'application/json' };
   const listeners = new Set();
   let items = new Map(), db = null, ready = null, pumping = false, timer = 0;
@@ -75,12 +75,9 @@
   }
 
   async function transcribe(it) {
-    const fd = new FormData();
-    const ext = /mp4|m4a/.test(it.audioType || '') ? 'm4a' : /ogg/.test(it.audioType || '') ? 'ogg' : 'webm';
-    fd.append('file', it.audio, `voice.${ext}`); fd.append('language', 'en');
-    fd.append('prompt', 'Wizard OS voice request to Archimedes. Names: Archimedes, Wizard, Hermes, Miguel, Thales, Mizel.');
-    const r = await call('/wizard-os-home/api/transcribe', { method: 'POST', body: fd });
-    return String((await r.json()).text || '').trim();
+    const audio = it.audio.type ? it.audio : new Blob([it.audio], { type: it.audioType || 'audio/webm' });
+    try { return (await window.WizConfig.transcribe(audio, { prompt: window.WizConfig.voicePrompt() })).text; }
+    catch (e) { throw new HttpError(e.status || 0, e.message); }
   }
   async function uploadAudio(it) {
     const ext = /mp4|m4a/.test(it.audioType || '') ? 'm4a' : /ogg/.test(it.audioType || '') ? 'ogg' : 'webm';

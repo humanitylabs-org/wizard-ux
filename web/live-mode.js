@@ -108,12 +108,12 @@
     M.chime('sent');
     const moon = LM.addMoon({ title: item.title, source: item.source });
     closeCard(true); LM.log.push('sent');
-    if (item.source === 'preview') { moon.state = 'working'; setTimeout(() => { moon.state = 'done'; renderMoons(); }, 6000); hintUI.show('preview \u00b7 not sent to Archimedes \u00b7 watch its moon', 'sent', 3500); }
+    if (item.source === 'preview') { moon.state = 'working'; setTimeout(() => { moon.state = 'done'; renderMoons(); }, 6000); hintUI.show(`preview \u00b7 not sent to ${window.WizConfig.agent()} \u00b7 watch its moon`, 'sent', 3500); }
     else {
       try {
-        const ctx = `Sent from Wizard OS Live Mode: James signed this with the thumbprint after Wizard noticed it in live speech.${item.said ? ` He said: "${item.said}".` : ''}${item.detail ? ` Detail: ${item.detail}` : ''}`;
+        const ctx = `Sent from Wizard OS Live Mode: ${window.WizConfig.owner() || 'The user'} signed this with the thumbprint after Wizard noticed it in live speech.${item.said ? ` They said: "${item.said}".` : ''}${item.detail ? ` Detail: ${item.detail}` : ''}`;
         const r = await wos().live.send(item.title, { instructions: ctx });
-        moon.sessionId = r.sessionId; hintUI.show('sent to Archimedes \u00b7 watch its moon', 'sent', 3500);
+        moon.sessionId = r.sessionId; hintUI.show(`sent to ${window.WizConfig.agent()} \u00b7 watch its moon`, 'sent', 3500);
       } catch (err) { moon.state = 'failed'; moon.retry = item; hintUI.show('couldn\u2019t send \u00b7 it\u2019s kept as a moon', 'sent', 3500); M.haptic('error'); }
     }
     renderMoons(); setTimeout(ambientHint, 3600);
@@ -135,7 +135,7 @@
     return x.length > 150 ? x.slice(0, 147).replace(/\s\S*$/, '') + '\u2026' : x; };
   function todayIdeas() {
     const day = new Date(); day.setHours(0, 0, 0, 0);
-    const fromMoons = LM.moons.map(m => ({ t: m.title, d: m.source === 'preview' ? 'Noticed in Live Mode · preview' : 'Noticed in Live Mode · sent to Archimedes', c: 'var(--violet-2)' }));
+    const fromMoons = LM.moons.map(m => ({ t: m.title, d: m.source === 'preview' ? 'Noticed in Live Mode · preview' : `Noticed in Live Mode · sent to ${window.WizConfig.agent()}`, c: 'var(--violet-2)' }));
     const ss = (wos()?.live?.sessions || []).filter(s => Date.parse(s.lastUserAt || s.updatedAt) >= day.getTime())
       .slice(0, 12).map(s => { const at = new Date(Date.parse(s.lastUserAt || s.updatedAt)); const hm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
         const pv = clean(s.preview); // agent-to-agent notes are plumbing, not ideas

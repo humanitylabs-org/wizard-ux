@@ -53,7 +53,7 @@ window.WizCore.chats = function createChats(H) {
     .replace(/\n*\[Browser dogfooding policy[\s\S]*$/, '')
     .replace(/<\s*\/?\s*helm_attachments\s*>/gi, '')
     .trim();
-  // One turn = what James said, the work in between, and the final answer.
+  // One turn = what the owner said, the work in between, and the final answer.
   function toTurns(rows) {
     const out = []; let cur = null;
     for (const m of rows) {
@@ -242,7 +242,7 @@ window.WizCore.chats = function createChats(H) {
   function renderThread(w, el) {
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
     const working = !!s && WORKING_ST.has(s.status);
-    const sub = isNew ? 'Starts a new thread with Archimedes' : working ? 'Archimedes is working' : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
+    const sub = isNew ? `Starts a new thread with ${window.WizConfig.agent()}` : working ? `${window.WizConfig.agent()} is working` : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
     const turns = c.loadedFor === w.thread ? c.turns || [] : null;
     let msgs;
     const pend = pendingFor(w);
@@ -258,7 +258,7 @@ window.WizCore.chats = function createChats(H) {
     el.innerHTML = `<div class="ch-thread">
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span class="emo">${isNew ? '✎' : emoOf(w.thread)}</span><div class="ti"><b>${esc(winTitle(w))}</b><small>${esc(sub)}</small></div></div>
       <div class="ch-msgs">${msgs}</div>
-      <form class="ch-compose" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? 'Steer Archimedes…' : 'Message Archimedes'}" enterkeyhint="enter">${esc(draft)}</textarea><button type="submit" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
+      <form class="ch-compose" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(window.WizConfig.agent())}…` : `Message ${esc(window.WizConfig.agent())}`}" enterkeyhint="enter">${esc(draft)}</textarea><button type="submit" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     const nb = el.querySelector('.ch-msgs');
     nb.scrollTop = atBottom ? nb.scrollHeight : (box ? box.scrollTop : nb.scrollHeight);

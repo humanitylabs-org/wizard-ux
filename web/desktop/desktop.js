@@ -84,10 +84,10 @@
     const w = W[id || ws[cur].focus], others = ws[cur].wins.filter(x => x !== w?.id).map(x => winTitle(W[x]));
     const a = appOf(w);
     return [
-      `[Wizard OS context] James sent this by ${how} from Wizard UX on his desktop (workspace ${cur + 1}).`,
+      `[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by ${how} from Wizard UX on their desktop (workspace ${cur + 1}).`,
       w ? `Window in front: ${winTitle(w)}${a?.url ? ` (${a.url})` : ''}.` : 'No window was open.',
       others.length ? `Also open on this workspace: ${others.join(', ')}.` : '',
-      'When he says "this", "here", or "it", he likely means that window. Use this as background only.',
+      'When they say "this", "here", or "it", they likely mean that window. Use this as background only.',
     ].filter(Boolean).join(' ');
   }
 
@@ -313,6 +313,8 @@
   $('#clock').addEventListener('click', () => { const i = ws.findIndex(d => !d.wins.length); goWs(i >= 0 ? i : cur); });
   $('#keysBtn').addEventListener('click', () => toggleKeys());
   $('#micBtn').addEventListener('click', () => talk());
+  // No transcriber on this Wizard: the mic button hides (the outbox still keeps typed messages safe).
+  window.WizConfig?.ready.then(() => { $('#micBtn').hidden = !window.WizConfig.has('voice'); });
 
   /* ---------------- home (empty workspace) ---------------- */
   function homeHtml(i) {
@@ -385,11 +387,18 @@
 
   /* ---------------- palette: one box for apps, threads, commands and asking Archimedes ---------------- */
   const pal = $('#palette'), palIn = $('#palInput'), palList = $('#palList');
+  // The agent's name comes from Wizard OS settings; keep static labels in step with it.
+  const nameLabels = () => {
+    const n = window.WizConfig.agent();
+    palIn.placeholder = `Open an app, find a thread, or ask ${n}…`;
+    document.querySelectorAll('[data-agent-name]').forEach(el => { el.textContent = n; });
+  };
+  nameLabels(); window.addEventListener('wizard:config', nameLabels);
   let palItems = [], palSel = 0;
   function commands() {
     return [
       { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}Enter`, run: () => newChat() },
-      { kind: 'cmd', name: 'Talk to Archimedes', icon: '🎙', keys: 'Right ⌘', run: () => talk() },
+      { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
       { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
       { kind: 'cmd', name: 'Inbox', icon: '⬇', keys: `${MOD}I`, run: () => openInbox() },
       { kind: 'cmd', name: 'Close window', icon: '✕', keys: `${MOD}W`, run: () => focused() && closeWin(focused().id) },
@@ -409,7 +418,7 @@
     else { const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] }; threads = [...L.needs, ...L.ready, ...L.working].slice(0, 6); }
     const th = threads.map(s => ({ kind: 'thread', name: s.title, sub: ago(LIVE.cardAt(s)) + (LIVE.isNew(s) ? ' · unread' : WORKING_ST.has(s.status) ? ' · working' : ''), icon: emoOf(s.id), run: o => openThread(s.id, o) }));
     const cmds = commands().filter(c => !n || norm(c.name).includes(n));
-    if (n) out.push({ grp: 'Ask', items: [{ kind: 'ask', name: `Ask Archimedes: “${clip(q, 70)}”`, icon: '✦', keys: `${CMD}Enter`, run: () => ask(q) }] });
+    if (n) out.push({ grp: 'Ask', items: [{ kind: 'ask', name: `Ask ${window.WizConfig.agent()}: “${clip(q, 70)}”`, icon: '✦', keys: `${CMD}Enter`, run: () => ask(q) }] });
     if (th.length) out.push({ grp: n ? 'Threads' : 'Needs you · unread · working', items: th });
     if (apps.length) out.push({ grp: 'Apps', items: apps });
     if (cmds.length) out.push({ grp: 'Commands', items: cmds });
@@ -473,7 +482,7 @@
 
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
-    ['Launch', [[`${CMD}K  or  ${MOD}Space`, 'Search apps, threads, commands; or ask Archimedes'], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', 'Talk to Archimedes (tap again to send, Esc to cancel)'], ['Right ⌥ (tap)', 'Dictate (tap again to insert at the cursor, or copy)']]],
+    ['Launch', [[`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send, Esc to cancel)`], ['Right ⌥ (tap)', 'Dictate (tap again to insert at the cursor, or copy)']]],
     ['Workspaces', [[`${MOD}1 … ${MOD}9`, 'Go to workspace'], [`⇧${MOD}1 … 9`, 'Send window to workspace'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
     ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full window'], [`${MOD}W`, 'Close window']]],
     ['Chats', [[`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list']]],
@@ -522,7 +531,7 @@
     const w = vTarget && W[vTarget];
     if (w && w.thread) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob);
     else ask('', 'voice', r.blob);
-    toast('✦', 'Sent to Archimedes', 1400);
+    toast('✦', `Sent to ${window.WizConfig.agent()}`, 1400);
     return 'sent';
   }
 

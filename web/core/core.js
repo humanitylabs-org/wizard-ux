@@ -18,12 +18,12 @@
     set(k, v) { try { localStorage.setItem(prefix + k, JSON.stringify(v)); } catch (e) {} },
   });
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  // Short relative time, Bangkok calendar for anything older than a day.
+  // Short relative time; the owner's calendar (Wizard OS settings clock) for anything older than a day.
   const ago = iso => {
     const t = Date.parse(iso || ''); if (!isFinite(t)) return '';
     const m = Math.round((Date.now() - t) / 6e4);
     if (m < 1) return 'now'; if (m < 60) return m + 'm'; if (m < 24 * 60) return Math.round(m / 60) + 'h';
-    const d = new Date(t + 7 * 36e5); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()}`;
+    const d = window.WizConfig ? window.WizConfig.dayParts(t) : { dow: new Date(t).getDay(), d: new Date(t).getDate() }; return `${DOW[d.dow]} ${d.d}`;
   };
   const emoOf = (() => {
     let EMO = {}, at = 0;

@@ -57,13 +57,7 @@
           // The durable outbox transcribes and keeps the recording itself: hand it the audio as is.
           if (o.transcribe === false) { set('idle'); return resolve({ text: '', blob, ms }); }
           try {
-            const fd = new FormData();
-            const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
-            fd.append('file', blob, `voice.${ext}`); fd.append('language', 'en');
-            fd.append('prompt', opts.prompt || 'Wizard voice. Names: Archimedes, Wizard, Hermes, Mizel, CineQueue, Omarchy.');
-            const r = await fetch('api/transcribe', { method: 'POST', body: fd });
-            const j = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+            const j = await window.WizConfig.transcribe(blob, { prompt: opts.prompt || window.WizConfig.voicePrompt() });
             set('idle'); resolve({ text: String(j.text || '').trim(), blob, ms, sttMs: j.ms });
           } catch (e) { set('idle'); resolve({ text: '', blob, ms, error: String(e.message || e) }); }
         };

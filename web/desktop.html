@@ -43,9 +43,9 @@
   <div id="palette" class="palette" hidden>
     <div class="pal-card" role="dialog" aria-label="Search and launch">
       <label class="pal-in"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="palInput" placeholder="Open an app, find a thread, or ask Archimedes…" spellcheck="false" autocomplete="off"></label>
+        <input id="palInput" placeholder="Open an app, find a thread, or ask Wizard…" data-agent-placeholder spellcheck="false" autocomplete="off"></label>
       <div id="palList" class="pal-list" role="listbox"></div>
-      <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>⇧↵</kbd> new window</span><span><kbd>⌘↵</kbd> ask Archimedes</span><span><kbd>Esc</kbd> close</span></div>
+      <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>⇧↵</kbd> new window</span><span><kbd>⌘↵</kbd> ask <b data-agent-name>Wizard</b></span><span><kbd>Esc</kbd> close</span></div>
     </div>
   </div>
 
@@ -59,6 +59,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="core/core.js"></script>
+  <script src="core/config.js"></script>
   <script src="core/apps.js"></script>
   <script src="live.js"></script>
   <script src="outbox.js"></script>
