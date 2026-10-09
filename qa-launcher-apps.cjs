@@ -48,6 +48,12 @@ const RETIRED = ['/shopping-assistant/', '/reader/', '/signal-feed/', '/recall/'
       await p.evaluate(() => __wos.openSheet('launcher')); await p.waitForTimeout(600);
       const txt = await p.evaluate(() => document.body.innerText);
       ok(/Wisdom/.test(txt) && /Wizard Shopping/.test(txt), 'mobile: launcher sheet shows Wisdom and Wizard Shopping');
+      const natives = await p.evaluate(() => [...document.querySelectorAll('#launcherBody [data-app]')].map(e => e.dataset.app).filter(id => ['maps', 'camera', 'phone', 'messages', 'spotify', 'telegram', 'line', 'grab', 'chrome', 'settings'].includes(id)));
+      ok(!natives.length && !/\bANDROID\b|Android/.test(await p.evaluate(() => document.querySelector('#launcherBody').innerText)), 'mobile: no Android apps or Android group in the launcher', JSON.stringify(natives));
+      await p.fill('#search', 'maps').catch(() => {}); await p.waitForTimeout(300);
+      const hit = await p.evaluate(() => [...document.querySelectorAll('#launcherBody [data-app]')].map(e => e.dataset.app));
+      ok(!hit.includes('maps'), 'mobile: searching "maps" in the launcher shows no Android tile', JSON.stringify(hit));
+      ok(await p.evaluate(() => (window.WizCore.apps('mobile').findApp('maps') || {}).id === 'maps'), 'mobile: voice "open maps" still resolves to Maps');
       await p.screenshot({ path: (process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch') + '/launcher-apps-mobile.png' });
     }
     ok(!errs.length, `${shell}: no shell page errors`, errs.join(' | '));
