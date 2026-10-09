@@ -48,7 +48,10 @@
 
   /* ---------------- apps ---------------- */
   // The registry lives in core/apps.js (shared with the desktop shell); the phone gets its own list.
-  const { APPS, APP, findApp } = window.WizCore.apps('mobile');
+  const { APPS, APP, findApp, capabilities } = window.WizCore.apps('mobile');
+  let launcherPage = '';  // '' = Apps, 'views' = things Archimedes built, 'caps' = screenless apps
+  const opened = id => store.get('opened', {})[id] || 0;
+  const agoShort = t => { if (!t) return 'Never opened'; const d = Math.floor((Date.now() - t) / 864e5); return d < 1 ? 'Opened today' : d === 1 ? 'Opened yesterday' : `Opened ${d} days ago`; };
   const norm = window.WizCore.norm;
 
   /* ---------------- state ---------------- */
@@ -1020,22 +1023,27 @@
   });
 
   function appTile(a) { return `<button class="lapp" data-app="${a.id}"><span class="ic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}${a.kind === 'native' ? '<span class="badge">APK</span>' : ''}</span><span class="nm">${esc(a.name)}</span></button>`; }
-  function appRow(a, sel) { const k = a.kind === 'view' ? 'view' : a.kind === 'native' ? 'native' : 'app'; return `<button class="lrow ${sel ? 'sel' : ''}" data-app="${a.id}"><span class="ic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</span><span class="nm">${esc(a.name)}<small>${esc(a.desc)}</small></span><span class="kind ${k}">${k === 'native' ? 'Android' : k === 'view' ? 'View' : 'Wizard'}</span></button>`; }
+  function appRow(a, sel) { const k = a.kind === 'view' || a.kind === 'made' ? 'view' : a.kind === 'native' ? 'native' : 'app'; return `<button class="lrow ${sel ? 'sel' : ''}" data-app="${a.id}"><span class="ic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</span><span class="nm">${esc(a.name)}<small>${esc(a.desc)}</small></span><span class="kind ${k}">${k === 'native' ? 'Android' : k === 'view' ? 'View' : 'Wizard'}</span></button>`; }
   function renderLauncher(q) {
     const body = $('#launcherBody');
     q = q.trim();
+    if (!q && launcherPage) { body.innerHTML = launcherPage === 'views' ? viewsPage() : capsPage(); body.scrollTop = 0; return; }
     if (!q) {
-      const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native').slice(0, 4);
+      const isApp = a => a.kind === 'wizard' || a.kind === 'chats';
+      const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && isApp(APP[id])).slice(0, 4);
+      const made = APPS.filter(a => a.kind === 'made'), caps = capabilities();
       body.innerHTML = `<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
-        <div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>
-        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats').length}</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats').map(appTile).join('')}</div></div>
-        ${deskBar()}`;
+        <div class="lgroup"><h4>Apps <span>${APPS.filter(isApp).length}</span></h4><div class="lgrid">${APPS.filter(isApp).map(appTile).join('')}</div></div>
+        <div class="lgroup lmore">
+          <button class="lrow" data-lpage="views"><span class="ic" style="--g1:#8f63ff;--g2:#3a2a7a">◫</span><span class="nm">Views<small>${made.length} built for you by ${esc(window.WizConfig?.agent?.() || 'Wizard')}</small></span><span class="st-go">›</span></button>
+          <button class="lrow" data-lpage="caps"><span class="ic" style="--g1:#3fe0ff;--g2:#1b4ab8">⚙</span><span class="nm">Capabilities<small>${caps.length ? `${caps.length} installed, no screen` : 'None installed yet'}</small></span><span class="st-go">›</span></button>
+        </div>${deskBar()}`;
       body.scrollTop = body.scrollHeight;
       return;
     }
     const n = norm(q);
     // Android apps stay voice-only ("open Maps" still routes); they never clutter the launcher.
-    const hits = APPS.filter(a => a.kind !== 'native').map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
+    const hits = APPS.filter(a => a.kind !== 'native' && a.kind !== 'view').map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
     const th = (LIVE.ok ? LIVE.sessions.filter(x => !x.hidden && norm(x.title).includes(n)) : []).slice(0, 5);
     body.innerHTML = `${hits.length ? `<div class="lgroup"><h4>Apps &amp; views</h4>${hits.slice(0, 7).map((a, k) => appRow(a, k === 0)).join('')}</div>` : ''}
       ${th.length ? `<div class="lgroup"><h4>Threads</h4>${th.map(t => `<button class="lrow" data-thread="${esc(t.id)}"><span class="ic emo">${emoOf(t.id)}</span><span class="nm">${esc(t.title)}<small>${esc(ago(t.lastAssistantAt || t.updatedAt))}${LIVE.isNew(t) ? ' · unread' : ''}</small></span><span class="kind view">Chats</span></button>`).join('')}</div>` : ''}
@@ -1057,12 +1065,33 @@
     if (sel?.dataset.app) { launch(APP[sel.dataset.app]); return; }
     closeSheets(); runUtterance(q, 'command', true);
   });
+  function pageHead(title, sub) { return `<div class="lpage-h"><button class="lback" data-lpage="" aria-label="Back to apps">‹</button><div><b>${title}</b><small>${sub}</small></div></div>`; }
+  function viewsPage() {
+    const made = APPS.filter(a => a.kind === 'made').map(a => [opened(a.id), a]).sort((x, y) => y[0] - x[0]);
+    const STALE = 30 * 864e5, now = Date.now();
+    const fresh = made.filter(([t]) => t && now - t < STALE), stale = made.filter(([t]) => !t || now - t >= STALE);
+    const row = ([t, a]) => `<div class="vrow"><button class="lrow" data-app="${a.id}"><span class="ic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</span><span class="nm">${esc(a.name)}<small>${esc(a.desc)} · ${agoShort(t)}</small></span></button><button class="vact" data-vpin="${a.id}" title="Move to Apps">Pin</button></div>`;
+    return pageHead('Views', 'Built for you. Not on your Apps list until you pin one.')
+      + (fresh.length ? `<div class="lgroup"><h4>Used this month</h4>${fresh.map(row).join('')}</div>` : '')
+      + (stale.length ? `<div class="lgroup"><h4>Not opened in 30 days <span>${stale.length}</span></h4>${stale.map(row).join('')}<button class="st-wide" data-varchive="1">Archive these ${stale.length}</button><p class="st-note">Archived views keep their links and can be restored here.</p></div>` : '');
+  }
+  function capsPage() {
+    const caps = capabilities();
+    const row = c => `<div class="lrow static"><span class="ic" style="--g1:#3fe0ff;--g2:#1b4ab8">${esc(c.name.charAt(0))}</span><span class="nm">${esc(c.name)}<small>${esc(c.desc)}</small></span><span class="kind ${c.status === 'running' ? 'ok' : ''}">${esc(c.status === 'running' ? 'On' : c.status || '—')}</span></div>`;
+    return pageHead('Capabilities', `What ${esc(window.WizConfig?.agent?.() || 'Wizard')} can do for you. No screen; just ask.`)
+      + (caps.length ? `<div class="lgroup">${caps.map(row).join('')}</div>` : '<div class="noresult">Nothing installed yet.</div>')
+      + '<p class="st-note">Install and remove from the Wizard App Store.</p>';
+  }
   function launch(a) {
     if (!a) return;
     const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
+    const o = store.get('opened', {}); o[a.id] = Date.now(); store.set('opened', o);
     closeSheets(); setTimeout(() => openApp(a), 120);
   }
   launcher.addEventListener('click', e => {
+    const lp = e.target.closest('[data-lpage]'); if (lp) { launcherPage = lp.dataset.lpage; vib(6); return renderLauncher($('#search').value || ''); }
+    const vp = e.target.closest('[data-vpin]'); if (vp) { toast('◫', 'Mockup: Pin would move this view onto your Apps list'); return; }
+    const va = e.target.closest('[data-varchive]'); if (va) { toast('◫', 'Mockup: Archive would hide these until you restore them'); return; }
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
     const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }
     const dw = e.target.closest('[data-dw]');
@@ -1737,6 +1766,7 @@
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
     if (closePeek()) return 'peek';
     if (menuFor) { closeMenu(); return 'menu'; }
+    if (sheet === 'launcher' && launcherPage) { launcherPage = ''; renderLauncher($('#search').value || ''); return 'lpage'; }
     if (sheet) { closeSheets(); return 'sheet'; }
     const d = desks[idx], f = W[d.focus];
     if (f) {

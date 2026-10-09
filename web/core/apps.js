@@ -11,6 +11,19 @@
     { id: 'v-inbox', kind: 'view', name: 'Inbox', icon: '⬇', g: ['#ffbe55', '#ff6b86'], view: 'inbox', desc: 'Needs you, ready for review, working' },
     // Chats: the one built-in Wizard app. Everything else comes from the box (GET /wizard/v1/apps).
     { id: 'wizard', kind: 'chats', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'], desc: 'Your threads with your Wizard' },
+    // Views: things Archimedes built for you. Off the Apps grid; listed under Views with when you last opened them.
+    // (Mockup: hard-coded here. Real version: launcher.json entries tagged "group": "views".)
+    { id: 'signal-feed', kind: 'made', name: 'Signal Feed', icon: '◎', g: ['#ff5ccf', '#5c3bff'], url: '/signal-feed/', desc: 'Old feed prototype' },
+    { id: 'reader', kind: 'made', name: 'Reader', icon: '📖', g: ['#e9b46b', '#8a4dff'], url: '/reader/', desc: 'Old long-form reader' },
+    { id: 'recall', kind: 'made', name: 'Recall', icon: '◉', g: ['#3fe0ff', '#3f6bff'], url: '/recall/', desc: 'Voice memory test' },
+    { id: 'capture', kind: 'made', name: 'Capture', icon: '✚', g: ['#4ff0b0', '#2f8cff'], url: '/capture/', desc: 'Drop-anything test' },
+    { id: 'idea-queue', kind: 'made', name: 'Idea Queue', icon: '💡', g: ['#ffd65c', '#ff8a5c'], url: '/idea-queue/', desc: 'Ideas waiting their moment' },
+    { id: 'model-performance', kind: 'made', name: 'Model Perf', icon: '📈', g: ['#3fe0ff', '#8f63ff'], url: '/model-performance/', desc: 'Model routing and cost report' },
+    { id: 'storyboard', kind: 'made', name: 'Storyboards', icon: '🎞', g: ['#ffbe55', '#8f63ff'], url: '/storyboard-review/', desc: 'Storyboard review' },
+    { id: 'golden-frog', kind: 'made', name: 'Golden Frog', icon: '🐸', g: ['#ffd65c', '#4ff0b0'], url: '/golden-frog-review/', desc: 'Golden Frog review' },
+    { id: 'trackhunt', kind: 'made', name: 'TrackHunt', icon: '♫', g: ['#4ff0b0', '#0d8a6a'], url: '/trackhunt/', desc: 'Find tracks' },
+    { id: 'thai-cram', kind: 'made', name: 'Thai Cram', icon: 'ก', g: ['#ff6b86', '#3f6bff'], url: '/thai-cram/', desc: 'Thai flashcards' },
+    { id: 'alerts', kind: 'made', name: 'Alerts', icon: '⚠', g: ['#ff6b86', '#8a2b4a'], url: '/alerts/', desc: 'System alerts' },
     // Android natives (real intents on Android Chrome)
     { id: 'maps', kind: 'native', name: 'Maps', icon: '📍', g: ['#34a853', '#4285f4'], href: 'https://www.google.com/maps', desc: 'Google Maps' },
     { id: 'camera', kind: 'native', name: 'Camera', icon: '📷', g: ['#4a4f63', '#1b1e2b'], href: 'intent:#Intent;action=android.media.action.STILL_IMAGE_CAMERA;end', desc: 'Camera' },
@@ -48,6 +61,8 @@
     ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '',
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
+  const CAPS_KEY = 'wux.caps.v1';
+  let CAPS = (() => { try { return JSON.parse(localStorage.getItem(CAPS_KEY) || '[]') || []; } catch (e) { return []; } })();
   const listeners = new Set();
   async function loadRemote() {
     try {
@@ -56,7 +71,10 @@
       if (!url) return;
       const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
       if (!r.ok) return;
-      const list = ((await r.json()).apps || []).filter(a => a && a.id && a.url && a.id !== 'wizard');
+      const all = ((await r.json()).apps || []).filter(a => a && a.id && a.id !== 'wizard');
+      CAPS = all.filter(a => !a.url && a.source === 'apps.json').map(a => ({ id: String(a.id), name: String(a.name || a.id), desc: a.desc || '', status: a.status || '' }));
+      try { localStorage.setItem(CAPS_KEY, JSON.stringify(CAPS)); } catch (e) {}
+      const list = all.filter(a => a.url);
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); } catch (e) {}
       REMOTE = list.map(toTile);
       listeners.forEach(fn => fn());
@@ -97,7 +115,7 @@
       return APPS.map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; })
         .filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
     }
-    return { APPS, APP, findApp, searchApps };
+    return { APPS, APP, findApp, searchApps, capabilities: () => CAPS.slice() };
   }
   window.WizCore.apps = registry;
 })();

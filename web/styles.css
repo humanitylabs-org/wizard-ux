@@ -730,3 +730,16 @@ body {
 .desk-label { max-width: calc(100% - 48px); overflow: hidden; text-overflow: ellipsis; }
 /* While recording the timer owns the top of the orb: the unread badge steps aside so the time is readable. */
 .device[data-voice="listen"] .orb-badge, .device[data-voice="paused"] .orb-badge, .device[data-voice="command"] .orb-badge { opacity: 0; }
+
+/* Launcher sub-pages: Views (built for you) and Capabilities (no screen) */
+.lmore { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 8px; }
+.lmore .st-go, .lrow .st-go { color: var(--ink-3); font-size: 20px; }
+.lpage-h { display: flex; align-items: center; gap: 10px; margin: 6px 2px 10px; }
+.lpage-h b { display: block; font-size: 17px; }
+.lpage-h small { display: block; font-size: 12px; color: var(--ink-3); }
+.lback { width: 36px; height: 36px; border-radius: 12px; font-size: 22px; color: var(--ink-2); background: rgba(205, 190, 255, .08); flex: 0 0 auto; }
+.vrow { display: flex; align-items: center; gap: 6px; }
+.vrow .lrow { flex: 1; min-width: 0; }
+.vact { flex: 0 0 auto; padding: 6px 10px; border-radius: 9px; font-size: 12px; font-weight: 700; color: var(--violet-2); border: 1px solid var(--line-2); }
+.lrow.static { cursor: default; }
+.lrow .kind.ok { color: #4ff0b0; border-color: rgba(79, 240, 176, .35); }

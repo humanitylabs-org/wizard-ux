@@ -410,8 +410,9 @@
   }
   function palBuild(q) {
     const n = norm(q), out = [];
-    const apps = (n ? searchApps(q) : APPS.filter(a => a.kind !== 'view')).filter(a => a.kind !== 'native').slice(0, n ? 8 : 12)
-      .map(a => ({ kind: 'app', name: a.name, sub: a.desc, icon: a.icon, g: a.g, run: o => openApp(a, o) }));
+    // Apps lead with no query; Views (built for you) appear only when searched, so they never crowd the quick list.
+    const apps = (n ? searchApps(q) : APPS.filter(a => a.kind !== 'view' && a.kind !== 'made')).filter(a => a.kind !== 'native').slice(0, n ? 8 : 12)
+      .map(a => ({ kind: 'app', name: a.name, sub: a.kind === 'made' ? `View · ${a.desc}` : a.desc, icon: a.icon, g: a.g, run: o => openApp(a, o) }));
     const sessions = LIVE?.ok ? LIVE.sessions.filter(s => !s.hidden) : [];
     let threads;
     if (n) threads = sessions.map(s => { const t = norm(s.title), p = norm(s.preview); const sc = t.startsWith(n) ? 3 : t.includes(n) ? 2 : p.includes(n) ? 1 : 0; return [sc, s]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0] || Date.parse(LIVE.cardAt(b[1])) - Date.parse(LIVE.cardAt(a[1]))).slice(0, 8).map(x => x[1]);
