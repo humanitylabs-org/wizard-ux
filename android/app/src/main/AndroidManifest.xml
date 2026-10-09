@@ -12,6 +12,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Native parity (feature/native-parity): background orb recorder, in-app update. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:networkSecurityConfig="@xml/wos_network"
@@ -116,5 +119,44 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- ===== Native parity (feature/native-parity) ===== -->
+        <!-- Orb recorder: keeps recording with the screen off or the app in the background (Stop/Send notification). -->
+        <service
+            android:name=".recording.RecorderService"
+            android:exported="false"
+            android:foregroundServiceType="microphone"
+            android:stopWithTask="false" />
+        <!-- Share to Wizard from any app: text, images, files. -->
+        <activity
+            android:name=".share.ShareActivity"
+            android:exported="true"
+            android:label="@string/share_label"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="ai.wizards.os.share"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+        <!-- Reply-ready notifications: backstop poll after the app process is gone. -->
+        <service
+            android:name=".notify.ReplyJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- In-app update: hands one verified APK to Android's installer (read-only, one-off grant). -->
+        <provider
+            android:name=".update.ApkProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

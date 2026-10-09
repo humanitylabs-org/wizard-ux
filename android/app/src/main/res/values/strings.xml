@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Wizard OS</string>
+    <string name="share_label">Wizard</string>
 </resources>

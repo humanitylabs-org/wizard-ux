@@ -1,0 +1,261 @@
+package ai.wizards.os.device;
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Base64;
+import android.util.Log;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.util.List;
+
+import ai.wizards.os.notify.ReplyWatcher;
+import ai.wizards.os.recording.RecorderService;
+import ai.wizards.os.recording.RecordingStore;
+import ai.wizards.os.share.ShareStore;
+import ai.wizards.os.update.Updater;
+
+/**
+ * Second JS bridge, "WizardOSDevice": the native-parity features (background recorder, share target, reply
+ * notifications, in-app update). Its own class so MainActivity only gains a few hook lines.
+ * Native → web events go to window.WosDevice.event(type, json) (web/device.js).
+ */
+public final class DeviceBridge implements RecorderService.Listener {
+    static final String TAG = "WizardDevice";
+    public static final String ACTION_SHARE = "ai.wizards.os.action.SHARE";
+    public static final String ACTION_RECOVER = "ai.wizards.os.action.RECOVER";
+    public static final String EXTRA_SHARE = "ai.wizards.os.extra.SHARE";
+    private static final int REQ_NOTIFY = 61;
+    private static final int CHUNK = 384 * 1024; // raw bytes per read (≈512 KB base64)
+
+    private final Activity activity;
+    private final WebView web;
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private String pending; // JSON for WosDevice.handle once the page is ready
+    private int tries;
+
+    public DeviceBridge(Activity activity, WebView web) {
+        this.activity = activity;
+        this.web = web;
+        RecorderService.setListener(this);
+        Updater.attach(activity, this);
+        new Thread(() -> ShareStore.get(activity).prune(), "wizard-share-prune").start();
+    }
+
+    /* ------------------------------------------------------------------ MainActivity hooks */
+
+    /** Share sheet and "recording saved" notification taps. */
+    public void onIntent(Intent intent) {
+        if (intent == null) return;
+        String a = intent.getAction();
+        String json = null;
+        if (ACTION_SHARE.equals(a) && intent.getStringExtra(EXTRA_SHARE) != null) {
+            json = obj("action", "share", "id", intent.getStringExtra(EXTRA_SHARE));
+        } else if (ACTION_RECOVER.equals(a)) {
+            RecorderService.clearSavedNotice(activity);
+            json = obj("action", "recover");
+        }
+        if (json == null) return;
+        intent.setAction(Intent.ACTION_MAIN); // once, not again on rotation/restore
+        pending = json;
+        tries = 0;
+        main.removeCallbacks(deliver);
+        main.post(deliver);
+    }
+
+    private final Runnable deliver = new Runnable() {
+        @Override public void run() {
+            if (pending == null) return;
+            final String json = pending;
+            web.evaluateJavascript("(window.WosDevice && window.WosDevice.ready ? window.WosDevice.handle(" + json + ") : false)", r -> {
+                if ("true".equals(r)) { if (json.equals(pending)) pending = null; return; }
+                if (++tries < 60) main.postDelayed(this, 300);
+                else pending = null;
+            });
+        }
+    };
+
+    public void onStart() { AppState.setFront(true); ReplyWatcher.appFront(activity); }
+    public void onStop() { AppState.setFront(false); ReplyWatcher.kick(activity); }
+    public void onResume() { Updater.onResume(activity); }
+    public void onDestroy() {
+        // A take still running (app swiped away) carries on; its notification's Stop/Send take over from here.
+        RecorderService.setListener(null);
+        Updater.detach(activity);
+    }
+
+    /* ------------------------------------------------------------------ events to the page */
+
+    public void emit(String type, String json) {
+        main.post(() -> web.evaluateJavascript("(window.WosDevice && window.WosDevice.event(" + ai.wizards.os.device.Json.quote(type) + "," + json + "))", null));
+    }
+
+    @Override
+    public void onRecorderEvent(String type, String id) {
+        emit("rec", obj("type", type, "id", id));
+    }
+
+    /* ------------------------------------------------------------------ JS API */
+
+    @JavascriptInterface
+    public int version() { return 1; }
+
+    /* --- recorder --- */
+
+    @JavascriptInterface
+    public String recStart(String kind) {
+        askNotifications();
+        String id = RecorderService.start(activity, kind);
+        Log.i(TAG, "recStart " + kind + " -> " + id);
+        return id;
+    }
+
+    @JavascriptInterface
+    public void recPause(boolean on) { RecorderService.pause(activity, on); }
+
+    @JavascriptInterface
+    public int recLevel() { return RecorderService.level(); }
+
+    @JavascriptInterface
+    public String recActive() {
+        String id = RecorderService.active();
+        if (id == null) return "null";
+        try {
+            return new JSONObject().put("id", id).put("ms", RecorderService.elapsedMs()).put("paused", RecorderService.isPaused())
+                    .put("source", RecorderService.source()).toString();
+        } catch (JSONException e) { return "null"; }
+    }
+
+    /** Stops the take (blocking this bridge thread until the file is closed) and claims it for the page. */
+    @JavascriptInterface
+    public String recStop(String id) {
+        RecorderService.stopNow(id, "app");
+        return claim(id);
+    }
+
+    @JavascriptInterface
+    public void recCancel(String id) { RecorderService.cancel(activity, id); }
+
+    /** Claims a stopped/recovered take for this page and describes it. */
+    @JavascriptInterface
+    public String recClaim(String id) { return claim(id); }
+
+    private String claim(String id) {
+        RecordingStore st = RecordingStore.get(activity);
+        JSONObject o = st.read(id);
+        if (o == null) return "null";
+        st.claim(id);
+        File a = st.audio(id);
+        try { return o.put("bytes", a.length()).put("mime", RecordingStore.MIME).toString(); }
+        catch (JSONException e) { return "null"; }
+    }
+
+    @JavascriptInterface
+    public String recRead(String id, int offset) { return readChunk(RecordingStore.get(activity).audio(id), offset); }
+
+    /** The page has the take safe (handled, or saved in the durable outbox): delete it and end the service's hold. */
+    @JavascriptInterface
+    public void recDone(String id) {
+        RecordingStore.get(activity).delete(id);
+        RecorderService.done(id);
+        Log.i(TAG, "recDone " + id);
+    }
+
+    /** Takes waiting for a home: stopped from the notification, or cut short by an app kill. */
+    @JavascriptInterface
+    public String recPending() {
+        List<JSONObject> l = RecordingStore.get(activity).pending(RecorderService.active());
+        return RecordingStore.json(l);
+    }
+
+    /* --- share --- */
+
+    @JavascriptInterface
+    public String shareMeta(String id) {
+        String m = ShareStore.get(activity).meta(id);
+        return m == null ? "null" : m;
+    }
+
+    @JavascriptInterface
+    public String shareRead(String id, int n, int offset) { return readChunk(ShareStore.get(activity).item(id, n), offset); }
+
+    @JavascriptInterface
+    public void shareDone(String id) { ShareStore.get(activity).delete(id); }
+
+    /* --- reply notifications --- */
+
+    /** A message James sent from Wizard OS was accepted: tell him when the reply is ready if he has left the app. */
+    @JavascriptInterface
+    public void watchRun(String sessionId, String runId, String title) {
+        askNotifications();
+        ReplyWatcher.watch(activity, sessionId, runId, title);
+    }
+
+    @JavascriptInterface
+    public String notifications() {
+        boolean ok = Build.VERSION.SDK_INT < 33 || activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        return obj("allowed", String.valueOf(ok), "watching", String.valueOf(ReplyWatcher.count(activity)));
+    }
+
+    /* --- update --- */
+
+    @JavascriptInterface
+    public void updateCheck() { Updater.check(activity); }
+
+    @JavascriptInterface
+    public void updateInstall() { Updater.install(activity); }
+
+    @JavascriptInterface
+    public String updateState() { return Updater.state(); }
+
+    /* ------------------------------------------------------------------ helpers */
+
+    private void askNotifications() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        if (activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return;
+        android.content.SharedPreferences p = activity.getSharedPreferences("device", Activity.MODE_PRIVATE);
+        if (p.getBoolean("askedNotify", false)) return;
+        p.edit().putBoolean("askedNotify", true).apply();
+        main.post(() -> activity.requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY));
+    }
+
+    /** {"b64": chunk, "next": offset or -1, "size": total}. */
+    private static String readChunk(File f, int offset) {
+        if (!f.isFile() || offset < 0) return "null";
+        try (RandomAccessFile r = new RandomAccessFile(f, "r")) {
+            long size = r.length();
+            if (offset > size) return "null";
+            int n = (int) Math.min(CHUNK, size - offset);
+            byte[] b = new byte[n];
+            r.seek(offset);
+            r.readFully(b);
+            long next = offset + n >= size ? -1 : offset + n;
+            return new JSONObject().put("b64", Base64.encodeToString(b, Base64.NO_WRAP)).put("next", next).put("size", size).toString();
+        } catch (IOException | JSONException e) {
+            Log.w(TAG, "read: " + e);
+            return "null";
+        }
+    }
+
+    static String obj(String... kv) {
+        StringBuilder b = new StringBuilder("{");
+        for (int i = 0; i + 1 < kv.length; i += 2) {
+            if (i > 0) b.append(',');
+            b.append(Json.quote(kv[i])).append(':');
+            String v = kv[i + 1];
+            b.append("true".equals(v) || "false".equals(v) || (v != null && v.matches("-?\\d{1,15}")) ? v : Json.quote(v == null ? "" : v));
+        }
+        return b.append('}').toString();
+    }
+}

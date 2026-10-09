@@ -66,6 +66,8 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingMic;
     private ValueCallback<Uri[]> pendingFiles;
     private boolean showingError;
+    /** Native-parity features (background recorder, share, reply notifications, in-app update): device/DeviceBridge. */
+    private ai.wizards.os.device.DeviceBridge device;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -88,6 +90,7 @@ public class MainActivity extends Activity {
         if (web.getUrl() == null) web.loadUrl(startUrl(getIntent()));
         installBack();
         queueHandoff(getIntent());
+        device.onIntent(getIntent());
     }
 
     private void buildWebView() {
@@ -107,6 +110,8 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         web.addJavascriptInterface(new Bridge(), "WizardOSNative");
+        device = new ai.wizards.os.device.DeviceBridge(this, web);
+        web.addJavascriptInterface(device, "WizardOSDevice");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -199,7 +204,7 @@ public class MainActivity extends Activity {
     String startUrl(Intent intent) {
         Uri data = intent == null ? null : intent.getData();
         if (data != null && Origin.isShell(data)) return data.toString();
-        return BuildConfig.HOME_URL;
+        return ai.wizards.os.device.AppState.homeUrl(this); // HOME_URL; QA builds may point at a fake Wizard
     }
 
     @Override
@@ -209,6 +214,7 @@ public class MainActivity extends Activity {
         Uri data = intent.getData();
         if (data != null && Origin.isShell(data)) web.loadUrl(data.toString());
         queueHandoff(intent);
+        device.onIntent(intent);
     }
 
     /* ---------------- Assistant handoff (the side-key app opens Wizard OS) ----------------
@@ -322,10 +328,12 @@ public class MainActivity extends Activity {
         current = new java.lang.ref.WeakReference<>(this);
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, true); // the floating button hides while Wizard OS is open
         ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
+        device.onStart();
     }
 
     @Override
     protected void onStop() {
+        device.onStop();
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, false); // …and comes back when James leaves
         super.onStop();
     }
@@ -343,6 +351,7 @@ public class MainActivity extends Activity {
         pushEverywhere();
         web.evaluateJavascript("window.dispatchEvent(new Event('wos-native-resume'))", null);
         pushSideButton();
+        device.onResume();
         if (sideSetupActive) {
             sideSetupActive = false;
             if (SideButton.assistant(this)) Toast.makeText(this, "Side button is on. Hold it to talk.", Toast.LENGTH_SHORT).show();
@@ -426,6 +435,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (device != null) device.onDestroy();
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
     }
