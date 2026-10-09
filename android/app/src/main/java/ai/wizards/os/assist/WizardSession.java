@@ -145,6 +145,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
             return;
         }
         capture.attach(this);
+        ai.wizards.os.SideButton.markUsed(getContext()); // the side button really reached Wizard OS
         Log.i(TAG, "corner shown handoff=" + handoff + " listening=" + capture.listening());
         Log.i(TAG, "shape corner wide=false");
         whenReady(() -> {

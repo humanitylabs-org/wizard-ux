@@ -85,14 +85,17 @@
     { id: 'line', kind: 'native', name: 'LINE', icon: 'L', g: ['#06c755', '#04773a'], href: 'intent://#Intent;package=jp.naver.line.android;end', desc: 'LINE' },
     { id: 'grab', kind: 'native', name: 'Grab', icon: 'G', g: ['#00b14f', '#0a5c32'], href: 'intent://#Intent;package=com.grabtaxi.passenger;end', desc: 'Rides and food' },
     { id: 'chrome', kind: 'native', name: 'Chrome', icon: '◍', g: ['#fbbc05', '#ea4335'], href: 'https://www.google.com/', desc: 'Browser' },
+    { id: 'side-button', kind: 'native', name: 'Side button', icon: '◉', g: ['#8f63ff', '#ff5ccf'], desc: 'Hold the side button to talk to Wizard' },
     { id: 'settings', kind: 'native', name: 'Settings', icon: '⚙', g: ['#6a7088', '#2a2f42'], href: 'intent:#Intent;action=android.settings.SETTINGS;end', desc: 'Android settings' },
   ];
+  // The side-button switch only exists inside the Wizard OS Android app (0.4.0+).
+  if (!(window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function')) APPS.splice(APPS.findIndex(a => a.id === 'side-button'), 1);
   const APP = Object.fromEntries(APPS.map(a => [a.id, a]));
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9ก-๙ ]+/g, ' ').replace(/\s+/g, ' ').trim();
   function findApp(q) {
     q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
     if (!q) return null;
-    const alias = { wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', 'yesterday': 'v-day', 'day review': 'v-day', 'day in review': 'v-day', 'week review': 'v-week', 'month review': 'v-month', notifications: 'v-inbox', inbox: 'v-inbox', terminal: 'console', music: 'spotify', ideas: 'idea-queue' };
+    const alias = { wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', 'yesterday': 'v-day', 'day review': 'v-day', 'day in review': 'v-day', 'week review': 'v-week', 'month review': 'v-month', notifications: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'v-inbox', terminal: 'console', music: 'spotify', ideas: 'idea-queue' };
     if (alias[q]) return APP[alias[q]];
     let best = null, bs = 0;
     for (const a of APPS) {
@@ -383,6 +386,7 @@
   /* Apps open as windows. Views reuse a review window already on this desk. */
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
+    if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
     if (a.kind === 'view') {
       if (a.view === 'inbox') { openSheet('inbox'); return true; }
       openReview(a.view, extra.date, opts); return true;
@@ -406,6 +410,40 @@
     openWin({ app: 'review', z }, opts);
   }
 
+  /* ---------------- side button (Wizard OS Android app only) ----------------
+   * The switch lives on Home. One tap: Wizard OS asks for the microphone in place, then opens the one system page
+   * Android keeps for itself (pick Wizard OS as the assistant). Back in Wizard OS, the app pushes the new state to
+   * window.__wosSideButton and the card turns green on its own. Once the side button has really reached Wizard
+   * OS, the card disappears. */
+  const NATIVE = () => window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function';
+  let SIDE = null;
+  try { if (NATIVE()) SIDE = JSON.parse(window.WizardOSNative.sideButton()); } catch (e) { SIDE = null; }
+  function sideCard() {
+    if (!SIDE || SIDE.step === 'ready' || store.get('sideHidden', false)) return '';
+    const on = SIDE.step === 'press';
+    const k = on ? 'Side button is on' : 'Side button';
+    const v = on ? 'Hold the side button and talk' : 'Hold it to talk to Wizard, even when locked';
+    const btn = on ? '' : `<span class="side-go">${SIDE.step === 'mic' ? 'Turn on' : 'Finish'}</span>`;
+    return `<button class="now-card side-card ${on ? 'on' : ''}" style="--c:${on ? 'var(--green)' : 'var(--violet-2)'}" data-act="side-button" data-step="${SIDE.step}"><span class="pip ${on ? '' : 'pulse'}"></span><span class="meta"><span class="k">${k}</span><span class="v">${v}</span></span>${btn}${on ? '<span class="side-x" data-act="side-button-hide" aria-label="Hide">✕</span>' : ''}</button>`;
+  }
+  function sideButtonTap(fromLauncher) {
+    if (!NATIVE()) { toast('◉', 'The side button works in the Wizard OS app'); return; }
+    if (SIDE && SIDE.step !== 'mic' && SIDE.step !== 'assistant') {
+      if (fromLauncher) { store.set('sideHidden', false); refreshHome(true); }
+      toast('◉', SIDE.step === 'ready' ? 'Side button is on. Hold it to talk.' : 'Side button is on. Hold it and talk.', 2600);
+      if (fromLauncher && SIDE.samsung) window.WizardOSNative.sideButtonSettings();
+      return;
+    }
+    window.__backLog = (window.__backLog || []).concat('side:' + (SIDE ? SIDE.step : '?')).slice(-30);
+    window.WizardOSNative.setupSideButton();
+  }
+  window.__wosSideButton = st => {
+    if (!st || typeof st !== 'object') return false;
+    const was = SIDE && SIDE.step; SIDE = st;
+    if (was !== st.step) refreshHome(true);
+    return true;
+  };
+
   /* ---------------- home desk ---------------- */
   function renderHome() {
     const L = live(), needs = L.needs.length, working = L.working.length, ready = L.ready.length;
@@ -423,6 +461,7 @@
         <button class="now-card" style="--c:var(--violet-2)" data-act="inbox"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span><span class="v">${esc(L.working[0]?.title || 'Idle')}</span></span><span class="n">${working}</span></button>
         <button class="now-card" style="--c:var(--pink)" data-act="yesterday"><span class="pip"></span><span class="meta"><span class="k">Yesterday</span><span class="v">${esc(clip(S.days[YESTERDAY] || `${yd.length} threads`, 70))}</span></span><span class="n">${yd.length}</span></button>
       </div>
+      ${sideCard()}
       <div class="hint-row">
         <button class="say" data-say="Open Chats">Open Chats</button>
         <button class="say" data-say="Show me last week">Show me last week</button>
@@ -436,7 +475,7 @@
     const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     if (t) t.textContent = hm; if (c) c.textContent = hm;
   }, 5000);
-  const refreshHome = () => { if (!desks[HOME].wins.length) { const g = track.children[HOME]?.querySelector('.glance'); if (g) g.innerHTML = renderHome(); } };
+  const refreshHome = force => { if (!desks[HOME].wins.length) { const g = track.children[HOME]?.querySelector('.glance'); if (g) g.innerHTML = renderHome(); } };
 
   /* ---------------- empty desk, app cards, maps, frames ---------------- */
   function renderEmpty(i) {
@@ -946,6 +985,8 @@
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'inbox') return openSheet('inbox');
     if (act === 'yesterday') return openReview('day', YESTERDAY);
+    if (act === 'side-button') return sideButtonTap(false);
+    if (act === 'side-button-hide') { store.set('sideHidden', true); return refreshHome(true); }
     const we = e.target.closest('.win'); if (!we) return;
     const id = we.dataset.win, w = W[id]; if (!w) return;
     const wa = e.target.closest('[data-wact]')?.dataset.wact;
@@ -1751,6 +1792,7 @@
     if (!h || typeof h !== 'object') return false;
     closeSheets(); if (idx !== HOME) goDesk(HOME);
     if (h.action === 'listen') { if (V.state === 'idle') startVoice('auto'); return true; }
+    if (h.action === 'side-button') { store.set('sideHidden', false); refreshHome(true); if (SIDE && (SIDE.step === 'mic' || SIDE.step === 'assistant')) sideButtonTap(false); else toast('◉', 'Side button is on. Hold it to talk.', 2600); return true; }
     const text = String(h.text || '').trim().slice(0, 2000);
     if (h.action !== 'say' || !text) return false;
     if (V.state !== 'idle') cancelVoice(true);
