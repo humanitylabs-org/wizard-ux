@@ -92,6 +92,19 @@
   }
   if (!W || typeof W !== 'object' || !Array.isArray(desks) || desks.length !== DESKS_N || desks.some(d => !d || !Array.isArray(d.wins))) freshLayout();
   else if (store.get('layoutV', 0) < 2) layoutV2();
+  // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
+  // A frame window remembers the page it was on, so a saved Mizel desk would keep the retired view: move it.
+  Object.values(W).forEach(w => { if (w && w.app === 'frame' && w.appId === 'mizel' && /^\/(meetings|mizel-preview|apps)(\/|$)|^\/$/.test(w.url || '')) delete w.url; });
+  // Apps from the Agent Service can arrive after first paint (fresh install, cleared cache): a frame window
+  // painted before its app was known has no page yet, so draw that desk again once the app list lands.
+  // (The list may already have landed before this script ran, so also check once right after boot.)
+  const reframe = () => {
+    desks.forEach((d, i) => { if (d.wins.some(id => { const w = W[id], u = w?.app === 'frame' && !w.url && APP[w.appId]?.url;
+      if (!u) return false; const f = document.querySelector(`.win[data-win="${id}"] iframe`); if (f && f.getAttribute('src') === u) return false;
+      winEl(id)?.remove(); return true; })) { try { renderDesk(i); } catch (e) {} } });
+  };
+  window.addEventListener('wizard:apps', reframe);
+  setTimeout(reframe, 0); setTimeout(reframe, 1500);
   desks.forEach(d => {
     d.wins = d.wins.filter(id => W[id]).slice(0, MAXW);
     if (!d.wins.includes(d.focus)) d.focus = d.wins[d.wins.length - 1] || null;
@@ -712,7 +725,11 @@
   function bridgeFrame(f) {
     const id = f.closest('.win')?.dataset.win; if (!id) return;
     let win; try { win = f.contentWindow; } catch (e) { return; }
-    try { if (W[id]) { W[id].url = win.location.pathname + win.location.search; save(); } } catch (e) {}
+    try { if (W[id]) { const here = win.location.pathname + win.location.search; const want = APP[W[id].appId]?.url || '';
+      // Remember only pages inside this app (never the placeholder "/" or where it redirects), or a frame
+      // painted before its app was known would stick on the wrong page for good.
+      const home = (want.split(/[?#]/)[0] || '').replace(/[^/]*$/, '');
+      if (home && home !== '/' && here.startsWith(home)) { W[id].url = here; save(); } } } catch (e) {}
     try { win.document.addEventListener('pointerdown', () => { focusWin(id); armBack(); }, true); } catch (e) {}
     // A hosted app may keep its own history guard. During the exit window the shell owns Back:
     // any Back that lands on a frame entry keeps unwinding until Wizard OS really leaves.
