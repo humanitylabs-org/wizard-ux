@@ -1572,6 +1572,18 @@
     $('#txChips').innerHTML = '';
     voiceEl.classList.add('tx');
   }
+  // After the orb is tapped to send, the card shrinks to a one-line pill above the orb
+  // ("Sending…" → "Sent to Archimedes") and fades. The words James said never cover the screen;
+  // they are already in the thread. Timing/router detail rides in data-detail for diagnostics.
+  function txPill(icon, label, cls, detail) {
+    tx.className = 'transcript brief ' + (cls || '');
+    $('#txRouteIcon').textContent = icon || '✦';
+    $('#txRouteText').textContent = label || '';
+    tx.dataset.detail = detail || '';
+    $('#txChips').innerHTML = '';
+    voiceEl.classList.add('tx');
+  }
+  const isPill = () => tx.classList.contains('brief');
   let txHideT = 0;
   function txHide(ms) { clearTimeout(txHideT); txHideT = setTimeout(() => { voiceEl.classList.remove('tx'); }, ms || 0); }
   const fmtT = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -1625,7 +1637,7 @@
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'Tap a line above to simulate'); return; }
     if (!V.rec) { V.stopAsked = true; return; }
     if (V.state !== 'paused') V.acc += performance.now() - V.t0;
-    setVoice('think'); $('#txRouteText').textContent = 'Transcribing · Wizard Voice Core';
+    setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core');
     try { V.rec.state !== 'inactive' && V.rec.stop(); } catch (e) { onRecStop(); }
   }
   function cancelVoice(quiet) {
@@ -1657,7 +1669,7 @@
       const aim = V.target, f = desks[idx].focus, fw = W[f];
       if (aim == null && fw?.app === 'chats' && fw.thread) sendChat(f, '', 'voice, aimed at this thread', blob);
       else toAgent('', 'Saved · sends when Wizard is reachable', { audio: blob, desk: aim, source: 'orb' });
-      txShow('', 'Couldn’t reach Wizard · recording saved, will send', 'agent', '↻'); txHide(3200);
+      txPill('↻', 'Saved · sends when Wizard is back', 'agent', 'Couldn’t reach Wizard · recording saved, will send'); txHide(2600);
     }
   }
   // The tap that starts recording must not also press an arc button: the arc fans out
@@ -1764,7 +1776,7 @@
     }
     // A capturing view takes a tap utterance as-is.
     if (kind !== 'command' && v?.mode === 'capture' && target == null) return toView(v, text, `To ${v.name}${sttNote}`);
-    setVoice('think'); $('#txRouteText').textContent = 'Routing · DeepSeek Flash';
+    setVoice('think'); if (isPill()) tx.dataset.detail = 'Routing · DeepSeek Flash'; else $('#txRouteText').textContent = 'Routing · DeepSeek Flash';
     try {
       const view = v && v.mode && kind !== 'command' && target == null ? { name: v.name, kind: v.kind } : null;
       const r = await fetch('api/route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: kind === 'command' ? 'command' : '', view, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
@@ -1784,6 +1796,12 @@
     }
   }
   function showRouted(kind, label) {
+    if (isPill()) {
+      const short = kind === 'agent' ? (/^Saved/.test(label) ? 'Saved · sends when Wizard is back' : 'Sent to Archimedes')
+        : kind === 'view' ? 'Sent ' + label.split(' · ')[0].replace(/^To /, 'to ')
+        : ($('#txText').textContent || 'Done');
+      return txPill(kind === 'command' ? '⚡' : kind === 'view' ? '◧' : '✦', short, kind, label);
+    }
     tx.className = 'transcript ' + kind; $('#txRouteIcon').textContent = kind === 'command' ? '⚡' : kind === 'view' ? '◧' : '✦'; $('#txRouteText').textContent = label;
   }
   function finishCmd(c, text, opts) {
@@ -1791,7 +1809,7 @@
     const ok = execute(c, text, opts);
     if (!ok) { $('#txRouteText').textContent += ' · no match'; }
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
-    txHide(ok ? 1300 : 3200);
+    txHide(ok ? (isPill() ? 1200 : 1300) : 3200);
   }
   function toView(v, text, label) {
     showRouted('view', label); setVoice('done'); vib([8, 40, 8]);
@@ -1799,7 +1817,7 @@
     if (!ok) return toAgent(text, `${v.name} didn’t take it · sent to Archimedes`);
     focusWin(v.id);
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
-    txHide(1500);
+    txHide(isPill() ? 1200 : 1500);
   }
   function execute(c, text, opts = {}) {
     const a = String(c.action || '').toLowerCase();
@@ -1841,7 +1859,7 @@
   async function toAgent(text, label, opts = {}) {
     showRouted('agent', label); setVoice('agent'); vib(10);
     setTimeout(() => { setVoice('idle'); }, 1200);
-    txHide(2600);
+    txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice');
     // Saved before it is sent: a dropped connection can delay this, never lose it.
     const it = await OUTBOX.enqueue({ kind: 'new', text, instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb' });
@@ -1857,7 +1875,7 @@
       LIVE.markSeen(it.sessionId);
     } else if (LIVE) { const s = LIVE.session(it.sessionId); if (s && !res.steered) Object.assign(s, { status: 'running', runId: res.runId, lastUserAt: new Date().toISOString() }); }
     if (it.attempts) toast('✦', res.steered ? 'Delivered · steering the live run' : 'Delivered to Archimedes', 2000);
-    else if (it.source === 'orb') toast('✦', 'Sent to Archimedes', 1800);
+    // First-try orb sends were already confirmed by the pill above the orb: no second banner.
     else if (res.steered) toast('✦', 'Sent · steering the live run', 1800);
     LIVE?.emit(); setTimeout(() => LIVE?.refresh(), 3000);
     for (const id of Object.keys(W)) if (W[id].app === 'chats' && W[id].thread === it.sessionId) setTimeout(() => W[id] && loadThread(W[id], true), 1500);
