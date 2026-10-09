@@ -53,23 +53,71 @@ window.WizCore.chats = function createChats(H) {
   const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false };
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
   const SEC_PAGE = 40;
-  function chatRow(s) {
+  function chatRow(s, snip) {
     const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = s.status === 'waiting_for_approval' || s.status === 'failed' || s.status === 'interrupted';
-    return `<button class="ch-row${isNew ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span>
+    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}" data-chopen="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span>
       <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      <span class="pv">${working ? '<i class="st working"></i>' + (s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working') + ' · ' : needs ? '<i class="st needs"></i>' : isNew ? '<i class="st unread"></i>' : ''}${esc(clip(s.preview || '', 110))}</span></span></button>`;
+      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${working ? '<i class="st working"></i>' + (s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working') + ' · ' : needs ? '<i class="st needs"></i>' : isNew ? '<i class="st unread"></i>' : ''}${esc(clip(s.preview || '', 110))}</span>`}</span></button>`;
   }
+  /* ---- Drafts: unsent new chats (legacy newThreadDrafts.ts). The new-chat composer owns the 'new' slot;
+   * "+" moves unsent words out of it into a saved 'new:<id>' slot, so a new chat always starts empty and
+   * older unsent work stays reopenable from here. ---- */
+  const SAVED_NEW = /^new(:[a-z0-9]{4,40})?$/;
+  function newDrafts() {
+    const all = KIT.drafts.all();
+    return Object.keys(all).filter(k => SAVED_NEW.test(k)).map(k => ({ key: k, ...KIT.drafts.get(k), at: all[k].at || 0 }))
+      .filter(d => d.text.trim() || d.files.length).sort((a, b) => b.at - a.at);
+  }
+  function draftRow(d, cur) {
+    const t = d.text.trim().replace(/\s+/g, ' ');
+    const what = t ? clip(t, 100) : `Unsent attachment${d.files.length === 1 ? '' : 's'}`;
+    const files = d.files.length ? ` · ${d.files.length} file${d.files.length === 1 ? '' : 's'}` : '';
+    return `<div class="ch-draft${cur ? ' cur' : ''}"><button class="ch-row draft" data-chdraft="${esc(d.key)}"><span class="emo">✎</span>
+      <span class="bd"><span class="tp"><b>${esc(what)}</b><time>${esc(ago(new Date(d.at).toISOString()))}</time></span>
+      <span class="pv">Draft · saved on this device${files}</span></span></button><button class="ch-draft-x" data-chdraftx="${esc(d.key)}" aria-label="Discard draft" title="Discard draft">×</button></div>`;
+  }
+  // Rotate one storage write: the live new-chat slot → a saved slot, the chosen saved slot → the live one.
+  function rotateNew(resume) {
+    const all = KIT.drafts.all(), cur = all.new;
+    if (resume === 'new') return true;
+    const resumed = resume ? all[resume] : null;
+    if (resume && !resumed) return false;
+    if (cur && ((cur.text || '').trim() || (cur.files || []).length)) all['new:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)] = cur;
+    if (resumed) { all.new = { ...resumed, at: Date.now() }; delete all[resume]; } else delete all.new;
+    try { localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all)); return true; } catch (e) { return false; }
+  }
+  function openNewDraft(wid, resume) {
+    const w = W[wid]; if (!w) return;
+    if (w.thread) saveDraft(wid);
+    const c = ch(wid); c.draft = ''; c.files = []; c.draftFor = '';
+    w.thread = null; // so openChat doesn't save the old slot over the rotated one
+    if (!rotateNew(resume || '')) { toast('!', 'Couldn’t open that draft · it’s still saved', 2200); }
+    const el = elOf(wid); if (el) delete el.dataset.draftFor;
+    openChat(wid, '__new__');
+  }
+  function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
+
   function renderChatList(w, el) {
+    if (!el) return;
     const c = ch(w.id), n = norm(c.q);
     const all = LIVE.ok ? LIVE.sessions.filter(s => !s.hidden) : [];
-    const hit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
+    const titleHit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
+    // Message bodies: searched lazily in the background (core/chat-search.js); hits stream in with a snippet.
+    const BS = window.WizCore.chatSearch, bs = n && BS ? BS.query(w.id, c.q, () => { const e2 = elOf(w.id); if (e2 && ch(w.id).q === c.q && e2.querySelector('.ch-list') && !holdList(w.id)) renderChatList(w, e2); }) : null;
+    if (!n && BS) BS.cancel(w.id);
+    const snips = bs ? bs.hits : new Map();
+    const seen = new Set(titleHit.map(s => s.id));
+    const hit = titleHit.concat(all.filter(s => !seen.has(s.id) && snips.has(s.id)));
     const groups = LIVE.workGroups(hit);
+    const ownerId = owner(w.id), curThread = W[ownerId]?.thread;
+    const drafts = newDrafts().filter(d => !n || norm(d.text).includes(n));
     c.more = c.more || {};
-    const head = `<div class="ch-top"><label class="ch-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-chsearch placeholder="Search threads" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false"></label>${PW?.FOLDER_SVG && window.WosFiles ? `<button class="ch-new ch-files-b" data-chfiles aria-label="Files">${PW.FOLDER_SVG}</button>` : ''}<button class="ch-new" data-chnew aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
+    const head = `<div class="ch-top"><label class="ch-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-chsearch placeholder="Search chats and messages" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}</label>${PW?.FOLDER_SVG && window.WosFiles ? `<button class="ch-new ch-files-b" data-chfiles aria-label="Files">${PW.FOLDER_SVG}</button>` : ''}<button class="ch-new" data-chnew aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
     let body;
-    if (!LIVE.ok) body = `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
-    else if (!hit.length) body = `<div class="ch-empty">No threads match “${esc(c.q)}”.</div>`;
-    else body = SECTIONS.map(([k, label]) => {
+    const draftSec = drafts.length ? `<section class="ch-sec open" data-sec="drafts"><div class="ch-sec-h static"><span>Drafts</span><small>${drafts.length}</small></div><div class="ch-sec-b">${drafts.map(d => draftRow(d, d.key === 'new' && curThread === '__new__')).join('')}</div></section>` : '';
+    if (!LIVE.ok) body = draftSec + `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
+    else if (!hit.length && !drafts.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
+    else body = draftSec + SECTIONS.map(([k, label]) => {
       const list = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k];
       // Errors also holds failed background work and voice notes that didn't send (chat-power.js #12).
       const extra = PW && k === 'errors' && !n ? PW.errorsExtra() : { n: 0, html: '' };
@@ -79,12 +127,16 @@ window.WizCore.chats = function createChats(H) {
       const newN = k === 'ready' ? list.filter(s => LIVE.isNew(s)).length : 0;
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s))).join('') + extra.html : shown.map(chatRow).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
+        ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
     }).join('');
+    if (bs && LIVE.ok) body += BS.footer(bs);
     const scroll = el.querySelector('.ch-scroll')?.scrollTop || 0;
+    // Results stream in while typing: keep the search box focused with the caret where it was.
+    const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     el.innerHTML = `<div class="ch-list">${head}<div class="ch-scroll">${body}</div></div>`;
     const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = scroll;
     PW?.paint(w.id, el);
+    if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
   }
   function toggleSection(w, k) {
     secOpen = { ...secOpen, [k]: !secOpen[k] };
@@ -508,7 +560,11 @@ window.WizCore.chats = function createChats(H) {
     if (justPressed() && e.target.closest('[data-chopen]')) return true; // a long-press/swipe just opened the actions sheet
     const o = e.target.closest('[data-chopen]'); if (o) { openChat(id, o.dataset.chopen); return true; }
     if (e.target.closest('[data-chback]')) { chatsBack(w); return true; }
-    if (e.target.closest('[data-chnew]')) { openChat(id, '__new__'); return true; }
+    if (e.target.closest('[data-chnew]')) { openNewDraft(owner(id), ''); return true; }
+    const dx = e.target.closest('[data-chdraftx]'); if (dx) { discardDraft(dx.dataset.chdraftx); renderChatList(w, elOf(id)); return true; }
+    const dr = e.target.closest('[data-chdraft]'); if (dr) { openNewDraft(owner(id), dr.dataset.chdraft); return true; }
+    if (e.target.closest('[data-chbsmore]')) { window.WizCore.chatSearch?.more(id); renderChatList(w, elOf(id)); return true; }
+    if (e.target.closest('[data-chsclear]')) { ch(id).q = ''; window.WizCore.chatSearch?.cancel(id); renderChatList(w, elOf(id)); elOf(id)?.querySelector('[data-chsearch]')?.focus(); return true; }
     const sec = e.target.closest('[data-sectoggle]'); if (sec) { toggleSection(w, sec.dataset.sectoggle); return true; }
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
@@ -525,6 +581,8 @@ window.WizCore.chats = function createChats(H) {
     const sl = e.target.closest('a[data-session]'); if (sl) { e.preventDefault(); openChat(owner(id), sl.dataset.session); return true; }
     // A private-origin link (a report, a hosted app) opens in a window of this shell: the shell never navigates away.
     const al = e.target.closest('.bub a[href]');
+    // A link to this app itself (…/wizard-os-home/?session=…, ?view=…, ?video=…) opens in place, never reloads.
+    if (al && window.WizCore.deeplink?.route(al.getAttribute('href'))) { e.preventDefault(); return true; }
     if (al && H.openLink) { let u = null; try { u = new URL(al.getAttribute('href'), location.href); } catch (err) {}
       if (u && (u.origin === location.origin || u.hostname === 'private.wizard001.com') && !u.pathname.startsWith('/wizard-os-home')) { e.preventDefault(); H.openLink(u.pathname + u.search + u.hash, (al.textContent || '').trim().slice(0, 40) || u.pathname); return true; } }
     const cc = e.target.closest('[data-codecopy]'); if (cc) { const t = cc.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.copyText(t).then(ok => { cc.textContent = ok ? 'Copied' : 'Couldn’t copy'; setTimeout(() => { cc.textContent = 'Copy'; }, 1500); }); return true; }
@@ -570,7 +628,7 @@ window.WizCore.chats = function createChats(H) {
   // A list must not re-render under an open actions sheet or a finger mid-press.
   const holdList = id => rowSheet?.wid === id || (!!lp && lp.wid === id) || !!PW?.holds(id);
   // Back / Esc: the media viewer, then the actions sheet. Returns what it closed, or ''.
-  const closeOverlay = () => (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : '');
+  const closeOverlay = () => (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
   // Put words (and already-uploaded files) back into a composer, e.g. editing an unsent message.
   function setDraft(wid, text, files) {
     const w = W[wid], c = ch(wid); if (!w) return;
@@ -582,5 +640,5 @@ window.WizCore.chats = function createChats(H) {
   const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, openChat, refreshCompose, saveDraft, closeRowSheet }) : null;
   return { CH, ch, click, bind, PW, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
-    KIT, threadAct, openRowSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft };
+    KIT, threadAct, openRowSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
 };

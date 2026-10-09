@@ -223,7 +223,7 @@
       el.classList.toggle('focus', id === d.focus && n > 1);
       el.classList.toggle('solo', n === 1);
       el.classList.toggle('full', !!d.full && id === d.focus);
-      const t = $('.wt', el); if (t) t.textContent = W[id].app === 'chats' ? 'Chats' : winTitle(W[id]);
+      const t = $('.wt', el); if (t) t.textContent = winTitle(W[id]); // Chats shows the thread's name (or New chat / Chats)
     });
     sec.setAttribute('aria-label', `Desk ${i + 1}: ${deskTitle(i)}`);
   }
@@ -492,6 +492,7 @@
         ${evNative && evOn && typeof window.WizardOSNative.voiceTypingSettings === 'function' ? `<button class="st-row" data-st="typing"><span class="st-ic">⌨</span><span class="st-tx" id="stTyping"><b>Voice typing &amp; screenshots</b><small>${esc(ev?.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Off · tap to set up: the orb types into any app and attaches screenshots')}</small></span>${ev?.keyboard ? '<span class="sw on"><i></i></span>' : '<span class="st-go">›</span>'}</button>` : ''}
         <button class="st-row" data-st="side" ${native ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(side)}</small></span><span class="st-go">›</span></button>
       </div>
+      ${window.WizCore.voiceStatus?.card() || ''}
       <div class="st-group"><h4>Wizard</h4>
         <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · ${esc(location.host)}</small></span></div>
         ${window.WosDevice?.settingsHtml?.() || ''}
@@ -2000,4 +2001,40 @@
     chatState: ch, addFiles: CHATS.addFiles, uploadFile: CHATS.uploadFile, renderChats, refreshCompose, toAgent, toast, txShow, txHide, setVoice, nativeFinish, nativeResume, get V() { return V; },
     reset() { Object.keys(localStorage).filter(k => k.startsWith('wos.')).forEach(k => localStorage.removeItem(k)); location.reload(); },
   };
+
+  /* ---------------- banners, deep links, voice card (core/status.js, core/deeplink.js, core/voice-status.js) ---------------- */
+  const chatsInFront = () => { const f = W[desks[idx].focus]; return f?.app === 'chats' && f.thread && f.thread !== '__new__' ? f.thread : ''; };
+  window.WizCore.status?.attach({ openInbox: () => openSheet('inbox'), inboxOpen: () => sheet === 'inbox', current: chatsInFront });
+  window.WizCore.voiceStatus?.onChange(() => { if (sheet === 'settings') renderSettings(); });
+  // The list may still be loading: wait for the section (up to ~5 s), open it, bring it into view.
+  function showSection(k, tries = 50) {
+    if (!k) return;
+    const sec = track.querySelector(`.win[data-win="${desks[idx].focus}"] [data-sec="${k}"]`);
+    if (!sec) { if (tries > 0) setTimeout(() => showSection(k, tries - 1), 100); return; }
+    if (!sec.classList.contains('open')) sec.querySelector('[data-sectoggle]')?.click();
+    track.querySelector(`.win[data-win="${desks[idx].focus}"] [data-sec="${k}"]`)?.scrollIntoView({ block: 'start' });
+  }
+  window.WizCore.deeplink?.handle({
+    // ?session= takes exactly the path the Android app's ACTION_THREAD intent takes.
+    thread: id => window.__wosHandoff({ action: 'thread', id }),
+    view(v, section) {
+      if (!$('#coach').hidden) { $('#coach').hidden = true; store.set('coached', true); }
+      closeSheets(true);
+      if (v === 'inbox') return openSheet('inbox');
+      if (v === 'apps') return openSheet('launcher');
+      if (v === 'settings' || v === 'usage') return openSettings();
+      if (v === 'day' || v === 'week' || v === 'month') return openReview(v);
+      if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); toast('◇', 'Files isn’t on this Wizard', 1800); return; }
+      // work / chats: the Chats window, at the asked-for section.
+      const here = desks.findIndex(d => d.wins.some(x => W[x].app === 'chats'));
+      if (here >= 0 && here !== idx) goDesk(here, true);
+      openApp(APP.wizard);
+      const cw = W[desks[idx].focus]; if (cw?.app === 'chats' && cw.thread) chatsBack(cw);
+      showSection(section);
+    },
+    app(id) { const a = findApp(id) || APP[id]; if (a) openApp(a); },
+    video: item => { closeSheets(true); return CHATS.KIT.viewer.open([item]); },
+    toast,
+  });
+  window.WizCore.deeplink?.consume();
 })();
