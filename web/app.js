@@ -620,7 +620,7 @@
   function chipFiles(s) {
     const out = [];
     for (const m of String(s).matchAll(/\[WIZARD_FILE_CHIPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILE_CHIPS_V1\]/g)) {
-      try { for (const f of JSON.parse(m[1])) out.push({ name: String(f.filename || f.name || 'file'), mime: String(f.mime || '') }); } catch (e) {}
+      try { for (const f of JSON.parse(m[1])) out.push({ id: /^[A-Za-z0-9._:-]+$/.test(String(f.id || '')) ? String(f.id) : '', name: String(f.filename || f.name || 'file'), mime: String(f.mime || ''), bytes: Number(f.bytes) || 0 }); } catch (e) {}
     }
     return out;
   }
@@ -641,7 +641,9 @@
       const raw = msgText(m.display_content ?? m.content);
       if (m.role === 'user') {
         if (kind || INTERNAL.some(p => raw.trimStart().startsWith(p))) { if (cur) cur.steps++; continue; }
-        const files = chipFiles(raw), t = cleanMsg(raw);
+        const files = chipFiles(raw);
+        let t = cleanMsg(raw);
+        if (files.length && /^Please use the attached (file|files)\.$/.test(t)) t = '';
         if (!t && !files.length) continue;
         cur = { u: { text: t, files, at: m.timestamp }, a: null, notes: [], steps: 0 }; out.push(cur);
       } else if (m.role === 'assistant') {
@@ -680,30 +682,135 @@
     return out.replace(/\u0000(\d+)\u0000/g, (_, k) => `<pre>${esc(blocks[+k])}</pre>`);
   }
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
+  // Same sections, order and day boundaries as Wizard's Work view.
+  const SECTIONS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['yesterday', 'Yesterday'], ['pastWeek', 'Past week'], ['deferred', 'Deferred'], ['archive', 'Archive']];
+  const SEC_OPEN_KEY = 'wos.chats.sections.v1';
+  const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false };
+  let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
+  const SEC_PAGE = 40;
   function chatRow(s) {
     const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = s.status === 'waiting_for_approval' || s.status === 'failed' || s.status === 'interrupted';
     return `<button class="ch-row${isNew ? ' unread' : ''}" data-chopen="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span>
-      <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(s.lastAssistantAt || s.activityAt || s.updatedAt))}</time></span>
+      <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       <span class="pv">${working ? '<i class="st working"></i>Working · ' : needs ? '<i class="st needs"></i>' : isNew ? '<i class="st unread"></i>' : ''}${esc(clip(s.preview || '', 110))}</span></span></button>`;
   }
   function renderChatList(w, el) {
     const c = ch(w.id), n = norm(c.q);
-    const all = (LIVE.ok ? LIVE.sessions : []).filter(s => !s.hidden && !s.archived);
+    const all = LIVE.ok ? LIVE.sessions.filter(s => !s.hidden) : [];
     const hit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
-    const t = s => Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt) || 0;
-    const sorted = hit.slice().sort((a, b) => t(b) - t(a));
+    const groups = LIVE.workGroups(hit);
+    c.more = c.more || {};
     const head = `<div class="ch-top"><label class="ch-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-chsearch placeholder="Search threads" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false"></label><button class="ch-new" data-chnew aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
     let body;
     if (!LIVE.ok) body = `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
-    else if (!sorted.length) body = `<div class="ch-empty">No threads match “${esc(c.q)}”.</div>`;
-    else body = sorted.slice(0, 120).map(chatRow).join('');
+    else if (!hit.length) body = `<div class="ch-empty">No threads match “${esc(c.q)}”.</div>`;
+    else body = SECTIONS.map(([k, label]) => {
+      const list = groups[k];
+      if (!list.length && (k === 'errors' || n)) return '';
+      // While searching, every section with a hit opens so nothing is buried.
+      const open = n ? true : secOpen[k];
+      const newN = k === 'ready' ? list.filter(s => LIVE.isNew(s)).length : 0;
+      const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
+      return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length}</small>${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
+        ${open ? `<div class="ch-sec-b">${list.length ? shown.map(chatRow).join('') : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
+    }).join('');
     const scroll = el.querySelector('.ch-scroll')?.scrollTop || 0;
     el.innerHTML = `<div class="ch-list">${head}<div class="ch-scroll">${body}</div></div>`;
     const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = scroll;
   }
+  function toggleSection(w, k) {
+    secOpen = { ...secOpen, [k]: !secOpen[k] };
+    try { localStorage.setItem(SEC_OPEN_KEY, JSON.stringify(secOpen)); } catch (e) {}
+    const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderChatList(w, el);
+  }
+  /* ---- attachments: the same Wizard Files upload + wizard_file_ids contract Wizard uses ---- */
+  const MAX_FILES = 8, MAX_BYTES = 64 * 1024 * 1024;
+  const fileKind = f => /^audio\//.test(f.mime || '') || /^wizard-voice-/.test(f.name || '') ? 'voice' : /^image\//.test(f.mime || '') ? 'image' : 'file';
+  const fsize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
+  const fileUrl = id => `/wizard/files/${encodeURIComponent(id)}/content`;
+  async function uploadFile(file) {
+    if (file.size > MAX_BYTES) throw Object.assign(new Error('That file is larger than the 64 MB upload limit.'), { user: true });
+    const r = await fetch('/wizard/files/upload', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': file.name || 'upload', 'X-Wizard-Mime': file.type || 'application/octet-stream' }, body: file });
+    if (!r.ok) throw Object.assign(new Error(r.status === 413 ? 'That file is too large for Wizard Files.' : `Wizard Files is unavailable (${r.status}).`), { status: r.status, user: true });
+    const f = (await r.json()).file || {};
+    if (!f.id) throw new Error('Wizard Files returned an invalid upload receipt.');
+    return { id: String(f.id), name: String(f.filename || file.name), mime: String(f.mime || file.type || ''), bytes: Number(f.bytes) || file.size };
+  }
+  async function addFiles(wid, list) {
+    const c = ch(wid); c.files = c.files || [];
+    for (const file of [...list]) {
+      if (c.files.length >= MAX_FILES) { toast('!', `Up to ${MAX_FILES} files per message`, 2400); break; }
+      const local = { key: Math.random().toString(36).slice(2), name: file.name, mime: file.type, bytes: file.size, uploading: true, preview: /^image\//.test(file.type) ? URL.createObjectURL(file) : '' };
+      c.files.push(local); refreshCompose(wid);
+      try { Object.assign(local, await uploadFile(file), { uploading: false }); }
+      catch (e) { c.files = c.files.filter(x => x !== local); toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
+      refreshCompose(wid);
+    }
+  }
+  function attachTray(c) {
+    const files = c.files || [];
+    if (!files.length) return '';
+    return `<div class="ch-tray">${files.map(f => `<span class="ch-att${f.uploading ? ' up' : ''}" data-attkey="${esc(f.key)}">${f.preview ? `<img src="${esc(f.preview)}" alt="">` : `<span class="ic">${fileKind(f) === 'voice' ? MIC_SVG : CLIP_SVG}</span>`}<span class="nm">${esc(fileKind(f) === 'voice' ? 'Voice note' : f.name)}<small>${f.uploading ? 'Uploading…' : esc(fsize(f.bytes))}</small></span><button type="button" data-attrm="${esc(f.key)}" aria-label="Remove">×</button></span>`).join('')}</div>`;
+  }
+  function refreshCompose(wid) {
+    const el = track.querySelector(`[data-chats="${wid}"]`); const form = el?.querySelector('[data-chform]'); if (!form) return;
+    const c = ch(wid), old = form.querySelector('.ch-tray');
+    const html = attachTray(c);
+    if (old) old.outerHTML = html || ''; else if (html) form.insertAdjacentHTML('afterbegin', html);
+    const busy = (c.files || []).some(f => f.uploading);
+    form.querySelector('[type=submit]').disabled = busy;
+  }
+  const MIC_SVG = '<svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg>';
+  const CLIP_SVG = '<svg viewBox="0 0 24 24"><path d="m9.5 17.5 7.7-7.7a3 3 0 0 0-4.2-4.2l-8 8a5 5 0 0 0 7.1 7.1l8-8"/></svg>';
+  const PLAY_SVG = '<svg viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></svg>';
+  /* ---- voice notes: mic + "Voice note" + length, tap to play (Telegram-style) ---- */
+  const DUR_KEY = 'wos.voice-durations.v1';
+  let DUR = (() => { try { return JSON.parse(localStorage.getItem(DUR_KEY) || '{}'); } catch (e) { return {}; } })();
+  const mmss = s => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  const durLoading = new Set();
+  function loadDuration(id) {
+    if (!id || DUR[id] != null || durLoading.has(id)) return; durLoading.add(id);
+    const a = new Audio(); a.preload = 'metadata';
+    const done = d => { durLoading.delete(id); if (isFinite(d) && d > 0) { DUR[id] = d; try { localStorage.setItem(DUR_KEY, JSON.stringify(DUR)); } catch (e) {} for (const n of document.querySelectorAll(`[data-vnote="${CSS.escape(id)}"] .vd`)) n.textContent = mmss(d); } a.src = ''; };
+    a.addEventListener('loadedmetadata', () => {
+      if (isFinite(a.duration)) return done(a.duration);
+      // Some m4a files report Infinity until the end is probed.
+      a.addEventListener('timeupdate', function f() { a.removeEventListener('timeupdate', f); done(a.duration); a.currentTime = 0; });
+      a.currentTime = 1e7;
+    });
+    a.addEventListener('error', () => durLoading.delete(id));
+    a.src = fileUrl(id);
+  }
+  let player = null; // { id, audio }
+  function toggleVoice(id) {
+    if (player && player.id === id) { if (player.audio.paused) player.audio.play().catch(() => {}); else player.audio.pause(); return; }
+    if (player) { player.audio.pause(); paintVoice(player.id, false, 0); }
+    const audio = new Audio(fileUrl(id)); player = { id, audio };
+    audio.addEventListener('timeupdate', () => { const d = DUR[id] || audio.duration; paintVoice(id, !audio.paused, isFinite(d) && d ? audio.currentTime / d : 0, audio.currentTime); });
+    audio.addEventListener('play', () => paintVoice(id, true));
+    audio.addEventListener('pause', () => paintVoice(id, false));
+    audio.addEventListener('ended', () => { paintVoice(id, false, 0); player = null; });
+    audio.addEventListener('error', () => { paintVoice(id, false, 0); player = null; toast('!', 'Couldn’t play this voice note', 2400); });
+    audio.play().catch(() => {});
+  }
+  function paintVoice(id, playing, frac, t) {
+    for (const n of document.querySelectorAll(`[data-vnote="${CSS.escape(id)}"]`)) {
+      n.classList.toggle('playing', !!playing);
+      if (frac != null) n.style.setProperty('--p', String(Math.min(1, frac)));
+      const vd = n.querySelector('.vd'); if (vd && t != null && playing) vd.textContent = mmss(t); else if (vd && !playing && DUR[id]) vd.textContent = mmss(DUR[id]);
+    }
+  }
+  function fileChip(f) {
+    const k = fileKind(f);
+    if (k === 'voice' && f.id) { loadDuration(f.id); return `<button type="button" class="vnote" data-vnote="${esc(f.id)}" aria-label="Play voice note"><span class="vp">${PLAY_SVG}<i></i></span><span class="vw"><span class="vt">${MIC_SVG}Voice note</span><span class="vbar"><b></b></span></span><span class="vd">${DUR[f.id] ? mmss(DUR[f.id]) : ''}</span></button>`; }
+    if (k === 'voice') return `<span class="fchip">${MIC_SVG} Voice note</span>`;
+    if (k === 'image' && f.id) return `<a class="fimg" href="${esc(fileUrl(f.id))}" target="_blank" rel="noopener"><img src="${esc(fileUrl(f.id))}" alt="${esc(f.name)}" loading="lazy"></a>`;
+    return f.id ? `<a class="fchip" href="${esc(fileUrl(f.id))}" target="_blank" rel="noopener">${CLIP_SVG} ${esc(f.name)}</a>` : `<span class="fchip">${CLIP_SVG} ${esc(f.name)}</span>`;
+  }
   function turnHtml(tn, last, working) {
     let h = '';
-    if (tn.u) h += `<div class="msg u"><div class="bub">${tn.u.files.map(f => `<span class="fchip">${/audio/.test(f.mime) ? '🎙' : /image/.test(f.mime) ? '🖼' : '📎'} ${esc(f.name)}</span>`).join('')}${tn.u.text ? md(tn.u.text) : ''}</div></div>`;
+    if (tn.u) h += `<div class="msg u"><div class="bub">${tn.u.files.length ? `<div class="fchips">${tn.u.files.map(fileChip).join('')}</div>` : ''}${tn.u.text ? md(tn.u.text) : ''}</div></div>`;
     const live = last && working;
     if (tn.steps || tn.notes.length || live) {
       const label = live ? (tn.notes.length ? esc(clip(tn.notes[tn.notes.length - 1], 90)) : 'Working') : `Worked through ${tn.steps} step${tn.steps === 1 ? '' : 's'}`;
@@ -721,7 +828,7 @@
     if (isNew && !c.pending.length) msgs = `<div class="ch-empty"><b>New chat</b><br>Type below, or tap the orb and talk.</div>`;
     else if (!turns && !isNew) msgs = `<div class="ch-empty">${c.err ? esc(c.err) : 'Loading thread…'}</div>`;
     else msgs = (turns || []).slice(-60).map((tn, k, arr) => turnHtml(tn, k === arr.length - 1, working)).join('')
-      + c.pending.map(p => `<div class="msg u pending"><div class="bub">${md(p)}</div></div>`).join('')
+      + c.pending.map(p => typeof p === 'string' ? { text: p } : p).map(p => `<div class="msg u pending"><div class="bub">${p.files?.length ? `<div class="fchips">${p.files.map(fileChip).join('')}</div>` : ''}${p.text ? md(p.text) : ''}</div></div>`).join('')
       + (c.pending.length && !working ? '<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> Sending</summary></details>' : '');
     const box = el.querySelector('.ch-msgs');
     const atBottom = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 80;
@@ -730,7 +837,7 @@
     el.innerHTML = `<div class="ch-thread">
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span class="emo">${isNew ? '✎' : emoOf(w.thread)}</span><div class="ti"><b>${esc(winTitle(w))}</b><small>${esc(sub)}</small></div></div>
       <div class="ch-msgs">${msgs}</div>
-      <form class="ch-compose" data-chform><textarea rows="1" placeholder="${working ? 'Steer Archimedes…' : 'Message Archimedes'}" enterkeyhint="enter">${esc(draft)}</textarea><button type="submit" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></form>
+      <form class="ch-compose" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? 'Steer Archimedes…' : 'Message Archimedes'}" enterkeyhint="enter">${esc(draft)}</textarea><button type="submit" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     const nb = el.querySelector('.ch-msgs');
     nb.scrollTop = atBottom ? nb.scrollHeight : (box ? box.scrollTop : nb.scrollHeight);
@@ -755,7 +862,13 @@
       const changed = c.loadedFor !== w.thread || sig !== c.sig;
       Object.assign(c, { turns, loadedFor: w.thread, at: Date.now(), err: '', sig });
       // A pending message has landed once the thread's last user turn matches it.
-      if (c.pending.length) { const lastU = [...turns].reverse().find(t => t.u)?.u.text || ''; c.pending = c.pending.filter(p => !lastU.includes(p.slice(0, 40))); }
+      if (c.pending.length) {
+        const lastU = [...turns].reverse().find(t => t.u)?.u || { text: '', files: [] };
+        const landed = p => { p = typeof p === 'string' ? { text: p, files: [] } : p;
+          if (p.files?.length && p.files.some(f => (lastU.files || []).some(x => x.id === f.id))) return true;
+          return !!p.text && (lastU.text || '').includes(p.text.slice(0, 40)); };
+        c.pending = c.pending.filter(p => !landed(p));
+      }
       if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && W[w.id].thread === w.thread) renderThread(W[w.id], el); }
     } catch (e) { c.err = e.status === 403 ? 'Wizard sign-in needed' : 'Couldn’t load this thread'; c.at = Date.now(); }
     finally { c.loading = false; }
@@ -768,23 +881,35 @@
   }
   function chatsBack(w) { w.thread = null; ch(w.id).pending = []; save(); renderChats(w); applyLayout(deskOf(w.id)); }
   async function sendChat(wid, text, how = 'typing in the Chats window') {
-    const w = W[wid]; text = String(text || '').trim(); if (!w || !text) return;
-    const c = ch(wid); c.pending.push(text); c.draft = ''; renderChats(w);
+    const w = W[wid]; text = String(text || '').trim(); if (!w) return;
+    const c = ch(wid);
+    const files = (c.files || []).filter(f => f.id && !f.uploading);
+    if (!text && !files.length) return;
+    if ((c.files || []).some(f => f.uploading)) { toast('…', 'Still uploading · send when it finishes', 2000); return; }
+    const sent = { text, files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })) };
+    c.pending.push(sent); c.draft = ''; c.files = []; renderChats(w);
+    const input = text || `Please use the attached ${files.length === 1 ? 'file' : 'files'}.`;
+    const fileIds = sent.files.map(f => f.id);
     try {
       if (w.thread === '__new__') {
-        const { sessionId } = await LIVE.send(text, { instructions: viewContext(wid, how) });
+        const { sessionId } = await LIVE.send(input, { instructions: viewContext(wid, how), fileIds });
         if (W[wid]) { W[wid].thread = sessionId; save(); }
         c.loadedFor = ''; renderChats(W[wid]); applyLayout(deskOf(wid));
       } else {
-        const r = await LIVE.reply(w.thread, text, { instructions: viewContext(wid, how) });
+        const r = await LIVE.reply(w.thread, input, { instructions: viewContext(wid, how), fileIds });
         toast('✦', r.steered ? 'Sent · steering the live run' : 'Sent to Archimedes', 1800);
       }
       setTimeout(() => W[wid] && loadThread(W[wid], true), 1500);
     } catch (e) {
-      c.pending = c.pending.filter(p => p !== text); c.draft = text; renderChats(w);
+      c.pending = c.pending.filter(p => p !== sent); c.draft = text; c.files = files; renderChats(w);
       toast('!', e.status === 403 ? 'Wizard sign-in needed · not sent' : 'Couldn’t reach Wizard · not sent', 3200);
     }
   }
+  const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
+  picker.setAttribute('data-chfile', '');
+  document.body.appendChild(picker);
+  let pickFor = '';
+  picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
   function growTa(ta) { if (!ta) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; }
   // While a thread is on screen, new replies count as read (same rule as Wizard).
   function markVisibleThreadsSeen() {
@@ -1014,6 +1139,11 @@
       const o = e.target.closest('[data-chopen]'); if (o) return openChat(id, o.dataset.chopen);
       if (e.target.closest('[data-chback]')) return chatsBack(w);
       if (e.target.closest('[data-chnew]')) return openChat(id, '__new__');
+      const sec = e.target.closest('[data-sectoggle]'); if (sec) return toggleSection(w, sec.dataset.sectoggle);
+      const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; return renderChatList(w, track.querySelector(`[data-chats="${id}"]`)); }
+      if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; return picker.click(); }
+      const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); return refreshCompose(id); }
+      const v = e.target.closest(".vnote[data-vnote]"); if (v) { e.preventDefault(); return toggleVoice(v.dataset.vnote); }
     }
   });
   track.addEventListener('dblclick', e => {
@@ -1026,7 +1156,10 @@
   track.addEventListener('submit', e => {
     const f = e.target.closest('[data-chform]'); if (!f) return;
     e.preventDefault(); const id = f.closest('.win')?.dataset.win; const ta = $('textarea', f);
-    const text = ta.value; if (!text.trim()) return; ta.value = ''; sendChat(id, text);
+    const text = ta.value; const c = ch(id);
+    if (!text.trim() && !(c.files || []).some(f => f.id)) return;
+    if ((c.files || []).some(f => f.uploading)) { toast('…', 'Still uploading · send when it finishes', 2000); return; }
+    ta.value = ''; sendChat(id, text);
   });
   track.addEventListener('input', e => {
     if (e.target.matches('[data-chsearch]')) { const id = e.target.closest('.win').dataset.win; ch(id).q = e.target.value; const el = track.querySelector(`[data-chats="${id}"] .ch-scroll`); if (el) { renderChatList(W[id], track.querySelector(`[data-chats="${id}"]`)); const inp = track.querySelector(`[data-chats="${id}"] [data-chsearch]`); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } }

@@ -87,7 +87,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("X-Robots-Tag", "noindex, nofollow")
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
             "connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; "
             "form-action 'self'; frame-ancestors 'none'",
         )

@@ -24,8 +24,21 @@
     if (v && typeof v === 'object') return text(v.content ?? v.text ?? '');
     return '';
   };
+  const chipLabel = raw => {
+    try {
+      const files = JSON.parse(raw);
+      if (!Array.isArray(files) || !files.length) return ' ';
+      const voice = files.every(f => /^audio\//.test(f.mime || '') || /^wizard-voice-/.test(f.filename || ''));
+      if (voice) return ' 🎙 Voice note ';
+      const img = files.every(f => /^image\//.test(f.mime || ''));
+      return img ? ` 🖼 ${files.length === 1 ? 'Photo' : files.length + ' photos'} ` : ` 📎 ${files.length === 1 ? (files[0].filename || 'File') : files.length + ' files'} `;
+    } catch (e) { return ' '; }
+  };
   const clean = s => String(s || '')
-    .replace(/\[WIZARD_FILES_V1\][\s\S]*?\[\/WIZARD_FILES_V1\]/g, ' ')
+    .replace(/\[WIZARD_FILES_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILES_V1\]/g, (_, j) => chipLabel(j))
+    .replace(/\[WIZARD_FILE_CHIPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILE_CHIPS_V1\]/g, (_, j) => chipLabel(j))
+    .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, ' ')
+    .replace(/^Please use the attached files?\.\s*/, '')
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, ' ')
     .replace(/\[(?:Browser dogfooding|System note)[^\]]*\][\s\S]*$/m, ' ')
     .replace(/[#*_`>]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -43,6 +56,7 @@
     const userText = clean(text(lastUser?.content ?? lastUser?.text) || text(item.wizard_request_preview));
     const preview = working ? (userText || latestText) : (latestText || userText || clean(text(item.preview)));
     const latestAt = optIso(latest?.timestamp ?? latest?.created_at);
+    const userAt = optIso(lastUser?.timestamp ?? lastUser?.created_at);
     return {
       id, runtime: 'direct',
       title: String(item.title || item.name || 'Untitled chat'),
@@ -56,6 +70,8 @@
       runId: String(item.wizard_run_id || ''),
       preview, previewRole: latest?.role === 'assistant' ? 'assistant' : latest?.role === 'user' ? 'user' : undefined,
       previewAt: latestAt,
+      requestAt: userAt || lastUserAt,
+      assignedAt: optIso(item.wizard_assigned_at),
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
     };
   }
@@ -117,19 +133,64 @@
     if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
     return r;
   }
-  async function fetchSessions() {
+  /* Every thread Wizard lists (same endpoint, same paging). A full walk runs at boot and
+   * every few minutes; in between only the recent pages are re-read and merged over it,
+   * so the Chats list always holds the whole history, including the archive. */
+  async function fetchSessions(full) {
     const out = []; let snapshot = '';
-    for (let offset = 0; offset < 300; offset += 100) {
+    for (let offset = 0; offset < 5000; ) {
       const q = `limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}`;
       const p = await (await req(`/wizard/hermes/api/sessions?${q}`)).json();
       if (!snapshot && typeof p.snapshot === 'string') snapshot = p.snapshot;
-      const page = (p.data || p.sessions || []).map(normalize).filter(Boolean);
-      out.push(...page);
-      // Ready is a 7-day window; older pages never surface as notifications.
-      const oldest = Math.min(...page.map(s => Date.parse(s.activityAt || s.updatedAt) || Infinity));
-      if (!p.has_more || !page.length || oldest < Date.now() - WEEK) break;
+      const rows = p.data || p.sessions || p.items || [];
+      out.push(...rows.map(normalize).filter(Boolean));
+      offset += rows.length;
+      const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
+      if (!more || !rows.length) return { sessions: out, complete: true };
+      const oldest = Math.min(...rows.map(r => { const s = normalize(r); return s ? Date.parse(s.activityAt || s.updatedAt) || Infinity : Infinity; }));
+      if (!full && oldest < Date.now() - 2 * WEEK) return { sessions: out, complete: false };
     }
-    return out;
+    return { sessions: out, complete: true };
+  }
+  const FULL_EVERY = 3 * 60 * 1000;
+
+  /* ---- Work sections: exact port of wizard-mobile src/workSections.ts ---- */
+  const DAY = 864e5;
+  const DAY_SHIFT = (7 - 6) * 36e5; // Bangkok work day starts 06:00 (UTC+7 year-round)
+  const workDayStart = (now = Date.now()) => Math.floor((now + DAY_SHIFT) / DAY) * DAY - DAY_SHIFT;
+  const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
+  const isErr = s => s.status === 'failed' || s.status === 'interrupted';
+  const needsApproval = s => s.status === 'waiting_for_approval';
+  const inWorking = s => WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s);
+  const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
+  const cardAt = s => inWorking(s) || isErr(s)
+    ? firstValid(s.assignedAt, s.requestAt, s.lastUserAt, s.previewRole === 'user' ? s.previewAt : undefined)
+    : firstValid(s.previewAt, s.activityAt, s.lastUserAt, s.updatedAt);
+  const newestFirst = (l, r) => {
+    const a = Date.parse(cardAt(l)), b = Date.parse(cardAt(r));
+    if (isFinite(a) !== isFinite(b)) return isFinite(a) ? -1 : 1;
+    return (isFinite(a) ? b - a : 0) || l.title.localeCompare(r.title);
+  };
+  const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
+  function groupWork(sessions, now = Date.now()) {
+    const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
+    const readyB = workDayStart(now), yB = readyB - DAY, archB = now - WEEK;
+    for (const s of sessions) {
+      if (s.hidden) continue;
+      const t = sectionTime(s);
+      if (needsApproval(s)) g.ready.push(s);
+      else if (inWorking(s)) g.working.push(s);
+      else if (s.deferred && !s.archived) g.deferred.push(s);
+      else if (isErr(s)) g.errors.push(s);
+      else if (s.archived) g.archive.push(s);
+      else if (isFinite(t) && t <= archB) g.archive.push(s);
+      else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
+      else if (t < readyB) g.yesterday.push(s);
+      else g.ready.push(s);
+    }
+    for (const list of Object.values(g)) list.sort(newestFirst);
+    g.ready.sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || newestFirst(l, r));
+    return g;
   }
   async function fetchDispositions() {
     try { return (await (await req('/wizard/thread-dispositions')).json()).state || {}; } catch (e) { return {}; }
@@ -146,6 +207,8 @@
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
     isNew(s) { return hasNew(s, this.seen); },
+    workGroups(sessions, now) { return groupWork(sessions || this.sessions, now); },
+    cardAt,
     groups() {
       const now = Date.now(), needs = [], ready = [], working = [];
       for (const s of this.sessions) {
@@ -167,7 +230,16 @@
       if (this.loading) return this.loading;
       this.loading = (async () => {
         try {
-          const [sessions, deferred, remote] = await Promise.all([fetchSessions(), fetchDispositions(), fetchSeen().catch(() => null)]);
+          const full = !this.fullAt || Date.now() - this.fullAt > FULL_EVERY;
+          const [got, deferred, remote] = await Promise.all([fetchSessions(full), fetchDispositions(), fetchSeen().catch(() => null)]);
+          let sessions = got.sessions;
+          if (got.complete) this.fullAt = Date.now();
+          else { const fresh = new Set(sessions.map(s => s.id)); sessions = sessions.concat(this.sessions.filter(s => !fresh.has(s.id) && !s.optimistic)); }
+          for (const s of sessions) {
+            const d = deferred[keyOf(s)];
+            delete s.deferred; delete s.restoredAt;
+            if (d) { if (d.deferred) s.deferred = true; else s.restoredAt = d.updatedAt; }
+          }
           this.sessions = sessions; this.deferred = deferred;
           let merged = merge(readLocal(), merge(this.seen, remote));
           if (!merged) { // first run anywhere: everything currently visible counts as read
@@ -202,6 +274,7 @@
       await req('/wizard/hermes/api/sessions', { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id }) });
       const body = { session_id: id, input };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
+      if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
       const r = await req('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
       const run = await r.json().catch(() => ({}));
       const runId = run.run_id || run.id || '';
@@ -214,12 +287,15 @@
       const s = this.session(id);
       if (s && WORKING.has(s.status) && s.runId) {
         try {
-          await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}/steer`, { method: 'POST', headers: J, body: JSON.stringify({ input }) });
+          const steer = { input };
+          if (opts.fileIds?.length) steer.wizard_file_ids = opts.fileIds.slice(0, 8);
+          await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}/steer`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
           return { steered: true, runId: s.runId };
         } catch (e) { if (![404, 409, 410].includes(e.status)) throw e; }
       }
       const body = { session_id: id, input };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
+      if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
       const r = await req('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
       const run = await r.json().catch(() => ({}));
       const runId = run.run_id || run.id || '';
