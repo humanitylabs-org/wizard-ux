@@ -188,5 +188,32 @@
     }, true);
   }
 
-  window.WizLinks = { mount, intercept, inApp: href => inApp(abs(href)) };
+  /* Hosted (same-origin) app frames: a link that would leave the app (another app, target=_blank/_top,
+   * window.open) must never replace Wizard. On Android the WebView loads such links in the MAIN frame
+   * (multiple windows are off), which is what made a tapped link take over the whole screen and need
+   * several Backs. Links that stay inside the app's own path keep working as normal in-app navigation. */
+  function guardFrame(win, base, sheet) {
+    let doc; try { doc = win.document; } catch (e) { return; }
+    if (!doc || doc.__wizLinkGuard) return; doc.__wizLinkGuard = true;
+    const home = String(base || '').split(/[?#]/)[0].replace(/[^/]*$/, '') || '/';
+    const leaves = (u, tgt) => u.origin !== ORIGIN || /^_(blank|top|parent)$/i.test(tgt || '') || (home !== '/' && !u.pathname.startsWith(home));
+    const go = u => { if (u.origin === ORIGIN) sheet.open(u.href); else external(u); };
+    doc.addEventListener('click', e => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
+      const u = abs(a.getAttribute('href'), win.location.href); if (!u || !/^https?:$/.test(u.protocol)) return;
+      if (!leaves(u, a.getAttribute('target'))) return;
+      e.preventDefault(); e.stopPropagation(); go(u);
+    }, true);
+    try {
+      const orig = win.open;
+      win.open = function (href, tgt, feat) {
+        const u = abs(href, win.location.href);
+        if (u && /^https?:$/.test(u.protocol) && (tgt == null || tgt === '' || /^_(blank|top|parent)$/i.test(tgt))) { go(u); return null; }
+        return orig.call(win, href, tgt, feat);
+      };
+    } catch (e) {}
+  }
+
+  window.WizLinks = { mount, intercept, guardFrame, inApp: href => inApp(abs(href)) };
 })();

@@ -241,6 +241,7 @@
         const doc = f.contentDocument; if (!doc || doc.__wuxHooked) return; doc.__wuxHooked = true;
         doc.addEventListener('pointerdown', () => focusWin(el.dataset.win, { scroll: false }), true);
         doc.addEventListener('keydown', e => onKey(e, true), true);
+        try { const w0 = W[el.dataset.win]; if (LINKS && window.WizLinks?.guardFrame) window.WizLinks.guardFrame(f.contentWindow, (w0 && ((APP[w0.appId] || {}).url || w0.url)) || f.contentWindow.location.pathname, LINKS); } catch (e) {}
       } catch (e) {}
     });
   }

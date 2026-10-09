@@ -14,6 +14,8 @@ const page = (title, body) => `<!doctype html><html><head><meta charset="utf-8">
 const FIX = {
   '/qa-page/one/': page('Page One', `<h1>One</h1><a id="plain" href="/qa-page/two/">two (plain)</a><br><a id="blank" href="/qa-page/three/" target="_blank">three (_blank)</a><br><a id="top" href="/qa-page/two/" target="_top">two (_top)</a><br><button id="wo" onclick="window.open('/qa-page/three/')">window.open</button><br><a id="ext" href="https://example.com/">external</a>`),
   '/qa-page/two/': page('Page Two', '<h1>Two</h1>'),
+  '/qa-page/host/': page('Host App', '<h1>Host</h1><a id="other" href="/qa-page/two/">other app</a><br><a id="blank" href="/qa-page/host/../two/" target="_blank">blank</a><br><button id="wopen" onclick="window.open(\'/qa-page/two/\', \'_blank\')">open</button><br><a id="inside" href="/qa-page/host/sub/">inside</a>'),
+  '/qa-page/host/sub/': page('Host Sub', '<h1>Sub</h1>'),
   '/qa-page/three/': page('Page Three', '<h1>Three</h1>'),
 };
 
@@ -127,6 +129,29 @@ const FIX = {
       await back(); await p.waitForTimeout(700);
       s = await st(); if (s.open) { await back(); await p.waitForTimeout(600); s = await st(); }
       ok(!s.open && p.url() === shellUrl, `${shell}: Back closes ${path}, Wizard stays open`, JSON.stringify(s));
+    }
+    // 8. James's case: a link INSIDE an embedded app (a window on the desk) to another app or _blank must
+    //    never replace Wizard; it opens in the sheet, and ONE Back returns to the app window.
+    {
+      await p.evaluate(a => { if (a === '__wos') { __wos.closeSheets && __wos.closeSheets(true); __wos.openWin({ app: 'frame', url: '/qa-page/host/', title: 'Host' }); }
+        else __wux.newWin({ app: 'frame', url: '/qa-page/host/', title: 'Host' }); }, api);
+      await p.waitForTimeout(1800);
+      const host = p.frameLocator('iframe[src="/qa-page/host/"]');
+      for (const [sel, label] of [['#other', 'link to another app'], ['#blank', 'target=_blank link'], ['#wopen', 'window.open']]) {
+        await host.locator(sel).click(); await p.waitForTimeout(1200);
+        s = await st();
+        const top = p.url();
+        ok(s.open && /qa-page\/two/.test(s.url) && top === shellUrl && !popups.length, `${shell}: ${label} inside an app opens in the sheet, Wizard stays`, JSON.stringify({ s, top, popups: popups.length }));
+        await back(); await p.waitForTimeout(800);
+        s = await st();
+        const still = await p.evaluate(() => !!document.querySelector('iframe[src="/qa-page/host/"]'));
+        ok(!s.open && still && p.url() === shellUrl, `${shell}: one Back after the ${label} returns to the app`, JSON.stringify({ s, still }));
+        for (const x of popups.splice(0)) await x.close().catch(() => {});
+      }
+      await host.locator('#inside').click(); await p.waitForTimeout(900);
+      s = await st();
+      const innerUrl = await p.evaluate(() => { try { return document.querySelector('iframe[src="/qa-page/host/"]').contentWindow.location.pathname; } catch (e) { return 'x'; } });
+      ok(!s.open && innerUrl === '/qa-page/host/sub/', `${shell}: a link inside the app's own pages stays normal in-app navigation`, JSON.stringify({ s, innerUrl }));
     }
     ok(!errs.length, `${shell}: no page errors`, JSON.stringify(errs));
     ok(!writes.length, `${shell}: zero writes`, JSON.stringify(writes));
