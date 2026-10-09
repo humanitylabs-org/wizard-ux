@@ -74,6 +74,7 @@
       requestAt: userAt || lastUserAt,
       assignedAt: optIso(item.wizard_assigned_at),
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
+      waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
     };
   }
 
