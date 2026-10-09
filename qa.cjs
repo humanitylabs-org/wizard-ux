@@ -19,6 +19,12 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
     return route.abort();
   });
   await ctx.route('**/wizard/thread-seen', route => route.request().method() === 'GET' ? route.continue() : route.fulfill({ status: 200, json: {} }));
+  // The router is a /wizard/* write too: answer it locally (a directions command, else "to the agent").
+  await ctx.route(/\/wizard\/v1\/route$|\/wizard-os-home\/api\/route$/, route => {
+    const t = String((route.request().postDataJSON?.() || {}).text || '');
+    const cmd = /airport|get me to|directions/i.test(t) ? { route: 'command', action: 'directions', destination: 'Bangkok airport' } : { route: 'agent' };
+    return route.fulfill({ status: 200, json: { cmd, ms: 3 } });
+  });
   const page = await ctx.newPage();
   const errors = [], external = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
@@ -130,7 +136,7 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   check('tapping the orb leaves the route on Auto', await page.evaluate(() => localStorage.getItem('wos.route')) === '"auto"', await page.evaluate(() => localStorage.getItem('wos.route')));
   // Typed command through real router (DeepSeek Flash) — natural phrasing not caught by local parser
   await page.evaluate(() => window.__wos.runUtterance('can you get me to the Bangkok airport', 'auto', true));
-  await page.waitForFunction(() => /DeepSeek|on-device|Archimedes/.test(document.querySelector('#txRouteText').textContent) && !/Routing/.test(document.querySelector('#txRouteText').textContent), null, { timeout: 30000 });
+  await page.waitForFunction(() => /DeepSeek|on-device|Archimedes|Command/.test(document.querySelector("#txRouteText").textContent) && !/Routing/.test(document.querySelector('#txRouteText').textContent), null, { timeout: 30000 });
   await page.waitForTimeout(300);
   const rt = await page.textContent('#txRouteText');
   const md = await page.evaluate(() => { const s = window.__wos; return s.desks[s.idx].wins.map(x => s.wins[x]).find(w => w.app === 'maps') || null; });
@@ -148,7 +154,8 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   const run = sent.find(s => s.path.endsWith('/v1/runs')), ses = sent.find(s => s.path.endsWith('/api/sessions'));
   check('reasoning request creates a real Wizard thread request', !!ses && ses.body?.source === 'wizard-mobile' && /^wizard_\d+_[0-9a-f]{12}$/.test(ses.body?.id || ''), JSON.stringify(ses?.body));
   check('run admitted with idempotency key and same session', !!run && run.body?.session_id === ses?.body?.id && run.idem.length >= 32 && /prioritize/.test(run.body?.input || ''), JSON.stringify(run?.body));
-  check('the reply opens as a Chats window on that thread', ad.some(w => w.app === 'chats' && w.thread === ses?.body?.id), JSON.stringify(ad));
+  // Background new threads (0.6.x): the new thread starts in the background — no window opens on this desk.
+  check('the new thread starts in the background (no window opened)', !ad.some(w => w.app === 'chats' && w.thread === ses?.body?.id), JSON.stringify(ad));
   check('send carries view context for Archimedes', typeof run?.body?.instructions === 'string' && /Wizard OS/.test(run.body.instructions), (run?.body?.instructions || '').slice(0, 160));
   await shot('14-agent');
 

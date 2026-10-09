@@ -80,7 +80,7 @@
     catch (e) { throw new HttpError(e.status || 0, e.message); }
   }
   async function uploadAudio(it) {
-    const ext = /mp4|m4a/.test(it.audioType || '') ? 'm4a' : /ogg/.test(it.audioType || '') ? 'ogg' : 'webm';
+    const ext = /mp4|m4a/.test(it.audioType || '') ? 'm4a' : /ogg/.test(it.audioType || '') ? 'ogg' : /aac/.test(it.audioType || '') ? 'aac' : 'webm';
     const name = `wizard-voice-${new Date(it.createdAt).toISOString().replace(/[:.]/g, '-')}.${ext}`;
     const r = await call('/wizard/files/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': name, 'X-Wizard-Mime': it.audioType || 'audio/webm' }, body: it.audio });
     const f = (await r.json()).file || {};
@@ -110,7 +110,9 @@
     }
     // 4. New chat: the session id was fixed at enqueue time; 409 means an earlier try created it.
     if (it.kind === 'new' && !it.sessionReady) {
-      try { await call('/wizard/hermes/api/sessions', { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id: it.sessionId }) }); }
+      const sb = { source: 'wizard-mobile', id: it.sessionId };
+      if (it.model) { sb.model = it.model; if (it.provider) sb.provider = it.provider; } // the picker's route for a new chat
+      try { await call('/wizard/hermes/api/sessions', { method: 'POST', headers: J, body: JSON.stringify(sb) }); }
       catch (e) { if (e.status !== 409) throw e; }
       it.sessionReady = true; await put(it);
     }
@@ -119,6 +121,7 @@
       const body = { session_id: it.sessionId, input };
       if (it.instructions) body.instructions = String(it.instructions).slice(0, 2000);
       if (fileIds.length) body.wizard_file_ids = fileIds;
+      if (it.model) { body.model = it.model; if (it.provider) body.provider = it.provider; }
       it.body = JSON.stringify(body); await put(it);
     }
     const r = await call('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': it.id }, body: it.body });
@@ -178,6 +181,8 @@
         audio: o.audio || null, audioType: o.audio ? (o.audio.type || 'audio/webm') : '',
         wid: o.wid || '', how: o.how || '', source: o.source || 'chat', title: String(o.text || '').slice(0, 60),
       };
+      // A route chosen in the model picker (sealed with the message, like legacy's admit()).
+      if (o.model) { it.model = String(o.model); it.provider = String(o.provider || ''); }
       await put(it); pump();
       return it;
     },
@@ -190,6 +195,8 @@
     forThread(sessionId, wid) { return [...items.values()].filter(it => it.state !== 'empty' && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     get(id) { return items.get(id) || null; },
     landed(id) { const it = items.get(id); if (it && it.state === 'sent') del(id); },
+    // Dismiss a failed item for good (the Errors section's Dismiss on an unsent voice note, after a confirm).
+    remove(id) { const it = items.get(id); if (!it || it.state === 'sending') return false; del(id); return true; },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     onSent(fn) { sentHooks.add(fn); return () => sentHooks.delete(fn); },
     pump, load,

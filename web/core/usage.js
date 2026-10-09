@@ -1,0 +1,97 @@
+/* Wizard UX core: AI usage in Settings (#24). Shared by every shell.
+ *
+ * GET /wizard/ai-usage → { fetchedAt, providers: [{ id, name, plan, status, fetchedAt, limits: [{ id, label,
+ * usedPercent, remainingPercent, resetsAt }], paid, error }] }. One row per quota window: how much is left,
+ * a bar, when it resets (countdown + the exact moment in the owner's time zone). A provider Wizard could not
+ * read says so in a line instead of going missing. Port of wizard-mobile ff86db8c aiUsage.ts (compactRows,
+ * usageTone, formatCountdown, formatResetTime, paidSummary, formatFreshness) and AiUsage.tsx.
+ *
+ *   WosUsage.load(force) → Promise<snapshot|null>   (cached 60 s)
+ *   WosUsage.html(now)   → the Settings card
+ */
+(() => {
+  'use strict';
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pct = v => { const n = Number(v); return isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null; };
+  const iso = v => (typeof v === 'string' && isFinite(Date.parse(v)) ? v : null);
+  function normalize(j) {
+    const providers = (Array.isArray(j?.providers) ? j.providers : []).map(p => {
+      if (!p || typeof p !== 'object' || !p.id) return null;
+      const limits = (Array.isArray(p.limits) ? p.limits : []).map(l => {
+        const rem = pct(l?.remainingPercent ?? (l?.usedPercent != null ? 100 - l.usedPercent : null)); if (rem == null) return null;
+        return { id: String(l.id || l.label || ''), label: String(l.label || 'Quota'), remainingPercent: rem, usedPercent: 100 - rem, resetsAt: iso(l.resetsAt) };
+      }).filter(Boolean);
+      const paid = p.paid && typeof p.paid === 'object' ? p.paid : null;
+      return { id: String(p.id), name: String(p.name || p.id), plan: p.plan ? String(p.plan) : '', status: ['ok', 'stale', 'unavailable'].includes(p.status) ? p.status : (limits.length ? 'ok' : 'unavailable'),
+        fetchedAt: iso(p.fetchedAt), limits, paid, error: p.error ? String(p.error.message || p.error) : '' };
+    }).filter(Boolean);
+    return { fetchedAt: iso(j?.fetchedAt), providers };
+  }
+  const tone = rem => (rem <= 10 ? 'alert' : rem <= 25 ? 'warning' : 'normal');
+  const zone = () => (window.WizConfig?.timeZone?.() || undefined);
+  const clock = ms => { try { return new Intl.DateTimeFormat('en-GB', { timeZone: zone(), hour: '2-digit', minute: '2-digit', hour12: false }).format(ms); } catch (e) { return ''; } };
+  const wday = ms => { try { return new Intl.DateTimeFormat('en-GB', { timeZone: zone(), weekday: 'short' }).format(ms); } catch (e) { return ''; } };
+  function countdown(at, now) {
+    const m = Math.floor((at - now) / 60000);
+    if (m <= 0) return 'Awaiting reset';
+    if (m < 60) return `Resets in ${m}m`;
+    const h = Math.floor(m / 60);
+    return h < 24 ? `Resets in ${h}h ${m % 60}m` : `Resets in ${Math.floor(h / 24)}d ${h % 24}h`;
+  }
+  function resetLine(resetsAt, now) {
+    const at = Date.parse(resetsAt || ''); if (!isFinite(at)) return '';
+    return `${countdown(at, now)} · ${wday(at)} ${clock(at)}`;
+  }
+  function freshness(providers, now) {
+    const ts = providers.filter(p => p.status !== 'unavailable' && p.fetchedAt).map(p => Date.parse(p.fetchedAt));
+    if (!ts.length) return 'Not updated yet';
+    const m = Math.max(0, Math.floor((now - Math.min(...ts)) / 60000));
+    return m < 1 ? 'Updated just now' : m < 60 ? `Updated ${m} min ago` : `Updated ${clock(Math.min(...ts))}`;
+  }
+  const money = (minor, exp, cur) => minor == null ? '' : (cur === 'USD' ? '$' : '') + (minor / 10 ** Math.max(0, exp || 0)).toFixed(Math.max(0, Math.min(4, exp || 0))) + (cur && cur !== 'USD' ? ' ' + cur : '');
+  function paidLine(p) {
+    if (!p || p.enabled === false) return '';
+    if (p.type === 'credits') return p.unlimited ? 'Credits: unlimited' : p.balanceMinor != null ? `Credits: ${money(p.balanceMinor, p.exponent, p.currency)}` : '';
+    const u = money(p.usedMinor, p.exponent, p.currency), l = money(p.limitMinor, p.exponent, p.currency);
+    return u && l ? `Extra usage: ${u} of ${l}` : u ? `Extra usage: ${u}` : '';
+  }
+  // compactRows: 'Claude · Session', 'ChatGPT 2 · Weekly'; a model-scoped window names the model ('Fable · weekly').
+  function rowLabel(p, l) {
+    const scope = l.label.split('·').map(s => s.trim()).filter(Boolean);
+    const named = scope.filter(s => s.toLowerCase() !== 'all models'), parts = named.length ? named : scope;
+    return parts.length > 1 ? parts.join(' · ') : `${p.name} · ${parts[0] || l.label}`;
+  }
+  const U = {
+    snap: null, error: '', at: 0, loading: null,
+    load(force) {
+      if (U.loading) return U.loading;
+      if (!force && U.snap && Date.now() - U.at < 60e3) return Promise.resolve(U.snap);
+      U.loading = fetch('/wizard/ai-usage', { cache: 'no-store', credentials: 'same-origin' })
+        .then(r => { if (!r.ok) throw new Error(r.status === 403 ? 'Wizard sign-in needed' : `AI usage unavailable (${r.status})`); return r.json(); })
+        .then(j => { U.snap = normalize(j); U.error = ''; U.at = Date.now(); return U.snap; })
+        .catch(e => { U.error = String(e.message || e); return U.snap; })
+        .finally(() => { U.loading = null; });
+      return U.loading;
+    },
+    normalize, tone, resetLine, rowLabel,
+    html(now = Date.now()) {
+      const s = U.snap;
+      const head = `<h4>AI usage <button type="button" class="st-mini" data-usage-refresh aria-label="Refresh AI usage">${U.loading ? '…' : '↻'}</button></h4>`;
+      if (!s) return `<div class="st-group st-usage" data-usage>${head}<div class="st-empty">${U.error ? esc(U.error) : 'Loading…'}</div></div>`;
+      const rows = [], notes = [];
+      for (const p of s.providers) {
+        if (p.status === 'unavailable' || !p.limits.length) { notes.push(`${p.name}${p.plan ? ' · ' + p.plan : ''}: ${p.status === 'unavailable' ? 'couldn’t read usage' : 'no quota windows'}${p.error ? ' · ' + p.error : ''}`); }
+        if (p.status === 'stale') notes.push(`${p.name}: last known reading`);
+        if (p.status === 'unavailable') continue;
+        for (const l of p.limits) rows.push(`<div class="us-row ${tone(l.remainingPercent)}${p.status === 'stale' ? ' stale' : ''}" data-usage-row="${esc(p.id + ':' + l.id)}"><div class="us-t"><b>${esc(rowLabel(p, l))}</b><span class="us-p">${l.remainingPercent}% left</span></div>`
+          + `<div class="us-bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${l.remainingPercent}" aria-label="${esc(rowLabel(p, l))} remaining"><i style="width:${l.remainingPercent}%"></i></div>`
+          + `<small class="us-r">${esc(resetLine(l.resetsAt, now) || 'No reset time reported')}</small></div>`);
+        const pl = paidLine(p.paid); if (pl) notes.push(`${p.name}: ${pl}`);
+      }
+      return `<div class="st-group st-usage" data-usage>${head}${rows.join('') || '<div class="st-empty">No quota windows reported.</div>'}`
+        + (notes.length ? `<p class="st-note us-notes">${notes.map(esc).join('<br>')}</p>` : '')
+        + `<p class="st-note">${esc(freshness(s.providers, now))}${U.error ? ' · ' + esc(U.error) : ''} · times in ${esc(zone() || 'local time')}</p></div>`;
+    },
+  };
+  window.WosUsage = U;
+})();

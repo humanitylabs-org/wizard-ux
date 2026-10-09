@@ -29,17 +29,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const leaked = [];
   await ctx.route('**/*', async r => {
     const q = r.request(), u = q.url();
-    const m = u.match(/\/wizard-os-home\/([a-z-]+\.(?:js|css)|index\.html|)(\?|$)/);
+    const m = u.match(/\/wizard-os-home\/((?:desktop\/|core\/)?[a-z-]+\.(?:js|css|html)|)(\?|$)/);
     if (m && q.method() === 'GET') {
       const f = m[1] || 'index.html', p = path.join(WEB, 'web', f);
       if (fs.existsSync(p) && f !== 'data.js' && f !== 'summaries.js') return r.fulfill({ status: 200, contentType: f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : 'application/javascript', body: fs.readFileSync(p) });
     }
-    if (/\/wizard-os-home\/api\/transcribe$/.test(u)) {
+    if (/\/wizard-os-home\/api\/transcribe$|\/wizard\/voice\/transcribe$/.test(u)) { // sidecar or bootstrap endpoint
       W.transcribes++;
       if (W.down === 'refuse' || W.sttDown) return r.abort('connectionrefused');
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'QA recording transcribed later', ms: 5 }) });
     }
-    if (/\/wizard-os-home\/api\/route$/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cmd: { route: 'agent' }, ms: 3 }) });
+    if (/\/wizard-os-home\/api\/route$|\/wizard\/v1\/route$/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cmd: { route: 'agent' }, ms: 3 }) });
     if (q.method() !== 'GET' && q.method() !== 'HEAD' && /\/wizard\//.test(u)) {
       if (W.down === 'refuse') return r.abort('connectionrefused');
       if (W.down === '502') return r.fulfill({ status: 502, contentType: 'text/html', body: 'Bad gateway' });
@@ -86,7 +86,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await p.waitForFunction(() => window.WosOutbox.unsent().some(x => x.text === 'QA outbox message one' && x.state === 'waiting'), null, { timeout: 8000 });
   const it1 = await p.evaluate(() => window.WosOutbox.unsent().find(x => x.text === 'QA outbox message one'));
   ok(it1 && it1.attempts >= 1, 'down: message kept and waiting', JSON.stringify(it1 && { s: it1.state, a: it1.attempts }));
-  ok(await p.isVisible('.msg.u.pending.waiting'), 'down: thread shows the message with “retrying”');
+  // New threads start in the background (0.6.x): the window is back on its list, where the unsent chat waits
+  // under "Sending" with "retrying" (it must never vanish from Chats while Wizard is down).
+  ok(await p.isVisible('[data-sec="sending"] .msg.u.pending.waiting') && /retrying/.test(await p.textContent('[data-sec="sending"] .msg.u.pending.waiting .pst') || ''), 'down: Chats shows the message under Sending with “retrying”');
   await p.screenshot({ path: path.join(OUT, 'outbox-waiting.png') });
   const inIdb = await p.evaluate(() => new Promise(res => { const r = indexedDB.open('wos-outbox'); r.onsuccess = () => { const t = r.result.transaction('items').objectStore('items').getAll(); t.onsuccess = () => res(t.result.map(x => x.text)); }; }));
   ok(inIdb.includes('QA outbox message one'), 'down: message is on disk (IndexedDB)');
@@ -95,6 +97,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await p.evaluate(() => window.WosOutbox.retry(window.WosOutbox.unsent().find(x => x.text === 'QA outbox message one').id));
   await p.waitForFunction(() => !window.WosOutbox.unsent().some(x => x.text === 'QA outbox message one'), null, { timeout: 10000 });
   ok(W.runs.filter(r => r.body.includes('QA outbox message one')).length === 1, 'up: delivered exactly once', String(W.runs.length));
+  await sleep(300);
+  ok(!(await p.isVisible('[data-sec="sending"]')), 'up: the Sending row leaves Chats once Wizard has it');
   const run1 = W.runs.find(r => r.body.includes('QA outbox message one'));
   ok(run1 && run1.key === it1.id && JSON.parse(run1.body).session_id === it1.sessionId, 'up: idempotency key + session id fixed at enqueue');
 

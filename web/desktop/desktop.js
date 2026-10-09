@@ -63,6 +63,13 @@
     visible: () => ws[cur].wins,
     editUnsent: it => editUnsent(it),
     newChatHint: `Type below and press ${CMD}Enter, or press ${MOD}V and talk.`,
+    owner: id => String(id).replace(/::list$/, ''),
+    // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
+    recordReply: (wid, sid) => recordReply(wid, sid),
+    recordingFor: () => (vReply && VOICE.state === 'listen' ? vReply.sid : ''),
+    // A private-origin link in a message opens as a window on this workspace; the shell never navigates away.
+    openLink: (url, title) => !!newWin({ app: 'frame', appId: 'link', url, title }),
+    changed: () => { for (const id of Object.keys(W)) if (W[id].app === 'chats') syncChatsPane(id); },
   });
 
   /* ---------------- windows ---------------- */
@@ -173,15 +180,15 @@
   function newChat(opts = {}) {
     let w = !opts.fresh && (ws[cur].wins.map(id => W[id]).find(x => x.app === 'chats'));
     if (!w) w = newWin({ app: 'chats', thread: null }, opts);
-    focusWin(w.id); CHATS.openChat(w.id, '__new__');
-    setTimeout(() => focusInside(w.id), 30);
+    focusWin(w.id); CHATS.openNewDraft(w.id, '');
+    syncChatsPane(w.id); setTimeout(() => focusInside(w.id), 30);
     return w;
   }
   function editUnsent(it) {
     const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
     const w = known ? (openThread(it.sessionId), focused()) : newChat();
     if (!w) return;
-    const c = CHATS.ch(w.id); c.draft = it.text || ''; c.files = (it.files || []).filter(f => f !== it.audioFile).map(f => ({ ...f, key: Math.random().toString(36).slice(2) }));
+    CHATS.setDraft(w.id, it.text || '', (it.files || []).filter(f => f !== it.audioFile));
     OUTBOX.remove(it.id); CHATS.renderChats(w); syncChatsPane(w.id);
   }
 
@@ -201,8 +208,9 @@
       <div class="wbody">${bodyHtml(w)}</div>`;
   }
   function bodyHtml(w) {
-    if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
-      <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div>Pick a thread, or start one.<br><kbd>${MOD}Enter</kbd> new chat · <kbd>${CMD}K</kbd> search · <kbd>${MOD}V</kbd> talk</div></div></div></div>`;
+    if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
+      <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
+      <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>↑</kbd><kbd>↓</kbd> move through chats · <kbd>/</kbd> search · <kbd>${MOD}Enter</kbd> new chat · <kbd>${CMD}K</kbd> launch · <kbd>${MOD}V</kbd> talk</div></div></div></div>`;
     const a = appOf(w), url = w.url || a.url || '/';
     return `<iframe src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
@@ -217,6 +225,42 @@
     const box = el.querySelector('.dchats'); if (box) box.dataset.thread = w.thread || '';
     $$('.ch-row', el).forEach(r => r.classList.toggle('cur', r.dataset.chopen === w.thread));
     const t = el.querySelector('.wbar .t'); if (t) t.textContent = winTitle(w);
+    el.setAttribute('aria-label', winTitle(w));
+    if (focused()?.id === base) document.title = `${winTitle(w)} · Wizard`;
+  }
+  /* ---- the list/thread divider: drag, arrow keys, double-click to reset; one width for every Chats window ---- */
+  const LIST_W = [220, 640, 340];
+  function listW() { const v = +store.get('listW', LIST_W[2]); return v >= LIST_W[0] && v <= LIST_W[1] ? v : LIST_W[2]; }
+  function setListW(px) { px = Math.round(Math.max(LIST_W[0], Math.min(LIST_W[1], px))); store.set('listW', px); $$('.dchats', stage).forEach(b => b.style.setProperty('--list-w', px + 'px')); return px; }
+  let split = null;
+  stage.addEventListener('pointerdown', e => {
+    const s = e.target.closest('[data-split]'); if (!s || e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    const box = s.closest('.dchats'); split = { box, left: box.getBoundingClientRect().left };
+    s.setPointerCapture?.(e.pointerId); document.documentElement.classList.add('splitting');
+  });
+  addEventListener('pointermove', e => { if (split) setListW(e.clientX - split.left); });
+  addEventListener('pointerup', () => { if (!split) return; split = null; document.documentElement.classList.remove('splitting'); });
+  stage.addEventListener('dblclick', e => { if (e.target.closest('[data-split]')) { e.stopPropagation(); setListW(LIST_W[2]); } }, true);
+  stage.addEventListener('keydown', e => {
+    if (!e.target.matches?.('[data-split]')) return;
+    const d = { ArrowLeft: -24, ArrowRight: 24 }[e.key]; if (!d) return;
+    e.preventDefault(); e.stopPropagation(); setListW(listW() + d);
+  });
+  /* ---- keyboard through the thread list: ↑/↓ (or j/k) open the previous/next chat, / searches ---- */
+  function listRows(id) { return $$('.pane-list .ch-row[data-chopen], .pane-list .ch-row[data-chdraft]', winEl(id) || document.createElement('div')); }
+  function stepThread(id, dir) {
+    const w = W[id]; if (!w || w.app !== 'chats') return false;
+    const rows = listRows(id); if (!rows.length) return false;
+    let i = rows.findIndex(r => r.classList.contains('kbd'));
+    if (i < 0) i = rows.findIndex(r => r.dataset.chopen && r.dataset.chopen === w.thread);
+    const j = i < 0 ? (dir > 0 ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, i + dir));
+    const r = rows[j]; if (!r) return false;
+    if (r.dataset.chopen) CHATS.openChat(id, r.dataset.chopen); else CHATS.openNewDraft(id, r.dataset.chdraft);
+    syncChatsPane(id);
+    const again = listRows(id)[j]; if (again) { $$('.pane-list .ch-row.kbd', winEl(id)).forEach(x => x.classList.remove('kbd')); again.classList.add('kbd'); again.focus({ preventScroll: true }); again.scrollIntoView({ block: 'nearest' }); }
+    log('list:' + (r.dataset.chopen || r.dataset.chdraft));
+    return true;
   }
   function mountWin(w, host) {
     const el = document.createElement('section');
@@ -349,8 +393,10 @@
     if (w?.app === 'chats') {
       // Rows in the list pane open in this window's thread pane.
       const row = e.target.closest('[data-chopen]');
-      if (row && e.target.closest('.pane-list')) { e.stopPropagation(); CHATS.openChat(id, row.dataset.chopen); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
-      if (e.target.closest('.pane-list [data-chnew]')) { e.stopPropagation(); CHATS.openChat(id, '__new__'); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
+      if (row && e.target.closest('.pane-list') && CHATS.justPressed()) { e.stopPropagation(); return; } // a long-press/right-click just opened the actions sheet
+      if (row && e.target.closest('.pane-list') && !e.target.closest('.ch-sheet')) { e.stopPropagation(); CHATS.openChat(id, row.dataset.chopen); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
+      if (e.target.closest('.pane-list [data-chnew]') || e.target.closest('[data-panenew]')) { e.stopPropagation(); CHATS.openNewDraft(id, ''); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
+      const dr = e.target.closest('.pane-list [data-chdraft]'); if (dr && !e.target.closest('[data-chdraftx]')) { e.stopPropagation(); CHATS.openNewDraft(id, dr.dataset.chdraft); syncChatsPane(id); setTimeout(() => focusInside(id), 20); return; }
       const cid = e.target.closest('[data-chats]')?.dataset.chats; if (cid && CHATS.click(e, cid)) { syncChatsPane(id); return; }
     }
   });
@@ -402,9 +448,12 @@
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
       { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
       { kind: 'cmd', name: 'Inbox', icon: '⬇', keys: `${MOD}I`, run: () => openInbox() },
+      ...(window.WosFiles ? [{ kind: 'cmd', name: 'Files', icon: '▤', run: () => openFiles() }] : []),
+      ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
       { kind: 'cmd', name: 'Close window', icon: '✕', keys: `${MOD}W`, run: () => focused() && closeWin(focused().id) },
       { kind: 'cmd', name: 'Full window', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Keyboard shortcuts', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
+      { kind: 'cmd', name: 'Settings', icon: '⚙', keys: `${MOD},`, run: () => openSettings() },
       { kind: 'cmd', name: 'Use the phone layout here', icon: '📱', run: () => { location.href = './?shell=phone'; } },
       { kind: 'cmd', name: 'Reset desktop layout', icon: '↺', run: () => { Object.keys(localStorage).filter(k => k.startsWith('wux.desk.')).forEach(k => localStorage.removeItem(k)); location.reload(); } },
     ];
@@ -459,6 +508,26 @@
     if (!audio) toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600);
   }
 
+  /* Wizard Files (#23): the shared Files sheet, in a Chats window (attaches to its open thread, else starts a new chat). */
+  function openFiles() {
+    let w = ws[cur].wins.map(id => W[id]).find(x => x.app === 'chats') || findWin(x => x.app === 'chats');
+    if (!w) w = newWin({ app: 'chats', thread: null });
+    focusWin(w.id);
+    setTimeout(() => CHATS.PW?.openFiles(w.thread ? w.id : w.id + '::list'), 30);
+  }
+  /* AI usage (#24): the same panel as the phone's Settings, in a card. */
+  const usageEl = document.createElement('div');
+  usageEl.className = 'keys usage-ov'; usageEl.hidden = true;
+  usageEl.innerHTML = '<div class="keys-card" role="dialog" aria-label="AI usage"><div class="keys-head"><b>AI usage</b><small>Quota left on each subscription, and when it resets.</small><button class="x" data-close="usage" aria-label="Close">✕</button></div><div class="usage-body" data-usage-host></div></div>';
+  document.body.appendChild(usageEl);
+  const paintUsage = () => { if (!usageEl.hidden) usageEl.querySelector('[data-usage-host]').innerHTML = window.WosUsage.html(); };
+  function openUsage() { usageEl.hidden = false; paintUsage(); window.WosUsage.load(Date.now() - (window.WosUsage.at || 0) > 60e3).then(paintUsage); }
+  function closeUsage() { if (usageEl.hidden) return false; usageEl.hidden = true; return true; }
+  usageEl.addEventListener('click', e => {
+    if (e.target === usageEl || e.target.closest('[data-close]')) return closeUsage();
+    if (e.target.closest('[data-usage-refresh]')) { window.WosUsage.load(true).then(paintUsage); paintUsage(); }
+  });
+
   /* ---------------- inbox drawer ---------------- */
   const ib = $('#inbox');
   let ibSel = 0;
@@ -482,12 +551,28 @@
     const r = e.target.closest('[data-thread]'); if (r) { closeInbox(); openThread(r.dataset.thread); }
   });
 
+  /* ---------------- settings (⌥, or the palette): connection and the voice provider, read-only ---------------- */
+  const setEl = document.createElement('div');
+  setEl.id = 'dsettings'; setEl.className = 'keys dsettings'; setEl.hidden = true;
+  document.body.appendChild(setEl);
+  function renderSettings() {
+    if (setEl.hidden) return;
+    const st = LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
+    setEl.innerHTML = `<div class="keys-card set-card" role="dialog" aria-label="Settings"><div class="keys-head"><b>Settings</b><small>Wizard on this computer</small><button class="x" data-close aria-label="Close">✕</button></div>
+      <div class="set-body"><div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(st)}</b><small>Desktop · ${esc(location.host)}</small></span></div></div>
+      ${C.voiceStatus?.card() || ''}</div></div>`;
+  }
+  function openSettings() { setEl.hidden = false; renderSettings(); setEl.querySelector('[data-close]')?.focus(); }
+  function closeSettings() { setEl.hidden = true; const f = focused(); if (f) focusInside(f.id); }
+  setEl.addEventListener('click', e => { if (e.target === setEl || e.target.closest('[data-close]')) closeSettings(); });
+  C.voiceStatus?.onChange(() => renderSettings());
+
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
     ['Launch', [[`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send, Esc to cancel)`], ['Right ⌥ (tap)', 'Dictate (tap again to insert at the cursor, or copy)']]],
     ['Workspaces', [[`${MOD}1 … ${MOD}9`, 'Go to workspace'], [`⇧${MOD}1 … 9`, 'Send window to workspace'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
     ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full window'], [`${MOD}W`, 'Close window']]],
-    ['Chats', [[`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list']]],
+    ['Chats', [[`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list'], ['↑ ↓  or  j k', 'Previous / next chat (in the list)'], [`⇧${MOD}J  ⇧${MOD}K`, 'Next / previous chat (anywhere)'], ['/', 'Search chats and messages'], [`${MOD},`, 'Settings']]],
     ['Wizard for Mac (works in any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to a bound app'], ['Right ⌘', 'Talk to Wizard from anywhere'], ['Right ⌥', 'Dictate into any app']]],
   ];
   const keysEl = $('#keys');
@@ -500,10 +585,11 @@
    * otherwise starts a new thread. Audio goes through the durable outbox: transcribed there,
    * kept as a voice note, retried if the network drops. */
   const pill = $('#voicePill'), mic = $('#micBtn');
-  let vTarget = null, vTimer = 0, vMode = 'talk', dTarget = null;
+  let vTarget = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null;
   const VOICE = C.voice({
     onState: st => {
       pill.hidden = st === 'idle'; pill.classList.toggle('think', st === 'think'); mic.classList.toggle('on', st !== 'idle');
+      CHATS.PW?.paintMic(st === 'listen' && !!vReply, vReply?.sid || '');
       $('#clock').hidden = st !== 'idle';
       pill.classList.toggle('dict', vMode === 'dictate');
       $('#voiceKey').textContent = vMode === 'dictate' ? 'Right ⌥' : 'Right ⌘';
@@ -517,24 +603,38 @@
   });
   async function talk(action = 'toggle') {
     if (VOICE.state === 'think') return 'busy';
-    if (action === 'cancel') { if (VOICE.state !== 'idle') { VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
+    if (action === 'cancel') { if (VOICE.state !== 'idle') { vReply = null; VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
     if (VOICE.state === 'idle') {
       if (action === 'send') return 'none';
-      vMode = 'talk';
+      vMode = 'talk'; vReply = null;
       const f = focused(); vTarget = f?.app === 'chats' && f.thread ? f.id : null;
       $('#voiceTime').textContent = '0:00';
       try { await VOICE.start(); } catch (e) { toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
       return 'voice';
     }
     if (action === 'start') return 'voice';
+    const rp = vReply; vReply = null; // the thread a composer-mic take belongs to, fixed before anything else runs
     const r = await VOICE.finish({ transcribe: false });
     if (!r || !r.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
     const w = vTarget && W[vTarget];
+    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
     if (w && w.thread) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob);
     else ask('', 'voice', r.blob);
     toast('✦', `Sent to ${window.WizConfig.agent()}`, 1400);
     return 'sent';
+  }
+
+  // Composer mic: tap to record a reply to this thread, tap again (or Right ⌘) to send it there. The thread is
+  // fixed when recording starts, so switching threads mid-take can't send it somewhere else.
+  async function recordReply(wid, sid) {
+    if (VOICE.state === 'think') return 'busy';
+    if (VOICE.state === 'listen') { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
+    if (!sid) return 'busy';
+    vMode = 'talk'; vTarget = wid; vReply = { wid, sid };
+    $('#voiceTime').textContent = '0:00';
+    try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
+    return 'recording';
   }
 
   // Dictation (Right ⌥): speech to text where you're typing. In a text field the words go in at the cursor;
@@ -614,7 +714,10 @@
     if (!pal.hidden) { closePalette(); return 'palette'; }
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }
+    if (closeUsage()) return 'usage';
+    if (setEl && !setEl.hidden) { closeSettings(); return 'settings'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
+    const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     if (VOICE.state === 'listen') { if (vMode === 'dictate') dictate('cancel'); else talk('cancel'); return 'voice'; }
     const f = focused();
     if (f?.app === 'chats' && f.thread) { CHATS.chatsBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return 'thread'; }
@@ -633,6 +736,20 @@
     if (k === 'Escape' && LINKS && LINKS.isOpen() && fromFrame) { const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } return; }
     if (k === 'Escape') { if (fromFrame && pal.hidden && keysEl.hidden && ib.hidden && VOICE.state !== 'listen') return; const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
     if (!pal.hidden) return; // the palette owns the keyboard while open
+    if (setEl && !setEl.hidden && !(e.altKey && code === 'Comma')) return; // so does Settings (⌥, closes it)
+    // Chats: ↑/↓ or j/k walk the thread list (from the list, the search box or an empty thread pane), / focuses search.
+    {
+      const f = focused(), plain = !e.altKey && !e.metaKey && !e.ctrlKey;
+      const inList = !!e.target.closest?.('.pane-list'), inSearch = e.target.matches?.('[data-chsearch]');
+      if (f?.app === 'chats' && ib.hidden && keysEl.hidden && plain && !fromFrame) {
+        const free = !typing(e.target) || inSearch;
+        if (free && (inList || inSearch || !f.thread || e.target === winEl(f.id)) && (k === 'ArrowDown' || k === 'ArrowUp' || (!inSearch && (k === 'j' || k === 'k')))) { if (stepThread(f.id, k === 'ArrowDown' || k === 'j' ? 1 : -1)) return hit(() => {}); }
+        if (k === '/' && !typing(e.target)) return hit(() => { const s = winEl(f.id)?.querySelector('[data-chsearch]'); if (s) { s.focus(); s.select(); } });
+        if (k === 'Enter' && inSearch) { const r = listRows(f.id)[0]; if (r) return hit(() => { stepThread(f.id, 1); focusInside(f.id); }); }
+      }
+      // ⌥⇧J / ⌥⇧K: next / previous chat from anywhere in the Chats window, even mid-sentence.
+      if (f?.app === 'chats' && e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (code === 'KeyJ' || code === 'KeyK')) return hit(() => stepThread(f.id, code === 'KeyJ' ? 1 : -1));
+    }
     if (!e.altKey || e.metaKey || e.ctrlKey) {
       // Inbox navigation without modifiers.
       if (!ib.hidden && !typing(e.target)) {
@@ -650,6 +767,7 @@
     if (code === 'KeyW') return hit(() => { const f = focused(); if (f) closeWin(f.id); });
     if (code === 'KeyF') return hit(() => toggleMono());
     if (code === 'Slash') return hit(() => toggleKeys());
+    if (code === 'Comma') return hit(() => (setEl.hidden ? openSettings() : closeSettings()));
     if (code === 'BracketLeft') return hit(() => { lastWs = cur; goWs((cur - 1 + WS_N) % WS_N); });
     if (code === 'BracketRight') return hit(() => { lastWs = cur; goWs((cur + 1) % WS_N); });
     if (code === 'Tab') return hit(() => { const t = lastWs; lastWs = cur; goWs(t); });
@@ -679,7 +797,7 @@
       const w = W[id]; if (w.app !== 'chats') continue;
       const el = winEl(id); if (!el) continue;
       const lp = el.querySelector(`[data-chats="${id}::list"]`);
-      if (lp && !lp.contains(document.activeElement)) CHATS.renderChatList(listWin(id), lp);
+      if (lp && !lp.contains(document.activeElement) && !CHATS.holdList(id + '::list')) CHATS.renderChatList(listWin(id), lp);
       if (w.thread) CHATS.loadThread(w);
       syncChatsPane(id);
     }
@@ -736,18 +854,35 @@
   }) : null;
   if (LINKS) window.WizLinks.intercept(document.body, LINKS);
   LIVE?.refresh();
-  {
-    const q = new URLSearchParams(location.search);
-    const sid = q.get('session'); if (sid) openThread(sid);
-    const open = q.get('open'); if (open) { const a = findApp(open) || APP[open]; if (a) openApp(a); }
-    if (sid || open) history.replaceState({ wux: 'guard' }, '', location.pathname);
-  }
+  /* Deep links (core/deeplink.js): ?session= opens the thread in a Chats window, ?view= a screen, ?video= the player.
+   * Back/Esc then walks thread → list → stays; the page is never left. */
+  C.deeplink.handle({
+    thread: sid => openThread(sid),
+    view(v, section) {
+      if (v === 'inbox') return openInbox();
+      if (v === 'apps') return openPalette();
+      if (v === 'settings' || v === 'usage') return openSettings();
+      if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); return toast('◇', 'Files isn’t on this Wizard', 1800); }
+      if (v === 'day' || v === 'week' || v === 'month') { const a = APP['v-' + v]; if (a?.url) return openApp(a); }
+      openApp(APP.wizard);
+      { const f = focused(); if (f?.app === 'chats' && f.thread) { CHATS.chatsBack(f); syncChatsPane(f.id); } }
+      const show = (tries = 50) => { const f = focused(); const sec = f && winEl(f.id)?.querySelector(`.pane-list [data-sec="${section}"]`); if (!sec) { if (tries > 0) setTimeout(() => show(tries - 1), 100); return; } if (!sec.classList.contains('open')) sec.querySelector('[data-sectoggle]')?.click(); winEl(f.id)?.querySelector(`.pane-list [data-sec="${section}"]`)?.scrollIntoView({ block: 'start' }); };
+      if (section) show();
+    },
+    app(id) { const a = findApp(id) || APP[id]; if (a) openApp(a); },
+    video: item => CHATS.KIT.viewer.open([item]),
+    toast,
+  });
+  C.deeplink.consume();
+  C.status?.attach({ openInbox, inboxOpen: () => !ib.hidden, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
   window.__wux = {
     get links() { return LINKS; },
     shell: 'desktop', get ws() { return ws; }, get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS,
     goWs, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openInbox, talk, ask, escStep, viewContext,
+    openFiles, openUsage, recordReply,
+    openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
 })();

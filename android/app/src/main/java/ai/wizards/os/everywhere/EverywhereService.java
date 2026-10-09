@@ -328,7 +328,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private boolean startForegroundSafe(boolean mic) {
         Notification n = new Notification.Builder(this, CH_RUNNING)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle(appRecording() && !listening ? ("paused".equals(appVoice) ? "Wizard OS recording paused" : "Wizard OS is recording")
+                .setContentTitle(appRecording() && !listening ? (nativeTake() ? "Floating orb shows your recording" : "paused".equals(appVoice) ? "Wizard OS recording paused" : "Wizard OS is recording")
                         : listening ? (dictating ? "Typing what you say…" : "Listening…") : "Wizard Everywhere is on")
                 .setContentText(appRecording() && !listening ? "Tap the orb to send, or open Wizard OS"
                         : listening ? "Tap the orb to finish"
@@ -383,7 +383,15 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     /** The app's recording is being shown on this orb (Wizard OS is in the background). */
     private boolean carrying() { return appRecording() && !listening && !appInFront && !surfaceInFront; }
 
-    private boolean micInUse() { return listening || appRecording(); }
+    /**
+     * 0.7.0: an in-app take is recorded by the app's own microphone service (recording/RecorderService), which
+     * keeps it with the screen off, in the background and across an app kill. Then this service only mirrors it
+     * (timer, Pause, Cancel, tap to send — all driven through the page, which drives that one recorder) and must
+     * not claim the microphone itself. Browsers/older pages without the native recorder still record in the
+     * WebView, and this service keeps them alive as before.
+     */
+    static boolean nativeTake() { return ai.wizards.os.recording.RecorderService.active() != null; }
+    private boolean micInUse() { return listening || (appRecording() && !nativeTake()); }
 
     private void onAppVoice() {
         Log.i(TAG, "app voice " + (appVoice == null ? "stopped" : appVoice) + " elapsed=" + appVoiceElapsed + " appInFront=" + appInFront);
@@ -746,6 +754,14 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         buzz(12);
         if (carrying()) { remote("send"); return; }
         if (listening) { finish(); return; }
+        if (nativeTake()) {
+            // One take, one microphone: an in-app recording is still going (the app's window is gone, so the orb
+            // can't drive it). Open Wizard OS, which picks that take back up, instead of starting a second one.
+            Log.i(TAG, "native take running; opening the app instead of a second recording");
+            toast("Your recording is still going in Wizard OS");
+            try { openApp(this, null, 5).send(); } catch (PendingIntent.CanceledException ignored) { }
+            return;
+        }
         WizardKeyboardService k = WizardKeyboardService.get();
         boolean dictate = KeyboardSignal.dictate(k != null && k.inputActiveNow(), keyboardOpen);
         start(dictate);

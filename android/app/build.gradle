@@ -15,10 +15,12 @@ android {
         applicationId 'ai.wizards.os'
         minSdk 28
         targetSdk 35
-        versionCode 13
-        versionName '0.7.2'
+        versionCode 14
+        versionName '0.8.0'
         buildConfigField 'String', 'HOME_URL', '"https://private.wizard001.com/wizard-os-home/"'
         buildConfigField 'String', 'ORIGIN', '"https://private.wizard001.com"'
+        // The one certificate (SHA-256) an in-app update must be signed with: the Wizard OS release key.
+        buildConfigField 'String', 'UPDATE_SIGNER', '"3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd"'
     }
 
     buildFeatures {
@@ -44,10 +46,30 @@ android {
             // QA build: installs beside the real app (own id) and allows WebView inspection over adb.
             applicationIdSuffix '.qa'
             versionNameSuffix '-qa'
+            // QA builds pin their own debug key at runtime (each Thales build job has its own; see Updater.pinnedSigner).
+            buildConfigField 'String', 'UPDATE_SIGNER', '""'
         }
         release {
             minifyEnabled false
             if (wosSigningReady) signingConfig signingConfigs.release
+        }
+        // QA fixture for the in-app update test only (built with :app:assembleQanext next to assembleDebug):
+        // the QA app again, same debug key, but a far higher version, so the updater has a real newer APK to verify.
+        qanext {
+            initWith debug
+            applicationIdSuffix '.qa'
+            versionNameSuffix '-qanext'
+            signingConfig signingConfigs.debug
+            matchingFallbacks = ['debug']
+        }
+        // Second update fixture (built with :app:assembleQalater): newer again than qanext (versionCode 9100+N),
+        // so the silent-update QA can publish a second update after Wizard OS installed the first one itself.
+        qalater {
+            initWith debug
+            applicationIdSuffix '.qa'
+            versionNameSuffix '-qalater'
+            signingConfig signingConfigs.debug
+            matchingFallbacks = ['debug']
         }
     }
 
@@ -62,6 +84,15 @@ android {
         textReport true
         // A WebView shell over James's private Wizard OS web app with one small native bridge.
         disable 'SetJavaScriptEnabled', 'JavascriptInterface', 'OldTargetApi', 'GradleDependency', 'AndroidGradlePluginVersion', 'MonochromeLauncherIcon'
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType('qanext')) { v ->
+        v.outputs.each { it.versionCode.set(9000 + (it.versionCode.getOrElse(0) ?: 0)) }
+    }
+    onVariants(selector().withBuildType('qalater')) { v ->
+        v.outputs.each { it.versionCode.set(9100 + (it.versionCode.getOrElse(0) ?: 0)) }
     }
 }
 

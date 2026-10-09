@@ -22,7 +22,7 @@ async function ctxFor(b, kind) {
     const q = r.request(), u = q.url();
     if (q.method() !== 'GET' && q.method() !== 'HEAD' && /\/(wizard\/|wizard-os-home\/api\/)/.test(u)) {
       writes.push({ m: q.method(), u: u.replace(/^https?:\/\/[^/]+/, '') });
-      if (/api\/transcribe$/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'qa voice words', ms: 5 }) });
+      if (/api\/transcribe$|\/wizard\/voice\/transcribe$/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'qa voice words', ms: 5 }) });
       if (/\/wizard\/files\/upload$/.test(u)) return r.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ file: { id: 'drop_qa' + writes.length, filename: 'voice.webm', mime: 'audio/webm', bytes: 2000 } }) });
       if (/\/api\/sessions$/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ session: { id: 'qa-fake-session' } }) });
       if (/\/v1\/runs$/.test(u)) return r.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ run_id: 'qa-fake-run', status: 'queued' }) });
@@ -123,7 +123,7 @@ async function ctxFor(b, kind) {
   await p.keyboard.press('Alt+Digit1'); await sleep(300);
 
   // Three windows: master + stack.
-  await p.evaluate(() => { __wux.openApp(__wux.wins && window.WizCore.apps('desktop').APP.reader); __wux.openApp(window.WizCore.apps('desktop').APP.files); });
+  await p.evaluate(() => { const A = window.WizCore.apps('desktop').APP; __wux.openApp(A.wisdom || A.reader); __wux.openApp(A.files); });
   await sleep(400);
   const three = await p.evaluate(() => [...document.querySelectorAll('.wsp:not([hidden]) .win:not(.gone)')].map(w => { const r = w.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; }));
   ok(three.length === 3 && three[0][3] > three[1][3] * 1.8 && three[1][0] === three[2][0] && three[2][1] > three[1][1], 'tiling: 3 windows = master left, stack right', JSON.stringify(three));
@@ -192,8 +192,8 @@ async function ctxFor(b, kind) {
   const orb2 = await p.evaluate(() => new Promise(res => { addEventListener('wizard:orb-state', e => res(e.detail.state), { once: true }); dispatchEvent(new CustomEvent('wizard:orb', { detail: { action: 'toggle' } })); setTimeout(() => res('timeout'), 3000); }));
   ok(orb2 === 'sent', 'bridge: second wizard:orb → sent', orb2);
   await sleep(800);
-  await p.evaluate(() => dispatchEvent(new CustomEvent('wizard:open', { detail: { path: '/meetings/' } }))); await sleep(400);
-  ok(await p.evaluate(() => document.querySelector('.win.focus .wbar .t')?.textContent) === 'Mizel', 'bridge: wizard:open /meetings/ opens Mizel');
+  await p.evaluate(() => dispatchEvent(new CustomEvent('wizard:open', { detail: { path: '/mizel-live/' } }))); await sleep(400);
+  ok(/^Mizel/.test(await p.evaluate(() => document.querySelector('.win.focus .wbar .t')?.textContent) || ''), 'bridge: wizard:open /mizel-live/ opens Mizel');
   await p.evaluate(id => dispatchEvent(new CustomEvent('wizard:open', { detail: { path: '/wizard/?session=' + encodeURIComponent(id) } })), firstId); await sleep(600);
   ok(await p.evaluate(id => Object.values(__wux.wins).some(w => w.app === 'chats' && w.thread === id) && document.querySelector('.win.focus')?.querySelector('.dchats') != null, firstId), 'bridge: wizard:open ?session= opens that thread');
   await p.evaluate(() => { const ta = document.querySelector('.win.focus .pane-main textarea'); ta.value = 'hello '; ta.focus(); ta.setSelectionRange(6, 6); });

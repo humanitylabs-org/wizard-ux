@@ -1,0 +1,109 @@
+/* Wizard UX core: search inside message bodies, not just titles (feature/chat-polish). Both shells.
+ *
+ * Wizard has no full-text endpoint, so titles and previews filter instantly (core/chats.js) and this reads
+ * recent threads' messages lazily to find body hits:
+ *   - newest threads first, a page of their latest messages each (LIMIT), BATCH threads per round,
+ *     at most CONC requests at once; "Search older threads" extends the round by another BATCH
+ *   - a thread's text is cached until its message count / activity changes (LRU, CACHE_N threads)
+ *   - typing a new query cancels the in-flight round (AbortController); clearing the box cancels it too
+ *   - every hit carries a snippet around the first match, highlighted with <mark>
+ * API (per Chats list window id):
+ *   WizCore.chatSearch.query(wid, q, onUpdate) → { hits: Map(id → {snippet, html}), state }   (starts / reuses a scan)
+ *   WizCore.chatSearch.more(wid)    search another BATCH of older threads
+ *   WizCore.chatSearch.cancel(wid)
+ */
+(() => {
+  'use strict';
+  const C = window.WizCore = window.WizCore || {};
+  const BATCH = 30, LIMIT = 200, CONC = 4, CACHE_N = 150, MAX_SCAN = 300;
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const cache = new Map(); // id → { sig, texts: [string] }
+  const runs = {};         // wid → { q, want, scanned, hits, ctrl, done, busy, onUpdate, stats }
+  const stats = { fetches: 0, aborted: 0 };
+  const base = () => { try { return (window.WizConfig?.endpoint('sessions')) || '/wizard/hermes/api/sessions'; } catch (e) { return '/wizard/hermes/api/sessions'; } };
+  const sigOf = s => [s.messageCount ?? '', s.activityAt || '', s.lastAssistantAt || '', s.updatedAt || ''].join('|');
+  const words = q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+
+  async function textsOf(s, signal) {
+    const sig = sigOf(s), hit = cache.get(s.id);
+    if (hit && hit.sig === sig) { cache.delete(s.id); cache.set(s.id, hit); return hit.texts; }
+    stats.fetches++;
+    const r = await fetch(`${base()}/${encodeURIComponent(s.id)}/messages?order=latest&limit=${LIMIT}&view=wizard`, { credentials: 'same-origin', cache: 'no-store', signal });
+    if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status });
+    const p = await r.json();
+    const rows = p.data || p.messages || p.items || [];
+    const KIT = window.WosChat;
+    const texts = [];
+    try {
+      for (const t of KIT.parseRows(rows)) { if (t.u?.text) texts.push(t.u.text); for (const n of t.notes || []) texts.push(n); if (t.a?.text) texts.push(t.a.text); }
+    } catch (e) {}
+    cache.set(s.id, { sig, texts });
+    while (cache.size > CACHE_N) cache.delete(cache.keys().next().value);
+    return texts;
+  }
+  // The snippet: ~40 characters either side of the first word's first match in the first text that has every word.
+  function match(texts, ws) {
+    for (let i = texts.length - 1; i >= 0; i--) { // newest first
+      const raw = String(texts[i] || '').replace(/\s+/g, ' '), low = raw.toLowerCase();
+      if (!ws.every(w => low.includes(w))) continue;
+      const at = low.indexOf(ws[0]);
+      const from = Math.max(0, at - 40), to = Math.min(raw.length, at + ws[0].length + 60);
+      const piece = raw.slice(from, to);
+      const re = new RegExp(ws.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi');
+      let html = '', last = 0, m;
+      while ((m = re.exec(piece))) { html += esc(piece.slice(last, m.index)) + '<mark>' + esc(m[0]) + '</mark>'; last = m.index + m[0].length; if (!m[0]) re.lastIndex++; }
+      html += esc(piece.slice(last));
+      return { snippet: (from > 0 ? '…' : '') + piece + (to < raw.length ? '…' : ''), html: (from > 0 ? '…' : '') + html + (to < raw.length ? '…' : '') };
+    }
+    return null;
+  }
+  function candidates() {
+    const L = window.WizLive; if (!L?.ok) return [];
+    const at = s => Date.parse(L.cardAt ? L.cardAt(s) : s.updatedAt) || 0;
+    return L.sessions.filter(s => !s.hidden && !s.optimistic && s.id && !String(s.id).startsWith('wizard_pending_')).sort((a, b) => at(b) - at(a));
+  }
+  async function pump(wid, r) {
+    if (r.busy) return; r.busy = true;
+    const ws = words(r.q), list = candidates();
+    try {
+      while (!r.ctrl.signal.aborted && r.scanned < Math.min(r.want, list.length)) {
+        const slice = list.slice(r.scanned, Math.min(r.want, list.length, r.scanned + CONC));
+        await Promise.all(slice.map(async s => {
+          try { const m = match(await textsOf(s, r.ctrl.signal), ws); if (m) r.hits.set(s.id, m); }
+          catch (e) { if (e.name === 'AbortError') throw e; r.errors++; }
+        }));
+        r.scanned += slice.length;
+        if (!r.ctrl.signal.aborted) r.onUpdate?.();
+      }
+    } catch (e) { if (e.name === 'AbortError') stats.aborted++; }
+    finally { r.busy = false; }
+    r.total = list.length;
+    if (!r.ctrl.signal.aborted) r.onUpdate?.();
+  }
+  function cancel(wid) { const r = runs[wid]; if (r) { r.ctrl.abort(); delete runs[wid]; } }
+  C.chatSearch = {
+    query(wid, q, onUpdate) {
+      const ws = words(q);
+      if (!ws.length || ws.join(' ').length < 2) { cancel(wid); return null; }
+      let r = runs[wid];
+      if (!r || r.q !== ws.join(' ')) {
+        cancel(wid);
+        r = runs[wid] = { q: ws.join(' '), want: BATCH, scanned: 0, total: candidates().length, hits: new Map(), ctrl: new AbortController(), busy: false, errors: 0, onUpdate };
+        // Wait for the typing to settle before reading anything.
+        setTimeout(() => { if (runs[wid] === r) pump(wid, r); }, 250);
+      } else r.onUpdate = onUpdate;
+      return r;
+    },
+    more(wid) { const r = runs[wid]; if (!r) return; r.want = Math.min(MAX_SCAN, r.want + BATCH); pump(wid, r); },
+    cancel,
+    /* One line under the results: progress, the cap, and the button for older threads. */
+    footer(r) {
+      if (!r) return '';
+      const total = Math.min(r.total || candidates().length, MAX_SCAN), upto = Math.min(r.want, total);
+      if (r.busy || r.scanned < upto) return `<div class="ch-bodysearch busy" data-chbs="busy"><span class="wx-spin" aria-hidden="true"></span>Searching messages · ${r.scanned} of ${upto} recent threads</div>`;
+      const n = r.hits.size, more = upto < total;
+      return `<div class="ch-bodysearch" data-chbs="done">Searched messages in the ${r.scanned} most recent threads${n ? ` · ${n} with matches` : ''}${more ? ` <button type="button" data-chbsmore>Search older threads</button>` : ''}</div>`;
+    },
+    get stats() { return { ...stats, cached: cache.size, runs: Object.fromEntries(Object.entries(runs).map(([k, r]) => [k, { q: r.q, scanned: r.scanned, want: r.want, hits: [...r.hits.keys()], busy: r.busy }])) }; },
+  };
+})();

@@ -33,7 +33,7 @@ const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else {
   const fr = () => p.frames().find(f => /\/wizard\/(\?|#|$)/.test(f.url()));
   ok(!!fr(), 'Legacy Wizard opens in a Wizard OS window');
   const panel = () => fr().evaluate(() => document.querySelector('.chat-panel')?.classList.contains('open'));
-  const shell = () => p.evaluate(() => { const fid = Object.values(__wos.wins).find(w => w.app === 'frame')?.id; return { idx: __wos.idx, full: __wos.desks[__wos.idx].full, focus: __wos.desks[__wos.idx].focus === fid, open: !!fid, toast: document.querySelector('#toast.show')?.innerText || '' }; });
+  const shell = () => p.evaluate(() => { const fid = Object.values(__wos.wins).find(w => w.app === 'frame' && w.appId === 'legacy-wizard')?.id; return { idx: __wos.idx, full: __wos.desks[__wos.idx].full, focus: __wos.desks[__wos.idx].focus === fid, open: !!fid, toast: document.querySelector('#toast.show')?.innerText || '' }; });
   const back = async () => { const r = await p.evaluate(() => window.__wosNativeBack()); await p.waitForTimeout(700); return r; };
   const openThread = async () => { await fr().locator('.chat-card:visible').first().tap(); await p.waitForTimeout(2000); return panel(); };
 
@@ -46,7 +46,7 @@ const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else {
   await back(); ok(!(await panel()), 'Back again lands on the list (repeatable)');
 
   // 2. Full screen: thread → list → tile → Home, one step per press.
-  await p.evaluate(() => { const fid = Object.values(__wos.wins).find(w => w.app === 'frame').id; __wos.setFull(fid, true); }); await p.waitForTimeout(600);
+  await p.evaluate(() => { const fid = Object.values(__wos.wins).find(w => w.app === 'frame' && w.appId === 'legacy-wizard').id; __wos.setFull(fid, true); }); await p.waitForTimeout(600);
   ok(await openThread(), 'full screen: open a Legacy thread');
   await back(); s = await shell(); ok(!(await panel()) && s.full, 'full screen: Back → thread list, still full screen', JSON.stringify(s));
   await back(); s = await shell(); ok(!s.full && s.open, 'full screen: Back at the Legacy root → tiled, app still open', JSON.stringify(s));
