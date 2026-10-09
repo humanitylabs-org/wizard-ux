@@ -1704,7 +1704,32 @@
   const EXIT_MS = 2000;
   let exitUntil = 0, exitT = 0, guardOn = false, ignorePop = 0;
   const watchers = new Set();
-  function backStep() {
+  // A hosted app that keeps its screens in app state (Legacy Wizard: thread → list, viewers, sheets) has no frame
+  // history to walk. It exposes its own Back as window.__wizardCloseOverlay() — the hook its Android app calls.
+  // That hook answers true even at its own root, so the shell compares a small layout signature after React
+  // settles: if nothing moved, the press was a no-op in the app and the shell takes the step instead.
+  function frameSig(win) {
+    try { const d = win.document; return [win.location.href, d.querySelectorAll('[role="dialog"],[aria-modal="true"],.open').length,
+      [...d.querySelectorAll('h1,[aria-label^="Back"]')].map(e => e.getAttribute('aria-label') || e.textContent).join('|')].join('#'); } catch (e) { return ''; }
+  }
+  function hostedBack(f) {
+    let win; try { win = winEl(f.id)?.querySelector('iframe')?.contentWindow; } catch (e) { return null; }
+    let hook; try { hook = win && win.__wizardCloseOverlay; } catch (e) { return null; }
+    if (typeof hook !== 'function') return null;
+    const before = frameSig(win);
+    let r; try { r = hook.call(win); } catch (e) { return null; }
+    if (r === false) return null;
+    const fid = f.id;
+    setTimeout(() => {
+      if (frameSig(win) !== before) return;
+      // The app was already at its root: take the shell step now (without asking the app again).
+      const did = backStep(fid);
+      window.__backLog = (window.__backLog || []).concat('hosted-noop:' + (did || 'root')).slice(-30);
+      if (!did) toast('⌂', "You're home", 1200);
+    }, 180);
+    return 'hosted';
+  }
+  function backStep(skipHosted) {
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
     if (document.querySelector('#txChips [data-handoff]')) { $('#txChips').innerHTML = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
@@ -1714,6 +1739,7 @@
     const d = desks[idx], f = W[d.focus];
     if (f) {
       if (f.app === 'chats' && f.thread) { chatsBack(f); return 'thread'; }
+      if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
       if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { nav.back(); return 'frame'; } }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }
       if (d.full) { setFull(f.id, false); return 'tile'; }
