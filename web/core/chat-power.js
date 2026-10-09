@@ -210,7 +210,7 @@ window.WosChatPower = function chatPower(A) {
         + `<button type="button" class="ghost" data-attdismiss="${esc(a.id)}" ${E.busy.has(a.id) ? 'disabled' : ''}>${E.busy.get(a.id) === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`).join('')
       + vf.map(it => {
         const sure = confirmDel.id === it.id && Date.now() - confirmDel.at < 4000;
-        return `<div class="ch-err voice" data-errob="${esc(it.id)}"><div class="ch-err-t"><b>${A.MIC_SVG}Voice note${it.text ? ` · ${esc(clip(it.text, 60))}` : ''}</b><small>Not sent · ${esc(it.error || 'Wizard didn’t take it')}</small></div><div class="ch-err-b">`
+        return `<div class="ch-err ch-err-vn" data-errob="${esc(it.id)}"><div class="ch-err-t"><b>${A.MIC_SVG}Voice note${it.text ? ` · ${esc(clip(it.text, 60))}` : ''}</b><small>Not sent · ${esc(it.error || 'Wizard didn’t take it')}</small></div><div class="ch-err-b">`
           + `<button type="button" data-obretry="${esc(it.id)}">Retry</button><button type="button" class="ghost${sure ? ' warn' : ''}" data-obdismiss="${esc(it.id)}">${sure ? 'Delete recording?' : 'Dismiss'}</button></div></div>`;
       }).join('');
     return { n: att.length + vf.length, html };

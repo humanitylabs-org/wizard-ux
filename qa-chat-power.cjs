@@ -60,7 +60,7 @@ const FIX = {
     row('tool', '{"ok":true}', now - 150, { tool_call_id: 'l1', plan: PLAN3(['completed', 'in_progress', 'pending']) }),
     row('assistant', '', now - 140, { tool_calls: [call('l2', 'Ask a question', { question: { text: 'Window or aisle seat?', choices: ['Window', 'Aisle'], state: 'waiting' } })] }),
   ] },
-  qa_pw_long: { title: 'QA power long', status: 'completed', t: now - 70, rows: () => { const r = []; for (let k = 0; k < 120; k++) { r.push(row('user', `Question number ${k}`, now - 86400 * 2 + k * 600)); r.push(row('assistant', `Answer number ${k}\n\nwith a second paragraph so the thread is tall enough to scroll.`, now - 86400 * 2 + k * 600 + 60)); } return r; } },
+  qa_pw_long: { title: 'QA power long', status: 'completed', t: now - 70, rows: () => { const r = []; for (let k = 0; k < 120; k++) { r.push(row('user', `Question number ${k}`, now - 86400 * 2 + k * 600)); r.push(row('assistant', k === 119 ? Array.from({ length: 30 }, (_, j) => `Final answer paragraph ${j} with enough words to wrap onto a second line on a phone.`).join('\n\n') : `Answer number ${k}\n\nwith a second paragraph so the thread is tall enough to scroll.`, now - 86400 * 2 + k * 600 + 60)); } return r; } },
 };
 function fixSession(id) {
   const f = FIX[id], rows = f.rows(), last = rows[rows.length - 1], lastU = [...rows].reverse().find(r => r.role === 'user');
@@ -146,6 +146,8 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
   }
   const S = async sel => `[data-chats="${await wid()}"] ${sel}`;
   const sheetOpen = () => p.evaluate(() => !!document.querySelector('.ch-psheet'));
+  // Scroll only the nearest scroller (scrollIntoView would also shift the phone shell itself).
+  const reveal = (sel, where = 'center') => p.evaluate(([sel, where]) => { const el = document.querySelector(sel); if (!el) return false; let sc = el.parentElement; while (sc && !/(auto|scroll)/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement; if (!sc) return false; const r = el.getBoundingClientRect(), bb = sc.getBoundingClientRect(); sc.scrollTop += where === 'start' ? r.top - bb.top - 40 : (r.top + r.height / 2) - (bb.top + bb.height / 2); return true; }, [sel, where]);
 
   await p.goto(URL_, { waitUntil: 'domcontentloaded' });
   await p.waitForFunction(() => window.__wos?.live?.ok && window.__wos.live.session('qa_pw_ready'), null, { timeout: 90000 }).catch(() => {});
@@ -221,7 +223,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await openThread('qa_pw_fail');
     const fp = await p.evaluate(sel => { const f = document.querySelector(sel); return f && { text: f.textContent, btns: [...f.querySelectorAll('button')].map(b => b.textContent.trim()), dis: [...f.querySelectorAll('button')].map(b => b.disabled) }; }, await S('.ch-fail'));
     ok(fp && fp.btns.join('|') === 'Retry|Choose another model|Dismiss' && !fp.dis.some(Boolean) && /Opus/.test(fp.text), '#11 phone: a failed thread shows Retry / Choose another model / Dismiss and its model', fp);
-    await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'center' }), await S('.ch-fail')); await sleep(200);
+    await reveal(await S('.ch-fail')); await sleep(200);
     await p.screenshot({ path: `${OUT}/phone-02-failed-thread.png` });
     const n0 = writes.length;
     await p.click(await S('[data-chretry]'));
@@ -262,7 +264,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     const es = await p.evaluate(sel => { const s = document.querySelector(sel); if (!s) return null; return { n: s.querySelector('.ch-sec-h small')?.textContent, rows: [...s.querySelectorAll('[data-errsid]')].map(x => x.dataset.errsid), att: [...s.querySelectorAll('[data-errattn]')].map(x => x.dataset.errattn), retryAtt: !!s.querySelector('[data-attretry="qa_att_retry"]'), retryNo: !!s.querySelector('[data-attretry="qa_att_dismiss"]') }; }, L);
     ok(es && es.rows.includes('qa_pw_fail3') && es.rows.includes('qa_pw_fail4') && !es.rows.includes('qa_pw_fail2'), '#12 phone: Errors lists failed threads (a dismissed one stays out)', es);
     ok(es && es.att.join(',') === 'qa_att_retry,qa_att_dismiss' && es.retryAtt && !es.retryNo, '#12 phone: Errors lists failed background work; Retry only where Wizard allows it', es);
-    await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), L); await sleep(200);
+    await reveal(L, 'start'); await sleep(200);
     await p.screenshot({ path: `${OUT}/phone-04-errors-section.png` });
     let n0 = writes.length;
     await p.click(`${L} [data-errretry="qa_pw_fail3"]`);
@@ -330,10 +332,14 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     const vrow = await p.evaluate(([sel, id]) => { const r = document.querySelector(`${sel} [data-errob="${id}"]`); return r && r.textContent; }, [L, failed]);
     ok(vrow && /Voice note/.test(vrow) && /Not sent/.test(vrow), '#12 phone: the failed voice note shows in Errors', vrow);
     failUpload = false;
+    // The list's first rows: scroll every scroller back to the top so no sticky header sits over the button.
+    await p.evaluate(sel => { let el = document.querySelector(sel); while (el) { if (el.scrollTop) el.scrollTop = 0; el = el.parentElement; } document.scrollingElement.scrollTop = 0; }, `${L} [data-errob="${failed}"]`); await sleep(250);
+    const hit = await p.evaluate(sel => { const b = document.querySelector(sel), r = b.getBoundingClientRect(); return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === b; }, `${L} [data-errob="${failed}"] [data-obretry]`);
+    ok(hit, '#12 phone: the voice note row sits in the Errors list, its Retry not covered (no clash with the orb’s .voice layer)');
     await p.click(`${L} [data-errob="${failed}"] [data-obretry]`);
     const vr3 = await until(() => runsTo('qa_pw_other', n2)[0], 15000);
     ok(vr3 && vr3.input === 'QA voice reply words', '#12 phone: Retry on a failed voice note delivers it to its thread', vr3);
-  } catch (e) { ok(false, '#13 composer mic section crashed', String(e).split('\n')[0]); failUpload = false; }
+  } catch (e) { await p.screenshot({ path: `${OUT}/fail-13.png` }).catch(() => {}); ok(false, '#13 composer mic section crashed', String(e).split('\n').slice(0, 6).join(' / ')); failUpload = false; }
 
   /* ===== #17 work receipt ===== */
   try {
@@ -345,7 +351,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     ok(body && body.steps.join('|') === 'Read the calendar|Draft the summary|Ask which week' && body.times.every(t => /^\d+(s|m)/.test(t)), '#17 phone: opening it lists the named steps with durations', body);
     ok(body && body.plan.length === 3 && /^completed:.*Read the calendar/.test(body.plan[0]) && /^pending:.*Send it to the team/.test(body.plan[2]), '#17 phone: the plan checklist shows each item’s state', body?.plan);
     ok(body && /You answered/.test(body.q) && /Which week should I plan\?/.test(body.q) && /Next week/.test(body.q), '#17 phone: an answered question shows the question and the answer', body?.q);
-    await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await S('details.wk')); await sleep(200);
+    await reveal(await S('details.wk'), 'start'); await sleep(200);
     await p.screenshot({ path: `${OUT}/phone-06-work-receipt.png` });
     await openThread('qa_pw_live');
     await p.waitForFunction(() => document.querySelector('[data-chats] details.wk.live'), null, { timeout: 8000 }).catch(() => {});
@@ -375,7 +381,8 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     const back1 = await p.evaluate(sel => document.querySelector(sel).scrollTop, await S('.ch-msgs'));
     ok(Math.abs(back1 - mid) < 30, '#18 phone: reopening within the hour returns to the same place', { back1, mid });
     await p.click(await S('[data-chlatest]'));
-    await sleep(1200);
+    await until(async () => p.evaluate(sel => { const nb = document.querySelector(sel); return nb.scrollHeight - nb.scrollTop - nb.clientHeight < 10; }, await S('.ch-msgs')), 4000);
+    await sleep(300);
     const end = await p.evaluate(sel => { const nb = document.querySelector(sel); return { gap: nb.scrollHeight - nb.scrollTop - nb.clientHeight, hidden: document.querySelector(sel.replace('.ch-msgs', '[data-chlatest]')).hidden }; }, await S('.ch-msgs'));
     ok(end.gap < 10 && end.hidden, '#18 phone: “↓ Latest” jumps to the bottom and hides', end);
     // Older than an hour: forgotten.
@@ -438,7 +445,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     ok(got.some(g => /Resets in|Awaiting reset/.test(g.reset)), '#24 phone: each row says when it resets', got.map(g => g.reset));
     const tz = await p.evaluate(() => document.querySelector('#settingsBody [data-usage]').textContent);
     ok(tz.includes(await p.evaluate(() => WizConfig.timeZone())), '#24 phone: reset times use the owner’s time zone from WizConfig');
-    await p.evaluate(() => document.querySelector('#settingsBody [data-usage]').scrollIntoView({ block: 'start' })); await sleep(250);
+    await reveal('#settingsBody [data-usage]', 'start'); await sleep(250);
     await p.screenshot({ path: `${OUT}/phone-11-ai-usage.png` });
     await back();
     ok(await p.evaluate(() => __wos.sheet === null), '#24 phone: Back closes Settings');
@@ -454,7 +461,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     ok((await thread()) === null, 'Back 2: thread → list');
     await back(); await back();
     ok(await p.evaluate(() => !!window.__wos) && !p.isClosed(), 'Back at Home never leaves the app');
-  } catch (e) { ok(false, 'Back section crashed', String(e).split('\n')[0]); }
+  } catch (e) { await p.screenshot({ path: `${OUT}/fail-back.png` }).catch(() => {}); ok(false, 'Back section crashed', String(e).split('\n').slice(0, 6).join(' / ')); }
 
   /* =============================== DESKTOP =============================== */
   try {
@@ -477,7 +484,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     const esc = async () => { await d.keyboard.press('Escape'); await sleep(400); };
     const lastEsc = () => d.evaluate(() => (window.__wuxLog || []).slice(-1)[0] || '');
     await d.waitForFunction(() => window.WosModels?.ready, null, { timeout: 15000 }).catch(() => {});
-    await dOpen('qa_pw_other');
+    await dOpen('qa_pw_ready');
     const chip = await d.evaluate(() => document.querySelector('.pane-main [data-chmodel]')?.textContent.trim() || null);
     ok(chip && /^Opus/.test(chip), '#11 desktop: the thread header shows the model chip', chip);
     await d.click('.pane-main [data-chmodel]'); await sleep(400);
@@ -486,11 +493,11 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     const pick = await d.evaluate(() => { const rows = [...document.querySelectorAll('.ch-psheet [data-mpick]')]; const i = rows.findIndex(x => !x.classList.contains('on')); const o = WosModels.visible('claude-opus-5-5', 'anthropic')[+rows[i].dataset.mpick]; return { i, value: o.value }; });
     let n0 = writes.length;
     await d.click(`.ch-psheet [data-mpick="${pick.i}"]`);
-    const mw = await until(() => writes.slice(n0).find(w => w.p === '/wizard/hermes/api/sessions/qa_pw_other/model'));
+    const mw = await until(() => writes.slice(n0).find(w => w.p === '/wizard/hermes/api/sessions/qa_pw_ready/model'));
     ok(mw && JSON.parse(mw.body).model === pick.value, '#11 desktop: picking sends POST /api/sessions/:id/model with the chosen id (intercepted)', { pick, body: mw?.body });
     await d.click('.pane-main [data-chmodel]'); await sleep(300);
     await esc();
-    ok(!(await d.evaluate(() => !!document.querySelector('.ch-psheet'))) && (await dThread()) === 'qa_pw_other', '#11 desktop: Esc closes the picker and keeps the thread', await lastEsc());
+    ok(!(await d.evaluate(() => !!document.querySelector('.ch-psheet'))) && (await dThread()) === 'qa_pw_ready', '#11 desktop: Esc closes the picker and keeps the thread', await lastEsc());
 
     await dOpen('qa_pw_work');
     await d.click('.pane-main details.wk summary'); await sleep(300);

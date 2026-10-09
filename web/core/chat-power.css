@@ -5,6 +5,10 @@
 .ch-model { display: inline-flex; align-items: center; gap: 3px; max-width: 46vw; padding: 0 6px; margin-left: 2px; height: 18px; border-radius: 9px; font: inherit; font-size: 11.5px; font-weight: 650; color: var(--violet-2); background: rgba(143, 99, 255, .12); vertical-align: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: auto; }
 .ch-model i { font-style: normal; font-size: 8px; opacity: .7; }
 .ch-head .ti small { pointer-events: auto; }
+/* the subtitle gives way, the chip never does: it stays tappable however long the subtitle is */
+.ch-head .ti small.ch-subm { display: flex; align-items: center; gap: 4px; overflow: visible; }
+.ch-subm .ch-subt { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-subm .ch-model { flex: 0 0 auto; max-width: 42vw; }
 /* the picker sheet */
 .ch-msheet .ch-sheet-b, .ch-files .ch-sheet-b { max-height: 78%; display: flex; flex-direction: column; }
 .msheet-list { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
@@ -29,8 +33,8 @@
 /* #12 Errors section rows */
 .ch-err { padding: 0 0 10px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
 .ch-err .ch-err-b { padding: 0 12px; }
-.ch-err.att, .ch-err.voice { padding: 10px 12px; }
-.ch-err.att .ch-err-b, .ch-err.voice .ch-err-b { padding: 0; }
+.ch-err.att, .ch-err.ch-err-vn { padding: 10px 12px; }
+.ch-err.att .ch-err-b, .ch-err.ch-err-vn .ch-err-b { padding: 0; }
 .ch-err-t { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
 .ch-err-t b { display: flex; align-items: center; gap: 6px; font-size: 14.5px; font-weight: 650; color: var(--ink); }
 .ch-err-t b svg { width: 15px; height: 15px; fill: none; stroke: var(--ink-2); stroke-width: 2; }
