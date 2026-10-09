@@ -420,7 +420,11 @@ public final class Updater {
         PackageInstaller.SessionParams p = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
         p.setAppPackageName(app.getPackageName());
         p.setSize(f.length());
-        if (Build.VERSION.SDK_INT >= 31) p.setRequireUserAction(UpdatePolicy.requireUserAction(Build.VERSION.SDK_INT));
+        int ua = UpdatePolicy.requireUserAction(Build.VERSION.SDK_INT);
+        // QA builds only: files/qa_update_confirm.txt forces Android's confirm (USER_ACTION_REQUIRED = 1), so the emulator
+        // exercises STATUS_PENDING_USER_ACTION → EXTRA_INTENT and a cancelled confirm like an older phone would.
+        if (BuildConfig.DEBUG && new File(app.getFilesDir(), "qa_update_confirm.txt").isFile()) ua = 1;
+        if (Build.VERSION.SDK_INT >= 31) p.setRequireUserAction(ua);
         int id = -1;
         try {
             id = pi.createSession(p);
@@ -439,11 +443,12 @@ public final class Updater {
                     set("error", "message", "The download changed after it was checked");
                     return;
                 }
-                prefs(app).edit().putInt("relaunch", relaunch ? r.versionCode : 0).apply();
+                // commit(), not apply(): Android kills this process as soon as the new version is in.
+                prefs(app).edit().putInt("relaunch", relaunch ? r.versionCode : 0).commit();
                 Intent i = new Intent(app, InstallReceiver.class).setAction(ACTION_STATUS).putExtra(EXTRA_VC, r.versionCode);
                 int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
                 PendingIntent cb = PendingIntent.getBroadcast(app, id, i, flags);
-                Log.i(TAG, "session " + id + " commit " + r.versionName + " (" + r.versionCode + ") requireUserAction=" + UpdatePolicy.requireUserAction(Build.VERSION.SDK_INT)
+                Log.i(TAG, "session " + id + " commit " + r.versionName + " (" + r.versionCode + ") requireUserAction=" + ua
                         + " installer=" + installerOfRecord(app));
                 s.commit(cb.getIntentSender());
             }
@@ -484,7 +489,7 @@ public final class Updater {
     static void onReplaced(Context c) {
         SharedPreferences p = prefs(c);
         int want = p.getInt("relaunch", 0);
-        p.edit().putInt("relaunch", 0).remove("noticed").remove("rejected").remove("rejectedWhy").apply();
+        p.edit().putInt("relaunch", 0).remove("noticed").remove("rejected").remove("rejectedWhy").commit();
         UpdateJob.schedule(c);
         Log.i(TAG, "replaced; now " + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ") installer=" + installerOfRecord(c) + " relaunch=" + want);
         if (want <= 0) return;

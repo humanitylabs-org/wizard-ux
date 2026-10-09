@@ -16,8 +16,10 @@ Checks
      (forced with `cmd jobscheduler run -f`) downloads + verifies it by itself; without "Install unknown apps" it
      waits and leaves one "ready" notification; nothing installs yet.
   B  in front: one "Update ready · tap to restart" banner; tap → Android's "Install unknown apps" (once) → back →
-     PackageInstaller session; Android's confirm (STATUS_PENDING_USER_ACTION → EXTRA_INTENT) if it asks → NEXT lands;
-     Wizard OS is now the installer of record. Taps counted.
+     PackageInstaller session. API 35 would install even this first self-update silently, so the QA-only
+     files/qa_update_confirm.txt forces USER_ACTION_REQUIRED: STATUS_PENDING_USER_ACTION → EXTRA_INTENT opens Android's
+     confirm; Cancel → STATUS_FAILURE_ABORTED is shown; Retry → confirm → NEXT lands; Wizard OS is now the installer
+     of record. Taps counted.
   N1 wrong sha256 in the feed: downloaded, refused, file deleted, nothing installs (app in background, so a missing
      check would install silently).
   N2 right sha256 but signed by another key: refused, nothing installs.
@@ -341,6 +343,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('B: in front, one "Update ready · tap to restart" banner', 'Update ready · tap to restart' in (b or ''), b)
         shot('B1-update-ready-banner')
         check('B: only one update banner on the page', pg.ev("document.querySelectorAll('#dvUpdate:not([hidden])').length") == 1)
+        runas('echo 1 > files/qa_update_confirm.txt')
         pg.tap('#dvUpdate .dv-um'); taps += 1  # the banner itself is the button
         t = wait(lambda: (lambda x: x if ('Settings' in x or 'settings' in x or 'ManageAppExternalSources' in x or 'Spa' in x) else '')(top()), 15)
         shot('B2-allow-unknown-apps')
@@ -349,31 +352,46 @@ with (BASE / 'worker.lock').open('a') as lock:
         time.sleep(1.5)
         check('B: first time only, Android\'s "Install unknown apps" opens and is allowed with one tap', hit and 'allow' in sx('appops get %s REQUEST_INSTALL_PACKAGES' % PKG).lower(), (t[:140], hit))
         sx('input keyevent KEYCODE_BACK'); time.sleep(2)   # back to Wizard OS (the system Back, not a tap)
+        # API 35 lets even this first self-update through without a confirm (UPDATE_PACKAGES_WITHOUT_USER_ACTION +
+        # updating itself). files/qa_update_confirm.txt (QA builds only) makes the session ask anyway, so the
+        # STATUS_PENDING_USER_ACTION → EXTRA_INTENT path and a cancelled confirm (STATUS_FAILURE_ABORTED) run for real.
+        t = wait(lambda: (lambda x: x if installer_ui(x) else '')(top()), 30, 1)
+        shot('B3-android-confirm')
+        lg = logs('status|installer opened', 6)
+        check('B(confirm): STATUS_PENDING_USER_ACTION opens Android\'s confirm from EXTRA_INTENT', bool(t) and 'status -1' in lg and 'installer opened' in lg, (t[-100:] if t else top()[-100:], lg[-300:]))
+        hc = tap_text(r'^Cancel$'); time.sleep(3)
+        if hc: taps += 1
+        lg = logs('status|install failed', 6)
+        bring_front(); connect(); time.sleep(1)
+        eb = wait(lambda: (lambda x: x if x.startswith('error') else '')(banner()), 15)
+        shot('B4-cancelled')
+        check('B(failure): a cancelled confirm (STATUS_FAILURE_ABORTED) is surfaced and nothing installs', 'status 3' in lg and 'cancelled' in (eb or '').lower() and vcode() == VC, (eb, lg[-300:]))
+        pg.tap('#dvUpdate [data-upd=go]'); taps += 1   # Retry
         confirm = False; seen = []
         t0 = time.time()
         while time.time() - t0 < 90:
             if vcode() == NEXT_VC: break
             tt = top(); seen.append(tt[-80:])
             if installer_ui(tt):
-                shot('B3-android-confirm'); x = ui()
+                x = ui()
                 h2 = tap_text(r'^(Update|Install)$', x)
                 if h2: taps += 1; confirm = True; time.sleep(3)
-            if not front() and not installer_ui(tt) and 'Settings' in tt:
-                sx('input keyevent KEYCODE_BACK')
             time.sleep(1)
         newv = wait(lambda: vcode() == NEXT_VC, 30, 2)
         lg = logs('session|status|installer opened|replaced', 12)
         receipt['taps']['first_update'] = taps
-        check('B: installs through a PackageInstaller session (requireUserAction=2 on API 35)', 'requireUserAction=2' in lg and 'session' in lg, lg[-500:])
-        check('B: the first update lands (versionCode %d) · taps=%d (banner + allow%s)' % (NEXT_VC, taps, ' + Android confirm' if confirm else ', no confirm needed'), newv, (vcode(), lg[-300:]))
+        check('B: installs through a PackageInstaller session (QA-forced requireUserAction=1 for the confirm path)', 'requireUserAction=1' in lg and 'session' in lg, lg[-500:])
+        check('B: the first update lands after one Android confirm (versionCode %d) · taps=%d (banner, allow, cancel, retry, confirm)' % (NEXT_VC, taps), newv and confirm, (vcode(), lg[-300:]))
+        runas('rm -f files/qa_update_confirm.txt')
         inst = installer()
         check('B: Wizard OS is now its own installer of record (later updates are silent)', inst == PKG, inst)
         stage()  # app data survives an update; harmless re-stage
         time.sleep(4)
-        relaunched = front()
+        relaunched = front(); nt = notifs()
         receipt['relaunched_after_tap_update'] = relaunched
-        shot('B4-after-first-update')
-        print('note: relaunch after tapped update: front=%s top=%s notif=%s' % (relaunched, top()[-80:], notifs().strip()[:160]), flush=True)
+        shot('B5-after-first-update')
+        check('B: after a tapped update James lands back in Wizard OS (or gets a "tap to open" notification)', relaunched or 'Wizard OS updated to' in nt,
+              (relaunched, top()[-80:], logs('replaced', 2)))
         if not relaunched: bring_front()
         connect()
         check('B: the updated app (%d) runs and loads Wizard OS' % NEXT_VC, pg.ev("window.WizardOSNative.platform()").endswith('-qanext'), pg.ev("window.WizardOSNative.platform()"))
