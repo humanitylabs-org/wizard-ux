@@ -397,6 +397,6 @@ window.WizCore.chats = function createChats(H) {
     return true;
   }
   const forget = id => { delete CH[id]; };
-  return { CH, ch, click, bind, insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat,
+  return { CH, ch, click, bind, insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST };
 };

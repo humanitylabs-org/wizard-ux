@@ -49,7 +49,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import ai.wizards.os.MainActivity;
-import ai.wizards.os.assist.SilenceDetector;
 
 /**
  * Wizard Everywhere: the floating Wizard orb (formerly Archimedes Anywhere) inside Wizard OS.
@@ -60,11 +59,14 @@ import ai.wizards.os.assist.SilenceDetector;
  *    closed and another with it open.
  *  - Hidden whenever Wizard OS itself is in front (the app has its own orb); back as soon as you leave.
  *  - Tap to talk. While it listens, Cancel · Pause · Screen fan out around it, like the app's orb. Tap the orb
- *    again (or just stop talking) to send. The recording goes into {@link EverywhereOutbox} before any network
+ *    again to send. Going quiet never sends: only the side button sends by itself (James, 0.6.1). The recording goes into {@link EverywhereOutbox} before any network
  *    call, so a dropped connection never loses it.
  *  - With a keyboard open it becomes voice typing: tap, talk, and the words are typed where the cursor is
  *    (needs Accessibility → Wizard OS, see {@link WizardKeyboardService}). Nothing goes to Wizard.
  *  - "Not sent" raises a notification with Retry; replies raise a notification that opens the thread.
+ *  - Carry: while the app's own orb is recording and you leave Wizard OS, this orb shows that recording (timer,
+ *    Pause, Cancel; tap to send) so it is obvious the mic is still on. The app keeps the recording; the orb is
+ *    its remote control. Works even when Wizard Everywhere is switched off (overlay permission permitting).
  */
 public class EverywhereService extends Service implements EverywhereOutbox.Listener {
     static final String TAG = EverywhereOutbox.TAG;
@@ -75,6 +77,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     static final String ACTION_FRONT = "ai.wizards.os.everywhere.FRONT";
     static final String ACTION_RETRY = "ai.wizards.os.everywhere.RETRY";
     static final String ACTION_KEYBOARD = "ai.wizards.os.everywhere.KEYBOARD";
+    static final String ACTION_APP_VOICE = "ai.wizards.os.everywhere.APP_VOICE";
     static final String EXTRA_FRONT = "front", EXTRA_KB = "kb", EXTRA_IME_TOP = "imeTop", EXTRA_SURFACE = "surface";
     static final String CH_RUNNING = "everywhere";
     static final String CH_UNSENT = "unsent";
@@ -88,6 +91,15 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private static boolean surfaceInFront;
     private static boolean keyboardOpen;
     private static int imeTop = -1;
+    /** The app's orb recording state: null (not recording), "listen" or "paused". */
+    private static volatile String appVoice;
+    private static volatile long appVoiceElapsed;
+    /** How the orb reaches the app's recorder (set by MainActivity). */
+    public interface AppVoiceRemote { void command(String cmd); }
+    private static AppVoiceRemote appRemote;
+    public static void setAppVoiceRemote(AppVoiceRemote r) { appRemote = r; }
+    /** Hard stop for a forgotten recording: it is kept and sent, never thrown away. */
+    static final long MAX_TAKE_MS = 30 * 60_000L;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private WindowManager wm;
@@ -98,7 +110,6 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private EverywhereOutbox outbox;
     private MediaRecorder recorder;
     private File recording;
-    private SilenceDetector detector;
     private boolean listening, paused, dictating;
     private long startedAt;
     private int size, big, margin;
@@ -143,7 +154,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     /** Wizard OS tells the orb when it comes to the front / leaves, so the orb hides while the app is open. */
     public static void setAppInFront(Context c, boolean front) {
         appInFront = front;
-        if (!enabled(c) || !overlayAllowed(c)) return;
+        if (!(enabled(c) || appRecording()) || !overlayAllowed(c)) return;
         try { c.startService(new Intent(c, EverywhereService.class).setAction(ACTION_FRONT).putExtra(EXTRA_FRONT, front)); }
         catch (Exception e) { // background start refused (rare): the foreground start path still works
             if (!front) ensureRunning(c);
@@ -158,6 +169,27 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         try { c.startService(new Intent(c, EverywhereService.class).setAction(ACTION_KEYBOARD).putExtra(EXTRA_KB, open).putExtra(EXTRA_IME_TOP, top)); }
         catch (Exception e) { Log.w(TAG, "keyboard update refused: " + e.getMessage()); }
     }
+
+    /**
+     * The app's orb changed state (listen / paused / think / idle). While it records, this service runs as a
+     * microphone foreground service (started now, while the app is in front, which Android requires) and the
+     * floating orb mirrors the take whenever Wizard OS is not in front.
+     */
+    public static void appVoiceState(Context c, String state, long elapsedMs) {
+        boolean rec = "listen".equals(state) || "paused".equals(state);
+        String was = appVoice;
+        appVoice = rec ? state : null;
+        appVoiceElapsed = Math.max(0, elapsedMs);
+        if (!rec && was == null) return;
+        if (!overlayAllowed(c)) return;
+        Intent i = new Intent(c, EverywhereService.class).setAction(ACTION_APP_VOICE);
+        try {
+            if (rec && was == null && Build.VERSION.SDK_INT >= 26) c.startForegroundService(i); else c.startService(i);
+        } catch (Exception e) { Log.w(TAG, "app voice update refused: " + e.getMessage()); }
+    }
+
+    static boolean appRecording() { return appVoice != null; }
+    public static boolean appIsRecording() { return appRecording(); }
 
     /** JSON for Settings. */
     public static String status(Context c) {
@@ -270,8 +302,11 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String a = intent == null ? ACTION_START : String.valueOf(intent.getAction());
-        if (!startForegroundSafe(listening)) { stopSelf(); return START_NOT_STICKY; }
-        if (ACTION_STOP.equals(a) || !enabled(this) || !overlayAllowed(this)) { shutdown(); return START_NOT_STICKY; }
+        if (!startForegroundSafe(micInUse())) { stopSelf(); return START_NOT_STICKY; }
+        boolean carrying = appRecording() && overlayAllowed(this);
+        if (ACTION_STOP.equals(a) && !carrying) { shutdown(); return START_NOT_STICKY; }
+        if ((!enabled(this) || !overlayAllowed(this)) && !carrying) { shutdown(); return START_NOT_STICKY; }
+        if (ACTION_APP_VOICE.equals(a)) onAppVoice();
         if (ACTION_FRONT.equals(a)) {
             if (intent.hasExtra(EXTRA_FRONT)) appInFront = intent.getBooleanExtra(EXTRA_FRONT, appInFront);
             if (intent.hasExtra(EXTRA_SURFACE)) surfaceInFront = intent.getBooleanExtra(EXTRA_SURFACE, surfaceInFront);
@@ -291,9 +326,12 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private boolean startForegroundSafe(boolean mic) {
         Notification n = new Notification.Builder(this, CH_RUNNING)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle(listening ? (dictating ? "Typing what you say…" : "Listening…") : "Wizard Everywhere is on")
-                .setContentText(listening ? "Tap the orb to finish" : "Tap the floating orb to talk")
-                .setContentIntent(openApp(this, MainActivity.ACTION_SETTINGS, 2))
+                .setContentTitle(appRecording() && !listening ? ("paused".equals(appVoice) ? "Wizard OS recording paused" : "Wizard OS is recording")
+                        : listening ? (dictating ? "Typing what you say…" : "Listening…") : "Wizard Everywhere is on")
+                .setContentText(appRecording() && !listening ? "Tap the orb to send, or open Wizard OS"
+                        : listening ? "Tap the orb to finish"
+                        : WizardKeyboardService.get() == null ? "Voice typing is off · tap to turn it on" : "Tap the floating orb to talk")
+                .setContentIntent(appRecording() && !listening ? openApp(this, null, 5) : openApp(this, MainActivity.ACTION_SETTINGS, 2))
                 .setOngoing(true)
                 .build();
         try {
@@ -340,8 +378,23 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     /* ------------------------------------------------------------------ the orb window */
 
+    /** The app's recording is being shown on this orb (Wizard OS is in the background). */
+    private boolean carrying() { return appRecording() && !listening && !appInFront && !surfaceInFront; }
+
+    private boolean micInUse() { return listening || appRecording(); }
+
+    private void onAppVoice() {
+        Log.i(TAG, "app voice " + (appVoice == null ? "stopped" : appVoice) + " elapsed=" + appVoiceElapsed + " appInFront=" + appInFront);
+        if (!appRecording() && (!enabled(this) || !overlayAllowed(this))) { shutdown(); return; }
+        startForegroundSafe(micInUse());
+        if (!appRecording() && !listening) setExpanded(false);
+        lastState = "";
+    }
+
     private void syncBubble() {
-        boolean show = EverywherePolicy.bubbleVisible(enabled(this), overlayAllowed(this), appInFront || surfaceInFront) || listening;
+        boolean show = EverywherePolicy.bubbleVisible(enabled(this), overlayAllowed(this), appInFront || surfaceInFront) || listening || carrying();
+        if (carrying() && !expanded) { if (show && !attached) attach(); setExpanded(true); }
+        if (!carrying() && !listening && expanded) setExpanded(false);
         if (show) attach(); else detach();
         Log.i(TAG, "bubble " + (show ? "shown" : "hidden") + " (appInFront=" + appInFront + ", surface=" + surfaceInFront + ", keyboard=" + keyboardOpen + ")");
     }
@@ -497,8 +550,11 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (!pageReady) return;
         int failed = 0;
         for (EverywhereOutbox.Item it : outbox.unsent()) if ("failed".equals(it.state)) failed++;
-        String mode = listening ? (paused ? "paused" : dictating ? "typing" : "listen") : keyboardOpen ? "type" : "idle";
-        String st = "{mode:'" + mode + "',kb:" + (keyboardOpen || dictating) + ",expanded:" + expanded + ",failed:" + failed + ",shots:" + shots.size() + "}";
+        boolean carry = carrying();
+        String mode = carry ? appVoice : listening ? (paused ? "paused" : dictating ? "typing" : "listen") : keyboardOpen ? "type" : "idle";
+        long ms = carry ? appVoiceElapsed : 0;
+        String st = "{mode:'" + mode + "',kb:" + (!carry && (keyboardOpen || dictating)) + ",expanded:" + expanded + ",failed:" + failed
+                + ",shots:" + shots.size() + ",carry:" + carry + ",ms:" + ms + "}";
         if (st.equals(lastState)) return;
         lastState = st;
         js("E.state(" + st + ")");
@@ -564,18 +620,28 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     /** The page's buttons (Cancel · Pause · Screen). Called on a binder thread. */
     private final class Bridge {
-        @JavascriptInterface public void cancel() { main.post(EverywhereService.this::cancelByUser); }
-        @JavascriptInterface public void pause() { main.post(EverywhereService.this::togglePause); }
+        @JavascriptInterface public void cancel() { main.post(() -> { if (carrying()) remote("cancel"); else cancelByUser(); }); }
+        @JavascriptInterface public void pause() { main.post(() -> { if (carrying()) remote("pause"); else togglePause(); }); }
         @JavascriptInterface public void shot() { main.post(EverywhereService.this::screenshot); }
         @JavascriptInterface public void log(String s) { Log.i(TAG, "page: " + s); }
     }
 
     private void tap() {
         buzz(12);
+        if (carrying()) { remote("send"); return; }
         if (listening) { finish(); return; }
         WizardKeyboardService k = WizardKeyboardService.get();
         boolean dictate = KeyboardSignal.dictate(k != null && k.inputActiveNow(), keyboardOpen);
         start(dictate);
+    }
+
+    /** Drive the app's orb from here. The app answers with appVoiceState, which redraws this orb. */
+    private void remote(String cmd) {
+        AppVoiceRemote r = appRemote;
+        Log.i(TAG, "remote " + cmd + (r == null ? " (app gone)" : ""));
+        if (r != null) { r.command(cmd); if (!"pause".equals(cmd)) toast("send".equals(cmd) ? "Sending to Wizard…" : "Discarded"); return; }
+        // The app's process is alive (it recorded a moment ago) but its window is gone: open it; it finishes there.
+        try { openApp(this, null, 5).send(); } catch (PendingIntent.CanceledException ignored) { }
     }
 
     /* ------------------------------------------------------------------ recording */
@@ -619,7 +685,6 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         paused = false;
         shots.clear();
         startedAt = SystemClock.elapsedRealtime();
-        detector = dictate ? SilenceDetector.dictation() : SilenceDetector.standard();
         Log.i(TAG, "listening" + (dictate ? " (voice typing)" : ""));
         setExpanded(true);
         pushState();
@@ -643,11 +708,9 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             int amp = 0;
             if (recorder != null) {
                 try { amp = recorder.getMaxAmplitude(); } catch (IllegalStateException e) { return; }
-                if (!paused) {
-                    SilenceDetector.Result res = detector.feed(amp, SystemClock.elapsedRealtime());
-                    if (res == SilenceDetector.Result.SEND) { finish(); return; }
-                    if (res == SilenceDetector.Result.NOTHING_HEARD) { discard(); toast("Didn’t catch anything"); return; }
-                }
+                // Going quiet never ends a take here (only the side button sends by itself). A forgotten take is
+                // kept and sent after 30 minutes rather than recording forever.
+                if (!paused && SystemClock.elapsedRealtime() - startedAt > MAX_TAKE_MS) { finish(); return; }
             }
             js("E.level(" + (paused ? 0 : Math.min(1f, amp / 12000f)) + ")");
             main.postDelayed(this, 90);
@@ -660,11 +723,9 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (!paused) {
             if (recorder != null) try { recorder.pause(); } catch (IllegalStateException e) { Log.w(TAG, "pause failed", e); return; }
             paused = true;
-            detector.pause(now);
         } else {
             if (recorder != null) try { recorder.resume(); } catch (IllegalStateException e) { Log.w(TAG, "resume failed", e); return; }
             paused = false;
-            detector.resume(now);
             if (recorder == null) { main.removeCallbacks(qaAutoFinish); main.postDelayed(qaAutoFinish, 2500); } // QA: 2.5 s more after carrying on
         }
         Log.i(TAG, paused ? "paused" : "resumed");
@@ -688,8 +749,11 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (!listening || dictating || shotPending) return;
         if (shots.size() >= MAX_SHOTS) { toast("Four screenshots already attached"); return; }
         WizardKeyboardService k = WizardKeyboardService.get();
-        if (k == null || Build.VERSION.SDK_INT < 30) {
-            Toast.makeText(this, "Turn on Accessibility → Wizard OS to attach screenshots", Toast.LENGTH_LONG).show();
+        if (Build.VERSION.SDK_INT < 30) { toast("Screenshots need Android 11 or newer"); return; }
+        if (k == null) {
+            // Not set up yet: bring Wizard OS forward on the one-step setup dialog. The take keeps recording.
+            Log.i(TAG, "screen tapped without accessibility: opening setup");
+            try { openApp(this, MainActivity.ACTION_ACCESSIBILITY, 6).send(); } catch (PendingIntent.CanceledException ignored) { }
             return;
         }
         if (web != null) web.setAlpha(0f);

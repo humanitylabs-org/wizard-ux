@@ -42,7 +42,7 @@
     place-items:center;background:var(--violet-2);color:#140b2c;font:800 10px/1 system-ui;font-style:normal}
   #bShot.n i{display:grid}
   body.open .arc{opacity:1;pointer-events:auto}
-  body.open.kb #bShot{opacity:0;pointer-events:none}
+  body.open.kb #bShot,body.open.carry #bShot{opacity:0;pointer-events:none}
   #timer{position:absolute;padding:4px 9px;border-radius:99px;background:rgba(18,10,42,.86);border:1px solid rgba(205,190,255,.22);
     font:700 11px/1 ui-monospace,monospace;letter-spacing:.06em;color:var(--ink);opacity:0;transition:opacity .2s;white-space:nowrap;
     transform:translate(-50%,-50%)}
@@ -101,9 +101,13 @@ const E = window.E = {
     const was = S.mode;
     S.kb = !!o.kb; S.mode = o.mode || 'idle';
     const live = S.mode === 'listen' || S.mode === 'paused' || S.mode === 'typing';
-    if (live && !(was === 'listen' || was === 'paused' || was === 'typing')) { S.ms = 0; S.t0 = performance.now(); }
-    if (S.mode === 'paused' && !S.paused) { S.ms += performance.now() - S.t0; S.paused = true; }
-    if (S.mode !== 'paused' && S.paused) { S.paused = false; S.t0 = performance.now(); }
+    if (o.carry) { S.ms = +o.ms || 0; S.t0 = performance.now(); S.paused = S.mode === 'paused'; }   // the app's take, shown here
+    else {
+      if (live && !(was === 'listen' || was === 'paused' || was === 'typing')) { S.ms = 0; S.t0 = performance.now(); }
+      if (S.mode === 'paused' && !S.paused) { S.ms += performance.now() - S.t0; S.paused = true; }
+      if (S.mode !== 'paused' && S.paused) { S.paused = false; S.t0 = performance.now(); }
+    }
+    document.body.classList.toggle('carry', !!o.carry);
     document.body.classList.toggle('open', live && !!o.expanded);
     document.body.classList.toggle('paused', S.mode === 'paused');
     document.body.classList.toggle('kb', S.kb || S.mode === 'type' || S.mode === 'typing');

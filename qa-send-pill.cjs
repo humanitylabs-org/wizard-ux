@@ -40,7 +40,7 @@ async function boot(b) {
   const p = await ctx.newPage();
   const errs = [];
   p.on('pageerror', e => { if (/wizard-os-home\//.test(String(e.stack || '')) || !/https?:\/\//.test(String(e.stack || ''))) errs.push(String(e)); });
-  await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); } catch (e) {} });
+  await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
   await p.goto('about:blank');
   await p.goto(URL_, { waitUntil: 'load' });
   await p.waitForFunction(() => window.__wos && window.__wos.live && window.__wos.live.ok, null, { timeout: 30000 });
@@ -58,8 +58,8 @@ const pill = p => p.evaluate(() => { const v = document.querySelector('#voice'),
   await p.evaluate(() => window.__wos.goDesk(1, true)); await p.waitForTimeout(900);
   await tapOrb(p, 1500);
   let s = await pill(p);
-  ok(s.voice === 'listen' && !s.brief, 'recording shows the normal listening card', JSON.stringify(s));
-  await tapOrb(p, 150);
+  ok(s.voice === 'listen' && !s.shown, 'recording shows no card (James, 9 Oct: no Listening/tap-to-send card)', JSON.stringify(s));
+  await tapOrb(p, 400); // the pill now fades in from nothing (no card while recording)
   s = await pill(p);
   ok(s.brief && s.shown && /Sending/.test(s.label), 'send: one-line "Sending…" pill', JSON.stringify(s));
   ok(!s.textVisible && s.h < 50 && s.w < 300, 'send: no transcript text, pill is small', JSON.stringify(s));
