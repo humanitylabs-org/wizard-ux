@@ -234,6 +234,7 @@
       const t = $('.wt', el); if (t) t.textContent = W[id].app === 'chats' ? 'Chats' : winTitle(W[id]);
     });
     sec.setAttribute('aria-label', `Desk ${i + 1}: ${deskTitle(i)}`);
+    if (i === idx) syncImmersive();
   }
   function refreshWin(id) {
     const w = W[id], el = winEl(id); if (!w || !el) return;
@@ -284,7 +285,7 @@
   }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(DESKS_N - 1, n));
-    const moved = n !== idx; idx = n; placeTrack(0, true); renderDots(); save(); scheduleParking();
+    const moved = n !== idx; idx = n; placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive();
     if (moved && LINKS && LINKS.isOpen()) LINKS.close(); // a link is a peek over this desk: moving desks dismisses it
     if (moved) vib(8);
     if (!silent) announce(`Desk ${idx + 1} · <b>${esc(deskName(idx))}</b>`);
@@ -416,6 +417,26 @@
     desks[i].focus = id; applyLayout(i); save();
   }
   let fullAt = 0;
+  /* Immersive full screen (James, 9 Oct): a full-screen window owns the whole display. Its title bar,
+   * the bottom bar with the orb, the desk label and the phone's status bar all go away. Ways out:
+   * pinch in, swipe up from the bottom edge, or Back. Chats keeps a small orb in the bottom-right
+   * corner so a voice reply is always one tap away; there the orb only talks (no shell swipes). */
+  var immOn = null, immTipT = 0; // var: applyLayout can run before this line during boot
+  function syncImmersive() {
+    const d = desks[idx], w = d && d.full && d.focus ? W[d.focus] : null, on = !!w;
+    const corner = on && w.app === 'chats';
+    device.classList.toggle('immersive', on);
+    device.classList.toggle('orb-corner', corner);
+    if (on === immOn) return; immOn = on;
+    try { window.WizardOSNative?.immersive?.(on); } catch (e) {}
+    clearTimeout(immTipT); device.classList.remove('imm-tip');
+    if (on) {
+      void device.offsetWidth; device.classList.add('imm-tip');
+      immTipT = setTimeout(() => device.classList.remove('imm-tip'), 2600);
+      const n = store.get('immTips', 0);
+      if (n < 3) { store.set('immTips', n + 1); toast('⤡', 'Pinch in or swipe up from the bottom to exit full screen'); }
+    }
+  }
   function setFull(id, on) {
     const i = deskOf(id); if (i < 0) return;
     const d = desks[i]; d.focus = id; d.full = !!on; fullAt = performance.now(); applyLayout(i); save(); vib(on ? 10 : 6);
@@ -1031,6 +1052,9 @@
       const t0 = e.touches[0].target, el = t0.closest ? t0 : t0.parentElement;
       if (!fixedId && el.closest('.zstage')) return;
       const id = fixedId || el.closest('.win')?.dataset.win; if (!id) return;
+      // A framed app that zooms its own content (maps, photos, PDFs) opts out of the shell's pinch with
+      // <meta name="wizard-os-pinch" content="app">; Back and the bottom-edge swipe still leave full screen.
+      if (fixedId && pinchClaimed(fixedId)) return;
       p = { id, d0: dist(e.touches[0], e.touches[1]), s: 1 };
     }, { passive: true, capture: true });
     root.addEventListener('touchmove', e => {
@@ -1045,12 +1069,51 @@
       const we = winEl(q.id); if (we) we.style.removeProperty('--pinch');
       const d = desks[deskOf(q.id)]; if (!d) return;
       if (q.s > 1.25 && !(d.full && d.focus === q.id)) setFull(q.id, true);
-      else if (q.s < .8 && d.full) setFull(q.id, false);
+      else if (q.s < (device.classList.contains('immersive') ? .72 : .8) && d.full) setFull(q.id, false);
     };
     root.addEventListener('touchend', e => { if (p && e.touches.length < 2) end(); }, { capture: true });
     root.addEventListener('touchcancel', end, { capture: true });
   }
   bindWinPinch(track);
+  function pinchClaimed(id) { try { return winEl(id)?.querySelector('iframe')?.contentDocument?.querySelector('meta[name="wizard-os-pinch"]')?.content === 'app'; } catch (e) { return false; } }
+
+  /* Bottom edge in immersive full screen: swipe up from anywhere along it to leave full screen.
+   * The window follows the finger (shrinks a touch), past ~56 px or a quick flick it returns to tiles. */
+  const immEdge = document.createElement('div'); immEdge.id = 'immEdge'; immEdge.className = 'imm-edge';
+  immEdge.innerHTML = '<i></i>'; immEdge.setAttribute('aria-hidden', 'true'); device.appendChild(immEdge);
+  // A click listener makes the strip a real tap target, so the browser's touch adjustment never snaps an
+  // edge touch onto the composer just above it.
+  immEdge.addEventListener('click', e => e.preventDefault());
+  immEdge.addEventListener('touchmove', e => { if (IE && e.cancelable) e.preventDefault(); }, { passive: false });
+  let IE = null;
+  const immWin = () => { const d = desks[idx]; return d && d.full && d.focus ? winEl(d.focus) : null; };
+  immEdge.addEventListener('pointerdown', e => {
+    if (!device.classList.contains('immersive')) return;
+    e.preventDefault(); try { immEdge.setPointerCapture(e.pointerId); } catch (_) {}
+    IE = { y: e.clientY, x: e.clientX, t: performance.now(), id: e.pointerId, dy: 0 };
+  });
+  immEdge.addEventListener('pointermove', e => {
+    if (!IE || e.pointerId !== IE.id) return;
+    IE.dy = Math.min(0, e.clientY - IE.y);
+    const p = Math.min(1, -IE.dy / 160), we = immWin();
+    if (we) { we.style.transition = 'none'; we.style.transform = `translateY(${IE.dy * .35}px) scale(${1 - p * .08})`; we.style.borderRadius = `${p * 22}px`; }
+    immEdge.classList.toggle('pull', -IE.dy > 12);
+  });
+  const immEnd = e => {
+    if (!IE || e.pointerId !== IE.id) return; const s = IE; IE = null;
+    immEdge.classList.remove('pull');
+    const we = immWin(); if (we) { we.style.transition = ''; we.style.transform = ''; we.style.borderRadius = ''; }
+    const v = s.dy / ((performance.now() - s.t) || 1);
+    if (e.type !== 'pointercancel' && (s.dy < -56 || (s.dy < -18 && v < -.45))) { const d = desks[idx]; if (d.full && d.focus) setFull(d.focus, false); }
+  };
+  immEdge.addEventListener('pointerup', immEnd); immEdge.addEventListener('pointercancel', immEnd);
+  // The keyboard is up: the bottom edge belongs to the text field, not the shell.
+  setInterval(() => {
+    if (!immOn) return;
+    let a = document.activeElement;
+    try { if (a && a.tagName === 'IFRAME') a = a.contentDocument?.activeElement; } catch (e) {}
+    device.classList.toggle('imm-typing', !!a && (/^(TEXTAREA|INPUT|SELECT)$/.test(a.tagName) || a.isContentEditable));
+  }, 400);
 
   /* ---------------- sheets ---------------- */
   const launcher = $('#launcher'), inboxEl = $('#inbox'), settingsEl = $('#settings');
@@ -1686,6 +1749,7 @@
     e.preventDefault(); orbWrap.setPointerCapture(e.pointerId); closeMenu();
     G = { x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
+    G.corner = device.classList.contains('orb-corner');
     if (V.state === 'idle' && !sheet) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); vib(18); startVoice('command'); } }, 380);
   });
   const aimFor = dx => { const steps = Math.abs(dx) > 150 ? 2 : Math.abs(dx) > 60 ? 1 : 0; if (!steps) return null; const t = idx + (dx < 0 ? -steps : steps); return t >= 0 && t < DESKS_N ? t : null; };
@@ -1697,13 +1761,15 @@
     }
     if (G.mode === 'hold') {
       // Aim: slide toward the desk this command should land on.
-      G.aim = aimFor(G.dx);
+      G.aim = G.corner ? null : aimFor(G.dx);
       orbWrap.dataset.dir = G.aim == null ? '' : (G.aim < idx ? `← Desk ${G.aim + 1}` : `Desk ${G.aim + 1} →`);
       device.classList.toggle('aiming', G.aim != null);
       $('#txRouteText').textContent = G.aim == null ? 'Command · release to run' : `Command · opens on desk ${G.aim + 1}`;
       return;
     }
     // Swipes work in every voice state: recording or sending never locks navigation.
+    if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14 && G.corner) { clearTimeout(G.hold); G.mode = 'still'; }
+    if (G.mode === 'still') return; // the corner orb only talks: a slid finger cancels, it never swipes the shell
     if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14) {
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
     }

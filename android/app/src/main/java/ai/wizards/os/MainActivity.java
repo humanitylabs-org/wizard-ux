@@ -343,6 +343,30 @@ public class MainActivity extends Activity {
         super.onStop();
     }
 
+    private boolean immersive;
+    /** Sticky immersive: the system bars hide, a swipe from the edge shows them briefly over the app. */
+    @SuppressWarnings("deprecation")
+    void setImmersive(boolean on) {
+        immersive = on;
+        if (Build.VERSION.SDK_INT >= 30) {
+            android.view.WindowInsetsController c = getWindow().getInsetsController();
+            if (c == null) return;
+            if (on) {
+                c.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                c.hide(WindowInsets.Type.systemBars());
+            } else c.show(WindowInsets.Type.systemBars());
+        } else {
+            View d = getWindow().getDecorView();
+            d.setSystemUiVisibility(on ? (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) : 0);
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && immersive) setImmersive(true); // a dialog or the shade can bring the bars back
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -593,6 +617,10 @@ public class MainActivity extends Activity {
         /** The orb is recording (or transcribing): keep the screen from locking until it says otherwise. */
         @JavascriptInterface
         public void keepAwake(boolean on) { runOnUiThread(() -> setKeepAwake(on)); }
+
+        /** Full-screen window in the shell: hide Android's status and navigation bars too (edge swipe peeks them). */
+        @JavascriptInterface
+        public void immersive(boolean on) { runOnUiThread(() -> setImmersive(on)); }
 
         @JavascriptInterface
         public void haptic(int ms) {

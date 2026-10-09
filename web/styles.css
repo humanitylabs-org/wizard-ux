@@ -731,3 +731,49 @@ body {
 .desk-label { max-width: calc(100% - 48px); overflow: hidden; text-overflow: ellipsis; }
 /* While recording the timer owns the top of the orb: the unread badge steps aside so the time is readable. */
 .device[data-voice="listen"] .orb-badge, .device[data-voice="paused"] .orb-badge, .device[data-voice="command"] .orb-badge { opacity: 0; }
+
+/* ================= Immersive full screen (James, 9 Oct) =================
+ * A full-screen window owns the whole display: no window title bar, no bottom bar, no desk label.
+ * Out: pinch in, swipe up from the bottom edge, or Back. In Chats the orb stays, small, bottom-right,
+ * beside the composer, so a voice reply is one tap away. */
+.device.immersive .tiles.has-full { top: var(--safe-t); bottom: var(--safe-b); left: 0; right: 0; }
+.device.immersive .tiles.has-full .win.full { border-radius: 0; }
+.device.immersive .win.full .wbar { display: none; }
+.device.immersive .desk-label, .device.immersive .hint-row { opacity: 0 !important; pointer-events: none; }
+.dock { transition: transform 300ms var(--ease), opacity 220ms; }
+.device.immersive:not(.orb-corner) .dock { transform: translateY(110%); opacity: 0; pointer-events: none; }
+.device.immersive:not(.orb-corner) .arc, .device.immersive:not(.orb-corner) .timer { visibility: hidden; }
+.device.immersive .voice .transcript.brief { bottom: calc(var(--safe-b) + 74px); }
+.device.immersive .transcript { bottom: calc(var(--safe-b) + 150px); }
+
+/* Chats in full screen: the bottom bar shrinks to just the orb, in the composer row's right corner. */
+.device.orb-corner { --corner-orb: 44px; --corner-r: 12px; --corner-b: 9px; }
+.device.orb-corner .dock { left: auto; right: var(--corner-r); bottom: calc(var(--safe-b) + var(--corner-b)); width: var(--corner-orb); height: var(--corner-orb);
+  padding: 0; gap: 0; background: none; border: 0; animation: cornerIn 320ms var(--spring); }
+@keyframes cornerIn { from { transform: scale(.4); opacity: 0; } }
+.device.orb-corner .desk-dots, .device.orb-corner #scrub { display: none; }
+.device.orb-corner .orb-wrap { margin: 0; }
+.device.orb-corner .win.full .ch-compose { padding-right: calc(var(--corner-orb) + var(--corner-r) + 8px); }
+.device.orb-corner .win.full .ch-scroll { padding-bottom: 72px; }
+/* voice controls fan up and left from the corner, Cancel nearest the thumb */
+.device.orb-corner .arc { left: auto; right: calc(var(--corner-r) + var(--corner-orb) / 2); bottom: calc(var(--safe-b) + var(--corner-b) + var(--corner-orb) / 2); margin: 0 -25px -25px 0; }
+/* the fan sits wholly above the composer row so it never lands on Send or the text field */
+.device.orb-corner .voice.on .arc-left  { transform: translate(-118px, -76px) scale(1); }
+.device.orb-corner .voice.on .arc-mid   { transform: translate(-68px, -118px) scale(1); }
+.device.orb-corner .voice.on .arc-right { transform: translate(-4px, -146px) scale(1); }
+.device.orb-corner .timer { left: auto; right: -4px; transform: none; top: -26px; }
+.device.orb-corner .hold-hint { left: auto; right: 0; transform: none; }
+.device.orb-corner .voice .transcript.brief { left: auto; right: 12px; transform: translateY(10px) scale(.94); bottom: calc(var(--safe-b) + 140px); }
+.device.orb-corner .voice.tx .transcript.brief { transform: none; }
+
+/* Bottom edge: swipe up from anywhere along it to leave full screen. Shows a faint handle on entry. */
+.imm-edge { position: absolute; left: 0; right: 0; bottom: 0; height: calc(18px + var(--safe-b)); z-index: 58; display: none; touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.device.immersive .imm-edge { display: block; }
+.device.immersive.imm-typing .imm-edge { display: none; }
+.device.orb-corner .imm-edge { right: calc(var(--corner-orb) + var(--corner-r) + 6px); height: calc(12px + var(--safe-b)); }
+.device.orb-corner .win.full .ch-compose { padding-bottom: 14px; }
+.imm-edge i { position: absolute; left: 50%; bottom: calc(5px + var(--safe-b)); width: 64px; height: 4px; margin-left: -32px; border-radius: 99px;
+  background: rgba(205, 190, 255, .55); box-shadow: 0 0 10px rgba(143, 99, 255, .5); opacity: 0; transition: opacity 400ms, width 220ms var(--spring); }
+.device.imm-tip .imm-edge i, .imm-edge.pull i { opacity: 1; }
+.imm-edge.pull i { width: 110px; margin-left: -55px; }
+.device.orb-corner .imm-edge i { left: calc(50% + 29px); }
