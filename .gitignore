@@ -1,3 +1,6 @@
 qa/
 qa-live/
 __pycache__/
+# Generated from the private Hermes session DB by tools/extract.py; never commit
+web/data.js
+web/summaries.js
