@@ -305,8 +305,14 @@ with (BASE / 'worker.lock').open('a') as lock:
             if tap_text(r'^Wizard OS voice typing$'): break
             sx('input swipe 540 1800 540 700 300'); time.sleep(1)
         time.sleep(2)
-        tap_text(r'^Use Wizard OS voice typing$|^Wizard OS voice typing$'); time.sleep(1.5)
-        tap_text(r'^Allow$'); time.sleep(2); shot('03f-a11y-on')
+        x = ui()
+        sw_node = re.search(r'<node [^>]*checkable="true"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', x)
+        if sw_node:
+            x1, y1, x2, y2 = map(int, sw_node.groups()); sx(f'input tap {(x1 + x2) // 2} {(y1 + y2) // 2}')
+        else:
+            tap_text(r'^Use Wizard OS voice typing$', x)
+        al = dialog(r'text="Allow"', 6); shot('03e-a11y-allow')
+        tap_text(r'^Allow$', al or None); time.sleep(2); shot('03f-a11y-on')
         on_by_ui = 'WizardKeyboardService' in sx('settings get secure enabled_accessibility_services')
         if not on_by_ui:
             print('  accessibility switch tap did not land:', re.findall(r'text="([^"]+)"', ui())[:12])
@@ -388,8 +394,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('leave the app mid-recording → the floating orb shows it is still recording', bc and (bc[2] - bc[0]) > dp(200) and 'app voice listen' in logs('app voice'), (bc, logs('app voice')))
         time.sleep(6)
         check('…and the app recording keeps going in the background (no auto-send on quiet)', pg.ev("window.__wos.voice") == 'listen', pg.ev("window.__wos.voice"))
-        ccx, ccy = (bc[0] + bc[2]) // 2, (bc[1] + bc[3]) // 2
-        PA2 = (ccx + dxs * dp(74), ccy + dys * dp(74)); CA2 = (ccx, ccy + dys * dp(104))
+        PA2, CA2 = PAUSE, CANCEL   # the orb stays where it was left; the fan opens around it
         sx(f'input tap {PA2[0]} {PA2[1]}'); time.sleep(1.2)
         check('floating Pause pauses the app’s recording', pg.ev("window.__wos.voice") == 'paused', (pg.ev("window.__wos.voice"), logs('remote')))
         sx(f'input tap {CA2[0]} {CA2[1]}'); time.sleep(1.5)
