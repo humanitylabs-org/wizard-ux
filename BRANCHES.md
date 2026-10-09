@@ -21,3 +21,4 @@ Android builds run on Thales with `android-build-thales`, signed with the Wizard
 ## Rules
 - Back never exits: Back steps out of the open view → Home → "Press back again to exit". Every Back change ships with a test.
 - QA never writes to Archimedes: Hermes/Wizard writes are intercepted, and each suite checks for zero `/v1/runs`.
+| `feature/everywhere-outbox` | Wizard OS 0.5.0: durable outbox (saved before send, idempotent retry, Not sent · Retry in thread/Inbox/Settings), Settings gear on Home, Wizard Everywhere floating button (Archimedes Anywhere merged in: hides while the app is open, draggable, remembered position, reply + not-sent notifications) | `web/outbox.js`, `web/app.js`, `android/.../everywhere/` | Web QA 22/22 + 54/54 + 33/33; device QA 25/25; upgrade 0.4.0→0.5.0 6/6 on Thales |
