@@ -2004,6 +2004,8 @@
     back() { window.__wosNativeBack(); },
   });
   mountLinks();
+  // Preview deep link: ?open=apps lands straight on the Apps menu (so a tapped review link shows the thing to judge).
+  try { if (new URLSearchParams(location.search).get('open') === 'apps') setTimeout(() => openSheet('launcher'), 300); } catch (e) {}
   window.__wos = {
     get links() { return LINKS; },
     live: LIVE, openPeek, closePeek, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
