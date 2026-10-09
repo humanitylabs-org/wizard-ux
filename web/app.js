@@ -649,7 +649,7 @@
       f.addEventListener('load', () => {
         let ok = false, why = '';
         try { const doc = f.contentDocument; why = doc ? doc.location.href : 'nodoc'; ok = !!doc && doc.location.href !== 'about:blank'; } catch (e) { ok = false; why = 'x:' + e.name; }
-        (window.__frameLog = window.__frameLog || []).push(why);
+        window.__frameLog = (window.__frameLog || []).concat(why).slice(-40); // bounded: the shell may run for weeks
         if (why === 'about:blank') {
           // A frame that had a real page and is back on blank was traversed by the Back key (cross-document, so no
           // popstate fires). That press belongs to the shell: take the step and restore the app in place.
