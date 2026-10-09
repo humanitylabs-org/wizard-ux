@@ -302,10 +302,20 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     }
 
     private void refreshBadge() {
+        syncAwake();
         if (ring == null) return;
         int failed = 0, waiting = 0;
         for (EverywhereOutbox.Item it : outbox.unsent()) { if ("failed".equals(it.state)) failed++; else waiting++; }
         ring.set(listening ? RingView.LISTEN : waiting > 0 ? RingView.SENDING : RingView.IDLE, failed);
+    }
+
+    /** The bubble's window keeps the screen on while it listens, so a lock can't cut the take short. */
+    private void syncAwake() {
+        if (lp == null || bubble == null) return;
+        int f = listening ? (lp.flags | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) : (lp.flags & ~WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (f == lp.flags) return;
+        lp.flags = f;
+        try { if (attached) wm.updateViewLayout(bubble, lp); } catch (RuntimeException ignored) { }
     }
 
     /** Tap = talk / send, drag = move (snaps to the nearer edge, remembered). */
