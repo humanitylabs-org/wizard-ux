@@ -68,7 +68,7 @@ public final class Updater {
     static final String ACTION_STATUS = "ai.wizards.os.update.STATUS";
     public static final String ACTION_UPDATE = "ai.wizards.os.action.UPDATE";
     static final String EXTRA_VC = "vc";
-    static final int N_UPDATE = 7601;
+    static final int N_UPDATE = 7601, N_UPDATED = 7602;
     private static final ExecutorService io = Executors.newSingleThreadExecutor();
     private static final Handler main = new Handler(Looper.getMainLooper());
     private static DeviceBridge bridge;
@@ -124,7 +124,8 @@ public final class Updater {
         if (b != null) b.emit("update", state.toString());
         if (wantsInstall && a.getPackageManager().canRequestPackageInstalls()) { wantsInstall = false; install(a); return; }
         if (System.currentTimeMillis() - lastCheck > 30 * 60_000L) check(a, null);
-        else if (verified != null) advance(a, false, null); // e.g. came back from a recording: show the ready banner
+        // e.g. came back from a recording: show the ready banner (an error stays up until James taps Retry)
+        else if (verified != null && !"error".equals(state.optString("state"))) advance(a, false, null);
     }
 
     /** Wizard OS left the screen: a downloaded update installs after a short grace (unless James comes back). */
@@ -477,7 +478,11 @@ public final class Updater {
             notice(app, "Wizard OS update ready", "Tap to install", pi);
             return;
         }
-        if (status == PackageInstaller.STATUS_SUCCESS) { cancelNotice(app); verified = null; set("installed"); return; }
+        if (status == PackageInstaller.STATUS_SUCCESS) {
+            NotificationManager nm = app.getSystemService(NotificationManager.class);
+            if (nm != null) nm.cancel(N_UPDATE); // "ready" is done; "updated · tap to open" (N_UPDATED) stays
+            verified = null; set("installed"); return;
+        }
         prefs(app).edit().putInt("relaunch", 0).apply();
         String why = UpdatePolicy.failureMessage(status, message);
         Log.w(TAG, "install failed: " + why);
@@ -497,7 +502,7 @@ public final class Updater {
         // (it allows it when Wizard Everywhere's overlay is on), so a tap-to-open notification is left as well;
         // opening the app clears it.
         Intent i = new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        notice(c, "Wizard OS updated to " + BuildConfig.VERSION_NAME, "Tap to open",
+        notice(c, N_UPDATED, "Wizard OS updated to " + BuildConfig.VERSION_NAME, "Tap to open",
                 PendingIntent.getActivity(c, 73, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         try { c.startActivity(i); } catch (RuntimeException e) { Log.i(TAG, "relaunch: " + e.getMessage()); }
     }
@@ -509,20 +514,22 @@ public final class Updater {
         notice(c, title, text, PendingIntent.getActivity(c, 71, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
     }
 
-    private static void notice(Context c, String title, String text, PendingIntent pi) {
+    private static void notice(Context c, String title, String text, PendingIntent pi) { notice(c, N_UPDATE, title, text, pi); }
+
+    private static void notice(Context c, int id, String title, String text, PendingIntent pi) {
         NotificationManager nm = c.getSystemService(NotificationManager.class);
         if (nm == null) return;
         if (nm.getNotificationChannel("updates") == null)
             nm.createNotificationChannel(new NotificationChannel("updates", "App updates", NotificationManager.IMPORTANCE_LOW));
         try {
-            nm.notify(N_UPDATE, new Notification.Builder(c, "updates").setSmallIcon(android.R.drawable.stat_sys_download_done)
+            nm.notify(id, new Notification.Builder(c, "updates").setSmallIcon(android.R.drawable.stat_sys_download_done)
                     .setContentTitle(title).setContentText(text).setContentIntent(pi).setAutoCancel(true).build());
         } catch (SecurityException e) { Log.i(TAG, "notice: " + e.getMessage()); }
     }
 
     static void cancelNotice(Context c) {
         NotificationManager nm = c.getSystemService(NotificationManager.class);
-        if (nm != null) nm.cancel(N_UPDATE);
+        if (nm != null) { nm.cancel(N_UPDATE); nm.cancel(N_UPDATED); }
     }
 
     /** "Update ready" notification tap (MainActivity intent action): install with James looking. */

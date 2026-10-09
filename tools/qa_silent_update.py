@@ -388,6 +388,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         stage()  # app data survives an update; harmless re-stage
         time.sleep(4)
         relaunched = front(); nt = notifs()
+        receipt['bal'] = sx('logcat -d | grep -iE "Background activity launch|BAL_|Abort background activity" | tail -4')
         receipt['relaunched_after_tap_update'] = relaunched
         shot('B5-after-first-update')
         check('B: after a tapped update James lands back in Wizard OS (or gets a "tap to open" notification)', relaunched or 'Wizard OS updated to' in nt,
