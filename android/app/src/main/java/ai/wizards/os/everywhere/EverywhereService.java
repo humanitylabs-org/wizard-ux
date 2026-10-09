@@ -365,7 +365,9 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             Toast.makeText(this, "Android blocked the microphone. Open Wizard OS and try again.", Toast.LENGTH_LONG).show();
             return;
         }
-        try {
+        File qa = qaAudio(); // debug builds on the emulator (no microphone): a staged recording, used once
+        if (qa != null) recording = qa;
+        else try {
             recording = new File(getCacheDir(), "everywhere-" + SystemClock.elapsedRealtime() + ".m4a");
             MediaRecorder r = Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(this) : new MediaRecorder();
             r.setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION);
@@ -381,13 +383,9 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         } catch (Exception e) {
             Log.w(TAG, "recorder failed", e);
             dropRecorder();
-            File qa = qaAudio();
-            if (qa == null) {
-                Toast.makeText(this, "The microphone is busy. Try again in a moment.", Toast.LENGTH_SHORT).show();
-                startForegroundSafe(false);
-                return;
-            }
-            recording = qa; // debug builds on the emulator: canned recording
+            Toast.makeText(this, "The microphone is busy. Try again in a moment.", Toast.LENGTH_SHORT).show();
+            startForegroundSafe(false);
+            return;
         }
         listening = true;
         startedAt = SystemClock.elapsedRealtime();
