@@ -368,14 +368,14 @@ with (BASE / 'worker.lock').open('a') as lock:
         # ------------------------------------------------ (f) origin scoping + iframe reach
         shell_port = pg.ev("typeof window.wizardMizelPort")
         check('bridge', 'shell main frame (https://private.wizard001.com/wizard-os-home/) has wizardMizelPort', shell_port == 'object', shell_port)
-        # The real Mizel app window is an iframe (/meetings/) inside the shell: open it and look inside.
+        # The real Mizel app window is an iframe (/mizel-live/, the canonical view) inside the shell: open it and look inside.
         pg.ev("window.dispatchEvent(new CustomEvent('wizard:open', {detail: {app: 'mizel'}}))")
         probe = "(() => { const f=[...document.querySelectorAll('iframe')].map(f => { try { return [f.contentWindow.location.href, typeof f.contentWindow.wizardMizelPort, f.contentDocument && f.contentDocument.readyState] } catch (e) { return [f.src, 'x:' + e.name] } }); return f.some(x => x[0].includes('/meetings/') && x[2] === 'complete') ? f : null })()"
         frames = pg.pump(25, lambda: pg.ev(probe), 1.0)
         frames = frames or pg.ev("[...document.querySelectorAll('iframe')].map(f => { try { return [f.src, typeof f.contentWindow.wizardMizelPort] } catch (e) { return [f.src, 'x'] } })")
         shot('01-shell-mizel-window')
-        mf = [f for f in (frames or []) if '/meetings/' in f[0]]
-        check('bridge', 'real Mizel iframe (/meetings/) inside the Wizard OS shell gets wizardMizelPort', mf and all(f[1] == 'object' for f in mf), frames)
+        mf = [f for f in (frames or []) if '/mizel-live/' in f[0]]
+        check('bridge', 'real Mizel iframe (/mizel-live/) inside the Wizard OS shell gets wizardMizelPort', mf and all(f[1] == 'object' for f in mf), frames)
         pg.ev("history.length")
         ok = open_host(pg)
         R0 = pg.ev("JSON.stringify({hasPort: R.hasPort, frames: R.frames})")
