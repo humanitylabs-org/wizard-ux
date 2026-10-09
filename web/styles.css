@@ -698,3 +698,20 @@ body {
 .ub-a { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .ub-a button { padding: 8px 14px; border-radius: 99px; background: rgba(143, 99, 255, .24); color: var(--ink); font-size: 13px; font-weight: 650; }
 .ub-a button.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
+
+/* Sent pill: after the orb sends, the transcript card collapses to one short line above the orb
+   and fades (~1.2 s). Same quiet confirmation as the floating orb; the sent words stay in the thread. */
+.voice .transcript.brief {
+  left: 50%; right: auto; width: max-content; max-width: calc(100% - 72px);
+  bottom: calc(var(--safe-b) + var(--dock-h) + 16px);
+  padding: 8px 14px 8px 9px; border-radius: 999px;
+  transform: translate(-50%, 10px) scale(.94);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+}
+.voice.tx .transcript.brief { transform: translate(-50%, 0) scale(1); }
+.transcript.brief #txText, .transcript.brief .tx-chips { display: none; }
+.transcript.brief .tx-route { font-size: 13px; font-weight: 650; letter-spacing: 0; text-transform: none; color: #eee9ff; white-space: nowrap; overflow: hidden; }
+.transcript.brief .tx-route span { overflow: hidden; text-overflow: ellipsis; }
+.transcript.brief .tx-route b { flex: none; border-radius: 50%; }
+.transcript.brief.agent .tx-route b { background: rgba(255, 110, 199, .2); color: var(--pink); }
+.transcript.brief.command .tx-route b { color: var(--cyan); }
