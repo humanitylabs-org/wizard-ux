@@ -186,10 +186,9 @@ def controls():
         m = re.search(r'(?:mFrame|frame)=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]', blk)
         if m and 'mViewVisibility=0x8' not in blk and 'mViewVisibility=0x4' not in blk: out[m0.group(1)] = tuple(map(int, m.groups()))
     return out
-def ours_at(x, y):
+def ours_at(x, y, frames):
     """Is any Wizard Everywhere window (orb or button) under this point?"""
-    fr = [bubble()] + list(controls().values())
-    return any(f and f[0] <= x < f[2] and f[1] <= y < f[3] for f in fr)
+    return any(f and f[0] <= x < f[2] and f[1] <= y < f[3] for f in frames)
 def mid(f): return ((f[0] + f[2]) // 2, (f[1] + f[3]) // 2)
 def wait_bubble(want, secs=8):
     t0 = time.time()
@@ -373,16 +372,18 @@ with (BASE / 'worker.lock').open('a') as lock:
         # 1. Talk, Pause, carry on, Cancel: nothing is sent.
         stage_audio(); sx('logcat -c')
         sx(f'input tap {cx} {cy}'); time.sleep(1.2)
-        bx = bubble(); cs = controls(); shot('07a-listening-small')
-        check('tap starts listening and Cancel · Pause · Screen open around the orb', 'listening' in logs('listening') and set(cs) == {'cancel', 'pause', 'screen'}, (logs('listening'), cs))
+        cs = controls()
         if len(cs) == 3: PAUSE, CANCEL, SHOT = mid(cs['pause']), mid(cs['cancel']), mid(cs['screen'])
+        sx(f'input tap {PAUSE[0]} {PAUSE[1]}'); time.sleep(1.0); shot('07-paused')
+        bx = bubble()
+        check('tap starts listening and Cancel · Pause · Screen open around the orb', 'listening' in logs('listening') and set(cs) == {'cancel', 'pause', 'screen'}, (logs('listening'), cs))
         check('the orb is smaller (about 64 dp) and stays that size while talking', bx and dp(56) <= (bx[2] - bx[0]) <= dp(72), bx)
         # Touches around the orb reach the app below: only the orb and the three buttons are windows.
         gaps = [(cx + dxs * dp(38), cy + dys * dp(100)), (cx + dxs * dp(100), cy + dys * dp(38)), (cx + dxs * dp(100), cy + dys * dp(100)),
                 (cx + dxs * dp(20), cy + dys * dp(45))]
-        blocked = [g for g in gaps if ours_at(*g)]
-        check('the space between and around the buttons is not ours: taps there reach the app underneath', not blocked, (blocked, bx, cs))
-        sx(f'input tap {PAUSE[0]} {PAUSE[1]}'); time.sleep(1.0); shot('07-paused')
+        frames = [bx] + list(cs.values())
+        blocked = [g for g in gaps if ours_at(*g, frames)]
+        check('the space between and around the buttons is not ours: taps there reach the app underneath', not blocked and len(cs) == 3, (blocked, bx, cs))
         check('Pause pauses the recording', 'paused' in logs(': paused'), logs('paused|resumed'))
         time.sleep(3)  # the QA recording would have finished by now if Pause didn't hold it
         check('while paused it does not send', STATE['transcribe'] == 0 and 'listening' in logs('listening'), STATE['transcribe'])
@@ -504,10 +505,13 @@ with (BASE / 'worker.lock').open('a') as lock:
               const r = document.createRange(); r.setStart(t, at); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return at; })()""")
         except Exception as e:
             print('  editor page:', e)
-        eb = ed and ed.ev("(() => { const r = document.getElementById('ed').getBoundingClientRect(); return [r.left + 40, r.top + 60, devicePixelRatio, window.outerHeight - window.innerHeight]; })()")
+        eb = ed and ed.ev("(() => { const r = document.getElementById('ed').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height - 30]; })()")
         if eb and not ime_shown():
-            # A real tap puts the IME up; then put the caret back after "- eggs" (the tap moved it).
-            sx(f'input tap {int(eb[0] * eb[2])} {int(eb[1] * eb[2]) + int(eb[3] * eb[2])}'); time.sleep(2)
+            # A tap on the editor itself (sent through Chrome, so it can't miss) puts the keyboard up; then the caret
+            # goes back after "- eggs" (the tap moved it).
+            for typ in ('touchStart', 'touchEnd'):
+                ed.call('Input.dispatchTouchEvent', type=typ, touchPoints=[] if typ == 'touchEnd' else [{'x': eb[0], 'y': eb[1]}])
+            time.sleep(2.5)
             ed.ev("""(() => { const ed = document.getElementById('ed'); const t = ed.firstChild; const at = t.data.indexOf('- eggs') + 6;
               const r = document.createRange(); r.setStart(t, at); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return at; })()""")
         wait_log('keyboard open', 8); wait_log('placed over keyboard', 8); time.sleep(1.5)

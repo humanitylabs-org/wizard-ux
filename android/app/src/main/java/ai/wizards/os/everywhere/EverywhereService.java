@@ -800,10 +800,10 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         setExpanded(true);
         pushState();
         main.post(meter);
-        if (recorder == null) main.postDelayed(qaAutoFinish, 2500); // QA canned audio
+        if (recorder == null) main.postDelayed(qaAutoFinish, QA_FINISH_MS); // QA canned audio
     }
 
-    /** QA builds: the staged recording finishes by itself after 2.5 s of not being paused. */
+    /** QA builds: the staged recording finishes by itself after QA_FINISH_MS of not being paused. */
     private final Runnable qaAutoFinish = new Runnable() {
         @Override public void run() {
             if (!listening) return;
@@ -827,6 +827,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     };
 
     private boolean micLost;
+    /** Debug builds, staged QA audio only: the scripted "tap to send" comes this long after the take starts. */
+    private static final long QA_FINISH_MS = 4000;
 
     /** Android took the microphone away mid-take: keep what was recorded, pause, and let a tap send it. */
     private void micLost(MediaRecorder mr, int what) {
@@ -851,7 +853,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         } else {
             if (recorder != null) try { recorder.resume(); } catch (IllegalStateException e) { Log.w(TAG, "resume failed", e); return; }
             paused = false;
-            if (recorder == null) { main.removeCallbacks(qaAutoFinish); main.postDelayed(qaAutoFinish, 2500); } // QA: 2.5 s more after carrying on
+            if (recorder == null) { main.removeCallbacks(qaAutoFinish); main.postDelayed(qaAutoFinish, QA_FINISH_MS); } // QA: the full wait again after carrying on
         }
         Log.i(TAG, paused ? "paused" : "resumed");
         buzz(10);
