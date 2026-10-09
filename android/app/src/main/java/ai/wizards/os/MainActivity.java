@@ -458,6 +458,21 @@ public class MainActivity extends Activity {
         }
 
         /** Messages from the floating button that Wizard has not accepted yet (no paths, no bodies). */
+        /** Android's Accessibility page, to switch on voice typing + screenshots for Wizard Everywhere. */
+        @JavascriptInterface
+        public void voiceTypingSettings() {
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    // Samsung/AOSP open straight on our row when they get the component name.
+                    String cn = new android.content.ComponentName(MainActivity.this, ai.wizards.os.everywhere.WizardKeyboardService.class).flattenToString();
+                    Bundle b = new Bundle(); b.putString(":settings:fragment_args_key", cn);
+                    i.putExtra(":settings:fragment_args_key", cn).putExtra(":settings:show_fragment_args", b);
+                    startActivity(i);
+                } catch (Exception e) { android.util.Log.w("WizardOS", "accessibility settings: " + e); }
+            });
+        }
+
         @JavascriptInterface
         public String unsent() { return ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this).unsentJson(); }
 

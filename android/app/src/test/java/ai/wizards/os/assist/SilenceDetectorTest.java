@@ -80,4 +80,33 @@ public class SilenceDetectorTest {
         assertTrue(body.contains("name=\"language\"\r\n\r\nen\r\n"));
         assertTrue(body.endsWith("--BOUNDARY--\r\n"));
     }
+
+    @Test
+    public void pauseNeverSendsOrGivesUp() {
+        SilenceDetector d = SilenceDetector.standard();
+        long t = 1000;
+        for (int i = 0; i < 20; i++, t += 90) d.feed(9000, t);   // 1.8 s talking
+        d.pause(t);
+        for (int i = 0; i < 400; i++, t += 90)                    // 36 s paused, silent
+            assertEquals(SilenceDetector.Result.CONTINUE, d.feed(300, t));
+        d.resume(t);
+        // After resuming, the 2.4 s pause rule starts fresh: 1 s of quiet is still listening …
+        SilenceDetector.Result r = SilenceDetector.Result.CONTINUE;
+        for (int i = 0; i < 11; i++, t += 90) r = d.feed(300, t);
+        assertEquals(SilenceDetector.Result.CONTINUE, r);
+        // … and a real pause after that sends.
+        for (int i = 0; i < 30 && r == SilenceDetector.Result.CONTINUE; i++, t += 90) r = d.feed(300, t);
+        assertEquals(SilenceDetector.Result.SEND, r);
+    }
+
+    @Test
+    public void pauseBeforeSpeakingDoesNotCountTowardsNothingHeard() {
+        SilenceDetector d = SilenceDetector.standard();
+        long t = 1000;
+        d.feed(300, t);
+        d.pause(t);
+        t += 60_000;
+        d.resume(t);
+        assertEquals(SilenceDetector.Result.CONTINUE, d.feed(300, t + 90));
+    }
 }

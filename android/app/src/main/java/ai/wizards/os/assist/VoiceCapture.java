@@ -16,6 +16,8 @@ import android.os.SystemClock;
 import android.util.Log;
 
 import java.io.File;
+
+import ai.wizards.os.everywhere.EverywhereOutbox;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -35,6 +37,11 @@ final class VoiceCapture {
         void onSending(String via);
         void onHeard(String text, long ms);
         void onError(String kind, String message);
+        /** Wizard accepted it: the thread to open. */
+        default void onDelivered(String sessionId) { }
+        /** Wizard isn't reachable yet: it's saved on the phone and retrying by itself. */
+        default void onQueued(String why) { }
+        default void onPaused(boolean paused) { }
     }
 
     private static VoiceCapture instance;
@@ -55,18 +62,22 @@ final class VoiceCapture {
     private SilenceDetector detector;
     private boolean listening;
     private boolean sending;
+    private boolean paused;
+    private final android.app.KeyguardManager keyguard;
     private long startedAt;
 
     private VoiceCapture(Context app) {
         this.app = app;
         this.store = new CaptureStore(app);
+        this.keyguard = (android.app.KeyguardManager) app.getSystemService(Context.KEYGUARD_SERVICE);
     }
 
     CaptureStore store() { return store; }
 
     boolean listening() { return listening; }
 
-    boolean busy() { return listening || sending; }
+    /** Only a live recording blocks a new one: anything already said is in the outbox and delivers by itself. */
+    boolean busy() { return listening; }
 
     /** The view that receives events; a new view takes over from the old one. */
     void attach(View v) { view = v; }
@@ -114,7 +125,8 @@ final class VoiceCapture {
         Log.i(TAG, "listening");
         if (view != null) view.onBegin();
         main.post(meter);
-        if (autoSendMs > 0) main.postDelayed(() -> send("qa"), autoSendMs);
+        paused = false;
+        if (autoSendMs > 0) main.postDelayed(qaSend = () -> { if (paused) main.postDelayed(qaSend, 500); else send("qa"); }, autoSendMs);
     }
 
     private void preferBuiltInMic(MediaRecorder r) {
@@ -141,7 +153,7 @@ final class VoiceCapture {
                 }
             }
             if (view != null) view.onLevel(Math.min(1f, amp / 12000f));
-            if (qaAudio == null) {
+            if (qaAudio == null && !paused) {
                 SilenceDetector.Result res = detector.feed(amp, SystemClock.elapsedRealtime());
                 if (res == SilenceDetector.Result.SEND) {
                     send("pause");
@@ -162,6 +174,8 @@ final class VoiceCapture {
         if (!listening) return;
         listening = false;
         main.removeCallbacks(meter);
+        if (paused && recorder != null) try { recorder.resume(); } catch (IllegalStateException ignored) { }
+        paused = false;
         MediaRecorder r = recorder;
         recorder = null;
         long heldMs = SystemClock.elapsedRealtime() - startedAt;
@@ -176,48 +190,118 @@ final class VoiceCapture {
         }
         final File qa = qaAudio;
         final File audio = qa != null ? qa : recording;
-        final File own = recording;
         recording = null;
-        if (!ok && qa == null) {
-            if (own != null) //noinspection ResultOfMethodCallIgnored
-                own.delete();
+        if ((!ok && qa == null) || audio == null || !audio.isFile() || audio.length() < 512) {
+            if (audio != null && qa == null) //noinspection ResultOfMethodCallIgnored
+                audio.delete();
             if (view != null) view.onNothing();
             return;
         }
-        Log.i(TAG, "sending via=" + via + " ms=" + heldMs + (qa != null ? " qa_audio=" + qa.getName() : ""));
+        boolean locked = keyguard != null && keyguard.isKeyguardLocked();
+        Log.i(TAG, "sending via=" + via + " ms=" + heldMs + " locked=" + locked + (qa != null ? " qa_audio=" + qa.getName() : ""));
+        // Same path as the floating orb: saved on the phone first, then words → Wizard, retried until it lands.
+        // No draft, no confirm: holding the side button and talking is sending.
+        final EverywhereOutbox.Item it;
+        try {
+            it = outbox().enqueueRecording(audio, EverywhereOutbox.SRC_SIDE, null, locked);
+        } catch (Exception e) {
+            Log.e(TAG, "could not keep the recording", e);
+            emitError("net", "Couldn’t save that recording on the phone.");
+            return;
+        }
+        pendingId = it.id;
+        reported = false;
         sending = true;
         if (view != null) view.onSending(via);
-        io.execute(() -> {
-            try {
-                Transcriber.Result t = Transcriber.transcribe(audio);
-                if (own != null) //noinspection ResultOfMethodCallIgnored
-                    own.delete();
-                main.post(() -> {
-                    sending = false;
-                    if (t.text.isEmpty()) {
-                        if (view != null) view.onNothing();
-                        return;
-                    }
-                    store.add(t.text, System.currentTimeMillis());
-                    Log.i(TAG, "transcribed ms=" + t.ms + " chars=" + t.text.length());
-                    if (view != null) view.onHeard(t.text, t.ms);
-                });
-            } catch (Exception e) {
-                if (own != null) //noinspection ResultOfMethodCallIgnored
-                    own.delete();
-                Log.w(TAG, "transcribe failed: " + e.getMessage());
-                main.post(() -> {
-                    sending = false;
-                    emitError("net", "Couldn’t reach Wizard voice. Is Tailscale on?");
-                });
-            }
-        });
+        main.removeCallbacks(slow);
+        main.postDelayed(slow, 15000);
+    }
+
+    /* ---------------------------------------------------------------- following the message */
+
+    private String pendingId;
+    private boolean reported;
+    private EverywhereOutbox ob;
+
+    private EverywhereOutbox outbox() {
+        if (ob == null) {
+            ob = EverywhereOutbox.get(app);
+            ob.addListener(follow);
+        }
+        return ob;
+    }
+
+    /** Wizard is slow to answer: say it's safe on the phone and free the button. The outbox keeps going. */
+    private final Runnable slow = () -> {
+        if (pendingId == null || reported) return;
+        EverywhereOutbox.Item it = ob == null ? null : ob.item(pendingId);
+        queued(it != null && !it.error.isEmpty() ? it.error : "Still sending");
+    };
+
+    private void queued(String why) {
+        reported = true;
+        sending = false;
+        Log.i(TAG, "queued: " + why);
+        if (view != null) view.onQueued(why);
+    }
+
+    private final EverywhereOutbox.Listener follow = new EverywhereOutbox.Listener() {
+        @Override
+        public void onWords(EverywhereOutbox.Item it, String text) {
+            if (!it.id.equals(pendingId)) return;
+            store.add(text, System.currentTimeMillis());
+            Log.i(TAG, "transcribed chars=" + text.length());
+            if (view != null && !reported) view.onHeard(text, SystemClock.elapsedRealtime() - startedAt);
+        }
+
+        @Override
+        public void onSent(EverywhereOutbox.Item it) {
+            if (!it.id.equals(pendingId)) return;
+            pendingId = null;
+            sending = false;
+            main.removeCallbacks(slow);
+            Log.i(TAG, "delivered session=" + it.sessionId);
+            if (view != null) view.onDelivered(it.sessionId);
+        }
+
+        @Override
+        public void onOutboxChanged() {
+            main.post(() -> {
+                if (pendingId == null || ob == null) return;
+                EverywhereOutbox.Item it = ob.item(pendingId);
+                if (it == null || "empty".equals(it.state)) {     // nothing intelligible in the recording
+                    pendingId = null; sending = false; main.removeCallbacks(slow);
+                    if (view != null) view.onNothing();
+                    return;
+                }
+                if (!reported && it.attempts > 0 && ("waiting".equals(it.state) || "failed".equals(it.state))) queued(it.error);
+            });
+        }
+    };
+
+    private Runnable qaSend;
+
+    boolean paused() { return paused; }
+
+    /** Pause / resume the recording (the Pause control). The pause detector stops its clock while paused. */
+    void togglePause() {
+        if (!listening) return;
+        long now = SystemClock.elapsedRealtime();
+        try {
+            if (!paused) { if (recorder != null) recorder.pause(); detector.pause(now); }
+            else { if (recorder != null) recorder.resume(); detector.resume(now); }
+        } catch (IllegalStateException e) { Log.w(TAG, "pause failed", e); return; }
+        paused = !paused;
+        Log.i(TAG, paused ? "paused" : "resumed");
+        if (view != null) view.onPaused(paused);
     }
 
     /** Stop and throw the recording away (Back, cancel, screen off). Never sends. */
     void discard() {
         listening = false;
+        paused = false;
         main.removeCallbacks(meter);
+        if (qaSend != null) main.removeCallbacks(qaSend);
         dropRecorder();
         if (recording != null) {
             //noinspection ResultOfMethodCallIgnored

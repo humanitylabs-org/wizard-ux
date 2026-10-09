@@ -109,6 +109,21 @@
                 android:value="Persistent user-controlled floating assistant button" />
         </service>
         <receiver
+            android:name=".everywhere.EverywhereService$RetryReceiver"
+            android:exported="false" />
+        <service
+            android:name=".everywhere.WizardKeyboardService"
+            android:exported="true"
+            android:label="Wizard OS voice typing"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/everywhere_accessibility" />
+        </service>
+        <receiver
             android:name=".everywhere.EverywhereBoot"
             android:exported="true">
             <intent-filter>

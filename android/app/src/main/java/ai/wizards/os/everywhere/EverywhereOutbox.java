@@ -43,8 +43,21 @@ public final class EverywhereOutbox {
     public static final String DEFAULT_ORIGIN = "https://private.wizard001.com";
     static final String PROMPT = "Wizard voice request spoken to Archimedes from the floating Wizard button on a phone. "
             + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
-    static final String INSTRUCTIONS = "James spoke this to the Wizard Everywhere floating button on his Android phone, "
-            + "outside the Wizard OS app (he may be in another app). The original recording is attached as a voice note.";
+    static final String DICTATION_PROMPT = "Dictation typed into a text field on James's phone. "
+            + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
+    /** Where a recording came from: the floating orb, the side button (lock screen / corner), or keyboard dictation. */
+    public static final String SRC_EVERYWHERE = "everywhere", SRC_SIDE = "side", SRC_DICTATION = "dictation";
+
+    static String instructions(Item it) {
+        int shots = it.shots == null ? 0 : it.shots.length();
+        String where = SRC_SIDE.equals(it.source)
+                ? (it.locked
+                    ? "Spoken into the Wizard OS side-button assistant while the Android phone was LOCKED, so the speaker was not verified by an unlock. "
+                    : "James spoke this by holding his Android phone's side button (Wizard OS assistant, phone unlocked). ")
+                : "James spoke this to the Wizard Everywhere floating orb on his Android phone, outside the Wizard OS app (he may be in another app). ";
+        return where + "The original recording is attached as a voice note."
+                + (shots > 0 ? " He attached " + shots + " screenshot" + (shots == 1 ? "" : "s") + " of what was on his screen while talking." : "");
+    }
 
     /** Debug (QA) builds only: files/qa_origin.txt points the outbox at a fake Wizard on the emulator host. */
     static String qaOrigin(Context c) {
@@ -57,20 +70,37 @@ public final class EverywhereOutbox {
         } catch (IOException e) { return DEFAULT_ORIGIN; }
     }
 
-    public interface Listener { void onOutboxChanged(); void onFailed(Item it); void onSent(Item it); void onReply(Item it, String text); }
+    public interface Listener {
+        default void onOutboxChanged() { }
+        default void onFailed(Item it) { }
+        default void onSent(Item it) { }
+        default void onReply(Item it, String text) { }
+        /** The recording has been turned into words (before it is sent on to Wizard). */
+        default void onWords(Item it, String text) { }
+        /** Keyboard dictation: the words are ready to type. */
+        default void onDictated(Item it, String text) { }
+    }
 
     public static final class Item {
         public String id, state = "waiting", text = "", error = "", sessionId, audioPath = "", body = "", runId = "";
+        public String source = SRC_EVERYWHERE;
         public long createdAt, nextAt, sentAt;
+        /** Side button only: the phone was locked when this was spoken. */
+        public boolean locked;
         public int attempts;
         boolean sessionReady;
         JSONObject audioFile;
+        /** Screenshot paths (kept until Wizard accepts the message) and their Wizard Files records, in order. */
+        JSONArray shots = new JSONArray(), shotFiles = new JSONArray();
+
+        public boolean dictation() { return SRC_DICTATION.equals(source); }
 
         JSONObject json() throws JSONException {
             return new JSONObject().put("id", id).put("state", state).put("text", text).put("error", error)
                     .put("sessionId", sessionId).put("audioPath", audioPath).put("body", body).put("runId", runId)
                     .put("createdAt", createdAt).put("nextAt", nextAt).put("sentAt", sentAt).put("attempts", attempts)
-                    .put("sessionReady", sessionReady).put("audioFile", audioFile == null ? JSONObject.NULL : audioFile);
+                    .put("sessionReady", sessionReady).put("audioFile", audioFile == null ? JSONObject.NULL : audioFile)
+                    .put("source", source).put("shots", shots).put("shotFiles", shotFiles).put("locked", locked);
         }
 
         static Item from(JSONObject o) {
@@ -80,6 +110,10 @@ public final class EverywhereOutbox {
             it.body = o.optString("body"); it.runId = o.optString("runId"); it.createdAt = o.optLong("createdAt");
             it.nextAt = o.optLong("nextAt"); it.sentAt = o.optLong("sentAt"); it.attempts = o.optInt("attempts");
             it.sessionReady = o.optBoolean("sessionReady"); it.audioFile = o.optJSONObject("audioFile");
+            it.source = o.optString("source", SRC_EVERYWHERE);
+            it.locked = o.optBoolean("locked");
+            JSONArray a = o.optJSONArray("shots"); if (a != null) it.shots = a;
+            JSONArray f = o.optJSONArray("shotFiles"); if (f != null) it.shotFiles = f;
             return it;
         }
 
@@ -87,7 +121,8 @@ public final class EverywhereOutbox {
         JSONObject publicJson() throws JSONException {
             return new JSONObject().put("id", id).put("state", "sending".equals(state) ? "sending" : state)
                     .put("text", text).put("error", error).put("createdAt", createdAt).put("attempts", attempts)
-                    .put("hasAudio", !audioPath.isEmpty()).put("sessionId", sessionId);
+                    .put("hasAudio", !audioPath.isEmpty()).put("sessionId", sessionId)
+                    .put("source", source).put("shots", shots.length());
         }
     }
 
@@ -99,7 +134,10 @@ public final class EverywhereOutbox {
     private static EverywhereOutbox instance;
 
     public static synchronized EverywhereOutbox get(Context c) {
-        if (instance == null) instance = new EverywhereOutbox(c.getApplicationContext(), qaOrigin(c));
+        if (instance == null) {
+            instance = new EverywhereOutbox(c.getApplicationContext(), qaOrigin(c));
+            instance.app = c.getApplicationContext();
+        }
         return instance;
     }
 
@@ -111,6 +149,8 @@ public final class EverywhereOutbox {
     private final List<Listener> listeners = new ArrayList<>();
     private final Runnable pumpTask = this::pumpNow;
     private boolean pumping;
+    /** Set for the app-wide instance: "Not sent" and reply notifications don't depend on the floating orb running. */
+    private Context app;
 
     /** Visible for tests: a private store directory and a fake Wizard origin. */
     EverywhereOutbox(Context app, String origin) { this(new File(app.getFilesDir(), "everywhere"), origin); }
@@ -163,9 +203,30 @@ public final class EverywhereOutbox {
     }
 
     /** Takes ownership of a finished recording: moves it into the outbox and queues it. Returns the item. */
-    public Item enqueueRecording(File recording) throws IOException {
+    public Item enqueueRecording(File recording) throws IOException { return enqueueRecording(recording, SRC_EVERYWHERE, null); }
+
+    /**
+     * Same, with where it came from and any screenshots. Everything (audio + PNGs) is on disk and fsynced before
+     * this returns, so nothing depends on the network or this process surviving.
+     */
+    public Item enqueueRecording(File recording, String source, List<byte[]> screenshots) throws IOException {
+        return enqueueRecording(recording, source, screenshots, false);
+    }
+
+    public Item enqueueRecording(File recording, String source, List<byte[]> screenshots, boolean locked) throws IOException {
         Item it = new Item();
-        it.id = "wos-ev-" + UUID.randomUUID();
+        it.locked = locked;
+        it.id = (SRC_DICTATION.equals(source) ? "wos-dict-" : SRC_SIDE.equals(source) ? "wos-side-" : "wos-ev-") + UUID.randomUUID();
+        it.source = source == null ? SRC_EVERYWHERE : source;
+        if (screenshots != null && !it.dictation()) {
+            int n = 0;
+            for (byte[] png : screenshots) {
+                if (png == null || png.length == 0) continue;
+                File f = new File(audioDir, it.id + "-shot" + (++n) + ".png");
+                try (FileOutputStream o = new FileOutputStream(f)) { o.write(png); o.getFD().sync(); }
+                it.shots.put(f.getAbsolutePath());
+            }
+        }
         it.createdAt = System.currentTimeMillis();
         it.sessionId = "wizard_" + it.createdAt + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         File kept = new File(audioDir, it.id + ".m4a");
@@ -217,9 +278,15 @@ public final class EverywhereOutbox {
             if (it == null) return;
             if (!it.audioPath.isEmpty()) //noinspection ResultOfMethodCallIgnored
                 new File(it.audioPath).delete();
+            deleteShots(it);
             save();
         }
         changed();
+    }
+
+    private static void deleteShots(Item it) {
+        for (int i = 0; i < it.shots.length(); i++) //noinspection ResultOfMethodCallIgnored
+            new File(it.shots.optString(i)).delete();
     }
 
     /* ------------------------------------------------------------------ delivery */
@@ -275,7 +342,10 @@ public final class EverywhereOutbox {
         }
         Log.i(TAG, "attempt " + it.attempts + " failed (" + status + "): " + msg + (gaveUp ? " → not sent" : " → retrying"));
         changed();
-        if (gaveUp) for (Listener l : snapshot()) l.onFailed(it);
+        if (gaveUp) {
+            if (app != null) EverywhereService.notifyFailed(app, this, it);
+            for (Listener l : snapshot()) l.onFailed(it);
+        }
     }
 
     private void deliver(Item it) throws IOException, JSONException {
@@ -284,7 +354,7 @@ public final class EverywhereOutbox {
         if (it.text.isEmpty()) {
             if (audio == null || !audio.isFile()) throw new HttpError(410, "The recording is gone");
             Transcriber.Result t;
-            try { t = Transcriber.transcribe(audio, origin, PROMPT); }
+            try { t = Transcriber.transcribe(audio, origin, it.dictation() ? DICTATION_PROMPT : PROMPT); }
             catch (IOException e) { throw asHttp(e); }
             if (t.text.isEmpty()) {
                 synchronized (this) { it.state = "empty"; it.error = "No speech in that recording"; items.remove(it.id); save(); }
@@ -294,7 +364,24 @@ public final class EverywhereOutbox {
                 return;
             }
             synchronized (this) { it.text = t.text; save(); }
+            final String heard = t.text;
+            main.post(() -> { for (Listener l : snapshot()) l.onWords(it, heard); });
             changed();
+        }
+        // Dictation stops here: the words go into the text field, nothing goes to Wizard.
+        if (it.dictation()) {
+            synchronized (this) {
+                it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
+                if (audio != null) //noinspection ResultOfMethodCallIgnored
+                    audio.delete();
+                it.audioPath = "";
+                items.remove(it.id);
+                save();
+            }
+            Log.i(TAG, "dictated " + it.id + " chars=" + it.text.length() + " attempts=" + it.attempts);
+            final String words = it.text;
+            main.post(() -> { changed(); for (Listener l : snapshot()) l.onDictated(it, words); });
+            return;
         }
         // 2. The recording rides along as a voice note.
         if (it.audioFile == null && audio != null && audio.isFile()) {
@@ -305,6 +392,17 @@ public final class EverywhereOutbox {
             if (f == null || f.optString("id").isEmpty()) throw new HttpError(502, "Wizard Files returned no id");
             synchronized (this) { it.audioFile = f; save(); }
         }
+        // 2b. Screenshots, one upload each; each id is kept as it lands so a retry skips what's already there.
+        for (int i = it.shotFiles.length(); i < it.shots.length(); i++) {
+            File png = new File(it.shots.optString(i));
+            if (!png.isFile()) { synchronized (this) { it.shotFiles.put(JSONObject.NULL); save(); } continue; }
+            String name = "wizard-screen-" + new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH-mm-ss", java.util.Locale.US).format(new java.util.Date(it.createdAt)) + "-" + (i + 1) + ".png";
+            JSONObject r = request("POST", "/wizard/files/upload", readAll(new FileInputStream(png)), "application/octet-stream",
+                    new String[]{"X-Wizard-Filename", name, "X-Wizard-Mime", "image/png"});
+            JSONObject f = r.optJSONObject("file");
+            if (f == null || f.optString("id").isEmpty()) throw new HttpError(502, "Wizard Files returned no id");
+            synchronized (this) { it.shotFiles.put(f); save(); }
+        }
         // 3. Its own thread. 409 = an earlier try already created it.
         if (!it.sessionReady) {
             try {
@@ -314,8 +412,14 @@ public final class EverywhereOutbox {
         }
         // 4. Admit the run: same key + same bytes on every try → Wizard replays instead of duplicating.
         if (it.body.isEmpty()) {
-            JSONObject b = new JSONObject().put("session_id", it.sessionId).put("input", it.text).put("instructions", INSTRUCTIONS);
-            if (it.audioFile != null) b.put("wizard_file_ids", new JSONArray().put(it.audioFile.optString("id")));
+            JSONObject b = new JSONObject().put("session_id", it.sessionId).put("input", it.text).put("instructions", instructions(it));
+            JSONArray ids = new JSONArray();
+            if (it.audioFile != null) ids.put(it.audioFile.optString("id"));
+            for (int i = 0; i < it.shotFiles.length(); i++) {
+                JSONObject f = it.shotFiles.optJSONObject(i);
+                if (f != null && !f.optString("id").isEmpty()) ids.put(f.optString("id"));
+            }
+            if (ids.length() > 0) b.put("wizard_file_ids", ids);
             synchronized (this) { it.body = b.toString(); save(); }
         }
         JSONObject run = request("POST", "/wizard/hermes/v1/runs", it.body.getBytes(StandardCharsets.UTF_8), "application/json",
@@ -326,6 +430,7 @@ public final class EverywhereOutbox {
             if (!it.audioPath.isEmpty()) //noinspection ResultOfMethodCallIgnored
                 new File(it.audioPath).delete(); // the server has it now (voice note + transcript)
             it.audioPath = "";
+            deleteShots(it);
             pruneSent();
             save();
         }
@@ -357,7 +462,10 @@ public final class EverywhereOutbox {
                     String st = r.optString("status");
                     if ("completed".equals(st) || "failed".equals(st) || "cancelled".equals(st) || "stopped".equals(st)) {
                         String out = "completed".equals(st) ? r.optString("output", "") : "That request " + st + ".";
-                        main.post(() -> { for (Listener l : snapshot()) l.onReply(it, out); });
+                        main.post(() -> {
+                            if (app != null) EverywhereService.notifyReply(app, it, out);
+                            for (Listener l : snapshot()) l.onReply(it, out);
+                        });
                         return;
                     }
                 }

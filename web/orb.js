@@ -1,5 +1,7 @@
 /* Wizard OS orb — a WebGL glass sphere with a living galaxy inside.
-   Exposes window.Orb with setMode(mode) and setLevel(0..1). Falls back to the PNG orb. */
+   Exposes window.Orb with setMode(mode) and setLevel(0..1). Falls back to the PNG orb.
+   Shared by every Wizard surface: the in-app dock, the side button (android/app/src/main/assets/assist/) and the
+   Wizard Everywhere floating orb. The Android copy is checked byte-for-byte by SharedOrbTest. */
 (function () {
   const canvas = document.getElementById('orb');
   const fallback = document.getElementById('orbFallback');
@@ -11,6 +13,9 @@
     think:    { a: [0.05, 0.02, 0.18], b: [0.48, 0.32, 1.00], c: [0.35, 0.90, 1.00], energy: 0.60, spin: 2.60, ring: 0.45, core: 0.85 },
     agent:    { a: [0.05, 0.02, 0.16], b: [0.62, 0.30, 1.00], c: [1.00, 0.45, 0.90], energy: 0.70, spin: 0.60, ring: 0.6, core: 1.05 },
     done:     { a: [0.02, 0.06, 0.08], b: [0.20, 0.95, 0.70], c: [0.55, 0.65, 1.00], energy: 0.55, spin: 0.50, ring: 0.5, core: 1.00 },
+    // Wizard Everywhere over a keyboard: the same orb, cooler, ready to type what you say.
+    type:     { a: [0.01, 0.04, 0.10], b: [0.16, 0.66, 1.00], c: [0.62, 0.42, 1.00], energy: 0.22, spin: 0.30, ring: 0.0, core: 0.60 },
+    typing:   { a: [0.01, 0.05, 0.12], b: [0.14, 0.80, 1.00], c: [0.70, 0.45, 1.00], energy: 0.85, spin: 0.85, ring: 1.0, core: 1.00 },
   };
 
   const VERT = `attribute vec2 p; void main(){ gl_Position = vec4(p,0.,1.); }`;
@@ -128,7 +133,7 @@ void main(){
       gl.uniform1f(U.t, (now - t0) / 1000);
       gl.uniform1f(U.lvl, levelS); gl.uniform1f(U.energy, cur.energy);
       gl.uniform1f(U.spin, cur.spin); gl.uniform1f(U.ring, cur.ring);
-      gl.uniform1f(U.core, cur.core); gl.uniform1f(U.press, press); gl.uniform1f(U.R, .5);
+      gl.uniform1f(U.core, cur.core); gl.uniform1f(U.press, press); gl.uniform1f(U.R, window.ORB_R || .5);
       gl.uniform3fv(U.cA, cur.a); gl.uniform3fv(U.cB, cur.b); gl.uniform3fv(U.cC, cur.c);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
@@ -149,7 +154,7 @@ void main(){
     webgl: ok,
     setMode(m) {
       mode = m; target = MODES[m] || MODES.idle;
-      fallback.src = (m === 'idle') ? 'robert-thread-orb.png' : 'robert-listening-galaxy.png';
+      fallback.src = (m === 'idle' || m === 'type') ? 'robert-thread-orb.png' : 'robert-listening-galaxy.png';
       canvas.parentElement.dataset.mode = m;
     },
     get mode() { return mode; },

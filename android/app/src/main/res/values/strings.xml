@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Wizard OS</string>
+    <string name="everywhere_accessibility">Lets the floating Wizard orb type what you say into the text field you are in (it turns into a mic when a keyboard is open), and attach a screenshot when you tap Screen while talking. Wizard OS only reads the focused text field and the screen when you ask it to.</string>
 </resources>

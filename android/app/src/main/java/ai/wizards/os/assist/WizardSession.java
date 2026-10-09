@@ -172,6 +172,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
             Log.i(TAG, "corner hidden while listening; discarded");
             capture.discard();
         }
+        delivered = null;
         capture.detach(this);
         setWide(false);
         if (pageReady) js("W.reset&&W.reset()");
@@ -256,9 +257,22 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         js("W.onError(" + JSONObject.quote(kind) + "," + JSONObject.quote(message) + ")");
     }
 
+    @Override
+    public void onDelivered(String sessionId) {
+        delivered = sessionId;
+        js("W.onDelivered()");
+    }
+
+    @Override public void onQueued(String why) { js("W.onQueued(" + JSONObject.quote(why) + ")"); }
+
+    @Override public void onPaused(boolean p) { js("W.onPaused(" + p + ")"); }
+
+    private String delivered;
+
+    /** Tap the bubble after it sent: open that thread in Wizard OS (the unsent list if it is still on its way). */
     private void openWizard(String text) {
-        Log.i(TAG, "open wizard (draft)");
-        startAssistantActivity(AssistLockActivity.sayIntent(getContext(), text));
+        Log.i(TAG, "open wizard thread=" + delivered);
+        startAssistantActivity(AssistLockActivity.threadIntent(getContext(), delivered));
         hide();
     }
 
@@ -268,6 +282,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         @JavascriptInterface public void listen() { main.post(() -> capture.start(null, 0)); }
 
         @JavascriptInterface public void cancel() { main.post(capture::discard); }
+
+        @JavascriptInterface public void pause() { main.post(capture::togglePause); }
 
         @JavascriptInterface public void unlock() { }
 

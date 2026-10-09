@@ -491,6 +491,7 @@
         <p class="st-note">Every message is saved on this phone before it’s sent, and retried until Wizard accepts it.</p></div>
       <div class="st-group"><h4>Assistant</h4>
         <button class="st-row" data-st="everywhere" ${evNative ? '' : 'disabled'}><span class="st-ic">✦</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
+        ${evNative && evOn && typeof window.WizardOSNative.voiceTypingSettings === 'function' ? `<button class="st-row" data-st="typing"><span class="st-ic">⌨</span><span class="st-tx"><b>Voice typing &amp; screenshots</b><small>${esc(ev?.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Turn on Accessibility → Wizard OS so the orb types into any app and can attach screenshots')}</small></span>${ev?.keyboard ? '<span class="sw on"><i></i></span>' : '<span class="st-go">›</span>'}</button>` : ''}
         <button class="st-row" data-st="side" ${native ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(side)}</small></span><span class="st-go">›</span></button>
       </div>
       <div class="st-group"><h4>Wizard</h4>
@@ -1366,6 +1367,7 @@
     const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
     if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); return setTimeout(onUnsentChange, 300); }
     const st = e.target.closest('[data-st]')?.dataset.st;
+    if (st === 'typing' && NATIVE() && window.WizardOSNative.voiceTypingSettings) { window.WizardOSNative.voiceTypingSettings(); return; }
     if (st === 'everywhere' && NATIVE() && typeof window.WizardOSNative.setEverywhere === 'function') { let on = false; try { on = JSON.parse(window.WizardOSNative.everywhere()).enabled; } catch (x) {} window.WizardOSNative.setEverywhere(!on); setTimeout(renderSettings, 250); vib(8); }
     if (st === 'side') { closeSheets(true); sideButtonTap(true); }
   });
@@ -2072,9 +2074,9 @@
     if (h.action !== 'say' || !text) return false;
     if (V.state !== 'idle') cancelVoice(true);
     clearTimeout(txHideT);
-    txShow(text, 'From the side button · tap Send', '', '◉');
-    $('#txChips').innerHTML = `<button data-sim="${esc(text)}" data-handoff="send">Send</button><button data-handoff="drop">Dismiss</button>`;
+    // Talking to Wizard is sending: no draft, no confirm — same as the orb.
     window.__backLog = (window.__backLog || []).concat('handoff:say').slice(-30);
+    runUtterance(text, 'auto');
     return true;
   };
   $('#txChips').addEventListener('click', e => { if (e.target.closest('[data-handoff="drop"]')) { $('#txChips').innerHTML = ''; txHide(0); } });

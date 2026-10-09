@@ -55,6 +55,8 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
     private boolean pageReady;
     private boolean handingOff;
     private String lastHeard = "";
+    /** The thread the last side-button message landed in (null until Wizard accepts it). */
+    private String deliveredSession;
     private boolean pendingBegin;
     private boolean unlockInFlight;
     private final BroadcastReceiver userPresent = new BroadcastReceiver() {
@@ -218,6 +220,16 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
         js("W.onError(" + JSONObject.quote(kind) + "," + JSONObject.quote(message) + ")");
     }
 
+    @Override
+    public void onDelivered(String sessionId) {
+        deliveredSession = sessionId;
+        js("W.onDelivered()");
+    }
+
+    @Override public void onQueued(String why) { js("W.onQueued(" + JSONObject.quote(why) + ")"); }
+
+    @Override public void onPaused(boolean p) { js("W.onPaused(" + p + ")"); }
+
     /**
      * Unlocked while the surface is up: hand the moment to the corner orb (Android's assistant
      * window), keeping a live recording running. The full surface then leaves.
@@ -283,15 +295,24 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
         });
     }
 
-    /** Unlocked only: hand the words to the Wizard app (clipboard + open). Never from the lock screen. */
+    /** Unlocked only: open the thread it went to (or the unsent list while it is still on its way). */
     private void openWizard(String text) {
         if (keyguard.isKeyguardLocked()) {
             requestUnlock();
             return;
         }
-        Log.i(TAG, "open wizard");
-        startActivity(sayIntent(this, text));
+        Log.i(TAG, "open wizard thread=" + deliveredSession);
+        startActivity(threadIntent(this, deliveredSession));
         closeSurface();
+    }
+
+    /** Wizard OS on the thread a side-button message went to; the unsent list if it hasn't landed yet. */
+    static Intent threadIntent(Context c, String sessionId) {
+        Intent i = new Intent(sessionId != null ? ai.wizards.os.MainActivity.ACTION_THREAD : ai.wizards.os.MainActivity.ACTION_UNSENT)
+                .setClassName(c.getPackageName(), "ai.wizards.os.MainActivity")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (sessionId != null) i.putExtra(ai.wizards.os.MainActivity.EXTRA_THREAD, sessionId);
+        return i;
     }
 
     /**
@@ -323,6 +344,9 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
 
         @JavascriptInterface
         public void cancel() { main.post(AssistLockActivity.this::discardRecording); }
+
+        @JavascriptInterface
+        public void pause() { main.post(capture::togglePause); }
 
         @JavascriptInterface
         public void unlock() { main.post(AssistLockActivity.this::requestUnlock); }

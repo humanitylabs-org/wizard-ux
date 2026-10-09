@@ -29,6 +29,11 @@ public final class SilenceDetector {
         return new SilenceDetector(2400, 9000, 180_000);
     }
 
+    /** Typing with your voice: people pause mid-sentence while writing, so wait longer before finishing. */
+    public static SilenceDetector dictation() {
+        return new SilenceDetector(3800, 12000, 300_000);
+    }
+
     /** Amplitude threshold that counts as speech, given the tracked noise floor. */
     int speechThreshold() {
         return (int) Math.max(1800, floor * 3.0);
@@ -38,8 +43,26 @@ public final class SilenceDetector {
         return speechMs >= 250;
     }
 
+    private long pausedAt = -1;
+
+    /** Pause: the clock stops, so a long pause never counts as "nothing heard" or "done talking". */
+    public void pause(long now) { if (pausedAt < 0) pausedAt = now; }
+
+    /** Resume after {@link #pause}: shift every timer by the pause and start the silence count fresh. */
+    public void resume(long now) {
+        if (pausedAt < 0) return;
+        long gap = Math.max(0, now - pausedAt);
+        pausedAt = -1;
+        if (startedAt >= 0) startedAt += gap;
+        lastAt = now;
+        quietSince = -1;
+    }
+
+    public boolean paused() { return pausedAt >= 0; }
+
     /** amp: 0..32767 from MediaRecorder.getMaxAmplitude(); now: monotonic millis. */
     public Result feed(int amp, long now) {
+        if (pausedAt >= 0) return Result.CONTINUE;
         if (startedAt < 0) {
             startedAt = now;
             lastAt = now;
