@@ -32,9 +32,9 @@ def tap_text(pattern, xml=None):
     xml = xml or ui()
     for m in re.finditer(r'<node [^>]*?>', xml):
         n = m.group(0)
-        t = re.search(r' text="([^"]*)"', n); d = re.search(r' content-desc="([^"]*)"', n)
-        label = (t.group(1) if t else '') + '|' + (d.group(1) if d else '')
-        if re.search(pattern, label, re.I):
+        t = re.search(r' text="([^"]*)"', n)
+        label = t.group(1) if t else ''
+        if label and re.search(pattern, label, re.I):
             b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n)
             if b:
                 x1, y1, x2, y2 = map(int, b.groups()); sx(f'input tap {(x1 + x2) // 2} {(y1 + y2) // 2}'); return label
@@ -154,14 +154,14 @@ with (BASE / 'worker.lock').open('a') as lock:
         time.sleep(2.5)
         xml = ui(); shot('02-mic-prompt')
         check('one tap asks for the microphone in place', 'permissioncontroller' in xml and re.search(r'record audio|microphone', xml, re.I), top())
-        tapped = tap_text(r'^While using the app|^Only this time|^Allow', xml)
+        tapped = tap_text(r'^While using the app$', xml) or tap_text(r'^Allow$', xml)
         time.sleep(3)
         t = top(); shot('03-assistant-page')
         check('after the mic it lands on the system assistant picker', 'ManageAssist' in t or 'DefaultApp' in t or 'Settings' in t, t)
         check('mic granted', 'RECORD_AUDIO: granted=true' in sx(f'dumpsys package {PKG} | grep RECORD_AUDIO'), tapped)
         # Pick Wizard OS the way a person would: Digital assistant app -> Wizard OS -> OK
         picked = None
-        for pat in [r'Digital assistant app|Default digital assistant app|Assist app', r'Wizard OS', r'^OK$|^Agree$']:
+        for pat in [r'^(Default )?digital assistant app$|^Assist app$', r'^Wizard OS', r'^OK$|^Agree$']:
             time.sleep(1.5); picked = tap_text(pat); print('  tapped', pat, '->', picked)
         time.sleep(2); shot('04-picked')
         holders = sx('cmd role get-role-holders --user 0 android.app.role.ASSISTANT').strip()
@@ -179,11 +179,12 @@ with (BASE / 'worker.lock').open('a') as lock:
         c = card(pg); shot('05-card-on')
         check('the card turns green on its own: Side button is on', c and c['on'] and c['step'] == 'press' and 'Hold the side button' in c['text'], c)
         # Real long-press of the power key
-        sx('settings put global power_button_long_press 5')
+        used_before = json.loads(pg.ev("window.WizardOSNative.sideButton()"))['used']
+        sx('settings put global power_button_long_press 5'); sx('logcat -c')
         sx('input keyevent --longpress KEYCODE_POWER'); time.sleep(4)
         t = top(); shot('06-side-hold')
-        session = 'VoiceInteractionSession' in sx('dumpsys window windows') or 'WizardSession' in sx('logcat -d -s WizardLock:I WizardOS:I | tail -40') or 'corner shown' in sx('logcat -d | grep -i "corner shown" | tail -3')
-        check('holding the side button reaches Wizard OS', session or 'AssistLock' in t, t)
+        lg = sx('logcat -d | grep -iE "corner shown|lock-screen surface" | tail -3').strip()
+        check('holding the side button reaches Wizard OS (corner orb)', 'corner shown' in lg and not used_before, lg)
         sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(3)
         pg.close(); pg = Page(); wait_shell(pg); time.sleep(1)
@@ -192,7 +193,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         # Android's assistant gear -> Wizard OS on the switch
         sx('input keyevent KEYCODE_HOME'); time.sleep(1)
         o = sx(f'am start -W -n {PKG}/ai.wizards.os.assist.AssistSetupActivity'); time.sleep(3)
-        check("Android's assistant settings gear opens Wizard OS itself", PKG + '/ai.wizards.os.MainActivity' in top(), top())
+        check("Android's assistant settings gear opens Wizard OS itself", re.search(re.escape(PKG) + r'/(ai\.wizards\.os)?\.MainActivity', top()), top())
         # Back never exits
         for _ in range(3): sx('input keyevent KEYCODE_BACK'); time.sleep(1)
         check('Back at Home stays in Wizard OS', PKG in top(), top())

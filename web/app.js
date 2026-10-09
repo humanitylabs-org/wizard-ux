@@ -422,7 +422,7 @@
     if (!SIDE || SIDE.step === 'ready' || store.get('sideHidden', false)) return '';
     const on = SIDE.step === 'press';
     const k = on ? 'Side button is on' : 'Side button';
-    const v = on ? 'Hold the side button and talk' : 'Hold it to talk to Wizard, even when locked';
+    const v = on ? (SIDE.samsung ? 'Hold the side button and talk · power menu? tap here' : 'Hold the side button and talk') : 'Hold it to talk to Wizard, even when locked';
     const btn = on ? '' : `<span class="side-go">${SIDE.step === 'mic' ? 'Turn on' : 'Finish'}</span>`;
     return `<button class="now-card side-card ${on ? 'on' : ''}" style="--c:${on ? 'var(--green)' : 'var(--violet-2)'}" data-act="side-button" data-step="${SIDE.step}"><span class="pip ${on ? '' : 'pulse'}"></span><span class="meta"><span class="k">${k}</span><span class="v">${v}</span></span>${btn}${on ? '<span class="side-x" data-act="side-button-hide" aria-label="Hide">✕</span>' : ''}</button>`;
   }
@@ -431,7 +431,9 @@
     if (SIDE && SIDE.step !== 'mic' && SIDE.step !== 'assistant') {
       if (fromLauncher) { store.set('sideHidden', false); refreshHome(true); }
       toast('◉', SIDE.step === 'ready' ? 'Side button is on. Hold it to talk.' : 'Side button is on. Hold it and talk.', 2600);
-      if (fromLauncher && SIDE.samsung) window.WizardOSNative.sideButtonSettings();
+      // Samsung: if holding the key still opens the power menu, the tap goes straight to Samsung's Side button page.
+      if (SIDE.samsung && SIDE.step === 'press') window.WizardOSNative.sideButtonSettings();
+      else if (fromLauncher && SIDE.samsung) window.WizardOSNative.sideButtonSettings();
       return;
     }
     window.__backLog = (window.__backLog || []).concat('side:' + (SIDE ? SIDE.step : '?')).slice(-30);
