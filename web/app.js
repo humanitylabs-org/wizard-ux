@@ -1503,11 +1503,15 @@
     }
     // A capturing view takes a tap utterance as-is.
     if (kind !== 'command' && v?.mode === 'capture' && target == null) return toView(v, text, `To ${v.name}${sttNote}`);
+    // An open thread owns what James says: unless it is a phone command (or aimed at another desk), it goes
+    // into that thread (steering the live run), never a new thread. New threads start from the list or New chat.
+    const intoThread = kind !== 'command' && target == null && v?.kind === 'chat thread';
+    const toAgentOrThread = label => intoThread ? toView(v, text, `To this thread${sttNote}`) : toAgent(text, label, opts);
     setVoice('think'); if (isPill()) tx.dataset.detail = 'Routing · DeepSeek Flash'; else $('#txRouteText').textContent = 'Routing · DeepSeek Flash';
     try {
       const view = v && v.mode && kind !== 'command' && target == null ? { name: v.name, kind: v.kind } : null;
       const routeUrl = window.WizConfig.endpoint('route');
-      if (!routeUrl) return toAgent(text, `To ${window.WizConfig.agent()}${sttNote}`, opts);
+      if (!routeUrl) return toAgentOrThread(`To ${window.WizConfig.agent()}${sttNote}`);
       const r = await fetch(routeUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: kind === 'command' ? 'command' : '', view, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'router');
@@ -1519,9 +1523,9 @@
         if (c.then_agent) setTimeout(() => toAgent(String(c.then_agent), `Opened ${c.app || 'app'} · follow-up to ${window.WizConfig.agent()}`, opts), 1500);
         return ran;
       }
-      return toAgent(text, `To ${window.WizConfig.agent()} · routed in ${j.ms} ms${sttNote}`, opts);
+      return toAgentOrThread(`To ${window.WizConfig.agent()} · routed in ${j.ms} ms${sttNote}`);
     } catch (e) {
-      return toAgent(text, `Router offline · sent to ${window.WizConfig.agent()}`, opts);
+      return toAgentOrThread(`Router offline · sent to ${window.WizConfig.agent()}`);
     }
   }
   function showRouted(kind, label) {
