@@ -105,6 +105,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private float density;
     /** Centre of the orb on screen; the window is placed around it. */
     private int cx = -1, cy = -1;
+    private int learnedOffY = -1;
     private final List<byte[]> shots = new ArrayList<>();
     private String lastState = "";
 
@@ -440,17 +441,34 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         int oy = expanded ? (dy < 0 ? w - size / 2 : size / 2) : size / 2;
         int wx = Math.max(0, Math.min(s.x - w, cx - ox)), wy = Math.max(0, Math.min(s.y - w, cy - oy));
         if (!expanded) { wx = cx - size / 2; wy = cy - size / 2; }
-        if (keyboardOpen && imeTop > 0 && !expanded && wy + w > imeTop - margin) {
-            wy = Math.max(margin, imeTop - margin - w);   // over a keyboard the orb never covers the keys
-            cy = wy + size / 2;
+        if (keyboardOpen && imeTop > 0 && !expanded) {
+            // imeTop is in screen pixels; the overlay's y is offset by the status bar on most phones.
+            int off = screenOffsetY();
+            if (wy + off + w > imeTop - margin) {
+                wy = Math.max(margin, imeTop - margin - w - off);   // over a keyboard the orb never covers the keys
+                cy = wy + size / 2;
+            }
         }
         lp.width = w; lp.height = w; lp.x = wx; lp.y = wy;
-        if (keyboardOpen && !expanded) Log.i(TAG, "placed over keyboard y=" + wy + " bottom=" + (wy + w) + " imeTop=" + imeTop);
+        if (keyboardOpen && !expanded) Log.i(TAG, "placed over keyboard y=" + wy + " bottom=" + (wy + w) + " screenBottom=" + (wy + w + screenOffsetY()) + " imeTop=" + imeTop);
         if (attached) try { wm.updateViewLayout(web, lp); } catch (Exception ignored) { }
         js("E.layout({ox:" + px(cx - wx) + ",oy:" + px(cy - wy) + ",dx:" + dx + ",dy:" + dy + "})");
     }
 
     private float px(int p) { return p / density; }
+
+    /** How far below lp.y the window really lands on screen (status bar inset), learned from the live window. */
+    private int screenOffsetY() {
+        if (attached && web != null && web.isAttachedToWindow()) {
+            int[] loc = new int[2];
+            web.getLocationOnScreen(loc);
+            int off = loc[1] - lp.y;
+            if (off >= 0 && off < screen().y / 4) learnedOffY = off;
+        }
+        if (learnedOffY >= 0) return learnedOffY;
+        int id = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        return id > 0 ? getResources().getDimensionPixelSize(id) : 0;
+    }
 
     private void setExpanded(boolean on) {
         if (expanded == on) return;

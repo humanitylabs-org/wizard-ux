@@ -182,11 +182,11 @@ const W = window.W = {
     orbMode('listen');
     M.haptic('press');M.chime([523,.9,.07]);
     setTop('listening');chips(true);
-    hint.show('talk · tap the orb or pause to send','listen',0,true);
+    hint.show('talk · tap the orb or stop talking to send','listen',0,true);
   },
   level(v){S.level=+v||0;O.setLevel(S.paused?0:Math.min(1,S.level*1.4))},
   onPaused(p){S.paused=!!p;orbMode(p?'paused':'listen');setTop(p?'paused':'listening');
-    hint.show(p?'paused · tap Pause to carry on':'talk · tap the orb or pause to send','listen',0,true)},
+    hint.show(p?'paused · tap Pause to carry on':'talk · tap the orb or stop talking to send','listen',0,true)},
   onSending(via){
     S.state='think';mode='gather';glow=1;chips(false);setTop('');S.paused=false;
     orbMode('think');O.setLevel(0);

@@ -270,7 +270,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('floating orb draws the shared Wizard orb', 'everywhere page ready' in lg, lg)
         cx, cy = (b4[0] + b4[2]) // 2, (b4[1] + b4[3]) // 2
         dxs = -1 if cx > sw / 2 else 1; dys = -1 if cy > shh * 0.42 else 1
-        PAUSE = (cx + dxs * dp(54), cy + dys * dp(54)); CANCEL = (cx, cy + dys * dp(74)); SHOT = (cx + dxs * dp(74), cy)
+        PAUSE = (cx + dxs * dp(74), cy + dys * dp(74)); CANCEL = (cx, cy + dys * dp(104)); SHOT = (cx + dxs * dp(104), cy)
         # 1. Talk, Pause, carry on, Cancel: nothing is sent.
         stage_audio(); sx('logcat -c')
         sx(f'input tap {cx} {cy}'); time.sleep(1.2)
