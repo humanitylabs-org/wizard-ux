@@ -43,25 +43,63 @@ public final class AccessibilitySetup {
         return Step.TURN_ON;
     }
 
+    /**
+     * Gate from what we can see. {@code opMode}: the ACCESS_RESTRICTED_SETTINGS app-op (ERRORED = locked and never
+     * tapped, IGNORED = Settings has said "Restricted setting" so App info's ⋮ now offers the unlock, ALLOWED =
+     * unlocked), or -1 when unreadable / DEFAULT. Then fall back to the install source: Android 13+ locks apps that
+     * did not come from a store, and {@code tried} (James already went to the Accessibility page once and came back
+     * with it still off) means the unlock is what is in the way.
+     */
+    public static int gateFrom(int sdk, int opMode, boolean sideloaded, boolean tried) {
+        if (sdk < 33) return GATE_NONE;
+        if (opMode == AppOpsManager.MODE_ALLOWED) return GATE_NONE;
+        if (opMode == AppOpsManager.MODE_ERRORED) return GATE_UNTRIED;
+        if (opMode == AppOpsManager.MODE_IGNORED) return GATE_OFFERED;
+        if (!sideloaded) return GATE_NONE;
+        return tried ? GATE_OFFERED : GATE_UNTRIED;
+    }
+
     public static Step step(Context c) { return decide(WizardKeyboardService.enabled(c), gate(c)); }
 
-    /**
-     * Android 13+ holds the Accessibility switch of a sideloaded app behind "Restricted setting", tracked by the
-     * hidden ACCESS_RESTRICTED_SETTINGS app-op: ERRORED until the user taps the greyed row once, IGNORED once
-     * Settings has shown "Restricted setting" (App info's ⋮ menu then offers the unlock), ALLOWED after it.
-     * Any doubt reads as no gate, so the worst case is the plain "turn it on" step.
-     */
     public static int gate(Context c) {
-        if (Build.VERSION.SDK_INT < 33) return GATE_NONE;
+        int g = gateFrom(Build.VERSION.SDK_INT, opMode(c), sideloaded(c), tried(c));
+        Log.i("WizardOS", "accessibility gate=" + g + " op=" + opMode(c) + " sideloaded=" + sideloaded(c) + " tried=" + tried(c));
+        return g;
+    }
+
+    /** ACCESS_RESTRICTED_SETTINGS for our uid, or -1 (unreadable or DEFAULT). */
+    static int opMode(Context c) {
+        if (Build.VERSION.SDK_INT < 33) return -1;
         try {
             AppOpsManager ops = c.getSystemService(AppOpsManager.class);
-            int mode = ops.unsafeCheckOpNoThrow("android:access_restricted_settings", Process.myUid(), c.getPackageName());
-            return mode == AppOpsManager.MODE_ERRORED ? GATE_UNTRIED : mode == AppOpsManager.MODE_IGNORED ? GATE_OFFERED : GATE_NONE;
+            int m = ops.unsafeCheckOpNoThrow("android:access_restricted_settings", Process.myUid(), c.getPackageName());
+            return m == AppOpsManager.MODE_DEFAULT ? -1 : m;
         } catch (Exception e) {
-            Log.w("WizardOS", "restricted-settings check: " + e.getMessage());
-            return GATE_NONE;
+            Log.w("WizardOS", "restricted-settings op unreadable: " + e);
+            return -1;
         }
     }
+
+    /** Installed from a downloaded/local file rather than a store (what Android 13+ restricts). */
+    static boolean sideloaded(Context c) {
+        if (Build.VERSION.SDK_INT < 33) return false;
+        try {
+            android.content.pm.InstallSourceInfo s = c.getPackageManager().getInstallSourceInfo(c.getPackageName());
+            int src = s.getPackageSource();
+            if (src == android.content.pm.PackageInstaller.PACKAGE_SOURCE_STORE) return false;
+            if (src == android.content.pm.PackageInstaller.PACKAGE_SOURCE_LOCAL_FILE
+                    || src == android.content.pm.PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE) return true;
+            String inst = s.getInstallingPackageName();
+            return inst == null || !(inst.equals("com.android.vending") || inst.equals("com.sec.android.app.samsungapps"));
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private static final String PREFS = "wos.a11y", TRIED = "tried";
+    static boolean tried(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(TRIED, false); }
+    /** James went to the Accessibility page from the dialog (set when he taps the button). */
+    public static void markTried(Context c, boolean v) { c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(TRIED, v).apply(); }
 
     /** Android's Accessibility page, opened on our row where the OEM honours the highlight extra. */
     public static Intent accessibilityPage(Context c) {

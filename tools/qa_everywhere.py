@@ -278,6 +278,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             if PKG in top(): break
             sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
         d2 = dialog('Unlock it for Wizard OS|Turn on voice typing', 8); shot('03d-unlock-dialog')
+        print('  app gate log:', sx("logcat -d -s WizardOS:* | grep -E 'accessibility (gate|setup)|restricted' | tail -4").strip())
         check('back in Wizard OS the dialog moves on to “Allow restricted settings”', 'Unlock it for Wizard OS' in d2 or not locked, (bool(locked), re.findall(r'text="([^"]+)"', d2)[:6]))
         if 'Open App info' in d2:
             tap_text(r'^Open App info$', d2); time.sleep(3); shot('03e-app-info')
@@ -287,12 +288,18 @@ with (BASE / 'worker.lock').open('a') as lock:
             cf = ui()
             if re.search(r'PIN|password|pattern', cf, re.I) and not allowed: print('  needs a screen lock confirm')
             print('  restricted gate after unlock:', sx(f'appops get {PKG} ACCESS_RESTRICTED_SETTINGS').strip())
-            check('App info ⋮ → Allow restricted settings unlocks it', allowed and 'allow' in sx(f'appops get {PKG} ACCESS_RESTRICTED_SETTINGS').lower(), allowed)
+            unlocked = 'allow' in sx(f'appops get {PKG} ACCESS_RESTRICTED_SETTINGS').lower()
+            check('App info ⋮ → Allow restricted settings unlocks it', allowed and unlocked, (allowed, re.findall(r'text="([^"]+)"', cf)[:8]))
+            if not unlocked: sx(f'appops set {PKG} ACCESS_RESTRICTED_SETTINGS allow')   # keep the rest of the run meaningful
             for _ in range(4):
                 if PKG in top(): break
                 sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
             d2 = dialog('Turn on voice typing', 8)
+        if 'allow' not in sx(f'appops get {PKG} ACCESS_RESTRICTED_SETTINGS').lower() and locked:
+            sx(f'appops set {PKG} ACCESS_RESTRICTED_SETTINGS allow'); d2 = dialog('Turn on voice typing|Unlock', 2) or d2
         # Last step: the switch itself.
+        if 'Open Accessibility' not in d2:
+            pg.ev("window.WizardOSNative.voiceTypingSettings()"); time.sleep(1.5); d2 = dialog('Turn on voice typing', 5)
         tap_text(r'^Open Accessibility$', d2); time.sleep(3)
         for _ in range(3):
             if tap_text(r'^Wizard OS voice typing$'): break
