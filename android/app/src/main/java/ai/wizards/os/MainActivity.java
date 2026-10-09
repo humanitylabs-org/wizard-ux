@@ -473,7 +473,9 @@ public class MainActivity extends Activity {
             default:
                 title = "Turn on voice typing & screenshots";
                 msg = "Lets the orb type what you say into any app and attach screenshots.\n\n"
-                    + "On the next screen: “Wizard OS voice typing” → turn it on → Allow. Then come back.";
+                    + "On the next screen: “Wizard OS voice typing” → turn it on → Allow. Then come back."
+                    + (ai.wizards.os.everywhere.AccessibilitySetup.stage(this) >= ai.wizards.os.everywhere.AccessibilitySetup.STAGE_UNLOCK_VISITED
+                        ? "\n\nStill greyed out? App info → ⋮ → Allow restricted settings." : "");
                 go = "Open Accessibility";
                 target = ai.wizards.os.everywhere.AccessibilitySetup.accessibilityPage(this);
         }
@@ -482,8 +484,10 @@ public class MainActivity extends Activity {
                 .setMessage(msg)
                 .setPositiveButton(go, (d, w) -> {
                     a11ySetup = true;
-                    if (target.getAction() != null && target.getAction().equals(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                        ai.wizards.os.everywhere.AccessibilitySetup.markTried(this, true);
+                    ai.wizards.os.everywhere.AccessibilitySetup.reached(this,
+                            step == ai.wizards.os.everywhere.AccessibilitySetup.Step.ALLOW_RESTRICTED
+                                    ? ai.wizards.os.everywhere.AccessibilitySetup.STAGE_UNLOCK_VISITED
+                                    : ai.wizards.os.everywhere.AccessibilitySetup.STAGE_A11Y_VISITED);
                     try { startActivity(target); }
                     catch (ActivityNotFoundException e) {
                         a11ySetup = false;
@@ -492,6 +496,13 @@ public class MainActivity extends Activity {
                 })
                 .setNegativeButton("Not now", null)
                 .create();
+        if (step != ai.wizards.os.everywhere.AccessibilitySetup.Step.ALLOW_RESTRICTED
+                && ai.wizards.os.everywhere.AccessibilitySetup.stage(this) >= ai.wizards.os.everywhere.AccessibilitySetup.STAGE_UNLOCK_VISITED) {
+            a11yDialog.setButton(android.app.AlertDialog.BUTTON_NEUTRAL, "App info", (d, w) -> {
+                a11ySetup = true;
+                try { startActivity(ai.wizards.os.everywhere.AccessibilitySetup.appInfoPage(this)); } catch (Exception ignored) { }
+            });
+        }
         if (step == ai.wizards.os.everywhere.AccessibilitySetup.Step.ALLOW_RESTRICTED) {
             a11yDialog.setButton(android.app.AlertDialog.BUTTON_NEUTRAL, "Accessibility", (d, w) -> {
                 a11ySetup = true;

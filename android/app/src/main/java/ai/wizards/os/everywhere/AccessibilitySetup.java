@@ -50,20 +50,22 @@ public final class AccessibilitySetup {
      * did not come from a store, and {@code tried} (James already went to the Accessibility page once and came back
      * with it still off) means the unlock is what is in the way.
      */
-    public static int gateFrom(int sdk, int opMode, boolean sideloaded, boolean tried) {
+    public static int gateFrom(int sdk, int opMode, boolean sideloaded, int stage) {
         if (sdk < 33) return GATE_NONE;
         if (opMode == AppOpsManager.MODE_ALLOWED) return GATE_NONE;
         if (opMode == AppOpsManager.MODE_ERRORED) return GATE_UNTRIED;
         if (opMode == AppOpsManager.MODE_IGNORED) return GATE_OFFERED;
         if (!sideloaded) return GATE_NONE;
-        return tried ? GATE_OFFERED : GATE_UNTRIED;
+        // Apps can't read their own flag, so follow James through it: Accessibility once → unlock → Accessibility.
+        return stage >= STAGE_UNLOCK_VISITED ? GATE_NONE : stage >= STAGE_A11Y_VISITED ? GATE_OFFERED : GATE_UNTRIED;
     }
 
     public static Step step(Context c) { return decide(WizardKeyboardService.enabled(c), gate(c)); }
 
     public static int gate(Context c) {
-        int g = gateFrom(Build.VERSION.SDK_INT, opMode(c), sideloaded(c), tried(c));
-        Log.i("WizardOS", "accessibility gate=" + g + " op=" + opMode(c) + " sideloaded=" + sideloaded(c) + " tried=" + tried(c));
+        int op = opMode(c);
+        int g = gateFrom(Build.VERSION.SDK_INT, op, sideloaded(c), stage(c));
+        Log.i("WizardOS", "accessibility gate=" + g + " op=" + op + " sideloaded=" + sideloaded(c) + " stage=" + stage(c));
         return g;
     }
 
@@ -75,8 +77,7 @@ public final class AccessibilitySetup {
             int m = ops.unsafeCheckOpNoThrow("android:access_restricted_settings", Process.myUid(), c.getPackageName());
             return m == AppOpsManager.MODE_DEFAULT ? -1 : m;
         } catch (Exception e) {
-            Log.w("WizardOS", "restricted-settings op unreadable: " + e);
-            return -1;
+            return -1; // usual: Android hides this op from the app itself
         }
     }
 
@@ -96,10 +97,13 @@ public final class AccessibilitySetup {
         }
     }
 
-    private static final String PREFS = "wos.a11y", TRIED = "tried";
-    static boolean tried(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(TRIED, false); }
-    /** James went to the Accessibility page from the dialog (set when he taps the button). */
-    public static void markTried(Context c, boolean v) { c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(TRIED, v).apply(); }
+    /** How far James got through the restricted-settings walk (never goes backwards). */
+    public static final int STAGE_NONE = 0, STAGE_A11Y_VISITED = 1, STAGE_UNLOCK_VISITED = 2;
+    private static final String PREFS = "wos.a11y", STAGE = "stage";
+    public static int stage(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(STAGE, STAGE_NONE); }
+    public static void reached(Context c, int s) {
+        if (s > stage(c)) c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(STAGE, s).apply();
+    }
 
     /** Android's Accessibility page, opened on our row where the OEM honours the highlight extra. */
     public static Intent accessibilityPage(Context c) {

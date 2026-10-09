@@ -26,20 +26,21 @@ public class AccessibilitySetupTest {
 
     @Test
     public void beforeAndroid13ThereIsNoGate() {
-        assertEquals(GATE_NONE, AccessibilitySetup.gateFrom(32, AppOpsManager.MODE_ERRORED, true, true));
+        assertEquals(GATE_NONE, AccessibilitySetup.gateFrom(32, AppOpsManager.MODE_ERRORED, true, 0));
     }
 
     @Test
     public void theAppOpWinsWhenReadable() {
-        assertEquals(GATE_NONE, AccessibilitySetup.gateFrom(34, AppOpsManager.MODE_ALLOWED, true, true));
-        assertEquals(GATE_UNTRIED, AccessibilitySetup.gateFrom(34, AppOpsManager.MODE_ERRORED, false, true));
-        assertEquals(GATE_OFFERED, AccessibilitySetup.gateFrom(34, AppOpsManager.MODE_IGNORED, false, false));
+        assertEquals(GATE_NONE, AccessibilitySetup.gateFrom(34, AppOpsManager.MODE_ALLOWED, true, 0));
+        assertEquals(GATE_UNTRIED, AccessibilitySetup.gateFrom(34, AppOpsManager.MODE_ERRORED, false, 2));
+        assertEquals(GATE_OFFERED, AccessibilitySetup.gateFrom(34, AppOpsManager.MODE_IGNORED, false, 0));
     }
 
     @Test
-    public void unreadableOpFallsBackToInstallSourceAndWhetherHeTriedOnce() {
-        assertEquals(GATE_NONE, AccessibilitySetup.gateFrom(34, -1, false, true));      // Play Store install
-        assertEquals(GATE_UNTRIED, AccessibilitySetup.gateFrom(34, -1, true, false));   // sideloaded, first ask
-        assertEquals(GATE_OFFERED, AccessibilitySetup.gateFrom(34, -1, true, true));    // came back still off
+    public void unreadableOpFollowsJamesThroughTheWalk() {
+        assertEquals(GATE_NONE, AccessibilitySetup.gateFrom(34, -1, false, 0));      // Play Store install
+        assertEquals(GATE_UNTRIED, AccessibilitySetup.gateFrom(34, -1, true, 0));    // sideloaded, first ask
+        assertEquals(GATE_OFFERED, AccessibilitySetup.gateFrom(34, -1, true, 1));    // came back still off → unlock
+        assertEquals(GATE_NONE, AccessibilitySetup.gateFrom(34, -1, true, 2));       // back from App info → the switch
     }
 }
