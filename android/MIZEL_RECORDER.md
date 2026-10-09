@@ -158,3 +158,13 @@ Base: `https://private.wizard001.com` (release; debug `.qa` builds may be pointe
   "staticNotification"}`; `fakeMic` 1 = synthetic 440 Hz tone only if `AudioRecord` cannot open, 2 = always
   synthetic; `staticNotification` 1 = no ticking chronometer (uiautomator cannot dump a shade that never idles;
   the text refreshes every 5 s instead).
+
+## Verification (Thales, 2026-10-09)
+
+- Builds (`android-build-thales`, source `a8e369c`): debug `.qa` `f9efaa9e…c6c639` (unit 59/59 in 11 suites, lint
+  clean); signed release `ai.wizards.os` 0.7.0 (11) `ef6b327d…f4bb73c`, signer `3bf74d0b…ed1fd`.
+- `tools/qa_mizel.py` (fresh API 35 emulator, fake meetings server via `qa_origin.txt`, real `AudioRecord`):
+  82/82 — long 17, pause 17, death 18, bridge 11, owner 10, back 5, link 2, setup 2. The long run is ~243 s of
+  media (50 contiguous chunks) with screen off + doze from t+25 s and airplane mode t+125–165 s.
+- `tools/qa_everywhere.py` on the same APK: 65/65 (no regression).
+- Not run: a > 30-minute recording; a real phone; James's real meetings server (fake only).
