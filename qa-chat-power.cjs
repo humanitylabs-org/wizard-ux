@@ -453,14 +453,24 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
 
   /* ===== Back never exits, after all the new sheets ===== */
   try {
+    const nb = () => p.evaluate(() => window.__wosNativeBack());
     await openThread('qa_pw_other');
     await p.click(await S('[data-chmodel]')); await sleep(300);
-    await back();
-    ok((await thread()) === 'qa_pw_other' && !(await sheetOpen()), 'Back 1: closes the picker, thread stays');
-    await back();
-    ok((await thread()) === null, 'Back 2: thread → list');
-    await back(); await back();
-    ok(await p.evaluate(() => !!window.__wos) && !p.isClosed(), 'Back at Home never leaves the app');
+    const b1 = await nb(); await sleep(300);
+    ok(b1 === 'chat-sheet' && (await thread()) === 'qa_pw_other' && !(await sheetOpen()), 'Back (Android) 1: closes the model picker, thread stays', b1);
+    await p.click(await S('.ch-compose [data-chfiles]')); await sleep(400);
+    const b2 = await nb(); await sleep(300);
+    ok(b2 === 'chat-sheet' && (await thread()) === 'qa_pw_other' && !(await sheetOpen()), 'Back (Android) 2: closes Files, thread stays', b2);
+    const b3 = await nb(); await sleep(400);
+    ok(b3 === 'thread' && (await thread()) === null, 'Back (Android) 3: thread → list', b3);
+    for (let k = 0; k < 4; k++) { await nb(); await sleep(250); }
+    ok(await p.evaluate(() => !!window.__wos) && !p.isClosed(), 'Back (Android) at Home never leaves the app');
+    // Browser Back too: a picker open → history Back closes it, page stays.
+    await openThread('qa_pw_other');
+    await p.click(await S('[data-chmodel]')); await sleep(300);
+    const u0 = p.url();
+    await p.goBack({ timeout: 2500 }).catch(() => {}); await sleep(600);
+    ok(p.url() === u0 && await p.evaluate(() => !!window.__wos) && !(await sheetOpen()) && (await thread()) === 'qa_pw_other', 'Browser Back closes the picker and stays in the app', { u0, now: p.url() });
   } catch (e) { await p.screenshot({ path: `${OUT}/fail-back.png` }).catch(() => {}); ok(false, 'Back section crashed', String(e).split('\n').slice(0, 6).join(' / ')); }
 
   /* =============================== DESKTOP =============================== */
@@ -543,9 +553,14 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await d.screenshot({ path: `${OUT}/desktop-06-latest.png` });
     // Failed thread on desktop
     await dOpen('qa_pw_fail3');
-    await d.evaluate(() => document.querySelector('.pane-main .ch-fail')?.scrollIntoView({ block: 'center' }));
+    await d.evaluate(() => { const f = document.querySelector('.pane-main .ch-fail'), nb = document.querySelector('.pane-main .ch-msgs'); if (f && nb) nb.scrollTop = nb.scrollHeight; });
     const df = await d.evaluate(() => [...(document.querySelector('.pane-main .ch-fail')?.querySelectorAll('button') || [])].map(b => b.textContent.trim()).join('|'));
-    ok(df === 'Retry|Choose another model|Dismiss' || df === '', '#11 desktop: a failed thread shows the same ways out (or none once retried)', df);
+    ok(df === 'Retry|Choose another model|Dismiss', '#11 desktop: a failed thread shows Retry / Choose another model / Dismiss', df);
+    await d.screenshot({ path: `${OUT}/desktop-07-failed-thread.png` });
+    n0 = writes.length;
+    await d.click('.pane-main [data-chretry]');
+    const dr = await until(() => runsTo('qa_pw_fail3', n0)[0]);
+    ok(dr && dr.input === 'Rename the photos', '#11 desktop: Retry re-sends through the outbox (intercepted)', dr);
     await dctx.close();
   } catch (e) { ok(false, 'desktop section crashed', String(e).split('\n')[0]); }
 
