@@ -1,4 +1,4 @@
-# Wizard OS — feature branches
+# Wizard UX — feature branches
 
 Each feature lives on its own branch so it can be read, reviewed, and merged on its own. `daily` merges all of them and is what James runs on his phone. `master` is the web shell baseline the feature branches start from.
 
@@ -16,7 +16,7 @@ Each feature lives on its own branch so it can be read, reviewed, and merged on 
 ## Builds
 Android builds run on Thales with `android-build-thales`, signed with the Wizard OS key (`3bf74d0b…ed1fd`), so every version installs over the previous one.
 - 0.4.0 (`daily`): sha256 `e4d31e99ed58…dd7298`. Download: https://private.wizard001.com/reports/wizard-os/
-- 0.3.0 (`daily` 8ebbbf3): sha256 `646520242a85…e3e79f`. Download: https://private.wizard001.com/reports/wizard-os/
+- 0.3.0 (`daily` 2f7bf7f): sha256 `646520242a85…e3e79f`. Download: https://private.wizard001.com/reports/wizard-os/
 
 ## Rules
 - Back never exits: Back steps out of the open view → Home → "Press back again to exit". Every Back change ships with a test.
