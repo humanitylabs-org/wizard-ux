@@ -9,29 +9,19 @@
     { id: 'v-week', kind: 'view', name: 'Week in review', icon: '◐', g: ['#8f63ff', '#ff5ccf'], view: 'week', desc: 'Seven days, one compression level up' },
     { id: 'v-month', kind: 'view', name: 'Month in review', icon: '◯', g: ['#3f6bff', '#8f63ff'], view: 'month', desc: 'The arc of the last four weeks' },
     { id: 'v-inbox', kind: 'view', name: 'Inbox', icon: '⬇', g: ['#ffbe55', '#ff6b86'], view: 'inbox', desc: 'Needs you, ready for review, working' },
-    // Wizard apps (live private apps)
+    // Wizard apps: the current builds only. Retired prototypes (old Reader/Essays, Shopping Assistant,
+    // Signal Feed, Recall, Capture, Idea Queue, etc.) stay reachable by URL but are kept off the launcher.
     { id: 'wizard', kind: 'chats', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'], desc: 'Your threads with Archimedes' },
+    { id: 'wizard-signal', kind: 'wizard', name: 'Wizard Signal', icon: '📡', g: ['#a74dff', '#ff5ccf'], url: '/wizard-signal/', desc: 'Your feed, your algorithm' },
+    { id: 'wisdom', kind: 'wizard', name: 'Wisdom', icon: '📖', g: ['#e9b46b', '#8a4dff'], url: '/wizard-signal/#wisdom', desc: 'Collections reader: Steve Jobs biography and more' },
+    { id: 'shopping', kind: 'wizard', name: 'Wizard Shopping', icon: '🛍', g: ['#ff8a5c', '#ff5ccf'], url: '/wizard-shopping/', desc: 'For You swipe feed and Browse' },
+    { id: 'mizel', kind: 'wizard', name: 'Mizel', icon: '◉', g: ['#3fe0ff', '#2f8cff'], url: '/meetings/#/', desc: 'Meeting recorder' },
+    { id: 'topics', kind: 'wizard', name: 'Topics', icon: '◇', g: ['#3fe0ff', '#8f63ff'], url: '/wizard-topics-preview/', probe: true, desc: 'Topic watches' },
     { id: 'cinequeue', kind: 'wizard', name: 'CineQueue', icon: '🎬', g: ['#ff5c7a', '#7a2bff'], url: '/cinequeue/', desc: 'Your watch queue' },
-    { id: 'signal-feed', kind: 'wizard', name: 'Signal Feed', icon: '◎', g: ['#ff5ccf', '#5c3bff'], url: '/signal-feed/', desc: 'High-signal feed' },
-    { id: 'wizard-signal', kind: 'wizard', name: 'Wizard Signal', icon: '📡', g: ['#a74dff', '#ff5ccf'], url: '/wizard-signal/', desc: 'Social signal' },
-    { id: 'reader', kind: 'wizard', name: 'Reader', icon: '📖', g: ['#e9b46b', '#8a4dff'], url: '/reader/', desc: 'Long-form reading' },
-    { id: 'recall', kind: 'wizard', name: 'Recall', icon: '◉', g: ['#3fe0ff', '#3f6bff'], url: '/recall/', desc: 'Voice memory' },
-    { id: 'capture', kind: 'wizard', name: 'Capture', icon: '✚', g: ['#4ff0b0', '#2f8cff'], url: '/capture/', desc: 'Drop anything in' },
-    { id: 'idea-queue', kind: 'wizard', name: 'Idea Queue', icon: '💡', g: ['#ffd65c', '#ff8a5c'], url: '/idea-queue/', desc: 'Ideas waiting their moment' },
+    { id: 'social', kind: 'wizard', name: 'Wizard Social', icon: '⚇', g: ['#7c5cff', '#3fe0ff'], url: '/wizard-social/', desc: 'Private social' },
     { id: 'files', kind: 'wizard', name: 'Files', icon: '🗂', g: ['#8aa0c8', '#4a5a8a'], url: '/files/', desc: 'Browse the server' },
     { id: 'iching', kind: 'wizard', name: 'I Ching', icon: '☯', g: ['#d8c39a', '#6a4a2a'], url: '/iching/', desc: 'Cast and read' },
-    { id: 'trackhunt', kind: 'wizard', name: 'TrackHunt', icon: '♫', g: ['#4ff0b0', '#0d8a6a'], url: '/trackhunt/', desc: 'Find tracks' },
-    { id: 'thai-cram', kind: 'wizard', name: 'Thai Cram', icon: 'ก', g: ['#ff6b86', '#3f6bff'], url: '/thai-cram/', desc: 'Thai flashcards' },
     { id: 'console', kind: 'wizard', name: 'Console', icon: '⌘', g: ['#3a3f58', '#151827'], url: '/console/', desc: 'Terminals' },
-    { id: 'model-performance', kind: 'wizard', name: 'Model Perf', icon: '📈', g: ['#3fe0ff', '#8f63ff'], url: '/model-performance/', desc: 'Model routing and cost' },
-    { id: 'topics', kind: 'wizard', name: 'Topics', icon: '◇', g: ['#3fe0ff', '#8f63ff'], url: '/wizard-topics-preview/', probe: true, desc: 'Threads grouped by topic' },
-    { id: 'mizel', kind: 'wizard', name: 'Mizel', icon: '◉', g: ['#3fe0ff', '#2f8cff'], url: '/meetings/#/', desc: 'Meeting recorder' },
-    { id: 'shopping', kind: 'wizard', name: 'Shopping', icon: '🛍', g: ['#ff8a5c', '#ff5ccf'], url: '/shopping-assistant/', desc: 'Researched buys' },
-    { id: 'storyboard', kind: 'wizard', name: 'Storyboards', icon: '🎞', g: ['#ffbe55', '#8f63ff'], url: '/storyboard-review/', desc: 'Storyboard review' },
-    { id: 'golden-frog', kind: 'wizard', name: 'Golden Frog', icon: '🐸', g: ['#ffd65c', '#4ff0b0'], url: '/golden-frog-review/', desc: 'Golden Frog review' },
-    { id: 'live', kind: 'wizard', name: 'Archimedes Live', icon: '🎙', g: ['#ff5ccf', '#3fe0ff'], url: '/archimedes-live/', desc: 'Realtime voice' },
-    { id: 'social', kind: 'wizard', name: 'Wizard Social', icon: '⚇', g: ['#7c5cff', '#3fe0ff'], url: '/wizard-social/', desc: 'Private social' },
-    { id: 'alerts', kind: 'wizard', name: 'Alerts', icon: '⚠', g: ['#ff6b86', '#8a2b4a'], url: '/alerts/', desc: 'System alerts' },
     // Desktop only: the legacy Wizard client stays one keystroke away while Wizard UX catches up.
     { id: 'legacy-wizard', kind: 'wizard', name: 'Wizard (legacy)', icon: '◈', g: ['#7c5cff', '#3a2a7a'], url: '/wizard/', desktopOnly: true, desc: 'The old chat app, for anything not ported yet' },
     // Android natives (real intents on Android Chrome)
@@ -63,7 +53,7 @@
   function findApp(q) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
       if (!q) return null;
-      const alias = { wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', 'yesterday': 'v-day', 'day review': 'v-day', 'day in review': 'v-day', 'week review': 'v-week', 'month review': 'v-month', notifications: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'v-inbox', terminal: 'console', music: 'spotify', ideas: 'idea-queue' };
+      const alias = { wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', 'yesterday': 'v-day', 'day review': 'v-day', 'day in review': 'v-day', 'week review': 'v-week', 'month review': 'v-month', notifications: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'v-inbox', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel' };
       if (alias[q]) return APP[alias[q]];
       let best = null, bs = 0;
       for (const a of APPS) {
