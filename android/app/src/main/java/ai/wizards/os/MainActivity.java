@@ -346,7 +346,7 @@ public class MainActivity extends Activity {
     private boolean immersive;
     /** Sticky immersive: the system bars hide, a swipe from the edge shows them briefly over the app. */
     @SuppressWarnings("deprecation")
-    void setImmersive(boolean on) {
+    void applyImmersive(boolean on) {
         immersive = on;
         if (Build.VERSION.SDK_INT >= 30) {
             android.view.WindowInsetsController c = getWindow().getInsetsController();
@@ -364,7 +364,7 @@ public class MainActivity extends Activity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus && immersive) setImmersive(true); // a dialog or the shade can bring the bars back
+        if (hasFocus && immersive) applyImmersive(true); // a dialog or the shade can bring the bars back
     }
 
     @Override
@@ -620,7 +620,7 @@ public class MainActivity extends Activity {
 
         /** Full-screen window in the shell: hide Android's status and navigation bars too (edge swipe peeks them). */
         @JavascriptInterface
-        public void immersive(boolean on) { runOnUiThread(() -> setImmersive(on)); }
+        public void immersive(boolean on) { runOnUiThread(() -> applyImmersive(on)); }
 
         @JavascriptInterface
         public void haptic(int ms) {
