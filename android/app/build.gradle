@@ -15,8 +15,8 @@ android {
         applicationId 'ai.wizards.os'
         minSdk 28
         targetSdk 35
-        versionCode 10
-        versionName '0.6.3'
+        versionCode 11
+        versionName '0.7.0'
         buildConfigField 'String', 'HOME_URL', '"https://private.wizard001.com/wizard-os-home/"'
         buildConfigField 'String', 'ORIGIN', '"https://private.wizard001.com"'
     }
@@ -49,6 +49,15 @@ android {
             minifyEnabled false
             if (wosSigningReady) signingConfig signingConfigs.release
         }
+        // QA fixture for the in-app update test only (built with :app:assembleQanext next to assembleDebug):
+        // the QA app again, same debug key, but a far higher version, so the updater has a real newer APK to verify.
+        qanext {
+            initWith debug
+            applicationIdSuffix '.qa'
+            versionNameSuffix '-qanext'
+            signingConfig signingConfigs.debug
+            matchingFallbacks = ['debug']
+        }
     }
 
     compileOptions {
@@ -65,6 +74,14 @@ android {
     }
 }
 
+androidComponents {
+    onVariants(selector().withBuildType('qanext')) { v ->
+        v.outputs.each { it.versionCode.set(9000 + (it.versionCode.getOrElse(0) ?: 0)) }
+    }
+}
+
 dependencies {
     testImplementation 'junit:junit:4.13.2'
+    // Real org.json for JVM unit tests (android.jar's copy is a stub there). Test classpath only.
+    testImplementation 'org.json:json:20240303'
 }
