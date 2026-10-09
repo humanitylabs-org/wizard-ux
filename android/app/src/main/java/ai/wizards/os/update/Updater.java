@@ -413,6 +413,7 @@ public final class Updater {
      * refused) and commit. The result arrives in {@link InstallReceiver}. {@code relaunch}: open Wizard OS again once
      * the new version is in (James was in it).
      */
+    @android.annotation.SuppressLint("ApplySharedPref") // must hit disk before Android kills us for the install
     private static void commit(Context app, UpdatePolicy.Release r, File f, boolean relaunch) {
         if (f == null || !f.isFile()) { verified = null; set("error", "message", "The download is gone · try again"); return; }
         set("installing");
@@ -425,7 +426,12 @@ public final class Updater {
         // QA builds only: files/qa_update_confirm.txt forces Android's confirm (USER_ACTION_REQUIRED = 1), so the emulator
         // exercises STATUS_PENDING_USER_ACTION → EXTRA_INTENT and a cancelled confirm like an older phone would.
         if (BuildConfig.DEBUG && new File(app.getFilesDir(), "qa_update_confirm.txt").isFile()) ua = 1;
-        if (Build.VERSION.SDK_INT >= 31) p.setRequireUserAction(ua);
+        if (Build.VERSION.SDK_INT >= 31) {
+            // Lint wants the SDK constants themselves (the policy's ints are the same values, unit-tested there).
+            if (ua == 2) p.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
+            else if (ua == 1) p.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED);
+            else p.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_UNSPECIFIED);
+        }
         int id = -1;
         try {
             id = pi.createSession(p);
@@ -491,6 +497,7 @@ public final class Updater {
     }
 
     /** MY_PACKAGE_REPLACED: the new version is in. Reopen Wizard OS if James was in it when it restarted. */
+    @android.annotation.SuppressLint("ApplySharedPref")
     static void onReplaced(Context c) {
         SharedPreferences p = prefs(c);
         int want = p.getInt("relaunch", 0);
