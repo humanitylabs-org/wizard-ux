@@ -197,3 +197,6 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5
 .toast { position: fixed; left: 50%; bottom: 22px; z-index: 50; transform: translate(-50%, 12px); opacity: 0; pointer-events: none; display: flex; align-items: center; gap: 8px;
   padding: 8px 14px; border-radius: 99px; background: rgba(22, 14, 46, .96); border: 1px solid var(--line-2); font-size: 13px; color: var(--ink); transition: opacity 160ms, transform 160ms var(--ease); }
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+.voice-pill.dict { background: rgba(110, 231, 255, .1); border-color: rgba(110, 231, 255, .35); }
+.voice-pill.dict .rec-dot { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }

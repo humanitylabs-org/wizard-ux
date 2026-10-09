@@ -2,7 +2,7 @@
  *
  * Omarchy's paradigm, made for Wizard: numbered workspaces along the top bar, windows that tile
  * themselves (one fills the workspace, two split side by side, more stack on the right), and a
- * keyboard for everything. No orb, no swipes. Voice is a key (⌥V, or Right ⌘ in Wizard for Mac).
+ * keyboard for everything. No orb, no swipes. Voice is a key: tap Right ⌘ to talk to Archimedes, tap Right ⌥ to dictate.
  *
  * Shared with the phone (web/core/*, live.js, outbox.js): the app registry, the Chats client,
  * Wizard's live data and read state, the durable outbox, voice capture and the native bridge.
@@ -10,7 +10,8 @@
  * Keys use ⌥ (Option/Alt) as the window-manager modifier, so they never fight the browser's ⌘ keys:
  *   ⌘K / ⌥Space   search and launch           ⌥1…⌥9      go to workspace
  *   ⌥Enter        new chat                    ⇧⌥1…9      send window to workspace
- *   ⌥V            talk (again to send)        ⌥←↑→↓/HJKL focus window
+ *   Right ⌘ tap   talk (tap again to send)    ⌥←↑→↓/HJKL focus window
+ *   Right ⌥ tap   dictate (tap again: insert at the cursor, else copy)
  *   ⌥I            inbox                       ⇧⌥←→       swap window
  *   ⌥W            close window                ⌥F         full window (monocle)
  *   ⌥/            all keys                    ⌥[ ⌥]      previous / next workspace
@@ -388,7 +389,8 @@
   function commands() {
     return [
       { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}Enter`, run: () => newChat() },
-      { kind: 'cmd', name: 'Talk to Archimedes', icon: '🎙', keys: `${MOD}V`, run: () => talk() },
+      { kind: 'cmd', name: 'Talk to Archimedes', icon: '🎙', keys: 'Right ⌘', run: () => talk() },
+      { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
       { kind: 'cmd', name: 'Inbox', icon: '⬇', keys: `${MOD}I`, run: () => openInbox() },
       { kind: 'cmd', name: 'Close window', icon: '✕', keys: `${MOD}W`, run: () => focused() && closeWin(focused().id) },
       { kind: 'cmd', name: 'Full window', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
@@ -471,28 +473,32 @@
 
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
-    ['Launch', [[`${CMD}K  or  ${MOD}Space`, 'Search apps, threads, commands; or ask Archimedes'], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], [`${MOD}V`, 'Talk (press again to send, Esc to cancel)']]],
+    ['Launch', [[`${CMD}K  or  ${MOD}Space`, 'Search apps, threads, commands; or ask Archimedes'], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', 'Talk to Archimedes (tap again to send, Esc to cancel)'], ['Right ⌥ (tap)', 'Dictate (tap again to insert at the cursor, or copy)']]],
     ['Workspaces', [[`${MOD}1 … ${MOD}9`, 'Go to workspace'], [`⇧${MOD}1 … 9`, 'Send window to workspace'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
     ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full window'], [`${MOD}W`, 'Close window']]],
     ['Chats', [[`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list']]],
-    ['Wizard for Mac', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to a bound app'], ['Right ⌘', 'Talk to Wizard'], ['Right ⌥', 'Dictate into the composer']]],
+    ['Wizard for Mac (works in any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to a bound app'], ['Right ⌘', 'Talk to Wizard from anywhere'], ['Right ⌥', 'Dictate into any app']]],
   ];
   const keysEl = $('#keys');
   $('#keysBody').innerHTML = KEYS.map(([h, rows]) => `<h4>${h}</h4>` + rows.map(([k, d]) => `<div class="krow"><span>${esc(d)}</span><span>${k.split(/\s{2,}/).map(x => `<kbd>${esc(x)}</kbd>`).join(' or ')}</span></div>`).join('')).join('');
   function toggleKeys(on) { keysEl.hidden = on == null ? !keysEl.hidden : !on; }
   keysEl.addEventListener('click', e => { if (e.target === keysEl || e.target.closest('[data-close]')) toggleKeys(false); });
 
-  /* ---------------- voice: ⌥V / mic / Right ⌘ (Wizard for Mac) ----------------
+  /* ---------------- voice: Right ⌘ talk, Right ⌥ dictate (taps), mic button ----------------
    * Tap to start, tap again to send (never hold). Lands in the focused thread when one is open,
    * otherwise starts a new thread. Audio goes through the durable outbox: transcribed there,
    * kept as a voice note, retried if the network drops. */
   const pill = $('#voicePill'), mic = $('#micBtn');
-  let vTarget = null, vTimer = 0;
+  let vTarget = null, vTimer = 0, vMode = 'talk', dTarget = null;
   const VOICE = C.voice({
     onState: st => {
       pill.hidden = st === 'idle'; pill.classList.toggle('think', st === 'think'); mic.classList.toggle('on', st !== 'idle');
       $('#clock').hidden = st !== 'idle';
-      $('#voiceText').textContent = st === 'think' ? 'Sending…' : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
+      pill.classList.toggle('dict', vMode === 'dictate');
+      $('#voiceKey').textContent = vMode === 'dictate' ? 'Right ⌥' : 'Right ⌘';
+      $('#voiceAct').textContent = vMode === 'dictate' ? 'insert' : 'send';
+      $('#voiceText').textContent = vMode === 'dictate' ? (st === 'think' ? 'Transcribing…' : 'Dictating')
+        : st === 'think' ? 'Sending…' : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
       clearInterval(vTimer);
       if (st === 'listen') vTimer = setInterval(() => { const s = Math.floor(VOICE.elapsed() / 1000); $('#voiceTime').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 250);
     },
@@ -501,8 +507,10 @@
   async function talk(action = 'toggle') {
     if (VOICE.state === 'think') return 'busy';
     if (action === 'cancel') { if (VOICE.state !== 'idle') { VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
+    if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
     if (VOICE.state === 'idle') {
       if (action === 'send') return 'none';
+      vMode = 'talk';
       const f = focused(); vTarget = f?.app === 'chats' && f.thread ? f.id : null;
       $('#voiceTime').textContent = '0:00';
       try { await VOICE.start(); } catch (e) { toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
@@ -517,6 +525,61 @@
     toast('✦', 'Sent to Archimedes', 1400);
     return 'sent';
   }
+
+  // Dictation (Right ⌥): speech to text where you're typing. In a text field the words go in at the cursor;
+  // anywhere else they land on the clipboard. (Wizard for Mac does this in every app, natively.)
+  const editable = el => !!el && (el.isContentEditable || el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && /^(text|search|url|email|)$/i.test(el.type || '')));
+  function insertAt(el, text) {
+    if (!el || !el.isConnected) return false;
+    el.focus({ preventScroll: true });
+    if (el.isContentEditable) return document.execCommand('insertText', false, text);
+    const a = el.selectionStart ?? el.value.length, b = el.selectionEnd ?? a;
+    const pre = a > 0 && !/\s$/.test(el.value.slice(0, a)) ? ' ' : '';
+    el.setRangeText(pre + text, a, b, 'end'); el.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+  async function dictate(action = 'toggle') {
+    if (VOICE.state === 'think') return 'busy';
+    if (VOICE.state !== 'idle' && vMode === 'talk') return 'busy';
+    if (action === 'cancel') { if (VOICE.state !== 'idle') { VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
+    if (VOICE.state === 'idle') {
+      vMode = 'dictate'; vTarget = null;
+      dTarget = editable(document.activeElement) ? document.activeElement : null;
+      $('#voiceTime').textContent = '0:00';
+      try { await VOICE.start(); } catch (e) { vMode = 'talk'; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
+      return 'dictating';
+    }
+    const r = await VOICE.finish({ transcribe: true });
+    vMode = 'talk';
+    const text = (r && r.text || '').trim();
+    if (!text) { toast('🎙', r?.error ? 'Transcription failed: ' + r.error : 'Didn’t catch that', 2200); return 'none'; }
+    window.__wuxLastDictation = text;
+    if (insertAt(dTarget, text)) { dTarget = null; return 'inserted'; }
+    dTarget = null;
+    try { await navigator.clipboard.writeText(text); toast('📋', `Copied: “${clip(text, 60)}” · ⌘V to paste`, 2600); return 'copied'; }
+    catch (e) { toast('✎', clip(text, 120), 6000); return 'shown'; }
+  }
+
+  // Right ⌘ / Right ⌥ as tap keys: press and release alone, quickly (a chord like ⌘C never counts).
+  // Inside Wizard for Mac the native app owns these keys system-wide and sends wizard:orb, so the page stands down.
+  const NATIVE_KEYS = !!window.webkit?.messageHandlers?.wizardNative;
+  let tapKey = null, tapAt = 0, tapChord = false;
+  addEventListener('keydown', e => {
+    if (NATIVE_KEYS) return;
+    if ((e.code === 'MetaRight' || e.code === 'AltRight') && !e.repeat) {
+      const others = (e.code === 'MetaRight' ? e.altKey : e.metaKey) || e.ctrlKey || e.shiftKey;
+      tapKey = e.code; tapAt = performance.now(); tapChord = others; return;
+    }
+    if (tapKey) tapChord = true;
+  }, true);
+  addEventListener('keyup', e => {
+    if (NATIVE_KEYS || e.code !== tapKey) return;
+    const ok = !tapChord && performance.now() - tapAt < 450; tapKey = null;
+    if (!ok) return;
+    e.preventDefault();
+    if (e.code === 'MetaRight') { log('key:right-cmd'); talk(); } else { log('key:right-opt'); dictate(); }
+  }, true);
+  addEventListener('blur', () => { tapKey = null; });
 
   /* ---------------- keyboard ---------------- */
   const typing = t => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
@@ -540,7 +603,7 @@
     if (!pal.hidden) { closePalette(); return 'palette'; }
     if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
-    if (VOICE.state === 'listen') { talk('cancel'); return 'voice'; }
+    if (VOICE.state === 'listen') { if (vMode === 'dictate') dictate('cancel'); else talk('cancel'); return 'voice'; }
     const f = focused();
     if (f?.app === 'chats' && f.thread) { CHATS.chatsBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return 'thread'; }
     if (ws[cur].mono) { toggleMono(); return 'mono'; }
@@ -568,7 +631,6 @@
     // ⌥ (Option/Alt) keys. Use e.code: on a Mac, ⌥ turns e.key into symbols (⌥V = √).
     if (digit) return hit(() => { const i = +digit[1] - 1; if (shift) { const f = focused(); if (f) moveWin(f.id, i); } else { lastWs = cur; goWs(i); } });
     if (code === 'Enter') return hit(() => newChat({ fresh: shift }));
-    if (code === 'KeyV') return hit(() => talk());
     if (code === 'KeyI') return hit(() => toggleInbox());
     if (code === 'KeyW') return hit(() => { const f = focused(); if (f) closeWin(f.id); });
     if (code === 'KeyF') return hit(() => toggleMono());

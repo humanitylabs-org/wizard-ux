@@ -16,7 +16,7 @@ async function ctxFor(b, kind) {
   const opts = kind === 'phone'
     ? { viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, userAgent: 'Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36' }
     : { viewport: { width: 1512, height: 920 }, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36' };
-  const ctx = await b.newContext({ ...opts, ignoreHTTPSErrors: true, permissions: ['microphone'] });
+  const ctx = await b.newContext({ ...opts, ignoreHTTPSErrors: true, permissions: ['microphone', 'clipboard-read', 'clipboard-write'] });
   const writes = [], loaded = [];
   await ctx.route('**/*', async r => {
     const q = r.request(), u = q.url();
@@ -150,15 +150,38 @@ async function ctxFor(b, kind) {
   const sent = writes.slice(w0).map(x => x.m + ' ' + x.u);
   ok(sent.some(x => /POST .*\/v1\/runs|POST .*\/api\/sessions/.test(x)), '⌘Enter: send goes out through the outbox (intercepted)', sent.join(' | '));
 
-  // Voice key: ⌥V start, ⌥V send → outbox with audio (intercepted transcribe/upload/run).
+  // Voice keys: tap Right ⌘ start, tap again send → outbox with audio (intercepted transcribe/upload/run).
   await p.evaluate(() => __wux.goWs(4)); await sleep(200);
   const w1 = writes.length;
-  await p.keyboard.press('Alt+KeyV'); await sleep(1600);
-  ok(await p.evaluate(() => __wux.voice) === 'listen' && await p.isVisible('#voicePill'), '⌥V: listening, pill in the top bar');
+  await p.keyboard.press('MetaRight'); await sleep(1600);
+  ok(await p.evaluate(() => __wux.voice) === 'listen' && await p.isVisible('#voicePill'), 'Right ⌘ tap: listening, pill in the top bar');
   await p.screenshot({ path: OUT + '/8-voice.png' });
-  await p.keyboard.press('Alt+KeyV'); await sleep(3500);
+  await p.keyboard.press('MetaRight'); await sleep(3500);
   const vw = writes.slice(w1).map(x => x.u);
-  ok(vw.some(u => /transcribe|files\/upload/.test(u)) && vw.some(u => /v1\/runs|api\/sessions/.test(u)), '⌥V again: sends the recording as a new thread (intercepted)', vw.join(' | '));
+  ok(vw.some(u => /transcribe|files\/upload/.test(u)) && vw.some(u => /v1\/runs|api\/sessions/.test(u)), 'Right ⌘ tap again: sends the recording as a new thread (intercepted)', vw.join(' | '));
+  // A chord (Right ⌘ + C) is a shortcut, never a voice tap.
+  await p.keyboard.down('MetaRight'); await p.keyboard.press('KeyC'); await p.keyboard.up('MetaRight'); await sleep(400);
+  ok(await p.evaluate(() => __wux.voice) === 'idle', 'Right ⌘ + C chord does not start voice');
+  // ⌥V is free again (types normally on a Mac).
+  await p.keyboard.press('Alt+KeyV'); await sleep(500);
+  ok(await p.evaluate(() => __wux.voice) === 'idle', '⌥V no longer bound to voice');
+
+  // Dictation: Right ⌥ tap with a text field focused → transcribed words go in at the cursor.
+  const w2 = writes.length;
+  await p.evaluate(() => { const i = document.createElement('textarea'); i.id = 'qaDict'; i.value = 'hello'; Object.assign(i.style, { position: 'fixed', bottom: '10px', left: '10px', zIndex: 9999 }); document.body.appendChild(i); i.focus(); i.setSelectionRange(5, 5); });
+  await p.keyboard.press('AltRight'); await sleep(1400);
+  ok(await p.evaluate(() => __wux.voice) === 'listen' && await p.evaluate(() => document.querySelector('#voicePill').classList.contains('dict')), 'Right ⌥ tap: dictating (cyan pill)');
+  await p.screenshot({ path: OUT + '/8b-dictate.png' });
+  await p.keyboard.press('AltRight'); await sleep(2500);
+  const dv = await p.evaluate(() => document.querySelector('#qaDict').value);
+  ok(dv === 'hello qa voice words', 'Right ⌥ tap again: transcript inserted at the cursor', dv);
+  const dw = writes.slice(w2).map(x => x.u).filter(u => /v1\/runs|api\/sessions|files\/upload/.test(u)).length;
+  ok(dw === 0, 'dictation sends nothing to Archimedes', String(dw));
+  // Dictation with nothing focused → clipboard.
+  await p.evaluate(() => { document.querySelector('#qaDict').remove(); document.activeElement && document.activeElement.blur(); });
+  await p.keyboard.press('AltRight'); await sleep(1400); await p.keyboard.press('AltRight'); await sleep(2500);
+  const clip = await p.evaluate(() => navigator.clipboard.readText().catch(e => 'ERR ' + e.message));
+  ok(clip === 'qa voice words', 'Right ⌥ with no text field: transcript copied to the clipboard', clip);
 
   // Native bridge v0.
   const ready = await p.evaluate(() => window.wizardUX);
