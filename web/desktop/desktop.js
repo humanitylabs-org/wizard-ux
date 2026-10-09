@@ -321,7 +321,7 @@
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     const n = new Date();
     const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
-    const quick = ['wizard', 'mizel', 'cinequeue', 'reader', 'files', 'console', 'legacy-wizard'].map(id => APP[id]).filter(Boolean);
+    const quick = ['wizard', 'wizard-signal', 'wisdom', 'shopping', 'mizel', 'files', 'console', 'legacy-wizard'].map(id => APP[id]).filter(Boolean);
     return `<div class="home-in">
       <div class="home-time">${window.WizConfig.hm()}</div>
       <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })} · Workspace ${i + 1}</div>

@@ -1025,7 +1025,7 @@
     const body = $('#launcherBody');
     q = q.trim();
     if (!q) {
-      const recentIds = store.get('recent', ['wizard', 'v-day', 'cinequeue', 'signal-feed']).filter(id => APP[id]).slice(0, 4);
+      const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id]).slice(0, 4);
       body.innerHTML = `<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
         <div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>
         <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats').length}</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats').map(appTile).join('')}</div></div>
@@ -1174,7 +1174,7 @@
   }
 
   /* ---------------- voice ---------------- */
-  const V = { state: 'idle', kind: 'auto', route: store.get('routeV', 0) >= 2 ? store.get('route', 'auto') : (store.set('routeV', 2), store.set('route', 'auto'), 'auto'), rec: null, stream: null, chunks: [], ac: null, an: null, t0: 0, acc: 0, raf: 0, sim: false, stopAsked: false, cancelled: false, simText: '' };
+  const V = { state: 'idle', kind: 'auto', route: store.get('routeV', 0) >= 2 ? store.get('route', 'auto') : (store.set('routeV', 2), store.set('route', 'auto'), 'auto'), rec: null, stream: null, chunks: [], parts: [], ac: null, an: null, t0: 0, acc: 0, raf: 0, sim: false, stopAsked: false, cancelled: false, simText: '' };
   const voiceEl = $('#voice'), tx = $('#transcript');
   // Keep the screen on while the orb records or transcribes: a screen lock mid-dictation pauses the WebView and loses the take.
   // Native shell (0.5.1+) sets FLAG_KEEP_SCREEN_ON; browsers and PWAs use the Screen Wake Lock API.
@@ -1284,7 +1284,7 @@
     V.onAt = performance.now();
     if (V.state !== 'idle') return;
     clearTimeout(txHideT);
-    Object.assign(V, { kind, target: null, chunks: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, target: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
     // No status card while recording: the orb, timer and arc already say it. Hold-for-command keeps
@@ -1293,16 +1293,7 @@
     else { txHide(0); if (!store.get('voiceTipSeen', false)) { store.set('voiceTipSeen', true); txPill('✦', 'Listening · tap the orb again to send', 'tip'); txHide(3200); } }
     V.raf = requestAnimationFrame(tick);
     try {
-      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
-      V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      if (V.cancelled || V.state === 'idle') { stopStream(); return; }
-      const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
-      const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
-      const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
-      V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
-      V.rec.ondataavailable = e => { if (e.data && e.data.size) V.chunks.push(e.data); };
-      V.rec.onstop = onRecStop;
-      V.rec.start(250);
+      if (!(await openRec())) return;
       if (V.stopAsked) finishVoice();
     } catch (err) {
       V.sim = true;
@@ -1316,11 +1307,40 @@
     }
   }
   $('#txChips').addEventListener('click', e => { const b = e.target.closest('[data-sim]'); if (!b) return; const k = V.kind; cancelVoice(true); runUtterance(b.dataset.sim, k); });
+  // Only a tap (or Cancel) ends a take. If Android takes the mic away (a call, another app, the system), the
+  // part recorded so far is kept and the take pauses: tap the orb to send it, or Pause to carry on recording.
+  async function openRec() {
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
+    V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (V.cancelled || V.state === 'idle') { stopStream(); return false; }
+    const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
+    const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
+    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
+    const rec = V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
+    V.mime = rec.mimeType || mime || 'audio/webm';
+    rec.ondataavailable = e => { if (e.data && e.data.size) V.chunks.push(e.data); };
+    rec.onstop = () => (V.state === 'think' ? onRecStop() : onRecInterrupted(rec));
+    // A track ended by the system stops the recorder too; onstop handles it.
+    V.stream.getAudioTracks().forEach(tr => tr.addEventListener('ended', () => { try { rec.state !== 'inactive' && rec.stop(); } catch (e) {} }));
+    rec.start(250);
+    return true;
+  }
+  function onRecInterrupted(rec) {
+    if (V.cancelled || V.rec !== rec || (V.state !== 'listen' && V.state !== 'paused' && V.state !== 'command')) return;
+    if (V.chunks.length) V.parts.push(new Blob(V.chunks, { type: V.mime || 'audio/webm' }));
+    V.chunks = [];
+    if (V.state !== 'paused') V.acc += performance.now() - V.t0;
+    stopStream(); V.rec = null; Orb.setLevel(0);
+    setVoice('paused');
+    $('#txRouteText').textContent = 'Mic interrupted · kept · tap the orb to send';
+    toast('⏸', 'Mic interrupted · your recording is kept');
+  }
   function stopStream() { try { V.stream && V.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { V.ac && V.ac.close(); } catch (e) {} V.stream = null; V.ac = null; V.an = null; }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
     if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
+    if (!V.rec && V.parts.length) { setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core'); onRecStop(); return; }
     if (!V.rec) { V.stopAsked = true; return; }
     if (V.state !== 'paused') V.acc += performance.now() - V.t0;
     setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core');
@@ -1334,13 +1354,22 @@
     if (!quiet) { toast('✕', 'Discarded'); vib(12); }
   }
   async function onRecStop() {
-    const blob = new Blob(V.chunks, { type: V.rec?.mimeType || 'audio/webm' });
+    const last = V.chunks.length ? new Blob(V.chunks, { type: V.mime || V.rec?.mimeType || 'audio/webm' }) : null;
+    const blobs = V.parts.concat(last && last.size ? [last] : []);
+    V.parts = []; V.chunks = [];
+    const blob = blobs[0] || new Blob([], { type: V.mime || 'audio/webm' });
+    const size = blobs.reduce((n, b) => n + b.size, 0);
     stopStream(); V.rec = null; Orb.setLevel(0);
     if (V.cancelled) return;
-    if (V.acc < 450 || blob.size < 1200) { setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
+    if (V.acc < 450 || size < 1200) { setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
     try {
-      const j = await window.WizConfig.transcribe(blob, { prompt: window.WizConfig.voicePrompt(APPS.map(a => a.name).slice(0, 40)), language: 'en' });
-      const text = (j.text || '').trim();
+      const words = []; const j = { ms: 0 };
+      const prompt = window.WizConfig.voicePrompt(APPS.map(a => a.name).slice(0, 40));
+      for (const part of blobs) {   // more than one part only after the mic was interrupted mid-take
+        const jj = await window.WizConfig.transcribe(part, { prompt, language: 'en' });
+        words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
+      }
+      const text = words.filter(Boolean).join(' ').trim();
       if (!text) { setVoice('idle'); txHide(); toast('◌', 'No speech detected'); return; }
       handleText(text, V.kind, false, j.ms, V.target);
     } catch (err) {
@@ -1348,8 +1377,11 @@
       setVoice('idle');
       const aim = V.target, f = desks[idx].focus, fw = W[f];
       const files = takeFiles();
-      if (aim == null && fw?.app === 'chats' && fw.thread) { ch(f).files = [...(ch(f).files || []), ...files]; sendChat(f, '', 'voice, aimed at this thread', blob); }
-      else toAgent('', 'Saved · sends when Wizard is reachable', { audio: blob, desk: aim, source: 'orb', files });
+      (blobs.length ? blobs : [blob]).forEach((part, i) => {
+        const fl = i === 0 ? files : [];   // attached files ride with the first part only
+        if (aim == null && fw?.app === 'chats' && fw.thread) { ch(f).files = [...(ch(f).files || []), ...fl]; sendChat(f, '', 'voice, aimed at this thread', part); }
+        else toAgent('', 'Saved · sends when Wizard is reachable', { audio: part, desk: aim, source: 'orb', files: fl });
+      });
       txPill('↻', 'Saved · sends when Wizard is back', 'agent', 'Couldn’t reach Wizard · recording saved, will send'); txHide(2600);
     }
   }
@@ -1359,6 +1391,10 @@
   $('#arcCancel').addEventListener('click', () => cancelVoice());
   $('#arcPause').addEventListener('click', () => {
     if (V.state === 'listen') { V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} setVoice('paused'); vib(6); }
+    else if (V.state === 'paused' && !V.rec && V.parts.length) {   // after a mic interruption: carry on with a fresh part
+      V.t0 = performance.now(); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6);
+      openRec().catch(() => { V.acc += performance.now() - V.t0; setVoice('paused'); toast('⏸', 'The mic is busy · tap the orb to send what you have'); });
+    }
     else if (V.state === 'paused') { V.t0 = performance.now(); try { V.rec && V.rec.resume(); } catch (e) {} setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
   });
   // The file picker is a separate screen on Android: pause the take while it is open, resume on return.

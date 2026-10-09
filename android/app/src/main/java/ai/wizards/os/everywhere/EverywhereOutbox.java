@@ -43,8 +43,8 @@ public final class EverywhereOutbox {
     public static final String DEFAULT_ORIGIN = "https://private.wizard001.com";
     static final String PROMPT = "Wizard voice request spoken to Archimedes from the floating Wizard button on a phone. "
             + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
-    static final String DICTATION_PROMPT = "Dictation typed into a text field on James's phone. "
-            + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
+    /** Dictation goes to STT bare, like Archimedes Anywhere: a context prompt can leak into typed text. */
+    static final String DICTATION_PROMPT = "";
     /** Where a recording came from: the floating orb, the side button (lock screen / corner), or keyboard dictation. */
     public static final String SRC_EVERYWHERE = "everywhere", SRC_SIDE = "side", SRC_DICTATION = "dictation";
 

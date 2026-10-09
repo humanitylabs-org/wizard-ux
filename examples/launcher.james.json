@@ -1,248 +1,126 @@
 {
- "schema": 1,
  "links": [
-  {
-   "id": "cinequeue",
-   "name": "CineQueue",
-   "icon": "🎬",
-   "url": "/cinequeue/",
-   "desc": "Your watch queue",
-   "colors": [
-    "#ff5c7a",
-    "#7a2bff"
-   ]
-  },
-  {
-   "id": "signal-feed",
-   "name": "Signal Feed",
-   "icon": "◎",
-   "url": "/signal-feed/",
-   "desc": "High-signal feed",
-   "colors": [
-    "#ff5ccf",
-    "#5c3bff"
-   ]
-  },
   {
    "id": "wizard-signal",
    "name": "Wizard Signal",
    "icon": "📡",
-   "url": "/wizard-signal/",
-   "desc": "Social signal",
    "colors": [
     "#a74dff",
     "#ff5ccf"
-   ]
+   ],
+   "url": "/wizard-signal/",
+   "desc": "Your feed, your algorithm"
   },
   {
-   "id": "reader",
-   "name": "Reader",
+   "id": "wisdom",
+   "name": "Wisdom",
    "icon": "📖",
-   "url": "/reader/",
-   "desc": "Long-form reading",
    "colors": [
     "#e9b46b",
     "#8a4dff"
-   ]
+   ],
+   "url": "/wizard-signal/#wisdom",
+   "desc": "Collections reader: Steve Jobs biography and more"
   },
   {
-   "id": "recall",
-   "name": "Recall",
-   "icon": "◉",
-   "url": "/recall/",
-   "desc": "Voice memory",
+   "id": "shopping",
+   "name": "Wizard Shopping",
+   "icon": "🛍",
    "colors": [
-    "#3fe0ff",
-    "#3f6bff"
-   ]
-  },
-  {
-   "id": "capture",
-   "name": "Capture",
-   "icon": "✚",
-   "url": "/capture/",
-   "desc": "Drop anything in",
-   "colors": [
-    "#4ff0b0",
-    "#2f8cff"
-   ]
-  },
-  {
-   "id": "idea-queue",
-   "name": "Idea Queue",
-   "icon": "💡",
-   "url": "/idea-queue/",
-   "desc": "Ideas waiting their moment",
-   "colors": [
-    "#ffd65c",
-    "#ff8a5c"
-   ]
-  },
-  {
-   "id": "files",
-   "name": "Files",
-   "icon": "🗂",
-   "url": "/files/",
-   "desc": "Browse the server",
-   "colors": [
-    "#8aa0c8",
-    "#4a5a8a"
-   ]
-  },
-  {
-   "id": "iching",
-   "name": "I Ching",
-   "icon": "☯",
-   "url": "/iching/",
-   "desc": "Cast and read",
-   "colors": [
-    "#d8c39a",
-    "#6a4a2a"
-   ]
-  },
-  {
-   "id": "trackhunt",
-   "name": "TrackHunt",
-   "icon": "♫",
-   "url": "/trackhunt/",
-   "desc": "Find tracks",
-   "colors": [
-    "#4ff0b0",
-    "#0d8a6a"
-   ]
-  },
-  {
-   "id": "thai-cram",
-   "name": "Thai Cram",
-   "icon": "ก",
-   "url": "/thai-cram/",
-   "desc": "Thai flashcards",
-   "colors": [
-    "#ff6b86",
-    "#3f6bff"
-   ]
-  },
-  {
-   "id": "console",
-   "name": "Console",
-   "icon": "⌘",
-   "url": "/console/",
-   "desc": "Terminals",
-   "colors": [
-    "#3a3f58",
-    "#151827"
-   ]
-  },
-  {
-   "id": "model-performance",
-   "name": "Model Perf",
-   "icon": "📈",
-   "url": "/model-performance/",
-   "desc": "Model routing and cost",
-   "colors": [
-    "#3fe0ff",
-    "#8f63ff"
-   ]
-  },
-  {
-   "id": "topics",
-   "name": "Topics",
-   "icon": "◇",
-   "url": "/wizard-topics-preview/",
-   "desc": "Threads grouped by topic",
-   "colors": [
-    "#3fe0ff",
-    "#8f63ff"
-   ]
+    "#ff8a5c",
+    "#ff5ccf"
+   ],
+   "url": "/wizard-shopping/",
+   "desc": "For You swipe feed and Browse"
   },
   {
    "id": "mizel",
    "name": "Mizel",
    "icon": "◉",
-   "url": "/meetings/#/",
-   "desc": "Meeting recorder",
    "colors": [
     "#3fe0ff",
     "#2f8cff"
-   ]
+   ],
+   "url": "/meetings/#/",
+   "desc": "Meeting recorder"
   },
   {
-   "id": "shopping",
-   "name": "Shopping",
-   "icon": "🛍",
-   "url": "/shopping-assistant/",
-   "desc": "Researched buys",
+   "id": "topics",
+   "name": "Topics",
+   "icon": "◇",
    "colors": [
-    "#ff8a5c",
-    "#ff5ccf"
-   ]
-  },
-  {
-   "id": "storyboard",
-   "name": "Storyboards",
-   "icon": "🎞",
-   "url": "/storyboard-review/",
-   "desc": "Storyboard review",
-   "colors": [
-    "#ffbe55",
+    "#3fe0ff",
     "#8f63ff"
-   ]
+   ],
+   "url": "/wizard-topics-preview/",
+   "desc": "Topic watches"
   },
   {
-   "id": "golden-frog",
-   "name": "Golden Frog",
-   "icon": "🐸",
-   "url": "/golden-frog-review/",
-   "desc": "Golden Frog review",
+   "id": "cinequeue",
+   "name": "CineQueue",
+   "icon": "🎬",
    "colors": [
-    "#ffd65c",
-    "#4ff0b0"
-   ]
-  },
-  {
-   "id": "live",
-   "name": "Archimedes Live",
-   "icon": "🎙",
-   "url": "/archimedes-live/",
-   "desc": "Realtime voice",
-   "colors": [
-    "#ff5ccf",
-    "#3fe0ff"
-   ]
+    "#ff5c7a",
+    "#7a2bff"
+   ],
+   "url": "/cinequeue/",
+   "desc": "Your watch queue"
   },
   {
    "id": "social",
    "name": "Wizard Social",
    "icon": "⚇",
-   "url": "/wizard-social/",
-   "desc": "Private social",
    "colors": [
     "#7c5cff",
     "#3fe0ff"
-   ]
+   ],
+   "url": "/wizard-social/",
+   "desc": "Private social"
   },
   {
-   "id": "alerts",
-   "name": "Alerts",
-   "icon": "⚠",
-   "url": "/alerts/",
-   "desc": "System alerts",
+   "id": "files",
+   "name": "Files",
+   "icon": "🗂",
    "colors": [
-    "#ff6b86",
-    "#8a2b4a"
-   ]
+    "#8aa0c8",
+    "#4a5a8a"
+   ],
+   "url": "/files/",
+   "desc": "Browse the server"
+  },
+  {
+   "id": "iching",
+   "name": "I Ching",
+   "icon": "☯",
+   "colors": [
+    "#d8c39a",
+    "#6a4a2a"
+   ],
+   "url": "/iching/",
+   "desc": "Cast and read"
+  },
+  {
+   "id": "console",
+   "name": "Console",
+   "icon": "⌘",
+   "colors": [
+    "#3a3f58",
+    "#151827"
+   ],
+   "url": "/console/",
+   "desc": "Terminals"
   },
   {
    "id": "legacy-wizard",
    "name": "Wizard (legacy)",
    "icon": "◈",
-   "url": "/wizard/",
-   "desc": "The old chat app, for anything not ported yet",
-   "desktop_only": true,
    "colors": [
     "#7c5cff",
     "#3a2a7a"
-   ]
+   ],
+   "url": "/wizard/",
+   "desc": "The old chat app, for anything not ported yet",
+   "desktop_only": true
   }
  ]
 }
