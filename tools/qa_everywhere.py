@@ -368,7 +368,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('floating orb draws the shared Wizard orb', 'everywhere page ready' in lg, lg)
         cx, cy = (b4[0] + b4[2]) // 2, (b4[1] + b4[3]) // 2
         dxs = -1 if cx > sw / 2 else 1; dys = -1 if cy > shh * 0.42 else 1
-        PAUSE = (cx + dxs * dp(54), cy + dys * dp(54)); CANCEL = (cx, cy + dys * dp(76)); SHOT = (cx + dxs * dp(76), cy)
+        PAUSE = (cx + dxs * dp(59), cy + dys * dp(59)); CANCEL = (cx, cy + dys * dp(84)); SHOT = (cx + dxs * dp(84), cy)
         # 1. Talk, Pause, carry on, Cancel: nothing is sent.
         stage_audio(); sx('logcat -c')
         sx(f'input tap {cx} {cy}'); time.sleep(1.2)
@@ -377,7 +377,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx(f'input tap {PAUSE[0]} {PAUSE[1]}'); time.sleep(1.0); shot('07-paused')
         bx = bubble()
         check('tap starts listening and Cancel · Pause · Screen open around the orb', 'listening' in logs('listening') and set(cs) == {'cancel', 'pause', 'screen'}, (logs('listening'), cs))
-        check('the orb is smaller (about 64 dp) and stays that size while talking', bx and dp(56) <= (bx[2] - bx[0]) <= dp(72), bx)
+        check('the orb is Archimedes Anywhere size (76 dp window, ~48 dp orb) and stays that size while talking', bx and dp(70) <= (bx[2] - bx[0]) <= dp(82), bx)
         # Touches around the orb reach the app below: only the orb and the three buttons are windows.
         gaps = [(cx + dxs * dp(38), cy + dys * dp(100)), (cx + dxs * dp(100), cy + dys * dp(38)), (cx + dxs * dp(100), cy + dys * dp(100)),
                 (cx + dxs * dp(20), cy + dys * dp(45))]
@@ -481,6 +481,16 @@ with (BASE / 'worker.lock').open('a') as lock:
         shot('10-typed')
         check('the words are typed into the field', 'dictation typed' in dl and typed, (dl, typed))
         check('voice typing sends nothing to Wizard', len(STATE['runs']) == runs_before, len(STATE['runs']))
+        # 0.6.3: over a keyboard the orb goes where James drops it, on the keys too, and stays there.
+        if ime_top:
+            bq = bubble(); qcx, qcy = (bq[0] + bq[2]) // 2, (bq[1] + bq[3]) // 2
+            tx, ty = qcx, ime_top + dp(70)
+            sx(f'input swipe {qcx} {qcy} {tx} {ty} 700'); time.sleep(2.5)
+            bd = bubble(); shot('10d-dragged-onto-keys')
+            on_keys = lambda b_: b_ and (b_[1] + b_[3]) // 2 > ime_top + dp(30)
+            check('over a keyboard the orb can be dragged onto the keys', on_keys(bd), (bd, ime_top))
+            time.sleep(3)
+            check('…and it stays there (not pushed back above the keyboard)', on_keys(bubble()) and abs(bubble()[1] - bd[1]) < 10, (bubble(), bd))
         for _ in range(3): sx('input keyevent KEYCODE_BACK'); time.sleep(1)
         sx('input keyevent KEYCODE_HOME'); time.sleep(3)
         # 4b. 0.6.2: a markdown note in a rich editor (Obsidian-style contenteditable, in Chrome). The words land at the

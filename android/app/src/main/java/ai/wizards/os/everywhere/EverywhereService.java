@@ -85,7 +85,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     static final int N_RUNNING = 7101, N_UNSENT = 7102, N_APP_UNSENT = 7103, N_REPLY_BASE = 7200;
     /** The orb (Archimedes Anywhere's bubble is 84 dp) and its three buttons; each is its own small window, so every
      *  touch outside the orb and the buttons reaches the app underneath. */
-    static final int ORB_DP = 64, CTL_DP = 40, FAN_DP = 76, MARGIN_DP = 4;
+    /** ORB_DP 76: the drawn orb is ~48 dp across, the size of Archimedes Anywhere's bubble face (James: 88 too big, 64 too small). */
+    static final int ORB_DP = 76, CTL_DP = 40, FAN_DP = 84, MARGIN_DP = 4;
     static final int MAX_SHOTS = 4;
 
     private static boolean appInFront;
@@ -481,7 +482,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         }
         int x = p.contains(k + "x") ? p.getInt(k + "x", def[0]) : def[0];
         int y = p.contains(k + "y") ? p.getInt(k + "y", def[1]) : def[1];
-        if (keyboardOpen && !p.contains(k + "y") && imeTop > 0) y = Math.min(y, imeTop - size - margin);
+        if (keyboardOpen && !p.contains(k + "y") && imeTop > 0) y = Math.min(y, imeTop - size - margin); // first time only
         return EverywherePolicy.clamp(x, y, size, s.x, s.y, margin);
     }
 
@@ -491,7 +492,9 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (cx < 0) { int[] p = savedSpot(); cx = p[0] + size / 2; cy = p[1] + size / 2; }
         int w = size;
         int wx = cx - size / 2, wy = cy - size / 2;
-        if (keyboardOpen && imeTop > 0) {
+        if (keyboardOpen && imeTop > 0 && !prefs(this).contains("kby")) {
+            // First time over a keyboard only: start clear of the keys. Once James drags it (onto the keys, next to
+            // Gboard's mic, anywhere), his spot wins and is never pushed back up.
             // imeTop is in screen pixels; the overlay's y is offset by the status bar on most phones.
             int off = screenOffsetY();
             if (wy + off + w > imeTop - margin) {
@@ -708,7 +711,10 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                     mine = false;
                     if (moved) {
                         Point sc = screen();
-                        int[] q = EverywherePolicy.snap(cx - size / 2, cy - size / 2, size, sc.x, sc.y, margin);
+                        // Over a keyboard it stays exactly where it is dropped (e.g. on the keys by Gboard's mic);
+                        // otherwise it tucks to the nearer edge.
+                        int[] q = keyboardOpen ? EverywherePolicy.clamp(cx - size / 2, cy - size / 2, size, sc.x, sc.y, margin)
+                                : EverywherePolicy.snap(cx - size / 2, cy - size / 2, size, sc.x, sc.y, margin);
                         cx = q[0] + size / 2; cy = q[1] + size / 2;
                         String k = slot();
                         prefs(EverywhereService.this).edit().putInt(k + "x", q[0]).putInt(k + "y", q[1]).apply();
