@@ -6,11 +6,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /** Builds the multipart/form-data body Wizard Voice Core expects (file + language + prompt). */
-final class Multipart {
+public final class Multipart {
     final String boundary;
     private final ByteArrayOutputStream out = new ByteArrayOutputStream();
 
-    Multipart() {
+    public Multipart() {
         this("wizardlock" + UUID.randomUUID().toString().replace("-", ""));
     }
 
@@ -18,11 +18,11 @@ final class Multipart {
         this.boundary = boundary;
     }
 
-    String contentType() {
+    public String contentType() {
         return "multipart/form-data; boundary=" + boundary;
     }
 
-    Multipart field(String name, String value) throws IOException {
+    public Multipart field(String name, String value) throws IOException {
         write("--" + boundary + "\r\n");
         write("Content-Disposition: form-data; name=\"" + safe(name) + "\"\r\n\r\n");
         write(value == null ? "" : value);
@@ -30,7 +30,7 @@ final class Multipart {
         return this;
     }
 
-    Multipart file(String name, String filename, String mime, byte[] data) throws IOException {
+    public Multipart file(String name, String filename, String mime, byte[] data) throws IOException {
         write("--" + boundary + "\r\n");
         write("Content-Disposition: form-data; name=\"" + safe(name) + "\"; filename=\"" + safe(filename) + "\"\r\n");
         write("Content-Type: " + mime + "\r\n\r\n");
@@ -39,7 +39,7 @@ final class Multipart {
         return this;
     }
 
-    byte[] finish() throws IOException {
+    public byte[] finish() throws IOException {
         write("--" + boundary + "--\r\n");
         return out.toByteArray();
     }

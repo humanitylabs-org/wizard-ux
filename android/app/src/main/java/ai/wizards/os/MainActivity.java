@@ -48,6 +48,14 @@ public class MainActivity extends Activity {
     static final String ACTION_SAY = "ai.wizards.os.action.SAY";
     /** Opens Wizard OS on the side-button switch (Android's assistant settings gear lands here). */
     public static final String ACTION_SIDE_BUTTON = "ai.wizards.os.action.SIDE_BUTTON";
+    /** Notifications and the Everywhere button open Wizard OS on Settings / the Unsent list / a thread. */
+    public static final String ACTION_SETTINGS = "ai.wizards.os.action.SETTINGS";
+    public static final String ACTION_UNSENT = "ai.wizards.os.action.UNSENT";
+    public static final String ACTION_THREAD = "ai.wizards.os.action.THREAD";
+    public static final String EXTRA_THREAD = "ai.wizards.os.extra.THREAD";
+    private static final int REQ_EVERYWHERE = 44;
+    private static java.lang.ref.WeakReference<MainActivity> current = new java.lang.ref.WeakReference<>(null);
+    private boolean everywhereSetup; // James is on Android's "Display over other apps" page
     private boolean sideSetupActive; // the user tapped Turn on and is in the system picker
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private String pendingHandoff; // JSON handed to window.__wosHandoff once the shell is ready
@@ -202,8 +210,13 @@ public class MainActivity extends Activity {
      * tap; nothing is ever sent on another app's behalf. */
     void queueHandoff(Intent intent) {
         if (intent == null) return;
-        String json = ACTION_SIDE_BUTTON.equals(intent.getAction()) ? "{\"action\":\"side-button\"}"
-                : Handoff.json(intent.getAction(), intent.getStringExtra(Intent.EXTRA_TEXT));
+        String act = intent.getAction();
+        String json = ACTION_SIDE_BUTTON.equals(act) ? "{\"action\":\"side-button\"}"
+                : ACTION_SETTINGS.equals(act) ? "{\"action\":\"settings\"}"
+                : ACTION_UNSENT.equals(act) ? "{\"action\":\"unsent\"}"
+                : ACTION_THREAD.equals(act) && intent.getStringExtra(EXTRA_THREAD) != null
+                    ? "{\"action\":\"thread\",\"id\":" + Handoff.quote(intent.getStringExtra(EXTRA_THREAD)) + "}"
+                : Handoff.json(act, intent.getStringExtra(Intent.EXTRA_TEXT));
         if (json == null) return;
         intent.setAction(Intent.ACTION_MAIN); // a handoff runs once, not again on rotation/restore
         pendingHandoff = json;
@@ -264,6 +277,7 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
+        if (code == REQ_EVERYWHERE) { continueEverywhere(); return; }
         if (code == REQ_SIDE_MIC) {
             boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
             if (ok) continueSideButton();
@@ -297,9 +311,30 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        current = new java.lang.ref.WeakReference<>(this);
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, true); // the floating button hides while Wizard OS is open
+        ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
+    }
+
+    @Override
+    protected void onStop() {
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, false); // …and comes back when James leaves
+        super.onStop();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         web.onResume();
+        if (everywhereSetup) {
+            everywhereSetup = false;
+            boolean ok = ai.wizards.os.everywhere.EverywhereService.overlayAllowed(this);
+            if (ok) ai.wizards.os.everywhere.EverywhereService.ensureRunning(this);
+            Toast.makeText(this, ok ? "Wizard Everywhere is on. It shows when you leave Wizard OS." : "Wizard Everywhere needs “Display over other apps”", Toast.LENGTH_LONG).show();
+        }
+        pushEverywhere();
         web.evaluateJavascript("window.dispatchEvent(new Event('wos-native-resume'))", null);
         pushSideButton();
         if (sideSetupActive) {
@@ -343,6 +378,46 @@ public class MainActivity extends Activity {
         super.onPause();
     }
 
+    /* ---------------- Wizard Everywhere (the floating button, formerly Archimedes Anywhere) ---------------- */
+
+    /** Called by the native outbox on any change, so Settings / the Inbox update while open. */
+    public static void notifyUnsentChanged() {
+        MainActivity a = current.get();
+        if (a == null || a.web == null) return;
+        a.main.post(() -> a.web.evaluateJavascript("(window.__wosUnsent && window.__wosUnsent())", null));
+    }
+
+    void pushEverywhere() {
+        if (web != null) web.evaluateJavascript("(window.__wosEverywhere && window.__wosEverywhere())", null);
+    }
+
+    /** Switch on: ask for the mic and notifications in place, then Android's overlay page if needed. */
+    void startEverywhere() {
+        ai.wizards.os.everywhere.EverywhereService.setEnabled(this, true);
+        java.util.List<String> need = new java.util.ArrayList<>();
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) need.add(Manifest.permission.RECORD_AUDIO);
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) need.add(Manifest.permission.POST_NOTIFICATIONS);
+        if (!need.isEmpty()) { requestPermissions(need.toArray(new String[0]), REQ_EVERYWHERE); return; }
+        continueEverywhere();
+    }
+
+    private void continueEverywhere() {
+        if (!ai.wizards.os.everywhere.EverywhereService.overlayAllowed(this)) {
+            everywhereSetup = true;
+            try {
+                startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
+                Toast.makeText(this, "Turn on “Allow display over other apps”, then come back", Toast.LENGTH_LONG).show();
+            } catch (ActivityNotFoundException e) {
+                everywhereSetup = false;
+                Toast.makeText(this, "This phone has no overlay setting", Toast.LENGTH_LONG).show();
+            }
+        } else {
+            ai.wizards.os.everywhere.EverywhereService.ensureRunning(this);
+            Toast.makeText(this, "Wizard Everywhere is on. It shows when you leave Wizard OS.", Toast.LENGTH_LONG).show();
+        }
+        pushEverywhere();
+    }
+
     @Override
     protected void onDestroy() {
         if (web != null) { root.removeView(web); web.destroy(); }
@@ -368,6 +443,34 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (!SideButton.openSideKeyPage(MainActivity.this)) SideButton.openAssistantPage(MainActivity.this);
             });
+        }
+
+        /** {"enabled","overlay","notifications","mic"} for the Wizard Everywhere switch in Settings. */
+        @JavascriptInterface
+        public String everywhere() { return ai.wizards.os.everywhere.EverywhereService.status(MainActivity.this); }
+
+        @JavascriptInterface
+        public void setEverywhere(boolean on) {
+            runOnUiThread(() -> {
+                if (on) startEverywhere();
+                else { ai.wizards.os.everywhere.EverywhereService.setEnabled(MainActivity.this, false); pushEverywhere(); }
+            });
+        }
+
+        /** Messages from the floating button that Wizard has not accepted yet (no paths, no bodies). */
+        @JavascriptInterface
+        public String unsent() { return ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this).unsentJson(); }
+
+        @JavascriptInterface
+        public void retryUnsent(String id) { ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this).retry(String.valueOf(id)); }
+
+        @JavascriptInterface
+        public void deleteUnsent(String id) { ai.wizards.os.everywhere.EverywhereOutbox.get(MainActivity.this).delete(String.valueOf(id)); }
+
+        /** The web outbox's "not sent" count, so a notification is waiting if James leaves the app. */
+        @JavascriptInterface
+        public void appUnsent(int failed, String firstText) {
+            ai.wizards.os.everywhere.EverywhereService.appUnsent(MainActivity.this, failed, firstText == null ? "" : firstText);
         }
 
         @JavascriptInterface

@@ -16,32 +16,35 @@ import org.json.JSONObject;
  * Sends one recording to Wizard Voice Core (Tinfoil-attested Voxtral) through the private,
  * tailnet-only Wizard OS endpoint. The phone must be on Tailscale. Nothing else leaves the phone.
  */
-final class Transcriber {
+public final class Transcriber {
     static final String ORIGIN = "https://private.wizard001.com";
     static final String ENDPOINT = ORIGIN + "/wizard-os-home/api/transcribe";
     static final String PROMPT = "Wizard voice request spoken to Archimedes on a phone lock screen. "
             + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
 
-    static final class Result {
-        final String text;
-        final long ms;
+    public static final class Result {
+        public final String text;
+        public final long ms;
         Result(String text, long ms) { this.text = text; this.ms = ms; }
     }
 
-    static Result transcribe(File audio) throws IOException {
+    static Result transcribe(File audio) throws IOException { return transcribe(audio, ORIGIN, PROMPT); }
+
+    /** origin is the private Wizard origin (a local fake in unit tests). */
+    public static Result transcribe(File audio, String origin, String prompt) throws IOException {
         byte[] data = readAll(audio);
         Multipart mp = new Multipart();
-        mp.file("file", "voice.m4a", "audio/mp4", data).field("language", "en").field("prompt", PROMPT);
+        mp.file("file", "voice.m4a", "audio/mp4", data).field("language", "en").field("prompt", prompt);
         byte[] body = mp.finish();
         long t0 = System.nanoTime();
-        HttpURLConnection c = (HttpURLConnection) new URL(ENDPOINT).openConnection();
+        HttpURLConnection c = (HttpURLConnection) new URL(origin + "/wizard-os-home/api/transcribe").openConnection();
         try {
             c.setConnectTimeout(8000);
             c.setReadTimeout(90000);
             c.setDoOutput(true);
             c.setRequestMethod("POST");
             c.setRequestProperty("Content-Type", mp.contentType());
-            c.setRequestProperty("Origin", ORIGIN);
+            c.setRequestProperty("Origin", origin);
             c.setFixedLengthStreamingMode(body.length);
             try (OutputStream os = c.getOutputStream()) { os.write(body); }
             int code = c.getResponseCode();

@@ -7,8 +7,8 @@ package ai.wizards.os.assist;
  * any app sees it), so "let go to send" is replaced by: tap the orb, hold the button again, or
  * pause. This class is the "pause" part. Pure Java so it can be unit-tested off-device.
  */
-final class SilenceDetector {
-    enum Result { CONTINUE, SEND, NOTHING_HEARD }
+public final class SilenceDetector {
+    public enum Result { CONTINUE, SEND, NOTHING_HEARD }
 
     private final long silenceMs;
     private final long noSpeechMs;
@@ -25,7 +25,7 @@ final class SilenceDetector {
         this.maxMs = maxMs;
     }
 
-    static SilenceDetector standard() {
+    public static SilenceDetector standard() {
         return new SilenceDetector(2400, 9000, 180_000);
     }
 
@@ -34,12 +34,12 @@ final class SilenceDetector {
         return (int) Math.max(1800, floor * 3.0);
     }
 
-    boolean heardSpeech() {
+    public boolean heardSpeech() {
         return speechMs >= 250;
     }
 
     /** amp: 0..32767 from MediaRecorder.getMaxAmplitude(); now: monotonic millis. */
-    Result feed(int amp, long now) {
+    public Result feed(int amp, long now) {
         if (startedAt < 0) {
             startedAt = now;
             lastAt = now;

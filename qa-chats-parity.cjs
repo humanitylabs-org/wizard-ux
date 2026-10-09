@@ -19,8 +19,8 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   const writes = [], leaked = [];
   await ctx.route('**/*', async r => {
     const q = r.request(), u = q.url();
-    const m = u.match(/\/wizard-os-home\/(app\.js|live\.js|styles\.css)(\?|$)/);
-    if (WEB && m) return r.fulfill({ status: 200, contentType: m[1].endsWith('.css') ? 'text/css' : 'application/javascript', body: fs.readFileSync(path.join(WEB, 'web', m[1])) });
+    const m = u.match(/\/wizard-os-home\/([a-z-]+\.(?:js|css)|index\.html|)(\?|$)/);
+    if (WEB && m && q.method() === 'GET' && !/^(data|summaries)\.js$/.test(m[1])) { const f = m[1] || 'index.html', fp = path.join(WEB, 'web', f); if (fs.existsSync(fp)) return r.fulfill({ status: 200, contentType: f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : 'application/javascript', body: fs.readFileSync(fp) }); }
     if (q.method() !== 'GET' && q.method() !== 'HEAD' && /\/wizard\//.test(u)) {
       const body = q.postDataBuffer() || Buffer.alloc(0);
       writes.push({ m: q.method(), u: u.replace(/^https:\/\/[^/]+/, ''), headers: q.headers(), body: /upload/.test(u) ? `<${body.length} bytes>` : body.toString() });

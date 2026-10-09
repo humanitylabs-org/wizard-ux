@@ -7,6 +7,7 @@
   const vib = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
   const D = window.WIZ_DATA || { threads: [], projects: {} };
   const LIVE = window.WizLive;
+  const OUTBOX = window.WosOutbox || null;
   const S = window.WIZ_SUMM || { days: {}, weeks: {}, month: '' };
   const device = $('#device');
   const TODAY = (D.generated || '2026-10-08').slice(0, 10);
@@ -176,7 +177,7 @@
   }
   function winTitle(w) {
     if (!w) return '';
-    if (w.app === 'chats') return w.thread === '__new__' ? 'New chat' : w.thread ? (LIVE?.session(w.thread)?.title || 'Thread') : 'Chats';
+    if (w.app === 'chats') return w.thread === '__new__' ? 'New chat' : w.thread ? (LIVE?.session(w.thread)?.title || OUTBOX?.forThread(w.thread)[0]?.title || 'Thread') : 'Chats';
     if (w.app === 'review') return { month: 'Month in review', week: 'Week in review', day: 'Day in review', group: 'Day in review', thread: 'Thread' }[w.z?.level] || 'Review';
     if (w.app === 'maps') return w.dest ? `Maps · ${w.dest}` : 'Maps';
     return winApp(w).name;
@@ -446,12 +447,107 @@
     return true;
   };
 
+  /* ---------------- settings & unsent ----------------
+   * The gear sits top-right wherever no app is in front (Home and empty desks). Settings holds Wizard Everywhere,
+   * the side button and the Unsent list. Unsent = everything saved on this phone that Wizard hasn't accepted yet:
+   * messages from the app (outbox) and recordings from the Everywhere button (native outbox), one list, Retry each. */
+  const GEAR_SVG = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
+  function gearBtn() { const n = unsentAll().length; return `<button class="gear" data-act="settings" aria-label="Settings${n ? `, ${n} unsent` : ''}">${GEAR_SVG}${n ? `<span class="gear-n">${n}</span>` : ''}</button>`; }
+  let NATIVE_UNSENT = [];
+  function readNativeUnsent() { try { NATIVE_UNSENT = NATIVE() && window.WizardOSNative.unsent ? JSON.parse(window.WizardOSNative.unsent()) : []; } catch (e) { NATIVE_UNSENT = []; } }
+  // From the app (outbox) and from the Everywhere button (native), oldest first.
+  function unsentAll() {
+    const web = OUTBOX ? OUTBOX.unsent().map(it => ({ ...it, origin: 'app' })) : [];
+    const nat = (NATIVE_UNSENT || []).map(it => ({ ...it, origin: 'everywhere' }));
+    return [...web, ...nat].sort((a, b) => a.createdAt - b.createdAt);
+  }
+  function unsentCard() {
+    const all = unsentAll(); if (!all.length) return '';
+    const failed = all.filter(x => x.state === 'failed').length;
+    const k = failed ? `${failed} not sent` : `${all.length} waiting to send`;
+    const v = esc(clip(all[0].text || 'Voice note', 70));
+    return `<button class="now-card unsent-card ${failed ? 'fail' : ''}" style="--c:${failed ? 'var(--amber)' : 'var(--violet-2)'}" data-act="unsent"><span class="pip ${failed ? '' : 'pulse'}"></span><span class="meta"><span class="k">${k}</span><span class="v">${v}</span></span><span class="side-go">${failed ? 'Retry' : 'View'}</span></button>`;
+  }
+  function unsentRow(it) {
+    const when = ago(new Date(it.createdAt).toISOString());
+    const st = it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
+    const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
+    return `<div class="ub-row ${it.state}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}">
+      <div class="ub-t">${it.audio || it.audioFile || it.hasAudio ? MIC_SVG : ''}<span>${esc(it.text || 'Voice note · words come when it sends')}</span></div>
+      <div class="ub-m">${src} · ${esc(when)} · ${st}</div>
+      <div class="ub-a"><button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>${it.origin === 'app' && it.sessionId && LIVE?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
+  }
+  function renderSettings() {
+    readNativeUnsent();
+    const all = unsentAll(), native = NATIVE();
+    let ev = null; try { ev = native && window.WizardOSNative.everywhere ? JSON.parse(window.WizardOSNative.everywhere()) : null; } catch (e) {}
+    const evOn = !!ev?.enabled;
+    const evSub = !native ? 'Works in the Wizard OS Android app' : evOn ? (ev.overlay ? 'On · floats over other apps, hides while Wizard OS is open' : 'Needs “Display over other apps”') : 'A floating Wizard button over your other apps. Tap to talk, drag to move.';
+    const side = !native ? 'Works in the Wizard OS Android app' : !SIDE ? '' : SIDE.step === 'press' || SIDE.step === 'ready' ? 'On · hold the side button to talk' : 'Hold the side button to talk, even when locked';
+    $('#settingsBody').innerHTML = `
+      <h3 class="st-title">Settings</h3>
+      <div class="st-group"><h4>Unsent <span>${all.length || ''}</span></h4>
+        ${all.length ? all.map(unsentRow).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">Everything you’ve said reached Wizard.</div>'}
+        <p class="st-note">Every message is saved on this phone before it’s sent, and retried until Wizard accepts it.</p></div>
+      <div class="st-group"><h4>Assistant</h4>
+        <button class="st-row" data-st="everywhere" ${native ? '' : 'disabled'}><span class="st-ic">✦</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
+        <button class="st-row" data-st="side" ${native ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(side)}</small></span><span class="st-go">›</span></button>
+      </div>
+      <div class="st-group"><h4>Wizard</h4>
+        <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · private.wizard001.com</small></span></div>
+      </div>`;
+  }
+  function openSettings(focusUnsent) {
+    openSheet('settings');
+    if (focusUnsent) { const g = $('#settingsBody .st-group'); g && g.scrollIntoView({ block: 'start' }); }
+  }
+  function unsentAction(id, origin, a) {
+    if (origin === 'everywhere') {
+      if (a === 'retry') window.WizardOSNative.retryUnsent(id);
+      if (a === 'delete') window.WizardOSNative.deleteUnsent(id);
+      setTimeout(onUnsentChange, 300); return;
+    }
+    const it = OUTBOX.get(id); if (!it) return;
+    if (a === 'retry') { OUTBOX.retry(id); toast('↻', 'Sending again', 1400); }
+    if (a === 'delete') { OUTBOX.remove(id); toast('✕', 'Deleted', 1400); }
+    if (a === 'open') { closeSheets(true); openWizardThread(it.sessionId); }
+    if (a === 'edit') editUnsent(it);
+  }
+  // Edit puts the words back in a composer (the thread's, or a new chat's) and takes the item out of the queue.
+  function editUnsent(it) {
+    closeSheets(true);
+    const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
+    let wid = desks[idx].wins.find(x => W[x].app === 'chats');
+    if (!wid) { const w = openWin({ app: 'chats', thread: null }); if (!w) return; wid = w.id; }
+    focusWin(wid); openChat(wid, known ? it.sessionId : '__new__');
+    const c = ch(wid); c.draft = it.text || ''; c.files = (it.files || []).filter(f => f !== it.audioFile).map(f => ({ ...f, key: Math.random().toString(36).slice(2) }));
+    OUTBOX.remove(it.id);
+    renderChats(W[wid]);
+    setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 50);
+  }
+  let lastUnsentSig = '';
+  function onUnsentChange() {
+    readNativeUnsent();
+    if (sheet === 'settings') renderSettings();
+    if (sheet === 'inbox') renderInbox();
+    refreshHome(); renderMoons();
+    desks.forEach((d, i) => { if (!d.wins.length && i !== HOME) { const g = track.children[i]?.querySelector('.glance'); if (g) g.innerHTML = renderEmpty(i); } });
+    for (const id of Object.keys(W)) { const w = W[id]; if (w.app === 'chats' && w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el) renderThread(w, el); } }
+    // Tell Android how many app messages are stuck, so it can say so in a notification while the app is closed.
+    const failed = OUTBOX ? OUTBOX.unsent().filter(x => x.state === 'failed') : [];
+    const sig = failed.map(x => x.id).join(',');
+    if (sig !== lastUnsentSig) { lastUnsentSig = sig; try { NATIVE() && window.WizardOSNative.appUnsent && window.WizardOSNative.appUnsent(failed.length, failed[0]?.text || ''); } catch (e) {} }
+  }
+  OUTBOX?.onChange(onUnsentChange);
+  window.__wosUnsent = () => { onUnsentChange(); return true; };
+  window.__wosEverywhere = () => { if (sheet === 'settings') renderSettings(); return true; };
+
   /* ---------------- home desk ---------------- */
   function renderHome() {
     const L = live(), needs = L.needs.length, working = L.working.length, ready = L.ready.length;
     const yd = byDay[YESTERDAY] || [];
     const now = new Date();
-    return `<div class="home">
+    return `<div class="home">${gearBtn()}
       <div class="home-top">
         <div class="home-date" id="homeDate">${DOWL[now.getDay()]} · ${now.getDate()} ${MON[now.getMonth()]}</div>
         <div class="home-time" id="homeTime">${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}</div>
@@ -463,6 +559,7 @@
         <button class="now-card" style="--c:var(--violet-2)" data-act="inbox"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span><span class="v">${esc(L.working[0]?.title || 'Idle')}</span></span><span class="n">${working}</span></button>
         <button class="now-card" style="--c:var(--pink)" data-act="yesterday"><span class="pip"></span><span class="meta"><span class="k">Yesterday</span><span class="v">${esc(clip(S.days[YESTERDAY] || `${yd.length} threads`, 70))}</span></span><span class="n">${yd.length}</span></button>
       </div>
+      ${unsentCard()}
       ${sideCard()}
       <div class="hint-row">
         <button class="say" data-say="Open Chats">Open Chats</button>
@@ -481,7 +578,7 @@
 
   /* ---------------- empty desk, app cards, maps, frames ---------------- */
   function renderEmpty(i) {
-    return `<div class="empty-desk"><div><div class="ring"><span class="num">${i + 1}</span></div>
+    return `${gearBtn()}<div class="empty-desk"><div><div class="ring"><span class="num">${i + 1}</span></div>
       <h3>Empty desk</h3><p>Tap the orb and say what belongs here.<br>Hold it, speak, and swipe toward a desk to open it there.</p>
       <button class="say" data-say="Open Chats">Open Chats</button><button class="say" data-say="Open Signal Feed">Open Signal Feed</button></div></div>`;
   }
@@ -825,11 +922,12 @@
     const sub = isNew ? 'Starts a new thread with Archimedes' : working ? 'Archimedes is working' : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
     const turns = c.loadedFor === w.thread ? c.turns || [] : null;
     let msgs;
-    if (isNew && !c.pending.length) msgs = `<div class="ch-empty"><b>New chat</b><br>Type below, or tap the orb and talk.</div>`;
-    else if (!turns && !isNew) msgs = `<div class="ch-empty">${c.err ? esc(c.err) : 'Loading thread…'}</div>`;
+    const pend = pendingFor(w);
+    if (isNew && !pend.length) msgs = `<div class="ch-empty"><b>New chat</b><br>Type below, or tap the orb and talk.</div>`;
+    else if (!turns && !isNew && !pend.length) msgs = `<div class="ch-empty">${c.err ? esc(c.err) : 'Loading thread…'}</div>`;
     else msgs = (turns || []).slice(-60).map((tn, k, arr) => turnHtml(tn, k === arr.length - 1, working)).join('')
-      + c.pending.map(p => typeof p === 'string' ? { text: p } : p).map(p => `<div class="msg u pending"><div class="bub">${p.files?.length ? `<div class="fchips">${p.files.map(fileChip).join('')}</div>` : ''}${p.text ? md(p.text) : ''}</div></div>`).join('')
-      + (c.pending.length && !working ? '<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> Sending</summary></details>' : '');
+      + pend.map(pendingHtml).join('')
+      + (pend.some(p => p.state !== 'failed') && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
     const box = el.querySelector('.ch-msgs');
     const atBottom = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     const draft = el.querySelector('textarea')?.value || c.draft || '';
@@ -843,6 +941,22 @@
     nb.scrollTop = atBottom ? nb.scrollHeight : (box ? box.scrollTop : nb.scrollHeight);
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
     growTa(el.querySelector('textarea'));
+  }
+  /* ---- durable outbox: every message is saved on the phone before it is sent ---- */
+  function pendingFor(w) {
+    if (!OUTBOX || !w.thread) return [];
+    return OUTBOX.forThread(w.thread === '__new__' ? '' : w.thread, w.thread === '__new__' ? w.id : '');
+  }
+  function pendingState(p) {
+    if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`;
+    if (p.state === 'waiting') return `<span class="pst wait">${esc(p.error || 'Couldn’t reach Wizard')} · retrying</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>`;
+    if (p.state === 'sent') return '<span class="pst ok">Sent</span>';
+    return '<span class="pst">Sending…</span>';
+  }
+  function pendingHtml(p) {
+    const files = (p.files || []).filter(f => f !== p.audioFile);
+    const voice = p.audio || p.audioFile ? `<span class="fchip">${MIC_SVG} Voice note${p.text ? '' : ' · words come when it sends'}</span>` : '';
+    return `<div class="msg u pending ${p.state}" data-ob="${esc(p.id)}"><div class="bub">${files.length || voice ? `<div class="fchips">${voice}${files.map(fileChip).join('')}</div>` : ''}${p.text ? md(p.text) : ''}</div><div class="pmeta">${pendingState(p)}</div></div>`;
   }
   function renderChats(w) {
     const el = track.querySelector(`[data-chats="${w.id}"]`); if (!el) return;
@@ -859,51 +973,44 @@
       if (!W[w.id] || W[w.id].thread !== w.thread) return;
       const turns = toTurns(rows);
       const sig = JSON.stringify(turns.slice(-3));
-      const changed = c.loadedFor !== w.thread || sig !== c.sig;
+      let changed = c.loadedFor !== w.thread || sig !== c.sig;
       Object.assign(c, { turns, loadedFor: w.thread, at: Date.now(), err: '', sig });
-      // A pending message has landed once the thread's last user turn matches it.
-      if (c.pending.length) {
-        const lastU = [...turns].reverse().find(t => t.u)?.u || { text: '', files: [] };
-        const landed = p => { p = typeof p === 'string' ? { text: p, files: [] } : p;
-          if (p.files?.length && p.files.some(f => (lastU.files || []).some(x => x.id === f.id))) return true;
-          return !!p.text && (lastU.text || '').includes(p.text.slice(0, 40)); };
-        c.pending = c.pending.filter(p => !landed(p));
+      // A sent message has landed once a recent user turn in the thread matches it.
+      const sent = OUTBOX ? OUTBOX.forThread(w.thread).filter(p => p.state === 'sent') : [];
+      if (sent.length) {
+        const us = turns.filter(t => t.u).slice(-4).map(t => t.u);
+        const landed = p => us.some(u => ((p.files || []).length && p.files.some(f => (u.files || []).some(x => x.id === f.id)))
+          || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
+        let gone = false;
+        for (const p of sent) if (landed(p)) { OUTBOX.landed(p.id); gone = true; }
+        if (gone) changed = true;
       }
       if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && W[w.id].thread === w.thread) renderThread(W[w.id], el); }
-    } catch (e) { c.err = e.status === 403 ? 'Wizard sign-in needed' : 'Couldn’t load this thread'; c.at = Date.now(); }
+    } catch (e) { c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now(); }
     finally { c.loading = false; }
   }
   function openChat(wid, sid) {
     const w = W[wid]; if (!w) return;
-    w.thread = sid; ch(wid).pending = []; save();
+    w.thread = sid; save();
     if (sid !== '__new__') LIVE.markSeen(sid);
     renderChats(w); applyLayout(deskOf(wid));
   }
-  function chatsBack(w) { w.thread = null; ch(w.id).pending = []; save(); renderChats(w); applyLayout(deskOf(w.id)); }
-  async function sendChat(wid, text, how = 'typing in the Chats window') {
+  function chatsBack(w) { w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
+  async function sendChat(wid, text, how = 'typing in the Chats window', audio = null) {
     const w = W[wid]; text = String(text || '').trim(); if (!w) return;
     const c = ch(wid);
     const files = (c.files || []).filter(f => f.id && !f.uploading);
-    if (!text && !files.length) return;
+    if (!text && !files.length && !audio) return;
     if ((c.files || []).some(f => f.uploading)) { toast('…', 'Still uploading · send when it finishes', 2000); return; }
-    const sent = { text, files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })) };
-    c.pending.push(sent); c.draft = ''; c.files = []; renderChats(w);
-    const input = text || `Please use the attached ${files.length === 1 ? 'file' : 'files'}.`;
-    const fileIds = sent.files.map(f => f.id);
-    try {
-      if (w.thread === '__new__') {
-        const { sessionId } = await LIVE.send(input, { instructions: viewContext(wid, how), fileIds });
-        if (W[wid]) { W[wid].thread = sessionId; save(); }
-        c.loadedFor = ''; renderChats(W[wid]); applyLayout(deskOf(wid));
-      } else {
-        const r = await LIVE.reply(w.thread, input, { instructions: viewContext(wid, how), fileIds });
-        toast('✦', r.steered ? 'Sent · steering the live run' : 'Sent to Archimedes', 1800);
-      }
-      setTimeout(() => W[wid] && loadThread(W[wid], true), 1500);
-    } catch (e) {
-      c.pending = c.pending.filter(p => p !== sent); c.draft = text; c.files = files; renderChats(w);
-      toast('!', e.status === 403 ? 'Wizard sign-in needed · not sent' : 'Couldn’t reach Wizard · not sent', 3200);
-    }
+    const isNew = w.thread === '__new__';
+    const s = isNew ? null : LIVE.session(w.thread);
+    const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
+    c.draft = ''; c.files = [];
+    // Saved on the phone first; the outbox delivers it (and retries) from here.
+    const it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : w.thread, steerRunId, text, audio,
+      instructions: viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid, how, source: 'chat' });
+    if (isNew && W[wid]) { W[wid].thread = it.sessionId; save(); c.loadedFor = ''; }
+    renderChats(W[wid]); applyLayout(deskOf(wid));
   }
   const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
   picker.setAttribute('data-chfile', '');
@@ -1111,6 +1218,8 @@
     const say = e.target.closest('[data-say]'); if (say) return runUtterance(say.dataset.say, 'auto');
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'inbox') return openSheet('inbox');
+    if (act === 'settings') return openSettings(false);
+    if (act === 'unsent') return openSettings(true);
     if (act === 'yesterday') return openReview('day', YESTERDAY);
     if (act === 'side-button') return sideButtonTap(false);
     if (act === 'side-button-hide') { store.set('sideHidden', true); return refreshHome(true); }
@@ -1136,6 +1245,8 @@
       const wt = e.target.closest('[data-wizthread]'); if (wt) return openWizardThread(wt.dataset.wizthread);
     }
     if (w.app === 'chats') {
+      const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); return toast('↻', 'Sending again', 1400); }
+      const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) editUnsent(it); return; }
       const o = e.target.closest('[data-chopen]'); if (o) return openChat(id, o.dataset.chopen);
       if (e.target.closest('[data-chback]')) return chatsBack(w);
       if (e.target.closest('[data-chnew]')) return openChat(id, '__new__');
@@ -1230,25 +1341,34 @@
   bindWinPinch(track);
 
   /* ---------------- sheets ---------------- */
-  const launcher = $('#launcher'), inboxEl = $('#inbox');
+  const launcher = $('#launcher'), inboxEl = $('#inbox'), settingsEl = $('#settings');
   let sheet = null;
   const sheetOpen = () => !!sheet;
   function openSheet(which, q) {
     closeSheets(true); closeMenu();
     sheet = which; device.classList.add('sheet-open');
     if (which === 'launcher') { renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
+    else if (which === 'settings') { renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; }
     else { renderInbox(); inboxEl.classList.add('open'); }
-    [launcher, inboxEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
+    [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
     vib(6);
   }
   function closeSheets(quiet) {
     if (!sheet && quiet) return;
     sheet = null; device.classList.remove('sheet-open');
-    launcher.classList.remove('open'); inboxEl.classList.remove('open');
-    [launcher, inboxEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
+    launcher.classList.remove('open'); inboxEl.classList.remove('open'); settingsEl.classList.remove('open');
+    [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
     $('#search').blur();
   }
   $('#scrim').addEventListener('click', () => closeSheets());
+  settingsEl.addEventListener('click', e => {
+    if (e.target.closest('[data-stclose]')) return closeSheets();
+    const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
+    if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); return setTimeout(onUnsentChange, 300); }
+    const st = e.target.closest('[data-st]')?.dataset.st;
+    if (st === 'everywhere' && NATIVE()) { let on = false; try { on = JSON.parse(window.WizardOSNative.everywhere()).enabled; } catch (x) {} window.WizardOSNative.setEverywhere(!on); setTimeout(renderSettings, 250); vib(8); }
+    if (st === 'side') { closeSheets(true); sideButtonTap(true); }
+  });
 
   function appTile(a) { return `<button class="lapp" data-app="${a.id}"><span class="ic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}${a.kind === 'native' ? '<span class="badge">APK</span>' : ''}</span><span class="nm">${esc(a.name)}</span></button>`; }
   function appRow(a, sel) { const k = a.kind === 'view' ? 'view' : a.kind === 'native' ? 'native' : 'app'; return `<button class="lrow ${sel ? 'sel' : ''}" data-app="${a.id}"><span class="ic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</span><span class="nm">${esc(a.name)}<small>${esc(a.desc)}</small></span><span class="kind ${k}">${k === 'native' ? 'Android' : k === 'view' ? 'View' : 'Wizard'}</span></button>`; }
@@ -1343,7 +1463,10 @@
       const items = L[G.g]; if (!items.length) continue;
       html += `<div class="ibx-h" style="--c:${G.c}"><h4><i></i>${G.name}</h4><span>${items.length}${G.g === 'ready' && items.length > 1 ? ' · <button class="ibx-all" data-allread>Mark all read</button>' : ''}</span></div>` + items.slice(0, 40).map(n => noteHtml(n, G.g)).join('');
     }
-    if (LIVE.ok && !L.needs.length && !L.ready.length && !L.working.length) html += `<div class="ibx-empty"><b>All clear.</b> Nothing unread, nothing running.</div>`;
+    // Unsent sits lowest of all: it is the one thing that can be lost if nobody looks.
+    const un = unsentAll();
+    if (un.length) html += `<div class="ibx-h" style="--c:var(--amber)"><h4><i></i>Unsent</h4><span>${un.length}${un.length > 1 ? ' · <button class="ibx-all" data-ub-all="retry">Retry all</button>' : ''}</span></div>` + un.map(unsentRow).join('');
+    if (LIVE.ok && !un.length && !L.needs.length && !L.ready.length && !L.working.length) html += `<div class="ibx-empty"><b>All clear.</b> Nothing unread, nothing running.</div>`;
     html += `<div class="sec-title" style="justify-content:center;margin:10px 0 4px"><span>Tap to open · swipe right to mark read</span></div>`;
     $('#inboxBody').innerHTML = html;
     const b = $('#inboxBody'); b.scrollTop = b.scrollHeight;
@@ -1360,7 +1483,11 @@
     if (Math.abs(dx) < 8) { closeSheets(true); openWizardThread(id); }
   });
   inboxEl.addEventListener('pointercancel', () => { if (ns) ns.el.style.transform = ''; ns = null; });
-  inboxEl.addEventListener('click', e => { if (e.target.closest('[data-allread]')) { LIVE.markSeen(live().ready.map(s => s.id)); vib(8); toast('✓', 'All marked read'); } });
+  inboxEl.addEventListener('click', e => {
+    if (e.target.closest('[data-allread]')) { LIVE.markSeen(live().ready.map(s => s.id)); vib(8); toast('✓', 'All marked read'); return; }
+    const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
+    if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); setTimeout(onUnsentChange, 300); }
+  });
 
   // Moons orbit the orb: one per running agent (violet) or thread that needs you (amber).
   function renderMoons() {
@@ -1501,8 +1628,12 @@
       if (!text) { setVoice('idle'); txHide(); toast('◌', 'No speech detected'); return; }
       handleText(text, V.kind, false, j.ms, V.target);
     } catch (err) {
+      // Never lose a recording: it goes to the outbox, which transcribes and sends it when Wizard is back.
       setVoice('idle');
-      txShow('', 'Transcription failed', 'agent', '!'); $('#txText').textContent = String(err.message || err).slice(0, 120); txHide(3200);
+      const aim = V.target, f = desks[idx].focus, fw = W[f];
+      if (aim == null && fw?.app === 'chats' && fw.thread) sendChat(f, '', 'voice, aimed at this thread', blob);
+      else toAgent('', 'Saved · sends when Wizard is reachable', { audio: blob, desk: aim, source: 'orb' });
+      txShow('', 'Couldn’t reach Wizard · recording saved, will send', 'agent', '↻'); txHide(3200);
     }
   }
   // The tap that starts recording must not also press an arc button: the arc fans out
@@ -1687,19 +1818,26 @@
     showRouted('agent', label); setVoice('agent'); vib(10);
     setTimeout(() => { setVoice('idle'); }, 1200);
     txHide(2600);
-    const ctx = viewContext(desks[idx].focus);
-    try {
-      const { sessionId } = await LIVE.send(text, { instructions: ctx });
-      const t = opts.desk == null ? idx : opts.desk;
-      const wid = desks[t].wins.find(x => W[x].app === 'chats');
-      if (wid) { if (t !== idx) goDesk(t); focusWin(wid); openChat(wid, sessionId); }
-      else { const w = openWin({ app: 'chats', thread: sessionId }, opts); if (w) LIVE.markSeen(sessionId); }
-      toast('✦', 'Sent to Archimedes', 1800);
-      renderMoons(); refreshHome(); renderDots();
-    } catch (e) {
-      toast('!', e.status === 403 ? 'Wizard sign-in needed · not sent' : 'Couldn’t reach Wizard · not sent', 3200);
-    }
+    const ctx = viewContext(desks[idx].focus, opts.how || 'voice');
+    // Saved before it is sent: a dropped connection can delay this, never lose it.
+    const it = await OUTBOX.enqueue({ kind: 'new', text, instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb' });
+    const t = opts.desk == null ? idx : opts.desk;
+    const wid = desks[t].wins.find(x => W[x].app === 'chats');
+    if (wid) { if (t !== idx) goDesk(t); focusWin(wid); openChat(wid, it.sessionId); }
+    else openWin({ app: 'chats', thread: it.sessionId }, opts);
+    renderMoons(); refreshHome(); renderDots();
   }
+  OUTBOX?.onSent((it, res) => {
+    if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
+      LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });
+      LIVE.markSeen(it.sessionId);
+    } else if (LIVE) { const s = LIVE.session(it.sessionId); if (s && !res.steered) Object.assign(s, { status: 'running', runId: res.runId, lastUserAt: new Date().toISOString() }); }
+    if (it.attempts) toast('✦', res.steered ? 'Delivered · steering the live run' : 'Delivered to Archimedes', 2000);
+    else if (it.source === 'orb') toast('✦', 'Sent to Archimedes', 1800);
+    else if (res.steered) toast('✦', 'Sent · steering the live run', 1800);
+    LIVE?.emit(); setTimeout(() => LIVE?.refresh(), 3000);
+    for (const id of Object.keys(W)) if (W[id].app === 'chats' && W[id].thread === it.sessionId) setTimeout(() => W[id] && loadThread(W[id], true), 1500);
+  });
 
   /* ---------------- orb gestures ----------------
    * Tap: talk. Hold: command; while still holding, slide left/right to aim what
@@ -1770,7 +1908,7 @@
     } else if (g.mode === 'v') {
       [launcher, inboxEl].forEach(el => el.classList.remove('dragging'));
       launcher._rendered = inboxEl._rendered = false;
-      if (sheet) { if ((sheet === 'launcher' && g.dy > 40) || (sheet === 'inbox' && g.dy < -40)) closeSheets(); else if (Math.abs(g.dy) > 40) openSheet(g.dy < 0 ? 'launcher' : 'inbox'); return; }
+      if (sheet) { if ((sheet === 'launcher' && g.dy > 40) || (sheet === 'inbox' && g.dy < -40) || (sheet === 'settings' && Math.abs(g.dy) > 40)) closeSheets(); else if (Math.abs(g.dy) > 40) openSheet(g.dy < 0 ? 'launcher' : 'inbox'); return; }
       const v = g.dy / vt;
       if (g.dy < -70 || v < -.55) openSheet('launcher');
       else if (g.dy > 70 || v > .55) openSheet('inbox');
@@ -1925,8 +2063,10 @@
     // A side-button handoff means James already knows the gestures: clear the first-run coach so the draft is visible.
     if (!$("#coach").hidden) { $("#coach").hidden = true; store.set("coached", true); }
     if (!h || typeof h !== 'object') return false;
-    closeSheets(); if (idx !== HOME) goDesk(HOME);
+    closeSheets(); if (idx !== HOME && h.action !== 'thread') goDesk(HOME);
     if (h.action === 'listen') { if (V.state === 'idle') startVoice('auto'); return true; }
+    if (h.action === 'thread' && h.id) { openWizardThread(String(h.id)); LIVE?.refresh(); return true; }
+    if (h.action === 'unsent' || h.action === 'settings') { onUnsentChange(); openSettings(h.action === 'unsent'); return true; }
     if (h.action === 'side-button') { store.set('sideHidden', false); refreshHome(true); if (SIDE && (SIDE.step === 'mic' || SIDE.step === 'assistant')) sideButtonTap(false); else toast('◉', 'Side button is on. Hold it to talk.', 2600); return true; }
     const text = String(h.text || '').trim().slice(0, 2000);
     if (h.action !== 'say' || !text) return false;
@@ -1943,7 +2083,7 @@
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
     HOME, get idx() { return idx; }, get desks() { return desks; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
-    startVoice, finishVoice, cancelVoice,
+    startVoice, finishVoice, cancelVoice, outbox: OUTBOX, openSettings, unsentAll, renderSettings,
     reset() { Object.keys(localStorage).filter(k => k.startsWith('wos.')).forEach(k => localStorage.removeItem(k)); location.reload(); },
   };
 })();
