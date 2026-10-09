@@ -35,14 +35,14 @@
   },
   {
    "id": "mizel",
-   "name": "Mizel",
+   "name": "Mizel.ai",
    "icon": "◉",
    "colors": [
     "#3fe0ff",
     "#2f8cff"
    ],
-   "url": "/meetings/#/",
-   "desc": "Meeting recorder"
+   "url": "/mizel-live/#/",
+   "desc": "Record, transcribe, outline"
   },
   {
    "id": "topics",
