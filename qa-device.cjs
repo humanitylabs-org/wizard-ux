@@ -226,8 +226,10 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     const run = W.runs[W.runs.length - 1];
     ok(W.runs.length === r0 + 1 && run.body.input === 'Look at this' && JSON.stringify(run.body.wizard_file_ids) === JSON.stringify(ups.map(f => f.id)), 'one new-chat run with the message and both attachments', JSON.stringify(run?.body));
     ok(W.sessions.has(run.body.session_id), 'a new Wizard thread was created for it');
-    const thread = await p.evaluate(() => Object.values(window.__wos.wins).find(w => w.app === 'chats')?.thread);
-    ok(thread === run.body.session_id, 'the new chat is open on screen', thread);
+    // Background new threads (daily 0.6.x rule): a new thread never takes focus; the Chats window steps
+    // back to its list and the new thread is listed there (Working), ready to open.
+    const st = await p.evaluate(sid => { const w = Object.values(window.__wos.wins).find(w => w.app === 'chats'); const el = w && document.querySelector(`.win[data-win="${w.id}"]`); return { thread: w ? w.thread : 'no-window', listed: !!(el && el.querySelector(`[data-chopen="${sid}"]`)), live: !!window.__wos.live.session(sid) }; }, run.body.session_id);
+    ok(st.thread == null && st.live && st.listed, 'the new chat starts in the background: Chats shows its list with the new thread in it', st);
     ok((await dev(p)).calls.includes('shareDone:sh-qa-2'), 'native copy released after send');
     await shot(p, '20-share-sent');
     // Share into an existing thread.

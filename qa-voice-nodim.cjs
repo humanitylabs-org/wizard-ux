@@ -94,7 +94,7 @@ async function drag(ctx, p, x, y, dy) {
   if (hasList) {
     const box = await p.evaluate(el => { el.scrollTop = 0; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * 0.7, h: r.height }; }, sh);
     await drag(ctx, p, box.x, box.y, -Math.round(box.h * 0.45));
-    const top = await p.evaluate(el => el.scrollTop, sh);
+    const top = await p.evaluate(el => el.isConnected ? el.scrollTop : -1, sh).then(async v => v >= 0 ? v : p.evaluate(el => el && el.scrollTop, await scroller(p)));
     ok(top > 40, 'recording: touch scroll moves the list', String(top));
     ok((await look(p)).voice === 'listen', 'recording keeps going after the scroll');
     // Tap a thread while recording.
@@ -130,7 +130,9 @@ async function drag(ctx, p, x, y, dy) {
     const box = await p.evaluate(el => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * 0.3, h: r.height }; }, sh2);
     await p.waitForTimeout(500); // let the programmatic jump settle before the thumb lands
     await drag(ctx, p, box.x, box.y, Math.round(box.h * 0.3));
-    const after = await p.evaluate(el => el.scrollTop, sh2);
+    // A live refresh mid-send may re-render the list (it keeps its scroll position on the new element): read
+    // the list that is on screen now, not a detached one.
+    const after = await p.evaluate(el => el.isConnected ? el.scrollTop : -1, sh2).then(async v => v >= 0 ? v : p.evaluate(el => el && el.scrollTop, await scroller(p)));
     ok(after !== before && (await look(p)).voice === 'think', 'sending: touch scroll still works mid-send', `${before}→${after}`);
   }
   await p.waitForTimeout(6000);

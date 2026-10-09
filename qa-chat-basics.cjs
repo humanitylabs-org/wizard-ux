@@ -27,7 +27,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAG0lEQVR42mNk+M9Qz0AEYBxVSF+FjKMKqasQAKSLEAG4h6AFAAAAAElFTkSuQmCC', 'base64');
 const PNG_URL = 'data:image/png;base64,' + PNG.toString('base64');
 const now = Date.now() / 1000;
-const YDAY = now - 26 * 3600;
+// Noon yesterday in Bangkok (UTC+7, no DST): "now - 26h" fell two days back between 00:00 and 02:00 Bangkok.
+const YDAY = Math.floor((now + 7 * 3600) / 86400) * 86400 - 7 * 3600 - 12 * 3600;
 const hex = n => n.toString(16).padStart(32, '0');
 const ATT = { img1: hex(0xa1), img2: hex(0xa2), audio: hex(0xa3), video: hex(0xa4), md: hex(0xa5), pdf: hex(0xa6) };
 const helm = items => `<helm_attachments>${JSON.stringify({ items })}</helm_attachments>`;

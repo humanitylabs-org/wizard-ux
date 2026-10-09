@@ -14,7 +14,7 @@ async function boot(b) {
   const writes = []; const R = { answer: { cmd: { route: 'agent' }, ms: 5 }, status: 200 };
   await ctx.route('**/*', r => {
     const q = r.request(), u = q.url();
-    const m = u.match(/\/wizard-os-home\/([a-z-]+\.(?:js|css)|index\.html|)(\?|$)/);
+    const m = u.match(/\/wizard-os-home\/((?:desktop\/|core\/)?[a-z-]+\.(?:js|css|html)|)(\?|$)/);
     if (W && m && q.method() === 'GET' && !/^(data|summaries)\.js$/.test(m[1])) {
       const f = m[1] || 'index.html', p = require('path').join(W, 'web', f);
       if (require('fs').existsSync(p)) return r.fulfill({ status: 200, contentType: f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : 'application/javascript', body: require('fs').readFileSync(p) });

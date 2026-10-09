@@ -19,7 +19,9 @@ async function boot(b) {
     if (!/private\.wizard001\.com$/.test(u.hostname)) return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET' && !m[1].startsWith('api/')) {
-      const f = m[1] || 'index.html', p = path.join(W, 'web', f);
+      const f = m[1] || 'index.html';
+      // data.js / summaries.js are untracked build outputs: fall back to the live tree's copy (same as tools/qa-origin.cjs).
+      let p = path.join(W, 'web', f); if (!fs.existsSync(p) && /^(data|summaries)\.js$/.test(f)) p = path.join('/home/telos/apps/wizard-os-home/web', f);
       if (!fs.existsSync(p)) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
       const ct = f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : f.endsWith('.png') ? 'image/png' : f.endsWith('.webmanifest') ? 'application/manifest+json' : 'application/javascript';
       return r.fulfill({ status: 200, contentType: ct, body: fs.readFileSync(p) });

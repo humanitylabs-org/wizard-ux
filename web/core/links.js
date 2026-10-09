@@ -184,8 +184,13 @@
     root.addEventListener('click', e => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = e.target.closest && e.target.closest('a[href]'); if (!a || !a.closest(scope)) return;
+      // Chat-kit links that already open in place: @session threads, Wizard Files, inline media.
+      if (a.hasAttribute('data-session') || a.hasAttribute('data-mlink') || a.closest('[data-mi]')) return;
       const u = abs(a.getAttribute('href')); if (!u || !/^https?:$/.test(u.protocol)) return;
       e.preventDefault(); e.stopPropagation();
+      // A link to this app itself (…/wizard-os-home/?session=…, ?view=…) opens in place, not in a sheet.
+      const DL = window.WizCore && window.WizCore.deeplink;
+      if (DL && DL.route(u.href)) return;
       sheet.open(u.href);
     }, true);
   }

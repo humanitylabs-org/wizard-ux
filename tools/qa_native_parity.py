@@ -346,9 +346,11 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('native device bridge present', pg.ev("typeof window.WizardOSDevice?.recStart === 'function'"))
         shot('00-home')
 
-        # ============ #22a update banner (feed advertises 9000+N) ============
+        # ============ #22a update check (feed advertises 9000+N with a tampered sha256) ============
+        # Since silent-update (0.7.0) the on-resume check downloads by itself, so the tampered feed is caught at once:
+        # the banner names the refusal and nothing is installed.
         banner = wait(lambda: pg.ev("(() => { const e = document.querySelector('#dvUpdate'); return e && !e.hidden ? e.innerText.replace(/\\s+/g, ' ') : ''; })()"), 25)
-        check('#22 banner: a newer Wizard OS is available', banner and NEXT_VN in banner and 'Update' in banner, banner)
+        check('#22 a newer Wizard OS in the feed is found and checked (tampered checksum refused, Retry offered)', banner and 'checksum' in banner and 'Retry' in banner and ('available %s' % NEXT_VN) in logs('WizardUpdate', 'available'), banner)
         shot('22a-update-banner')
 
         # ============ #14a orb take: background + screen off, then send once ============
@@ -451,6 +453,16 @@ with (BASE / 'worker.lock').open('a') as lock:
                     m = re.search(r'(?:mFrame|frame)=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]', blk)
                     if m and 'mViewVisibility=0x8' not in blk and 'mViewVisibility=0x4' not in blk: return tuple(map(int, m.groups()))
             return None
+        def ctl_windows():
+            # Since 0.6.2 the orb's Cancel/Pause/Screen buttons are their own small overlay windows (WizOrbCtl-*),
+            # so "expanded, carrying" means those windows are on screen, not a wider orb window.
+            out = []
+            for blk in sx('dumpsys window windows').split('Window #')[1:]:
+                head = blk.split('\n', 1)[0]
+                if 'WizOrbCtl-' in head and 'mViewVisibility=0x8' not in blk and 'mViewVisibility=0x4' not in blk:
+                    m = re.search(r'WizOrbCtl-(\w+)', head)
+                    if m: out.append(m.group(1))
+            return sorted(out)
         sx('appops set %s SYSTEM_ALERT_WINDOW allow' % PKG)
         pg.ev("window.WizardOSNative.setEverywhere(true)"); time.sleep(2)
         for _ in range(4):  # switching it on may offer the voice-typing setup dialog
@@ -467,11 +479,11 @@ with (BASE / 'worker.lock').open('a') as lock:
         pg.tap('#orbWrap'); time.sleep(1.5)
         rh = native_id()
         sx('input keyevent KEYCODE_HOME'); time.sleep(4)
-        b = wait(lambda: (lambda x: x if x and (x[2] - x[0]) > (bi[2] - bi[0]) + 100 else None)(bubble()) if bi else None, 8)
+        b = wait(lambda: (lambda c: c if {'cancel', 'pause'} <= set(c) else None)(ctl_windows()) if bi else None, 8)
         s1 = rec_size(rh)
         shot('14f-carried-by-floating-orb')
         evl = sx('logcat -d -s WizardEverywhere:* | grep -iE "app voice|listening|remote" | tail -6').strip()
-        check('#14 leave the app mid-take → the floating orb shows the take (expanded, carrying)', rh and bi and b and 'app voice listen' in evl, (rh, bi, b, evl))
+        check('#14 leave the app mid-take → the floating orb shows the take (Cancel + Pause out, carrying)', rh and bi and b and bubble() and 'app voice listen' in evl, (rh, bi, b, evl))
         ev_t, rs_t = fgs_type('EverywhereService'), fgs_type('RecorderService')
         check('#14 one microphone owner: RecorderService records, the floating orb service does not', rs_t > 0 and (rs_t & 0x80) and ev_t >= 0 and not (ev_t & 0x80) and ': listening' not in evl, (hex(ev_t), hex(rs_t)))
         time.sleep(5)
@@ -541,7 +553,9 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('#20 a new chat started with the image attached (exactly one run)', runs_n() == n0 + 1 and up and up[0]['id'] in json.dumps(b) and 'Shared from the QA gallery' in json.dumps(b), (runs_n() - n0, json.dumps(b)[:300]))
         share_sid = ST['runs'][n0]['session'] if runs_n() > n0 else ''
         th = pg.ev("(() => { const w = window.__wos; const d = w.desks[w.idx]; const f = w.wins[d.focus]; return f ? (f.app + ':' + (f.thread || '')) : ''; })()") or ''
-        check('#20 the new thread is open in the app', share_sid and th == 'chats:' + share_sid, (th, share_sid))
+        # A new thread starts in the background (0.6.x rule): Chats steps back to its list and the thread is listed there.
+        listed = pg.ev("(sid => !!document.querySelector('[data-chopen=\"' + sid + '\"]'))(%s)" % json.dumps(share_sid)) if share_sid else False
+        check('#20 the new thread starts in the background and is listed in Chats', share_sid and th == 'chats:' and listed, (th, share_sid, listed))
         time.sleep(1.5); shot('20c-shared-thread')
 
         # ============ #21 reply notification for that chat (app in background) → tap opens the thread ============
@@ -585,40 +599,45 @@ with (BASE / 'worker.lock').open('a') as lock:
         shot('22c-draft-kept')
         pg.ev("window.__wos.goDesk(window.__wos.HOME, true)")
 
-        # ============ #22c APK update: bad checksum refused → fixed feed → installer ============
+        # ============ #22c APK update: bad checksum refused → fixed feed → "Install unknown apps" → installed ============
+        # Since silent-update (0.7.0) Wizard OS downloads and verifies FIRST, and only a verified APK asks for
+        # "Install unknown apps" (a tampered one never reaches Android). On API 35 the self-update may then install
+        # through a PackageInstaller session with or without Android's confirm screen; either way it must land.
         sweep()
         sx('logcat -c')
         pg.ev("window.WizardOSDevice.updateCheck()"); time.sleep(3)
         pg.tap('#dvUpdate [data-upd=go]'); time.sleep(4)
-        t = top()
-        if 'ManageAppExternalSources' in t or 'com.android.settings' in t or 'Unknown' in t or 'Spa' in t:
-            shot('22d-allow-unknown-apps')
-            check('#22 Update asks for "Install unknown apps" the first time', True, t[:120])
-            tap_text(r'Allow from this source'); time.sleep(1.5)
-            if 'allow' not in sx('appops get %s REQUEST_INSTALL_PACKAGES' % PKG).lower():
-                sx('appops set %s REQUEST_INSTALL_PACKAGES allow' % PKG)
-            for _ in range(3):
-                if front(): break
-                sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
-        else:
-            check('#22 Update asks for "Install unknown apps" the first time', False, t[:160])
         connect()
         err = wait(lambda: pg.ev("(() => { const e = document.querySelector('#dvUpdate'); return e && e.dataset.state === 'error' ? e.innerText.replace(/\\s+/g, ' ') : ''; })()"), 40)
-        check('#22 a download that doesn\'t match the published sha256 is refused', 'checksum' in (err or '') and 'installer opened' not in logs('WizardUpdate', 'installer opened'), err)
+        check('#22 a download that doesn\'t match the published sha256 is refused', 'checksum' in (err or '') and 'installer opened' not in logs('WizardUpdate', 'installer opened') and front(), (err, top()[-80:]))
         check('#22 refused file is deleted', 'apk' not in runas('ls cache/updates files/updates 2>/dev/null'), runas('ls cache/updates files/updates 2>/dev/null'))
         shot('22e-checksum-refused')
         ST['feed'] = dict(ST['feed'], sha256=NEXT_SHA)
         gets0 = ST['apk_gets']
         pg.tap('#dvUpdate [data-upd=go]')
-        inst = wait(lambda: any(k in top() for k in ('packageinstaller', 'PackageInstaller', 'InstallStart', 'InstallStaging', 'install')), 60, 1)
-        time.sleep(2); t = top()
-        lg = logs('WizardUpdate', 'installer opened|rejected|available')
-        check('#22 Retry downloads the newer APK, verifies sha256 + signer, and opens Android\'s installer', inst and ST['apk_gets'] > gets0 and 'installer opened' in lg, (t[:140], lg))
-        shot('22f-installer')
-        xml = ui()
-        hit = tap_text(r'^(Update|Install)$', xml)
-        newv = wait(lambda: ('versionCode=%d' % NEXT_VC) in sx('dumpsys package %s | grep versionCode' % PKG), 60, 2)
-        check('#22 confirming in the installer lands the newer build (versionCode %d)' % NEXT_VC, hit and newv, sx('dumpsys package %s | grep -E "versionCode|versionName"' % PKG).strip())
+        settings = wait(lambda: (lambda t: t if ('ManageAppExternalSources' in t or 'com.android.settings' in t or 'Spa' in t) else '')(top()), 60, 1)
+        shot('22d-allow-unknown-apps')
+        lg = logs('WizardUpdate', 'verified|rejected|available')
+        check('#22 Retry downloads the newer APK, verifies sha256 + signer, then asks for "Install unknown apps" (first time)', settings and ST['apk_gets'] > gets0 and 'verified' in lg, (settings[:140] if settings else top()[:140], lg))
+        if settings:
+            tap_text(r'Allow from this source'); time.sleep(1.5)
+            if 'allow' not in sx('appops get %s REQUEST_INSTALL_PACKAGES' % PKG).lower():
+                sx('appops set %s REQUEST_INSTALL_PACKAGES allow' % PKG)
+            sx('input keyevent KEYCODE_BACK'); time.sleep(2)   # system Back returns to Wizard OS
+        confirm = False; t0 = time.time()
+        while time.time() - t0 < 90:
+            if ('versionCode=%d' % NEXT_VC) in sx('dumpsys package %s | grep versionCode' % PKG): break
+            tt = top()
+            if any(k in tt for k in ('packageinstaller', 'PackageInstaller', 'InstallStart', 'InstallStaging')):
+                if not confirm: shot('22f-installer')
+                if tap_text(r'^(Update|Install)$', ui()): confirm = True; time.sleep(3)
+            elif front() and not confirm:
+                st = pg.ev("(() => { const e = document.querySelector('#dvUpdate'); return e && !e.hidden ? e.dataset.state + ':' + e.innerText.replace(/\\s+/g, ' ') : ''; })()") if pg else ''
+                if st and st.startswith('ready'): pg.tap('#dvUpdate .dv-um')   # in front: the "tap to restart" banner
+            time.sleep(1)
+        newv = wait(lambda: ('versionCode=%d' % NEXT_VC) in sx('dumpsys package %s | grep versionCode' % PKG), 30, 2)
+        lg = logs('WizardUpdate', 'session|status|installer opened|replaced')
+        check('#22 the verified update installs through a PackageInstaller session and lands the newer build (versionCode %d)' % NEXT_VC, newv and 'session' in lg, (sx('dumpsys package %s | grep -E "versionCode|versionName"' % PKG).strip(), 'confirm' if confirm else 'no confirm', lg[-300:]))
         shot('22g-installed')
 
         crashed = sx('logcat -d -b crash')

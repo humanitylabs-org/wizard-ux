@@ -118,6 +118,9 @@ a.fchip { color: inherit; text-decoration: none; }
 .msg.u.pending .pbtn { padding: 5px 12px; border-radius: 99px; background: rgba(143, 99, 255, .3); color: var(--ink); font-size: 12px; font-weight: 700; }
 .msg.u.pending .pbtn.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
 .msg.u.pending { flex-direction: column; align-items: flex-end; }
+/* The same unsent bubble in the Chats list ("Sending" section): one compact row per new chat. */
+.msg.u.pending.ch-out { padding: 6px 12px 8px; }
+.msg.u.pending.ch-out .bub { max-width: 100%; font-size: 14px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 
 /* ---------------- Chats: chat-app basics (feature/chat-basics) ---------------- */
 @keyframes ch-fade { from { opacity: 0; } }

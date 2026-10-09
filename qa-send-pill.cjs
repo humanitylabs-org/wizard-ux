@@ -64,13 +64,15 @@ const pill = p => p.evaluate(() => { const v = document.querySelector('#voice'),
   ok(s.brief && s.shown && /Sending/.test(s.label), 'send: one-line "Sending…" pill', JSON.stringify(s));
   ok(!s.textVisible && s.h < 50 && s.w < 300, 'send: no transcript text, pill is small', JSON.stringify(s));
   let seen = null, peak = 0;
-  for (let k = 0; k < 20; k++) { await p.waitForTimeout(100); const x = await pill(p); if (/Sent to Archimedes/.test(x.label) && x.shown) { seen = x; } peak = Math.max(peak, x.h); }
-  ok(!!seen, 'pill reads "Sent to Archimedes"', JSON.stringify(seen));
+  // The agent's name comes from the bootstrap (portable Wizard UX); this fixture has none, so it is the default.
+  const AGENT = await p.evaluate(() => window.WizConfig.agent()), SENT = new RegExp('Sent to ' + AGENT);
+  for (let k = 0; k < 20; k++) { await p.waitForTimeout(100); const x = await pill(p); if (SENT.test(x.label) && x.shown) { seen = x; } peak = Math.max(peak, x.h); }
+  ok(!!seen, `pill reads "Sent to ${AGENT}"`, JSON.stringify(seen));
   ok(peak < 50 && seen && !seen.textVisible, 'the sent words never cover the screen', String(peak));
   await p.waitForTimeout(1500);
   s = await pill(p);
   ok(!s.shown && s.voice === 'idle', 'pill fades on its own (~1.5 s after send)', JSON.stringify(s));
-  ok(!s.toasts.some(t => /Sent to Archimedes/.test(t)), 'no second "Sent" banner at the top', JSON.stringify(s.toasts));
+  ok(!s.toasts.some(t => SENT.test(t)), 'no second "Sent" banner at the top', JSON.stringify(s.toasts));
   // Typed/simulated utterances keep the full card (they show the words as they are typed in).
   await p.evaluate(() => window.__wos.runUtterance && window.__wos.runUtterance('next desk', 'auto', true));
   await p.waitForTimeout(300);

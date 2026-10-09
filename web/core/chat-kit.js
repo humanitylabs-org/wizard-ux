@@ -248,22 +248,25 @@
 
   /* ================= Bangkok time ================= */
   const TZ = () => (window.WizConfig && window.WizConfig.timeZone && window.WizConfig.timeZone()) || 'UTC';
-  const fmt = (o, loc = 'en-GB') => new Intl.DateTimeFormat(loc, { timeZone: TZ(), ...o });
-  const F_DAY = fmt({ year: 'numeric', month: '2-digit', day: '2-digit' }, 'en-CA'), F_TIME = fmt({ hour: '2-digit', minute: '2-digit', hour12: false });
-  const F_DATE = fmt({ weekday: 'short', day: 'numeric', month: 'short' }), F_DATEY = fmt({ weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-  const F_FULL = fmt({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+  // Formatters are built per zone on first use, never at load: the settings zone (bootstrap) can land
+  // after this file runs, and a first launch must not keep showing the device's zone.
+  const O_DAY = [{ year: 'numeric', month: '2-digit', day: '2-digit' }, 'en-CA'], O_TIME = [{ hour: '2-digit', minute: '2-digit', hour12: false }];
+  const O_DATE = [{ weekday: 'short', day: 'numeric', month: 'short' }], O_DATEY = [{ weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }];
+  const O_FULL = [{ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }];
+  // Each formatter is rebuilt only when the zone changes.
+  const F = o => { const z = TZ(); if (o.z !== z) { o.f = new Intl.DateTimeFormat(o[1] || 'en-GB', { timeZone: z, ...o[0] }); o.z = z; } return o.f; };
   const time = {
     ms: tsMs,
-    dayKey: ms => isFinite(ms) ? F_DAY.format(ms) : '',
-    clock: ms => isFinite(ms) ? F_TIME.format(ms) : '',
+    dayKey: ms => isFinite(ms) ? F(O_DAY).format(ms) : '',
+    clock: ms => isFinite(ms) ? F(O_TIME).format(ms) : '',
     day(ms, now = Date.now()) {
       if (!isFinite(ms)) return '';
-      const k = F_DAY.format(ms);
-      if (k === F_DAY.format(now)) return 'Today';
-      if (k === F_DAY.format(now - 864e5)) return 'Yesterday';
-      return (k.slice(0, 4) === F_DAY.format(now).slice(0, 4) ? F_DATE : F_DATEY).format(ms);
+      const D = F(O_DAY), k = D.format(ms);
+      if (k === D.format(now)) return 'Today';
+      if (k === D.format(now - 864e5)) return 'Yesterday';
+      return F(k.slice(0, 4) === D.format(now).slice(0, 4) ? O_DATE : O_DATEY).format(ms);
     },
-    full: ms => isFinite(ms) ? `${F_FULL.format(ms)} Bangkok` : '',
+    full: ms => isFinite(ms) ? `${F(O_FULL).format(ms)} Bangkok` : '',
   };
 
   /* ================= drafts: one per thread, kept across reloads ================= */

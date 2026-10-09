@@ -12,7 +12,7 @@ async function boot(b, { noCloseWatcher = false } = {}) {
   const writes = [];
   await ctx.route('**/*', r => {
     const q = r.request(), u = q.url();
-    { const __m = u.match(/\/wizard-os-home\/([a-z-]+\.(?:js|css)|index\.html|)(\?|$)/); const __W = process.env.QA_WEB_DIR;
+    { const __m = u.match(/\/wizard-os-home\/((?:desktop\/|core\/)?[a-z-]+\.(?:js|css|html)|)(\?|$)/); const __W = process.env.QA_WEB_DIR;
       if (__W && __m && q.method() === 'GET' && !/^(data|summaries)\.js$/.test(__m[1])) { const __f = __m[1] || 'index.html', __p = require('path').join(__W, 'web', __f); if (require('fs').existsSync(__p)) return r.fulfill({ status: 200, contentType: __f.endsWith('.css') ? 'text/css' : __f.endsWith('.html') ? 'text/html' : 'application/javascript', body: require('fs').readFileSync(__p) }); } }
     if (q.method() !== 'GET' && /\/wizard\/(hermes|thread-seen)/.test(u)) {
       writes.push({ m: q.method(), u: u.replace(/^https:\/\/[^/]+/, ''), body: q.postData() || '' });

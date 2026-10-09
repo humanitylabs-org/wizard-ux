@@ -22,6 +22,10 @@ bt = sorted((SDK / 'build-tools').iterdir())[-1]
 for f in (old, new):
     certs = sh(bt / 'apksigner', 'verify', '--print-certs', f)
     print(f.name, re.search(r'SHA-256 digest: (\w+)', certs).group(1)[:16] if 'SHA-256' in certs else certs[:200])
+# The expected new versionName: WOS_NEW if given, else read from the new APK itself (no stale hard-coded default).
+_vn = re.search(r"versionName='([^']+)'", sh(bt / 'aapt2', 'dump', 'badging', new) or '')
+WANT_VN = os.environ.get('WOS_NEW') or (_vn.group(1) if _vn else '')
+print('expect versionName', WANT_VN)
 em = None
 with (BASE / 'worker.lock').open('a') as lock:
     fcntl.flock(lock, fcntl.LOCK_EX)
@@ -38,7 +42,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx(f"run-as {PKG} true"); first = sx(f'dumpsys package {PKG} | grep firstInstallTime').strip()
         o2 = sh(ADB, '-s', S, 'install', '-r', new).strip().splitlines()[-1]
         ver = re.search(r'versionName=\S+', sx(f'dumpsys package {PKG}')).group(0)
-        check('new release installs over the old one (same signer, data kept)', o2 == 'Success' and ver == 'versionName=' + os.environ.get('WOS_NEW', '0.6.0') and sx(f'dumpsys package {PKG} | grep firstInstallTime').strip() == first, (o2, ver))
+        check('new release installs over the old one (same signer, data kept)', o2 == 'Success' and WANT_VN and ver == 'versionName=' + WANT_VN and sx(f'dumpsys package {PKG} | grep firstInstallTime').strip() == first, (o2, ver))
         sx('logcat -c')
         sx(f'am start -W -n {PKG}/.MainActivity'); time.sleep(8)
         check('new release launches into Wizard OS', PKG in top(), top())

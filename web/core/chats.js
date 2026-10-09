@@ -76,6 +76,12 @@ window.WizCore.chats = function createChats(H) {
       <span class="bd"><span class="tp"><b>${esc(what)}</b><time>${esc(ago(new Date(d.at).toISOString()))}</time></span>
       <span class="pv">Draft · saved on this device${files}</span></span></button><button class="ch-draft-x" data-chdraftx="${esc(d.key)}" aria-label="Discard draft" title="Discard draft">×</button></div>`;
   }
+  // A new chat that hasn't reached Wizard yet, in the Chats list: its words and the same state/Retry/Edit as in a thread.
+  function outRow(it) {
+    const t = String(it.text || '').trim().replace(/\s+/g, ' ');
+    const what = t ? clip(t, 100) : (it.audio || it.audioFile ? 'Voice note' : 'New chat');
+    return `<div class="msg u pending ${esc(it.state)} ch-out" data-ob="${esc(it.id)}"><div class="bub">${esc(what)}</div><div class="pmeta">${pendingState(it)}</div></div>`;
+  }
   // Rotate one storage write: the live new-chat slot → a saved slot, the chosen saved slot → the live one.
   function rotateNew(resume) {
     const all = KIT.drafts.all(), cur = all.new;
@@ -115,9 +121,13 @@ window.WizCore.chats = function createChats(H) {
     const head = `<div class="ch-top"><label class="ch-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-chsearch placeholder="Search chats and messages" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}</label>${PW?.FOLDER_SVG && window.WosFiles ? `<button class="ch-new ch-files-b" data-chfiles aria-label="Files">${PW.FOLDER_SVG}</button>` : ''}<button class="ch-new" data-chnew aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
     let body;
     const draftSec = drafts.length ? `<section class="ch-sec open" data-sec="drafts"><div class="ch-sec-h static"><span>Drafts</span><small>${drafts.length}</small></div><div class="ch-sec-b">${drafts.map(d => draftRow(d, d.key === 'new' && curThread === '__new__')).join('')}</div></section>` : '';
-    if (!LIVE.ok) body = draftSec + `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
-    else if (!hit.length && !drafts.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
-    else body = draftSec + SECTIONS.map(([k, label]) => {
+    // New chats still on the phone (the window went back to the list on send): shown until Wizard admits them,
+    // so a message sent while Wizard is unreachable never vanishes from Chats. Failed voice notes live in Errors.
+    const outNew = OUTBOX ? OUTBOX.unsent().filter(it => it.kind === 'new' && !(it.state === 'failed' && (it.audio || it.audioFile)) && (!n || norm(it.text).includes(n))) : [];
+    const sendSec = outNew.length ? `<section class="ch-sec open" data-sec="sending"><div class="ch-sec-h static"><span>Sending</span><small>${outNew.length}</small></div><div class="ch-sec-b">${outNew.map(outRow).join('')}</div></section>` : '';
+    if (!LIVE.ok) body = draftSec + sendSec + `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
+    else if (!hit.length && !drafts.length && !outNew.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
+    else body = draftSec + sendSec + SECTIONS.map(([k, label]) => {
       const list = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k];
       // Errors also holds failed background work and voice notes that didn't send (chat-power.js #12).
       const extra = PW && k === 'errors' && !n ? PW.errorsExtra() : { n: 0, html: '' };
@@ -640,6 +650,13 @@ window.WizCore.chats = function createChats(H) {
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
   const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, openChat, refreshCompose, saveDraft, closeRowSheet }) : null;
+  // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
+  let outSig = '';
+  OUTBOX?.onChange(() => {
+    const sig = OUTBOX.unsent().filter(it => it.kind === 'new').map(it => it.id + ':' + it.state + ':' + (it.error || '')).join(',');
+    if (sig === outSig) return; outSig = sig;
+    for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
+  });
   return { CH, ch, click, bind, PW, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };

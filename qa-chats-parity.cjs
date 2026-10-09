@@ -19,7 +19,7 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   const writes = [], leaked = [];
   await ctx.route('**/*', async r => {
     const q = r.request(), u = q.url();
-    const m = u.match(/\/wizard-os-home\/([a-z-]+\.(?:js|css)|index\.html|)(\?|$)/);
+    const m = u.match(/\/wizard-os-home\/((?:desktop\/|core\/)?[a-z-]+\.(?:js|css|html)|)(\?|$)/);
     if (WEB && m && q.method() === 'GET' && !/^(data|summaries)\.js$/.test(m[1])) { const f = m[1] || 'index.html', fp = path.join(WEB, 'web', f); if (fs.existsSync(fp)) return r.fulfill({ status: 200, contentType: f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : 'application/javascript', body: fs.readFileSync(fp) }); }
     if (q.method() !== 'GET' && q.method() !== 'HEAD' && /\/wizard\//.test(u)) {
       const body = q.postDataBuffer() || Buffer.alloc(0);
@@ -66,9 +66,13 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   ok(secs.reduce((a, s) => a + s.n, 0) === listed, 'section counts add up to every thread', `${secs.reduce((a, s) => a + s.n, 0)} vs ${listed}`);
   const readySec = secs.find(s => s.k === 'ready');
   const readyTitles = await p.$$eval('.ch-sec[data-sec="ready"] .ch-row b', els => els.map(e => e.textContent));
-  for (const t of ['Our PRs — daily review', 'Connector health — action needed', 'Morning projects — status and unblocks']) ok(readyTitles.includes(t), `Ready shows “${t}” (missing from Chats before)`);
-  const yTitles = await p.$$eval('.ch-sec[data-sec="yesterday"] .ch-row b', els => els.map(e => e.textContent));
-  ok(yTitles.some(t => /Mobile equivalent of Mac app launcher/.test(t)), 'Yesterday holds yesterday’s threads (Mac app launcher)');
+  // Data-driven (the live thread titles change daily): Chats' Ready / Yesterday hold exactly what Wizard's Work view
+  // groups there — the threads that were missing from Chats before (Our PRs, Connector health, …) were Ready ones.
+  const want = await p.evaluate(() => { const g = __wos.live.workGroups(); return { ready: g.ready.length, yday: g.yesterday.length }; });
+  const readyN = await p.$eval('.ch-sec[data-sec="ready"] .ch-sec-h small', e => +e.textContent).catch(() => 0);
+  ok(want.ready > 0 && readyN === want.ready, `Ready holds every thread Wizard's Work view calls Ready (${readyN}/${want.ready})`, JSON.stringify(readyTitles.slice(0, 3)));
+  const yN = await p.$eval('.ch-sec[data-sec="yesterday"] .ch-sec-h small', e => +e.textContent).catch(() => 0);
+  ok(yN === want.yday, `Yesterday holds yesterday's threads (${yN}/${want.yday})`);
   const order = await p.evaluate(() => { const L = __wos.live, g = L.workGroups(); return g.ready.every((s, i, a) => !i || Date.parse(L.cardAt(a[i - 1])) >= Date.parse(L.cardAt(s))); });
   ok(order, 'Ready is newest-first by latest message (Wizard rule)');
   ok(secs.find(s => s.k === 'pastWeek')?.open === false && secs.find(s => s.k === 'archive')?.open === false, 'Past week + Archive start collapsed');

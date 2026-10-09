@@ -88,7 +88,9 @@
     });
     put(HOME + 1, { app: 'frame', appId: 'topics' });
     put(HOME + 2, { app: 'frame', appId: 'mizel' });
-    store.set('layoutV', 2);
+    // On a fresh install the app list may not have landed yet: only settle the layout once it has, so the
+    // Topics/Mizel desks still appear when the list arrives (see the wizard:apps listener below).
+    if (APP.topics || APP.mizel) store.set('layoutV', 2);
   }
   if (!W || typeof W !== 'object' || !Array.isArray(desks) || desks.length !== DESKS_N || desks.some(d => !d || !Array.isArray(d.wins))) freshLayout();
   else if (store.get('layoutV', 0) < 2) layoutV2();
@@ -103,7 +105,11 @@
       if (!u) return false; const f = document.querySelector(`.win[data-win="${id}"] iframe`); if (f && f.getAttribute('src') === u) return false;
       winEl(id)?.remove(); return true; })) { try { renderDesk(i); } catch (e) {} } });
   };
-  window.addEventListener('wizard:apps', reframe);
+  const lateLayout = () => {
+    if (store.get('layoutV', 0) >= 2 || !(APP.topics || APP.mizel)) return;
+    layoutV2(); try { save(); renderDesk(HOME + 1); renderDesk(HOME + 2); } catch (e) {}
+  };
+  window.addEventListener('wizard:apps', () => { lateLayout(); reframe(); });
   setTimeout(reframe, 0); setTimeout(reframe, 1500);
   desks.forEach(d => {
     d.wins = d.wins.filter(id => W[id]).slice(0, MAXW);
