@@ -83,7 +83,9 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     static final String CH_UNSENT = "unsent";
     static final String CH_REPLIES = "replies";
     static final int N_RUNNING = 7101, N_UNSENT = 7102, N_APP_UNSENT = 7103, N_REPLY_BASE = 7200;
-    static final int ORB_DP = 88, EXPANDED_DP = 270, MARGIN_DP = 4;
+    /** The orb (Archimedes Anywhere's bubble is 84 dp) and its three buttons; each is its own small window, so every
+     *  touch outside the orb and the buttons reaches the app underneath. */
+    static final int ORB_DP = 64, CTL_DP = 40, FAN_DP = 76, MARGIN_DP = 4;
     static final int MAX_SHOTS = 4;
 
     private static boolean appInFront;
@@ -98,8 +100,6 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     public interface AppVoiceRemote { void command(String cmd); }
     private static AppVoiceRemote appRemote;
     public static void setAppVoiceRemote(AppVoiceRemote r) { appRemote = r; }
-    /** Hard stop for a forgotten recording: it is kept and sent, never thrown away. */
-    static final long MAX_TAKE_MS = 30 * 60_000L;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private WindowManager wm;
@@ -112,7 +112,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private File recording;
     private boolean listening, paused, dictating;
     private long startedAt;
-    private int size, big, margin;
+    private int size, ctl, fan, margin;
     private float density;
     /** Centre of the orb on screen; the window is placed around it. */
     private int cx = -1, cy = -1;
@@ -292,7 +292,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         wm = getSystemService(WindowManager.class);
         density = getResources().getDisplayMetrics().density;
         size = Math.round(ORB_DP * density);
-        big = Math.round(EXPANDED_DP * density);
+        ctl = Math.round(CTL_DP * density);
+        fan = Math.round(FAN_DP * density);
         margin = Math.round(MARGIN_DP * density);
         channels(this);
         outbox = EverywhereOutbox.get(this);
@@ -446,6 +447,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     }
 
     private void detach() {
+        hideControls();
         if (!attached || web == null) return;
         try { wm.removeViewImmediate(web); } catch (Exception ignored) { }
         attached = false;
@@ -483,18 +485,13 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         return EverywherePolicy.clamp(x, y, size, s.x, s.y, margin);
     }
 
-    /** Lay the window out around the orb centre: small when idle, large (room for the controls) while listening. */
+    /** The window is just the orb. While talking, Cancel · Pause · Screen open as their own small windows. */
     private void place() {
         if (lp == null) return;
         if (cx < 0) { int[] p = savedSpot(); cx = p[0] + size / 2; cy = p[1] + size / 2; }
-        Point s = screen();
-        int w = expanded ? big : size;
-        int dx = cx > s.x / 2 ? -1 : 1, dy = cy > s.y * 0.42f ? -1 : 1;  // controls fan towards the middle
-        int ox = expanded ? (dx < 0 ? w - size / 2 : size / 2) : size / 2;
-        int oy = expanded ? (dy < 0 ? w - size / 2 : size / 2) : size / 2;
-        int wx = Math.max(0, Math.min(s.x - w, cx - ox)), wy = Math.max(0, Math.min(s.y - w, cy - oy));
-        if (!expanded) { wx = cx - size / 2; wy = cy - size / 2; }
-        if (keyboardOpen && imeTop > 0 && !expanded) {
+        int w = size;
+        int wx = cx - size / 2, wy = cy - size / 2;
+        if (keyboardOpen && imeTop > 0) {
             // imeTop is in screen pixels; the overlay's y is offset by the status bar on most phones.
             int off = screenOffsetY();
             if (wy + off + w > imeTop - margin) {
@@ -505,7 +502,119 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         lp.width = w; lp.height = w; lp.x = wx; lp.y = wy;
         if (keyboardOpen && !expanded) Log.i(TAG, "placed over keyboard y=" + wy + " bottom=" + (wy + w) + " screenBottom=" + (wy + w + screenOffsetY()) + " imeTop=" + imeTop);
         if (attached) try { wm.updateViewLayout(web, lp); } catch (Exception ignored) { }
-        js("E.layout({ox:" + px(cx - wx) + ",oy:" + px(cy - wy) + ",dx:" + dx + ",dy:" + dy + "})");
+        js("E.layout({ox:" + px(size / 2) + ",oy:" + px(size / 2) + "})");
+        placeControls();
+    }
+
+    /* ------------------------------------------------------------------ Cancel · Pause · Screen */
+
+    private static final int C_CANCEL = 0, C_PAUSE = 1, C_SHOT = 2;
+    private final android.widget.FrameLayout[] ctlView = new android.widget.FrameLayout[3];
+    private final WindowManager.LayoutParams[] ctlLp = new WindowManager.LayoutParams[3];
+    private final boolean[] ctlShown = new boolean[3];
+    private android.widget.ImageView pauseIcon;
+    private android.widget.TextView shotCount;
+
+    private android.widget.FrameLayout control(int which) {
+        if (ctlView[which] != null) return ctlView[which];
+        android.widget.FrameLayout f = new android.widget.FrameLayout(this);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        bg.setColor(which == C_CANCEL ? 0xE6461226 : 0xE0120A2A);
+        bg.setStroke(Math.max(1, Math.round(density)), which == C_CANCEL ? 0x80FF8FA6 : 0x55CDBEFF);
+        f.setBackground(bg);
+        f.setElevation(6 * density);
+        android.widget.ImageView i = new android.widget.ImageView(this);
+        i.setImageResource(which == C_CANCEL ? ai.wizards.os.R.drawable.ev_cancel : which == C_PAUSE ? ai.wizards.os.R.drawable.ev_pause : ai.wizards.os.R.drawable.ev_screen);
+        int pad = Math.round(10 * density);
+        f.addView(i, new android.widget.FrameLayout.LayoutParams(ctl - pad * 2, ctl - pad * 2, Gravity.CENTER));
+        f.setContentDescription(which == C_CANCEL ? "Cancel recording" : which == C_PAUSE ? "Pause recording" : "Attach a screenshot");
+        if (which == C_PAUSE) pauseIcon = i;
+        if (which == C_SHOT) {
+            shotCount = new android.widget.TextView(this);
+            shotCount.setTextColor(0xFF140B2C);
+            shotCount.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 9);
+            shotCount.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            shotCount.setGravity(Gravity.CENTER);
+            android.graphics.drawable.GradientDrawable b = new android.graphics.drawable.GradientDrawable();
+            b.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            b.setColor(0xFFB99BFF);
+            shotCount.setBackground(b);
+            shotCount.setVisibility(View.GONE);
+            int s = Math.round(15 * density);
+            f.addView(shotCount, new android.widget.FrameLayout.LayoutParams(s, s, Gravity.TOP | Gravity.END));
+        }
+        f.setOnClickListener(v -> {
+            buzz(10);
+            if (which == C_CANCEL) { if (carrying()) remote("cancel"); else cancelByUser(); }
+            else if (which == C_PAUSE) { if (carrying()) remote("pause"); else togglePause(); }
+            else screenshot();
+        });
+        WindowManager.LayoutParams p = new WindowManager.LayoutParams(ctl, ctl,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT);
+        p.gravity = Gravity.TOP | Gravity.START;
+        p.setTitle(which == C_CANCEL ? "WizOrbCtl-cancel" : which == C_PAUSE ? "WizOrbCtl-pause" : "WizOrbCtl-screen");
+        ctlLp[which] = p;
+        ctlView[which] = f;
+        return f;
+    }
+
+    /** Which buttons belong on screen right now: all three while talking; no Screen while typing or carrying the app's take. */
+    private boolean controlWanted(int which) {
+        if (!attached || !expanded || !(listening || carrying())) return false;
+        if (which == C_SHOT) return listening && !dictating && !keyboardOpen;
+        return true;
+    }
+
+    /** Fan the buttons out around the orb, towards the middle of the screen (the same quarter circle as before). */
+    private void placeControls() {
+        Point s = screen();
+        int dx = cx > s.x / 2 ? -1 : 1, dy = cy > s.y * 0.42f ? -1 : 1;
+        int d = Math.round(fan * 0.7071f);
+        int[][] spot = { {0, dy * fan}, {dx * d, dy * d}, {dx * fan, 0} };   // Cancel, Pause, Screen
+        boolean showPaused = carrying() ? "paused".equals(appVoice) : paused;
+        if (pauseIcon != null) {
+            pauseIcon.setImageResource(showPaused ? ai.wizards.os.R.drawable.ev_play : ai.wizards.os.R.drawable.ev_pause);
+            ctlView[C_PAUSE].setContentDescription(showPaused ? "Resume recording" : "Pause recording");
+        }
+        if (shotCount != null) {
+            shotCount.setText(String.valueOf(shots.size()));
+            shotCount.setVisibility(shots.isEmpty() ? View.GONE : View.VISIBLE);
+            ctlView[C_SHOT].setContentDescription(shots.isEmpty() ? "Attach a screenshot" : shots.size() + " screenshots attached");
+        }
+        for (int i = 0; i < 3; i++) {
+            boolean want = controlWanted(i);
+            if (!want) { hideControl(i); continue; }
+            android.widget.FrameLayout v = control(i);
+            WindowManager.LayoutParams p = ctlLp[i];
+            p.x = Math.max(0, Math.min(s.x - ctl, cx + spot[i][0] - ctl / 2));
+            p.y = Math.max(0, Math.min(s.y - ctl, cy + spot[i][1] - ctl / 2));
+            if (ctlShown[i]) { try { wm.updateViewLayout(v, p); } catch (Exception ignored) { } continue; }
+            try {
+                wm.addView(v, p);
+                ctlShown[i] = true;
+                v.setScaleX(.3f); v.setScaleY(.3f); v.setAlpha(0f);
+                v.animate().scaleX(1f).scaleY(1f).alpha(1f).setStartDelay(i * 30L).setDuration(320)
+                        .setInterpolator(new android.view.animation.OvershootInterpolator(1.6f)).start();
+            } catch (Exception e) { Log.w(TAG, "control refused: " + e.getMessage()); }
+        }
+    }
+
+    private void hideControl(int i) {
+        if (!ctlShown[i] || ctlView[i] == null) return;
+        ctlView[i].animate().cancel();
+        try { wm.removeViewImmediate(ctlView[i]); } catch (Exception ignored) { }
+        ctlShown[i] = false;
+    }
+
+    private void hideControls() { for (int i = 0; i < 3; i++) hideControl(i); }
+
+    /** Screenshots: the orb and its buttons step out of the picture. */
+    private void overlaysVisible(boolean on) {
+        if (web != null) web.setAlpha(on ? 1f : 0f);
+        for (int i = 0; i < 3; i++) if (ctlShown[i] && ctlView[i] != null) ctlView[i].setAlpha(on ? 1f : 0f);
     }
 
     private float px(int p) { return p / density; }
@@ -555,6 +664,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         long ms = carry ? appVoiceElapsed : 0;
         String st = "{mode:'" + mode + "',kb:" + (!carry && (keyboardOpen || dictating)) + ",expanded:" + expanded + ",failed:" + failed
                 + ",shots:" + shots.size() + ",carry:" + carry + ",ms:" + ms + "}";
+        placeControls();
         if (st.equals(lastState)) return;
         lastState = st;
         js("E.state(" + st + ")");
@@ -603,7 +713,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                         String k = slot();
                         prefs(EverywhereService.this).edit().putInt(k + "x", q[0]).putInt(k + "y", q[1]).apply();
                         Log.i(TAG, "moved to " + q[0] + "," + q[1] + (keyboardOpen ? " (keyboard)" : ""));
-                        if (listening) setExpanded(true); else place();
+                        if (listening || carrying()) setExpanded(true); else place();
                     } else {
                         v.performClick();
                         tap();
@@ -670,6 +780,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             r.setAudioSamplingRate(32000);
             r.setAudioEncodingBitRate(64000);
             r.setOutputFile(recording.getAbsolutePath());
+            r.setOnErrorListener((mr, what, extra) -> main.post(() -> micLost(mr, what)));
             r.prepare();
             r.start();
             recorder = r;
@@ -708,17 +819,31 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             int amp = 0;
             if (recorder != null) {
                 try { amp = recorder.getMaxAmplitude(); } catch (IllegalStateException e) { return; }
-                // Going quiet never ends a take here (only the side button sends by itself). A forgotten take is
-                // kept and sent after 30 minutes rather than recording forever.
-                if (!paused && SystemClock.elapsedRealtime() - startedAt > MAX_TAKE_MS) { finish(); return; }
+                // Only a tap ends a take (Archimedes Anywhere's rule): no silence send, no time limit.
             }
             js("E.level(" + (paused ? 0 : Math.min(1f, amp / 12000f)) + ")");
             main.postDelayed(this, 90);
         }
     };
 
+    private boolean micLost;
+
+    /** Android took the microphone away mid-take: keep what was recorded, pause, and let a tap send it. */
+    private void micLost(MediaRecorder mr, int what) {
+        if (!listening || mr != recorder) return;
+        Log.w(TAG, "microphone lost (" + what + "): recording kept, paused");
+        try { mr.stop(); } catch (RuntimeException ignored) { }
+        mr.release();
+        recorder = null;
+        micLost = true;
+        paused = true;
+        toast("Mic interrupted · recording kept · tap the orb to send");
+        pushState();
+    }
+
     private void togglePause() {
         if (!listening) return;
+        if (micLost) { toast("The mic was interrupted · tap the orb to send what you have"); return; }
         long now = SystemClock.elapsedRealtime();
         if (!paused) {
             if (recorder != null) try { recorder.pause(); } catch (IllegalStateException e) { Log.w(TAG, "pause failed", e); return; }
@@ -756,11 +881,11 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             try { openApp(this, MainActivity.ACTION_ACCESSIBILITY, 6).send(); } catch (PendingIntent.CanceledException ignored) { }
             return;
         }
-        if (web != null) web.setAlpha(0f);
+        overlaysVisible(false);
         shotPending = true;
         main.postDelayed(() -> k.screenshot(png -> main.post(() -> {
             shotPending = false;
-            if (web != null) web.setAlpha(1f);
+            overlaysVisible(true);
             if (!listening) return;
             if (png == null || png.length == 0) { Log.w(TAG, "screenshot empty"); toast("This screen blocked capture"); }
             else {
@@ -777,7 +902,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (!listening) return;
         if (shotPending) { finishAfterShot = true; return; } // the screenshot being taken rides along
         if (paused && recorder != null) try { recorder.resume(); } catch (IllegalStateException ignored) { }
-        listening = false; paused = false;
+        listening = false; paused = false; micLost = false;
         main.removeCallbacks(meter);
         main.removeCallbacks(qaAutoFinish);
         boolean ok = true;
@@ -817,7 +942,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     }
 
     private void discard() {
-        listening = false; paused = false; dictating = false; finishAfterShot = false;
+        listening = false; paused = false; dictating = false; finishAfterShot = false; micLost = false;
         main.removeCallbacks(meter);
         main.removeCallbacks(qaAutoFinish);
         dropRecorder();
@@ -868,17 +993,33 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     /** Voice typing: type the words where the cursor is; if no field takes them, they're on the clipboard. */
     @Override
     public void onDictated(EverywhereOutbox.Item it, String words) {
-        boolean fresh = System.currentTimeMillis() - it.createdAt < 3 * 60_000L;
-        WizardKeyboardService k = WizardKeyboardService.get();
-        boolean typed = fresh && k != null && k.insertText(words);
-        if (!typed) {
+        // Archimedes Anywhere's path: reject decoder loops, run its clean-up, skip a duplicate, insert at the cursor.
+        if (DictationCleanup.isLikelyRepetitionLoop(words)) {
             ClipboardManager cb = getSystemService(ClipboardManager.class);
             cb.setPrimaryClip(ClipData.newPlainText("Wizard", words.trim()));
+            toast("That came back garbled · copied instead of typed");
+            Log.w(TAG, "dictation looked like a repetition loop chars=" + words.length());
+            buzz(30);
+            return;
+        }
+        String text = DictationCleanup.cleanTranscriptForInsertion(words);
+        long now = System.currentTimeMillis();
+        if (text.equals(lastInserted) && now - lastInsertAt < 2500L) { Log.i(TAG, "dictation duplicate skipped"); return; }
+        boolean fresh = now - it.createdAt < 3 * 60_000L;
+        WizardKeyboardService k = WizardKeyboardService.get();
+        boolean typed = fresh && k != null && k.insertText(text);
+        if (typed) { lastInserted = text; lastInsertAt = now; }
+        else {
+            ClipboardManager cb = getSystemService(ClipboardManager.class);
+            cb.setPrimaryClip(ClipData.newPlainText("Wizard", text.trim()));
             toast(k == null ? "Copied · turn on Accessibility → Wizard OS to type it for you" : "Copied · paste it where you want it");
         }
-        Log.i(TAG, "dictation " + (typed ? "typed" : "copied") + " chars=" + words.length());
+        Log.i(TAG, "dictation " + (typed ? "typed" : "copied") + " chars=" + text.length());
         buzz(typed ? 18 : 30);
     }
+
+    private String lastInserted = "";
+    private long lastInsertAt;
 
     /* ------------------------------------------------------------------ util */
 
