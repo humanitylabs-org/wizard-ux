@@ -262,17 +262,20 @@ window.WizCore.chats = function createChats(H) {
   }
   const COPY_SVG = '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
   const SHARE_SVG = '<svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>';
+  const CHECK_SVG = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
   const timeTag = ms => isFinite(ms) ? `<time title="${esc(KIT.time.full(ms))}">${esc(KIT.time.clock(ms))}</time>` : '';
   function turnHtml(c, tn, last, working) {
     let h = '';
     if (tn.u) h += `<div class="msg u"><div class="bub">${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
     const live = last && working;
+    const steersHtml = (tn.steers || []).map(st => `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
     const wk = PW ? PW.workHtml(c, tn, live) : null; // the work receipt (chat-work.js #17)
     if (wk != null) h += wk;
     else if (tn.steps || tn.notes.length || live) {
       const label = live ? (tn.notes.length ? esc(clip(tn.notes[tn.notes.length - 1], 90)) : 'Working') : `Worked through ${tn.steps} step${tn.steps === 1 ? '' : 's'}`;
       h += `<details class="steps${live ? ' live' : ''}"><summary>${live ? '<i class="dots"><b></b><b></b><b></b></i>' : '◇'} ${label}</summary>${tn.notes.map(x => `<div class="note-line">${md(x)}</div>`).join('')}</details>`;
     }
+    h += steersHtml;
     if (tn.a || tn.media.length) {
       const k = tn.a ? c.texts.push(tn.a.text) - 1 : -1;
       h += `<div class="msg a"><div class="bub">${tn.a ? md(tn.a.text) : ''}${mediaBlock(c, tn.media)}</div>`
@@ -471,13 +474,16 @@ window.WizCore.chats = function createChats(H) {
   function pendingState(p) {
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`;
     if (p.state === 'waiting') return `<span class="pst wait">${esc(p.error || 'Couldn’t reach Wizard')} · retrying</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>`;
+    const agent = esc(window.WizConfig.agent());
+    if (p.state === 'sent' && p.steered && p.steerQueued) return `<span class="pst ok">${CHECK_SVG}Added to the queued request</span>`;
+    if (p.state === 'sent' && p.steered) return `<span class="pst ok">${CHECK_SVG}Delivered · ${agent} sees it next step</span>`;
     if (p.state === 'sent') return '<span class="pst ok">Sent</span>';
-    return '<span class="pst">Sending…</span>';
+    return `<span class="pst">${p.steerRunId && !p.attempts ? 'Steering…' : 'Sending…'}</span>`;
   }
   function pendingHtml(p, c) {
     const files = (p.files || []).filter(f => f !== p.audioFile);
     const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text ? '' : ' · words come when it sends'}</span></div>` : '';
-    return `<div class="msg u pending ${p.state}" data-ob="${esc(p.id)}"><div class="bub">${voice}${userMedia(c || { media: [] }, files, [])}${p.text ? md(p.text) : ''}</div><div class="pmeta">${pendingState(p)}</div></div>`;
+    return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}" data-ob="${esc(p.id)}"><div class="bub">${voice}${userMedia(c || { media: [] }, files, [])}${p.text ? md(p.text) : ''}</div><div class="pmeta">${pendingState(p)}</div></div>`;
   }
   function renderChats(w) {
     const el = track.querySelector(`[data-chats="${w.id}"]`); if (!el) return;
@@ -501,11 +507,24 @@ window.WizCore.chats = function createChats(H) {
       // A sent message has landed once a recent user turn in the thread matches it.
       const sent = OUTBOX ? OUTBOX.forThread(w.thread).filter(p => p.state === 'sent') : [];
       if (sent.length) {
-        const us = turns.filter(t => t.u).slice(-4).map(t => t.u);
+        const us = turns.filter(t => t.u).slice(-4).map(t => t.u).concat(turns.slice(-4).flatMap(t => t.steers || []));
         const landed = p => us.some(u => ((p.files || []).length && p.files.some(f => (u.files || []).some(x => x.id === f.id)))
           || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
         let gone = false;
         for (const p of sent) if (landed(p)) { OUTBOX.landed(p.id); gone = true; }
+        // The run settled and the steer never reached the transcript: Hermes ended the turn before reading
+        // it and returned it as pending_steer for the client to replay. Two settled polls, then replay it
+        // as an ordinary message so it is never silently dropped.
+        const sNow = LIVE.session(w.thread), settled = !!sNow && !WORKING_ST.has(sNow.status) && sNow.status !== 'waiting_for_approval';
+        for (const p of sent) {
+          if (!p.steered || p.steerQueued || landed(p)) continue;
+          if (!settled) { p.settledPolls = 0; continue; }
+          p.settledPolls = (p.settledPolls || 0) + 1; gone = true;
+          if (p.settledPolls < 2 || p.replayed) continue;
+          p.replayed = true; OUTBOX.landed(p.id);
+          OUTBOX.enqueue({ kind: 'reply', sessionId: p.sessionId, text: p.text, files: (p.files || []).filter(f => f !== p.audioFile), wid: p.wid, source: p.source });
+          H.toast('↻', `${window.WizConfig.agent()} finished before reading your steer · sent it as a new message`, 2600);
+        }
         if (gone) changed = true;
       }
       if (await loadApproval(w, LIVE.session(w.thread))) changed = true;

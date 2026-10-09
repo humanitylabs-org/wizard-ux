@@ -81,17 +81,29 @@
     .replace(/^\[Workspace::v1: [^\]\r\n]+\]\s*/, '')
     .replace(/\n*\[Browser dogfooding policy[\s\S]*$/, '')
     .trim();
+  // Hermes delivers a steer as its own user row wrapped in this marker (agent/prompt_builder.py STEER_MARKER_*).
+  const STEER_OPEN = '[OUT-OF-BAND USER MESSAGE';
+  const steerText = s => cleanText(String(s || '')
+    .replace(/^\s*\[OUT-OF-BAND USER MESSAGE[^\]\n]*\]\s*/, '')
+    .replace(/\s*\[\/OUT-OF-BAND USER MESSAGE\]\s*$/, ''));
   const tsMs = v => typeof v === 'number' && isFinite(v) ? (Math.abs(v) < 1e12 ? v * 1000 : v) : (Date.parse(String(v ?? '')) || NaN);
   // One turn = what the owner said (words, photos, files), the work in between, the answer and anything the agent sent.
   function parseRows(rows) {
     const out = []; let cur = null;
-    const newTurn = u => { cur = { u, a: null, notes: [], steps: 0, media: [], at: u?.at, work: [] }; out.push(cur); return cur; };
+    const newTurn = u => { cur = { u, a: null, notes: [], steps: 0, media: [], at: u?.at, work: [], steers: [] }; out.push(cur); return cur; };
     for (const m of rows || []) {
       const kind = m.display_kind || '';
       const content = m.display_content ?? m.content;
       const raw = partsText(content);
       const at = tsMs(m.timestamp ?? m.created_at);
       if (m.role === 'user') {
+        // A mid-run steer the agent has taken in: shown inside the turn it steered, marked as received.
+        if (kind === 'steer' || raw.trimStart().startsWith(STEER_OPEN)) {
+          const st = steerText(raw);
+          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push({ text: st, at, files: chipFiles(raw) });
+          if (cur) cur.steps++;
+          continue;
+        }
         if (kind || INTERNAL.some(p => raw.trimStart().startsWith(p))) { if (cur) cur.steps++; continue; }
         const files = chipFiles(raw), images = imagesOf(m, content);
         let t = helm(cleanText(raw)).text;

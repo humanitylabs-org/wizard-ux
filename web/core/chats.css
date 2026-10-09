@@ -240,3 +240,10 @@ a.fchip { color: inherit; text-decoration: none; }
 .mviewer.zoomed .mv-bar, .mviewer.zoomed .mv-top { opacity: .25; }
 /* The desktop shell has no #device frame: the viewer covers the browser window. */
 body > .mviewer { position: fixed; z-index: 200; }
+
+/* Steers: a message sent while the agent works. Once the agent has read it, it sits inside the turn it
+ * steered with a quiet "Read by …" receipt; until then the pending bubble says Delivered / Added. */
+.msg.u.steer .bub { border-style: dashed; border-color: rgba(185, 155, 255, .45); }
+.msg.u.steer .mmeta .srcpt, .msg.u.pending .pst.ok { display: inline-flex; align-items: center; gap: 4px; color: #8fe3b5; font-weight: 600; }
+.msg.u.steer .mmeta .srcpt svg, .msg.u.pending .pst.ok svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.msg.u.pending.steer.sent .bub { opacity: .85; }

@@ -104,8 +104,9 @@
     if (it.kind === 'reply' && it.steerRunId && !it.attempts) {
       try {
         const steer = { input }; if (fileIds.length) steer.wizard_file_ids = fileIds;
-        await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}/steer`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
-        return done(it, { steered: true, runId: it.steerRunId });
+        const sr = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}/steer`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
+        const ack = await sr.json().catch(() => ({}));
+        return done(it, { steered: true, runId: it.steerRunId, steerQueued: ack?.status === 'queued' });
       } catch (e) { if (![404, 409, 410].includes(e.status)) throw e; }
     }
     // 4. New chat: the session id was fixed at enqueue time; 409 means an earlier try created it.
@@ -129,7 +130,7 @@
     return done(it, { steered: false, runId: run.run_id || run.id || '' });
   }
   async function done(it, res) {
-    Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, steered: res.steered, error: '' });
+    Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, steered: res.steered, steerQueued: !!res.steerQueued, error: '' });
     delete it.audio; // the server has it now (voice note + transcript)
     await put(it);
     for (const fn of sentHooks) { try { fn(it, res); } catch (e) { console.error(e); } }
