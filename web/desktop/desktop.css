@@ -86,7 +86,18 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5
 
 /* ---------- Chats on the desktop: list beside thread ---------- */
 .dchats { position: absolute; inset: 0; display: flex; container-type: inline-size; }
-.dchats .pane-list { position: relative; flex: 0 0 min(340px, 42%); border-right: 1px solid var(--line); }
+.dchats .pane-list { position: relative; flex: 0 0 min(var(--list-w, 340px), 60%); border-right: 1px solid var(--line); }
+.dchats .pane-split { flex: 0 0 6px; margin: 0 -3px; position: relative; z-index: 2; cursor: col-resize; touch-action: none; }
+.dchats .pane-split::after { content: ''; position: absolute; inset: 0 2px; border-radius: 2px; transition: background .15s; }
+.dchats .pane-split:hover::after, .dchats .pane-split:focus-visible::after, .splitting .dchats .pane-split::after { background: var(--violet); }
+.dchats .pane-split:focus { outline: none; }
+html.splitting, html.splitting * { cursor: col-resize !important; user-select: none !important; }
+.dchats .pane-empty b { color: var(--ink-2); font-size: 15px; }
+.dchats .pane-newchat { margin: 12px 0 14px; padding: 8px 16px; border-radius: 99px; background: rgba(143, 99, 255, .22); border: 1px solid var(--line-2); color: var(--ink); font-weight: 700; font-size: 13.5px; }
+.dchats .pane-newchat:hover { background: rgba(143, 99, 255, .34); }
+.dchats .ch-row.kbd { outline: 1px solid var(--line-2); }
+.dsettings .set-card { width: min(520px, calc(100vw - 32px)); }
+.dsettings .set-body { padding: 4px 14px 6px; }
 .dchats .pane-main { position: relative; flex: 1; min-width: 0; }
 .dchats .pane-empty { position: absolute; inset: 0; display: none; place-items: center; text-align: center; color: var(--ink-3); font-size: 13.5px; line-height: 1.7; }
 .dchats[data-thread=""] .pane-main > .chats { display: none; }
@@ -95,6 +106,7 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5
 .dchats .pane-main .ch-back { display: none; }
 @container (max-width: 620px) {
   .dchats .pane-list { flex: 1; border-right: 0; }
+  .dchats .pane-split { display: none; }
   .dchats:not([data-thread=""]) .pane-list { display: none; }
   .dchats[data-thread=""] .pane-main { display: none; }
   .dchats .pane-main .ch-back { display: grid; }
