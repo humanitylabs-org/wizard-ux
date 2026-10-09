@@ -525,11 +525,12 @@ with (BASE / 'worker.lock').open('a') as lock:
             shot('10c-editor-typed')
             n = STATE['transcribe']
             print('  editor note after:', json.dumps(after))
-            want_line = '- eggs Wizard Everywhere QA message number %d' % n
+            # Archimedes Anywhere's rules: mid-sentence words start lower-case, a space joins them to the word before.
+            want_line = ('- eggs wizard everywhere qa message number %d' % n)
             lines = (after or '').replace('\r', '').split('\n')
-            check('voice typing in a note editor inserts at the cursor', 'dictation typed' in dl2 and want_line in lines, (dl2, after))
+            check('voice typing in a note editor inserts at the cursor', 'dictation typed' in dl2 and any(l.strip().lower() == want_line for l in lines), (dl2, after))
             check('…and the rest of the note is untouched (heading, list, blank lines, last line)',
-                  [l for l in lines if l.strip() and 'Wizard Everywhere' not in l] == ['# Shopping', '- milk', 'Call the shop.'] and (after or '').count('\n') >= NOTE.count('\n'), after)
+                  [l for l in lines if l.strip() and 'everywhere qa message' not in l.lower()] == ['# Shopping', '- milk', 'Call the shop.'] and (after or '').count('\n') == NOTE.count('\n'), after)
             ed.close()
         sx('am force-stop com.android.chrome'); sx('am clear-debug-app')
         sx('input keyevent KEYCODE_HOME'); time.sleep(3)
