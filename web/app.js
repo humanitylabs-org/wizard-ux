@@ -189,7 +189,7 @@
   function buildDesks() {
     track.innerHTML = desks.map((_, i) => deskShell(i)).join('');
     desks.forEach((_, i) => renderDesk(i));
-    placeTrack(0, false); renderDots(); renderMoons();
+    placeTrack(0, false); renderDots(); renderMoons(); parkDesks(true);
   }
   /* Sync one desk's DOM with its window list without reloading live windows. */
   function renderDesk(i) {
@@ -233,9 +233,43 @@
     $('.nebula').style.transform = `translate3d(${(-idx + 2) * -3 + dx * .01}%,0,0)`;
   }
   let labelT = 0;
+  /* Parking: hosted apps on desks out of view stay loaded but go quiet, so swipes stay smooth.
+   *  - Every framed app off the current desk sees document.visibilityState === 'hidden' (and a
+   *    visibilitychange), exactly as if the phone screen were off: Legacy Wizard, Topics, Meetings and
+   *    friends stop their polling and catch up the moment their desk lands in view.
+   *  - Desks more than one swipe away also skip rendering (content-visibility), so a heavy app two
+   *    desks over costs no style, layout or paint. The neighbours stay painted for the swipe itself.
+   * A desk is woken only after the slide settles, so its catch-up work never lands mid-animation. */
+  let parkT = 0;
+  function frameSetHidden(f, hidden) {
+    try {
+      const d = f.contentDocument; if (!d || d.location.href === 'about:blank') return;
+      if (!d.__wosVis) {
+        d.__wosVis = { hidden: false };
+        Object.defineProperty(d, 'hidden', { configurable: true, get: () => d.__wosVis.hidden || document.hidden });
+        Object.defineProperty(d, 'visibilityState', { configurable: true, get: () => (d.__wosVis.hidden || document.hidden) ? 'hidden' : 'visible' });
+      }
+      if (d.__wosVis.hidden === hidden) return;
+      d.__wosVis.hidden = hidden;
+      if (!document.hidden) d.dispatchEvent(new Event('visibilitychange'));
+    } catch (e) {}
+  }
+  function parkDesks(wakeCurrent) {
+    $$('.desk', track).forEach((sec, i) => {
+      sec.classList.toggle('parked', Math.abs(i - idx) > 1);
+      if (i !== idx || wakeCurrent) $$('iframe.appframe', sec).forEach(f => frameSetHidden(f, i !== idx));
+    });
+  }
+  function scheduleParking() {
+    parkDesks(false); clearTimeout(parkT);
+    // The slide is 520 ms; a desk you only pass through never wakes, and a wake never lands mid-swipe
+    // (a waking app catches up at once, which is exactly the hitch this avoids).
+    const wake = () => { let busy = false; try { busy = !!(G || DS); } catch (e) {} if (busy) parkT = setTimeout(wake, 250); else parkDesks(true); };
+    parkT = setTimeout(wake, 900);
+  }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(DESKS_N - 1, n));
-    const moved = n !== idx; idx = n; placeTrack(0, true); renderDots(); save();
+    const moved = n !== idx; idx = n; placeTrack(0, true); renderDots(); save(); scheduleParking();
     if (moved) vib(8);
     if (!silent) announce(`Desk ${idx + 1} · <b>${esc(deskName(idx))}</b>`);
     markVisibleThreadsSeen();
@@ -659,6 +693,7 @@
         if (ok) { try { f._lastUrl = f.contentWindow.location.href; } catch (e) {} }
         wrap?.classList.toggle('blocked', !ok);
         if (ok) bridgeFrame(f);
+        if (ok) { const sec = f.closest('.desk'); if (sec && +sec.dataset.desk !== idx) frameSetHidden(f, true); } // opened or reloaded off-screen: park at once
       });
     });
   }
