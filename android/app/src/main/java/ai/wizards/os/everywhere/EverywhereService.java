@@ -768,9 +768,15 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             try { openApp(this, MainActivity.ACTION_SETTINGS, 4).send(); } catch (PendingIntent.CanceledException ignored) { }
             return;
         }
+        if (!ai.wizards.os.MicOwner.tryAcquire(ai.wizards.os.MicOwner.EVERYWHERE)) { // one mic owner: a meeting may be recording
+            Log.i(TAG, "start refused: mic held by " + ai.wizards.os.MicOwner.holder());
+            Toast.makeText(this, ai.wizards.os.MicOwner.reason(ai.wizards.os.MicOwner.EVERYWHERE), Toast.LENGTH_LONG).show();
+            return;
+        }
         listening = true; // the foreground notification and the window both read it
         if (!startForegroundSafe(true)) {
             listening = false;
+            ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.EVERYWHERE);
             Toast.makeText(this, "Android blocked the microphone. Open Wizard OS and try again.", Toast.LENGTH_LONG).show();
             return;
         }
@@ -794,6 +800,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             Log.w(TAG, "recorder failed", e);
             dropRecorder();
             listening = false;
+            ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.EVERYWHERE);
             Toast.makeText(this, "The microphone is busy. Try again in a moment.", Toast.LENGTH_SHORT).show();
             startForegroundSafe(false);
             return;
@@ -920,6 +927,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             try { r.stop(); } catch (RuntimeException e) { ok = false; }
             r.release();
         }
+        ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.EVERYWHERE);
         File f = recording;
         recording = null;
         final boolean dict = dictating;
@@ -954,6 +962,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         main.removeCallbacks(meter);
         main.removeCallbacks(qaAutoFinish);
         dropRecorder();
+        ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.EVERYWHERE);
         if (recording != null) //noinspection ResultOfMethodCallIgnored
             recording.delete();
         recording = null;

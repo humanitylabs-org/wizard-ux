@@ -25,4 +25,14 @@ public class OriginTest {
         assertFalse(Origin.isShellPath("/wizard-os-home-preview/"));
         assertFalse(Origin.isShellPath("/wizard/"));
     }
+
+    @Test
+    public void inAppPaths() {
+        assertTrue(Origin.isInAppPath("/wizard-os-home/"));
+        assertTrue(Origin.isInAppPath("/mizel-live/"));
+        assertTrue(Origin.isInAppPath("/mizel-live"));
+        assertFalse(Origin.isInAppPath("/mizel-live-evil/"));
+        assertFalse(Origin.isInAppPath("/meetings/"));
+        assertFalse(Origin.isInAppPath("/"));
+    }
 }

@@ -2,7 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Mizel recorder: retry uploads the moment the network returns; network-constrained upload job. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Mizel recorder: a partial wake lock keeps capture going with the screen off. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Wizard Everywhere: the floating button over other apps (switched on in Settings). -->
@@ -46,6 +50,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="private.wizard001.com" android:pathPrefix="/wizard-os-home/" />
+                <data android:scheme="https" android:host="private.wizard001.com" android:pathPrefix="/mizel-live/" />
             </intent-filter>
         </activity>
 
@@ -123,6 +128,18 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/everywhere_accessibility" />
         </service>
+        <!-- ===== Mizel meeting recorder (feature/mizel-recorder) =====
+             Captures the phone mic in 5 s WAV chunks while a meeting records; uploads them through a durable
+             outbox; Pause releases the mic. Started only from the app (page bridge) while it is in front. -->
+        <service
+            android:name=".mizel.MeetingRecorderService"
+            android:exported="false"
+            android:foregroundServiceType="microphone"
+            android:stopWithTask="false" />
+        <service
+            android:name=".mizel.MizelUploadJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <receiver
             android:name=".everywhere.EverywhereBoot"
             android:exported="true">

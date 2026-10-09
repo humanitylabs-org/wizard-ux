@@ -15,8 +15,8 @@ android {
         applicationId 'ai.wizards.os'
         minSdk 28
         targetSdk 35
-        versionCode 10
-        versionName '0.6.3'
+        versionCode 11
+        versionName '0.7.0'
         buildConfigField 'String', 'HOME_URL', '"https://private.wizard001.com/wizard-os-home/"'
         buildConfigField 'String', 'ORIGIN', '"https://private.wizard001.com"'
     }
@@ -66,5 +66,9 @@ android {
 }
 
 dependencies {
+    // window.wizardMizelPort: WebViewCompat.addWebMessageListener (origin-scoped page ⇄ native port).
+    implementation 'androidx.webkit:webkit:1.12.1'
     testImplementation 'junit:junit:4.13.2'
+    // org.json is an Android stub on the JVM; the real one lets the Mizel journal/protocol tests run off-device.
+    testImplementation 'org.json:json:20240303'
 }

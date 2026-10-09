@@ -70,6 +70,7 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingMic;
     private ValueCallback<Uri[]> pendingFiles;
     private boolean showingError;
+    private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
 
     @Override
     protected void onCreate(Bundle state) {
@@ -115,6 +116,8 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         web.addJavascriptInterface(new Bridge(), "WizardOSNative");
+        if (mizel != null) mizel.detach();
+        mizel = ai.wizards.os.mizel.MizelBridge.install(web, BuildConfig.ORIGIN);
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -206,7 +209,7 @@ public class MainActivity extends Activity {
 
     String startUrl(Intent intent) {
         Uri data = intent == null ? null : intent.getData();
-        if (data != null && Origin.isShell(data)) return data.toString();
+        if (data != null && Origin.isInApp(data)) return data.toString();
         return BuildConfig.HOME_URL;
     }
 
@@ -215,7 +218,7 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         Uri data = intent.getData();
-        if (data != null && Origin.isShell(data)) web.loadUrl(data.toString());
+        if (data != null && Origin.isInApp(data)) web.loadUrl(data.toString());
         if (ACTION_ACCESSIBILITY.equals(intent.getAction())) { intent.setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); return; }
         queueHandoff(intent);
     }
@@ -331,6 +334,7 @@ public class MainActivity extends Activity {
         current = new java.lang.ref.WeakReference<>(this);
         ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, true); // the floating button hides while Wizard OS is open
         ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
+        ai.wizards.os.mizel.MeetingRecorderService.recover(this); // a meeting cut off by a process death is closed and uploaded
     }
 
     @Override
@@ -516,6 +520,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(null);
         if (ai.wizards.os.everywhere.EverywhereService.appIsRecording()) ai.wizards.os.everywhere.EverywhereService.appVoiceState(this, "idle", 0);
+        if (mizel != null) { mizel.detach(); mizel = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
     }
