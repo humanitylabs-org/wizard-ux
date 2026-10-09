@@ -294,6 +294,14 @@ def notifs(): return sx('dumpsys notification --noredact | grep -E "pkg=%s|andro
 def front(): return PKG in top()
 def bring_front(): sx('am start -W -n %s/ai.wizards.os.MainActivity' % PKG); time.sleep(2)
 def runs_n(): return len(ST['runs'])
+FOREIGN = []
+def sweep():
+    """Every resource this page has loaded that isn't the fake Wizard (the real one must never be touched)."""
+    try:
+        FOREIGN.extend(pg.ev("performance.getEntriesByType('resource').map(e => e.name).concat([location.href]).filter(u => /^https?:/.test(u) && !u.startsWith(%s))" % json.dumps(ORIGIN)) or [])
+        return True
+    except Exception as e:
+        FOREIGN.append('(could not read: %s)' % e); return False
 
 
 em = None
@@ -373,24 +381,32 @@ with (BASE / 'worker.lock').open('a') as lock:
         run14 = ST['runs'][n0] if runs_n() > n0 else None
         shot('14c-sent')
 
+        sweep()
         # ============ #14b notification Send while backgrounded ============
         n0 = runs_n()
         pg.ev("window.__wos.goDesk(window.__wos.HOME, true)"); time.sleep(0.5)
         pg.tap('#orbWrap'); time.sleep(1.5)
         rid2 = native_id()
         sx('input keyevent KEYCODE_HOME'); time.sleep(4)
-        sx('cmd statusbar expand-notifications'); time.sleep(2)
-        xml = ui()
-        if 'Recording for Wizard' in xml and not re.search(r'text="Send"', xml):
-            tap_text(r'^Recording for Wizard$', xml); time.sleep(1); xml = ui()  # expand to show the actions
+        sx('cmd statusbar expand-notifications')
+        xml = wait(lambda: (lambda x: x if 'Recording for Wizard' in x else '')(ui()), 10, 1) or ui()
+        if not re.search(r'(text|content-desc)="Send"', xml):
+            tap_text(r'^Recording for Wizard$', xml); time.sleep(1.5); xml = ui()  # expand to show the actions
         shot('14d-notification-actions')
         hit = tap_text(r'^Send$', xml)
+        if not hit and 'Recording for Wizard' in sx('dumpsys notification --noredact | grep android.title='):
+            # uiautomator can't get an idle dump while the notification's chronometer ticks; the shade layout on
+            # this fixed pixel_7/API 35 image puts the first notification's 2nd action at (368, 1096) (see shot 14d).
+            sx('input tap 368 1096'); hit = 'Send (fixed position; ui dump not idle)'
         time.sleep(1); sx('cmd statusbar collapse')
         wait(lambda: runs_n() > n0, 40); time.sleep(5)
         check('#14 notification Send (app in background) sends the take exactly once', hit and runs_n() == n0 + 1 and rec_size(rid2) == 0, (hit, rid2, runs_n() - n0))
         bring_front(); connect()
-        check('#14 orb idle after notification Send', voice() == 'idle', voice())
+        check('#14 orb idle after notification Send', wait(lambda: voice() == 'idle', 10), voice())
+        if voice() != 'idle':  # keep later steps independent of this one
+            pg.ev("window.__wos.cancelVoice(true)"); time.sleep(1)
 
+        sweep()
         # ============ #14c app killed mid-take → recovered → sent once ============
         n0, u0 = runs_n(), len(ST['uploads'])
         pg.ev("window.__wos.goDesk(window.__wos.HOME, true)"); time.sleep(0.5)
@@ -414,6 +430,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         time.sleep(2); bring_front(); connect()
         check('#14 not offered again', not pg.ev("!!document.querySelector('[data-dv=recording]')"))
 
+        sweep()
         # ============ #20 share sheet → new chat with the image ============
         n0, u0 = runs_n(), len(ST['uploads'])
         png = job / 'qa-share.png'
@@ -451,9 +468,15 @@ with (BASE / 'worker.lock').open('a') as lock:
         # Back closes the sheet and stays in the app (Back never exits), then share again.
         sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
         check('#20 Back closes the Share sheet and Wizard OS stays open', front() and not pg.ev("!!document.querySelector('[data-dv=share]')"), top()[:100])
-        sx("am start -n %s/ai.wizards.os.share.ShareActivity -a android.intent.action.SEND -t image/png --eu android.intent.extra.STREAM %s --es android.intent.extra.TEXT 'Shared from the QA gallery' --grant-read-uri-permission" % (PKG, media))
-        time.sleep(3); connect()
-        wait(lambda: pg.ev("!!document.querySelector('[data-dv=share] [data-shareto=__new__]')"), 15)
+        sx('input keyevent KEYCODE_HOME'); time.sleep(1.5)
+        sx("am start -a android.intent.action.SEND -t image/png --eu android.intent.extra.STREAM %s --es android.intent.extra.TEXT 'Shared from the QA gallery' --grant-read-uri-permission -f 0x10000000" % media)
+        time.sleep(4)
+        if not front():
+            tap_text(r'^Wizard$'); time.sleep(1.5)
+            if not wait(front, 6): tap_text(r'^Just once$|^Always$'); time.sleep(2)
+        connect()
+        sheet2 = wait(lambda: pg.ev("(() => { const e = document.querySelector('[data-dv=share]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()"), 15)
+        check('#20 sharing again opens a fresh Share sheet with the image', sheet2 and 'qa-share' in sheet2, (sheet2, logs('WizardShare', '.')))
         pg.tap('[data-dv=share] [data-shareto=__new__]')
         wait(lambda: runs_n() > n0, 40); time.sleep(3)
         up = ST['uploads'][u0:]
@@ -488,6 +511,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         for _ in range(3): sx('input keyevent KEYCODE_BACK'); time.sleep(1)
         check('Back never leaves Wizard OS (thread → list → home)', front(), top()[:100])
 
+        sweep()
         # ============ #22b web hot-reload keeps a typed draft ============
         pg.ev("window.__wos.openWizardThread('qa_old_thread')"); time.sleep(2)
         pg.ev("(() => { const t = document.querySelector('.win.focus .ch-compose textarea') || document.querySelector('.ch-compose textarea'); t.value = 'Half-typed draft that must survive'; t.dispatchEvent(new Event('input', { bubbles: true })); return true; })()")
@@ -497,7 +521,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         bn = pg.ev("(() => { const e = document.querySelector('#dvWeb'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()")
         check('#22 web update detected → "Wizard OS was updated · Reload"', 'updated' in (bn or ''), bn)
         shot('22b-web-updated')
-        pg.ev("window.__qaMark = 1"); pg.tap('#dvWeb [data-web=go]'); time.sleep(4)
+        sweep(); pg.ev("window.__qaMark = 1"); pg.tap('#dvWeb [data-web=go]'); time.sleep(4)
         connect()
         same = pg.ev("window.__qaMark === 1")
         dv = pg.ev("(() => { const t = document.querySelector('.ch-compose textarea'); return t ? t.value : null; })()")
@@ -506,6 +530,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         pg.ev("window.__wos.goDesk(window.__wos.HOME, true)")
 
         # ============ #22c APK update: bad checksum refused → fixed feed → installer ============
+        sweep()
         sx('logcat -c')
         pg.ev("window.WizardOSDevice.updateCheck()"); time.sleep(3)
         pg.tap('#dvUpdate [data-upd=go]'); time.sleep(4)
@@ -542,13 +567,13 @@ with (BASE / 'worker.lock').open('a') as lock:
 
         crashed = sx('logcat -d -b crash')
         check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
-        foreign = []
+        sx('am start -W -n %s/ai.wizards.os.MainActivity' % PKG); time.sleep(4)
         try:
-            connect()
-            foreign = pg.ev("performance.getEntriesByType('resource').map(e => e.name).filter(u => /wizard001\\.com/.test(u))") or []
+            connect(); sweep()
+            check('the updated app (9006) starts and loads Wizard OS', pg.ev("window.WizardOSNative.platform()").endswith('-qanext'), pg.ev("window.WizardOSNative.platform()"))
         except Exception as e:
-            foreign = ['(could not read: %s)' % e]
-        check('zero requests to the real Wizard from the WebView (fake origin only)', not foreign, foreign[:5])
+            check('the updated app (9006) starts and loads Wizard OS', False, e)
+        check('zero requests to the real Wizard from the WebView (fake origin only)', not FOREIGN, FOREIGN[:5])
         writes = [l for l in ST['log'] if not l.startswith('GET')]
         receipt['fake_writes'] = writes
     finally:
