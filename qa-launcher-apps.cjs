@@ -48,6 +48,11 @@ const RETIRED = ['/shopping-assistant/', '/reader/', '/signal-feed/', '/recall/'
       await p.evaluate(() => __wos.openSheet('launcher')); await p.waitForTimeout(600);
       const txt = await p.evaluate(() => document.body.innerText);
       ok(/Wisdom/.test(txt) && /Wizard Shopping/.test(txt), 'mobile: launcher sheet shows Wisdom and Wizard Shopping');
+      await p.evaluate(() => { __wos.closeSheets && __wos.closeSheets(); }); await p.waitForTimeout(200);
+      await p.evaluate(() => { const t = document.querySelector('#launcherBody [data-app="files"]'); t && t.click(); }); await p.waitForTimeout(900);
+      await p.evaluate(() => __wos.openSheet('launcher')); await p.waitForTimeout(600);
+      const stray = await p.evaluate(() => { const b = document.querySelector('#launcherBody'); return { bar: !!b.querySelector('.deskbar'), txt: /Full\s*←|\d+ windows?/.test(b.innerText) }; });
+      ok(!stray.bar && !stray.txt, 'mobile: no stray window-list text at the bottom of the launcher', JSON.stringify(stray));
       const natives = await p.evaluate(() => [...document.querySelectorAll('#launcherBody [data-app]')].map(e => e.dataset.app).filter(id => ['maps', 'camera', 'phone', 'messages', 'spotify', 'telegram', 'line', 'grab', 'chrome', 'settings'].includes(id)));
       ok(!natives.length && !/\bANDROID\b|Android/.test(await p.evaluate(() => document.querySelector('#launcherBody').innerText)), 'mobile: no Android apps or Android group in the launcher', JSON.stringify(natives));
       await p.fill('#search', 'maps').catch(() => {}); await p.waitForTimeout(300);
