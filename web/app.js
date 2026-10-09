@@ -11,6 +11,8 @@
   const OUTBOX = window.WosOutbox || null;
   const S = window.WIZ_SUMM || { days: {}, weeks: {}, month: '' };
   const device = $('#device');
+  // In-app browser for links tapped in Wizard (core/links.js). Mounted once the window manager exists.
+  let LINKS = null;
   const TODAY = (D.generated || '2026-10-08').slice(0, 10);
   const DESKS_N = 5, HOME = 2;
 
@@ -77,7 +79,7 @@
   // Default layout: Home = latest, then Topics and Mizel desks when this Wizard has those apps.
   function layoutV2() {
     const put = (i, w) => {
-      if (w.app === 'frame' && !APP[w.appId]) return; // that app isn't on this Wizard
+      if (w.app === 'frame' && !APP[w.appId] && !w.url) return; // that app isn't on this Wizard
       if (Object.values(W).some(x => x.app === w.app && x.appId === w.appId)) return;
       const d = desks[i]; if (d.wins.length >= MAXW) return;
       const id = newId(); W[id] = { id, ...w }; d.wins.unshift(id); d.focus = id; d.full = false;
@@ -93,6 +95,19 @@
   }
   if (!W || typeof W !== 'object' || !Array.isArray(desks) || desks.length !== DESKS_N || desks.some(d => !d || !Array.isArray(d.wins))) freshLayout();
   else if (store.get('layoutV', 0) < 2) layoutV2();
+  // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
+  // A frame window remembers the page it was on, so a saved Mizel desk would keep the retired view: move it.
+  Object.values(W).forEach(w => { if (w && w.app === 'frame' && w.appId === 'mizel' && /^\/(meetings|mizel-preview|apps)(\/|$)|^\/$/.test(w.url || '')) delete w.url; });
+  // Apps from the Agent Service can arrive after first paint (fresh install, cleared cache): a frame window
+  // painted before its app was known has no page yet, so draw that desk again once the app list lands.
+  // (The list may already have landed before this script ran, so also check once right after boot.)
+  const reframe = () => {
+    desks.forEach((d, i) => { if (d.wins.some(id => { const w = W[id], u = w?.app === 'frame' && !w.url && APP[w.appId]?.url;
+      if (!u) return false; const f = document.querySelector(`.win[data-win="${id}"] iframe`); if (f && f.getAttribute('src') === u) return false;
+      winEl(id)?.remove(); return true; })) { try { renderDesk(i); } catch (e) {} } });
+  };
+  window.addEventListener('wizard:apps', reframe);
+  setTimeout(reframe, 0); setTimeout(reframe, 1500);
   desks.forEach(d => {
     d.wins = d.wins.filter(id => W[id]).slice(0, MAXW);
     if (!d.wins.includes(d.focus)) d.focus = d.wins[d.wins.length - 1] || null;
@@ -137,7 +152,7 @@
     if (w.app === 'chats') return CHATS_APP;
     if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'] || { name: 'Review', icon: '◐', g: ['#444a60', '#22263a'] };
     if (w.app === 'maps') return APP.maps;
-    return APP[w.appId] || { name: 'App', icon: '◇', g: ['#444a60', '#22263a'] };
+    return APP[w.appId] || { name: w.title || 'Page', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
   function winTitle(w) {
     if (!w) return '';
@@ -192,7 +207,7 @@
   function buildDesks() {
     track.innerHTML = desks.map((_, i) => deskShell(i)).join('');
     desks.forEach((_, i) => renderDesk(i));
-    placeTrack(0, false); renderDots(); renderMoons();
+    placeTrack(0, false); renderDots(); renderMoons(); parkDesks(true);
   }
   /* Sync one desk's DOM with its window list without reloading live windows. */
   function renderDesk(i) {
@@ -236,9 +251,44 @@
     $('.nebula').style.transform = `translate3d(${(-idx + 2) * -3 + dx * .01}%,0,0)`;
   }
   let labelT = 0;
+  /* Parking: hosted apps on desks out of view stay loaded but go quiet, so swipes stay smooth.
+   *  - Every framed app off the current desk sees document.visibilityState === 'hidden' (and a
+   *    visibilitychange), exactly as if the phone screen were off: Legacy Wizard, Topics, Meetings and
+   *    friends stop their polling and catch up the moment their desk lands in view.
+   *  - Desks more than one swipe away also skip rendering (content-visibility), so a heavy app two
+   *    desks over costs no style, layout or paint. The neighbours stay painted for the swipe itself.
+   * A desk is woken only after the slide settles, so its catch-up work never lands mid-animation. */
+  let parkT = 0;
+  function frameSetHidden(f, hidden) {
+    try {
+      const d = f.contentDocument; if (!d || d.location.href === 'about:blank') return;
+      if (!d.__wosVis) {
+        d.__wosVis = { hidden: false };
+        Object.defineProperty(d, 'hidden', { configurable: true, get: () => d.__wosVis.hidden || document.hidden });
+        Object.defineProperty(d, 'visibilityState', { configurable: true, get: () => (d.__wosVis.hidden || document.hidden) ? 'hidden' : 'visible' });
+      }
+      if (d.__wosVis.hidden === hidden) return;
+      d.__wosVis.hidden = hidden;
+      if (!document.hidden) d.dispatchEvent(new Event('visibilitychange'));
+    } catch (e) {}
+  }
+  function parkDesks(wakeCurrent) {
+    $$('.desk', track).forEach((sec, i) => {
+      sec.classList.toggle('parked', Math.abs(i - idx) > 1);
+      if (i !== idx || wakeCurrent) $$('iframe.appframe', sec).forEach(f => frameSetHidden(f, i !== idx));
+    });
+  }
+  function scheduleParking() {
+    parkDesks(false); clearTimeout(parkT);
+    // The slide is 520 ms; a desk you only pass through never wakes, and a wake never lands mid-swipe
+    // (a waking app catches up at once, which is exactly the hitch this avoids).
+    const wake = () => { let busy = false; try { busy = !!(G || DS); } catch (e) {} if (busy) parkT = setTimeout(wake, 250); else parkDesks(true); };
+    parkT = setTimeout(wake, 900);
+  }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(DESKS_N - 1, n));
-    const moved = n !== idx; idx = n; placeTrack(0, true); renderDots(); save();
+    const moved = n !== idx; idx = n; placeTrack(0, true); renderDots(); save(); scheduleParking();
+    if (moved && LINKS && LINKS.isOpen()) LINKS.close(); // a link is a peek over this desk: moving desks dismisses it
     if (moved) vib(8);
     if (!silent) announce(`Desk ${idx + 1} · <b>${esc(deskName(idx))}</b>`);
     markVisibleThreadsSeen();
@@ -379,6 +429,15 @@
     desks[i] = { wins: [], focus: null, full: false }; renderDesk(i); save(); renderDots(); toast('◌', 'Desk cleared');
   }
   /* Apps open as windows. Views reuse a review window already on this desk. */
+  function mountLinks() {
+    if (LINKS || !window.WizLinks) return;
+    LINKS = window.WizLinks.mount({
+      parent: device, mode: 'sheet',
+      onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a); else openWin({ app: 'frame', url, title }); },
+      onChange: on => { device.classList.toggle('link-open', on); if (on) { closeSheets(true); armBack(); } },
+    });
+    window.WizLinks.intercept(device, LINKS);
+  }
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
@@ -604,7 +663,7 @@
       <a class="cta" href="${esc(link)}" rel="noopener">${w.mode === 'dir' ? 'Start navigation in Maps' : 'Open in Maps'}</a></div>`;
   }
   function renderFrame(w) {
-    const a = APP[w.appId] || {};
+    const a = APP[w.appId] || winApp(w);
     if (w.appId === 'mizel') return `<div class="mizel-split"><div class="rec-strip">${recStripHtml()}</div>${renderFrameCore(w, a)}</div>`;
     return renderFrameCore(w, a);
   }
@@ -662,13 +721,18 @@
         if (ok) { try { f._lastUrl = f.contentWindow.location.href; } catch (e) {} }
         wrap?.classList.toggle('blocked', !ok);
         if (ok) bridgeFrame(f);
+        if (ok) { const sec = f.closest('.desk'); if (sec && +sec.dataset.desk !== idx) frameSetHidden(f, true); } // opened or reloaded off-screen: park at once
       });
     });
   }
   function bridgeFrame(f) {
     const id = f.closest('.win')?.dataset.win; if (!id) return;
     let win; try { win = f.contentWindow; } catch (e) { return; }
-    try { if (W[id]) { W[id].url = win.location.pathname + win.location.search; save(); } } catch (e) {}
+    try { if (W[id]) { const here = win.location.pathname + win.location.search; const want = APP[W[id].appId]?.url || '';
+      // Remember only pages inside this app (never the placeholder "/" or where it redirects), or a frame
+      // painted before its app was known would stick on the wrong page for good.
+      const home = (want.split(/[?#]/)[0] || '').replace(/[^/]*$/, '');
+      if (home && home !== '/' && here.startsWith(home)) { W[id].url = here; save(); } } } catch (e) {}
     try { win.document.addEventListener('pointerdown', () => { focusWin(id); armBack(); }, true); } catch (e) {}
     // A hosted app may keep its own history guard. During the exit window the shell owns Back:
     // any Back that lands on a frame entry keeps unwinding until Wizard OS really leaves.
@@ -1037,7 +1101,7 @@
         <div class="lgroup lmore">
           <button class="lrow" data-lpage="views"><span class="ic" style="--g1:#8f63ff;--g2:#3a2a7a">◫</span><span class="nm">Views<small>${made.length} built for you by ${esc(window.WizConfig?.agent?.() || 'Wizard')}</small></span><span class="st-go">›</span></button>
           <button class="lrow" data-lpage="caps"><span class="ic" style="--g1:#3fe0ff;--g2:#1b4ab8">⚙</span><span class="nm">Capabilities<small>${caps.length ? `${caps.length} installed, no screen` : 'None installed yet'}</small></span><span class="st-go">›</span></button>
-        </div>${deskBar()}`;
+        </div>`;
       body.scrollTop = body.scrollHeight;
       return;
     }
@@ -1735,6 +1799,10 @@
   const EXIT_MS = 2000;
   let exitUntil = 0, exitT = 0, guardOn = false, ignorePop = 0;
   const watchers = new Set();
+  // LEGACY-BRIDGE (remove when Legacy Wizard retires, or replace with the spec'd app Back contract — see
+  // wizard-os docs/WORK_OUTSTANDING.md "Back button contract"): the hook name and the layout-signature guess below
+  // exist only because Legacy Wizard's hook always answers true. A spec'd hook returns handled/not-handled honestly,
+  // which deletes frameSig() and the timeout. Regression: qa-hosted-back.cjs.
   // A hosted app that keeps its screens in app state (Legacy Wizard: thread → list, viewers, sheets) has no frame
   // history to walk. It exposes its own Back as window.__wizardCloseOverlay() — the hook its Android app calls.
   // That hook answers true even at its own root, so the shell compares a small layout signature after React
@@ -1764,6 +1832,7 @@
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
     if (document.querySelector('#txChips [data-handoff]')) { $('#txChips').innerHTML = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
+    if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (closePeek()) return 'peek';
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet === 'launcher' && launcherPage) { launcherPage = ''; renderLauncher($('#search').value || ''); return 'lpage'; }
@@ -1934,7 +2003,9 @@
     },
     back() { window.__wosNativeBack(); },
   });
+  mountLinks();
   window.__wos = {
+    get links() { return LINKS; },
     live: LIVE, openPeek, closePeek, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
     HOME, get idx() { return idx; }, get desks() { return desks; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },

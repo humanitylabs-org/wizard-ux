@@ -19,8 +19,8 @@
     "#e9b46b",
     "#8a4dff"
    ],
-   "url": "/wizard-signal/#wisdom",
-   "desc": "Collections reader: Steve Jobs biography and more"
+   "url": "/wisdom/",
+   "desc": "Deep reading: collections, seasons, episodes"
   },
   {
    "id": "shopping",
@@ -35,14 +35,14 @@
   },
   {
    "id": "mizel",
-   "name": "Mizel",
+   "name": "Mizel.ai",
    "icon": "◉",
    "colors": [
     "#3fe0ff",
     "#2f8cff"
    ],
-   "url": "/meetings/#/",
-   "desc": "Meeting recorder"
+   "url": "/mizel-live/#/",
+   "desc": "Record, transcribe, outline"
   },
   {
    "id": "topics",

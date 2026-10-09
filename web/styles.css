@@ -64,6 +64,7 @@ body {
           mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 26px), transparent 100%); }
 .desk-scroll::-webkit-scrollbar { display: none; }
 .sheet-open .desk { filter: blur(6px) brightness(.55); }
+.desk.parked { content-visibility: hidden; } /* two+ swipes away: loaded, not rendered (see parkDesks) */
 
 .desk-label {
   position: absolute; left: 50%; bottom: calc(var(--dock-h) + var(--safe-b) + 4px); z-index: 40;

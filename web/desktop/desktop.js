@@ -612,6 +612,7 @@
   // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
     if (!pal.hidden) { closePalette(); return 'palette'; }
+    if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     if (VOICE.state === 'listen') { if (vMode === 'dictate') dictate('cancel'); else talk('cancel'); return 'voice'; }
@@ -627,6 +628,9 @@
     // ⌘K / Ctrl+K, ⌥Space: palette, from anywhere (even while typing).
     if ((e.metaKey || e.ctrlKey) && !e.altKey && (k === 'k' || k === 'K')) return hit(() => (pal.hidden ? openPalette() : closePalette()));
     if (alt && code === 'Space') return hit(() => (pal.hidden ? openPalette() : closePalette()));
+    // Link pane: ⌘Enter keeps it as a window, ⌘⇧Enter opens it in the browser.
+    if (LINKS && LINKS.isOpen() && (e.metaKey || e.ctrlKey) && k === 'Enter') return hit(() => LINKS.el.querySelector(shift ? '[data-ls="out"]' : '[data-ls="keep"]')?.click());
+    if (k === 'Escape' && LINKS && LINKS.isOpen() && fromFrame) { const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } return; }
     if (k === 'Escape') { if (fromFrame && pal.hidden && keysEl.hidden && ib.hidden && VOICE.state !== 'listen') return; const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
     if (!pal.hidden) return; // the palette owns the keyboard while open
     if (!e.altKey || e.metaKey || e.ctrlKey) {
@@ -725,6 +729,12 @@
 
   /* ---------------- deep links + boot ---------------- */
   render();
+  // In-app browser (core/links.js): links tapped in Wizard open in a right-half pane.
+  const LINKS = window.WizLinks ? window.WizLinks.mount({
+    parent: document.body, mode: 'pane',
+    onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a, { fresh: false }); else newWin({ app: 'frame', url, title }); },
+  }) : null;
+  if (LINKS) window.WizLinks.intercept(document.body, LINKS);
   LIVE?.refresh();
   {
     const q = new URLSearchParams(location.search);
@@ -735,6 +745,7 @@
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
   window.__wux = {
+    get links() { return LINKS; },
     shell: 'desktop', get ws() { return ws; }, get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS,
     goWs, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openInbox, talk, ask, escStep, viewContext,
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
