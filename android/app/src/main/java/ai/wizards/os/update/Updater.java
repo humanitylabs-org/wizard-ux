@@ -120,6 +120,14 @@ public final class Updater {
     /** Update button: download + verify if needed, then open Android's installer. */
     public static void install(Activity a) {
         if (release == null) { check(a); return; }
+        if ("error".equals(state.optString("state"))) {
+            // Retry: re-read the feed first (it may have been fixed), then carry on with whatever it now says.
+            final Activity act = a;
+            release = null; verified = null;
+            check(a);
+            io.execute(() -> { String s2 = state.optString("state"); if (release != null && ("available".equals(s2) || "ready".equals(s2))) main.post(() -> install(act)); });
+            return;
+        }
         if (!a.getPackageManager().canRequestPackageInstalls()) {
             wantsInstall = true;
             set("permission");

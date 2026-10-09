@@ -45,6 +45,12 @@ public final class AppState {
         } catch (IOException e) { return null; }
     }
 
+    /** QA builds pointed at a fake Wizard: its pages stay in the app like the private origin's do. */
+    public static boolean isQaPage(Context c, android.net.Uri u) {
+        String qa = qaOrigin(c);
+        return qa != null && u != null && qa.equals(u.getScheme() + "://" + u.getHost() + ":" + u.getPort());
+    }
+
     /** Only loopback-style fakes on the emulator host are accepted; anything else falls back to the real origin. */
     public static boolean isQaOrigin(String o) {
         return o != null && o.matches("http://(localhost|10\\.0\\.2\\.2):\\d{2,5}");

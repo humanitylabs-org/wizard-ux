@@ -117,7 +117,7 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
-                if (Origin.isPrivate(u)) return false;
+                if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) return false;
                 if (!req.isForMainFrame()) return false; // hosted app frames stay inside their window
                 openOutside(u);
                 return true;
