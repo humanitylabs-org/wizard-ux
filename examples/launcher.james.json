@@ -130,8 +130,7 @@
     "#3a2a7a"
    ],
    "url": "/wizard/",
-   "desc": "The old chat app, for anything not ported yet",
-   "desktop_only": true
+   "desc": "The old chat app, for anything not ported yet"
   }
  ]
 }
