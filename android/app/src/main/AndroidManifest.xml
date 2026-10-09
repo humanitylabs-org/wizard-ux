@@ -15,6 +15,10 @@
     <!-- Native parity (0.7.0): background orb recorder, in-app update. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Hands-free updates: once Wizard OS installed itself, Android installs its later versions without asking
+         (API 31+); the background check only downloads on unmetered networks. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:networkSecurityConfig="@xml/wos_network"
@@ -167,7 +171,25 @@
             android:name=".notify.ReplyJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
-        <!-- In-app update: hands one verified APK to Android's installer (read-only, one-off grant). -->
+        <!-- In-app update: PackageInstaller session results (Android's confirm screen, success, failures). -->
+        <receiver
+            android:name=".update.InstallReceiver"
+            android:exported="false" />
+        <!-- Reboot: keep the update check scheduled. Updated: reopen Wizard OS if James was in it. -->
+        <receiver
+            android:name=".update.UpdateBoot"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <!-- Background update check (unmetered network, every few hours). -->
+        <service
+            android:name=".update.UpdateJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Legacy: hands one verified APK to Android's installer (read-only, one-off grant); unused by the session path. -->
         <provider
             android:name=".update.ApkProvider"
             android:authorities="${applicationId}.updates"

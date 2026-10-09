@@ -58,6 +58,7 @@ public final class DeviceBridge implements RecorderService.Listener {
     /** Share sheet and "recording saved" notification taps. */
     public void onIntent(Intent intent) {
         if (intent == null) return;
+        Updater.onIntent(activity, intent); // "Update ready · tap to install" notification
         String a = intent.getAction();
         String json = null;
         if (ACTION_SHARE.equals(a) && intent.getStringExtra(EXTRA_SHARE) != null) {
@@ -87,7 +88,7 @@ public final class DeviceBridge implements RecorderService.Listener {
     };
 
     public void onStart() { AppState.setFront(true); ReplyWatcher.appFront(activity); }
-    public void onStop() { AppState.setFront(false); ReplyWatcher.kick(activity); }
+    public void onStop() { AppState.setFront(false); ReplyWatcher.kick(activity); Updater.onStop(activity); }
     public void onResume() { Updater.onResume(activity); }
     public void onDestroy() {
         // A take still running (app swiped away) carries on; its notification's Stop/Send take over from here.
