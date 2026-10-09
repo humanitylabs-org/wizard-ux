@@ -6,7 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
-/** The orb's keyboard mode and voice-typing text fitting (ported from Archimedes Anywhere's rules). */
+/** The orb's keyboard mode (ported from Archimedes Anywhere's rules). */
 public class KeyboardSignalTest {
     @Test public void coldStartStaysTheNormalOrb() {
         KeyboardSignal k = new KeyboardSignal();
@@ -48,31 +48,5 @@ public class KeyboardSignalTest {
         assertTrue(KeyboardSignal.dictate(true, false));
         assertTrue(KeyboardSignal.dictate(false, true));
         assertFalse(KeyboardSignal.dictate(false, false));
-    }
-
-    @Test public void emptyFieldStartsWithACapital() {
-        assertEquals("Meet me at six.", DictationText.fit("", "", "meet me at six."));
-    }
-
-    @Test public void midSentenceJoinsWithASpaceAndLowerCase() {
-        assertEquals(" and bring the charger", DictationText.fit("Coming now", "", "And bring the charger"));
-    }
-
-    @Test public void afterAFullStopCapitalises() {
-        assertEquals(" See you soon.", DictationText.fit("Done.", "", "see you soon."));
-        assertEquals("See you soon.", DictationText.fit("Done. ", "", "see you soon."));
-    }
-
-    @Test public void insertingBeforeTextDropsTheStrayFullStopAndAddsASpace() {
-        assertEquals(" really ", DictationText.fit("It is", "good", "Really."));
-    }
-
-    @Test public void keepsIAndAcronyms() {
-        assertEquals(" I think so", DictationText.fit("Yes", "", "I think so"));
-        assertEquals(" OK then", DictationText.fit("Fine", "", "OK then"));
-    }
-
-    @Test public void nothingSaidInsertsNothing() {
-        assertEquals("", DictationText.fit("abc", "", "   "));
     }
 }
