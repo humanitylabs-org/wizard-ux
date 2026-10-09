@@ -11,6 +11,8 @@
   const OUTBOX = window.WosOutbox || null;
   const S = window.WIZ_SUMM || { days: {}, weeks: {}, month: '' };
   const device = $('#device');
+  // In-app browser for links tapped in Wizard (core/links.js). Mounted once the window manager exists.
+  let LINKS = null;
   const TODAY = (D.generated || '2026-10-08').slice(0, 10);
   const DESKS_N = 5, HOME = 2;
 
@@ -74,7 +76,7 @@
   // Default layout: Home = latest, then Topics and Mizel desks when this Wizard has those apps.
   function layoutV2() {
     const put = (i, w) => {
-      if (w.app === 'frame' && !APP[w.appId]) return; // that app isn't on this Wizard
+      if (w.app === 'frame' && !APP[w.appId] && !w.url) return; // that app isn't on this Wizard
       if (Object.values(W).some(x => x.app === w.app && x.appId === w.appId)) return;
       const d = desks[i]; if (d.wins.length >= MAXW) return;
       const id = newId(); W[id] = { id, ...w }; d.wins.unshift(id); d.focus = id; d.full = false;
@@ -134,7 +136,7 @@
     if (w.app === 'chats') return CHATS_APP;
     if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'] || { name: 'Review', icon: '◐', g: ['#444a60', '#22263a'] };
     if (w.app === 'maps') return APP.maps;
-    return APP[w.appId] || { name: 'App', icon: '◇', g: ['#444a60', '#22263a'] };
+    return APP[w.appId] || { name: w.title || 'Page', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
   function winTitle(w) {
     if (!w) return '';
@@ -270,6 +272,7 @@
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(DESKS_N - 1, n));
     const moved = n !== idx; idx = n; placeTrack(0, true); renderDots(); save(); scheduleParking();
+    if (moved && LINKS && LINKS.isOpen()) LINKS.close(); // a link is a peek over this desk: moving desks dismisses it
     if (moved) vib(8);
     if (!silent) announce(`Desk ${idx + 1} · <b>${esc(deskName(idx))}</b>`);
     markVisibleThreadsSeen();
@@ -410,6 +413,15 @@
     desks[i] = { wins: [], focus: null, full: false }; renderDesk(i); save(); renderDots(); toast('◌', 'Desk cleared');
   }
   /* Apps open as windows. Views reuse a review window already on this desk. */
+  function mountLinks() {
+    if (LINKS || !window.WizLinks) return;
+    LINKS = window.WizLinks.mount({
+      parent: device, mode: 'sheet',
+      onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a); else openWin({ app: 'frame', url, title }); },
+      onChange: on => { device.classList.toggle('link-open', on); if (on) { closeSheets(true); armBack(); } },
+    });
+    window.WizLinks.intercept(device, LINKS);
+  }
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
@@ -635,7 +647,7 @@
       <a class="cta" href="${esc(link)}" rel="noopener">${w.mode === 'dir' ? 'Start navigation in Maps' : 'Open in Maps'}</a></div>`;
   }
   function renderFrame(w) {
-    const a = APP[w.appId] || {};
+    const a = APP[w.appId] || winApp(w);
     if (w.appId === 'mizel') return `<div class="mizel-split"><div class="rec-strip">${recStripHtml()}</div>${renderFrameCore(w, a)}</div>`;
     return renderFrameCore(w, a);
   }
@@ -1773,6 +1785,7 @@
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
     if (document.querySelector('#txChips [data-handoff]')) { $('#txChips').innerHTML = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
+    if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (closePeek()) return 'peek';
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet) { closeSheets(); return 'sheet'; }
@@ -1942,7 +1955,9 @@
     },
     back() { window.__wosNativeBack(); },
   });
+  mountLinks();
   window.__wos = {
+    get links() { return LINKS; },
     live: LIVE, openPeek, closePeek, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
     HOME, get idx() { return idx; }, get desks() { return desks; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
