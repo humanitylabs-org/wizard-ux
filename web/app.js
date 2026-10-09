@@ -1583,19 +1583,16 @@
     }
     openSheet('launcher', text); return false;
   }
-  /* A new request to Archimedes. The reply opens in Chats on this desk (or the desk
-   * James swiped toward), tiled beside whatever is already there. */
+  /* A new request to Archimedes. It is delegated in the background: James stays exactly where he is
+   * (no Chats window opens, no desk switch, no thread takes focus). The new thread shows up in Chats,
+   * Working and the Inbox like any other, and he opens it when he chooses. */
   async function toAgent(text, label, opts = {}) {
     showRouted('agent', label); setVoice('agent'); vib(10);
     setTimeout(() => { setVoice('idle'); }, 1200);
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice');
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    const it = await OUTBOX.enqueue({ kind: 'new', text, instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
-    const t = opts.desk == null ? idx : opts.desk;
-    const wid = desks[t].wins.find(x => W[x].app === 'chats');
-    if (wid) { if (t !== idx) goDesk(t); focusWin(wid); openChat(wid, it.sessionId); }
-    else openWin({ app: 'chats', thread: it.sessionId }, opts);
+    await OUTBOX.enqueue({ kind: 'new', text, instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
     renderMoons(); refreshHome(); renderDots();
   }
   OUTBOX?.onSent((it, res) => {

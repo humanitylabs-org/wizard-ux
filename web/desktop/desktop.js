@@ -449,12 +449,13 @@
   palList.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) palRun(+b.dataset.i, { fresh: e.shiftKey }); });
   pal.addEventListener('pointerdown', e => { if (e.target === pal) closePalette(); });
 
-  /* Ask Archimedes from anywhere: a new thread, through the durable outbox, opened beside what you're doing. */
+  /* Ask Archimedes from anywhere: a new thread, through the durable outbox, delegated in the background.
+   * Nothing opens or takes focus; the thread shows up in Chats and the Inbox when James wants it. */
   async function ask(text, how = 'typing in the desktop launcher', audio = null) {
     text = String(text || '').trim(); if (!text && !audio) return;
     const ctx = viewContext(ws[cur].focus, how);
-    const it = await OUTBOX.enqueue({ kind: 'new', text, audio, instructions: ctx, source: 'orb', how });
-    openThread(it.sessionId);
+    await OUTBOX.enqueue({ kind: 'new', text, audio, instructions: ctx, source: 'orb', how });
+    if (!audio) toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600);
   }
 
   /* ---------------- inbox drawer ---------------- */
