@@ -1706,6 +1706,10 @@
   const EXIT_MS = 2000;
   let exitUntil = 0, exitT = 0, guardOn = false, ignorePop = 0;
   const watchers = new Set();
+  // LEGACY-BRIDGE (remove when Legacy Wizard retires, or replace with the spec'd app Back contract — see
+  // wizard-os docs/WORK_OUTSTANDING.md "Back button contract"): the hook name and the layout-signature guess below
+  // exist only because Legacy Wizard's hook always answers true. A spec'd hook returns handled/not-handled honestly,
+  // which deletes frameSig() and the timeout. Regression: qa-hosted-back.cjs.
   // A hosted app that keeps its screens in app state (Legacy Wizard: thread → list, viewers, sheets) has no frame
   // history to walk. It exposes its own Back as window.__wizardCloseOverlay() — the hook its Android app calls.
   // That hook answers true even at its own root, so the shell compares a small layout signature after React
