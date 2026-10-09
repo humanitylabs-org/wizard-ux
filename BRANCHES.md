@@ -9,10 +9,12 @@ Each feature lives on its own branch so it can be read, reviewed, and merged on 
 | `feature/native-shell` | Android app `ai.wizards.os`: WebView around `/wizard-os-home/`, hardware Back routed to the shell (never exits), mic for the private origin only, own persistent signer | `android/` (MainActivity, Origin), `web/app.js` (`__wosNativeBack`) | Native QA 12/12 on Thales |
 | `feature/assistant-handoff` | `ai.wizards.os.action.LISTEN` opens the orb listening; `.SAY` puts words on Home as a draft James sends with one tap (never auto-sent) | `android/.../Handoff.java`, MainActivity handoff block, `web/app.js` (`__wosHandoff`) | Handoff QA 9/9, unit tests |
 | `feature/side-key-assistant` | Hold the side button: full Wizard over the lock screen, small corner orb when unlocked (VoiceInteractionSession), hands words to Wizard OS via `.SAY`. Imported from Wizard Lock tag `side-key-0.2.0` (2b2e755); future behaviour arrives as new `side-key-*` tags | `android/.../assist/*`, `assets/assist/`, manifest block "Side-button assistant", `assist/README.md` | Device QA 30/30 (owner: lock-screen thread) |
+| `feature/side-button-setup` | One-tap side-button switch: Home card + launcher "Side button" → mic asked in place → lands on Android's one assistant page → card turns green on return, disappears after the first real hold; Android's assistant gear opens Wizard OS; Samsung gets a shortcut to its Side button page | `SideButton.java`, MainActivity bridge, `web/app.js` side card, `tools/qa_side_setup.py` | Device QA 17/17 fresh + 17/17 signed upgrade over 0.3.0; qa-os 54/54 |
 | `fix/back-exit-warn-guard` | When the guard is dropped for the exit warning, the resulting pop can land in a hosted frame; it is now ignored until it lands, so a single Back at Home never leaves and a real double Back still exits | `web/app.js` | qa-livemode 6/6 runs, qa-os 3/3 runs, Android Back 6/6 x2 |
 
 ## Builds
 Android builds run on Thales with `android-build-thales`, signed with the Wizard OS key (`3bf74d0b…ed1fd`), so every version installs over the previous one.
+- 0.4.0 (`daily`): sha256 `e4d31e99ed58…dd7298`. Download: https://private.wizard001.com/reports/wizard-os/
 - 0.3.0 (`daily` 8ebbbf3): sha256 `646520242a85…e3e79f`. Download: https://private.wizard001.com/reports/wizard-os/
 
 ## Rules
