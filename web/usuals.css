@@ -3,7 +3,7 @@
 .us-wrap { padding: 14px 14px 24px; display: flex; flex-direction: column; gap: 12px; }
 .us-list { display: flex; flex-direction: column; gap: 10px; }
 .us-card { display: flex; gap: 8px; align-items: stretch; }
-.us-go { flex: 1; display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 20px; text-align: left;
+.us-go { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 20px; text-align: left;
   border: 1px solid rgba(0, 177, 79, .35); background: linear-gradient(135deg, rgba(0, 177, 79, .16), rgba(10, 92, 50, .10)); color: #fff; }
 .us-go:disabled { opacity: .45; }
 .us-go:active { transform: scale(.985); }
