@@ -283,11 +283,18 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('B: that Back only closed the orb (page stays put)', settings_depth() == 'sub', settings_depth())
 
         # C. Screen button on the side-button orb: attach the screen, then it sends with the take.
+        # No uiautomator from here until the chip is tapped: a UiAutomation connection suspends every other
+        # accessibility service (WizardKeyboardService included), which makes the chip take its "set up
+        # Accessibility" branch. James's phone never has that connection.
         d0 = open_settings_sub()
+        for _ in range(20):
+            if 'WizardKeyboardService' in sx('dumpsys accessibility | grep -iE "Bound services|Enabled services"'): break
+            time.sleep(1)
+        bound = sx('dumpsys accessibility | grep -iE "Bound services"').strip()
+        print('  a11y before C:', bound[:200])
         arm(0); n0 = len(side_runs()); u0 = len(STATE.get('upload_names', []))
         hold(); wait_log('listening', 10, alogs); time.sleep(2); shot('c1-controls')
-        lab = tap_text(r'Attach a screenshot')
-        if not lab:
+        if True:
             fr = sx(f'logcat -d -s WizardOSAssist:* | grep "orb frame" | tail -1').strip()
             m = re.search(r'orb frame (\d+),(\d+),(\d+),(\d+)', fr)
             fx, fy, fw, fh = map(int, m.groups())
@@ -296,6 +303,8 @@ with (BASE / 'worker.lock').open('a') as lock:
             print('  screen chip via orb frame', (fx, fy, fw, fh), '→ tap', x, y); sx(f'input tap {x} {y}')
         time.sleep(0.4); (job / 'c-window.txt').write_text(sx('dumpsys window windows'))
         sa = wait_log('screenshot attached', 10, alogs); time.sleep(0.8); shot('c2-shot-attached')
+        (job / 'logcat-c.txt').write_text(sx('logcat -d'))
+        print('  C trace:', alogs('screen chip|screenshot|onHide from|sending via')[-600:])
         check('C: Screen chip shows while the side-button orb listens and attaches a screenshot', 'screenshot attached 1' in sa, sa or alogs('screen|shot'))
         sx('input keyevent KEYCODE_BACK'); time.sleep(1)
         sl = alogs('sending via')
