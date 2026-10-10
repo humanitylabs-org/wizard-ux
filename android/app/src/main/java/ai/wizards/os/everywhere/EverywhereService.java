@@ -80,6 +80,10 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     static final String ACTION_RETRY = "ai.wizards.os.everywhere.RETRY";
     static final String ACTION_KEYBOARD = "ai.wizards.os.everywhere.KEYBOARD";
     static final String ACTION_APP_VOICE = "ai.wizards.os.everywhere.APP_VOICE";
+    /** "Show orb" on the notification while the orb is hidden (0.9.3). */
+    static final String ACTION_SHOW = "ai.wizards.os.everywhere.SHOW";
+    /** Hidden from the long-press menu (an app refuses to work with something drawn over it). Opening Wizard OS clears it. */
+    static final String KEY_HIDDEN = "hidden";
     static final String EXTRA_FRONT = "front", EXTRA_KB = "kb", EXTRA_IME_TOP = "imeTop", EXTRA_SURFACE = "surface";
     static final String CH_RUNNING = "everywhere";
     static final String CH_UNSENT = "unsent";
@@ -90,6 +94,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     /** ORB_DP 76: the drawn orb is ~48 dp across, the size of Archimedes Anywhere's bubble face (James: 88 too big, 64 too small). */
     static final int ORB_DP = 76, CTL_DP = 40, FAN_DP = 84, MARGIN_DP = 4;
     static final int MAX_SHOTS = 4;
+    /** Hold this long (still) for the orb's menu. A little longer than Android's 400 ms so a slow tap still talks. */
+    static final int LONG_PRESS_MS = 450;
 
     private static boolean appInFront;
     /** The side-button surface is showing: it has its own orb, so the floating one steps aside. */
@@ -131,12 +137,20 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private int learnedOffY = -1;
     private final List<byte[]> shots = new ArrayList<>();
     private String lastState = "";
+    /** Long-press → Select text / Translate screen (0.9.3). While it is open the orb steps aside. */
+    private ScreenMode screen;
+    private boolean screenOpen;
 
     /* ------------------------------------------------------------------ static API (MainActivity / Settings) */
 
     public static boolean enabled(Context c) { return prefs(c).getBoolean(KEY_ENABLED, false); }
 
     public static boolean overlayAllowed(Context c) { return Settings.canDrawOverlays(c); }
+
+    /** The orb was hidden from its long-press menu; it stays switched on and comes back from Wizard OS or the notification. */
+    public static boolean hidden(Context c) { return prefs(c).getBoolean(KEY_HIDDEN, false); }
+
+    static void setHidden(Context c, boolean on) { prefs(c).edit().putBoolean(KEY_HIDDEN, on).apply(); }
 
     static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS, MODE_PRIVATE); }
 
@@ -166,6 +180,12 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     /** Wizard OS tells the orb when it comes to the front / leaves, so the orb hides while the app is open. */
     public static void setAppInFront(Context c, boolean front) {
         appInFront = front;
+        if (front && hidden(c)) {
+            // James hid the orb for an app that refused to work under it; coming back to Wizard OS brings it back.
+            setHidden(c, false);
+            Log.i(TAG, "orb unhidden: Wizard OS opened");
+            if (enabled(c)) Toast.makeText(c, "Floating orb is back · it shows when you leave Wizard OS", Toast.LENGTH_SHORT).show();
+        }
         if (!(enabled(c) || appRecording()) || !overlayAllowed(c)) return;
         try { c.startService(new Intent(c, EverywhereService.class).setAction(ACTION_FRONT).putExtra(EXTRA_FRONT, front)); }
         catch (Exception e) { // background start refused (rare): the foreground start path still works
@@ -208,6 +228,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         boolean notif = canNotify(c);
         boolean mic = c.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
         return "{\"enabled\":" + enabled(c) + ",\"overlay\":" + overlayAllowed(c) + ",\"notifications\":" + notif + ",\"mic\":" + mic
+                + ",\"hidden\":" + hidden(c) + ",\"hold\":true"
                 + ",\"keyboard\":" + WizardKeyboardService.enabled(c) + ",\"keyboardLive\":" + (WizardKeyboardService.get() != null) + "}";
     }
 
@@ -346,6 +367,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             if (intent.hasExtra(EXTRA_SURFACE)) surfaceInFront = intent.getBooleanExtra(EXTRA_SURFACE, surfaceInFront);
         }
         if (ACTION_RETRY.equals(a)) { outbox.retry("*"); getSystemService(NotificationManager.class).cancel(N_UNSENT); }
+        if (ACTION_SHOW.equals(a) && hidden(this)) { setHidden(this, false); Log.i(TAG, "orb unhidden: notification"); startForegroundSafe(micInUse()); }
         if (ACTION_KEYBOARD.equals(a)) {
             keyboardOpen = intent.getBooleanExtra(EXTRA_KB, keyboardOpen);
             int t = intent.getIntExtra(EXTRA_IME_TOP, -1);
@@ -358,13 +380,22 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     }
 
     private boolean startForegroundSafe(boolean mic) {
-        Notification n = new Notification.Builder(this, CH_RUNNING)
+        boolean hid = hidden(this) && !listening && !appRecording();
+        Notification n = hid ? new Notification.Builder(this, CH_RUNNING)
+                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setContentTitle("Floating orb hidden")
+                .setContentText("Tap to bring it back · opening Wizard OS does too")
+                .setContentIntent(PendingIntent.getService(this, 8, new Intent(this, EverywhereService.class).setAction(ACTION_SHOW),
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
+                .setOngoing(true)
+                .build()
+                : new Notification.Builder(this, CH_RUNNING)
                 .setSmallIcon(android.R.drawable.ic_btn_speak_now)
                 .setContentTitle(appRecording() && !listening ? (nativeTake() ? "Floating orb shows your recording" : "paused".equals(appVoice) ? "Wizard OS recording paused" : "Wizard OS is recording")
                         : listening ? (dictating ? "Typing what you say…" : "Listening…") : "Wizard Everywhere is on")
                 .setContentText(appRecording() && !listening ? "Tap the orb to send, or open Wizard OS"
                         : listening ? "Tap the orb to finish"
-                        : WizardKeyboardService.get() == null ? "Voice typing is off · tap to turn it on" : "Tap the floating orb to talk")
+                        : WizardKeyboardService.get() == null ? "Voice typing is off · tap to turn it on" : "Tap the orb to talk · hold it to select text, translate or hide")
                 .setContentIntent(appRecording() && !listening ? openApp(this, null, 5) : openApp(this, MainActivity.ACTION_SETTINGS, 2))
                 .setOngoing(true)
                 .build();
@@ -396,6 +427,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         outbox.removeListener(this);
         try { unregisterReceiver(screenWatch); } catch (Exception ignored) { }
         discard();
+        if (screen != null) screen.close();
         detach();
         if (web != null) { web.destroy(); web = null; }
         super.onDestroy();
@@ -435,11 +467,13 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     }
 
     private void syncBubble() {
-        boolean show = EverywherePolicy.bubbleVisible(enabled(this), overlayAllowed(this), appInFront || surfaceInFront) || listening || carrying();
+        boolean show = !screenOpen && (EverywherePolicy.orbVisible(enabled(this), overlayAllowed(this), appInFront || surfaceInFront, hidden(this))
+                || listening || carrying());
         if (carrying() && !expanded) { if (show && !attached) attach(); setExpanded(true); }
         if (!carrying() && !listening && expanded) setExpanded(false);
         if (show) attach(); else detach();
-        Log.i(TAG, "bubble " + (show ? "shown" : "hidden") + " (appInFront=" + appInFront + ", surface=" + surfaceInFront + ", keyboard=" + keyboardOpen + ")");
+        Log.i(TAG, "bubble " + (show ? "shown" : "hidden") + " (appInFront=" + appInFront + ", surface=" + surfaceInFront + ", keyboard=" + keyboardOpen
+                + ", hiddenByUser=" + hidden(this) + ", screen=" + screenOpen + ")");
     }
 
     @SuppressLint({"ClickableViewAccessibility", "SetJavaScriptEnabled", "JavascriptInterface"})
@@ -452,7 +486,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             web.setVerticalScrollBarEnabled(false);
             web.setHorizontalScrollBarEnabled(false);
             web.setOverScrollMode(View.OVER_SCROLL_NEVER);
-            web.setContentDescription("Wizard Everywhere. Tap to talk, drag to move.");
+            web.setContentDescription("Wizard Everywhere. Tap to talk, hold for Select text, Translate and Hide, drag to move.");
             WebSettings s = web.getSettings();
             s.setJavaScriptEnabled(true);
             s.setAllowFileAccess(true); // only file:///android_asset/assist/ is served; everything else is blocked
@@ -490,6 +524,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     }
 
     private void detach() {
+        hideMenu();
         hideControls();
         if (!attached || web == null) return;
         try { wm.removeViewImmediate(web); } catch (Exception ignored) { }
@@ -726,10 +761,16 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         main.post(() -> { if (web != null) web.evaluateJavascript("try{" + code + "}catch(e){}", null); });
     }
 
-    /** Touches on the orb: tap = talk / finish, drag = move. Anything else (the controls) goes to the page. */
+    /** Touches on the orb: tap = talk / finish, hold = the menu (Select text · Translate screen · Hide orb), drag = move. */
     private final class Touch implements View.OnTouchListener {
-        float downX, downY; int startCx, startCy; boolean mine, moved;
+        float downX, downY; int startCx, startCy; boolean mine, moved, held;
         final int slop = ViewConfiguration.get(EverywhereService.this).getScaledTouchSlop();
+        final Runnable hold = () -> {
+            if (!mine || moved || listening || carrying()) return;
+            held = true;
+            buzz(18);
+            showMenu();
+        };
 
         @Override
         public boolean onTouch(View v, MotionEvent e) {
@@ -738,14 +779,20 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                     int ox = cx - lp.x, oy = cy - lp.y;
                     mine = Math.hypot(e.getX() - ox, e.getY() - oy) <= size * 0.5f;
                     if (!mine) return false;
-                    downX = e.getRawX(); downY = e.getRawY(); startCx = cx; startCy = cy; moved = false;
+                    downX = e.getRawX(); downY = e.getRawY(); startCx = cx; startCy = cy; moved = false; held = false;
+                    // A touch on the orb while the menu is up just closes it (the outside-touch may have closed it a moment ago).
+                    if (menuShown || SystemClock.uptimeMillis() - menuClosedAt < 350) { hideMenu(); held = true; return true; }
+                    main.removeCallbacks(hold);
+                    if (!listening && !carrying()) main.postDelayed(hold, LONG_PRESS_MS);
                     return true;
                 }
                 case MotionEvent.ACTION_MOVE: {
                     if (!mine) return false;
+                    if (held) return true; // the menu is open: holding still or wobbling never drags the orb away from it
                     float dx = e.getRawX() - downX, dy = e.getRawY() - downY;
                     if (!moved && Math.hypot(dx, dy) < slop * 1.5) return true;
                     moved = true;
+                    main.removeCallbacks(hold);
                     Point s = screen();
                     int[] p = EverywherePolicy.clamp(startCx - size / 2 + Math.round(dx), startCy - size / 2 + Math.round(dy), size, s.x, s.y, margin);
                     cx = p[0] + size / 2; cy = p[1] + size / 2;
@@ -757,6 +804,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                 case MotionEvent.ACTION_UP: {
                     if (!mine) return false;
                     mine = false;
+                    main.removeCallbacks(hold);
+                    if (held) { held = false; return true; } // the hold opened (or closed) the menu: not a tap
                     if (moved) {
                         Point sc = screen();
                         // Over a keyboard it stays exactly where it is dropped (e.g. on the keys by Gboard's mic);
@@ -775,11 +824,172 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                     return true;
                 }
                 case MotionEvent.ACTION_CANCEL:
-                    boolean was = mine; mine = false; return was;
+                    main.removeCallbacks(hold);
+                    boolean was = mine; mine = false; held = false; return was;
                 default:
                     return mine;
             }
         }
+    }
+
+    /* ------------------------------------------------------------------ long-press menu (0.9.3) */
+
+    private android.widget.LinearLayout menu;
+    private WindowManager.LayoutParams menuLp;
+    private boolean menuShown;
+    private long menuClosedAt;
+    private final Runnable menuTimeout = this::hideMenu;
+
+    static final String M_SELECT = "select", M_TRANSLATE = "translate", M_HIDE = "hide";
+
+    private View menuRow(String glyph, String label, String sub, String id) {
+        android.widget.LinearLayout r = new android.widget.LinearLayout(this);
+        r.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        r.setGravity(Gravity.CENTER_VERTICAL);
+        int ph = Math.round(14 * density), pv = Math.round(9 * density);
+        r.setPadding(ph, pv, ph, pv);
+        r.setMinimumHeight(Math.round(52 * density));
+        android.graphics.drawable.GradientDrawable press = new android.graphics.drawable.GradientDrawable();
+        press.setColor(0x33B99BFF);
+        press.setCornerRadius(14 * density);
+        android.graphics.drawable.StateListDrawable bg = new android.graphics.drawable.StateListDrawable();
+        bg.addState(new int[]{android.R.attr.state_pressed}, press);
+        r.setBackground(bg);
+        android.widget.TextView g = new android.widget.TextView(this);
+        g.setText(glyph);
+        g.setTextColor(M_HIDE.equals(id) ? 0xFFFFB4C4 : 0xFFB99BFF);
+        g.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 18);
+        g.setGravity(Gravity.CENTER);
+        r.addView(g, new android.widget.LinearLayout.LayoutParams(Math.round(30 * density), Math.round(30 * density)));
+        android.widget.LinearLayout tx = new android.widget.LinearLayout(this);
+        tx.setOrientation(android.widget.LinearLayout.VERTICAL);
+        tx.setPadding(Math.round(12 * density), 0, 0, 0);
+        android.widget.TextView t = new android.widget.TextView(this);
+        t.setText(label);
+        t.setTextColor(0xFFF4F1FF);
+        t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15);
+        t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tx.addView(t);
+        android.widget.TextView s = new android.widget.TextView(this);
+        s.setText(sub);
+        s.setTextColor(0xFFA79FC4);
+        s.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
+        tx.addView(s);
+        r.addView(tx, new android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        r.setContentDescription(label);
+        r.setTag(id);
+        r.setOnClickListener(v -> { buzz(10); onMenu(id); });
+        return r;
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void showMenu() {
+        if (!attached || menuShown) return;
+        if (menu == null) {
+            // Focusable, so Back closes the menu (one layer) instead of reaching the app underneath.
+            menu = new android.widget.LinearLayout(this) {
+                @Override public boolean dispatchKeyEvent(android.view.KeyEvent e) {
+                    if (e.getKeyCode() == android.view.KeyEvent.KEYCODE_BACK) {
+                        if (e.getAction() == android.view.KeyEvent.ACTION_UP && !e.isCanceled()) hideMenu();
+                        return true;
+                    }
+                    return super.dispatchKeyEvent(e);
+                }
+            };
+            menu.setFocusable(true);
+            menu.setFocusableInTouchMode(true);
+            menu.setOrientation(android.widget.LinearLayout.VERTICAL);
+            int pad = Math.round(6 * density);
+            menu.setPadding(pad, pad, pad, pad);
+            android.graphics.drawable.GradientDrawable card = new android.graphics.drawable.GradientDrawable();
+            card.setColor(0xF7120E26);
+            card.setCornerRadius(20 * density);
+            card.setStroke(Math.max(1, Math.round(density)), 0x33CDBEFF);
+            menu.setBackground(card);
+            menu.setElevation(10 * density);
+            menu.addView(menuRow("⌖", "Select text", "Copy · search · translate anything on screen", M_SELECT));
+            menu.addView(menuRow("文", "Translate screen", "English over the text, in place", M_TRANSLATE));
+            menu.addView(menuRow("⊘", "Hide orb", "Until you open Wizard OS", M_HIDE));
+            menu.setOnTouchListener((v, e) -> {
+                if (e.getActionMasked() == MotionEvent.ACTION_OUTSIDE) { hideMenu(); return true; }
+                return false;
+            });
+        }
+        Point s = screen();
+        int w = Math.min(Math.round(268 * density), s.x - margin * 4);
+        menu.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(s.y, View.MeasureSpec.AT_MOST));
+        int h = menu.getMeasuredHeight();
+        int off = screenOffsetY();
+        int[] at = EverywherePolicy.menuSpot(cx, cy + off, size, w, h, s.x, s.y, margin * 3);
+        menuLp = new WindowManager.LayoutParams(w, h,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                        | WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
+                PixelFormat.TRANSLUCENT);
+        menuLp.gravity = Gravity.TOP | Gravity.START;
+        menuLp.x = at[0]; menuLp.y = at[1] - off;
+        menuLp.setTitle("WizOrbMenu");
+        try {
+            wm.addView(menu, menuLp);
+            menuShown = true;
+            menu.setAlpha(0f); menu.setScaleX(.92f); menu.setScaleY(.92f);
+            menu.setPivotX(at[0] + w / 2f < cx ? w : 0); menu.setPivotY(h / 2f);
+            menu.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(140).start();
+            menu.requestFocus();
+            main.removeCallbacks(menuTimeout);
+            main.postDelayed(menuTimeout, 10_000);
+            Log.i(TAG, "orb menu shown at " + at[0] + "," + at[1]);
+        } catch (Exception e) { Log.w(TAG, "orb menu refused: " + e.getMessage()); }
+    }
+
+    private void hideMenu() {
+        main.removeCallbacks(menuTimeout);
+        if (!menuShown || menu == null) return;
+        menu.animate().cancel();
+        try { wm.removeViewImmediate(menu); } catch (Exception ignored) { }
+        menuShown = false;
+        menuClosedAt = SystemClock.uptimeMillis();
+    }
+
+    private void onMenu(String id) {
+        hideMenu();
+        Log.i(TAG, "orb menu: " + id);
+        if (M_HIDE.equals(id)) {
+            setHidden(this, true);
+            syncBubble();
+            startForegroundSafe(micInUse());
+            Toast.makeText(this, "Orb hidden · open Wizard OS (or tap its notification) to bring it back", Toast.LENGTH_LONG).show();
+            return;
+        }
+        openScreen(M_TRANSLATE.equals(id) ? "translate" : "select");
+    }
+
+    /* ------------------------------------------------------------------ Screen mode (Select text · Translate screen) */
+
+    private void openScreen(String mode) {
+        if (screenOpen) return;
+        WizardKeyboardService k = WizardKeyboardService.get();
+        if (k == null) {
+            // Reading another app's screen needs the same Accessibility switch as voice typing: open its one-step setup.
+            Log.i(TAG, "screen mode without accessibility: opening setup");
+            toast("Turn on voice typing & screenshots once, then hold the orb again");
+            try { openApp(this, MainActivity.ACTION_ACCESSIBILITY, 6).send(); } catch (PendingIntent.CanceledException ignored) { }
+            return;
+        }
+        screenOpen = true;
+        syncBubble(); // the orb steps out of the picture
+        final Point s = screen();
+        main.postDelayed(() -> {
+            List<ScreenPolicy.Block> blocks = ScreenPolicy.clean(k.screenText(), s.x, s.y);
+            Log.i(TAG, "screen text blocks=" + blocks.size());
+            k.screenshotJpeg(jpeg -> main.post(() -> {
+                if (!screenOpen) return;
+                if (screen == null) screen = new ScreenMode(this, () -> { screenOpen = false; syncBubble(); }, EverywhereOutbox.qaOrigin(this));
+                Log.i(TAG, "screen shot " + (jpeg == null ? "refused" : jpeg.length + " bytes"));
+                screen.open(mode, blocks, jpeg, s.x, s.y);
+            }));
+        }, 180);
     }
 
     /** The page's buttons (Cancel · Pause · Screen). Called on a binder thread. */

@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Wizard Screen</title>
+<style>
+  :root { --top: 24px; --bot: 0px; --acc: #b99bff; --ink: #f4f1ff; --mut: #a79fc4; --card: rgba(18, 14, 36, .97); --line: rgba(205, 190, 255, .16); }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #07060f; color: var(--ink); font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; user-select: none; -webkit-user-select: none; }
+  #shot { position: fixed; inset: 0; background: #07060f center / 100% 100% no-repeat; }
+  #shot.dim::after { content: ""; position: absolute; inset: 0; background: rgba(7, 6, 15, .28); }
+  #blank { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 32px; text-align: center; color: var(--mut); }
+  #layer { position: fixed; inset: 0; touch-action: none; }
+  .b { position: absolute; border-radius: 6px; border: 1px solid rgba(185, 155, 255, .42); background: rgba(185, 155, 255, .06); transition: background .12s, border-color .12s; }
+  .b.l { border-style: dashed; border-color: rgba(185, 155, 255, .3); }
+  .b.on { background: rgba(185, 155, 255, .34); border: 1.5px solid var(--acc); box-shadow: 0 0 0 1px rgba(7, 6, 15, .4); }
+  .b .en { position: absolute; inset: 0; border-radius: 5px; background: rgba(12, 10, 24, .93); color: #fff; overflow: hidden; padding: 1px 4px; display: flex; align-items: center; line-height: 1.12; word-break: break-word; }
+  .b.on .en { background: rgba(58, 40, 112, .95); }
+  body.orig .b .en { display: none; }
+  #trail { position: fixed; inset: 0; pointer-events: none; }
+  /* top bar */
+  #top { position: fixed; left: 0; right: 0; top: var(--top); padding: 8px 10px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
+  #top > * { pointer-events: auto; }
+  .chip { height: 36px; min-width: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 600 13.5px system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+  .chip.x { padding: 0; width: 36px; font-size: 20px; font-weight: 400; }
+  .chip.on { background: #3a2870; border-color: var(--acc); }
+  .chip[hidden] { display: none; }
+  #hint { flex: 1; text-align: center; color: var(--ink); font-size: 13px; text-shadow: 0 1px 6px #000, 0 0 2px #000; pointer-events: none; }
+  /* bottom sheet */
+  #sheet { position: fixed; left: 8px; right: 8px; bottom: calc(var(--bot) + 8px); background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 10px 34px rgba(0, 0, 0, .6); padding: 12px 12px 10px; transform: translateY(130%); transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+  #sheet.show { transform: none; }
+  #sel { max-height: 30vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 15px; color: var(--ink); user-select: text; -webkit-user-select: text; padding: 2px 2px 10px; }
+  #sel .lab { display: block; font: 600 11.5px system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--acc); margin-bottom: 4px; user-select: none; }
+  #sel .err { color: #ff9db3; }
+  #sel .pl { display: block; padding: 7px 8px; margin: 2px -4px; border-radius: 10px; border: 1px solid transparent; }
+  #sel .pl.on { background: rgba(185, 155, 255, .2); border-color: rgba(185, 155, 255, .55); }
+  .acts { display: flex; gap: 6px; }
+  .acts button { flex: 1; height: 46px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--ink); font: 600 13px system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .acts button i { font-style: normal; font-size: 17px; line-height: 1; color: var(--acc); }
+  .acts button:active { background: rgba(185, 155, 255, .18); }
+  .acts button[disabled] { opacity: .45; }
+  /* search strip above the native search sheet */
+  #sstrip { position: fixed; left: 8px; right: 8px; display: none; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+  #sstrip b { flex: 1; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #toast { position: fixed; left: 50%; top: calc(var(--top) + 60px); transform: translate(-50%, -10px); opacity: 0; background: #241a48; border: 1px solid var(--acc); color: #fff; padding: 9px 16px; border-radius: 20px; font: 600 13.5px system-ui, sans-serif; transition: opacity .15s, transform .15s; pointer-events: none; white-space: nowrap; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(185, 155, 255, .35); border-top-color: var(--acc); border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="shot"></div>
+<div id="blank"></div>
+<div id="layer"></div>
+<canvas id="trail"></canvas>
+<div id="top">
+  <button class="chip x" id="close" aria-label="Close">×</button>
+  <div id="hint">Tap or swipe over text</div>
+  <button class="chip" id="lang" hidden>English</button>
+  <button class="chip" id="pic" hidden>Picture text</button>
+  <button class="chip" id="all">All</button>
+</div>
+<div id="sheet">
+  <div id="sel"></div>
+  <div class="acts">
+    <button id="aCopy"><i>⧉</i>Copy</button>
+    <button id="aSearch"><i>⌕</i>Search</button>
+    <button id="aTrans"><i>文A</i>Translate</button>
+    <button id="aAsk"><i>✦</i>Ask Wizard</button>
+  </div>
+</div>
+<div id="sstrip"><b id="sq"></b><button class="chip" id="sBig">Bigger</button><button class="chip x" id="sClose" aria-label="Close search">×</button></div>
+<div id="toast"></div>
+<script>
+(() => {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const N = window.ScreenNative || { close() {}, copy() {}, search() {}, sheet() {}, closeSearch() {}, translate() {}, picture() {}, ask() {}, shot() { return ''; }, log() {} };
+  const st = { o: null, blocks: [], sel: new Set(), en: null, enFrom: '', showEn: true, pic: null, picSel: new Set(), panel: 'sel', trans: null, searching: false, big: false, seq: 0, pending: {} };
+  let toastT = 0;
+  function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('show'), 1400); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  function id() { return 'r' + (++st.seq); }
+
+  /* ---------------- layout ---------------- */
+  function open(o) {
+    st.o = o;
+    document.documentElement.style.setProperty('--top', (o.top || 24) + 'px');
+    document.documentElement.style.setProperty('--bot', (o.bot || 0) + 'px');
+    const dpr = o.dpr || devicePixelRatio || 1, ox = o.ox || 0, oy = o.oy || 0;
+    st.blocks = (o.blocks || []).map((b, i) => ({ i, t: b.t, l: !!b.l, x: (b.x - ox) / dpr, y: (b.y - oy) / dpr, w: b.w / dpr, h: b.h / dpr }));
+    if (o.shot) {
+      const b64 = N.shot();
+      if (b64) { $('#shot').style.backgroundImage = 'url(data:image/jpeg;base64,' + b64 + ')'; $('#shot').classList.add('dim'); }
+      $('#pic').hidden = false;
+    }
+    const layer = $('#layer');
+    layer.innerHTML = st.blocks.map(b => `<div class="b${b.l ? ' l' : ''}" data-i="${b.i}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px"></div>`).join('');
+    if (!st.blocks.length) {
+      const bl = $('#blank'); bl.style.display = 'flex';
+      bl.textContent = o.shot ? 'This screen has no text Android can read. Reading the picture…' : 'This app hides its screen and its text from other apps.';
+      $('#all').hidden = true;
+    }
+    $('#hint').textContent = o.mode === 'translate' ? 'Translating…' : st.blocks.length ? 'Tap or swipe over text' : '';
+    sizeTrail();
+    if (o.mode === 'translate') translateScreen();
+    else if (o.few && o.shot) picture();
+    N.log('screen page open mode=' + o.mode + ' blocks=' + st.blocks.length + ' shot=' + o.shot);
+  }
+  function sizeTrail() { const c = $('#trail'); c.width = innerWidth * devicePixelRatio; c.height = innerHeight * devicePixelRatio; c.style.width = innerWidth + 'px'; c.style.height = innerHeight + 'px'; }
+
+  /* ---------------- selection on the screen ---------------- */
+  function el(i) { return $('#layer').children[i]; }
+  function hit(x, y, pad) {
+    let best = null;
+    for (const b of st.blocks) {
+      if (x >= b.x - pad && x <= b.x + b.w + pad && y >= b.y - pad && y <= b.y + b.h + pad) {
+        if (!best || b.w * b.h < best.w * best.h) best = b;
+      }
+    }
+    return best;
+  }
+  function setSel(i, on) { if (on) st.sel.add(i); else st.sel.delete(i); const e = el(i); if (e) e.classList.toggle('on', on); }
+  function clearSel() { for (const i of [...st.sel]) setSel(i, false); }
+  function textOf(useEn) {
+    const list = [...st.sel].sort((a, b) => a - b).map(i => st.blocks[i]);
+    let out = '', prev = null;
+    for (const b of list) {
+      const t = useEn && st.en && st.en[b.i] ? st.en[b.i] : b.t;
+      if (prev) out += Math.abs((prev.y + prev.h / 2) - (b.y + b.h / 2)) <= Math.max(6, Math.min(prev.h, b.h) / 2) ? ' ' : '\n';
+      out += t; prev = b;
+    }
+    return out;
+  }
+  let drag = null;
+  const trail = $('#trail'), tctx = trail.getContext('2d');
+  function trailTo(x, y) {
+    const d = devicePixelRatio;
+    tctx.strokeStyle = 'rgba(185,155,255,.55)'; tctx.lineWidth = 16 * d; tctx.lineCap = tctx.lineJoin = 'round';
+    tctx.beginPath(); tctx.moveTo(drag.lx * d, drag.ly * d); tctx.lineTo(x * d, y * d); tctx.stroke();
+    drag.lx = x; drag.ly = y;
+  }
+  $('#layer').addEventListener('pointerdown', e => {
+    if (st.panel === 'pic' || st.searching) return;
+    const b = hit(e.clientX, e.clientY, 8);
+    drag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, add: !(b && st.sel.has(b.i)), first: b };
+    $('#layer').setPointerCapture(e.pointerId);
+  });
+  $('#layer').addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 9) return;
+    if (!drag.moved) { drag.moved = true; if (drag.first) setSel(drag.first.i, drag.add); }
+    // every point on the way: the text it passes over joins (or leaves) the selection
+    const steps = Math.max(1, Math.ceil(Math.hypot(e.clientX - drag.lx, e.clientY - drag.ly) / 6));
+    for (let k = 1; k <= steps; k++) {
+      const x = drag.lx + (e.clientX - drag.lx) * k / steps, y = drag.ly + (e.clientY - drag.ly) * k / steps;
+      const b = hit(x, y, 4); if (b) setSel(b.i, drag.add);
+    }
+    trailTo(e.clientX, e.clientY);
+    syncSheet();
+  });
+  function endDrag(e) {
+    if (!drag) return;
+    const d = drag; drag = null;
+    tctx.clearRect(0, 0, trail.width, trail.height);
+    if (!d.moved) {
+      if (d.first) setSel(d.first.i, !st.sel.has(d.first.i));
+      else if (st.sel.size) clearSel();
+    }
+    st.panel = 'sel'; st.trans = null;
+    syncSheet();
+  }
+  $('#layer').addEventListener('pointerup', endDrag);
+  $('#layer').addEventListener('pointercancel', endDrag);
+
+  /* ---------------- the sheet ---------------- */
+  function current() {
+    if (st.panel === 'pic') return [...st.picSel].sort((a, b) => a - b).map(i => st.pic[i]).join('\n');
+    return textOf(st.showEn);
+  }
+  function syncSheet() {
+    const sel = $('#sel'), sh = $('#sheet');
+    let html = '', any = false;
+    if (st.panel === 'pic') {
+      any = true;
+      if (st.pic === null) html = '<span class="lab">Text in the picture</span><span class="spin"></span> Reading the picture…';
+      else if (st.pic.error) html = '<span class="lab">Text in the picture</span><span class="err">' + esc(st.pic.error) + '</span>';
+      else if (!st.pic.length) html = '<span class="lab">Text in the picture</span>No text found in the picture.';
+      else html = '<span class="lab">Text in the picture · tap lines to pick</span>' + st.pic.map((t, i) => `<span class="pl${st.picSel.has(i) ? ' on' : ''}" data-pl="${i}">${esc(t)}</span>`).join('');
+    } else if (st.sel.size) {
+      any = true;
+      html = esc(textOf(st.showEn && !!st.en));
+    }
+    if (st.trans) {
+      any = true;
+      html += '<span class="lab" style="margin-top:10px">' + esc(st.trans.from ? 'English · from ' + st.trans.from : 'English') + '</span>'
+        + (st.trans.busy ? '<span class="spin"></span> Translating…' : st.trans.error ? '<span class="err">' + esc(st.trans.error) + '</span>' : esc(st.trans.text));
+    }
+    sel.innerHTML = html;
+    const has = !!current().trim();
+    for (const b of ['#aCopy', '#aSearch', '#aTrans', '#aAsk']) $(b).disabled = !has;
+    sh.classList.toggle('show', any && !st.searching);
+    $('#all').textContent = (st.panel === 'pic' ? (st.pic && st.pic.length && st.picSel.size === st.pic.length) : (st.blocks.length && st.sel.size === st.blocks.length)) ? 'None' : 'All';
+    if (st.sel.size || st.panel === 'pic') $('#hint').textContent = '';
+    else if (st.o && st.o.mode !== 'translate' && st.blocks.length) $('#hint').textContent = 'Tap or swipe over text';
+  }
+  $('#sel').addEventListener('click', e => {
+    const p = e.target.closest('[data-pl]'); if (!p) return;
+    const i = +p.dataset.pl; if (st.picSel.has(i)) st.picSel.delete(i); else st.picSel.add(i);
+    st.trans = null; syncSheet();
+  });
+  $('#all').addEventListener('click', () => {
+    if (st.panel === 'pic') {
+      if (!st.pic || !st.pic.length) return;
+      if (st.picSel.size === st.pic.length) st.picSel.clear(); else st.pic.forEach((_, i) => st.picSel.add(i));
+    } else {
+      if (st.sel.size === st.blocks.length) clearSel(); else st.blocks.forEach(b => setSel(b.i, true));
+    }
+    st.trans = null; syncSheet();
+  });
+  $('#close').addEventListener('click', () => N.close());
+
+  /* ---------------- actions ---------------- */
+  function picked() {
+    // A part picked inside the sheet (long-press text there) wins over the whole selection.
+    const s = String(getSelection() || '').trim();
+    return s || current().trim();
+  }
+  $('#aCopy').addEventListener('click', () => {
+    const t = st.trans && st.trans.text && !String(getSelection() || '').trim() ? st.trans.text : picked();
+    if (!t) return; N.copy(t); toast('Copied');
+  });
+  $('#aSearch').addEventListener('click', () => { const t = picked(); if (t) N.search(t, st.big ? 0.9 : 0.62); });
+  $('#aAsk').addEventListener('click', () => {
+    const own = String(getSelection() || '').trim();
+    if (own) return N.ask(own);
+    let t = st.panel === 'pic' ? current().trim() : textOf(false).trim();
+    const en = st.trans && st.trans.text ? st.trans.text : st.panel !== 'pic' && st.showEn && st.en ? textOf(true).trim() : '';
+    if (en && en !== t) t += '\n\nEnglish:\n' + en;
+    if (t) N.ask(t);
+  });
+  $('#aTrans').addEventListener('click', () => {
+    const t = picked(); if (!t) return;
+    const items = t.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 150);
+    const rid = id(); st.pending[rid] = { kind: 'sel', items };
+    st.trans = { busy: true }; syncSheet();
+    N.translate(rid, JSON.stringify(items));
+  });
+
+  /* Translate screen: English laid over every piece of text, in place. */
+  function translateScreen() {
+    if (!st.blocks.length) { picture(true); return; }
+    // Real text only: icon labels (content descriptions) would paint English boxes over toolbars and buttons, and
+    // a web address or a bare number has nothing to translate.
+    const idx = st.blocks.filter(b => !b.l && !notWords(b.t)).map(b => b.i);
+    if (!idx.length) { picture(true); return; }
+    const rid = id(); st.pending[rid] = { kind: 'screen', idx };
+    $('#hint').innerHTML = '<span class="spin"></span> Translating…';
+    N.translate(rid, JSON.stringify(idx.map(i => st.blocks[i].t)));
+  }
+  function notWords(t) {
+    const s = String(t).trim();
+    return /^(https?:|data:|file:|www\.)/i.test(s) || (/^\S+$/.test(s) && /[./:]\S/.test(s) && !/\s/.test(s) && s.length > 12)
+      || /^[\d\s.,:;%+\-–—/()฿$€£¥#*]+$/.test(s);
+  }
+  function paintEnglish() {
+    for (const b of st.blocks) {
+      const e = el(b.i); if (!e) continue;
+      let en = e.querySelector('.en');
+      const t = st.en && st.en[b.i];
+      if (!t || t === b.t) { if (en) en.remove(); continue; }
+      if (!en) { en = document.createElement('div'); en.className = 'en'; e.appendChild(en); }
+      en.textContent = t;
+      let fs = Math.max(9, Math.min(22, b.h * 0.62));
+      en.style.fontSize = fs + 'px';
+      while (fs > 7 && (en.scrollHeight > en.clientHeight + 1 || en.scrollWidth > en.clientWidth + 1)) { fs -= 1; en.style.fontSize = fs + 'px'; }
+    }
+    $('#lang').hidden = false;
+    $('#lang').classList.toggle('on', st.showEn);
+    $('#lang').textContent = st.showEn ? 'English' : 'Original';
+    document.body.classList.toggle('orig', !st.showEn);
+  }
+  $('#lang').addEventListener('click', () => { st.showEn = !st.showEn; paintEnglish(); syncSheet(); });
+
+  function picture(thenTranslate) {
+    if (!st.o || !st.o.shot) return;
+    st.panel = 'pic'; st.pic = null; st.picSel.clear(); st.trans = null;
+    $('#pic').classList.add('on');
+    syncSheet();
+    const rid = id(); st.pending[rid] = { kind: 'pic', thenTranslate: !!thenTranslate };
+    N.picture(rid);
+  }
+  $('#pic').addEventListener('click', () => {
+    if (st.panel === 'pic') { st.panel = 'sel'; $('#pic').classList.remove('on'); st.trans = null; syncSheet(); return; }
+    if (st.pic && !st.pic.error) { st.panel = 'pic'; $('#pic').classList.add('on'); syncSheet(); return; }
+    picture(false);
+  });
+
+  /* ---------------- native callbacks ---------------- */
+  window.S = {
+    open,
+    /** QA: what the page holds, with each block's centre in screen pixels (for real taps). */
+    peek() {
+      const o = st.o || {}, d = o.dpr || 1;
+      return { mode: o.mode, shot: !!o.shot, sel: [...st.sel], panel: st.panel, searching: st.searching, showEn: st.showEn,
+        en: st.en ? Object.keys(st.en).length : 0, pic: Array.isArray(st.pic) ? st.pic : st.pic, trans: st.trans,
+        sheet: $('#sheet').classList.contains('show'), sheetText: $('#sel').innerText,
+        blocks: st.blocks.map(b => ({ t: b.t, x: Math.round((b.x + b.w / 2) * d + (o.ox || 0)), y: Math.round((b.y + b.h / 2) * d + (o.oy || 0)) })),
+        btn: Object.fromEntries(['aCopy', 'aSearch', 'aTrans', 'aAsk', 'pic', 'all', 'close', 'lang', 'sClose'].map(k => {
+          const r = document.getElementById(k).getBoundingClientRect();
+          return [k, r.width ? [Math.round((r.left + r.width / 2) * d + (o.ox || 0)), Math.round((r.top + r.height / 2) * d + (o.oy || 0))] : null];
+        })) };
+    },
+    back() {
+      if (st.searching) { N.closeSearch(); return true; }
+      if (st.trans) { st.trans = null; syncSheet(); return true; }
+      if (st.panel === 'pic' && st.picSel.size) { st.picSel.clear(); syncSheet(); return true; }
+      if (st.panel === 'pic' && st.blocks.length) { st.panel = 'sel'; $('#pic').classList.remove('on'); syncSheet(); return true; }
+      if (st.sel.size) { clearSel(); syncSheet(); return true; }
+      return false;
+    },
+    searchShown(q, px) {
+      st.searching = true;
+      const s = $('#sstrip'); s.style.display = 'flex';
+      s.style.bottom = 'calc(var(--bot) + ' + (px + 6) + 'px)';
+      $('#sq').textContent = 'Search · ' + q;
+      $('#sBig').textContent = st.big ? 'Smaller' : 'Bigger';
+      syncSheet();
+    },
+    searchHidden() { st.searching = false; $('#sstrip').style.display = 'none'; syncSheet(); },
+    translated(rid, r) {
+      const p = st.pending[rid]; delete st.pending[rid]; if (!p) return;
+      if (p.kind === 'screen') {
+        if (r.error) { $('#hint').textContent = r.error; return; }
+        st.en = {}; (r.items || []).forEach((t, k) => { const i = p.idx ? p.idx[k] : k; if (st.blocks[i]) st.en[i] = t; });
+        st.enFrom = r.from || '';
+        $('#hint').textContent = st.enFrom ? 'From ' + st.enFrom + ' · tap text to pick' : 'Tap text to pick';
+        paintEnglish(); syncSheet();
+        N.log('screen translated items=' + (r.items || []).length);
+        return;
+      }
+      if (p.kind === 'pictr') {
+        if (r.error || !st.pic || st.pic.error) return;
+        st.pic = (r.items || []).map((t, i) => t || st.pic[i]); syncSheet(); return;
+      }
+      st.trans = r.error ? { error: r.error } : { text: (r.items || []).join('\n'), from: r.from || '' };
+      syncSheet();
+      N.log('selection translated ' + (r.error ? 'error' : 'ok'));
+    },
+    pictured(rid, r) {
+      const p = st.pending[rid]; delete st.pending[rid]; if (!p) return;
+      st.pic = r.error ? { error: r.error } : (r.lines || []);
+      if (!r.error && !st.blocks.length) { $('#blank').style.display = 'none'; }
+      syncSheet();
+      N.log('picture lines=' + (r.lines ? r.lines.length : 'error'));
+      if (p.thenTranslate && Array.isArray(st.pic) && st.pic.length) {
+        const t = id(); st.pending[t] = { kind: 'pictr' }; N.translate(t, JSON.stringify(st.pic));
+      }
+    },
+  };
+  $('#sClose').addEventListener('click', () => N.closeSearch());
+  $('#sBig').addEventListener('click', () => { st.big = !st.big; N.sheet(st.big ? 0.9 : 0.62); });
+  addEventListener('resize', sizeTrail);
+  N.log('screen page ready');
+})();
+</script>
+</body>
+</html>
