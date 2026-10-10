@@ -24,6 +24,11 @@
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Usuals: see and open Grab (Android 11+ hides other apps unless they are named here). -->
+    <queries>
+        <package android:name="com.grabtaxi.passenger" />
+    </queries>
+
     <application
         android:networkSecurityConfig="@xml/wos_network"
         android:allowBackup="false"
