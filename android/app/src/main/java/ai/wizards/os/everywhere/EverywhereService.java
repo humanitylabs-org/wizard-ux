@@ -780,7 +780,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                     mine = Math.hypot(e.getX() - ox, e.getY() - oy) <= size * 0.5f;
                     if (!mine) return false;
                     downX = e.getRawX(); downY = e.getRawY(); startCx = cx; startCy = cy; moved = false; held = false;
-                    if (menuShown) { hideMenu(); held = true; return true; } // a touch on the orb while the menu is up just closes it
+                    // A touch on the orb while the menu is up just closes it (the outside-touch may have closed it a moment ago).
+                    if (menuShown || SystemClock.uptimeMillis() - menuClosedAt < 350) { hideMenu(); held = true; return true; }
                     main.removeCallbacks(hold);
                     if (!listening && !carrying()) main.postDelayed(hold, LONG_PRESS_MS);
                     return true;
@@ -836,6 +837,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private android.widget.LinearLayout menu;
     private WindowManager.LayoutParams menuLp;
     private boolean menuShown;
+    private long menuClosedAt;
     private final Runnable menuTimeout = this::hideMenu;
 
     static final String M_SELECT = "select", M_TRANSLATE = "translate", M_HIDE = "hide";
@@ -884,7 +886,18 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private void showMenu() {
         if (!attached || menuShown) return;
         if (menu == null) {
-            menu = new android.widget.LinearLayout(this);
+            // Focusable, so Back closes the menu (one layer) instead of reaching the app underneath.
+            menu = new android.widget.LinearLayout(this) {
+                @Override public boolean dispatchKeyEvent(android.view.KeyEvent e) {
+                    if (e.getKeyCode() == android.view.KeyEvent.KEYCODE_BACK) {
+                        if (e.getAction() == android.view.KeyEvent.ACTION_UP && !e.isCanceled()) hideMenu();
+                        return true;
+                    }
+                    return super.dispatchKeyEvent(e);
+                }
+            };
+            menu.setFocusable(true);
+            menu.setFocusableInTouchMode(true);
             menu.setOrientation(android.widget.LinearLayout.VERTICAL);
             int pad = Math.round(6 * density);
             menu.setPadding(pad, pad, pad, pad);
@@ -910,8 +923,9 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         int[] at = EverywherePolicy.menuSpot(cx, cy + off, size, w, h, s.x, s.y, margin * 3);
         menuLp = new WindowManager.LayoutParams(w, h,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                        | WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
                 PixelFormat.TRANSLUCENT);
         menuLp.gravity = Gravity.TOP | Gravity.START;
         menuLp.x = at[0]; menuLp.y = at[1] - off;
@@ -922,6 +936,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             menu.setAlpha(0f); menu.setScaleX(.92f); menu.setScaleY(.92f);
             menu.setPivotX(at[0] + w / 2f < cx ? w : 0); menu.setPivotY(h / 2f);
             menu.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(140).start();
+            menu.requestFocus();
             main.removeCallbacks(menuTimeout);
             main.postDelayed(menuTimeout, 10_000);
             Log.i(TAG, "orb menu shown at " + at[0] + "," + at[1]);
@@ -934,6 +949,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         menu.animate().cancel();
         try { wm.removeViewImmediate(menu); } catch (Exception ignored) { }
         menuShown = false;
+        menuClosedAt = SystemClock.uptimeMillis();
     }
 
     private void onMenu(String id) {

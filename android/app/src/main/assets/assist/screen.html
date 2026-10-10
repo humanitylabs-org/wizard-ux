@@ -284,6 +284,18 @@
   /* ---------------- native callbacks ---------------- */
   window.S = {
     open,
+    /** QA: what the page holds, with each block's centre in screen pixels (for real taps). */
+    peek() {
+      const o = st.o || {}, d = o.dpr || 1;
+      return { mode: o.mode, shot: !!o.shot, sel: [...st.sel], panel: st.panel, searching: st.searching, showEn: st.showEn,
+        en: st.en ? Object.keys(st.en).length : 0, pic: Array.isArray(st.pic) ? st.pic : st.pic, trans: st.trans,
+        sheet: $('#sheet').classList.contains('show'), sheetText: $('#sel').innerText,
+        blocks: st.blocks.map(b => ({ t: b.t, x: Math.round((b.x + b.w / 2) * d + (o.ox || 0)), y: Math.round((b.y + b.h / 2) * d + (o.oy || 0)) })),
+        btn: Object.fromEntries(['aCopy', 'aSearch', 'aTrans', 'aAsk', 'pic', 'all', 'close', 'lang', 'sClose'].map(k => {
+          const r = document.getElementById(k).getBoundingClientRect();
+          return [k, r.width ? [Math.round((r.left + r.width / 2) * d + (o.ox || 0)), Math.round((r.top + r.height / 2) * d + (o.oy || 0))] : null];
+        })) };
+    },
     back() {
       if (st.searching) { N.closeSearch(); return true; }
       if (st.trans) { st.trans = null; syncSheet(); return true; }

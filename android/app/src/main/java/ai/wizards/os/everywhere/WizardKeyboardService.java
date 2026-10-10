@@ -417,7 +417,7 @@ public class WizardKeyboardService extends AccessibilityService {
     /** Same as a JPEG (fast to encode): the frozen background of Screen mode and what "Read picture text" reads. */
     public void screenshotJpeg(Shot cb) {
         if (Build.VERSION.SDK_INT < 30) { cb.done(null); return; }
-        shotAttempt(cb, 0, true);
+        shotAttempt(cb, 1, true);
     }
 
     @android.annotation.SuppressLint("NewApi")
