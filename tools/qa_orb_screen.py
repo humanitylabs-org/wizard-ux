@@ -354,7 +354,10 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('without Accessibility, Select text opens Wizard OS on the one-step setup', PKG in top() and re.search('voice typing|Accessibility', x, re.I), (top(), re.findall(r'text="([^"]+)"', x)[:8]))
 
         crashed = sx('logcat -d -b crash')
-        check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:400])
+        # Only Wizard OS counts: a uiautomator dump racing the emulator ("FATAL EXCEPTION: UiAutomation") is the harness.
+        mine = [b for b in crashed.split('FATAL EXCEPTION')[1:] if 'UiAutomation' not in b.split('\n', 1)[0]]
+        pids = sx(f'pidof {PKG}').split()
+        check('no Wizard OS crashes', not mine and f'Process: {PKG}' not in crashed, (crashed[:400], pids))
     except Exception as e:
         import traceback; traceback.print_exc()
         check('script ran to the end', False, repr(e)); shot('zz-error')
