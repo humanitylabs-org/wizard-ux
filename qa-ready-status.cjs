@@ -120,15 +120,31 @@ function routeFor() {
     ok((await readyIds())[0] === 'qa_rs_fyi', '1 back to Newest: the newest thread is at the top again', await readyIds());
 
     const n = await rowInfo('qa_rs_needs');
-    ok(n && /att-needs/.test(n.cls) && /^Needs you · Say "ship desks"/.test(n.pv.trim()), '2 needs-you row: amber label + the exact ask as preview', n);
+    ok(n && /att-needs/.test(n.cls) && /^Say "ship desks"/.test(n.pv.trim()), '2 needs-you row: the exact ask is the preview', n);
     const c = await rowInfo('qa_rs_check');
-    ok(c && /att-check/.test(c.cls) && /^Test this · Try the new orb timing/.test(c.pv.trim()), '2 test-this row: label + ask', c);
+    ok(c && /att-check/.test(c.cls) && /^Try the new orb timing/.test(c.pv.trim()), '2 test-this row: the ask is the preview', c);
     const d = await rowInfo('qa_rs_done');
     ok(d && d.quiet && /Sending pill is live/.test(d.pv) && !/Long reply body/.test(d.pv), '2 done row is quiet and shows its one-line outcome', d);
     const f = await rowInfo('qa_rs_fyi');
     ok(f && f.quiet && /Good Arts Law/.test(f.pv), '2 FYI row is quiet with its one-liner', f);
     const pl = await rowInfo('qa_rs_plain');
     ok(pl && !pl.quiet && /Long reply body/.test(pl.pv), '2 a thread without a status keeps the old preview', pl);
+    // 2b. Status icons (James, 10 Oct 2026): the row icon is the status; no per-thread ✦ star, no dots for untagged rows.
+    const icons = await p.evaluate(sel => Object.fromEntries([...document.querySelectorAll(sel)].filter(e => e.dataset.chopen.startsWith('qa_rs_')).map(e => [e.dataset.chopen, (e.querySelector('.emo.sti')?.className || '').replace('emo sti ', '')])), await R('[data-chopen]'));
+    ok(icons.qa_rs_needs === 'needs' && icons.qa_rs_check === 'check' && icons.qa_rs_done === 'done' && icons.qa_rs_fyi === 'fyi', '2b each status has its own icon (hand / flask / check / info)', icons);
+    ok(icons.qa_rs_plain === 'none', '2b a thread with no status gets the neutral icon', icons);
+    ok(await p.evaluate(sel => ![...document.querySelectorAll(sel)].some(e => e.textContent.includes('✦')), await R('.ch-row .emo')), '2b no ✦ star anywhere in Ready');
+    const solid = await p.evaluate(sel => { const r = {}; for (const k of ['done', 'fyi']) { const f = document.querySelector(sel + ` .emo.sti.${k} svg .f`); r[k] = f && getComputedStyle(f).fill; } return r; }, await R(''));
+    ok(solid.done && solid.done !== 'none' && solid.fyi && solid.fyi !== 'none' && solid.done !== solid.fyi, '2b done and FYI icons are solid, in different colours', solid);
+    // 2c. Bold = unread, plain = read, for every status (inbox rule); status never fades a row or sets its weight.
+    const weightOf = async id => p.evaluate(sel => { const e = document.querySelector(sel); if (!e) return null; const b = e.querySelector('.tp b'); return { unread: e.classList.contains('unread'), w: +getComputedStyle(b).fontWeight, op: +getComputedStyle(e).opacity }; }, await R(`[data-chopen="${id}"]`));
+    const before = {}; for (const id of ['qa_rs_needs', 'qa_rs_check', 'qa_rs_done', 'qa_rs_fyi', 'qa_rs_plain']) before[id] = await weightOf(id);
+    ok(Object.values(before).every(v => v && v.unread && v.w >= 700 && v.op === 1), '2c unread rows are bold at full strength, whatever their status', before);
+    await p.evaluate(() => __wos.live.markSeen(['qa_rs_needs', 'qa_rs_check', 'qa_rs_done', 'qa_rs_fyi', 'qa_rs_plain']));
+    await sleep(600);
+    const after = {}; for (const id of ['qa_rs_needs', 'qa_rs_check', 'qa_rs_done', 'qa_rs_fyi', 'qa_rs_plain']) after[id] = await weightOf(id);
+    const readOnes = Object.entries(after).filter(([, v]) => v && !v.unread);
+    ok(readOnes.length >= 2 && readOnes.every(([, v]) => v.w <= 500 && v.op === 1), '2c read rows are plain (needs-you and test-this included)', after);
     const hdr = await p.$eval(await R('.ch-sec-h'), e => e.textContent);
     ok(/need you/.test(hdr), '2 Ready header counts what needs you', hdr);
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);

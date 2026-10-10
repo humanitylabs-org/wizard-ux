@@ -77,7 +77,7 @@ window.WizCore.chats = function createChats(H) {
     // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Test this, then its one line.
     const def = deferredOf(s) && !working && !needs;
     const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi');
-    // MOCKUP: the row icon says what the thread wants from James (replaces the per-thread ✦ star).
+    // The row icon says what the thread wants from James (replaced the per-thread ✦ star, 10 Oct 2026).
     // Emphasis is read state only (bold = unread, like an inbox); the status never changes weight or fades a row.
     const kind = working ? (s.pend === 'waiting' ? 'offline' : 'working') : s.status === 'failed' || s.status === 'interrupted' ? 'failed' : s.status === 'waiting_for_approval' ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
     const pv = working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))

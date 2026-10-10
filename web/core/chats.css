@@ -308,7 +308,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 .msg.laterrun span:nth-child(2) { flex: 1; }
 .msg.laterrun time { font-size: 12px; opacity: .8; }
 
-/* MOCKUP (feature/ready-icons-mock): the row icon is the thread's status, not a per-thread star.
+/* Ready status icons: the row icon is the thread's status, not a per-thread star.
    Two separate signals: the icon = what the thread wants; bold/plain = unread/read (like an inbox).
    Status never changes a row's weight or opacity, so every status reads at full strength. */
 .ch-row .emo.sti { position: relative; font-size: 0; color: var(--ink-3); background: rgba(205, 190, 255, .06); }
@@ -323,7 +323,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-row .emo.sti.approval { color: #ffb84d; background: rgba(255, 184, 77, .16); box-shadow: inset 0 0 0 1px rgba(255, 184, 77, .30); }
 .ch-row .emo.sti.failed { color: #ff6b6b; background: rgba(255, 107, 107, .15); box-shadow: inset 0 0 0 1px rgba(255, 107, 107, .28); }
 .ch-row .emo.sti.offline { color: #ffb84d; background: rgba(255, 184, 77, .10); }
-.ch-row .emo.sti.deferred { color: var(--ink-3); background: rgba(205, 190, 255, .06); }
+.ch-row .emo.sti.deferred { color: var(--violet-2); background: rgba(143, 99, 255, .14); box-shadow: inset 0 0 0 1px rgba(185, 155, 255, .30); } /* matches the violet Deferred label */
 .ch-row .emo.sti.working { background: rgba(90, 220, 255, .08); }
 .ch-row .emo.sti .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(90, 220, 255, .22); border-top-color: var(--cyan); animation: sti-spin .9s linear infinite; }
 @keyframes sti-spin { to { transform: rotate(360deg); } }
