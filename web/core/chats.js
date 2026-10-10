@@ -58,17 +58,34 @@ window.WizCore.chats = function createChats(H) {
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Test this' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
   const deferredOf = s => !!s.deferred && !s.archived;
   const attOf = s => (s.attention && !WORKING_ST.has(s.status) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') ? s.attention : null;
+  const svg = b => `<svg viewBox="0 0 24 24" aria-hidden="true">${b}</svg>`;
+  const STI = {
+    needs: svg('<path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>'),
+    check: svg('<path d="M10 2v7.5a2 2 0 0 1-.2.9L4.7 20.6a1 1 0 0 0 .9 1.4h12.8a1 1 0 0 0 .9-1.4l-5.1-10.2a2 2 0 0 1-.2-.9V2M8.5 2h7M7 16h10"/>'),
+    done: svg('<circle class="f" cx="12" cy="12" r="10"/><path class="k" d="m7.5 12.3 3 3 6-6.3"/>'),
+    fyi: svg('<circle class="f" cx="12" cy="12" r="10"/><path class="k" d="M12 11v5.5"/><circle class="kd" cx="12" cy="7.6" r="1.35"/>'),
+    deferred: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>'),
+    approval: svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'),
+    failed: svg('<path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3M12 9v4M12 17h.01"/>'),
+    working: '<i class="spin" aria-hidden="true"></i>',
+    offline: svg('<path d="M12 20h.01M8.5 16.4a5 5 0 0 1 7 0M2 8.8a15 15 0 0 1 20 0M5 12.9a10 10 0 0 1 14 0"/><path d="m2 2 20 20"/>'),
+    none: '<i class="dot" aria-hidden="true"></i>',
+  };
+  const STI_TIP = { deferred: 'Deferred', needs: 'Needs you', check: 'Test this', done: 'Done', fyi: 'FYI', approval: 'Approval needed', failed: 'Stopped with an error', working: 'Working', offline: 'Offline · will retry', none: 'No status' };
   function chatRow(s, snip) {
     const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = s.status === 'waiting_for_approval' || s.status === 'failed' || s.status === 'interrupted';
     // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Test this, then its one line.
     const def = deferredOf(s) && !working && !needs;
-    const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi'), asks = !!at && !quiet;
-    const pv = working ? `<i class="st working${s.pend === 'waiting' ? ' off' : s.pend ? ' soon' : ''}"></i>` + workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
-      : needs ? '<i class="st needs"></i>' + esc(clip(s.preview || '', 110))
-      : def ? '<i class="st deferred"></i><em class="att deferred">Deferred</em> · ' + esc(clip(attOf(s)?.ask || s.preview || '', 140))
-      : at ? (asks ? `<i class="st ${A.cls}"></i><em class="att ${A.cls}">${A.label}</em> · ` : (isNew ? '<i class="st unread"></i>' : '') + (at.state === 'done' ? '<em class="att done">✓</em> ' : '')) + esc(clip(at.ask, 140))
-      : (isNew ? '<i class="st unread"></i>' : '') + esc(clip(s.preview || '', 110));
-    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${quiet ? ' quiet' : ''}${def ? ' deferred' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}><span class="emo">${emoOf(s.id)}</span>
+    const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi');
+    // The row icon says what the thread wants from James (replaced the per-thread ✦ star, 10 Oct 2026).
+    // Emphasis is read state only (bold = unread, like an inbox); the status never changes weight or fades a row.
+    const kind = working ? (s.pend === 'waiting' ? 'offline' : 'working') : s.status === 'failed' || s.status === 'interrupted' ? 'failed' : s.status === 'waiting_for_approval' ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
+    const pv = working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
+      : needs ? esc(clip(s.preview || '', 110))
+      : def ? '<em class="att deferred">Deferred</em> · ' + esc(clip(attOf(s)?.ask || s.preview || '', 140))
+      : at ? esc(clip(at.ask, 140))
+      : esc(clip(s.preview || '', 110));
+    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}><span class="emo sti ${kind}" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span>
       <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button>`;
   }

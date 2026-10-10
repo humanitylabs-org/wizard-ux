@@ -169,13 +169,13 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     });
     ok(look.d && look.d.op === 1, '3 a deferred row is not faded (full opacity)', look);
     ok(look.d && look.n && look.d.title === look.n.title && look.d.pv === look.n.pv, '3 a deferred row reads like any other thread (same title and preview styling)', look);
-    const dot = await p.evaluate(() => { const d = document.querySelector('[data-sec="ready"] [data-chopen="qa_rd_def"] .st.deferred'), cs = d && getComputedStyle(d); return cs && { bg: cs.backgroundColor, border: cs.borderTopWidth }; });
-    ok(dot && dot.bg === 'rgba(0, 0, 0, 0)' && parseFloat(dot.border) >= 1, '3 the Deferred dot is a ring, never the filled unread dot', dot);
+    const dot = await p.evaluate(() => { const d = document.querySelector('[data-sec="ready"] [data-chopen="qa_rd_def"]'); return d && { icon: (d.querySelector('.emo.sti')?.className || '').replace('emo sti ', ''), filled: !!d.querySelector('.pv .st.unread') }; });
+    ok(dot && dot.icon === 'deferred' && !dot.filled, '3 a deferred row wears the Deferred (clock) icon, never the unread dot', dot);
     ok(look.label && look.label.text === 'Deferred' && look.label.color !== look.pvColor && look.label.color !== 'rgb(125, 116, 163)' && +look.label.weight >= 700, '3 "Deferred" is a coloured label like Needs you / Test this', look);
     const hdr = await p.evaluate(async sel => {
       const h = document.querySelector(sel); const m = (h?.querySelector('b.wait')?.textContent || '').match(/^(\d+) need you/);
       const sec = h?.closest('[data-sec]'); const rows = [...sec.querySelectorAll('[data-chopen]')];
-      const want = rows.filter(r => !r.classList.contains('deferred') && (r.classList.contains('att-needs') || r.querySelector('.st.needs'))).length;
+      const want = rows.filter(r => !r.classList.contains('deferred') && (r.classList.contains('att-needs') || r.querySelector('.sti.needs, .sti.approval'))).length;
       return { got: m ? +m[1] : 0, want };
     }, await R('.ch-sec-h'));
     ok(hdr.got === hdr.want, '4 "N need you" leaves deferred threads out', hdr);
