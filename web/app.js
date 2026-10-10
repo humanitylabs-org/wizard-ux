@@ -119,7 +119,7 @@
   if (desks[0].wins.length) { const d = blank({ wins: desks[0].wins, focus: desks[0].focus }); desks[0] = blank({ id: 'home', home: true }); desks.splice(1, 0, d); }
   desks = desks.filter((d, i) => i === 0 || d.wins.length);
   Object.keys(W).forEach(id => { if (!desks.some(d => d.wins.includes(id))) delete W[id]; });
-  let idx = store.get('idx4', 1); if (!(idx >= 0 && idx < desks.length)) idx = Math.min(1, desks.length - 1);
+  let idx = store.get('idx4', HOME); if (!(idx >= 0 && idx < desks.length)) idx = HOME;
   const save = () => { store.set('wins4', W); store.set('strip', desks); store.set('idx4', idx); };
 
   /* Live Wizard state: inbox, unread, working come from the real Wizard backend. */
