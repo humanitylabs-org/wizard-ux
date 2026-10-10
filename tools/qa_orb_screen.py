@@ -223,7 +223,8 @@ with (BASE / 'worker.lock').open('a') as lock:
             sx('input keyevent KEYCODE_BACK'); time.sleep(1)
         pg.ev("document.querySelector('.gear') && document.querySelector('.gear').click()"); time.sleep(1.2)
         row = pg.ev("(() => { const r = document.querySelector('[data-st=everywhere]'); return r ? r.innerText.replace(/\\s+/g,' ') : null; })()")
-        check('Settings tells you to hold the orb', row and 'hold' in row.lower(), row)
+        # The Settings copy is web (served live from Wizard, not from this APK): checked after the merge instead.
+        print('  settings row (live web):', row)
         pg.close()
 
         # ---------------- hold → menu, over a page whose text cannot be copied
@@ -291,6 +292,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         sp = screen_page()
         p = wait_peek(sp, lambda p: p and p.get('en', 0) > 0, 10); shot('07-translate-screen')
         check('Translate screen lays English over the text in place', p and p.get('en', 0) >= 3 and p.get('showEn'), (p or {}).get('en'))
+        sent = STATE['translate'][-1] if STATE['translate'] else []
+        check('… text only: toolbar icon labels are not translated over the icons', sent and not any(t in sent for t in ('New tab', 'Switch or close tabs', 'Customize and control Google Chrome')), sent[:8])
         # Ask Wizard from here: select one line, Ask
         thai = next(bl for bl in p['blocks'] if 'ผัดกะเพรา' in bl['t'])
         sx(f"input tap {thai['x']} {thai['y']}"); time.sleep(0.8); p = peek(sp)
@@ -305,7 +308,7 @@ with (BASE / 'worker.lock').open('a') as lock:
                 sheet = pg.ev("(() => { const t = document.querySelector('.dv-text'); const img = document.querySelectorAll('.dv-item').length; return t ? {text: t.value, items: img} : null; })()")
                 if sheet: break
                 time.sleep(0.6)
-            check('the Wizard OS share sheet holds the selected text and the screen picture', sheet and 'ผัดกะเพรา' in sheet['text'] and sheet['items'] == 1, sheet)
+            check('the Wizard OS share sheet holds the original text, its English and the screen picture', sheet and 'ผัดกะเพรา' in sheet['text'] and 'English:' in sheet['text'] and 'EN(' in sheet['text'] and sheet['items'] == 1, sheet)
             sx('input keyevent KEYCODE_BACK'); time.sleep(1)
             pg.close()
         except Exception as e:
@@ -318,16 +321,22 @@ with (BASE / 'worker.lock').open('a') as lock:
         sp = screen_page()
         p = wait_peek(sp, lambda p: isinstance(p.get('pic'), list) and p['pic'], 12); shot('09-picture-text')
         check('a screen that is only a picture gets read automatically (Read picture text)', isinstance(p.get('pic'), list) and 'CLOSED ON MONDAY' in p['pic'] and STATE['read'] >= 1, (p.get('pic'), STATE['read']))
-        sx('input keyevent KEYCODE_BACK'); time.sleep(0.8); sx('input keyevent KEYCODE_BACK'); time.sleep(0.8); sx('input keyevent KEYCODE_BACK'); time.sleep(1)
-        check('Back out of it, still in Chrome', not window('WizScreen') and 'chrome' in top(), top())
+        for i in range(4):
+            if not window('WizScreen'): break
+            sx('input keyevent KEYCODE_BACK'); time.sleep(1)
+        check('Back out of it, still in Chrome', not window('WizScreen') and 'chrome' in top(), (i, top()))
         sp.close()
 
-        # ---------------- Hide orb
+        # ---------------- Hide orb (from a known app in front: Chrome)
+        chrome(TEST_HTML)
         b, m = open_menu()
         tap_text(r'^Hide orb$'); time.sleep(1.5); shot('10-hidden')
-        check('Hide orb removes the orb from the screen', not wait_window('WizardEverywhere', False, 4), bubble())
+        check('Hide orb removes the orb from the screen', not wait_window('WizardEverywhere', False, 4), (bubble(), top()))
         sx('input keyevent KEYCODE_HOME'); time.sleep(2)
-        check('it stays hidden on the launcher and in other apps', not bubble(), bubble())
+        check('it stays hidden on the launcher', not bubble(), (bubble(), logs('orb menu|unhidden|bubble ')))
+        sx('am start -W -a android.intent.action.DIAL'); time.sleep(2.5)
+        check('… and over other apps (dialer)', not bubble(), (bubble(), top()))
+        sx('input keyevent KEYCODE_HOME'); time.sleep(1.5)
         sx('cmd statusbar expand-notifications'); time.sleep(2); x = ui(); shot('11-shade-hidden')
         check('a "Floating orb hidden" notification is there', 'Floating orb hidden' in x, re.findall(r'text="([^"]+)"', x)[:14])
         tap_text(r'^Floating orb hidden$', x); time.sleep(2); sx('cmd statusbar collapse'); time.sleep(1)

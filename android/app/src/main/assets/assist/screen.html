@@ -232,7 +232,14 @@
     if (!t) return; N.copy(t); toast('Copied');
   });
   $('#aSearch').addEventListener('click', () => { const t = picked(); if (t) N.search(t, st.big ? 0.9 : 0.62); });
-  $('#aAsk').addEventListener('click', () => { const t = picked(); if (t) N.ask(t); });
+  $('#aAsk').addEventListener('click', () => {
+    const own = String(getSelection() || '').trim();
+    if (own) return N.ask(own);
+    let t = st.panel === 'pic' ? current().trim() : textOf(false).trim();
+    const en = st.trans && st.trans.text ? st.trans.text : st.panel !== 'pic' && st.showEn && st.en ? textOf(true).trim() : '';
+    if (en && en !== t) t += '\n\nEnglish:\n' + en;
+    if (t) N.ask(t);
+  });
   $('#aTrans').addEventListener('click', () => {
     const t = picked(); if (!t) return;
     const items = t.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 150);
@@ -244,9 +251,12 @@
   /* Translate screen: English laid over every piece of text, in place. */
   function translateScreen() {
     if (!st.blocks.length) { picture(true); return; }
-    const rid = id(); st.pending[rid] = { kind: 'screen' };
+    // Real text only: icon labels (content descriptions) would paint English boxes over toolbars and buttons.
+    const idx = st.blocks.filter(b => !b.l).map(b => b.i);
+    if (!idx.length) { picture(true); return; }
+    const rid = id(); st.pending[rid] = { kind: 'screen', idx };
     $('#hint').innerHTML = '<span class="spin"></span> Translating…';
-    N.translate(rid, JSON.stringify(st.blocks.map(b => b.t)));
+    N.translate(rid, JSON.stringify(idx.map(i => st.blocks[i].t)));
   }
   function paintEnglish() {
     for (const b of st.blocks) {
@@ -317,7 +327,7 @@
       const p = st.pending[rid]; delete st.pending[rid]; if (!p) return;
       if (p.kind === 'screen') {
         if (r.error) { $('#hint').textContent = r.error; return; }
-        st.en = {}; (r.items || []).forEach((t, i) => { if (st.blocks[i]) st.en[i] = t; });
+        st.en = {}; (r.items || []).forEach((t, k) => { const i = p.idx ? p.idx[k] : k; if (st.blocks[i]) st.en[i] = t; });
         st.enFrom = r.from || '';
         $('#hint').textContent = st.enFrom ? 'From ' + st.enFrom + ' · tap text to pick' : 'Tap text to pick';
         paintEnglish(); syncSheet();
