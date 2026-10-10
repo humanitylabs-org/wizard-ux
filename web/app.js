@@ -52,7 +52,7 @@
 
   /* ---------------- apps ---------------- */
   // The registry lives in core/apps.js (shared with the desktop shell); the phone gets its own list.
-  const { APPS, APP, findApp } = window.WizCore.apps('mobile');
+  const { APPS, APP, findApp, quickSearch, searchUrl } = window.WizCore.apps('mobile');
   const norm = window.WizCore.norm;
 
   /* ---------------- state ---------------- */
@@ -599,11 +599,42 @@
    * pinch in, swipe up from the bottom edge, or Back. Chats keeps a small orb in the bottom-right
    * corner so a voice reply is always one tap away; there the orb only talks (no shell swipes). */
   var immOn = null, immTipT = 0; // var: applyLayout can run before this line during boot
+  /* Edge to edge (James, 10 Oct): in immersive full screen the window reaches the very top of the glass, under
+   * the camera too. The native shell reports the camera cutout height; shell-drawn windows pad their content by
+   * it, and hosted apps get it as --wos-cutout on their <html> so their own top controls can clear the camera. */
+  var cutTop = 0; try { cutTop = +window.WizardOSNative?.cutoutTop?.() || 0; } catch (e) {}
+  function shareCutout() {
+    const v = device.classList.contains("immersive") ? (cutTop || 0) : 0;
+    device.style.setProperty('--cut-t', v + 'px');
+    $$('iframe.appframe').forEach(f => { try { const d = f.contentDocument; if (d && d.documentElement) d.documentElement.style.setProperty('--wos-cutout', (f.closest('.win.full') ? v : 0) + 'px'); } catch (e) {} });
+  }
+  window.__wosCutout = px => { cutTop = Math.max(0, px | 0); shareCutout(); };
+  /* Status bar (James, 10 Oct: "like Telegram"): the native shell draws this page under the status bar so the
+   * background reaches the top of the glass, and reports the bar's height; --safe-t keeps content below it. */
+  function setNatTop(px) { document.documentElement.style.setProperty('--nat-t', Math.max(0, px | 0) + 'px'); }
+  try { setNatTop(+window.WizardOSNative?.insetTop?.() || 0); } catch (e) {}
+  window.__wosTop = setNatTop;
+  /* A hosted app either clears the camera itself (its CSS reads --wos-cutout) or the shell moves it below the camera
+   * and paints the strip above in the app's own background colour. */
+  function frameEdge(f) {
+    const we = f.closest('.win'); if (!we) return;
+    let own = false, bg = '';
+    try {
+      const d = f.contentDocument;
+      own = !!d.querySelector('meta[name="wizard-os-edge"][content="cover"]');
+      if (!own) for (const sh of d.styleSheets) { let t = ''; try { t = Array.from(sh.cssRules, r => r.cssText).join(''); } catch (e) {} if (t.includes('--wos-cutout')) { own = true; break; } }
+      const pick = el => { const c = el && d.defaultView.getComputedStyle(el).backgroundColor; return c && !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(c) ? c : ''; };
+      bg = pick(d.body) || pick(d.documentElement);
+    } catch (e) {}
+    we.classList.toggle('edge-own', own);
+    if (bg) we.style.setProperty('--frame-bg', bg); else we.style.removeProperty('--frame-bg');
+  }
   function syncImmersive() {
     const d = desks[idx], w = d && d.full && d.focus ? W[d.focus] : null, on = !!w;
     const corner = on && w.app === 'chats';
     device.classList.toggle('immersive', on);
     device.classList.toggle('orb-corner', corner);
+    shareCutout();
     if (on === immOn) return; immOn = on;
     try { window.WizardOSNative?.immersive?.(on); } catch (e) {}
     clearTimeout(immTipT); device.classList.remove('imm-tip');
@@ -665,6 +696,12 @@
     const f = desks[idx] ? W[desks[idx].focus] : null, on = !!(f && f.from && f.from.sid);
     device.classList.toggle('reviewing', on);
     if (on) rvChip.innerHTML = `<i></i><span>Orb → feedback to <b>${esc(clip(f.from.title || 'the thread', 34))}</b></span>`;
+  }
+  /* Quick search: results open in the link sheet over whatever James is doing (no thread, no desk change). */
+  function openSearch(query, tab) {
+    const url = searchUrl(query, tab); if (!url) return false;
+    closeSheets(true); mountLinks(); if (!LINKS) return false;
+    LINKS.open(url); return true;
   }
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
@@ -1005,6 +1042,8 @@
     }, true); } catch (e) {}
     try { bindWinPinch(win.document, id); } catch (e) {}
     armFrameBack(f, win);
+    shareCutout();
+    frameEdge(f); setTimeout(() => { if (f.isConnected) frameEdge(f); }, 800); // apps that paint their theme after boot
   }
   // Voice mode a framed app asks for: <meta name="wizard-os-voice" content="capture|auto">.
   function frameVoiceMode(id) {
@@ -1408,6 +1447,7 @@
     const th = (LIVE.ok ? LIVE.sessions.filter(x => !x.hidden && norm(x.title).includes(n)) : []).slice(0, 5);
     body.innerHTML = `${hits.length ? `<div class="lgroup"><h4>Apps &amp; views</h4>${hits.slice(0, 7).map((a, k) => appRow(a, k === 0)).join('')}</div>` : ''}
       ${th.length ? `<div class="lgroup"><h4>Threads</h4>${th.map(t => `<button class="lrow" data-thread="${esc(t.id)}"><span class="ic emo">${emoOf(t.id)}</span><span class="nm">${esc(t.title)}<small>${esc(ago(t.lastAssistantAt || t.updatedAt))}${LIVE.isNew(t) ? ' · unread' : ''}</small></span><span class="kind view">Chats</span></button>`).join('')}</div>` : ''}
+      ${searchUrl(q) ? (() => { const qs = quickSearch(q) || { query: q, tab: 'all' }; return `<div class="lgroup"><h4>Search</h4><button class="lrow" data-qsearch="${esc(qs.query)}" data-qtab="all"><span class="ic" style="--g1:#8f63ff;--g2:#2a1a66">⌕</span><span class="nm">“${esc(qs.query)}”<small>Search with an AI overview</small></span><span class="kind view">Web</span></button><button class="lrow" data-qsearch="${esc(qs.query)}" data-qtab="images"><span class="ic" style="--g1:#ff5ccf;--g2:#5c3bff">▦</span><span class="nm">“${esc(qs.query)}”<small>Image search</small></span><span class="kind view">Images</span></button></div>`; })() : ''}
       <div class="lgroup"><h4>Command</h4><button class="lrow ${hits.length ? '' : 'sel'}" data-cmd="${esc(q)}"><span class="ic" style="--g1:#0fb8d8;--g2:#2a3a8a">⚡</span><span class="nm">“${esc(q)}”<small>Run through the fast router</small></span><span class="kind cmd">Run</span></button></div>`;
     body.scrollTop = body.scrollHeight;
   }
@@ -1443,6 +1483,7 @@
       else if (k === 'left') moveWin(id, i - 1); else if (k === 'right') moveWin(id, i + 1);
       return;
     }
+    const qs = e.target.closest('[data-qsearch]'); if (qs) { openSearch(qs.dataset.qsearch, qs.dataset.qtab); return; }
     const c = e.target.closest('[data-cmd]'); if (c) { closeSheets(); runUtterance(c.dataset.cmd, 'command', true); }
   });
 
@@ -1588,7 +1629,7 @@
     const dev = DEV(); let meta = null;
     try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (e) {}
     V.native = null;
-    if (!meta) { setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
+    if (!meta) { dropHold(); setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
     V.acc = Math.max(V.acc, Number(meta.ms) || 0);
     onRecStop(nativeBlob(id), id);
   }
@@ -1722,6 +1763,10 @@
     if (V.state !== 'idle') return;
     clearTimeout(txHideT);
     Object.assign(V, { kind, target: null, replyTo: null, snap: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
+    // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
+    // Browsing to another thread mid-take, or after the send tap, never moves the message.
+    V.snap = sendSnap();
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
     // No status card while recording: the orb, timer and arc already say it. Hold-for-command keeps
@@ -1777,11 +1822,31 @@
     toast('⏸', 'Mic interrupted · your recording is kept');
   }
   function stopStream() { try { V.stream && V.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { V.ac && V.ac.close(); } catch (e) {} V.stream = null; V.ac = null; V.an = null; }
+  /* Send and go for the orb (James, 10 Oct 2026: "it sits at this screen for like 10 seconds… process this in the
+   * background, send them back out… allow them to keep using their phone"). The send tap steps a phone thread
+   * back to the list at once, like a typed send; transcription, routing and delivery carry on behind the pill
+   * above the orb. The snapshot already pins the destination, so leaving can't move the message.
+   * Stays put for a hold-command, an aimed desk, a composer-mic reply (already instant), or a composer tray with
+   * files (those ride with the words when they land in the thread). */
+  function leaveOnSend(snap) {
+    const v = snap?.view;
+    if (V.kind === 'command' || V.replyTo || V.target != null || v?.kind !== 'chat thread') return false;
+    const w = W[v.id]; if (!w || w.thread !== v.thread) return false;
+    const c = CHATS.ch(v.id); if ((c.files || []).length) return false;
+    CHATS.saveDraft(v.id); // words typed in the composer stay as the thread's draft
+    if (!CHATS.leaveAfterSend(v.id, v.thread, v.thread === '__new__', 'voice')) return false;
+    // ...and the thread is under Working before the list paints, never in Ready (live.js holdSend).
+    V.hold = LIVE.holdSend?.(v.thread) || null;
+    CHATS.renderChats(w); applyLayout(deskOf(v.id));
+    return true;
+  }
+  function dropHold() { if (V.hold) { LIVE.releaseSend?.(V.hold); V.hold = null; } }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
-    V.snap = sendSnap(); // the send tap fixes the destination; transcription can't move it
+    V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
     if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
+    leaveOnSend(V.snap);
     if (V.native) {
       if (V.state !== 'paused') V.acc += performance.now() - V.t0;
       setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core');
@@ -1810,11 +1875,15 @@
     const blob = blobs[0] || new Blob([], { type: V.mime || 'audio/webm' });
     const size = blobs.reduce((n, b) => n + b.size, 0);
     stopStream(); V.rec = null; Orb.setLevel(0);
-    if (V.cancelled) { recDone(nid); return; }
-    if (V.acc < 450 || size < 1200) { recDone(nid); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
+    if (V.cancelled) { recDone(nid); dropHold(); return; }
+    if (V.acc < 450 || size < 1200) { recDone(nid); dropHold(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
     // A voice reply from a thread's composer goes to that thread, as recorded: no routing, no commands,
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
     const snap = V.snap || sendSnap(); V.snap = null;
+    const kind = V.kind, aimAt = V.target;
+    // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.
+    const hold = V.hold; V.hold = null;
+    const unhold = () => { if (hold) setTimeout(() => LIVE.releaseSend?.(hold), 1500); };
     if (V.replyTo) {
       const rt = V.replyTo, files = takeFiles(); V.replyTo = null; replyTake(null);
       setVoice('idle'); txPill('✦', 'Voice reply · saved to this thread', 'agent'); txHide(1800);
@@ -1824,14 +1893,19 @@
     try {
       const words = []; const j = { ms: 0 };
       const prompt = window.WizConfig.voicePrompt(APPS.map(a => a.name).slice(0, 40));
+      // No network: straight to the outbox (it transcribes and sends when Wizard is back), no waiting on a dead line.
+      if (navigator.onLine === false) throw new Error('offline');
       for (const part of blobs) {   // more than one part only after the mic was interrupted mid-take
-        const jj = await window.WizConfig.transcribe(part, { prompt, language: 'en' });
+        // A flaky line can hang a request for a long time: past this bound the take goes to the outbox instead.
+        const limit = 12000 + Math.round(part.size / 20);
+        const jj = await Promise.race([window.WizConfig.transcribe(part, { prompt, language: 'en' }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('transcription timed out')), limit))]);
         words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
       }
       const text = words.filter(Boolean).join(' ').trim();
-      if (!text) { recDone(nid); setVoice('idle'); txHide(); toast('◌', 'No speech detected'); return; }
+      if (!text) { recDone(nid); unhold(); setVoice('idle'); txHide(); toast('◌', 'No speech detected'); return; }
       // The words are what gets sent from here; the native take is deleted once they are handled (or in the outbox).
-      Promise.resolve(handleText(text, V.kind, false, j.ms, V.target, snap)).finally(() => recDone(nid));
+      Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).finally(() => { recDone(nid); unhold(); });
     } catch (err) {
       // Never lose a recording: it goes to the outbox, which transcribes and sends it when Wizard is back.
       setVoice('idle');
@@ -1843,7 +1917,7 @@
         if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { sid: sv.thread, files: fl, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
         return toAgent('', 'Saved · sends when Wizard is reachable', { audio: part, desk: aim, source: 'orb', files: fl, snap });
       });
-      Promise.all(queued.map(q => Promise.resolve(q).catch(() => {}))).then(() => recDone(nid));
+      Promise.all(queued.map(q => Promise.resolve(q).catch(() => {}))).then(() => { recDone(nid); unhold(); });
       txPill('↻', 'Saved · sends when Wizard is back', 'agent', 'Couldn’t reach Wizard · recording saved, will send'); txHide(2600);
     }
   }
@@ -1941,7 +2015,10 @@
   }
 
   /* ---------------- routing ---------------- */
-  function localParse(t) {
+  function localParse(t, snap) {
+    // The quick-search spell ("image search …", "search …") opens the search sheet on-device, even over a thread.
+    const qs = quickSearch(t);
+    if (qs && (qs.strong || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'quick_search', query: qs.query, tab: qs.tab };
     const s = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '');
     if (/^(zoom|go|dive) (in|deeper|down)\b/.test(s)) return { action: 'zoom', dir: 'in' };
     if (/^(zoom|back|go|pull) (out|up|back)\b|^zoom out\b/.test(s)) {
@@ -1984,7 +2061,7 @@
       return toAgent(text, `To ${window.WizConfig.agent()} · with files` + sttNote, { ...opts, files });
     }
     const t0 = performance.now();
-    const loc = localParse(text);
+    const loc = localParse(text, snap);
     if (loc) {
       const ms = Math.max(1, Math.round(performance.now() - t0));
       showRouted('command', `Command · on-device · ${ms} ms${sttNote}`);
@@ -2001,7 +2078,7 @@
       const view = v && v.mode && kind !== 'command' && target == null ? { name: v.name, kind: v.kind } : null;
       const routeUrl = window.WizConfig.endpoint('route');
       if (!routeUrl) return toAgentOrThread(`To ${window.WizConfig.agent()}${sttNote}`);
-      const r = await fetch(routeUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: kind === 'command' ? 'command' : '', view, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
+      const r = await fetch(routeUrl, { method: 'POST', signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: kind === 'command' ? 'command' : '', view, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'router');
       const c = j.cmd || {};
@@ -2062,6 +2139,7 @@
     if (a === 'close_window') { if (!f) return false; closeWin(f); return true; }
     if (a === 'fullscreen') { if (!f) return false; setFull(f, c.on !== false); return true; }
     if (a === 'move_window') { if (!f) return false; const to = c.to === 'prev' || c.to === 'left' ? idx - 1 : c.to === 'next' || c.to === 'right' ? idx + 1 : +c.to - 1; return moveWin(f, to); }
+    if (a === 'quick_search') return openSearch(c.query, c.tab);
     if (a === 'search') { openSheet('launcher', c.query || text); return true; }
     if (a === 'open_view' || a === 'view' || a === 'show') {
       const v = String(c.view || arg).toLowerCase();
@@ -2092,7 +2170,8 @@
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
       LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });
       LIVE.markSeen(it.sessionId);
-    } else if (LIVE) { const s = LIVE.session(it.sessionId); if (s && !res.steered) Object.assign(s, { status: 'running', runId: res.runId, lastUserAt: new Date().toISOString() }); }
+    } else if (LIVE?.session(it.sessionId)?.synthetic) LIVE.markSeen(it.sessionId);
+    // A reply's thread is already held in Working with its live status by live.js (PEND), until Wizard lists the run.
     if (it.attempts) toast('✦', res.steered ? 'Delivered · steering the live run' : `Delivered to ${window.WizConfig.agent()}`, 2000);
     // First-try orb sends were already confirmed by the pill above the orb: no second banner.
     else if (res.steered) toast('✦', 'Sent · steering the live run', 1800);
@@ -2239,7 +2318,7 @@
     if (sheet) { closeSheets(); return 'sheet'; }
     const d = desks[idx], f = W[d.focus];
     if (f) {
-      if (f.app === 'chats' && f.thread) { chatsBack(f); return 'thread'; }
+      if (f.app === 'chats' && f.thread) return CHATS.threadBack(f);
       if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
       if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { nav.back(); return 'frame'; } }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }

@@ -147,4 +147,18 @@ public class UpdatePolicyTest {
         assertTrue(UpdatePolicy.mayPromptAgain(12, 12, true));
         assertTrue(UpdatePolicy.mayPromptAgain(12, 13, false));
     }
+
+    @Test
+    public void aPausedSideButtonOrFloatingOrbTakeHoldsTheUpdate() {
+        // 10 Oct: James paused a side-button take, 0.8.4 installed itself (paused = no active RECORD_AUDIO op) and the take was gone.
+        assertTrue(UpdatePolicy.takeLive(false, false, ai.wizards.os.MicOwner.SIDE, false));
+        assertTrue(UpdatePolicy.takeLive(false, false, ai.wizards.os.MicOwner.EVERYWHERE, false));
+        assertTrue(UpdatePolicy.takeLive(false, false, ai.wizards.os.MicOwner.MEETING, false));
+        assertTrue(UpdatePolicy.takeLive(true, false, null, false));
+        assertTrue(UpdatePolicy.takeLive(false, true, null, false));
+        assertTrue(UpdatePolicy.takeLive(false, false, null, true));
+        assertFalse(UpdatePolicy.takeLive(false, false, null, false));
+        boolean live = UpdatePolicy.takeLive(false, false, ai.wizards.os.MicOwner.SIDE, false);
+        assertEquals(UpdatePolicy.Step.DEFER, UpdatePolicy.next(true, true, true, false, live, true, false));
+    }
 }

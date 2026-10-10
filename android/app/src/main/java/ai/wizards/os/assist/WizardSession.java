@@ -47,6 +47,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     static final int ORB_DP = 132;
     static final int MARGIN_DP = 14;
     static final int BUBBLE_MAX_DP = 380;
+    /** After a take is handed to the outbox the orb plays its "sent" pulse and gets out of the way. */
+    static final long CLOSE_AFTER_SEND_MS = 450;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final VoiceCapture capture;
@@ -125,6 +127,11 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
             }
         });
         root.addView(web, new FrameLayout.LayoutParams(dp(ORB_DP), dp(ORB_DP), Gravity.BOTTOM | Gravity.END));
+        if (ai.wizards.os.BuildConfig.DEBUG) web.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            int[] at = new int[2]; // QA builds: where the orb window really is on screen, after every layout
+            v.getLocationOnScreen(at);
+            Log.i(TAG, "orb frame " + at[0] + "," + at[1] + "," + (r - l) + "," + (b - t));
+        });
         layoutOrb();
         web.loadUrl("file:///android_asset/assist/surface.html#corner");
         return root;
@@ -147,6 +154,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         capture.attach(this);
         ai.wizards.os.SideButton.markUsed(getContext()); // the side button really reached Wizard OS
         Log.i(TAG, "corner shown handoff=" + handoff + " listening=" + capture.listening());
+        awake = false;
+        syncAwake();
         Log.i(TAG, "shape corner wide=false");
         whenReady(() -> {
             if (handoff) {
@@ -159,7 +168,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
             if (capture.listening()) capture.send("button");
             else if (!capture.busy()) {
                 File qa = VoiceCapture.takeQaNext(getContext()); // debug builds only; null in release
-                capture.start(qa, qa != null ? 2500 : 0);
+                capture.start(qa, qa != null ? VoiceCapture.qaAutoSendMs(getContext(), 2500) : 0);
             }
         });
     }
@@ -167,16 +176,28 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     @Override
     public void onHide() {
         super.onHide();
-        // Dismissed (Back, Home, screen off): an unsent recording is dropped, never sent.
-        if (capture.listening()) {
-            Log.i(TAG, "corner hidden while listening; discarded");
-            capture.discard();
-        }
-        delivered = null;
+        // Dismissed (Back, Home, screen off, another app): what was said is never lost. A take with speech in it
+        // is sent exactly as if the pause had ended it, and a message already sending keeps going and toasts
+        // when it lands. Only Cancel throws a take away.
+        if (capture.listening()) capture.finishOnDismiss("dismiss");
         capture.detach(this);
+        capture.noteDismissed();
+        delivered = null;
+        main.removeCallbacks(closeAfterSend);
         setWide(false);
+        syncAwake();
         if (pageReady) js("W.reset&&W.reset()");
         Log.i(TAG, "corner hidden");
+    }
+
+    /**
+     * Back does nothing while the side-button orb is up (James, 10 Oct 2026): talking keeps going, a message that is
+     * sending keeps going, and the orb stays. The X (Cancel) is the only way to throw a take away; the orb closes
+     * itself after sending. The key is swallowed here so it never reaches the app underneath either.
+     */
+    @Override
+    public void onBackPressed() {
+        Log.i(TAG, "back ignored listening=" + capture.listening() + " sending=" + capture.sending());
     }
 
     @Override
@@ -238,13 +259,46 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         });
     }
 
-    @Override public void onBegin() { js("W.begin()"); }
+    /**
+     * The screen never dims or locks while the side-button orb has a live take (talking or paused): the orb's window
+     * holds FLAG_KEEP_SCREEN_ON exactly as long as the microphone take is open, and lets go on send/cancel/hide.
+     */
+    private boolean awake;
+
+    private void syncAwake() {
+        boolean on = capture.listening();
+        if (on == awake) return;
+        awake = on;
+        android.view.Window w = getWindow() == null ? null : getWindow().getWindow();
+        if (w == null) return;
+        if (on) w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else w.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        Log.i(TAG, "keep screen on " + on);
+    }
+
+    private final Runnable closeAfterSend = this::closeIfSent;
+
+    private void closeIfSent() {
+        if (!capture.listening()) {
+            Log.i(TAG, "sent; corner closes itself");
+            hide();
+        }
+    }
+
+    @Override public void onBegin() { main.removeCallbacks(closeAfterSend); syncAwake(); js("W.begin()"); }
 
     @Override public void onLevel(float level) { js("W.level(" + level + ")"); }
 
-    @Override public void onNothing() { js("W.onNothing()"); }
+    @Override public void onNothing() { syncAwake(); js("W.onNothing()"); }
 
-    @Override public void onSending(String via) { js("W.onSending(" + JSONObject.quote(via) + ")"); }
+    @Override
+    public void onSending(String via) {
+        syncAwake();
+        js("W.onSending(" + JSONObject.quote(via) + ")");
+        // Snappy: it is already saved on the phone and on its way; the orb leaves instead of narrating the trip.
+        main.removeCallbacks(closeAfterSend);
+        main.postDelayed(closeAfterSend, CLOSE_AFTER_SEND_MS);
+    }
 
     @Override
     public void onHeard(String text, long ms) {
@@ -254,6 +308,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
 
     @Override
     public void onError(String kind, String message) {
+        syncAwake();
         js("W.onError(" + JSONObject.quote(kind) + "," + JSONObject.quote(message) + ")");
     }
 
@@ -265,7 +320,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
 
     @Override public void onQueued(String why) { js("W.onQueued(" + JSONObject.quote(why) + ")"); }
 
-    @Override public void onPaused(boolean p) { js("W.onPaused(" + p + ")"); }
+    @Override public void onPaused(boolean p) { syncAwake(); js("W.onPaused(" + p + ")"); }
 
     private String delivered;
 
@@ -281,7 +336,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
 
         @JavascriptInterface public void listen() { main.post(() -> capture.start(null, 0)); }
 
-        @JavascriptInterface public void cancel() { main.post(capture::discard); }
+        @JavascriptInterface public void cancel() { main.post(() -> { capture.discard(); syncAwake(); }); }
 
         @JavascriptInterface public void pause() { main.post(capture::togglePause); }
 
@@ -300,6 +355,44 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         @JavascriptInterface public void full() { }
 
         @JavascriptInterface public void corner(boolean w) { main.post(() -> setWide(w)); }
+
+        /** Screen: attach what is on the phone right now to this take (the orb steps out of the picture). */
+        @JavascriptInterface public void shot() { main.post(WizardSession.this::screenshot); }
+
+        @JavascriptInterface public int shots() { return capture.shotCount(); }
+    }
+
+    /* ---------------------------------------------------------------- Screen */
+
+    private boolean shotPending;
+
+    /**
+     * Screen button: hide the orb, capture the app underneath through the accessibility service (the same one the
+     * floating orb uses), attach it to the take, show the orb again. Without accessibility it opens the one-step setup.
+     */
+    private void screenshot() {
+        if (!capture.listening() || shotPending) return;
+        if (capture.shotCount() >= VoiceCapture.MAX_SHOTS) { js("W.onShot(-2)"); return; }
+        if (Build.VERSION.SDK_INT < 30) { js("W.onShot(-3)"); return; }
+        ai.wizards.os.everywhere.WizardKeyboardService k = ai.wizards.os.everywhere.WizardKeyboardService.get();
+        if (k == null) {
+            Log.i(TAG, "screen tapped without accessibility: opening setup");
+            Intent i = new Intent(ai.wizards.os.MainActivity.ACTION_ACCESSIBILITY)
+                    .setClassName(getContext().getPackageName(), "ai.wizards.os.MainActivity")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startAssistantActivity(i);
+            return;
+        }
+        shotPending = true;
+        if (web != null) web.setAlpha(0f);
+        Log.i(TAG, "screenshot requested");
+        main.postDelayed(() -> k.screenshot(png -> main.post(() -> {
+            shotPending = false;
+            if (web != null) web.setAlpha(1f);
+            boolean ok = capture.addShot(png);
+            if (!ok && (png == null || png.length == 0)) Log.w(TAG, "screenshot empty");
+            js("W.onShot(" + (ok ? capture.shotCount() : -1) + ")");
+        })), 160);
     }
 
 }

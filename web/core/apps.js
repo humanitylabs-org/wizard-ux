@@ -97,7 +97,36 @@
       return APPS.map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; })
         .filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
     }
-    return { APPS, APP, findApp, searchApps };
+    // Quick search (the "image search …" / "search …" spell). The search app is whichever installed or
+    // linked app has the id `wizard-search`; with none, the spell is off and the phrase routes as before.
+    const searchApp = () => APP['wizard-search'] || null;
+    function searchUrl(query, tab) {
+      const a = searchApp(); if (!a || !a.url || !query) return '';
+      const u = new URL(a.url, location.origin);
+      u.searchParams.set('q', query); if (tab === 'images') u.searchParams.set('tab', 'images');
+      return u.pathname + u.search;
+    }
+    return { APPS, APP, findApp, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
+  }
+  /* "image search capybaras", "pictures of eames chairs", "search why is the sky blue", "quick search …".
+   * Returns { query, tab: 'images' | 'all' } or null. Thread/app searches ("search my chats for …") stay with the shell. */
+  function parseQuickSearch(text) {
+    let s = String(text || '').trim().replace(/^(hey |ok |okay )?(wizard|archimedes)[,.!]?\s+/i, '').replace(/[.!?,\s]+$/, '').replace(/,?\s+please$/i, '');
+    const IMG = '(?:image|images|picture|pictures|photo|photos|pic|pics)';
+    let m = s.match(new RegExp(`^${IMG}\\s*search(?:\\s+(?:for|of))?\\s+(.+)$`, 'i'))
+      || s.match(new RegExp(`^search\\s+(?:for\\s+)?${IMG}\\s+(?:of|for)\\s+(.+)$`, 'i'))
+      || s.match(new RegExp(`^search\\s+${IMG}\\s+(.+)$`, 'i'))
+      || s.match(new RegExp(`^(?:show me|find|find me|get me|pull up)\\s+(?:some\\s+)?${IMG}\\s+of\\s+(.+)$`, 'i'))
+      || s.match(new RegExp(`^${IMG}\\s+of\\s+(.+)$`, 'i'));
+    if (m) return { query: m[1].trim(), tab: 'images', strong: true };
+    if (/^search\s+(?:in\s+)?(?:my|the)\s+(?:chats?|threads?|inbox|apps?|files|notes|messages)\b/i.test(s)) return null;
+    // The two spells work everywhere; plain "search / look up / google …" works unless a thread is in front
+    // (there it may be a request to the agent, so the caller decides with `strong`).
+    m = s.match(/^(?:quick search|web search|search the web|overview(?: of)?)(?:\s+(?:for|on|of))?\s+(.+)$/i);
+    if (m) return { query: m[1].trim(), tab: 'all', strong: true };
+    m = s.match(/^(?:search|look up|lookup|google)(?:\s+(?:for|on))?\s+(.+)$/i);
+    if (m) return { query: m[1].trim(), tab: 'all', strong: false };
+    return null;
   }
   window.WizCore.apps = registry;
 })();

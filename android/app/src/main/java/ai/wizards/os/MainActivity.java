@@ -79,16 +79,29 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(5, 3, 12));
-        // targetSdk 35 draws edge to edge: keep the shell clear of the status and navigation bars.
+        // targetSdk 35 draws edge to edge. The page itself runs under the status bar so its background reaches the
+        // top of the glass (James, 10 Oct: "like Telegram"); the shell keeps its content clear of the bar with the
+        // inset it is told (--nat-t). Only the side cutouts, the navigation bar and the keyboard still pad the view.
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             if (Build.VERSION.SDK_INT >= 30) {
-                int types = WindowInsets.Type.systemBars() | WindowInsets.Type.ime() | WindowInsets.Type.displayCutout();
+                // Immersive full screen: the bars are hidden and only the keyboard pushes the shell up.
+                int types = immersive ? WindowInsets.Type.ime()
+                        : WindowInsets.Type.systemBars() | WindowInsets.Type.ime() | WindowInsets.Type.displayCutout();
                 android.graphics.Insets i = insets.getInsets(types);
-                v.setPadding(i.left, i.top, i.right, i.bottom);
+                int cut = insets.getInsets(WindowInsets.Type.displayCutout()).top;
+                reportCutout(cut);
+                reportTop(immersive ? 0 : Math.max(cut, insets.getInsets(WindowInsets.Type.statusBars()).top));
+                v.setPadding(i.left, 0, i.right, i.bottom);
                 return WindowInsets.CONSUMED;
             }
             return insets; // API 28-29 do not draw edge to edge; the system already keeps content clear
         });
+        // Let the window extend into the camera cutout; the insets listener decides when content actually goes there.
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.layoutInDisplayCutoutMode = Build.VERSION.SDK_INT >= 30
+                ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        getWindow().setAttributes(lp);
         setContentView(root);
         buildWebView();
         if (state != null) web.restoreState(state);
@@ -124,6 +137,9 @@ public class MainActivity extends Activity {
         if (mizel != null) mizel.detach();
         mizel = ai.wizards.os.mizel.MizelBridge.install(web, BuildConfig.ORIGIN);
 
+        // A WebView cannot save files. Anything it is asked to download (an APK, a PDF, an export) goes to
+        // Android's download manager, so the file lands in Downloads with a notification you can tap to open or install.
+        web.setDownloadListener((url, userAgent, disposition, mime, length) -> downloadOutside(url, userAgent, disposition, mime));
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
@@ -147,6 +163,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 if (!url.startsWith("data:")) showingError = false;
+                topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
             }
 
             @Override
@@ -173,6 +190,7 @@ public class MainActivity extends Activity {
                 try {
                     Intent pick = params.createIntent();
                     pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);
+                    pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     startActivityForResult(pick, REQ_FILE);
                     return true;
                 } catch (ActivityNotFoundException e) {
@@ -262,6 +280,26 @@ public class MainActivity extends Activity {
         }
     };
 
+    private void downloadOutside(String url, String userAgent, String disposition, String mime) {
+        Uri u = Uri.parse(url);
+        if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) { openOutside(u); return; }
+        try {
+            String name = android.webkit.URLUtil.guessFileName(url, disposition, mime);
+            android.app.DownloadManager.Request r = new android.app.DownloadManager.Request(u)
+                    .setMimeType(mime)
+                    .setTitle(name)
+                    .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name);
+            if (userAgent != null) r.addRequestHeader("User-Agent", userAgent);
+            String cookie = android.webkit.CookieManager.getInstance().getCookie(url);
+            if (cookie != null) r.addRequestHeader("Cookie", cookie);
+            ((android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(r);
+            Toast.makeText(this, "Downloading " + name + " · it'll be in Downloads", Toast.LENGTH_SHORT).show();
+        } catch (RuntimeException e) {
+            openOutside(u); // no download manager / storage refused: let the browser fetch it
+        }
+    }
+
     private void openOutside(Uri u) {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE));
@@ -322,8 +360,20 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
         if (code != REQ_FILE || pendingFiles == null) return;
-        pendingFiles.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result, data));
+        pendingFiles.onReceiveValue(pickedUris(result, data));
         pendingFiles = null;
+    }
+
+    /* A multi-pick comes back as ClipData; FileChooserParams.parseResult only reads getData(), so it dropped
+     * every file but one. Read every ClipData item, then fall back to the single result. */
+    static Uri[] pickedUris(int result, Intent data) {
+        if (result != Activity.RESULT_OK || data == null) return null;
+        java.util.ArrayList<Uri> out = new java.util.ArrayList<>();
+        android.content.ClipData clip = data.getClipData();
+        if (clip != null) for (int i = 0; i < clip.getItemCount(); i++) { Uri u = clip.getItemAt(i).getUri(); if (u != null && !out.contains(u)) out.add(u); }
+        if (out.isEmpty() && data.getData() != null) out.add(data.getData());
+        if (out.isEmpty()) return WebChromeClient.FileChooserParams.parseResult(result, data);
+        return out.toArray(new Uri[0]);
     }
 
     /* ---------------- Lifecycle ---------------- */
@@ -355,7 +405,9 @@ public class MainActivity extends Activity {
     /** Sticky immersive: the system bars hide, a swipe from the edge shows them briefly over the app. */
     @SuppressWarnings("deprecation")
     void applyImmersive(boolean on) {
+        boolean changed = immersive != on;
         immersive = on;
+        if (changed && root != null) root.requestApplyInsets(); // re-pad: edge to edge in, clear of the bars out
         if (Build.VERSION.SDK_INT >= 30) {
             android.view.WindowInsetsController c = getWindow().getInsetsController();
             if (c == null) return;
@@ -367,6 +419,31 @@ public class MainActivity extends Activity {
             View d = getWindow().getDecorView();
             d.setSystemUiVisibility(on ? (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) : 0);
         }
+    }
+
+    private volatile int cutoutCss = 0;
+    private int cutoutSent = -1;
+    /** The camera cutout height in CSS px, so full-screen pages can keep small top controls clear of it.
+     *  Pushed on change; the page also reads it with WizardOSNative.cutoutTop() when it boots. */
+    private int cutoutPx = 0;
+    private void reportCutout(int px) {
+        cutoutPx = px;
+        cutoutCss = Math.round(px / getResources().getDisplayMetrics().density);
+        if (cutoutCss == cutoutSent || web == null) return;
+        cutoutSent = cutoutCss;
+        web.evaluateJavascript("(window.__wosCutout && window.__wosCutout(" + cutoutCss + "))", null);
+    }
+
+    private volatile int topCss = 0;
+    private int topSent = -1;
+    /** Status bar (or camera, whichever is taller) height in CSS px the shell keeps its content below; 0 in immersive. */
+    private int topPx = 0;
+    private void reportTop(int px) {
+        topPx = px;
+        topCss = Math.round(px / getResources().getDisplayMetrics().density);
+        if (topCss == topSent || web == null) return;
+        topSent = topCss;
+        web.evaluateJavascript("(window.__wosTop && window.__wosTop(" + topCss + "))", null);
     }
 
     @Override
@@ -631,6 +708,14 @@ public class MainActivity extends Activity {
         /** Full-screen window in the shell: hide Android's status and navigation bars too (edge swipe peeks them). */
         @JavascriptInterface
         public void immersive(boolean on) { runOnUiThread(() -> applyImmersive(on)); }
+
+        /** Camera cutout height in CSS px (0 when the phone has none). */
+        @JavascriptInterface
+        public int cutoutTop() { return cutoutCss; }
+
+        /** Status bar inset in CSS px the page draws under (0 in immersive full screen). */
+        @JavascriptInterface
+        public int insetTop() { return topCss; }
 
         @JavascriptInterface
         public void haptic(int ms) {

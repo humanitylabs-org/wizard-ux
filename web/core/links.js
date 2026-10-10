@@ -214,6 +214,10 @@
       // Chat-kit links that already open in place: @session threads, Wizard Files, inline media.
       if (a.hasAttribute('data-session') || a.hasAttribute('data-mlink') || a.closest('[data-mi]')) return;
       const u = abs(a.getAttribute('href')); if (!u || !/^https?:$/.test(u.protocol)) return;
+      // A thread link to this app inside a Chats thread is left to chats.js, which opens it in place and
+      // remembers the thread it came from (Done/Back step back to it).
+      const DL0 = window.WizCore && window.WizCore.deeplink, d0 = DL0 && DL0.isOwn(u) ? DL0.parse(u.href) : null;
+      if (d0 && d0.session && !d0.video && a.closest('[data-chats]')) { e.preventDefault(); return; }
       e.preventDefault(); e.stopPropagation();
       if (inApp(u) && isImage(u) && viewImage(u, a.ownerDocument)) return;
       // A link to this app itself (…/wizard-os-home/?session=…, ?view=…) opens in place, not in a sheet.

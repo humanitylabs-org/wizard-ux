@@ -69,6 +69,8 @@
       updatedAt: lastUserAt ?? iso(item.wizard_started_at ?? item.updated_at ?? item.last_active ?? item.started_at),
       activityAt: optIso(item.wizard_activity_at) || optIso(item.last_active),
       runId: String(item.wizard_run_id || ''),
+      // The idempotency key of the newest run Wizard knows for this thread (= the outbox item id for our sends).
+      lastRunKey: String(item.wizard_last_run_idempotency_key || ''),
       preview, previewRole: latest?.role === 'assistant' ? 'assistant' : latest?.role === 'user' ? 'user' : undefined,
       previewAt: latestAt,
       requestAt: userAt || lastUserAt,
@@ -222,11 +224,94 @@
       else if (!s.restoredAt || Date.parse(r) > Date.parse(s.restoredAt)) s.restoredAt = r;
     }
     const o = OVER.get(s.id); if (o) Object.assign(s, o.patch);
+    applyPend(s);
     // A Stop James asked for shows as “Stopping…” until Wizard reports the run settled (max 2 min).
     const st = s.runId && STOPPING.get(s.runId);
     if (st) { if (!WORKING.has(s.status) || Date.now() - st > 120000) STOPPING.delete(s.runId); else s.status = 'stopping'; }
   }
   const STOPPING = new Map();
+
+  /* ---- a send puts its thread in Working at once (James, 10 Oct 2026: "move it out of the ready list immediately
+   * and into working… I don't want to see the thread I just replied to in my feed and then have a UX update") ----
+   * Every reply / new chat in the outbox holds its thread in Working, with a status that follows the message:
+   * Sending… (leaving the phone) → Offline · will retry (Wizard unreachable) → Starting… (Wizard accepted it)
+   * → Working (Wizard lists the run). The hold outlives stale list reads and releases to Wizard's own truth as soon
+   * as Wizard reports this run (its idempotency key = the outbox item id); 2 min after acceptance it releases anyway.
+   * A message that truly can't be sent puts the thread back where it was (the pill keeps Retry/Edit). */
+  const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
+  const PEND_MAX = 2 * 60e3;
+  // Released only on Wizard's own word for THIS message (run idempotency key = outbox item id): no clock comparisons.
+  // (or Wizard lists the very run it accepted for it, as working).
+  const confirmed = (s, p) => {
+    const st = s.orig ? s.orig.status : s.status, run = s.orig ? s.orig.runId : s.runId;
+    return (!!p.key && s.lastRunKey === p.key) || (!!p.runId && run === p.runId && WORKING.has(st));
+  };
+  /* The send tap itself (James, 10 Oct 2026: "the thread I just exited moving to working immediately… It should just
+   * automatically disappear" from Ready). An orb send reaches the outbox only after transcription and routing (seconds,
+   * longer on a bad line), so the thread is held in Working from the tap: replaced by the outbox item the moment it
+   * exists, released if the take turns out empty or becomes a phone command, and never longer than TAP_MAX. */
+  const TAPS = new Map(); // sessionId -> { at, until }
+  const TAP_MAX = 60e3;
+  const RELEASED = new Set(); // outbox item ids whose hold is over (so a later outbox change doesn't re-hold them)
+  function applyPend(s) {
+    const p = PEND.get(s.id);
+    if (p && (confirmed(s, p) || (p.sentAt && Date.now() - p.sentAt > PEND_MAX))) { RELEASED.add(p.key); PEND.delete(s.id); unPend(s); return; }
+    if (!p) { if (s.pend !== undefined) unPend(s); return; }
+    if (!s.orig) s.orig = { status: s.status, runId: s.runId, assignedAt: s.assignedAt, requestAt: s.requestAt };
+    const at = new Date(p.at).toISOString();
+    // Already working (a message into a live run) keeps Wizard's status; anything else is held in Working.
+    if (!WORKING.has(s.orig.status) && s.orig.status !== 'waiting_for_approval') {
+      s.status = p.state === 'sent' ? 'running' : 'submitting';
+      s.runId = p.runId || ''; // never an older finished run (a quick second reply must not try to steer it)
+      s.assignedAt = at; s.requestAt = at;
+    }
+    // What the row says: Sending… → (Offline · will retry) → Starting… → (Wizard reports the run) Working.
+    s.pend = p.state === 'sent' ? 'starting' : p.state;
+    s.pendText = p.text; // shown in the row; s.preview stays Wizard's so read-state fingerprints are untouched
+  }
+  function unPend(s) {
+    if (s.orig) { for (const [k, v] of Object.entries(s.orig)) { if (v === undefined) delete s[k]; else s[k] = v; } }
+    delete s.orig; delete s.pend; delete s.pendText;
+  }
+  // Re-read the outbox: which threads are held, and in what state. Returns true when anything changed.
+  function syncPending(OB) {
+    const before = [...PEND].map(([k, p]) => k + p.key + p.state).join();
+    const latest = new Map();
+    for (const it of OB._items.values()) {
+      if ((it.kind !== 'reply' && it.kind !== 'new') || !it.sessionId) continue;
+      const cur = latest.get(it.sessionId); if (!cur || it.createdAt > cur.createdAt) latest.set(it.sessionId, it);
+    }
+    for (const [sid, p] of PEND) if (!latest.has(sid) && p.state !== 'sent') PEND.delete(sid); // deleted / taken back to edit
+    for (const [sid, it] of latest) {
+      const tap = TAPS.get(sid); if (tap && it.createdAt >= tap.at) TAPS.delete(sid); // the message itself takes over
+      const known = PEND.get(sid);
+      const drop = it.state === 'failed' || it.state === 'empty' || (it.state === 'sent' && it.steered);
+      if (drop) { PEND.delete(sid); continue; }
+      if (RELEASED.has(it.id) || (it.state === 'sent' && !known && Date.now() - (it.sentAt || 0) > PEND_MAX)) { if (known?.key === it.id) PEND.delete(sid); continue; } // already settled
+      const text = String(it.text || '').replace(/\s+/g, ' ').trim() || (it.audio || it.audioFile ? '🎙 Voice note' : (it.files || []).length ? '📎 Attachment' : '');
+      PEND.set(sid, { key: it.id, kind: it.kind, text, at: it.createdAt, state: it.state === 'sent' ? 'sent' : it.state === 'waiting' ? 'waiting' : 'sending', sentAt: it.sentAt || 0, runId: it.runId || '' });
+    }
+    // An orb send still being transcribed/routed: Working from the send tap (outranks an older message's state).
+    for (const [sid, t] of TAPS) {
+      if (Date.now() > t.until) { TAPS.delete(sid); if (PEND.get(sid)?.key === 'tap:' + t.at) PEND.delete(sid); continue; }
+      PEND.set(sid, { key: 'tap:' + t.at, kind: 'reply', text: '🎙 Voice reply', at: t.at, state: 'sending', sentAt: 0, runId: '' });
+    }
+    for (const [sid, p] of PEND) if (String(p.key).startsWith('tap:') && !TAPS.has(sid)) PEND.delete(sid);
+    // Apply to the list in hand: held threads get the overlay, released ones go back, new chats get a row.
+    for (const s of L.sessions) if (PEND.has(s.id) || s.pend !== undefined) applyPend(s);
+    L.sessions = L.sessions.filter(s => !(s.synthetic && !PEND.has(s.id)));
+    addSynthetic(L.sessions);
+    return before !== [...PEND].map(([k, p]) => k + p.key + p.state).join();
+  }
+  // A new chat is listed before Wizard has created it, so it lands in Working the moment it is sent.
+  function addSynthetic(list) {
+    for (const [sid, p] of PEND) {
+      if (p.kind !== 'new' || list.some(s => s.id === sid)) continue;
+      const at = new Date(p.at).toISOString();
+      const s = { id: sid, runtime: 'direct', title: (p.text || 'New chat').slice(0, 60), status: 'submitting', updatedAt: at, preview: p.text, previewRole: 'user', source: 'wizard-mobile', optimistic: true, synthetic: true };
+      list.unshift(s); applyPend(s);
+    }
+  }
   const commandId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 
   /* ---- store ---- */
@@ -272,6 +357,7 @@
           }
           // A settled action stays applied until a list read that started after it lands.
           for (const [k, o] of OVER) if (o.settled && o.settled < started) OVER.delete(k);
+          addSynthetic(sessions);
           this.sessions = sessions; this.deferred = deferred;
           let merged = merge(readLocal(), merge(this.seen, remote));
           if (!merged) { // first run anywhere: everything currently visible counts as read
@@ -418,6 +504,23 @@
   addEventListener('storage', e => { if (e.key === SEEN_KEY || e.key === SEEN_BASE) { L.seen = merge(L.seen, readLocal()); L.emit(); } });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) L.refresh(); });
   setInterval(() => { if (!document.hidden) L.refresh(); }, 15000);
+  // outbox.js loads after this file: follow it once every script has run.
+  function attachOutbox() {
+    const OB = window.WosOutbox; if (!OB || L._outbox) return; L._outbox = true;
+    const sync = () => { if (syncPending(OB)) L.emit(); };
+    OB.onChange(sync); OB.load().then(sync).catch(() => {});
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox); else setTimeout(attachOutbox, 0);
+  L.pending = id => PEND.get(id) || null;
+  const resync = () => { const OB = window.WosOutbox; if (OB && syncPending(OB)) L.emit(); };
+  // Returns a token for releaseSend. '__new__' has no row to move (a new chat is listed once it is in the outbox).
+  L.holdSend = sid => {
+    if (!sid || sid === '__new__') return null;
+    const t = { sid, at: Date.now(), until: Date.now() + TAP_MAX }; TAPS.set(sid, t);
+    resync(); setTimeout(resync, TAP_MAX + 50);
+    return t;
+  };
+  L.releaseSend = t => { if (t && TAPS.get(t.sid) === t) { TAPS.delete(t.sid); resync(); } };
   window.WizLive = L;
   window.__wizLiveInternals = { hasNew, recordFor, merge, fingerprint, normalize };
 })();

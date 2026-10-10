@@ -161,7 +161,7 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
         // Screen off or the user left: the overlay is a moment, not an app. Next hold starts fresh.
         if (!isChangingConfigurations() && !unlockInFlight && !handingOff) {
             Log.i(TAG, "stopped; closing surface");
-            discardRecording();
+            capture.finishOnDismiss("dismiss"); // anything said still goes; an empty take is dropped
             finish();
         }
     }
@@ -169,21 +169,20 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
     @SuppressWarnings("deprecation")
     @Override
     public void onBackPressed() {
-        // One Back = one step. The surface closes its list/card first; otherwise Back closes the
-        // overlay onto the lock screen, which is the phone's own root. Back never sends anything.
-        if (!pageReady) {
-            closeSurface();
-            return;
-        }
+        // Back never ends a take or closes the surface (James, 10 Oct 2026): only the X cancels. The one thing Back
+        // still does is close the private list if it is open (a step inside the surface, not an exit).
+        if (!pageReady) { Log.i(TAG, "back ignored (page loading)"); return; }
         web.evaluateJavascript("(window.W && W.back()) || ''", value -> {
-            if (value == null || !value.contains("handled")) closeSurface();
+            if (value == null || !value.contains("handled"))
+                Log.i(TAG, "back ignored listening=" + capture.listening());
         });
     }
 
     @Override
     protected void onDestroy() {
+        main.removeCallbacks(closeAfterSend);
         try { unregisterReceiver(userPresent); } catch (IllegalArgumentException ignored) { }
-        if (!handingOff) discardRecording();
+        if (!handingOff) capture.finishOnDismiss("dismiss");
         capture.detach(this);
         if (web != null) {
             web.destroy();
@@ -208,13 +207,27 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
 
     private void discardRecording() { capture.discard(); }
 
-    @Override public void onBegin() { js("W.begin()"); }
+    @Override public void onBegin() { main.removeCallbacks(closeAfterSend); js("W.begin()"); }
 
     @Override public void onLevel(float level) { js("W.level(" + level + ")"); }
 
     @Override public void onNothing() { js("W.onNothing()"); }
 
-    @Override public void onSending(String via) { js("W.onSending(" + JSONObject.quote(via) + ")"); }
+    /** After sending, the lock-screen surface shows its "sent" pulse and returns to the lock screen (no lingering card). */
+    static final long CLOSE_AFTER_SEND_MS = 650;
+    private final Runnable closeAfterSend = () -> {
+        if (!capture.listening() && !isFinishing() && !handingOff) {
+            Log.i(TAG, "sent; surface closes itself");
+            closeSurface();
+        }
+    };
+
+    @Override
+    public void onSending(String via) {
+        js("W.onSending(" + JSONObject.quote(via) + ")");
+        main.removeCallbacks(closeAfterSend);
+        main.postDelayed(closeAfterSend, CLOSE_AFTER_SEND_MS);
+    }
 
     @Override
     public void onHeard(String text, long ms) {
@@ -256,8 +269,11 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
         }
     }
 
+    /** Back / close: anything said is sent (never lost), an empty take is dropped. Cancel is the only discard. */
     private void closeSurface() {
-        discardRecording();
+        capture.finishOnDismiss("dismiss");
+        capture.detach(this);
+        capture.noteDismissed();
         Log.i(TAG, "surface closed");
         finish();
     }

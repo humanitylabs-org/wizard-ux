@@ -268,8 +268,10 @@ public final class Updater {
 
     /** Any Wizard OS recording: native recorder, app orb, floating orb / side button (microphone op active). */
     public static boolean recording(Context c) {
-        if (ai.wizards.os.recording.RecorderService.active() != null) return true;
-        if (ai.wizards.os.everywhere.EverywhereService.appIsRecording()) return true;
+        // A side-button / floating-orb / meeting take holds the one mic owner from start until send or cancel, paused
+        // included (a paused MediaRecorder is not an active RECORD_AUDIO op, so the AppOps check below misses it).
+        if (UpdatePolicy.takeLive(ai.wizards.os.recording.RecorderService.active() != null,
+                ai.wizards.os.everywhere.EverywhereService.appIsRecording(), ai.wizards.os.MicOwner.holder(), false)) return true;
         if (Build.VERSION.SDK_INT >= 30) {
             try {
                 AppOpsManager ops = c.getSystemService(AppOpsManager.class);
