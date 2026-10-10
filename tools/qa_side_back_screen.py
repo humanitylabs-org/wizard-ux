@@ -255,32 +255,39 @@ with (BASE / 'worker.lock').open('a') as lock:
         # A. James's exact case: talk, it sends, he presses Back to leave the page he was on.
         d0 = open_settings_sub(); shot('a0-settings-display')
         check('setup: a page with somewhere to go Back to (Settings → Battery)', d0 == 'sub', d0)
-        arm(1500); n0 = len(side_runs()); STATE['slow'] = 4.0
-        hold(); sl = wait_log('sending via=', 12, alogs); shot('a1-sending')
-        check('A: side button take ends by itself and starts sending', 'sending via=qa' in sl, sl or alogs('listening|corner'))
-        sx('input keyevent KEYCODE_BACK'); time.sleep(1.5); shot('a2-after-back')
-        bl = alogs('back pressed|corner hidden|back passed|discard')
-        check('A: Back while sending closes the orb', 'corner hidden' in bl, bl)
+        arm(0); n0 = len(side_runs())
+        hold(); ll = wait_log('listening', 10, alogs); time.sleep(1.5); shot('a1-listening')
+        check('A: side button is listening', 'listening' in ll, ll)
+        sx('input keyevent KEYCODE_BACK'); time.sleep(1.0); shot('a2-after-back')
+        bl = alogs('back ignored|back pressed|corner hidden|back passed|dismissed|sending via')
+        check('A: Back while the orb is up is ignored (still listening, orb stays, nothing sent)',
+              'back ignored listening=true' in bl and 'corner hidden' not in bl and 'sending via' not in bl, bl)
+        fr = sx(f'logcat -d -s WizardOSAssist:* | grep "orb frame" | tail -1').strip()
+        fx, fy, fw, fh = map(int, re.search(r'orb frame (\d+),(\d+),(\d+),(\d+)', fr).groups())
+        sx(f'input tap {fx + fw - dp(66)} {fy + fh // 2}')  # tap the orb = send, as on the phone
+        sl = wait_log('sending via', 8, alogs)
+        check('A: tapping the orb after that Back sends it', 'sending via=button' in sl or 'sending via=tap' in sl or 'sending via' in sl, sl)
         got = wait_runs(n0 + 1)
-        check('A: the message still reaches Wizard (exactly once)', got == n0 + 1, (got, STATE['log'][-6:]))
-        STATE['slow'] = 0; time.sleep(2)
-        print('  in-flight evidence:', alogs('toast|delivered|closes itself'))
-        check('A: no lingering "Sent to Wizard" toast (0.8.6: the orb closes itself right after sending)', 'Sent to Wizard' not in alogs('toast'), alogs('toast'))
-        pb = alogs('back passed')
-        d1 = settings_depth(); shot('a3-page-went-back')
-        check('A: the same Back also went back in the page underneath (Battery → Settings)', d1 == 'root', (pb, d1))
+        check('A: the message reaches Wizard exactly once', got == n0 + 1, (got, STATE['log'][-6:]))
+        d1 = settings_depth(); shot('a3-page-stays')
+        check('A: Back never reached the app underneath (Battery page stays)', d1 == 'sub' and not alogs('back passed'), d1)
 
         # B. Back in the middle of talking: what was said is sent, not thrown away.
         d0 = open_settings_sub()
         arm(0); n0 = len(side_runs())
         hold(); ll = wait_log('listening', 10, alogs); time.sleep(1.5); shot('b1-listening')
         check('B: side button is listening', 'listening' in ll, ll)
-        sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
-        bl = alogs('dismissed while listening|sending via|corner hidden|discard')
-        check('B: Back mid-talk sends what was said', 'action=SEND' in bl and 'sending via=dismiss' in bl, bl)
-        got = wait_runs(n0 + 1)
-        check('B: it reaches Wizard exactly once', got == n0 + 1, got)
-        check('B: that Back only closed the orb (page stays put)', settings_depth() == 'sub', settings_depth())
+        for _ in range(2): sx('input keyevent KEYCODE_BACK'); time.sleep(0.8)
+        time.sleep(1); shot('b2-after-back')
+        bl = alogs('back ignored|dismissed while listening|sending via|corner hidden|discard')
+        check('B: Back mid-talk is ignored: still listening, nothing sent, orb still up',
+              'back ignored listening=true' in bl and 'sending via' not in bl and 'corner hidden' not in bl and len(side_runs()) == n0, bl)
+        # Only the X ends it: Cancel throws it away.
+        fr = sx(f'logcat -d -s WizardOSAssist:* | grep "orb frame" | tail -1').strip()
+        fx, fy, fw, fh = map(int, re.search(r'orb frame (\d+),(\d+),(\d+),(\d+)', fr).groups())
+        sx(f'input tap {fx + fw - dp(196 + 23)} {fy + fh // 2}'); time.sleep(3)
+        check('B: the X after those Backs discards it (nothing sent)', len(side_runs()) == n0 and 'sending via' not in alogs('sending via'), alogs('sending via|discard'))
+        check('B: the page underneath never moved', settings_depth() == 'sub', settings_depth())
 
         # C. Screen button on the side-button orb: attach the screen, then it sends with the take.
         # No uiautomator from here until the chip is tapped: a UiAutomation connection suspends every other
@@ -309,7 +316,9 @@ with (BASE / 'worker.lock').open('a') as lock:
         (job / 'logcat-c.txt').write_text(sx('logcat -d'))
         print('  C trace:', alogs('screen chip|screenshot|onHide from|sending via')[-600:])
         check('C: Screen chip shows while the side-button orb listens and attaches a screenshot', 'screenshot attached 1' in sa, sa or alogs('screen|shot'))
-        sx('input keyevent KEYCODE_BACK'); time.sleep(1)
+        fr = sx(f'logcat -d -s WizardOSAssist:* | grep "orb frame" | tail -1').strip()
+        fx, fy, fw, fh = map(int, re.search(r'orb frame (\d+),(\d+),(\d+),(\d+)', fr).groups())
+        sx(f'input tap {fx + fw - dp(66)} {fy + fh // 2}'); time.sleep(1.5)  # tap the orb = send
         sl = alogs('sending via')
         check('C: the take goes with the screenshot', 'shots=1' in sl, sl)
         got = wait_runs(n0 + 1)
@@ -328,17 +337,19 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx(f'input tap {fx + fw - dp(196 + 23)} {fy + fh // 2}'); time.sleep(3)
         cl = alogs('sending via|discard|corner hidden')
         check('C2: Cancel chip on the side-button orb discards (nothing sent)', len(side_runs()) == n0 and 'sending via' not in cl, (len(side_runs()) - n0, cl))
-        sx('input keyevent KEYCODE_BACK'); time.sleep(1)
 
         # D. Lock-screen surface: Back mid-talk also sends.
         n0 = len(side_runs())
         sx(f'run-as {PKG} cp /data/local/tmp/qa_voice.m4a files/qa_side.m4a'); sx('logcat -c')
-        sx(f'am start -W -a android.intent.action.ASSIST -n {PKG}/ai.wizards.os.assist.AssistLockActivity --es qa_audio qa_side.m4a')
+        sx(f'am start -W -a android.intent.action.ASSIST -n {PKG}/ai.wizards.os.assist.AssistLockActivity --es qa_audio qa_side.m4a --el qa_autosend_ms 6000')
         wait_log('listening', 10, alogs); time.sleep(1.5)
         sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
-        dl = alogs('dismissed while listening|sending via|surface closed')
-        got = wait_runs(n0 + 1)
-        check('D: full surface Back mid-talk sends too (never lost)', 'action=SEND' in dl and got == n0 + 1, (dl, got))
+        dl = alogs('back ignored|dismissed while listening|sending via|surface closed')
+        check('D: lock-screen surface ignores Back mid-talk (still open, still listening)',
+              'back ignored listening=true' in dl and 'surface closed' not in dl and 'AssistLockActivity' in top(), (dl, top()))
+        wait_log('sending via', 15, alogs)  # canned audio sends itself after its auto-send window
+        got = wait_runs(n0 + 1, 30)
+        check('D: that take still reaches Wizard once (Back lost nothing)', got == n0 + 1, (got, alogs('sending via|surface closed')))
 
         crashed = sx('logcat -d -b crash')
         check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])

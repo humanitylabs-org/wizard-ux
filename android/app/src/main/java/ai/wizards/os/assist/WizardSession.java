@@ -191,22 +191,13 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     }
 
     /**
-     * Back while the orb is up. Mid-talk: send what was said and step away. After it was sent (sending, or the
-     * heard bubble): step away and hand the Back to the app underneath, which is what James was reaching for;
-     * the message keeps going and a toast says when it lands. Nothing said is ever lost to Back.
+     * Back does nothing while the side-button orb is up (James, 10 Oct 2026): talking keeps going, a message that is
+     * sending keeps going, and the orb stays. The X (Cancel) is the only way to throw a take away; the orb closes
+     * itself after sending. The key is swallowed here so it never reaches the app underneath either.
      */
     @Override
     public void onBackPressed() {
-        boolean wasListening = capture.listening();
-        Log.i(TAG, "back pressed listening=" + wasListening);
-        hide(); // onHide sends a live take and keeps a message in flight
-        if (!wasListening) {
-            ai.wizards.os.everywhere.WizardKeyboardService k = ai.wizards.os.everywhere.WizardKeyboardService.get();
-            if (k != null) main.postDelayed(() -> {
-                boolean ok = k.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);
-                Log.i(TAG, "back passed to the app underneath ok=" + ok);
-            }, 120);
-        }
+        Log.i(TAG, "back ignored listening=" + capture.listening() + " sending=" + capture.sending());
     }
 
     @Override
