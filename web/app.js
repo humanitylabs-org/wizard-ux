@@ -445,6 +445,26 @@
     $$('iframe.appframe').forEach(f => { try { const d = f.contentDocument; if (d && d.documentElement) d.documentElement.style.setProperty('--wos-cutout', (f.closest('.win.full') ? v : 0) + 'px'); } catch (e) {} });
   }
   window.__wosCutout = px => { cutTop = Math.max(0, px | 0); shareCutout(); };
+  /* Status bar (James, 10 Oct: "like Telegram"): the native shell draws this page under the status bar so the
+   * background reaches the top of the glass, and reports the bar's height; --safe-t keeps content below it. */
+  function setNatTop(px) { document.documentElement.style.setProperty('--nat-t', Math.max(0, px | 0) + 'px'); }
+  try { setNatTop(+window.WizardOSNative?.insetTop?.() || 0); } catch (e) {}
+  window.__wosTop = setNatTop;
+  /* A hosted app either clears the camera itself (its CSS reads --wos-cutout) or the shell moves it below the camera
+   * and paints the strip above in the app's own background colour. */
+  function frameEdge(f) {
+    const we = f.closest('.win'); if (!we) return;
+    let own = false, bg = '';
+    try {
+      const d = f.contentDocument;
+      own = !!d.querySelector('meta[name="wizard-os-edge"][content="cover"]');
+      if (!own) for (const sh of d.styleSheets) { let t = ''; try { t = Array.from(sh.cssRules, r => r.cssText).join(''); } catch (e) {} if (t.includes('--wos-cutout')) { own = true; break; } }
+      const pick = el => { const c = el && d.defaultView.getComputedStyle(el).backgroundColor; return c && !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(c) ? c : ''; };
+      bg = pick(d.body) || pick(d.documentElement);
+    } catch (e) {}
+    we.classList.toggle('edge-own', own);
+    if (bg) we.style.setProperty('--frame-bg', bg); else we.style.removeProperty('--frame-bg');
+  }
   function syncImmersive() {
     const d = desks[idx], w = d && d.full && d.focus ? W[d.focus] : null, on = !!w;
     const corner = on && w.app === 'chats';
@@ -816,6 +836,7 @@
     try { bindWinPinch(win.document, id); } catch (e) {}
     armFrameBack(f, win);
     shareCutout();
+    frameEdge(f); setTimeout(() => { if (f.isConnected) frameEdge(f); }, 800); // apps that paint their theme after boot
   }
   // Voice mode a framed app asks for: <meta name="wizard-os-voice" content="capture|auto">.
   function frameVoiceMode(id) {
