@@ -28,7 +28,7 @@ public final class Transcriber {
         Result(String text, long ms) { this.text = text; this.ms = ms; }
     }
 
-    static Result transcribe(File audio) throws IOException { return transcribe(audio, ORIGIN, PROMPT); }
+    static Result transcribe(File audio) throws IOException { return transcribe(audio, ai.wizards.os.device.AppState.live(ORIGIN), PROMPT); }
 
     /** origin is the private Wizard origin (a local fake in unit tests). */
     public static Result transcribe(File audio, String origin, String prompt) throws IOException {

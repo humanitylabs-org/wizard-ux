@@ -150,7 +150,9 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
                 // A main-frame hop to the retired private.wizard001.com lands on the same page under this Wizard's own name.
-                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying) { view.loadUrl(Origin.toHome(u.toString())); return true; }
+                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying && !ai.wizards.os.device.AppState.legacyFallback) { view.loadUrl(Origin.toHome(u.toString())); return true; }
+                // Under the safety net the tailnet name is unreachable: its links open the same page on the old name.
+                if (req.isForMainFrame() && Origin.isHome(u) && ai.wizards.os.device.AppState.legacyFallback) { view.loadUrl(Origin.toLegacy(u.toString())); return true; }
                 if (carrying && Carry.isPage(MainActivity.this, u.toString())) return false;
                 if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) return false;
                 if (!req.isForMainFrame()) return false; // hosted app frames stay inside their window
@@ -161,6 +163,12 @@ public class MainActivity extends Activity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
                 if (req.isForMainFrame() && carrying) { endCarry("unreachable"); return; } // old name gone: just go home
+                // Safety net: the tailnet name unreachable from this phone → same page on the old name for this run.
+                // (A failing old-name page is not isHome, so this cannot loop; both failing ends on the offline page.)
+                if (req.isForMainFrame() && Origin.isHome(req.getUrl()) && ai.wizards.os.device.AppState.useLegacy(MainActivity.this)) {
+                    view.loadUrl(Origin.toLegacy(req.getUrl().toString()));
+                    return;
+                }
                 if (req.isForMainFrame()) showOffline(String.valueOf(err.getDescription()));
             }
 
@@ -244,7 +252,7 @@ public class MainActivity extends Activity {
 
     String startUrl(Intent intent) {
         Uri data = intent == null ? null : intent.getData();
-        String target = data != null && Origin.isInApp(data) ? Origin.toHome(data.toString()) : null;
+        String target = data != null && Origin.isInApp(data) ? inAppUrl(data.toString()) : null;
         // First launch after the move to the tailnet name: bring the phone's drafts/unsent/seen state across, then go on.
         if (Carry.pending(this)) {
             Carry.attempt(this);
@@ -255,6 +263,11 @@ public class MainActivity extends Activity {
         }
         if (target != null) return target;
         return ai.wizards.os.device.AppState.homeUrl(this); // HOME_URL; QA builds may point at a fake Wizard
+    }
+
+    /** An in-app link on whichever name this run uses (the tailnet name, or the old one under the safety net). */
+    static String inAppUrl(String url) {
+        return ai.wizards.os.device.AppState.legacyFallback ? Origin.toLegacy(url) : Origin.toHome(url);
     }
 
     /* ---------------- Carry: move local state off the retired private.wizard001.com (see Carry) ---------------- */
@@ -282,8 +295,8 @@ public class MainActivity extends Activity {
         setIntent(intent);
         Uri data = intent.getData();
         if (data != null && Origin.isInApp(data)) {
-            if (carrying) carryNext = Origin.toHome(data.toString());
-            else web.loadUrl(Origin.toHome(data.toString()));
+            if (carrying) carryNext = inAppUrl(data.toString());
+            else web.loadUrl(inAppUrl(data.toString()));
         }
         if (ACTION_ACCESSIBILITY.equals(intent.getAction())) { intent.setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); return; }
         queueHandoff(intent);
@@ -354,12 +367,13 @@ public class MainActivity extends Activity {
 
     private void showOffline(String why) {
         showingError = true;
+        ai.wizards.os.device.AppState.legacyFallback = false; // both names failed: Retry tries the tailnet name first again
         String html = "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
                 + "<body style='margin:0;background:#05030c;color:#e9e4ff;font:16px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center'>"
                 + "<div style='padding:24px'><div style='font-size:44px;color:#9b7bff'>◉</div>"
                 + "<h2 style='font-weight:600'>Can't reach Wizard OS</h2>"
                 + "<p style='opacity:.75'>Check that Tailscale is connected on this phone, then tap retry.</p>"
-                + "<a href='" + BuildConfig.HOME_URL + "' style='display:inline-block;margin-top:12px;padding:12px 22px;border-radius:999px;background:#2a1d5c;color:#fff;text-decoration:none'>Retry</a>"
+                + "<a href='" + ai.wizards.os.device.AppState.homeUrl(this) + "' style='display:inline-block;margin-top:12px;padding:12px 22px;border-radius:999px;background:#2a1d5c;color:#fff;text-decoration:none'>Retry</a>"
                 + "<p style='opacity:.4;font-size:12px;margin-top:18px'>" + android.text.Html.escapeHtml(why) + "</p></div></body>";
         web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
     }
@@ -707,14 +721,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String carryIn() {
             String u = pageUrl;
-            if (u == null || !u.startsWith(ai.wizards.os.device.AppState.origin(MainActivity.this) + "/")) return "";
+            if (u == null || !u.startsWith(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this) + "/")) return "";
             return Carry.load(MainActivity.this);
         }
 
         @JavascriptInterface
         public void carryDone() {
             String u = pageUrl;
-            if (u != null && u.startsWith(ai.wizards.os.device.AppState.origin(MainActivity.this) + "/")) Carry.clear(MainActivity.this);
+            if (u != null && u.startsWith(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this) + "/")) Carry.clear(MainActivity.this);
         }
 
         /* ---- Usuals: James's regular Grab orders (usuals/*). Nothing here can place an order. ---- */

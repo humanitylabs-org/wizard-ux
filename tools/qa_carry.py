@@ -16,6 +16,8 @@ audio), exactly as an older Wizard OS would have left them. Then:
   5 a later launch goes straight to NEW (no second carry); the app's copy (files/carry.json) is gone
   6 values already on NEW are never overwritten
   7 if OLD cannot be reached, the app still opens NEW (and retries carry later, at most 3 times)
+  8 safety net: the real tailnet name unreachable (dead DNS) → the app opens the same shell on the old name
+    (served by CDP Fetch interception, as qa_mizel does) instead of an error page
 """
 import base64, fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
 import urllib.request
@@ -320,6 +322,33 @@ with (BASE / 'worker.lock').open('a') as lock:
         prefs = runas('cat shared_prefs/carry.xml 2>/dev/null')
         check('#7 and keeps the carry for a later launch (not marked done)', 'name="done" value="true"' not in prefs and 'tries' in prefs, prefs.strip()[:200])
         shot('07-old-down')
+
+        # ---- 8. safety net: the real build origins, tailnet name unreachable → old name, same page
+        runas('rm -f files/qa_home.txt files/qa_origin.txt files/qa_carry_from.txt files/carry.json shared_prefs/carry.xml')
+        launch(); time.sleep(6)  # tailnet name fails (dead DNS) → old name fails too → offline page
+        pg = page(lambda u: True, 20)
+        pg.call('Fetch.enable', patterns=[{'urlPattern': 'https://private.wizard001.com/*'}])
+        served = []
+        pg.ev("(() => { const a = document.querySelector('a'); setTimeout(() => a && a.click(), 50); return !!a; })()")
+        t0 = time.time(); pg.s.settimeout(1.0)
+        while time.time() - t0 < 25:
+            try: d = pg._recv()
+            except socket.timeout: continue
+            except Exception: break
+            if d.get('method') != 'Fetch.requestPaused': continue
+            p = d['params']; url = p['request']['url']; served.append(url)
+            if p.get('resourceType') == 'Document':
+                body = b'<!doctype html><meta charset=utf-8><title>legacy-shell</title><body>legacy shell'
+                hdrs = [{'name': 'Content-Type', 'value': 'text/html'}]
+            else:
+                body = b'{}'; hdrs = [{'name': 'Content-Type', 'value': 'application/json'}]
+            pg._send({'id': 900000 + len(served), 'method': 'Fetch.fulfillRequest', 'params': {'requestId': p['requestId'], 'responseCode': 200, 'responseHeaders': hdrs, 'body': base64.b64encode(body).decode()}})
+            if p.get('resourceType') == 'Document': time.sleep(2); break
+        pg.s.settimeout(30)
+        href = pg.ev('location.href'); title = pg.ev('document.title'); pg.close()
+        check('#8 tailnet name unreachable → the shell opens on the old name instead of an error', href.startswith('https://private.wizard001.com/wizard-os-home/') and title == 'legacy-shell', (href, title, served[:3]))
+        check('#8 the app stays open', PKG in top(), top()[:80])
+        shot('08-safety-net')
 
         crashed = sx('logcat -d -b crash')
         check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
