@@ -38,7 +38,7 @@ def shot(name): (OUT / (name + '.png')).write_bytes(sh(ADB, '-s', S, 'exec-out',
 # No uiautomator: a dump re-binds UiAutomation and knocks Wizard OS's accessibility service (and its cover) off.
 # The stand-in Grab and the cover (debug builds) log their labels and centres instead.
 def _views(tag, prefix):
-    lines = [l for l in sx(f'logcat -d -s {tag}:*').splitlines() if (': ' + prefix) in l]
+    lines = [l for l in sx(f'logcat -d -s {tag}:*').splitlines() if (': ' + prefix) in l and ': views |Not now@' not in l]  # the pop-up logs its own line
     if not lines: return [], None
     l = lines[-1].split(': ' + prefix, 1)[1]
     frame = None
