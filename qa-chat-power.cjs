@@ -384,6 +384,11 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await openThread('qa_pw_long');
     const first = await p.evaluate(sel => { const nb = document.querySelector(sel); const a = [...nb.querySelectorAll('.msg.a')].pop(); return { top: Math.round(a.getBoundingClientRect().top - nb.getBoundingClientRect().top), gap: nb.scrollHeight - nb.scrollTop - nb.clientHeight }; }, await S('.ch-msgs'));
     ok(first.top >= 0 && first.top < 40, '#18 phone: a thread opens at the first line of the latest reply', first);
+    // A live update re-renders the open thread right after it opens (status, approval, new rows). The old list is
+    // detached by then and reads scrollTop 0, which used to throw the thread back to the very top (James, 10 Oct).
+    for (let k = 0; k < 3; k++) { await p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); __wos.renderChats(w); }); await sleep(120); }
+    const again = await p.evaluate(sel => { const nb = document.querySelector(sel); const a = [...nb.querySelectorAll('.msg.a')].pop(); return { top: Math.round(a.getBoundingClientRect().top - nb.getBoundingClientRect().top), st: Math.round(nb.scrollTop) }; }, await S('.ch-msgs'));
+    ok(again.st > 0 && again.top >= 0 && again.top < 40, '#18 phone: live re-renders keep the thread at the start of the latest reply (never jumps to the top)', again);
     const mid = await p.evaluate(sel => { const nb = document.querySelector(sel); nb.scrollTop = Math.round(nb.scrollHeight * 0.4); nb.dispatchEvent(new Event('scroll')); return nb.scrollTop; }, await S('.ch-msgs'));
     await sleep(600);
     const lat = await p.evaluate(sel => { const b = document.querySelector(sel); return b && !b.hidden && b.offsetParent !== null; }, await S('[data-chlatest]'));
@@ -393,6 +398,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     ok(saved && Math.abs(saved.scrollTop - mid) < 4 && saved.messageId, '#18 phone: the reading place is saved (legacy key, per thread)', { saved, mid });
     await back();
     await openThread('qa_pw_long');
+    for (let k = 0; k < 2; k++) { await p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); __wos.renderChats(w); }); await sleep(120); }
     const back1 = await p.evaluate(sel => document.querySelector(sel).scrollTop, await S('.ch-msgs'));
     ok(Math.abs(back1 - mid) < 30, '#18 phone: reopening within the hour returns to the same place', { back1, mid });
     await p.click(await S('[data-chlatest]'));
