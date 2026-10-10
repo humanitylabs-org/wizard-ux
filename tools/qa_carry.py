@@ -256,12 +256,19 @@ with (BASE / 'worker.lock').open('a') as lock:
         pg = page(lambda u: u.endswith('/qa-seed.html'))
         n = pg.ev(SEED_JS); pg.close()
         check('seeded the old origin (drafts, thread marks, 2 unsent + 1 sent in the outbox)', n and n >= 3, n)
-        sx('am force-stop %s' % PKG); time.sleep(1)
+        # The WebView writes localStorage to disk lazily; a force-stop right after the writes loses them (a real
+        # phone's old-name state was written long ago). Give it time, then prove the seed survived a restart.
+        time.sleep(12); sx('am force-stop %s' % PKG); time.sleep(1)
+        launch(); time.sleep(4)
+        pg = page(lambda u: u.startswith(OLD + '/wizard-os-home/'))
+        kept = pg.ev("JSON.stringify([localStorage.getItem('wos.chat.drafts.v1'), localStorage.getItem('wizard.thread-emojis.v1'), localStorage.getItem('wos.chats.readyOrder.v1')])"); pg.close()
+        check('the seed is on disk on the old name (survives a restart)', 'carried draft text' in (kept or '') and '🐸' in (kept or ''), kept)
+        time.sleep(12); sx('am force-stop %s' % PKG); time.sleep(1)
         # A pre-existing value on NEW must survive the carry.
         runas('echo %s > files/qa_home.txt && echo %s > files/qa_origin.txt' % (NEW, NEW))
         launch(); time.sleep(4)
         pg = page(lambda u: u.startswith(NEW + '/wizard-os-home/'))
-        pg.ev("localStorage.setItem('wos.chats.readyOrder.v1', 'new-value'), 1"); pg.close()
+        pg.ev("localStorage.setItem('wos.chats.readyOrder.v1', 'new-value'), 1"); pg.close(); time.sleep(12)
         runas('rm -f shared_prefs/carry.xml files/carry.json')
         nOld0, nNew0 = len(ST[OLD_PORT]['runs']), len(ST[NEW_PORT]['runs'])
 
