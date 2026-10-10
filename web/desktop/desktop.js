@@ -712,6 +712,7 @@
   // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
     if (!pal.hidden) { closePalette(); return 'palette'; }
+    if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }
     if (closeUsage()) return 'usage';

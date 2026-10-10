@@ -7,6 +7,8 @@
  *   - One top bar: ‹ (page back; hidden at depth 1), title over domain, Keep, ↗ (not in the Android
  *     app, where it would load over the shell), ✕.
  *   - Back pops the sheet's own page stack, then dismisses. It never exits.
+ *   - Same-origin image links (.png/.jpg/…) open in the media viewer, never as a raw page: fit to width,
+ *     pinch to zoom, swipe between the page's images, Back closes only the viewer.
  *   - Keep turns the current page into a normal window on the current desk (through the shell's window
  *     manager), then dismisses. It never creates a desk.
  *   - A second link while the sheet is open pushes onto the same stack.
@@ -30,6 +32,20 @@
     // Android app: a main-frame navigation to another origin is handed to the system browser natively.
     // Browser / PWA: a new tab.
     try { window.open(u.href, '_blank', 'noopener'); } catch (e) { location.href = u.href; }
+  }
+  // Images never load as a raw page (Android shows them at full pixel size, wider than the screen, no zoom).
+  // They open in the shared media viewer: fit to the screen width, pinch to zoom, Back closes only the viewer.
+  const IMG = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
+  const isImage = u => !!u && IMG.test(u.pathname);
+  function viewImage(u, doc) {
+    const V = window.WosChat && window.WosChat.viewer; if (!V || !u) return false;
+    const rel = x => x.origin === ORIGIN ? x.pathname + x.search : x.href;
+    const item = x => ({ url: rel(x), name: decodeURIComponent(x.pathname.split('/').pop() || 'Image'), kind: 'image', mime: '' });
+    // Swipe between every image linked from the same page, starting at the tapped one.
+    const seen = new Set(), list = [];
+    if (doc) for (const a of doc.querySelectorAll('a[href]')) { const x = abs(a.getAttribute('href'), doc.baseURI); if (x && isImage(x) && !seen.has(x.href)) { seen.add(x.href); list.push(x); } }
+    if (!seen.has(u.href)) list.unshift(u);
+    return V.open(list.map(item), Math.max(0, list.findIndex(x => x.href === u.href)));
   }
   function nice(u) {
     const p = decodeURIComponent(u.pathname.replace(/\/+$/, '').split('/').filter(Boolean).pop() || u.hostname);
@@ -77,8 +93,9 @@
       onChange && onChange(false);
       return true;
     }
-    function go(href, base) {
+    function go(href, base, doc) {
       const u = abs(href, base); if (!u) return false;
+      if (inApp(u) && isImage(u) && viewImage(u, doc)) return true;
       if (!inApp(u)) { external(u); return true; }
       if (cur() && cur().url === u.href) { show(); return true; }
       stack.push({ url: u.href, title: '' }); paint(); show(); load(u.href);
@@ -95,6 +112,12 @@
       el.classList.remove('loading');
       let win, doc; try { win = frame.contentWindow; doc = frame.contentDocument; } catch (e) { return; }
       if (!doc || doc.location.href === 'about:blank') return;
+      // A bare image reached the frame anyway (redirect, no file extension): show it in the viewer instead.
+      if (/^image\//.test(doc.contentType || '') && window.WosChat && window.WosChat.viewer) {
+        const img = abs(doc.location.href);
+        if (cur() && cur().url === img.href) { if (stack.length > 1) { stack.pop(); popping = true; paint(); load(cur().url); } else close(); }
+        viewImage(img); return;
+      }
       const here = doc.location.href, c = cur();
       if (c && c.url !== here) {
         // The page moved by itself (redirect, or a plain link click that we let through).
@@ -117,11 +140,11 @@
         if (!t || t === '_self') { const h = doc.location; if (u.pathname === h.pathname && u.search === h.search && u.hash) return; } // in-page anchor
         // Every step is a replace-load driven by the sheet, so browser history never fills with frame entries
         // and Back always means "the sheet's previous page".
-        e.preventDefault(); go(u.href);
+        e.preventDefault(); go(u.href, null, doc);
       }, true);
       // Keyboard inside the page: Esc steps back / closes; ⌘/Ctrl+Enter keeps; ⌘/Ctrl+⇧+Enter opens in the browser.
       doc.addEventListener('keydown', e => {
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); return; }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const V = window.WosChat && window.WosChat.viewer; if (V && V.isOpen()) V.close(); else back(); return; }
         if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); el.querySelector(e.shiftKey ? '[data-ls="out"]' : '[data-ls="keep"]')?.click(); }
       }, true);
       doc.addEventListener('submit', e => {
@@ -188,6 +211,7 @@
       if (a.hasAttribute('data-session') || a.hasAttribute('data-mlink') || a.closest('[data-mi]')) return;
       const u = abs(a.getAttribute('href')); if (!u || !/^https?:$/.test(u.protocol)) return;
       e.preventDefault(); e.stopPropagation();
+      if (inApp(u) && isImage(u) && viewImage(u, a.ownerDocument)) return;
       // A link to this app itself (…/wizard-os-home/?session=…, ?view=…) opens in place, not in a sheet.
       const DL = window.WizCore && window.WizCore.deeplink;
       if (DL && DL.route(u.href)) return;
@@ -209,6 +233,7 @@
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
       const u = abs(a.getAttribute('href'), win.location.href); if (!u || !/^https?:$/.test(u.protocol)) return;
+      if (u.origin === ORIGIN && isImage(u)) { if (viewImage(u, doc)) { e.preventDefault(); e.stopPropagation(); } return; }
       if (!leaves(u, a.getAttribute('target'))) return;
       e.preventDefault(); e.stopPropagation(); go(u);
     }, true);
@@ -222,5 +247,5 @@
     } catch (e) {}
   }
 
-  window.WizLinks = { mount, intercept, guardFrame, inApp: href => inApp(abs(href)) };
+  window.WizLinks = { mount, intercept, guardFrame, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
 })();
