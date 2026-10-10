@@ -43,9 +43,9 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   await page.click('#coachGo');
   await page.waitForTimeout(900);
   check('webgl orb', await page.evaluate(() => window.Orb.webgl));
-  check('home desk active', await page.evaluate(() => window.__wos.idx === 2));
+  check('first run: Home is the far-left desk, Chats beside it, starts on Chats', await page.evaluate(() => window.__wos.HOME === 0 && window.__wos.desks[0].home && window.__wos.idx === 1));
   const dots = await page.evaluate(() => [document.querySelectorAll('#dotsL .ddot').length, document.querySelectorAll('#dotsR .ddot').length]);
-  check('dots 2 left / 2 right on home', dots[0] === 2 && dots[1] === 2, JSON.stringify(dots));
+  check('dots 1 left / 3 right on Chats', dots[0] === 1 && dots[1] === 3, JSON.stringify(dots));
   await shot('01-home');
 
   let cx = 0, cy = 0;
@@ -60,20 +60,19 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(650);
   }
-  // swipe orb left -> next desk (Topics), dots follow
+  // swipe orb left -> next desk (yesterday's review), dots follow
   await drag(-150, 0);
-  check('swipe left moves to desk 4 (Topics)', await page.evaluate(() => window.__wos.idx === 3));
+  check('swipe left moves to desk 3 (review)', await page.evaluate(() => window.__wos.idx === 2));
   const dots2 = await page.evaluate(() => [document.querySelectorAll('#dotsL .ddot').length, document.querySelectorAll('#dotsR .ddot').length]);
-  check('dots 3 left / 1 right on desk 4', dots2[0] === 3 && dots2[1] === 1, JSON.stringify(dots2));
+  check('dots 2 left / 2 right on desk 3', dots2[0] === 2 && dots2[1] === 2, JSON.stringify(dots2));
   // Yesterday's review window lives on desk 1; tap its dot.
-  await page.locator('#dotsL [data-goto="0"]').tap(); await page.waitForTimeout(800);
-  check('review window lives on desk 1', await page.evaluate(() => window.__wos.idx === 0 && window.__wos.desks[0].wins.some(id => window.__wos.wins[id].app === 'review')));
+  check('review window lives on desk 3', await page.evaluate(() => window.__wos.idx === 2 && window.__wos.desks[2].wins.some(id => window.__wos.wins[id].app === 'review')));
   await shot('03-review-day');
   let at = await page.evaluate(() => window.__wos.idx);
 
   // pinch out on review -> week
   async function pinch(scale) {
-    const st = await page.locator('.desk[data-desk="0"] .zstage').boundingBox();
+    const st = await page.locator('.desk[data-desk="2"] .zstage').boundingBox();
     const mx = st.x + st.width / 2, my = st.y + 220, d0 = scale > 1 ? 40 : 150, d1 = d0 * scale;
     const cdp = await ctx.newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: mx - d0 / 2, y: my, id: 1 }, { x: mx + d0 / 2, y: my, id: 2 }] });
@@ -81,22 +80,22 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(700);
   }
-  const lvl = () => page.evaluate(() => { const w = window.__wos.wins; const id = window.__wos.desks[0].wins.find(x => w[x].app === "review"); return w[id].z.level; });
+  const lvl = () => page.evaluate(() => { const w = window.__wos.wins; const id = window.__wos.desks[2].wins.find(x => w[x].app === "review"); return w[id].z.level; });
   await pinch(0.35); check('pinch in-to-out: day -> week', (await lvl()) === 'week', await lvl());
   await shot('04-review-week');
   await pinch(0.35); check('pinch: week -> month', (await lvl()) === 'month', await lvl());
   await shot('05-review-month');
   await pinch(3.2); check('pinch open: month -> week', (await lvl()) === 'week', await lvl());
   // tap a day card to dive
-  await page.locator('.desk[data-desk="0"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="2"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
   check('tap dives week -> day', (await lvl()) === 'day', await lvl());
-  await page.locator('.desk[data-desk="0"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="2"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
   check('tap dives day -> focus', (await lvl()) === 'group', await lvl());
   await shot('06-review-focus');
-  await page.locator('.desk[data-desk="0"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="2"] .zlayer:last-child [data-z]').first().click(); await page.waitForTimeout(700);
   check('tap dives focus -> thread', (await lvl()) === 'thread', await lvl());
   await shot('07-review-thread');
-  await page.locator('.desk[data-desk="0"] .crumb [data-crumb="0"]').click(); await page.waitForTimeout(700);
+  await page.locator('.desk[data-desk="2"] .crumb [data-crumb="0"]').click(); await page.waitForTimeout(700);
   check('breadcrumb jumps back to month', (await lvl()) === 'month', await lvl());
 
   // swipe up -> launcher
@@ -107,13 +106,13 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   await shot('09-launcher-search');
   await page.press('#search', 'Enter'); await page.waitForTimeout(800);
   const d = await page.evaluate(() => { const s = window.__wos, dk = s.desks[s.idx]; return { idx: s.idx, wins: dk.wins.map(x => s.wins[x].app + ':' + (s.wins[x].appId || '')) }; });
-  check('search+enter opens CineQueue as a window, tiled beside the review', d.wins.includes('frame:cinequeue') && d.wins.length === 2, JSON.stringify(d));
+  check('search+enter opens CineQueue on its own desk right beside the review', d.wins.includes('frame:cinequeue') && d.wins.length === 1 && d.idx === 3, JSON.stringify(d));
   const ob = await page.locator('#orbWrap').boundingBox();
   check('orb stays centred in the nav bar with apps open', Math.abs(ob.x + ob.width / 2 - 393 / 2) < 3 && ob.width >= 40 && ob.width <= 48, JSON.stringify(ob));
   await page.waitForTimeout(2500); await shot('09b-cinequeue-desk');
 
   // swipe down -> inbox (from the home desk, where the big orb lives)
-  await page.evaluate(() => window.__wos.goDesk(2, true)); await page.waitForTimeout(600);
+  await page.evaluate(() => window.__wos.goDesk(0, true)); await page.waitForTimeout(600);
   await drag(0, 260);
   check('swipe down opens inbox', await page.evaluate(() => document.querySelector('#inbox').classList.contains('open')));
   await shot('10-inbox');
@@ -121,7 +120,7 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   check('swipe up on orb closes inbox', await page.evaluate(() => !document.querySelector('#inbox').classList.contains('open')));
 
   // go home, tap orb -> recording with arc
-  await page.evaluate(() => window.__wos.goDesk(2, true)); await page.waitForTimeout(600);
+  await page.evaluate(() => window.__wos.goDesk(0, true)); await page.waitForTimeout(600);
   await locateOrb(); await page.touchscreen.tap(cx, cy); await page.waitForTimeout(1600);
   check('tap orb starts recording', await page.evaluate(() => window.__wos.voice === 'listen'), await page.evaluate(() => window.__wos.voice));
   check('arc buttons visible', await page.evaluate(() => document.querySelector('#voice').classList.contains('on')));
@@ -145,12 +144,12 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   await page.waitForTimeout(2200);
 
   // agent route
-  await page.evaluate(() => { const s = window.__wos; [...s.desks[4].wins].forEach(id => s.closeWin(id)); s.goDesk(4, true); }); await page.waitForTimeout(500);
+  await page.evaluate(() => window.__wos.goDesk(0, true)); await page.waitForTimeout(500);
   await page.evaluate(() => window.__wos.runUtterance('what should I prioritize for the Wizard OS launch next week?', 'auto', true));
   await page.waitForFunction(() => /Archimedes/.test(document.querySelector('#txRouteText').textContent), null, { timeout: 30000 });
   await page.waitForTimeout(500);
   await page.waitForTimeout(1200);
-  const ad = await page.evaluate(() => { const s = window.__wos; return s.desks[4].wins.map(x => s.wins[x]); });
+  const ad = await page.evaluate(() => Object.values(window.__wos.wins));
   const run = sent.find(s => s.path.endsWith('/v1/runs')), ses = sent.find(s => s.path.endsWith('/api/sessions'));
   check('reasoning request creates a real Wizard thread request', !!ses && ses.body?.source === 'wizard-mobile' && /^wizard_\d+_[0-9a-f]{12}$/.test(ses.body?.id || ''), JSON.stringify(ses?.body));
   check('run admitted with idempotency key and same session', !!run && run.body?.session_id === ses?.body?.id && run.idem.length >= 32 && /prioritize/.test(run.body?.input || ''), JSON.stringify(run?.body));
@@ -160,7 +159,7 @@ const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
   await shot('14-agent');
 
   // hold for command (fake mic)
-  await page.evaluate(() => window.__wos.goDesk(2, true)); await page.waitForTimeout(800); await locateOrb();
+  await page.evaluate(() => window.__wos.goDesk(0, true)); await page.waitForTimeout(800); await locateOrb();
   const cdp = await ctx.newCDPSession(page);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] });
   await page.waitForTimeout(900);
