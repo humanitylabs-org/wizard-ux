@@ -125,6 +125,43 @@ async function orbTake(p) {
     ok(errs.length === 0, 'no page errors (4)', errs.join(' | '));
     await ctx.close();
   }
+  // 5. Repro (10 Oct 2026, James): "I started a thread on the chat list, I clicked into a thread while I was
+  // recording it, and then I hit send and it replied to that thread." The take belongs where recording STARTED.
+  {
+    const { ctx, p, writes, errs } = await boot(b);
+    const wid = await chatsWin(p); const [Y] = await pickThreads(p);
+    await p.evaluate(w => { if (__wos.wins[w].thread) __wos.chats.chatsBack(__wos.wins[w]); __wos.focusWin(w); }, wid);
+    await p.waitForTimeout(400);
+    const startView = await p.evaluate(w => __wos.wins[w].thread || '', wid);
+    writes.length = 0;
+    await tapOrb(p); await p.waitForTimeout(900);
+    const on = await p.evaluate(() => __wos.voice);
+    await p.evaluate(([w, y]) => __wos.openChat(w, y), [wid, Y]); await p.waitForTimeout(900);
+    await tapOrb(p); await p.waitForTimeout(3500);
+    const runs = runsOf(writes);
+    ok(!startView && on === 'listen', 'take starts on the Chats list', JSON.stringify({ startView, on }));
+    ok(sessionsOf(writes).length === 1 && runs.length === 1 && runs[0].session_id !== Y, 'take started on the list and sent from thread Y starts a NEW thread', JSON.stringify({ s: sessionsOf(writes).length, runs: runs.map(r => r.session_id), Y }));
+    ok(steersOf(writes).length === 0, 'no steer into Y (list-started take)');
+    ok(/thread list/.test(runs[0]?.instructions || ''), 'context note names the Chats list, where recording started', (runs[0]?.instructions || '').slice(0, 200));
+    ok(await p.evaluate(w => __wos.wins[w].thread, wid) === Y, 'Y stays open after the send (list-started take)');
+    ok(errs.length === 0, 'no page errors (5)', errs.join(' | '));
+    await ctx.close();
+  }
+  // 6. Mirror: a take started inside thread X, then James opens Y while recording and sends: it lands in X.
+  {
+    const { ctx, p, writes, errs } = await boot(b);
+    const wid = await chatsWin(p); const [X, Y] = await pickThreads(p);
+    await p.evaluate(([w, x]) => { __wos.openChat(w, x); const s = __wos.live.session(x); if (s) Object.assign(s, { status: 'completed', runId: '' }); }, [wid, X]); await p.waitForTimeout(600);
+    writes.length = 0;
+    await tapOrb(p); await p.waitForTimeout(900);
+    await p.evaluate(([w, y]) => __wos.openChat(w, y), [wid, Y]); await p.waitForTimeout(900);
+    await tapOrb(p); await p.waitForTimeout(3500);
+    const runs = runsOf(writes);
+    ok(sessionsOf(writes).length === 0 && runs.length === 1 && runs[0].session_id === X, 'take started in X and sent from Y lands in X', JSON.stringify({ s: sessionsOf(writes).length, runs: runs.map(r => r.session_id), X, Y }));
+    ok(await p.evaluate(w => __wos.wins[w].thread, wid) === Y, 'Y stays open (X-started take)');
+    ok(errs.length === 0, 'no page errors (6)', errs.join(' | '));
+    await ctx.close();
+  }
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
