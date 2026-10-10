@@ -173,6 +173,7 @@ public class MainActivity extends Activity {
                 try {
                     Intent pick = params.createIntent();
                     pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);
+                    pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     startActivityForResult(pick, REQ_FILE);
                     return true;
                 } catch (ActivityNotFoundException e) {
@@ -322,8 +323,20 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
         if (code != REQ_FILE || pendingFiles == null) return;
-        pendingFiles.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result, data));
+        pendingFiles.onReceiveValue(pickedUris(result, data));
         pendingFiles = null;
+    }
+
+    /* A multi-pick comes back as ClipData; FileChooserParams.parseResult only reads getData(), so it dropped
+     * every file but one. Read every ClipData item, then fall back to the single result. */
+    static Uri[] pickedUris(int result, Intent data) {
+        if (result != Activity.RESULT_OK || data == null) return null;
+        java.util.ArrayList<Uri> out = new java.util.ArrayList<>();
+        android.content.ClipData clip = data.getClipData();
+        if (clip != null) for (int i = 0; i < clip.getItemCount(); i++) { Uri u = clip.getItemAt(i).getUri(); if (u != null && !out.contains(u)) out.add(u); }
+        if (out.isEmpty() && data.getData() != null) out.add(data.getData());
+        if (out.isEmpty()) return WebChromeClient.FileChooserParams.parseResult(result, data);
+        return out.toArray(new Uri[0]);
     }
 
     /* ---------------- Lifecycle ---------------- */
