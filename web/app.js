@@ -435,11 +435,22 @@
    * pinch in, swipe up from the bottom edge, or Back. Chats keeps a small orb in the bottom-right
    * corner so a voice reply is always one tap away; there the orb only talks (no shell swipes). */
   var immOn = null, immTipT = 0; // var: applyLayout can run before this line during boot
+  /* Edge to edge (James, 10 Oct): in immersive full screen the window reaches the very top of the glass, under
+   * the camera too. The native shell reports the camera cutout height; shell-drawn windows pad their content by
+   * it, and hosted apps get it as --wos-cutout on their <html> so their own top controls can clear the camera. */
+  var cutTop = 0; try { cutTop = +window.WizardOSNative?.cutoutTop?.() || 0; } catch (e) {}
+  function shareCutout() {
+    const v = device.classList.contains("immersive") ? (cutTop || 0) : 0;
+    device.style.setProperty('--cut-t', v + 'px');
+    $$('iframe.appframe').forEach(f => { try { const d = f.contentDocument; if (d && d.documentElement) d.documentElement.style.setProperty('--wos-cutout', (f.closest('.win.full') ? v : 0) + 'px'); } catch (e) {} });
+  }
+  window.__wosCutout = px => { cutTop = Math.max(0, px | 0); shareCutout(); };
   function syncImmersive() {
     const d = desks[idx], w = d && d.full && d.focus ? W[d.focus] : null, on = !!w;
     const corner = on && w.app === 'chats';
     device.classList.toggle('immersive', on);
     device.classList.toggle('orb-corner', corner);
+    shareCutout();
     if (on === immOn) return; immOn = on;
     try { window.WizardOSNative?.immersive?.(on); } catch (e) {}
     clearTimeout(immTipT); device.classList.remove('imm-tip');
@@ -804,6 +815,7 @@
     }, true); } catch (e) {}
     try { bindWinPinch(win.document, id); } catch (e) {}
     armFrameBack(f, win);
+    shareCutout();
   }
   // Voice mode a framed app asks for: <meta name="wizard-os-voice" content="capture|auto">.
   function frameVoiceMode(id) {

@@ -82,13 +82,23 @@ public class MainActivity extends Activity {
         // targetSdk 35 draws edge to edge: keep the shell clear of the status and navigation bars.
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             if (Build.VERSION.SDK_INT >= 30) {
-                int types = WindowInsets.Type.systemBars() | WindowInsets.Type.ime() | WindowInsets.Type.displayCutout();
+                // Immersive full screen draws all the way to the top edge, under the camera cutout too
+                // (James, 10 Oct); only the keyboard still pushes the shell up.
+                int types = immersive ? WindowInsets.Type.ime()
+                        : WindowInsets.Type.systemBars() | WindowInsets.Type.ime() | WindowInsets.Type.displayCutout();
                 android.graphics.Insets i = insets.getInsets(types);
+                reportCutout(insets.getInsets(WindowInsets.Type.displayCutout()).top);
                 v.setPadding(i.left, i.top, i.right, i.bottom);
                 return WindowInsets.CONSUMED;
             }
             return insets; // API 28-29 do not draw edge to edge; the system already keeps content clear
         });
+        // Let the window extend into the camera cutout; the insets listener decides when content actually goes there.
+        WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.layoutInDisplayCutoutMode = Build.VERSION.SDK_INT >= 30
+                ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        getWindow().setAttributes(lp);
         setContentView(root);
         buildWebView();
         if (state != null) web.restoreState(state);
@@ -355,7 +365,9 @@ public class MainActivity extends Activity {
     /** Sticky immersive: the system bars hide, a swipe from the edge shows them briefly over the app. */
     @SuppressWarnings("deprecation")
     void applyImmersive(boolean on) {
+        boolean changed = immersive != on;
         immersive = on;
+        if (changed && root != null) root.requestApplyInsets(); // re-pad: edge to edge in, clear of the bars out
         if (Build.VERSION.SDK_INT >= 30) {
             android.view.WindowInsetsController c = getWindow().getInsetsController();
             if (c == null) return;
@@ -367,6 +379,17 @@ public class MainActivity extends Activity {
             View d = getWindow().getDecorView();
             d.setSystemUiVisibility(on ? (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) : 0);
         }
+    }
+
+    private volatile int cutoutCss = 0;
+    private int cutoutSent = -1;
+    /** The camera cutout height in CSS px, so full-screen pages can keep small top controls clear of it.
+     *  Pushed on change; the page also reads it with WizardOSNative.cutoutTop() when it boots. */
+    private void reportCutout(int px) {
+        cutoutCss = Math.round(px / getResources().getDisplayMetrics().density);
+        if (cutoutCss == cutoutSent || web == null) return;
+        cutoutSent = cutoutCss;
+        web.evaluateJavascript("(window.__wosCutout && window.__wosCutout(" + cutoutCss + "))", null);
     }
 
     @Override
@@ -631,6 +654,10 @@ public class MainActivity extends Activity {
         /** Full-screen window in the shell: hide Android's status and navigation bars too (edge swipe peeks them). */
         @JavascriptInterface
         public void immersive(boolean on) { runOnUiThread(() -> applyImmersive(on)); }
+
+        /** Camera cutout height in CSS px (0 when the phone has none). */
+        @JavascriptInterface
+        public int cutoutTop() { return cutoutCss; }
 
         @JavascriptInterface
         public void haptic(int ms) {

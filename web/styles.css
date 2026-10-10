@@ -773,9 +773,11 @@ body {
  * A full-screen window owns the whole display: no window title bar, no bottom bar, no desk label.
  * Out: pinch in, swipe up from the bottom edge, or Back. In Chats the orb stays, small, bottom-right,
  * beside the composer, so a voice reply is one tap away. */
-.device.immersive .tiles.has-full { top: var(--safe-t); bottom: var(--safe-b); left: 0; right: 0; }
+.device.immersive .tiles.has-full { top: 0; bottom: var(--safe-b); left: 0; right: 0; }
 .device.immersive .tiles.has-full .win.full { border-radius: 0; }
 .device.immersive .win.full .wbar { display: none; }
+/* Edge to edge: shell-drawn windows keep their content below the camera; hosted apps read --wos-cutout themselves. */
+.device.immersive .win.full:not(.app-frame) .wbody { padding-top: var(--cut-t, 0px); box-sizing: border-box; }
 .device.immersive .desk-label, .device.immersive .hint-row { opacity: 0 !important; pointer-events: none; }
 .dock { transition: transform 300ms var(--ease), opacity 220ms; }
 .device.immersive:not(.orb-corner) .dock { transform: translateY(110%); opacity: 0; pointer-events: none; }
