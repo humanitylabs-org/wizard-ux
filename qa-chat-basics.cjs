@@ -397,7 +397,7 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     await p.locator('[data-chstop]').tap(); await sleep(600);
     const w = writes.slice(n0).find(x => /\/stop$/.test(x.p));
     ok(w && w.p === '/wizard/hermes/v1/runs/qa-run-live/stop' && w.m === 'POST', 'Stop posts to /v1/runs/:id/stop', w);
-    ok(/Stopping/.test(await p.locator('.ch-head small').textContent()), 'header says “Stopping…”');
+    ok(/Stopping/.test(await p.locator('.ch-head .ti').getAttribute('title')), 'header status (title hint) says “Stopping…”');
   }
 
   /* ===== #6: drafts per thread, kept across reloads (new chat too) ===== */
