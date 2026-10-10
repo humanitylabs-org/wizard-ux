@@ -246,6 +246,12 @@
     const st = s.orig ? s.orig.status : s.status, run = s.orig ? s.orig.runId : s.runId;
     return (!!p.key && s.lastRunKey === p.key) || (!!p.runId && run === p.runId && WORKING.has(st));
   };
+  /* The send tap itself (James, 10 Oct 2026: "the thread I just exited moving to working immediately… It should just
+   * automatically disappear" from Ready). An orb send reaches the outbox only after transcription and routing (seconds,
+   * longer on a bad line), so the thread is held in Working from the tap: replaced by the outbox item the moment it
+   * exists, released if the take turns out empty or becomes a phone command, and never longer than TAP_MAX. */
+  const TAPS = new Map(); // sessionId -> { at, until }
+  const TAP_MAX = 60e3;
   const RELEASED = new Set(); // outbox item ids whose hold is over (so a later outbox change doesn't re-hold them)
   function applyPend(s) {
     const p = PEND.get(s.id);
@@ -277,6 +283,7 @@
     }
     for (const [sid, p] of PEND) if (!latest.has(sid) && p.state !== 'sent') PEND.delete(sid); // deleted / taken back to edit
     for (const [sid, it] of latest) {
+      const tap = TAPS.get(sid); if (tap && it.createdAt >= tap.at) TAPS.delete(sid); // the message itself takes over
       const known = PEND.get(sid);
       const drop = it.state === 'failed' || it.state === 'empty' || (it.state === 'sent' && it.steered);
       if (drop) { PEND.delete(sid); continue; }
@@ -284,6 +291,12 @@
       const text = String(it.text || '').replace(/\s+/g, ' ').trim() || (it.audio || it.audioFile ? '🎙 Voice note' : (it.files || []).length ? '📎 Attachment' : '');
       PEND.set(sid, { key: it.id, kind: it.kind, text, at: it.createdAt, state: it.state === 'sent' ? 'sent' : it.state === 'waiting' ? 'waiting' : 'sending', sentAt: it.sentAt || 0, runId: it.runId || '' });
     }
+    // An orb send still being transcribed/routed: Working from the send tap (outranks an older message's state).
+    for (const [sid, t] of TAPS) {
+      if (Date.now() > t.until) { TAPS.delete(sid); if (PEND.get(sid)?.key === 'tap:' + t.at) PEND.delete(sid); continue; }
+      PEND.set(sid, { key: 'tap:' + t.at, kind: 'reply', text: '🎙 Voice reply', at: t.at, state: 'sending', sentAt: 0, runId: '' });
+    }
+    for (const [sid, p] of PEND) if (String(p.key).startsWith('tap:') && !TAPS.has(sid)) PEND.delete(sid);
     // Apply to the list in hand: held threads get the overlay, released ones go back, new chats get a row.
     for (const s of L.sessions) if (PEND.has(s.id) || s.pend !== undefined) applyPend(s);
     L.sessions = L.sessions.filter(s => !(s.synthetic && !PEND.has(s.id)));
@@ -499,6 +512,15 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox); else setTimeout(attachOutbox, 0);
   L.pending = id => PEND.get(id) || null;
+  const resync = () => { const OB = window.WosOutbox; if (OB && syncPending(OB)) L.emit(); };
+  // Returns a token for releaseSend. '__new__' has no row to move (a new chat is listed once it is in the outbox).
+  L.holdSend = sid => {
+    if (!sid || sid === '__new__') return null;
+    const t = { sid, at: Date.now(), until: Date.now() + TAP_MAX }; TAPS.set(sid, t);
+    resync(); setTimeout(resync, TAP_MAX + 50);
+    return t;
+  };
+  L.releaseSend = t => { if (t && TAPS.get(t.sid) === t) { TAPS.delete(t.sid); resync(); } };
   window.WizLive = L;
   window.__wizLiveInternals = { hasNew, recordFor, merge, fingerprint, normalize };
 })();

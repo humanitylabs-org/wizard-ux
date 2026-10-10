@@ -1387,7 +1387,7 @@
     const dev = DEV(); let meta = null;
     try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (e) {}
     V.native = null;
-    if (!meta) { setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
+    if (!meta) { dropHold(); setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
     V.acc = Math.max(V.acc, Number(meta.ms) || 0);
     onRecStop(nativeBlob(id), id);
   }
@@ -1589,9 +1589,12 @@
     const c = CHATS.ch(v.id); if ((c.files || []).length) return false;
     CHATS.saveDraft(v.id); // words typed in the composer stay as the thread's draft
     if (!CHATS.leaveAfterSend(v.id, v.thread, v.thread === '__new__', 'voice')) return false;
+    // ...and the thread is under Working before the list paints, never in Ready (live.js holdSend).
+    V.hold = LIVE.holdSend?.(v.thread) || null;
     CHATS.renderChats(w); applyLayout(deskOf(v.id));
     return true;
   }
+  function dropHold() { if (V.hold) { LIVE.releaseSend?.(V.hold); V.hold = null; } }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
     V.snap = sendSnap(); // the send tap fixes the destination; transcription can't move it
@@ -1626,12 +1629,15 @@
     const blob = blobs[0] || new Blob([], { type: V.mime || 'audio/webm' });
     const size = blobs.reduce((n, b) => n + b.size, 0);
     stopStream(); V.rec = null; Orb.setLevel(0);
-    if (V.cancelled) { recDone(nid); return; }
-    if (V.acc < 450 || size < 1200) { recDone(nid); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
+    if (V.cancelled) { recDone(nid); dropHold(); return; }
+    if (V.acc < 450 || size < 1200) { recDone(nid); dropHold(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
     // A voice reply from a thread's composer goes to that thread, as recorded: no routing, no commands,
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
     const snap = V.snap || sendSnap(); V.snap = null;
     const kind = V.kind, aimAt = V.target;
+    // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.
+    const hold = V.hold; V.hold = null;
+    const unhold = () => { if (hold) setTimeout(() => LIVE.releaseSend?.(hold), 1500); };
     if (V.replyTo) {
       const rt = V.replyTo, files = takeFiles(); V.replyTo = null; replyTake(null);
       setVoice('idle'); txPill('✦', 'Voice reply · saved to this thread', 'agent'); txHide(1800);
@@ -1651,9 +1657,9 @@
         words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
       }
       const text = words.filter(Boolean).join(' ').trim();
-      if (!text) { recDone(nid); setVoice('idle'); txHide(); toast('◌', 'No speech detected'); return; }
+      if (!text) { recDone(nid); unhold(); setVoice('idle'); txHide(); toast('◌', 'No speech detected'); return; }
       // The words are what gets sent from here; the native take is deleted once they are handled (or in the outbox).
-      Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).finally(() => recDone(nid));
+      Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).finally(() => { recDone(nid); unhold(); });
     } catch (err) {
       // Never lose a recording: it goes to the outbox, which transcribes and sends it when Wizard is back.
       setVoice('idle');
@@ -1664,7 +1670,7 @@
         if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { sid: sv.thread, files: fl, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
         return toAgent('', 'Saved · sends when Wizard is reachable', { audio: part, desk: aim, source: 'orb', files: fl, snap });
       });
-      Promise.all(queued.map(q => Promise.resolve(q).catch(() => {}))).then(() => recDone(nid));
+      Promise.all(queued.map(q => Promise.resolve(q).catch(() => {}))).then(() => { recDone(nid); unhold(); });
       txPill('↻', 'Saved · sends when Wizard is back', 'agent', 'Couldn’t reach Wizard · recording saved, will send'); txHide(2600);
     }
   }
