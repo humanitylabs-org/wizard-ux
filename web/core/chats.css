@@ -289,3 +289,20 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-rdy-bar button.on { color: var(--ink); border-color: rgba(185, 155, 255, .45); background: rgba(143, 99, 255, .14); }
 .ch-subj { display: flex; align-items: baseline; gap: 8px; padding: 12px 10px 4px; font-size: 12.5px; font-weight: 750; color: var(--violet-2); }
 .ch-subj small { font-size: 11.5px; font-weight: 650; color: var(--ink-3); }
+
+/* MOCKUP (feature/ready-icons-mock): the row icon is the thread's status, not a per-thread star. */
+.ch-row .emo.sti { position: relative; font-size: 0; color: var(--ink-3); background: rgba(205, 190, 255, .06); }
+.ch-row .emo.sti svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ch-row .emo.sti.needs { color: var(--amber); background: rgba(255, 190, 85, .16); box-shadow: inset 0 0 0 1px rgba(255, 190, 85, .28); }
+.ch-row .emo.sti.check { color: var(--cyan); background: rgba(90, 220, 255, .13); box-shadow: inset 0 0 0 1px rgba(90, 220, 255, .25); }
+.ch-row .emo.sti.done { color: #8fe3b5; background: rgba(143, 227, 181, .08); }
+.ch-row .emo.sti.fyi { color: var(--ink-3); background: rgba(205, 190, 255, .05); }
+.ch-row .emo.sti.approval { color: var(--amber); background: rgba(255, 190, 85, .16); box-shadow: inset 0 0 0 1px rgba(255, 190, 85, .28); }
+.ch-row .emo.sti.failed { color: #ff7a7a; background: rgba(255, 110, 110, .14); box-shadow: inset 0 0 0 1px rgba(255, 110, 110, .26); }
+.ch-row .emo.sti.offline { color: var(--amber); background: rgba(255, 190, 85, .10); }
+.ch-row .emo.sti.working { background: rgba(90, 220, 255, .08); }
+.ch-row .emo.sti .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(90, 220, 255, .22); border-top-color: var(--cyan); animation: sti-spin .9s linear infinite; }
+@keyframes sti-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ch-row .emo.sti .spin { animation-duration: 3s; } }
+.ch-row .emo.sti .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); opacity: .55; }
+.ch-row .emo.sti .unb { position: absolute; top: -2px; right: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--violet-2); box-shadow: 0 0 0 2px var(--bg, #0b0a12), 0 0 8px var(--violet); }
