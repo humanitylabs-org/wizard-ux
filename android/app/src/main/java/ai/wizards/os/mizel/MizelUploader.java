@@ -190,7 +190,7 @@ public final class MizelUploader {
     /* ------------------------------------------------------------------ http */
 
     private HttpURLConnection open(String path) throws IOException {
-        HttpURLConnection c = (HttpURLConnection) new URL(origin + path).openConnection();
+        HttpURLConnection c = (HttpURLConnection) new URL(ai.wizards.os.device.AppState.live(origin) + path).openConnection();
         c.setConnectTimeout(8000);
         c.setReadTimeout(30_000);
         c.setInstanceFollowRedirects(false);

@@ -40,7 +40,9 @@ public final class MizelBridge implements MizelHub.Listener {
         }
         MizelBridge b = new MizelBridge(web.getContext().getApplicationContext());
         try {
-            WebViewCompat.addWebMessageListener(web, NAME, Collections.singleton(origin), b::onMessage);
+            java.util.Set<String> allow = new java.util.HashSet<>(Collections.singleton(origin));
+            if (MizelConfig.DEFAULT_ORIGIN.equals(origin)) allow.add(ai.wizards.os.device.AppState.LEGACY_ORIGIN);
+            WebViewCompat.addWebMessageListener(web, NAME, allow, b::onMessage);
         } catch (RuntimeException e) {
             Log.w(MizelHub.TAG, "addWebMessageListener failed: no meeting bridge", e);
             return null;
@@ -57,7 +59,8 @@ public final class MizelBridge implements MizelHub.Listener {
 
     private void onMessage(WebView view, WebMessageCompat message, Uri sourceOrigin, boolean isMainFrame, JavaScriptReplyProxy reply) {
         // Belt and braces: the allow-list already guarantees this.
-        if (sourceOrigin == null || !MizelConfig.DEFAULT_ORIGIN.equals(sourceOrigin.getScheme() + "://" + sourceOrigin.getAuthority())) return;
+        String src = sourceOrigin == null ? null : sourceOrigin.getScheme() + "://" + sourceOrigin.getAuthority();
+        if (src == null || !(MizelConfig.DEFAULT_ORIGIN.equals(src) || ai.wizards.os.device.AppState.LEGACY_ORIGIN.equals(src))) return;
         frames.remove(reply);
         frames.add(reply);
         while (frames.size() > MAX_FRAMES) frames.remove(frames.iterator().next());
