@@ -247,6 +247,9 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     const tr = await until(() => runsTo('qa_pw_work', n0).find(r => r.input === 'QA declutter typed send'), 10000);
     ok(!!tr, '5 Send delivers the typed message (intercepted)', tr);
     await sleep(400);
+    // Send and go: the phone pops back to the list; reopening the thread shows the plain mic.
+    ok(await p.evaluate(() => !Object.values(__wos.wins).find(x => x.app === 'chats')?.thread), '5 after sending: back on the chat list');
+    await openThread('qa_pw_work');
     ok(await vis(`${await S('.ch-compose')} [data-chmic]`) && !(await vis(`${await S('.ch-compose')} .ch-send`)), '5 after sending: back to the mic');
     // recording: the mic itself turns into Send
     await openThread('qa_pw_work');
@@ -261,6 +264,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     const vr = await until(() => runsTo('', n1).find(r => r.input === 'QA voice reply words'), 15000);
     ok(vr && vr.session_id === 'qa_pw_work', '5 tapping it sends the voice reply to this thread (intercepted)', vr);
     await until(() => p.evaluate(() => __wos.voice === 'idle'), 4000); await sleep(300);
+    await openThread('qa_pw_work');
     ok(await vis(`${await S('.ch-compose')} [data-chmic]`) && !(await p.evaluate(sel => document.querySelector(sel)?.classList.contains('on'), await S('.ch-compose [data-chmic]'))), '5 after the voice send: plain mic again');
   } catch (e) { ok(false, 'composer section crashed', String(e).split('\n')[0]); }
 
@@ -293,6 +297,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     ok(sends().length === 1, '6 exactly one message was sent', sends().length);
     ok(ups.length === 3, '6 each screenshot uploaded once', ups.length);
     await sleep(500);
+    await openThread('qa_pw_work'); // send and go returned to the list
     const bub = await p.evaluate(() => { const b = [...document.querySelectorAll('[data-chats] .msg.u .bub')].filter(x => x.innerText.includes('QA three screenshots')).pop(); return b && { imgs: b.querySelectorAll('.mimg img').length, text: b.innerText }; });
     ok(bub && bub.imgs === 3, '6 the sent bubble shows the 3 screenshots as images', bub);
     ok(bub && !/Screenshot_|\.jpg/i.test(bub.text), '6 the sent bubble shows no filename text', bub && bub.text);

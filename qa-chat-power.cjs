@@ -136,6 +136,8 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
   p.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|frame-ancestors|Framing/.test(m.text())) errs.push('phone console: ' + m.text()); });
   await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
   const back = async () => { await p.keyboard.press('Escape'); await sleep(450); };
+  // Send and go (10 Oct 2026): a phone send already returns to the list; only press Back if a thread is still open.
+  const backToList = async () => { if (await p.evaluate(() => !!Object.values(__wos.wins).find(x => x.app === 'chats' && x.thread))) await back(); };
   const wid = () => p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats')?.id);
   const thread = () => p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats')?.thread ?? null);
   const backLog = () => p.evaluate(() => (__wos.back.log || []).slice(-1)[0] || '');
@@ -328,7 +330,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await sleep(400);
     const left = await p.evaluate(async sel => ({ tray: document.querySelectorAll(`${sel} .ch-att`).length, draft: JSON.parse(localStorage.getItem('wos.chat.drafts.v1') || '{}')['direct:qa_pw_other'] || null }), await S('.ch-compose'));
     ok(left.tray === 0 && !left.draft, '#13b phone: after the voice reply sends, the composer tray is empty and no draft is left behind', left);
-    await back(); await sleep(300);
+    await backToList(); await sleep(300);
     const draftRows = await p.evaluate(() => document.querySelectorAll('.ch-draft').length);
     await openThread('qa_pw_other');
     const reopen = await p.evaluate(async sel => document.querySelectorAll(`${sel} .ch-att`).length, await S('.ch-compose'));
@@ -342,7 +344,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await p.click(await S('.ch-compose [data-chmic]'));
     const failed = await until(() => p.evaluate(() => __wos.outbox.unsent().find(it => it.state === 'failed' && it.audio)?.id || ''), 15000);
     ok(!!failed, '#12/#13 phone: a voice reply Wizard refuses stays in the outbox as failed', failed);
-    await back(); await sleep(300);
+    await backToList(); await sleep(300);
     const L = await S('[data-sec="errors"]');
     const vrow = await p.evaluate(([sel, id]) => { const r = document.querySelector(`${sel} [data-errob="${id}"]`); return r && r.textContent; }, [L, failed]);
     ok(vrow && /Voice note/.test(vrow) && /Not sent/.test(vrow), '#12 phone: the failed voice note shows in Errors', vrow);
@@ -384,6 +386,11 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await openThread('qa_pw_long');
     const first = await p.evaluate(sel => { const nb = document.querySelector(sel); const a = [...nb.querySelectorAll('.msg.a')].pop(); return { top: Math.round(a.getBoundingClientRect().top - nb.getBoundingClientRect().top), gap: nb.scrollHeight - nb.scrollTop - nb.clientHeight }; }, await S('.ch-msgs'));
     ok(first.top >= 0 && first.top < 40, '#18 phone: a thread opens at the first line of the latest reply', first);
+    // A live update re-renders the open thread right after it opens (status, approval, new rows). The old list is
+    // detached by then and reads scrollTop 0, which used to throw the thread back to the very top (James, 10 Oct).
+    for (let k = 0; k < 3; k++) { await p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); __wos.renderChats(w); }); await sleep(120); }
+    const again = await p.evaluate(sel => { const nb = document.querySelector(sel); const a = [...nb.querySelectorAll('.msg.a')].pop(); return { top: Math.round(a.getBoundingClientRect().top - nb.getBoundingClientRect().top), st: Math.round(nb.scrollTop) }; }, await S('.ch-msgs'));
+    ok(again.st > 0 && again.top >= 0 && again.top < 40, '#18 phone: live re-renders keep the thread at the start of the latest reply (never jumps to the top)', again);
     const mid = await p.evaluate(sel => { const nb = document.querySelector(sel); nb.scrollTop = Math.round(nb.scrollHeight * 0.4); nb.dispatchEvent(new Event('scroll')); return nb.scrollTop; }, await S('.ch-msgs'));
     await sleep(600);
     const lat = await p.evaluate(sel => { const b = document.querySelector(sel); return b && !b.hidden && b.offsetParent !== null; }, await S('[data-chlatest]'));
@@ -393,6 +400,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     ok(saved && Math.abs(saved.scrollTop - mid) < 4 && saved.messageId, '#18 phone: the reading place is saved (legacy key, per thread)', { saved, mid });
     await back();
     await openThread('qa_pw_long');
+    for (let k = 0; k < 2; k++) { await p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); __wos.renderChats(w); }); await sleep(120); }
     const back1 = await p.evaluate(sel => document.querySelector(sel).scrollTop, await S('.ch-msgs'));
     ok(Math.abs(back1 - mid) < 30, '#18 phone: reopening within the hour returns to the same place', { back1, mid });
     await p.click(await S('[data-chlatest]'));

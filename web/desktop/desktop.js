@@ -615,11 +615,12 @@
     }
     if (action === 'start') return 'voice';
     const rp = vReply; vReply = null; // the thread a composer-mic take belongs to, fixed before anything else runs
+    const aimSid = vTarget && W[vTarget]?.thread; // the thread in front at the send key, before any await
     const r = await VOICE.finish({ transcribe: false });
     if (!r || !r.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
     const w = vTarget && W[vTarget];
     if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
-    if (w && w.thread) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob);
+    if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { sid: aimSid });
     else ask('', 'voice', r.blob);
     toast('✦', `Sent to ${window.WizConfig.agent()}`, 1400);
     return 'sent';

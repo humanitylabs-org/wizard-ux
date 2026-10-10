@@ -67,7 +67,8 @@ const runs = ws => ws.filter(w => /\/v1\/runs$/.test(w.u));
     const st = steers(writes)[0]; const body = st ? JSON.parse(st.body || '{}') : {};
     ok(/Legacy Wizard is on the desktop app/.test(body.input || ''), 'the steer carries exactly what was said', JSON.stringify(body).slice(0, 160));
     const still = await p.evaluate(() => __wos.wins[__wos.desks[1].focus].thread);
-    ok(still === tid, 'the same thread stays open (no jump to a new one)', `${still} vs ${tid}`);
+    // No jump to a new thread; send and go (10 Oct 2026) may pop back to the list.
+    ok(still === tid || still === null, 'no jump to another thread (same thread, or back on the list)', `${still} vs ${tid}`);
     ok(errs.length === 0, 'no page errors (repro)', errs.join(' | '));
     await ctx.close();
   }
