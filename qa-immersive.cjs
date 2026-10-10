@@ -82,6 +82,12 @@ async function pinch(p, cx, cy, d0, d1) {
   ok(!s.bar, 'title bar gone in full screen', JSON.stringify(s));
   ok(s.win && s.win.y <= 1 && s.win.b >= VH - 1 && s.win.x <= 0 && s.win.r >= VW, 'Chats fills the whole display', JSON.stringify(s.win));
   ok(s.orbVis && s.orb.r > VW - 70 && s.orb.b > VH - 70 && s.orb.w <= 50, 'orb is small and bottom-right', JSON.stringify(s.orb));
+  // Edge to edge (James, 10 Oct): the native shell reports the camera cutout; shell windows pad their content
+  // by it while the window itself still starts at the very top edge. Simulate a 32px punch-hole.
+  await p.evaluate(() => window.__wosCutout(32)); await p.waitForTimeout(150);
+  const cut = await p.evaluate(id => { const we = document.querySelector(`.win[data-win="${id}"]`); return { winTop: we.getBoundingClientRect().top, pad: getComputedStyle(we.querySelector('.wbody')).paddingTop, tilesTop: document.querySelector('.tiles.has-full')?.getBoundingClientRect().top }; }, cid);
+  ok(cut.winTop <= 0.5 && cut.tilesTop <= 0.5, 'full-screen window starts at the very top edge', JSON.stringify(cut));
+  ok(cut.pad === '32px', 'shell window content clears the camera cutout', JSON.stringify(cut));
   await shot(p, '2-chats-full-list');
   // open a thread so the composer shows
   await p.locator(`.win[data-win="${cid}"] [data-chopen]`).first().tap().catch(() => {}); await p.waitForTimeout(900);
@@ -142,6 +148,9 @@ async function pinch(p, cx, cy, d0, d1) {
     s = await state(p); ok(!s.imm && s.orbVis, 'another desk (not full) shows the normal shell', JSON.stringify(s));
   } else ok(false, 'review window present for the non-Chats case');
   ok(errs.length === 0, 'no page errors', errs.join(' | '));
+  // after leaving full screen the cutout padding is gone again
+  const after = await p.evaluate(() => getComputedStyle(document.querySelector('#device')).getPropertyValue('--cut-t').trim());
+  ok(after === '0px', 'cutout inset resets outside full screen', after);
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
