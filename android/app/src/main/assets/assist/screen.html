@@ -251,12 +251,18 @@
   /* Translate screen: English laid over every piece of text, in place. */
   function translateScreen() {
     if (!st.blocks.length) { picture(true); return; }
-    // Real text only: icon labels (content descriptions) would paint English boxes over toolbars and buttons.
-    const idx = st.blocks.filter(b => !b.l).map(b => b.i);
+    // Real text only: icon labels (content descriptions) would paint English boxes over toolbars and buttons, and
+    // a web address or a bare number has nothing to translate.
+    const idx = st.blocks.filter(b => !b.l && !notWords(b.t)).map(b => b.i);
     if (!idx.length) { picture(true); return; }
     const rid = id(); st.pending[rid] = { kind: 'screen', idx };
     $('#hint').innerHTML = '<span class="spin"></span> Translating…';
     N.translate(rid, JSON.stringify(idx.map(i => st.blocks[i].t)));
+  }
+  function notWords(t) {
+    const s = String(t).trim();
+    return /^(https?:|data:|file:|www\.)/i.test(s) || (/^\S+$/.test(s) && /[./:]\S/.test(s) && !/\s/.test(s) && s.length > 12)
+      || /^[\d\s.,:;%+\-–—/()฿$€£¥#*]+$/.test(s);
   }
   function paintEnglish() {
     for (const b of st.blocks) {
