@@ -86,7 +86,7 @@ window.WizCore.chats = function createChats(H) {
       : at ? esc(clip(at.ask, 140))
       : esc(clip(s.preview || '', 110));
     return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}><span class="emo sti ${kind}" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span>
-      <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
+      <span class="bd"><span class="tp"><b>${esc(s.title)}</b>${s.titleWas ? `<i class="was" title="Renamed from ${esc(s.titleWas)}">was ${esc(clip(s.titleWas, 40))}</i>` : ''}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
@@ -441,9 +441,34 @@ window.WizCore.chats = function createChats(H) {
     const acts = threadActions(s, null);
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Thread actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(s.title)}</div>
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
+      <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || s.status === 'waiting_for_approval' ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
     rowSheet = { wid, sid }; vib(10);
+  }
+  /* Rename (long-press a thread, or tap the title inside it). James's name locks the thread: the agent keeps it. */
+  const RENAME_SVG = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>';
+  function openRenameSheet(wid, sid) {
+    const s = LIVE.session(sid), el = track.querySelector(`[data-chats="${wid}"]`); if (!s || !el) return;
+    closeRowSheet();
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Rename thread"><form class="ch-sheet-b ch-rename" data-rnform>
+      <div class="ch-sheet-t">Rename thread</div>
+      <input type="text" name="t" maxlength="60" value="${esc(s.title)}" autocomplete="off" enterkeyhint="done" aria-label="Thread name">
+      <p class="ch-sheet-n">Short is best: project · feature. Your name sticks; ${esc(window.WizConfig.agent())} won’t rename it.</p>
+      <div class="ch-rename-b"><button type="button" data-rncancel>Cancel</button><button type="submit" class="go">Save</button></div></form></div>`);
+    rowSheet = { wid, sid, rename: true };
+    const inp = el.querySelector('.ch-rename input'); if (inp) { inp.focus(); inp.select(); }
+  }
+  async function submitRename(form) {
+    if (!rowSheet?.rename) return;
+    const { wid, sid } = rowSheet, t = form.querySelector('input').value.replace(/\s+/g, ' ').trim();
+    if (!t) { form.querySelector('input').focus(); return; }
+    closeRowSheet();
+    const r = await LIVE.rename(sid, t);
+    if (r === true) toast('✎', 'Renamed', 1400);
+    else toast('!', r === 'taken' ? 'Another thread already has that name' : 'Couldn’t rename · kept the old name', 2600);
+    for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
+    const w = W[wid]; if (w && w.thread === sid) renderThreadNow(w);
   }
   function closeRowSheet() {
     if (!rowSheet) return false;
@@ -495,13 +520,19 @@ window.WizCore.chats = function createChats(H) {
       if (c.showFor !== w.thread) { c.show = PAGE; c.showFor = w.thread; }
       const from = Math.max(0, all.length - c.show), shown = all.slice(from);
       let day = '';
+      // Renames show where they happened ("Renamed from …"), so the old name still finds its place in the thread.
+      const firstAt = shown.length ? turnAt(shown[0]) : Infinity;
+      const rns = (s?.renames || []).map(r => ({ ...r, ms: r.at * 1000 })).filter(r => from === 0 || !(r.ms < firstAt)).sort((a, b) => a.ms - b.ms);
+      const rnHtml = r => `<div class="ch-renamed"><span>${r.by === 'you' ? 'You renamed this from' : 'Renamed from'} “${esc(r.from)}”</span></div>`;
+      const rnBefore = at => { let out = ''; while (rns.length && isFinite(at) && rns[0].ms <= at) out += rnHtml(rns.shift()); return out; };
       msgs = (from > 0 ? `<button type="button" class="ch-earlier" data-chearlier>Load earlier messages · ${from} more</button>` : '')
         + shown.map((tn, k, arr) => {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);
           const div = dk && dk !== day ? `<div class="ch-day"><span>${esc(KIT.time.day(at))}</span></div>` : '';
           if (dk) day = dk;
-          return div + turnHtml(c, tn, k === arr.length - 1, working);
+          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working);
         }).join('')
+        + rns.splice(0).map(rnHtml).join('')
         + approvalHtml(c, s)
         + pend.map(p => pendingHtml(p, c)).join('')
         + (pend.some(p => p.state !== 'failed') && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
@@ -521,7 +552,7 @@ window.WizCore.chats = function createChats(H) {
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
     el.innerHTML = `<div class="ch-thread">
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}"><b>${esc(winTitle(w))}</b></div>${chip}</div>
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       <form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(window.WizConfig.agent())}…` : `Message ${esc(window.WizConfig.agent())}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
@@ -845,6 +876,9 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
     const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); threadAct(rw, sid, rsa.dataset.rsact); return true; }
+    if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
+    if (e.target.closest('[data-rncancel]') && rowSheet) { closeRowSheet(); return true; }
+    if (e.target.closest('[data-chrename]') && w.thread && w.thread !== '__new__' && LIVE.session(w.thread)) { openRenameSheet(id, w.thread); return true; }
     if (e.target.closest('[data-rsopen]') && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); openChat(owner(rw), sid); return true; }
     // The lift that ends a long-press can land on the sheet's backdrop (the row sat under it): keep the sheet open.
     if (rowSheet && e.target.closest('.ch-sheet') && !e.target.closest('.ch-sheet-b')) { if (!justPressed()) closeRowSheet(); return true; }
@@ -874,6 +908,7 @@ window.WizCore.chats = function createChats(H) {
   /* Submit, search-as-you-type, drafts and ⌘/Ctrl+Enter, delegated from the shell's root. */
   function bind(root) {
     root.addEventListener('submit', e => {
+      const rn = e.target.closest('[data-rnform]'); if (rn) { e.preventDefault(); submitRename(rn); return; }
       const f = e.target.closest('[data-chform]'); if (!f) return;
       e.preventDefault(); const id = idOf(f); const ta = f.querySelector('textarea');
       const text = ta.value; const c = ch(id);
@@ -929,5 +964,5 @@ window.WizCore.chats = function createChats(H) {
   });
   return { CH, ch, click, bind, PW, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
-    KIT, threadAct, openRowSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
+    KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
 };
