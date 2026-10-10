@@ -56,6 +56,8 @@ public class MainActivity extends Activity {
     /** The floating orb's Screen button (voice typing / screenshots not set up yet) opens the setup dialog. */
     public static final String ACTION_ACCESSIBILITY = "ai.wizards.os.action.ACCESSIBILITY";
     public static final String EXTRA_THREAD = "ai.wizards.os.extra.THREAD";
+    /** Usuals (re-ordering Grab food) hands back to Wizard OS on its panel after teaching or cancelling. */
+    public static final String ACTION_USUALS = "ai.wizards.os.action.USUALS";
     private static final int REQ_EVERYWHERE = 44;
     private static java.lang.ref.WeakReference<MainActivity> current = new java.lang.ref.WeakReference<>(null);
     private boolean everywhereSetup; // James is on Android's "Display over other apps" page
@@ -256,6 +258,7 @@ public class MainActivity extends Activity {
         String json = ACTION_SIDE_BUTTON.equals(act) ? "{\"action\":\"side-button\"}"
                 : ACTION_SETTINGS.equals(act) ? "{\"action\":\"settings\"}"
                 : ACTION_UNSENT.equals(act) ? "{\"action\":\"unsent\"}"
+                : ACTION_USUALS.equals(act) ? "{\"action\":\"usuals\"}"
                 : ACTION_THREAD.equals(act) && intent.getStringExtra(EXTRA_THREAD) != null
                     ? "{\"action\":\"thread\",\"id\":" + Handoff.quote(intent.getStringExtra(EXTRA_THREAD)) + "}"
                 : Handoff.json(act, intent.getStringExtra(Intent.EXTRA_TEXT));
@@ -467,6 +470,7 @@ public class MainActivity extends Activity {
         pushEverywhere();
         web.evaluateJavascript("window.dispatchEvent(new Event('wos-native-resume'))", null);
         pushSideButton();
+        web.evaluateJavascript("(window.__wosUsuals && window.__wosUsuals())", null);
         device.onResume();
         if (sideSetupActive) {
             sideSetupActive = false;
@@ -646,6 +650,64 @@ public class MainActivity extends Activity {
     final class Bridge {
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }
+
+        /* ---- Usuals: James's regular Grab orders (usuals/*). Nothing here can place an order. ---- */
+        @JavascriptInterface
+        public String usuals() {
+            ai.wizards.os.usuals.UsualsRunner r = ai.wizards.os.usuals.UsualsRunner.get(MainActivity.this);
+            try {
+                return new org.json.JSONObject()
+                        .put("list", new org.json.JSONArray(ai.wizards.os.usuals.UsualsStore.json(MainActivity.this)))
+                        .put("blocker", r.blocker(ai.wizards.os.usuals.UsualsPolicy.GRAB))
+                        .put("state", new org.json.JSONObject(r.stateJson())).toString();
+            } catch (org.json.JSONException e) { return "{}"; }
+        }
+
+        @JavascriptInterface
+        public String usualsTeach(String name) {
+            final String[] out = {""};
+            java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
+            main.post(() -> { out[0] = ai.wizards.os.usuals.UsualsRunner.get(MainActivity.this).teach(name); l.countDown(); });
+            try { l.await(3, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+            return out[0];
+        }
+
+        @JavascriptInterface
+        public String usualsRun(String id) {
+            final String[] out = {""};
+            java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
+            main.post(() -> { out[0] = ai.wizards.os.usuals.UsualsRunner.get(MainActivity.this).run(String.valueOf(id)); l.countDown(); });
+            try { l.await(3, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+            return out[0];
+        }
+
+        /** The usual whose name James said ("order my usual kra pao"), or "". */
+        @JavascriptInterface
+        public String usualsMatch(String said) {
+            java.util.List<ai.wizards.os.usuals.UsualsStore.Usual> l = ai.wizards.os.usuals.UsualsStore.all(MainActivity.this);
+            int i = ai.wizards.os.usuals.UsualsPolicy.matchVoice(ai.wizards.os.usuals.UsualsStore.names(l), String.valueOf(said));
+            return i >= 0 ? l.get(i).id : "";
+        }
+
+        @JavascriptInterface
+        public boolean usualsSave(String id, String name, String script) {
+            ai.wizards.os.usuals.UsualsStore.Usual u = ai.wizards.os.usuals.UsualsStore.get(MainActivity.this, String.valueOf(id));
+            if (u == null) return false;
+            if (name != null && !name.trim().isEmpty()) u.name = name.trim();
+            if (script != null && !script.equals(ai.wizards.os.usuals.UsualsPolicy.write(u.steps))) {
+                java.util.List<ai.wizards.os.usuals.UsualsPolicy.Step> s = ai.wizards.os.usuals.UsualsPolicy.parse(script);
+                if (s.isEmpty()) return false;
+                u.steps = s;
+            }
+            ai.wizards.os.usuals.UsualsStore.put(MainActivity.this, u);
+            return true;
+        }
+
+        @JavascriptInterface
+        public void usualsDelete(String id) { ai.wizards.os.usuals.UsualsStore.delete(MainActivity.this, String.valueOf(id)); }
+
+        @JavascriptInterface
+        public void usualsCancel() { main.post(() -> ai.wizards.os.usuals.UsualsRunner.get(MainActivity.this).cancel()); }
 
         /** {"mic","assistant","used","samsung","step"}: what the side-button switch should show. */
         @JavascriptInterface
