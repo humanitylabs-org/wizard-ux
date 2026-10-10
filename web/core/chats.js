@@ -638,18 +638,39 @@ window.WizCore.chats = function createChats(H) {
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
-    if (here) { KIT.drafts.clear(draftKey(w)); c.draft = ''; c.files = []; }
-    // Saved on the phone first; the outbox delivers it (and retries) from here.
+    const dkey = isNew ? 'new' : 'direct:' + sid;
+    if (here) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; c.follow = true; }
     const nm = isNew && PW ? PW.newModel(c) : null; // a model picked for this new chat (#11)
-    const it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio,
-      instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
-    if (here) c.follow = true; if (nm) c.newModel = null;
+    if (nm) c.newModel = null;
     // Send and go (James, 10 Oct 2026): on the phone every send steps back to the thread list, a new thread
-    // and a reply alike, so he never waits on the screen to watch it go. The list carries the proof: the
-    // Sending section until Wizard takes it (Retry/Edit there if it can't), then the thread under Working.
-    // Keyed on the pinned thread: a thread James opened since stays open.
-    leaveAfterSend(wid, sid, isNew, how);
-    renderChats(W[wid]); applyLayout(deskOf(wid));
+    // and a reply alike, so he never waits on the screen to watch it go. Keyed on the pinned thread: a thread
+    // James opened since stays open.
+    // It happens on the tap itself, BEFORE the outbox save is awaited (James, 10 Oct 2026: "it should immediately
+    // send me back to the message list… there's a second or two delay"). Leaving after `await OUTBOX.enqueue`
+    // tied the screen to the phone's IndexedDB commit plus every outbox listener's re-render: ~80 ms on a desktop
+    // Chrome, 1-2 s in the phone's WebView. The reply's thread is held under Working from the same frame
+    // (live.js holdSend, the orb's path) until its outbox item takes over. qa-send-leave-timing.cjs guards this.
+    const left = leaveAfterSend(wid, sid, isNew, how);
+    const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
+    if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
+    // Saved on the phone; the outbox delivers it (and retries) from here.
+    let it;
+    try {
+      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio,
+        instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
+    } catch (e) {
+      // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
+      // thread if the window is still on the list he was sent to.
+      if (hold) LIVE.releaseSend?.(hold);
+      if (nm) c.newModel = nm;
+      if (here) KIT.drafts.set(dkey, text, tray);
+      if (left && W[wid] && !W[wid].thread) openChat(wid, sid);
+      if (audio) throw e; // a recording: its caller keeps its own copy and reports it, as before
+      toast('!', 'Couldn’t save that message · your words are back in the thread', 3200);
+      return null;
+    }
+    if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
+    return it;
   }
   const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
   picker.setAttribute('data-chfile', '');
