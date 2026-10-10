@@ -124,6 +124,9 @@ public class MainActivity extends Activity {
         if (mizel != null) mizel.detach();
         mizel = ai.wizards.os.mizel.MizelBridge.install(web, BuildConfig.ORIGIN);
 
+        // A WebView cannot save files. Anything it is asked to download (an APK, a PDF, an export) goes to
+        // Android's download manager, so the file lands in Downloads with a notification you can tap to open or install.
+        web.setDownloadListener((url, userAgent, disposition, mime, length) -> downloadOutside(url, userAgent, disposition, mime));
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
@@ -262,6 +265,26 @@ public class MainActivity extends Activity {
             });
         }
     };
+
+    private void downloadOutside(String url, String userAgent, String disposition, String mime) {
+        Uri u = Uri.parse(url);
+        if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) { openOutside(u); return; }
+        try {
+            String name = android.webkit.URLUtil.guessFileName(url, disposition, mime);
+            android.app.DownloadManager.Request r = new android.app.DownloadManager.Request(u)
+                    .setMimeType(mime)
+                    .setTitle(name)
+                    .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, name);
+            if (userAgent != null) r.addRequestHeader("User-Agent", userAgent);
+            String cookie = android.webkit.CookieManager.getInstance().getCookie(url);
+            if (cookie != null) r.addRequestHeader("Cookie", cookie);
+            ((android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(r);
+            Toast.makeText(this, "Downloading " + name + " · it'll be in Downloads", Toast.LENGTH_SHORT).show();
+        } catch (RuntimeException e) {
+            openOutside(u); // no download manager / storage refused: let the browser fetch it
+        }
+    }
 
     private void openOutside(Uri u) {
         try {
