@@ -91,6 +91,8 @@ async function pinch(p, cx, cy, d0, d1) {
   ok(cut.winTop <= 0.5 && cut.tilesTop <= 0.5, 'full-screen window starts at the very top edge', JSON.stringify(cut));
   ok(cut.body >= 31.5, 'shell window content clears the camera cutout', JSON.stringify(cut));
   // James (10 Oct, screenshot 2): the thread title must sit below the camera, background above it.
+  const ban = await p.evaluate(() => { const d = document.querySelector('#device'), b = document.createElement('div'); b.className = 'wx-banners'; b.innerHTML = '<div style="height:20px">x</div>'; d.appendChild(b); const t = b.getBoundingClientRect().top; b.remove(); return t; });
+  ok(ban >= 31.5, 'full screen: notice banners clear the camera', ban);
   ok(cut.firstTop >= 31.5, 'Chats top row (search / thread title) starts below the camera', JSON.stringify(cut));
   await shot(p, '2-chats-full-list');
   // open a thread so the composer shows

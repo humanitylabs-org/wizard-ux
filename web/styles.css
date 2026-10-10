@@ -782,6 +782,7 @@ body {
  * --wos-cutout themselves stay full bleed (.edge-own); others move down and the strip takes their own background. */
 .device.immersive .win.full .wbody { margin-top: var(--cut-t, 0px); }
 .device.immersive .win.full.edge-own .wbody { margin-top: 0; }
+.device.immersive > .wx-banners, .device.immersive .toast { margin-top: var(--cut-t, 0px); } /* notices clear the camera too */
 .device.immersive .win.full.app-frame:not(.edge-own) { background: var(--frame-bg, #0f1014); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .device.immersive .desk-label, .device.immersive .hint-row { opacity: 0 !important; pointer-events: none; }
 .dock { transition: transform 300ms var(--ease), opacity 220ms; }
