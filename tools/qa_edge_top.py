@@ -141,6 +141,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         time.sleep(10)
         for k in ('window_animation_scale', 'transition_animation_scale', 'animator_duration_scale'): sx(f'settings put global {k} 0')
         sx('input keyevent KEYCODE_WAKEUP'); sx('wm dismiss-keyguard')
+        sx('settings put secure immersive_mode_confirmations confirmed')  # Android's one-time full-screen tip would cover the shots
         # A phone with a punch-hole-ish camera notch (James's phone has one).
         ov = [l.split()[-1] for l in sx('cmd overlay list android').splitlines() if 'cutout.emulation' in l]
         pick = next((o for o in ov if o.endswith('.tall')), None) or next((o for o in ov if o.endswith('.corner')), None) or (ov[0] if ov else None)
