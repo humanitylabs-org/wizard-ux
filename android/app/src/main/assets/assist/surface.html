@@ -63,6 +63,13 @@
   body.corner .chip small{display:none}
   body.corner #pauseC{left:auto;right:140px;margin-left:0}
   body.corner #cancelC{left:auto;right:196px}
+  /* Screen: attach what's on the phone to this take (corner/unlocked only; never on the lock screen). */
+  #shotC{display:none}
+  body.corner.canshot #shotC{display:flex;left:auto;right:252px}
+  #shotC b{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;border-radius:9px;background:#b99bff;color:#140b2c;
+    font:700 10px/17px system-ui;text-align:center;display:none}
+  #shotC.has b{display:block}
+  #shotC.flash{background:rgba(185,168,255,.32)}
   #bub{display:none;position:absolute;left:4px;right:136px;top:50%;transform:translateY(-50%) translateX(12px);opacity:0;
     padding:11px 14px;border-radius:18px;background:rgba(20,14,40,.96);border:1px solid rgba(185,168,255,.35);
     box-shadow:0 6px 28px rgba(0,0,0,.45);transition:opacity .28s,transform .28s}
@@ -93,6 +100,8 @@
 <button class="chip" id="pauseC" aria-label="Pause"><svg viewBox="0 0 24 24" fill="none" stroke="#cfc4ff" stroke-width="1.8" stroke-linecap="round" class="i-pause"><path d="M8 5v14M16 5v14"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="#cfc4ff" stroke-width="1.8" stroke-linejoin="round" class="i-play"><path d="M7 5l12 7-12 7z"/></svg><small>pause</small></button>
 <button class="chip" id="unlockC" aria-label="Unlock the phone"><svg viewBox="0 0 24 24" fill="none" stroke="#cfc4ff" stroke-width="1.6" stroke-linecap="round"><rect x="6" y="11" width="12" height="9" rx="2"/><path d="M8.5 11V8a3.5 3.5 0 0 1 6.8-1.2"/></svg><small>unlock</small></button>
 <button class="chip" id="cancelC" aria-label="Cancel"><svg viewBox="0 0 24 24" fill="none" stroke="#cfc4ff" stroke-width="1.6" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg><small>cancel</small></button>
+
+<button class="chip" id="shotC" aria-label="Attach a screenshot"><svg viewBox="0 0 24 24" fill="none" stroke="#cfc4ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="12" r="3"/></svg><b id="shotN"></b><small>screen</small></button>
 
 <div class="wm-zoom" id="zl"><div class="zl-h">What you told the Wizard</div><div id="zlist"></div></div>
 <div class="wm-hint" id="hint"></div>
@@ -146,7 +155,7 @@ const words = M.words($('words'), { anchor: orbXY, lanes:[.56,.61,.66,.71], max:
 let idleTimer=0;
 function idleClose(ms){clearTimeout(idleTimer);idleTimer=setTimeout(()=>{if(S.state==='card'||S.state==='idle')N.close()},ms)}
 function setTop(t){$('top').textContent=t||'';$('top').classList.toggle('on',!!t)}
-function chips(on){['unlockC','cancelC','pauseC'].forEach(id=>$(id).classList.toggle('on',on));$('unlockC').style.display=S.locked?'':'none';
+function chips(on){['unlockC','cancelC','pauseC','shotC'].forEach(id=>$(id).classList.toggle('on',on));if(!on)shotBadge(0);$('unlockC').style.display=S.locked?'':'none';
   if(inCorner())N.corner&&N.corner(on)}
 function setCard(k,m,s,acts,cls){
   $('k').textContent=k;$('m').textContent=m;$('s').textContent=s||'';
@@ -164,6 +173,8 @@ function bubble(k,t,cls,wide=true){
 }
 function bubbleOff(){$('bub').classList.remove('on');clearTimeout(bubT);bubT=setTimeout(()=>{if(MODE==='corner'&&S.state!=='card')N.corner&&N.corner(false)},300)}
 const inCorner=()=>MODE==='corner';
+function shotBadge(n){$('shotN').textContent=n>0?String(n):'';$('shotC').classList.toggle('has',n>0);
+  $('shotC').setAttribute('aria-label',n>0?n+(n===1?' screenshot':' screenshots')+' attached':'Attach a screenshot')}
 
 /* ---------- called by native ---------- */
 const W = window.W = {
@@ -171,6 +182,7 @@ const W = window.W = {
     MODE=m==='corner'?'corner':'full';
     document.body.classList.toggle('corner',MODE==='corner');document.documentElement.classList.toggle('corner',MODE==='corner');
     window.ORB_R=MODE==='corner'?.62:.32;
+    document.body.classList.toggle('canshot',MODE==='corner'&&typeof N.shot==='function');
     document.documentElement.style.background=document.body.style.background=MODE==='corner'?'transparent':'#000';
     rs();
   },
@@ -247,6 +259,11 @@ const W = window.W = {
     if(S.state==='card'&&S.heard){N.corner&&N.corner(true);setTimeout(()=>bubble('Heard you · tap to open',S.heard),80);idleClose(7000)}
     else N.corner&&N.corner(false);
   },
+  /* Screen result from native: n>0 attached (count), -1 the screen refused capture, -2 four already, -3 needs Android 11. */
+  onShot(n){
+    if(n>0){shotBadge(n);M.haptic('press');$('shotC').classList.add('flash');setTimeout(()=>$('shotC').classList.remove('flash'),260);N.log&&N.log('shot attached '+n);return}
+    M.haptic('error');N.log&&N.log('shot failed '+n);
+  },
   reset(){clearTimeout(idleTimer);$('bub').classList.remove('on');if(card.open)card.sink();S.state='idle';S.heard='';S.paused=false;setTop('');chips(false);orbMode('idle')},
   onUnlockCancelled(){W._after=null;if(S.state==='listen')hint.show('still locked · still listening','unlock',2200,true)},
   openWizard(){N.openWizard(S.heard||'')},
@@ -265,7 +282,7 @@ const W = window.W = {
     if(S.state==='list'){$('zl').classList.remove('on','deep');S.state=card.open?'card':'idle';
       if(!S.locked){N.close();return 'handled'}
       hint.show('back to the lock screen','b',0,true);idleClose(6000);return 'handled'}
-    if(S.state==='listen'){N.cancel();return ''}
+    if(S.state==='listen')return ''; // Back closes the surface; native sends what was said (Cancel is the only discard)
     return '';
   },
 };
@@ -276,6 +293,7 @@ $('bub').addEventListener('click',e=>{e.stopPropagation();if(S.state==='card')W.
 $('cancelC').addEventListener('click',e=>{e.stopPropagation();N.cancel();W.onNothing();hint.show('cancelled','c',0,true)});
 $('pauseC').addEventListener('click',e=>{e.stopPropagation();N.pause&&N.pause()});
 $('unlockC').addEventListener('click',e=>{e.stopPropagation();N.unlock()});
+$('shotC').addEventListener('click',e=>{e.stopPropagation();if(S.state==='listen'&&N.shot)N.shot()});
 M.spread(document.body,{onOut(){ if(inCorner())return; if(S.state==='list'){$('zl').classList.add('deep');return} if(S.state!=='listen'&&S.state!=='think')W.showList() },
   onIn(){ if(S.state==='list')W.back() }});
 document.addEventListener('pointerdown',()=>{M.sound.unlock()},{capture:true});
