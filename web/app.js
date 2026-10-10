@@ -2320,7 +2320,10 @@
       const cw = W[desks[idx].focus]; if (cw?.app === 'chats' && cw.thread) chatsBack(cw);
       showSection(section);
     },
-    app(id) { const a = findApp(id) || APP[id]; if (a) openApp(a); },
+    app(id) {
+      const a = findApp(id) || APP[id]; if (a) return openApp(a);
+      Promise.resolve(window.WizCore.appsLoaded?.()).then(() => { const b = findApp(id) || APP[id]; if (b) openApp(b); });
+    },
     video: item => { closeSheets(true); return CHATS.KIT.viewer.open([item]); },
     toast,
   });
