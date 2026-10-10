@@ -473,6 +473,7 @@
     const corner = on && w.app === 'chats';
     device.classList.toggle('immersive', on);
     device.classList.toggle('orb-corner', corner);
+    trackCornerLift(corner);
     shareCutout();
     if (on === immOn) return; immOn = on;
     try { window.WizardOSNative?.immersive?.(on); } catch (e) {}
@@ -483,6 +484,22 @@
       const n = store.get('immTips', 0);
       if (n < 3) { store.set('immTips', n + 1); toast('⤡', 'Pinch in or swipe up from the bottom to exit full screen'); }
     }
+  }
+  /* Full-screen Chats (James, 10 Oct): the orb sits in the right-hand column above the composer, high enough that
+   * Done (end of a reply) and ↓ Latest (scrolled up) sit directly below it. It follows the composer's real height
+   * (attachments, multi-line text, keyboard). On the thread list there is no composer: it stays in the corner. */
+  let liftRO = null, liftMO = null, liftEl = null;
+  function paintCornerLift() {
+    const c = device.querySelector('.win.full .ch-thread .ch-compose');
+    if (c !== liftEl) { try { liftRO?.disconnect(); } catch (e) {} liftEl = c; if (c && liftRO) liftRO.observe(c); }
+    const h = c && c.offsetParent ? Math.round(c.getBoundingClientRect().height) : 0;
+    device.style.setProperty('--comp-h', h + 'px');
+    device.classList.toggle('orb-lift', h > 0);
+  }
+  function trackCornerLift(on) {
+    if (!on) { try { liftRO?.disconnect(); liftMO?.disconnect(); } catch (e) {} liftRO = liftMO = liftEl = null; device.classList.remove('orb-lift'); device.style.removeProperty('--comp-h'); return; }
+    if (!liftRO && window.ResizeObserver) { liftRO = new ResizeObserver(paintCornerLift); liftMO = new MutationObserver(paintCornerLift); liftMO.observe(track, { childList: true, subtree: true }); }
+    paintCornerLift();
   }
   function setFull(id, on) {
     const i = deskOf(id); if (i < 0) return;
@@ -783,8 +800,16 @@
       const h = win.history, push = h.pushState.bind(h), rep = h.replaceState.bind(h);
       h.pushState = function (st, t, u) { const r = (win.navigator.userActivation?.isActive ? push : rep)(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
       h.replaceState = function (st, t, u) { const r = rep(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
+      // The app stepping back through its own entries (collapse a section with history.back()) is the app's
+      // step, never the user's Back: mark it so the frame popstate below lets the app handle it (James, 10 Oct:
+      // collapsing a part in a full-screen app dropped full screen).
+      const bk = h.back.bind(h), go = h.go.bind(h);
+      h.back = function () { selfPop(win); return bk(); };
+      h.go = function (n) { if (+n < 0) selfPop(win); return go(n); };
     } catch (e) {}
   }
+  function selfPop(win) { try { win.__wosSelfPop = Date.now() + 800; } catch (e) {} }
+  function takeSelfPop(win) { try { if (win.__wosSelfPop && Date.now() < win.__wosSelfPop) { win.__wosSelfPop = 0; return true; } } catch (e) {} return false; }
   function watchEarly(f) {
     let last = null, n = 0;
     const tick = () => {
@@ -838,6 +863,8 @@
     try { win.addEventListener('popstate', e => {
       if (Date.now() < dropUntil) { e.stopImmediatePropagation(); ignorePop = 0; dropUntil = 0; return; } // the shell's guard drop landed here
       if (Date.now() < exitUntil) { e.stopImmediatePropagation(); history.back(); return; }
+      // The app (or the shell on its behalf) stepped back through the app's own entry: the app's step.
+      if (takeSelfPop(win)) { try { win.__wosHref = win.location.href; } catch (x) {} return; }
       let same = false; try { same = win.location.href === win.__wosHref; win.__wosHref = win.location.href; } catch (x) {}
       // The app keeps its own back step only when it is the focused window on the desk in view, nothing is
       // open over it, and the pop really changed its page. Anything else (an app on another desk, a boot-time
@@ -1705,6 +1732,8 @@
       // The words are what gets sent from here; the native take is deleted once they are handled (or in the outbox).
       Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).finally(() => { recDone(nid); unhold(); });
     } catch (err) {
+      // A held command that can't be heard is dropped with a note, never queued for the agent as a message.
+      if (kind === 'command') { recDone(nid); unhold(); setVoice('idle'); txPill('⚡', 'Command not heard · nothing sent', 'command', String(err?.message || err)); txHide(2400); return; }
       // Never lose a recording: it goes to the outbox, which transcribes and sends it when Wizard is back.
       setVoice('idle');
       const aim = V.target, sv = snap.view;
@@ -1794,12 +1823,13 @@
   }
 
   /* ---------------- routing ---------------- */
-  function localParse(t, snap) {
+  function localParse(t, snap, kind) {
     // "Order my usual kra pao": a taught usual runs on the phone (Grab under a cover), nothing goes to Wizard.
     const us = window.WosUsuals?.match(t); if (us) return { action: 'usual', id: us };
     // The quick-search spell ("image search …", "search …") opens the search sheet on-device, even over a thread.
+    // A held orb is always a command, so there even the plain "search for …" form is the search app's.
     const qs = quickSearch(t);
-    if (qs && (qs.strong || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'quick_search', query: qs.query, tab: qs.tab };
+    if (qs && (qs.strong || kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'quick_search', query: qs.query, tab: qs.tab };
     const s = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '');
     if (/^(zoom|go|dive) (in|deeper|down)\b/.test(s)) return { action: 'zoom', dir: 'in' };
     if (/^(zoom|back|go|pull) (out|up|back)\b|^zoom out\b/.test(s)) {
@@ -1841,7 +1871,7 @@
       return toAgent(text, `To ${window.WizConfig.agent()} · with files` + sttNote, { ...opts, files });
     }
     const t0 = performance.now();
-    const loc = localParse(text, snap);
+    const loc = localParse(text, snap, kind);
     if (loc) {
       const ms = Math.max(1, Math.round(performance.now() - t0));
       showRouted('command', `Command · on-device · ${ms} ms${sttNote}`);
@@ -1852,7 +1882,11 @@
     // An open thread owns what James says: unless it is a phone command (or aimed at another desk), it goes
     // into that thread (steering the live run), never a new thread. New threads start from the list or New chat.
     const intoThread = kind !== 'command' && target == null && v?.kind === 'chat thread';
-    const toAgentOrThread = label => intoThread ? toView(v, text, `To this thread${sttNote}`, snap) : toAgent(text, label, opts);
+    // A held orb is a command for the interface, never a message (James, 10 Oct 2026: "the long press is me
+    // saying I want to issue a command that I want the interface to respond to"). When nothing matches, it
+    // offers the choices and sends nothing until one is tapped.
+    const toAgentOrThread = label => kind === 'command' && !typed ? holdNoMatch(text, opts)
+      : intoThread ? toView(v, text, `To this thread${sttNote}`, snap) : toAgent(text, label, opts);
     setVoice('think'); if (isPill()) tx.dataset.detail = 'Routing · DeepSeek Flash'; else $('#txRouteText').textContent = 'Routing · DeepSeek Flash';
     try {
       const view = v && v.mode && kind !== 'command' && target == null ? { name: v.name, kind: v.kind } : null;
@@ -1873,6 +1907,19 @@
     } catch (e) {
       return toAgentOrThread(`Router offline · sent to ${window.WizConfig.agent()}`);
     }
+  }
+  /* Hold-command with no command match: a choice card, nothing is sent until James taps. */
+  function holdNoMatch(text, opts) {
+    setVoice('idle'); vib(12);
+    txShow(text, 'No command matched · nothing sent', 'command', '⚡');
+    const q = String(text || '').trim().replace(/[.!?,\s]+$/, '');
+    const btn = (k, label) => `<button data-hold="${k}">${esc(label)}</button>`;
+    $('#txChips').innerHTML = (searchUrl(q) ? btn('search', 'Search the web') + btn('images', 'Image search') : '')
+      + btn('agent', `Send to ${window.WizConfig.agent()}`) + btn('drop', 'Dismiss');
+    V.holdText = q; V.holdOpts = opts;
+    window.__backLog = (window.__backLog || []).concat('hold:nomatch').slice(-30);
+    txHide(9000);
+    return false;
   }
   function showRouted(kind, label) {
     if (isPill()) {
@@ -1921,7 +1968,7 @@
     if (a === 'move_window') { if (!f) return false; const to = c.to === 'prev' || c.to === 'left' ? idx - 1 : c.to === 'next' || c.to === 'right' ? idx + 1 : +c.to - 1; return moveWin(f, to); }
     if (a === 'quick_search') return openSearch(c.query, c.tab);
     if (a === 'usual') return window.WosUsuals?.run(c.id) ?? false;
-    if (a === 'search') { openSheet('launcher', c.query || text); return true; }
+    if (a === 'search') { const q = c.query || text; if (searchUrl(q) && !findApp(q)) return openSearch(q, 'all'); openSheet('launcher', q); return true; }
     if (a === 'open_view' || a === 'view' || a === 'show') {
       const v = String(c.view || arg).toLowerCase();
       if (/inbox|notif/.test(v)) { openSheet('inbox'); return true; }
@@ -2088,7 +2135,7 @@
   }
   function backStep(skipHosted) {
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
-    if (document.querySelector('#txChips [data-handoff]')) { $('#txChips').innerHTML = ''; txHide(0); return 'draft'; }
+    if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
@@ -2102,7 +2149,7 @@
     if (f) {
       if (f.app === 'chats' && f.thread) return CHATS.threadBack(f);
       if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
-      if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { nav.back(); return 'frame'; } }
+      if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { try { selfPop(winEl(f.id).querySelector('iframe').contentWindow); } catch (e) {} nav.back(); return 'frame'; } }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }
       if (d.full) { setFull(f.id, false); return 'tile'; }
     }
@@ -2240,6 +2287,14 @@
     return true;
   };
   $('#txChips').addEventListener('click', e => { if (e.target.closest('[data-handoff="drop"]')) { $('#txChips').innerHTML = ''; txHide(0); } });
+  $('#txChips').addEventListener('click', e => {
+    const b = e.target.closest('[data-hold]'); if (!b) return;
+    const k = b.dataset.hold, q = V.holdText || '', opts = V.holdOpts || {};
+    V.holdText = ''; V.holdOpts = null; $('#txChips').innerHTML = '';
+    if (k === 'search' || k === 'images') { txHide(0); openSearch(q, k === 'images' ? 'images' : 'all'); return; }
+    if (k === 'agent' && q) { toAgent(q, `To ${window.WizConfig.agent()} · from a held command`, { ...opts, how: 'voice (held command, sent on purpose)' }); return; }
+    txHide(0);
+  });
   // Native bridge v0 (core/bridge.js): the same events drive the phone and the desktop shell.
   window.WizCore.bridge?.handle({
     orb(d) {
@@ -2309,7 +2364,10 @@
       const cw = W[desks[idx].focus]; if (cw?.app === 'chats' && cw.thread) chatsBack(cw);
       showSection(section);
     },
-    app(id) { const a = findApp(id) || APP[id]; if (a) openApp(a); },
+    app(id) {
+      const a = findApp(id) || APP[id]; if (a) return openApp(a);
+      Promise.resolve(window.WizCore.appsLoaded?.()).then(() => { const b = findApp(id) || APP[id]; if (b) openApp(b); });
+    },
     video: item => { closeSheets(true); return CHATS.KIT.viewer.open([item]); },
     toast,
   });

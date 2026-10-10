@@ -44,6 +44,12 @@
     .replace(/\[(?:Browser dogfooding|System note)[^\]]*\][\s\S]*$/m, ' ')
     .replace(/[#*_`>]+/g, ' ').replace(/\s+/g, ' ').trim();
 
+  const ATTN = new Set(['needs_you', 'check', 'done', 'fyi']);
+  function attentionOf(v) {
+    if (!v || typeof v !== 'object' || !ATTN.has(v.state)) return null;
+    const ask = String(v.ask || '').replace(/\s+/g, ' ').trim().slice(0, 140); if (!ask) return null;
+    return { state: v.state, ask, subject: String(v.subject || '').replace(/\s+/g, ' ').trim().slice(0, 40) };
+  }
   function normalize(item) {
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
@@ -77,6 +83,8 @@
       assignedAt: optIso(item.wizard_assigned_at),
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
+      // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
+      attention: attentionOf(item.wizard_attention),
       // The thread's model route (chat-models.js shows and changes it).
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
@@ -180,6 +188,9 @@
     return (isFinite(a) ? b - a : 0) || l.title.localeCompare(r.title);
   };
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
+  // Ready order: approvals, then needs you, then things to test, then everything else (newest first within each).
+  const asksJames = s => s.attention?.state === 'needs_you' || s.attention?.state === 'check';
+  const readyRank = s => needsApproval(s) ? 0 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archB = now - WEEK;
@@ -192,12 +203,13 @@
       else if (isErr(s)) g.errors.push(s);
       else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
+      else if (asksJames(s)) g.ready.push(s); // waiting on James: stays in Ready until he acts, whatever the day
       else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
       else if (t < readyB) g.yesterday.push(s);
       else g.ready.push(s);
     }
     for (const list of Object.values(g)) list.sort(newestFirst);
-    g.ready.sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || newestFirst(l, r));
+    g.ready.sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
     return g;
   }
   async function fetchDispositions() {

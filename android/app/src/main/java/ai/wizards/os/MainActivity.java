@@ -75,6 +75,7 @@ public class MainActivity extends Activity {
     /** Native-parity features (background recorder, share, reply notifications, in-app update): device/DeviceBridge. */
     private ai.wizards.os.device.DeviceBridge device;
     private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
+    private ai.wizards.os.apps.AppsBridge apps; // window.wizardAppsPort: the shell only (Android Apps relay)
 
     @Override
     protected void onCreate(Bundle state) {
@@ -138,6 +139,8 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(device, "WizardOSDevice");
         if (mizel != null) mizel.detach();
         mizel = ai.wizards.os.mizel.MizelBridge.install(web, BuildConfig.ORIGIN);
+        if (apps != null) apps.detach();
+        apps = ai.wizards.os.apps.AppsBridge.install(this, web);
 
         // A WebView cannot save files. Anything it is asked to download (an APK, a PDF, an export) goes to
         // Android's download manager, so the file lands in Downloads with a notification you can tap to open or install.
@@ -472,6 +475,7 @@ public class MainActivity extends Activity {
         pushSideButton();
         web.evaluateJavascript("(window.__wosUsuals && window.__wosUsuals())", null);
         device.onResume();
+        if (apps != null) apps.onResume();
         if (sideSetupActive) {
             sideSetupActive = false;
             if (SideButton.assistant(this)) Toast.makeText(this, "Side button is on. Hold it to talk.", Toast.LENGTH_SHORT).show();
@@ -636,6 +640,7 @@ public class MainActivity extends Activity {
         ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(null);
         if (ai.wizards.os.everywhere.EverywhereService.appIsRecording()) ai.wizards.os.everywhere.EverywhereService.appVoiceState(this, "idle", 0);
         if (mizel != null) { mizel.detach(); mizel = null; }
+        if (apps != null) { apps.detach(); apps = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
     }

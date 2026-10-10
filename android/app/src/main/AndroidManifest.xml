@@ -23,9 +23,19 @@
          (API 31+); the background check only downloads on unmetered networks. -->
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Android Apps (optional Wizard app): Wizard OS installs open-source apps James asks for and becomes their
+         update owner (API 34+), so later versions install silently; uninstall goes through Android's own dialog. -->
+    <uses-permission android:name="android.permission.ENFORCE_UPDATE_OWNERSHIP" />
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
-    <!-- Usuals: see and open Grab (Android 11+ hides other apps unless they are named here). -->
+    <!-- Android Apps lists what has a launcher icon (no QUERY_ALL_PACKAGES) and can open Google Play. -->
     <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <package android:name="com.android.vending" />
+        <!-- Usuals: see and open Grab. -->
         <package android:name="com.grabtaxi.passenger" />
     </queries>
 
@@ -217,5 +227,13 @@
             android:authorities="${applicationId}.updates"
             android:exported="false"
             android:grantUriPermissions="true" />
+        <!-- Android Apps: install session results, and the background update job for apps Wizard OS installed. -->
+        <receiver
+            android:name=".apps.AppsInstallReceiver"
+            android:exported="false" />
+        <service
+            android:name=".apps.AppsUpdateJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>
