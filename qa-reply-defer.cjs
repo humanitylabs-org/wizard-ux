@@ -29,6 +29,7 @@ const FIX = {
   qa_rd_plain: { title: 'QA rd Plain thread', t: now - 20, att: { state: 'fyi', ask: 'Plain answer for the defer test', subject: 'Research' } },
   qa_rd_needs: { title: 'QA rd Needs you', t: now - 40, att: { state: 'needs_you', ask: 'Pick the desk layout', subject: 'Wizard OS' } },
   qa_rd_check: { title: 'QA rd Test this', t: now - 60, att: { state: 'check', ask: 'Try the timer', subject: 'Wizard OS' } },
+  qa_rd_plain_ref: { title: 'QA rd Plain reference', t: now - 30, att: null },
   qa_rd_def: { title: 'QA rd Deferred today', t: now - 10, att: { state: 'fyi', ask: 'Read this later', subject: 'Research' }, def: true },
   qa_rd_def_old: { title: 'QA rd Deferred needs', t: now - 3 * 86400, att: { state: 'needs_you', ask: 'Approve the purchase', subject: 'QA rd Home' }, def: true },
 };
@@ -156,6 +157,21 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     const d = await rowInfo('qa_rd_def'), dOld = await rowInfo('qa_rd_def_old');
     ok(d && /\bdeferred\b/.test(d.cls) && /^Deferred · Read this later/.test(d.pv), '3 a deferred row reads "Deferred · <its line>"', d);
     ok(dOld && /^Deferred · Approve the purchase/.test(dOld.pv) && !/att-needs/.test(dOld.cls), '3 a deferred needs-you row shows Deferred, not Needs you', dOld);
+    // Same weight as every other thread (James, 10 Oct 2026: "don't fade it and make it hard to read … just add the
+    // label"): no opacity, the title and preview read exactly like a plain row, and the label is coloured like the others.
+    const look = await p.evaluate(() => {
+      const sel = id => `[data-sec="ready"] [data-chopen="${id}"]`, css = el => el && getComputedStyle(el);
+      const d = document.querySelector(sel('qa_rd_def')), n = document.querySelector(sel('qa_rd_plain_ref'));
+      const pick = (row) => row && { op: +css(row).opacity, title: [css(row.querySelector('.tp b')).color, css(row.querySelector('.tp b')).fontWeight].join(' '),
+        pv: [css(row.querySelector('.pv')).color, css(row.querySelector('.pv')).webkitLineClamp].join(' ') };
+      const lab = d?.querySelector('em.att.deferred');
+      return { d: pick(d), n: pick(n), label: lab && { text: lab.textContent, color: css(lab).color, weight: css(lab).fontWeight }, pvColor: d && css(d.querySelector('.pv')).color };
+    });
+    ok(look.d && look.d.op === 1, '3 a deferred row is not faded (full opacity)', look);
+    ok(look.d && look.n && look.d.title === look.n.title && look.d.pv === look.n.pv, '3 a deferred row reads like any other thread (same title and preview styling)', look);
+    const dot = await p.evaluate(() => { const d = document.querySelector('[data-sec="ready"] [data-chopen="qa_rd_def"] .st.deferred'), cs = d && getComputedStyle(d); return cs && { bg: cs.backgroundColor, border: cs.borderTopWidth }; });
+    ok(dot && dot.bg === 'rgba(0, 0, 0, 0)' && parseFloat(dot.border) >= 1, '3 the Deferred dot is a ring, never the filled unread dot', dot);
+    ok(look.label && look.label.text === 'Deferred' && look.label.color !== look.pvColor && look.label.color !== 'rgb(125, 116, 163)' && +look.label.weight >= 700, '3 "Deferred" is a coloured label like Needs you / Test this', look);
     const hdr = await p.evaluate(async sel => {
       const h = document.querySelector(sel); const m = (h?.querySelector('b.wait')?.textContent || '').match(/^(\d+) need you/);
       const sec = h?.closest('[data-sec]'); const rows = [...sec.querySelectorAll('[data-chopen]')];
