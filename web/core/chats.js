@@ -55,7 +55,7 @@ window.WizCore.chats = function createChats(H) {
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
   const SEC_PAGE = 40;
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
-  const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Test this' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
+  const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
   const deferredOf = s => !!s.deferred && !s.archived;
   const attOf = s => (s.attention && !WORKING_ST.has(s.status) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') ? s.attention : null;
   const svg = b => `<svg viewBox="0 0 24 24" aria-hidden="true">${b}</svg>`;
@@ -71,19 +71,23 @@ window.WizCore.chats = function createChats(H) {
     offline: svg('<path d="M12 20h.01M8.5 16.4a5 5 0 0 1 7 0M2 8.8a15 15 0 0 1 20 0M5 12.9a10 10 0 0 1 14 0"/><path d="m2 2 20 20"/>'),
     none: '<i class="dot" aria-hidden="true"></i>',
   };
-  const STI_TIP = { deferred: 'Deferred', needs: 'Needs you', check: 'Test this', done: 'Done', fyi: 'FYI', approval: 'Approval needed', failed: 'Stopped with an error', working: 'Working', offline: 'Offline · will retry', none: 'No status' };
+  const STI_LAB = { needs: 'Needs you', check: 'Your call', done: 'Done', fyi: 'FYI', deferred: 'Deferred', approval: 'Needs approval', failed: 'Error' };
+  const STI_TIP = { deferred: 'Deferred', needs: 'Needs you', check: 'Your call: see if it is what you meant', done: 'Done', fyi: 'FYI', approval: 'Approval needed', failed: 'Stopped with an error', working: 'Working', offline: 'Offline · will retry', none: 'No status' };
   function chatRow(s, snip) {
     const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = s.status === 'waiting_for_approval' || s.status === 'failed' || s.status === 'interrupted';
-    // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Test this, then its one line.
+    // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Your call, then its one line.
     const def = deferredOf(s) && !working && !needs;
     const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi');
     // The row icon says what the thread wants from James (replaced the per-thread ✦ star, 10 Oct 2026).
     // Emphasis is read state only (bold = unread, like an inbox); the status never changes weight or fades a row.
     const kind = working ? (s.pend === 'waiting' ? 'offline' : 'working') : s.status === 'failed' || s.status === 'interrupted' ? 'failed' : s.status === 'waiting_for_approval' ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
+    // The icon's meaning in words, in the icon's colour, at the preview's own weight (James, 10 Oct 2026:
+    // "most people won't know what those icons mean … same color as the icon … don't make it any brighter or bolder").
+    const lab = STI_LAB[kind] ? `<em class="att ${kind}">${STI_LAB[kind]}:</em> ` : '';
     const pv = working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
-      : needs ? esc(clip(s.preview || '', 110))
-      : def ? '<em class="att deferred">Deferred</em> · ' + esc(clip(attOf(s)?.ask || s.preview || '', 140))
-      : at ? esc(clip(at.ask, 140))
+      : needs ? lab + esc(clip(s.preview || '', 110))
+      : def ? lab + esc(clip(attOf(s)?.ask || s.preview || '', 140))
+      : at ? lab + esc(clip(at.ask, 140))
       : esc(clip(s.preview || '', 110));
     return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}><span class="emo sti ${kind}" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span>
       <span class="bd"><span class="tp"><b>${esc(s.title)}</b>${s.titleWas ? `<i class="was" title="Renamed from ${esc(s.titleWas)}">was ${esc(clip(s.titleWas, 40))}</i>` : ''}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
@@ -786,7 +790,7 @@ window.WizCore.chats = function createChats(H) {
     if (!w) { if (opts.seal && opts.seal !== true) opts.seal.putBack(); return; }
     const c = ch(wid);
     const sid = opts.sid || w.thread; if (!sid) { if (opts.seal && opts.seal !== true) opts.seal.putBack(); return; }
-    const here = w.thread === sid; // the window still shows the thread this was sent from
+    const here = !opts.away && w.thread === sid; // the window still shows the thread this was sent from (opts.away: sent from elsewhere, e.g. a review desk)
     const voice = 'seal' in opts; // a voice send: the composer goes only as taken at the tap, never the live tray
     const sealed = opts.seal === true ? takeComposer(wid, sid) : opts.seal || null;
     const tray = here && !voice ? (c.files || []) : [];
@@ -814,7 +818,7 @@ window.WizCore.chats = function createChats(H) {
     // tied the screen to the phone's IndexedDB commit plus every outbox listener's re-render: ~80 ms on a desktop
     // Chrome, 1-2 s in the phone's WebView. The reply's thread is held under Working from the same frame
     // (live.js holdSend, the orb's path) until its outbox item takes over. qa-send-leave-timing.cjs guards this.
-    const left = leaveAfterSend(wid, sid, isNew, how);
+    const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
     const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     // Saved on the phone; the outbox delivers it (and retries) from here.

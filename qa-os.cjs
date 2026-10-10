@@ -34,7 +34,7 @@ async function boot(b, { noCloseWatcher = false } = {}) {
   await p.waitForTimeout(800);
   return { ctx, p, writes, errs };
 }
-const state = p => p.evaluate(() => ({ idx: __wos.idx, url: location.pathname, sheet: __wos.sheet, desks: __wos.desks.map(d => ({ wins: d.wins.map(id => ({ app: __wos.wins[id].app, thread: __wos.wins[id].thread || null })), full: d.full, focus: d.focus })), back: __wos.back }));
+const state = p => p.evaluate(() => ({ home: __wos.HOME, idx: __wos.idx, url: location.pathname, sheet: __wos.sheet, desks: __wos.desks.map(d => ({ wins: d.wins.map(id => ({ app: __wos.wins[id].app, thread: __wos.wins[id].thread || null })), full: d.full, focus: d.focus })), back: __wos.back }));
 const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.waitForTimeout(500); };
 
 (async () => {
@@ -44,7 +44,7 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
   {
     const { ctx, p, writes, errs } = await boot(b);
     let s = await state(p);
-    ok(s.idx === 2 && s.desks[2].wins.length === 0, 'boots on Home; Home holds no app');
+    ok(s.home === 0 && s.desks[0].wins.length === 0, 'Home is the first desk and holds no app');
     ok(s.desks[1].wins.some(w => w.app === 'chats'), 'Chats starts as a window on desk 2 (closable, not pinned)');
     ok(s.back.watchers >= 1, 'Back watcher armed at boot', JSON.stringify(s.back));
     { const g = await p.evaluate(() => { const r = s => document.querySelector(s).getBoundingClientRect(); const o = r('#orbWrap'), d = r('#dock');
@@ -68,7 +68,7 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     ok(s.url.includes('wizard-os-home') && s.desks[1].wins[0].thread === null && s.idx === 1, 'Back from a thread returns to the thread list (app stays open)', JSON.stringify(s));
     await p.keyboard.press('Escape'); await p.waitForTimeout(700);
     s = await state(p);
-    ok(s.url.includes('wizard-os-home') && s.idx === 2, 'next Back goes to the Home desk', JSON.stringify({ idx: s.idx, log: s.back.log }));
+    ok(s.url.includes('wizard-os-home') && s.idx === s.home, 'next Back goes to the Home desk', JSON.stringify({ idx: s.idx, log: s.back.log }));
     await p.keyboard.press('Escape'); await p.waitForTimeout(400);
     s = await state(p);
     const warned = await p.locator('#toast').textContent();
@@ -78,11 +78,11 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     ok(s.url.includes('wizard-os-home') && !s.back.exitArmed && s.back.watchers >= 1, 'warning expires after 2 s and Back re-arms', JSON.stringify(s.back));
     // Many Backs in a row (no taps in between) must each be consumed, never leak to the browser.
     await p.evaluate(() => { __wos.goDesk(0); }); await p.waitForTimeout(300);
-    await p.locator('.desk').nth(0).tap({ position: { x: 200, y: 300 } }).catch(() => {});
+    await p.locator(`.desk[data-desk="${0}"]`).tap({ position: { x: 200, y: 300 } }).catch(() => {});
     await p.evaluate(() => { __wos.openSheet('launcher'); }); await p.waitForTimeout(300);
     for (let k = 0; k < 2; k++) { await p.keyboard.press('Escape'); await p.waitForTimeout(350); }
     s = await state(p);
-    ok(s.url.includes('wizard-os-home') && s.idx === 2 && !s.sheet, 'sheet → Home in two Backs without any tap between', JSON.stringify({ idx: s.idx, log: s.back.log }));
+    ok(s.url.includes('wizard-os-home') && s.idx === s.home && !s.sheet, 'sheet → Home in two Backs without any tap between', JSON.stringify({ idx: s.idx, log: s.back.log }));
     // Double Back on Home really exits (the only way out).
     await p.keyboard.press('Escape'); await p.waitForTimeout(250);
     await p.goBack().catch(() => {}); await p.waitForTimeout(600);
@@ -105,7 +105,7 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     await tap(p, '.ch-search');
     await p.goBack(); await p.waitForTimeout(700);
     s = await state(p);
-    ok(s.url.includes('wizard-os-home') && s.idx === 2, 'history Back → Home desk', JSON.stringify({ idx: s.idx, log: s.back.log }));
+    ok(s.url.includes('wizard-os-home') && s.idx === s.home, 'history Back → Home desk', JSON.stringify({ idx: s.idx, log: s.back.log }));
     await p.locator('.home-line').tap().catch(() => {});
     await p.waitForTimeout(300);
     await p.goBack(); await p.waitForTimeout(700);
@@ -122,10 +122,14 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     await p.evaluate(() => __wos.goDesk(1)); await p.waitForTimeout(500);
     await p.evaluate(() => __wos.execute({ action: 'open_view', view: 'week' }, 'open week')); await p.waitForTimeout(900);
     let s = await state(p);
-    ok(s.desks[1].wins.length === 2 && s.desks[1].wins.map(w => w.app).join() === 'chats,review', 'opening an app on a busy desk tiles it beside Chats');
-    ok(await p.locator('.desk').nth(1).locator('.tiles').getAttribute('data-n') === '2', 'two tiles laid out');
+    ok(s.idx === 2 && s.desks[2].wins.length === 1 && s.desks[2].wins[0].app === 'review', 'opening an app puts it on its own desk right beside this one', JSON.stringify(s.desks.map(d => d.wins.map(w => w.app))));
+    await p.evaluate(() => __wos.mergeDesks(__wos.desks[1].id, __wos.desks[2].id)); await p.waitForTimeout(700);
+    s = await state(p);
+    ok(s.desks[1].wins.length === 2 && s.desks[1].wins.map(w => w.app).join() === 'chats,review', 'merging two desks tiles the review beside Chats');
+    ok(await p.locator(`.desk[data-desk="${1}"]`).locator('.tiles').getAttribute('data-n') === '2', 'two tiles laid out');
     await p.screenshot({ path: OUT + '/41-tiled-2.png' });
     await p.evaluate(() => __wos.execute({ action: 'open_app', app: 'CineQueue' }, 'open cinequeue')); await p.waitForTimeout(1500);
+    await p.evaluate(() => { const d = __wos.desks.findIndex(x => x.wins.some(id => __wos.wins[id].appId === 'cinequeue')); if (d > 1) __wos.mergeDesks(__wos.desks[1].id, __wos.desks[d].id); __wos.goDesk(1, true); }); await p.waitForTimeout(900);
     await p.screenshot({ path: OUT + '/42-tiled-3.png' });
     s = await state(p);
     ok(s.desks[1].wins.length === 3, 'third app tiles too (master + stack)');
@@ -135,9 +139,19 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     await p.waitForFunction(() => { try { const f = document.querySelector('.win.app-frame iframe'); return f && f.contentDocument && f.contentDocument.readyState === 'complete'; } catch (e) { return true; } }, null, { timeout: 20000 }).catch(() => {});
     await p.waitForTimeout(3500);
     const cdp = await ctx.newCDPSession(p);
-    const bb = await p.locator('.desk').nth(1).locator('.win').nth(0).locator('.wbar .wt').boundingBox();
+    const bb = await p.locator(`.desk[data-desk="${1}"]`).locator('.win').nth(0).locator('.wbar .wt').boundingBox();
     const tp = async () => { const pt = [{ x: bb.x + bb.width / 2, y: bb.y + bb.height / 2, id: 1 }]; await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt }); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); };
-    await tp(); await p.waitForTimeout(140); await tp(); await p.waitForTimeout(600);
+    // Headless software rendering can delay CDP touch dispatch past the 450 ms window (a real phone never does).
+    // Measure the actual gap between the two clicks and retry when the harness, not the app, was too slow.
+    await p.evaluate(() => { window.__barClicks = []; document.addEventListener('click', e => { if (e.target.closest('.wbar')) __barClicks.push(e.timeStamp); }, true); });
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await p.evaluate(() => { __barClicks.length = 0; });
+      await tp(); await p.waitForTimeout(140); await tp(); await p.waitForTimeout(600);
+      if (await p.evaluate(() => __wos.desks[1].full)) break;
+      const gap = await p.evaluate(() => __barClicks.length === 2 ? __barClicks[1] - __barClicks[0] : -1);
+      if (gap >= 0 && gap < 450) break; // a genuine miss: the app ignored a real double-tap
+      await p.waitForTimeout(400);
+    }
     s = await state(p);
     ok(s.desks[1].full === true, 'double-tap title bar → full screen', JSON.stringify(s.desks[1]));
     await p.screenshot({ path: OUT + '/43-full.png' });
@@ -146,7 +160,7 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     ok(s.desks[1].full === false && s.idx === 1, 'Back from full screen returns to tiles (same desk)', JSON.stringify({ full: s.desks[1].full, idx: s.idx, log: s.back.log }));
     // Pinch out on a tile → full screen; pinch in → tiles.
     await p.waitForTimeout(800);
-    const w0 = await p.locator('.desk').nth(1).locator('.win').nth(0).boundingBox();
+    const w0 = await p.locator(`.desk[data-desk="${1}"]`).locator('.win').nth(0).boundingBox();
     // In-page TouchEvents through the real handlers. (Raw CDP touch streams stall in headless
     // Chromium once a framed app is busy; the CDP path is covered in isolated runs.)
     const pinch = async (box, from, to) => {
@@ -168,7 +182,7 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     await p.waitForFunction(() => __wos.desks[1].full === true, null, { timeout: 3000 }).catch(() => {});
     s = await state(p);
     ok(s.desks[1].full === true, 'pinch out on a window → full screen', JSON.stringify({ d: s.desks[1], ev: await p.evaluate(() => __pev), w0 }));
-    const wf = await p.locator('.desk').nth(1).locator('.win.full').boundingBox({ timeout: 5000 }).catch(() => w0);
+    const wf = await p.locator(`.desk[data-desk="${1}"]`).locator('.win.full').boundingBox({ timeout: 5000 }).catch(() => w0);
     await p.evaluate(() => { __pev.length = 0; });
     await pinch(wf, 130, 40);
     await p.waitForFunction(() => __pev.some(x => x.startsWith('touchend n=0')), null, { timeout: 25000 }).catch(() => {});
@@ -176,7 +190,7 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     s = await state(p);
     ok(s.desks[1].full === false, 'pinch in → back to tiles');
     // Move Chats to desk 5 via its menu; close CineQueue.
-    const chatWin = p.locator('.desk').nth(1).locator('.win.app-chats');
+    const chatWin = p.locator(`.desk[data-desk="${1}"]`).locator('.win.app-chats');
     await chatWin.locator('[data-wact="menu"]').tap(); await p.waitForTimeout(300);
     ok(await p.locator('#wmenu.open').count() === 1, 'window menu opens');
     await p.locator('#wmenu [data-mact="right"]').tap(); await p.waitForTimeout(700);
@@ -184,14 +198,14 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     ok(s.desks[2].wins.some(w => w.app === 'chats') || s.desks.findIndex(d => d.wins.some(w => w.app === 'chats')) === 2, 'menu → move Chats one desk right', JSON.stringify(s.desks.map(d => d.wins.map(w => w.app))));
     ok(s.idx === 2, 'view follows the moved window');
     await p.evaluate(() => __wos.goDesk(1)); await p.waitForTimeout(700);
-    const fr = p.locator('.desk').nth(1).locator('.win.app-frame');
+    const fr = p.locator(`.desk[data-desk="${1}"]`).locator('.win.app-frame');
     await fr.locator('[data-wact="close"]').tap(); await p.waitForTimeout(600);
     s = await state(p);
     ok(!s.desks[1].wins.some(w => w.app === 'frame'), 'close button closes a window');
     // Chats can be closed entirely and reopened from the launcher.
     const ci = s.desks.findIndex(d => d.wins.some(w => w.app === 'chats'));
     await p.evaluate(i => __wos.goDesk(i), ci); await p.waitForTimeout(500);
-    await p.locator('.desk').nth(ci).locator('.win.app-chats [data-wact="close"]').tap(); await p.waitForTimeout(600);
+    await p.locator(`.desk[data-desk="${ci}"]`).locator('.win.app-chats [data-wact="close"]').tap(); await p.waitForTimeout(600);
     s = await state(p);
     ok(!s.desks.some(d => d.wins.some(w => w.app === 'chats')), 'Chats can be closed like any app');
     await p.evaluate(() => __wos.openSheet('launcher')); await p.waitForTimeout(400);
@@ -249,7 +263,7 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     ok(ids[1].includes('chats'), 'Chats still one desk left of Home', JSON.stringify(ids));
     // Topics isn't published yet: its window shows a "coming" card, never an error page.
     await p.evaluate(() => __wos.goDesk(3)); await p.waitForTimeout(1500);
-    const topics = await p.evaluate(() => { const w = document.querySelectorAll('.desk')[3].querySelector('.frame-wrap'); const f = w?.querySelector('iframe'); let href = ''; try { href = f.contentWindow.location.href; } catch (e) {} return { coming: w?.classList.contains('coming'), href }; });
+    const topics = await p.evaluate(() => { const w = document.querySelector('.desk[data-desk="3"]').querySelector('.frame-wrap'); const f = w?.querySelector('iframe'); let href = ''; try { href = f.contentWindow.location.href; } catch (e) {} return { coming: w?.classList.contains('coming'), href }; });
     ok(topics.coming || /wizard-topics-preview/.test(topics.href), 'Topics desk: on-its-way card until published, then the live app', JSON.stringify(topics));
     await p.screenshot({ path: OUT + '/50-topics-coming.png' });
     await p.evaluate(() => __wos.goDesk(2)); await p.waitForTimeout(700);
@@ -265,15 +279,15 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt });
     await p.waitForTimeout(700);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await p.waitForFunction(() => document.querySelector('#peek.open'), null, { timeout: 5000 }).catch(() => {});
+    await p.waitForFunction(() => document.querySelector('#overview.open'), null, { timeout: 5000 }).catch(() => {});
     await p.waitForTimeout(500);
     s = await state(p);
-    ok(await p.locator('#peek.open .pk-card').count() === 5 && s.idx === 4, 'long-press a dot → peek every desk as cards (no jump)', 'idx=' + s.idx + ' ' + JSON.stringify(await p.evaluate(() => ({ dev: __dev, peek: document.getElementById('peek')?.className, cards: document.querySelectorAll('#peek .pk-card').length, back: __wos.back.log.slice(-4) }))));
+    ok(await p.locator('#overview.open .ov-card[data-ov]').count() === s.desks.length && s.idx === 4, 'long-press a dot → overview of every desk as cards (no jump)', 'idx=' + s.idx + ' ' + JSON.stringify(await p.evaluate(() => ({ dev: __dev, peek: document.getElementById('peek')?.className, cards: document.querySelectorAll('#peek .pk-card').length, back: __wos.back.log.slice(-4) }))));
     await p.screenshot({ path: OUT + '/52-peek.png' });
-    await p.keyboard.press('Escape'); await p.waitForFunction(() => !document.querySelector('#peek.open'), null, { timeout: 4000 }).catch(() => {});
-    ok(await p.locator('#peek.open').count() === 0 && (await state(p)).idx === 4, 'Back closes the peek, stays on the desk');
+    await p.keyboard.press('Escape'); await p.waitForFunction(() => !document.querySelector('#overview.open'), null, { timeout: 4000 }).catch(() => {});
+    ok(await p.locator('#overview.open').count() === 0 && (await state(p)).idx === 4, 'Back closes the overview, stays on the desk');
     await p.evaluate(() => __wos.openPeek(4)); await p.waitForTimeout(900);
-    await p.locator('#peek [data-peek="1"]').click(); await p.waitForTimeout(700);
+    await p.locator('#overview .ov-card[data-ov]').nth(1).click(); await p.waitForTimeout(700);
     ok((await state(p)).idx === 1, 'tap a card → that desk');
     // Scrubber: hold the strip under the orb, nudge right desk by desk, release lands.
     const sc = await p.locator('#scrub').boundingBox();
