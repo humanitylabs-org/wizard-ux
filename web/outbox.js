@@ -39,6 +39,25 @@
   function lsSave() { if (db) return; try { localStorage.setItem(LS, JSON.stringify([...items.values()].map(({ audio, ...x }) => x))); } catch (e) {} }
   async function put(it) { items.set(it.id, it); lsSave(); try { await tx('readwrite', s => s.put(it)); } catch (e) { console.warn('outbox put', e); } emit(); }
   async function del(id) { items.delete(id); lsSave(); try { await tx('readwrite', s => s.delete(id)); } catch (e) {} emit(); }
+  // Unsent messages carried over from the retired private.wizard001.com (core/carry-in.js): stored by id
+  // (never twice), then the app is told it can drop its copy. Voice audio comes back as a Blob.
+  async function adoptCarried() {
+    const C = window.WosCarry; if (!C || !Array.isArray(C.outbox)) return;
+    window.WosCarry = null;
+    for (const x of C.outbox) {
+      if (items.has(x.id)) continue;
+      const it = { ...x }; delete it.audio64;
+      if (x.audio64) {
+        try { const bin = atob(x.audio64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); it.audio = new Blob([u8], { type: x.audioType || 'audio/webm' }); }
+        catch (e) { it.audio = null; }
+      }
+      if (it.state === 'sending') it.state = 'waiting';
+      items.set(it.id, it);
+      try { await tx('readwrite', s => s.put(it)); } catch (e) { console.warn('outbox carry', e); }
+    }
+    lsSave();
+    try { C.done(); } catch (e) {}
+  }
   function load() {
     if (ready) return ready;
     ready = (async () => {
@@ -50,6 +69,7 @@
         db = null;
         try { for (const it of JSON.parse(localStorage.getItem(LS) || '[]')) items.set(it.id, it); } catch (x) {}
       }
+      await adoptCarried();
       emit(); schedule(0);
     })();
     return ready;
@@ -90,10 +110,12 @@
 
   async function deliver(it) {
     // 1. Words: a voice item that never got its transcript gets one now.
+    // Words typed or pasted with it (it.typed: a link, say) go first, then what was said: one message (legacy
+    // composeVoiceTurnText). A recording with no speech still sends when it carries typed words.
     if (!it.text && it.audio) {
-      const text = await transcribe(it);
-      if (!text) { it.state = 'empty'; it.error = 'No speech in that recording'; await put(it); return; }
-      it.text = text; await put(it);
+      const text = String(await transcribe(it) || '').trim(), typed = String(it.typed || '').trim();
+      if (!text && !typed) { it.state = 'empty'; it.error = 'No speech in that recording'; await put(it); return; }
+      it.text = [typed, text].filter(Boolean).join('\n\n').slice(0, 64000); await put(it);
     }
     // 2. The recording rides along as a voice note, so the original audio is on the server too.
     if (it.audio && !it.audioFile) { it.audioFile = await uploadAudio(it); it.files = [...(it.files || []), it.audioFile]; await put(it); }
@@ -178,9 +200,9 @@
       const it = {
         id: 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'queued',
         kind: o.kind === 'reply' ? 'reply' : 'new', sessionId: o.sessionId || newSessionId(), steerRunId: o.steerRunId || '',
-        text: String(o.text || '').trim(), instructions: o.instructions || '', files: o.files || [],
+        text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: o.files || [],
         audio: o.audio || null, audioType: o.audio ? (o.audio.type || 'audio/webm') : '',
-        wid: o.wid || '', how: o.how || '', source: o.source || 'chat', title: String(o.text || '').slice(0, 60),
+        wid: o.wid || '', how: o.how || '', source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60),
       };
       // A route chosen in the model picker (sealed with the message, like legacy's admit()).
       if (o.model) { it.model = String(o.model); it.provider = String(o.provider || ''); }

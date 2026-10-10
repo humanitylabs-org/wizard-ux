@@ -17,7 +17,11 @@ public final class UsualsStore {
 
     public static final class Usual {
         public String id = "", name = "", pkg = UsualsPolicy.GRAB, lastTotal = "", lastRun = "", lastResult = "";
-        public long lastRunAt;
+        /** What's in it ("2× Kra pao moo saap · 1× Thai iced tea") and where from, read off the route. */
+        public String basket = "", place = "";
+        /** Saved from "Order something new" with a name made up from the food: Usuals offers to rename it. */
+        public boolean needsName;
+        public long lastRunAt, createdAt;
         public List<UsualsPolicy.Step> steps = new ArrayList<>();
 
         JSONObject toJson() throws JSONException {
@@ -26,6 +30,7 @@ public final class UsualsStore {
                     .put("near", s.near).put("x", (double) s.x).put("y", (double) s.y));
             return new JSONObject().put("id", id).put("name", name).put("pkg", pkg).put("lastTotal", lastTotal)
                     .put("lastRun", lastRun).put("lastResult", lastResult).put("lastRunAt", lastRunAt).put("steps", st)
+                    .put("basket", basket).put("place", place).put("needsName", needsName).put("createdAt", createdAt)
                     .put("script", UsualsPolicy.write(steps));
         }
 
@@ -34,6 +39,8 @@ public final class UsualsStore {
             u.id = o.optString("id"); u.name = o.optString("name"); u.pkg = o.optString("pkg", UsualsPolicy.GRAB);
             u.lastTotal = o.optString("lastTotal"); u.lastRun = o.optString("lastRun"); u.lastResult = o.optString("lastResult");
             u.lastRunAt = o.optLong("lastRunAt");
+            u.basket = o.optString("basket"); u.place = o.optString("place"); u.needsName = o.optBoolean("needsName");
+            u.createdAt = o.optLong("createdAt");
             JSONArray st = o.optJSONArray("steps");
             if (st != null) for (int i = 0; i < st.length(); i++) {
                 JSONObject s = st.optJSONObject(i);
@@ -64,7 +71,7 @@ public final class UsualsStore {
     }
 
     public static synchronized void put(Context c, Usual u) {
-        if (u.id == null || u.id.isEmpty()) u.id = "u-" + UUID.randomUUID().toString().substring(0, 8);
+        if (u.id == null || u.id.isEmpty()) { u.id = "u-" + UUID.randomUUID().toString().substring(0, 8); u.createdAt = System.currentTimeMillis(); }
         List<Usual> list = all(c);
         boolean found = false;
         for (int i = 0; i < list.size(); i++) if (list.get(i).id.equals(u.id)) { list.set(i, u); found = true; }

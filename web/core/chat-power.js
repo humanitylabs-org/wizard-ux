@@ -210,7 +210,7 @@ window.WosChatPower = function chatPower(A) {
         + `<button type="button" class="ghost" data-attdismiss="${esc(a.id)}" ${E.busy.has(a.id) ? 'disabled' : ''}>${E.busy.get(a.id) === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`).join('')
       + vf.map(it => {
         const sure = confirmDel.id === it.id && Date.now() - confirmDel.at < 4000;
-        return `<div class="ch-err ch-err-vn" data-errob="${esc(it.id)}"><div class="ch-err-t"><b>${A.MIC_SVG}Voice note${it.text ? ` · ${esc(clip(it.text, 60))}` : ''}</b><small>Not sent · ${esc(it.error || 'Wizard didn’t take it')}</small></div><div class="ch-err-b">`
+        return `<div class="ch-err ch-err-vn" data-errob="${esc(it.id)}"><div class="ch-err-t"><b>${A.MIC_SVG}Voice note${it.text || it.typed ? ` · ${esc(clip(it.text || it.typed, 60))}` : ''}</b><small>Not sent · ${esc(it.error || 'Wizard didn’t take it')}</small></div><div class="ch-err-b">`
           + `<button type="button" data-obretry="${esc(it.id)}">Retry</button><button type="button" class="ghost${sure ? ' warn' : ''}" data-obdismiss="${esc(it.id)}">${sure ? 'Delete recording?' : 'Dismiss'}</button></div></div>`;
       }).join('');
     return { n: att.length + vf.length, html };
@@ -225,23 +225,19 @@ window.WosChatPower = function chatPower(A) {
   const micBtn = wid => { if (!H.recordReply) return ''; const sid = H.win(wid)?.thread, on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
   /* A recording made from a thread's composer: always delivered to that thread (pinned when recording started),
    * through the durable outbox, which transcribes it and keeps the recording as a voice note. */
-  async function sendVoiceTo(wid, sid, blob, files = []) {
+  async function sendVoiceTo(wid, sid, blob, files = [], seal = true) {
     if (!OUTBOX || !blob || !sid) return null;
     const w = H.win(wid), c = ch(wid);
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = s && A.WORKING_ST.has(s.status) && s.runId ? s.runId : '';
     const nm = isNew ? (c.newModel || null) : null;
-    // Files already attached in this thread's composer ride with the voice reply and leave the composer, the
-    // same as a typed send; otherwise they'd stay behind as a "draft" of a message that already went.
-    // Typed words stay put: the outbox treats a non-empty text as the transcript.
-    const dkey = isNew ? 'new' : 'direct:' + sid, here = !!w && w.thread === sid;
-    const comp = (here ? (c.files || []) : A.KIT.drafts.get(dkey).files).filter(f => f && f.id && !f.uploading);
-    const all = [...(files || []), ...comp].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
-    // Cleared before the await, so the other parts of an interrupted take don't carry the same files again.
-    const kept = here ? (c.draft || '') : A.KIT.drafts.get(dkey).text;
-    const clearTray = list => { if (here) { c.files = list; A.refreshCompose(wid); } A.KIT.drafts.set(dkey, kept, list); };
-    if (comp.length) clearTray([]);
+    // The thread's composer rides with the recording as ONE message (legacy H4): the words typed or pasted
+    // there (a link, say) go before the transcript, its photos and files with the voice note, and the composer
+    // empties. seal: the composer taken at the send tap (chats.js takeComposer); true takes it now; false for the
+    // later parts of an interrupted take, so nothing goes twice.
+    const sealed = seal === true ? A.takeComposer(wid, sid) : seal || { text: '', files: [], done() {}, putBack() {} };
+    const all = [...(files || []), ...sealed.files].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i).slice(0, 8);
     const wasHere = !!w && w.thread === sid;
     if (isNew) c.newModel = null;
     c.follow = true;
@@ -252,16 +248,17 @@ window.WosChatPower = function chatPower(A) {
     if (w) A.renderChats(w);
     let it;
     try {
-      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', audio: blob,
+      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', typed: sealed.text, audio: blob,
         instructions: H.viewContext(wid, 'a voice reply recorded in this thread'), files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
         wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
-    } catch (e) { // not saved anywhere: the attachments go back, and so does James if he is still on the list
+    } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
       if (isNew && nm) c.newModel = nm;
-      if (comp.length) clearTray(comp);
+      sealed.putBack();
       if (left && w && !w.thread) A.openChat(wid, sid);
       throw e;
     }
+    sealed.done();
     return it;
   }
   function paintMic(on, sid) {

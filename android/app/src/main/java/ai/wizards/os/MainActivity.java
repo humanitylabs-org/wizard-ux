@@ -31,7 +31,7 @@ import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
 /**
- * Wizard OS: a native home for James's private Wizard OS shell (private.wizard001.com/wizard-os-home/).
+ * Wizard OS: a native home for James's private Wizard OS shell (wizard.tailc0f369.ts.net/wizard-os-home/; the retired private.wizard001.com still opens).
  *
  * Rules this activity enforces:
  *  - Back never exits. Every Back is handed to the shell (window.__wosNativeBack), which closes the top
@@ -149,6 +149,11 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
+                // A main-frame hop to the retired private.wizard001.com lands on the same page under this Wizard's own name.
+                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying && !ai.wizards.os.device.AppState.legacyFallback) { view.loadUrl(Origin.toHome(u.toString())); return true; }
+                // Under the safety net the tailnet name is unreachable: its links open the same page on the old name.
+                if (req.isForMainFrame() && Origin.isHome(u) && ai.wizards.os.device.AppState.legacyFallback) { view.loadUrl(Origin.toLegacy(u.toString())); return true; }
+                if (carrying && Carry.isPage(MainActivity.this, u.toString())) return false;
                 if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) return false;
                 if (!req.isForMainFrame()) return false; // hosted app frames stay inside their window
                 openOutside(u);
@@ -157,17 +162,27 @@ public class MainActivity extends Activity {
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
+                if (req.isForMainFrame() && carrying) { endCarry("unreachable"); return; } // old name gone: just go home
+                // Safety net: the tailnet name unreachable from this phone → same page on the old name for this run.
+                // (A failing old-name page is not isHome, so this cannot loop; both failing ends on the offline page.)
+                if (req.isForMainFrame() && Origin.isHome(req.getUrl()) && ai.wizards.os.device.AppState.useLegacy(MainActivity.this)) {
+                    view.loadUrl(Origin.toLegacy(req.getUrl().toString()));
+                    return;
+                }
                 if (req.isForMainFrame()) showOffline(String.valueOf(err.getDescription()));
             }
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                pageUrl = url;
                 setKeepAwake(false);
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 if (!url.startsWith("data:")) showingError = false;
+                // Back must never land on the one-time carry page: drop it from history once the shell is up.
+                if (clearAfterCarry && !carrying && !Carry.isPage(MainActivity.this, url)) { clearAfterCarry = false; view.clearHistory(); }
                 topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
             }
 
@@ -221,14 +236,14 @@ public class MainActivity extends Activity {
     }
 
     void handleBack() {
-        if (showingError) { web.loadUrl(BuildConfig.HOME_URL); return; }
+        if (showingError) { web.loadUrl(ai.wizards.os.device.AppState.homeUrl(this)); return; }
         web.evaluateJavascript("(window.__wosNativeBack ? window.__wosNativeBack() : 'nojs')", result -> {
             String r = result == null ? "" : result.replace("\"", "");
             if (!r.equals("nojs") && !r.isEmpty() && !r.equals("null")) return; // the shell handled it
             // The shell is not loaded (or is a page off the shell): step back in the WebView, else go home.
             String url = web.getUrl();
             if (web.canGoBack()) web.goBack();
-            else if (url == null || !url.startsWith(BuildConfig.HOME_URL)) web.loadUrl(BuildConfig.HOME_URL);
+            else if (url == null || !url.startsWith(ai.wizards.os.device.AppState.homeUrl(this))) web.loadUrl(ai.wizards.os.device.AppState.homeUrl(this));
             else Toast.makeText(this, "You're home", Toast.LENGTH_SHORT).show();
         });
     }
@@ -237,8 +252,41 @@ public class MainActivity extends Activity {
 
     String startUrl(Intent intent) {
         Uri data = intent == null ? null : intent.getData();
-        if (data != null && Origin.isInApp(data)) return data.toString();
+        String target = data != null && Origin.isInApp(data) ? inAppUrl(data.toString()) : null;
+        // First launch after the move to the tailnet name: bring the phone's drafts/unsent/seen state across, then go on.
+        if (Carry.pending(this)) {
+            Carry.attempt(this);
+            carrying = true;
+            carryNext = target;
+            main.postDelayed(carryTimeout, Carry.TIMEOUT_MS);
+            return Carry.pageUrl(this);
+        }
+        if (target != null) return target;
         return ai.wizards.os.device.AppState.homeUrl(this); // HOME_URL; QA builds may point at a fake Wizard
+    }
+
+    /** An in-app link on whichever name this run uses (the tailnet name, or the old one under the safety net). */
+    static String inAppUrl(String url) {
+        return ai.wizards.os.device.AppState.legacyFallback ? Origin.toLegacy(url) : Origin.toHome(url);
+    }
+
+    /* ---------------- Carry: move local state off the retired private.wizard001.com (see Carry) ---------------- */
+
+    private volatile boolean carrying;
+    private volatile String pageUrl;
+    private String carryNext;
+    private boolean clearAfterCarry;
+    private final Runnable carryTimeout = () -> endCarry("timeout");
+
+    void endCarry(String why) {
+        if (!carrying) return;
+        carrying = false;
+        main.removeCallbacks(carryTimeout);
+        android.util.Log.i("WizardOSCarry", "carry " + why);
+        String next = carryNext != null ? carryNext : ai.wizards.os.device.AppState.homeUrl(this);
+        carryNext = null;
+        clearAfterCarry = true;
+        if (web != null) web.loadUrl(next);
     }
 
     @Override
@@ -246,7 +294,10 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         Uri data = intent.getData();
-        if (data != null && Origin.isInApp(data)) web.loadUrl(data.toString());
+        if (data != null && Origin.isInApp(data)) {
+            if (carrying) carryNext = inAppUrl(data.toString());
+            else web.loadUrl(inAppUrl(data.toString()));
+        }
         if (ACTION_ACCESSIBILITY.equals(intent.getAction())) { intent.setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); return; }
         queueHandoff(intent);
         device.onIntent(intent);
@@ -316,12 +367,13 @@ public class MainActivity extends Activity {
 
     private void showOffline(String why) {
         showingError = true;
+        ai.wizards.os.device.AppState.legacyFallback = false; // both names failed: Retry tries the tailnet name first again
         String html = "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
                 + "<body style='margin:0;background:#05030c;color:#e9e4ff;font:16px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center'>"
                 + "<div style='padding:24px'><div style='font-size:44px;color:#9b7bff'>◉</div>"
                 + "<h2 style='font-weight:600'>Can't reach Wizard OS</h2>"
                 + "<p style='opacity:.75'>Check that Tailscale is connected on this phone, then tap retry.</p>"
-                + "<a href='" + BuildConfig.HOME_URL + "' style='display:inline-block;margin-top:12px;padding:12px 22px;border-radius:999px;background:#2a1d5c;color:#fff;text-decoration:none'>Retry</a>"
+                + "<a href='" + ai.wizards.os.device.AppState.homeUrl(this) + "' style='display:inline-block;margin-top:12px;padding:12px 22px;border-radius:999px;background:#2a1d5c;color:#fff;text-decoration:none'>Retry</a>"
                 + "<p style='opacity:.4;font-size:12px;margin-top:18px'>" + android.text.Html.escapeHtml(why) + "</p></div></body>";
         web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
     }
@@ -656,6 +708,29 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }
 
+        /* ---- Carry (one time): the old name's page hands its local state over; the new name's shell takes it. ---- */
+        @JavascriptInterface
+        public boolean carryOut(String json) {
+            if (!carrying || !Carry.isPage(MainActivity.this, pageUrl)) return false;
+            boolean ok = Carry.save(MainActivity.this, json);
+            if (ok) Carry.finished(MainActivity.this);
+            main.post(() -> endCarry(ok ? "saved" : "refused"));
+            return ok;
+        }
+
+        @JavascriptInterface
+        public String carryIn() {
+            String u = pageUrl;
+            if (u == null || !u.startsWith(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this) + "/")) return "";
+            return Carry.load(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void carryDone() {
+            String u = pageUrl;
+            if (u != null && u.startsWith(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this) + "/")) Carry.clear(MainActivity.this);
+        }
+
         /* ---- Usuals: James's regular Grab orders (usuals/*). Nothing here can place an order. ---- */
         @JavascriptInterface
         public String usuals() {
@@ -681,25 +756,28 @@ public class MainActivity extends Activity {
         public String usualsRun(String id) {
             final String[] out = {""};
             java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
-            main.post(() -> { out[0] = ai.wizards.os.usuals.UsualsRunner.get(MainActivity.this).run(String.valueOf(id)); l.countDown(); });
+            main.post(() -> {
+                ai.wizards.os.usuals.UsualsRunner r = ai.wizards.os.usuals.UsualsRunner.get(MainActivity.this);
+                out[0] = ai.wizards.os.usuals.UsualsRunner.NEW.equals(id) ? r.teach("") : r.run(String.valueOf(id));
+                l.countDown();
+            });
             try { l.await(3, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
             return out[0];
         }
 
-        /** The usual whose name James said ("order my usual kra pao"), or "". */
+        /** The usual whose name James said ("order my usual kra pao"), "+new" for "order something new", or "". */
         @JavascriptInterface
         public String usualsMatch(String said) {
-            java.util.List<ai.wizards.os.usuals.UsualsStore.Usual> l = ai.wizards.os.usuals.UsualsStore.all(MainActivity.this);
-            int i = ai.wizards.os.usuals.UsualsPolicy.matchVoice(ai.wizards.os.usuals.UsualsStore.names(l), String.valueOf(said));
-            return i >= 0 ? l.get(i).id : "";
+            String id = ai.wizards.os.usuals.UsualsVoice.match(MainActivity.this, String.valueOf(said));
+            return id == null ? "" : id;
         }
 
         @JavascriptInterface
         public boolean usualsSave(String id, String name, String script) {
             ai.wizards.os.usuals.UsualsStore.Usual u = ai.wizards.os.usuals.UsualsStore.get(MainActivity.this, String.valueOf(id));
             if (u == null) return false;
-            if (name != null && !name.trim().isEmpty()) u.name = name.trim();
-            if (script != null && !script.equals(ai.wizards.os.usuals.UsualsPolicy.write(u.steps))) {
+            if (name != null && !name.trim().isEmpty()) { u.name = name.trim(); u.needsName = false; }
+            if (script != null && !"null".equals(script) && !"undefined".equals(script) && !script.equals(ai.wizards.os.usuals.UsualsPolicy.write(u.steps))) {
                 java.util.List<ai.wizards.os.usuals.UsualsPolicy.Step> s = ai.wizards.os.usuals.UsualsPolicy.parse(script);
                 if (s.isEmpty()) return false;
                 u.steps = s;
@@ -708,6 +786,12 @@ public class MainActivity extends Activity {
             return true;
         }
 
+        /** "Keep" on a new usual's suggested name. */
+        @JavascriptInterface
+        public void usualsKeepName(String id) {
+            ai.wizards.os.usuals.UsualsStore.Usual u = ai.wizards.os.usuals.UsualsStore.get(MainActivity.this, String.valueOf(id));
+            if (u != null && u.needsName) { u.needsName = false; ai.wizards.os.usuals.UsualsStore.put(MainActivity.this, u); }
+        }
         @JavascriptInterface
         public void usualsDelete(String id) { ai.wizards.os.usuals.UsualsStore.delete(MainActivity.this, String.valueOf(id)); }
 

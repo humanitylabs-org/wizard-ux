@@ -23,7 +23,7 @@ Sources: legacy-features.md (163 legacy features at wizard-mobile ff86db8c), new
 16. Full Markdown: real tables, italics, quotes, nested lists, headings, code blocks with Copy/Share, and `@session` links that open threads.
 17. Work receipt detail: plan checklist (X of N done), named steps with durations, "Worked for 3m", and "Waiting on you" questions.
 18. Reading position: open at the start of the latest reply, remember position for an hour, "↓ Latest" jump button.
-19. Paste an image into the composer, and send text + voice + photos as one turn.
+19. Paste an image into the composer, and send text + voice + photos as one turn. Paste-image DONE (integrate/chat-basics). Text + voice + photos as one turn: DONE on fix/voice-seals-composer (it was never ported: 47ba6a0 carried photos only and kept typed words back as a draft).
 20. Share to Wizard from other Android apps (share sheet → upload → notification).
 21. Reply notifications for any chat, not just Everywhere sends.
 22. In-app updates (banner → download → verify → install) and web hot-reload that keeps the draft.

@@ -68,6 +68,32 @@ public final class UsualsPolicy {
                 || n.equals("increase") || n.equals("more") || n.equals("select") || n.equals(norm("เลือก")) || isPrice(n);
     }
 
+    /** A tap that puts something in the basket: "Add", "Add to basket · ฿65", "+", "เพิ่ม". */
+    public static boolean isAddLabel(String label) {
+        String n = norm(label);
+        if (n.isEmpty() || isCommit(label) || isRemoveLabel(label)) return false;
+        // "Add", "Add to basket · ฿65", "Add ฿65", "Add 2 to basket"; not "Address" or "Add a note for the driver".
+        return n.equals("+") || n.equals("plus") || n.equals("increase") || n.equals("add")
+                || n.matches("add to (basket|cart|order)\\b.*") || n.matches("add\\s*[·•|-]?\\s*(฿|\\$|thb)?\\s*[0-9].*")
+                || n.matches("add [0-9]+ (item|items )?to (basket|cart|order)\\b.*")
+                || n.equals(norm("เพิ่ม")) || n.startsWith(norm("เพิ่มลง")) || n.startsWith(norm("ใส่ตะกร้า"));
+    }
+
+    /** A tap that takes something out: "Remove", "−", "Delete", "ลบ". */
+    public static boolean isRemoveLabel(String label) {
+        String n = norm(label);
+        return n.equals("-") || n.equals("−") || n.equals("–") || n.equals("minus") || n.equals("decrease") || n.equals("remove")
+                || n.startsWith("remove ") || n.equals("delete") || n.equals(norm("ลบ")) || n.equals(norm("ลด"));
+    }
+
+    /** A recorded step that added to the basket. */
+    public static boolean isAdd(Step s) {
+        return s != null && "tap".equals(s.type) && !isRemoveLabel(s.label)
+                && (isAddLabel(s.label) || (!s.near.isEmpty() && isPrice(s.label)));
+    }
+
+    public static boolean isRemove(Step s) { return s != null && "tap".equals(s.type) && isRemoveLabel(s.label); }
+
     public static boolean isPrice(String label) {
         String n = norm(label);
         Matcher m = MONEY.matcher(n.toUpperCase(Locale.ROOT).replace("฿", "฿"));
@@ -78,13 +104,20 @@ public final class UsualsPolicy {
      * How well a node on screen matches a recorded step: 0 none, higher better. Exact text beats prefix beats
      * contains; the same view id adds one. A step with no label matches by view id alone.
      */
+    /** Without numbers and money: what a button is, not how many or how much. */
+    static String noCounts(String n) {
+        return n.replaceAll("(฿|\\$|thb|บาท)", "").replaceAll("[0-9\u0e50-\u0e59]+([.,][0-9]+)*", "").replaceAll("\\s+", " ").trim();
+    }
+
     public static int score(String stepLabel, String stepId, String nodeLabel, String nodeId) {
         String a = norm(stepLabel), b = norm(nodeLabel);
         boolean sameId = stepId != null && !stepId.isEmpty() && stepId.equals(nodeId);
         if (a.isEmpty()) return sameId ? 2 : 0;
         if (b.isEmpty()) return 0;
         int s = 0;
+        String an = noCounts(a), bn = noCounts(b);
         if (a.equals(b)) s = 4;
+        else if (an.length() >= 4 && an.equals(bn)) s = 3; // "View basket · 4 items" is "View basket · 3 items" now
         else if (b.startsWith(a) && a.length() >= 3) s = 2;
         else if (a.startsWith(b) && b.length() >= 6) s = 2;
         else if (a.length() >= 4 && b.contains(a)) s = 1;
@@ -197,6 +230,7 @@ public final class UsualsPolicy {
         List<Step> out = new ArrayList<>();
         for (Step s : in) {
             if ("tap".equals(s.type) && isCommit(s.label)) continue;
+            if (isRemove(s)) continue; // a recipe only builds the basket up (path() already took back what was removed)
             if ("tap".equals(s.type) && s.label.isEmpty() && s.id.isEmpty() && s.x < 0) continue;
             if ("type".equals(s.type) && !out.isEmpty() && "type".equals(out.get(out.size() - 1).type)) {
                 out.set(out.size() - 1, s);
@@ -206,6 +240,236 @@ public final class UsualsPolicy {
         }
         while (!out.isEmpty() && "type".equals(out.get(out.size() - 1).type) && out.get(out.size() - 1).label.isEmpty()) out.remove(out.size() - 1);
         return out;
+    }
+
+    /* ------------------------------------------------------------------ browse-first recording */
+
+    /**
+     * One entry of a browse recording, with when it happened: either the screen Grab showed (a fingerprint from
+     * {@link #sig}) or a step James took. Screens come from a light poll; steps from his taps and typing.
+     */
+    public static final class Rec {
+        public final String sig;
+        public final Step step;
+        public final long t;
+        private Rec(String sig, Step step, long t) { this.sig = sig; this.step = step; this.t = t; }
+        public static Rec screen(String sig, long t) { return new Rec(sig == null ? "" : sig, null, t); }
+        public static Rec of(Step s, long t) { return new Rec(null, s, t); }
+    }
+
+    /**
+     * A screen's fingerprint from its fixed parts (titles, bars, view ids; not the contents of scrolling lists or
+     * what's typed in a field). Digits and prices are dropped so "View basket · 2 items" matches "· 3 items".
+     * "" means "can't tell".
+     */
+    public static String sig(List<String> parts) {
+        java.util.TreeSet<String> set = new java.util.TreeSet<>();
+        for (String p : parts) {
+            if (p == null) continue;
+            String n = norm(p);
+            if (n.length() < 2 || n.length() > 48 || isPrice(n)) continue;
+            n = n.replaceAll("[0-9\u0e50-\u0e59]+([.,][0-9]+)?", "").replaceAll("[฿$]", "").replaceAll("\\s+", " ").trim();
+            if (n.length() < 2) continue;
+            set.add(n);
+            if (set.size() >= 40) break;
+        }
+        return String.join("|", set);
+    }
+
+    /**
+     * Which dish each add was for. "Add" beside a dish names it (near); "Add to basket" on a dish's own page is for
+     * the tap that opened that page (not the options he picked on it, like "Pork" or "Extra egg").
+     */
+    public static java.util.Map<Step, String> items(List<Rec> recsIn) {
+        List<Rec> recs = new ArrayList<>(recsIn);
+        recs.sort((x, y) -> Long.compare(x.t, y.t));
+        java.util.Map<Step, String> itemOf = new java.util.IdentityHashMap<>();
+        String lastTap = "", screenItem = "", sig = null;
+        for (Rec r : recs) {
+            if (r.step == null) {
+                if (!r.sig.isEmpty() && !r.sig.equals(sig)) { sig = r.sig; screenItem = lastTap; }
+                continue;
+            }
+            Step s = r.step;
+            if (!"tap".equals(s.type)) continue;
+            if (isAdd(s) || isRemove(s)) itemOf.put(s, !s.near.isEmpty() ? s.near : !screenItem.isEmpty() && isAdd(s) ? screenItem : isAdd(s) ? lastTap : "");
+            else if (!s.optional() && !isCommit(s.label) && !isGeneric(s.label)) lastTap = s.label;
+        }
+        return itemOf;
+    }
+
+    /** A tap within this long before the screen changed is what changed it. */
+    static final long CAUSE_MS = 4000;
+
+    /**
+     * The route James actually took to his basket, with the browsing taken out.
+     *
+     * <ul>
+     * <li>Coming back to a screen he was already on (Back out of a restaurant he didn't order from, out of reviews,
+     *     out of checkout) erases the detour and the tap that started it, unless something that ended up in the
+     *     basket was added on the way (an item page that returns to the menu after "Add to basket").</li>
+     * <li>With the checkout screen's text known, adds of things that aren't in the final basket are dropped too
+     *     (added, then removed at checkout).</li>
+     * </ul>
+     *
+     * @param finalTexts texts on the last checkout screen, or null if he never reached it
+     */
+    public static List<Step> path(List<Rec> recsIn, List<String> finalTexts) {
+        List<Rec> recs = new ArrayList<>(recsIn);
+        recs.sort((x, y) -> Long.compare(x.t, y.t)); // tap times are when he tapped; screens when they were seen
+        java.util.Map<Step, String> itemOf = items(recs);
+        String basketText = "";
+        if (finalTexts != null) { StringBuilder b = new StringBuilder(); for (String t : finalTexts) b.append(' ').append(norm(t)); basketText = b.toString(); }
+        final String bt = basketText;
+        java.util.function.Predicate<String> kept = item -> {
+            if (bt.isEmpty() || item == null || item.isEmpty()) return true;
+            String n = norm(item);
+            if (bt.contains(n)) return true;
+            String[] w = n.split(" ");
+            return (n.length() > 12 && bt.contains(n.substring(0, 12))) || (w.length >= 2 && bt.contains(w[0] + " " + w[1]));
+        };
+
+        List<String> sigs = new ArrayList<>();
+        List<Long> since = new ArrayList<>();
+        List<List<Rec>> visits = new ArrayList<>();
+        for (Rec r : recs) {
+            if (r.step != null) {
+                if (visits.isEmpty()) { sigs.add(""); since.add(r.t); visits.add(new ArrayList<>()); }
+                visits.get(visits.size() - 1).add(r);
+                continue;
+            }
+            String g = r.sig;
+            if (g.isEmpty()) continue;
+            if (!sigs.isEmpty() && g.equals(sigs.get(sigs.size() - 1))) continue;
+            int j = sigs.lastIndexOf(g);
+            if (j >= 0) {
+                boolean productive = false;
+                for (int v = j + 1; v < visits.size() && !productive; v++)
+                    for (Rec x : visits.get(v)) if (isAdd(x.step) && kept.test(itemOf.get(x.step))) { productive = true; break; }
+                if (!productive) {
+                    // Did one of his taps take him away from screen j? Then everything since was a detour: erase it
+                    // with that tap. If the screen changed on its own (a pop-up, a redraw, results appearing as he
+                    // typed), keep his typing and pop-up closers from that stretch; only its taps were browsing.
+                    long left = since.get(j + 1);
+                    List<Rec> on = visits.get(j);
+                    boolean tapped = false;
+                    if (!on.isEmpty()) {
+                        Rec last = on.get(on.size() - 1);
+                        if ("tap".equals(last.step.type) && !isAdd(last.step) && !last.step.optional() && left - last.t <= CAUSE_MS) {
+                            on.remove(on.size() - 1);
+                            tapped = true;
+                        }
+                    }
+                    List<Rec> keep = new ArrayList<>();
+                    for (int v = j + 1; v < visits.size(); v++)
+                        for (Rec x : visits.get(v))
+                            if (x.step.optional() || (!tapped && !"tap".equals(x.step.type))) keep.add(x);
+                    while (sigs.size() > j + 1) { sigs.remove(sigs.size() - 1); since.remove(since.size() - 1); visits.remove(visits.size() - 1); }
+                    on.addAll(keep);
+                    continue;
+                }
+            }
+            sigs.add(g);
+            since.add(r.t);
+            visits.add(new ArrayList<>());
+        }
+        List<Step> out = new ArrayList<>();
+        for (List<Rec> v : visits) for (Rec x : v) out.add(x.step);
+
+        // "−" / Remove: takes back the latest add of that item; the tap itself never goes in a recipe.
+        for (int i = 0; i < out.size(); i++) {
+            Step s = out.get(i);
+            if (!isRemove(s)) continue;
+            String item = itemOf.get(s);
+            out.remove(i--);
+            if (item == null || item.isEmpty()) continue;
+            for (int k = i; k >= 0; k--) {
+                Step a = out.get(k);
+                String ai = itemOf.get(a);
+                if (isAdd(a) && ai != null && !ai.isEmpty() && (item.equals(ai) || norm(item).contains(norm(ai)))) { out.remove(k); i--; break; }
+            }
+        }
+        // Added then taken out again: only when the checkout text plainly lists the rest of the basket.
+        if (!bt.isEmpty()) {
+            boolean anyKept = false;
+            for (Step s : out) if (isAdd(s) && itemOf.containsKey(s) && !itemOf.get(s).isEmpty() && kept.test(itemOf.get(s))) { anyKept = true; break; }
+            if (anyKept) out.removeIf(s -> itemOf.containsKey(s) && !kept.test(itemOf.get(s)));
+        }
+        return out;
+    }
+
+    /** What went into the basket, in order, with how many: item name → count. {@code items} from {@link #items}, or null. */
+    public static java.util.LinkedHashMap<String, Integer> basket(List<Step> steps, java.util.Map<Step, String> items) {
+        java.util.LinkedHashMap<String, Integer> m = new java.util.LinkedHashMap<>();
+        String lastItem = "";
+        for (Step s : steps) {
+            if (!"tap".equals(s.type)) continue;
+            if (isAdd(s)) {
+                String item = items != null && items.containsKey(s) ? items.get(s) : !s.near.isEmpty() ? s.near : lastItem;
+                if (item != null && !item.isEmpty()) m.merge(item, 1, Integer::sum);
+            } else if (!isGeneric(s.label) && !s.optional() && !isCommit(s.label)) lastItem = s.label;
+        }
+        return m;
+    }
+
+    /** "2× Kra pao moo saap · 1× Thai iced tea" */
+    public static String basketLine(List<Step> steps, java.util.Map<Step, String> items) {
+        StringBuilder b = new StringBuilder();
+        for (java.util.Map.Entry<String, Integer> e : basket(steps, items).entrySet()) {
+            if (b.length() > 0) b.append(" · ");
+            b.append(e.getValue()).append("× ").append(e.getKey());
+        }
+        return b.toString();
+    }
+
+    /** The restaurant: the last real tap before the first dish was opened or added. */
+    public static String place(List<Step> steps, java.util.Map<Step, String> items) {
+        Step first = null;
+        for (Step s : steps) if ("tap".equals(s.type) && isAdd(s)) { first = s; break; }
+        String dish = first == null ? "" : items != null && items.containsKey(first) ? items.get(first) : first.near;
+        String last = "";
+        for (Step s : steps) {
+            if (s == first) break;
+            if (!"tap".equals(s.type)) continue;
+            if (dish != null && !dish.isEmpty() && first.near.isEmpty() && s.label.equals(dish)) break; // the dish's own page
+            if (isGeneric(s.label) || s.optional() || s.label.length() > 60) continue;
+            last = s.label;
+        }
+        return last;
+    }
+
+    /** A name he would say: the dish he took most of ("Kra pao moo saap"), plus the next one or "+ 2 more". */
+    public static String suggestName(List<Step> steps, java.util.Map<Step, String> items) {
+        java.util.LinkedHashMap<String, Integer> b = basket(steps, items);
+        List<String> names = new ArrayList<>(b.keySet());
+        if (names.isEmpty()) { String p = place(steps, items); return p.isEmpty() ? "Grab order" : clip(p); }
+        String first = names.get(0);
+        for (String i : names) if (b.get(i) > b.get(first)) first = i;
+        if (names.size() == 1) return clip(first);
+        String other = names.get(0).equals(first) ? names.get(1) : names.get(0);
+        if (names.size() == 2) return clip(first + " + " + other);
+        return clip(first + " + " + (names.size() - 1) + " more");
+    }
+
+    private static String clip(String s) { return s.length() > 40 ? s.substring(0, 39).trim() + "…" : s; }
+
+    private static final Pattern BROWSE_ORDER = Pattern.compile(
+            "(something|anything)( new| different| else)?( to eat)?( (from|on) grab)?|(some )?food( (from|on) grab)?|(from |on )?grab( ?food)?");
+    private static final Pattern BROWSE_GET = Pattern.compile(
+            "(some )?food( (from|on) grab)?|something (new )?to eat( (from|on) grab)?|something (new )?(from|on) grab|grab( ?food)?");
+
+    /**
+     * "Order something new", "order food", "get me some food from Grab": open Grab to browse (and save the route)
+     * instead of running a usual. "I want something else" on its own is ordinary talk, not food.
+     */
+    public static boolean isBrowse(String said) {
+        String s = norm(said).replaceAll("[.!?]+$", "");
+        s = WAKE.matcher(s).replaceFirst("").trim();
+        Matcher m = VERB.matcher(s);
+        if (!m.matches()) return false;
+        String verb = m.group(3).trim(), rest = m.group(7).trim().replaceAll("^(me |us )", "").trim();
+        boolean order = verb.startsWith("order") || verb.startsWith("reorder") || verb.startsWith("re-order");
+        return (order ? BROWSE_ORDER : BROWSE_GET).matcher(rest).matches();
     }
 
     /** Ms a step may look for its target before the run gives up on it. */

@@ -32,6 +32,7 @@ public class Main extends Activity {
             {"Tom yum goong", "120"}, {"Tom kha gai", "110"}, {"Pad thai", "80"}, {"Pad see ew", "80"}, {"Khao man gai", "60"},
             {"Massaman curry", "120"}, {"Green curry", "110"}, {"Larb moo", "75"}, {"Som tam thai", "60"},
             {"Kra pao moo saap", "65"}, {"Khao niao", "20"}, {"Thai iced tea", "45"}, {"Mango sticky rice", "90"}};
+    private static final String[][] BURGERS = {{"Classic burger", "149"}, {"Cheeseburger", "169"}, {"Fries", "59"}, {"Cola", "35"}};
     private LinearLayout root;
     private final Runnable dumper = this::dumpViews;
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
@@ -57,7 +58,9 @@ public class Main extends Activity {
         }
     }
 
+    private String screen = "";
     private void clear(String screen) {
+        this.screen = screen.startsWith("menu") ? "menu" : screen;
         root.removeAllViews(); Log.i(TAG, "screen " + screen);
         root.postDelayed(this::dumpViews, 700);
     }
@@ -120,12 +123,15 @@ public class Main extends Activity {
 
     private void menu(String restaurant) {
         clear("menu " + restaurant);
+        lastMenu = restaurant;
         root.addView(text(restaurant, 22, true));
         ScrollView sv = new ScrollView(this);
         sv.setOnScrollChangeListener((v, x, y, ox, oy) -> { root.removeCallbacks(dumper); root.postDelayed(dumper, 400); });
         LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(0, 0, 0, dp(140)); // like Grab: the last dish scrolls clear of the basket bar
         sv.addView(list);
-        for (String[] m : MENU) {
+        String[][] items = restaurant.startsWith("Kruang") ? BURGERS : MENU;
+        for (String[] m : items) {
             LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(0, dp(18), dp(12), dp(18));
             LinearLayout col = new LinearLayout(this); col.setOrientation(LinearLayout.VERTICAL);
@@ -152,13 +158,28 @@ public class Main extends Activity {
         bar.addView(view, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
     }
 
-    private int price(String item) { for (String[] m : MENU) if (m[0].equals(item)) return Integer.parseInt(m[1]); return 0; }
+    private int price(String item) {
+        for (String[] m : MENU) if (m[0].equals(item)) return Integer.parseInt(m[1]);
+        for (String[] m : BURGERS) if (m[0].equals(item)) return Integer.parseInt(m[1]);
+        return 0;
+    }
 
     private void checkout() {
         clear("checkout");
         root.addView(text("Review order", 22, true));
         int sub = 0;
-        for (Map.Entry<String, Integer> e : basket.entrySet()) { root.addView(text(e.getValue() + "× " + e.getKey() + "   ฿" + price(e.getKey()) * e.getValue(), 16, false)); sub += price(e.getKey()) * e.getValue(); }
+        for (Map.Entry<String, Integer> e : basket.entrySet()) {
+            // A row per dish with Remove beside it (like Grab's basket editor).
+            LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
+            row.addView(text(e.getValue() + "× " + e.getKey() + "   ฿" + price(e.getKey()) * e.getValue(), 16, false),
+                    new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+            Button rm = new Button(this); rm.setText("Remove"); rm.setAllCaps(false);
+            final String item = e.getKey();
+            rm.setOnClickListener(v -> v.post(() -> { basket.remove(item); Log.i(TAG, "removed " + item); checkout(); }));
+            row.addView(rm);
+            root.addView(row);
+            sub += price(e.getKey()) * e.getValue();
+        }
         root.addView(text("Delivery fee   ฿25", 15, false));
         int total = sub + 25;
         root.addView(text("Total", 18, true));
@@ -175,5 +196,9 @@ public class Main extends Activity {
         Log.i(TAG, "checkout total=" + total);
     }
 
-    @Override public void onBackPressed() { home(); }
+    private String lastMenu;
+    @Override public void onBackPressed() {
+        if (screen.equals("checkout") && lastMenu != null) { menu(lastMenu); return; }
+        home();
+    }
 }

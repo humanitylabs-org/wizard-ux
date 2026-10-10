@@ -17,7 +17,7 @@ import org.json.JSONObject;
  * tailnet-only Wizard OS endpoint. The phone must be on Tailscale. Nothing else leaves the phone.
  */
 public final class Transcriber {
-    static final String ORIGIN = "https://private.wizard001.com";
+    static final String ORIGIN = ai.wizards.os.BuildConfig.ORIGIN;
     static final String ENDPOINT = ORIGIN + "/wizard-os-home/api/transcribe";
     static final String PROMPT = "Wizard voice request spoken to Archimedes on a phone lock screen. "
             + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
@@ -28,7 +28,7 @@ public final class Transcriber {
         Result(String text, long ms) { this.text = text; this.ms = ms; }
     }
 
-    static Result transcribe(File audio) throws IOException { return transcribe(audio, ORIGIN, PROMPT); }
+    static Result transcribe(File audio) throws IOException { return transcribe(audio, ai.wizards.os.device.AppState.live(ORIGIN), PROMPT); }
 
     /** origin is the private Wizard origin (a local fake in unit tests). */
     public static Result transcribe(File audio, String origin, String prompt) throws IOException {

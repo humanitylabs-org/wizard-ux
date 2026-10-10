@@ -75,7 +75,7 @@ android/        Android app ai.wizards.os
                   Handoff       intents ai.wizards.os.action.LISTEN / .SAY
                   SideButton    one-tap side-button setup
                   assist/       hold-the-side-button assistant (lock screen + corner orb)
-tools/          extract.py (builds the private review data), Thales QA helpers
+tools/          Thales QA helpers
 qa-*.cjs        Playwright and Android QA suites
 BRANCHES.md     Feature branch map, verification evidence, build history
 ```
@@ -112,7 +112,7 @@ Both sit behind the private gateway on Tailscale (`https://private.wizard001.com
 
 ### Private review data
 
-The Day, Week and Month reviews read `web/data.js` and `web/summaries.js`. Both are generated from the owner's own Hermes session database by `tools/extract.py`. They contain real thread titles and message snippets, so they are **gitignored and must never be committed**.
+The Day, Week and Month reviews read `web/data.js` and `web/summaries.js`. Both are generated from the owner's own Hermes session database by a private extractor that lives outside this repo. They contain real thread titles and message snippets, so they are **gitignored and must never be committed**.
 
 ## Android
 
