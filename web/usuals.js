@@ -1,7 +1,8 @@
 /* Usuals: James's regular Grab orders, one tap (or "order my usual …") away.
- * Native does the work (android/.../usuals/*): it teaches by watching James build a basket in Grab once, then replays
- * those taps under a cover and stops on Grab's checkout. Placing the order is always James's tap on the cover.
- * This file is only the window: the list, Teach, Order, rename/edit, and what the last run did. */
+ * Native does the work (android/.../usuals/*). "Order something new" opens Grab to browse: whatever he ends up
+ * ordering is saved as a usual, named after the food (rename after). A saved usual replays under a cover and stops on
+ * Grab's checkout. Placing the order is always James's tap: in Grab, or on the cover.
+ * This file is only the window: the list, Order something new, Order, rename/edit, and what the last run did. */
 (() => {
   'use strict';
   const N = () => window.WizardOSNative;
@@ -9,7 +10,8 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const els = new Set();
   let editing = null; // { id } while the edit sheet is open
-  let teachName = null; // the name field while it is open
+  let teachName = null; // the name field while it is open (Edit → Teach again keeps the old name)
+  let naming = null;    // { id } while a just-saved usual's name field is open
 
   function read() {
     if (!has()) return { list: [], blocker: 'native', state: {} };
@@ -18,8 +20,8 @@
   const ago = t => { if (!t) return ''; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
   const lastLine = u => {
     const r = u.lastResult || '';
-    if (!u.lastRunAt) return u.lastTotal ? `Last basket ${u.lastTotal}` : `${u.steps.length} steps · never run`;
-    if (r === 'ordered') return `Ordered ${ago(u.lastRunAt)}${u.lastTotal ? ' · ' + u.lastTotal : ''}`;
+    if (!u.lastRunAt) return [u.basket, u.lastTotal].filter(Boolean).join(' · ') || `${u.steps.length} steps · never run`;
+    if (r === 'ordered') return `Ordered ${ago(u.lastRunAt)}${u.lastTotal ? ' · ' + u.lastTotal : ''}${u.basket ? ' · ' + u.basket : ''}`;
     if (r === 'ready') return `Reached checkout ${ago(u.lastRunAt)}${u.lastTotal ? ' · ' + u.lastTotal : ''}`;
     if (r.startsWith('failed')) return `Stopped ${ago(u.lastRunAt)} · ${r.replace(/^failed: /, '')}`;
     return `${u.steps.length} steps`;
@@ -32,21 +34,33 @@
     return '';
   }
 
+  function nameCard(u) {
+    return `<form class="us-name" data-us-form="name" data-id="${esc(u.id)}">
+        <div class="us-name-h"><b>Saved ✓</b><span>${esc([u.basket, u.place && 'from ' + u.place].filter(Boolean).join(' · ') || 'Your Grab order')}</span></div>
+        <div class="us-name-row"><input name="n" maxlength="40" value="${esc(u.name)}" autocomplete="off" enterkeyhint="done" aria-label="Name"><button type="submit">Save name</button></div>
+        <button type="button" class="us-keep" data-us="keep" data-id="${esc(u.id)}">Keep “${esc(u.name)}”</button></form>`;
+  }
+
   function html() {
     const d = read(), list = d.list || [], b = d.blocker || '';
     const st = d.state || {};
-    const live = st.mode && !/^(idle|done)$/.test(st.mode) && st.mode !== 'failed' ? `<div class="us-live">${esc(st.name)} · ${esc(st.status)}</div>` : '';
+    const live = st.mode && !/^(idle|done)$/.test(st.mode) && st.mode !== 'failed'
+      ? `<div class="us-live"><span>${esc(st.browsing ? 'New order' : st.name)} · ${esc(st.status)}</span><button data-us="stop">${st.mode === 'teaching' ? "Don't save" : 'Stop'}</button></div>` : '';
+    // The newest usual still wearing its made-up name gets the name field on top; it says what's in it.
+    const fresh = list.filter(u => u.needsName).sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0))[0];
+    if (naming && !list.some(u => u.id === naming.id && u.needsName)) naming = null;
+    const nameUi = fresh && !(st.mode && st.mode !== 'idle' && st.mode !== 'failed') ? nameCard(fresh) : '';
     const cards = list.map(u => `<div class="us-card" data-id="${esc(u.id)}">
         <button class="us-go" data-us="run" data-id="${esc(u.id)}" ${b ? 'disabled' : ''} aria-label="Order ${esc(u.name)}"><span class="us-ic">🍜</span><span class="us-meta"><b>${esc(u.name)}</b><small>${esc(lastLine(u))}</small></span><span class="us-cta">Order</span></button>
         <button class="us-more" data-us="edit" data-id="${esc(u.id)}" aria-label="Edit ${esc(u.name)}">⋯</button></div>`).join('');
+    const newBtn = `<button class="us-new" data-us="new" ${b ? 'disabled' : ''}><span class="us-ic">🛵</span><span class="us-meta"><b>Order something new</b><small>Browse Grab. What you order is saved here.</small></span></button>`;
     const empty = !list.length ? `<div class="us-empty"><div class="us-big">🍜</div><h3>Your usuals, one tap away</h3>
-        <p>Teach a usual once: Grab opens, you build the basket like normal and stop at checkout, then tap Done. After that, tap it here or say <i>“order my usual ${'kra pao'}”</i>. Wizard fills the basket under a cover and waits for you to tap <b>Place order</b>.</p></div>` : '';
+        <p>Tap <b>Order something new</b> and order in Grab like normal. Whatever you order is saved here, named after the food. Next time, tap it or say <i>“order my usual ${'kra pao'}”</i>. Wizard fills the basket and stops at checkout for your <b>Place order</b>.</p></div>` : '';
     const teach = teachName != null
-      ? `<form class="us-teach" data-us-form="teach"><input name="n" maxlength="40" placeholder="Name it, e.g. Kra pao" value="${esc(teachName)}" autocomplete="off" enterkeyhint="go"><button type="submit" ${b ? 'disabled' : ''}>Open Grab</button></form>`
-      : `<button class="us-add" data-us="teach" ${b ? 'disabled' : ''}>＋ Teach a usual</button>`;
+      ? `<form class="us-teach" data-us-form="teach"><input name="n" maxlength="40" placeholder="Name it, e.g. Kra pao" value="${esc(teachName)}" autocomplete="off" enterkeyhint="go"><button type="submit" ${b ? 'disabled' : ''}>Open Grab</button></form>` : '';
     const log = st.log && st.log.length && st.mode === 'failed' ? `<details class="us-log"><summary>What the last run did</summary><pre>${esc(st.log.slice(-12).join('\n'))}</pre></details>` : '';
-    return `<div class="desk-scroll us-wrap">${blockerCard(b)}${live}${empty}<div class="us-list">${cards}</div>${teach}
-      <p class="us-fine">Runs on this phone with Grab open under a cover; it takes about half a minute. Your Grab login, card and address stay in Grab. Wizard never presses Place order for you.</p>${log}</div>${editSheet(list)}`;
+    return `<div class="desk-scroll us-wrap">${blockerCard(b)}${live}${nameUi}${empty}${newBtn}${teach}<div class="us-list">${cards}</div>
+      <p class="us-fine">Runs on this phone with Grab on screen. Your Grab login, card and address stay in Grab. Wizard never presses Place order for you: you tap it, in Grab or on the cover.</p>${log}</div>${editSheet(list)}`;
   }
 
   function editSheet(list) {
@@ -62,14 +76,16 @@
 
   function toast(i, t) { window.__wos?.toast?.(i, t, 2600); }
   function why(b) {
-    return b === 'accessibility' ? 'Turn on Wizard OS accessibility first' : b === 'grab' ? "Grab isn't installed" : b === 'busy' ? 'Finish teaching first' : b === 'missing' ? 'That usual is gone' : b;
+    return b === 'accessibility' ? 'Turn on Wizard OS accessibility first' : b === 'grab' ? "Grab isn't installed" : b === 'busy' ? 'Finish the order in progress first' : b === 'missing' ? 'That usual is gone' : b;
   }
 
   function onClick(e) {
     const t = e.target.closest('[data-us]'); if (!t) return;
     const a = t.dataset.us, id = t.dataset.id;
     if (a === 'a11y') return N()?.voiceTypingSettings?.();
-    if (a === 'teach') { teachName = ''; paint(); setTimeout(() => document.querySelector('.us-teach input')?.focus(), 30); return; }
+    if (a === 'new') { const r = N().usualsTeach(''); if (r) toast('🍜', why(r)); paint(); return; }
+    if (a === 'stop') { N().usualsCancel?.(); setTimeout(paint, 300); return; }
+    if (a === 'keep') { N().usualsKeepName?.(id); paint(); return; }
     if (a === 'run') { const r = N().usualsRun(id); if (r) toast('🍜', why(r)); return; }
     if (a === 'edit') { editing = { id }; paint(); return; }
     if (a === 'delete') { if (!confirm('Delete this usual?')) return; N().usualsDelete(id); editing = null; paint(); return; }
@@ -82,6 +98,12 @@
       const name = f.n.value.trim() || 'My usual';
       teachName = null; paint();
       const r = N().usualsTeach(name); if (r) toast('🍜', why(r));
+      return;
+    }
+    if (f.dataset.usForm === 'name') {
+      const n = f.n.value.trim();
+      if (n) N().usualsSave(f.dataset.id, n, null); else N().usualsKeepName?.(f.dataset.id);
+      document.activeElement?.blur?.(); paint(); toast('✓', 'Saved');
       return;
     }
     if (f.dataset.usForm === 'edit') {

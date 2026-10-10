@@ -58,17 +58,34 @@ window.WizCore.chats = function createChats(H) {
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Test this' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
   const deferredOf = s => !!s.deferred && !s.archived;
   const attOf = s => (s.attention && !WORKING_ST.has(s.status) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') ? s.attention : null;
+  const svg = b => `<svg viewBox="0 0 24 24" aria-hidden="true">${b}</svg>`;
+  const STI = {
+    needs: svg('<path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>'),
+    check: svg('<path d="M10 2v7.5a2 2 0 0 1-.2.9L4.7 20.6a1 1 0 0 0 .9 1.4h12.8a1 1 0 0 0 .9-1.4l-5.1-10.2a2 2 0 0 1-.2-.9V2M8.5 2h7M7 16h10"/>'),
+    done: svg('<circle class="f" cx="12" cy="12" r="10"/><path class="k" d="m7.5 12.3 3 3 6-6.3"/>'),
+    fyi: svg('<circle class="f" cx="12" cy="12" r="10"/><path class="k" d="M12 11v5.5"/><circle class="kd" cx="12" cy="7.6" r="1.35"/>'),
+    deferred: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>'),
+    approval: svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'),
+    failed: svg('<path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3M12 9v4M12 17h.01"/>'),
+    working: '<i class="spin" aria-hidden="true"></i>',
+    offline: svg('<path d="M12 20h.01M8.5 16.4a5 5 0 0 1 7 0M2 8.8a15 15 0 0 1 20 0M5 12.9a10 10 0 0 1 14 0"/><path d="m2 2 20 20"/>'),
+    none: '<i class="dot" aria-hidden="true"></i>',
+  };
+  const STI_TIP = { deferred: 'Deferred', needs: 'Needs you', check: 'Test this', done: 'Done', fyi: 'FYI', approval: 'Approval needed', failed: 'Stopped with an error', working: 'Working', offline: 'Offline · will retry', none: 'No status' };
   function chatRow(s, snip) {
     const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = s.status === 'waiting_for_approval' || s.status === 'failed' || s.status === 'interrupted';
     // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Test this, then its one line.
     const def = deferredOf(s) && !working && !needs;
-    const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi'), asks = !!at && !quiet;
-    const pv = working ? `<i class="st working${s.pend === 'waiting' ? ' off' : s.pend ? ' soon' : ''}"></i>` + workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
-      : needs ? '<i class="st needs"></i>' + esc(clip(s.preview || '', 110))
-      : def ? '<i class="st deferred"></i><em class="att deferred">Deferred</em> · ' + esc(clip(attOf(s)?.ask || s.preview || '', 140))
-      : at ? (asks ? `<i class="st ${A.cls}"></i><em class="att ${A.cls}">${A.label}</em> · ` : (isNew ? '<i class="st unread"></i>' : '') + (at.state === 'done' ? '<em class="att done">✓</em> ' : '')) + esc(clip(at.ask, 140))
-      : (isNew ? '<i class="st unread"></i>' : '') + esc(clip(s.preview || '', 110));
-    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${quiet ? ' quiet' : ''}${def ? ' deferred' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}><span class="emo">${emoOf(s.id)}</span>
+    const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi');
+    // The row icon says what the thread wants from James (replaced the per-thread ✦ star, 10 Oct 2026).
+    // Emphasis is read state only (bold = unread, like an inbox); the status never changes weight or fades a row.
+    const kind = working ? (s.pend === 'waiting' ? 'offline' : 'working') : s.status === 'failed' || s.status === 'interrupted' ? 'failed' : s.status === 'waiting_for_approval' ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
+    const pv = working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
+      : needs ? esc(clip(s.preview || '', 110))
+      : def ? '<em class="att deferred">Deferred</em> · ' + esc(clip(attOf(s)?.ask || s.preview || '', 140))
+      : at ? esc(clip(at.ask, 140))
+      : esc(clip(s.preview || '', 110));
+    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}><span class="emo sti ${kind}" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span>
       <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button>`;
   }
@@ -589,7 +606,8 @@ window.WizCore.chats = function createChats(H) {
   function pendingHtml(p, c) {
     const files = (p.files || []).filter(f => f !== p.audioFile);
     const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text ? '' : ' · words come when it sends'}</span></div>` : '';
-    return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}" data-ob="${esc(p.id)}"><div class="bub">${voice}${userMedia(c || { media: [] }, files, [])}${p.text ? md(p.text) : ''}</div><div class="pmeta">${pendingState(p)}</div></div>`;
+    const words = p.text || p.typed || ''; // a voice note not yet transcribed shows the typed words riding with it
+    return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}" data-ob="${esc(p.id)}"><div class="bub">${voice}${userMedia(c || { media: [] }, files, [])}${words ? md(words) : ''}</div><div class="pmeta">${pendingState(p)}</div></div>`;
   }
   function renderChats(w) {
     const el = track.querySelector(`[data-chats="${w.id}"]`); if (!el) return;
@@ -673,23 +691,88 @@ window.WizCore.chats = function createChats(H) {
     // Starting… → Working). A "Sent" banner over a row still saying "Sending…" contradicted it.
     return true;
   }
+  /* One send carries the whole composer (legacy Wizard H4, `composeVoiceTurnText`; James, 10 Oct 2026: "when I
+   * paste a link in the text box and I send you a voice note … they should both be sent together. The images and
+   * the text and the voice note should all be sent together"). At the voice send tap, the composer of the thread
+   * the take goes into is TAKEN: its typed or pasted words and its photos and files leave the composer and ride
+   * with the recording as one message (words first, then the transcript). Until the outbox has the message, the
+   * taken words wait under a hidden 'sealed:<thread>' draft key, so a reload or crash puts them back in the composer
+   * (restoreSealed, at start). done(): the outbox has it. putBack(): the take was dropped or could not be saved. */
+  const composerKey = sid => sid === '__new__' ? 'new' : 'direct:' + sid;
+  const SEALED = 'sealed:';
+  const fileRef = f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes });
+  // What a thread's composer holds right now (the window's textarea while it shows that thread, else the draft).
+  function peekComposer(wid, sid) {
+    const w = W[wid], here = !!w && !!sid && w.thread === sid, c = w ? ch(wid) : null;
+    const ta = here ? elOf(wid)?.querySelector('.ch-compose textarea') : null;
+    const saved = sid ? KIT.drafts.get(composerKey(sid)) : { text: '', files: [] };
+    return { here, ta, c, text: String(here ? (ta ? ta.value : c.draft || '') : saved.text), all: here ? (c.files || []) : saved.files };
+  }
+  // A photo or file in that composer is still uploading: the voice send waits for it, like a typed send.
+  const composerBusy = (wid, sid) => peekComposer(wid, sid).all.some(f => f && f.uploading);
+  function restoreInto(wid, sid, text, files) {
+    const now = peekComposer(wid, sid);
+    const back = { text: [String(text || '').trim(), now.text.trim()].filter(Boolean).join('\n'), files: [...files, ...now.all.filter(f => !files.some(x => x.id === f.id))].slice(0, 8) };
+    if (now.here) { setDraft(wid, back.text, back.files); renderChats(W[wid]); } else KIT.drafts.set(composerKey(sid), back.text, back.files);
+  }
+  const NO_SEAL = { text: '', files: [], done() {}, putBack() {} };
+  function takeComposer(wid, sid) {
+    if (!sid) return NO_SEAL;
+    const P = peekComposer(wid, sid), dkey = composerKey(sid);
+    const text = P.text.trim(), files = P.all.filter(f => f && f.id && !f.uploading).map(fileRef);
+    if (!text && !files.length) return NO_SEAL;
+    const rest = P.all.filter(f => f && f.uploading); // never taken half-uploaded: it stays for the next message
+    if (P.here) {
+      P.c.draft = ''; P.c.files = rest;
+      if (P.ta) { P.ta.value = ''; growTa(P.ta); syncSend(P.ta.form, P.c); }
+      refreshCompose(wid);
+    }
+    KIT.drafts.set(dkey, '', rest);
+    const skey = SEALED + sid + ':' + Date.now().toString(36);
+    KIT.drafts.set(skey, text, files);
+    let open = true;
+    return { text, files,
+      done() { if (open) { open = false; KIT.drafts.clear(skey); } },
+      putBack() { if (!open) return; open = false; KIT.drafts.clear(skey); restoreInto(wid, sid, text, files); } };
+  }
+  // At start: words taken by a voice send that never reached the outbox (the page died mid-send) go back.
+  function restoreSealed() {
+    for (const k of Object.keys(KIT.drafts.all())) {
+      if (!k.startsWith(SEALED)) continue;
+      const d = KIT.drafts.get(k), sid = k.slice(SEALED.length).replace(/:[a-z0-9]+$/, '');
+      KIT.drafts.clear(k); if (sid) restoreInto('', sid, d.text, d.files);
+    }
+  }
+  // Typed words first, then what was said (legacy order: the pasted link is the context the voice talks about).
+  const joinWords = (typed, said) => [String(typed || '').trim(), String(said || '').trim()].filter(Boolean).join('\n\n');
   /* opts.sid pins the destination ('__new__' = a new thread) to where James was when he sent. Voice sends
    * reach here seconds after the tap (transcription, routing); by then the window may show another thread,
-   * and a new-chat message must never land in it as a reply. opts.files: files riding with a voice send. */
+   * and a new-chat message must never land in it as a reply. opts.files: files riding with a voice send.
+   * opts.seal (voice sends): the thread's composer taken at the send tap (takeComposer), sent with it; true
+   * takes it now; false sends nothing from the composer (the later parts of an interrupted take). */
   async function sendChat(wid, text, how = 'typing in the Chats window', audio = null, opts = {}) {
-    const w = W[wid]; text = String(text || '').trim(); if (!w) return;
+    const w = W[wid]; text = String(text || '').trim();
+    if (!w) { if (opts.seal && opts.seal !== true) opts.seal.putBack(); return; }
     const c = ch(wid);
-    const sid = opts.sid || w.thread; if (!sid) return;
+    const sid = opts.sid || w.thread; if (!sid) { if (opts.seal && opts.seal !== true) opts.seal.putBack(); return; }
     const here = !opts.away && w.thread === sid; // the window still shows the thread this was sent from (opts.away: sent from elsewhere, e.g. a review desk)
-    const tray = here ? (c.files || []) : [];
-    const files = [...(opts.files || []), ...tray].filter(f => f && f.id && !f.uploading).filter((f, i, a) => a.findIndex(x => x.id === f.id) === i);
-    if (!text && !files.length && !audio) return;
+    const voice = 'seal' in opts; // a voice send: the composer goes only as taken at the tap, never the live tray
+    const sealed = opts.seal === true ? takeComposer(wid, sid) : opts.seal || null;
+    const tray = here && !voice ? (c.files || []) : [];
+    const files = [...(opts.files || []), ...(sealed ? sealed.files : []), ...tray].filter(f => f && f.id && !f.uploading).filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
+    // A recording not yet transcribed carries the typed words beside it (the outbox puts them before the
+    // transcript); anything already in words is joined now.
+    const typed = sealed ? sealed.text : '';
+    const later = !!audio && !text;
+    text = later ? '' : joinWords(typed, text);
+    if (!text && !files.length && !audio) { sealed?.putBack(); return; }
     if (tray.some(f => f.uploading)) { toast('…', 'Still uploading · send when it finishes', 2000); return; }
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
     const dkey = isNew ? 'new' : 'direct:' + sid;
-    if (here) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; c.follow = true; }
+    if (here && !voice) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; }
+    if (here) c.follow = true;
     const nm = isNew && PW ? PW.newModel(c) : null; // a model picked for this new chat (#11)
     if (nm) c.newModel = null;
     // Send and go (James, 10 Oct 2026): on the phone every send steps back to the thread list, a new thread
@@ -706,19 +789,20 @@ window.WizCore.chats = function createChats(H) {
     // Saved on the phone; the outbox delivers it (and retries) from here.
     let it;
     try {
-      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio,
+      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
         instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
     } catch (e) {
       // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
       // thread if the window is still on the list he was sent to.
       if (hold) LIVE.releaseSend?.(hold);
       if (nm) c.newModel = nm;
-      if (here) KIT.drafts.set(dkey, text, tray);
+      if (sealed) sealed.putBack(); else if (here && !voice) KIT.drafts.set(dkey, text, tray);
       if (left && W[wid] && !W[wid].thread) openChat(wid, sid);
       if (audio) throw e; // a recording: its caller keeps its own copy and reports it, as before
       toast('!', 'Couldn’t save that message · your words are back in the thread', 3200);
       return null;
     }
+    sealed?.done();
     if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     return it;
   }
@@ -793,6 +877,8 @@ window.WizCore.chats = function createChats(H) {
       const f = e.target.closest('[data-chform]'); if (!f) return;
       e.preventDefault(); const id = idOf(f); const ta = f.querySelector('textarea');
       const text = ta.value; const c = ch(id);
+      // A voice take into this thread is recording: Send finishes it, and the words and files here go with it.
+      const into = H.voiceInto?.(); if (into && into === H.win(id)?.thread && H.finishVoice) { H.finishVoice(); return; }
       if (!text.trim() && !(c.files || []).some(f => f.id)) return;
       if ((c.files || []).some(f => f.uploading)) { H.toast('…', 'Still uploading · send when it finishes', 2000); return; }
       ta.value = ''; syncSend(f, c); sendChat(id, text);
@@ -832,7 +918,8 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer }) : null;
+  restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
   OUTBOX?.onChange(() => {
@@ -840,7 +927,7 @@ window.WizCore.chats = function createChats(H) {
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
-  return { CH, ch, click, bind, PW, leaveAfterSend, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, sendChat, uploadFile,
+  return { CH, ch, click, bind, PW, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
 };
