@@ -30,7 +30,9 @@
     background:rgba(0,0,0,.62);font:700 9.5px/1 ui-monospace,monospace;letter-spacing:.02em;color:#fff;
     opacity:0;transition:opacity .2s;white-space:nowrap;pointer-events:none}
   #timer::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--red);margin-right:3px;
-    vertical-align:1px;animation:blink 1.1s infinite}
+    vertical-align:1px}
+  /* Battery (0.8.5): blink only while a take is live; an endless animation on the hidden dot kept the overlay compositing. */
+  body.live #timer::before{animation:blink 1.1s infinite}
   body.paused #timer::before{background:var(--amber);animation:none}
   body.kb #timer::before{background:var(--cyan)}
   body.live #timer{opacity:1}
