@@ -83,6 +83,8 @@ async function boot(b, { native = true } = {}) {
       shareRead(id, n, off) { return chunk(S.shares[id]?.files[n], off); },
       shareDone(id) { call('shareDone', id); delete S.shares[id]; persist(); },
       watchRun(s, r, t) { call('watchRun', s, r); S.watch.push({ s, r, t }); persist(); },
+      replyNotes() { return JSON.stringify(S.notes || []); },
+      clearThread(s) { call('clearThread', s); const n0 = (S.notes || []).length; S.notes = (S.notes || []).filter(x => x.s !== s); persist(); return n0 - S.notes.length; },
       notifications() { return JSON.stringify(S.notif); },
       updateCheck() { call('updateCheck'); }, updateInstall() { call('updateInstall'); },
       updateState() { return JSON.stringify(S.upd); },
@@ -265,6 +267,36 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     ok(/Reply notifications/.test(await p.locator('#settingsBody').innerText()), 'Settings shows the reply-notification state');
     await shot(p, '22-settings');
     ok(errs.length === 0, 'no page errors (update)', errs.join(' | '));
+    await ctx.close();
+  }
+
+  /* ---- #21b reading a thread clears its reply notification, however James got there ---- */
+  {
+    const { ctx, p, errs } = await boot(b);
+    await open(p);
+    const now = Date.now();
+    // A reply that landed AFTER the app's last look at the thread must survive until it is read;
+    // a notification for a thread nobody has opened stays put.
+    await p.evaluate(at => { window.__dev.notes = [{ s: 'qa_old_thread', at }, { s: 'qa_unread_thread', at: 1 }]; }, now + 3600e3);
+    await p.evaluate(() => window.__wos.openWizardThread('qa_old_thread')); await sleep(900);
+    let d = await dev(p);
+    ok(!d.calls.includes('clearThread:qa_old_thread'), '#21b a reply newer than the last read is not cleared early', JSON.stringify(d.calls.filter(c => c.startsWith('clear'))));
+    await p.evaluate(() => window.__wos.chatsBack?.(Object.values(window.__wos.W || {}).find(w => w.app === 'chats')));
+    await p.evaluate(() => window.__wos.goDesk(window.__wos.HOME, true)); await sleep(300);
+    // Now the notification is older than the reply; James opens the thread from the list (not the notification).
+    await p.evaluate(at => { window.__dev.notes = [{ s: 'qa_old_thread', at }, { s: 'qa_unread_thread', at: 1 }]; }, now - 60e3);
+    await p.evaluate(() => window.__wos.openWizardThread('qa_old_thread')); await sleep(900);
+    d = await dev(p);
+    ok(d.calls.includes('clearThread:qa_old_thread'), '#21b opening the thread in Wizard clears its notification', JSON.stringify(d.calls.filter(c => c.startsWith('clear'))));
+    ok(!d.calls.includes('clearThread:qa_unread_thread') && (d.notes || []).some(x => x.s === 'qa_unread_thread'), '#21b other threads keep their notifications', JSON.stringify(d.notes));
+    // Read elsewhere (another Wizard surface) then coming back to the app: the resume sweep catches it.
+    await p.evaluate(at => { window.__dev.notes = [{ s: 'qa_old_thread', at }]; }, now - 30e3);
+    const c0 = (await dev(p)).calls.length;
+    await p.evaluate(() => window.dispatchEvent(new Event('wos-native-resume'))); await sleep(400);
+    d = await dev(p);
+    ok(d.calls.slice(c0).includes('clearThread:qa_old_thread'), '#21b returning to the app sweeps notifications for threads already read', JSON.stringify(d.calls.slice(c0)));
+    ok(await p.evaluate(() => window.__wos.voice) === 'idle' && await p.evaluate(() => !document.hidden), 'app still open after the sweeps');
+    ok(errs.length === 0, 'no page errors (notification clear)', errs.join(' | '));
     await ctx.close();
   }
 

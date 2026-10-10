@@ -281,6 +281,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                 .setStyle(new Notification.BigTextStyle().bigText(EverywherePolicy.clip(text, 600)))
                 .setContentIntent(openApp(c, MainActivity.ACTION_THREAD, 100 + (it.id.hashCode() & 0xffff), it.sessionId))
                 .setAutoCancel(true)
+                .addExtras(ai.wizards.os.notify.ReplyWatcher.threadExtras(it.sessionId))
                 .build();
         c.getSystemService(NotificationManager.class).notify(N_REPLY_BASE + (it.id.hashCode() & 0xff), note);
     }

@@ -161,7 +161,7 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
         // Screen off or the user left: the overlay is a moment, not an app. Next hold starts fresh.
         if (!isChangingConfigurations() && !unlockInFlight && !handingOff) {
             Log.i(TAG, "stopped; closing surface");
-            discardRecording();
+            capture.finishOnDismiss("dismiss"); // anything said still goes; an empty take is dropped
             finish();
         }
     }
@@ -183,7 +183,7 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
     @Override
     protected void onDestroy() {
         try { unregisterReceiver(userPresent); } catch (IllegalArgumentException ignored) { }
-        if (!handingOff) discardRecording();
+        if (!handingOff) capture.finishOnDismiss("dismiss");
         capture.detach(this);
         if (web != null) {
             web.destroy();
@@ -256,8 +256,11 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
         }
     }
 
+    /** Back / close: anything said is sent (never lost), an empty take is dropped. Cancel is the only discard. */
     private void closeSurface() {
-        discardRecording();
+        capture.finishOnDismiss("dismiss");
+        capture.detach(this);
+        capture.noteDismissed();
         Log.i(TAG, "surface closed");
         finish();
     }

@@ -203,6 +203,14 @@ public final class DeviceBridge implements RecorderService.Listener {
         ReplyWatcher.watch(activity, sessionId, runId, title);
     }
 
+    /** Reply notifications on the shade, so the page can clear the ones for threads James has since read. */
+    @JavascriptInterface
+    public String replyNotes() { return ReplyWatcher.active(activity); }
+
+    /** James read this thread in Wizard: remove its notifications even though he didn't open it from them. */
+    @JavascriptInterface
+    public int clearThread(String sessionId) { return ReplyWatcher.clearThread(activity, sessionId); }
+
     @JavascriptInterface
     public String notifications() {
         boolean ok = Build.VERSION.SDK_INT < 33 || activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;

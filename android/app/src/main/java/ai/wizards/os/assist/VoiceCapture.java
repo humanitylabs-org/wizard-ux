@@ -16,6 +16,8 @@ import android.os.SystemClock;
 import android.util.Log;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 import ai.wizards.os.everywhere.EverywhereOutbox;
 import java.util.concurrent.ExecutorService;
@@ -65,6 +67,9 @@ final class VoiceCapture {
     private boolean paused;
     private final android.app.KeyguardManager keyguard;
     private long startedAt;
+    /** Screenshots taken with the corner orb's Screen button while talking; they ride with this take. */
+    static final int MAX_SHOTS = 4;
+    private final List<byte[]> shots = new ArrayList<>();
 
     private VoiceCapture(Context app) {
         this.app = app;
@@ -75,6 +80,34 @@ final class VoiceCapture {
     CaptureStore store() { return store; }
 
     boolean listening() { return listening; }
+
+    int shotCount() { return shots.size(); }
+
+    /** Attach a screenshot to the take in progress (max four). False when nothing is being recorded or it is full. */
+    boolean addShot(byte[] png) {
+        if (!listening || png == null || png.length == 0 || shots.size() >= MAX_SHOTS) return false;
+        shots.add(png);
+        Log.i(TAG, "screenshot attached " + shots.size() + " bytes=" + png.length);
+        return true;
+    }
+
+    /**
+     * The surface went away mid-take (Back, Home, screen off, another app). What was said is never lost:
+     * if any speech was heard it is sent, exactly as if the pause had ended it; an empty take is dropped.
+     * Only the Cancel button throws a take away on purpose.
+     */
+    void finishOnDismiss(String via) {
+        DismissPolicy.Action a = DismissPolicy.onDismiss(listening, detector != null && detector.heardSpeech(), qaAudio != null);
+        if (a == DismissPolicy.Action.NONE) return;
+        Log.i(TAG, "dismissed while listening via=" + via + " action=" + a);
+        if (a == DismissPolicy.Action.SEND) send(via);
+        else discard();
+    }
+
+    /** The surface was dismissed: if a message is still on its way, say so (it finishes by itself and toasts when it lands). */
+    void noteDismissed() {
+        if (sending && !reported) toast("Still sending to Wizard…");
+    }
 
     /** Only a live recording blocks a new one: anything already said is in the outbox and delivers by itself. */
     boolean busy() { return listening; }
@@ -207,17 +240,18 @@ final class VoiceCapture {
             return;
         }
         boolean locked = keyguard != null && keyguard.isKeyguardLocked();
-        Log.i(TAG, "sending via=" + via + " ms=" + heldMs + " locked=" + locked + (qa != null ? " qa_audio=" + qa.getName() : ""));
+        Log.i(TAG, "sending via=" + via + " ms=" + heldMs + " locked=" + locked + " shots=" + shots.size() + (qa != null ? " qa_audio=" + qa.getName() : ""));
         // Same path as the floating orb: saved on the phone first, then words → Wizard, retried until it lands.
         // No draft, no confirm: holding the side button and talking is sending.
         final EverywhereOutbox.Item it;
         try {
-            it = outbox().enqueueRecording(audio, EverywhereOutbox.SRC_SIDE, null, locked);
+            it = outbox().enqueueRecording(audio, EverywhereOutbox.SRC_SIDE, shots.isEmpty() ? null : new ArrayList<>(shots), locked);
         } catch (Exception e) {
             Log.e(TAG, "could not keep the recording", e);
             emitError("net", "Couldn’t save that recording on the phone.");
             return;
         }
+        shots.clear();
         pendingId = it.id;
         reported = false;
         sending = true;
@@ -252,6 +286,7 @@ final class VoiceCapture {
         sending = false;
         Log.i(TAG, "queued: " + why);
         if (view != null) view.onQueued(why);
+        else toast("Saved on your phone · sends when Wizard is back");
     }
 
     private final EverywhereOutbox.Listener follow = new EverywhereOutbox.Listener() {
@@ -271,6 +306,7 @@ final class VoiceCapture {
             main.removeCallbacks(slow);
             Log.i(TAG, "delivered session=" + it.sessionId);
             if (view != null) view.onDelivered(it.sessionId);
+            else toast("Sent to Wizard");
         }
 
         @Override
@@ -281,6 +317,7 @@ final class VoiceCapture {
                 if (it == null || "empty".equals(it.state)) {     // nothing intelligible in the recording
                     pendingId = null; sending = false; main.removeCallbacks(slow);
                     if (view != null) view.onNothing();
+                    else toast("Didn’t catch that");
                     return;
                 }
                 if (!reported && it.attempts > 0 && ("waiting".equals(it.state) || "failed".equals(it.state))) queued(it.error);
@@ -309,6 +346,7 @@ final class VoiceCapture {
     void discard() {
         listening = false;
         paused = false;
+        shots.clear();
         main.removeCallbacks(meter);
         if (qaSend != null) main.removeCallbacks(qaSend);
         dropRecorder();
@@ -326,6 +364,14 @@ final class VoiceCapture {
             recorder.release();
             recorder = null;
         }
+    }
+
+    /** The surface is gone (Back/Home) but the message is still on its way: say how it ended. */
+    private void toast(String msg) {
+        main.post(() -> {
+            Log.i(TAG, "toast: " + msg);
+            android.widget.Toast.makeText(app, msg, android.widget.Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void emitError(String kind, String msg) {
@@ -346,5 +392,17 @@ final class VoiceCapture {
         //noinspection ResultOfMethodCallIgnored
         used.delete();
         return f.renameTo(used) ? used : null;
+    }
+
+    /** Debug builds only: files/qa_autosend_ms.txt overrides the QA auto-send delay (0 = never; QA ends the take). */
+    static long qaAutoSendMs(Context c, long dflt) {
+        if (!BuildConfig.DEBUG) return dflt;
+        File f = new File(c.getFilesDir(), "qa_autosend_ms.txt");
+        if (!f.isFile()) return dflt;
+        try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+            byte[] b = new byte[32];
+            int n = in.read(b);
+            return n > 0 ? Long.parseLong(new String(b, 0, n, java.nio.charset.StandardCharsets.US_ASCII).trim()) : dflt;
+        } catch (Exception e) { return dflt; }
     }
 }
