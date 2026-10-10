@@ -1584,7 +1584,8 @@
     V.replyTo = { wid, sid };
     if (V.native) replyTake(V.native, { wid, sid });
     CHATS.PW?.paintMic(true, sid);
-    txPill('✦', 'Voice reply · tap the mic or the orb to send', 'agent'); txHide(2200);
+    // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
+    // animates."): the lit mic, the orb and its timer already say a reply is recording.
     return 'recording';
   }
   async function startVoice(kind) {

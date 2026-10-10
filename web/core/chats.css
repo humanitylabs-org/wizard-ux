@@ -281,6 +281,11 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-row.att-needs .pv, .ch-row.att-check .pv { color: var(--ink-2); }
 .ch-row.att-needs .tp b, .ch-row.att-check .tp b { color: var(--ink); font-weight: 700; }
 .ch-row.quiet { opacity: .72; }
+/* Deferred: bottom of Ready, a muted status in place of Needs you / Test this */
+.st.deferred { box-sizing: border-box; background: transparent; border: 1.5px solid var(--violet-2); box-shadow: none; } /* a ring: the filled violet dot means unread */
+/* Deferred is a label like Needs you / Test this (James, 10 Oct 2026: "don't fade it … same weight as all the other
+ * threads, just add the label"): full opacity, normal preview, its own colour. */
+.ch-row .pv em.att.deferred { color: var(--violet-2); }
 .ch-row.quiet .pv { -webkit-line-clamp: 1; }
 .ch-row.quiet.unread { opacity: .9; }
 .ch-sec-h b.wait { background: rgba(255, 190, 85, .16); color: var(--amber); }
@@ -289,3 +294,16 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-rdy-bar button.on { color: var(--ink); border-color: rgba(185, 155, 255, .45); background: rgba(143, 99, 255, .14); }
 .ch-subj { display: flex; align-items: baseline; gap: 8px; padding: 12px 10px 4px; font-size: 12.5px; font-weight: 750; color: var(--violet-2); }
 .ch-subj small { font-size: 11.5px; font-weight: 650; color: var(--ink-3); }
+
+/* A note from another agent thread (coordinator / cross-thread): a quiet labelled row, not a James bubble. */
+.msg.agentnote { margin: 10px 0 2px; align-self: stretch; }
+.msg.agentnote > summary { list-style: none; display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 13px; color: rgba(233, 228, 255, .62); padding: 6px 10px; border: 1px dashed rgba(185, 155, 255, .32); border-radius: 12px; }
+.msg.agentnote > summary::-webkit-details-marker { display: none; }
+.msg.agentnote > summary .an-ic { color: #b99bff; }
+.msg.agentnote > summary .an-from { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg.agentnote > summary time { font-size: 12px; opacity: .8; }
+.msg.agentnote .an-body { margin-top: 6px; padding: 8px 12px; font-size: 13.5px; color: rgba(233, 228, 255, .78); border-left: 2px solid rgba(185, 155, 255, .35); }
+.msg.laterrun { display: flex; align-items: center; gap: 7px; margin: 12px 0 2px; font-size: 13px; color: rgba(233, 228, 255, .55); padding: 6px 10px; border: 1px dashed rgba(185, 155, 255, .25); border-radius: 12px; }
+.msg.laterrun .lr-ic { color: #b99bff; }
+.msg.laterrun span:nth-child(2) { flex: 1; }
+.msg.laterrun time { font-size: 12px; opacity: .8; }

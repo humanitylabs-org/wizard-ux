@@ -27,7 +27,7 @@
     let u; try { u = new URL(href, location.href); } catch (e) { return null; }
     const q = u.searchParams, out = {};
     const sid = (q.get('session') || '').trim(); if (SESSION_ID.test(sid)) out.session = sid;
-    const view = (q.get('view') || '').trim(); if (!out.session && VIEWS.has(view)) { out.view = view; const s = q.get('section') || ''; if (SECTIONS.has(s)) out.section = s; }
+    const view = (q.get('view') || '').trim(); if (!out.session && VIEWS.has(view)) { out.view = view; const s = q.get('section') || ''; if (SECTIONS.has(s)) out.section = s === 'deferred' ? 'ready' : s; } // Deferred lives at the bottom of Ready
     const vid = (q.get('video') || '').trim().toLowerCase(); if (VIDEO_ID.test(vid)) out.video = vid;
     const open = (q.get('open') || '').trim(); if (!out.session && !out.view && /^[a-z0-9-]{1,40}$/i.test(open)) out.open = open;
     return Object.keys(out).length ? out : null;
