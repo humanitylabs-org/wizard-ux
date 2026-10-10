@@ -13,6 +13,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.Bundle;
+import android.service.notification.StatusBarNotification;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
@@ -71,6 +73,47 @@ public final class ReplyWatcher {
         }
         Log.i(TAG, "watch " + session + " run=" + run);
         kick(app);
+    }
+
+    /** Extra carried by every per-thread notification (reply watcher + Wizard Everywhere) so it can be found again. */
+    public static final String EXTRA_THREAD = "wos.thread";
+
+    public static Bundle threadExtras(String session) {
+        Bundle b = new Bundle();
+        if (session != null) b.putString(EXTRA_THREAD, session);
+        return b;
+    }
+
+    /** Thread notifications on the shade right now, as [{"s": session, "at": postedAtMillis}]. */
+    public static String active(Context c) {
+        JSONArray out = new JSONArray();
+        NotificationManager nm = c.getSystemService(NotificationManager.class);
+        if (nm == null) return "[]";
+        try {
+            for (StatusBarNotification sbn : nm.getActiveNotifications()) {
+                String s = sbn.getNotification().extras.getString(EXTRA_THREAD);
+                if (s == null || s.isEmpty()) continue;
+                out.put(new JSONObject().put("s", s).put("at", sbn.getPostTime()));
+            }
+        } catch (RuntimeException | JSONException e) { Log.w(TAG, "active: " + e); }
+        return out.toString();
+    }
+
+    /** The thread was read in Wizard (any route, any surface): its notifications have done their job. */
+    public static int clearThread(Context c, String session) {
+        if (session == null || session.isEmpty()) return 0;
+        NotificationManager nm = c.getSystemService(NotificationManager.class);
+        if (nm == null) return 0;
+        int n = 0;
+        try {
+            for (StatusBarNotification sbn : nm.getActiveNotifications()) {
+                if (!session.equals(sbn.getNotification().extras.getString(EXTRA_THREAD))) continue;
+                nm.cancel(sbn.getTag(), sbn.getId());
+                n++;
+            }
+        } catch (RuntimeException e) { Log.w(TAG, "clear: " + e); }
+        if (n > 0) Log.i(TAG, "cleared " + n + " for " + session);
+        return n;
     }
 
     /** Wizard OS came to the front: the thread is right there, so drop notifications for it. */
@@ -199,6 +242,7 @@ public final class ReplyWatcher {
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .setCategory(Notification.CATEGORY_MESSAGE)
+                .addExtras(threadExtras(session))
                 .build();
         c.getSystemService(NotificationManager.class).notify(id, n);
         Log.i(TAG, "notified " + session);

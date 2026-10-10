@@ -187,6 +187,25 @@
     try { d.watchRun(it.sessionId, res.runId, title); log('watch', it.sessionId, res.runId); } catch (e) {}
   });
 
+  /* Reading a thread anywhere in Wizard (opening it from the list, having it on screen, or reading it on another
+   * Wizard surface — seen state syncs) clears its reply notifications, not just a tap on the notification itself.
+   * Rule: a notification goes once the thread's seen time is at or after the moment it was posted, so a fresh reply
+   * that the session list hasn't caught up with yet is never swept away. */
+  const seenAtOf = (L, id) => {
+    const s = L.session?.(id); if (!s) return NaN;
+    const r = L.seen?.threads?.[`${s.runtime}:${s.id}`]; if (!r) return NaN;
+    return typeof r.seenAt === 'number' ? r.seenAt : Date.parse(r.seenAt ?? '');
+  };
+  function sweepReadNotes(why) {
+    const d = DEV(), L = W$()?.live; if (!d || typeof d.replyNotes !== 'function' || !L?.ok) return 0;
+    const notes = J(d.replyNotes()) || []; let n = 0;
+    for (const id of new Set(notes.filter(x => seenAtOf(L, x.s) >= x.at).map(x => x.s))) {
+      try { n += Number(d.clearThread(id)) || 0; } catch (e) {}
+    }
+    if (n) log('notes:cleared', why, n);
+    return n;
+  }
+
   /* ================= #22 updates: native APK banner ================= */
   let upd = null, updHidden = 0;
   const UPD_TEXT = {
@@ -315,10 +334,10 @@
       const ver = u.installed || (J(d.updateState()) || {}).installed || '';
       const sub = u.state === 'ready' ? `${u.version} is ready · tap to restart` : u.state === 'available' ? `${u.version} is available · tap to update` : u.state === 'error' ? `${u.message || 'Update failed'} · tap to retry` : u.state === 'deferred' ? `${u.version} installs after this recording` : u.state === 'current' ? 'Up to date' : u.state === 'offline' ? 'Couldn’t check · tap to try again' : 'Tap to check for updates';
       return `<div class="st-row static"><span class="st-ic">◉</span><span class="st-tx"><b>Recording</b><small>Keeps going with the screen off or in another app · Stop and Send in the notification</small></span></div>
-        <div class="st-row static"><span class="st-ic">✉</span><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
+        <div class="st-row static"><span class="st-ic">✉</span><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
         <button class="st-row" data-dvupd><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
     },
-    saveDrafts, checkWeb, _state: () => ({ sheet: sheet?.kind || null, upd, webPending, print0: !!print0 }),
+    saveDrafts, checkWeb, sweepReadNotes, _state: () => ({ sheet: sheet?.kind || null, upd, webPending, print0: !!print0 }),
   };
   document.addEventListener('click', e => {
     if (!e.target.closest('[data-dvupd]')) return;
@@ -331,6 +350,7 @@
     restoreDrafts();
     api.ready = true;
     const d = DEV();
+    W$()?.live?.onChange?.(() => sweepReadNotes('seen'));
     if (d) {
       syncRecorder('boot');
       upd = J(d.updateState()); renderUpdate();
@@ -339,7 +359,7 @@
     setTimeout(() => checkWeb(true), 1500);
     setInterval(() => { if (!document.hidden) checkWeb(false); }, 5 * 60e3);
   }
-  addEventListener('wos-native-resume', () => { if (api.ready) { syncRecorder('resume'); checkWeb(false); } });
+  addEventListener('wos-native-resume', () => { if (api.ready) { syncRecorder('resume'); checkWeb(false); sweepReadNotes('resume'); } });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { saveDrafts(); if (webPending) applyWeb(); }
     else if (api.ready) { checkWeb(false); syncRecorder('visible'); }
