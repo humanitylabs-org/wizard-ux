@@ -30,7 +30,7 @@ const FIX = {
   qa_rd_needs: { title: 'QA rd Needs you', t: now - 40, att: { state: 'needs_you', ask: 'Pick the desk layout', subject: 'Wizard OS' } },
   qa_rd_check: { title: 'QA rd Test this', t: now - 60, att: { state: 'check', ask: 'Try the timer', subject: 'Wizard OS' } },
   qa_rd_def: { title: 'QA rd Deferred today', t: now - 10, att: { state: 'fyi', ask: 'Read this later', subject: 'Research' }, def: true },
-  qa_rd_def_old: { title: 'QA rd Deferred needs', t: now - 3 * 86400, att: { state: 'needs_you', ask: 'Approve the purchase', subject: 'Home' }, def: true },
+  qa_rd_def_old: { title: 'QA rd Deferred needs', t: now - 3 * 86400, att: { state: 'needs_you', ask: 'Approve the purchase', subject: 'QA rd Home' }, def: true },
 };
 const DEF = Object.fromEntries(Object.entries(FIX).filter(([, f]) => f.def).map(([id]) => [`direct:${id}`, { sessionId: id, runtime: 'direct', deferred: true, updatedAt: new Date(Date.now() - 60000).toISOString() }]));
 const LONG = Array.from({ length: 10 }, (_, i) => `Paragraph ${i + 1}. ` + 'A long reply line that wraps across the phone width so the thread scrolls. '.repeat(3)).join('\n\n');
@@ -207,7 +207,7 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     const ds = await rowInfo('qa_rd_def_old');
     ok(ds && /^Deferred · /.test(ds.pv), 'By subject: deferred rows keep their Deferred line', ds);
     const subjHdr = await p.$$eval(await R('.ch-subj'), els => els.map(e => e.textContent));
-    ok(!subjHdr.some(t => /^Home.*waiting/.test(t)), 'By subject: a deferred needs-you is not counted as waiting', subjHdr);
+    ok(subjHdr.some(t => /^QA rd Home/.test(t)) && !subjHdr.some(t => /^QA rd Home.*waiting/.test(t)), 'By subject: a deferred needs-you is not counted as waiting', subjHdr);
     await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(300);
     ok(await p.evaluate(() => !!document.querySelector('.win')), 'app still open');
   } catch (e) { ok(false, 'suite crashed', String(e).split('\n')[0]); }
