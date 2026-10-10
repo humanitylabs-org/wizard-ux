@@ -242,17 +242,26 @@ window.WosChatPower = function chatPower(A) {
     const kept = here ? (c.draft || '') : A.KIT.drafts.get(dkey).text;
     const clearTray = list => { if (here) { c.files = list; A.refreshCompose(wid); } A.KIT.drafts.set(dkey, kept, list); };
     if (comp.length) clearTray([]);
+    const wasHere = !!w && w.thread === sid;
+    if (isNew) c.newModel = null;
+    c.follow = true;
+    // Send and go: a voice reply from the composer mic steps back to the list like a typed send (chats.js), on
+    // the tap, not after the recording has been written to the phone's storage (a blob commit can take seconds).
+    const left = !!w && !!A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
+    const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
+    if (w) A.renderChats(w);
     let it;
     try {
       it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', audio: blob,
         instructions: H.viewContext(wid, 'a voice reply recorded in this thread'), files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
-        wid: isNew ? wid : (w && w.thread === sid ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
-    } catch (e) { if (comp.length) clearTray(comp); throw e; } // not saved anywhere: the attachments go back
-    if (isNew) c.newModel = null;
-    c.follow = true;
-    // Send and go: a voice reply from the composer mic steps back to the list like a typed send (chats.js).
-    if (w) A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
-    if (w) A.renderChats(w);
+        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
+    } catch (e) { // not saved anywhere: the attachments go back, and so does James if he is still on the list
+      if (hold) LIVE.releaseSend?.(hold);
+      if (isNew && nm) c.newModel = nm;
+      if (comp.length) clearTray(comp);
+      if (left && w && !w.thread) A.openChat(wid, sid);
+      throw e;
+    }
     return it;
   }
   function paintMic(on, sid) {
