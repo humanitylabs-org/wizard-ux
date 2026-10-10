@@ -1550,6 +1550,10 @@
     if (V.state !== 'idle') return;
     clearTimeout(txHideT);
     Object.assign(V, { kind, target: null, replyTo: null, snap: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
+    // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
+    // Browsing to another thread mid-take, or after the send tap, never moves the message.
+    V.snap = sendSnap();
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
     // No status card while recording: the orb, timer and arc already say it. Hold-for-command keeps
@@ -1626,7 +1630,7 @@
   function dropHold() { if (V.hold) { LIVE.releaseSend?.(V.hold); V.hold = null; } }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
-    V.snap = sendSnap(); // the send tap fixes the destination; transcription can't move it
+    V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
     if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
     leaveOnSend(V.snap);
