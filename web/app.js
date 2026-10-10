@@ -50,7 +50,7 @@
 
   /* ---------------- apps ---------------- */
   // The registry lives in core/apps.js (shared with the desktop shell); the phone gets its own list.
-  const { APPS, APP, findApp } = window.WizCore.apps('mobile');
+  const { APPS, APP, findApp, quickSearch, searchUrl } = window.WizCore.apps('mobile');
   const norm = window.WizCore.norm;
 
   /* ---------------- state ---------------- */
@@ -479,6 +479,12 @@
       onChange: on => { device.classList.toggle('link-open', on); if (on) { closeSheets(true); armBack(); } },
     });
     window.WizLinks.intercept(device, LINKS);
+  }
+  /* Quick search: results open in the link sheet over whatever James is doing (no thread, no desk change). */
+  function openSearch(query, tab) {
+    const url = searchUrl(query, tab); if (!url) return false;
+    closeSheets(true); mountLinks(); if (!LINKS) return false;
+    LINKS.open(url); return true;
   }
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
@@ -1207,6 +1213,7 @@
     const th = (LIVE.ok ? LIVE.sessions.filter(x => !x.hidden && norm(x.title).includes(n)) : []).slice(0, 5);
     body.innerHTML = `${hits.length ? `<div class="lgroup"><h4>Apps &amp; views</h4>${hits.slice(0, 7).map((a, k) => appRow(a, k === 0)).join('')}</div>` : ''}
       ${th.length ? `<div class="lgroup"><h4>Threads</h4>${th.map(t => `<button class="lrow" data-thread="${esc(t.id)}"><span class="ic emo">${emoOf(t.id)}</span><span class="nm">${esc(t.title)}<small>${esc(ago(t.lastAssistantAt || t.updatedAt))}${LIVE.isNew(t) ? ' · unread' : ''}</small></span><span class="kind view">Chats</span></button>`).join('')}</div>` : ''}
+      ${searchUrl(q) ? (() => { const qs = quickSearch(q) || { query: q, tab: 'all' }; return `<div class="lgroup"><h4>Search</h4><button class="lrow" data-qsearch="${esc(qs.query)}" data-qtab="all"><span class="ic" style="--g1:#8f63ff;--g2:#2a1a66">⌕</span><span class="nm">“${esc(qs.query)}”<small>Search with an AI overview</small></span><span class="kind view">Web</span></button><button class="lrow" data-qsearch="${esc(qs.query)}" data-qtab="images"><span class="ic" style="--g1:#ff5ccf;--g2:#5c3bff">▦</span><span class="nm">“${esc(qs.query)}”<small>Image search</small></span><span class="kind view">Images</span></button></div>`; })() : ''}
       <div class="lgroup"><h4>Command</h4><button class="lrow ${hits.length ? '' : 'sel'}" data-cmd="${esc(q)}"><span class="ic" style="--g1:#0fb8d8;--g2:#2a3a8a">⚡</span><span class="nm">“${esc(q)}”<small>Run through the fast router</small></span><span class="kind cmd">Run</span></button></div>`;
     body.scrollTop = body.scrollHeight;
   }
@@ -1242,6 +1249,7 @@
       else if (k === 'left') moveWin(id, i - 1); else if (k === 'right') moveWin(id, i + 1);
       return;
     }
+    const qs = e.target.closest('[data-qsearch]'); if (qs) { openSearch(qs.dataset.qsearch, qs.dataset.qtab); return; }
     const c = e.target.closest('[data-cmd]'); if (c) { closeSheets(); runUtterance(c.dataset.cmd, 'command', true); }
   });
 
@@ -1744,7 +1752,10 @@
   }
 
   /* ---------------- routing ---------------- */
-  function localParse(t) {
+  function localParse(t, snap) {
+    // The quick-search spell ("image search …", "search …") opens the search sheet on-device, even over a thread.
+    const qs = quickSearch(t);
+    if (qs && (qs.strong || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'quick_search', query: qs.query, tab: qs.tab };
     const s = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '');
     if (/^(zoom|go|dive) (in|deeper|down)\b/.test(s)) return { action: 'zoom', dir: 'in' };
     if (/^(zoom|back|go|pull) (out|up|back)\b|^zoom out\b/.test(s)) {
@@ -1786,7 +1797,7 @@
       return toAgent(text, `To ${window.WizConfig.agent()} · with files` + sttNote, { ...opts, files });
     }
     const t0 = performance.now();
-    const loc = localParse(text);
+    const loc = localParse(text, snap);
     if (loc) {
       const ms = Math.max(1, Math.round(performance.now() - t0));
       showRouted('command', `Command · on-device · ${ms} ms${sttNote}`);
@@ -1864,6 +1875,7 @@
     if (a === 'close_window') { if (!f) return false; closeWin(f); return true; }
     if (a === 'fullscreen') { if (!f) return false; setFull(f, c.on !== false); return true; }
     if (a === 'move_window') { if (!f) return false; const to = c.to === 'prev' || c.to === 'left' ? idx - 1 : c.to === 'next' || c.to === 'right' ? idx + 1 : +c.to - 1; return moveWin(f, to); }
+    if (a === 'quick_search') return openSearch(c.query, c.tab);
     if (a === 'search') { openSheet('launcher', c.query || text); return true; }
     if (a === 'open_view' || a === 'view' || a === 'show') {
       const v = String(c.view || arg).toLowerCase();
