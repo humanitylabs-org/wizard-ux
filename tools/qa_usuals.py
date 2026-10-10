@@ -72,6 +72,7 @@ def tap_text(pattern, pkg=None, tries=10):
         time.sleep(1)
     return None
 def clear_logs(): sx('logcat -c')
+def top(): return next((l.strip() for l in sx('dumpsys activity activities').splitlines() if 'topResumedActivity' in l), '')
 def grablog(): return GLOG[0] + sx('logcat -d -s FakeGrab:*')
 GLOG = ['']
 def uslog(): return sx('logcat -d -s WizardUsuals:*')
@@ -230,6 +231,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             for _ in range(8):
                 time.sleep(.8); ns = gviews()
                 it = next((n for n in ns if n['text'] == item), None)
+                if it and it['y'] > 1800: sx('input swipe 540 1500 540 1000 400'); time.sleep(1.2); continue  # keep clear of the basket bar
                 if it:
                     adds = sorted([n for n in ns if n['text'] == 'Add' and abs(n['y'] - it['y']) < 140], key=lambda n: abs(n['y'] - it['y']))
                     if adds:

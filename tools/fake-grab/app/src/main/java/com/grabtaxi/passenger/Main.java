@@ -105,7 +105,7 @@ public class Main extends Activity {
             for (String r : new String[]{"Krua Thai Kitchen", "Som Tam Nua", "Kruang Burger"}) {
                 if (!r.toLowerCase().contains(s)) continue;
                 Button b = new Button(this); b.setText(r); b.setAllCaps(false);
-                b.setOnClickListener(v -> menu(r));
+                b.setOnClickListener(v -> v.post(() -> menu(r))); // like a fragment commit: navigation lands after the click event
                 res.addView(b);
             }
         };
@@ -148,7 +148,7 @@ public class Main extends Activity {
         int n = 0; for (int v : basket.values()) n += v;
         if (n == 0) return;
         Button view = new Button(this); view.setText("View basket · " + n + (n == 1 ? " item" : " items")); view.setAllCaps(false);
-        view.setOnClickListener(v -> checkout());
+        view.setOnClickListener(v -> v.post(this::checkout));
         bar.addView(view, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
     }
 

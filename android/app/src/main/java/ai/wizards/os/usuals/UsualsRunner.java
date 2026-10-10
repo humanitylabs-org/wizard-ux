@@ -387,54 +387,48 @@ public final class UsualsRunner {
         return best;
     }
 
-    /** How many levels up from {@code n} the item name appears (0..6), or -1. */
+    /** 0 when the item name next to {@code n} is {@code near}, else -1. */
     private static int nearDistance(AccessibilityNodeInfo n, String near) {
-        String want = UsualsPolicy.norm(near);
-        AccessibilityNodeInfo p = n;
-        for (int d = 0; d < 7 && p != null; d++) {
-            List<String> t = new ArrayList<>();
-            textsInto(p, t, 0, 60);
-            for (String s : t) { String x = UsualsPolicy.norm(s); if (x.equals(want) || (want.length() >= 5 && x.contains(want))) return d; }
-            p = p.getParent();
-        }
-        return -1;
+        String want = UsualsPolicy.norm(near), got = UsualsPolicy.norm(rowText(n, ""));
+        if (got.isEmpty()) return -1;
+        return got.equals(want) || (want.length() >= 5 && (got.contains(want) || want.contains(got))) ? 0 : -1;
     }
 
-    /** The item name next to a generic "Add"/"+": the first meaningful text in the closest ancestor that has one. */
-    private static String nearText(AccessibilityNodeInfo n, String own) {
+    /** The item name next to a generic "Add"/"+": the meaningful text on the same row (by position on screen). */
+    private static String nearText(AccessibilityNodeInfo n, String own) { return rowText(n, own); }
+
+    /**
+     * Menus are often flattened in the accessibility tree (the row itself isn't a node), so "the text in my parent"
+     * is the whole menu. Use geometry: among texts under the nearest few ancestors, the one whose vertical centre is
+     * closest to the button's, preferring the name above or level with it over the price below.
+     */
+    static String rowText(AccessibilityNodeInfo n, String own) {
+        Rect me = new Rect(); n.getBoundsInScreen(me);
+        int cy = me.centerY(), h = Math.max(me.height(), 40);
+        int band = Math.max(220, h * 3);
         AccessibilityNodeInfo p = n.getParent();
         for (int d = 0; d < 6 && p != null; d++) {
-            List<String> t = new ArrayList<>();
-            textsInto(p, t, 0, 40);
-            for (String s : t) {
-                String x = s.trim();
-                if (x.length() < 3 || x.equalsIgnoreCase(own) || UsualsPolicy.isGeneric(x) || UsualsPolicy.isPrice(x) || UsualsPolicy.money(x) != null && x.length() < 14) continue;
-                return x.length() > 60 ? x.substring(0, 60) : x;
+            List<AccessibilityNodeInfo> nodes = new ArrayList<>();
+            collect(p, nodes, 0);
+            String best = null; int bestCost = Integer.MAX_VALUE;
+            for (AccessibilityNodeInfo t : nodes) {
+                CharSequence cs = t.getText() != null ? t.getText() : t.getContentDescription();
+                if (cs == null) continue;
+                String x = cs.toString().trim();
+                if (x.length() < 3 || x.equalsIgnoreCase(own) || UsualsPolicy.isGeneric(x) || UsualsPolicy.isPrice(x)
+                        || (UsualsPolicy.money(x) != null && x.length() < 14) || x.length() > 80) continue;
+                Rect r = new Rect(); t.getBoundsInScreen(r);
+                if (r.isEmpty()) continue;
+                int dy = r.centerY() - cy;
+                if (Math.abs(dy) > band) continue;
+                if (r.top >= me.bottom + h) continue;        // a row further down
+                int cost = Math.abs(dy) + (dy > 0 ? h : 0);  // below the button costs a bit more than above
+                if (cost < bestCost) { bestCost = cost; best = x; }
             }
+            if (best != null) return best.length() > 60 ? best.substring(0, 60) : best;
             p = p.getParent();
         }
         return "";
-    }
-
-    private static AccessibilityNodeInfo clickable(AccessibilityNodeInfo n) {
-        AccessibilityNodeInfo p = n;
-        for (int d = 0; d < 6 && p != null; d++) {
-            if (p.isClickable() && p.isEnabled()) return p;
-            p = p.getParent();
-        }
-        return null;
-    }
-
-    /** What a person would call this control: its own text or description, else the first text inside it. */
-    static String labelOf(AccessibilityNodeInfo n) {
-        if (n == null) return "";
-        CharSequence t = n.getText();
-        if (t != null && t.toString().trim().length() > 0) return t.toString().trim();
-        CharSequence d = n.getContentDescription();
-        if (d != null && d.toString().trim().length() > 0) return d.toString().trim();
-        List<String> in = new ArrayList<>();
-        textsInto(n, in, 0, 3);
-        return in.isEmpty() ? "" : in.get(0).trim();
     }
 
     private static void textsInto(AccessibilityNodeInfo n, List<String> out, int depth, int max) {
