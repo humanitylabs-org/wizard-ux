@@ -203,14 +203,15 @@ const W = window.W = {
   onSending(via){
     S.state='think';mode='gather';glow=1;chips(false);setTop('');S.paused=false;
     orbMode('think');O.setLevel(0);
-    M.haptic('notice');M.chime('notice');ripples.push({r:20,a:.6});
-    if(inCorner()){bubble('Sending to Wizard','',null);return}
+    // 0.8.6: sending IS the confirmation (it is saved on the phone first). One "sent" tick and the orb leaves.
+    M.haptic('sent');M.chime('sent');ripples.push({r:16,a:.7,c:'79,240,176'});
+    if(inCorner())return;
     hint.show('sending to Wizard…','send',0,true);
   },
   /* The words are back: show them while they go on to Wizard. No confirm — talking is sending. */
   onHeard(text,ms){
     S.heard=text;S.ms=ms;
-    if(inCorner()){bubble('Sending to Wizard',text);return}
+    if(inCorner())return;
     text.split(/\s+/).slice(0,10).forEach((w,i)=>setTimeout(()=>words.add(w),i*110));
     hint.show('sending to Wizard…','send',0,true);
   },

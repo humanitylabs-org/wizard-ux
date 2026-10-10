@@ -182,6 +182,7 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
 
     @Override
     protected void onDestroy() {
+        main.removeCallbacks(closeAfterSend);
         try { unregisterReceiver(userPresent); } catch (IllegalArgumentException ignored) { }
         if (!handingOff) capture.finishOnDismiss("dismiss");
         capture.detach(this);
@@ -208,13 +209,27 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
 
     private void discardRecording() { capture.discard(); }
 
-    @Override public void onBegin() { js("W.begin()"); }
+    @Override public void onBegin() { main.removeCallbacks(closeAfterSend); js("W.begin()"); }
 
     @Override public void onLevel(float level) { js("W.level(" + level + ")"); }
 
     @Override public void onNothing() { js("W.onNothing()"); }
 
-    @Override public void onSending(String via) { js("W.onSending(" + JSONObject.quote(via) + ")"); }
+    /** After sending, the lock-screen surface shows its "sent" pulse and returns to the lock screen (no lingering card). */
+    static final long CLOSE_AFTER_SEND_MS = 650;
+    private final Runnable closeAfterSend = () -> {
+        if (!capture.listening() && !isFinishing() && !handingOff) {
+            Log.i(TAG, "sent; surface closes itself");
+            closeSurface();
+        }
+    };
+
+    @Override
+    public void onSending(String via) {
+        js("W.onSending(" + JSONObject.quote(via) + ")");
+        main.removeCallbacks(closeAfterSend);
+        main.postDelayed(closeAfterSend, CLOSE_AFTER_SEND_MS);
+    }
 
     @Override
     public void onHeard(String text, long ms) {

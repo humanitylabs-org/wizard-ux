@@ -691,10 +691,15 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         pushState();
     }
 
-    /** The orb's window keeps the screen on while it listens, so a screen timeout can't cut the take short (0.5.1). */
+    /**
+     * The orb's window keeps the screen on while it has a live take, its own (talking or paused) or the app's take it
+     * carries outside Wizard OS, so a screen timeout can't cut the take short or lock the phone (0.5.1; carry 0.8.6).
+     */
     private void syncAwake() {
         if (lp == null || web == null) return;
-        int f = listening ? (lp.flags | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) : (lp.flags & ~WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        boolean on = listening || carrying();
+        if (on != ((lp.flags & WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0)) Log.i(TAG, "keep screen on " + on);
+        int f = on ? (lp.flags | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) : (lp.flags & ~WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (f == lp.flags) return;
         lp.flags = f;
         try { if (attached) wm.updateViewLayout(web, lp); } catch (RuntimeException ignored) { }
