@@ -66,7 +66,7 @@ HOUSE = {
     'v-inbox':       ('inbox',    166, None),
     'usuals':        ('usuals',   42,  None),
     'side-button':   ('side',     300, 0.07),
-    'maps':          ('pin',      150, None),
+    'maps':          ('pin',      114, None),
 }
 # Apps with no sigil yet get their initial on a hue picked from their id.
 FALLBACK_HUES = [20, 66, 112, 158, 196, 230, 268, 300, 334]
