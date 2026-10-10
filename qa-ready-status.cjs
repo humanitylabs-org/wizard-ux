@@ -85,7 +85,9 @@ function routeFor() {
   await p.evaluate(() => __wos.goDesk(1)); await sleep(800);
   const wid = () => p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats')?.id);
   const R = async sel => `[data-chats="${await wid()}"] [data-sec="ready"] ${sel}`;
-  const readyIds = async () => p.$$eval(await R('[data-chopen]'), els => els.map(e => e.dataset.chopen).filter(id => id.startsWith('qa_rs_')));
+  // Ready pages at 40 rows and the live list is long, so expand it before reading (as James would tap Show more).
+  const expandReady = async () => p.evaluate(sel => { const b = document.querySelector(sel); if (b) b.click(); }, await R('[data-secmore]'));
+  const readyIds = async () => { await expandReady(); await sleep(150); return p.$$eval(await R('[data-chopen]'), els => els.map(e => e.dataset.chopen).filter(id => id.startsWith('qa_rs_'))); };
   const rowInfo = async id => p.evaluate(({ sel }) => { const e = document.querySelector(sel); if (!e) return null; return { cls: e.className, pv: e.querySelector('.pv')?.textContent || '', quiet: e.dataset.quiet === '1', op: getComputedStyle(e).opacity }; }, { sel: await R(`[data-chopen="${id}"]`) });
 
   try {
@@ -121,15 +123,28 @@ function routeFor() {
     ok((await readyIds())[0] === 'qa_rs_fyi', '1 back to Newest: the newest thread is at the top again', await readyIds());
 
     const n = await rowInfo('qa_rs_needs');
-    ok(n && /att-needs/.test(n.cls) && /^Say "ship desks"/.test(n.pv.trim()), '2 needs-you row: the exact ask is the preview', n);
+    ok(n && /att-needs/.test(n.cls) && /^Needs you: Say "ship desks"/.test(n.pv.trim()), '2 needs-you row: "Needs you:" label then the exact ask', n);
     const c = await rowInfo('qa_rs_check');
-    ok(c && /att-check/.test(c.cls) && /^Try the new orb timing/.test(c.pv.trim()), '2 test-this row: the ask is the preview', c);
+    ok(c && /att-check/.test(c.cls) && /^Your call: Try the new orb timing/.test(c.pv.trim()), '2 check row: "Your call:" label (a judgment call, not QA) then the ask', c);
     const d = await rowInfo('qa_rs_done');
-    ok(d && d.quiet && /Sending pill is live/.test(d.pv) && !/Long reply body/.test(d.pv), '2 done row is quiet and shows its one-line outcome', d);
+    ok(d && d.quiet && /^Done: Sending pill is live/.test(d.pv.trim()) && !/Long reply body/.test(d.pv), '2 done row is quiet and shows its one-line outcome', d);
     const f = await rowInfo('qa_rs_fyi');
-    ok(f && f.quiet && /Good Arts Law/.test(f.pv), '2 FYI row is quiet with its one-liner', f);
+    ok(f && f.quiet && /^FYI: .*Good Arts Law/.test(f.pv.trim()), '2 FYI row is quiet with its one-liner', f);
     const pl = await rowInfo('qa_rs_plain');
-    ok(pl && !pl.quiet && /Long reply body/.test(pl.pv), '2 a thread without a status keeps the old preview', pl);
+    ok(pl && !pl.quiet && /Long reply body/.test(pl.pv) && !/^(Needs you|Your call|Done|FYI|Deferred):/.test(pl.pv.trim()), '2 a thread without a status keeps the old preview, no label', pl);
+
+    const labStyle = await p.evaluate(() => {
+      const out = {};
+      for (const [id, k] of [['qa_rs_needs','needs'],['qa_rs_check','check'],['qa_rs_done','done'],['qa_rs_fyi','fyi']]) {
+        const r = document.querySelector(`[data-sec="ready"] [data-chopen="${id}"]`); if (!r) continue;
+        const em = r.querySelector('.pv em.att'), pv = r.querySelector('.pv'), ic = r.querySelector('.emo');
+        if (!em) { out[k] = null; continue; }
+        const e = getComputedStyle(em), v = getComputedStyle(pv), i = getComputedStyle(ic);
+        out[k] = { sameColourAsIcon: e.color === i.color, sameWeight: e.fontWeight === v.fontWeight, sameSize: e.fontSize === v.fontSize };
+      }
+      return out;
+    });
+    ok(['needs','check','done','fyi'].every(k => labStyle[k] && labStyle[k].sameColourAsIcon && labStyle[k].sameWeight && labStyle[k].sameSize), '2 label is in its icon\'s colour at the preview\'s own weight and size', labStyle);
     // 2b. Status icons (James, 10 Oct 2026): the row icon is the status; no per-thread ✦ star, no dots for untagged rows.
     const icons = await p.evaluate(sel => Object.fromEntries([...document.querySelectorAll(sel)].filter(e => e.dataset.chopen.startsWith('qa_rs_')).map(e => [e.dataset.chopen, (e.querySelector('.emo.sti')?.className || '').replace('emo sti ', '')])), await R('[data-chopen]'));
     ok(icons.qa_rs_needs === 'needs' && icons.qa_rs_check === 'check' && icons.qa_rs_done === 'done' && icons.qa_rs_fyi === 'fyi', '2b each status has its own icon (hand / flask / check / info)', icons);
@@ -153,8 +168,12 @@ function routeFor() {
 
     // 3. By subject: groups with something waiting first, "Other" last; persists.
     await p.locator(await R('[data-rdyorder="subject"]')).tap(); await sleep(500);
-    const subj = await p.$$eval(await R('.ch-subj span'), els => els.map(e => e.textContent));
-    ok(subj[0] === 'Wizard OS' && subj.includes('Home') && subj.includes('Research') && subj[subj.length - 1] === 'Other', '3 By subject: Wizard OS (2 waiting) first, Other last', subj);
+    await expandReady(); await sleep(150);
+    const subjW = await p.$$eval(await R('.ch-subj'), els => els.map(e => ({ name: e.querySelector('span')?.textContent, waiting: /waiting/.test(e.textContent) })));
+    const subj = subjW.map(x => x.name), firstQuiet = subjW.findIndex(x => !x.waiting);
+    ok(subj.includes('Wizard OS') && subj.includes('Home') && subj.includes('Research') && subj[subj.length - 1] === 'Other'
+      && (firstQuiet < 0 || subjW.slice(firstQuiet).every(x => !x.waiting)) && subj.indexOf('Wizard OS') < firstQuiet,
+      '3 By subject: groups with something waiting first (Wizard OS among them), Other last', subjW);
     const order = await readyIds();
     ok(order.indexOf('qa_rs_needs') < order.indexOf('qa_rs_done') && order.indexOf('qa_rs_done') < order.indexOf('qa_rs_old'), '3 rows sit under their subject', order);
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
