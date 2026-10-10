@@ -47,6 +47,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     static final int ORB_DP = 132;
     static final int MARGIN_DP = 14;
     static final int BUBBLE_MAX_DP = 380;
+    /** After a take is handed to the outbox the orb plays its "sent" pulse and gets out of the way. */
+    static final long CLOSE_AFTER_SEND_MS = 450;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final VoiceCapture capture;
@@ -152,6 +154,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         capture.attach(this);
         ai.wizards.os.SideButton.markUsed(getContext()); // the side button really reached Wizard OS
         Log.i(TAG, "corner shown handoff=" + handoff + " listening=" + capture.listening());
+        awake = false;
+        syncAwake();
         Log.i(TAG, "shape corner wide=false");
         whenReady(() -> {
             if (handoff) {
@@ -179,7 +183,9 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         capture.detach(this);
         capture.noteDismissed();
         delivered = null;
+        main.removeCallbacks(closeAfterSend);
         setWide(false);
+        syncAwake();
         if (pageReady) js("W.reset&&W.reset()");
         Log.i(TAG, "corner hidden");
     }
@@ -262,13 +268,44 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         });
     }
 
-    @Override public void onBegin() { js("W.begin()"); }
+    /**
+     * The screen never dims or locks while the side-button orb has a live take (talking or paused): the orb's window
+     * holds FLAG_KEEP_SCREEN_ON exactly as long as the microphone take is open, and lets go on send/cancel/hide.
+     */
+    private boolean awake;
+
+    private void syncAwake() {
+        boolean on = capture.listening();
+        if (on == awake) return;
+        awake = on;
+        android.view.Window w = getWindow() == null ? null : getWindow().getWindow();
+        if (w == null) return;
+        if (on) w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else w.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        Log.i(TAG, "keep screen on " + on);
+    }
+
+    private final Runnable closeAfterSend = () -> {
+        if (!capture.listening()) {
+            Log.i(TAG, "sent; corner closes itself");
+            hide();
+        }
+    };
+
+    @Override public void onBegin() { main.removeCallbacks(closeAfterSend); syncAwake(); js("W.begin()"); }
 
     @Override public void onLevel(float level) { js("W.level(" + level + ")"); }
 
-    @Override public void onNothing() { js("W.onNothing()"); }
+    @Override public void onNothing() { syncAwake(); js("W.onNothing()"); }
 
-    @Override public void onSending(String via) { js("W.onSending(" + JSONObject.quote(via) + ")"); }
+    @Override
+    public void onSending(String via) {
+        syncAwake();
+        js("W.onSending(" + JSONObject.quote(via) + ")");
+        // Snappy: it is already saved on the phone and on its way; the orb leaves instead of narrating the trip.
+        main.removeCallbacks(closeAfterSend);
+        main.postDelayed(closeAfterSend, CLOSE_AFTER_SEND_MS);
+    }
 
     @Override
     public void onHeard(String text, long ms) {
@@ -278,6 +315,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
 
     @Override
     public void onError(String kind, String message) {
+        syncAwake();
         js("W.onError(" + JSONObject.quote(kind) + "," + JSONObject.quote(message) + ")");
     }
 
@@ -289,7 +327,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
 
     @Override public void onQueued(String why) { js("W.onQueued(" + JSONObject.quote(why) + ")"); }
 
-    @Override public void onPaused(boolean p) { js("W.onPaused(" + p + ")"); }
+    @Override public void onPaused(boolean p) { syncAwake(); js("W.onPaused(" + p + ")"); }
 
     private String delivered;
 

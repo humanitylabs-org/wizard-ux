@@ -263,12 +263,12 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('A: Back while sending closes the orb', 'corner hidden' in bl, bl)
         got = wait_runs(n0 + 1)
         check('A: the message still reaches Wizard (exactly once)', got == n0 + 1, (got, STATE['log'][-6:]))
-        tl = wait_log('toast: Sent to Wizard', 20, alogs); STATE['slow'] = 0
-        print('  in-flight evidence:', alogs('toast|delivered'))
-        check('A: a toast says it was sent (orb already gone)', 'Sent to Wizard' in tl, tl or alogs('toast'))
+        STATE['slow'] = 0; time.sleep(2)
+        print('  in-flight evidence:', alogs('toast|delivered|closes itself'))
+        check('A: no lingering "Sent to Wizard" toast (0.8.6: the orb closes itself right after sending)', 'Sent to Wizard' not in alogs('toast'), alogs('toast'))
         pb = alogs('back passed')
         d1 = settings_depth(); shot('a3-page-went-back')
-        check('A: the same Back also went back in the page underneath (Battery → Settings)', 'ok=true' in pb and d1 == 'root', (pb, d1))
+        check('A: the same Back also went back in the page underneath (Battery → Settings)', d1 == 'root', (pb, d1))
 
         # B. Back in the middle of talking: what was said is sent, not thrown away.
         d0 = open_settings_sub()

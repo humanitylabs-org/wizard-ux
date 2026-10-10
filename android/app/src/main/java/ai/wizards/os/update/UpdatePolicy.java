@@ -119,6 +119,20 @@ public final class UpdatePolicy {
         return Step.INSTALL;
     }
 
+    /**
+     * Is any Wizard OS take live? Then an update must wait (installing restarts the app and would throw the take away).
+     * A paused take counts: its MediaRecorder is paused, so Android no longer reports RECORD_AUDIO as active, but
+     * the side button / floating orb still hold the one mic owner until the take is sent or cancelled (0.8.6).
+     *
+     * @param nativeRecorder the in-app native recorder has a take
+     * @param appVoice       the in-app web orb reported a take (listening / paused / thinking)
+     * @param micHolder      MicOwner.holder(): side button, floating orb or meeting, null when free
+     * @param micOpActive    Android says the RECORD_AUDIO op is active for Wizard OS
+     */
+    public static boolean takeLive(boolean nativeRecorder, boolean appVoice, String micHolder, boolean micOpActive) {
+        return nativeRecorder || appVoice || micHolder != null || micOpActive;
+    }
+
     /** SessionParams.setRequireUserAction value: USER_ACTION_NOT_REQUIRED (2) on API 31+, else none (0 = unspecified). */
     public static int requireUserAction(int sdk) { return sdk >= 31 ? 2 : 0; }
 

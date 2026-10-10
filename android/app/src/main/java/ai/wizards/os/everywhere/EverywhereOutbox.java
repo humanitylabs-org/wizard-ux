@@ -229,7 +229,7 @@ public final class EverywhereOutbox {
         }
         it.createdAt = System.currentTimeMillis();
         it.sessionId = "wizard_" + it.createdAt + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-        File kept = new File(audioDir, it.id + ".m4a");
+        File kept = new File(audioDir, it.id + ai.wizards.os.assist.TakeRecovery.ext(recording.getName()));
         if (!recording.renameTo(kept)) {
             try (InputStream in = new FileInputStream(recording); FileOutputStream out = new FileOutputStream(kept)) {
                 copy(in, out); out.getFD().sync();
@@ -385,9 +385,9 @@ public final class EverywhereOutbox {
         }
         // 2. The recording rides along as a voice note.
         if (it.audioFile == null && audio != null && audio.isFile()) {
-            String name = "wizard-everywhere-" + new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH-mm-ss", java.util.Locale.US).format(new java.util.Date(it.createdAt)) + ".m4a";
+            String name = "wizard-everywhere-" + new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH-mm-ss", java.util.Locale.US).format(new java.util.Date(it.createdAt)) + ai.wizards.os.assist.TakeRecovery.ext(audio.getName());
             JSONObject r = request("POST", "/wizard/files/upload", readAll(new FileInputStream(audio)), "application/octet-stream",
-                    new String[]{"X-Wizard-Filename", name, "X-Wizard-Mime", "audio/mp4"});
+                    new String[]{"X-Wizard-Filename", name, "X-Wizard-Mime", ai.wizards.os.assist.TakeRecovery.mime(audio.getName())});
             JSONObject f = r.optJSONObject("file");
             if (f == null || f.optString("id").isEmpty()) throw new HttpError(502, "Wizard Files returned no id");
             synchronized (this) { it.audioFile = f; save(); }
