@@ -361,6 +361,49 @@ public class WizardKeyboardService extends AccessibilityService {
         return null;
     }
 
+    /* ------------------------------------------------------------------ screen text (orb long-press → Screen) */
+
+    /**
+     * Every piece of text Android exposes for the apps on screen right now (not our own windows, not the keyboard),
+     * with where it sits. Works where an app blocks long-press copy: the text is read from the app's views, the
+     * same way a screen reader reads it. Call on the main thread; walks at most a few thousand nodes.
+     */
+    public java.util.List<ScreenPolicy.Block> screenText() {
+        java.util.List<ScreenPolicy.Block> out = new java.util.ArrayList<>();
+        int[] budget = {6000};
+        try {
+            List<AccessibilityWindowInfo> ws = getWindows();
+            boolean any = false;
+            for (AccessibilityWindowInfo w : ws) {
+                int t = w.getType();
+                if (t == AccessibilityWindowInfo.TYPE_INPUT_METHOD || t == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) continue;
+                AccessibilityNodeInfo r = w.getRoot();
+                if (t == AccessibilityWindowInfo.TYPE_SYSTEM) continue; // status bar, nav bar: not part of the app
+                if (r == null || ownPackage(r)) continue;
+                walk(r, out, budget, 0);
+                any = true;
+            }
+            if (!any) { AccessibilityNodeInfo r = getRootInActiveWindow(); if (r != null && !ownPackage(r)) walk(r, out, budget, 0); }
+        } catch (Exception e) { Log.w(TAG, "screen text failed", e); }
+        return out;
+    }
+
+    private void walk(AccessibilityNodeInfo n, java.util.List<ScreenPolicy.Block> out, int[] budget, int depth) {
+        if (n == null || depth > 60 || --budget[0] < 0) return;
+        if (!n.isVisibleToUser()) return;
+        CharSequence text = n.getText();
+        boolean label = false;
+        if (text == null || text.length() == 0) { text = n.getContentDescription(); label = true; }
+        if (n.isPassword()) text = null;
+        if (text != null && text.length() > 0) {
+            Rect b = new Rect();
+            n.getBoundsInScreen(b);
+            if (b.width() > 0 && b.height() > 0)
+                out.add(new ScreenPolicy.Block(text.toString(), b.left, b.top, b.width(), b.height(), label));
+        }
+        for (int i = 0; i < n.getChildCount(); i++) walk(n.getChild(i), out, budget, depth + 1);
+    }
+
     /* ------------------------------------------------------------------ screenshots */
 
     public interface Shot { void done(byte[] png); }
@@ -368,21 +411,27 @@ public class WizardKeyboardService extends AccessibilityService {
     /** PNG of the screen (Android 11+), longest side ≤ 1600 px; null when the screen refuses capture. */
     public void screenshot(Shot cb) {
         if (Build.VERSION.SDK_INT < 30) { cb.done(null); return; }
-        shotAttempt(cb, 1);
+        shotAttempt(cb, 1, false);
+    }
+
+    /** Same as a JPEG (fast to encode): the frozen background of Screen mode and what "Read picture text" reads. */
+    public void screenshotJpeg(Shot cb) {
+        if (Build.VERSION.SDK_INT < 30) { cb.done(null); return; }
+        shotAttempt(cb, 1, true);
     }
 
     @android.annotation.SuppressLint("NewApi")
-    private void shotAttempt(Shot cb, int retries) {
+    private void shotAttempt(Shot cb, int retries, boolean jpeg) {
         try {
             takeScreenshot(Display.DEFAULT_DISPLAY, getMainExecutor(), new TakeScreenshotCallback() {
                 @Override public void onSuccess(ScreenshotResult r) {
-                    byte[] png = encode(r);
-                    if ((png == null || png.length == 0) && retries > 0) { main.postDelayed(() -> shotAttempt(cb, retries - 1), 600); return; }
+                    byte[] png = encode(r, jpeg);
+                    if ((png == null || png.length == 0) && retries > 0) { main.postDelayed(() -> shotAttempt(cb, retries - 1, jpeg), 600); return; }
                     cb.done(png);
                 }
                 @Override public void onFailure(int code) {
                     Log.w(TAG, "screenshot failed " + code);
-                    if (retries > 0) main.postDelayed(() -> shotAttempt(cb, retries - 1), 600); else cb.done(null);
+                    if (retries > 0) main.postDelayed(() -> shotAttempt(cb, retries - 1, jpeg), 600); else cb.done(null);
                 }
             });
         } catch (Exception e) {
@@ -392,7 +441,7 @@ public class WizardKeyboardService extends AccessibilityService {
     }
 
     @android.annotation.SuppressLint("NewApi")
-    private static byte[] encode(ScreenshotResult r) {
+    private static byte[] encode(ScreenshotResult r, boolean jpeg) {
         if (r == null) return null;
         HardwareBuffer buf = r.getHardwareBuffer();
         if (buf == null) return null;
@@ -407,7 +456,7 @@ public class WizardKeyboardService extends AccessibilityService {
             int w = soft.getWidth(), h = soft.getHeight(), longest = Math.max(w, h);
             out = longest > 1600 ? Bitmap.createScaledBitmap(soft, Math.max(1, w * 1600 / longest), Math.max(1, h * 1600 / longest), true) : soft;
             ByteArrayOutputStream b = new ByteArrayOutputStream();
-            if (!out.compress(Bitmap.CompressFormat.PNG, 100, b)) return null;
+            if (!out.compress(jpeg ? Bitmap.CompressFormat.JPEG : Bitmap.CompressFormat.PNG, jpeg ? 88 : 100, b)) return null;
             return b.toByteArray();
         } catch (Exception | OutOfMemoryError e) {
             Log.w(TAG, "screenshot encode failed", e);

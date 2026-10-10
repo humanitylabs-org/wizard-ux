@@ -62,6 +62,28 @@ public final class ShareStore {
         for (File d : ds) if (System.currentTimeMillis() - d.lastModified() > 24 * 3600_000L) delete(d.getName());
     }
 
+    /**
+     * Stage text plus an optional screen picture as a share (the floating orb's Screen → Ask Wizard), so it opens in
+     * the same share sheet as "Share to Wizard" from any app. Returns the share id.
+     */
+    public static String stage(Context c, String text, byte[] jpeg) throws IOException {
+        ShareStore store = get(c);
+        String id = store.newId();
+        File dir = store.dir(id);
+        org.json.JSONArray items = new org.json.JSONArray();
+        try {
+            if (jpeg != null && jpeg.length > 0) {
+                try (FileOutputStream o = new FileOutputStream(new File(dir, "0.bin"))) { o.write(jpeg); }
+                items.put(new org.json.JSONObject().put("n", 0).put("name", "screen.jpg").put("mime", "image/jpeg").put("bytes", jpeg.length));
+            }
+            org.json.JSONObject meta = new org.json.JSONObject().put("id", id).put("at", System.currentTimeMillis())
+                    .put("items", items).put("skipped", 0).put("text", text == null ? "" : text.trim())
+                    .put("subject", "").put("from", "Screen");
+            store.save(id, meta.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (org.json.JSONException e) { store.delete(id); throw new IOException("Couldn’t stage the screen"); }
+        return id;
+    }
+
     static String safe(String id) { return String.valueOf(id).replaceAll("[^A-Za-z0-9._-]", "_"); }
 
     /** A display name that is safe as an upload filename header: no paths, no control chars, bounded length. */

@@ -85,9 +85,8 @@
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
-      // Thread titles (Agent Service thread-titles.mjs): the name it had before a recent rename, and every rename
-      // with its time, so the card says "was: …" for a while and the thread shows "Renamed from …" where it happened.
-      titleWas: typeof item.wizard_title_was === 'string' ? item.wizard_title_was.slice(0, 120) : '',
+      // Thread titles (Agent Service thread-titles.mjs): every rename with its time, so the thread shows
+      // "Renamed from …" right after the reply that renamed it. The list shows only the current title.
       renames: Array.isArray(item.wizard_title_renames) ? item.wizard_title_renames.filter(r => r && typeof r.from === 'string' && isFinite(r.at)).slice(-6).map(r => ({ from: r.from.slice(0, 120), to: String(r.to || '').slice(0, 120), at: Number(r.at), by: r.by === 'you' ? 'you' : 'agent' })) : [],
       // The thread's model route (chat-models.js shows and changes it).
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
@@ -195,7 +194,8 @@
   // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
   //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
-  const asksJames = s => s.attention?.state === 'needs_you' || s.attention?.state === 'check';
+  // Status labels never move a thread between days (James, 11 Oct 2026: Ready, Yesterday and Past week stay
+  // filtered by day in Newest and Priority); Priority only reorders within Ready.
   // Deferred threads sit at the bottom of Ready marked Deferred (James, 10 Oct 2026: "defer could just go at the
   // bottom of today … and just change the status to deferred"), whatever their day and in every order, until
   // restored or done.
@@ -214,7 +214,6 @@
       else if (isErr(s)) g.errors.push(s);
       else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
-      else if (asksJames(s)) g.ready.push(s); // waiting on James: stays in Ready until he acts, whatever the day
       else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
       else if (t < readyB) g.yesterday.push(s);
       else g.ready.push(s);
@@ -507,8 +506,8 @@
       const s = this.session(id), t = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 60);
       if (!s || !t || this.busy(id)) return false;
       if (t === s.title) return true;
-      const before = { title: s.title, titleWas: s.titleWas };
-      Object.assign(s, { title: t, titleWas: '' }); this.emit();
+      const before = { title: s.title };
+      Object.assign(s, { title: t }); this.emit();
       try {
         const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: t }) });
         if (!r.ok) { let msg = ''; try { msg = (await r.json())?.error?.message || ''; } catch (e) {} throw Object.assign(new Error(msg || 'rename failed'), { status: r.status }); }
