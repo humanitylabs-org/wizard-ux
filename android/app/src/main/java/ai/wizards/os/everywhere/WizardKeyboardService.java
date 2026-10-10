@@ -74,6 +74,7 @@ public class WizardKeyboardService extends AccessibilityService {
             setServiceInfo(info);
         }
         Log.i(TAG, "keyboard service connected");
+        ai.wizards.os.usuals.UsualsRunner.get(this).serviceConnected();
         main.post(poll);
     }
 
@@ -98,6 +99,7 @@ public class WizardKeyboardService extends AccessibilityService {
     @Override
     public void onAccessibilityEvent(AccessibilityEvent e) {
         if (e == null) return;
+        ai.wizards.os.usuals.UsualsRunner.get(this).onEvent(e); // records taps in Grab only while James teaches a usual
         int t = e.getEventType();
         if (t == AccessibilityEvent.TYPE_VIEW_FOCUSED || t == AccessibilityEvent.TYPE_VIEW_CLICKED
                 || t == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
