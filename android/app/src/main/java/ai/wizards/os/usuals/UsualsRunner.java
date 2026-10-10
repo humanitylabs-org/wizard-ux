@@ -46,6 +46,21 @@ public final class UsualsRunner {
     private Mode mode = Mode.IDLE;
     private UsualsStore.Usual usual;
     private final List<UsualsPolicy.Step> recorded = new ArrayList<>();
+    /** "Order something new": he browses; the route is saved when he orders (or taps Done), named after the food. */
+    private boolean browsing;
+    /** Everything seen while teaching: Grab's screens (fingerprints) and his taps, with times. */
+    private final List<UsualsPolicy.Rec> recs = new ArrayList<>();
+    private String lastSig = "";
+    /** Texts of the last checkout screen Grab showed while teaching: the final basket and the total. */
+    private List<String> lastCheckout;
+    private long grabAwaySince;
+    private String commitLabel;
+    private boolean atCheckout;
+    private boolean scrollUp;
+    private final Runnable watch = this::watchScreen;
+    /** "Order something new" said or tapped: browse Grab and save the route as a new usual. */
+    public static final String NEW = "+new";
+    private static final long AWAY_MS = 20 * 60 * 1000L;
     private int stepIdx;
     private long stepStarted;
     private int scrolls;
@@ -66,7 +81,7 @@ public final class UsualsRunner {
             org.json.JSONObject o = new org.json.JSONObject().put("mode", mode.name().toLowerCase(java.util.Locale.ROOT))
                     .put("status", status).put("usual", usual == null ? "" : usual.id).put("name", usual == null ? "" : usual.name)
                     .put("step", stepIdx).put("steps", usual == null ? recorded.size() : usual.steps.size())
-                    .put("total", total == null ? "" : total).put("recorded", recorded.size());
+                    .put("total", total == null ? "" : total).put("recorded", recorded.size()).put("browsing", browsing);
             org.json.JSONArray l = new org.json.JSONArray();
             for (String s : log.subList(Math.max(0, log.size() - 40), log.size())) l.put(s);
             o.put("log", l);
@@ -97,40 +112,97 @@ public final class UsualsRunner {
 
     /* ------------------------------------------------------------------ teach */
 
+    /**
+     * Opens Grab and records. With a name: the old "teach a usual" (Done at checkout). Without one ("Order something
+     * new"): he browses and orders as normal; the route is saved when he taps Place order in Grab (or Done), named
+     * after what's in the basket, and he can rename it later.
+     */
     public String teach(String name) {
         String b = blocker(UsualsPolicy.GRAB);
         if (!b.isEmpty()) return b;
+        if (mode == Mode.RUNNING || mode == Mode.ORDERING) return "busy";
         stopQuietly();
         usual = new UsualsStore.Usual();
-        usual.name = name == null || name.trim().isEmpty() ? "My usual" : name.trim();
-        recorded.clear(); log.clear(); total = null;
+        String n = name == null ? "" : name.trim();
+        browsing = n.isEmpty();
+        usual.name = n;
+        recorded.clear(); recs.clear(); log.clear(); total = null; lastCheckout = null; lastSig = ""; grabAwaySince = 0; commitLabel = null; atCheckout = false;
         mode = Mode.TEACHING;
-        status = "Build your basket in Grab, then tap Done";
-        note("teach start: " + usual.name);
+        status = browsing ? "Browse Grab and order as usual" : "Build your basket in Grab, then tap Done";
+        note("teach start: " + (browsing ? "something new (named after the basket)" : usual.name));
         launchFresh(usual.pkg);
-        cover().showTeachBar(usual.name);
+        cover().showTeachBar(browsing ? "New order" : usual.name, browsing);
+        main.removeCallbacks(watch);
+        main.postDelayed(watch, 1200);
         return "";
     }
 
-    /** Done on the teach bar: keep what was recorded and go back to Wizard OS. */
-    public void finishTeach() {
-        if (mode != Mode.TEACHING) return;
-        List<UsualsPolicy.Step> steps = UsualsPolicy.tidy(recorded);
-        cover().hide();
+    /** Done on the teach card: keep what was recorded and go back to Wizard OS (to name it, if it's new). */
+    public void finishTeach() { finishTeach(false); }
+
+    /**
+     * @param ordered he tapped Grab's own Place order: save quietly, leave him in Grab (order tracking), and show a
+     *                small "Saved" card with Rename.
+     */
+    private void finishTeach(boolean ordered) {
+        if (mode != Mode.TEACHING || usual == null) return;
+        main.removeCallbacks(watch);
+        if (!ordered) sample();
+        java.util.Map<UsualsPolicy.Step, String> items = UsualsPolicy.items(recs);
+        List<UsualsPolicy.Step> steps = UsualsPolicy.tidy(UsualsPolicy.path(recs, lastCheckout));
+        note("teach recorded " + recs.size() + " events → " + steps.size() + " steps");
         if (steps.isEmpty()) {
             mode = Mode.IDLE; status = "Nothing was recorded";
             note("teach: nothing recorded");
-            backToWizard("usuals");
+            if (cover != null) cover.hide();
+            if (!ordered) backToWizard("usuals");
             return;
         }
-        // The checkout screen at the end of teaching tells us what it cost.
-        String seen = UsualsPolicy.total(screenTexts(usual.pkg));
+        String seen = lastCheckout != null ? UsualsPolicy.total(lastCheckout)
+                : commitLabel != null ? UsualsPolicy.total(java.util.Collections.singletonList(commitLabel))
+                : UsualsPolicy.total(screenTexts(usual.pkg));
         if (seen != null) usual.lastTotal = seen;
         usual.steps = steps;
+        usual.basket = UsualsPolicy.basketLine(steps, items);
+        usual.place = UsualsPolicy.place(steps, items);
+        if (browsing) { usual.name = uniqueName(UsualsPolicy.suggestName(steps, items)); usual.needsName = true; }
+        if (ordered) { usual.lastRunAt = System.currentTimeMillis(); usual.lastResult = "ordered"; }
         UsualsStore.put(app, usual);
-        note("teach saved " + steps.size() + " steps: " + UsualsPolicy.write(steps).replace('\n', '|'));
+        note("teach saved “" + usual.name + "” " + steps.size() + " steps: " + UsualsPolicy.write(steps).replace('\n', '|')
+                + (usual.basket.isEmpty() ? "" : " · basket " + usual.basket) + (ordered ? " · ordered in Grab" : ""));
         mode = Mode.IDLE; status = "Saved " + usual.name;
+        final String id = usual.id;
+        if (ordered) {
+            cover().showSaved(usual.name);
+            main.postDelayed(() -> { if (mode == Mode.IDLE && cover != null && cover.showingSaved()) cover.hide(); }, 7000);
+        } else {
+            if (cover != null) cover.hide();
+            backToWizard("usuals");
+        }
+        browsing = false;
+        note("saved id " + id);
+    }
+
+    /** Save what reached checkout without showing anything (he's in another app). */
+    private void finishTeachQuietly() {
+        boolean wasCover = cover != null;
+        finishTeach(true);
+        if (wasCover && cover != null) cover.hide();
+        UsualsStore.Usual u = usual == null ? null : UsualsStore.get(app, usual.id);
+        if (u != null) { u.lastResult = ""; u.lastRunAt = 0; UsualsStore.put(app, u); }
+    }
+
+    /** Rename on the "Saved" card: Wizard OS opens on Usuals with the name field. */
+    void renameSaved() {
+        if (cover != null) cover.hide();
         backToWizard("usuals");
+    }
+
+    private String uniqueName(String base) {
+        List<String> taken = UsualsStore.names(UsualsStore.all(app));
+        if (!taken.contains(base)) return base;
+        for (int i = 2; i < 50; i++) if (!taken.contains(base + " " + i)) return base + " " + i;
+        return base;
     }
 
     public void cancel() {
@@ -142,8 +214,91 @@ public final class UsualsRunner {
 
     private void stopQuietly() {
         main.removeCallbacks(tick);
+        main.removeCallbacks(watch);
         if (cover != null) cover.hide();
         mode = Mode.IDLE;
+        browsing = false;
+    }
+
+    /* ------------------------------------------------------------------ watching while teaching */
+
+    /** Every ~0.7 s while teaching: which Grab screen is up (for taking out detours) and, at checkout, the basket. */
+    private void watchScreen() {
+        if (mode != Mode.TEACHING || usual == null) return;
+        sample();
+        if (mode == Mode.TEACHING) main.postDelayed(watch, 700);
+    }
+
+    private void sample() {
+        WizardKeyboardService s = svc();
+        AccessibilityNodeInfo root = s == null ? null : grabRoot(s, usual.pkg);
+        long now = SystemClock.uptimeMillis();
+        if (root == null) {
+            // He switched apps (to ask someone, to check a message): the card steps aside and comes back with Grab.
+            if (grabAwaySince == 0) { grabAwaySince = now; if (cover != null) cover.teachVisible(false); }
+            else if (now - grabAwaySince > AWAY_MS) {
+                if (lastCheckout != null) { note("teach: away from Grab 20 min after checkout → saving"); finishTeachQuietly(); }
+                else { note("teach: away from Grab 20 min, recording dropped"); stopQuietly(); status = ""; }
+            }
+            return;
+        }
+        if (grabAwaySince != 0 && cover != null) cover.teachVisible(true);
+        grabAwaySince = 0;
+        List<String> parts = new ArrayList<>(), all = new ArrayList<>();
+        boolean[] commit = {false};
+        walkScreen(root, 0, false, parts, all, commit);
+        String sig = UsualsPolicy.sig(parts);
+        if (commit[0]) lastCheckout = all;
+        if (!sig.isEmpty() && !sig.equals(lastSig)) {
+            // From checkout to a screen never seen before, with no order button and no tap of his just before: Grab's
+            // order control (a swipe, a custom view) didn't report a tap, and this is the order-tracking screen.
+            if (atCheckout && !commit[0] && !seenSig(sig) && !tappedWithin(now, 4000)) {
+                note("teach: checkout → new screen without a tap → treating as ordered");
+                recs.add(UsualsPolicy.Rec.screen(sig, now));
+                main.post(() -> finishTeach(true));
+                atCheckout = false;
+                return;
+            }
+            atCheckout = commit[0];
+            lastSig = sig;
+            recs.add(UsualsPolicy.Rec.screen(sig, now));
+            Log.i(TAG, "teach screen " + Integer.toHexString(sig.hashCode()) + (commit[0] ? " (checkout)" : ""));
+        }
+    }
+
+    private boolean seenSig(String sig) {
+        for (UsualsPolicy.Rec x : recs) if (x.step == null && sig.equals(x.sig)) return true;
+        return false;
+    }
+
+    private boolean tappedWithin(long now, long ms) {
+        for (int i = recs.size() - 1; i >= 0; i--) {
+            UsualsPolicy.Rec x = recs.get(i);
+            if (x.step != null && "tap".equals(x.step.type)) return now - x.t <= ms;
+        }
+        return false;
+    }
+
+    /**
+     * One pass over Grab's screen: its fixed parts (outside scrolling lists, not what's typed) for the fingerprint,
+     * all texts (for the basket and total), and whether an order button is showing.
+     */
+    private static void walkScreen(AccessibilityNodeInfo n, int depth, boolean inList, List<String> parts, List<String> all, boolean[] commit) {
+        if (n == null || depth > 40 || all.size() > 600) return;
+        if (!n.isVisibleToUser()) return;
+        CharSequence cs = n.getText() != null && n.getText().length() > 0 ? n.getText() : n.getContentDescription();
+        String txt = cs == null ? "" : cs.toString().trim();
+        if (!txt.isEmpty()) {
+            all.add(txt);
+            if (!commit[0] && UsualsPolicy.isCommit(txt) && clickable(n) != null) commit[0] = true;
+        }
+        if (!inList) {
+            String id = n.getViewIdResourceName();
+            if (id != null && !id.isEmpty()) parts.add("#" + id.substring(id.indexOf('/') + 1));
+            if (!txt.isEmpty() && !n.isEditable()) parts.add(txt);
+        }
+        boolean list = inList || n.isScrollable();
+        for (int i = 0; i < n.getChildCount(); i++) walkScreen(n.getChild(i), depth + 1, list, parts, all, commit);
     }
 
     /**
@@ -154,7 +309,7 @@ public final class UsualsRunner {
         if (cover != null) { cover.hide(); cover = null; }
         if (usual == null) return;
         switch (mode) {
-            case TEACHING: cover().showTeachBar(usual.name); cover().teachCount(UsualsPolicy.tidy(recorded).size()); break;
+            case TEACHING: cover().showTeachBar(browsing ? "New order" : usual.name, browsing); teachProgress(); main.removeCallbacks(watch); main.postDelayed(watch, 700); break;
             case RUNNING: cover().showRunning(usual.name, stepIdx, usual.steps.size(), status); break;
             case READY: cover().showReady(usual.name, total, true); break;
             default: break;
@@ -168,32 +323,53 @@ public final class UsualsRunner {
         CharSequence pkg = e.getPackageName();
         if (pkg == null || !usual.pkg.contentEquals(pkg)) return;
         int t = e.getEventType();
+        long at = e.getEventTime() > 0 ? e.getEventTime() : SystemClock.uptimeMillis();
         if (t == AccessibilityEvent.TYPE_VIEW_CLICKED) {
             AccessibilityNodeInfo n = e.getSource();
             String label = n != null ? labelOf(n) : "";
             if (label.isEmpty() && e.getText() != null && !e.getText().isEmpty()) label = String.valueOf(e.getText().get(0));
             if (label.isEmpty() && e.getContentDescription() != null) label = e.getContentDescription().toString();
             if (n != null && n.isEditable()) return; // tapping the search box: the typing step finds it again
-            if (UsualsPolicy.isCommit(label)) { note("teach: ignored a commit tap “" + label + "”"); return; }
+            if (UsualsPolicy.isCommit(label)) {
+                // He ordered in Grab himself: that's the end of the route. Save it (named after the food), stay in Grab.
+                note("teach: James tapped “" + label + "” in Grab → saving");
+                commitLabel = label; // "Place order ฿245": the total, if the checkout screen was never sampled
+                main.post(() -> finishTeach(true));
+                return;
+            }
             String id = n != null && n.getViewIdResourceName() != null ? n.getViewIdResourceName() : "";
-            String near = n != null && UsualsPolicy.isGeneric(label) ? nearText(n, label) : "";
+            String near = n != null && (UsualsPolicy.isGeneric(label) || UsualsPolicy.isRemoveLabel(label)) ? nearText(n, label) : "";
             float x = -1, y = -1;
             if (n != null) {
                 Rect r = new Rect(); n.getBoundsInScreen(r);
                 DisplayMetrics dm = app.getResources().getDisplayMetrics();
                 x = r.exactCenterX() / dm.widthPixels; y = r.exactCenterY() / dm.heightPixels;
             }
-            recorded.add(new UsualsPolicy.Step("tap", label, id, near, x, y));
+            UsualsPolicy.Step st = new UsualsPolicy.Step("tap", label, id, near, x, y);
+            recorded.add(st);
+            recs.add(UsualsPolicy.Rec.of(st, at));
             note("teach tap “" + label + "”" + (near.isEmpty() ? "" : " @ " + near) + (id.isEmpty() ? "" : " #" + id));
-            cover().teachCount(UsualsPolicy.tidy(recorded).size());
+            teachProgress();
         } else if (t == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
             AccessibilityNodeInfo n = e.getSource();
             String text = n != null && n.getText() != null ? n.getText().toString()
                     : e.getText() != null && !e.getText().isEmpty() ? String.valueOf(e.getText().get(0)) : "";
             if (n != null && n.getHintText() != null && text.contentEquals(n.getHintText())) text = "";
-            recorded.add(new UsualsPolicy.Step("type", text, "", "", -1, -1));
-            cover().teachCount(UsualsPolicy.tidy(recorded).size());
+            UsualsPolicy.Step st = new UsualsPolicy.Step("type", text, "", "", -1, -1);
+            recorded.add(st);
+            recs.add(UsualsPolicy.Rec.of(st, at));
+            teachProgress();
         }
+    }
+
+    /** The card's second line: what's in the basket so far (browsing), or the step count (teaching a named usual). */
+    private void teachProgress() {
+        if (cover == null) return;
+        if (browsing) {
+            List<UsualsPolicy.Step> st = UsualsPolicy.tidy(UsualsPolicy.path(recs, null));
+            String b = UsualsPolicy.basketLine(st, UsualsPolicy.items(recs));
+            cover.teachLine(b.isEmpty() ? "Saves when you order" : b);
+        } else cover.teachCount(UsualsPolicy.tidy(recorded).size());
     }
 
     /* ------------------------------------------------------------------ run */
@@ -206,7 +382,7 @@ public final class UsualsRunner {
         if (mode == Mode.TEACHING) return "busy";
         stopQuietly();
         usual = u; log.clear(); total = null;
-        stepIdx = 0; scrolls = 0; stepStarted = SystemClock.uptimeMillis();
+        stepIdx = 0; scrolls = 0; scrollUp = false; stepStarted = SystemClock.uptimeMillis();
         mode = Mode.RUNNING;
         status = "Opening Grab";
         note("run start: " + u.name + " (" + u.steps.size() + " steps)");
@@ -279,7 +455,12 @@ public final class UsualsRunner {
         if (st.optional() && waited > UsualsPolicy.stepBudgetMs(st)) { note("step " + stepIdx + " optional “" + st.label + "” not there, skipped"); next(200); return; }
         // Not on screen yet: a pop-up in the way, or further down the menu.
         if (waited > 3000 && dismissPopup(root)) { again(900); return; }
-        if (waited > 4000 && scrolls < 10 && scrollDown(root)) { scrolls++; again(900); return; }
+        // Further down the menu, or (Grab kept its scroll position) back up it.
+        if (waited > 4000 && scrolls < 24) {
+            boolean moved = scroll(root, !scrollUp);
+            if (!moved && !scrollUp) { scrollUp = true; moved = scroll(root, false); }
+            if (moved) { scrolls++; again(900); return; }
+        }
         if (waited > UsualsPolicy.stepBudgetMs(st)) { fail("Couldn't find “" + st.label + "”" + (st.near.isEmpty() ? "" : " by “" + st.near + "”")); return; }
         again(500);
     }
@@ -289,7 +470,7 @@ public final class UsualsRunner {
     private void again(long ms) { main.removeCallbacks(tick); main.postDelayed(tick, ms); }
 
     private void next(long ms) {
-        stepIdx++; scrolls = 0; stepStarted = SystemClock.uptimeMillis() + ms;
+        stepIdx++; scrolls = 0; scrollUp = false; stepStarted = SystemClock.uptimeMillis() + ms;
         again(ms);
     }
 
@@ -538,7 +719,7 @@ public final class UsualsRunner {
         return false;
     }
 
-    private static boolean scrollDown(AccessibilityNodeInfo root) {
+    private static boolean scroll(AccessibilityNodeInfo root, boolean down) {
         List<AccessibilityNodeInfo> all = new ArrayList<>();
         collect(root, all, 0);
         AccessibilityNodeInfo big = null; int area = 0;
@@ -548,7 +729,7 @@ public final class UsualsRunner {
             int a = r.width() * r.height();
             if (a > area) { area = a; big = n; }
         }
-        return big != null && big.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+        return big != null && big.performAction(down ? AccessibilityNodeInfo.ACTION_SCROLL_FORWARD : AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD);
     }
 
     /** Last resort for controls that ignore ACTION_CLICK: a real tap at their centre (the cover lets it through). */

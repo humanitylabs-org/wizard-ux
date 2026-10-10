@@ -4,16 +4,20 @@ com.grabtaxi.passenger) on a fresh API35 emulator.
 
 usage: qa_usuals.py WOS_QA_APK FAKE_GRAB_APK WEB_DIR [OUT_DIR]
 
-A. Usuals shows in the app list (native bridge present); without accessibility it says so.
-B. Teach: tap Teach → name → Open Grab; the teach card is up; a person (adb taps) dismisses the promo, searches
-   "krua", opens Krua Thai Kitchen, scrolls, taps Add by "Kra pao moo saap" twice and "Thai iced tea" once, opens
-   the basket, taps Done → back in Wizard OS with the usual saved (steps recorded, total ฿200 read off checkout).
-   (That a Place-order tap is never recorded or replayed is covered by UsualsPolicyTest.)
+A. Usuals shows in the app list (native bridge present); without accessibility it says so; with it, the empty state
+   leads with "Order something new" (no name asked first).
+B. Order something new: Grab opens with the "Saving this order" card. A person (adb taps) browses like James would:
+   closes the promo, searches "krua", LOOKS at Kruang Burger (opens it, backs out), opens Krua Thai Kitchen, adds
+   2× Kra pao + 1× Mango sticky rice + 1× Thai iced tea, goes to checkout, REMOVES the mango sticky rice there, and
+   taps Grab's own Place order. → exactly one order (2× kra pao + iced tea, ฿200); Wizard saves the route on its own,
+   named "Kra pao moo saap + Thai iced tea", with the burger detour and the removed dish taken out; a "Saved to
+   Usuals" card with Rename floats over Grab's tracking screen. Rename → Usuals opens with the name field → "Kra pao".
 C. Run: tap Order → Grab opens fresh (promo shows on that launch), the cover is up, the run reaches checkout,
-   the cover shows "Place order · ฿200"; NO order was placed by the run (FakeGrab log has no ORDER PLACED).
+   the cover shows "Place order · ฿200"; NO order was placed by the run.
 D. Look first → cover gone, Grab is on checkout, still no order.
-E. Run again → Place order on the cover → FakeGrab logs exactly one ORDER PLACED with 2x Kra pao + 1x iced tea.
-F. Voice: the in-app router turns "order my usual kra pao" into a run (handleText → localParse), no Wizard write.
+E. Run again → Place order on the cover → FakeGrab logs exactly one more ORDER PLACED, 2x Kra pao + 1x iced tea.
+F. Voice: "order my usual kra pao" runs it (handleText → localParse), "order something new" opens Grab to browse,
+   nothing written to Wizard; ordinary talk doesn't start anything. Cancel/Don't save leave no order and no usual.
 G. Back: edit sheet open → Back closes the sheet, app stays open. No crashes.
 """
 import fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid, urllib.request
@@ -207,28 +211,35 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx(f'settings put secure enabled_accessibility_services {PKG}/ai.wizards.os.everywhere.WizardKeyboardService'); sx('settings put secure accessibility_enabled 1'); time.sleep(4)
         pg.ev("window.WosUsuals.refresh()"); time.sleep(.5)
         txt = pg.ev("document.querySelector('[data-usuals]')?.innerText || ''")
-        check('A: with the switch on, the empty state invites teaching', 'Teach a usual' in txt and 'One switch' not in txt, txt[:160])
+        check('A: with the switch on, the empty state leads with Order something new (no name asked)',
+              'Order something new' in txt and 'One switch' not in txt and not pg.ev("!!document.querySelector('.us-teach input')"), txt[:200])
         shot('a-empty')
 
-        # B. Teach
-        pg.ev("document.querySelector('[data-us=teach]').click()"); time.sleep(.5)
-        pg.ev("(() => { const i = document.querySelector('.us-teach input'); i.value = 'Kra pao'; document.querySelector('.us-teach button').click(); })()")
+        # B. Order something new: browse, change his mind, order in Grab → saved by itself
+        pg.ev("document.querySelector('[data-us=new]').click()")
         ok = wait_for(lambda: GPKG in top(), 15)
-        check('B: Open Grab launches Grab', ok, top())
+        check('B: Order something new opens Grab straight away', ok, top())
         time.sleep(3)
-        card = find(r'^Done$')
-        card = card or wait_for(lambda: find(r'^Done$'), 6)
-        check('B: the teach card (Done) floats over Grab', card is not None, cviews())
-        shot('b-teach-card')
-        # James builds the basket by hand:
+        card = wait_for(lambda: find(r'^Save$'), 8)
+        cv, _ = cviews()
+        check('B: the "Saving this order" card floats over Grab', card is not None and any('Saving this order' in n['text'] for n in cv), cv)
+        shot('b-browse-card')
         if wait_for(lambda: re.search(r'views \|Not now@(\d+),(\d+)', grablog()), 6):
             m = re.findall(r'views \|Not now@(\d+),(\d+)', grablog())[-1]; sx(f'input tap {m[0]} {m[1]}'); time.sleep(1.5)
         box = wait_for(lambda: gfind(r'Search for dishes'), 8)
         if box: tap(box); time.sleep(1); sx('input text krua'); time.sleep(1.5)
+        # A look at the burger place, then back out of it
+        r = wait_for(lambda: gfind(r'^Kruang Burger$'), 8)
+        if r: tap(r); time.sleep(2.5)
+        looked = 'screen menu Kruang Burger' in grablog()
+        sx('input keyevent KEYCODE_BACK'); time.sleep(2)
+        box = wait_for(lambda: gfind(r'Search for dishes'), 8)
+        if box: tap(box); time.sleep(1); sx('input text krua'); time.sleep(1.5)
         r = wait_for(lambda: gfind(r'^Krua Thai Kitchen$'), 8)
         if r: tap(r); time.sleep(2)
+        check('B: (by hand) looked at Kruang Burger, backed out, opened Krua Thai Kitchen', looked and 'screen menu Krua Thai Kitchen' in grablog(), grablog()[-300:])
         def add_by(item):
-            for _ in range(8):
+            for _ in range(10):
                 time.sleep(.8); ns = gviews()
                 it = next((n for n in ns if n['text'] == item), None)
                 if it and it['y'] > 1800: sx('input swipe 540 1500 540 1000 400'); time.sleep(1.2); continue  # keep clear of the basket bar
@@ -239,23 +250,59 @@ with (BASE / 'worker.lock').open('a') as lock:
                         return bool(wait_for(lambda: grablog().count('added ' + item) > before, 5, .3))
                 sx('input swipe 540 1700 540 1000 400'); time.sleep(1.2)
             return False
-        a1 = add_by('Kra pao moo saap'); a2 = add_by('Kra pao moo saap'); a3 = add_by('Thai iced tea')
-        check('B: (by hand) added 2× kra pao + 1× iced tea', a1 and a2 and a3, grablog()[-300:])
-        time.sleep(.8); tap_text(r'^View basket', pkg=GPKG); time.sleep(2)
-        check('B: (by hand) on checkout at ฿200', 'checkout total=200' in grablog(), grablog()[-200:])
-        shot('b-checkout-teach')
-        tap_text(r'^Done$'); time.sleep(3)
-        back = wait_for(lambda: PKG in top(), 10)
+        a1 = add_by('Kra pao moo saap'); a2 = add_by('Kra pao moo saap'); a3 = add_by('Thai iced tea'); a4 = add_by('Mango sticky rice')
+        check('B: (by hand) added 2× kra pao + iced tea + mango sticky rice', a1 and a2 and a3 and a4, grablog()[-300:])
+        time.sleep(2)
+        cv, _ = cviews()
+        line = next((n['text'] for n in cv if '×' in n['text']), '')
+        check('B: the card shows the basket so far', '2× Kra pao moo saap' in line and 'Thai iced tea' in line, cv)
+        shot('b-browse-basket')
+        tap_text(r'^View basket', pkg=GPKG); time.sleep(2)
+        # Changes his mind about dessert at checkout
+        def remove(item):
+            for _ in range(6):
+                ns = gviews()
+                it = next((n for n in ns if item in n['text']), None)
+                rm = it and sorted([n for n in ns if n['text'] == 'Remove' and abs(n['y'] - it['y']) < 120], key=lambda n: abs(n['y'] - it['y']))
+                if rm: tap(rm[0]); return bool(wait_for(lambda: ('removed ' + item) in grablog(), 5, .3))
+                time.sleep(1)
+            return False
+        rmd = remove('Mango sticky rice'); time.sleep(2)
+        check('B: (by hand) removed the mango sticky rice at checkout → ฿200', rmd and 'checkout total=200' in grablog(), grablog()[-300:])
+        shot('b-checkout')
+        orders0 = grablog().count('ORDER PLACED')
+        tap_text(r'^Place order', pkg=GPKG)
+        placed = wait_for(lambda: grablog().count('ORDER PLACED') > orders0, 8, .3)
+        gl = grablog()
+        check('B: his own tap on Place order in Grab places exactly one order (2× kra pao + iced tea, ฿200)',
+              placed and gl.count('ORDER PLACED') == 1 and 'ORDER PLACED total=200 items=2x Kra pao moo saap; 1x Thai iced tea;' in gl, gl[-300:])
+        saved = wait_for(lambda: find(r'^Rename$'), 8, .5)
+        cv, _ = cviews()
+        check('B: Wizard saves it by itself: "Saved to Usuals" with Rename over Grab\'s tracking screen',
+              saved is not None and any('Saved to Usuals' in n['text'] for n in cv) and GPKG in top(), (cv, top()))
+        shot('b-saved-card')
         lst = json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}')
         u = (lst.get('list') or [{}])[0]
         script = u.get('script', '')
         print('  recorded:', script.replace('\n', ' | '))
-        check('B: Done returns to Wizard OS with the usual saved', back and u.get('name') == 'Kra pao' and len(u.get('steps', [])) >= 5, (top(), u.get('name'), len(u.get('steps', []))))
-        check('B: recipe has the search, the restaurant and Add by the item (not screen spots)',
-              'type krua' in script and 'Krua Thai Kitchen' in script and 'tap Add @ Kra pao moo saap' in script and 'tap Add @ Thai iced tea' in script, script)
+        print('  usual:', {k: u.get(k) for k in ('name', 'basket', 'place', 'lastTotal', 'needsName', 'lastResult')})
+        check('B: named after the food', u.get('name') == 'Kra pao moo saap + Thai iced tea' and u.get('needsName') is True, u.get('name'))
+        check('B: basket and place read off the route', u.get('basket') == '2× Kra pao moo saap · 1× Thai iced tea' and u.get('place') == 'Krua Thai Kitchen', (u.get('basket'), u.get('place')))
+        check('B: route keeps the search, the restaurant and Add by the item',
+              'type krua' in script and 'tap Krua Thai Kitchen' in script and script.count('tap Add @ Kra pao moo saap') == 2 and 'tap Add @ Thai iced tea' in script, script)
+        check('B: the burger detour and the removed dessert are not in the route',
+              'Kruang' not in script and 'Mango' not in script and 'Remove' not in script and 'Place order' not in script, script)
         check('B: total read off checkout', u.get('lastTotal') == '฿200', u.get('lastTotal'))
-        check('B: no order placed while teaching', 'ORDER PLACED' not in grablog())
-        pg.close(); pg = page()
+        # Rename from the card
+        tap_text(r'^Rename$'); time.sleep(3)
+        back = wait_for(lambda: PKG in top(), 10)
+        pg.close(); pg = page(); time.sleep(1)
+        has_name = pg.ev("!!document.querySelector('.us-name input')")
+        check('B: Rename opens Usuals with the name field and what\'s in it', back and has_name and '2× Kra pao' in (pg.ev("document.querySelector('.us-name')?.innerText || ''") or ''), (top(), has_name))
+        shot('b-name')
+        pg.ev("(() => { const i = document.querySelector('.us-name input'); i.value = 'Kra pao'; document.querySelector('.us-name button[type=submit]').click(); })()"); time.sleep(.8)
+        lst = json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}'); u = (lst.get('list') or [{}])[0]
+        check('B: renamed to Kra pao, name field gone', u.get('name') == 'Kra pao' and not u.get('needsName') and not pg.ev("!!document.querySelector('.us-name')"), (u.get('name'), u.get('needsName')))
         pg.ev("window.WosUsuals.refresh()"); time.sleep(.5); shot('b-saved')
 
         # C. Run → cover → checkout, nothing ordered
@@ -270,7 +317,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         check(f'C: run reaches checkout under the cover ({secs}s)', ready is not None, log[-900:])
         check('C: the cover shows the total on Place order', ready is not None and '฿200' in (ready['text'] or ''), ready and ready['text'])
         check('C: the run closed Grab\'s promo pop-up by itself', 'popup closed' in grablog() or 'Not now' in log, '')
-        check('C: nothing ordered by the run', 'ORDER PLACED' not in grablog())
+        check('C: nothing ordered by the run', grablog().count('ORDER PLACED') == 1)
         check('C: basket is right (2 kra pao + iced tea → checkout ฿200)', grablog().count('checkout total=200') >= 2, grablog()[-300:])
         shot('c-ready')
 
@@ -278,7 +325,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         tap_text(r'^Look first$'); time.sleep(2)
         ul = uslog(); hidden = ul.rfind('cover hidden') > ul.rfind('cover frame')
         check('D: Look first leaves Grab on its checkout, uncovered', hidden and GPKG in top() and find(r'^Place order ฿200$', pkg=GPKG) is not None, (hidden, top()))
-        check('D: still nothing ordered', 'ORDER PLACED' not in grablog())
+        check('D: still nothing ordered', grablog().count('ORDER PLACED') == 1)
         shot('d-look-first')
 
         # E. Run again and order from the cover
@@ -288,9 +335,9 @@ with (BASE / 'worker.lock').open('a') as lock:
         ready = wait_for(lambda: find(r'^Place order'), 90, 1)
         check('E: second run reaches checkout', ready is not None, uslog()[-400:])
         if ready: tap(ready)
-        placed = wait_for(lambda: 'ORDER PLACED' in grablog(), 15, .5)
+        placed = wait_for(lambda: grablog().count('ORDER PLACED') >= 2, 15, .5)
         gl = grablog()
-        check('E: James\'s tap on Place order places exactly one order', placed and gl.count('ORDER PLACED') == 1, gl[-300:])
+        check('E: James\'s tap on Place order places exactly one more order', placed and gl.count('ORDER PLACED') == 2, gl[-300:])
         check('E: the order is 2× kra pao + 1× iced tea, ฿200', 'ORDER PLACED total=200 items=2x Kra pao moo saap; 1x Thai iced tea;' in gl, gl[-200:])
         time.sleep(1.5); shot('e-ordered')
         wait_for(lambda: find(r'^Ordered') is None, 6, .5)
@@ -304,9 +351,21 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('F: …and sends nothing to Wizard', len(WRITES) == n0, WRITES[n0:])
         ready = wait_for(lambda: find(r'^Place order'), 90, 1)
         tap_text(r'^Cancel$'); time.sleep(2)
-        check('F: Cancel on the cover: nothing ordered, back in Wizard OS', grablog().count('ORDER PLACED') == 1 and PKG in top(), top())
+        check('F: Cancel on the cover: nothing ordered, back in Wizard OS', grablog().count('ORDER PLACED') == 2 and PKG in top(), top())
         nm = pg.ev("window.WosUsuals.match('what is a good kra pao place')")
         check('F: ordinary talk about kra pao does not start an order', nm == '', nm)
+        nm2 = pg.ev("window.WosUsuals.match('I want something else')")
+        check('F: "I want something else" is ordinary talk too', nm2 == '', nm2)
+        # "Order something new" by voice opens Grab to browse; "Don't save" leaves nothing behind
+        pg.close(); pg = page()
+        n0 = len(WRITES); c0 = len(json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}').get('list') or [])
+        pg.ev("window.__wos.handleText('Order something new', 'auto')")
+        card = wait_for(lambda: find(r'^Save$'), 15, .5)
+        check('F: "order something new" opens Grab with the Saving card', card is not None and GPKG in top() and len(WRITES) == n0, (top(), WRITES[n0:]))
+        tap_text(r'^✕$'); time.sleep(2.5)
+        pg.close(); pg = page()
+        c1 = len(json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}').get('list') or [])
+        check('F: ✕ (don\'t save) → back in Wizard OS, no new usual, no order', PKG in top() and c1 == c0 and grablog().count('ORDER PLACED') == 2, (top(), c0, c1))
 
         # G. Back from the edit sheet stays in the app
         pg.close(); pg = page()

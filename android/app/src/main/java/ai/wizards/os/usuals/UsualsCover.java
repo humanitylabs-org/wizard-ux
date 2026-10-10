@@ -84,7 +84,7 @@ final class UsualsCover {
     void hide() {
         if (view != null && ai.wizards.os.BuildConfig.DEBUG) Log.i(UsualsRunner.TAG, "cover hidden");
         if (view != null && wm != null) { try { wm.removeView(view); } catch (Exception ignored) { } }
-        view = null; teachCountView = null;
+        view = null; teachCountView = null; saved = false;
     }
 
     /** Lets one synthetic tap through to Grab (only used when Grab ignores a direct click). */
@@ -101,7 +101,7 @@ final class UsualsCover {
      * A small card on the right edge, half way down: Grab's search bar (top) and basket/checkout buttons (bottom)
      * stay clear. It can be dragged up and down if it sits on something.
      */
-    void showTeachBar(String name) {
+    void showTeachBar(String name, boolean browsing) {
         LinearLayout card = new LinearLayout(ctx());
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(12), dp(10), dp(12), dp(10));
@@ -110,14 +110,16 @@ final class UsualsCover {
         bg.setColor(Color.argb(242, 22, 14, 44));
         bg.setStroke(dp(1), Color.argb(120, 170, 130, 255));
         card.setBackground(bg);
-        TextView t = text("Teaching", 11, Color.argb(210, 190, 170, 255), true);
-        TextView n = text(name, 14, Color.WHITE, true); n.setMaxWidth(dp(130)); n.setSingleLine(true); n.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        teachCountView = text("0 steps", 11, Color.argb(190, 220, 210, 255), false);
+        TextView t = text(browsing ? "Saving this order" : "Teaching", 11, Color.argb(210, 190, 170, 255), true);
+        TextView n = text(name, 14, Color.WHITE, true); n.setMaxWidth(dp(150)); n.setSingleLine(true); n.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        teachCountView = text(browsing ? "Saves when you order" : "0 steps", 11, Color.argb(190, 220, 210, 255), false);
+        teachCountView.setMaxWidth(dp(150)); teachCountView.setMaxLines(3); teachCountView.setEllipsize(android.text.TextUtils.TruncateAt.END);
         card.addView(t); card.addView(n); card.addView(teachCountView);
         LinearLayout btns = row();
-        Button cancel = button("✕", false); cancel.setContentDescription("Cancel teaching");
+        Button cancel = button("✕", false); cancel.setContentDescription(browsing ? "Don't save this order" : "Cancel teaching");
         cancel.setOnClickListener(v -> runner.cancel());
-        Button done = button("Done", true); done.setContentDescription("Done teaching");
+        // Browsing: ordering in Grab saves it; Save is for "keep this basket without ordering now".
+        Button done = button(browsing ? "Save" : "Done", true); done.setContentDescription(browsing ? "Save without ordering" : "Done teaching");
         done.setOnClickListener(v -> runner.finishTeach());
         btns.addView(cancel, new LinearLayout.LayoutParams(dp(40), dp(38)));
         LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(38)); dl.leftMargin = dp(6);
@@ -125,27 +127,79 @@ final class UsualsCover {
         LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT); bl.topMargin = dp(8);
         card.addView(btns, bl);
         show(card, false);
+        saved = false;
         if (lp != null && view != null) {
             lp.width = WindowManager.LayoutParams.WRAP_CONTENT;
             lp.gravity = Gravity.END | Gravity.TOP;
             lp.y = ctx().getResources().getDisplayMetrics().heightPixels * 2 / 5;
             try { wm.updateViewLayout(view, lp); } catch (Exception ignored) { }
-            final float[] down = new float[2];
-            card.setOnTouchListener((v, e) -> {
-                switch (e.getActionMasked()) {
-                    case android.view.MotionEvent.ACTION_DOWN: down[0] = e.getRawY(); down[1] = lp.y; return true;
-                    case android.view.MotionEvent.ACTION_MOVE:
-                        lp.y = Math.max(dp(40), Math.round(down[1] + e.getRawY() - down[0]));
-                        try { wm.updateViewLayout(view, lp); } catch (Exception ignored) { }
-                        return true;
-                    default: return true;
-                }
-            });
+            draggable(card);
         }
+    }
+
+    private void draggable(View card) {
+        final float[] down = new float[2];
+        card.setOnTouchListener((v, e) -> {
+            switch (e.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN: down[0] = e.getRawY(); down[1] = lp.y; return true;
+                case android.view.MotionEvent.ACTION_MOVE:
+                    lp.y = Math.max(dp(40), Math.round(down[1] + e.getRawY() - down[0]));
+                    try { wm.updateViewLayout(view, lp); } catch (Exception ignored) { }
+                    return true;
+                default: return true;
+            }
+        });
     }
 
     void teachCount(int n) {
         if (teachCountView != null) teachCountView.setText(n + (n == 1 ? " step" : " steps") + (n > 0 ? " · Done at checkout" : ""));
+    }
+
+    /** Browsing: the basket so far, e.g. "2× Kra pao moo saap · 1× Thai iced tea". */
+    void teachLine(String s) {
+        if (teachCountView != null && !s.contentEquals(teachCountView.getText())) { teachCountView.setText(s); qaDump(); }
+    }
+
+    /** Off while he's in another app (the card belongs on Grab), back when Grab is. */
+    void teachVisible(boolean on) {
+        if (view == null || full) return;
+        view.setVisibility(on ? View.VISIBLE : View.GONE);
+        if (on) qaDump();
+    }
+
+    private boolean saved;
+    boolean showingSaved() { return saved && view != null; }
+
+    /** After he ordered in Grab: a small card on Grab's tracking screen. "Saved as Kra pao · Rename". */
+    void showSaved(String name) {
+        LinearLayout card = new LinearLayout(ctx());
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(14), dp(10), dp(14), dp(12));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(18));
+        bg.setColor(Color.argb(245, 14, 34, 22));
+        bg.setStroke(dp(1), Color.argb(150, 0, 200, 95));
+        card.setBackground(bg);
+        card.addView(text("Saved to Usuals ✓", 12, Color.rgb(120, 230, 160), true));
+        TextView n = text(name, 15, Color.WHITE, true); n.setSingleLine(true); n.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        card.addView(n);
+        LinearLayout btns = row();
+        Button ok = button("OK", false); ok.setOnClickListener(v -> hide());
+        Button ren = button("Rename", true); ren.setContentDescription("Rename this usual");
+        ren.setOnClickListener(v -> runner.renameSaved());
+        btns.addView(ok, new LinearLayout.LayoutParams(dp(64), dp(38)));
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(38)); rl.leftMargin = dp(8);
+        btns.addView(ren, rl);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT); bl.topMargin = dp(8);
+        card.addView(btns, bl);
+        show(card, false);
+        if (lp != null && view != null) {
+            lp.width = WindowManager.LayoutParams.WRAP_CONTENT;
+            lp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
+            lp.y = dp(64);
+            try { wm.updateViewLayout(view, lp); } catch (Exception ignored) { }
+        }
+        saved = true;
     }
 
     /* ------------------------------------------------------------------ run cover */

@@ -94,6 +94,131 @@ public class UsualsPolicyTest {
         assertEquals(-1, UsualsPolicy.matchVoice(Arrays.asList("Kra pao chicken", "Kra pao pork"), "order kra pao")); // tie: ask
     }
 
+    /* ---------------- browse first ("Order something new") ---------------- */
+
+    private long now;
+    private final List<UsualsPolicy.Rec> recs = new ArrayList<>();
+    private void screen(String name) { now += 700; recs.add(UsualsPolicy.Rec.screen(name, now)); }
+    private void tapAt(String l, String near) { now += 300; recs.add(UsualsPolicy.Rec.of(tap(l, near), now)); }
+    private void typeAt(String txt) { now += 150; recs.add(UsualsPolicy.Rec.of(type(txt), now)); }
+    private String route(List<String> checkout) { return UsualsPolicy.write(UsualsPolicy.tidy(UsualsPolicy.path(recs, checkout))); }
+
+    @Test public void browsingDetoursAreTakenOut() {
+        screen("home");
+        tapAt("Not now", "");
+        typeAt("k"); typeAt("kr"); typeAt("krua");
+        screen("results");
+        tapAt("Kruang Burger", "");          // a look...
+        screen("menu kruang");
+        tapAt("Reviews", "");
+        screen("reviews");
+        screen("menu kruang");               // back
+        screen("results");                   // back again: nothing ordered there
+        tapAt("Krua Thai Kitchen", "");
+        screen("menu krua");
+        tapAt("Add", "Kra pao moo saap");
+        tapAt("Add", "Kra pao moo saap");
+        tapAt("Add", "Thai iced tea");
+        tapAt("View basket · 3 items", "");
+        screen("checkout");
+        assertEquals("tap Not now\ntype krua\ntap Krua Thai Kitchen\ntap Add @ Kra pao moo saap\ntap Add @ Kra pao moo saap\n"
+                + "tap Add @ Thai iced tea\ntap View basket · 3 items", route(null));
+        List<UsualsPolicy.Step> st = UsualsPolicy.tidy(UsualsPolicy.path(recs, null));
+        java.util.Map<UsualsPolicy.Step, String> items = UsualsPolicy.items(recs);
+        assertEquals("2× Kra pao moo saap · 1× Thai iced tea", UsualsPolicy.basketLine(st, items));
+        assertEquals("Kra pao moo saap + Thai iced tea", UsualsPolicy.suggestName(st, items));
+        assertEquals("Krua Thai Kitchen", UsualsPolicy.place(st, items));
+    }
+
+    @Test public void itemPageLoopIsKept() {
+        // Menu → dish page → options → "Add to basket" → back on the menu: a loop that put food in the basket.
+        screen("home");
+        tapAt("Krua Thai Kitchen", "");
+        screen("menu");
+        tapAt("Kra pao moo saap", "");
+        screen("dish");
+        tapAt("Pork", "");
+        tapAt("Add to basket · ฿65", "");
+        screen("menu");
+        tapAt("Som tam thai", "");           // a look at another dish, backed out of
+        screen("dish 2");
+        screen("menu");
+        tapAt("View basket · 1 item", "");
+        screen("checkout");
+        assertEquals("tap Krua Thai Kitchen\ntap Kra pao moo saap\ntap Pork\ntap Add to basket · ฿65\ntap View basket · 1 item", route(null));
+        List<UsualsPolicy.Step> st = UsualsPolicy.tidy(UsualsPolicy.path(recs, null));
+        java.util.Map<UsualsPolicy.Step, String> items = UsualsPolicy.items(recs);
+        assertEquals("1× Kra pao moo saap", UsualsPolicy.basketLine(st, items));
+        assertEquals("Kra pao moo saap", UsualsPolicy.suggestName(st, items));
+        assertEquals("Krua Thai Kitchen", UsualsPolicy.place(st, items));
+    }
+
+    @Test public void removedItemsLeaveTheRecipe() {
+        screen("menu");
+        tapAt("Add", "Kra pao moo saap");
+        tapAt("Add", "Pad thai");
+        tapAt("Add", "Thai iced tea");
+        tapAt("−", "Thai iced tea");         // changed his mind with the stepper
+        tapAt("View basket · 2 items", "");
+        screen("checkout");
+        // ...and took the pad thai out on the checkout screen: the final basket only lists the kra pao.
+        assertEquals("tap Add @ Kra pao moo saap\ntap View basket · 2 items",
+                route(Arrays.asList("Review order", "1× Kra pao moo saap   ฿65", "Delivery fee ฿25", "Total", "฿90", "Place order ฿90")));
+    }
+
+    @Test public void basketChangersAndAddresses() {
+        assertTrue(UsualsPolicy.isAddLabel("Add"));
+        assertTrue(UsualsPolicy.isAddLabel("Add to basket · ฿65"));
+        assertTrue(UsualsPolicy.isAddLabel("+"));
+        assertTrue(UsualsPolicy.isAddLabel("เพิ่ม"));
+        assertFalse(UsualsPolicy.isAddLabel("Address"));
+        assertFalse(UsualsPolicy.isAddLabel("Add a note for the driver"));
+        assertFalse(UsualsPolicy.isAddLabel("Place order ฿245"));
+        assertTrue(UsualsPolicy.isRemoveLabel("−"));
+        assertTrue(UsualsPolicy.isRemoveLabel("Remove"));
+    }
+
+    @Test public void screenFingerprintsIgnoreCountsAndPrices() {
+        assertEquals(UsualsPolicy.sig(Arrays.asList("Krua Thai Kitchen", "View basket · 2 items", "฿65")),
+                UsualsPolicy.sig(Arrays.asList("Krua Thai Kitchen", "View basket · 3 items", "฿130")));
+        assertFalse(UsualsPolicy.sig(Arrays.asList("Krua Thai Kitchen")).equals(UsualsPolicy.sig(Arrays.asList("Som Tam Nua"))));
+    }
+
+    @Test public void orderSomethingNewByVoice() {
+        for (String s : new String[]{"Order something new", "order something", "Hey Wizard, order something new.", "order food",
+                "order something from Grab", "get me some food", "get me food from grab", "order something to eat", "grab me something to eat"})
+            assertTrue(s, UsualsPolicy.isBrowse(s));
+        for (String s : new String[]{"I want something else", "order my usual kra pao", "get me a taxi", "what should I order",
+                "order a taxi to the airport", "get me something"})
+            assertFalse(s, UsualsPolicy.isBrowse(s));
+    }
+
+    @Test public void namesKeepItShort() {
+        List<UsualsPolicy.Step> st = Arrays.asList(tap("Krua Thai Kitchen", ""), tap("Add", "Kra pao moo saap"), tap("Add", "Pad thai"),
+                tap("Add", "Thai iced tea"), tap("Add", "Pad thai"));
+        assertEquals("Pad thai + 2 more", UsualsPolicy.suggestName(st, null));
+        assertEquals("Grab order", UsualsPolicy.suggestName(new ArrayList<>(), null));
+    }
+
+    @Test public void promoPopUpClosersSurvive() {
+        screen("home");
+        screen("promo");
+        tapAt("Not now", "");
+        screen("home");                     // "back" from the pop-up
+        typeAt("krua");
+        screen("results");
+        tapAt("Krua Thai Kitchen", "");
+        screen("menu");
+        tapAt("Add", "Kra pao moo saap");
+        assertEquals("tap Not now\ntype krua\ntap Krua Thai Kitchen\ntap Add @ Kra pao moo saap", route(null));
+    }
+
+    @Test public void basketButtonsMatchWhateverTheCount() {
+        assertEquals(3, UsualsPolicy.score("View basket · 4 items", "", "View basket · 3 items", ""));
+        assertEquals(3, UsualsPolicy.score("View Basket 2 Items ฿245", "", "View Basket 3 Items ฿280", ""));
+        assertEquals(0, UsualsPolicy.score("฿65", "", "฿80", ""));
+    }
+
     private static UsualsPolicy.Step tap(String l, String near) { return new UsualsPolicy.Step("tap", l, "", near, .5f, .5f); }
     private static UsualsPolicy.Step type(String t) { return new UsualsPolicy.Step("type", t, "", "", -1, -1); }
 }
