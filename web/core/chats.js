@@ -610,7 +610,7 @@ window.WizCore.chats = function createChats(H) {
     const w = W[wid]; text = String(text || '').trim(); if (!w) return;
     const c = ch(wid);
     const sid = opts.sid || w.thread; if (!sid) return;
-    const here = w.thread === sid; // the window still shows the thread this was sent from
+    const here = !opts.away && w.thread === sid; // the window still shows the thread this was sent from (opts.away: sent from elsewhere, e.g. a review desk)
     const tray = here ? (c.files || []) : [];
     const files = [...(opts.files || []), ...tray].filter(f => f && f.id && !f.uploading).filter((f, i, a) => a.findIndex(x => x.id === f.id) === i);
     if (!text && !files.length && !audio) return;
@@ -628,7 +628,7 @@ window.WizCore.chats = function createChats(H) {
     // and a reply alike, so he never waits on the screen to watch it go. The list carries the proof: the
     // Sending section until Wizard takes it (Retry/Edit there if it can't), then the thread under Working.
     // Keyed on the pinned thread: a thread James opened since stays open.
-    leaveAfterSend(wid, sid, isNew, how);
+    if (!opts.away) leaveAfterSend(wid, sid, isNew, how);
     renderChats(W[wid]); applyLayout(deskOf(wid));
   }
   const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });

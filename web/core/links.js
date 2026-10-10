@@ -216,6 +216,8 @@
       // A link to this app itself (…/wizard-os-home/?session=…, ?view=…) opens in place, not in a sheet.
       const DL = window.WizCore && window.WizCore.deeplink;
       if (DL && DL.route(u.href)) return;
+      // The phone shell can claim a link (sheet.route) to open it on a desk of its own instead of the sheet.
+      if (sheet.route && sheet.route(u.href, a)) return;
       sheet.open(u.href);
     }, true);
   }
@@ -229,7 +231,7 @@
     if (!doc || doc.__wizLinkGuard) return; doc.__wizLinkGuard = true;
     const home = String(base || '').split(/[?#]/)[0].replace(/[^/]*$/, '') || '/';
     const leaves = (u, tgt) => u.origin !== ORIGIN || /^_(blank|top|parent)$/i.test(tgt || '') || (home !== '/' && !u.pathname.startsWith(home));
-    const go = u => { if (u.origin === ORIGIN) sheet.open(u.href); else external(u); };
+    const go = u => { if (u.origin !== ORIGIN) return external(u); let fe = null; try { fe = win.frameElement; } catch (e) {} if (sheet.route && sheet.route(u.href, fe)) return; sheet.open(u.href); };
     doc.addEventListener('click', e => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
