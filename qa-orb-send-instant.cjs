@@ -57,6 +57,11 @@ async function sendFromThread(p, wid, X) {
   return Date.now() - t0;
 }
 const pill = p => p.evaluate(() => { const t = document.querySelector('#voice .transcript'); return document.querySelector('#voice')?.classList.contains('tx') ? (document.querySelector('#txRouteText')?.textContent || '') : ''; });
+// Which list section X sits in right now (Wizard's Work sections, as the Chats list groups them).
+const sectionOf = (p, x) => p.evaluate(id => { const g = __wos.live.workGroups(); for (const [k, l] of Object.entries(g)) if (l.some(s => s.id === id)) return k; return ''; }, x);
+const domSection = (p, x) => p.evaluate(id => document.querySelector(`[data-sec] [data-chopen="${id}"]`)?.closest('[data-sec]')?.dataset.sec || '', x);
+// Sample X's section every 150 ms for ms: every sample must be Working (no flash into Ready).
+async function watchSection(p, x, ms) { const seen = new Set(); const end = Date.now() + ms; while (Date.now() < end) { seen.add(await sectionOf(p, x)); await sleep(150); } return [...seen]; }
 const thread = (p, wid) => p.evaluate(w => __wos.wins[w].thread, wid);
 
 (async () => {
@@ -70,11 +75,17 @@ const thread = (p, wid) => p.evaluate(w => __wos.wins[w].thread, wid);
     const ms = await sendFromThread(p, wid, X);
     ok(ms < 1000, `slow line: back on the thread list within 1 s of the send tap (${ms} ms)`);
     ok(/Sending/.test(await pill(p)), 'slow line: the pill above the orb says Sending… while it works', await pill(p));
+    ok(await sectionOf(p, X) === 'working', 'slow line: the thread just left is under Working at once, not Ready', await sectionOf(p, X));
+    const ds = await domSection(p, X);
+    ok(ds !== 'ready', 'slow line: the list on screen does not show it under Ready', ds);
+    const during = await watchSection(p, X, 2500);
+    ok(during.length === 1 && during[0] === 'working', 'slow line: it stays in Working while the words are transcribed (no flash into Ready)', during.join(','));
     if (SHOTS) await p.screenshot({ path: `${SHOTS}/instant-list.png` });
     // James keeps using the phone: he opens thread Y while X's reply is still transcribing.
     await p.evaluate(([w, y]) => __wos.openChat(w, y), [wid, Y]); await p.waitForTimeout(600);
     ok(await p.evaluate(() => __wos.voice) === 'think', 'orb is still finishing the send in the background');
-    await p.waitForTimeout(9000);
+    const after = await watchSection(p, X, 7000);
+    ok(!after.includes('ready'), 'slow line: still never in Ready once delivered (held until Wizard reports the run)', after.join(','));
     const runs = runsOf(writes);
     ok(runs.length === 1 && runs[0].session_id === X, 'slow line: the reply lands in X (where it was sent)', JSON.stringify(runs.map(r => r.session_id)) + ` X=${X}`);
     ok(steersOf(writes).length === 0 && !runs.some(r => r.session_id === Y), 'nothing goes into Y, the thread opened meanwhile');
@@ -89,6 +100,7 @@ const thread = (p, wid) => p.evaluate(w => __wos.wins[w].thread, wid);
     R.sttDelay = 120000; writes.length = 0;
     const ms = await sendFromThread(p, wid, X);
     ok(ms < 1000, `hung line: back on the list within 1 s (${ms} ms)`);
+    ok(await sectionOf(p, X) === 'working', 'hung line: the thread is under Working at once', await sectionOf(p, X));
     await p.waitForFunction(() => __wos.voice === 'idle', null, { timeout: 20000 }).catch(() => {});
     const ob = await p.evaluate(() => window.WosOutbox.unsent().map(it => ({ kind: it.kind, sid: it.sessionId, audio: !!(it.audio || it.audioFile) })));
     ok(ob.some(it => it.kind === 'reply' && it.sid === X && it.audio), 'hung line: the recording is saved in the outbox as a reply to X', JSON.stringify(ob));
@@ -108,6 +120,7 @@ const thread = (p, wid) => p.evaluate(w => __wos.wins[w].thread, wid);
     await p.waitForFunction(w => !__wos.wins[w].thread, wid, { timeout: 15000 }).catch(() => {});
     const ms = Date.now() - t0;
     ok(ms < 1000, `offline: back on the list within 1 s (${ms} ms)`);
+    ok(await sectionOf(p, X) === 'working', 'offline: the thread is under Working at once', await sectionOf(p, X));
     await p.waitForTimeout(1200);
     ok(/Saved/.test(await pill(p)) || await p.evaluate(() => __wos.voice) === 'idle', 'offline: pill says Saved · sends when Wizard is back', await pill(p));
     // (Playwright's route handler still answers while offline, so the item may already read 'sent': check it exists.)
@@ -119,6 +132,20 @@ const thread = (p, wid) => p.evaluate(w => __wos.wins[w].thread, wid);
     const runs = runsOf(writes);
     ok(runs.some(r => r.session_id === X), 'back online: the reply is delivered to X', JSON.stringify(runs.map(r => r.session_id)));
     ok(errs.length === 0, 'no page errors (3)', errs.join(' | '));
+    await ctx.close();
+  }
+  // 4. A take with no speech: the hold lets go and the thread returns to where it was (nothing was sent).
+  {
+    const { ctx, p, writes, errs, R } = await boot(b);
+    const wid = await chatsWin(p); const [X] = await pickThreads(p);
+    await p.evaluate(x => { const s = __wos.live.session(x); if (s) Object.assign(s, { status: 'completed', runId: '' }); }, X);
+    const before = await sectionOf(p, X);
+    R.words = ''; R.sttDelay = 1500; writes.length = 0;
+    await sendFromThread(p, wid, X);
+    ok(await sectionOf(p, X) === 'working', 'empty take: Working right after the tap', await sectionOf(p, X));
+    await p.waitForTimeout(5000);
+    ok(await sectionOf(p, X) === before && runsOf(writes).length === 0, `empty take: back in ${before}, nothing sent`, await sectionOf(p, X));
+    ok(errs.length === 0, 'no page errors (4)', errs.join(' | '));
     await ctx.close();
   }
   await b.close();
