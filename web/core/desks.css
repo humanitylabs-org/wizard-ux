@@ -15,16 +15,21 @@
 :root { --rv: #ffb84d; --rv-2: #ffcf85; }
 .win.reviewing { border-color: rgba(255, 184, 77, .55); box-shadow: 0 0 0 1px rgba(255, 184, 77, .35), 0 10px 40px rgba(255, 160, 40, .12); }
 .win.reviewing .wbar { background: linear-gradient(90deg, rgba(255, 184, 77, .16), rgba(255, 184, 77, .04)); border-bottom-color: rgba(255, 184, 77, .3); }
-.rv-tag { flex: 0 0 auto; padding: 2px 7px; border-radius: 99px; background: rgba(255, 184, 77, .22); color: var(--rv-2); font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.wbar .wpin { width: auto !important; padding: 0 9px; border-radius: 99px; background: rgba(205, 190, 255, .12); color: var(--ink); font-size: 12px; font-weight: 700; }
-.win.reviewing .wbar .wpin { background: rgba(255, 184, 77, .2); color: var(--rv-2); }
-.rv-chip { position: absolute; left: 50%; bottom: calc(var(--dock-h) + var(--safe-b) + 6px); z-index: 45; transform: translate(-50%, 8px); max-width: calc(100% - 40px);
-  display: flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 99px; pointer-events: none; opacity: 0; transition: opacity 220ms var(--ease), transform 260ms var(--ease);
-  background: rgba(40, 26, 6, .82); border: 1px solid rgba(255, 184, 77, .4); color: var(--rv-2); font-size: 12px; white-space: nowrap; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-.rv-chip span { overflow: hidden; text-overflow: ellipsis; }
-.rv-chip b { color: #fff3dd; font-weight: 700; }
-.rv-chip i { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--rv); box-shadow: 0 0 8px var(--rv); }
-.device.reviewing:not(.link-open):not(.sheet-open):not(.ov-open) .rv-chip { opacity: 1; transform: translate(-50%, 0); }
+.rv-tag { flex: 0 0 auto; margin-left: -2px; padding: 2px 7px; border-radius: 99px; background: rgba(255, 184, 77, .2); color: var(--rv-2); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.win.reviewing .wbar .wt { flex: 0 1 auto; }
+.win.reviewing .wbar .rv-tag + * { margin-left: auto; }
+/* Pin is an action, the tag is a label: outlined, neutral ink, pin icon. */
+.wbar .wpin { display: inline-flex; align-items: center; gap: 4px; width: auto !important; height: 26px; padding: 0 10px 0 7px; border-radius: 9px; background: transparent; border: 1px solid rgba(236, 232, 255, .28); color: var(--ink); font-size: 12px; font-weight: 650; }
+.wbar .wpin svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.wbar .wpin:active { background: rgba(236, 232, 255, .12); }
+.rv-coach { position: absolute; inset: 0; z-index: 90; display: flex; align-items: flex-end; justify-content: center; padding: 0 18px calc(var(--dock-h) + var(--safe-b) + 18px); background: rgba(5, 3, 12, .55); opacity: 0; transition: opacity 220ms var(--ease); }
+.rv-coach.open { opacity: 1; }
+.rv-card { width: 100%; max-width: 380px; padding: 16px 16px 14px; border-radius: 20px; background: rgba(28, 20, 8, .96); border: 1px solid rgba(255, 184, 77, .45); box-shadow: 0 18px 50px rgba(0, 0, 0, .5); color: #f3ead9; font-size: 14px; line-height: 1.45; transform: translateY(12px); transition: transform 260ms var(--ease); }
+.rv-coach.open .rv-card { transform: translateY(0); }
+.rv-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--rv-2); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.rv-h i { width: 8px; height: 8px; border-radius: 50%; background: var(--rv); box-shadow: 0 0 8px var(--rv); }
+.rv-card p { margin: 0 0 6px; } .rv-card b { color: #fff; }
+.rv-ok { display: block; width: 100%; margin-top: 10px; height: 40px; border: 0; border-radius: 12px; background: rgba(255, 184, 77, .9); color: #2a1a00; font: inherit; font-weight: 800; }
 .device.reviewing .orb-ring { box-shadow: 0 0 0 2px rgba(255, 184, 77, .55), 0 0 22px rgba(255, 170, 60, .35); border-radius: 50%; }
 .device.reviewing .desk-label { display: none; }
 

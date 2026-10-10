@@ -202,8 +202,8 @@
     const el = document.createElement('article');
     const rv = !!(w.from && w.from.sid);
     el.className = `win app-${w.app}${rv ? ' reviewing' : ''}`; el.dataset.win = w.id;
-    el.innerHTML = `<header class="wbar"><span class="wic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</span>${rv ? '<span class="rv-tag">Review</span>' : ''}<span class="wt">${esc(winTitle(w))}</span>
-      ${w.from ? '<button class="wb wpin" data-wact="pin" aria-label="Pin this desk" title="Keep it as a normal desk">Pin</button>' : ''}
+    el.innerHTML = `<header class="wbar"><span class="wic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</span><span class="wt">${esc(winTitle(w))}</span>${rv ? '<span class="rv-tag">Review</span>' : ''}
+      ${w.from ? '<button class="wb wpin" data-wact="pin" aria-label="Pin this desk" title="Keep it as a normal desk"><svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3v1H7v-1l3-3-1-6zM12 14v6"/></svg><span>Pin</span></button>' : ''}
       <button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
       <button class="wb" data-wact="menu" aria-label="Window options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
       <button class="wb" data-wact="close" aria-label="Close window"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button></header>
@@ -689,13 +689,26 @@
     const el = winEl(id); if (el) { el.classList.remove('reviewing'); el.querySelector('[data-wact="pin"]')?.remove(); el.querySelector('.rv-tag')?.remove(); }
     applyLayout(deskOf(id)); renderDots(); syncReviewChip(); toast('📌', 'Pinned · it stays as a normal desk', 1600);
   }
-  // Review mode marker above the orb: says where what James says will go.
-  const rvChip = document.createElement('div'); rvChip.id = 'rvChip'; rvChip.className = 'rv-chip'; rvChip.setAttribute('aria-live', 'polite');
-  device.appendChild(rvChip);
+  /* Review mode: the amber orb ring is the only lasting marker (James, 10 Oct 2026: no persistent chip).
+   * The first time a review desk opens, a one-off card explains it; tap anywhere or Back dismisses it. */
+  let rvCoach = null;
+  function closeReviewCoach() { if (!rvCoach) return false; const el = rvCoach; rvCoach = null; el.classList.remove('open'); setTimeout(() => el.remove(), 240); return true; }
+  function showReviewCoach(f) {
+    if (rvCoach || store.get('rvCoached', false)) return;
+    store.set('rvCoached', true);
+    rvCoach = document.createElement('div'); rvCoach.className = 'rv-coach'; rvCoach.setAttribute('role', 'dialog'); rvCoach.setAttribute('aria-label', 'Review mode');
+    rvCoach.innerHTML = `<div class="rv-card"><div class="rv-h"><i></i>Review mode</div>
+      <p><b>Tap the orb and talk.</b> Your feedback goes to <b>${esc(clip(LIVE?.session(f.from.sid)?.title || (f.from.title !== 'Thread' && f.from.title) || 'the thread you came from', 48))}</b>.</p>
+      <p><b>Pin</b> keeps this as a normal desk.</p>
+      <p><b>Back</b> or <b>✕</b> closes it and takes you back.</p>
+      <button class="rv-ok" type="button">Got it</button></div>`;
+    rvCoach.addEventListener('click', () => closeReviewCoach());
+    device.appendChild(rvCoach); void rvCoach.offsetWidth; rvCoach.classList.add('open');
+  }
   function syncReviewChip() {
     const f = desks[idx] ? W[desks[idx].focus] : null, on = !!(f && f.from && f.from.sid);
     device.classList.toggle('reviewing', on);
-    if (on) rvChip.innerHTML = `<i></i><span>Orb → feedback to <b>${esc(clip(f.from.title || 'the thread', 34))}</b></span>`;
+    if (on) showReviewCoach(f); else closeReviewCoach();
   }
   /* Quick search: results open in the link sheet over whatever James is doing (no thread, no desk change). */
   function openSearch(query, tab) {
@@ -2314,6 +2327,7 @@
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
     if (closeOverview()) return 'overview';
+    if (closeReviewCoach()) return 'review-coach';
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet) { closeSheets(); return 'sheet'; }
     const d = desks[idx], f = W[d.focus];
