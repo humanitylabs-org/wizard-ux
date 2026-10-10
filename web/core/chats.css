@@ -262,6 +262,14 @@ a.fchip { color: inherit; text-decoration: none; }
 .mv-bar button { min-width: 44px; padding: 10px 16px; border-radius: 99px; font-size: 14px; font-weight: 700; color: var(--ink); background: rgba(205, 190, 255, .1); border: 1px solid var(--line-2); }
 .mv-bar button[data-mv="prev"], .mv-bar button[data-mv="next"] { font-size: 20px; padding: 6px 14px; }
 .mviewer.zoomed .mv-bar, .mviewer.zoomed .mv-top { opacity: .25; }
+.mv-menu { position: absolute; inset: 0; z-index: 2; display: flex; align-items: flex-end; background: rgba(3, 1, 10, .45); animation: ch-fade 140ms both; touch-action: manipulation; }
+.mv-menu[hidden] { display: none !important; }
+.mviewer.menu-open .mv-bar { visibility: hidden; }
+.mv-menu-b { width: 100%; padding: 8px 8px calc(12px + var(--safe-b, 0px)); border-radius: 18px 18px 0 0; background: rgb(20, 13, 44); border-top: 1px solid var(--line-2); }
+.mv-menu-t { display: block; padding: 8px 12px 10px; font-size: 13px; font-weight: 750; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mv-menu-b button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 12px; border-radius: 12px; font-size: 15px; font-weight: 650; color: var(--ink); text-align: left; }
+.mv-menu-b button:active { background: rgba(205, 190, 255, .1); }
+.mv-menu-b [data-mvm="cancel"] { justify-content: center; color: var(--ink-3); }
 /* The desktop shell has no #device frame: the viewer covers the browser window. */
 body > .mviewer { position: fixed; z-index: 200; }
 

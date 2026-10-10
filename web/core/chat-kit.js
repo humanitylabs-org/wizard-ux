@@ -378,6 +378,7 @@
     const blob = await fetchBlob(item.url);
     const type = blob.type || item.mime || 'application/octet-stream';
     let name = item.name && item.name !== 'Image' ? item.name : `wizard-image${extFor(type) || '.png'}`;
+    if (extFor(type) && !/\.[a-z0-9]{2,5}$/i.test(name)) name += extFor(type); // a search title has no extension
     return new File([blob], name, { type });
   }
   async function shareFile(item) {
@@ -388,10 +389,24 @@
     }
     return 'unsupported';
   }
+  // The Android app (0.8.4+) hands any download its WebView sees to Android's download manager: the file lands in
+  // Downloads with a notification, and the app's own toast says so. The WebView can't save a blob it holds itself,
+  // so Save points it at the file's real URL instead (item.download names the file, e.g. Wizard Search's ?dl=title).
+  const appDownloads = () => {
+    const m = /WizardOS-Android\/(\d+)\.(\d+)\.(\d+)/.exec(navigator.userAgent || '');
+    return !!m && (+m[1] * 1e6 + +m[2] * 1e3 + +m[3]) >= 8004; // DownloadListener → DownloadManager since 0.8.4
+  };
+  function download(href, name) {
+    const a = document.createElement('a'); a.href = href; a.download = name || ''; a.rel = 'noopener'; a.hidden = true;
+    a.addEventListener('click', e => e.stopPropagation()); // the shell's link handlers never see it: only the download happens
+    document.body.appendChild(a); a.click(); a.remove();
+  }
   async function saveFile(item) {
-    const file = await asFile(item), n = native();
+    const n = native(), href = String(item.download || item.url || '');
+    if (appDownloads() && !(n && typeof n.saveFile === 'function') && !/^(blob|data):/i.test(href)) { download(href, item.name); return 'downloading'; }
+    const file = await asFile(item);
     if (n && typeof n.saveFile === 'function') { n.saveFile(await b64(file), file.name, file.type); return 'saved'; }
-    if (n) { const r = await shareFile(item); return r === 'unsupported' ? 'unsupported' : r; } // WebView has no downloads: the share sheet saves
+    if (n) { const r = await shareFile(item); return r === 'unsupported' ? 'unsupported' : r; } // old app: the share sheet saves
     const u = URL.createObjectURL(file); const a = document.createElement('a'); a.href = u; a.download = file.name; a.rel = 'noopener';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 60000);
     return 'saved';
@@ -407,18 +422,31 @@
     el.className = 'mviewer'; el.hidden = true; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Media viewer');
     el.innerHTML = `<div class="mv-top"><button type="button" class="mv-x" data-mv="close" aria-label="Close">×</button><div class="mv-ti"><b></b><small></small></div></div>
       <div class="mv-stage"></div>
-      <div class="mv-bar"><button type="button" data-mv="prev" aria-label="Previous">‹</button><button type="button" data-mv="copy" hidden>Copy</button><button type="button" data-mv="share">Share</button><button type="button" data-mv="save">Save</button><button type="button" data-mv="next" aria-label="Next">›</button></div>`;
+      <div class="mv-bar"><button type="button" data-mv="prev" aria-label="Previous">‹</button><button type="button" data-mv="copy" hidden>Copy</button><button type="button" data-mv="share">Share</button><button type="button" data-mv="save">Save</button><button type="button" data-mv="next" aria-label="Next">›</button></div>
+      <div class="mv-menu" hidden><div class="mv-menu-b" role="menu"><b class="mv-menu-t"></b><button type="button" role="menuitem" data-mvm="save">⤓ <span>Save image</span></button><button type="button" role="menuitem" data-mvm="share">↗ <span>Share</span></button><button type="button" role="menuitem" data-mvm="cancel"><span>Cancel</span></button></div></div>`;
     (document.getElementById('device') || document.body).appendChild(el);
     el.addEventListener('click', e => {
+      const mm = e.target.closest('.mv-menu');
+      if (mm) {
+        if (!V.menuArmed && e.detail !== 0) return; // the finger lifting off the long-press that opened it: only a fresh press counts
+        const k = e.target.closest('[data-mvm]')?.dataset.mvm; const it = V.items[V.i];
+        if (!k && e.target.closest('.mv-menu-b')) return;
+        menu(false);
+        if (it && k === 'save') save(it); else if (it && k === 'share') share(it);
+        return;
+      }
       const a = e.target.closest('[data-mv]')?.dataset.mv; if (!a) return;
       if (a === 'close') return viewer.close();
       if (a === 'prev') return go(-1);
       if (a === 'next') return go(1);
       const it = V.items[V.i]; if (!it) return;
       if (a === 'copy') return copyText(V.text || '').then(ok => K.notify(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy'));
-      if (a === 'share') return shareFile(it).then(r => r === 'unsupported' ? shareText(location.origin + it.url, it.name).then(x => K.notify(x === 'copied' ? '⧉' : '↗', x === 'copied' ? 'Link copied' : 'Shared')) : r === 'shared' && K.notify('↗', 'Shared')).catch(() => K.notify('!', 'Couldn’t share this file'));
-      if (a === 'save') return saveFile(it).then(r => K.notify(r === 'unsupported' ? '!' : '⤓', r === 'saved' ? 'Saved' : r === 'shared' ? 'Choose where to save' : r === 'cancelled' ? 'Not saved' : 'Saving isn’t available here')).catch(() => K.notify('!', 'Couldn’t save this file'));
+      if (a === 'share') return share(it);
+      if (a === 'save') return save(it);
     });
+    // Long-press (or right-click) the photo: Save / Share, like holding an image in a browser.
+    el.addEventListener('contextmenu', e => { if (e.target.closest('.mv-stage') && V.items[V.i]?.kind === 'image') { e.preventDefault(); menu(true); } });
+    el.querySelector('.mv-menu').addEventListener('pointerdown', () => { V.menuArmed = true; });
     const stage = el.querySelector('.mv-stage');
     stage.addEventListener('pointerdown', e => {
       if (!V.items[V.i] || V.items[V.i].kind !== 'image') return;
@@ -426,6 +454,8 @@
       V.ptr.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (V.ptr.size === 2) { const [a, b] = [...V.ptr.values()]; V.g = { pinch: true, d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: V.s, x0: V.x, y0: V.y }; }
       else if (V.ptr.size === 1) V.g = { pinch: false, sx: e.clientX, sy: e.clientY, x0: V.x, y0: V.y, t: Date.now(), moved: false };
+      clearTimeout(V.lp); V.lp = 0;
+      if (V.ptr.size === 1) V.lp = setTimeout(() => { V.lp = 0; const g = V.g; if (g && !g.pinch && !g.moved && V.ptr.size === 1) { g.held = true; menu(true); } }, 500);
     });
     stage.addEventListener('pointermove', e => {
       if (!V.ptr.has(e.pointerId) || !V.g) return;
@@ -436,14 +466,16 @@
       }
       if (V.g.pinch) return;
       const dx = e.clientX - V.g.sx, dy = e.clientY - V.g.sy;
-      if (Math.abs(dx) + Math.abs(dy) > 8) V.g.moved = true;
+      if (Math.abs(dx) + Math.abs(dy) > 8) { V.g.moved = true; clearTimeout(V.lp); V.lp = 0; }
+      if (V.g.held) return;
       if (V.s > 1.02) { V.x = V.g.x0 + dx; V.y = V.g.y0 + dy; paint(); }
       else { V.g.dx = dx; V.g.dy = dy; const img = stage.querySelector('img'); if (img) { img.style.transition = 'none'; img.style.transform = Math.abs(dx) > Math.abs(dy) ? `translateX(${dx}px)` : `translateY(${Math.max(0, dy)}px)`; el.style.setProperty('--fade', String(Math.max(.35, 1 - Math.max(0, dy) / 400))); } }
     });
     const up = e => {
       if (!V.ptr.has(e.pointerId)) return;
-      V.ptr.delete(e.pointerId);
+      V.ptr.delete(e.pointerId); clearTimeout(V.lp); V.lp = 0;
       const g = V.g; if (!g) return;
+      if (g.held) { V.g = null; el.style.removeProperty('--fade'); paint(); return; } // a long-press is never also a tap/swipe
       if (g.pinch) { if (V.ptr.size === 0) { V.g = null; if (V.s < 1.05) reset(); } else { const p = [...V.ptr.values()][0]; V.g = { pinch: false, sx: p.x, sy: p.y, x0: V.x, y0: V.y, t: Date.now(), moved: true }; } return; }
       V.g = null; el.style.removeProperty('--fade');
       if (!g.moved && Date.now() - g.t < 300) {
@@ -460,6 +492,17 @@
     document.addEventListener('keydown', e => { if (!viewer.isOpen()) return; if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1); });
     V.el = el; return el;
   }
+  function menu(on) {
+    const m = V.el?.querySelector('.mv-menu'); if (!m) return false;
+    if (!on) { if (m.hidden) return false; m.hidden = true; V.el.classList.remove('menu-open'); return true; }
+    const it = V.items[V.i]; if (!it || it.kind !== 'image') return false;
+    m.querySelector('.mv-menu-t').textContent = it.name || 'Photo';
+    m.hidden = false; V.menuArmed = false; V.el.classList.add('menu-open');
+    try { navigator.vibrate?.(12); } catch (e) {}
+    return true;
+  }
+  const save = it => saveFile(it).then(r => r === 'downloading' ? null : K.notify(r === 'unsupported' ? '!' : '⤓', r === 'saved' ? 'Saved' : r === 'shared' ? 'Choose where to save' : r === 'cancelled' ? 'Not saved' : 'Saving isn’t available here')).catch(() => K.notify('!', 'Couldn’t save this file'));
+  const share = it => shareFile(it).then(r => r === 'unsupported' ? shareText(location.origin + it.url, it.name).then(x => K.notify(x === 'copied' ? '⧉' : '↗', x === 'copied' ? 'Link copied' : 'Shared')) : r === 'shared' && K.notify('↗', 'Shared')).catch(() => K.notify('!', 'Couldn’t share this file'));
   function reset() { V.s = 1; V.x = 0; V.y = 0; paint(); }
   function paint() {
     const img = V.el?.querySelector('.mv-stage img'); if (!img) return;
@@ -470,7 +513,7 @@
   const sizeLabel = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b ? b + ' B' : '';
   function show() {
     const el = build(), it = V.items[V.i]; if (!it) return;
-    V.s = 1; V.x = 0; V.y = 0; V.text = '';
+    V.s = 1; V.x = 0; V.y = 0; V.text = ''; menu(false);
     const stage = el.querySelector('.mv-stage');
     for (const m of stage.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
     el.dataset.kind = it.kind;
@@ -503,12 +546,14 @@
     },
     close() {
       if (!V.el || V.el.hidden) return false;
+      if (menu(false)) return true; // Back/Esc: the Save/Share menu first, the photo stays open
       for (const m of V.el.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
       V.el.classList.remove('open', 'zoomed'); V.el.hidden = true; V.el.querySelector('.mv-stage').innerHTML = ''; V.items = []; V.ptr.clear(); V.g = null;
       K.onChange(false); return true;
     },
     isOpen: () => !!V.el && !V.el.hidden,
-    get state() { return { open: viewer.isOpen(), i: V.i, n: V.items.length, scale: V.s, kind: V.items[V.i]?.kind || '', name: V.items[V.i]?.name || '' }; },
+    menu: () => viewer.isOpen() && menu(true),
+    get state() { return { open: viewer.isOpen(), i: V.i, n: V.items.length, scale: V.s, kind: V.items[V.i]?.kind || '', name: V.items[V.i]?.name || '', menu: !!V.el && !V.el.querySelector('.mv-menu').hidden }; },
   };
 
   /* ================= approvals (normalizers.ts) ================= */

@@ -15,10 +15,10 @@ android {
         applicationId 'ai.wizards.os'
         minSdk 28
         targetSdk 35
-        versionCode 25
-        versionName '0.9.1'
-        buildConfigField 'String', 'HOME_URL', '"https://private.wizard001.com/wizard-os-home/"'
-        buildConfigField 'String', 'ORIGIN', '"https://private.wizard001.com"'
+        versionCode 26
+        versionName '0.9.2'
+        buildConfigField 'String', 'HOME_URL', '"https://wizard.tailc0f369.ts.net/wizard-os-home/"'
+        buildConfigField 'String', 'ORIGIN', '"https://wizard.tailc0f369.ts.net"'
         // The one certificate (SHA-256) an in-app update must be signed with: the Wizard OS release key.
         buildConfigField 'String', 'UPDATE_SIGNER', '"3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd"'
     }

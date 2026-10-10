@@ -40,7 +40,7 @@ import ai.wizards.os.assist.Transcriber;
  */
 public final class EverywhereOutbox {
     static final String TAG = "WizardEverywhere";
-    public static final String DEFAULT_ORIGIN = "https://private.wizard001.com";
+    public static final String DEFAULT_ORIGIN = ai.wizards.os.BuildConfig.ORIGIN;
     static final String PROMPT = "Wizard voice request spoken to Archimedes from the floating Wizard button on a phone. "
             + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
     /** Dictation goes to STT bare, like Archimedes Anywhere: a context prompt can leak into typed text. */
@@ -354,7 +354,7 @@ public final class EverywhereOutbox {
         if (it.text.isEmpty()) {
             if (audio == null || !audio.isFile()) throw new HttpError(410, "The recording is gone");
             Transcriber.Result t;
-            try { t = Transcriber.transcribe(audio, origin, it.dictation() ? DICTATION_PROMPT : PROMPT); }
+            try { t = Transcriber.transcribe(audio, ai.wizards.os.device.AppState.live(origin), it.dictation() ? DICTATION_PROMPT : PROMPT); }
             catch (IOException e) { throw asHttp(e); }
             if (t.text.isEmpty()) {
                 synchronized (this) { it.state = "empty"; it.error = "No speech in that recording"; items.remove(it.id); save(); }
@@ -496,7 +496,7 @@ public final class EverywhereOutbox {
     /* ------------------------------------------------------------------ http */
 
     private JSONObject request(String method, String path, byte[] body, String type, String[] headers) throws IOException {
-        HttpURLConnection c = (HttpURLConnection) new URL(origin + path).openConnection();
+        HttpURLConnection c = (HttpURLConnection) new URL(ai.wizards.os.device.AppState.live(origin) + path).openConnection();
         try {
             c.setConnectTimeout(8000);
             c.setReadTimeout(body != null && body.length > 200_000 ? 120_000 : 30_000);

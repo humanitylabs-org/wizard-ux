@@ -127,7 +127,7 @@ const deskIdx = p => p.evaluate(() => __wos.idx ?? null);
   ok(did === 'thread' && (await look(p)).voice === 'listen', 'Android Back while recording: thread → list, still recording', did);
   ok(!(await p.evaluate(() => !!document.querySelector('.win [data-chback]'))), 'Back landed on the thread list');
   did = await p.evaluate(() => window.__wosNativeBack()); await p.waitForTimeout(500);
-  ok((await look(p)).voice === 'listen' && (await deskIdx(p)) === 2, 'second Back goes to the Home desk, still recording', `${did} desk=${await deskIdx(p)}`);
+  ok((await look(p)).voice === 'listen' && (await deskIdx(p)) === (await p.evaluate(() => __wos.HOME)), 'second Back goes to the Home desk, still recording', `${did} desk=${await deskIdx(p)}`);
 
   /* 4. Swipe desks while recording: on the orb, and anywhere on the bar */
   let d0 = await deskIdx(p);
