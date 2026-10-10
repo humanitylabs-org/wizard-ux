@@ -85,6 +85,10 @@
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
+      // Thread titles (Agent Service thread-titles.mjs): the name it had before a recent rename, and every rename
+      // with its time, so the card says "was: …" for a while and the thread shows "Renamed from …" where it happened.
+      titleWas: typeof item.wizard_title_was === 'string' ? item.wizard_title_was.slice(0, 120) : '',
+      renames: Array.isArray(item.wizard_title_renames) ? item.wizard_title_renames.filter(r => r && typeof r.from === 'string' && isFinite(r.at)).slice(-6).map(r => ({ from: r.from.slice(0, 120), to: String(r.to || '').slice(0, 120), at: Number(r.at), by: r.by === 'you' ? 'you' : 'agent' })) : [],
       // The thread's model route (chat-models.js shows and changes it).
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
@@ -498,6 +502,19 @@
       return p.record;
     },
     defer(id) { return this._act(id, { deferred: true }, () => this._defer(id, true)); },
+    /* Rename: James's own title for a thread. It locks the name: the agent never renames it after this. */
+    async rename(id, title) {
+      const s = this.session(id), t = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      if (!s || !t || this.busy(id)) return false;
+      if (t === s.title) return true;
+      const before = { title: s.title, titleWas: s.titleWas };
+      Object.assign(s, { title: t, titleWas: '' }); this.emit();
+      try {
+        const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: t }) });
+        if (!r.ok) { let msg = ''; try { msg = (await r.json())?.error?.message || ''; } catch (e) {} throw Object.assign(new Error(msg || 'rename failed'), { status: r.status }); }
+        setTimeout(() => this.refresh(), 50); return true;
+      } catch (e) { const c = this.session(id); if (c) Object.assign(c, before); this.emit(); return /already in use/i.test(e.message) ? 'taken' : false; }
+    },
     // Restore: a deferred thread comes back to Work; an archived (or aged-out) one is un-archived and lands in Ready.
     restore(id) {
       const s = this.session(id); if (!s) return Promise.resolve(false);
