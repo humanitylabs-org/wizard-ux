@@ -561,24 +561,31 @@ window.WizCore.chats = function createChats(H) {
     renderChats(w); applyLayout(deskOf(wid));
   }
   function chatsBack(w) { if (w.thread) saveDraft(w.id); const c = ch(w.id); c.files = []; c.draft = ''; c.draftFor = ''; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
-  async function sendChat(wid, text, how = 'typing in the Chats window', audio = null) {
+  /* opts.sid pins the destination ('__new__' = a new thread) to where James was when he sent. Voice sends
+   * reach here seconds after the tap (transcription, routing); by then the window may show another thread,
+   * and a new-chat message must never land in it as a reply. opts.files: files riding with a voice send. */
+  async function sendChat(wid, text, how = 'typing in the Chats window', audio = null, opts = {}) {
     const w = W[wid]; text = String(text || '').trim(); if (!w) return;
     const c = ch(wid);
-    const files = (c.files || []).filter(f => f.id && !f.uploading);
+    const sid = opts.sid || w.thread; if (!sid) return;
+    const here = w.thread === sid; // the window still shows the thread this was sent from
+    const tray = here ? (c.files || []) : [];
+    const files = [...(opts.files || []), ...tray].filter(f => f && f.id && !f.uploading).filter((f, i, a) => a.findIndex(x => x.id === f.id) === i);
     if (!text && !files.length && !audio) return;
-    if ((c.files || []).some(f => f.uploading)) { toast('…', 'Still uploading · send when it finishes', 2000); return; }
-    const isNew = w.thread === '__new__';
-    const s = isNew ? null : LIVE.session(w.thread);
+    if (tray.some(f => f.uploading)) { toast('…', 'Still uploading · send when it finishes', 2000); return; }
+    const isNew = sid === '__new__';
+    const s = isNew ? null : LIVE.session(sid);
     const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
-    KIT.drafts.clear(draftKey(w)); c.draft = ''; c.files = [];
+    if (here) { KIT.drafts.clear(draftKey(w)); c.draft = ''; c.files = []; }
     // Saved on the phone first; the outbox delivers it (and retries) from here.
     const nm = isNew && PW ? PW.newModel(c) : null; // a model picked for this new chat (#11)
-    const it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : w.thread, steerRunId, text, audio,
-      instructions: viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid, how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
-    c.follow = true; if (nm) c.newModel = null;
+    const it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio,
+      instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
+    if (here) c.follow = true; if (nm) c.newModel = null;
     // A new thread is delegated in the background: the window steps back to the list instead of
-    // opening the thread, and the thread appears there (Working) once it is admitted.
-    if (isNew && W[wid]) { W[wid].thread = null; save(); c.loadedFor = ''; c.draftFor = ''; toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600); }
+    // opening the thread, and the thread appears there (Working) once it is admitted. Only if James is
+    // still on New chat: a thread he opened meanwhile stays open.
+    if (isNew) { if (W[wid] && W[wid].thread === '__new__') { W[wid].thread = null; save(); c.loadedFor = ''; c.draftFor = ''; } toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600); }
     renderChats(W[wid]); applyLayout(deskOf(wid));
   }
   const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
