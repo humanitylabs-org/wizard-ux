@@ -43,7 +43,8 @@ public final class UsualsPolicy {
     public static boolean isCommit(String label) {
         String n = norm(label);
         if (n.isEmpty() || n.length() > 60) return false;
-        for (String c : COMMIT) {
+        for (String raw : COMMIT) {
+            String c = norm(raw); // NFKC splits Thai ำ: compare normalised to normalised
             if (!n.startsWith(c)) continue;
             if (n.length() == c.length()) return true;
             char next = n.charAt(c.length());
@@ -55,7 +56,7 @@ public final class UsualsPolicy {
 
     public static boolean isDismiss(String label) {
         String n = norm(label);
-        for (String d : DISMISS) if (n.equals(d)) return true;
+        for (String d : DISMISS) if (n.equals(norm(d))) return true;
         return false;
     }
 
@@ -63,8 +64,8 @@ public final class UsualsPolicy {
     public static boolean isGeneric(String label) {
         String n = norm(label);
         if (n.length() <= 2) return true;
-        return n.equals("add") || n.equals("add to basket") || n.equals("add to cart") || n.equals("เพิ่ม") || n.equals("plus")
-                || n.equals("increase") || n.equals("more") || n.equals("select") || n.equals("เลือก") || isPrice(n);
+        return n.equals("add") || n.equals("add to basket") || n.equals("add to cart") || n.equals(norm("เพิ่ม")) || n.equals("plus")
+                || n.equals("increase") || n.equals("more") || n.equals("select") || n.equals(norm("เลือก")) || isPrice(n);
     }
 
     public static boolean isPrice(String label) {
@@ -95,7 +96,7 @@ public final class UsualsPolicy {
     public static String total(List<String> texts) {
         for (int i = 0; i < texts.size(); i++) {
             String n = norm(texts.get(i));
-            if ((n.startsWith("total") || n.startsWith("ยอดรวม") || n.startsWith("รวมทั้งหมด")) && !n.startsWith("total savings")) {
+            if ((n.startsWith("total") || n.startsWith(norm("ยอดรวม")) || n.startsWith(norm("รวมทั้งหมด"))) && !n.startsWith("total savings")) {
                 String here = money(texts.get(i));
                 if (here != null) return here;
                 for (int j = i + 1; j < Math.min(texts.size(), i + 4); j++) {
