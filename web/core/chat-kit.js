@@ -8,7 +8,7 @@
   const K = { notify: () => {}, onChange: () => {} };
 
   /* ================= message parsing ================= */
-  const INTERNAL = ['[IMPORTANT: Background process ', '[ASYNC DELEGATION BATCH COMPLETE', '[Wizard follow-through]', '[CONTEXT COMPACTION', '[CONTEXT SUMMARY]:', '[PRIOR CONTEXT', '[Your active task list was preserved', '[Your previous agent loop was paused', '[James requested recovery', '[OUT-OF-BAND', '[SYSTEM:'];
+  const INTERNAL = ['[IMPORTANT: Background process ', '[ASYNC DELEGATION BATCH COMPLETE', '[Wizard follow-through] The delegated results', '[CONTEXT COMPACTION', '[CONTEXT SUMMARY]:', '[PRIOR CONTEXT', '[Your active task list was preserved', '[Your previous agent loop was paused', '[James requested recovery', '[OUT-OF-BAND', '[SYSTEM:'];
   const partsText = c => typeof c === 'string' ? c
     : Array.isArray(c) ? c.map(p => typeof p === 'string' ? p : p && typeof p === 'object' && typeof p.text === 'string' ? p.text : '').filter(Boolean).join('\n')
     : c && typeof c === 'object' ? String(c.text || c.content || '') : '';
@@ -58,11 +58,29 @@
     }
     return { text: visible.join('').replace(/\n{3,}/g, '\n\n').trim(), attachments };
   }
-  const SAFE_IMG = /^(data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+$|\/wizard\/|https:\/\/private\.wizard001\.com\/)/i;
+  /* This Wizard's own addresses. Links into it are written as paths ("/cinequeue/") so they open on whatever
+   * address this device reached Wizard through (localhost on the Mac, the tailnet name on a phone). Absolute
+   * links to this box's other names (the current host, or a retired custom domain listed in the bootstrap's
+   * network.aliases) are folded back to paths, so old messages keep opening in place after a rename. */
+  const LEGACY_HOME_HOSTS = ['private.wizard001.com'];
+  function homeHosts() {
+    const out = new Set([location.hostname, ...LEGACY_HOME_HOSTS]);
+    try { for (const h of (window.WizConfig?.raw?.network?.aliases || [])) if (typeof h === 'string' && h) out.add(h.toLowerCase()); } catch (e) {}
+    return out;
+  }
+  // Absolute https link to this Wizard → '/path?query#hash'; anything else unchanged.
+  function homePath(href) {
+    const s = String(href || '').trim();
+    if (!/^https:\/\//i.test(s)) return s;
+    let u; try { u = new URL(s); } catch (e) { return s; }
+    return homeHosts().has(u.hostname.toLowerCase()) && (!u.port || u.port === location.port) ? u.pathname + u.search + u.hash : s;
+  }
+  const isHomeUrl = u => !!u && (u.origin === location.origin || (u.protocol === 'https:' && homeHosts().has(u.hostname.toLowerCase())));
+  const SAFE_IMG = /^(data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+$|\/(?![\/\\]))/i; // inline data, or a path on this Wizard
   // Inline image parts: OpenAI image_url / input_image, Anthropic base64 image, legacy image_urls.
   function imagesOf(m, content) {
     const urls = [];
-    const add = u => { u = typeof u === 'string' ? u : u && typeof u === 'object' ? (u.url || u.image_url || '') : ''; if (typeof u === 'string' && u && SAFE_IMG.test(u) && !urls.includes(u)) urls.push(u); };
+    const add = u => { u = typeof u === 'string' ? u : u && typeof u === 'object' ? (u.url || u.image_url || '') : ''; if (typeof u === 'string') u = homePath(u); if (typeof u === 'string' && u && SAFE_IMG.test(u) && !urls.includes(u)) urls.push(u); };
     if (Array.isArray(content)) for (const p of content) {
       if (!p || typeof p !== 'object') continue;
       if (p.type === 'image_url') add(p.image_url);
@@ -86,7 +104,29 @@
   const steerText = s => cleanText(String(s || '')
     .replace(/^\s*\[OUT-OF-BAND USER MESSAGE[^\]\n]*\]\s*/, '')
     .replace(/\s*\[\/OUT-OF-BAND USER MESSAGE\]\s*$/, ''));
+  // A note another agent thread wrote into this one (a coordinator's "[Wizard follow-through] Cross-thread note from
+  // the "X" thread…", or the same note delivered mid-run as a steer). It is not the owner speaking: it gets its own
+  // labelled row, and a note that started a turn opens a new turn so the reply sits under the note that prompted it,
+  // never under the owner's last real message (which then read as hours of work and a reply to the wrong thing).
+  const NOTE_FROM_Q = /^Cross-thread note from (?:the )?["\u201c]([^"\u201d\n]{1,80})["\u201d]/i;
+  const NOTE_FROM = /^Cross-thread note from (?:the )?([^.:(\n"\u201c]{1,60}?) (?:thread|coordinator)\b/i;
+  function agentNote(raw) {
+    const s0 = String(raw || '').trimStart();
+    const ft = s0.startsWith('[Wizard follow-through]');
+    if (ft && /^\[Wizard follow-through\]\s*The delegated results/.test(s0)) return null; // the watcher's own nudge stays internal
+    const body = (s0.startsWith(STEER_OPEN) ? steerText(s0) : cleanText(s0.replace(/^\[Wizard follow-through\]\s*/, ''))).replace(/^\[(Cross-thread note[^\]\n]{0,120})\]\s*/i, '$1. ');
+    if (!ft && !/^Cross-thread note\b/i.test(body)) return null;
+    if (!body) return null;
+    const m = body.match(NOTE_FROM_Q) || body.match(NOTE_FROM);
+    return { text: body, from: m ? m[1].trim() : '' };
+  }
   const tsMs = v => typeof v === 'number' && isFinite(v) ? (Math.abs(v) < 1e12 ? v * 1000 : v) : (Date.parse(String(v ?? '')) || NaN);
+  // The turn already ended with a final reply (no tool calls) and work starts again a while later with no new message
+  // from the owner: a coordinator note, a helper finishing, or a watcher started a new run. That is a new turn. Folding
+  // it into the old one hid the real answer under "Worked for 9h" and showed the late reply as the answer to the
+  // owner's question. Recovery nudges within a minute of the reply stay in the same turn.
+  const LATER_MS = 60000;
+  const later = (cur, at) => !!(cur && cur.a && cur.a.final && isFinite(at) && isFinite(cur.a.at) && at - cur.a.at >= LATER_MS);
   // One turn = what the owner said (words, photos, files), the work in between, the answer and anything the agent sent.
   function parseRows(rows) {
     const out = []; let cur = null;
@@ -97,10 +137,14 @@
       const raw = partsText(content);
       const at = tsMs(m.timestamp ?? m.created_at);
       if (m.role === 'user') {
+        const isSteer = kind === 'steer' || raw.trimStart().startsWith(STEER_OPEN);
+        const note = agentNote(raw);
+        // An agent note that started a turn: its own turn, labelled, so the reply below answers it.
+        if (note && !isSteer) { if (!(cur && cur.note && cur.note.text === note.text && !cur.a)) { newTurn(null); cur.at = at; cur.note = { ...note, at }; } continue; }
         // A mid-run steer the agent has taken in: shown inside the turn it steered, marked as received.
-        if (kind === 'steer' || raw.trimStart().startsWith(STEER_OPEN)) {
-          const st = steerText(raw);
-          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push({ text: st, at, files: chipFiles(raw) });
+        if (isSteer) {
+          const st = note ? note.text : steerText(raw);
+          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push(note ? { text: st, at, files: [], note: true, from: note.from } : { text: st, at, files: chipFiles(raw) });
           if (cur) cur.steps++;
           continue;
         }
@@ -116,6 +160,7 @@
         const h = helm(cleanText(raw));
         const t = h.text;
         if (!cur) newTurn(null);
+        else if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; }
         noteWork(cur, m, at);
         for (const a of h.attachments) if (!cur.media.some(x => x.id === a.id)) cur.media.push(a);
         for (const u of imagesOf(m, content)) if (!cur.media.some(x => x.url === u)) cur.media.push({ id: u.slice(-24), name: 'Image', mime: 'image/*', kind: 'image', url: u });
@@ -123,8 +168,8 @@
         if (!t) { if (!h.attachments.length) cur.steps++; continue; }
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
         if (cur.a) cur.notes.push(cur.a.text);
-        cur.a = { text: t, at };
-      } else if (cur) { cur.steps++; noteWork(cur, m, at); }
+        cur.a = { text: t, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length) };
+      } else if (cur) { if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; } cur.steps++; noteWork(cur, m, at); }
     }
     return out;
   }
@@ -140,16 +185,18 @@
 
   /* ================= Markdown (GFM subset, no raw HTML) ================= */
   const SAFE_HREF = /^(https?:|mailto:|tel:)/i;
+  // A path on this Wizard ("/cinequeue/"), never a protocol-relative "//host" or a "/\\host" trick.
+  const HOME_PATH = /^\/(?![\/\\])[^\s]*$/;
   const SESSION_REF = /@session:default\/([A-Za-z0-9_](?:[A-Za-z0-9._:-]{0,178}[A-Za-z0-9_])?)/g;
-  const SESSION_HREF = /^(?:https:\/\/private\.wizard001\.com)?\/wizard\/\?session=([A-Za-z0-9._:%-]{1,240})$/;
-  const PRIVATE_MEDIA = /^(?:https:\/\/private\.wizard001\.com)?(\/wizard\/(?:files\/[A-Za-z0-9._:-]+\/content|attachments\/[0-9a-f]{32}))$/;
+  const SESSION_HREF = /^\/wizard\/\?session=([A-Za-z0-9._:%-]{1,240})$/;
+  const PRIVATE_MEDIA = /^(\/wizard\/(?:files\/[A-Za-z0-9._:-]+\/content|attachments\/[0-9a-f]{32}))$/;
   function linkHtml(href, inner) {
-    href = String(href || '').trim();
+    href = homePath(href);
     const sm = href.match(SESSION_HREF);
     if (sm) { let id = ''; try { id = decodeURIComponent(sm[1]); } catch (e) {} if (/^[A-Za-z0-9._:-]{1,200}$/.test(id)) return `<a href="/wizard/?session=${encodeURIComponent(id)}" class="wsl" data-session="${esc(id)}">${inner}</a>`; }
     const pm = href.match(PRIVATE_MEDIA);
     if (pm) return `<a href="${esc(pm[1])}" data-mlink="${esc(pm[1])}">${inner}</a>`;
-    if (SAFE_HREF.test(href)) return `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
+    if (SAFE_HREF.test(href) || HOME_PATH.test(href)) return `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
     return `<span class="badlink">${inner}</span>`;
   }
   function inline(src, noLinks) {
@@ -486,5 +533,5 @@
     return action && choices.length ? { requestId: str(it.request_id, it.id) || undefined, action, choices } : null;
   }
 
-  window.WosChat = { K, esc, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, shareText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, shareText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

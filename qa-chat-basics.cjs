@@ -435,14 +435,14 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     holdDisposition = 1500;
     const n0 = writes.length;
     await p.locator('.ch-tacts [data-chact="defer"]').tap(); await sleep(250);
-    ok((await thread()) === null && (await section('qa_ready_thread')) === 'deferred', 'Defer: back to the list and in Deferred at once (before the save returns)', await section('qa_ready_thread'));
+    const isDef = () => p.evaluate(() => !!__wos.live.session('qa_ready_thread')?.deferred);
+    ok((await thread()) === null && (await section('qa_ready_thread')) === 'ready' && await isDef(), 'Defer: back to the list, deferred at the bottom of Ready at once (before the save returns)', await section('qa_ready_thread'));
     await sleep(1600); holdDisposition = 0;
     const w = writes.slice(n0).find(x => x.p === '/wizard/thread-dispositions');
     ok(w && w.m === 'PUT' && JSON.stringify(JSON.parse(w.body)) === JSON.stringify({ sessionId: 'qa_ready_thread', runtime: 'direct', deferred: true }), 'Defer saves through /wizard/thread-dispositions like Wizard', w);
     await p.evaluate(() => __wos.live.refresh()); await sleep(500);
-    ok((await section('qa_ready_thread')) === 'deferred', 'Deferred survives a refresh from Wizard');
-    // From the list: long-press → Restore.
-    await p.evaluate(() => { const s = document.querySelector('[data-sectoggle="deferred"]'); if (s && s.getAttribute('aria-expanded') !== 'true') s.click(); }); await sleep(300);
+    ok((await section('qa_ready_thread')) === 'ready' && await isDef(), 'Deferred survives a refresh from Wizard');
+    // From the list (bottom of Ready): long-press → Restore.
     await reveal('.ch-list [data-chopen="qa_ready_thread"]'); await sleep(200);
     let c = await center('.ch-list [data-chopen="qa_ready_thread"]');
     await longPress(c[0], c[1]); await sleep(300);
@@ -454,7 +454,7 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     await longPress(c[0], c[1]); await sleep(300);
     const n1 = writes.length;
     await p.locator('.ch-sheet [data-rsact="restore"]').tap(); await sleep(150);
-    ok((await section('qa_ready_thread')) === 'ready', 'Restore puts it back in Ready immediately', await section('qa_ready_thread'));
+    ok((await section('qa_ready_thread')) === 'ready' && !(await isDef()), 'Restore clears Deferred immediately (stays in Ready)', await section('qa_ready_thread'));
     await sleep(500);
     const w1 = writes.slice(n1).find(x => x.p === '/wizard/thread-dispositions');
     ok(w1 && JSON.parse(w1.body).deferred === false, 'Restore of a deferred thread saves deferred:false', w1?.body);
@@ -585,7 +585,7 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     ok(acts2.join(',') === 'defer,done', 'desktop: Defer / Done under the final reply', acts2);
     await d.screenshot({ path: `${OUT}/14-desktop-thread-actions.png` });
     await d.locator('.pane-main .ch-tacts [data-chact="defer"]').click(); await sleep(250);
-    ok((await dThread()) !== 'qa_done_thread' && await d.evaluate(() => { const g = __wux.live.workGroups(); return (g.deferred || []).some(s => s.id === 'qa_done_thread'); }), 'desktop: Defer from the header files it under Deferred at once');
+    ok((await dThread()) !== 'qa_done_thread' && await d.evaluate(() => { const g = __wux.live.workGroups(); return (g.ready || []).some(s => s.id === 'qa_done_thread' && s.deferred); }), 'desktop: Defer from the header files it under Deferred at once');
     await sleep(600);
     const dw = writes.slice(n0).find(x => x.p === '/wizard/thread-dispositions');
     ok(dw && dw.m === 'PUT' && JSON.parse(dw.body).sessionId === 'qa_done_thread' && JSON.parse(dw.body).deferred === true, 'desktop: Defer saves through /wizard/thread-dispositions (intercepted)', dw?.body);

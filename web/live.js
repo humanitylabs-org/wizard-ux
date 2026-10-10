@@ -192,7 +192,11 @@
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
   //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
   const asksJames = s => s.attention?.state === 'needs_you' || s.attention?.state === 'check';
-  const readyRank = s => needsApproval(s) ? 0 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
+  // Deferred threads sit at the bottom of Ready marked Deferred (James, 10 Oct 2026: "defer could just go at the
+  // bottom of today … and just change the status to deferred"), whatever their day and in every order, until
+  // restored or done.
+  const isDeferred = s => !!s.deferred && !s.archived;
+  const readyRank = s => needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
@@ -202,7 +206,7 @@
       const t = sectionTime(s);
       if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
-      else if (s.deferred && !s.archived) g.deferred.push(s);
+      else if (isDeferred(s)) g.ready.push(s);
       else if (isErr(s)) g.errors.push(s);
       else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
@@ -212,7 +216,8 @@
       else g.ready.push(s);
     }
     for (const list of Object.values(g)) list.sort(newestFirst);
-    g.ready.sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || newestFirst(l, r));
+    // Newest: approvals pinned, then recency; deferred threads always last (Priority re-sorts with readyRank).
+    g.ready.sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(l, r));
     return g;
   }
   async function fetchDispositions() {
