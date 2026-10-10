@@ -48,29 +48,34 @@ window.WizCore.chats = function createChats(H) {
   const toTurns = KIT.parseRows, md = KIT.md;
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
   // Same sections, order and day boundaries as Wizard's Work view.
-  const SECTIONS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['yesterday', 'Yesterday'], ['pastWeek', 'Past week'], ['deferred', 'Deferred'], ['archive', 'Archive']];
+  // Deferred threads live at the bottom of Ready with a Deferred status (live.js groupWork), not in a section.
+  const SECTIONS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['yesterday', 'Yesterday'], ['pastWeek', 'Past week'], ['archive', 'Archive']];
   const SEC_OPEN_KEY = 'wos.chats.sections.v1';
   const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false };
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
   const SEC_PAGE = 40;
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Test this' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
+  const deferredOf = s => !!s.deferred && !s.archived;
   const attOf = s => (s.attention && !WORKING_ST.has(s.status) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') ? s.attention : null;
   function chatRow(s, snip) {
     const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = s.status === 'waiting_for_approval' || s.status === 'failed' || s.status === 'interrupted';
-    const at = attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi'), asks = !!at && !quiet;
+    // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Test this, then its one line.
+    const def = deferredOf(s) && !working && !needs;
+    const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi'), asks = !!at && !quiet;
     const pv = working ? `<i class="st working${s.pend === 'waiting' ? ' off' : s.pend ? ' soon' : ''}"></i>` + workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
       : needs ? '<i class="st needs"></i>' + esc(clip(s.preview || '', 110))
+      : def ? '<i class="st deferred"></i><em class="att deferred">Deferred</em> · ' + esc(clip(attOf(s)?.ask || s.preview || '', 140))
       : at ? (asks ? `<i class="st ${A.cls}"></i><em class="att ${A.cls}">${A.label}</em> · ` : (isNew ? '<i class="st unread"></i>' : '') + (at.state === 'done' ? '<em class="att done">✓</em> ' : '')) + esc(clip(at.ask, 140))
       : (isNew ? '<i class="st unread"></i>' : '') + esc(clip(s.preview || '', 110));
-    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${quiet ? ' quiet' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}><span class="emo">${emoOf(s.id)}</span>
+    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${quiet ? ' quiet' : ''}${def ? ' deferred' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}><span class="emo">${emoOf(s.id)}</span>
       <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button>`;
   }
   /* Ready can be grouped by subject (the agent's subject on each status line): the roundup, kept live. */
   const READY_GROUP_KEY = 'wos.chats.readyBySubject.v1';
   let readyBySubject = (() => { try { return localStorage.getItem(READY_GROUP_KEY) === '1'; } catch (e) { return false; } })();
-  const waitsOn = s => s.status === 'waiting_for_approval' || ['needs_you', 'check'].includes(attOf(s)?.state);
+  const waitsOn = s => s.status === 'waiting_for_approval' || (!deferredOf(s) && ['needs_you', 'check'].includes(attOf(s)?.state));
   function readyBody(list, rowFn) {
     const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready"><button type="button" data-rdygroup="0" aria-pressed="${!readyBySubject}"${readyBySubject ? '' : ' class="on"'}>Newest</button><button type="button" data-rdygroup="1" aria-pressed="${readyBySubject}"${readyBySubject ? ' class="on"' : ''}>By subject</button></div>`;
     if (!readyBySubject) return bar + list.map(rowFn).join('');
@@ -195,7 +200,7 @@ window.WizCore.chats = function createChats(H) {
       // While searching, every section with a hit opens so nothing is buried.
       const open = n ? true : secOpen[k];
       const newN = k === 'ready' ? list.filter(s => LIVE.isNew(s) && !waitsOn(s)).length : 0;
-      const waitN = k === 'ready' ? list.filter(s => s.status === 'waiting_for_approval' || attOf(s)?.state === 'needs_you').length : 0;
+      const waitN = k === 'ready' ? list.filter(s => s.status === 'waiting_for_approval' || (!deferredOf(s) && attOf(s)?.state === 'needs_you')).length : 0;
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
         ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
@@ -384,7 +389,7 @@ window.WizCore.chats = function createChats(H) {
     const w = W[wid];
     vib(8);
     if (a !== 'restore' && w && w.thread === sid) threadBack(w);
-    const msg = { done: ['✓', 'Marked done'], defer: ['◷', 'Moved to Deferred'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
+    const msg = { done: ['✓', 'Marked done'], defer: ['◷', 'Deferred · bottom of Ready'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
     const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : a === 'defer' ? LIVE.defer(sid) : LIVE.restore(sid));
     if (ok && a === 'file') toast('▤', 'Filed in Archive', 1800);
@@ -737,7 +742,8 @@ window.WizCore.chats = function createChats(H) {
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
     const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); threadAct(rw, sid, rsa.dataset.rsact); return true; }
     if (e.target.closest('[data-rsopen]') && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); openChat(owner(rw), sid); return true; }
-    if (rowSheet && e.target.closest('.ch-sheet') && !e.target.closest('.ch-sheet-b')) { closeRowSheet(); return true; }
+    // The lift that ends a long-press can land on the sheet's backdrop (the row sat under it): keep the sheet open.
+    if (rowSheet && e.target.closest('.ch-sheet') && !e.target.closest('.ch-sheet-b')) { if (!justPressed()) closeRowSheet(); return true; }
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve); return true; }

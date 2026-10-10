@@ -62,7 +62,7 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   const secs = await p.$$eval('.ch-sec', els => els.map(e => ({ k: e.dataset.sec, label: e.querySelector('.ch-sec-h span').textContent, n: +e.querySelector('.ch-sec-h small').textContent, open: e.classList.contains('open'), rows: e.querySelectorAll('.ch-row').length })));
   console.log('  sections:', secs.map(s => `${s.label} ${s.n}${s.open ? '' : ' (closed)'}`).join(' · '));
   const labels = secs.map(s => s.label);
-  ok(['Working', 'Ready', 'Yesterday', 'Past week', 'Deferred', 'Archive'].every(l => labels.includes(l)), 'Working / Ready / Yesterday / Past week / Deferred / Archive sections present', labels.join(','));
+  ok(['Working', 'Ready', 'Yesterday', 'Past week', 'Archive'].every(l => labels.includes(l)) && !labels.includes('Deferred'), 'Working / Ready / Yesterday / Past week / Archive sections present (Deferred sits at the bottom of Ready)', labels.join(','));
   ok(secs.reduce((a, s) => a + s.n, 0) === listed, 'section counts add up to every thread', `${secs.reduce((a, s) => a + s.n, 0)} vs ${listed}`);
   const readySec = secs.find(s => s.k === 'ready');
   const readyTitles = await p.$$eval('.ch-sec[data-sec="ready"] .ch-row b', els => els.map(e => e.textContent));
@@ -73,8 +73,11 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   ok(want.ready > 0 && readyN === want.ready, `Ready holds every thread Wizard's Work view calls Ready (${readyN}/${want.ready})`, JSON.stringify(readyTitles.slice(0, 3)));
   const yN = await p.$eval('.ch-sec[data-sec="yesterday"] .ch-sec-h small', e => +e.textContent).catch(() => 0);
   ok(yN === want.yday, `Yesterday holds yesterday's threads (${yN}/${want.yday})`);
-  const order = await p.evaluate(() => { const L = __wos.live, g = L.workGroups(); return g.ready.every((s, i, a) => !i || Date.parse(L.cardAt(a[i - 1])) >= Date.parse(L.cardAt(s))); });
-  ok(order, 'Ready is newest-first by latest message (Wizard rule)');
+  // Newest first within each status band (approval · needs you · test this · the rest · Deferred at the bottom).
+  const order = await p.evaluate(() => { const L = __wos.live, g = L.workGroups();
+    const band = s => s.status === 'waiting_for_approval' ? 0 : s.deferred ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
+    return g.ready.every((s, i, a) => !i || band(a[i - 1]) < band(s) || (band(a[i - 1]) === band(s) && Date.parse(L.cardAt(a[i - 1])) >= Date.parse(L.cardAt(s)))); });
+  ok(order, 'Ready is newest-first by latest message within each status band, Deferred last');
   ok(secs.find(s => s.k === 'pastWeek')?.open === false && secs.find(s => s.k === 'archive')?.open === false, 'Past week + Archive start collapsed');
   await p.tap('.ch-sec[data-sec="pastWeek"] .ch-sec-h'); await p.waitForTimeout(300);
   ok(await p.locator('.ch-sec[data-sec="pastWeek"] .ch-row').count() > 0, 'tapping Past week expands it');

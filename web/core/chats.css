@@ -281,6 +281,11 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-row.att-needs .pv, .ch-row.att-check .pv { color: var(--ink-2); }
 .ch-row.att-needs .tp b, .ch-row.att-check .tp b { color: var(--ink); font-weight: 700; }
 .ch-row.quiet { opacity: .72; }
+/* Deferred: bottom of Ready, a muted status in place of Needs you / Test this */
+.st.deferred { background: var(--ink-3); box-shadow: none; }
+.ch-row .pv em.att.deferred { color: var(--ink-3); }
+.ch-row.deferred { opacity: .62; }
+.ch-row.deferred .pv { -webkit-line-clamp: 1; }
 .ch-row.quiet .pv { -webkit-line-clamp: 1; }
 .ch-row.quiet.unread { opacity: .9; }
 .ch-sec-h b.wait { background: rgba(255, 190, 85, .16); color: var(--amber); }

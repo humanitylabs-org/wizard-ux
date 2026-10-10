@@ -266,6 +266,7 @@ body {
 
 .timer { position: absolute; left: 50%; bottom: -24px; transform: translateX(-50%) translateY(6px); opacity: 0; transition: opacity 220ms, transform 260ms var(--ease);
   min-width: 52px; padding: 3px 9px; border-radius: 99px; text-align: center; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .04em;
+  white-space: nowrap; width: max-content; /* one line: the orb is narrower than dot + time, so it used to wrap */
   background: rgba(12, 6, 30, .9); border: 1px solid rgba(205, 190, 255, .35); color: #fff; pointer-events: none; }
 .timer::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--red); margin-right: 6px; vertical-align: 1px; box-shadow: 0 0 8px var(--red); animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .2; } }

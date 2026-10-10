@@ -190,7 +190,10 @@
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
   // Ready order: approvals, then needs you, then things to test, then everything else (newest first within each).
   const asksJames = s => s.attention?.state === 'needs_you' || s.attention?.state === 'check';
-  const readyRank = s => needsApproval(s) ? 0 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
+  // Deferred threads sit at the bottom of Ready marked Deferred (James, 10 Oct 2026: "defer could just go at the
+  // bottom of today … and just change the status to deferred"), whatever their day, until restored or done.
+  const isDeferred = s => !!s.deferred && !s.archived;
+  const readyRank = s => needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archB = now - WEEK;
@@ -199,7 +202,7 @@
       const t = sectionTime(s);
       if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
-      else if (s.deferred && !s.archived) g.deferred.push(s);
+      else if (isDeferred(s)) g.ready.push(s);
       else if (isErr(s)) g.errors.push(s);
       else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
