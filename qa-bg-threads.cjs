@@ -92,11 +92,13 @@ const phoneState = p => p.evaluate(() => ({ idx: __wos.desks.findIndex((d, i) =>
     ok(th === null, 'New chat send: window returns to the thread list (does not open the new thread)', String(th));
     ok(await p.evaluate(() => __wos.idx) === 1, 'New chat send: stays on the Chats desk');
     ok(await p.locator('.ch-row').count() > 0, 'New chat send: the list is on screen');
-    // An existing thread reply still stays in the thread (replies are not new threads).
+    // A reply in an existing thread goes to that thread (no new thread) and, send-and-go (10 Oct 2026), the
+    // phone pops back to the list too (qa-send-and-go.cjs covers it in depth).
     await p.evaluate(id => __wos.openChat(id, __wos.live.sessions.find(s => !/QA background/.test(s.preview || ''))?.id), wid); await p.waitForTimeout(1200);
-    const tid = await p.evaluate(id => __wos.wins[id].thread, wid);
-    await p.evaluate(id => __wos.sendChat(id, 'QA reply stays put'), wid); await p.waitForTimeout(1500);
-    ok(await p.evaluate(id => __wos.wins[id].thread, wid) === tid && !!tid, 'reply in an open thread: thread stays open', tid);
+    const tid = await p.evaluate(id => __wos.wins[id].thread, wid); writes.length = 0;
+    await p.evaluate(id => __wos.sendChat(id, 'QA reply in its thread'), wid); await p.waitForTimeout(1500);
+    ok(!!tid && !writes.some(w => /\/api\/sessions$/.test(w.u)) && writes.some(w => w.body.includes('QA reply in its thread')), 'reply in an open thread: delivered to that thread, no new thread', tid);
+    ok(await p.evaluate(id => __wos.wins[id].thread, wid) === null, 'reply in an open thread: phone pops back to the list');
     ok(errs.length === 0, 'no page errors (New chat)', errs.join(' | '));
     await ctx.close();
   }

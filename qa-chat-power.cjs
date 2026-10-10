@@ -136,6 +136,8 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
   p.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|frame-ancestors|Framing/.test(m.text())) errs.push('phone console: ' + m.text()); });
   await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
   const back = async () => { await p.keyboard.press('Escape'); await sleep(450); };
+  // Send and go (10 Oct 2026): a phone send already returns to the list; only press Back if a thread is still open.
+  const backToList = async () => { if (await p.evaluate(() => !!Object.values(__wos.wins).find(x => x.app === 'chats' && x.thread))) await back(); };
   const wid = () => p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats')?.id);
   const thread = () => p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats')?.thread ?? null);
   const backLog = () => p.evaluate(() => (__wos.back.log || []).slice(-1)[0] || '');
@@ -328,7 +330,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await sleep(400);
     const left = await p.evaluate(async sel => ({ tray: document.querySelectorAll(`${sel} .ch-att`).length, draft: JSON.parse(localStorage.getItem('wos.chat.drafts.v1') || '{}')['direct:qa_pw_other'] || null }), await S('.ch-compose'));
     ok(left.tray === 0 && !left.draft, '#13b phone: after the voice reply sends, the composer tray is empty and no draft is left behind', left);
-    await back(); await sleep(300);
+    await backToList(); await sleep(300);
     const draftRows = await p.evaluate(() => document.querySelectorAll('.ch-draft').length);
     await openThread('qa_pw_other');
     const reopen = await p.evaluate(async sel => document.querySelectorAll(`${sel} .ch-att`).length, await S('.ch-compose'));
@@ -342,7 +344,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await p.click(await S('.ch-compose [data-chmic]'));
     const failed = await until(() => p.evaluate(() => __wos.outbox.unsent().find(it => it.state === 'failed' && it.audio)?.id || ''), 15000);
     ok(!!failed, '#12/#13 phone: a voice reply Wizard refuses stays in the outbox as failed', failed);
-    await back(); await sleep(300);
+    await backToList(); await sleep(300);
     const L = await S('[data-sec="errors"]');
     const vrow = await p.evaluate(([sel, id]) => { const r = document.querySelector(`${sel} [data-errob="${id}"]`); return r && r.textContent; }, [L, failed]);
     ok(vrow && /Voice note/.test(vrow) && /Not sent/.test(vrow), '#12 phone: the failed voice note shows in Errors', vrow);

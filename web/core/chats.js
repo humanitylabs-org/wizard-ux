@@ -80,7 +80,10 @@ window.WizCore.chats = function createChats(H) {
   function outRow(it) {
     const t = String(it.text || '').trim().replace(/\s+/g, ' ');
     const what = t ? clip(t, 100) : (it.audio || it.audioFile ? 'Voice note' : 'New chat');
-    return `<div class="msg u pending ${esc(it.state)} ch-out" data-ob="${esc(it.id)}"><div class="bub">${esc(what)}</div><div class="pmeta">${pendingState(it)}</div></div>`;
+    // A reply names its thread and opens it on tap.
+    const s = it.kind === 'reply' && it.sessionId ? LIVE.session(it.sessionId) : null;
+    const to = it.kind === 'reply' ? `<small class="ch-out-to">Reply · ${esc(clip(s?.title || 'thread', 60))}</small>` : '';
+    return `<div class="msg u pending ${esc(it.state)} ch-out" data-ob="${esc(it.id)}">${to}<div class="bub"${it.kind === 'reply' && it.sessionId ? ` data-chopen="${esc(it.sessionId)}"` : ''}>${esc(what)}</div><div class="pmeta">${pendingState(it)}</div></div>`;
   }
   // Rotate one storage write: the live new-chat slot → a saved slot, the chosen saved slot → the live one.
   function rotateNew(resume) {
@@ -121,9 +124,9 @@ window.WizCore.chats = function createChats(H) {
     const head = `<div class="ch-top"><label class="ch-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-chsearch placeholder="Search chats and messages" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}</label><button class="ch-new" data-chnew aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
     let body;
     const draftSec = drafts.length ? `<section class="ch-sec open" data-sec="drafts"><div class="ch-sec-h static"><span>Drafts</span><small>${drafts.length}</small></div><div class="ch-sec-b">${drafts.map(d => draftRow(d, d.key === 'new' && curThread === '__new__')).join('')}</div></section>` : '';
-    // New chats still on the phone (the window went back to the list on send): shown until Wizard admits them,
-    // so a message sent while Wizard is unreachable never vanishes from Chats. Failed voice notes live in Errors.
-    const outNew = OUTBOX ? OUTBOX.unsent().filter(it => it.kind === 'new' && !(it.state === 'failed' && (it.audio || it.audioFile)) && (!n || norm(it.text).includes(n))) : [];
+    // Messages still on the phone (the window went back to the list on send), new chats and replies: shown until
+    // Wizard takes them, so a send never vanishes from Chats. Failed voice notes live in Errors.
+    const outNew = OUTBOX ? OUTBOX.unsent().filter(it => (it.kind === 'new' || it.kind === 'reply') && !(it.state === 'failed' && (it.audio || it.audioFile)) && (!n || norm(it.text).includes(n))) : [];
     const sendSec = outNew.length ? `<section class="ch-sec open" data-sec="sending"><div class="ch-sec-h static"><span>Sending</span><small>${outNew.length}</small></div><div class="ch-sec-b">${outNew.map(outRow).join('')}</div></section>` : '';
     if (!LIVE.ok) body = draftSec + sendSec + `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
     else if (!hit.length && !drafts.length && !outNew.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
@@ -561,13 +564,23 @@ window.WizCore.chats = function createChats(H) {
     renderChats(w); applyLayout(deskOf(wid));
   }
   function chatsBack(w) { if (w.thread) saveDraft(w.id); const c = ch(w.id); c.files = []; c.draft = ''; c.draftFor = ''; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
+  /* After a send from a thread (or New chat): back to the list on the phone. The desktop keeps the thread
+   * pane, since its list is already beside it. Only if the window still shows the thread that was sent from;
+   * a thread James opened meanwhile stays open. Orb sends already show the send pill, so no second toast. */
+  const PHONE = () => (document.documentElement.dataset.shell || 'phone') !== 'desktop';
+  function leaveAfterSend(wid, sid, isNew, how = '') {
+    const w = W[wid]; if (!w || !sid || w.thread !== sid || !(isNew || PHONE())) return false;
+    const c = ch(wid); w.thread = null; save(); c.loadedFor = ''; c.draftFor = '';
+    if (!/voice, aimed/.test(how)) toast('✦', isNew ? `New thread started · ${window.WizConfig.agent()} is on it` : `Sent · ${window.WizConfig.agent()} has it`, 1400);
+    return true;
+  }
   async function sendChat(wid, text, how = 'typing in the Chats window', audio = null) {
     const w = W[wid]; text = String(text || '').trim(); if (!w) return;
     const c = ch(wid);
     const files = (c.files || []).filter(f => f.id && !f.uploading);
     if (!text && !files.length && !audio) return;
     if ((c.files || []).some(f => f.uploading)) { toast('…', 'Still uploading · send when it finishes', 2000); return; }
-    const isNew = w.thread === '__new__';
+    const isNew = w.thread === '__new__', sid0 = w.thread;
     const s = isNew ? null : LIVE.session(w.thread);
     const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
     KIT.drafts.clear(draftKey(w)); c.draft = ''; c.files = [];
@@ -576,9 +589,10 @@ window.WizCore.chats = function createChats(H) {
     const it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : w.thread, steerRunId, text, audio,
       instructions: viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid, how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
     c.follow = true; if (nm) c.newModel = null;
-    // A new thread is delegated in the background: the window steps back to the list instead of
-    // opening the thread, and the thread appears there (Working) once it is admitted.
-    if (isNew && W[wid]) { W[wid].thread = null; save(); c.loadedFor = ''; c.draftFor = ''; toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600); }
+    // Send and go (James, 10 Oct 2026): on the phone every send steps back to the thread list, a new thread
+    // and a reply alike, so he never waits on the screen to watch it go. The list carries the proof: the
+    // Sending section until Wizard takes it (Retry/Edit there if it can't), then the thread under Working.
+    leaveAfterSend(wid, isNew ? '__new__' : sid0, isNew, how);
     renderChats(W[wid]); applyLayout(deskOf(wid));
   }
   const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
@@ -684,15 +698,15 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, openChat, refreshCompose, saveDraft, closeRowSheet }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend }) : null;
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
   OUTBOX?.onChange(() => {
-    const sig = OUTBOX.unsent().filter(it => it.kind === 'new').map(it => it.id + ':' + it.state + ':' + (it.error || '')).join(',');
+    const sig = OUTBOX.unsent().filter(it => it.kind === 'new' || it.kind === 'reply').map(it => it.id + ':' + it.state + ':' + (it.error || '')).join(',');
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
-  return { CH, ch, click, bind, PW, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, uploadFile,
+  return { CH, ch, click, bind, PW, leaveAfterSend, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
 };

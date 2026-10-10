@@ -248,8 +248,10 @@ window.WosChatPower = function chatPower(A) {
         instructions: H.viewContext(wid, 'a voice reply recorded in this thread'), files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
         wid: isNew ? wid : (w && w.thread === sid ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
     } catch (e) { if (comp.length) clearTray(comp); throw e; } // not saved anywhere: the attachments go back
-    if (isNew && w && w.thread === '__new__') { w.thread = it.sessionId; c.newModel = null; H.save(); c.loadedFor = ''; }
+    if (isNew) c.newModel = null;
     c.follow = true;
+    // Send and go: a voice reply from the composer mic steps back to the list like a typed send (chats.js).
+    if (w) A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
     if (w) A.renderChats(w);
     return it;
   }
