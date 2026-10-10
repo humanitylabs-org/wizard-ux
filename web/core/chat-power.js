@@ -81,7 +81,7 @@ window.WosChatPower = function chatPower(A) {
     }
     // Later renders: a thread that follows stays on the bottom; otherwise the reading place holds.
     if (c.follow || (o.working && o.atBottom)) toBottom(nb);
-    else nb.scrollTop = o.box ? o.box.scrollTop : nb.scrollTop;
+    else if (o.boxTop != null) nb.scrollTop = o.boxTop; // read before the old list was replaced (a detached box reads 0)
     paintLatest(el, nb);
     return true;
   }
