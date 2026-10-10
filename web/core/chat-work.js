@@ -50,7 +50,7 @@
     // A question still open when the run ended was never answered; the agent carried on without it.
     if (question && question.state === 'waiting' && !live) question = { ...question, state: 'unanswered' };
     const times = evs.map(e => e.at).filter(fin);
-    const start = fin(tn.u?.at) ? tn.u.at : times.length ? Math.min(...times) : NaN;
+    const start = fin(tn.u?.at) ? tn.u.at : fin(tn.note?.at) ? tn.note.at : times.length ? Math.min(...times) : NaN;
     const end = live ? now : fin(tn.a?.at) ? tn.a.at : times.length ? Math.max(...times) : NaN;
     // A step with no result yet: done when the next step started (or the answer came), running if live.
     steps.forEach((st, i) => { if (!fin(st.end)) { const nx = steps[i + 1]?.start; st.end = fin(nx) ? nx : live ? NaN : end; st.running = live && !fin(nx); } });

@@ -162,6 +162,7 @@
     if (w.app === 'chats') return CHATS_APP;
     if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'] || { name: 'Review', icon: '◐', g: ['#444a60', '#22263a'] };
     if (w.app === 'maps') return APP.maps;
+    if (w.app === 'usuals') return APP.usuals || { name: 'Usuals', icon: '🍜', g: ['#00b14f', '#0a5c32'] };
     return APP[w.appId] || { name: w.title || 'Page', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
   function winTitle(w) {
@@ -192,6 +193,7 @@
       case 'review': return renderReviewShell(w.id);
       case 'frame': return renderFrame(w);
       case 'maps': return renderMaps(w);
+      case 'usuals': return `<div class="usuals" data-usuals="${w.id}"></div>`;
       default: return renderApp(w);
     }
   }
@@ -209,6 +211,7 @@
   function mountWin(w, el) {
     if (w.app === 'review') mountReview(w.id, null);
     if (w.app === 'chats') renderChats(w);
+    if (w.app === 'usuals') window.WosUsuals?.mount(el.querySelector('[data-usuals]'));
     watchFrames(el);
   }
   function deskShell(i) {
@@ -530,6 +533,7 @@
       if (a.view === 'inbox') { openSheet('inbox'); return true; }
       openReview(a.view, extra.date, opts); return true;
     }
+    if (a.id === 'usuals') { openUsuals(opts); return true; }
     if (a.id === 'maps') { openWin({ app: 'maps', dest: extra.query || '', mode: extra.query ? 'search' : 'home' }, opts); return true; }
     if (a.kind === 'chats') {
       const t = opts.desk == null ? idx : opts.desk;
@@ -540,6 +544,13 @@
     if (a.kind === 'wizard' && a.url) { openWin({ app: 'frame', appId: a.id }, opts); return true; }
     openWin({ app: 'app', appId: a.id, query: extra.query || '' }, opts);
     return true;
+  }
+  function openUsuals(opts = {}) {
+    closeSheets(true);
+    const t = opts.desk == null ? idx : opts.desk;
+    const here = Object.keys(W).find(id => W[id].app === 'usuals');
+    if (here) { const d = deskOf(here); if (d !== idx) goDesk(d); focusWin(here); window.WosUsuals?.refresh(); return; }
+    openWin({ app: 'usuals' }, { ...opts, desk: t });
   }
   function openReview(level, date, opts = {}) {
     const z = level === 'month' ? { level: 'month' } : level === 'week' ? { level: 'week', week: weekOf(date || YESTERDAY) } : { level: 'day', day: date || YESTERDAY };
@@ -1251,7 +1262,7 @@
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native').slice(0, 4);
       body.innerHTML = `<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
         <div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>
-        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats').length}</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats').map(appTile).join('')}</div></div>`; // the per-desk window list never renders in the launcher: it read as stray text
+        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals').length}</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals').map(appTile).join('')}</div></div>`; // the per-desk window list never renders in the launcher: it read as stray text
       body.scrollTop = body.scrollHeight;
       return;
     }
@@ -1569,7 +1580,8 @@
     V.replyTo = { wid, sid };
     if (V.native) replyTake(V.native, { wid, sid });
     CHATS.PW?.paintMic(true, sid);
-    txPill('✦', 'Voice reply · tap the mic or the orb to send', 'agent'); txHide(2200);
+    // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
+    // animates."): the lit mic, the orb and its timer already say a reply is recording.
     return 'recording';
   }
   async function startVoice(kind) {
@@ -1813,6 +1825,8 @@
 
   /* ---------------- routing ---------------- */
   function localParse(t, snap, kind) {
+    // "Order my usual kra pao": a taught usual runs on the phone (Grab under a cover), nothing goes to Wizard.
+    const us = window.WosUsuals?.match(t); if (us) return { action: 'usual', id: us };
     // The quick-search spell ("image search …", "search …") opens the search sheet on-device, even over a thread.
     // A held orb is always a command, so there even the plain "search for …" form is the search app's.
     const qs = quickSearch(t);
@@ -1954,6 +1968,7 @@
     if (a === 'fullscreen') { if (!f) return false; setFull(f, c.on !== false); return true; }
     if (a === 'move_window') { if (!f) return false; const to = c.to === 'prev' || c.to === 'left' ? idx - 1 : c.to === 'next' || c.to === 'right' ? idx + 1 : +c.to - 1; return moveWin(f, to); }
     if (a === 'quick_search') return openSearch(c.query, c.tab);
+    if (a === 'usual') return window.WosUsuals?.run(c.id) ?? false;
     if (a === 'search') { const q = c.query || text; if (searchUrl(q) && !findApp(q)) return openSearch(q, 'all'); openSheet('launcher', q); return true; }
     if (a === 'open_view' || a === 'view' || a === 'show') {
       const v = String(c.view || arg).toLowerCase();
@@ -2126,7 +2141,8 @@
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
-    const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
+    const dv = window.WosDevice?.back?.(); if (dv) return dv;
+    { const fw = W[desks[idx].focus]; if (fw?.app === 'usuals') { const u = window.WosUsuals?.back?.(); if (u) return u; } } // share picker, recovered-recording card
     if (closePeek()) return 'peek';
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet) { closeSheets(); return 'sheet'; }
@@ -2259,6 +2275,7 @@
     closeSheets(); if (idx !== HOME && h.action !== 'thread') goDesk(HOME);
     if (h.action === 'listen') { if (V.state === 'idle') startVoice('auto'); return true; }
     if (h.action === 'thread' && h.id) { openWizardThread(String(h.id)); LIVE?.refresh(); return true; }
+    if (h.action === 'usuals') { openUsuals(); return true; }
     if (h.action === 'unsent' || h.action === 'settings') { onUnsentChange(); openSettings(h.action === 'unsent'); return true; }
     if (h.action === 'side-button') { store.set('sideHidden', false); refreshHome(true); if (SIDE && (SIDE.step === 'mic' || SIDE.step === 'assistant')) sideButtonTap(false); else toast('◉', 'Side button is on. Hold it to talk.', 2600); return true; }
     const text = String(h.text || '').trim().slice(0, 2000);

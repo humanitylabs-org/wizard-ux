@@ -2,6 +2,9 @@
 // (wizard_attention: needs_you / check / done / fyi + one-line ask + subject). Ready shows needs-you and
 // test-this rows first with the exact ask as the preview, done/FYI rows go quiet and swipe straight to Done,
 // a needs-you thread from an earlier day stays in Ready, and "By subject" groups Ready like the roundup.
+// Ready has three orders: Newest (pure recency, labels never move rows), Priority (needs you, test this, rest)
+// and By subject. James, 10 Oct 2026: "Newest, I actually want to not use the labels … the newest appears at the
+// top. Then … another option … priority … and that's where it should sort how it is now."
 //
 // James, 10 Oct 2026: "differentiate tasks in ready by which ones are needs you / awaiting your action and which
 // ones are done … I don't want the UX to get too cluttered."
@@ -74,7 +77,7 @@ function routeFor() {
   const p = await ctx.newPage(); p.setDefaultTimeout(8000);
   const errs = [];
   p.on('pageerror', e => errs.push(String(e)));
-  await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); localStorage.removeItem('wos.chats.readyBySubject.v1'); } catch (e) {} });
+  await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); if (!sessionStorage.getItem('qaInit')) { sessionStorage.setItem('qaInit', '1'); localStorage.removeItem('wos.chats.readyBySubject.v1'); localStorage.removeItem('wos.chats.readyOrder.v1'); } } catch (e) {} });
   await p.goto(URL_, { waitUntil: 'domcontentloaded' });
   await p.waitForFunction(() => window.__wos?.live?.ok && window.__wos.live.session('qa_rs_needs'), null, { timeout: 90000 }).catch(() => {});
   ok(await p.evaluate(() => !!window.__wos?.live?.session('qa_rs_needs')), 'thread list loaded with fixture threads');
@@ -87,9 +90,34 @@ function routeFor() {
   try {
     const ids = await readyIds();
     ok(ids.includes('qa_rs_old'), '1 a needs-you thread from 3 days ago stays in Ready', ids);
-    const pos = id => ids.indexOf(id);
-    ok(pos('qa_rs_needs') >= 0 && pos('qa_rs_needs') < pos('qa_rs_check') && pos('qa_rs_check') < pos('qa_rs_fyi') && pos('qa_rs_check') < pos('qa_rs_done') && pos('qa_rs_check') < pos('qa_rs_plain'), '1 order: needs you, then test this, then the rest (even when newer)', ids);
-    ok(pos('qa_rs_old') < pos('qa_rs_check'), '1 the older needs-you sorts with needs-you, above test-this', ids);
+    const onNow = async () => p.$$eval(await R('.ch-rdy-bar button'), els => els.map(e => `${e.textContent}${e.classList.contains('on') ? '*' : ''}`));
+    ok(JSON.stringify(await onNow()) === JSON.stringify(['Newest*', 'Priority', 'By subject']), '1 three orders, Newest is the default', await onNow());
+    // Newest: pure recency, the labels never move a row.
+    ok(JSON.stringify(ids) === JSON.stringify(['qa_rs_fyi', 'qa_rs_plain', 'qa_rs_done', 'qa_rs_check', 'qa_rs_needs', 'qa_rs_old']), '1 Newest: newest at the top, status labels ignored', ids);
+    // Priority: needs you, then test this, then the rest (newest first within each).
+    await p.locator(await R('[data-rdyorder="priority"]')).tap(); await sleep(500);
+    const pids = await readyIds(), pos = id => pids.indexOf(id);
+    ok(JSON.stringify(pids) === JSON.stringify(['qa_rs_needs', 'qa_rs_old', 'qa_rs_check', 'qa_rs_fyi', 'qa_rs_plain', 'qa_rs_done']), '1 Priority: needs you, then test this, then the rest (even when newer)', pids);
+    ok(pos('qa_rs_old') < pos('qa_rs_check'), '1 Priority: the older needs-you sorts with needs-you, above test-this', pids);
+    ok(JSON.stringify(await onNow()) === JSON.stringify(['Newest', 'Priority*', 'By subject']), '1 Priority is highlighted', await onNow());
+    ok((await p.$$(await R('.ch-subj'))).length === 0, '1 Priority adds no subsection headers');
+    await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
+    await p.screenshot({ path: path.join(OUT, '1b-ready-priority.png') });
+    // Priority survives a reload; Newest returns to recency.
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(() => window.__wos?.live?.ok && window.__wos.live.session('qa_rs_needs'), null, { timeout: 90000 }).catch(() => {});
+    await p.evaluate(() => __wos.goDesk(1)); await sleep(1000);
+    ok((await readyIds())[0] === 'qa_rs_needs' && (await onNow())[1] === 'Priority*', '1 Priority is remembered across a reload', await readyIds());
+    // Paging: Priority orders the whole Ready list before the first 40 are cut.
+    const paged = await p.evaluate(() => {
+      const L = __wos.live, base = Date.now();
+      const mk = (i, st) => ({ id: 'pg' + i, title: 'pg' + i, status: 'completed', previewAt: new Date(base - i * 60000).toISOString(), attention: st ? { state: st, ask: 'x', subject: '' } : null });
+      const list = Array.from({ length: 45 }, (_, i) => mk(i, i === 44 ? 'needs_you' : null));
+      return L.readyByPriority(list).slice(0, 40).map(s => s.id).indexOf('pg44');
+    });
+    ok(paged === 0, '1 Priority puts a needs-you row from deep in the list on the first page', paged);
+    await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(500);
+    ok((await readyIds())[0] === 'qa_rs_fyi', '1 back to Newest: the newest thread is at the top again', await readyIds());
 
     const n = await rowInfo('qa_rs_needs');
     ok(n && /att-needs/.test(n.cls) && /^Needs you · Say "ship desks"/.test(n.pv.trim()), '2 needs-you row: amber label + the exact ask as preview', n);
@@ -104,19 +132,26 @@ function routeFor() {
     const hdr = await p.$eval(await R('.ch-sec-h'), e => e.textContent);
     ok(/need you/.test(hdr), '2 Ready header counts what needs you', hdr);
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
-    await p.screenshot({ path: path.join(OUT, '1-ready-newest.png') });
+    await p.screenshot({ path: path.join(OUT, '1a-ready-newest.png') });
 
     // 3. By subject: groups with something waiting first, "Other" last; persists.
-    await p.locator(await R('[data-rdygroup="1"]')).tap(); await sleep(500);
+    await p.locator(await R('[data-rdyorder="subject"]')).tap(); await sleep(500);
     const subj = await p.$$eval(await R('.ch-subj span'), els => els.map(e => e.textContent));
     ok(subj[0] === 'Wizard OS' && subj.includes('Home') && subj.includes('Research') && subj[subj.length - 1] === 'Other', '3 By subject: Wizard OS (2 waiting) first, Other last', subj);
     const order = await readyIds();
     ok(order.indexOf('qa_rs_needs') < order.indexOf('qa_rs_done') && order.indexOf('qa_rs_done') < order.indexOf('qa_rs_old'), '3 rows sit under their subject', order);
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
     await p.screenshot({ path: path.join(OUT, '2-ready-by-subject.png') });
-    ok(await p.evaluate(() => localStorage.getItem('wos.chats.readyBySubject.v1')) === '1', '3 the choice is remembered');
-    await p.locator(await R('[data-rdygroup="0"]')).tap(); await sleep(400);
+    ok(await p.evaluate(() => localStorage.getItem('wos.chats.readyOrder.v1')) === 'subject', '3 the choice is remembered');
+    await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(400);
     ok((await p.$$(await R('.ch-subj'))).length === 0, '3 Newest turns grouping off');
+    // The old two-way toggle's "By subject" carries over to the three-way choice.
+    await p.evaluate(() => { localStorage.removeItem('wos.chats.readyOrder.v1'); localStorage.setItem('wos.chats.readyBySubject.v1', '1'); });
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(() => window.__wos?.live?.ok && window.__wos.live.session('qa_rs_needs'), null, { timeout: 90000 }).catch(() => {});
+    await p.evaluate(() => __wos.goDesk(1)); await sleep(1000);
+    ok((await p.$$(await R('.ch-subj'))).length > 0, '3 an old "By subject" setting carries over');
+    await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(400);
 
     // 4. Swipe left on a quiet row files it straight to Done; on a needs-you row it opens the action sheet.
     async function swipe(id) {
