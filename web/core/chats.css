@@ -307,3 +307,31 @@ body > .mviewer { position: fixed; z-index: 200; }
 .msg.laterrun .lr-ic { color: #b99bff; }
 .msg.laterrun span:nth-child(2) { flex: 1; }
 .msg.laterrun time { font-size: 12px; opacity: .8; }
+
+/* Ready status icons: the row icon is the thread's status, not a per-thread star.
+   Two separate signals: the icon = what the thread wants; bold/plain = unread/read (like an inbox).
+   Status never changes a row's weight or opacity, so every status reads at full strength. */
+.ch-row .emo.sti { position: relative; font-size: 0; color: var(--ink-3); background: rgba(205, 190, 255, .06); }
+.ch-row .emo.sti svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ch-row .emo.sti svg .f { fill: currentColor; stroke: none; }
+.ch-row .emo.sti svg .k { stroke: #0b0a12; stroke-width: 2.6; }
+.ch-row .emo.sti svg .kd { fill: #0b0a12; stroke: none; }
+.ch-row .emo.sti.needs { color: #ffb84d; background: rgba(255, 184, 77, .16); box-shadow: inset 0 0 0 1px rgba(255, 184, 77, .30); }
+.ch-row .emo.sti.check { color: #5adcff; background: rgba(90, 220, 255, .14); box-shadow: inset 0 0 0 1px rgba(90, 220, 255, .28); }
+.ch-row .emo.sti.done { color: #3ddc84; background: rgba(61, 220, 132, .14); box-shadow: inset 0 0 0 1px rgba(61, 220, 132, .28); }
+.ch-row .emo.sti.fyi { color: #ffd84a; background: rgba(255, 216, 74, .13); box-shadow: inset 0 0 0 1px rgba(255, 216, 74, .26); }
+.ch-row .emo.sti.approval { color: #ffb84d; background: rgba(255, 184, 77, .16); box-shadow: inset 0 0 0 1px rgba(255, 184, 77, .30); }
+.ch-row .emo.sti.failed { color: #ff6b6b; background: rgba(255, 107, 107, .15); box-shadow: inset 0 0 0 1px rgba(255, 107, 107, .28); }
+.ch-row .emo.sti.offline { color: #ffb84d; background: rgba(255, 184, 77, .10); }
+.ch-row .emo.sti.deferred { color: var(--violet-2); background: rgba(143, 99, 255, .14); box-shadow: inset 0 0 0 1px rgba(185, 155, 255, .30); } /* matches the violet Deferred label */
+.ch-row .emo.sti.working { background: rgba(90, 220, 255, .08); }
+.ch-row .emo.sti .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(90, 220, 255, .22); border-top-color: var(--cyan); animation: sti-spin .9s linear infinite; }
+@keyframes sti-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ch-row .emo.sti .spin { animation-duration: 3s; } }
+.ch-row .emo.sti .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); opacity: .55; }
+/* Read state is the only thing that sets weight: unread = bold white title + brighter preview + violet time; read = plain. */
+.ch-row .tp b, .ch-row.att-needs .tp b, .ch-row.att-check .tp b { color: var(--ink-2); font-weight: 500; }
+.ch-row .pv, .ch-row.att-needs .pv, .ch-row.att-check .pv { color: var(--ink-3); }
+.ch-row.unread .tp b, .ch-row.unread.att-needs .tp b, .ch-row.unread.att-check .tp b { color: var(--ink); font-weight: 750; }
+.ch-row.unread .pv, .ch-row.unread.att-needs .pv, .ch-row.unread.att-check .pv { color: var(--ink-2); }
+.ch-row.quiet, .ch-row.quiet.unread { opacity: 1; }

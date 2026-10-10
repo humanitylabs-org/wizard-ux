@@ -742,25 +742,28 @@ public class MainActivity extends Activity {
         public String usualsRun(String id) {
             final String[] out = {""};
             java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
-            main.post(() -> { out[0] = ai.wizards.os.usuals.UsualsRunner.get(MainActivity.this).run(String.valueOf(id)); l.countDown(); });
+            main.post(() -> {
+                ai.wizards.os.usuals.UsualsRunner r = ai.wizards.os.usuals.UsualsRunner.get(MainActivity.this);
+                out[0] = ai.wizards.os.usuals.UsualsRunner.NEW.equals(id) ? r.teach("") : r.run(String.valueOf(id));
+                l.countDown();
+            });
             try { l.await(3, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
             return out[0];
         }
 
-        /** The usual whose name James said ("order my usual kra pao"), or "". */
+        /** The usual whose name James said ("order my usual kra pao"), "+new" for "order something new", or "". */
         @JavascriptInterface
         public String usualsMatch(String said) {
-            java.util.List<ai.wizards.os.usuals.UsualsStore.Usual> l = ai.wizards.os.usuals.UsualsStore.all(MainActivity.this);
-            int i = ai.wizards.os.usuals.UsualsPolicy.matchVoice(ai.wizards.os.usuals.UsualsStore.names(l), String.valueOf(said));
-            return i >= 0 ? l.get(i).id : "";
+            String id = ai.wizards.os.usuals.UsualsVoice.match(MainActivity.this, String.valueOf(said));
+            return id == null ? "" : id;
         }
 
         @JavascriptInterface
         public boolean usualsSave(String id, String name, String script) {
             ai.wizards.os.usuals.UsualsStore.Usual u = ai.wizards.os.usuals.UsualsStore.get(MainActivity.this, String.valueOf(id));
             if (u == null) return false;
-            if (name != null && !name.trim().isEmpty()) u.name = name.trim();
-            if (script != null && !script.equals(ai.wizards.os.usuals.UsualsPolicy.write(u.steps))) {
+            if (name != null && !name.trim().isEmpty()) { u.name = name.trim(); u.needsName = false; }
+            if (script != null && !"null".equals(script) && !"undefined".equals(script) && !script.equals(ai.wizards.os.usuals.UsualsPolicy.write(u.steps))) {
                 java.util.List<ai.wizards.os.usuals.UsualsPolicy.Step> s = ai.wizards.os.usuals.UsualsPolicy.parse(script);
                 if (s.isEmpty()) return false;
                 u.steps = s;
@@ -769,6 +772,12 @@ public class MainActivity extends Activity {
             return true;
         }
 
+        /** "Keep" on a new usual's suggested name. */
+        @JavascriptInterface
+        public void usualsKeepName(String id) {
+            ai.wizards.os.usuals.UsualsStore.Usual u = ai.wizards.os.usuals.UsualsStore.get(MainActivity.this, String.valueOf(id));
+            if (u != null && u.needsName) { u.needsName = false; ai.wizards.os.usuals.UsualsStore.put(MainActivity.this, u); }
+        }
         @JavascriptInterface
         public void usualsDelete(String id) { ai.wizards.os.usuals.UsualsStore.delete(MainActivity.this, String.valueOf(id)); }
 
