@@ -51,6 +51,9 @@ const PNG = fs.readFileSync(process.env.QA_PNG || '/home/telos/.hermes/data/apps
     await p.goto(URL_ + `?shell=${phone ? 'phone' : 'desktop'}`, { waitUntil: 'load' });
     await p.waitForTimeout(2500);
     const api = phone ? '__wos' : '__wux';
+    // Desk strip: phone links open as review desks (qa-desk-strip.cjs covers that). Turn the route off so this
+    // suite keeps testing the sheet itself, which still serves desktop, quick search and declined links.
+    if (phone) await p.evaluate(() => { if (window.__wos.links) window.__wos.links.route = null; });
     const shellUrl = p.url();
     const st = () => p.evaluate(a => window[a].links.state(), api);
     // A chat bubble with two links, like an agent reply.
@@ -100,7 +103,7 @@ const PNG = fs.readFileSync(process.env.QA_PNG || '/home/telos/.hermes/data/apps
     s = await st();
     const after = await p.evaluate(a => a === '__wos' ? { n: document.querySelectorAll('.desk').length, wins: JSON.parse(localStorage.getItem('wos.wins') || '{}') } : { n: document.querySelectorAll('.ws, [data-ws]').length, wins: JSON.parse(localStorage.getItem('wux.desk.wins') || '{}') }, api);
     const kept = await p.evaluate(() => [...document.querySelectorAll('iframe')].map(f => f.getAttribute('src') || '').filter(x => /qa-page\/two/.test(x)).length);
-    ok(!s.open && kept >= 1 && after.n === before.n, `${shell}: Keep → window on this desk, sheet gone, no new desk`, JSON.stringify({ kept, before: before.n, after: after.n }));
+    ok(!s.open && kept >= 1 && after.n === before.n + (shell === 'phone' ? 1 : 0), shell === 'phone' ? 'phone: Keep → window on its own desk right beside this one (desk strip), sheet gone' : `${shell}: Keep → window on this desk, sheet gone, no new desk`, JSON.stringify({ kept, before: before.n, after: after.n }));
     await p.screenshot({ path: `${SHOTS}/ls-${shell}-kept.png` });
 
     // 6. Opening the sheet over the Apps sheet: Back closes the link sheet first.

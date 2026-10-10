@@ -786,7 +786,7 @@ window.WizCore.chats = function createChats(H) {
     if (!w) { if (opts.seal && opts.seal !== true) opts.seal.putBack(); return; }
     const c = ch(wid);
     const sid = opts.sid || w.thread; if (!sid) { if (opts.seal && opts.seal !== true) opts.seal.putBack(); return; }
-    const here = w.thread === sid; // the window still shows the thread this was sent from
+    const here = !opts.away && w.thread === sid; // the window still shows the thread this was sent from (opts.away: sent from elsewhere, e.g. a review desk)
     const voice = 'seal' in opts; // a voice send: the composer goes only as taken at the tap, never the live tray
     const sealed = opts.seal === true ? takeComposer(wid, sid) : opts.seal || null;
     const tray = here && !voice ? (c.files || []) : [];
@@ -814,7 +814,7 @@ window.WizCore.chats = function createChats(H) {
     // tied the screen to the phone's IndexedDB commit plus every outbox listener's re-render: ~80 ms on a desktop
     // Chrome, 1-2 s in the phone's WebView. The reply's thread is held under Working from the same frame
     // (live.js holdSend, the orb's path) until its outbox item takes over. qa-send-leave-timing.cjs guards this.
-    const left = leaveAfterSend(wid, sid, isNew, how);
+    const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
     const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     // Saved on the phone; the outbox delivers it (and retries) from here.

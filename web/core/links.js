@@ -27,7 +27,10 @@
   const NATIVE = !!window.WizardOSNative || /WizardOS-Android\//.test(navigator.userAgent || '');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  function abs(href, base) { try { return new URL(href, base || location.href); } catch (e) { return null; } }
+  // A preview of this shell on a sibling host (desks.wizard001.com) treats links to the canonical private
+  // origin as its own, so a thread's private.wizard001.com/… link opens inside the preview it was tapped in.
+  const CANON = 'private.wizard001.com', SIBLING = location.hostname !== CANON && (/\.wizard001\.com$/.test(location.hostname) || location.hostname === '127.0.0.1');
+  function abs(href, base) { try { const u = new URL(href, base || location.href); if (SIBLING && u.hostname === CANON && u.protocol === 'https:') return new URL(u.pathname + u.search + u.hash, location.origin); return u; } catch (e) { return null; } }
   function inApp(u) { return !!u && (u.protocol === 'https:' || u.protocol === 'http:') && u.origin === ORIGIN; }
   function external(u) {
     // Android app: a main-frame navigation to another origin is handed to the system browser natively.
@@ -220,6 +223,8 @@
       // A link to this app itself (…/wizard-os-home/?session=…, ?view=…) opens in place, not in a sheet.
       const DL = window.WizCore && window.WizCore.deeplink;
       if (DL && DL.route(u.href)) return;
+      // The phone shell can claim a link (sheet.route) to open it on a desk of its own instead of the sheet.
+      if (sheet.route && sheet.route(u.href, a)) return;
       sheet.open(u.href);
     }, true);
   }
@@ -233,7 +238,7 @@
     if (!doc || doc.__wizLinkGuard) return; doc.__wizLinkGuard = true;
     const home = String(base || '').split(/[?#]/)[0].replace(/[^/]*$/, '') || '/';
     const leaves = (u, tgt) => u.origin !== ORIGIN || /^_(blank|top|parent)$/i.test(tgt || '') || (home !== '/' && !u.pathname.startsWith(home));
-    const go = u => { if (u.origin === ORIGIN) sheet.open(u.href); else external(u); };
+    const go = u => { if (u.origin !== ORIGIN) return external(u); let fe = null; try { fe = win.frameElement; } catch (e) {} if (sheet.route && sheet.route(u.href, fe)) return; sheet.open(u.href); };
     doc.addEventListener('click', e => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
