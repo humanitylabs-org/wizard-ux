@@ -293,7 +293,7 @@ $('bub').addEventListener('click',e=>{e.stopPropagation();if(S.state==='card')W.
 $('cancelC').addEventListener('click',e=>{e.stopPropagation();N.cancel();W.onNothing();hint.show('cancelled','c',0,true)});
 $('pauseC').addEventListener('click',e=>{e.stopPropagation();N.pause&&N.pause()});
 $('unlockC').addEventListener('click',e=>{e.stopPropagation();N.unlock()});
-$('shotC').addEventListener('click',e=>{e.stopPropagation();N.log&&N.log('screen chip tapped state='+S.state);if(S.state==='listen'&&N.shot)N.shot()});
+$('shotC').addEventListener('click',e=>{e.stopPropagation();if(S.state==='listen'&&N.shot)N.shot()});
 M.spread(document.body,{onOut(){ if(inCorner())return; if(S.state==='list'){$('zl').classList.add('deep');return} if(S.state!=='listen'&&S.state!=='think')W.showList() },
   onIn(){ if(S.state==='list')W.back() }});
 document.addEventListener('pointerdown',()=>{M.sound.unlock()},{capture:true});
