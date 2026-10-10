@@ -356,11 +356,19 @@ window.WizCore.chats = function createChats(H) {
   const SHARE_SVG = '<svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>';
   const CHECK_SVG = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
   const timeTag = ms => isFinite(ms) ? `<time title="${esc(KIT.time.full(ms))}">${esc(KIT.time.clock(ms))}</time>` : '';
+  // A note another agent thread wrote into this one: never shown as the owner's message. Collapsed to one labelled
+  // line (who sent it); tap to read it.
+  function noteHtml(n) {
+    const from = n.from ? `From the \u201c${esc(n.from)}\u201d thread` : 'From another agent thread';
+    return `<details class="msg agentnote" data-agentnote><summary><span class="an-ic">\u21aa</span><span class="an-from">${from}</span>${timeTag(n.at)}</summary><div class="an-body">${md(n.text)}</div></details>`;
+  }
   function turnHtml(c, tn, last, working) {
     let h = '';
     if (tn.u) h += `<div class="msg u"><div class="bub">${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
+    else if (tn.note) h += noteHtml(tn.note);
+    else if (tn.later) h += `<div class="msg laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(tn.later.at)}</div>`;
     const live = last && working;
-    const steersHtml = (tn.steers || []).map(st => `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
+    const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
     const wk = PW ? PW.workHtml(c, tn, live) : null; // the work receipt (chat-work.js #17)
     if (wk != null) h += wk;
     else if (tn.steps || tn.notes.length || live) {
