@@ -76,6 +76,7 @@ public class MainActivity extends Activity {
     private ai.wizards.os.device.DeviceBridge device;
     private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
     private ai.wizards.os.apps.AppsBridge apps; // window.wizardAppsPort: the shell only (Android Apps relay)
+    private ai.wizards.os.identity.IdentityBridge identity; // window.wizardIdentityPort: Wizard ID, the shell only
 
     @Override
     protected void onCreate(Bundle state) {
@@ -141,6 +142,8 @@ public class MainActivity extends Activity {
         mizel = ai.wizards.os.mizel.MizelBridge.install(web, BuildConfig.ORIGIN);
         if (apps != null) apps.detach();
         apps = ai.wizards.os.apps.AppsBridge.install(this, web);
+        if (identity != null) identity.detach();
+        identity = ai.wizards.os.identity.IdentityBridge.install(this, web);
 
         // A WebView cannot save files. Anything it is asked to download (an APK, a PDF, an export) goes to
         // Android's download manager, so the file lands in Downloads with a notification you can tap to open or install.
@@ -693,6 +696,7 @@ public class MainActivity extends Activity {
         if (ai.wizards.os.everywhere.EverywhereService.appIsRecording()) ai.wizards.os.everywhere.EverywhereService.appVoiceState(this, "idle", 0);
         if (mizel != null) { mizel.detach(); mizel = null; }
         if (apps != null) { apps.detach(); apps = null; }
+        if (identity != null) { identity.detach(); identity = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
     }

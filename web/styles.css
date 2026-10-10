@@ -683,6 +683,8 @@ body {
 .st-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); text-align: left; color: var(--ink); }
 .st-row[disabled] { opacity: .5; }
 .st-row.static { cursor: default; }
+.st-row.st-warn { border-color: rgba(255, 190, 85, .45); }
+.st-row.st-warn small { color: var(--amber); }
 .st-ic { flex: 0 0 34px; height: 34px; border-radius: 12px; display: grid; place-items: center; background: rgba(143, 99, 255, .18); color: var(--violet-2); font-size: 16px; }
 .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .st-tx b { font-size: 15px; font-weight: 600; }

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Wizard OS Home prototype server.
 
-Serves the static prototype and two small endpoints:
+Serves the static prototype and a few small endpoints:
   POST /api/transcribe  -> Wizard Voice Core (wizard-stt, Tinfoil-attested Voxtral)
   POST /api/route       -> DeepSeek V4.1 Flash via the local Tinfoil proxy; returns a command JSON
+  POST /api/identity/publish  -> relays one Wizard ID event the phone already signed (verified first; profile only)
+  GET  /api/identity/profile?pubkey=<hex> -> the newest verified Nostr profile for that key
 
 Loopback only. Same-origin POSTs only. No state is written; agent-route requests are never delivered.
 """
@@ -18,6 +20,8 @@ import urllib.request
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+import wizard_id
 
 ROOT = Path(__file__).resolve().parent / "web"
 PORT = int(os.environ.get("WIZARD_OS_HOME_PORT", "9271"))
@@ -105,6 +109,8 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if self.path.split("?")[0] == "/api/health":
             return self._json(200, {"ok": True, "router_model": ROUTER_MODEL})
+        if self.path.split("?")[0] == "/api/identity/profile":
+            return self._identity_profile()
         return super().do_GET()
 
     def do_POST(self):
@@ -116,6 +122,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._transcribe()
         if path == "/api/route":
             return self._route()
+        if path == "/api/identity/publish":
+            return self._identity_publish()
         return self._json(404, {"error": "not found"})
 
     def _json(self, code, obj):
@@ -131,6 +139,25 @@ class Handler(SimpleHTTPRequestHandler):
         if n <= 0 or n > limit:
             return None
         return self.rfile.read(n)
+
+    def _identity_publish(self):
+        raw = self._body(96 * 1024)
+        if raw is None:
+            return self._json(400, {"error": "empty"})
+        try:
+            ev = json.loads(raw).get("event")
+        except Exception:  # noqa: BLE001
+            return self._json(400, {"error": "not JSON"})
+        out = wizard_id.publish(ev)
+        return self._json(200 if out.get("ok") else (400 if "error" in out else 502), out)
+
+    def _identity_profile(self):
+        from urllib.parse import parse_qs, urlparse
+        pk = (parse_qs(urlparse(self.path).query).get("pubkey") or [""])[0]
+        try:
+            return self._json(200, {"profile": wizard_id.profile(pk)})
+        except ValueError as e:
+            return self._json(400, {"error": str(e)})
 
     def _transcribe(self):
         ctype = self.headers.get("Content-Type", "")

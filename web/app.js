@@ -651,6 +651,7 @@
         <button class="st-row" data-st="side" ${native ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(side)}</small></span><span class="st-go">›</span></button>
       </div>
       ${window.WizCore.voiceStatus?.card() || ''}
+      ${window.WosIdentity?.settingsHtml?.() ? `<div class="st-group"><h4>Identity</h4>${window.WosIdentity.settingsHtml()}</div>` : ''}
       <div class="st-group"><h4>Wizard</h4>
         <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · ${esc(location.host)}</small></span></div>
         ${window.WosDevice?.settingsHtml?.() || ''}
@@ -1254,6 +1255,7 @@
     if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); return setTimeout(onUnsentChange, 300); }
     const st = e.target.closest('[data-st]')?.dataset.st;
     if (st === 'typing' && NATIVE() && window.WizardOSNative.voiceTypingSettings) { window.WizardOSNative.voiceTypingSettings(); return; }
+    if (st === 'wizard-id' && window.WosIdentity) { vib(8); window.WosIdentity.setup().catch(() => {}).finally(() => { if (sheet === 'settings') renderSettings(); }); return; }
     if (st === 'everywhere' && NATIVE() && typeof window.WizardOSNative.setEverywhere === 'function') { let on = false; try { on = JSON.parse(window.WizardOSNative.everywhere()).enabled; } catch (x) {} window.WizardOSNative.setEverywhere(!on); setTimeout(renderSettings, 250); vib(8); }
     if (st === 'side') { closeSheets(true); sideButtonTap(true); }
     if (st === 'files') return openFilesScreen();

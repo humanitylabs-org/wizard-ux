@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Wizard ID: the fingerprint / PIN prompt that unlocks the key for one signature. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Mizel recorder: retry uploads the moment the network returns; network-constrained upload job. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -78,6 +80,14 @@
                 <data android:scheme="https" android:host="private.wizard001.com" android:pathPrefix="/mizel-live/" />
             </intent-filter>
         </activity>
+        <!-- Wizard ID: create / bring / back up the owner's key, and the one approval sheet that signs. Not exported. -->
+        <activity
+            android:name=".identity.IdentityActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.WizardOS"
+            android:windowSoftInputMode="adjustResize"
+            android:screenOrientation="portrait" />
 
         <!-- ===== Side-button assistant (feature/side-button-assistant) =====
              Hold the side button: locked phone = full Wizard over the real keyguard (showWhenLocked);
