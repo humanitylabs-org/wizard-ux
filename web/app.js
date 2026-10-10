@@ -151,6 +151,9 @@
     // The composer's mic (#13): the orb's own recorder, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
     recordingFor: () => (V.replyTo && (V.state === 'listen' || V.state === 'paused') ? V.replyTo.sid : ''),
+    // The thread a recording take will go into (its composer rides along); Send in that composer finishes the take.
+    voiceInto: () => (V.state === 'listen' || V.state === 'paused' ? sealTarget()?.sid || '' : ''),
+    finishVoice: () => finishVoice(),
     // A private-origin link in a message opens in a window on this desk: the shell never navigates away.
     openLink: (url, title) => !!openWin({ app: 'frame', appId: 'link', url, title }),
     overlay: open => { if (open) { closeMenu(); armBack(); } },
@@ -684,7 +687,7 @@
     let wid = desks[idx].wins.find(x => W[x].app === 'chats');
     if (!wid) { const w = openWin({ app: 'chats', thread: null }); if (!w) return; wid = w.id; }
     focusWin(wid); openChat(wid, known ? it.sessionId : '__new__');
-    CHATS.setDraft(wid, it.text || '', (it.files || []).filter(f => f !== it.audioFile));
+    CHATS.setDraft(wid, it.text || it.typed || '', (it.files || []).filter(f => f !== it.audioFile));
     OUTBOX.remove(it.id);
     renderChats(W[wid]);
     setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 50);
@@ -1454,7 +1457,7 @@
     const dev = DEV(); let meta = null;
     try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (e) {}
     V.native = null;
-    if (!meta) { dropHold(); setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
+    if (!meta) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
     V.acc = Math.max(V.acc, Number(meta.ms) || 0);
     onRecStop(nativeBlob(id), id);
   }
@@ -1462,7 +1465,7 @@
   /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
   function nativeResume(a) {
     if (V.state !== 'idle' || !a?.id) return false;
-    Object.assign(V, { native: a.id, kind: a.kind === 'command' ? 'command' : 'auto', target: null, snap: null, replyTo: replyTake(a.id), chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
+    Object.assign(V, { native: a.id, kind: a.kind === 'command' ? 'command' : 'auto', target: null, snap: null, seal: null, replyTo: replyTake(a.id), chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
     txPill('✦', 'Still recording · tap orb to send', 'agent'); txHide(2600);
@@ -1588,7 +1591,7 @@
     V.onAt = performance.now();
     if (V.state !== 'idle') return;
     clearTimeout(txHideT);
-    Object.assign(V, { kind, target: null, replyTo: null, snap: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
@@ -1658,20 +1661,35 @@
     const v = snap?.view;
     if (V.kind === 'command' || V.replyTo || V.target != null || v?.kind !== 'chat thread') return false;
     const w = W[v.id]; if (!w || w.thread !== v.thread) return false;
-    const c = CHATS.ch(v.id); if ((c.files || []).length) return false;
-    CHATS.saveDraft(v.id); // words typed in the composer stay as the thread's draft
+    // The composer (words, photos, files) was taken at this tap (V.seal) and rides with the take.
+    CHATS.saveDraft(v.id);
     if (!CHATS.leaveAfterSend(v.id, v.thread, v.thread === '__new__', 'voice')) return false;
     // ...and the thread is under Working before the list paints, never in Ready (live.js holdSend).
     V.hold = LIVE.holdSend?.(v.thread) || null;
     CHATS.renderChats(w); applyLayout(deskOf(v.id));
     return true;
   }
+  // The thread a take is sent into (and whose composer rides with it): a composer-mic take's pinned thread, or the
+  // thread open when an orb take started. A held command, or a take aimed at another desk, has none.
+  function sealTarget() {
+    if (V.replyTo) return { wid: V.replyTo.wid, sid: V.replyTo.sid };
+    const v = V.snap?.view;
+    return V.kind !== 'command' && V.target == null && v?.kind === 'chat thread' && v.thread && W[v.id] ? { wid: v.id, sid: v.thread } : null;
+  }
+  // A take that sends nothing gives the composer it took back (words, photos, files: chats.js takeComposer).
+  function unseal(seal) { const t = seal || V.seal; if (!seal) V.seal = null; try { t?.putBack(); } catch (e) { console.error(e); } }
   function dropHold() { if (V.hold) { LIVE.releaseSend?.(V.hold); V.hold = null; } }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
     V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
     if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
+    // Text, photos and voice go as ONE message (legacy H4; James, 10 Oct 2026: "when I paste a link in the text
+    // box and I send you a voice note … they should both be sent together"). The composer of the thread this take
+    // goes into is taken now, at the tap, and rides with the recording (chats.js takeComposer).
+    const sealAt = sealTarget();
+    if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
+    if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length ? t : null; }
     leaveOnSend(V.snap);
     if (V.native) {
       if (V.state !== 'paused') V.acc += performance.now() - V.t0;
@@ -1686,6 +1704,7 @@
   }
   function cancelVoice(quiet) {
     V.cancelled = true; if (V.replyTo) { replyTake(null); V.replyTo = null; }
+    unseal();
     if (V.native) { try { DEV().recCancel(V.native); } catch (e) {} V.native = null; }
     try { V.rec && V.rec.state !== 'inactive' && (V.rec.onstop = null, V.rec.stop()); } catch (e) {}
     stopStream(); V.rec = null; V.sim = false; cancelAnimationFrame(V.raf); Orb.setLevel(0);
@@ -1701,11 +1720,12 @@
     const blob = blobs[0] || new Blob([], { type: V.mime || 'audio/webm' });
     const size = blobs.reduce((n, b) => n + b.size, 0);
     stopStream(); V.rec = null; Orb.setLevel(0);
-    if (V.cancelled) { recDone(nid); dropHold(); return; }
-    if (V.acc < 450 || size < 1200) { recDone(nid); dropHold(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
+    if (V.cancelled) { recDone(nid); dropHold(); unseal(); return; }
+    if (V.acc < 450 || size < 1200) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
     // A voice reply from a thread's composer goes to that thread, as recorded: no routing, no commands,
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
     const snap = V.snap || sendSnap(); V.snap = null;
+    snap.seal = V.seal || null; V.seal = null; // the composer read at the send tap (finishVoice)
     const kind = V.kind, aimAt = V.target;
     // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.
     const hold = V.hold; V.hold = null;
@@ -1713,7 +1733,7 @@
     if (V.replyTo) {
       const rt = V.replyTo, files = takeFiles(); V.replyTo = null; replyTake(null);
       setVoice('idle'); txPill('✦', 'Voice reply · saved to this thread', 'agent'); txHide(1800);
-      Promise.all(blobs.map((part, i) => Promise.resolve(CHATS.sendVoiceTo(rt.wid, rt.sid, part, i === 0 ? files : [])).catch(() => {}))).finally(() => recDone(nid));
+      Promise.all(blobs.map((part, i) => Promise.resolve(CHATS.sendVoiceTo(rt.wid, rt.sid, part, i === 0 ? files : [], i === 0 ? snap.seal || false : false)).catch(() => {}))).finally(() => recDone(nid));
       return;
     }
     try {
@@ -1729,20 +1749,22 @@
         words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
       }
       const text = words.filter(Boolean).join(' ').trim();
-      if (!text) { recDone(nid); unhold(); setVoice('idle'); txHide(); toast('◌', 'No speech detected'); return; }
+      if (!text) { recDone(nid); unhold(); unseal(snap.seal); setVoice('idle'); txHide(); toast('◌', snap.seal ? 'No speech detected · your text is back in the thread' : 'No speech detected'); return; }
       // The words are what gets sent from here; the native take is deleted once they are handled (or in the outbox).
       Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).finally(() => { recDone(nid); unhold(); });
     } catch (err) {
       // A held command that can't be heard is dropped with a note, never queued for the agent as a message.
-      if (kind === 'command') { recDone(nid); unhold(); setVoice('idle'); txPill('⚡', 'Command not heard · nothing sent', 'command', String(err?.message || err)); txHide(2400); return; }
+      if (kind === 'command') { recDone(nid); unhold(); unseal(snap.seal); setVoice('idle'); txPill('⚡', 'Command not heard · nothing sent', 'command', String(err?.message || err)); txHide(2400); return; }
       // Never lose a recording: it goes to the outbox, which transcribes and sends it when Wizard is back.
       setVoice('idle');
       const aim = V.target, sv = snap.view;
       const files = takeFiles();
       const queued = (blobs.length ? blobs : [blob]).map((part, i) => {
         const fl = i === 0 ? files : [];   // attached files ride with the first part only
-        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { sid: sv.thread, files: fl, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
-        return toAgent('', 'Saved · sends when Wizard is reachable', { audio: part, desk: aim, source: 'orb', files: fl, snap });
+        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { sid: sv.thread, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
+        const sl = i === 0 ? snap.seal : null; // the window is gone: the taken composer still rides with it
+        return toAgent('', 'Saved · sends when Wizard is reachable', { audio: part, desk: aim, source: 'orb', files: [...fl, ...(sl ? sl.files : [])].slice(0, 8), typed: sl?.text || '', snap })
+          .then(() => sl?.done(), e => { sl?.putBack(); throw e; });
       });
       Promise.all(queued.map(q => Promise.resolve(q).catch(() => {}))).then(() => { recDone(nid); unhold(); });
       txPill('↻', 'Saved · sends when Wizard is back', 'agent', 'Couldn’t reach Wizard · recording saved, will send'); txHide(2600);
@@ -1816,7 +1838,7 @@
   function deliverToView(v, text, snap) {
     const w = W[v.id]; if (!w) return false;
     // The thread that was open when James sent, even if the window shows another one by now.
-    if (w.app === 'chats' && (v.thread || w.thread)) { sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread || w.thread, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); return true; }
+    if (w.app === 'chats' && (v.thread || w.thread)) { sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread || w.thread, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); return true; }
     if (w.app === 'frame') {
       try { const f = winEl(v.id).querySelector('iframe'); f.contentWindow.postMessage({ type: 'wizard-os:voice', text }, location.origin); return true; } catch (e) { return false; }
     }
@@ -1865,11 +1887,16 @@
     const opts = target == null ? { snap } : { desk: target, snap };
     $('#txText').textContent = text;
     const v = snap.view;
-    // Attached files mean "look at this": skip command routing and send words + files together.
+    // Attached files mean "look at this": skip command routing and send words + files together. So do words,
+    // photos or files waiting in the thread's composer (snap.seal): one message, never a command.
     const files = typed ? [] : takeFiles();
-    if (files.length) {
-      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Sent with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread, files, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
-      return toAgent(text, `To ${window.WizConfig.agent()} · with files` + sttNote, { ...opts, files });
+    const seal = typed ? null : snap.seal || null;
+    if (files.length || seal) {
+      const nf = files.length + (seal ? seal.files.length : 0);
+      const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : ''].filter(Boolean).join(' + ');
+      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Sent with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+      const all = [...files, ...(seal ? seal.files : [])].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
+      return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all }).then(() => seal?.done(), e => { seal?.putBack(); throw e; });
     }
     const t0 = performance.now();
     const loc = localParse(text, snap, kind);
@@ -1992,7 +2019,7 @@
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice', opts.snap);
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    await OUTBOX.enqueue({ kind: 'new', text, instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
+    await OUTBOX.enqueue({ kind: 'new', text, typed: opts.typed || '', instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
     renderMoons(); refreshHome(); renderDots();
   }
   OUTBOX?.onSent((it, res) => {
