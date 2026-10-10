@@ -252,11 +252,20 @@ public final class UsualsRunner {
         if (!sig.isEmpty() && !sig.equals(lastSig)) {
             // From checkout to a screen never seen before, with no order button and no tap of his just before: Grab's
             // order control (a swipe, a custom view) didn't report a tap, and this is the order-tracking screen.
-            if (atCheckout && !commit[0] && !seenSig(sig) && !tappedWithin(now, 4000)) {
-                note("teach: checkout → new screen without a tap → treating as ordered");
-                recs.add(UsualsPolicy.Rec.screen(sig, now));
-                main.post(() -> finishTeach(true));
+            if (atCheckout && !commit[0] && !seenSig(sig) && !tappedSinceScreen()) {
+                // Confirm a moment later (a click event can trail its screen change by a frame or two).
+                final String to = sig;
+                final long seenAt = now;
+                main.postDelayed(() -> {
+                    if (mode != Mode.TEACHING) return;
+                    if (tappedSinceScreen()) { recs.add(UsualsPolicy.Rec.screen(to, seenAt)); return; } // his tap after all
+                    if (!to.equals(lastSig)) return; // moved on again (back to checkout): not an order
+                    note("teach: checkout → new screen without a tap → treating as ordered");
+                    recs.add(UsualsPolicy.Rec.screen(to, SystemClock.uptimeMillis()));
+                    finishTeach(true);
+                }, 600);
                 atCheckout = false;
+                lastSig = sig;
                 return;
             }
             atCheckout = commit[0];
@@ -271,10 +280,17 @@ public final class UsualsRunner {
         return false;
     }
 
-    private boolean tappedWithin(long now, long ms) {
+    /**
+     * Did he tap anything since the current (checkout) screen came up? A tap there that opened a new screen (change
+     * address, payment) is his; a new screen with no tap since is Grab moving on after an order button that never
+     * reported its tap (it can vanish before Android sends the click).
+     */
+    private boolean tappedSinceScreen() {
+        long shown = -1;
+        for (int i = recs.size() - 1; i >= 0; i--) { UsualsPolicy.Rec x = recs.get(i); if (x.step == null) { shown = x.t; break; } }
         for (int i = recs.size() - 1; i >= 0; i--) {
             UsualsPolicy.Rec x = recs.get(i);
-            if (x.step != null && "tap".equals(x.step.type)) return now - x.t <= ms;
+            if (x.step != null && "tap".equals(x.step.type) && x.t >= shown) return true;
         }
         return false;
     }
