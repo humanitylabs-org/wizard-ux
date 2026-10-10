@@ -11,7 +11,7 @@ public class EverywhereBoot extends BroadcastReceiver {
         String a = i == null ? "" : String.valueOf(i.getAction());
         if (Intent.ACTION_BOOT_COMPLETED.equals(a) || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)) {
             EverywhereService.ensureRunning(c);
-            ai.wizards.os.assist.VoiceCapture.recoverAfterRestart(c); // a side-button take cut off by the update/reboot
+            ai.wizards.os.assist.TakeRecovery.recoverAfterRestart(c); // a side-button take cut off by the update/reboot
             EverywhereOutbox.get(c).pump();
             ai.wizards.os.mizel.MeetingRecorderService.recover(c); // finish uploading any meeting cut off by a reboot
         }

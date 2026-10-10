@@ -15,4 +15,7 @@ public final class TakeRecovery {
     }
 
     public static String mime(String path) { return ".aac".equals(ext(path)) ? "audio/aac" : "audio/mp4"; }
+
+    /** Boot / app-updated receiver: send any side-button take the previous process was cut off in the middle of. */
+    public static void recoverAfterRestart(android.content.Context c) { VoiceCapture.recoverAfterRestart(c); }
 }

@@ -96,7 +96,7 @@ final class VoiceCapture {
     private static boolean recovered;
 
     /** Boot / app-updated receiver: recover a cut-off take without waiting for the next side-button press. */
-    public static void recoverAfterRestart(Context c) { get(c); }
+    static void recoverAfterRestart(Context c) { get(c); }
 
     /** Sends any take a dead process left behind (once per process). {@code live}: this process's own take, skipped. */
     static synchronized void recoverOrphans(Context c, File live) {
