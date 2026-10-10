@@ -1597,11 +1597,28 @@
     toast('⏸', 'Mic interrupted · your recording is kept');
   }
   function stopStream() { try { V.stream && V.stream.getTracks().forEach(t => t.stop()); } catch (e) {} try { V.ac && V.ac.close(); } catch (e) {} V.stream = null; V.ac = null; V.an = null; }
+  /* Send and go for the orb (James, 10 Oct 2026: "it sits at this screen for like 10 seconds… process this in the
+   * background, send them back out… allow them to keep using their phone"). The send tap steps a phone thread
+   * back to the list at once, like a typed send; transcription, routing and delivery carry on behind the pill
+   * above the orb. The snapshot already pins the destination, so leaving can't move the message.
+   * Stays put for a hold-command, an aimed desk, a composer-mic reply (already instant), or a composer tray with
+   * files (those ride with the words when they land in the thread). */
+  function leaveOnSend(snap) {
+    const v = snap?.view;
+    if (V.kind === 'command' || V.replyTo || V.target != null || v?.kind !== 'chat thread') return false;
+    const w = W[v.id]; if (!w || w.thread !== v.thread) return false;
+    const c = CHATS.ch(v.id); if ((c.files || []).length) return false;
+    CHATS.saveDraft(v.id); // words typed in the composer stay as the thread's draft
+    if (!CHATS.leaveAfterSend(v.id, v.thread, v.thread === '__new__', 'voice')) return false;
+    CHATS.renderChats(w); applyLayout(deskOf(v.id));
+    return true;
+  }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
     V.snap = sendSnap(); // the send tap fixes the destination; transcription can't move it
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
     if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
+    leaveOnSend(V.snap);
     if (V.native) {
       if (V.state !== 'paused') V.acc += performance.now() - V.t0;
       setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core');
@@ -1635,6 +1652,7 @@
     // A voice reply from a thread's composer goes to that thread, as recorded: no routing, no commands,
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
     const snap = V.snap || sendSnap(); V.snap = null;
+    const kind = V.kind, aimAt = V.target;
     if (V.replyTo) {
       const rt = V.replyTo, files = takeFiles(); V.replyTo = null; replyTake(null);
       setVoice('idle'); txPill('✦', 'Voice reply · saved to this thread', 'agent'); txHide(1800);
@@ -1644,14 +1662,19 @@
     try {
       const words = []; const j = { ms: 0 };
       const prompt = window.WizConfig.voicePrompt(APPS.map(a => a.name).slice(0, 40));
+      // No network: straight to the outbox (it transcribes and sends when Wizard is back), no waiting on a dead line.
+      if (navigator.onLine === false) throw new Error('offline');
       for (const part of blobs) {   // more than one part only after the mic was interrupted mid-take
-        const jj = await window.WizConfig.transcribe(part, { prompt, language: 'en' });
+        // A flaky line can hang a request for a long time: past this bound the take goes to the outbox instead.
+        const limit = 12000 + Math.round(part.size / 20);
+        const jj = await Promise.race([window.WizConfig.transcribe(part, { prompt, language: 'en' }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('transcription timed out')), limit))]);
         words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
       }
       const text = words.filter(Boolean).join(' ').trim();
       if (!text) { recDone(nid); setVoice('idle'); txHide(); toast('◌', 'No speech detected'); return; }
       // The words are what gets sent from here; the native take is deleted once they are handled (or in the outbox).
-      Promise.resolve(handleText(text, V.kind, false, j.ms, V.target, snap)).finally(() => recDone(nid));
+      Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).finally(() => recDone(nid));
     } catch (err) {
       // Never lose a recording: it goes to the outbox, which transcribes and sends it when Wizard is back.
       setVoice('idle');
@@ -1801,7 +1824,7 @@
       const view = v && v.mode && kind !== 'command' && target == null ? { name: v.name, kind: v.kind } : null;
       const routeUrl = window.WizConfig.endpoint('route');
       if (!routeUrl) return toAgentOrThread(`To ${window.WizConfig.agent()}${sttNote}`);
-      const r = await fetch(routeUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: kind === 'command' ? 'command' : '', view, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
+      const r = await fetch(routeUrl, { method: 'POST', signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: kind === 'command' ? 'command' : '', view, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'router');
       const c = j.cmd || {};
