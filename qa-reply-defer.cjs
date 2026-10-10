@@ -86,7 +86,7 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
   await ctx.route('**/*', route);
   const p = await ctx.newPage(); p.setDefaultTimeout(8000);
   const errs = []; p.on('pageerror', e => errs.push(String(e)));
-  await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); localStorage.removeItem('wos.chats.readyBySubject.v1');
+  await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); localStorage.removeItem('wos.chats.readyBySubject.v1'); localStorage.removeItem('wos.chats.readyOrder.v1');
     localStorage.setItem('wos.chats.sections.v1', JSON.stringify({ ready: true })); } catch (e) {} });
   await p.goto(URL_, { waitUntil: 'domcontentloaded' });
   await p.waitForFunction(() => window.__wos?.live?.ok && window.__wos.live.session('qa_rd_plain') && window.__wos.live.session('qa_rd_def')?.deferred, null, { timeout: 90000 }).catch(() => {});
@@ -199,11 +199,16 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     ids = await readyIds();
     ok(ids.indexOf('qa_rd_plain') < ids.indexOf('qa_rd_def'), '6 restored row leaves the deferred tail', ids);
 
-    // By subject keeps the Deferred status line
-    await p.locator(await R('[data-rdygroup="1"]')).tap(); await sleep(500);
+    // Priority: needs you → test this → rest, Deferred still last. By subject keeps the Deferred line.
+    await p.locator(await R('[data-rdyorder="priority"]')).tap(); await sleep(500);
+    ids = await readyIds();
+    ok(ids.slice(-2).sort().join() === 'qa_rd_def,qa_rd_def_old' && ids.indexOf('qa_rd_needs') < ids.indexOf('qa_rd_check'), 'Priority: needs you first, deferred still at the bottom', ids);
+    await p.locator(await R('[data-rdyorder="subject"]')).tap(); await sleep(500);
     const ds = await rowInfo('qa_rd_def_old');
     ok(ds && /^Deferred · /.test(ds.pv), 'By subject: deferred rows keep their Deferred line', ds);
-    await p.locator(await R('[data-rdygroup="0"]')).tap(); await sleep(300);
+    const subjHdr = await p.$$eval(await R('.ch-subj'), els => els.map(e => e.textContent));
+    ok(!subjHdr.some(t => /^Home.*waiting/.test(t)), 'By subject: a deferred needs-you is not counted as waiting', subjHdr);
+    await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(300);
     ok(await p.evaluate(() => !!document.querySelector('.win')), 'app still open');
   } catch (e) { ok(false, 'suite crashed', String(e).split('\n')[0]); }
 

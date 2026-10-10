@@ -72,13 +72,23 @@ window.WizCore.chats = function createChats(H) {
       <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button>`;
   }
-  /* Ready can be grouped by subject (the agent's subject on each status line): the roundup, kept live. */
-  const READY_GROUP_KEY = 'wos.chats.readyBySubject.v1';
-  let readyBySubject = (() => { try { return localStorage.getItem(READY_GROUP_KEY) === '1'; } catch (e) { return false; } })();
+  /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
+   * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
+  const READY_ORDER_KEY = 'wos.chats.readyOrder.v1', READY_ORDERS = ['newest', 'priority', 'subject'];
+  const READY_ORDER_LABEL = { newest: 'Newest', priority: 'Priority', subject: 'By subject' };
+  let readyOrder = (() => {
+    try {
+      const v = localStorage.getItem(READY_ORDER_KEY); if (READY_ORDERS.includes(v)) return v;
+      if (localStorage.getItem('wos.chats.readyBySubject.v1') === '1') return 'subject'; // the old two-way toggle
+    } catch (e) {}
+    return 'newest';
+  })();
   const waitsOn = s => s.status === 'waiting_for_approval' || (!deferredOf(s) && ['needs_you', 'check'].includes(attOf(s)?.state));
+  // Newest keeps groupWork's recency order; Priority and By subject put what waits on James first.
+  const readyOrdered = list => readyOrder === 'newest' ? list : LIVE.readyByPriority(list);
   function readyBody(list, rowFn) {
-    const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready"><button type="button" data-rdygroup="0" aria-pressed="${!readyBySubject}"${readyBySubject ? '' : ' class="on"'}>Newest</button><button type="button" data-rdygroup="1" aria-pressed="${readyBySubject}"${readyBySubject ? ' class="on"' : ''}>By subject</button></div>`;
-    if (!readyBySubject) return bar + list.map(rowFn).join('');
+    const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready">${READY_ORDERS.map(o => `<button type="button" data-rdyorder="${o}" aria-pressed="${readyOrder === o}"${readyOrder === o ? ' class="on"' : ''}>${READY_ORDER_LABEL[o]}</button>`).join('')}</div>`;
+    if (readyOrder !== 'subject') return bar + list.map(rowFn).join('');
     const groups = new Map();
     for (const s of list) { const k = attOf(s)?.subject || 'Other'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
     // Subjects with something waiting on James first, then by size; "Other" last.
@@ -193,7 +203,9 @@ window.WizCore.chats = function createChats(H) {
     if (!LIVE.ok) body = draftSec + `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
     else if (!hit.length && !drafts.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
     else body = draftSec + SECTIONS.map(([k, label]) => {
-      const list = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k];
+      const list0 = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k];
+      // Ready's order is chosen before paging, so Priority never pages a needs-you row out of the first page.
+      const list = k === 'ready' && !n ? readyOrdered(list0) : list0;
       // Errors also holds failed background work and voice notes that didn't send (chat-power.js #12).
       const extra = PW && k === 'errors' && !n ? PW.errorsExtra() : { n: 0, html: '' };
       if (!list.length && !extra.n && (k === 'errors' || n)) return '';
@@ -735,8 +747,8 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chbsmore]')) { window.WizCore.chatSearch?.more(id); renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chsclear]')) { ch(id).q = ''; window.WizCore.chatSearch?.cancel(id); renderChatList(w, elOf(id)); elOf(id)?.querySelector('[data-chsearch]')?.focus(); return true; }
     const sec = e.target.closest('[data-sectoggle]'); if (sec) { toggleSection(w, sec.dataset.sectoggle); return true; }
-    const rg = e.target.closest('[data-rdygroup]');
-    if (rg) { readyBySubject = rg.dataset.rdygroup === '1'; try { localStorage.setItem(READY_GROUP_KEY, readyBySubject ? '1' : '0'); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
+    const rg = e.target.closest('[data-rdyorder]');
+    if (rg) { if (READY_ORDERS.includes(rg.dataset.rdyorder)) readyOrder = rg.dataset.rdyorder; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }

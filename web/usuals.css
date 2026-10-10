@@ -1,0 +1,43 @@
+/* Usuals window (web/usuals.js). Dark, thumb-first. */
+.usuals { height: 100%; position: relative; }
+.us-wrap { padding: 14px 14px 24px; display: flex; flex-direction: column; gap: 12px; }
+.us-list { display: flex; flex-direction: column; gap: 10px; }
+.us-card { display: flex; gap: 8px; align-items: stretch; }
+.us-go { flex: 1; display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 20px; text-align: left;
+  border: 1px solid rgba(0, 177, 79, .35); background: linear-gradient(135deg, rgba(0, 177, 79, .16), rgba(10, 92, 50, .10)); color: #fff; }
+.us-go:disabled { opacity: .45; }
+.us-go:active { transform: scale(.985); }
+.us-ic { font-size: 28px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; background: rgba(0, 0, 0, .25); flex: 0 0 auto; }
+.us-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.us-meta b { font-size: 16px; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.us-meta small { font-size: 12px; color: rgba(220, 230, 225, .72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.us-cta { flex: 0 0 auto; padding: 9px 14px; border-radius: 99px; background: #00c85f; color: #06140b; font-weight: 800; font-size: 14px; }
+.us-more { flex: 0 0 44px; border-radius: 16px; border: 1px solid var(--line-2, rgba(255,255,255,.12)); background: rgba(255, 255, 255, .04); color: #cfc6f5; font-size: 20px; }
+.us-add { padding: 14px; border-radius: 18px; border: 1px dashed rgba(190, 170, 255, .4); background: transparent; color: #d9cfff; font-weight: 700; font-size: 15px; }
+.us-add:disabled { opacity: .45; }
+.us-teach { display: flex; gap: 8px; }
+.us-teach input { flex: 1; min-width: 0; padding: 13px 14px; border-radius: 16px; border: 1px solid rgba(190, 170, 255, .35); background: rgba(255, 255, 255, .05); color: #fff; font-size: 16px; }
+.us-teach button { padding: 0 16px; border-radius: 16px; border: 0; background: #00c85f; color: #06140b; font-weight: 800; }
+.us-teach button:disabled { opacity: .45; }
+.us-note { display: flex; flex-direction: column; gap: 4px; padding: 13px 14px; border-radius: 18px; text-align: left; font-size: 13px; line-height: 1.4;
+  border: 1px solid rgba(255, 190, 85, .35); background: rgba(255, 190, 85, .08); color: #ffe9c2; }
+.us-note b { font-size: 14px; color: #fff; }
+.us-live { padding: 11px 14px; border-radius: 16px; background: rgba(143, 99, 255, .16); color: #e6dcff; font-size: 13px; font-weight: 650; }
+.us-empty { text-align: center; padding: 18px 8px 4px; color: rgba(225, 218, 255, .8); }
+.us-empty .us-big { font-size: 46px; }
+.us-empty h3 { margin: 8px 0 6px; font-size: 19px; color: #fff; }
+.us-empty p { margin: 0; font-size: 13.5px; line-height: 1.5; }
+.us-fine { margin: 2px 4px 0; font-size: 11.5px; line-height: 1.45; color: rgba(210, 200, 245, .55); }
+.us-log summary { font-size: 12px; color: rgba(210, 200, 245, .7); }
+.us-log pre { white-space: pre-wrap; font-size: 11px; color: rgba(220, 215, 245, .75); background: rgba(0, 0, 0, .3); padding: 10px; border-radius: 12px; }
+.us-sheet { position: absolute; inset: 0; background: rgba(5, 3, 12, .72); display: flex; align-items: flex-end; z-index: 3; }
+.us-sheet form { width: 100%; background: #140d2b; border-radius: 22px 22px 0 0; padding: 16px 14px 18px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid rgba(190, 170, 255, .25); }
+.us-sheet h4 { margin: 0; font-size: 16px; color: #fff; }
+.us-sheet label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: rgba(215, 205, 250, .8); font-weight: 650; }
+.us-sheet label small { font-weight: 500; color: rgba(215, 205, 250, .55); }
+.us-sheet input, .us-sheet textarea { padding: 11px 12px; border-radius: 12px; border: 1px solid rgba(190, 170, 255, .3); background: rgba(255, 255, 255, .05); color: #fff; font-size: 15px; }
+.us-sheet textarea { font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.us-row { display: flex; gap: 8px; }
+.us-row button { flex: 1; padding: 12px; border-radius: 14px; border: 1px solid rgba(190, 170, 255, .25); background: rgba(255, 255, 255, .05); color: #fff; font-weight: 700; }
+.us-row .us-save { background: #00c85f; color: #06140b; border: 0; }
+.us-row .us-del { color: #ff8fa3; }
