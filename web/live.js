@@ -188,9 +188,12 @@
     return (isFinite(a) ? b - a : 0) || l.title.localeCompare(r.title);
   };
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
-  // Ready order: approvals, then needs you, then things to test, then everything else (newest first within each).
+  // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
+  //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
+  //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
   const asksJames = s => s.attention?.state === 'needs_you' || s.attention?.state === 'check';
   const readyRank = s => needsApproval(s) ? 0 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
+  const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archB = now - WEEK;
@@ -209,7 +212,7 @@
       else g.ready.push(s);
     }
     for (const list of Object.values(g)) list.sort(newestFirst);
-    g.ready.sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
+    g.ready.sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || newestFirst(l, r));
     return g;
   }
   async function fetchDispositions() {
@@ -333,6 +336,7 @@
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
     isNew(s) { return hasNew(s, this.seen); },
     workGroups(sessions, now) { return groupWork(sessions || this.sessions, now); },
+    readyByPriority: byPriority,
     cardAt,
     groups() {
       const now = Date.now(), needs = [], ready = [], working = [];
