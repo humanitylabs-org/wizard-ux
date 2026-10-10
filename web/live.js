@@ -195,7 +195,8 @@
   // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
   //   Priority = approvals, then needs you, then things to test, then everything else (newest first within each).
-  const asksJames = s => s.attention?.state === 'needs_you' || s.attention?.state === 'check';
+  // Status labels never move a thread between days (James, 11 Oct 2026: Ready, Yesterday and Past week stay
+  // filtered by day in Newest and Priority); Priority only reorders within Ready.
   // Deferred threads sit at the bottom of Ready marked Deferred (James, 10 Oct 2026: "defer could just go at the
   // bottom of today … and just change the status to deferred"), whatever their day and in every order, until
   // restored or done.
@@ -214,7 +215,6 @@
       else if (isErr(s)) g.errors.push(s);
       else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
-      else if (asksJames(s)) g.ready.push(s); // waiting on James: stays in Ready until he acts, whatever the day
       else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
       else if (t < readyB) g.yesterday.push(s);
       else g.ready.push(s);

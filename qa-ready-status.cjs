@@ -1,7 +1,7 @@
 // QA: Ready status lines (feature/ready-status). Each finished thread carries the agent's hidden status tag
 // (wizard_attention: needs_you / check / done / fyi + one-line ask + subject). Ready shows needs-you and
 // test-this rows first with the exact ask as the preview, done/FYI rows go quiet and swipe straight to Done,
-// a needs-you thread from an earlier day stays in Ready, and "By subject" groups Ready like the roundup.
+// a needs-you thread from an earlier day files under its own day (Past week) with a "need you" count, and "By subject" groups Ready like the roundup.
 // Ready has three orders: Newest (pure recency, labels never move rows), Priority (needs you, test this, rest)
 // and By subject. James, 10 Oct 2026: "Newest, I actually want to not use the labels … the newest appears at the
 // top. Then … another option … priority … and that's where it should sort how it is now."
@@ -92,16 +92,17 @@ function routeFor() {
 
   try {
     const ids = await readyIds();
-    ok(ids.includes('qa_rs_old'), '1 a needs-you thread from 3 days ago stays in Ready', ids);
+    ok(!ids.includes('qa_rs_old'), '1 a needs-you thread from 3 days ago is NOT in Ready (Ready is today only)', ids);
+    const pastHas = await p.evaluate(w => { const sec = document.querySelector(`[data-chats="${w}"] [data-sec="pastWeek"]`); return { has: !!window.__wos.live.workGroups().pastWeek.find(s => s.id === 'qa_rs_old'), wait: sec?.querySelector('.ch-sec-h .wait')?.textContent || '' }; }, await wid());
+    ok(pastHas.has && /need you/.test(pastHas.wait), '1 it files under Past week, whose header counts it as need you', pastHas);
     const onNow = async () => p.$$eval(await R('.ch-rdy-bar button'), els => els.map(e => `${e.textContent}${e.classList.contains('on') ? '*' : ''}`));
     ok(JSON.stringify(await onNow()) === JSON.stringify(['Newest*', 'Priority', 'By subject']), '1 three orders, Newest is the default', await onNow());
     // Newest: pure recency, the labels never move a row.
-    ok(JSON.stringify(ids) === JSON.stringify(['qa_rs_fyi', 'qa_rs_plain', 'qa_rs_done', 'qa_rs_check', 'qa_rs_needs', 'qa_rs_old']), '1 Newest: newest at the top, status labels ignored', ids);
+    ok(JSON.stringify(ids) === JSON.stringify(['qa_rs_fyi', 'qa_rs_plain', 'qa_rs_done', 'qa_rs_check', 'qa_rs_needs']), '1 Newest: newest at the top, status labels ignored', ids);
     // Priority: needs you, then test this, then the rest (newest first within each).
     await p.locator(await R('[data-rdyorder="priority"]')).tap(); await sleep(500);
     const pids = await readyIds(), pos = id => pids.indexOf(id);
-    ok(JSON.stringify(pids) === JSON.stringify(['qa_rs_needs', 'qa_rs_old', 'qa_rs_check', 'qa_rs_fyi', 'qa_rs_plain', 'qa_rs_done']), '1 Priority: needs you, then test this, then the rest (even when newer)', pids);
-    ok(pos('qa_rs_old') < pos('qa_rs_check'), '1 Priority: the older needs-you sorts with needs-you, above test-this', pids);
+    ok(JSON.stringify(pids) === JSON.stringify(['qa_rs_needs', 'qa_rs_check', 'qa_rs_fyi', 'qa_rs_plain', 'qa_rs_done']), '1 Priority: needs you, then test this, then the rest (even when newer)', pids);
     ok(JSON.stringify(await onNow()) === JSON.stringify(['Newest', 'Priority*', 'By subject']), '1 Priority is highlighted', await onNow());
     ok((await p.$$(await R('.ch-subj'))).length === 0, '1 Priority adds no subsection headers');
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
@@ -171,11 +172,11 @@ function routeFor() {
     await expandReady(); await sleep(150);
     const subjW = await p.$$eval(await R('.ch-subj'), els => els.map(e => ({ name: e.querySelector('span')?.textContent, waiting: /waiting/.test(e.textContent) })));
     const subj = subjW.map(x => x.name), firstQuiet = subjW.findIndex(x => !x.waiting);
-    ok(subj.includes('Wizard OS') && subj.includes('Home') && subj.includes('Research') && subj[subj.length - 1] === 'Other'
+    ok(subj.includes('Wizard OS') && !subj.includes('Home') && subj.includes('Research') && subj[subj.length - 1] === 'Other'
       && (firstQuiet < 0 || subjW.slice(firstQuiet).every(x => !x.waiting)) && subj.indexOf('Wizard OS') < firstQuiet,
       '3 By subject: groups with something waiting first (Wizard OS among them), Other last', subjW);
     const order = await readyIds();
-    ok(order.indexOf('qa_rs_needs') < order.indexOf('qa_rs_done') && order.indexOf('qa_rs_done') < order.indexOf('qa_rs_old'), '3 rows sit under their subject', order);
+    ok(order.indexOf('qa_rs_needs') < order.indexOf('qa_rs_done') && order.indexOf('qa_rs_done') < order.indexOf('qa_rs_fyi') && order.indexOf('qa_rs_fyi') < order.indexOf('qa_rs_plain') && !order.includes('qa_rs_old'), '3 rows sit under their subject (older days stay out of Ready)', order);
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
     await p.screenshot({ path: path.join(OUT, '2-ready-by-subject.png') });
     ok(await p.evaluate(() => localStorage.getItem('wos.chats.readyOrder.v1')) === 'subject', '3 the choice is remembered');
