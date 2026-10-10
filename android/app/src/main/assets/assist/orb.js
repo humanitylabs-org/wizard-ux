@@ -110,22 +110,46 @@ void main(){
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
   function size() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    // 2x is already sharper than the eye can tell on a ~50 dp orb; 2.5x drew 56% more pixels per frame.
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.round(canvas.clientWidth * dpr), hh = Math.round(canvas.clientHeight * dpr);
     if (canvas.width !== w || canvas.height !== hh) { canvas.width = w; canvas.height = hh; }
   }
   const lerp = (a, b, k) => a + (b - a) * k;
   const t0 = performance.now();
   let last = t0, phase = 0;
+  /* Battery (0.8.5): the orb used to redraw its shader at the screen's full refresh rate (up to 120 fps)
+     for as long as it existed, even sitting idle in a corner or behind another app. Now:
+       - listening / thinking / any visible change in progress: full rate;
+       - resting (idle, type, paused, settled): IDLE_FPS, woken by setTimeout, so nothing ticks between frames;
+       - page hidden, canvas not laid out, or Orb.sleep(true): no frames at all until it is back. */
+  const IDLE_FPS = 12;
+  const LIVE = { listen: 1, command: 1, think: 1, agent: 1, typing: 1, done: 1 };
+  let raf = 0, timer = 0, asleep = false, settleUntil = 0, frames = 0;
+  const hidden = () => asleep || document.hidden;
+  function busy(now) {
+    return LIVE[mode] || now < settleUntil || Math.abs(levelS - level) > .002 || Math.abs(press - pressT) > .002;
+  }
+  function schedule(now) {
+    if (raf || timer || hidden()) return;
+    if (busy(now)) raf = requestAnimationFrame(frame);
+    // The next rAF lands up to one vsync after the timer, so aim a little early to keep ~IDLE_FPS.
+    else timer = setTimeout(() => { timer = 0; if (!hidden()) raf = requestAnimationFrame(frame); },
+      Math.max(0, 1000 / IDLE_FPS - (performance.now() - now) - 8));
+  }
+  function wake() { settleUntil = performance.now() + 1600; if (timer) { clearTimeout(timer); timer = 0; } schedule(performance.now()); }
   function frame(now) {
-    const dt = Math.min((now - last) / 1000, .05); last = now;
+    raf = 0;
+    if (hidden()) return;
+    const dt = Math.min((now - last) / 1000, .1); last = now;
     const k = 1 - Math.pow(.0015, dt);
     for (const key of ['energy','spin','ring','core']) cur[key] = lerp(cur[key], target[key], k);
     for (const key of ['a','b','c']) for (let i = 0; i < 3; i++) cur[key][i] = lerp(cur[key][i], target[key][i], k);
     levelS = lerp(levelS, level, 1 - Math.pow(.00002, dt));
     press = lerp(press, pressT, 1 - Math.pow(.0000001, dt));
     phase += dt * (0.6 + cur.spin);
-    if (gl && prog) {
+    // Not laid out (display:none, immersive full screen): skip the GPU work and check again at the resting rate.
+    if (gl && prog && canvas.clientWidth > 0) {
       size();
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
@@ -136,19 +160,21 @@ void main(){
       gl.uniform1f(U.core, cur.core); gl.uniform1f(U.press, press); gl.uniform1f(U.R, window.ORB_R || .5);
       gl.uniform3fv(U.cA, cur.a); gl.uniform3fv(U.cB, cur.b); gl.uniform3fv(U.cC, cur.c);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      frames++;
     }
     const host = canvas.parentElement;
     host.style.setProperty('--lvl', levelS.toFixed(3));
     host.style.setProperty('--energy', cur.energy.toFixed(3));
-    requestAnimationFrame(frame);
+    schedule(now);
   }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { last = performance.now(); wake(); } });
 
   let ok = false;
   if (gl) { try { init(); ok = true; } catch (e) { console.warn('orb shader', e); } }
   if (!ok) { canvas.hidden = true; fallback.hidden = false; }
   // A lost WebGL context leaves a blank (sometimes white) canvas on Android: show the PNG orb instead.
   canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); gl = null; canvas.hidden = true; fallback.hidden = false; });
-  requestAnimationFrame(frame);
+  wake();
 
   window.Orb = {
     webgl: ok,
@@ -156,9 +182,13 @@ void main(){
       mode = m; target = MODES[m] || MODES.idle;
       fallback.src = (m === 'idle' || m === 'type') ? 'robert-thread-orb.png' : 'robert-listening-galaxy.png';
       canvas.parentElement.dataset.mode = m;
+      wake();
     },
     get mode() { return mode; },
-    setLevel(v) { level = Math.max(0, Math.min(1, v)); },
-    press(on) { pressT = on ? 1 : 0; },
+    setLevel(v) { const l = Math.max(0, Math.min(1, v)); if (l !== level) { level = l; if (!raf) schedule(performance.now()); } },
+    press(on) { pressT = on ? 1 : 0; wake(); },
+    /** Native hosts call sleep(true) when the orb's window is off screen or the display is off. */
+    sleep(on) { asleep = !!on; if (asleep) { cancelAnimationFrame(raf); raf = 0; clearTimeout(timer); timer = 0; } else { last = performance.now(); wake(); } },
+    get frames() { return frames; },
   };
 })();
