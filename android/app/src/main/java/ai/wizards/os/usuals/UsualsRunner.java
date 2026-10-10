@@ -146,6 +146,22 @@ public final class UsualsRunner {
         mode = Mode.IDLE;
     }
 
+    /**
+     * The accessibility service (re)connected: Android drops its overlay windows when it rebinds the service, so
+     * whatever was on screen comes back.
+     */
+    public void serviceConnected() {
+        if (cover != null) { cover.hide(); cover = null; }
+        if (usual == null) return;
+        switch (mode) {
+            case TEACHING: cover().showTeachBar(usual.name); cover().teachCount(UsualsPolicy.tidy(recorded).size()); break;
+            case RUNNING: cover().showRunning(usual.name, stepIdx, usual.steps.size(), status); break;
+            case READY: cover().showReady(usual.name, total, true); break;
+            default: break;
+        }
+        note("service reconnected: cover back for " + mode);
+    }
+
     /** Every accessibility event from the service; only taps and typing inside Grab, and only while teaching. */
     public void onEvent(AccessibilityEvent e) {
         if (mode != Mode.TEACHING || e == null || usual == null) return;

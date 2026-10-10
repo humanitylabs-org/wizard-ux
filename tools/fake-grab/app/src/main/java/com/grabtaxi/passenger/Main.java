@@ -33,6 +33,7 @@ public class Main extends Activity {
             {"Massaman curry", "120"}, {"Green curry", "110"}, {"Larb moo", "75"}, {"Som tam thai", "60"},
             {"Kra pao moo saap", "65"}, {"Khao niao", "20"}, {"Thai iced tea", "45"}, {"Mango sticky rice", "90"}};
     private LinearLayout root;
+    private final Runnable dumper = this::dumpViews;
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
     @Override protected void onCreate(Bundle b) {
@@ -45,12 +46,43 @@ public class Main extends Activity {
         home();
         if (n % 2 == 1) {
             Log.i(TAG, "screen popup");
-            new AlertDialog.Builder(this).setTitle("50% off your next 3 orders!").setMessage("Use code HUNGRY at checkout.")
-                    .setPositiveButton("Not now", (d, w) -> Log.i(TAG, "popup closed")).show();
+            AlertDialog dlg = new AlertDialog.Builder(this).setTitle("50% off your next 3 orders!").setMessage("Use code HUNGRY at checkout.")
+                    .setPositiveButton("Not now", (d, w) -> Log.i(TAG, "popup closed")).create();
+            dlg.setOnShowListener(d -> root.postDelayed(() -> {
+                View btn = dlg.getButton(AlertDialog.BUTTON_POSITIVE);
+                int[] xy = new int[2]; btn.getLocationOnScreen(xy);
+                Log.i(TAG, "views |Not now@" + (xy[0] + btn.getWidth() / 2) + "," + (xy[1] + btn.getHeight() / 2));
+            }, 600));
+            dlg.show();
         }
     }
 
-    private void clear(String screen) { root.removeAllViews(); Log.i(TAG, "screen " + screen); }
+    private void clear(String screen) {
+        root.removeAllViews(); Log.i(TAG, "screen " + screen);
+        root.postDelayed(this::dumpViews, 700);
+    }
+
+    /** QA reads where things are from here (uiautomator would knock the accessibility service off). */
+    void dumpViews() {
+        StringBuilder sb = new StringBuilder("views");
+        walk(getWindow().getDecorView(), sb);
+        Log.i(TAG, sb.toString());
+    }
+
+    private void walk(View v, StringBuilder sb) {
+        if (v.getVisibility() != View.VISIBLE) return;
+        if (v instanceof TextView) {
+            CharSequence t = ((TextView) v).getText();
+            if (v instanceof EditText && (t == null || t.length() == 0)) t = ((EditText) v).getHint();
+            int[] xy = new int[2]; v.getLocationOnScreen(xy);
+            if (t != null && t.length() > 0 && v.getHeight() > 0 && xy[1] + v.getHeight() > 0 && xy[1] < getResources().getDisplayMetrics().heightPixels)
+                sb.append(" |").append(t.toString().replace('|', '/')).append('@').append(xy[0] + v.getWidth() / 2).append(',').append(xy[1] + v.getHeight() / 2);
+        }
+        if (v instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) walk(g.getChildAt(i), sb);
+        }
+    }
 
     private TextView text(String s, int sp, boolean bold) {
         TextView t = new TextView(this); t.setText(s); t.setTextSize(sp); t.setTextColor(Color.rgb(20, 20, 20));
@@ -80,7 +112,7 @@ public class Main extends Activity {
         q.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
             public void onTextChanged(CharSequence s, int a, int b, int c) { }
-            public void afterTextChanged(Editable e) { show.run(); }
+            public void afterTextChanged(Editable e) { show.run(); root.removeCallbacks(dumper); root.postDelayed(dumper, 500); }
         });
         q.setOnEditorActionListener((v, a, e) -> { show.run(); return true; });
         root.addView(text("Popular near you: Burger King · Starbucks · MK Restaurants", 14, false));
@@ -90,6 +122,7 @@ public class Main extends Activity {
         clear("menu " + restaurant);
         root.addView(text(restaurant, 22, true));
         ScrollView sv = new ScrollView(this);
+        sv.setOnScrollChangeListener((v, x, y, ox, oy) -> { root.removeCallbacks(dumper); root.postDelayed(dumper, 400); });
         LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
         sv.addView(list);
         for (String[] m : MENU) {
@@ -99,7 +132,7 @@ public class Main extends Activity {
             col.addView(text(m[0], 17, true)); col.addView(text("฿" + m[1], 14, false));
             row.addView(col, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
             Button add = new Button(this); add.setText("Add"); add.setAllCaps(false);
-            add.setOnClickListener(v -> { basket.merge(m[0], 1, Integer::sum); Log.i(TAG, "added " + m[0] + " x" + basket.get(m[0])); menuBar(); });
+            add.setOnClickListener(v -> { basket.merge(m[0], 1, Integer::sum); Log.i(TAG, "added " + m[0] + " x" + basket.get(m[0])); menuBar(); root.removeCallbacks(dumper); root.postDelayed(dumper, 400); });
             row.addView(add);
             list.addView(row);
         }

@@ -35,31 +35,45 @@ def sh(*a, stdin=None, binary=False):
     return r.stdout
 def sx(c): return sh(ADB, '-s', S, 'shell', c)
 def shot(name): (OUT / (name + '.png')).write_bytes(sh(ADB, '-s', S, 'exec-out', 'screencap', '-p', binary=True))
-def ui(): sx('uiautomator dump /sdcard/ui.xml >/dev/null'); return sx('cat /sdcard/ui.xml')
-def top(): return next((l.strip() for l in sx('dumpsys activity activities').splitlines() if 'topResumedActivity' in l), '')
-def nodes(xml=None):
-    xml = xml or ui(); out = []
-    for m in re.finditer(r'<node [^>]*?>', xml):
-        n = m.group(0)
-        g = lambda a: (re.search(' ' + a + r'="([^"]*)"', n) or [None, ''])[1]
-        b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', n)
-        out.append({'text': g('text'), 'desc': g('content-desc'), 'pkg': g('package'), 'cls': g('class'),
-                    'b': tuple(map(int, b.groups())) if b else (0, 0, 0, 0)})
-    return out
-def find(pattern, xml=None, pkg=None):
-    for n in nodes(xml):
-        if pkg and n['pkg'] != pkg: continue
-        for l in (n['text'], n['desc']):
-            if l and re.search(pattern, l, re.I): return n
+# No uiautomator: a dump re-binds UiAutomation and knocks Wizard OS's accessibility service (and its cover) off.
+# The stand-in Grab and the cover (debug builds) log their labels and centres instead.
+def _views(tag, prefix):
+    lines = [l for l in sx(f'logcat -d -s {tag}:*').splitlines() if (': ' + prefix) in l]
+    if not lines: return [], None
+    l = lines[-1].split(': ' + prefix, 1)[1]
+    frame = None
+    m = re.match(r' frame=(-?\d+),(-?\d+),(-?\d+),(-?\d+)', l)
+    if m: frame = tuple(map(int, m.groups()))
+    out = []
+    for part in l.split(' |')[1:]:
+        lab, _, xy = part.rpartition('@')
+        try: x, y = map(int, xy.split(','))
+        except Exception: continue
+        out.append({'text': lab, 'x': x, 'y': y})
+    return out, frame
+def gviews(): return _views('FakeGrab', 'views')[0]
+def cviews(): return _views('WizardUsuals', 'cover')
+def gfind(pattern):
+    for n in gviews():
+        if re.search(pattern, n['text'], re.I): return n
     return None
-def tap(n): x1, y1, x2, y2 = n['b']; sx(f'input tap {(x1 + x2) // 2} {(y1 + y2) // 2}')
+def cfind(pattern, since=None):
+    v, _ = cviews()
+    for n in v:
+        if re.search(pattern, n['text'], re.I): return n
+    return None
+def tap(n): sx(f"input tap {n['x']} {n['y']}")
+def find(pattern, pkg=None):
+    return gfind(pattern) if pkg == GPKG else cfind(pattern)
 def tap_text(pattern, pkg=None, tries=10):
     for _ in range(tries):
-        n = find(pattern, pkg=pkg)
-        if n: tap(n); return n['text'] or n['desc']
+        n = find(pattern, pkg)
+        if n: tap(n); return n['text']
         time.sleep(1)
     return None
-def grablog(): return sx('logcat -d -s FakeGrab:*')
+def clear_logs(): sx('logcat -c')
+def grablog(): return GLOG[0] + sx('logcat -d -s FakeGrab:*')
+GLOG = ['']
 def uslog(): return sx('logcat -d -s WizardUsuals:*')
 def wait_for(fn, secs=30, step=1.0):
     t = time.time()
@@ -202,26 +216,30 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('B: Open Grab launches Grab', ok, top())
         time.sleep(3)
         card = find(r'^Done$')
-        check('B: the teach card (Done) floats over Grab', card is not None)
+        card = card or wait_for(lambda: find(r'^Done$'), 6)
+        check('B: the teach card (Done) floats over Grab', card is not None, cviews())
         shot('b-teach-card')
         # James builds the basket by hand:
-        tap_text(r'^Not now$', pkg=None, tries=4); time.sleep(1)
-        box = find(r'Search for dishes', pkg=GPKG)
+        if wait_for(lambda: re.search(r'views \|Not now@(\d+),(\d+)', grablog()), 6):
+            m = re.findall(r'views \|Not now@(\d+),(\d+)', grablog())[-1]; sx(f'input tap {m[0]} {m[1]}'); time.sleep(1.5)
+        box = wait_for(lambda: gfind(r'Search for dishes'), 8)
         if box: tap(box); time.sleep(1); sx('input text krua'); time.sleep(1.5)
-        tap_text(r'^Krua Thai Kitchen$', pkg=GPKG); time.sleep(2)
+        r = wait_for(lambda: gfind(r'^Krua Thai Kitchen$'), 8)
+        if r: tap(r); time.sleep(2)
         def add_by(item):
             for _ in range(8):
-                x = ui(); ns = nodes(x)
+                time.sleep(.8); ns = gviews()
                 it = next((n for n in ns if n['text'] == item), None)
                 if it:
-                    y = (it['b'][1] + it['b'][3]) // 2
-                    adds = [n for n in ns if n['text'] == 'Add' and n['b'][1] - 120 < y < n['b'][3] + 120]
-                    if adds: tap(adds[0]); time.sleep(1); return True
-                sx('input swipe 540 1700 540 900 300'); time.sleep(1)
+                    adds = sorted([n for n in ns if n['text'] == 'Add' and abs(n['y'] - it['y']) < 140], key=lambda n: abs(n['y'] - it['y']))
+                    if adds:
+                        before = grablog().count('added ' + item); tap(adds[0])
+                        return bool(wait_for(lambda: grablog().count('added ' + item) > before, 5, .3))
+                sx('input swipe 540 1700 540 1000 400'); time.sleep(1.2)
             return False
         a1 = add_by('Kra pao moo saap'); a2 = add_by('Kra pao moo saap'); a3 = add_by('Thai iced tea')
         check('B: (by hand) added 2× kra pao + 1× iced tea', a1 and a2 and a3, grablog()[-300:])
-        tap_text(r'^View basket', pkg=GPKG); time.sleep(2)
+        time.sleep(.8); tap_text(r'^View basket', pkg=GPKG); time.sleep(2)
         check('B: (by hand) on checkout at ฿245', 'checkout total=245' in grablog(), grablog()[-200:])
         shot('b-checkout-teach')
         tap_text(r'^Done$'); time.sleep(3)

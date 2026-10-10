@@ -74,6 +74,7 @@ public class WizardKeyboardService extends AccessibilityService {
             setServiceInfo(info);
         }
         Log.i(TAG, "keyboard service connected");
+        ai.wizards.os.usuals.UsualsRunner.get(this).serviceConnected();
         main.post(poll);
     }
 

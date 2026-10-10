@@ -51,11 +51,38 @@ final class UsualsCover {
         lp.gravity = Gravity.TOP;
         if (Build.VERSION.SDK_INT >= 28) lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         lp.setTitle("WizardUsualsCover");
-        try { wm.addView(v, lp); view = v; full = fullScreen; }
+        try { wm.addView(v, lp); view = v; full = fullScreen; qaDump(); }
         catch (Exception e) { Log.w(UsualsRunner.TAG, "cover failed", e); view = null; }
     }
 
+    /** Debug (QA) builds: log the cover's buttons and where they are (uiautomator would knock the service off). */
+    void qaDump() {
+        if (!ai.wizards.os.BuildConfig.DEBUG || view == null) return;
+        view.postDelayed(() -> {
+            if (view == null) return;
+            int[] o = new int[2]; view.getLocationOnScreen(o);
+            StringBuilder sb = new StringBuilder("cover frame=" + o[0] + "," + o[1] + "," + (o[0] + view.getWidth()) + "," + (o[1] + view.getHeight()));
+            walk(view, sb);
+            Log.i(UsualsRunner.TAG, sb.toString());
+        }, 500);
+    }
+
+    private static void walk(View v, StringBuilder sb) {
+        if (v.getVisibility() != View.VISIBLE) return;
+        if (v instanceof TextView) {
+            CharSequence t = ((TextView) v).getText();
+            int[] xy = new int[2]; v.getLocationOnScreen(xy);
+            if (t != null && t.length() > 0) sb.append(" |").append(t.toString().replace('|', '/').replace('\n', ' '))
+                    .append('@').append(xy[0] + v.getWidth() / 2).append(',').append(xy[1] + v.getHeight() / 2);
+        }
+        if (v instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) walk(g.getChildAt(i), sb);
+        }
+    }
+
     void hide() {
+        if (view != null && ai.wizards.os.BuildConfig.DEBUG) Log.i(UsualsRunner.TAG, "cover hidden");
         if (view != null && wm != null) { try { wm.removeView(view); } catch (Exception ignored) { } }
         view = null; teachCountView = null;
     }
@@ -160,6 +187,7 @@ final class UsualsCover {
         bar.setVisibility(View.VISIBLE);
         bar.setProgress(of == 0 ? 5 : Math.max(5, step * 100 / of));
         setActions(button("Cancel", false), v -> runner.cancel());
+        qaDump();
     }
 
     void showReady(String name, String total, boolean canOrder) {
@@ -179,6 +207,7 @@ final class UsualsCover {
         actions.addView(look, wide(46));
         Button cancel = button("Cancel", false); cancel.setOnClickListener(v -> runner.cancel());
         actions.addView(cancel, wide(46));
+        qaDump();
     }
 
     void showOrdering(String name) {
@@ -195,6 +224,7 @@ final class UsualsCover {
         title.setText(ordered ? "Ordered ✓" : "Check Grab");
         sub.setText(ordered ? name + " is on its way. Track it in Grab." : "Grab is still on checkout; it may want one more tap.");
         actions.removeAllViews();
+        qaDump();
     }
 
     void showFailed(String name, String why) {
@@ -207,6 +237,7 @@ final class UsualsCover {
         actions.addView(look, wide(48));
         Button cancel = button("Close", false); cancel.setOnClickListener(v -> runner.cancel());
         actions.addView(cancel, wide(46));
+        qaDump();
     }
 
     /* ------------------------------------------------------------------ bits */
