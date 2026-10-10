@@ -118,7 +118,7 @@ window.WizCore.chats = function createChats(H) {
     const ownerId = owner(w.id), curThread = W[ownerId]?.thread;
     const drafts = newDrafts().filter(d => !n || norm(d.text).includes(n));
     c.more = c.more || {};
-    const head = `<div class="ch-top"><label class="ch-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-chsearch placeholder="Search chats and messages" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}</label>${PW?.FOLDER_SVG && window.WosFiles ? `<button class="ch-new ch-files-b" data-chfiles aria-label="Files">${PW.FOLDER_SVG}</button>` : ''}<button class="ch-new" data-chnew aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
+    const head = `<div class="ch-top"><label class="ch-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-chsearch placeholder="Search chats and messages" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}</label><button class="ch-new" data-chnew aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
     let body;
     const draftSec = drafts.length ? `<section class="ch-sec open" data-sec="drafts"><div class="ch-sec-h static"><span>Drafts</span><small>${drafts.length}</small></div><div class="ch-sec-b">${drafts.map(d => draftRow(d, d.key === 'new' && curThread === '__new__')).join('')}</div></section>` : '';
     // New chats still on the phone (the window went back to the list on send): shown until Wizard admits them,
@@ -167,22 +167,35 @@ window.WizCore.chats = function createChats(H) {
     if (!f.id) throw new Error('Wizard Files returned an invalid upload receipt.');
     return { id: String(f.id), name: String(f.filename || file.name), mime: String(f.mime || file.type || ''), bytes: Number(f.bytes) || file.size };
   }
+  // A multi-pick stages every file at once (each shows immediately), then they upload side by side.
   async function addFiles(wid, list) {
     const c = ch(wid); c.files = c.files || [];
-    for (const file of [...list]) {
-      if (c.files.length >= MAX_FILES) { toast('!', `Up to ${MAX_FILES} files per message`, 2400); break; }
-      const local = { key: Math.random().toString(36).slice(2), name: file.name, mime: file.type, bytes: file.size, uploading: true, preview: /^image\//.test(file.type) ? URL.createObjectURL(file) : '' };
-      c.files.push(local); refreshCompose(wid);
+    const picked = [...list], room = Math.max(0, MAX_FILES - c.files.length);
+    if (picked.length > room) toast('!', `Up to ${MAX_FILES} files per message`, 2400);
+    const locals = picked.slice(0, room).map(file => ({ file, key: Math.random().toString(36).slice(2), name: file.name, mime: file.type, bytes: file.size, uploading: true, preview: /^image\//.test(file.type) ? URL.createObjectURL(file) : '' }));
+    if (!locals.length) return;
+    c.files.push(...locals); refreshCompose(wid);
+    await Promise.all(locals.map(async local => {
+      const { file } = local; delete local.file;
       try { Object.assign(local, await uploadFile(file), { uploading: false }); if (local.preview) PREVIEW[local.id] = local.preview; }
       catch (e) { c.files = c.files.filter(x => x !== local); toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
-      refreshCompose(wid); saveDraft(wid);
-    }
+      refreshCompose(wid);
+    }));
+    saveDraft(wid);
   }
+  // Photos and screenshots stage as big thumbnails only; other files keep a name chip.
   function attachTray(c) {
     const files = c.files || [];
     if (!files.length) return '';
-    return `<div class="ch-tray">${files.map(f => `<span class="ch-att${f.uploading ? ' up' : ''}" data-attkey="${esc(f.key)}">${f.preview ? `<img src="${esc(f.preview)}" alt="">` : `<span class="ic">${fileKind(f) === 'voice' ? MIC_SVG : CLIP_SVG}</span>`}<span class="nm">${esc(fileKind(f) === 'voice' ? 'Voice note' : f.name)}<small>${f.uploading ? 'Uploading…' : esc(fsize(f.bytes))}</small></span><button type="button" data-attrm="${esc(f.key)}" aria-label="Remove">×</button></span>`).join('')}</div>`;
+    const rm = f => `<button type="button" data-attrm="${esc(f.key)}" aria-label="Remove">×</button>`;
+    return `<div class="ch-tray">${files.map(f => f.preview && fileKind(f) === 'image'
+      ? `<span class="ch-att ch-attimg${f.uploading ? ' up' : ''}" data-attkey="${esc(f.key)}"><img src="${esc(f.preview)}" alt="${esc(f.name || 'Photo')}">${f.uploading ? '<i class="ch-attspin" aria-label="Uploading"></i>' : ''}${rm(f)}</span>`
+      : `<span class="ch-att${f.uploading ? ' up' : ''}" data-attkey="${esc(f.key)}">${f.preview ? `<img src="${esc(f.preview)}" alt="">` : `<span class="ic">${fileKind(f) === 'voice' ? MIC_SVG : CLIP_SVG}</span>`}<span class="nm">${esc(fileKind(f) === 'voice' ? 'Voice note' : f.name)}<small>${f.uploading ? 'Uploading…' : esc(fsize(f.bytes))}</small></span>${rm(f)}</span>`).join('')}</div>`;
   }
+  /* Mic until there is something to send: typed words or a ready attachment swap it for Send (.has-text);
+   * a voice take recording in this thread turns the mic itself into Send (.ch-mic.on). */
+  const hasContent = (text, c) => !!(String(text || '').trim() || (c.files || []).length);
+  function syncSend(form, c) { if (form) form.classList.toggle('has-text', hasContent(form.querySelector('textarea')?.value, c)); }
   function refreshCompose(wid) {
     const el = track.querySelector(`[data-chats="${wid}"]`); const form = el?.querySelector('[data-chform]'); if (!form) return;
     const c = ch(wid), old = form.querySelector('.ch-tray');
@@ -190,6 +203,7 @@ window.WizCore.chats = function createChats(H) {
     if (old) old.outerHTML = html || ''; else if (html) form.insertAdjacentHTML('afterbegin', html);
     const busy = (c.files || []).some(f => f.uploading);
     form.querySelector('[type=submit]').disabled = busy;
+    syncSend(form, c);
   }
   const MIC_SVG = '<svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg>';
   const CLIP_SVG = '<svg viewBox="0 0 24 24"><path d="m9.5 17.5 7.7-7.7a3 3 0 0 0-4.2-4.2l-8 8a5 5 0 0 0 7.1 7.1l8-8"/></svg>';
@@ -284,8 +298,9 @@ window.WizCore.chats = function createChats(H) {
     return h;
   }
   const turnAt = tn => [tn.u?.at, tn.a?.at, tn.mediaAt].find(v => isFinite(v));
-  /* Thread actions, same rules as Wizard: Done / Close & file / Defer on a settled thread with an answer;
-   * Restore (and Done) on a deferred or archived one; nothing while the agent is working or waiting. */
+  /* Thread actions: Defer / Done on a settled thread with an answer (Close & file retired with Helm);
+   * Restore (and Done) on a deferred or archived one; nothing while the agent is working or waiting.
+   * They sit bottom-right under the final response, Done rightmost. */
   function threadActions(s, turns) {
     if (!s || LIVE.busy(s.id)) return [];
     if (WORKING_ST.has(s.status) || s.status === 'waiting_for_approval') return [];
@@ -293,7 +308,7 @@ window.WizCore.chats = function createChats(H) {
     if (s.deferred && !s.archived) return ['restore', 'done'];
     if (inArchive) return ['restore'];
     if (turns && !turns.some(t => t.a || t.media.length)) return [];
-    return ['done', 'defer', 'file'];
+    return ['defer', 'done'];
   }
   const ACT = {
     done: { label: 'Done', icon: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>', hint: 'Mark done' },
@@ -399,10 +414,11 @@ window.WizCore.chats = function createChats(H) {
     PW?.ensureModels();
     const chip = PW ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
+    const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
     el.innerHTML = `<div class="ch-thread">
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><span class="emo">${isNew ? '✎' : emoOf(w.thread)}</span><div class="ti"><b>${esc(winTitle(w))}</b><small${chip ? ' class="ch-subm"' : ''}>${chip ? `<span class="ch-subt">${esc(sub)}</span>` : esc(sub)}${chip}</small></div>${acts.length ? `<div class="ch-acts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${a === 'file' ? 'File' : ACT[a].label}</span></button>`).join('')}</div>` : ''}</div>
-      <div class="ch-msgs">${msgs}${fail}</div>${PW ? PW.latestBtn() : ''}
-      <form class="ch-compose" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button>${PW ? PW.filesBtn() : ''}<textarea rows="1" placeholder="${working ? `Steer ${esc(window.WizConfig.agent())}…` : `Message ${esc(window.WizConfig.agent())}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}"><b>${esc(winTitle(w))}</b></div>${chip}</div>
+      <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
+      <form class="ch-compose${hasContent(draft, c) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(window.WizConfig.agent())}…` : `Message ${esc(window.WizConfig.agent())}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
     const nb = el.querySelector('.ch-msgs');
@@ -631,14 +647,14 @@ window.WizCore.chats = function createChats(H) {
       const text = ta.value; const c = ch(id);
       if (!text.trim() && !(c.files || []).some(f => f.id)) return;
       if ((c.files || []).some(f => f.uploading)) { H.toast('…', 'Still uploading · send when it finishes', 2000); return; }
-      ta.value = ''; sendChat(id, text);
+      ta.value = ''; syncSend(f, c); sendChat(id, text);
     });
     root.addEventListener('input', e => {
       if (e.target.matches('[data-chsearch]')) {
         const id = idOf(e.target); ch(id).q = e.target.value; const el = elOf(id);
         if (el?.querySelector('.ch-scroll')) { renderChatList(H.win(id), el); const inp = el.querySelector('[data-chsearch]'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
       }
-      if (e.target.matches('.ch-compose textarea')) { growTa(e.target); const id = idOf(e.target); ch(id).draft = e.target.value; saveDraft(id); }
+      if (e.target.matches('.ch-compose textarea')) { growTa(e.target); const id = idOf(e.target); ch(id).draft = e.target.value; saveDraft(id); syncSend(e.target.form, ch(id)); }
     });
     root.addEventListener('keydown', e => {
       if (e.target.matches('.ch-compose textarea') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.target.form.requestSubmit(); }
@@ -651,7 +667,7 @@ window.WizCore.chats = function createChats(H) {
     const ta = elOf(id)?.querySelector('.ch-compose textarea'); if (!ta || !text) return false;
     const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
     ta.value = ta.value.slice(0, a) + text + ta.value.slice(b); ta.focus();
-    ta.setSelectionRange(a + text.length, a + text.length); ch(id).draft = ta.value; saveDraft(id); growTa(ta);
+    ta.setSelectionRange(a + text.length, a + text.length); ch(id).draft = ta.value; saveDraft(id); growTa(ta); syncSend(ta.form, ch(id));
     return true;
   }
   const forget = id => { delete CH[id]; };

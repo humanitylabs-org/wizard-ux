@@ -1,14 +1,10 @@
 /* Wizard UX core: styles for core/chat-power.js — model chip + picker, failed-thread panel, Errors actions,
  * composer mic, work receipts, ↓ Latest, Files, AI usage. Shared by every shell. */
 
-/* #11 model chip in the thread header */
-.ch-model { display: inline-flex; align-items: center; gap: 3px; max-width: 46vw; padding: 0 6px; margin-left: 2px; height: 18px; border-radius: 9px; font: inherit; font-size: 11.5px; font-weight: 650; color: var(--violet-2); background: rgba(143, 99, 255, .12); vertical-align: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: auto; }
-.ch-model i { font-style: normal; font-size: 8px; opacity: .7; }
-.ch-head .ti small { pointer-events: auto; }
-/* the subtitle gives way, the chip never does: it stays tappable however long the subtitle is */
-.ch-head .ti small.ch-subm { display: flex; align-items: center; gap: 4px; overflow: visible; }
-.ch-subm .ch-subt { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ch-subm .ch-model { flex: 0 0 auto; max-width: 42vw; }
+/* #11 model chip: far right of the thread header (thread and new chat alike) */
+.ch-model { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; max-width: 38vw; height: 30px; padding: 0 11px; border-radius: 15px; font: inherit; font-size: 13px; font-weight: 650; color: var(--violet-2); background: rgba(143, 99, 255, .14); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-model i { font-style: normal; font-size: 9px; opacity: .7; }
+.ch-model:active { background: rgba(143, 99, 255, .24); }
 /* the picker sheet */
 .ch-msheet .ch-sheet-b, .ch-files .ch-sheet-b { max-height: 78%; display: flex; flex-direction: column; }
 .msheet-list { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
@@ -40,12 +36,19 @@
 .ch-err-t b svg { width: 15px; height: 15px; fill: none; stroke: var(--ink-2); stroke-width: 2; }
 .ch-err-t small { font-size: 12.5px; color: #ff9c82; }
 
-/* #13 composer mic */
+/* #13 composer mic: one round button on the right. Mic while the field is empty; Send once there are words or
+ * a file (.has-text); the mic itself turns into Send while its voice take records (.on). Without a mic
+ * (no voice on this device) Send always shows. */
+.ch-compose:not(.has-text) .ch-mic ~ .ch-send, .ch-compose .ch-mic.on ~ .ch-send { display: none; }
+.ch-compose.has-text .ch-mic:not(.on) { display: none; }
+/* (mic look) */
 .ch-compose button.ch-mic { background: rgba(205, 190, 255, .08); border: 1px solid var(--line-2); }
-.ch-compose button.ch-mic svg { width: 19px; height: 19px; fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; }
-.ch-compose button.ch-mic.on { background: #ff4d6d; border-color: transparent; box-shadow: 0 0 0 4px rgba(255, 77, 109, .22); animation: ch-micpulse 1.2s ease-in-out infinite; }
-.ch-compose button.ch-mic.on svg { stroke: #fff; }
-@keyframes ch-micpulse { 50% { box-shadow: 0 0 0 7px rgba(255, 77, 109, .12); } }
+.ch-compose button.ch-mic svg { width: 19px; height: 19px; fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ch-compose button.ch-mic .snd { display: none; }
+.ch-compose button.ch-mic.on { background: linear-gradient(140deg, #7a4dff, #c04dff); border-color: transparent; box-shadow: 0 0 0 4px rgba(255, 77, 109, .28); animation: ch-micpulse 1.2s ease-in-out infinite; }
+.ch-compose button.ch-mic.on .mc { display: none; }
+.ch-compose button.ch-mic.on .snd { display: block; width: 18px; height: 18px; stroke: #fff; stroke-width: 2.4; }
+@keyframes ch-micpulse { 50% { box-shadow: 0 0 0 7px rgba(255, 77, 109, .14); } }
 
 /* #17 work receipt */
 .steps.wk summary { display: flex; align-items: center; gap: 6px; }
@@ -78,9 +81,6 @@
 .ch-latest[hidden] { display: none; }
 
 /* #23 Files */
-.ch-compose button.ch-fromfiles { width: 32px; margin-left: -4px; background: none; border: 0; }
-.ch-compose button.ch-fromfiles svg { width: 19px; height: 19px; fill: none; stroke: var(--ink-3); stroke-width: 1.8; stroke-linejoin: round; }
-.ch-top .ch-files-b svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
 .fi-top { display: flex; align-items: center; gap: 8px; padding: 2px 4px 8px; flex: 0 0 auto; }
 .fi-top .ch-sheet-t { flex: 1; padding: 0 6px; }
 .fi-top b { font-size: 16px; font-weight: 750; padding-left: 4px; }

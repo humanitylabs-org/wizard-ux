@@ -125,7 +125,7 @@ window.WosChatPower = function chatPower(A) {
     if (!M) return '';
     const cur = w.thread === '__new__' ? newModel(ch(w.id)) : s ? threadModel(s) : null;
     const label = cur?.model ? M.short(cur.model, cur.provider) : M.ready ? 'Default model' : 'Model';
-    return ` · <button type="button" class="ch-model" data-chmodel aria-label="Model: ${esc(cur?.model ? M.name(cur.model, cur.provider) : 'default')}. Change model" title="${esc(cur?.model || '')}">${esc(label)}<i aria-hidden="true">▾</i></button>`;
+    return `<button type="button" class="ch-model" data-chmodel aria-label="Model: ${esc(cur?.model ? M.name(cur.model, cur.provider) : 'default')}. Change model" title="${esc(cur?.model || '')}">${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
   let modelsAsked = false;
   function ensureModels() {
@@ -220,7 +220,9 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= #13 composer mic ================= */
   // On while a take pinned to THIS thread is recording (recordingFor() names the thread the take belongs to).
-  const micBtn = wid => { if (!H.recordReply) return ''; const sid = H.win(wid)?.thread, on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="Voice reply to this thread">${A.MIC_SVG}</button>`; };
+  // While its take records, the mic IS the send button (arrow, recording ring); otherwise it is the mic.
+  const SEND_SVG = '<svg class="snd" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+  const micBtn = wid => { if (!H.recordReply) return ''; const sid = H.win(wid)?.thread, on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
   /* A recording made from a thread's composer: always delivered to that thread (pinned when recording started),
    * through the durable outbox, which transcribes it and keeps the recording as a voice note. */
   async function sendVoiceTo(wid, sid, blob, files = []) {
@@ -252,7 +254,7 @@ window.WosChatPower = function chatPower(A) {
     return it;
   }
   function paintMic(on, sid) {
-    H.root().querySelectorAll('[data-chmic]').forEach(b => { const id = b.closest('[data-chats]')?.dataset.chats, x = !!on && !!sid && H.win(id)?.thread === sid; b.classList.toggle('on', x); b.setAttribute('aria-pressed', String(x)); });
+    H.root().querySelectorAll('[data-chmic]').forEach(b => { const id = b.closest('[data-chats]')?.dataset.chats, x = !!on && !!sid && H.win(id)?.thread === sid; b.classList.toggle('on', x); b.setAttribute('aria-pressed', String(x)); b.setAttribute('aria-label', x ? 'Send this voice reply' : 'Record a voice reply to this thread'); });
   }
 
   /* ================= sheets: model picker, Files ================= */

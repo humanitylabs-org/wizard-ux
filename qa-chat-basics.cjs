@@ -429,12 +429,12 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
   const listSection = id => p.evaluate(id => document.querySelector(`.ch-list [data-chopen="${CSS.escape(id)}"]`)?.closest('[data-sec]')?.dataset.sec || '', id);
   {
     await openThread('qa_ready_thread');
-    const acts = await p.evaluate(() => [...document.querySelectorAll('.ch-head [data-chact]')].map(b => b.dataset.chact));
-    ok(acts.join(',') === 'done,defer,file', 'thread header offers Done / Defer / File in one tap', acts);
+    const acts = await p.evaluate(() => [...document.querySelectorAll('.ch-tacts [data-chact]')].map(b => b.dataset.chact));
+    ok(acts.join(',') === 'defer,done', 'under the final reply: Defer / Done in one tap (Close & file retired)', acts);
     await p.screenshot({ path: `${OUT}/09-thread-actions.png` });
     holdDisposition = 1500;
     const n0 = writes.length;
-    await p.locator('.ch-head [data-chact="defer"]').tap(); await sleep(250);
+    await p.locator('.ch-tacts [data-chact="defer"]').tap(); await sleep(250);
     ok((await thread()) === null && (await section('qa_ready_thread')) === 'deferred', 'Defer: back to the list and in Deferred at once (before the save returns)', await section('qa_ready_thread'));
     await sleep(1600); holdDisposition = 0;
     const w = writes.slice(n0).find(x => x.p === '/wizard/thread-dispositions');
@@ -469,21 +469,19 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     await sleep(600);
     const w2 = writes.slice(n2).find(x => /\/api\/sessions\/qa_done_thread$/.test(x.p));
     ok(w2 && w2.m === 'PATCH' && JSON.stringify(JSON.parse(w2.body)) === JSON.stringify({ archived: true }), 'Done saves archived:true on the session (PATCH), like Wizard', w2);
-    // Close & file from the thread header.
+    // Done from under the final reply (Close & file is retired).
     await openThread('qa_file_thread');
     const n3 = writes.length;
-    await p.locator('.ch-head [data-chact="file"]').tap(); await sleep(120);
-    ok((await thread()) === null && (await section('qa_file_thread')) === 'archive', 'Close & file: back to the list, in Archive at once');
+    await p.locator('.ch-tacts [data-chact="done"]').tap(); await sleep(120);
+    ok((await thread()) === null && (await section('qa_file_thread')) === 'archive', 'Done under the reply: back to the list, in Archive at once');
     await sleep(700);
-    const w3 = writes.slice(n3).find(x => x.p === '/wizard/filings');
-    const b3 = w3 && JSON.parse(w3.body);
-    ok(b3 && b3.session_id === 'qa_file_thread' && b3.runtime === 'direct' && /^[A-Za-z0-9-]{8,200}$/.test(b3.client_command_id), 'Close & file posts to /wizard/filings with a command id', w3?.body);
+    ok(!writes.slice(n3).some(x => x.p === '/wizard/filings'), 'nothing posts to the retired /wizard/filings route');
     // Restore an archived thread from inside it.
     await openThread('qa_file_thread');
-    const ra = await p.evaluate(() => [...document.querySelectorAll('.ch-head [data-chact]')].map(b => b.dataset.chact));
+    const ra = await p.evaluate(() => [...document.querySelectorAll('.ch-tacts [data-chact]')].map(b => b.dataset.chact));
     ok(ra.join(',') === 'restore', 'an archived thread offers Restore', ra);
     const n4 = writes.length;
-    await p.locator('.ch-head [data-chact="restore"]').tap(); await sleep(150);
+    await p.locator('.ch-tacts [data-chact="restore"]').tap(); await sleep(150);
     ok((await section('qa_file_thread')) === 'ready', 'Restore brings an archived thread back to Ready at once', await section('qa_file_thread'));
     await sleep(600);
     const w4 = writes.slice(n4).find(x => /\/api\/sessions\/qa_file_thread$/.test(x.p));
@@ -492,7 +490,7 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     // A failed save puts the thread back.
     await openThread('qa_fail_thread');
     failNext = '/api/sessions/qa_fail_thread';
-    await p.locator('.ch-head [data-chact="done"]').tap(); await sleep(120);
+    await p.locator('.ch-tacts [data-chact="done"]').tap(); await sleep(120);
     const mid = await section('qa_fail_thread');
     await sleep(900);
     ok(mid === 'archive' && (await section('qa_fail_thread')) === 'ready', 'a failed save puts the thread back where it was', { mid, after: await section('qa_fail_thread') });
@@ -560,10 +558,10 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
       const u = [...document.querySelectorAll('.pane-main .msg.u .mimg img')], a = [...document.querySelectorAll('.pane-main .msg.a .mimg img')];
       return { u: u.filter(i => i.naturalWidth > 0 && i.src.startsWith('data:image/')).length, a: a.filter(i => i.naturalWidth > 0 && /\/wizard\/attachments\/[0-9a-f]{32}$/.test(i.src)).length,
         raw: /helm_attachments|"items"\s*:|"sha256"/.test(document.querySelector('.pane-main .ch-msgs').textContent),
-        acts: [...document.querySelectorAll('.pane-main .ch-head [data-chact]')].map(b => b.dataset.chact) };
+        acts: [...document.querySelectorAll('.pane-main .ch-tacts [data-chact]')].map(b => b.dataset.chact) };
     });
     ok(r.u >= 1 && r.a >= 2 && !r.raw, 'desktop: real thread shows James’s photo in his bubble and Archimedes’s images, no raw JSON', r);
-    ok(r.acts.length >= 1 && (r.acts.includes('done') || r.acts.includes('restore')), 'desktop: thread header carries the Done / Defer / File (or Restore) actions', r.acts);
+    ok(r.acts.length >= 1 && (r.acts.includes('done') || r.acts.includes('restore')), 'desktop: the thread carries the Defer / Done (or Restore) actions', r.acts);
     await dReveal('.pane-main .msg.u .mimg'); await sleep(500);
     await d.screenshot({ path: `${OUT}/12-desktop-real-thread.png` });
     await d.locator('.pane-main .msg.a .mimg').first().click();
@@ -581,12 +579,12 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     ok(mdOk, 'desktop: full Markdown (table, quote, code, italics) renders');
     await dOpen('qa_done_thread');
     const n0 = writes.length;
-    const acts = await d.evaluate(() => [...document.querySelectorAll('.pane-main .ch-head [data-chact]')].map(b => b.dataset.chact));
-    if (acts.includes('restore')) { await d.locator('.pane-main .ch-head [data-chact="restore"]').click(); await sleep(400); await dOpen('qa_done_thread'); }
-    const acts2 = await d.evaluate(() => [...document.querySelectorAll('.pane-main .ch-head [data-chact]')].map(b => b.dataset.chact));
-    ok(acts2.join(',') === 'done,defer,file', 'desktop: header offers Done / Defer / File', acts2);
+    const acts = await d.evaluate(() => [...document.querySelectorAll('.pane-main .ch-tacts [data-chact]')].map(b => b.dataset.chact));
+    if (acts.includes('restore')) { await d.locator('.pane-main .ch-tacts [data-chact="restore"]').click(); await sleep(400); await dOpen('qa_done_thread'); }
+    const acts2 = await d.evaluate(() => [...document.querySelectorAll('.pane-main .ch-tacts [data-chact]')].map(b => b.dataset.chact));
+    ok(acts2.join(',') === 'defer,done', 'desktop: Defer / Done under the final reply', acts2);
     await d.screenshot({ path: `${OUT}/14-desktop-thread-actions.png` });
-    await d.locator('.pane-main .ch-head [data-chact="defer"]').click(); await sleep(250);
+    await d.locator('.pane-main .ch-tacts [data-chact="defer"]').click(); await sleep(250);
     ok((await dThread()) !== 'qa_done_thread' && await d.evaluate(() => { const g = __wux.live.workGroups(); return (g.deferred || []).some(s => s.id === 'qa_done_thread'); }), 'desktop: Defer from the header files it under Deferred at once');
     await sleep(600);
     const dw = writes.slice(n0).find(x => x.p === '/wizard/thread-dispositions');
