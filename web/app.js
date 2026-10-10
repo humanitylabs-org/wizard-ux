@@ -789,8 +789,16 @@
       const h = win.history, push = h.pushState.bind(h), rep = h.replaceState.bind(h);
       h.pushState = function (st, t, u) { const r = (win.navigator.userActivation?.isActive ? push : rep)(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
       h.replaceState = function (st, t, u) { const r = rep(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
+      // The app stepping back through its own entries (collapse a section with history.back()) is the app's
+      // step, never the user's Back: mark it so the frame popstate below lets the app handle it (James, 10 Oct:
+      // collapsing a part in a full-screen app dropped full screen).
+      const bk = h.back.bind(h), go = h.go.bind(h);
+      h.back = function () { selfPop(win); return bk(); };
+      h.go = function (n) { if (+n < 0) selfPop(win); return go(n); };
     } catch (e) {}
   }
+  function selfPop(win) { try { win.__wosSelfPop = Date.now() + 800; } catch (e) {} }
+  function takeSelfPop(win) { try { if (win.__wosSelfPop && Date.now() < win.__wosSelfPop) { win.__wosSelfPop = 0; return true; } } catch (e) {} return false; }
   function watchEarly(f) {
     let last = null, n = 0;
     const tick = () => {
@@ -844,6 +852,8 @@
     try { win.addEventListener('popstate', e => {
       if (Date.now() < dropUntil) { e.stopImmediatePropagation(); ignorePop = 0; dropUntil = 0; return; } // the shell's guard drop landed here
       if (Date.now() < exitUntil) { e.stopImmediatePropagation(); history.back(); return; }
+      // The app (or the shell on its behalf) stepped back through the app's own entry: the app's step.
+      if (takeSelfPop(win)) { try { win.__wosHref = win.location.href; } catch (x) {} return; }
       let same = false; try { same = win.location.href === win.__wosHref; win.__wosHref = win.location.href; } catch (x) {}
       // The app keeps its own back step only when it is the focused window on the desk in view, nothing is
       // open over it, and the pop really changed its page. Anything else (an app on another desk, a boot-time
@@ -2124,7 +2134,7 @@
     if (f) {
       if (f.app === 'chats' && f.thread) return CHATS.threadBack(f);
       if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
-      if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { nav.back(); return 'frame'; } }
+      if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { try { selfPop(winEl(f.id).querySelector('iframe').contentWindow); } catch (e) {} nav.back(); return 'frame'; } }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }
       if (d.full) { setFull(f.id, false); return 'tile'; }
     }
