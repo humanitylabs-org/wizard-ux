@@ -811,6 +811,19 @@ body {
 .device.orb-corner .voice .transcript.brief { left: auto; right: 12px; transform: translateY(10px) scale(.94); bottom: calc(var(--safe-b) + 140px); }
 .device.orb-corner .voice.tx .transcript.brief { transform: none; }
 
+/* Full-screen thread (James, 10 Oct): the orb rises into the right-hand column above the composer. Below it sits a
+ * band for Done (end of a reply) and ↓ Latest (scrolled up), so neither is ever under the orb; the composer gets its
+ * full width back. --comp-h is the composer's measured height. */
+.device.orb-lift { --corner-b: calc(var(--comp-h, 63px) + 52px); }
+.device.orb-lift .dock { transition: bottom 180ms var(--ease); }
+.device.orb-lift .win.full .ch-compose { padding-right: 10px; }
+.device.orb-lift .win.full .ch-latest { right: 12px; bottom: calc(var(--comp-h, 63px) + 10px); }
+.device.orb-lift .imm-edge { right: 0; }
+.device.orb-lift .imm-edge i { left: 50%; }
+/* the live transcript card sits above the voice fan (which tops out ~175px above the orb), never on it */
+.device.orb-lift .transcript { bottom: calc(var(--safe-b) + var(--corner-b) + var(--corner-orb) + 170px); }
+.device.orb-lift .voice .transcript.brief { bottom: calc(var(--safe-b) + var(--corner-b) + var(--corner-orb) + 170px); }
+
 /* Bottom edge: swipe up from anywhere along it to leave full screen. Shows a faint handle on entry. */
 .imm-edge { position: absolute; left: 0; right: 0; bottom: 0; height: calc(18px + var(--safe-b)); z-index: 58; display: none; touch-action: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .device.immersive .imm-edge { display: block; }
