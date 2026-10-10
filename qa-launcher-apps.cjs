@@ -7,7 +7,8 @@ const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:1
 const W = process.env.QA_WEB_DIR;
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, x); } };
-const WANT = { 'wizard-signal': '/wizard-signal/', wisdom: '/wisdom/', shopping: '/wizard-shopping/', mizel: '/mizel-live/#/', trackhunt: '/trackhunt/', 'legacy-wizard': '/wizard/' };
+// Android Apps (10 Oct): ONE Wizard app tile for the phone's Android apps; the apps themselves never become tiles.
+const WANT = { 'android-apps': '/android-apps/', 'wizard-signal': '/wizard-signal/', wisdom: '/wisdom/', shopping: '/wizard-shopping/', mizel: '/mizel-live/#/', trackhunt: '/trackhunt/', 'legacy-wizard': '/wizard/' };
 const RETIRED = ['/shopping-assistant/', '/reader/', '/signal-feed/', '/recall/', '/capture/', '/idea-queue/', '/storyboard-review/', '/golden-frog-review/'];
 
 (async () => {
@@ -54,7 +55,7 @@ const RETIRED = ['/shopping-assistant/', '/reader/', '/signal-feed/', '/recall/'
       const stray = await p.evaluate(() => { const b = document.querySelector('#launcherBody'); return { bar: !!b.querySelector('.deskbar'), txt: /Full\s*←|\d+ windows?/.test(b.innerText) }; });
       ok(!stray.bar && !stray.txt, 'mobile: no stray window-list text at the bottom of the launcher', JSON.stringify(stray));
       const natives = await p.evaluate(() => [...document.querySelectorAll('#launcherBody [data-app]')].map(e => e.dataset.app).filter(id => ['maps', 'camera', 'phone', 'messages', 'spotify', 'telegram', 'line', 'grab', 'chrome', 'settings'].includes(id)));
-      ok(!natives.length && !/\bANDROID\b|Android/.test(await p.evaluate(() => document.querySelector('#launcherBody').innerText)), 'mobile: no Android apps or Android group in the launcher', JSON.stringify(natives));
+      ok(!natives.length && !/\bANDROID\b|Android(?! Apps)/.test(await p.evaluate(() => document.querySelector('#launcherBody').innerText)), 'mobile: no Android apps or Android group in the launcher', JSON.stringify(natives));
       await p.fill('#search', 'maps').catch(() => {}); await p.waitForTimeout(300);
       const hit = await p.evaluate(() => [...document.querySelectorAll('#launcherBody [data-app]')].map(e => e.dataset.app));
       ok(!hit.includes('maps'), 'mobile: searching "maps" in the launcher shows no Android tile', JSON.stringify(hit));
