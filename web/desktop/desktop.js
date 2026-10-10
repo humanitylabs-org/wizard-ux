@@ -67,6 +67,9 @@
     // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
     recordingFor: () => (vReply && VOICE.state === 'listen' ? vReply.sid : ''),
+    // The thread a recording take will go into (its composer rides along); Send in that composer finishes the take.
+    voiceInto: () => (VOICE.state === 'listen' && vMode === 'talk' ? (vReply?.sid || (vTarget && W[vTarget]?.thread) || '') : ''),
+    finishVoice: () => talk('send'),
     // A private-origin link in a message opens as a window on this workspace; the shell never navigates away.
     openLink: (url, title) => !!newWin({ app: 'frame', appId: 'link', url, title }),
     changed: () => { for (const id of Object.keys(W)) if (W[id].app === 'chats') syncChatsPane(id); },
@@ -190,7 +193,7 @@
     const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
     const w = known ? (openThread(it.sessionId), focused()) : newChat();
     if (!w) return;
-    CHATS.setDraft(w.id, it.text || '', (it.files || []).filter(f => f !== it.audioFile));
+    CHATS.setDraft(w.id, it.text || it.typed || '', (it.files || []).filter(f => f !== it.audioFile));
     OUTBOX.remove(it.id); CHATS.renderChats(w); syncChatsPane(w.id);
   }
 
@@ -630,12 +633,18 @@
     if (action === 'start') return 'voice';
     const rp = vReply; vReply = null; // the thread a composer-mic take belongs to, fixed before anything else runs
     const aimSid = vTarget && W[vTarget]?.thread; // the thread in front at the send key, before any await
+    // Text, photos and voice go as ONE message (legacy H4): that thread's composer, taken at the send key.
+    const sealAt = rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
+    if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { vReply = rp; toast('…', 'Still uploading · send when it finishes', 2000); return 'busy'; }
+    const t = sealAt ? CHATS.takeComposer(sealAt.wid, sealAt.sid) : null;
+    const sealed = t && (t.text || t.files.length) ? t : false;
     const r = await VOICE.finish({ transcribe: false });
+    if ((!r || !r.blob) && sealed) sealed.putBack();
     if (!r || !r.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
-    if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { sid: aimSid });
-    else ask('', 'voice', r.blob);
+    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
+    if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { sid: aimSid, seal: sealed });
+    else { if (sealed) sealed.putBack(); ask('', 'voice', r.blob); }
     toast('✦', `Sent to ${window.WizConfig.agent()}`, 1400);
     return 'sent';
   }
