@@ -112,9 +112,10 @@ final class UsualsCover {
         card.setBackground(bg);
         TextView t = text(browsing ? "Saving this order" : "Teaching", 11, Color.argb(210, 190, 170, 255), true);
         TextView n = text(name, 14, Color.WHITE, true); n.setMaxWidth(dp(150)); n.setSingleLine(true); n.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        teachCountView = text(browsing ? "Saves when you order" : "0 steps", 11, Color.argb(190, 220, 210, 255), false);
-        teachCountView.setMaxWidth(dp(150)); teachCountView.setMaxLines(3); teachCountView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        card.addView(t); card.addView(n); card.addView(teachCountView);
+        // show() starts with hide(), which forgets the old card's line: keep this one in a local until it's up.
+        TextView line = text(browsing ? "Saves when you order" : "0 steps", 11, Color.argb(190, 220, 210, 255), false);
+        line.setMaxWidth(dp(150)); line.setMaxLines(3); line.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        card.addView(t); card.addView(n); card.addView(line);
         LinearLayout btns = row();
         Button cancel = button("✕", false); cancel.setContentDescription(browsing ? "Don't save this order" : "Cancel teaching");
         cancel.setOnClickListener(v -> runner.cancel());
@@ -128,6 +129,7 @@ final class UsualsCover {
         card.addView(btns, bl);
         show(card, false);
         saved = false;
+        teachCountView = line;
         if (lp != null && view != null) {
             lp.width = WindowManager.LayoutParams.WRAP_CONTENT;
             lp.gravity = Gravity.END | Gravity.TOP;

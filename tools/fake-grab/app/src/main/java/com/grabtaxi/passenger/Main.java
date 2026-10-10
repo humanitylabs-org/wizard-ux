@@ -128,6 +128,7 @@ public class Main extends Activity {
         ScrollView sv = new ScrollView(this);
         sv.setOnScrollChangeListener((v, x, y, ox, oy) -> { root.removeCallbacks(dumper); root.postDelayed(dumper, 400); });
         LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(0, 0, 0, dp(140)); // like Grab: the last dish scrolls clear of the basket bar
         sv.addView(list);
         String[][] items = restaurant.startsWith("Kruang") ? BURGERS : MENU;
         for (String[] m : items) {

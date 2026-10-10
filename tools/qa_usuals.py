@@ -239,10 +239,12 @@ with (BASE / 'worker.lock').open('a') as lock:
         if r: tap(r); time.sleep(2)
         check('B: (by hand) looked at Kruang Burger, backed out, opened Krua Thai Kitchen', looked and 'screen menu Krua Thai Kitchen' in grablog(), grablog()[-300:])
         def add_by(item):
+            last_y = None
             for _ in range(10):
                 time.sleep(.8); ns = gviews()
                 it = next((n for n in ns if n['text'] == item), None)
-                if it and it['y'] > 1800: sx('input swipe 540 1500 540 1000 400'); time.sleep(1.2); continue  # keep clear of the basket bar
+                # Keep clear of the basket bar; the last row can't scroll any higher, so take it where it is.
+                if it and it['y'] > 1800 and it['y'] != last_y: last_y = it['y']; sx('input swipe 540 1500 540 1000 400'); time.sleep(1.2); continue
                 if it:
                     adds = sorted([n for n in ns if n['text'] == 'Add' and abs(n['y'] - it['y']) < 140], key=lambda n: abs(n['y'] - it['y']))
                     if adds:
