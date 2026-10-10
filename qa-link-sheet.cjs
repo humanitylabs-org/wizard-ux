@@ -17,7 +17,10 @@ const FIX = {
   '/qa-page/host/': page('Host App', '<h1>Host</h1><a id="other" href="/qa-page/two/">other app</a><br><a id="blank" href="/qa-page/host/../two/" target="_blank">blank</a><br><button id="wopen" onclick="window.open(\'/qa-page/two/\', \'_blank\')">open</button><br><a id="inside" href="/qa-page/host/sub/">inside</a>'),
   '/qa-page/host/sub/': page('Host Sub', '<h1>Sub</h1>'),
   '/qa-page/three/': page('Page Three', '<h1>Three</h1>'),
+  '/qa-page/gallery/': page('Gallery', '<h1>Mockups</h1><a id="img1" href="/qa-page/wide.png">original</a><br><a id="img2" href="wide2.png" target="_blank">second</a>'),
 };
+// A real 1280-px-wide mockup screenshot: wider than any phone.
+const PNG = fs.readFileSync(process.env.QA_PNG || '/home/telos/.hermes/data/apps/private-reports/herdr-to-wizard/herdr-homepage-demo.png');
 
 (async () => {
   const RES = process.env.QA_RESOLVE; const b = await pw.chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), ...(RES ? { args: ['--host-resolver-rules=' + RES] } : {}) });
@@ -29,6 +32,7 @@ const FIX = {
     const writes = [], popups = [];
     await ctx.route('**/*', r => {
       const q = r.request(), u = new URL(q.url());
+      if (u.origin === ORIGIN && /^\/qa-page\/(gallery\/)?wide2?\.png$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'image/png', body: PNG });
       if (u.origin === ORIGIN && FIX[u.pathname]) return r.fulfill({ status: 200, contentType: 'text/html', body: FIX[u.pathname] });
       // QA_WEB_DIR: serve this branch's shell files in place of the live ones (real gateway, real apps).
       const m = WEB && u.origin === ORIGIN && q.method() === 'GET' && u.pathname.match(/^\/wizard-os-home\/((?:desktop\/|core\/)?[a-z-]+\.(?:js|css|html)|)$/);
@@ -143,6 +147,44 @@ const FIX = {
       await p.screenshot({ path: `${SHOTS}/ls-phone-34.png` });
       await back(); await p.waitForTimeout(600);
       s = await st(); ok(!s.open, 'phone: one Back closes it', JSON.stringify(s));
+    }
+    // 7b. James's case: a mockup image link opens fit to the screen width with pinch zoom, never as a raw
+    //     full-size page wider than the viewport. Back closes the image first, then the page, never Wizard.
+    {
+      const vs = () => p.evaluate(() => window.WosChat.viewer.state);
+      const fit = () => p.evaluate(() => { const i = document.querySelector('.mviewer .mv-stage img'), r = i && i.getBoundingClientRect(); return i ? { w: Math.round(r.width), vw: innerWidth, nat: i.naturalWidth, overflow: document.documentElement.scrollWidth > innerWidth } : null; });
+      await tapLink(ORIGIN + '/qa-page/gallery/');
+      const g = p.frameLocator('.linksheet iframe');
+      await g.locator('#img1').click(); await p.waitForTimeout(900);
+      let v = await vs(), f = await fit(); s = await st();
+      ok(v.open && v.kind === 'image' && v.n === 2 && v.i === 0 && s.open && /gallery/.test(s.url) && s.depth === 1, `${shell}: image link in a page → image viewer over the page`, JSON.stringify({ v, s }));
+      ok(f && f.nat === 1280 && f.w <= f.vw && !f.overflow, `${shell}: 1280-px mockup opens no wider than the screen`, JSON.stringify(f));
+      if (phone) {
+        await p.screenshot({ path: `${SHOTS}/ls-phone-image-fit.png` });
+        // Real two-finger pinch (CDP touch → genuine pointer events).
+        const cdp = await ctx.newCDPSession(p);
+        const r = await p.locator('.mviewer .mv-stage').boundingBox(), cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+        const tp = d => [{ x: cx - d, y: cy, id: 1 }, { x: cx + d, y: cy, id: 2 }];
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: tp(40) });
+        for (let k = 1; k <= 8; k++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: tp(40 + k * 14) }); await p.waitForTimeout(16); }
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await p.waitForTimeout(300); v = await vs();
+        ok(v.scale > 2, 'phone: pinch zooms the mockup', JSON.stringify(v));
+        await p.screenshot({ path: `${SHOTS}/ls-phone-image-zoom.png` });
+      }
+      await back(); await p.waitForTimeout(500);
+      v = await vs(); s = await st();
+      ok(!v.open && s.open && /gallery/.test(s.url) && p.url() === shellUrl, `${shell}: Back closes the image, the page stays`, JSON.stringify({ v, s }));
+      await g.locator('#img2').click(); await p.waitForTimeout(900);
+      v = await vs(); ok(v.open && v.i === 1 && !popups.length, `${shell}: target=_blank image opens in the viewer, no new tab`, JSON.stringify({ v, popups: popups.length }));
+      await back(); await p.waitForTimeout(400); await back(); await p.waitForTimeout(600);
+      s = await st(); ok(!s.open && p.url() === shellUrl, `${shell}: Back twice → page closed, Wizard stays`, JSON.stringify(s));
+      // An image link straight in a chat bubble.
+      await tapLink(ORIGIN + '/qa-page/wide.png');
+      v = await vs(); f = await fit(); s = await st();
+      ok(v.open && !s.open && f && f.w <= f.vw, `${shell}: image link in chat → viewer, fit to width`, JSON.stringify({ v, s, f }));
+      await back(); await p.waitForTimeout(500);
+      v = await vs(); ok(!v.open && p.url() === shellUrl, `${shell}: one Back closes it, Wizard stays`, JSON.stringify(v));
     }
     // 8. James's case: a link INSIDE an embedded app (a window on the desk) to another app or _blank must
     //    never replace Wizard; it opens in the sheet, and ONE Back returns to the app window.
