@@ -282,18 +282,13 @@ body > .mviewer { position: fixed; z-index: 200; }
 
 /* Ready status lines (the agent's hidden status tag): needs you / test this stand out; done / FYI go quiet. */
 .st.check { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
-.ch-row .pv em.att { font-style: normal; font-weight: 750; letter-spacing: .01em; }
-.ch-row .pv em.att.needs { color: var(--amber); }
-.ch-row .pv em.att.check { color: var(--cyan); }
-.ch-row .pv em.att.done { color: var(--ink-3); font-weight: 700; }
 .ch-row.att-needs .pv, .ch-row.att-check .pv { color: var(--ink-2); }
 .ch-row.att-needs .tp b, .ch-row.att-check .tp b { color: var(--ink); font-weight: 700; }
 .ch-row.quiet { opacity: .72; }
-/* Deferred: bottom of Ready, a muted status in place of Needs you / Test this */
+/* Deferred: bottom of Ready, a muted status in place of Needs you / Your call */
 .st.deferred { box-sizing: border-box; background: transparent; border: 1.5px solid var(--violet-2); box-shadow: none; } /* a ring: the filled violet dot means unread */
-/* Deferred is a label like Needs you / Test this (James, 10 Oct 2026: "don't fade it … same weight as all the other
+/* Deferred is a label like Needs you / Your call (James, 10 Oct 2026: "don't fade it … same weight as all the other
  * threads, just add the label"): full opacity, normal preview, its own colour. */
-.ch-row .pv em.att.deferred { color: var(--violet-2); }
 .ch-row.quiet .pv { -webkit-line-clamp: 1; }
 .ch-row.quiet.unread { opacity: .9; }
 .ch-sec-h b.wait { background: rgba(255, 190, 85, .16); color: var(--amber); }
@@ -357,3 +352,13 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-sheet-b .ch-rename-b button.go { background: rgba(185, 165, 255, .18); border-color: rgba(185, 165, 255, .4); }
 .ch-renamed { align-self: center; margin: 4px 0; max-width: 92%; font-size: 11.5px; font-weight: 650; color: var(--ink-3); text-align: center; }
 .ch-renamed span { display: inline-block; padding: 3px 10px; border-radius: 99px; border: 1px dashed var(--line-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+/* Status label before the preview: the icon's word in the icon's colour, same size and weight as the preview
+ * (it blends in; bold still means unread only). */
+.ch-row .pv em.att { font-style: normal; font-weight: inherit; letter-spacing: 0; }
+.ch-row .pv em.att.needs, .ch-row .pv em.att.approval { color: #ffb84d; }
+.ch-row .pv em.att.check { color: #5adcff; }
+.ch-row .pv em.att.done { color: #3ddc84; }
+.ch-row .pv em.att.fyi { color: #ffd84a; }
+.ch-row .pv em.att.deferred { color: var(--violet-2); }
+.ch-row .pv em.att.failed { color: #ff6b6b; }

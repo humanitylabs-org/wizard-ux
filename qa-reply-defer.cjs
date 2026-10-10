@@ -96,8 +96,11 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
   const wid = () => p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats')?.id);
   const W = async sel => `[data-chats="${await wid()}"] ${sel}`;
   const R = async sel => W(`[data-sec="ready"] ${sel}`);
-  const readyIds = async () => p.$$eval(await R('[data-chopen]'), els => els.map(e => e.dataset.chopen).filter(id => id.startsWith('qa_rd_')));
-  const rowInfo = async id => p.evaluate(sel => { const e = document.querySelector(sel); if (!e) return null; return { cls: e.className, pv: (e.querySelector('.pv')?.textContent || '').trim(), sec: e.closest('[data-sec]')?.dataset.sec }; }, await W(`[data-chopen="${id}"]`));
+  // Ready pages at 40 rows and the live list is long now, so deferred fixtures (always last) sit behind "Show more":
+  // expand Ready before reading it, as James would.
+  const expandReady = async () => p.evaluate(sel => { const b = document.querySelector(sel); if (b) b.click(); }, await R('[data-secmore]'));
+  const readyIds = async () => { await expandReady(); await sleep(150); return p.$$eval(await R('[data-chopen]'), els => els.map(e => e.dataset.chopen).filter(id => id.startsWith('qa_rd_'))); };
+  const rowInfo = async id => (await expandReady(), p.evaluate(sel => { const e = document.querySelector(sel); if (!e) return null; return { cls: e.className, pv: (e.querySelector('.pv')?.textContent || '').trim(), sec: e.closest('[data-sec]')?.dataset.sec }; }, await W(`[data-chopen="${id}"]`)));
 
   // Samples the voice layer for `ms`: any moment the status pill shows, and where it sits relative to the orb.
   const watchPill = ms => p.evaluate(ms => new Promise(res => {
@@ -155,8 +158,8 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     ok(ids.includes('qa_rd_def') && ids.includes('qa_rd_def_old'), '3 deferred threads (today and 3 days old) sit in Ready', ids);
     ok(ids.slice(-2).sort().join() === 'qa_rd_def,qa_rd_def_old', '3 deferred rows are the bottom of Ready, even the newest one', ids);
     const d = await rowInfo('qa_rd_def'), dOld = await rowInfo('qa_rd_def_old');
-    ok(d && /\bdeferred\b/.test(d.cls) && /^Deferred · Read this later/.test(d.pv), '3 a deferred row reads "Deferred · <its line>"', d);
-    ok(dOld && /^Deferred · Approve the purchase/.test(dOld.pv) && !/att-needs/.test(dOld.cls), '3 a deferred needs-you row shows Deferred, not Needs you', dOld);
+    ok(d && /\bdeferred\b/.test(d.cls) && /^Deferred: Read this later/.test(d.pv), '3 a deferred row reads "Deferred: <its line>"', d);
+    ok(dOld && /^Deferred: Approve the purchase/.test(dOld.pv) && !/att-needs/.test(dOld.cls), '3 a deferred needs-you row shows Deferred, not Needs you', dOld);
     // Same weight as every other thread (James, 10 Oct 2026: "don't fade it and make it hard to read … just add the
     // label"): no opacity, the title and preview read exactly like a plain row, and the label is coloured like the others.
     const look = await p.evaluate(() => {
@@ -171,7 +174,10 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     ok(look.d && look.n && look.d.title === look.n.title && look.d.pv === look.n.pv, '3 a deferred row reads like any other thread (same title and preview styling)', look);
     const dot = await p.evaluate(() => { const d = document.querySelector('[data-sec="ready"] [data-chopen="qa_rd_def"]'); return d && { icon: (d.querySelector('.emo.sti')?.className || '').replace('emo sti ', ''), filled: !!d.querySelector('.pv .st.unread') }; });
     ok(dot && dot.icon === 'deferred' && !dot.filled, '3 a deferred row wears the Deferred (clock) icon, never the unread dot', dot);
-    ok(look.label && look.label.text === 'Deferred' && look.label.color !== look.pvColor && look.label.color !== 'rgb(125, 116, 163)' && +look.label.weight >= 700, '3 "Deferred" is a coloured label like Needs you / Test this', look);
+    const iconColor = await p.evaluate(() => { const i = document.querySelector('[data-sec="ready"] [data-chopen="qa_rd_def"] .emo.sti'); return i && getComputedStyle(i).color; });
+    const pvWeight = await p.evaluate(() => { const v = document.querySelector('[data-sec="ready"] [data-chopen="qa_rd_def"] .pv'); return v && getComputedStyle(v).fontWeight; });
+    // Labels blend in (James, 10 Oct 2026): the icon's colour, the preview's own weight — never brighter or bolder.
+    ok(look.label && look.label.text === 'Deferred:' && look.label.color !== look.pvColor && look.label.color === iconColor && look.label.weight === pvWeight, '3 "Deferred:" is a label in its icon\'s colour at the preview\'s weight, like Needs you / Test this', { look, iconColor, pvWeight });
     const hdr = await p.evaluate(async sel => {
       const h = document.querySelector(sel); const m = (h?.querySelector('b.wait')?.textContent || '').match(/^(\d+) need you/);
       const sec = h?.closest('[data-sec]'); const rows = [...sec.querySelectorAll('[data-chopen]')];
@@ -190,14 +196,14 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     const toast = await p.evaluate(() => document.querySelector('#toast')?.textContent || '');
     ok(await p.evaluate(() => !Object.values(__wos.wins).find(w => w.app === 'chats')?.thread), '5 Defer steps back to the list');
     const pl = await rowInfo('qa_rd_plain');
-    ok(pl && pl.sec === 'ready' && /^Deferred · /.test(pl.pv), '5 the thread is in Ready, marked Deferred, at once', pl);
+    ok(pl && pl.sec === 'ready' && /^Deferred: /.test(pl.pv), '5 the thread is in Ready, marked Deferred, at once', pl);
     ids = await readyIds();
     ok(ids.slice(-3).includes('qa_rd_plain') && ids.indexOf('qa_rd_plain') > ids.indexOf('qa_rd_check'), '5 it moved to the bottom of Ready', ids);
     ok(/Deferred/.test(toast) && !/Moved to Deferred/.test(toast), '5 the toast says Deferred (no section to move to)', toast);
     const pw1 = writes.slice(wd).find(x => x.p === '/wizard/thread-dispositions');
     ok(pw1 && JSON.parse(pw1.body).deferred === true && JSON.parse(pw1.body).sessionId === 'qa_rd_plain', '5 saved through /wizard/thread-dispositions like Wizard', pw1);
     await sleep(1500);
-    ok(/^Deferred · /.test((await rowInfo('qa_rd_plain'))?.pv || ''), '5 Deferred survives the save and refresh');
+    ok(/^Deferred: /.test((await rowInfo('qa_rd_plain'))?.pv || ''), '5 Deferred survives the save and refresh');
 
     // ---- 6 Restore ----
     await p.evaluate(() => __wos.openWizardThread('qa_rd_plain'));
@@ -221,7 +227,7 @@ const overlap = (a, b) => !!a && !!b && a.x < b.r && b.x < a.r && a.y < b.b && b
     ok(ids.slice(-2).sort().join() === 'qa_rd_def,qa_rd_def_old' && ids.indexOf('qa_rd_needs') < ids.indexOf('qa_rd_check'), 'Priority: needs you first, deferred still at the bottom', ids);
     await p.locator(await R('[data-rdyorder="subject"]')).tap(); await sleep(500);
     const ds = await rowInfo('qa_rd_def_old');
-    ok(ds && /^Deferred · /.test(ds.pv), 'By subject: deferred rows keep their Deferred line', ds);
+    ok(ds && /^Deferred: /.test(ds.pv), 'By subject: deferred rows keep their Deferred line', ds);
     const subjHdr = await p.$$eval(await R('.ch-subj'), els => els.map(e => e.textContent));
     ok(subjHdr.some(t => /^QA rd Home/.test(t)) && !subjHdr.some(t => /^QA rd Home.*waiting/.test(t)), 'By subject: a deferred needs-you is not counted as waiting', subjHdr);
     await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(300);
