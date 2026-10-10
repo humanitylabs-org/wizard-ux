@@ -97,6 +97,13 @@ async function ctxFor(b, kind) {
   const top = await p.evaluate(() => document.querySelector('.pal-it.sel .nm')?.childNodes[0]?.textContent);
   ok(/CineQueue/.test(top || ''), 'palette: fuzzy app match ranks first', top);
   await p.screenshot({ path: OUT + '/3-palette.png' });
+  // Apps lead threads with a query (James: ⌘K "music" → Wizard Music first, under the cursor).
+  await p.fill('#palInput', 'music'); await sleep(150);
+  const mus = await p.evaluate(() => ({ grps: [...document.querySelectorAll('#palList .pal-grp')].map(g => g.textContent), first: document.querySelector('.pal-it.sel .nm')?.childNodes[0]?.textContent }));
+  ok(mus.grps[0] === 'Apps' && /^Wizard Music$/.test(mus.first || ''), 'palette: "music" → Apps lead, Wizard Music first', JSON.stringify(mus));
+  ok(!mus.grps.includes('Threads') || mus.grps.indexOf('Threads') > mus.grps.indexOf('Apps'), 'palette: threads sit below apps', JSON.stringify(mus.grps));
+  await p.screenshot({ path: OUT + '/3b-palette-music.png' });
+  await p.fill('#palInput', 'cinequ'); await sleep(150);
   await p.keyboard.press('Enter');
   await sleep(500);
   const tiles = await p.evaluate(() => [...document.querySelectorAll('.wsp:not([hidden]) .win:not(.gone)')].map(w => { const r = w.getBoundingClientRect(); return { x: Math.round(r.left), w: Math.round(r.width), t: w.querySelector('.wbar .t').textContent }; }));

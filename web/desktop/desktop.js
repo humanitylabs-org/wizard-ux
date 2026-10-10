@@ -483,12 +483,17 @@
       if (qs.tab === 'images') items.reverse();
       searchGrp = { grp: 'Search', items, strong: !!quickSearch(q)?.strong };
     }
-    if (n) out.push({ grp: 'Ask', items: [{ kind: 'ask', name: `Ask ${window.WizConfig.agent()}: “${clip(q, 70)}”`, icon: '✦', keys: `${CMD}Enter`, run: () => ask(q) }] });
-    if (th.length) out.push({ grp: n ? 'Threads' : 'Needs you · unread · working', items: th });
-    if (apps.length) out.push({ grp: 'Apps', items: apps });
+    // With a query, apps lead (James: "music" → Wizard Music first, under the cursor), then threads,
+    // then commands; "Ask" goes last unless nothing else matched. With no query, attention threads lead.
+    if (n) {
+      if (apps.length) out.push({ grp: 'Apps', items: apps });
+      if (th.length) out.push({ grp: 'Threads', items: th });
+    } else {
+      if (th.length) out.push({ grp: 'Needs you · unread · working', items: th });
+      if (apps.length) out.push({ grp: 'Apps', items: apps });
+    }
     if (cmds.length) out.push({ grp: 'Commands', items: cmds });
-    // With a query, the best match leads; "Ask" goes last unless nothing else matched.
-    if (n && out.length > 1) out.push(out.shift());
+    if (n) out.push({ grp: 'Ask', items: [{ kind: 'ask', name: `Ask ${window.WizConfig.agent()}: “${clip(q, 70)}”`, icon: '✦', keys: `${CMD}Enter`, run: () => ask(q) }] });
     // "image search …" / "search the web …" leads; otherwise Search sits just above Ask.
     if (searchGrp) { if (searchGrp.strong) out.unshift(searchGrp); else out.splice(Math.max(0, out.length - 1), 0, searchGrp); }
     return out;

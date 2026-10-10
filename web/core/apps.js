@@ -103,7 +103,7 @@
     // Ranked fuzzy search over names and descriptions (launcher, palette).
     function searchApps(q) {
       const n = norm(q); if (!n) return APPS.slice();
-      return APPS.map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; })
+      return APPS.map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 4 : (' ' + nm).includes(' ' + n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; })
         .filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
     }
     // Quick search (the "image search …" / "search …" spell). The search app is whichever installed or
