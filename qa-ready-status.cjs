@@ -53,7 +53,8 @@ function routeFor() {
     if (m !== 'GET' && m !== 'HEAD') {
       const body = (q.postDataBuffer() || Buffer.alloc(0)).toString();
       writes.push({ m, p: u.pathname, body });
-      for (const id of Object.keys(FIX)) if ((u.pathname.includes(id) || body.includes(id)) && /archive|hide|done|"archived":true/i.test(u.pathname + body)) ARCH.add(id);
+      // Read-state writes carry thread ids (one of them ends in "done"): they never archive anything.
+      if (u.pathname !== '/wizard/thread-seen') for (const id of Object.keys(FIX)) if ((u.pathname.includes(id) || body.includes(id)) && /archive|hide|done|"archived":true/i.test(u.pathname + body)) ARCH.add(id);
       if (u.pathname === '/wizard/thread-seen') { let st; try { st = JSON.parse(body).state; } catch (e) {} return json(200, { state: st || { initializedAt: Date.now(), threads: {} } }); }
       return json(200, { ok: true });
     }
