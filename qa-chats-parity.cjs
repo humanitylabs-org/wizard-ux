@@ -123,7 +123,8 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   await p.locator('.ch-att', { hasText: 'notes.pdf' }).locator('[data-attrm]').tap(); await p.waitForTimeout(200);
   ok(await p.locator('.ch-tray .ch-att').count() === 1, 'remove (×) drops one attachment');
   await p.screenshot({ path: `${OUT}/parity-attach.png` });
-  await p.tap('.ch-compose [type=submit]'); await p.waitForTimeout(1500);
+  // No text → the round button is the mic (James 10 Oct); a photo-only send still goes through Ctrl/⌘+Enter.
+  await p.locator('.ch-compose textarea').focus(); await p.keyboard.press('Control+Enter'); await p.waitForTimeout(1500);
   let run = writes.filter(w => /\/v1\/runs$/.test(w.u)).pop();
   const rb = run ? JSON.parse(run.body) : {};
   ok(Array.isArray(rb.wizard_file_ids) && rb.wizard_file_ids.length === 1 && /^drop_qa/.test(rb.wizard_file_ids[0]), 'photo-only send carries wizard_file_ids', run?.body);

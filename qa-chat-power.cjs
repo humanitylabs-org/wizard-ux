@@ -415,33 +415,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
   try {
     realFiles = ((await (await fetch(origin + '/wizard/files')).json()).files || []).filter(f => !f.status || f.status === 'ready');
     await openThread('qa_pw_ready');
-    await p.click(await S('.ch-compose [data-chfiles]'));
-    await p.waitForFunction(() => document.querySelectorAll('.ch-psheet [data-fiattach]').length > 0, null, { timeout: 15000 }).catch(() => {});
-    const fl = await p.evaluate(() => ({ rows: [...document.querySelectorAll('.ch-psheet [data-fiid]')].map(x => x.dataset.fiid), head: document.querySelector('.ch-psheet .fi-top small')?.textContent }));
-    ok(realFiles.length > 0 && fl.rows.length === Math.min(200, realFiles.length) && fl.rows[0] === realFiles[0].id, '#23 phone: Files lists the real /wizard/files, newest first', { got: fl.rows.length, want: realFiles.length, head: fl.head });
-    const lay = await p.evaluate(() => { const t = document.querySelector('.ch-psheet .fi-kinds button'), x = document.querySelector('.ch-psheet .fi-x'), b = document.querySelector('.ch-psheet .fi-b'); const tr = t.getBoundingClientRect(), xr = x.getBoundingClientRect(), br = b.getBoundingClientRect(); return { tabH: Math.round(tr.height), xRight: Math.round(br.right - xr.right) }; });
-    ok(lay.tabH >= 28 && lay.xRight < 30, '#23 phone: filter tabs keep their height and Close sits at the right edge', lay);
-    await sleep(350);
-    await p.screenshot({ path: `${OUT}/phone-09-files-sheet.png` });
-    await p.click('.ch-psheet [data-fikind="voice"]'); await sleep(200);
-    const voiceN = await p.evaluate(() => document.querySelectorAll('.ch-psheet [data-fiid]').length);
-    const wantVoice = realFiles.filter(f => /^audio\//.test(f.mime) && /^wizard-(voice|everywhere)-/.test(f.filename)).length;
-    ok(voiceN === Math.min(200, wantVoice), '#23 phone: the Voice filter narrows the list', { voiceN, wantVoice });
-    await p.click('.ch-psheet [data-fikind="all"]'); await sleep(200);
-    const fid = realFiles[0].id;
-    await p.click(`.ch-psheet [data-fiattach="${fid}"]`); await sleep(400);
-    const att = await p.evaluate(([fid, w]) => ({ files: (__wos.chatState(w).files || []).map(f => f.id), tray: document.querySelectorAll(`[data-chats="${w}"] .ch-tray [data-attkey]`).length, pressed: document.querySelector(`.ch-psheet [data-fiattach="${fid}"]`)?.getAttribute('aria-pressed') }), [fid, await wid()]);
-    ok(att.files.join(',') === fid && att.tray === 1 && att.pressed === 'true', '#23 phone: Attach adds the file to this composer (no upload)', att);
-    ok(!writes.some(w => /files\/upload/.test(w.p) && w.tag === 'phone-attach'), '#23 attaching an existing file uploads nothing');
-    await p.screenshot({ path: `${OUT}/phone-10-files-attached.png` });
-    await back();
-    ok(!(await sheetOpen()) && (await thread()) === 'qa_pw_ready' && (await backLog()) === 'chat-sheet', '#23 phone: Back closes Files and stays in the thread', await backLog());
-    const n0 = writes.length;
-    await p.fill(await S('.ch-compose textarea'), 'QA please look at this file');
-    await p.click(await S('.ch-compose button[type="submit"]'));
-    const fr = await until(() => runsTo('qa_pw_ready', n0).find(r => r.input === 'QA please look at this file'));
-    ok(fr && Array.isArray(fr.wizard_file_ids) && fr.wizard_file_ids.includes(fid), '#23 phone: the sent run carries the file in wizard_file_ids (intercepted)', fr);
-    ok(!writes.slice(n0).some(w => /files\/upload/.test(w.p)), '#23 phone: no upload for an existing Wizard file');
+    ok(!(await p.evaluate(sel => !!document.querySelector(sel), await S('.ch-compose [data-chfiles]'))), '#23 phone: the composer has no Files button (paperclip only)');
     // Files from Settings
     await back();
     await p.evaluate(() => __wos.openSettings()); await sleep(400);
@@ -476,9 +450,6 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await p.click(await S('[data-chmodel]')); await sleep(300);
     const b1 = await nb(); await sleep(300);
     ok(b1 === 'chat-sheet' && (await thread()) === 'qa_pw_other' && !(await sheetOpen()), 'Back (Android) 1: closes the model picker, thread stays', b1);
-    await p.click(await S('.ch-compose [data-chfiles]')); await sleep(400);
-    const b2 = await nb(); await sleep(300);
-    ok(b2 === 'chat-sheet' && (await thread()) === 'qa_pw_other' && !(await sheetOpen()), 'Back (Android) 2: closes Files, thread stays', b2);
     const b3 = await nb(); await sleep(400);
     ok(b3 === 'thread' && (await thread()) === null, 'Back (Android) 3: thread → list', b3);
     for (let k = 0; k < 4; k++) { await nb(); await sleep(250); }

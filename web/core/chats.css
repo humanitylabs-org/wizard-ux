@@ -33,10 +33,8 @@
 .ch-back { flex: 0 0 auto; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; color: var(--ink-2); }
 .ch-back svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .ch-back:active { background: rgba(205, 190, 255, .1); }
-.ch-head .emo { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-size: 16px; background: rgba(205, 190, 255, .07); }
-.ch-head .ti { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.ch-head .ti b { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ch-head .ti small { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-head .ti { flex: 1; min-width: 0; display: flex; align-items: center; min-height: 36px; }
+.ch-head .ti b { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-msgs { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 10px; }
 .ch-msgs::-webkit-scrollbar { display: none; }
 .msg { display: flex; }
@@ -80,6 +78,11 @@
 .ch-att .nm { min-width: 0; display: flex; flex-direction: column; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-att .nm small { font-size: 11px; color: var(--ink-3); }
 .ch-compose .ch-att button { width: 24px; height: 24px; border-radius: 50%; background: rgba(0, 0, 0, .35); color: var(--ink-2); font-size: 16px; line-height: 1; }
+.ch-att.ch-attimg { position: relative; display: block; max-width: none; width: 92px; height: 92px; padding: 0; overflow: hidden; border-radius: 14px; }
+.ch-att.ch-attimg img { width: 100%; height: 100%; border-radius: 0; object-fit: cover; display: block; }
+.ch-compose .ch-att.ch-attimg button { position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; background: rgba(0, 0, 0, .6); color: #fff; }
+.ch-attspin { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 2.5px solid rgba(255, 255, 255, .3); border-top-color: #fff; animation: ch-attspin .8s linear infinite; }
+@keyframes ch-attspin { to { transform: rotate(360deg); } }
 /* Sections: same groups as Wizard's Work view */
 .ch-sec { margin: 0 0 2px; }
 .ch-sec-h { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 8px 8px; text-align: left; font-size: 11.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
@@ -184,11 +187,12 @@ a.fchip { color: inherit; text-decoration: none; }
 .mcard.aud { max-width: 300px; }
 .mcard audio { width: 220px; height: 34px; margin-top: 2px; }
 /* Thread header actions: one row, icons + short words, no extra height. */
-.ch-acts { flex: 0 0 auto; display: flex; gap: 2px; }
-.ch-acts button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 40px; height: 36px; padding: 0 4px; line-height: 1.1; border-radius: 10px; font-size: 10px; font-weight: 700; color: var(--ink-2); }
-.ch-acts button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.ch-acts button:active { background: rgba(205, 190, 255, .12); color: var(--ink); }
-.ch-acts button[data-chact="done"] { color: var(--green); }
+/* Defer · Done: bottom-right under the final response */
+.ch-tacts { display: flex; justify-content: flex-end; gap: 8px; margin: 2px 0 6px; }
+.ch-tacts button { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 17px; font-size: 13.5px; font-weight: 700; color: var(--ink-2); background: rgba(205, 190, 255, .07); border: 1px solid var(--line); }
+.ch-tacts button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ch-tacts button:active { background: rgba(205, 190, 255, .14); color: var(--ink); }
+.ch-tacts button[data-chact="done"] { color: var(--green); border-color: rgba(80, 220, 150, .35); background: rgba(80, 220, 150, .08); }
 .ch-row { transition: transform 160ms var(--ease); touch-action: pan-y; -webkit-touch-callout: none; }
 /* Long-press / swipe actions sheet */
 .ch-sheet { position: absolute; inset: 0; z-index: 8; display: flex; align-items: flex-end; background: rgba(3, 1, 10, .5); animation: ch-fade 160ms both; }
