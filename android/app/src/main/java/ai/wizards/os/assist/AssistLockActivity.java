@@ -169,14 +169,12 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
     @SuppressWarnings("deprecation")
     @Override
     public void onBackPressed() {
-        // One Back = one step. The surface closes its list/card first; otherwise Back closes the
-        // overlay onto the lock screen, which is the phone's own root. Back never sends anything.
-        if (!pageReady) {
-            closeSurface();
-            return;
-        }
+        // Back never ends a take or closes the surface (James, 10 Oct 2026): only the X cancels. The one thing Back
+        // still does is close the private list if it is open (a step inside the surface, not an exit).
+        if (!pageReady) { Log.i(TAG, "back ignored (page loading)"); return; }
         web.evaluateJavascript("(window.W && W.back()) || ''", value -> {
-            if (value == null || !value.contains("handled")) closeSurface();
+            if (value == null || !value.contains("handled"))
+                Log.i(TAG, "back ignored listening=" + capture.listening());
         });
     }
 

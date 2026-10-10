@@ -281,10 +281,10 @@ const W = window.W = {
     hint.show('spread again for times · back closes','list',0,true);
   },
   back(){
+    // Back only steps out of the private list. Otherwise it is ignored: talking, sending and the card stay put,
+    // and the X is the only cancel (James, 10 Oct 2026).
     if(S.state==='list'){$('zl').classList.remove('on','deep');S.state=card.open?'card':'idle';
-      if(!S.locked){N.close();return 'handled'}
-      hint.show('back to the lock screen','b',0,true);idleClose(6000);return 'handled'}
-    if(S.state==='listen')return ''; // Back closes the surface; native sends what was said (Cancel is the only discard)
+      if(S.state==='idle')idleClose(6000);return 'handled'}
     return '';
   },
 };
