@@ -35,6 +35,24 @@ public final class EverywherePolicy {
         return enabled && overlayAllowed && !appInFront;
     }
 
+    /** 0.9.3: the long-press menu's "Hide orb" hides it (switched on, just out of the way) until Wizard OS is opened. */
+    public static boolean orbVisible(boolean enabled, boolean overlayAllowed, boolean appInFront, boolean hiddenByUser) {
+        return bubbleVisible(enabled, overlayAllowed, appInFront) && !hiddenByUser;
+    }
+
+    /**
+     * Where the long-press menu goes: beside the orb, on the side facing the middle of the screen, vertically centred
+     * on it and kept fully on screen. {@code ocx, ocy} is the orb's centre in screen pixels. Returns the menu's {x, y}.
+     */
+    static int[] menuSpot(int ocx, int ocy, int orb, int w, int h, int screenW, int screenH, int margin) {
+        boolean right = ocx > screenW / 2;
+        int x = right ? ocx - orb / 2 - w : ocx + orb / 2;
+        x = Math.max(margin, Math.min(screenW - w - margin, x));
+        int y = ocy - h / 2;
+        y = Math.max(margin * 4, Math.min(screenH - h - margin * 4, y));
+        return new int[]{x, y};
+    }
+
     /** Clamp a dragged position on screen. Returns {x, y}. */
     static int[] clamp(int x, int y, int size, int screenW, int screenH, int margin) {
         int maxX = Math.max(margin, screenW - size - margin);
