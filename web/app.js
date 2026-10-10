@@ -1859,7 +1859,8 @@
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
       LIVE.sessions.unshift({ id: it.sessionId, runtime: 'direct', title: (it.text || 'Voice note').slice(0, 60), status: 'running', runId: res.runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: it.text, source: 'wizard-mobile' });
       LIVE.markSeen(it.sessionId);
-    } else if (LIVE) { const s = LIVE.session(it.sessionId); if (s && !res.steered) Object.assign(s, { status: 'running', runId: res.runId, lastUserAt: new Date().toISOString() }); }
+    } else if (LIVE?.session(it.sessionId)?.synthetic) LIVE.markSeen(it.sessionId);
+    // A reply's thread is already held in Working with its live status by live.js (PEND), until Wizard lists the run.
     if (it.attempts) toast('✦', res.steered ? 'Delivered · steering the live run' : `Delivered to ${window.WizConfig.agent()}`, 2000);
     // First-try orb sends were already confirmed by the pill above the orb: no second banner.
     else if (res.steered) toast('✦', 'Sent · steering the live run', 1800);

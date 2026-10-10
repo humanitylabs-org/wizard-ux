@@ -57,7 +57,13 @@ window.WizCore.chats = function createChats(H) {
     const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = s.status === 'waiting_for_approval' || s.status === 'failed' || s.status === 'interrupted';
     return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}" data-chopen="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span>
       <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${working ? '<i class="st working"></i>' + (s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working') + ' · ' : needs ? '<i class="st needs"></i>' : isNew ? '<i class="st unread"></i>' : ''}${esc(clip(s.preview || '', 110))}</span>`}</span></button>`;
+      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${working ? `<i class="st working${s.pend === 'waiting' ? ' off' : s.pend ? ' soon' : ''}"></i>` + workLabel(s) + ' · ' : needs ? '<i class="st needs"></i>' : isNew ? '<i class="st unread"></i>' : ''}${esc(clip((working && s.pendText) || s.preview || '', 110))}</span>`}</span></button>`;
+  }
+  // A thread James just wrote to sits in Working from the tap on; its status follows the message (live.js PEND).
+  const PEND_LABEL = { sending: 'Sending…', queued: 'Sending…', waiting: 'Offline · will retry', starting: 'Starting…' };
+  function workLabel(s) {
+    if (s.pend && PEND_LABEL[s.pend]) return PEND_LABEL[s.pend];
+    return s.status === 'stopping' ? 'Stopping…' : s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working';
   }
   /* ---- Drafts: unsent new chats (legacy newThreadDrafts.ts). The new-chat composer owns the 'new' slot;
    * "+" moves unsent words out of it into a saved 'new:<id>' slot, so a new chat always starts empty and
@@ -154,7 +160,9 @@ window.WizCore.chats = function createChats(H) {
     // Messages still on the phone (the window went back to the list on send), new chats and replies: shown until
     // Wizard takes them, so a send never vanishes from Chats. Failed voice notes live in Errors.
     const outNew = OUTBOX ? OUTBOX.unsent().filter(it => (it.kind === 'new' || it.kind === 'reply') && !(it.state === 'failed' && (it.audio || it.audioFile)) && (!n || norm(it.text).includes(n))) : [];
-    const pill = sendPill(outNew, w);
+    // A message still leaving the phone already shows as its thread's "Sending…" row in Working; the pill is only
+    // for trouble (offline / not sent) or a thread that isn't in the list.
+    const pill = sendPill(outNew.filter(it => it.state === 'failed' || it.state === 'waiting' || !LIVE.session(it.sessionId)), w);
     if (!LIVE.ok) body = draftSec + `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
     else if (!hit.length && !drafts.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
     else body = draftSec + SECTIONS.map(([k, label]) => {
@@ -600,7 +608,8 @@ window.WizCore.chats = function createChats(H) {
   function leaveAfterSend(wid, sid, isNew, how = '') {
     const w = W[wid]; if (!w || !sid || w.thread !== sid || !(isNew || PHONE())) return false;
     const c = ch(wid); w.thread = null; save(); c.loadedFor = ''; c.draftFor = '';
-    if (!/voice, aimed/.test(how)) toast('✦', isNew ? `New thread started · ${window.WizConfig.agent()} is on it` : `Sent · ${window.WizConfig.agent()} has it`, 1400);
+    // No toast: the thread is already the top row of Working, its status following the message (Sending… →
+    // Starting… → Working). A "Sent" banner over a row still saying "Sending…" contradicted it.
     return true;
   }
   /* opts.sid pins the destination ('__new__' = a new thread) to where James was when he sent. Voice sends

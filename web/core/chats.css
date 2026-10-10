@@ -25,6 +25,8 @@
 .st { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
 .st.unread { background: var(--violet-2); box-shadow: 0 0 8px var(--violet); }
 .st.working { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: pip 1.6s ease-out infinite; }
+.st.working.soon { animation-duration: .9s; } /* just sent: Sending… / Starting… pulse a little quicker */
+.st.working.off { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: none; } /* Offline · will retry */
 .st.needs { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
 .ch-empty { margin: 24px 16px; padding: 18px; border-radius: 16px; text-align: center; color: var(--ink-3); font-size: 14px; line-height: 1.5; background: rgba(205, 190, 255, .04); border: 1px solid var(--line); }
 .ch-empty b { color: var(--ink); font-size: 16px; }
