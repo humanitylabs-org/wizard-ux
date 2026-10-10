@@ -785,7 +785,7 @@
     return renderFrameCore(w, a);
   }
   function renderFrameCore(w, a) {
-    return `<div class="frame-wrap"><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} src="${esc(w.url || a.url || '/')}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe>
+    return `<div class="frame-wrap"><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} src="${esc(w.url || a.url || '/')}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
       <div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
   }
   // A refused frame lands on an unreadable error document: show the fallback card.
@@ -1620,7 +1620,7 @@
       $('#txRouteText').textContent = kind === 'command' ? 'No mic here · tap a command' : 'No mic here · tap a line to simulate';
       const ex = kind === 'command'
         ? ['Open CineQueue', 'Zoom out', 'Next desk', 'Directions to the airport']
-        : ['Show me yesterday', 'Directions to Iconsiam', 'Play something chill on Spotify', 'What did we ship on Wizard this week?'];
+        : ['Show me yesterday', 'Directions to Iconsiam', 'Play something chill', 'What did we ship on Wizard this week?'];
       $('#txChips').innerHTML = `<span class="lbl">Try</span>` + ex.map(x => `<button data-sim="${esc(x)}">${esc(x)}</button>`).join('');
       if (V.stopAsked) { cancelVoice(true); }
     }
@@ -1853,6 +1853,16 @@
   function localParse(t, snap, kind) {
     // "Order my usual kra pao": a taught usual runs on the phone (Grab under a cover), nothing goes to Wizard.
     const us = window.WosUsuals?.match(t); if (us) return { action: 'usual', id: us };
+    // Music (play …, pause, next, louder, I like this): on-device, straight to Wizard Music. A held orb takes any
+    // music phrase; a tap only the unmistakable ones ("play …", "pause the music"), so chat words stay chat.
+    // In front of Wizard Music a held orb is always for the player ("Guy Barato Trap" = play it).
+    if (window.WosMusic?.available()) {
+      const inMusic = kind === 'command' && W[(snap || sendSnap()).id]?.appId === 'wizard-music';
+      const mc = window.WosMusic.parse(t, inMusic);
+      const v0 = (snap || sendSnap()).view;
+      const tapOk = mc && (mc.strong || (mc.op === 'play' && v0?.kind !== 'chat thread' && norm(t).split(' ').length <= 8));
+      if (mc && (kind === 'command' || tapOk)) return { action: 'music', cmd: mc };
+    }
     // The quick-search spell ("image search …", "search …") opens the search sheet on-device, even over a thread.
     // A held orb is always a command, so there even the plain "search for …" form is the search app's.
     const qs = quickSearch(t);
@@ -1983,7 +1993,13 @@
     const f = desks[idx].focus;
     if (/direction|navigat|route/.test(a)) { closeSheets(); openWin({ app: 'maps', dest: c.destination || c.target || c.query || text, mode: 'dir' }, opts); return true; }
     if (/maps_search|map/.test(a)) { closeSheets(); openWin({ app: 'maps', dest: c.query || c.target || text, mode: 'search' }, opts); return true; }
-    if (/music|play/.test(a)) { closeSheets(); openWin({ app: 'app', appId: 'spotify', query: c.query || c.target || '' }, opts); return true; }
+    if (a === 'music') return window.WosMusic.run(c.cmd);
+    if (/music|play/.test(a)) {
+      // The router's play_music: Wizard Music when installed (it fixes misheard names), else Spotify search.
+      const q = c.query || c.target || '';
+      if (window.WosMusic?.available()) return window.WosMusic.run({ op: 'play', said: q ? `play ${q}` : text });
+      closeSheets(); openWin({ app: 'app', appId: 'spotify', query: q }, opts); return true;
+    }
     if (a === 'zoom') {
       let id = W[f]?.app === 'review' ? f : desks[idx].wins.find(x => W[x].app === 'review');
       if (!id) { openReview('day', null, opts); return true; }
@@ -2353,6 +2369,17 @@
     back() { window.__wosNativeBack(); },
   });
   mountLinks();
+  // Music by voice (core/music-voice.js): the Wizard Music window is the player it drives.
+  window.WosMusic?.install({
+    app: () => APP['wizard-music'] || null,
+    findWin: () => {
+      const mine = id => W[id]?.app === 'frame' && W[id].appId === 'wizard-music';
+      return desks[idx].wins.find(mine) || Object.keys(W).find(id => mine(id) && deskOf(id) >= 0) || null;
+    },
+    openMusic: () => { closeSheets(true); const w = openWin({ app: 'frame', appId: 'wizard-music' }); return w ? w.id : null; },
+    frameOf: id => winEl(id)?.querySelector('iframe.appframe') || null,
+    toast,
+  });
   window.__wos = {
     get links() { return LINKS; },
     live: LIVE, openPeek, closePeek, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
