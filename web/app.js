@@ -470,6 +470,7 @@
     const corner = on && w.app === 'chats';
     device.classList.toggle('immersive', on);
     device.classList.toggle('orb-corner', corner);
+    trackCornerLift(corner);
     shareCutout();
     if (on === immOn) return; immOn = on;
     try { window.WizardOSNative?.immersive?.(on); } catch (e) {}
@@ -480,6 +481,22 @@
       const n = store.get('immTips', 0);
       if (n < 3) { store.set('immTips', n + 1); toast('⤡', 'Pinch in or swipe up from the bottom to exit full screen'); }
     }
+  }
+  /* Full-screen Chats (James, 10 Oct): the orb sits in the right-hand column above the composer, high enough that
+   * Done (end of a reply) and ↓ Latest (scrolled up) sit directly below it. It follows the composer's real height
+   * (attachments, multi-line text, keyboard). On the thread list there is no composer: it stays in the corner. */
+  let liftRO = null, liftMO = null, liftEl = null;
+  function paintCornerLift() {
+    const c = device.querySelector('.win.full .ch-thread .ch-compose');
+    if (c !== liftEl) { try { liftRO?.disconnect(); } catch (e) {} liftEl = c; if (c && liftRO) liftRO.observe(c); }
+    const h = c && c.offsetParent ? Math.round(c.getBoundingClientRect().height) : 0;
+    device.style.setProperty('--comp-h', h + 'px');
+    device.classList.toggle('orb-lift', h > 0);
+  }
+  function trackCornerLift(on) {
+    if (!on) { try { liftRO?.disconnect(); liftMO?.disconnect(); } catch (e) {} liftRO = liftMO = liftEl = null; device.classList.remove('orb-lift'); device.style.removeProperty('--comp-h'); return; }
+    if (!liftRO && window.ResizeObserver) { liftRO = new ResizeObserver(paintCornerLift); liftMO = new MutationObserver(paintCornerLift); liftMO.observe(track, { childList: true, subtree: true }); }
+    paintCornerLift();
   }
   function setFull(id, on) {
     const i = deskOf(id); if (i < 0) return;
@@ -1550,6 +1567,10 @@
     if (V.state !== 'idle') return;
     clearTimeout(txHideT);
     Object.assign(V, { kind, target: null, replyTo: null, snap: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
+    // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
+    // Browsing to another thread mid-take, or after the send tap, never moves the message.
+    V.snap = sendSnap();
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
     // No status card while recording: the orb, timer and arc already say it. Hold-for-command keeps
@@ -1626,7 +1647,7 @@
   function dropHold() { if (V.hold) { LIVE.releaseSend?.(V.hold); V.hold = null; } }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
-    V.snap = sendSnap(); // the send tap fixes the destination; transcription can't move it
+    V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
     if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
     leaveOnSend(V.snap);
@@ -2081,7 +2102,7 @@
     if (sheet) { closeSheets(); return 'sheet'; }
     const d = desks[idx], f = W[d.focus];
     if (f) {
-      if (f.app === 'chats' && f.thread) { chatsBack(f); return 'thread'; }
+      if (f.app === 'chats' && f.thread) return CHATS.threadBack(f);
       if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
       if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { nav.back(); return 'frame'; } }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }

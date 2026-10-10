@@ -360,7 +360,7 @@ window.WizCore.chats = function createChats(H) {
     const s = LIVE.session(sid); if (!s || !ACT[a]) return;
     const w = W[wid];
     vib(8);
-    if (a !== 'restore' && w && w.thread === sid) chatsBack(w);
+    if (a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', 'Marked done'], defer: ['◷', 'Moved to Deferred'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
     const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : a === 'defer' ? LIVE.defer(sid) : LIVE.restore(sid));
@@ -590,17 +590,28 @@ window.WizCore.chats = function createChats(H) {
     } catch (e) { c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now(); }
     finally { c.loading = false; }
   }
-  function openChat(wid, sid) {
+  /* Thread trail: a thread opened from a link inside another thread remembers where it came from, so Back,
+   * Done and Defer step back to that thread instead of the list (James clicks through a summary thread's links,
+   * reviews each one, taps Done, and lands back on the summary). Opening a thread any other way starts a fresh trail. */
+  function openChat(wid, sid, opts = {}) {
     const w = W[wid]; if (!w) return;
     if (w.thread) saveDraft(wid);
     closeRowSheet();
     const c = ch(wid); c.approval = null;
+    if (opts.via === 'link' && w.thread && w.thread !== '__new__' && w.thread !== sid) c.trail = (c.trail || []).concat(w.thread).slice(-20);
+    else if (!opts.keepTrail) c.trail = [];
     PW?.opened(wid, sid);
     w.thread = sid; save(); loadDraft(w);
     if (sid !== '__new__') LIVE.markSeen(sid);
     renderChats(w); applyLayout(deskOf(wid));
   }
-  function chatsBack(w) { if (w.thread) saveDraft(w.id); const c = ch(w.id); c.files = []; c.draft = ''; c.draftFor = ''; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
+  function chatsBack(w) { if (w.thread) saveDraft(w.id); const c = ch(w.id); c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
+  /* One step back from a thread: to the thread it was opened from (trail), else to the list. */
+  function threadBack(w) {
+    const c = ch(w.id), prev = (c.trail || []).pop();
+    if (prev && prev !== w.thread && LIVE.session(prev)) { openChat(w.id, prev, { keepTrail: true }); return 'trail'; }
+    chatsBack(w); return 'thread';
+  }
   /* After a send from a thread (or New chat): back to the list on the phone. The desktop keeps the thread
    * pane, since its list is already beside it. Only if the window still shows the thread that was sent from;
    * a thread James opened meanwhile stays open. Orb sends already show the send pill, so no second toast. */
@@ -627,18 +638,39 @@ window.WizCore.chats = function createChats(H) {
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
-    if (here) { KIT.drafts.clear(draftKey(w)); c.draft = ''; c.files = []; }
-    // Saved on the phone first; the outbox delivers it (and retries) from here.
+    const dkey = isNew ? 'new' : 'direct:' + sid;
+    if (here) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; c.follow = true; }
     const nm = isNew && PW ? PW.newModel(c) : null; // a model picked for this new chat (#11)
-    const it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio,
-      instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
-    if (here) c.follow = true; if (nm) c.newModel = null;
+    if (nm) c.newModel = null;
     // Send and go (James, 10 Oct 2026): on the phone every send steps back to the thread list, a new thread
-    // and a reply alike, so he never waits on the screen to watch it go. The list carries the proof: the
-    // Sending section until Wizard takes it (Retry/Edit there if it can't), then the thread under Working.
-    // Keyed on the pinned thread: a thread James opened since stays open.
-    leaveAfterSend(wid, sid, isNew, how);
-    renderChats(W[wid]); applyLayout(deskOf(wid));
+    // and a reply alike, so he never waits on the screen to watch it go. Keyed on the pinned thread: a thread
+    // James opened since stays open.
+    // It happens on the tap itself, BEFORE the outbox save is awaited (James, 10 Oct 2026: "it should immediately
+    // send me back to the message list… there's a second or two delay"). Leaving after `await OUTBOX.enqueue`
+    // tied the screen to the phone's IndexedDB commit plus every outbox listener's re-render: ~80 ms on a desktop
+    // Chrome, 1-2 s in the phone's WebView. The reply's thread is held under Working from the same frame
+    // (live.js holdSend, the orb's path) until its outbox item takes over. qa-send-leave-timing.cjs guards this.
+    const left = leaveAfterSend(wid, sid, isNew, how);
+    const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
+    if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
+    // Saved on the phone; the outbox delivers it (and retries) from here.
+    let it;
+    try {
+      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio,
+        instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
+    } catch (e) {
+      // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
+      // thread if the window is still on the list he was sent to.
+      if (hold) LIVE.releaseSend?.(hold);
+      if (nm) c.newModel = nm;
+      if (here) KIT.drafts.set(dkey, text, tray);
+      if (left && W[wid] && !W[wid].thread) openChat(wid, sid);
+      if (audio) throw e; // a recording: its caller keeps its own copy and reports it, as before
+      toast('!', 'Couldn’t save that message · your words are back in the thread', 3200);
+      return null;
+    }
+    if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
+    return it;
   }
   const picker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
   picker.setAttribute('data-chfile', '');
@@ -666,7 +698,7 @@ window.WizCore.chats = function createChats(H) {
     if (PW && PW.click(e, id)) return true;
     if (justPressed() && e.target.closest('[data-chopen]')) return true; // a long-press/swipe just opened the actions sheet
     const o = e.target.closest('[data-chopen]'); if (o) { openChat(id, o.dataset.chopen); return true; }
-    if (e.target.closest('[data-chback]')) { chatsBack(w); return true; }
+    if (e.target.closest('[data-chback]')) { threadBack(w); return true; }
     if (e.target.closest('[data-chnew]')) { openNewDraft(owner(id), ''); return true; }
     const dx = e.target.closest('[data-chdraftx]'); if (dx) { discardDraft(dx.dataset.chdraftx); renderChatList(w, elOf(id)); return true; }
     const dr = e.target.closest('[data-chdraft]'); if (dr) { openNewDraft(owner(id), dr.dataset.chdraft); return true; }
@@ -685,10 +717,13 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chearlier]')) { const c = ch(id), el = elOf(id), box = el.querySelector('.ch-msgs'); c.show = (c.show || PAGE) + PAGE; renderThread(w, el, { h: box.scrollHeight, top: box.scrollTop }); return true; }
     const mi = e.target.closest('[data-mi]'); if (mi) { e.preventDefault(); openMedia(id, +mi.dataset.mi); return true; }
     const ml = e.target.closest('a[data-mlink]'); if (ml) { e.preventDefault(); const u = ml.dataset.mlink; KIT.viewer.open([{ url: u, name: ml.textContent.trim() || 'File', kind: 'file', mime: '' }]); return true; }
-    const sl = e.target.closest('a[data-session]'); if (sl) { e.preventDefault(); openChat(owner(id), sl.dataset.session); return true; }
+    const sl = e.target.closest('a[data-session]'); if (sl) { e.preventDefault(); openChat(owner(id), sl.dataset.session, { via: 'link' }); return true; }
     // A private-origin link (a report, a hosted app) opens in a window of this shell: the shell never navigates away.
     const al = e.target.closest('.bub a[href]');
     // A link to this app itself (…/wizard-os-home/?session=…, ?view=…, ?video=…) opens in place, never reloads.
+    { const DL = window.WizCore.deeplink, href = al?.getAttribute('href'); let u = null; try { u = href ? new URL(href, location.href) : null; } catch (err) {}
+      const d = u && DL?.isOwn(u) ? DL.parse(u.href) : null; // a thread link to this app's own page: same trail as a session link
+      if (d?.session && !d.video) { e.preventDefault(); openChat(owner(id), d.session, { via: 'link' }); return true; } }
     if (al && window.WizCore.deeplink?.route(al.getAttribute('href'))) { e.preventDefault(); return true; }
     if (al && H.openLink) { let u = null; try { u = new URL(al.getAttribute('href'), location.href); } catch (err) {}
       if (u && (u.origin === location.origin || u.hostname === 'private.wizard001.com') && !u.pathname.startsWith('/wizard-os-home')) { e.preventDefault(); H.openLink(u.pathname + u.search + u.hash, (al.textContent || '').trim().slice(0, 40) || u.pathname); return true; } }
@@ -752,7 +787,7 @@ window.WizCore.chats = function createChats(H) {
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
-  return { CH, ch, click, bind, PW, leaveAfterSend, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, uploadFile,
+  return { CH, ch, click, bind, PW, leaveAfterSend, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
 };
