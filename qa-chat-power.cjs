@@ -311,14 +311,28 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     ok(vr && Array.isArray(vr.wizard_file_ids) && vr.wizard_file_ids.some(id => /^drop_qavoice/.test(id)), '#13 phone: the recording rides along as a voice note (wizard_file_ids)', vr?.wizard_file_ids);
     ok(routeCalls === route0 && writes.slice(n0).some(w => /\/transcribe$/.test(w.p)), '#13 phone: no router call; transcribed by the outbox (intercepted)', { routeCalls, route0 });
     ok(!runsTo('qa_pw_other', n0).length, '#13 phone: nothing went to the thread on screen');
-    // Second take: tap the mic again to send.
+    // Second take: attach screenshots in the composer first (James's case), then tap the mic again to send.
     await until(() => p.evaluate(() => __wos.voice === 'idle'), 4000);
     const n1 = writes.length;
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+    const [fc] = await Promise.all([p.waitForEvent('filechooser'), p.click(await S('.ch-compose [data-chattach]'))]);
+    await fc.setFiles([{ name: 'Screenshot_qa_1.png', mimeType: 'image/png', buffer: png }, { name: 'Screenshot_qa_2.png', mimeType: 'image/png', buffer: png }]);
+    const shotIds = await until(() => p.evaluate(() => { const d = JSON.parse(localStorage.getItem('wos.chat.drafts.v1') || '{}')['direct:qa_pw_other']; return d && d.files.length === 2 ? d.files.map(f => f.id) : null; }), 8000);
+    ok(shotIds && shotIds.length === 2, '#13b phone: two screenshots attached in the composer (saved with the draft)', shotIds);
     await p.click(await S('.ch-compose [data-chmic]'));
     await until(() => p.evaluate(() => __wos.voice === 'listen'), 4000); await sleep(1500);
     await p.click(await S('.ch-compose [data-chmic]'));
     const vr2 = await until(() => runsTo('', n1).find(r => r.input === 'QA voice reply words'), 15000);
     ok(vr2 && vr2.session_id === 'qa_pw_other', '#13 phone: tapping the mic again sends the reply to this thread', vr2);
+    ok(vr2 && (shotIds || []).every(id => (vr2.wizard_file_ids || []).includes(id)), '#13b phone: the composer’s attachments ride along with the voice reply', { sent: vr2?.wizard_file_ids, shotIds });
+    await sleep(400);
+    const left = await p.evaluate(async sel => ({ tray: document.querySelectorAll(`${sel} .ch-att`).length, draft: JSON.parse(localStorage.getItem('wos.chat.drafts.v1') || '{}')['direct:qa_pw_other'] || null }), await S('.ch-compose'));
+    ok(left.tray === 0 && !left.draft, '#13b phone: after the voice reply sends, the composer tray is empty and no draft is left behind', left);
+    await back(); await sleep(300);
+    const draftRows = await p.evaluate(() => document.querySelectorAll('.ch-draft').length);
+    await openThread('qa_pw_other');
+    const reopen = await p.evaluate(async sel => document.querySelectorAll(`${sel} .ch-att`).length, await S('.ch-compose'));
+    ok(reopen === 0, '#13b phone: reopening the thread shows no stale attachments', { reopen, draftRows });
     // A voice note that can't be delivered shows in Errors with Retry / Dismiss.
     await until(() => p.evaluate(() => __wos.voice === 'idle'), 4000);
     failUpload = true;

@@ -230,9 +230,22 @@ window.WosChatPower = function chatPower(A) {
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = s && A.WORKING_ST.has(s.status) && s.runId ? s.runId : '';
     const nm = isNew ? (c.newModel || null) : null;
-    const it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', audio: blob,
-      instructions: H.viewContext(wid, 'a voice reply recorded in this thread'), files: (files || []).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
-      wid: isNew ? wid : (w && w.thread === sid ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
+    // Files already attached in this thread's composer ride with the voice reply and leave the composer, the
+    // same as a typed send; otherwise they'd stay behind as a "draft" of a message that already went.
+    // Typed words stay put: the outbox treats a non-empty text as the transcript.
+    const dkey = isNew ? 'new' : 'direct:' + sid, here = !!w && w.thread === sid;
+    const comp = (here ? (c.files || []) : A.KIT.drafts.get(dkey).files).filter(f => f && f.id && !f.uploading);
+    const all = [...(files || []), ...comp].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
+    // Cleared before the await, so the other parts of an interrupted take don't carry the same files again.
+    const kept = here ? (c.draft || '') : A.KIT.drafts.get(dkey).text;
+    const clearTray = list => { if (here) { c.files = list; A.refreshCompose(wid); } A.KIT.drafts.set(dkey, kept, list); };
+    if (comp.length) clearTray([]);
+    let it;
+    try {
+      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', audio: blob,
+        instructions: H.viewContext(wid, 'a voice reply recorded in this thread'), files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
+        wid: isNew ? wid : (w && w.thread === sid ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
+    } catch (e) { if (comp.length) clearTray(comp); throw e; } // not saved anywhere: the attachments go back
     if (isNew && w && w.thread === '__new__') { w.thread = it.sessionId; c.newModel = null; H.save(); c.loadedFor = ''; }
     c.follow = true;
     if (w) A.renderChats(w);
