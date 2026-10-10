@@ -35,6 +35,8 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
         <package android:name="com.android.vending" />
+        <!-- Usuals: see and open Grab. -->
+        <package android:name="com.grabtaxi.passenger" />
     </queries>
 
     <application
