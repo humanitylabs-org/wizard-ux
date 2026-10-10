@@ -734,7 +734,7 @@
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     if (VOICE.state === 'listen') { if (vMode === 'dictate') dictate('cancel'); else talk('cancel'); return 'voice'; }
     const f = focused();
-    if (f?.app === 'chats' && f.thread) { CHATS.chatsBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return 'thread'; }
+    if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
     if (ws[cur].mono) { toggleMono(); return 'mono'; }
     return '';
   }

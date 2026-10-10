@@ -2081,7 +2081,7 @@
     if (sheet) { closeSheets(); return 'sheet'; }
     const d = desks[idx], f = W[d.focus];
     if (f) {
-      if (f.app === 'chats' && f.thread) { chatsBack(f); return 'thread'; }
+      if (f.app === 'chats' && f.thread) return CHATS.threadBack(f);
       if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
       if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { nav.back(); return 'frame'; } }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }
