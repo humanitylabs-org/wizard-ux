@@ -62,7 +62,9 @@
       listeners.forEach(fn => fn());
     } catch (e) {}
   }
-  loadRemote();
+  const firstLoad = loadRemote();
+  // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
+  window.WizCore.appsLoaded = () => firstLoad;
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
 
   function registry(shell) {
