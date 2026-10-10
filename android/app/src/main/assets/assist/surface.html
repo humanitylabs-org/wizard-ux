@@ -74,7 +74,8 @@
     padding:11px 14px;border-radius:18px;background:rgba(20,14,40,.96);border:1px solid rgba(185,168,255,.35);
     box-shadow:0 6px 28px rgba(0,0,0,.45);transition:opacity .28s,transform .28s}
   body.corner #bub{display:block}
-  #bub.on{opacity:1;transform:translateY(-50%)}
+  #bub{pointer-events:none} /* invisible bubble must never swallow taps meant for Screen/Cancel/Pause */
+  #bub.on{opacity:1;transform:translateY(-50%);pointer-events:auto}
   #bub b{display:block;font:600 10px/1 system-ui;letter-spacing:.16em;text-transform:uppercase;color:#b99bff;margin-bottom:6px}
   #bub.err b{color:#ffbe55}
   #bub span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font:400 14px/1.32 system-ui;color:#f3efff}

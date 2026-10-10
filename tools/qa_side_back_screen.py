@@ -294,6 +294,9 @@ with (BASE / 'worker.lock').open('a') as lock:
         print('  a11y before C:', bound[:200])
         arm(0); n0 = len(side_runs()); u0 = len(STATE.get('upload_names', []))
         hold(); wait_log('listening', 10, alogs); time.sleep(2); shot('c1-controls')
+        vw = sx('dumpsys window windows'); i = vw.find('VoiceInteractionSession}:')
+        reg = re.search(r'touchable region=SkRegion\(([^)]*)\)', vw[i:i + 3000]) if i >= 0 else None
+        print('  side orb touchable region while talking:', reg.group(1) if reg else None)
         if True:
             fr = sx(f'logcat -d -s WizardOSAssist:* | grep "orb frame" | tail -1').strip()
             m = re.search(r'orb frame (\d+),(\d+),(\d+),(\d+)', fr)
@@ -315,6 +318,17 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('C: Wizard gets the voice note + the screenshot in one message',
               got == n0 + 1 and any(n and n.endswith('.png') for n in names) and len(run.get('wizard_file_ids', [])) == 2 and '1 screenshot' in run.get('instructions', ''),
               (got, names, run.get('wizard_file_ids'), run.get('instructions', '')[-90:]))
+
+        # C2. Cancel chip (same row, was also under the invisible bubble): throws the take away, nothing sent.
+        d0 = open_settings_sub()
+        arm(0); n0 = len(side_runs())
+        hold(); wait_log('listening', 10, alogs); time.sleep(2)
+        fr = sx(f'logcat -d -s WizardOSAssist:* | grep "orb frame" | tail -1').strip()
+        fx, fy, fw, fh = map(int, re.search(r'orb frame (\d+),(\d+),(\d+),(\d+)', fr).groups())
+        sx(f'input tap {fx + fw - dp(196 + 23)} {fy + fh // 2}'); time.sleep(3)
+        cl = alogs('sending via|discard|corner hidden')
+        check('C2: Cancel chip on the side-button orb discards (nothing sent)', len(side_runs()) == n0 and 'sending via' not in cl, (len(side_runs()) - n0, cl))
+        sx('input keyevent KEYCODE_BACK'); time.sleep(1)
 
         # D. Lock-screen surface: Back mid-talk also sends.
         n0 = len(side_runs())
