@@ -79,16 +79,19 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(5, 3, 12));
-        // targetSdk 35 draws edge to edge: keep the shell clear of the status and navigation bars.
+        // targetSdk 35 draws edge to edge. The page itself runs under the status bar so its background reaches the
+        // top of the glass (James, 10 Oct: "like Telegram"); the shell keeps its content clear of the bar with the
+        // inset it is told (--nat-t). Only the side cutouts, the navigation bar and the keyboard still pad the view.
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             if (Build.VERSION.SDK_INT >= 30) {
-                // Immersive full screen draws all the way to the top edge, under the camera cutout too
-                // (James, 10 Oct); only the keyboard still pushes the shell up.
+                // Immersive full screen: the bars are hidden and only the keyboard pushes the shell up.
                 int types = immersive ? WindowInsets.Type.ime()
                         : WindowInsets.Type.systemBars() | WindowInsets.Type.ime() | WindowInsets.Type.displayCutout();
                 android.graphics.Insets i = insets.getInsets(types);
-                reportCutout(insets.getInsets(WindowInsets.Type.displayCutout()).top);
-                v.setPadding(i.left, i.top, i.right, i.bottom);
+                int cut = insets.getInsets(WindowInsets.Type.displayCutout()).top;
+                reportCutout(cut);
+                reportTop(immersive ? 0 : Math.max(cut, insets.getInsets(WindowInsets.Type.statusBars()).top));
+                v.setPadding(i.left, 0, i.right, i.bottom);
                 return WindowInsets.CONSUMED;
             }
             return insets; // API 28-29 do not draw edge to edge; the system already keeps content clear
@@ -160,6 +163,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 if (!url.startsWith("data:")) showingError = false;
+                topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
             }
 
             @Override
@@ -421,11 +425,25 @@ public class MainActivity extends Activity {
     private int cutoutSent = -1;
     /** The camera cutout height in CSS px, so full-screen pages can keep small top controls clear of it.
      *  Pushed on change; the page also reads it with WizardOSNative.cutoutTop() when it boots. */
+    private int cutoutPx = 0;
     private void reportCutout(int px) {
+        cutoutPx = px;
         cutoutCss = Math.round(px / getResources().getDisplayMetrics().density);
         if (cutoutCss == cutoutSent || web == null) return;
         cutoutSent = cutoutCss;
         web.evaluateJavascript("(window.__wosCutout && window.__wosCutout(" + cutoutCss + "))", null);
+    }
+
+    private volatile int topCss = 0;
+    private int topSent = -1;
+    /** Status bar (or camera, whichever is taller) height in CSS px the shell keeps its content below; 0 in immersive. */
+    private int topPx = 0;
+    private void reportTop(int px) {
+        topPx = px;
+        topCss = Math.round(px / getResources().getDisplayMetrics().density);
+        if (topCss == topSent || web == null) return;
+        topSent = topCss;
+        web.evaluateJavascript("(window.__wosTop && window.__wosTop(" + topCss + "))", null);
     }
 
     @Override
@@ -694,6 +712,10 @@ public class MainActivity extends Activity {
         /** Camera cutout height in CSS px (0 when the phone has none). */
         @JavascriptInterface
         public int cutoutTop() { return cutoutCss; }
+
+        /** Status bar inset in CSS px the page draws under (0 in immersive full screen). */
+        @JavascriptInterface
+        public int insetTop() { return topCss; }
 
         @JavascriptInterface
         public void haptic(int ms) {

@@ -5,7 +5,7 @@
 /* ---------- banners (same glass as the native update banner, .dv-update) ---------- */
 /* They live in the top strip (the phone's status bar, the desktop's top bar) as one-line pills, so they never
  * cover a window, a search box or a composer. While one shows, it sits over the clock. */
-.wx-banners { position: fixed; left: 8px; right: 8px; top: calc(env(safe-area-inset-top, 0px) + 3px); z-index: 62; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
+.wx-banners { position: fixed; left: 8px; right: 8px; top: calc(var(--safe-t, env(safe-area-inset-top, 0px)) + 3px); z-index: 62; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
 .device > .wx-banners { position: absolute; top: calc(var(--sb, 0px) + var(--safe-t, 0px) + 6px); }
 /* Phone: while a banner shows, windows, Home and the gear make room for it (nothing is covered). */
 .device.wx-on .tiles { top: calc(var(--sb) + var(--safe-t) + 44px); }
