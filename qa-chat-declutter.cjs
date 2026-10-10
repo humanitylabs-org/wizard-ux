@@ -237,7 +237,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     const [fc] = await Promise.all([p.waitForEvent('filechooser'), p.locator(`${C} [data-chattach]`).tap()]);
     await fc.setFiles([{ name: 'qa.txt', mimeType: 'text/plain', buffer: Buffer.from('qa') }]);
     await p.waitForFunction(sel => document.querySelectorAll(sel + ' .ch-tray .ch-att:not(.up)').length === 1, C, { timeout: 5000 }).catch(() => {});
-    ok(await vis(`${C} .ch-send`) && !(await vis(`${C} [data-chmic]`)), '5 attachment only: Send shows');
+    ok(await vis(`${C} [data-chmic]`) && !(await vis(`${C} .ch-send`)), '5 attachment only: the mic stays (a voice reply carries it)');
     await p.locator(`${C} [data-attrm]`).tap(); await sleep(200);
     ok(await vis(`${C} [data-chmic]`) && !(await vis(`${C} .ch-send`)), '5 attachment removed: back to the mic');
     // typed send works and resets to the mic
@@ -280,7 +280,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     ok(!/Screenshot|\.jpg|KB/i.test(tray.text), '6 staged screenshots show no filename or size text', tray.text);
     ok(tray.w >= 80 && tray.h >= 80, '6 staged screenshots are big thumbnails (≥80px)', tray);
     await p.screenshot({ path: `${OUT}/07-multi-staged.png` });
-    ok(await vis(`${C} .ch-send`), '6 Send shows with the staged screenshots');
+    ok(await vis(`${C} [data-chmic]`) && !(await vis(`${C} .ch-send`)), '6 with only screenshots staged the mic stays');
     const n0 = writes.length;
     await p.locator(`${C} textarea`).tap(); await p.keyboard.type('QA three screenshots');
     await p.locator(`${C} .ch-send`).tap();
