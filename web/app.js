@@ -1711,6 +1711,8 @@
       // The words are what gets sent from here; the native take is deleted once they are handled (or in the outbox).
       Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).finally(() => { recDone(nid); unhold(); });
     } catch (err) {
+      // A held command that can't be heard is dropped with a note, never queued for the agent as a message.
+      if (kind === 'command') { recDone(nid); unhold(); setVoice('idle'); txPill('⚡', 'Command not heard · nothing sent', 'command', String(err?.message || err)); txHide(2400); return; }
       // Never lose a recording: it goes to the outbox, which transcribes and sends it when Wizard is back.
       setVoice('idle');
       const aim = V.target, sv = snap.view;
@@ -1800,10 +1802,11 @@
   }
 
   /* ---------------- routing ---------------- */
-  function localParse(t, snap) {
+  function localParse(t, snap, kind) {
     // The quick-search spell ("image search …", "search …") opens the search sheet on-device, even over a thread.
+    // A held orb is always a command, so there even the plain "search for …" form is the search app's.
     const qs = quickSearch(t);
-    if (qs && (qs.strong || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'quick_search', query: qs.query, tab: qs.tab };
+    if (qs && (qs.strong || kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'quick_search', query: qs.query, tab: qs.tab };
     const s = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '');
     if (/^(zoom|go|dive) (in|deeper|down)\b/.test(s)) return { action: 'zoom', dir: 'in' };
     if (/^(zoom|back|go|pull) (out|up|back)\b|^zoom out\b/.test(s)) {
@@ -1845,7 +1848,7 @@
       return toAgent(text, `To ${window.WizConfig.agent()} · with files` + sttNote, { ...opts, files });
     }
     const t0 = performance.now();
-    const loc = localParse(text, snap);
+    const loc = localParse(text, snap, kind);
     if (loc) {
       const ms = Math.max(1, Math.round(performance.now() - t0));
       showRouted('command', `Command · on-device · ${ms} ms${sttNote}`);
@@ -1856,7 +1859,11 @@
     // An open thread owns what James says: unless it is a phone command (or aimed at another desk), it goes
     // into that thread (steering the live run), never a new thread. New threads start from the list or New chat.
     const intoThread = kind !== 'command' && target == null && v?.kind === 'chat thread';
-    const toAgentOrThread = label => intoThread ? toView(v, text, `To this thread${sttNote}`, snap) : toAgent(text, label, opts);
+    // A held orb is a command for the interface, never a message (James, 10 Oct 2026: "the long press is me
+    // saying I want to issue a command that I want the interface to respond to"). When nothing matches, it
+    // offers the choices and sends nothing until one is tapped.
+    const toAgentOrThread = label => kind === 'command' && !typed ? holdNoMatch(text, opts)
+      : intoThread ? toView(v, text, `To this thread${sttNote}`, snap) : toAgent(text, label, opts);
     setVoice('think'); if (isPill()) tx.dataset.detail = 'Routing · DeepSeek Flash'; else $('#txRouteText').textContent = 'Routing · DeepSeek Flash';
     try {
       const view = v && v.mode && kind !== 'command' && target == null ? { name: v.name, kind: v.kind } : null;
@@ -1877,6 +1884,19 @@
     } catch (e) {
       return toAgentOrThread(`Router offline · sent to ${window.WizConfig.agent()}`);
     }
+  }
+  /* Hold-command with no command match: a choice card, nothing is sent until James taps. */
+  function holdNoMatch(text, opts) {
+    setVoice('idle'); vib(12);
+    txShow(text, 'No command matched · nothing sent', 'command', '⚡');
+    const q = String(text || '').trim().replace(/[.!?,\s]+$/, '');
+    const btn = (k, label) => `<button data-hold="${k}">${esc(label)}</button>`;
+    $('#txChips').innerHTML = (searchUrl(q) ? btn('search', 'Search the web') + btn('images', 'Image search') : '')
+      + btn('agent', `Send to ${window.WizConfig.agent()}`) + btn('drop', 'Dismiss');
+    V.holdText = q; V.holdOpts = opts;
+    window.__backLog = (window.__backLog || []).concat('hold:nomatch').slice(-30);
+    txHide(9000);
+    return false;
   }
   function showRouted(kind, label) {
     if (isPill()) {
@@ -1924,7 +1944,7 @@
     if (a === 'fullscreen') { if (!f) return false; setFull(f, c.on !== false); return true; }
     if (a === 'move_window') { if (!f) return false; const to = c.to === 'prev' || c.to === 'left' ? idx - 1 : c.to === 'next' || c.to === 'right' ? idx + 1 : +c.to - 1; return moveWin(f, to); }
     if (a === 'quick_search') return openSearch(c.query, c.tab);
-    if (a === 'search') { openSheet('launcher', c.query || text); return true; }
+    if (a === 'search') { const q = c.query || text; if (searchUrl(q) && !findApp(q)) return openSearch(q, 'all'); openSheet('launcher', q); return true; }
     if (a === 'open_view' || a === 'view' || a === 'show') {
       const v = String(c.view || arg).toLowerCase();
       if (/inbox|notif/.test(v)) { openSheet('inbox'); return true; }
@@ -2091,7 +2111,7 @@
   }
   function backStep(skipHosted) {
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
-    if (document.querySelector('#txChips [data-handoff]')) { $('#txChips').innerHTML = ''; txHide(0); return 'draft'; }
+    if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
@@ -2241,6 +2261,14 @@
     return true;
   };
   $('#txChips').addEventListener('click', e => { if (e.target.closest('[data-handoff="drop"]')) { $('#txChips').innerHTML = ''; txHide(0); } });
+  $('#txChips').addEventListener('click', e => {
+    const b = e.target.closest('[data-hold]'); if (!b) return;
+    const k = b.dataset.hold, q = V.holdText || '', opts = V.holdOpts || {};
+    V.holdText = ''; V.holdOpts = null; $('#txChips').innerHTML = '';
+    if (k === 'search' || k === 'images') { txHide(0); openSearch(q, k === 'images' ? 'images' : 'all'); return; }
+    if (k === 'agent' && q) { toAgent(q, `To ${window.WizConfig.agent()} · from a held command`, { ...opts, how: 'voice (held command, sent on purpose)' }); return; }
+    txHide(0);
+  });
   // Native bridge v0 (core/bridge.js): the same events drive the phone and the desktop shell.
   window.WizCore.bridge?.handle({
     orb(d) {
