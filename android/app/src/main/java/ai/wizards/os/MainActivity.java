@@ -31,7 +31,7 @@ import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
 /**
- * Wizard OS: a native home for James's private Wizard OS shell (private.wizard001.com/wizard-os-home/).
+ * Wizard OS: a native home for James's private Wizard OS shell (wizard.tailc0f369.ts.net/wizard-os-home/; the retired private.wizard001.com still opens).
  *
  * Rules this activity enforces:
  *  - Back never exits. Every Back is handed to the shell (window.__wosNativeBack), which closes the top
@@ -149,6 +149,9 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
+                // A main-frame hop to the retired private.wizard001.com lands on the same page under this Wizard's own name.
+                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying) { view.loadUrl(Origin.toHome(u.toString())); return true; }
+                if (carrying && Carry.isPage(MainActivity.this, u.toString())) return false;
                 if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) return false;
                 if (!req.isForMainFrame()) return false; // hosted app frames stay inside their window
                 openOutside(u);
@@ -157,17 +160,21 @@ public class MainActivity extends Activity {
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
+                if (req.isForMainFrame() && carrying) { endCarry("unreachable"); return; } // old name gone: just go home
                 if (req.isForMainFrame()) showOffline(String.valueOf(err.getDescription()));
             }
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                pageUrl = url;
                 setKeepAwake(false);
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 if (!url.startsWith("data:")) showingError = false;
+                // Back must never land on the one-time carry page: drop it from history once the shell is up.
+                if (clearAfterCarry && !carrying && !Carry.isPage(MainActivity.this, url)) { clearAfterCarry = false; view.clearHistory(); }
                 topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
             }
 
@@ -221,14 +228,14 @@ public class MainActivity extends Activity {
     }
 
     void handleBack() {
-        if (showingError) { web.loadUrl(BuildConfig.HOME_URL); return; }
+        if (showingError) { web.loadUrl(ai.wizards.os.device.AppState.homeUrl(this)); return; }
         web.evaluateJavascript("(window.__wosNativeBack ? window.__wosNativeBack() : 'nojs')", result -> {
             String r = result == null ? "" : result.replace("\"", "");
             if (!r.equals("nojs") && !r.isEmpty() && !r.equals("null")) return; // the shell handled it
             // The shell is not loaded (or is a page off the shell): step back in the WebView, else go home.
             String url = web.getUrl();
             if (web.canGoBack()) web.goBack();
-            else if (url == null || !url.startsWith(BuildConfig.HOME_URL)) web.loadUrl(BuildConfig.HOME_URL);
+            else if (url == null || !url.startsWith(ai.wizards.os.device.AppState.homeUrl(this))) web.loadUrl(ai.wizards.os.device.AppState.homeUrl(this));
             else Toast.makeText(this, "You're home", Toast.LENGTH_SHORT).show();
         });
     }
@@ -237,8 +244,36 @@ public class MainActivity extends Activity {
 
     String startUrl(Intent intent) {
         Uri data = intent == null ? null : intent.getData();
-        if (data != null && Origin.isInApp(data)) return data.toString();
+        String target = data != null && Origin.isInApp(data) ? Origin.toHome(data.toString()) : null;
+        // First launch after the move to the tailnet name: bring the phone's drafts/unsent/seen state across, then go on.
+        if (Carry.pending(this)) {
+            Carry.attempt(this);
+            carrying = true;
+            carryNext = target;
+            main.postDelayed(carryTimeout, Carry.TIMEOUT_MS);
+            return Carry.pageUrl(this);
+        }
+        if (target != null) return target;
         return ai.wizards.os.device.AppState.homeUrl(this); // HOME_URL; QA builds may point at a fake Wizard
+    }
+
+    /* ---------------- Carry: move local state off the retired private.wizard001.com (see Carry) ---------------- */
+
+    private volatile boolean carrying;
+    private volatile String pageUrl;
+    private String carryNext;
+    private boolean clearAfterCarry;
+    private final Runnable carryTimeout = () -> endCarry("timeout");
+
+    void endCarry(String why) {
+        if (!carrying) return;
+        carrying = false;
+        main.removeCallbacks(carryTimeout);
+        android.util.Log.i("WizardOSCarry", "carry " + why);
+        String next = carryNext != null ? carryNext : ai.wizards.os.device.AppState.homeUrl(this);
+        carryNext = null;
+        clearAfterCarry = true;
+        if (web != null) web.loadUrl(next);
     }
 
     @Override
@@ -246,7 +281,10 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         Uri data = intent.getData();
-        if (data != null && Origin.isInApp(data)) web.loadUrl(data.toString());
+        if (data != null && Origin.isInApp(data)) {
+            if (carrying) carryNext = Origin.toHome(data.toString());
+            else web.loadUrl(Origin.toHome(data.toString()));
+        }
         if (ACTION_ACCESSIBILITY.equals(intent.getAction())) { intent.setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); return; }
         queueHandoff(intent);
         device.onIntent(intent);
@@ -655,6 +693,29 @@ public class MainActivity extends Activity {
     final class Bridge {
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }
+
+        /* ---- Carry (one time): the old name's page hands its local state over; the new name's shell takes it. ---- */
+        @JavascriptInterface
+        public boolean carryOut(String json) {
+            if (!carrying || !Carry.isPage(MainActivity.this, pageUrl)) return false;
+            boolean ok = Carry.save(MainActivity.this, json);
+            if (ok) Carry.finished(MainActivity.this);
+            main.post(() -> endCarry(ok ? "saved" : "refused"));
+            return ok;
+        }
+
+        @JavascriptInterface
+        public String carryIn() {
+            String u = pageUrl;
+            if (u == null || !u.startsWith(ai.wizards.os.device.AppState.origin(MainActivity.this) + "/")) return "";
+            return Carry.load(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void carryDone() {
+            String u = pageUrl;
+            if (u != null && u.startsWith(ai.wizards.os.device.AppState.origin(MainActivity.this) + "/")) Carry.clear(MainActivity.this);
+        }
 
         /* ---- Usuals: James's regular Grab orders (usuals/*). Nothing here can place an order. ---- */
         @JavascriptInterface

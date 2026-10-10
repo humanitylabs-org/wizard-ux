@@ -17,7 +17,7 @@ import org.json.JSONObject;
  * tailnet-only Wizard OS endpoint. The phone must be on Tailscale. Nothing else leaves the phone.
  */
 public final class Transcriber {
-    static final String ORIGIN = "https://private.wizard001.com";
+    static final String ORIGIN = ai.wizards.os.BuildConfig.ORIGIN;
     static final String ENDPOINT = ORIGIN + "/wizard-os-home/api/transcribe";
     static final String PROMPT = "Wizard voice request spoken to Archimedes on a phone lock screen. "
             + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";

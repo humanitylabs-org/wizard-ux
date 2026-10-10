@@ -39,6 +39,25 @@
   function lsSave() { if (db) return; try { localStorage.setItem(LS, JSON.stringify([...items.values()].map(({ audio, ...x }) => x))); } catch (e) {} }
   async function put(it) { items.set(it.id, it); lsSave(); try { await tx('readwrite', s => s.put(it)); } catch (e) { console.warn('outbox put', e); } emit(); }
   async function del(id) { items.delete(id); lsSave(); try { await tx('readwrite', s => s.delete(id)); } catch (e) {} emit(); }
+  // Unsent messages carried over from the retired private.wizard001.com (core/carry-in.js): stored by id
+  // (never twice), then the app is told it can drop its copy. Voice audio comes back as a Blob.
+  async function adoptCarried() {
+    const C = window.WosCarry; if (!C || !Array.isArray(C.outbox)) return;
+    window.WosCarry = null;
+    for (const x of C.outbox) {
+      if (items.has(x.id)) continue;
+      const it = { ...x }; delete it.audio64;
+      if (x.audio64) {
+        try { const bin = atob(x.audio64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); it.audio = new Blob([u8], { type: x.audioType || 'audio/webm' }); }
+        catch (e) { it.audio = null; }
+      }
+      if (it.state === 'sending') it.state = 'waiting';
+      items.set(it.id, it);
+      try { await tx('readwrite', s => s.put(it)); } catch (e) { console.warn('outbox carry', e); }
+    }
+    lsSave();
+    try { C.done(); } catch (e) {}
+  }
   function load() {
     if (ready) return ready;
     ready = (async () => {
@@ -50,6 +69,7 @@
         db = null;
         try { for (const it of JSON.parse(localStorage.getItem(LS) || '[]')) items.set(it.id, it); } catch (x) {}
       }
+      await adoptCarried();
       emit(); schedule(0);
     })();
     return ready;

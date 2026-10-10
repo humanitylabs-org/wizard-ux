@@ -40,7 +40,7 @@ import ai.wizards.os.assist.Transcriber;
  */
 public final class EverywhereOutbox {
     static final String TAG = "WizardEverywhere";
-    public static final String DEFAULT_ORIGIN = "https://private.wizard001.com";
+    public static final String DEFAULT_ORIGIN = ai.wizards.os.BuildConfig.ORIGIN;
     static final String PROMPT = "Wizard voice request spoken to Archimedes from the floating Wizard button on a phone. "
             + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
     /** Dictation goes to STT bare, like Archimedes Anywhere: a context prompt can leak into typed text. */
