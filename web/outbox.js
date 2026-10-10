@@ -110,10 +110,12 @@
 
   async function deliver(it) {
     // 1. Words: a voice item that never got its transcript gets one now.
+    // Words typed or pasted with it (it.typed: a link, say) go first, then what was said: one message (legacy
+    // composeVoiceTurnText). A recording with no speech still sends when it carries typed words.
     if (!it.text && it.audio) {
-      const text = await transcribe(it);
-      if (!text) { it.state = 'empty'; it.error = 'No speech in that recording'; await put(it); return; }
-      it.text = text; await put(it);
+      const text = String(await transcribe(it) || '').trim(), typed = String(it.typed || '').trim();
+      if (!text && !typed) { it.state = 'empty'; it.error = 'No speech in that recording'; await put(it); return; }
+      it.text = [typed, text].filter(Boolean).join('\n\n').slice(0, 64000); await put(it);
     }
     // 2. The recording rides along as a voice note, so the original audio is on the server too.
     if (it.audio && !it.audioFile) { it.audioFile = await uploadAudio(it); it.files = [...(it.files || []), it.audioFile]; await put(it); }
@@ -198,9 +200,9 @@
       const it = {
         id: 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'queued',
         kind: o.kind === 'reply' ? 'reply' : 'new', sessionId: o.sessionId || newSessionId(), steerRunId: o.steerRunId || '',
-        text: String(o.text || '').trim(), instructions: o.instructions || '', files: o.files || [],
+        text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: o.files || [],
         audio: o.audio || null, audioType: o.audio ? (o.audio.type || 'audio/webm') : '',
-        wid: o.wid || '', how: o.how || '', source: o.source || 'chat', title: String(o.text || '').slice(0, 60),
+        wid: o.wid || '', how: o.how || '', source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60),
       };
       // A route chosen in the model picker (sealed with the message, like legacy's admit()).
       if (o.model) { it.model = String(o.model); it.provider = String(o.provider || ''); }
