@@ -10,7 +10,9 @@ import android.app.Service;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.BroadcastReceiver;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
@@ -108,6 +110,15 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private boolean pageReady;
     private WindowManager.LayoutParams lp;
     private boolean attached, expanded;
+    /** Battery (0.8.5): the display is off. With attached, decides whether the orb page may draw at all. */
+    private boolean screenOff;
+    private final BroadcastReceiver screenWatch = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            screenOff = Intent.ACTION_SCREEN_OFF.equals(i.getAction());
+            syncOrbSleep();
+        }
+    };
+    private Boolean orbAsleep;
     private EverywhereOutbox outbox;
     private MediaRecorder recorder;
     private File recording;
@@ -300,6 +311,26 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         channels(this);
         outbox = EverywhereOutbox.get(this);
         outbox.addListener(this);
+        IntentFilter sf = new IntentFilter(Intent.ACTION_SCREEN_OFF);
+        sf.addAction(Intent.ACTION_SCREEN_ON);
+        registerReceiver(screenWatch, sf);
+    }
+
+    /**
+     * Battery (0.8.5): the orb's WebGL page draws only while its window is on screen and the display is on.
+     * Off screen it gets Orb.sleep(true) and the WebView is paused, so it costs nothing behind Wizard OS,
+     * under the side-button surface or with the screen off. Android used to bill ~38% of a day's battery to it.
+     */
+    static boolean orbShouldSleep(boolean attached, boolean screenOff) { return !attached || screenOff; }
+
+    private void syncOrbSleep() {
+        if (web == null) return;
+        boolean sleep = orbShouldSleep(attached, screenOff);
+        if (orbAsleep != null && orbAsleep == sleep && pageReady) return;
+        orbAsleep = pageReady ? sleep : null;
+        if (sleep) web.onPause(); else web.onResume();
+        js("Orb.sleep(" + sleep + ")");
+        Log.i(TAG, "orb " + (sleep ? "asleep" : "awake") + " (attached=" + attached + ", screenOff=" + screenOff + ")");
     }
 
     @Override
@@ -363,6 +394,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     @Override
     public void onDestroy() {
         outbox.removeListener(this);
+        try { unregisterReceiver(screenWatch); } catch (Exception ignored) { }
         discard();
         detach();
         if (web != null) { web.destroy(); web = null; }
@@ -433,7 +465,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                     if (r.getUrl().toString().startsWith("file:///android_asset/assist/")) return null;
                     return new WebResourceResponse("text/plain", "utf-8", 403, "Blocked", null, new ByteArrayInputStream(new byte[0]));
                 }
-                @Override public void onPageFinished(WebView v, String url) { pageReady = true; place(); lastState = ""; pushState(); }
+                @Override public void onPageFinished(WebView v, String url) { pageReady = true; place(); lastState = ""; pushState(); orbAsleep = null; syncOrbSleep(); }
             });
             web.setOnTouchListener(new Touch());
             web.loadUrl("file:///android_asset/assist/everywhere.html");
@@ -451,6 +483,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             attached = true;
             lastState = "";
             pushState();
+            syncOrbSleep();
         } catch (Exception e) {
             Log.w(TAG, "overlay refused: " + e.getMessage());
         }
@@ -461,6 +494,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (!attached || web == null) return;
         try { wm.removeViewImmediate(web); } catch (Exception ignored) { }
         attached = false;
+        syncOrbSleep();
     }
 
     private Point screen() {
