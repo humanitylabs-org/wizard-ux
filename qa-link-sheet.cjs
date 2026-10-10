@@ -134,19 +134,29 @@ const PNG = fs.readFileSync(process.env.QA_PNG || '/home/telos/.hermes/data/apps
       s = await st(); if (s.open) { await back(); await p.waitForTimeout(600); s = await st(); }
       ok(!s.open && p.url() === shellUrl, `${shell}: Back closes ${path}, Wizard stays open`, JSON.stringify(s));
     }
-    // 7b. Phone: the sheet opens at about three-quarters height (the thread stays visible above); ⤢ goes full.
+    // 7b. Phone (James, 10 Oct): the sheet opens full height by default; ⤡ shrinks it to ~3/4, ⤢ restores full,
+    //     and the next link opens full again.
     if (phone) {
       await tapLink(ORIGIN + '/qa-page/two/'); await p.waitForTimeout(700);
       const h = () => p.evaluate(() => { const pn = document.querySelector('.linksheet .ls-panel').getBoundingClientRect(), dv = document.querySelector('#device').getBoundingClientRect(); return Math.round(pn.height / dv.height * 100); });
       const h0 = await h();
       await p.click('.linksheet [data-ls="full"]'); await p.waitForTimeout(500);
       const h1 = await h();
-      ok(h0 >= 60 && h0 <= 72 && h1 >= 82, 'phone: sheet opens at ~3/4 (thread visible above), ⤢ makes it full', JSON.stringify({ h0, h1 }));
-      await p.screenshot({ path: `${SHOTS}/ls-phone-full.png` });
-      await p.click('.linksheet [data-ls="full"]'); await p.waitForTimeout(400);
+      ok(h0 >= 85 && h1 >= 60 && h1 <= 72, 'phone: sheet opens full height by default, ⤡ shrinks it to ~3/4', JSON.stringify({ h0, h1 }));
       await p.screenshot({ path: `${SHOTS}/ls-phone-34.png` });
+      await p.click('.linksheet [data-ls="full"]'); await p.waitForTimeout(400);
+      const h2 = await h();
+      ok(h2 >= 85, 'phone: ⤢ restores full height', JSON.stringify({ h2 }));
+      await p.screenshot({ path: `${SHOTS}/ls-phone-full.png` });
+      const dockOk = await p.evaluate(() => { const d = document.querySelector('#dock').getBoundingClientRect(); const el = document.elementFromPoint(d.left + d.width / 2, d.top + d.height / 2); return !!(el && el.closest('#dock')); });
+      ok(dockOk, 'phone: full-height sheet keeps the dock and orb tappable', '');
+      await p.click('.linksheet [data-ls="full"]'); await p.waitForTimeout(300);
       await back(); await p.waitForTimeout(600);
       s = await st(); ok(!s.open, 'phone: one Back closes it', JSON.stringify(s));
+      await tapLink(ORIGIN + '/qa-page/one/'); await p.waitForTimeout(700);
+      const h3 = await h();
+      ok(h3 >= 85, 'phone: after shrinking, the next link opens full height again', JSON.stringify({ h3 }));
+      await back(); await p.waitForTimeout(600);
     }
     // 7b. James's case: a mockup image link opens fit to the screen width with pinch zoom, never as a raw
     //     full-size page wider than the viewport. Back closes the image first, then the page, never Wizard.
