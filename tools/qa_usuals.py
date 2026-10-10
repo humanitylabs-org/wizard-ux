@@ -7,10 +7,10 @@ usage: qa_usuals.py WOS_QA_APK FAKE_GRAB_APK WEB_DIR [OUT_DIR]
 A. Usuals shows in the app list (native bridge present); without accessibility it says so.
 B. Teach: tap Teach → name → Open Grab; the teach card is up; a person (adb taps) dismisses the promo, searches
    "krua", opens Krua Thai Kitchen, scrolls, taps Add by "Kra pao moo saap" twice and "Thai iced tea" once, opens
-   the basket, taps Done → back in Wizard OS with the usual saved (steps recorded, total ฿245 read off checkout).
+   the basket, taps Done → back in Wizard OS with the usual saved (steps recorded, total ฿200 read off checkout).
    (That a Place-order tap is never recorded or replayed is covered by UsualsPolicyTest.)
 C. Run: tap Order → Grab opens fresh (promo shows on that launch), the cover is up, the run reaches checkout,
-   the cover shows "Place order · ฿245"; NO order was placed by the run (FakeGrab log has no ORDER PLACED).
+   the cover shows "Place order · ฿200"; NO order was placed by the run (FakeGrab log has no ORDER PLACED).
 D. Look first → cover gone, Grab is on checkout, still no order.
 E. Run again → Place order on the cover → FakeGrab logs exactly one ORDER PLACED with 2x Kra pao + 1x iced tea.
 F. Voice: the in-app router turns "order my usual kra pao" into a run (handleText → localParse), no Wizard write.
@@ -242,7 +242,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         a1 = add_by('Kra pao moo saap'); a2 = add_by('Kra pao moo saap'); a3 = add_by('Thai iced tea')
         check('B: (by hand) added 2× kra pao + 1× iced tea', a1 and a2 and a3, grablog()[-300:])
         time.sleep(.8); tap_text(r'^View basket', pkg=GPKG); time.sleep(2)
-        check('B: (by hand) on checkout at ฿245', 'checkout total=245' in grablog(), grablog()[-200:])
+        check('B: (by hand) on checkout at ฿200', 'checkout total=200' in grablog(), grablog()[-200:])
         shot('b-checkout-teach')
         tap_text(r'^Done$'); time.sleep(3)
         back = wait_for(lambda: PKG in top(), 10)
@@ -253,7 +253,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('B: Done returns to Wizard OS with the usual saved', back and u.get('name') == 'Kra pao' and len(u.get('steps', [])) >= 5, (top(), u.get('name'), len(u.get('steps', []))))
         check('B: recipe has the search, the restaurant and Add by the item (not screen spots)',
               'type krua' in script and 'Krua Thai Kitchen' in script and 'tap Add @ Kra pao moo saap' in script and 'tap Add @ Thai iced tea' in script, script)
-        check('B: total read off checkout', u.get('lastTotal') == '฿245', u.get('lastTotal'))
+        check('B: total read off checkout', u.get('lastTotal') == '฿200', u.get('lastTotal'))
         check('B: no order placed while teaching', 'ORDER PLACED' not in grablog())
         pg.close(); pg = page()
         pg.ev("window.WosUsuals.refresh()"); time.sleep(.5); shot('b-saved')
@@ -268,15 +268,16 @@ with (BASE / 'worker.lock').open('a') as lock:
         secs = round(time.time() - t0, 1)
         log = uslog()
         check(f'C: run reaches checkout under the cover ({secs}s)', ready is not None, log[-900:])
-        check('C: the cover shows the total on Place order', ready is not None and '฿245' in (ready['text'] or ''), ready and ready['text'])
+        check('C: the cover shows the total on Place order', ready is not None and '฿200' in (ready['text'] or ''), ready and ready['text'])
         check('C: the run closed Grab\'s promo pop-up by itself', 'popup closed' in grablog() or 'Not now' in log, '')
         check('C: nothing ordered by the run', 'ORDER PLACED' not in grablog())
-        check('C: basket is right (2 kra pao + iced tea → checkout ฿245)', grablog().count('checkout total=245') >= 2, grablog()[-300:])
+        check('C: basket is right (2 kra pao + iced tea → checkout ฿200)', grablog().count('checkout total=200') >= 2, grablog()[-300:])
         shot('c-ready')
 
         # D. Look first
         tap_text(r'^Look first$'); time.sleep(2)
-        check('D: Look first leaves Grab on its checkout, uncovered', find(r'^Ordering|^Look first') is None and find(r'^Place order ฿245$', pkg=GPKG) is not None)
+        ul = uslog(); hidden = ul.rfind('cover hidden') > ul.rfind('cover frame')
+        check('D: Look first leaves Grab on its checkout, uncovered', hidden and GPKG in top() and find(r'^Place order ฿200$', pkg=GPKG) is not None, (hidden, top()))
         check('D: still nothing ordered', 'ORDER PLACED' not in grablog())
         shot('d-look-first')
 
@@ -290,7 +291,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         placed = wait_for(lambda: 'ORDER PLACED' in grablog(), 15, .5)
         gl = grablog()
         check('E: James\'s tap on Place order places exactly one order', placed and gl.count('ORDER PLACED') == 1, gl[-300:])
-        check('E: the order is 2× kra pao + 1× iced tea, ฿245', 'ORDER PLACED total=245 items=2x Kra pao moo saap; 1x Thai iced tea;' in gl, gl[-200:])
+        check('E: the order is 2× kra pao + 1× iced tea, ฿200', 'ORDER PLACED total=200 items=2x Kra pao moo saap; 1x Thai iced tea;' in gl, gl[-200:])
         time.sleep(1.5); shot('e-ordered')
         wait_for(lambda: find(r'^Ordered') is None, 6, .5)
 
