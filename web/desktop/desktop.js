@@ -26,7 +26,7 @@
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const LIVE = window.WizLive;
   const OUTBOX = window.WosOutbox || null;
-  const { APPS, APP, findApp, searchApps } = C.apps('desktop');
+  const { APPS, APP, findApp, searchApps, quickSearch, searchUrl } = C.apps('desktop');
   const store = C.store('wux.desk.');
   const WS_N = 9;
   const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -468,12 +468,24 @@
     else { const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] }; threads = [...L.needs, ...L.ready, ...L.working].slice(0, 6); }
     const th = threads.map(s => ({ kind: 'thread', name: s.title, sub: ago(LIVE.cardAt(s)) + (LIVE.isNew(s) ? ' · unread' : WORKING_ST.has(s.status) ? ' · working' : ''), icon: emoOf(s.id), run: o => openThread(s.id, o) }));
     const cmds = commands().filter(c => !n || norm(c.name).includes(n));
+    // Quick search: web + AI overview, or images, in the right-half link pane (no new thread).
+    let searchGrp = null;
+    if (n && searchUrl(q)) {
+      const qs = quickSearch(q) || { query: q, tab: 'all' };
+      const go = tab => () => { const u = searchUrl(qs.query, tab); if (u && LINKS) LINKS.open(u); };
+      const items = [{ kind: 'search', name: `Search: “${clip(qs.query, 70)}”`, sub: 'AI overview + web results', icon: '⌕', g: ['#8f63ff', '#2a1a66'], run: go('all') },
+        { kind: 'search', name: `Image search: “${clip(qs.query, 70)}”`, sub: 'Images', icon: '▦', g: ['#ff5ccf', '#5c3bff'], run: go('images') }];
+      if (qs.tab === 'images') items.reverse();
+      searchGrp = { grp: 'Search', items, strong: !!quickSearch(q)?.strong };
+    }
     if (n) out.push({ grp: 'Ask', items: [{ kind: 'ask', name: `Ask ${window.WizConfig.agent()}: “${clip(q, 70)}”`, icon: '✦', keys: `${CMD}Enter`, run: () => ask(q) }] });
     if (th.length) out.push({ grp: n ? 'Threads' : 'Needs you · unread · working', items: th });
     if (apps.length) out.push({ grp: 'Apps', items: apps });
     if (cmds.length) out.push({ grp: 'Commands', items: cmds });
     // With a query, the best match leads; "Ask" goes last unless nothing else matched.
     if (n && out.length > 1) out.push(out.shift());
+    // "image search …" / "search the web …" leads; otherwise Search sits just above Ask.
+    if (searchGrp) { if (searchGrp.strong) out.unshift(searchGrp); else out.splice(Math.max(0, out.length - 1), 0, searchGrp); }
     return out;
   }
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
