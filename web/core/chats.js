@@ -90,7 +90,7 @@ window.WizCore.chats = function createChats(H) {
       : at ? lab + esc(clip(at.ask, 140))
       : esc(clip(s.preview || '', 110));
     return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}><span class="emo sti ${kind}" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span>
-      <span class="bd"><span class="tp"><b>${esc(s.title)}</b>${s.titleWas ? `<i class="was" title="Renamed from ${esc(s.titleWas)}">was ${esc(clip(s.titleWas, 40))}</i>` : ''}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
+      <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority

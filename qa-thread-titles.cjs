@@ -2,7 +2,7 @@
 // and maybe the feature in as few words as possible"; renames only on a real pivot, with a breadcrumb, and
 // his own rename always wins.
 //
-// Checks: a freshly renamed thread shows "was …" on its row; the thread shows "Renamed from …" where it
+// Checks: rows show only the current title; the thread shows "Renamed from …" where it
 // happened; long-press → Rename saves through PATCH /api/sessions/<id> {title}; tapping the thread title opens
 // Rename; Back closes the rename sheet and keeps the app open; a name clash says so and keeps the old name.
 //
@@ -95,17 +95,13 @@ function routeFor() {
   const row = id => W(`[data-sec="ready"] [data-chopen="${id}"]`);
 
   try {
-    // 1. The list: short titles, and "was …" beside a freshly renamed one.
-    const r1 = await p.evaluate(sel => { const e = document.querySelector(sel); return e && { t: e.querySelector('.tp b')?.textContent, was: e.querySelector('.tp i.was')?.textContent || '' }; }, row('qa_tt_pivot'));
-    ok(r1 && r1.t === 'DeFleur · Captions' && r1.was === 'was Review 0xMovez post on X', '1 renamed row shows the new title with "was <old title>"', r1);
-    const r2 = await p.evaluate(sel => document.querySelector(sel)?.querySelector('.tp i.was') ? 'has' : 'none', row('qa_tt_plain'));
-    ok(r2 === 'none', '1 a thread that was never renamed shows no "was"', r2);
-    const fits = await p.evaluate(sel => { const e = document.querySelector(sel); const b = e.querySelector('.tp b'), t = e.querySelector('.tp time'); return b.getBoundingClientRect().right <= t.getBoundingClientRect().left + 1 && e.querySelector('.tp').scrollWidth <= e.querySelector('.tp').clientWidth + 1; }, row('qa_tt_pivot'));
-    ok(fits, '1 title, "was" and time fit on one line without overlap');
+    // 1. The list: short titles only. James, 10 Oct 2026: "take out the was … note … It's just clutter."
+    const r1 = await p.evaluate(sel => { const e = document.querySelector(sel); return e && { t: e.querySelector('.tp b')?.textContent, was: !!e.querySelector('.tp i.was'), text: e.querySelector('.tp')?.textContent || '' }; }, row('qa_tt_pivot'));
+    ok(r1 && r1.t === 'DeFleur · Captions' && !r1.was && !/\bwas\b|0xMovez/.test(r1.text), '1 a renamed row shows only its new title (no "was")', r1);
     const full = await p.evaluate(sel => { const b = document.querySelector(sel).querySelector('.tp b'); return b.scrollWidth <= b.clientWidth + 1; }, row('qa_tt_pivot'));
-    ok(full, '1 the "was" note never truncates the title itself');
+    ok(full, '1 the short title is shown in full');
     await p.locator(row('qa_tt_pivot')).scrollIntoViewIfNeeded(); await sleep(200);
-    await p.screenshot({ path: path.join(OUT, '1-list-was.png') });
+    await p.screenshot({ path: path.join(OUT, '1-list.png') });
 
     // 2. The thread: "Renamed from …" where it happened (between the tweet turn and the pipeline turn).
     await p.locator(row('qa_tt_pivot')).tap(); await sleep(1200);
@@ -136,7 +132,7 @@ function routeFor() {
     // 5. Back to the list; the row shows the new name and no stale "was".
     await p.locator(W('[data-chback]')).tap(); await sleep(900);
     const r5 = await p.evaluate(sel => { const e = document.querySelector(sel); return e && { t: e.querySelector('.tp b')?.textContent, was: e.querySelector('.tp i.was')?.textContent || '' }; }, row('qa_tt_pivot'));
-    ok(r5 && r5.t === 'DeFleur · Packaging' && !r5.was, '5 list row shows James\'s name, no "was"', r5);
+    ok(r5 && r5.t === 'DeFleur · Packaging' && !r5.was, '5 list row shows James\'s name', r5);
 
     // 6. Long-press a row → sheet has Rename; a taken name says so and keeps the old name.
     const box = await p.locator(row('qa_tt_plain')).boundingBox();
