@@ -172,6 +172,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     @Override
     public void onHide() {
         super.onHide();
+        if (ai.wizards.os.BuildConfig.DEBUG) Log.i(TAG, "onHide from", new Throwable("who hid the corner"));
         // Dismissed (Back, Home, screen off, another app): what was said is never lost. A take with speech in it
         // is sent exactly as if the pause had ended it, and a message already sending keeps going and toasts
         // when it lands. Only Cancel throws a take away.
@@ -340,6 +341,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
      * floating orb uses), attach it to the take, show the orb again. Without accessibility it opens the one-step setup.
      */
     private void screenshot() {
+        Log.i(TAG, "screenshot asked listening=" + capture.listening() + " pending=" + shotPending + " a11y=" + (ai.wizards.os.everywhere.WizardKeyboardService.get() != null));
         if (!capture.listening() || shotPending) return;
         if (capture.shotCount() >= VoiceCapture.MAX_SHOTS) { js("W.onShot(-2)"); return; }
         if (Build.VERSION.SDK_INT < 30) { js("W.onShot(-3)"); return; }

@@ -294,6 +294,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             # surface.html: body.corner.canshot #shotC {right:252px; width:46px; top:50%} inside the orb window
             x = fx + fw - dp(252 + 23); y = fy + fh // 2
             print('  screen chip via orb frame', (fx, fy, fw, fh), '→ tap', x, y); sx(f'input tap {x} {y}')
+        time.sleep(0.4); (job / 'c-window.txt').write_text(sx('dumpsys window windows'))
         sa = wait_log('screenshot attached', 10, alogs); time.sleep(0.8); shot('c2-shot-attached')
         check('C: Screen chip shows while the side-button orb listens and attaches a screenshot', 'screenshot attached 1' in sa, sa or alogs('screen|shot'))
         sx('input keyevent KEYCODE_BACK'); time.sleep(1)
@@ -319,6 +320,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         crashed = sx('logcat -d -b crash')
         check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
     finally:
+        try: (job / 'logcat.txt').write_text(sx('logcat -d'))
+        except Exception as e: print('  logcat dump failed', e)
         if em: sh(ADB, '-s', S, 'emu', 'kill'); em.wait(40)
         srv.shutdown()
         (job / 'fake-wizard.json').write_text(json.dumps({k: (list(v) if isinstance(v, set) else v) for k, v in STATE.items()}, indent=1, default=str))
