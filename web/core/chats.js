@@ -76,14 +76,41 @@ window.WizCore.chats = function createChats(H) {
       <span class="bd"><span class="tp"><b>${esc(what)}</b><time>${esc(ago(new Date(d.at).toISOString()))}</time></span>
       <span class="pv">Draft · saved on this device${files}</span></span></button><button class="ch-draft-x" data-chdraftx="${esc(d.key)}" aria-label="Discard draft" title="Discard draft">×</button></div>`;
   }
-  // A new chat that hasn't reached Wizard yet, in the Chats list: its words and the same state/Retry/Edit as in a thread.
-  function outRow(it) {
-    const t = String(it.text || '').trim().replace(/\s+/g, ' ');
-    const what = t ? clip(t, 100) : (it.audio || it.audioFile ? 'Voice note' : 'New chat');
-    // A reply names its thread and opens it on tap.
-    const s = it.kind === 'reply' && it.sessionId ? LIVE.session(it.sessionId) : null;
-    const to = it.kind === 'reply' ? `<small class="ch-out-to">Reply · ${esc(clip(s?.title || 'thread', 60))}</small>` : '';
-    return `<div class="msg u pending ${esc(it.state)} ch-out" data-ob="${esc(it.id)}">${to}<div class="bub"${it.kind === 'reply' && it.sessionId ? ` data-chopen="${esc(it.sessionId)}"` : ''}>${esc(what)}</div><div class="pmeta">${pendingState(it)}</div></div>`;
+  // Messages still on the phone, in the Chats list: one small floating pill over the list (James, 10 Oct 2026:
+  // "a little popover, pillbox sort of thing to let me know a message is sending… I don't need all my threads
+  // shifted down"). It never takes layout space. Tap opens the reply's thread; Retry/Edit appear only when stuck.
+  function sendPill(items, w) {
+    const c = ch(w.id), ids = items.map(it => it.id).join(',');
+    // The moment the last message leaves the phone, flash "Sent" for a beat, then the pill goes (per window).
+    if (c.pillIds && !ids && LIVE.ok) {
+      c.sentUntil = Date.now() + 1500; clearTimeout(c.sentTimer);
+      c.sentTimer = setTimeout(() => { const w2 = H.win(w.id), e2 = elOf(w.id); if (w2 && !w2.thread && e2 && e2.querySelector('.ch-list') && !holdList(w.id)) renderChatList(w2, e2); }, 1600);
+    }
+    c.pillIds = ids;
+    if (!items.length) {
+      const left = (c.sentUntil || 0) - Date.now();
+      return left > 0 ? `<div class="ch-pill sent" style="animation-delay:${left - 1500}ms" role="status">${CHECK_SVG}<span>Sent</span></div>` : '';
+    }
+    c.sentUntil = 0;
+    const failed = items.filter(it => it.state === 'failed'), waiting = items.filter(it => it.state === 'waiting');
+    const one = items.length === 1 ? items[0] : null;
+    const name = it => { const s = it.kind === 'reply' && it.sessionId ? LIVE.session(it.sessionId) : null; return s?.title || (it.kind === 'new' ? 'New chat' : 'thread'); };
+    const open = one && one.kind === 'reply' && one.sessionId ? ` data-chopen="${esc(one.sessionId)}"` : '';
+    let cls = '', label, btns = '';
+    if (failed.length) {
+      cls = ' fail';
+      label = one ? `Not sent · ${esc(clip(name(one), 34))}` : `${failed.length} not sent`;
+      btns = one ? `<button type="button" class="pbtn" data-obretry="${esc(one.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(one.id)}">Edit</button>`
+        : `<button type="button" class="pbtn" data-obretryall>Retry all</button>`;
+    } else if (waiting.length) {
+      cls = ' wait';
+      label = 'Offline · retrying';
+      btns = one ? `<button type="button" class="pbtn" data-obretry="${esc(one.id)}">Retry now</button>` : `<button type="button" class="pbtn" data-obretryall>Retry now</button>`;
+    } else {
+      label = one ? `Sending · ${esc(clip(name(one), 34))}` : `Sending ${items.length} messages`;
+    }
+    const spin = failed.length ? '' : '<i class="dots"><b></b><b></b><b></b></i>';
+    return `<div class="ch-pill${cls}" data-sendpill="${items.length}" role="status"><span class="pl"${open}>${spin}<span>${label}</span></span>${btns}</div>`;
   }
   // Rotate one storage write: the live new-chat slot → a saved slot, the chosen saved slot → the live one.
   function rotateNew(resume) {
@@ -127,10 +154,10 @@ window.WizCore.chats = function createChats(H) {
     // Messages still on the phone (the window went back to the list on send), new chats and replies: shown until
     // Wizard takes them, so a send never vanishes from Chats. Failed voice notes live in Errors.
     const outNew = OUTBOX ? OUTBOX.unsent().filter(it => (it.kind === 'new' || it.kind === 'reply') && !(it.state === 'failed' && (it.audio || it.audioFile)) && (!n || norm(it.text).includes(n))) : [];
-    const sendSec = outNew.length ? `<section class="ch-sec open" data-sec="sending"><div class="ch-sec-h static"><span>Sending</span><small>${outNew.length}</small></div><div class="ch-sec-b">${outNew.map(outRow).join('')}</div></section>` : '';
-    if (!LIVE.ok) body = draftSec + sendSec + `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
-    else if (!hit.length && !drafts.length && !outNew.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
-    else body = draftSec + sendSec + SECTIONS.map(([k, label]) => {
+    const pill = sendPill(outNew, w);
+    if (!LIVE.ok) body = draftSec + `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
+    else if (!hit.length && !drafts.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
+    else body = draftSec + SECTIONS.map(([k, label]) => {
       const list = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k];
       // Errors also holds failed background work and voice notes that didn't send (chat-power.js #12).
       const extra = PW && k === 'errors' && !n ? PW.errorsExtra() : { n: 0, html: '' };
@@ -146,7 +173,7 @@ window.WizCore.chats = function createChats(H) {
     const scroll = el.querySelector('.ch-scroll')?.scrollTop || 0;
     // Results stream in while typing: keep the search box focused with the caret where it was.
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
-    el.innerHTML = `<div class="ch-list">${head}<div class="ch-scroll">${body}</div></div>`;
+    el.innerHTML = `<div class="ch-list">${head}<div class="ch-scroll">${body}</div>${pill}</div>`;
     const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = scroll;
     PW?.paint(w.id, el);
     if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
@@ -625,6 +652,7 @@ window.WizCore.chats = function createChats(H) {
   function click(e, id) {
     const w = H.win(id); if (!w) return false;
     const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); H.toast('↻', 'Sending again', 1400); return true; }
+    if (e.target.closest('[data-obretryall]')) { OUTBOX.retryAll(); H.toast('↻', 'Sending again', 1400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;
     if (justPressed() && e.target.closest('[data-chopen]')) return true; // a long-press/swipe just opened the actions sheet

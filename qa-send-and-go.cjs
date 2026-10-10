@@ -107,10 +107,19 @@ async function typeAndSend(p, wid, text) {
     await typeAndSend(p, wid, 'QA send and go offline reply');
     await shot(p, '3-offline-reply-sending');
     ok((await threadOf(p, wid)) === null, 'offline reply: still pops back to the list');
-    const sec = p.locator(`.win[data-win="${wid}"] [data-sec="sending"]`);
-    ok(await sec.count() === 1 && /QA send and go offline reply/.test(await sec.innerText()), 'offline reply: shown under Sending on the list', await sec.count() ? await sec.innerText() : 'no Sending section');
-    ok(await sec.locator(`[data-chopen="${tid}"]`).count() === 1, 'offline reply: the Sending row opens its thread');
-    ok(/Reply ·/.test(await sec.innerText().catch(() => '')), 'offline reply: the Sending row names it as a reply');
+    // Sending pill (James, 10 Oct 2026): a small floating pill, never a section that pushes the threads down.
+    const pill = p.locator(`.win[data-win="${wid}"] .ch-pill`);
+    ok(await p.locator(`.win[data-win="${wid}"] [data-sec="sending"]`).count() === 0, 'offline reply: no Sending section in the list');
+    ok(await pill.count() === 1, 'offline reply: a sending pill shows on the list');
+    const pt = await pill.innerText().catch(() => '');
+    ok(/retrying|Sending|Not sent/.test(pt) && !/QA send and go offline reply/.test(pt), 'offline reply: pill is a short status line (no message body)', pt);
+    ok(await pill.locator(`[data-chopen="${tid}"]`).count() === 1, 'offline reply: tapping the pill opens its thread');
+    ok(await pill.locator('[data-obretry]').count() === 1, 'offline reply: pill carries Retry while stuck');
+    const geo = await p.evaluate(id => { const root = document.querySelector(`.win[data-win="${id}"]`); const pl = root.querySelector('.ch-pill'), row = root.querySelector('.ch-scroll .ch-sec');
+      const r = pl.getBoundingClientRect(); return { pos: getComputedStyle(pl).position, h: r.height, w: r.width, rowTop: row?.getBoundingClientRect().top || 0 }; }, wid);
+    ok(geo.pos === 'absolute' && geo.h <= 40, 'offline reply: pill floats (absolute) and is one line tall', JSON.stringify(geo));
+    const rowTop0 = await p.evaluate(id => { const root = document.querySelector(`.win[data-win="${id}"]`); root.querySelector('.ch-pill')?.remove(); return root.querySelector('.ch-scroll .ch-sec')?.getBoundingClientRect().top || 0; }, wid);
+    ok(Math.abs(rowTop0 - geo.rowTop) < 1, 'offline reply: threads do not shift down for the pill', `${geo.rowTop} vs ${rowTop0}`);
     ok(errs.length === 0, 'no page errors (offline)', errs.join(' | '));
     await ctx.close();
   }

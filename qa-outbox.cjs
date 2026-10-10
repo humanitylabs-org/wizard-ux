@@ -88,7 +88,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   ok(it1 && it1.attempts >= 1, 'down: message kept and waiting', JSON.stringify(it1 && { s: it1.state, a: it1.attempts }));
   // New threads start in the background (0.6.x): the window is back on its list, where the unsent chat waits
   // under "Sending" with "retrying" (it must never vanish from Chats while Wizard is down).
-  ok(await p.isVisible('[data-sec="sending"] .msg.u.pending.waiting') && /retrying/.test(await p.textContent('[data-sec="sending"] .msg.u.pending.waiting .pst') || ''), 'down: Chats shows the message under Sending with “retrying”');
+  ok(await p.isVisible('.ch-pill.wait') && /retrying/.test(await p.textContent('.ch-pill.wait') || ''), 'down: Chats shows the sending pill with “retrying”');
   await p.screenshot({ path: path.join(OUT, 'outbox-waiting.png') });
   const inIdb = await p.evaluate(() => new Promise(res => { const r = indexedDB.open('wos-outbox'); r.onsuccess = () => { const t = r.result.transaction('items').objectStore('items').getAll(); t.onsuccess = () => res(t.result.map(x => x.text)); }; }));
   ok(inIdb.includes('QA outbox message one'), 'down: message is on disk (IndexedDB)');
@@ -98,7 +98,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await p.waitForFunction(() => !window.WosOutbox.unsent().some(x => x.text === 'QA outbox message one'), null, { timeout: 10000 });
   ok(W.runs.filter(r => r.body.includes('QA outbox message one')).length === 1, 'up: delivered exactly once', String(W.runs.length));
   await sleep(300);
-  ok(!(await p.isVisible('[data-sec="sending"]')), 'up: the Sending row leaves Chats once Wizard has it');
+  ok(!(await p.isVisible('.ch-pill:not(.sent)')), 'up: the sending pill leaves Chats once Wizard has it');
+  await sleep(1900);
+  ok(!(await p.isVisible('.ch-pill')), 'up: the brief “Sent” pill fades away');
   const run1 = W.runs.find(r => r.body.includes('QA outbox message one'));
   ok(run1 && run1.key === it1.id && JSON.parse(run1.body).session_id === it1.sessionId, 'up: idempotency key + session id fixed at enqueue');
 
