@@ -431,6 +431,27 @@ public final class UsualsRunner {
         return "";
     }
 
+    private static AccessibilityNodeInfo clickable(AccessibilityNodeInfo n) {
+        AccessibilityNodeInfo p = n;
+        for (int d = 0; d < 6 && p != null; d++) {
+            if (p.isClickable() && p.isEnabled()) return p;
+            p = p.getParent();
+        }
+        return null;
+    }
+
+    /** What a person would call this control: its own text or description, else the first text inside it. */
+    static String labelOf(AccessibilityNodeInfo n) {
+        if (n == null) return "";
+        CharSequence t = n.getText();
+        if (t != null && t.toString().trim().length() > 0) return t.toString().trim();
+        CharSequence d = n.getContentDescription();
+        if (d != null && d.toString().trim().length() > 0) return d.toString().trim();
+        List<String> in = new ArrayList<>();
+        textsInto(n, in, 0, 3);
+        return in.isEmpty() ? "" : in.get(0).trim();
+    }
+
     private static void textsInto(AccessibilityNodeInfo n, List<String> out, int depth, int max) {
         if (n == null || depth > 30 || out.size() >= max) return;
         CharSequence t = n.getText();
