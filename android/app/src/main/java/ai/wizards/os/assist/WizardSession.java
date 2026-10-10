@@ -285,12 +285,14 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         Log.i(TAG, "keep screen on " + on);
     }
 
-    private final Runnable closeAfterSend = () -> {
+    private final Runnable closeAfterSend = this::closeIfSent;
+
+    private void closeIfSent() {
         if (!capture.listening()) {
             Log.i(TAG, "sent; corner closes itself");
             hide();
         }
-    };
+    }
 
     @Override public void onBegin() { main.removeCallbacks(closeAfterSend); syncAwake(); js("W.begin()"); }
 
