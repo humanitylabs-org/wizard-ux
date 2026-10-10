@@ -53,11 +53,33 @@ window.WizCore.chats = function createChats(H) {
   const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false };
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
   const SEC_PAGE = 40;
+  // The agent's status line for a finished thread (live.js attention): what it asks of James.
+  const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Test this' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
+  const attOf = s => (s.attention && !WORKING_ST.has(s.status) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') ? s.attention : null;
   function chatRow(s, snip) {
     const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = s.status === 'waiting_for_approval' || s.status === 'failed' || s.status === 'interrupted';
-    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}" data-chopen="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span>
+    const at = attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi'), asks = !!at && !quiet;
+    const pv = working ? `<i class="st working${s.pend === 'waiting' ? ' off' : s.pend ? ' soon' : ''}"></i>` + workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
+      : needs ? '<i class="st needs"></i>' + esc(clip(s.preview || '', 110))
+      : at ? (asks ? `<i class="st ${A.cls}"></i><em class="att ${A.cls}">${A.label}</em> · ` : (isNew ? '<i class="st unread"></i>' : '') + (at.state === 'done' ? '<em class="att done">✓</em> ' : '')) + esc(clip(at.ask, 140))
+      : (isNew ? '<i class="st unread"></i>' : '') + esc(clip(s.preview || '', 110));
+    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${quiet ? ' quiet' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}><span class="emo">${emoOf(s.id)}</span>
       <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${working ? `<i class="st working${s.pend === 'waiting' ? ' off' : s.pend ? ' soon' : ''}"></i>` + workLabel(s) + ' · ' : needs ? '<i class="st needs"></i>' : isNew ? '<i class="st unread"></i>' : ''}${esc(clip((working && s.pendText) || s.preview || '', 110))}</span>`}</span></button>`;
+      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button>`;
+  }
+  /* Ready can be grouped by subject (the agent's subject on each status line): the roundup, kept live. */
+  const READY_GROUP_KEY = 'wos.chats.readyBySubject.v1';
+  let readyBySubject = (() => { try { return localStorage.getItem(READY_GROUP_KEY) === '1'; } catch (e) { return false; } })();
+  const waitsOn = s => s.status === 'waiting_for_approval' || ['needs_you', 'check'].includes(attOf(s)?.state);
+  function readyBody(list, rowFn) {
+    const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready"><button type="button" data-rdygroup="0" aria-pressed="${!readyBySubject}"${readyBySubject ? '' : ' class="on"'}>Newest</button><button type="button" data-rdygroup="1" aria-pressed="${readyBySubject}"${readyBySubject ? ' class="on"' : ''}>By subject</button></div>`;
+    if (!readyBySubject) return bar + list.map(rowFn).join('');
+    const groups = new Map();
+    for (const s of list) { const k = attOf(s)?.subject || 'Other'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
+    // Subjects with something waiting on James first, then by size; "Other" last.
+    const waits = l => l.filter(waitsOn).length;
+    const keys = [...groups.keys()].sort((a, b) => (a === 'Other') - (b === 'Other') || waits(groups.get(b)) - waits(groups.get(a)) || groups.get(b).length - groups.get(a).length || a.localeCompare(b));
+    return bar + keys.map(k => { const l = groups.get(k), wN = waits(l); return `<div class="ch-subj"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${l.length}</small></div>` + l.map(rowFn).join(''); }).join('');
   }
   // A thread James just wrote to sits in Working from the tap on; its status follows the message (live.js PEND).
   const PEND_LABEL = { sending: 'Sending…', queued: 'Sending…', waiting: 'Offline · will retry', starting: 'Starting…' };
@@ -172,10 +194,11 @@ window.WizCore.chats = function createChats(H) {
       if (!list.length && !extra.n && (k === 'errors' || n)) return '';
       // While searching, every section with a hit opens so nothing is buried.
       const open = n ? true : secOpen[k];
-      const newN = k === 'ready' ? list.filter(s => LIVE.isNew(s)).length : 0;
+      const newN = k === 'ready' ? list.filter(s => LIVE.isNew(s) && !waitsOn(s)).length : 0;
+      const waitN = k === 'ready' ? list.filter(waitsOn).length : 0;
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
-      return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
+      return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
+        ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
     }).join('');
     if (bs && LIVE.ok) body += BS.footer(bs);
     const scroll = el.querySelector('.ch-scroll')?.scrollTop || 0;
@@ -506,7 +529,9 @@ window.WizCore.chats = function createChats(H) {
     });
     const lpEnd = () => {
       if (!lp) return; const q = lp; lp = null; clearTimeout(q.t); q.row.style.transform = '';
-      if (q.dx < -60) { lpUntil = Date.now() + 700; openRowSheet(q.wid, q.sid); }
+      // A Done / FYI row needs nothing from James: a swipe files it straight away (Archive keeps it, restorable).
+      if (q.dx < -60 && q.row.dataset.quiet === '1' && threadActions(LIVE.session(q.sid), null).includes('done')) { lpUntil = Date.now() + 700; threadAct(q.wid, q.sid, 'done'); }
+      else if (q.dx < -60) { lpUntil = Date.now() + 700; openRowSheet(q.wid, q.sid); }
     };
     root.addEventListener('pointerup', lpEnd); root.addEventListener('pointercancel', lpEnd);
     // Right-click (a mouse) opens the same sheet; a touch long-press already did.
@@ -705,6 +730,8 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chbsmore]')) { window.WizCore.chatSearch?.more(id); renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chsclear]')) { ch(id).q = ''; window.WizCore.chatSearch?.cancel(id); renderChatList(w, elOf(id)); elOf(id)?.querySelector('[data-chsearch]')?.focus(); return true; }
     const sec = e.target.closest('[data-sectoggle]'); if (sec) { toggleSection(w, sec.dataset.sectoggle); return true; }
+    const rg = e.target.closest('[data-rdygroup]');
+    if (rg) { readyBySubject = rg.dataset.rdygroup === '1'; try { localStorage.setItem(READY_GROUP_KEY, readyBySubject ? '1' : '0'); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
