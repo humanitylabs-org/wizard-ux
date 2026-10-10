@@ -368,6 +368,25 @@ public final class EverywhereOutbox {
             main.post(() -> { for (Listener l : snapshot()) l.onWords(it, heard); });
             changed();
         }
+        // "Order my usual kra pao" from an orb or the side button: run that usual on the phone, send nothing.
+        if (!it.dictation() && app != null) {
+            String usual = ai.wizards.os.usuals.UsualsVoice.match(app, it.text);
+            if (usual != null) {
+                synchronized (this) {
+                    it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
+                    if (audio != null) //noinspection ResultOfMethodCallIgnored
+                        audio.delete();
+                    it.audioPath = "";
+                    deleteShots(it);
+                    items.remove(it.id);
+                    save();
+                }
+                Log.i(TAG, "usual " + usual + " from " + it.source + " " + it.id);
+                final Context a = app;
+                main.post(() -> { changed(); for (Listener l : snapshot()) l.onSent(it); ai.wizards.os.usuals.UsualsVoice.start(a, usual); });
+                return;
+            }
+        }
         // Dictation stops here: the words go into the text field, nothing goes to Wizard.
         if (it.dictation()) {
             synchronized (this) {

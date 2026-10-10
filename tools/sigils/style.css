@@ -1,0 +1,81 @@
+/* Wizard OS sigils: one silhouette, one bite, one colour.
+ * An icon box gets class `sgt` and `--c:<app colour>`; inside it, `<i class="sgi sg-<glyph>">` draws the
+ * glyph as a mask over a lit gradient of that colour. The tile itself stays dark glass, tinted by the
+ * app's hue, so the glyph carries the colour and a full grid reads calm, not loud. */
+.sgt {
+  --c: #9d8cff;
+  position: relative; isolation: isolate; overflow: hidden;
+  display: grid; place-items: center;
+  color: var(--c);
+  background: #110d1b;
+  background:
+    radial-gradient(130% 95% at 50% -8%, color-mix(in oklab, var(--c) 40%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 60% at 50% 120%, color-mix(in oklab, var(--c) 26%, transparent) 0%, transparent 72%),
+    linear-gradient(180deg, #17121f 0%, #0c0a12 100%);
+  border: 1px solid color-mix(in oklab, var(--c) 38%, rgba(255, 255, 255, .06));
+  box-shadow:
+    0 10px 24px -10px color-mix(in oklab, var(--c) 55%, transparent),
+    0 2px 6px rgba(0, 0, 0, .45),
+    inset 0 1px 0 color-mix(in oklab, var(--c) 30%, rgba(255, 255, 255, .14)),
+    inset 0 -10px 18px -12px rgba(0, 0, 0, .7);
+}
+/* Soft bloom behind the glyph: the glyph seems to light the glass it sits in. */
+.sgt::before {
+  content: ""; position: absolute; inset: 18%; z-index: -1; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--c) 42%, transparent), transparent);
+  filter: blur(7px); opacity: 1; pointer-events: none;
+}
+/* Glass sheen across the top third. */
+.sgt::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, 0) 38%);
+}
+.sgi {
+  display: block; width: 70%; height: 70%; font-style: normal;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35));
+  background: var(--c);
+  background: linear-gradient(168deg,
+    color-mix(in oklab, var(--c) 42%, #fff) 0%,
+    var(--c) 46%,
+    color-mix(in oklab, var(--c) 80%, #1a0f2e) 100%);
+  -webkit-mask: var(--sg) center / contain no-repeat; mask: var(--sg) center / contain no-repeat;
+}
+/* App with no sigil yet: its initial, set in the app's colour. */
+.sgi.sgl {
+  -webkit-mask: none; mask: none; background: none;
+  display: grid; place-items: center; width: auto; height: auto;
+  font: 800 1em/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: -.02em;
+  color: color-mix(in oklab, var(--c) 82%, #fff);
+}
+
+/* ---------- where icons show ---------- */
+/* Launcher tiles: a squircle, a little larger than before, and a pressed state that dims the glow. */
+.lapp .ic.sgt { width: 58px; height: 58px; border-radius: 19px; font-size: 25px; transition: transform 180ms var(--spring, ease), box-shadow 180ms; }
+.lapp:active .ic.sgt { transform: scale(.88); box-shadow: 0 4px 12px -6px color-mix(in oklab, var(--c) 60%, transparent), inset 0 1px 0 rgba(255, 255, 255, .1); }
+.lapp .ic.sgt .badge { z-index: 2; }
+.lrow .ic.sgt { width: 40px; height: 40px; border-radius: 13px; font-size: 17px; }
+.lrow .ic.sgt .sgi { width: 64%; height: 64%; }
+.wic.sgt { width: 22px; height: 22px; border-radius: 7px; font-size: 11px; box-shadow: none; }
+.wic.sgt::before, .pk-win i.sgt::before, .wbar .ic.sgt::before, .app-chip i.sgt::before, .pal-it .ic.sgt::before { display: none; }
+.wic.sgt .sgi, .wbar .ic.sgt .sgi, .app-chip i.sgt .sgi { width: 72%; height: 72%; }
+.pk-win i.sgt { width: 30px; height: 30px; border-radius: 10px; font-size: 14px; box-shadow: none; }
+.dwin .ic.sgt { box-shadow: none; }
+.frame-coming .glyph.sgt, .frame-fallback .glyph.sgt { font-size: 26px; }
+.frame-coming .glyph.sgt { box-shadow: 0 14px 36px -12px color-mix(in oklab, var(--c) 60%, transparent), inset 0 1px 0 rgba(255, 255, 255, .12); }
+.appcard .hero.sgt { border: 0; border-radius: 0; box-shadow: none; overflow: hidden; }
+.appcard .hero.sgt .big { width: 112px; height: 112px; border-radius: 34px; display: grid; place-items: center; background: rgba(8, 6, 14, .55); border: 1px solid color-mix(in oklab, var(--c) 34%, transparent); box-shadow: 0 24px 60px -18px color-mix(in oklab, var(--c) 70%, transparent); filter: none; }
+.appcard .hero.sgt .big .sgi { width: 64%; height: 64%; }
+/* Desktop shell */
+.wbar .ic.sgt { width: 18px; height: 18px; border-radius: 5px; box-shadow: none; }
+.app-chip i.sgt { width: 22px; height: 22px; border-radius: 7px; box-shadow: none; }
+.pal-it .ic.sgt { box-shadow: none; }
+.pal-it .ic.sgt .sgi { width: 70%; height: 70%; }
+
+/* ---------- the launcher as a home screen ---------- */
+/* Tiles rise in when the sheet opens, a few ms apart, left to right and top to bottom. */
+@keyframes sgRise { from { opacity: 0; transform: translateY(10px) scale(.92); } to { opacity: 1; transform: none; } }
+.launcher.open .lgrid .lapp { animation: sgRise 420ms var(--spring, cubic-bezier(.2, .9, .2, 1.1)) both; animation-delay: calc(var(--i, 0) * 22ms + 60ms); }
+.lapp .nm { color: rgba(236, 230, 255, .78); font-weight: 560; letter-spacing: .005em; }
+@media (prefers-reduced-motion: reduce) {
+  .launcher.open .lgrid .lapp { animation: none; }
+}

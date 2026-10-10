@@ -159,11 +159,16 @@
     vib: ms => vib(ms),
   });
   const { CH, ch, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, refreshCompose, toggleVoice, markVisibleThreadsSeen, MIC_SVG } = CHATS;
-  const CHATS_APP = { name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'] };
+  const CHATS_APP = { id: 'wizard', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'] };
+  // App icons are sigils (core/sigils.js): one silhouette, one bite, one colour per app.
+  const ico = (tag, cls, a, extra) => window.WizSigil ? window.WizSigil.box(tag, cls, a, extra) : `<${tag} class="${cls}" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}${extra || ''}</${tag}>`;
+  const sig = (cls, glyph, color, fb) => window.WizSigil ? window.WizSigil.chip('span', cls, glyph, color) : `<span class="${cls}">${fb}</span>`;
+  let tileN = 0;
   function winApp(w) {
     if (w.app === 'chats') return CHATS_APP;
     if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'] || { name: 'Review', icon: '◐', g: ['#444a60', '#22263a'] };
     if (w.app === 'maps') return APP.maps;
+    if (w.app === 'usuals') return APP.usuals || { name: 'Usuals', icon: '🍜', g: ['#00b14f', '#0a5c32'] };
     return APP[w.appId] || { name: w.title || 'Page', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
   function winTitle(w) {
@@ -194,6 +199,7 @@
       case 'review': return renderReviewShell(w.id);
       case 'frame': return renderFrame(w);
       case 'maps': return renderMaps(w);
+      case 'usuals': return `<div class="usuals" data-usuals="${w.id}"></div>`;
       default: return renderApp(w);
     }
   }
@@ -202,7 +208,7 @@
     const el = document.createElement('article');
     const rv = !!(w.from && w.from.sid);
     el.className = `win app-${w.app}${rv ? ' reviewing' : ''}`; el.dataset.win = w.id;
-    el.innerHTML = `<header class="wbar"><span class="wic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</span><span class="wt">${esc(winTitle(w))}</span>${rv ? '<span class="rv-tag">Review</span>' : ''}
+    el.innerHTML = `<header class="wbar">${ico('span', 'wic', a)}<span class="wt">${esc(winTitle(w))}</span>${rv ? '<span class="rv-tag">Review</span>' : ''}
       ${w.from ? '<button class="wb wpin" data-wact="pin" aria-label="Pin this desk" title="Keep it as a normal desk"><svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3v1H7v-1l3-3-1-6zM12 14v6"/></svg><span>Pin</span></button>' : ''}
       <button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
       <button class="wb" data-wact="menu" aria-label="Window options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
@@ -213,6 +219,7 @@
   function mountWin(w, el) {
     if (w.app === 'review') mountReview(w.id, null);
     if (w.app === 'chats') renderChats(w);
+    if (w.app === 'usuals') window.WosUsuals?.mount(el.querySelector('[data-usuals]'));
     watchFrames(el);
   }
   // Desk sections are keyed by desk id and laid out with CSS order, so reordering, merging or closing desks
@@ -385,7 +392,7 @@
   function ovCard(i) {
     const d = desks[i], wins = d.wins.map(id => W[id]).filter(Boolean), rv = isReviewDesk(i);
     const body = d.home ? `<span class="ov-home"><b>${esc(window.WizConfig.hm())}</b><small>Home</small></span>`
-      : wins.map(w => { const a = winApp(w); return `<span class="ov-win${w.from?.sid ? ' rv' : ''}"><i style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</i><em>${esc(clip(winTitle(w), 46))}</em></span>`; }).join('');
+      : wins.map(w => { const a = winApp(w); return `<span class="ov-win${w.from?.sid ? ' rv' : ''}">${ico('i', '', a)}<em>${esc(clip(winTitle(w), 46))}</em></span>`; }).join('');
     return `<div class="ov-card${i === idx ? ' here' : ''}${d.home ? ' home' : ''}${rv ? ' review' : ''}" data-ov="${d.id}" role="button" aria-label="${esc(deskName(i))}">
       <div class="ov-top"><b>${esc(clip(rv ? 'Review · ' + deskName(i) : deskName(i), 26))}</b>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(deskName(i))}">✕</button>`}</div>
       <div class="ov-body ov-n${Math.min(wins.length, 4)}">${body}</div></div>`;
@@ -740,6 +747,7 @@
       if (a.view === 'inbox') { openSheet('inbox'); return true; }
       openReview(a.view, extra.date, opts); return true;
     }
+    if (a.id === 'usuals') { openUsuals(opts); return true; }
     if (a.id === 'maps') { openWin({ app: 'maps', dest: extra.query || '', mode: extra.query ? 'search' : 'home' }, opts); return true; }
     if (a.kind === 'chats') {
       const here = Object.keys(W).find(id => W[id].app === 'chats' && deskOf(id) >= 0);
@@ -754,6 +762,13 @@
     }
     openWin({ app: 'app', appId: a.id, query: extra.query || '' }, opts);
     return true;
+  }
+  function openUsuals(opts = {}) {
+    closeSheets(true);
+    const t = opts.desk == null ? idx : opts.desk;
+    const here = Object.keys(W).find(id => W[id].app === 'usuals');
+    if (here) { const d = deskOf(here); if (d !== idx) goDesk(d); focusWin(here); window.WosUsuals?.refresh(); return; }
+    openWin({ app: 'usuals' }, { ...opts, desk: t });
   }
   function openReview(level, date, opts = {}) {
     const z = level === 'month' ? { level: 'month' } : level === 'week' ? { level: 'week', week: weekOf(date || YESTERDAY) } : { level: 'day', day: date || YESTERDAY };
@@ -953,7 +968,7 @@
     const native = a.kind === 'native';
     let href = a.url || a.href;
     if (a.id === 'spotify' && w.query) href = `spotify:search:${encodeURIComponent(w.query)}`;
-    return `<div class="desk-scroll"><div class="appcard"><div class="hero" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}"><span class="big">${a.icon || '◇'}</span></div>
+    return `<div class="desk-scroll"><div class="appcard">${ico('div', 'hero', a).replace(/^(<div[^>]*>)([\s\S]*)<\/div>$/, '$1<span class="big">$2</span></div>')}
       <div class="body"><h3>${esc(a.name)}${w.query ? ` · “${esc(w.query)}”` : ''}</h3><p>${esc(a.desc || '')}${native ? '. Opens the real Android app.' : ''}</p>
       <a class="cta" href="${esc(href)}" target="${native ? '_self' : '_blank'}" rel="noopener">Open ${esc(a.name)}</a></div></div></div>`;
   }
@@ -980,8 +995,8 @@
     return renderFrameCore(w, a);
   }
   function renderFrameCore(w, a) {
-    return `<div class="frame-wrap"><div class="frame-coming"><span class="glyph" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}</span><h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} src="${esc(w.url || a.url || '/')}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe>
-      <div class="frame-fallback"><span class="glyph" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}</span><h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
+    return `<div class="frame-wrap"><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} src="${esc(w.url || a.url || '/')}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; fullscreen" referrerpolicy="same-origin"></iframe>
+      <div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
   }
   // A refused frame lands on an unreadable error document: show the fallback card.
   // Readable (same-origin) frames get the shell's Back handling, pinch, and voice hooks.
@@ -1468,16 +1483,16 @@
     if (e.target.closest('[data-usage-refresh]')) { window.WosUsage?.load(true).then(paintUsage); paintUsage(); }
   });
 
-  function appTile(a) { return `<button class="lapp" data-app="${a.id}"><span class="ic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}${a.kind === 'native' ? '<span class="badge">APK</span>' : ''}</span><span class="nm">${esc(a.name)}</span></button>`; }
-  function appRow(a, sel) { const k = a.kind === 'view' ? 'view' : a.kind === 'native' ? 'native' : 'app'; return `<button class="lrow ${sel ? 'sel' : ''}" data-app="${a.id}"><span class="ic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</span><span class="nm">${esc(a.name)}<small>${esc(a.desc)}</small></span><span class="kind ${k}">${k === 'native' ? 'Android' : k === 'view' ? 'View' : 'Wizard'}</span></button>`; }
+  function appTile(a) { return `<button class="lapp" data-app="${a.id}" style="--i:${tileN++}">${ico('span', 'ic', a, a.kind === 'native' ? '<span class="badge">APK</span>' : '')}<span class="nm">${esc(a.name)}</span></button>`; }
+  function appRow(a, sel) { const k = a.kind === 'view' ? 'view' : a.kind === 'native' ? 'native' : 'app'; return `<button class="lrow ${sel ? 'sel' : ''}" data-app="${a.id}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}<small>${esc(a.desc)}</small></span><span class="kind ${k}">${k === 'native' ? 'Android' : k === 'view' ? 'View' : 'Wizard'}</span></button>`; }
   function renderLauncher(q) {
     const body = $('#launcherBody');
-    q = q.trim();
+    q = q.trim(); tileN = 0;
     if (!q) {
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native').slice(0, 4);
       body.innerHTML = `<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
         <div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>
-        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats').length}</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats').map(appTile).join('')}</div></div>`; // the per-desk window list never renders in the launcher: it read as stray text
+        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals').length}</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals').map(appTile).join('')}</div></div>`; // the per-desk window list never renders in the launcher: it read as stray text
       body.scrollTop = body.scrollHeight;
       return;
     }
@@ -1487,15 +1502,15 @@
     const th = (LIVE.ok ? LIVE.sessions.filter(x => !x.hidden && norm(x.title).includes(n)) : []).slice(0, 5);
     body.innerHTML = `${hits.length ? `<div class="lgroup"><h4>Apps &amp; views</h4>${hits.slice(0, 7).map((a, k) => appRow(a, k === 0)).join('')}</div>` : ''}
       ${th.length ? `<div class="lgroup"><h4>Threads</h4>${th.map(t => `<button class="lrow" data-thread="${esc(t.id)}"><span class="ic emo">${emoOf(t.id)}</span><span class="nm">${esc(t.title)}<small>${esc(ago(t.lastAssistantAt || t.updatedAt))}${LIVE.isNew(t) ? ' · unread' : ''}</small></span><span class="kind view">Chats</span></button>`).join('')}</div>` : ''}
-      ${searchUrl(q) ? (() => { const qs = quickSearch(q) || { query: q, tab: 'all' }; return `<div class="lgroup"><h4>Search</h4><button class="lrow" data-qsearch="${esc(qs.query)}" data-qtab="all"><span class="ic" style="--g1:#8f63ff;--g2:#2a1a66">⌕</span><span class="nm">“${esc(qs.query)}”<small>Search with an AI overview</small></span><span class="kind view">Web</span></button><button class="lrow" data-qsearch="${esc(qs.query)}" data-qtab="images"><span class="ic" style="--g1:#ff5ccf;--g2:#5c3bff">▦</span><span class="nm">“${esc(qs.query)}”<small>Image search</small></span><span class="kind view">Images</span></button></div>`; })() : ''}
-      <div class="lgroup"><h4>Command</h4><button class="lrow ${hits.length ? '' : 'sel'}" data-cmd="${esc(q)}"><span class="ic" style="--g1:#0fb8d8;--g2:#2a3a8a">⚡</span><span class="nm">“${esc(q)}”<small>Run through the fast router</small></span><span class="kind cmd">Run</span></button></div>`;
+      ${searchUrl(q) ? (() => { const qs = quickSearch(q) || { query: q, tab: 'all' }; return `<div class="lgroup"><h4>Search</h4><button class="lrow" data-qsearch="${esc(qs.query)}" data-qtab="all">${sig('ic', 'search', '#81B7FF', '⌕')}<span class="nm">“${esc(qs.query)}”<small>Search with an AI overview</small></span><span class="kind view">Web</span></button><button class="lrow" data-qsearch="${esc(qs.query)}" data-qtab="images">${sig('ic', 'image', '#EF90FE', '▦')}<span class="nm">“${esc(qs.query)}”<small>Image search</small></span><span class="kind view">Images</span></button></div>`; })() : ''}
+      <div class="lgroup"><h4>Command</h4><button class="lrow ${hits.length ? '' : 'sel'}" data-cmd="${esc(q)}">${sig('ic', 'bolt', '#0AD3E3', '⚡')}<span class="nm">“${esc(q)}”<small>Run through the fast router</small></span><span class="kind cmd">Run</span></button></div>`;
     body.scrollTop = body.scrollHeight;
   }
   // This desk's windows sit right above the search bar, nearest the thumb.
   function deskBar() {
     const d = desks[idx]; if (!d.wins.length) return '';
     const rows = d.wins.map(id => { const w = W[id], a = winApp(w), full = d.full && d.focus === id;
-      return `<div class="dwin${id === d.focus ? ' on' : ''}"><span class="ic" style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</span><span class="nm">${esc(winTitle(w))}</span>
+      return `<div class="dwin${id === d.focus ? ' on' : ''}">${ico('span', 'ic', a)}<span class="nm">${esc(winTitle(w))}</span>
         <span class="acts"><button data-dw="full" data-id="${id}">${full ? 'Tile' : 'Full'}</button>${idx > 0 ? `<button data-dw="left" data-id="${id}" aria-label="Move to desk ${idx}">←</button>` : ''}${idx < desks.length - 1 ? `<button data-dw="right" data-id="${id}" aria-label="Move to desk ${idx + 2}">→</button>` : ''}<button data-dw="close" data-id="${id}" aria-label="Close">✕</button></span></div>`; }).join('');
     return `<div class="deskbar"><div class="dh"><b>${esc(deskName(idx))}</b><span>${d.wins.length} window${d.wins.length === 1 ? '' : 's'}</span></div>${rows}</div>`;
   }
@@ -1795,7 +1810,8 @@
     V.replyTo = { wid, sid };
     if (V.native) replyTake(V.native, { wid, sid });
     CHATS.PW?.paintMic(true, sid);
-    txPill('✦', 'Voice reply · tap the mic or the orb to send', 'agent'); txHide(2200);
+    // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
+    // animates."): the lit mic, the orb and its timer already say a reply is recording.
     return 'recording';
   }
   async function startVoice(kind) {
@@ -2058,6 +2074,8 @@
 
   /* ---------------- routing ---------------- */
   function localParse(t, snap, kind) {
+    // "Order my usual kra pao": a taught usual runs on the phone (Grab under a cover), nothing goes to Wizard.
+    const us = window.WosUsuals?.match(t); if (us) return { action: 'usual', id: us };
     // The quick-search spell ("image search …", "search …") opens the search sheet on-device, even over a thread.
     // A held orb is always a command, so there even the plain "search for …" form is the search app's.
     const qs = quickSearch(t);
@@ -2201,6 +2219,7 @@
     if (a === 'fullscreen') { if (!f) return false; setFull(f, c.on !== false); return true; }
     if (a === 'move_window') { if (!f) return false; const to = c.to === 'prev' || c.to === 'left' ? idx - 1 : c.to === 'next' || c.to === 'right' ? idx + 1 : +c.to - 1; return moveWin(f, to); }
     if (a === 'quick_search') return openSearch(c.query, c.tab);
+    if (a === 'usual') return window.WosUsuals?.run(c.id) ?? false;
     if (a === 'search') { const q = c.query || text; if (searchUrl(q) && !findApp(q)) return openSearch(q, 'all'); openSheet('launcher', q); return true; }
     if (a === 'open_view' || a === 'view' || a === 'show') {
       const v = String(c.view || arg).toLowerCase();
@@ -2374,6 +2393,7 @@
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
+    { const fw = W[desks[idx]?.focus]; if (fw?.app === 'usuals') { const u = window.WosUsuals?.back?.(); if (u) return u; } }
     if (closeOverview()) return 'overview';
     if (closeReviewCoach()) return 'review-coach';
     if (menuFor) { closeMenu(); return 'menu'; }
@@ -2508,6 +2528,7 @@
     closeSheets(); if (idx !== HOME && h.action !== 'thread') goDesk(HOME);
     if (h.action === 'listen') { if (V.state === 'idle') startVoice('auto'); return true; }
     if (h.action === 'thread' && h.id) { openWizardThread(String(h.id)); LIVE?.refresh(); return true; }
+    if (h.action === 'usuals') { openUsuals(); return true; }
     if (h.action === 'unsent' || h.action === 'settings') { onUnsentChange(); openSettings(h.action === 'unsent'); return true; }
     if (h.action === 'side-button') { store.set('sideHidden', false); refreshHome(true); if (SIDE && (SIDE.step === 'mic' || SIDE.step === 'assistant')) sideButtonTap(false); else toast('◉', 'Side button is on. Hold it to talk.', 2600); return true; }
     const text = String(h.text || '').trim().slice(0, 2000);

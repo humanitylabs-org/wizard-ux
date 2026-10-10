@@ -73,6 +73,8 @@
   });
 
   /* ---------------- windows ---------------- */
+  // App icons are sigils (core/sigils.js): one silhouette, one bite, one colour per app.
+  const ico = (tag, cls, a, extra) => window.WizSigil ? window.WizSigil.box(tag, cls, a, extra) : `<${tag} class="${cls}" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}${extra || ''}</${tag}>`;
   function appOf(w) {
     if (!w) return null;
     if (w.app === 'chats') return APP.wizard;
@@ -201,7 +203,7 @@
   }
   function winHtml(w) {
     const a = appOf(w);
-    return `<div class="wbar" data-drag><span class="ic" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}</span><span class="t">${esc(winTitle(w))}</span>
+    return `<div class="wbar" data-drag>${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>
       ${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
       <button data-wact="mono" title="Full window (${MOD}F)" aria-label="Full window">⤢</button>
       <button data-wact="close" title="Close (${MOD}W)" aria-label="Close window">✕</button></div>
@@ -372,7 +374,7 @@
       <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })} · Workspace ${i + 1}</div>
       <div class="home-line">${LIVE?.ok ? `<b>${L.needs.length} need${L.needs.length === 1 ? 's' : ''} you</b>, ${L.ready.length} unread, ${L.working.length} working.` : 'Connecting to Wizard…'}</div>
       <div class="home-cols"><div class="home-card"><h4>Needs you · Unread</h4>${rows(L.needs.concat(L.ready))}</div><div class="home-card"><h4>Working</h4>${rows(L.working)}</div></div>
-      <div class="home-apps">${quick.map(a => `<button class="app-chip" data-app="${a.id}"><i style="--g1:${a.g[0]};--g2:${a.g[1]}">${a.icon}</i>${esc(a.name)}</button>`).join('')}</div>
+      <div class="home-apps">${quick.map(a => `<button class="app-chip" data-app="${a.id}">${ico('i', '', a)}${esc(a.name)}</button>`).join('')}</div>
       <div class="home-keys"><span><kbd>${CMD}K</kbd> search and launch</span><span><kbd>${MOD}Enter</kbd> new chat</span><span><kbd>${MOD}V</kbd> talk</span><span><kbd>${MOD}1</kbd>…<kbd>9</kbd> workspaces</span><span><kbd>${MOD}/</kbd> all keys</span></div>
     </div>`;
   }
@@ -461,7 +463,7 @@
   function palBuild(q) {
     const n = norm(q), out = [];
     const apps = (n ? searchApps(q) : APPS.filter(a => a.kind !== 'view')).filter(a => a.kind !== 'native').slice(0, n ? 8 : 12)
-      .map(a => ({ kind: 'app', name: a.name, sub: a.desc, icon: a.icon, g: a.g, run: o => openApp(a, o) }));
+      .map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, icon: a.icon, g: a.g, run: o => openApp(a, o) }));
     const sessions = LIVE?.ok ? LIVE.sessions.filter(s => !s.hidden) : [];
     let threads;
     if (n) threads = sessions.map(s => { const t = norm(s.title), p = norm(s.preview); const sc = t.startsWith(n) ? 3 : t.includes(n) ? 2 : p.includes(n) ? 1 : 0; return [sc, s]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0] || Date.parse(LIVE.cardAt(b[1])) - Date.parse(LIVE.cardAt(a[1]))).slice(0, 8).map(x => x[1]);
@@ -492,7 +494,7 @@
   function palRender() {
     const groups = palBuild(palIn.value); palItems = groups.flatMap(g => g.items); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
     let k = 0;
-    palList.innerHTML = groups.map(g => `<div class="pal-grp">${esc(g.grp)}</div>` + g.items.map(it => { const i = k++; return `<button class="pal-it${i === palSel ? ' sel' : ''}" data-i="${i}" role="option"><span class="ic" style="--g1:${it.g?.[0] || '#3a2a6a'};--g2:${it.g?.[1] || '#241a44'}">${it.icon || '◇'}</span><span class="nm">${esc(it.name)}${it.sub ? `<small>${esc(clip(it.sub, 60))}</small>` : ''}</span>${it.keys ? `<span class="hint"><kbd>${esc(it.keys)}</kbd></span>` : ''}</button>`; }).join('')).join('') || '<div class="pal-empty">Nothing yet.</div>';
+    palList.innerHTML = groups.map(g => `<div class="pal-grp">${esc(g.grp)}</div>` + g.items.map(it => { const i = k++; return `<button class="pal-it${i === palSel ? ' sel' : ''}" data-i="${i}" role="option">${it.app ? ico('span', 'ic', it.app) : `<span class="ic" style="--g1:${it.g?.[0] || '#3a2a6a'};--g2:${it.g?.[1] || '#241a44'}">${it.icon || '◇'}</span>`}<span class="nm">${esc(it.name)}${it.sub ? `<small>${esc(clip(it.sub, 60))}</small>` : ''}</span>${it.keys ? `<span class="hint"><kbd>${esc(it.keys)}</kbd></span>` : ''}</button>`; }).join('')).join('') || '<div class="pal-empty">Nothing yet.</div>';
     palList.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
   }
   function openPalette(q = '') { pal.hidden = false; palIn.value = q; palSel = 0; palRender(); palIn.focus(); palIn.select(); }
