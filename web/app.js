@@ -470,6 +470,7 @@
     const corner = on && w.app === 'chats';
     device.classList.toggle('immersive', on);
     device.classList.toggle('orb-corner', corner);
+    trackCornerLift(corner);
     shareCutout();
     if (on === immOn) return; immOn = on;
     try { window.WizardOSNative?.immersive?.(on); } catch (e) {}
@@ -480,6 +481,22 @@
       const n = store.get('immTips', 0);
       if (n < 3) { store.set('immTips', n + 1); toast('⤡', 'Pinch in or swipe up from the bottom to exit full screen'); }
     }
+  }
+  /* Full-screen Chats (James, 10 Oct): the orb sits in the right-hand column above the composer, high enough that
+   * Done (end of a reply) and ↓ Latest (scrolled up) sit directly below it. It follows the composer's real height
+   * (attachments, multi-line text, keyboard). On the thread list there is no composer: it stays in the corner. */
+  let liftRO = null, liftMO = null, liftEl = null;
+  function paintCornerLift() {
+    const c = device.querySelector('.win.full .ch-thread .ch-compose');
+    if (c !== liftEl) { try { liftRO?.disconnect(); } catch (e) {} liftEl = c; if (c && liftRO) liftRO.observe(c); }
+    const h = c && c.offsetParent ? Math.round(c.getBoundingClientRect().height) : 0;
+    device.style.setProperty('--comp-h', h + 'px');
+    device.classList.toggle('orb-lift', h > 0);
+  }
+  function trackCornerLift(on) {
+    if (!on) { try { liftRO?.disconnect(); liftMO?.disconnect(); } catch (e) {} liftRO = liftMO = liftEl = null; device.classList.remove('orb-lift'); device.style.removeProperty('--comp-h'); return; }
+    if (!liftRO && window.ResizeObserver) { liftRO = new ResizeObserver(paintCornerLift); liftMO = new MutationObserver(paintCornerLift); liftMO.observe(track, { childList: true, subtree: true }); }
+    paintCornerLift();
   }
   function setFull(id, on) {
     const i = deskOf(id); if (i < 0) return;
