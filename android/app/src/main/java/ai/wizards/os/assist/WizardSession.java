@@ -125,6 +125,11 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
             }
         });
         root.addView(web, new FrameLayout.LayoutParams(dp(ORB_DP), dp(ORB_DP), Gravity.BOTTOM | Gravity.END));
+        if (ai.wizards.os.BuildConfig.DEBUG) web.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            int[] at = new int[2]; // QA builds: where the orb window really is on screen, after every layout
+            v.getLocationOnScreen(at);
+            Log.i(TAG, "orb frame " + at[0] + "," + at[1] + "," + (r - l) + "," + (b - t));
+        });
         layoutOrb();
         web.loadUrl("file:///android_asset/assist/surface.html#corner");
         return root;

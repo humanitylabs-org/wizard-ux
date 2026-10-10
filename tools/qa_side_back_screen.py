@@ -63,6 +63,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
         if STATE['down']: return self._json(503, {'error': 'down'})
         if self.path == '/wizard-os-home/api/transcribe':
             STATE['transcribe'] += 1
+            if STATE.get('slow', 0): time.sleep(STATE['slow'])  # case A: keep the message in flight while Back is pressed
             if STATE['drop_transcribe'] > 0: STATE['drop_transcribe'] -= 1; return self._drop()
             return self._json(200, {'text': 'Wizard Everywhere QA message number %d' % STATE['transcribe']})
         if self.path == '/wizard/files/upload':
@@ -211,15 +212,15 @@ def wait_runs(n, secs=40):
     while time.time() - t0 < secs and len(side_runs()) < n: time.sleep(0.8)
     return len(side_runs())
 def settings_depth():
-    """Where Android Settings is: 'sub' on the Display page, 'root' on the main list."""
+    """Where Android Settings is: 'sub' on the Battery page, 'root' on the main list."""
     x = ui()
-    if re.search(r'text="(Brightness level|Dark theme|Screen timeout)"', x): return 'sub'
+    if re.search(r'text="(Battery usage|Battery Saver|Battery percentage|Adaptive preferences)"', x): return 'sub'
     if re.search(r'text="(Network &amp; internet|Connected devices|Apps)"', x): return 'root'
     return 'other'
 def open_settings_sub():
     sx('am force-stop com.android.settings')
     sx('am start -W -n com.android.settings/.Settings'); time.sleep(2.5)
-    tap_text(r'^Display$') ; time.sleep(2)
+    tap_text(r'^Battery$'); time.sleep(2)  # first screen, no scrolling (Display is below the fold on API 35)
     return settings_depth()
 
 with (BASE / 'worker.lock').open('a') as lock:
@@ -253,8 +254,8 @@ with (BASE / 'worker.lock').open('a') as lock:
 
         # A. James's exact case: talk, it sends, he presses Back to leave the page he was on.
         d0 = open_settings_sub(); shot('a0-settings-display')
-        check('setup: a page with somewhere to go Back to (Settings → Display)', d0 == 'sub', d0)
-        arm(1500); n0 = len(side_runs())
+        check('setup: a page with somewhere to go Back to (Settings → Battery)', d0 == 'sub', d0)
+        arm(1500); n0 = len(side_runs()); STATE['slow'] = 4.0
         hold(); sl = wait_log('sending via=', 12, alogs); shot('a1-sending')
         check('A: side button take ends by itself and starts sending', 'sending via=qa' in sl, sl or alogs('listening|corner'))
         sx('input keyevent KEYCODE_BACK'); time.sleep(1.5); shot('a2-after-back')
@@ -262,11 +263,12 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('A: Back while sending closes the orb', 'corner hidden' in bl, bl)
         got = wait_runs(n0 + 1)
         check('A: the message still reaches Wizard (exactly once)', got == n0 + 1, (got, STATE['log'][-6:]))
-        tl = wait_log('toast: Sent to Wizard', 10, alogs)
+        tl = wait_log('toast: Sent to Wizard', 20, alogs); STATE['slow'] = 0
+        print('  in-flight evidence:', alogs('toast|delivered'))
         check('A: a toast says it was sent (orb already gone)', 'Sent to Wizard' in tl, tl or alogs('toast'))
         pb = alogs('back passed')
         d1 = settings_depth(); shot('a3-page-went-back')
-        check('A: the same Back also went back in the page underneath (Display → Settings)', 'ok=true' in pb and d1 == 'root', (pb, d1))
+        check('A: the same Back also went back in the page underneath (Battery → Settings)', 'ok=true' in pb and d1 == 'root', (pb, d1))
 
         # B. Back in the middle of talking: what was said is sent, not thrown away.
         d0 = open_settings_sub()
@@ -286,10 +288,12 @@ with (BASE / 'worker.lock').open('a') as lock:
         hold(); wait_log('listening', 10, alogs); time.sleep(2); shot('c1-controls')
         lab = tap_text(r'Attach a screenshot')
         if not lab:
-            W_, H_ = map(int, sx('wm size').split()[-1].split('x'))
-            nav = dp(48)
-            x = W_ - dp(7) - dp(252 + 23); y = H_ - nav - dp(14) - dp(66)
-            print('  screen chip not in the UI tree; tapping computed', x, y); sx(f'input tap {x} {y}')
+            fr = sx(f'logcat -d -s WizardOSAssist:* | grep "orb frame" | tail -1').strip()
+            m = re.search(r'orb frame (\d+),(\d+),(\d+),(\d+)', fr)
+            fx, fy, fw, fh = map(int, m.groups())
+            # surface.html: body.corner.canshot #shotC {right:252px; width:46px; top:50%} inside the orb window
+            x = fx + fw - dp(252 + 23); y = fy + fh // 2
+            print('  screen chip via orb frame', (fx, fy, fw, fh), '→ tap', x, y); sx(f'input tap {x} {y}')
         sa = wait_log('screenshot attached', 10, alogs); time.sleep(0.8); shot('c2-shot-attached')
         check('C: Screen chip shows while the side-button orb listens and attaches a screenshot', 'screenshot attached 1' in sa, sa or alogs('screen|shot'))
         sx('input keyevent KEYCODE_BACK'); time.sleep(1)
