@@ -3,7 +3,8 @@
  * Spec (Archimedes + Claude Fable, 9 Oct 2026):
  *   - Same-origin links (our private apps and previews) open in ONE sheet over the current desk.
  *     Every other origin goes straight to the system browser: no card, no limbo.
- *   - Phone: a sheet at ~92% height, with drag-down on the top bar to dismiss. Desktop: a right-half pane.
+ *   - Phone: a sheet at full height (above the dock, orb usable); ⤡ shrinks it to ~3/4. Drag the top bar down
+ *     to dismiss. Desktop: a right-half pane.
  *   - One top bar: ‹ (page back; hidden at depth 1), title over domain, Keep, ↗ (not in the Android
  *     app, where it would load over the shell), ✕.
  *   - Back pops the sheet's own page stack, then dismisses. It never exits.
@@ -59,7 +60,7 @@
         <span class="ls-grip" aria-hidden="true"></span>
         <button class="ls-back" data-ls="back" aria-label="Back" hidden>‹</button>
         <span class="ls-title"><b></b><small></small></span>
-        <button class="ls-full" data-ls="full" aria-label="Full screen" title="Full screen">⤢</button>
+        <button class="ls-full" data-ls="full" aria-label="Smaller" title="Smaller">⤡</button>
         <button class="ls-keep" data-ls="keep" title="Keep as a window on this desk">Keep</button>
         ${NATIVE ? '' : '<button class="ls-out" data-ls="out" aria-label="Open in browser" title="Open in browser">↗</button>'}
         <button class="ls-x" data-ls="close" aria-label="Close">✕</button>
@@ -87,7 +88,7 @@
       onChange && onChange(true);
     }
     function close() {
-      if (!open) return false; open = false; el.classList.remove('full'); { const fb = el.querySelector('[data-ls="full"]'); if (fb) { fb.textContent = '⤢'; fb.setAttribute('aria-label', 'Full screen'); } }
+      if (!open) return false; open = false; el.classList.remove('peek'); { const fb = el.querySelector('[data-ls="full"]'); if (fb) { fb.textContent = '⤡'; fb.setAttribute('aria-label', 'Smaller'); fb.title = 'Smaller'; } }
       el.classList.remove('open'); panel.style.transform = '';
       hideT = setTimeout(() => { if (!open) { el.hidden = true; stack = []; try { frame.contentWindow.location.replace('about:blank'); } catch (e) {} } }, 260);
       onChange && onChange(false);
@@ -167,7 +168,7 @@
     el.addEventListener('click', e => {
       const b = e.target.closest('[data-ls]'); if (!b) return;
       const k = b.dataset.ls, c = cur();
-      if (k === 'full') { const on = !el.classList.contains('full'); el.classList.toggle('full', on); b.textContent = on ? '⤡' : '⤢'; b.setAttribute('aria-label', on ? 'Smaller' : 'Full screen'); return; }
+      if (k === 'full') { const peek = !el.classList.contains('peek'); el.classList.toggle('peek', peek); b.textContent = peek ? '⤢' : '⤡'; b.setAttribute('aria-label', peek ? 'Full screen' : 'Smaller'); b.title = b.getAttribute('aria-label'); return; }
       if (k === 'close') close();
       else if (k === 'back') back();
       else if (k === 'out' && c) external(abs(c.url));

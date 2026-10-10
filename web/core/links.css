@@ -42,9 +42,11 @@
 /* Phone: the sheet stops above the dock, so the orb, desk dots and desk swipes stay usable (z under the dock). */
 .device .linksheet.sheet { inset: 0 0 calc(var(--dock-h, 0px) + var(--safe-b, 0px) - 12px) 0; z-index: 47; }
 .device .linksheet.sheet .ls-panel { height: calc(100% - var(--safe-t, 0px) - 34px); border-radius: 22px; left: 6px; right: 6px; bottom: 4px; }
-/* Phone default: three-quarters height, so the thread you came from stays visible above (tap it to close).
-   ⤢ grows it to full height; ⤡ brings it back. */
-.device .linksheet.sheet:not(.full) .ls-panel { height: 76%; }
+/* Phone default (James, 10 Oct): full height, from just under the status bar down to the dock, so the orb and
+   desk dots stay usable. ⤡ shrinks it to three-quarters (the thread you came from shows above; tap it to close);
+   ⤢ grows it back. */
+.device .linksheet.sheet .ls-panel { height: calc(100% - var(--safe-t, 0px) - 6px); }
+.device .linksheet.sheet.peek .ls-panel { height: 76%; }
 .device .linksheet.sheet .ls-panel { transition: transform .26s cubic-bezier(.2, .8, .2, 1), height .22s ease; }
 .ls-full { display: none; }
 .linksheet.sheet .ls-full { display: inline-grid; }
