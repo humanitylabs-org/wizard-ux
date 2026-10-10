@@ -230,6 +230,7 @@ public final class UsualsRunner {
     }
 
     private void sample() {
+        fresh();
         WizardKeyboardService s = svc();
         AccessibilityNodeInfo root = s == null ? null : grabRoot(s, usual.pkg);
         long now = SystemClock.uptimeMillis();
@@ -354,6 +355,7 @@ public final class UsualsRunner {
                 return;
             }
             String id = n != null && n.getViewIdResourceName() != null ? n.getViewIdResourceName() : "";
+            if (n != null && (UsualsPolicy.isGeneric(label) || UsualsPolicy.isRemoveLabel(label))) fresh();
             String near = n != null && (UsualsPolicy.isGeneric(label) || UsualsPolicy.isRemoveLabel(label)) ? nearText(n, label) : "";
             float x = -1, y = -1;
             if (n != null) {
@@ -419,6 +421,7 @@ public final class UsualsRunner {
         UsualsPolicy.Step st = usual.steps.get(stepIdx);
         long waited = SystemClock.uptimeMillis() - stepStarted;
         cover().showRunning(usual.name, stepIdx, usual.steps.size(), st.describe());
+        fresh();
         AccessibilityNodeInfo root = grabRoot(s, usual.pkg);
         if (root == null) {
             if (waited > 20000) { fail("Grab didn't open"); return; }
@@ -494,6 +497,7 @@ public final class UsualsRunner {
 
     private void reachCheckout() {
         // Give the checkout screen a moment to settle, then read the total and look for the order button.
+        fresh();
         WizardKeyboardService s = svc();
         AccessibilityNodeInfo root = s == null ? null : grabRoot(s, usual.pkg);
         List<String> texts = root == null ? new ArrayList<>() : texts(root);
@@ -515,6 +519,7 @@ public final class UsualsRunner {
     /** James's tap on the cover's Place order: the only path that presses Grab's order button. */
     public void placeOrder() {
         if (mode != Mode.READY || usual == null) return;
+        fresh();
         WizardKeyboardService s = svc();
         AccessibilityNodeInfo root = s == null ? null : grabRoot(s, usual.pkg);
         AccessibilityNodeInfo commit = root == null ? null : findCommit(root);
@@ -561,6 +566,19 @@ public final class UsualsRunner {
 
     /* ------------------------------------------------------------------ finding things */
 
+    /**
+     * Android keeps a cache of Grab's nodes and only updates it on the event types our service listens to, which
+     * leave out scrolling and content changes (they'd flood voice typing). After a scroll the cache still has the old
+     * positions, so "the dish beside Add" comes out as whatever used to be there. Before reading positions: drop the
+     * cache (Android 14+), and refresh each node we measure (any version).
+     */
+    private static void fresh() {
+        WizardKeyboardService s = svc();
+        if (s != null && Build.VERSION.SDK_INT >= 34) { try { s.clearCache(); } catch (Throwable ignored) { } }
+    }
+
+    private static void refresh(AccessibilityNodeInfo n) { try { n.refresh(); } catch (Throwable ignored) { } }
+
     static final class Match { AccessibilityNodeInfo node, click; int score; }
 
     private Match find(AccessibilityNodeInfo root, UsualsPolicy.Step st) {
@@ -571,6 +589,10 @@ public final class UsualsRunner {
             if (!n.isVisibleToUser()) continue;
             String id = n.getViewIdResourceName() == null ? "" : n.getViewIdResourceName();
             int sc = UsualsPolicy.score(st.label, st.id, labelOf(n), id);
+            if (sc == 0) continue;
+            refresh(n);
+            if (!n.isVisibleToUser()) continue;
+            sc = UsualsPolicy.score(st.label, st.id, labelOf(n), id); // a recycled row may now say something else
             if (sc == 0) continue;
             AccessibilityNodeInfo c = clickable(n);
             if (c == null) continue;
@@ -600,6 +622,7 @@ public final class UsualsRunner {
      * closest to the button's, preferring the name above or level with it over the price below.
      */
     static String rowText(AccessibilityNodeInfo n, String own) {
+        refresh(n);
         Rect me = new Rect(); n.getBoundsInScreen(me);
         int cy = me.centerY(), h = Math.max(me.height(), 40);
         int band = Math.max(220, h * 3);
@@ -609,6 +632,9 @@ public final class UsualsRunner {
             collect(p, nodes, 0);
             String best = null; int bestCost = Integer.MAX_VALUE;
             for (AccessibilityNodeInfo t : nodes) {
+                if (t.getText() == null && t.getContentDescription() == null) continue;
+                refresh(t);
+                if (!t.isVisibleToUser()) continue;
                 CharSequence cs = t.getText() != null ? t.getText() : t.getContentDescription();
                 if (cs == null) continue;
                 String x = cs.toString().trim();
