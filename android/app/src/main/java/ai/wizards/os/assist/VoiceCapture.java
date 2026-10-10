@@ -110,9 +110,10 @@ final class VoiceCapture {
             if (!TakeRecovery.worthSending(f.length())) { //noinspection ResultOfMethodCallIgnored
                 f.delete(); continue; }
             try {
+                long bytes = f.length();
                 EverywhereOutbox.get(c).enqueueRecording(f, EverywhereOutbox.SRC_SIDE, null, false);
                 n++;
-                Log.i(TAG, "recovered an unfinished take bytes=" + f.length() + " -> outbox");
+                Log.i(TAG, "recovered an unfinished take bytes=" + bytes + " -> outbox");
             } catch (Exception e) { Log.w(TAG, "could not recover " + f.getName(), e); }
         }
         if (n > 0) {
