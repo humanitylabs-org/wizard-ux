@@ -315,7 +315,9 @@ window.WizCore.chats = function createChats(H) {
     const scroll = el.querySelector('.ch-scroll')?.scrollTop || 0;
     // Results stream in while typing: keep the search box focused with the caret where it was.
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
-    el.innerHTML = `<div class="ch-list">${head}<div class="ch-scroll">${sugHtml}${body}</div>${pill}${c.sheet ? filterSheet(c) : ''}</div>`;
+    // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
+    const fab = '<button type="button" class="ch-fab" data-chnew data-chfab aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>';
+    el.innerHTML = `<div class="ch-list">${head}<div class="ch-scroll">${sugHtml}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
     const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = scroll;
     PW?.paint(w.id, el);
     if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }

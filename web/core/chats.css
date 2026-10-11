@@ -400,3 +400,15 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-fopt { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--line-2); font-size: 14px; color: var(--ink); background: rgba(205, 190, 255, .04); }
 .ch-fopt.on { background: rgba(185, 155, 255, .2); border-color: rgba(185, 155, 255, .5); }
 .ch-fopt b { color: var(--violet-2, #b99bff); font-size: 12px; }
+
+/* New chat button: bottom-right of the Chats list, clear of the orb (dock sits below the window; corner orb lifts it). */
+.ch-fab { position: absolute; right: 16px; bottom: 16px; z-index: 5; width: 54px; height: 54px; border-radius: 18px; display: grid; place-items: center;
+  background: linear-gradient(145deg, #9b6bff, #6d45e6); color: #fff; box-shadow: 0 10px 26px rgba(70, 30, 160, .55), inset 0 1px 0 rgba(255, 255, 255, .22); }
+.ch-fab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.ch-fab:active { transform: scale(.94); }
+.ch-list .ch-scroll { padding-bottom: 84px; }
+.ch-list:has(.ch-fab) .ch-pill { left: 16px; transform: none; max-width: calc(100% - 100px); }
+.device.orb-corner .win.full .ch-fab { bottom: calc(var(--safe-b) + var(--corner-b) + var(--corner-orb) + 14px); right: calc(var(--corner-r) - 5px); }
+.device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: calc(var(--corner-b) + var(--corner-orb) + 96px); }
+.ch-list:has(.ch-fab) .ch-pill { animation-name: ch-pill-in-l; }
+@keyframes ch-pill-in-l { from { opacity: 0; transform: translateY(8px); } }
