@@ -434,7 +434,7 @@ window.WizCore.chats = function createChats(H) {
   function threadActions(s, turns) {
     if (!s || LIVE.busy(s.id)) return [];
     if (WORKING_ST.has(s.status) || s.status === 'waiting_for_approval') return [];
-    const inArchive = s.archived || LIVE.workGroups([s]).archive.length > 0;
+    const inArchive = !!s.archived;
     if (s.deferred && !s.archived) return ['restore', 'done'];
     if (inArchive) return ['restore'];
     if (turns && !turns.some(t => t.a || t.media.length)) return [];

@@ -139,6 +139,11 @@
       catch (e) { if (e.status !== 409) throw e; }
       it.sessionReady = true; await put(it);
     }
+    // Replying to an archived thread brings it back first: Hermes keeps an API run's thread archived otherwise,
+    // so it would drop back into Archive the moment the reply finished. Best effort; never blocks the send.
+    if (it.kind === 'reply' && window.WizLive?.session(it.sessionId)?.archived) {
+      try { await call(`/wizard/hermes/api/sessions/${encodeURIComponent(it.sessionId)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: false }) }); } catch (e) {}
+    }
     // 5. Admit the run. Same key + same bytes on every try → Wizard replays instead of duplicating.
     if (!it.body) {
       const body = { session_id: it.sessionId, input };

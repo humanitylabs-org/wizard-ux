@@ -204,7 +204,7 @@
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
-    const readyB = workDayStart(now), yB = readyB - DAY, archB = now - WEEK;
+    const readyB = workDayStart(now), yB = readyB - DAY;
     for (const s of sessions) {
       if (s.hidden) continue;
       const t = sectionTime(s);
@@ -212,8 +212,9 @@
       else if (inWorking(s)) g.working.push(s);
       else if (isDeferred(s)) g.ready.push(s);
       else if (isErr(s)) g.errors.push(s);
+      // Archive is Hermes's own archived flag, never a client-side age rule, so every Hermes surface agrees.
+      // Idle threads move there when Hermes archives them (config sessions.auto_archive, see README).
       else if (s.archived) g.archive.push(s);
-      else if (isFinite(t) && t <= archB) g.archive.push(s);
       else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
       else if (t < readyB) g.yesterday.push(s);
       else g.ready.push(s);
@@ -435,6 +436,8 @@
           return { steered: true, runId: s.runId };
         } catch (e) { if (![404, 409, 410].includes(e.status)) throw e; }
       }
+      // An archived thread comes back before the run (Hermes keeps an API run's thread archived otherwise).
+      if (s?.archived) { try { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: false }) }); s.archived = false; } catch (e) {} }
       const body = { session_id: id, input };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
       if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
@@ -514,7 +517,7 @@
         setTimeout(() => this.refresh(), 50); return true;
       } catch (e) { const c = this.session(id); if (c) Object.assign(c, before); this.emit(); return /already in use/i.test(e.message) ? 'taken' : false; }
     },
-    // Restore: a deferred thread comes back to Work; an archived (or aged-out) one is un-archived and lands in Ready.
+    // Restore: a deferred thread comes back to Work; an archived one is un-archived in Hermes and lands in Ready.
     restore(id) {
       const s = this.session(id); if (!s) return Promise.resolve(false);
       const at = new Date().toISOString();

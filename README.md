@@ -110,6 +110,19 @@ Both sit behind the private gateway on Tailscale (`https://private.wizard001.com
 | `WIZARD_OS_ROUTER_MODEL` | `deepseek-v4-1-flash` | Router model |
 | `TINFOIL_API_KEY` | read from `~/.hermes/.env` | Key for the router |
 
+### Archive
+
+Chats' Archive section is Hermes's own `archived` flag, the same one the Hermes dashboard, desktop app and CLI read. The UX never moves a thread there by age. To have idle threads archived automatically, turn on Hermes's built-in sweep (stock Hermes, no patch) in `~/.hermes/config.yaml`:
+
+```yaml
+sessions:
+  auto_archive: true      # soft-hide only, never deletes; pinned threads are exempt
+  auto_archive_days: 7    # matches the old "older than Past week" rule
+  min_interval_hours: 24
+```
+
+Done, Restore and replying to an archived thread all write the same flag (`PATCH /api/sessions/{id}`), so the list is the same on every Hermes surface. (Hermes un-archives a swept thread on its own when the CLI or a gateway resumes it, but not when an API run lands on it, which is why a reply un-archives first.)
+
 ### Private review data
 
 The Day, Week and Month reviews read `web/data.js` and `web/summaries.js`. Both are generated from the owner's own Hermes session database by a private extractor that lives outside this repo. They contain real thread titles and message snippets, so they are **gitignored and must never be committed**.
