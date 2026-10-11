@@ -1,7 +1,7 @@
 /* Wizard UX core: deep links (feature/chat-polish). Both shells.
  *
  *   ?session=<id>          open that thread inside the app (same path as the Android ACTION_THREAD handoff)
- *   ?view=<name>[&section] open a screen: inbox | work | chats | apps | settings | files | day | week | month
+ *   ?view=<name>[&section] open a screen: inbox | work | chats | apps | settings | files | day | week | month | help | tour
  *   ?video=<32 hex>        play a Wizard attachment in the in-app viewer (checked with HEAD: must be video/*)
  *   ?open=<app id>         open an app (the desktop already had this; the phone gets it too)
  * A session is more specific than a view, so it wins when both are present (legacy deepLink.ts).
@@ -17,7 +17,7 @@
   const C = window.WizCore = window.WizCore || {};
   const SESSION_ID = /^(?!\.{1,2}$)[A-Za-z0-9._:-]{1,180}$/;
   const VIDEO_ID = /^[a-f0-9]{32}$/;
-  const VIEWS = new Set(['inbox', 'work', 'chats', 'apps', 'settings', 'files', 'day', 'week', 'month', 'usage']);
+  const VIEWS = new Set(['inbox', 'work', 'chats', 'apps', 'settings', 'files', 'day', 'week', 'month', 'usage', 'help', 'tour']);
   const SECTIONS = new Set(['errors', 'working', 'ready', 'yesterday', 'pastWeek', 'deferred', 'archive', 'drafts']);
   const KEYS = ['session', 'view', 'section', 'video', 'open'];
   let H = null;

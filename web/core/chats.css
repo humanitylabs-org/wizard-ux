@@ -360,3 +360,12 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-row .pv em.att.fyi { color: #ffd84a; }
 .ch-row .pv em.att.deferred { color: var(--violet-2); }
 .ch-row .pv em.att.failed { color: #ff6b6b; }
+/* Filtered list from Home's Unread / Working cards */
+.ch-filter { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 6px 6px; padding: 8px 6px 8px 10px; }
+.ch-fl { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: .01em; }
+.ch-fl small { font-size: 12px; font-weight: 500; color: var(--ink-3); }
+.ch-fdot { width: 8px; height: 8px; border-radius: 50%; background: var(--pink, #ff5ccf); box-shadow: 0 0 10px currentColor; }
+.ch-fdot.unread { background: var(--pink, #ff5ccf); color: var(--pink, #ff5ccf); }
+.ch-fdot.working { background: var(--violet-2, #b79bff); color: var(--violet-2, #b79bff); animation: blink 1.6s ease-in-out infinite; }
+.ch-fx { border: 1px solid var(--line-2, rgba(205,190,255,.18)); background: rgba(205, 190, 255, .05); color: var(--ink-2); border-radius: 99px; padding: 6px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.ch-flist { border-top: 0; }

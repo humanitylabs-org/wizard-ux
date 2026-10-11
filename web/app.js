@@ -330,7 +330,10 @@
   }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
-    const moved = n !== idx; idx = n; placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip();
+    const moved = n !== idx; idx = n;
+    // A filtered Chats list (Home's Unread / Working) is a quick look: leaving its desk puts it back to all chats.
+    if (moved) for (const id in W) if (W[id].app === 'chats' && CHATS.CH[id]?.filter && !desks[n].wins.includes(id)) CHATS.clearFilter(W[id]);
+    placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip();
     if (moved && LINKS && LINKS.isOpen()) LINKS.close(); // a link is a peek over this desk: moving desks dismisses it
     if (moved) vib(8);
     if (!silent) announce(`<b>${esc(deskName(idx))}</b>`);
@@ -776,8 +779,40 @@
   function openReview(level, date, opts = {}) {
     const z = level === 'month' ? { level: 'month' } : level === 'week' ? { level: 'week', week: weekOf(date || YESTERDAY) } : { level: 'day', day: date || YESTERDAY };
     const here = Object.keys(W).find(id => W[id].app === 'review' && deskOf(id) >= 0);
-    if (here && opts.desk == null) { const t = deskOf(here); W[here].z = z; W[here].zd = 0; if (t !== idx) goDesk(t); focusWin(here); mountReview(here, null); applyLayout(t); save(); return; }
+    if (here && opts.desk == null) {
+      // From a Home card it opens like any app, on the desk beside this one, even if an old review desk sits
+      // further down the strip (James, 11 Oct: Yesterday was jumping to a far desk).
+      if (opts.beside) bringBeside(here);
+      const t = deskOf(here); W[here].z = z; W[here].zd = 0; if (t !== idx) goDesk(t); focusWin(here); mountReview(here, null); applyLayout(t); save(); return;
+    }
     openWin({ app: 'review', z }, opts);
+  }
+  /* Move an open window to where a new app would open (insertPos: right beside this desk, after Chats when on
+   * Home). A window alone on its desk takes its whole desk along; one sharing a desk gets a desk of its own. */
+  function bringBeside(id) {
+    const from = deskOf(id); if (from < 0 || from === idx) return;
+    const t = insertPos(); if (from === t) return;
+    if (desks[from].wins.length === 1) {
+      const [d] = desks.splice(from, 1); desks.splice(from < t ? t - 1 : t, 0, d);
+      if (idx > from && idx <= t) idx--; // keep the desk in front (Home) the same desk
+    } else {
+      const f = desks[from]; f.wins = f.wins.filter(x => x !== id); if (f.focus === id) f.focus = f.wins[f.wins.length - 1] || null; f.full = false;
+      desks.splice(t, 0, blank({ wins: [id], focus: id })); renderDesk(from);
+    }
+    syncDesks(); save();
+  }
+  /* Home's Unread and Working cards: the Chats window, filtered to just those threads. Back clears the filter
+   * and returns to the desk the card was tapped on. */
+  function openChatsFiltered(f, opts = {}) {
+    closeSheets(true);
+    const from = desks[idx].id;
+    let here = Object.keys(W).find(id => W[id].app === 'chats' && deskOf(id) >= 0);
+    if (!here) { openApp(APP.wizard); here = Object.keys(W).find(id => W[id].app === 'chats' && deskOf(id) >= 0); }
+    if (!here) return;
+    const t = deskOf(here); if (t !== idx) goDesk(t, true);
+    focusWin(here); const w = W[here], d = desks[t]; if (d.full && d.focus !== here) setFull(d.focus, false);
+    CHATS.setFilter(w, f); CHATS.ch(here).filterFrom = opts.from === undefined ? from : opts.from;
+    announce(`<b>${f === 'working' ? 'Working' : 'Unread'}</b>`);
   }
 
   /* ---------------- side button (Wizard OS Android app only) ----------------
@@ -867,6 +902,7 @@
       <div class="st-group"><h4>Wizard</h4>
         <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · ${esc(location.host)}</small></span></div>
         ${window.WosDevice?.settingsHtml?.() || ''}
+        <button class="st-row" data-st="help"><span class="st-ic">?</span><span class="st-tx"><b>Gestures &amp; help</b><small>How the orb, desks and Back work · practice again</small></span><span class="st-go">›</span></button>
         ${window.WosFiles ? `<button class="st-row" data-st="files"><span class="st-ic">▤</span><span class="st-tx"><b>Files</b><small>Everything in Wizard Files · preview, attach to a chat</small></span><span class="st-go">›</span></button>` : ''}
       </div>
       ${window.WosUsage ? window.WosUsage.html() : ''}`;
@@ -928,7 +964,9 @@
 
   /* ---------------- home desk ---------------- */
   function renderHome() {
-    const L = live(), needs = L.needs.length, working = L.working.length, ready = L.ready.length;
+    const L = live(), needs = L.needs.length, ready = L.ready.length;
+    // Working counts what the Chats Working list (and the Working card's filter) shows, sending messages included.
+    const W0 = LIVE && LIVE.ok ? (LIVE.workGroups().working || []) : [], working = W0.length;
     const yd = byDay[YESTERDAY] || [];
     const now = new Date();
     return `<div class="home">${gearBtn()}
@@ -939,18 +977,12 @@
       </div>
       <div class="home-spacer"></div>
       <div class="constellation">
-        <button class="now-card" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="inbox" data-k="needs"><span class="pip"></span><span class="meta"><span class="k">${needs ? 'Needs you' : 'Unread'}</span><span class="v">${esc(L.needs[0]?.title || L.ready[0]?.title || 'Nothing waiting')}</span></span><span class="n">${needs + ready}</span></button>
-        <button class="now-card" style="--c:var(--violet-2)" data-act="inbox"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span><span class="v">${esc(L.working[0]?.title || 'Idle')}</span></span><span class="n">${working}</span></button>
+        <button class="now-card" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="unread"><span class="pip"></span><span class="meta"><span class="k">${needs ? 'Needs you' : 'Unread'}</span><span class="v">${esc(L.needs[0]?.title || L.ready[0]?.title || 'Nothing waiting')}</span></span><span class="n">${needs + ready}</span></button>
+        <button class="now-card" style="--c:var(--violet-2)" data-act="working"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span><span class="v">${esc(W0[0]?.title || 'Idle')}</span></span><span class="n">${working}</span></button>
         <button class="now-card" style="--c:var(--pink)" data-act="yesterday"><span class="pip"></span><span class="meta"><span class="k">Yesterday</span><span class="v">${esc(clip(S.days[YESTERDAY] || `${yd.length} threads`, 70))}</span></span><span class="n">${yd.length}</span></button>
       </div>
       ${unsentCard()}
       ${sideCard()}
-      <div class="hint-row">
-        <button class="say" data-say="Open Chats">Open Chats</button>
-        <button class="say" data-say="Show me last week">Show me last week</button>
-        <button class="say" data-say="Open CineQueue">Open CineQueue</button>
-        <button class="say" data-say="What did we ship on Wizard this week?">What did we ship this week?</button>
-      </div>
     </div>`;
   }
   setInterval(() => {
@@ -963,8 +995,7 @@
   /* ---------------- empty desk, app cards, maps, frames ---------------- */
   function renderEmpty(i) {
     return `${gearBtn()}<div class="empty-desk"><div><div class="ring"><span class="num">${i + 1}</span></div>
-      <h3>Empty desk</h3><p>Tap the orb and say what belongs here.<br>Hold it, speak, and swipe toward a desk to open it there.</p>
-      <button class="say" data-say="Open Chats">Open Chats</button><button class="say" data-say="Open Signal Feed">Open Signal Feed</button></div></div>`;
+      <h3>Empty desk</h3><p>Tap the orb and say what belongs here.<br>Hold it, speak, and swipe toward a desk to open it there.</p></div></div>`;
   }
   function renderApp(w) {
     const a = APP[w.appId] || {};
@@ -1310,7 +1341,8 @@
     if (act === 'inbox') return openSheet('inbox');
     if (act === 'settings') return openSettings(false);
     if (act === 'unsent') return openSettings(true);
-    if (act === 'yesterday') return openReview('day', YESTERDAY);
+    if (act === 'yesterday') return openReview('day', YESTERDAY, { beside: true });
+    if (act === 'unread' || act === 'working') return openChatsFiltered(act);
     if (act === 'side-button') return sideButtonTap(false);
     if (act === 'side-button-hide') { store.set('sideHidden', true); return refreshHome(true); }
     const we = e.target.closest('.win'); if (!we) return;
@@ -1483,6 +1515,7 @@
     if (st === 'everywhere' && NATIVE() && typeof window.WizardOSNative.setEverywhere === 'function') { let on = false; try { on = JSON.parse(window.WizardOSNative.everywhere()).enabled; } catch (x) {} window.WizardOSNative.setEverywhere(!on); setTimeout(renderSettings, 250); vib(8); }
     if (st === 'side') { closeSheets(true); sideButtonTap(true); }
     if (st === 'files') return openFilesScreen();
+    if (st === 'help') { closeSheets(true); return window.WosTour?.openHelp(); }
     if (e.target.closest('[data-usage-refresh]')) { window.WosUsage?.load(true).then(paintUsage); paintUsage(); }
   });
 
@@ -2029,6 +2062,8 @@
 
   /* Typed or simulated utterance, same pipeline as voice */
   async function runUtterance(text, kind, typed) {
+    // "help" (tapped or held) opens the gestures sheet on the phone; it never goes to the agent.
+    if (window.WosTour?.isHelp(text) && (kind === 'command' || sendSnap().view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
     clearTimeout(txHideT); V.kind = kind || 'auto';
     const snap = sendSnap();
     txShow('', typed ? 'Typed' : 'Heard', kind === 'command' ? 'command' : '', kind === 'command' ? '⚡' : '✦');
@@ -2148,6 +2183,8 @@
   async function handleText(text, kind, typed, sttMs, target, snap) {
     const sttNote = sttMs ? ` · heard in ${sttMs} ms` : '';
     snap = snap || sendSnap();
+    // A bare "help" opens the gestures sheet. Held: always. Tapped: unless a thread is open (there it's a reply).
+    if (window.WosTour?.isHelp(text) && (kind === 'command' || snap.view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
     const opts = target == null ? { snap } : { desk: target, snap };
     $('#txText').textContent = text;
     const v = snap.view;
@@ -2434,6 +2471,7 @@
     return 'hosted';
   }
   function backStep(skipHosted) {
+    { const t = window.WosTour?.back(); if (t) return t; } // the first-run tour and the Help sheet sit above everything
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
@@ -2449,6 +2487,11 @@
     const d = desks[idx], f = W[d.focus];
     if (f) {
       if (f.app === 'chats' && f.thread) return CHATS.threadBack(f);
+      if (f.app === 'chats' && CHATS.ch(f.id).filter) {
+        const back = CHATS.ch(f.id).filterFrom; CHATS.clearFilter(f);
+        const p = back ? desks.findIndex(x => x.id === back) : -1; if (p >= 0 && p !== idx) goDesk(p);
+        return 'filter';
+      }
       if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
       if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { try { selfPop(winEl(f.id).querySelector('iframe').contentWindow); } catch (e) {} nav.back(); return 'frame'; } }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }
@@ -2555,8 +2598,18 @@
   if (LIVE) LIVE.refresh();
   $('#clock').textContent = window.WizConfig.hm();
   window.addEventListener('wizard:config', () => { const t = $('#homeTime'), c = $('#clock'), hm = window.WizConfig.hm(); if (t) t.textContent = hm; if (c) c.textContent = hm; });
-  if (!store.get('coached', false)) { $('#coach').hidden = false; }
-  $('#coachGo').addEventListener('click', () => { $('#coach').hidden = true; store.set('coached', true); shock(); });
+  /* First run: the practice tour (core/tour.js). Say "help" or Settings → Gestures & help to see it again. */
+  window.WosTour?.attach({
+    device, orbWrap, shock, vib, toast,
+    setMode: m => Orb.setMode(m),
+    goHome: () => { if (idx !== HOME) goDesk(HOME, true); },
+    workingCard: () => track.querySelector('.home-desk [data-act="working"]'),
+    openDayReview: () => openReview('day', YESTERDAY, { beside: true }),
+    prepare: () => { if (V.state !== 'idle') cancelVoice(true); closeMenu(); closeOverview(); closeSheets(true); const d = desks[idx]; if (d.full && d.focus) setFull(d.focus, false); },
+    say: (t, kind) => runUtterance(t, kind || 'auto'),
+  });
+  const firstRun = !store.get('coached', false) && !window.WosTour?.done();
+  if (firstRun) setTimeout(() => { if (!(window.__deeplinkLog || []).length) window.WosTour?.start('first-run'); else window.WosTour?.mark(); }, 600);
   // Native shell (Wizard OS Android app): the app hands every hardware/gesture Back to the shell. A step that
   // undoes something returns its name; at the true root the shell stays put and says so. The app never exits
   // on Back (James's rule), so there is no "press again to exit" in native mode.
@@ -2571,7 +2624,7 @@
   // draft that James sends with one tap — another app can never make Archimedes act on its own.
   window.__wosHandoff = h => {
     // A side-button handoff means James already knows the gestures: clear the first-run coach so the draft is visible.
-    if (!$("#coach").hidden) { $("#coach").hidden = true; store.set("coached", true); }
+    if (window.WosTour?.active) window.WosTour.finish('handoff');
     if (!h || typeof h !== 'object') return false;
     closeSheets(); if (idx !== HOME && h.action !== 'thread') goDesk(HOME);
     if (h.action === 'listen') { if (V.state === 'idle') startVoice('auto'); return true; }
@@ -2663,7 +2716,9 @@
     // ?session= takes exactly the path the Android app's ACTION_THREAD intent takes.
     thread: id => window.__wosHandoff({ action: 'thread', id }),
     view(v, section) {
-      if (!$('#coach').hidden) { $('#coach').hidden = true; store.set('coached', true); }
+      if (window.WosTour?.active && v !== 'tour') window.WosTour.finish('deeplink');
+      if (v === 'tour') return window.WosTour?.start('link');
+      if (v === 'help') { closeSheets(true); return window.WosTour?.openHelp(); }
       closeSheets(true);
       if (v === 'inbox') return openSheet('inbox');
       if (v === 'apps') return openSheet('launcher');

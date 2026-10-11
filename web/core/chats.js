@@ -51,6 +51,21 @@ window.WizCore.chats = function createChats(H) {
   // Deferred threads live at the bottom of Ready with a Deferred status (live.js groupWork), not in a section.
   const SECTIONS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['yesterday', 'Yesterday'], ['pastWeek', 'Past week'], ['archive', 'Archive']];
   const SEC_OPEN_KEY = 'wos.chats.sections.v1';
+  // Unread = what Home counts as waiting (needs you + unread from the past week, live.js groups());
+  // Working = the Chats Working section (includes messages still sending).
+  const FILTERS = {
+    unread: { label: 'Unread', empty: 'All caught up. Nothing unread.', list: () => { const g = LIVE.groups(); return g.needs.concat(g.ready); } },
+    working: { label: 'Working', empty: 'Nothing is working right now.', list: () => LIVE.workGroups().working || [] },
+  };
+  function setFilter(w, f) {
+    const c = ch(w.id), next = f && FILTERS[f] ? f : '';
+    if ((c.filter || '') === next && !w.thread) return false;
+    if (w.thread) chatsBack(w);
+    c.filter = next; if (next) { c.q = ''; }
+    const el = elOf(w.id); if (el) { renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; }
+    return true;
+  }
+  const clearFilter = w => !!(w && !w.thread && ch(w.id).filter && setFilter(w, ''));
   const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false };
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
   const SEC_PAGE = 40;
@@ -214,6 +229,9 @@ window.WizCore.chats = function createChats(H) {
     c.more = c.more || {};
     const head = `<div class="ch-top"><label class="ch-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-chsearch placeholder="Search chats and messages" aria-label="Search chats and messages" value="${esc(c.q)}" enterkeyhint="search" spellcheck="false">${c.q ? '<button type="button" class="ch-sclear" data-chsclear aria-label="Clear search">×</button>' : ''}</label><button class="ch-new" data-chnew aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`;
     let body;
+    // Filtered list (Home's Unread / Working cards, James 11 Oct): the same Chats window showing only those
+    // threads, flat and newest first, with the same rows. The count matches the Home card. × or Back clears it.
+    const F = !n && c.filter && FILTERS[c.filter] ? FILTERS[c.filter] : null;
     const draftSec = drafts.length ? `<section class="ch-sec open" data-sec="drafts"><div class="ch-sec-h static"><span>Drafts</span><small>${drafts.length}</small></div><div class="ch-sec-b">${drafts.map(d => draftRow(d, d.key === 'new' && curThread === '__new__')).join('')}</div></section>` : '';
     // Messages still on the phone (the window went back to the list on send), new chats and replies: shown until
     // Wizard takes them, so a send never vanishes from Chats. Failed voice notes live in Errors.
@@ -221,7 +239,12 @@ window.WizCore.chats = function createChats(H) {
     // A message still leaving the phone already shows as its thread's "Sending…" row in Working; the pill is only
     // for trouble (offline / not sent) or a thread that isn't in the list.
     const pill = sendPill(outNew.filter(it => it.state === 'failed' || it.state === 'waiting' || !LIVE.session(it.sessionId)), w);
-    if (!LIVE.ok) body = draftSec + `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
+    if (F && LIVE.ok) {
+      const list = F.list();
+      body = `<div class="ch-filter" data-filter="${c.filter}"><span class="ch-fl"><i class="ch-fdot ${c.filter}"></i>${F.label}<small>${list.length}</small></span><button type="button" class="ch-fx" data-chfilterx aria-label="Show all chats">All chats ×</button></div>`
+        + (list.length ? `<div class="ch-sec open ch-flist"><div class="ch-sec-b">${list.map(s => chatRow(s, null)).join('')}</div></div>` : `<div class="ch-empty">${F.empty}</div>`);
+    }
+    else if (!LIVE.ok) body = draftSec + `<div class="ch-empty">${LIVE.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : 'Connecting to Wizard…'}</div>`;
     else if (!hit.length && !drafts.length) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
     else body = draftSec + SECTIONS.map(([k, label]) => {
       const list0 = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k];
@@ -872,6 +895,7 @@ window.WizCore.chats = function createChats(H) {
     const dx = e.target.closest('[data-chdraftx]'); if (dx) { discardDraft(dx.dataset.chdraftx); renderChatList(w, elOf(id)); return true; }
     const dr = e.target.closest('[data-chdraft]'); if (dr) { openNewDraft(owner(id), dr.dataset.chdraft); return true; }
     if (e.target.closest('[data-chbsmore]')) { window.WizCore.chatSearch?.more(id); renderChatList(w, elOf(id)); return true; }
+    if (e.target.closest('[data-chfilterx]')) { setFilter(w, ''); return true; }
     if (e.target.closest('[data-chsclear]')) { ch(id).q = ''; window.WizCore.chatSearch?.cancel(id); renderChatList(w, elOf(id)); elOf(id)?.querySelector('[data-chsearch]')?.focus(); return true; }
     const sec = e.target.closest('[data-sectoggle]'); if (sec) { toggleSection(w, sec.dataset.sectoggle); return true; }
     const rg = e.target.closest('[data-rdyorder]');
@@ -966,7 +990,7 @@ window.WizCore.chats = function createChats(H) {
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
-  return { CH, ch, click, bind, PW, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, sendChat, uploadFile,
+  return { CH, ch, click, bind, PW, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
 };
