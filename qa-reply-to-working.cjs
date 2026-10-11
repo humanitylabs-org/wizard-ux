@@ -159,7 +159,7 @@ async function typeAndSend(p, wid, text) {
   {
     const { ctx, p, errs } = await boot(b, { admit: 2500 });
     const wid = await chatsWin(p);
-    await p.locator(`.win[data-win="${wid}"] [data-chnew]`).first().tap(); await p.waitForTimeout(600);
+    await p.locator(`.win[data-win="${wid}"] [data-chsearch]`).first().tap(); await p.waitForTimeout(300); await p.locator(`.win[data-win="${wid}"] [data-chnew]`).first().tap(); await p.waitForTimeout(600);
     await typeAndSend(p, wid, 'QA brand new chat to working');
     await p.waitForTimeout(300);
     const sid = await p.evaluate(() => __wos.outbox.unsent().find(i => i.kind === 'new')?.sessionId);

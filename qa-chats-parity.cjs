@@ -113,7 +113,7 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   /* 4. Attachments: new chat. */
   await p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); __wos.openChat ? __wos.openChat(w.id, '__new__') : null; });
   await p.waitForTimeout(500);
-  if (!(await p.locator('[data-chattach]').count())) { await p.tap('[data-chback]').catch(() => {}); await p.waitForTimeout(400); await p.tap('[data-chnew]'); await p.waitForTimeout(500); }
+  if (!(await p.locator('[data-chattach]').count())) { await p.tap('[data-chback]').catch(() => {}); await p.waitForTimeout(400); await p.tap('[data-chsearch]'); await p.waitForTimeout(300); await p.tap('[data-chnew]'); await p.waitForTimeout(500); }
   ok(await p.locator('[data-chattach]').isVisible(), 'new chat has an attach button');
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
   const [chooser] = await Promise.all([p.waitForEvent('filechooser'), p.tap('[data-chattach]')]);

@@ -91,7 +91,7 @@ async function typeAndSend(p, wid, text) {
   {
     const { ctx, p, writes, errs } = await boot(b);
     const wid = await chatsWin(p); await p.waitForTimeout(400);
-    await p.locator(`.win[data-win="${wid}"] [data-chnew]`).first().tap(); await p.waitForTimeout(700);
+    await p.locator(`.win[data-win="${wid}"] [data-chsearch]`).first().tap(); await p.waitForTimeout(300); await p.locator(`.win[data-win="${wid}"] [data-chnew]`).first().tap(); await p.waitForTimeout(700);
     ok((await threadOf(p, wid)) === '__new__', 'phone: New chat composer is open');
     await typeAndSend(p, wid, 'QA send and go new chat');
     ok(runs(writes).some(w => w.body.includes('QA send and go new chat')), 'new chat: delegated');

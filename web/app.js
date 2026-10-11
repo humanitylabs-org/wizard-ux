@@ -56,6 +56,7 @@
   const norm = window.WizCore.norm;
 
   /* ---------------- state ---------------- */
+  const tourEv = (type, d) => { try { window.WosTour?.event?.(type, d || {}); } catch (e) { console.error(e); } };
   const store = {
     get(k, d) { try { const v = localStorage.getItem('wos.' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('wos.' + k, JSON.stringify(v)); } catch (e) {} },
@@ -331,8 +332,8 @@
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
     const moved = n !== idx; idx = n;
-    // A filtered Chats list (Home's Unread / Working) is a quick look: leaving its desk puts it back to all chats.
-    if (moved) for (const id in W) if (W[id].app === 'chats' && CHATS.CH[id]?.filter && !desks[n].wins.includes(id)) CHATS.clearFilter(W[id]);
+    // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
+    if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
     placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip();
     if (moved && LINKS && LINKS.isOpen()) LINKS.close(); // a link is a peek over this desk: moving desks dismisses it
     if (moved) vib(8);
@@ -364,7 +365,7 @@
   $('#dock').addEventListener('click', e => {
     const b = e.target.closest('[data-goto]'); if (!b) return;
     if (Date.now() - peekJustOpened < 600 || Date.now() - dockSwiped < 400) return;
-    goDesk(+b.dataset.goto);
+    goDesk(+b.dataset.goto); tourEv('desk', { home: idx === HOME });
   });
   $('#dock').addEventListener('contextmenu', e => { if (e.target.closest('[data-goto]')) e.preventDefault(); });
   /* Swipe anywhere on the bottom bar to change desks: the orb has its own gestures, the
@@ -386,8 +387,8 @@
     if (!s.h) return;
     const dx = e.clientX - s.x, v = dx / ((performance.now() - s.t) || 1);
     dockSwiped = Date.now();
-    if (e.type !== 'pointercancel' && (dx < -60 || v < -.5)) goDesk(idx + 1);
-    else if (e.type !== 'pointercancel' && (dx > 60 || v > .5)) goDesk(idx - 1);
+    if (e.type !== 'pointercancel' && (dx < -60 || v < -.5)) { goDesk(idx + 1); tourEv('desk', { home: idx === HOME }); }
+    else if (e.type !== 'pointercancel' && (dx > 60 || v > .5)) { goDesk(idx - 1); tourEv('desk', { home: idx === HOME }); }
     else placeTrack(0, true);
   };
   $('#dock').addEventListener('pointerup', dockEnd); $('#dock').addEventListener('pointercancel', dockEnd);
@@ -558,11 +559,9 @@
   /* ---------------- window operations ---------------- */
   /* Every new thing opens on its own desk, right beside the one in front (never between Home and Chats).
    * opts.desk (hold the orb, speak, swipe toward a desk) or opts.here puts it on an existing desk instead. */
-  function insertPos() {
-    let p = idx + 1;
-    if (p === 1 && desks[1] && desks[1].wins.some(id => W[id]?.app === 'chats')) p = 2;
-    return p;
-  }
+  // Directly beside the desk in front, Home included (James, 11 Oct 2026: from Home, Yesterday and every other
+  // app open on the desk right next to Home; Chats just moves one to the right).
+  function insertPos() { return idx + 1; }
   function openWin(obj, opts = {}) {
     const w = { id: newId(), ...obj }; W[w.id] = w;
     let t = opts.desk != null ? Math.max(0, Math.min(desks.length - 1, opts.desk)) : opts.here ? idx : -1;
@@ -787,8 +786,8 @@
     }
     openWin({ app: 'review', z }, opts);
   }
-  /* Move an open window to where a new app would open (insertPos: right beside this desk, after Chats when on
-   * Home). A window alone on its desk takes its whole desk along; one sharing a desk gets a desk of its own. */
+  /* Move an open window to where a new app would open (insertPos: right beside this desk, Home included.
+   * A window alone on its desk takes its whole desk along; one sharing a desk gets a desk of its own. */
   function bringBeside(id) {
     const from = deskOf(id); if (from < 0 || from === idx) return;
     const t = insertPos(); if (from === t) return;
@@ -811,8 +810,11 @@
     if (!here) return;
     const t = deskOf(here); if (t !== idx) goDesk(t, true);
     focusWin(here); const w = W[here], d = desks[t]; if (d.full && d.focus !== here) setFull(d.focus, false);
-    CHATS.setFilter(w, f); CHATS.ch(here).filterFrom = opts.from === undefined ? from : opts.from;
-    announce(`<b>${f === 'working' ? 'Working' : 'Unread'}</b>`);
+    const c = CHATS.ch(here); c.subject = ''; c.q = ''; c.sheet = false; c.lastChip = 'status';
+    // The chip is the same one James can add himself from the filter button; the first time, one coach line.
+    c.coach = !store.get('chipCoached', false); store.set('chipCoached', true);
+    c.fromCard = !!opts.card;
+    c.filter = ''; CHATS.setFilter(w, f); c.filterFrom = opts.from === undefined ? from : opts.from;
   }
 
   /* ---------------- side button (Wizard OS Android app only) ----------------
@@ -996,7 +998,7 @@
   /* ---------------- empty desk, app cards, maps, frames ---------------- */
   function renderEmpty(i) {
     return `${gearBtn()}<div class="empty-desk"><div><div class="ring"><span class="num">${i + 1}</span></div>
-      <h3>Empty desk</h3><p>Tap the orb and say what belongs here.<br>Hold it, speak, and swipe toward a desk to open it there.</p></div></div>`;
+      <h3>Empty desk</h3><p>Tap the orb and say what belongs here.<br>Hold it and say a command, like “Open Calendar”.</p></div></div>`;
   }
   function renderApp(w) {
     const a = APP[w.appId] || {};
@@ -1343,7 +1345,7 @@
     if (act === 'settings') return openSettings(false);
     if (act === 'unsent') return openSettings(true);
     if (act === 'yesterday') return openReview('day', YESTERDAY, { beside: true });
-    if (act === 'unread' || act === 'working') return openChatsFiltered(act);
+    if (act === 'unread' || act === 'working') return openChatsFiltered(act, { card: true });
     if (act === 'side-button') return sideButtonTap(false);
     if (act === 'side-button-hide') { store.set('sideHidden', true); return refreshHome(true); }
     const we = e.target.closest('.win'); if (!we) return;
@@ -1492,7 +1494,7 @@
   const sheetOpen = () => !!sheet;
   function openSheet(which, q) {
     closeSheets(true); closeMenu();
-    sheet = which; device.classList.add('sheet-open');
+    sheet = which; device.classList.add('sheet-open'); tourEv('sheet', { which });
     if (which === 'launcher') { renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
     else if (which === 'settings') { renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; }
     else { renderInbox(); inboxEl.classList.add('open'); }
@@ -1501,7 +1503,7 @@
   }
   function closeSheets(quiet) {
     if (!sheet && quiet) return;
-    sheet = null; device.classList.remove('sheet-open');
+    const was = sheet; sheet = null; if (was) tourEv('sheet-closed', { which: was }); device.classList.remove('sheet-open');
     launcher.classList.remove('open'); inboxEl.classList.remove('open'); settingsEl.classList.remove('open');
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
     $('#search').blur();
@@ -1756,8 +1758,9 @@
     else if (cmd === 'pause') $('#arcPause').click();
     return true;
   };
+  let NOMIC = false;
   function setVoice(s) {
-    V.state = s; device.dataset.voice = s;
+    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s });
     CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
     reportVoice(s);
     keepAwake(s === 'listen' || s === 'paused' || s === 'command' || s === 'think');
@@ -1881,7 +1884,7 @@
       if (!(await openRec())) return;
       if (V.stopAsked) finishVoice();
     } catch (err) {
-      V.sim = true;
+      V.sim = true; NOMIC = true; tourEv('nomic', { kind });
       txShow('', '', '', '✦');
       $('#txRouteText').textContent = kind === 'command' ? 'No mic here · tap a command' : 'No mic here · tap a line to simulate';
       const ex = kind === 'command'
@@ -2009,7 +2012,7 @@
     const size = blobs.reduce((n, b) => n + b.size, 0);
     stopStream(); V.rec = null; Orb.setLevel(0);
     if (V.cancelled) { recDone(nid); dropHold(); unseal(); return; }
-    if (V.acc < 450 || size < 1200) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); return; }
+    if (V.acc < 450 || size < 1200) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); tourEv('nospeech'); return; }
     // A voice reply from a thread's composer goes to that thread, as recorded: no routing, no commands,
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
     const snap = V.snap || sendSnap(); V.snap = null;
@@ -2037,7 +2040,7 @@
         words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
       }
       const text = words.filter(Boolean).join(' ').trim();
-      if (!text) { recDone(nid); unhold(); unseal(snap.seal); setVoice('idle'); txHide(); toast('◌', snap.seal ? 'No speech detected · your text is back in the thread' : 'No speech detected'); return; }
+      if (!text) { recDone(nid); unhold(); unseal(snap.seal); setVoice('idle'); txHide(); toast('◌', snap.seal ? 'No speech detected · your text is back in the thread' : 'No speech detected'); tourEv('nospeech'); return; }
       // The words are what gets sent from here; the native take is deleted once they are handled (or in the outbox).
       Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).finally(() => { recDone(nid); unhold(); });
     } catch (err) {
@@ -2155,7 +2158,30 @@
   }
 
   /* ---------------- routing ---------------- */
+  /* On the Chats list, a held orb (or a tap) can filter and search it (James + Claude Fable, 11 Oct):
+   *   clear filter | all chats | show everything      → chips off
+   *   filter [by] X | only X | show [me] [only] X [only] → chip X (status or subject), else search X
+   *   search [for] X | find X                          → search text
+   * A held orb with any other words on the list keeps doing what it always did (open apps, etc.). */
+  function chatsVoice(t, snap, kind) {
+    const v = snap?.view; if (!v || v.kind !== 'thread list') return null;
+    const s = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '').trim();
+    if (/^(clear|remove|reset|turn off|drop) (the |all )?(filters?|chips?)$|^(show )?(all|every) (chats|threads)$|^show everything$|^no filters?$/.test(s)) return { action: 'chats_filter', clear: true };
+    let m = s.match(/^(?:filter|filtered) (?:by |to |for |on )?(.+)$/) || s.match(/^only (?:show )?(.+)$/) || s.match(/^show (?:me )?(?:only |just )?(?:the |my )?(.+?)(?: only| chats| threads)?$/);
+    if (m) {
+      const want = m[1].replace(/ (chats|threads|messages|ones)$/, '').trim();
+      const f = CHATS.matchFilters(want, 1)[0];
+      if (f) return { action: 'chats_filter', f };
+      if (/^(?:filter|filtered)/.test(s)) return { action: 'chats_search', q: want };
+      return null; // "show me …" with no filter match is not ours
+    }
+    // A tap keeps "find me a …" for the agent; only "search …" searches the list. A held orb takes both.
+    m = s.match(kind === 'command' ? /^(?:search|find|look for)(?: (?:my |the )?(?:chats|threads|messages))?(?: for)? (.+)$/ : /^search(?: (?:my |the )?(?:chats|threads|messages))?(?: for)? (.+)$/);
+    if (m) return { action: 'chats_search', q: m[1] };
+    return null;
+  }
   function localParse(t, snap, kind) {
+    { const cv = chatsVoice(t, snap || sendSnap(), kind); if (cv) return cv; }
     // "Order my usual kra pao": a taught usual runs on the phone (Grab under a cover), nothing goes to Wizard.
     const us = window.WosUsuals?.match(t); if (us) return { action: 'usual', id: us };
     // Music (play …, pause, next, louder, I like this): on-device, straight to Wizard Music. A held orb takes any
@@ -2261,6 +2287,7 @@
   }
   /* Hold-command with no command match: a choice card, nothing is sent until James taps. */
   function holdNoMatch(text, opts) {
+    tourEv('nomatch', { text });
     setVoice('idle'); vib(12);
     txShow(text, 'No command matched · nothing sent', 'command', '⚡');
     const q = String(text || '').trim().replace(/[.!?,\s]+$/, '');
@@ -2284,6 +2311,7 @@
   function finishCmd(c, text, opts) {
     setVoice('done'); vib([8, 40, 8]);
     const ok = execute(c, text, opts);
+    tourEv('command', { ok: !!ok, text });
     if (!ok) { $('#txRouteText').textContent += ' · no match'; }
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
     txHide(ok ? (isPill() ? 1200 : 1300) : 3200);
@@ -2324,6 +2352,13 @@
     if (a === 'fullscreen') { if (!f) return false; setFull(f, c.on !== false); return true; }
     if (a === 'move_window') { if (!f) return false; const to = c.to === 'prev' || c.to === 'left' ? idx - 1 : c.to === 'next' || c.to === 'right' ? idx + 1 : +c.to - 1; return moveWin(f, to); }
     if (a === 'quick_search') return openSearch(c.query, c.tab);
+    if (a === 'chats_filter' || a === 'chats_search') {
+      const w = W[f]?.app === 'chats' ? W[f] : null; if (!w) return false;
+      closeSheets(true); const cc = CHATS.ch(w.id); cc.fromCard = false; cc.coach = false;
+      if (c.clear) { CHATS.clearAll(w); toast('⌯', 'All chats', 1400); return true; }
+      if (c.f) { CHATS.addFilter(w, c.f); cc.lastChip = c.f.kind; toast('⌯', `Filter: ${c.f.label}`, 1600); return true; }
+      CHATS.setQuery(w, c.q); toast('⌕', `Searching “${clip(c.q, 40)}”`, 1600); return true;
+    }
     if (a === 'usual') return window.WosUsuals?.run(c.id) ?? false;
     if (a === 'search') { const q = c.query || text; if (searchUrl(q) && !findApp(q)) return openSearch(q, 'all'); openSheet('launcher', q); return true; }
     if (a === 'open_view' || a === 'view' || a === 'show') {
@@ -2343,6 +2378,7 @@
    * (no Chats window opens, no desk switch, no thread takes focus). The new thread shows up in Chats,
    * Working and the Inbox like any other, and he opens it when he chooses. */
   async function toAgent(text, label, opts = {}) {
+    tourEv('sent', { text });
     showRouted('agent', label); setVoice('agent'); vib(10);
     setTimeout(() => { setVoice('idle'); }, 1200);
     txHide(isPill() ? 1400 : 2600);
@@ -2365,8 +2401,7 @@
   });
 
   /* ---------------- orb gestures ----------------
-   * Tap: talk. Hold: command; while still holding, slide left/right to aim what
-   * you said at a neighbouring desk. Swipe: left/right desks, up apps, down inbox. */
+   * Tap: talk. Hold: command (it opens on the desk beside this one). Swipe: left/right desks, up apps, down inbox. */
   const orbWrap = $('#orbWrap');
   let G = null;
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
@@ -2378,7 +2413,9 @@
     G.corner = device.classList.contains('orb-corner');
     if (V.state === 'idle' && !sheet) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); vib(18); startVoice('command'); } }, 380);
   });
-  const aimFor = dx => { const steps = Math.abs(dx) > 150 ? 2 : Math.abs(dx) > 60 ? 1 : 0; if (!steps) return null; const t = idx + (dx < 0 ? -steps : steps); return t >= 0 && t < desks.length ? t : null; };
+  // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
+  // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
+  const aimFor = () => null;
   orbWrap.addEventListener('pointermove', e => {
     if (!G) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
     // A hold that starts travelling right after it fired was really a swipe (slow frame ate the moves).
@@ -2433,7 +2470,7 @@
     } else if (g.mode === 'h') {
       if (sheet) return;
       const v = g.dx / vt;
-      if (g.dx < -60 || v < -.5) goDesk(idx + 1); else if (g.dx > 60 || v > .5) goDesk(idx - 1); else placeTrack(0, true);
+      if (g.dx < -60 || v < -.5) { goDesk(idx + 1); tourEv('desk', { home: idx === HOME }); } else if (g.dx > 60 || v > .5) { goDesk(idx - 1); tourEv('desk', { home: idx === HOME }); } else placeTrack(0, true);
     } else if (g.mode === 'v') {
       [launcher, inboxEl].forEach(el => el.classList.remove('dragging'));
       launcher._rendered = inboxEl._rendered = false;
@@ -2507,10 +2544,11 @@
     const d = desks[idx], f = W[d.focus];
     if (f) {
       if (f.app === 'chats' && f.thread) return CHATS.threadBack(f);
-      if (f.app === 'chats' && CHATS.ch(f.id).filter) {
-        const back = CHATS.ch(f.id).filterFrom; CHATS.clearFilter(f);
-        const p = back ? desks.findIndex(x => x.id === back) : -1; if (p >= 0 && p !== idx) goDesk(p);
-        return 'filter';
+      if (f.app === 'chats' && (CHATS.hasFilter(f) || CHATS.ch(f.id).q)) {
+        const c = CHATS.ch(f.id), back = c.filterFrom, did = CHATS.clearFilter(f);
+        // A Home card's chip: one Back takes it off and goes back to Home, the way James came.
+        if (did === 'chip' && !CHATS.hasFilter(f)) { c.fromCard = false; c.coach = false; c.filterFrom = null; const p = back ? desks.findIndex(x => x.id === back) : -1; if (p >= 0 && p !== idx) goDesk(p); }
+        if (did) return did === 'search' ? 'search' : 'filter';
       }
       if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
       if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { try { selfPop(winEl(f.id).querySelector('iframe').contentWindow); } catch (e) {} nav.back(); return 'frame'; } }
@@ -2624,7 +2662,10 @@
     setMode: m => Orb.setMode(m),
     goHome: () => { if (idx !== HOME) goDesk(HOME, true); },
     workingCard: () => track.querySelector('.home-desk [data-act="working"]'),
-    openDayReview: () => openReview('day', YESTERDAY, { beside: true }),
+    cmdExample: () => (findApp('calendar') ? 'Open Calendar' : 'Open Day in review'),
+    noMic: () => NOMIC,
+    closeSheets: () => closeSheets(),
+    dismissVoice: () => { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(1200); },
     prepare: () => { if (V.state !== 'idle') cancelVoice(true); closeMenu(); closeOverview(); closeSheets(true); const d = desks[idx]; if (d.full && d.focus) setFull(d.focus, false); },
     say: (t, kind) => runUtterance(t, kind || 'auto'),
   });
