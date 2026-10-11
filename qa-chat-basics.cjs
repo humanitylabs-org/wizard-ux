@@ -293,7 +293,7 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     ok(r.days.join(',') === 'Yesterday,Today', 'day dividers: Yesterday, Today', r.days);
     ok(r.times.length >= 8 && r.times.every(x => / Bangkok$/.test(x.title)), 'every message has a time, full Bangkok date on hover', r.times.slice(0, 3));
     // Today's messages show only HH:MM; any other day carries its date too (James, 11 Oct).
-    const bkkDay = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Bangkok', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(YDAY * 1000));
+    const bkkDay = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Bangkok', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(YDAY * 1000));
     ok(r.times.slice(0, 2).every(x => x.t === `${bkkDay}, ${bkk.format(new Date(YDAY * 1000))}` || x.t === `${bkkDay}, ${bkk.format(new Date((YDAY + 30) * 1000))}`), 'yesterday\'s messages show date + time', { want: bkkDay, got: r.times.slice(0, 2) });
     ok(r.times.slice(2).every(x => /^\d\d:\d\d$/.test(x.t)), 'today\'s messages show only HH:MM', r.times.slice(2, 5));
     ok(r.times.some(x => x.t === bkk.format(new Date((now - 120) * 1000))), 'times are Bangkok local time', { want: bkk.format(new Date((now - 120) * 1000)), got: r.times.map(x => x.t) });

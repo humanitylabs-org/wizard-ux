@@ -310,7 +310,8 @@
   // Formatters are built per zone on first use, never at load: the settings zone (bootstrap) can land
   // after this file runs, and a first launch must not keep showing the device's zone.
   const O_DAY = [{ year: 'numeric', month: '2-digit', day: '2-digit' }, 'en-CA'], O_TIME = [{ hour: '2-digit', minute: '2-digit', hour12: false }];
-  const O_DATE = [{ weekday: 'short', day: 'numeric', month: 'short' }], O_DATEY = [{ weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }];
+  // Month first with commas (James, 11 Oct): "Thu, Oct 8", "Thu, Oct 8, 2025"; a stamp adds ", 20:48".
+  const O_DATE = [{ weekday: 'short', month: 'short', day: 'numeric' }, 'en-US'], O_DATEY = [{ weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }, 'en-US'];
   const O_FULL = [{ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }];
   // Each formatter is rebuilt only when the zone changes.
   const F = o => { const z = TZ(); if (o.z !== z) { o.f = new Intl.DateTimeFormat(o[1] || 'en-GB', { timeZone: z, ...o[0] }); o.z = z; } return o.f; };
@@ -327,7 +328,7 @@
     },
     full: ms => isFinite(ms) ? `${F(O_FULL).format(ms)} Bangkok` : '',
     // Message stamp (James, 11 Oct): today's messages show only the time; any other day shows its date
-    // too ("Sat 10 Oct, 18:16"; year added outside the current year), so a scrolled-to message is never
+    // too ("Thu, Oct 8, 18:16"; year added outside the current year), so a scrolled-to message is never
     // ambiguous when its day divider is off screen.
     stamp(ms, now = Date.now()) {
       if (!isFinite(ms)) return '';
