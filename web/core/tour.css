@@ -69,11 +69,11 @@
 .tr-gi.tap::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; border: 1.5px solid var(--violet-2); animation: gRing 1.6s ease-out infinite; }
 @keyframes gTap { 0%, 100% { transform: scale(1); } 12% { transform: scale(.7); } 24% { transform: scale(1); } }
 @keyframes gRing { 0%, 12% { opacity: 0; transform: scale(.4); } 30% { opacity: .9; } 100% { opacity: 0; transform: scale(1.4); } }
-.tr-gi.hold { border-color: rgba(63, 224, 255, .3); background: conic-gradient(#3fe0ff var(--p, 0%), transparent 0); animation: gHold 2.2s linear infinite; }
+.tr-gi.hold { border-color: rgba(63, 224, 255, .3); background: conic-gradient(#3fe0ff var(--tr-hold, 0%), transparent 0); animation: gHold 2.2s linear infinite; }
 .tr-gi.hold i { background: #3fe0ff; animation: gHoldDot 2.2s ease-in-out infinite; }
 @keyframes gHoldDot { 0%, 15% { transform: none; } 55%, 80% { transform: translateX(10px) scale(1.15); box-shadow: 0 0 14px #3fe0ff; } 100% { transform: none; } }
-@property --p { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
-@keyframes gHold { 0% { --p: 0%; } 50% { --p: 100%; } 100% { --p: 100%; } }
+@property --tr-hold { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+@keyframes gHold { 0% { --tr-hold: 0%; } 50% { --tr-hold: 100%; } 100% { --tr-hold: 100%; } }
 .tr-gi.hold::before { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: #0c0820; }
 .tr-gi.hold i { position: relative; z-index: 1; }
 .tr-gi.down i { animation: gDown 1.6s ease-in-out infinite; }
