@@ -899,6 +899,7 @@
         <button class="st-row" data-st="side" ${native ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(side)}</small></span><span class="st-go">›</span></button>
       </div>
       ${window.WizCore.voiceStatus?.card() || ''}
+      ${window.WosCancelled ? window.WosCancelled.html() : ''}
       <div class="st-group"><h4>Wizard</h4>
         <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · ${esc(location.host)}</small></span></div>
         ${window.WosDevice?.settingsHtml?.() || ''}
@@ -1508,6 +1509,7 @@
   $('#scrim').addEventListener('click', () => closeSheets());
   settingsEl.addEventListener('click', e => {
     if (e.target.closest('[data-stclose]')) return closeSheets();
+    if (window.WosCancelled?.act(e.target)) return;
     const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
     if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); return setTimeout(onUnsentChange, 300); }
     const st = e.target.closest('[data-st]')?.dataset.st;
@@ -1973,11 +1975,29 @@
   function cancelVoice(quiet) {
     V.cancelled = true; if (V.replyTo) { replyTake(null); V.replyTo = null; }
     unseal();
+    // A long take cancelled by accident is kept (Settings → Cancelled recordings, James 11 Oct); a quick one is gone.
+    // Native takes are kept by the app's recorder on recCancel (0.9.5+); the page keeps the ones it recorded itself.
+    const heldMs = voiceElapsed();
+    const long = !V.sim && heldMs >= (window.WosCancelled?.KEEP_FROM_MS || 15000);
+    const nativeKeeps = !!V.native && typeof DEV()?.cancelledList === 'function';
     if (V.native) { try { DEV().recCancel(V.native); } catch (e) {} V.native = null; }
-    try { V.rec && V.rec.state !== 'inactive' && (V.rec.onstop = null, V.rec.stop()); } catch (e) {}
+    const rec = V.rec, mime = V.mime || rec?.mimeType || 'audio/webm';
+    const keepWeb = parts => { const b = new Blob(parts, { type: mime }); window.WosCancelled?.keepWeb(b, heldMs).then(k => k && window.WosCancelled.repaint()); };
+    if (long && rec && window.WosCancelled) {
+      // Stop the web recorder and keep what it heard (the last chunk arrives with the stop).
+      const parts = V.parts.slice(), chunks = V.chunks;
+      try {
+        if (rec.state !== 'inactive') { rec.onstop = () => keepWeb(parts.concat(chunks)); rec.stop(); }
+        else keepWeb(parts.concat(chunks));
+      } catch (e) { keepWeb(parts.concat(chunks)); }
+    } else {
+      if (long && !rec && V.parts.length && window.WosCancelled) keepWeb(V.parts.slice());
+      try { rec && rec.state !== 'inactive' && (rec.onstop = null, rec.stop()); } catch (e) {}
+    }
     stopStream(); V.rec = null; V.sim = false; cancelAnimationFrame(V.raf); Orb.setLevel(0);
     setVoice('idle'); txHide(quiet ? 0 : 0);
-    if (!quiet) { toast('✕', 'Discarded'); vib(12); }
+    const kept = long && (nativeKeeps || !!rec || !!V.parts.length);
+    if (!quiet || kept) { toast('✕', kept ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Discarded', kept ? 3200 : 2200); vib(12); }
   }
   async function onRecStop(nblob, nid) {
     // A native take (Android RecorderService) arrives as one blob + its id; a web take is the parts + current chunks.
