@@ -336,7 +336,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
 
         @JavascriptInterface public void listen() { main.post(() -> capture.start(null, 0)); }
 
-        @JavascriptInterface public void cancel() { main.post(() -> { capture.discard(); syncAwake(); }); }
+        @JavascriptInterface public void cancel() { main.post(() -> { capture.cancelByUser(); syncAwake(); }); }
 
         @JavascriptInterface public void pause() { main.post(capture::togglePause); }
 

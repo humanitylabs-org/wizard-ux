@@ -836,3 +836,10 @@ body {
 .device.imm-tip .imm-edge i, .imm-edge.pull i { opacity: 1; }
 .imm-edge.pull i { width: 110px; margin-left: -55px; }
 .device.orb-corner .imm-edge i { left: calc(50% + 29px); }
+/* Settings → Cancelled recordings (core/cancelled.js) */
+.cx-row { padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); }
+.cx-t { font-size: 14px; color: var(--ink-2); }
+.cx-t b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+.cx-text { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(0, 0, 0, .22); font-size: 14px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; max-height: 40vh; overflow: auto; user-select: text; -webkit-user-select: text; }
+.cx-err { margin-top: 6px; font-size: 12.5px; color: #ffbe55; }
+.cx-row .ub-a button[disabled] { opacity: .6; }

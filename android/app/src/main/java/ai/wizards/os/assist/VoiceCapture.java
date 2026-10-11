@@ -398,6 +398,21 @@ final class VoiceCapture {
         if (view != null) view.onPaused(paused);
     }
 
+    /**
+     * The X: stop and throw the take away, except that a long one (an accident hurts) is kept for
+     * Settings → Cancelled recordings. Returns true when kept.
+     */
+    boolean cancelByUser() {
+        boolean kept = false;
+        if (listening && recording != null && qaAudio == null) {
+            long ms = SystemClock.elapsedRealtime() - startedAt;
+            dropRecorder(); // closes the file
+            kept = ai.wizards.os.recording.CancelledTakes.keep(app, recording, ms, "side", "audio/aac");
+        }
+        discard();
+        return kept;
+    }
+
     /** Stop and throw the recording away (Back, cancel, screen off). Never sends. */
     void discard() {
         listening = false;
