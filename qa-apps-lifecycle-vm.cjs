@@ -1,0 +1,60 @@
+// Real lifecycle through the Apps screens UI, against the throwaway Runtipi in Lima VM 'wos-apps' on Thales.
+// Phone viewport. App Store → card → Install (real), wait running → Stop (real) → Start (real).
+const PW = process.env.PW || 'playwright';
+const { chromium } = require(PW);
+const BASE = process.argv[2] || 'http://127.0.0.1:9600/wizard-os-home/';
+const APP = process.argv[3] || 'secret-drop';
+const SHOTS = process.argv[4] || '';
+const fs = require('fs');
+let pass = 0, fail = 0;
+const ok = (c, n, d) => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, d ? JSON.stringify(d).slice(0, 300) : ''); } };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const status = async () => { const r = await fetch(new URL('/api/apps/installed', BASE)); const d = await r.json(); const x = (d.installed || []).find((i) => i.info?.id === APP); return x?.app?.status || 'missing'; };
+const waitStatus = async (want, ms) => { const t = Date.now(); let s; while (Date.now() - t < ms) { s = await status(); if (want.includes(s)) return s; await sleep(3000); } return s; };
+
+(async () => {
+  if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
+  const b = await chromium.launch();
+  const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36' });
+  await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); localStorage.setItem('wos.tour.done', '1'); } catch (e) {} });
+  const p = await ctx.newPage();
+  const errs = []; p.on('pageerror', (e) => errs.push(String(e)));
+  const shot = async (n) => { if (SHOTS) { await sleep(900); await p.screenshot({ path: `${SHOTS}/${n}.png` }); } };
+  ok(await status() === 'missing', `${APP} not installed before the run`);
+  await p.goto(BASE + '?view=store', { waitUntil: 'domcontentloaded' });
+  await p.waitForFunction(() => window.__wos?.wam?.mode === 'store' && document.querySelectorAll('#launcherBody [data-wam-id]').length > 3, null, { timeout: 30000 });
+  await p.evaluate((id) => document.querySelector(`#launcherBody [data-wam-id="${id}"]`).click(), APP);
+  await p.waitForFunction(() => document.querySelector('#launcherBody .wam-card [data-wam-do="install"]'), null, { timeout: 10000 });
+  await shot('v1-card');
+  await p.evaluate(() => document.querySelector('#launcherBody [data-wam-do="install"]').click());
+  await sleep(1500);
+  const roNote = await p.evaluate(() => !!document.querySelector('#launcherBody .wam-ro'));
+  ok(!roNote, 'install in the VM is not refused (no read-only note)');
+  const s1 = await waitStatus(['running'], 600000);
+  ok(s1 === 'running', `real install → running (${s1})`);
+  await p.waitForFunction(() => document.querySelector('#launcherBody [data-wam-do="stop"]'), null, { timeout: 60000 }).catch(() => {});
+  await shot('v2-installed');
+  ok(await p.evaluate(() => !!document.querySelector('#launcherBody [data-wam-do="stop"]')), 'card switches to Stop once running');
+  await p.evaluate(() => document.querySelector('#launcherBody [data-wam-do="stop"]').click());
+  const s2 = await waitStatus(['stopped'], 180000);
+  ok(s2 === 'stopped', `real Stop → stopped (${s2})`);
+  await p.waitForFunction(() => document.querySelector('#launcherBody [data-wam-do="start"]'), null, { timeout: 60000 }).catch(() => {});
+  await shot('v3-stopped');
+  ok(await p.evaluate(() => !!document.querySelector('#launcherBody [data-wam-do="start"]')), 'card switches to Start once stopped');
+  await p.evaluate(() => document.querySelector('#launcherBody [data-wam-do="start"]').click());
+  const s3 = await waitStatus(['running'], 180000);
+  ok(s3 === 'running', `real Start → running (${s3})`);
+  // My Apps now shows it with a running dot.
+  await p.evaluate(() => window.__wos.onBack()); await sleep(600); await p.evaluate(() => window.__wos.onBack()); await sleep(1500);
+  await p.waitForFunction((id) => document.querySelector(`#launcherBody [data-wam-id="${id}"] .wam-dot`), APP, { timeout: 20000 }).catch(() => {});
+  const dot = await p.evaluate((id) => document.querySelector(`#launcherBody [data-wam-id="${id}"] .wam-dot`)?.className || '', APP);
+  ok(/run|on|ok|green|running/.test(dot), 'My Apps shows the new app with a running dot', dot);
+  await shot('v4-my-apps');
+  const vmlog = await (await fetch(new URL('/__vm/log', BASE))).json();
+  ok(vmlog.some((x) => x.path.includes('/install')) && vmlog.some((x) => x.path.includes('/stop')) && vmlog.some((x) => x.path.includes('/start')), 'install/stop/start reached the VM Runtipi', vmlog.map((x) => x.path));
+  ok(!errs.length, 'no page errors', errs);
+  console.log('lifecycle calls:', JSON.stringify(vmlog.map((x) => `${x.method} ${x.path}`)));
+  console.log(`\nqa-apps-lifecycle-vm ${pass}/${pass + fail}`);
+  await b.close();
+  process.exit(fail ? 1 : 0);
+})().catch((e) => { console.error(e); process.exit(2); });
