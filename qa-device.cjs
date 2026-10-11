@@ -26,10 +26,14 @@ async function boot(b, { native = true } = {}) {
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && (q.method() === 'GET' || q.method() === 'HEAD') && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = path.join(WEB, 'web', f);
+      // Each "deploy" moves the web/ tree id the commit hooks write to ux-version.txt; W.noVersion = an origin without it.
+      if (f === 'ux-version.txt') return W.noVersion ? r.fulfill({ status: 404, body: '' }) : r.fulfill({ status: 200, contentType: 'text/plain', body: (0xabc0000 + W.assetVer).toString(16) + '\n' });
       if (!fs.existsSync(p) || /^(data|summaries)\.js$/.test(f)) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
       const ct = f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : f.endsWith('.png') ? 'image/png' : f.endsWith('.webmanifest') ? 'application/manifest+json' : 'application/javascript';
       // Each "deploy" bumps the ETag of app.js, the way the static server's Last-Modified changes.
-      return r.fulfill({ status: 200, contentType: ct, headers: { etag: `"${f}-${f === 'app.js' ? W.assetVer : 1}"` }, body: fs.readFileSync(p) });
+      // Headers only change through W.lenBump (the Agent Service sends no ETag, only Content-Length).
+      const body = fs.readFileSync(p);
+      return r.fulfill({ status: 200, contentType: ct, headers: { 'content-length': String(body.length + (f === 'core/chat-kit.js' ? W.lenBump || 0 : 0)) }, body: f === 'core/chat-kit.js' && W.lenBump ? Buffer.concat([body, Buffer.from(' '.repeat(W.lenBump))]) : body });
     }
     const json = (o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
     if (u.pathname.endsWith('/api/transcribe')) { W.transcribes++; return json({ text: 'Native recorder QA take', ms: 4 }); }
@@ -324,6 +328,29 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     ok(await p.evaluate(() => window.__wos.voice !== 'idle' && !window.__wosReloading), 'Reload waits while the orb is recording');
     await p.evaluate(() => window.__wos.cancelVoice(true));
     ok(errs.length === 0, 'no page errors (hot reload)', errs.join(' | '));
+    await ctx.close();
+  }
+
+  /* ---- #22b the prompt follows every deploy, not a hand-kept file list (James, 11 Oct) ---- */
+  {
+    const { ctx, p, errs } = await boot(b, { native: false });
+    await open(p); await sleep(2200); // first check (1.5 s after boot) records the version
+    await p.evaluate(() => window.WosDevice.checkWeb(true)); await sleep(500);
+    ok(!(await p.locator('#dvWeb').isVisible().catch(() => false)), 'no prompt while nothing changed');
+    W.assetVer++; // a deploy that only touched core/chat-kit.js (missing from the old list)
+    await p.evaluate(() => window.WosDevice.checkWeb(true)); await sleep(600);
+    ok(await p.locator('#dvWeb').isVisible(), 'a deploy that changes any web file raises "Wizard OS was updated · Reload"');
+    await p.locator('#dvWeb [data-web="go"]').click();
+    await p.waitForFunction(() => window.WosDevice && window.WosDevice.ready, null, { timeout: 20000 }); await sleep(2200);
+    ok(await p.evaluate(() => window.__wosReloading === undefined && !document.querySelector('#dvWeb')), 'one tap reloads into the new version, prompt gone');
+    // An origin without ux-version.txt still sees a change in a file the page loaded.
+    W.noVersion = true;
+    await p.reload(); await p.waitForFunction(() => window.WosDevice && window.WosDevice.ready, null, { timeout: 20000 }); await sleep(2200);
+    W.lenBump = 3;
+    await p.evaluate(() => window.WosDevice.checkWeb(true)); await sleep(800);
+    ok(await p.locator('#dvWeb').isVisible(), 'fallback: a change to core/chat-kit.js alone raises the prompt');
+    W.noVersion = false; W.lenBump = 0;
+    ok(errs.length === 0, 'no page errors (deploy prompt)', errs.join(' | '));
     await ctx.close();
   }
 

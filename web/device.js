@@ -241,12 +241,29 @@
   function onUpdate(u) { upd = u; log('update:' + u.state, u.version || '', u.message || ''); renderUpdate(); if (W$()?.sheet === 'settings') W$().renderSettings(); }
 
   /* ================= #22 web hot-reload that keeps drafts ================= */
-  const ASSETS = ['index.html', 'app.js', 'live.js', 'outbox.js', 'device.js', 'orb.js', 'live-mode.js', 'styles.css',
-    'core/core.js', 'core/apps.js', 'core/chats.js', 'core/chat-power.js', 'core/chat-models.js', 'core/chat-work.js', 'core/chat-errors.js', 'core/files.js', 'core/usage.js', 'core/bridge.js', 'core/shell.js', 'core/base.css', 'core/chats.css', 'core/chat-power.css'];
+  // What changed is read from ux-version.txt: the git tree id of web/, rewritten by the repo's commit/merge/
+  // checkout hooks (tools/write-ux-version.sh), so any committed web change flips it. The Agent Service sends no
+  // ETag/Last-Modified, which left the old header fingerprint comparing sizes only: a same-length edit, or a
+  // file missing from a hand-kept list (chat-kit.js), never raised the prompt (James, 11 Oct). Without the
+  // version file, fall back to headers over every script and stylesheet the page actually loaded.
+  const VERSION = 'ux-version.txt';
+  const assets = () => {
+    const base = new URL('.', location.href).href, out = new Set(['index.html']);
+    document.querySelectorAll('script[src], link[rel="stylesheet"][href]').forEach(el => {
+      const u = new URL(el.getAttribute('src') || el.getAttribute('href'), location.href);
+      if (u.origin === location.origin && u.href.startsWith(base) && !/(^|\/)(data|summaries)\.js$/.test(u.pathname)) out.add(u.pathname.slice(new URL(base).pathname.length));
+    });
+    return [...out];
+  };
   const DRAFTS = 'wos.drafts.v1';
   let print0 = '', webPending = false, lastCheck = 0;
   async function fingerprint() {
-    const parts = await Promise.all(ASSETS.map(async a => {
+    try {
+      const r = await fetch(VERSION, { cache: 'no-store', credentials: 'same-origin' });
+      const v = r.ok ? (await r.text()).trim() : '';
+      if (/^[0-9a-f]{7,64}$/i.test(v)) return 'v:' + v;
+    } catch (e) { return ''; }
+    const parts = await Promise.all(assets().map(async a => {
       try {
         // GET (some proxies mishandle HEAD); only the headers are read, the body is dropped unread.
         const r = await fetch(a, { cache: 'no-store', credentials: 'same-origin' });
@@ -357,7 +374,7 @@
       setTimeout(() => { try { d.updateCheck(); } catch (e) {} }, 2500);
     }
     setTimeout(() => checkWeb(true), 1500);
-    setInterval(() => { if (!document.hidden) checkWeb(false); }, 5 * 60e3);
+    setInterval(() => { if (!document.hidden) checkWeb(false); }, 60e3); // one tiny text file a minute
   }
   addEventListener('wos-native-resume', () => { if (api.ready) { syncRecorder('resume'); checkWeb(false); sweepReadNotes('resume'); } });
   document.addEventListener('visibilitychange', () => {

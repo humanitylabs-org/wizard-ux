@@ -4,3 +4,4 @@ __pycache__/
 # Generated from the private Hermes session DB by a private, owner-local extractor; never commit
 web/data.js
 web/summaries.js
+web/ux-version.txt
