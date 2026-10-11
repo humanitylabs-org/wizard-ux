@@ -1816,7 +1816,15 @@
   }
   const isPill = () => tx.classList.contains('brief');
   let txHideT = 0;
-  function txHide(ms) { clearTimeout(txHideT); txHideT = setTimeout(() => { voiceEl.classList.remove('tx'); }, ms || 0); }
+  // Once the card has faded, drop its choice chips too: a hidden card with chips kept the × "on" and made
+  // the next Back silently clear an invisible card instead of navigating.
+  function txHide(ms) {
+    clearTimeout(txHideT);
+    txHideT = setTimeout(() => {
+      voiceEl.classList.remove('tx');
+      txHideT = setTimeout(() => { if (!voiceEl.classList.contains('tx') && $('#txChips').childElementCount) { $('#txChips').innerHTML = ''; V.holdText = ''; V.holdOpts = null; } }, 320);
+    }, ms || 0);
+  }
   const fmtT = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   function tick() {
     const el = V.acc + (V.state === 'listen' || V.state === 'command' ? performance.now() - V.t0 : 0);
@@ -2286,6 +2294,7 @@
     }
   }
   /* Hold-command with no command match: a choice card, nothing is sent until James taps. */
+  const NOMATCH_MS = 4000;
   function holdNoMatch(text, opts) {
     tourEv('nomatch', { text });
     setVoice('idle'); vib(12);
@@ -2293,10 +2302,10 @@
     const q = String(text || '').trim().replace(/[.!?,\s]+$/, '');
     const btn = (k, label) => `<button data-hold="${k}">${esc(label)}</button>`;
     $('#txChips').innerHTML = (searchUrl(q) ? btn('search', 'Search the web') + btn('images', 'Image search') : '')
-      + btn('agent', `Send to ${window.WizConfig.agent()}`) + btn('drop', 'Dismiss');
+      + btn('agent', `Send to ${window.WizConfig.agent()}`);
     V.holdText = q; V.holdOpts = opts;
     window.__backLog = (window.__backLog || []).concat('hold:nomatch').slice(-30);
-    txHide(9000);
+    txHide(NOMATCH_MS); // James (11 Oct): 9 s lingered far too long; × closes it at once
     return false;
   }
   function showRouted(kind, label) {
@@ -2703,6 +2712,10 @@
     return true;
   };
   $('#txChips').addEventListener('click', e => { if (e.target.closest('[data-handoff="drop"]')) { $('#txChips').innerHTML = ''; txHide(0); } });
+  // × on a choice card: clear it now, nothing sent. Touching the card keeps it up while James reads/picks.
+  const closeChoice = () => { $('#txChips').innerHTML = ''; V.holdText = ''; V.holdOpts = null; window.__backLog = (window.__backLog || []).concat('tx:close').slice(-30); txHide(0); };
+  $('#txClose').addEventListener('click', e => { e.stopPropagation(); closeChoice(); });
+  tx.addEventListener('pointerdown', e => { if (!e.target.closest('#txClose') && V.holdText && $('#txChips').childElementCount) txHide(NOMATCH_MS); });
   $('#txChips').addEventListener('click', e => {
     const b = e.target.closest('[data-hold]'); if (!b) return;
     const k = b.dataset.hold, q = V.holdText || '', opts = V.holdOpts || {};

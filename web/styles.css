@@ -337,6 +337,12 @@ body {
   background: repeating-linear-gradient(90deg, rgba(205, 190, 255, .5) 0 3px, transparent 3px 7px);
   -webkit-mask: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent); mask: linear-gradient(90deg, transparent, #000 15%, #000 85%, transparent);
   transform: scaleY(calc(.15 + var(--lvl, 0) * 1.6)); transition: transform 80ms; }
+/* × on any choice card (chips showing): one tap closes it, nothing sent. Hidden on plain transcripts and pills. */
+.tx-x { display: none; margin-left: auto; flex: none; width: 32px; height: 32px; margin-top: -6px; margin-right: -8px; border-radius: 50%; place-items: center; background: rgba(205, 190, 255, .1); border: 1px solid var(--line-2); color: var(--ink); }
+.tx-x svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.tx-x:active { background: rgba(205, 190, 255, .25); }
+.transcript:has(.tx-chips:not(:empty)) .tx-x { display: grid; }
+.transcript.brief .tx-x { display: none !important; }
 .tx-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .tx-chips:empty { display: none; }
 .tx-chips button { padding: 6px 10px; border-radius: 99px; font-size: 13px; background: rgba(205, 190, 255, .08); border: 1px solid var(--line-2); color: var(--ink); }
