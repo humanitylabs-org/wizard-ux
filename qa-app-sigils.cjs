@@ -52,8 +52,8 @@ async function ctxFor(b, mobile) {
     await p.waitForFunction(() => document.querySelectorAll('#launcherBody .lapp').length > 8, null, { timeout: 15000 }).catch(() => {});
     await p.waitForTimeout(1200);
     const r = await p.evaluate(() => {
-      const tiles = [...document.querySelectorAll('#launcherBody .lgroup')].filter(g => /wizard apps/i.test(g.querySelector('h4')?.textContent || ''))
-        .flatMap(g => [...g.querySelectorAll('.lapp')]);
+      const tiles = [...document.querySelectorAll('#launcherBody .lgroup')].filter(g => /wizard apps|^\s*apps\b/i.test(g.querySelector('h4')?.textContent || '')) // My Apps (feature/apps-views) names it Apps
+        .flatMap(g => [...g.querySelectorAll('.lapp[data-app]')]); // App Manager tiles (data-wam-id) wear the app's own logo
       return {
         loaded: !!window.WizSigil,
         tiles: tiles.map(t => {

@@ -454,6 +454,9 @@
       { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
       { kind: 'cmd', name: 'Inbox', icon: '⬇', keys: `${MOD}I`, run: () => openInbox() },
       ...(window.WosFiles ? [{ kind: 'cmd', name: 'Files', icon: '▤', run: () => openFiles() }] : []),
+      ...(window.WosApps ? [{ kind: 'cmd', name: 'Get apps', lead: true, sub: 'App Store: find and install Wizard apps', icon: '+', run: () => openApps('store') },
+        { kind: 'cmd', name: 'My apps', lead: true, sub: 'Installed agents, apps and system', icon: '▦', run: () => openApps('apps') },
+        { kind: 'cmd', name: 'Resources', sub: 'Storage, processor, memory · Start/Stop all', icon: '◔', run: () => openSettings('resources') }] : []),
       ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
       { kind: 'cmd', name: 'Close window', icon: '✕', keys: `${MOD}W`, run: () => focused() && closeWin(focused().id) },
       { kind: 'cmd', name: 'Full window', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
@@ -485,6 +488,9 @@
     }
     // With a query, apps lead (James: "music" → Wizard Music first, under the cursor), then threads,
     // then commands; "Ask" goes last unless nothing else matched. With no query, attention threads lead.
+    // "get apps" / "my apps" / "app store": the Apps panel leads (it is what that phrase means).
+    const appsCmd = n && n.length >= 3 && commands().filter(c => c.lead && (norm(c.name).startsWith(n) || (/store/.test(n) && c.name === 'Get apps')));
+    if (appsCmd && appsCmd.length) out.push({ grp: 'Apps', items: appsCmd });
     if (n) {
       if (apps.length) out.push({ grp: 'Apps', items: apps });
       if (th.length) out.push({ grp: 'Threads', items: th });
@@ -582,12 +588,73 @@
     const st = LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
     setEl.innerHTML = `<div class="keys-card set-card" role="dialog" aria-label="Settings"><div class="keys-head"><b>Settings</b><small>Wizard on this computer</small><button class="x" data-close aria-label="Close">✕</button></div>
       <div class="set-body"><div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(st)}</b><small>Desktop · ${esc(location.host)}</small></span></div></div>
+      ${window.WosApps ? '<div class="wam-res" data-wam-res></div>' : ''}
       ${C.voiceStatus?.card() || ''}</div></div>`;
+    const r = setEl.querySelector('[data-wam-res]'); if (r) { r._wamLoad = setEl._wamLoad; window.WosApps.renderResources(r, {}).then(() => { setEl._wamLoad = r._wamLoad; }); }
   }
-  function openSettings() { setEl.hidden = false; renderSettings(); setEl.querySelector('[data-close]')?.focus(); }
+  function openSettings(focus) {
+    setEl.hidden = false; renderSettings(); setEl.querySelector('[data-close]')?.focus();
+    if (focus === 'resources') { const go = (n = 40) => { const r = setEl.querySelector('[data-wam-res] .st-group'); if (r) return r.scrollIntoView({ block: 'start' }); if (n > 0) setTimeout(() => go(n - 1), 100); }; go(); }
+  }
   function closeSettings() { setEl.hidden = true; const f = focused(); if (f) focusInside(f.id); }
   setEl.addEventListener('click', e => { if (e.target === setEl || e.target.closest('[data-close]')) closeSettings(); });
   C.voiceStatus?.onChange(() => renderSettings());
+
+  /* ---------------- Apps (⌘K → My apps / Get apps): Oscar's App Manager views (core/wizard-apps.js) ----------------
+   * The same three views as the phone's swipe-up sheet: My Apps, the App Store (chip row + index search) and an app
+   * card. Esc/Back peels card → store → My Apps → closed; it never leaves the page. */
+  const appsEl = document.createElement('div');
+  appsEl.id = 'dapps'; appsEl.className = 'keys dapps'; appsEl.hidden = true;
+  appsEl.innerHTML = `<div class="keys-card dapps-card" role="dialog" aria-label="Apps"><div class="keys-head"><b data-dapps-title>My apps</b><small data-dapps-sub>Your agents, apps and system</small><button class="x" data-close aria-label="Close">✕</button></div>
+    <div class="dapps-body launcher-body" data-dapps-body></div><div class="wam wam-chips" data-dapps-chips hidden></div>
+    <label class="dapps-search pal-in"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input data-dapps-q placeholder="Search your apps" spellcheck="false" autocomplete="off"></label></div>`;
+  document.body.appendChild(appsEl);
+  const AP = { mode: 'apps', store: null, from: 'apps' };
+  const apBody = appsEl.querySelector('[data-dapps-body]'), apChips = appsEl.querySelector('[data-dapps-chips]'), apQ = appsEl.querySelector('[data-dapps-q]');
+  const apHead = (t, sub) => { appsEl.querySelector('[data-dapps-title]').textContent = t; appsEl.querySelector('[data-dapps-sub]').textContent = sub; };
+  const apLog = s => { window.__wamLog = (window.__wamLog || []).concat(s).slice(-30); };
+  function apMyApps() {
+    AP.mode = 'apps'; AP.store = null; apChips.hidden = true; apQ.value = ''; apQ.placeholder = 'Search your apps'; apHead('My apps', 'Your agents, apps and system');
+    const host = document.createElement('div'); host.className = 'wam-host'; apBody.replaceChildren(host);
+    const mine = () => new Set((window.WosApps.cached || []).map(a => a.id));
+    const extra = () => APPS.filter(a => (a.kind === 'wizard' || a.kind === 'chats') && !mine().has(a.id)).map(a => `<button class="lapp" data-app="${esc(a.id)}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`);
+    window.WosApps.renderMyApps(host, { shell: true, get extraTiles() { return extra(); }, onGetApps: apStore, onApp: a => apCard(a, 'apps') });
+    apLog('apps');
+  }
+  function apStore() {
+    AP.mode = 'store'; apQ.value = ''; apQ.placeholder = 'Search the App Store'; apHead('App Store', 'Wizard apps from the App Index');
+    const host = document.createElement('div'); host.className = 'wam-host wam-store';
+    AP.store = { host, api: window.WosApps.renderStore(host, { shell: true, chipsEl: apChips, onBack: apMyApps, onApp: a => apCard(a, 'store') }) };
+    apChips.hidden = false; apBody.replaceChildren(host); apBody.scrollTop = 0; apQ.focus(); apLog('store');
+  }
+  function apCard(a, from) {
+    AP.mode = 'card'; AP.from = from; apChips.hidden = true;
+    const card = document.createElement('div'); card.className = 'wam-host';
+    window.WosApps.renderCard(card, a, { shell: true, from, onBack: from === 'store' ? apBackToStore : apMyApps });
+    apBody.replaceChildren(card); apBody.scrollTop = 0; apLog('card:' + a.id);
+  }
+  function apBackToStore() { if (!AP.store) return apMyApps(); AP.mode = 'store'; apChips.hidden = false; apHead('App Store', 'Wizard apps from the App Index'); apBody.replaceChildren(AP.store.host); AP.store.api.repaint(); apLog('store'); }
+  function openApps(mode = 'apps') { if (!window.WosApps) return; appsEl.hidden = false; if (mode === 'store') apStore(); else { apMyApps(); apQ.focus(); } }
+  function closeApps() { if (appsEl.hidden) return false; appsEl.hidden = true; AP.mode = 'apps'; AP.store = null; const f = focused(); if (f) focusInside(f.id); return true; }
+  function appsBack() {
+    if (appsEl.hidden) return '';
+    if (AP.mode === 'card') { if (AP.from === 'store' && AP.store) apBackToStore(); else apMyApps(); return 'app-card'; }
+    if (AP.mode === 'store') { apMyApps(); return 'store'; }
+    closeApps(); return 'apps';
+  }
+  apQ.addEventListener('input', () => {
+    if (AP.mode === 'apps') { // My apps: filter the tiles in place
+      const n = norm(apQ.value); apBody.querySelectorAll('.lapp').forEach(b => { b.hidden = !!n && !norm(b.textContent).includes(n) && !b.matches('[data-wam-get]'); });
+      return;
+    }
+    if (AP.mode === 'card') apBackToStore();
+    AP.store?.api.setQuery(apQ.value);
+  });
+  apQ.addEventListener('keydown', e => { if (e.key === 'Enter' && AP.mode !== 'apps') { e.preventDefault(); AP.store?.api.setQuery(apQ.value); } });
+  appsEl.addEventListener('click', e => {
+    if (e.target === appsEl || e.target.closest('[data-close]')) return closeApps();
+    const b = e.target.closest('[data-app]'); if (b) { const a = APP[b.dataset.app]; if (a) { closeApps(); openApp(a); } }
+  });
 
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
@@ -744,6 +811,7 @@
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }
+    { const ab = appsBack(); if (ab) return ab; } // App Store / app card → My apps → closed
     if (closeUsage()) return 'usage';
     if (setEl && !setEl.hidden) { closeSettings(); return 'settings'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
@@ -766,6 +834,7 @@
     if (k === 'Escape' && LINKS && LINKS.isOpen() && fromFrame) { const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } return; }
     if (k === 'Escape') { if (fromFrame && pal.hidden && keysEl.hidden && ib.hidden && VOICE.state !== 'listen') return; const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
     if (!pal.hidden) return; // the palette owns the keyboard while open
+    if (!appsEl.hidden) return; // so does the Apps panel (Esc steps back inside it)
     if (setEl && !setEl.hidden && !(e.altKey && code === 'Comma')) return; // so does Settings (⌥, closes it)
     // Chats: ↑/↓ or j/k walk the thread list (from the list, the search box or an empty thread pane), / focuses search.
     {
@@ -891,7 +960,9 @@
     thread: sid => openThread(sid),
     view(v, section) {
       if (v === 'inbox') return openInbox();
-      if (v === 'apps') return openPalette();
+      if (v === 'apps') return window.WosApps ? openApps('apps') : openPalette();
+      if (v === 'store') return openApps('store');
+      if (v === 'resources') return openSettings('resources');
       if (v === 'settings' || v === 'usage') return openSettings();
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); return toast('◇', 'Files isn’t on this Wizard', 1800); }
       if (v === 'day' || v === 'week' || v === 'month') { const a = APP['v-' + v]; if (a?.url) return openApp(a); }
@@ -913,7 +984,7 @@
     shell: 'desktop', get ws() { return ws; }, get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS,
     goWs, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openInbox, talk, ask, escStep, viewContext,
     openFiles, openUsage, recordReply,
-    openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
+    openSettings, closeSettings, openApps, closeApps, appsBack, get appsMode() { return appsEl.hidden ? '' : AP.mode; }, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
 })();

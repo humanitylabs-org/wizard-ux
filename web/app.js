@@ -109,7 +109,7 @@
     if (store.get('stripSeeded', false) || !(APP.topics || APP.mizel)) return;
     seedApps(); store.set('stripSeeded', true); try { save(); syncDesks(); } catch (e) {}
   };
-  window.addEventListener('wizard:apps', () => { lateLayout(); reframe(); });
+  window.addEventListener('wizard:apps', () => { lateLayout(); reframe(); try { if (sheet === 'launcher' && WAM.mode === 'apps') renderLauncher($('#search').value, true); } catch (e) {} }); // My Apps picks up the box's app list when it lands
   setTimeout(reframe, 0); setTimeout(reframe, 1500);
   desks.forEach(d => {
     d.wins = d.wins.filter(id => W[id]).slice(0, MAXW);
@@ -905,7 +905,9 @@
         <button class="st-row" data-st="help"><span class="st-ic">?</span><span class="st-tx"><b>Gestures &amp; help</b><small>How the orb, desks and Back work · practice again</small></span><span class="st-go">›</span></button>
         ${window.WosFiles ? `<button class="st-row" data-st="files"><span class="st-ic">▤</span><span class="st-tx"><b>Files</b><small>Everything in Wizard Files · preview, attach to a chat</small></span><span class="st-go">›</span></button>` : ''}
       </div>
+      ${window.WosApps ? '<div class="wam-res" data-wam-res></div>' : ''}
       ${window.WosUsage ? window.WosUsage.html() : ''}`;
+    { const r = $('#settingsBody [data-wam-res]'); if (r) { r._wamLoad = WAM.load; window.WosApps.renderResources(r, {}).then(() => { WAM.load = r._wamLoad; }); } }
     // AI usage (#24): read when Settings opens, painted in place when it lands.
     if (window.WosUsage && !window.WosUsage.loading && (!window.WosUsage.snap || Date.now() - window.WosUsage.at > 60e3)) window.WosUsage.load().then(paintUsage);
   }
@@ -1500,7 +1502,7 @@
   }
   function closeSheets(quiet) {
     if (!sheet && quiet) return;
-    sheet = null; device.classList.remove('sheet-open');
+    sheet = null; device.classList.remove('sheet-open'); wamReset();
     launcher.classList.remove('open'); inboxEl.classList.remove('open'); settingsEl.classList.remove('open');
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
     $('#search').blur();
@@ -1531,11 +1533,13 @@
       const top = body.scrollTop; body.innerHTML = html; body.__lhtml = html;
       body.scrollTop = live ? top : body.scrollHeight;
     };
+    if (WAM.mode !== 'apps') return; // App Store / app card own the sheet body until Back or close
     if (!q) {
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native').slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
         <div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>
-        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals').length}</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals').map(appTile).join('')}</div></div>`); // the per-desk window list never renders in the launcher: it read as stray text
+        ${window.WosApps ? '<div class="wam-host" data-wam-myapps></div>' : `<div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals').length}</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals').map(appTile).join('')}</div></div>`}`); // the per-desk window list never renders in the launcher: it read as stray text
+      wamMyApps(body, live);
       return;
     }
     const n = norm(q);
@@ -1555,9 +1559,76 @@
         <span class="acts"><button data-dw="full" data-id="${id}">${full ? 'Tile' : 'Full'}</button>${idx > 0 ? `<button data-dw="left" data-id="${id}" aria-label="Move to desk ${idx}">←</button>` : ''}${idx < desks.length - 1 ? `<button data-dw="right" data-id="${id}" aria-label="Move to desk ${idx + 2}">→</button>` : ''}<button data-dw="close" data-id="${id}" aria-label="Close">✕</button></span></div>`; }).join('');
     return `<div class="deskbar"><div class="dh"><b>${esc(deskName(idx))}</b><span>${d.wins.length} window${d.wins.length === 1 ? '' : 's'}</span></div>${rows}</div>`;
   }
-  $('#search').addEventListener('input', e => renderLauncher(e.target.value));
+  /* ---- My Apps / App Store / app card (core/wizard-apps.js, Oscar's App Manager views) ----
+   * My Apps replaces the "Wizard apps" group of the swipe-up launcher; "Get apps" turns the same sheet into the
+   * App Store (chip row above the search bar, the search bar searches the App Index); a tile opens its card.
+   * Back: card → where it came from → My Apps → sheet closes. Never leaves the app. */
+  const WAM = { mode: 'apps', store: null, card: null, chips: null, from: 'apps', ph: '' };
+  function wamChips() {
+    if (WAM.chips) return WAM.chips;
+    const c = document.createElement('div'); c.className = 'wam wam-chips'; c.hidden = true; $('#searchForm').before(c);
+    return (WAM.chips = c);
+  }
+  function wamStoreUi(on) {
+    const s = $('#search'); if (!WAM.ph) WAM.ph = s.placeholder;
+    wamChips().hidden = !on; s.placeholder = on ? 'Search the App Store' : WAM.ph;
+    launcher.classList.toggle('wam-store-mode', on);
+  }
+  function wamMyApps(body, live) {
+    let host = body.querySelector('[data-wam-myapps]'); if (!host || !window.WosApps) return;
+    if (live && host.childElementCount && host.dataset.wamN === String(APPS.length)) return; // the box's app list arrived late: redraw once
+    // Entrance stagger (--i) continues from the Recent/Views tiles above, the same on every repaint (a growing index
+    // left the last tiles invisible for over a second).
+    const base = body.querySelectorAll('.lgroup .lapp').length;
+    const shellTiles = () => { const mine = new Set((window.WosApps.cached || []).map(a => a.id)); let k = base; return APPS.filter(a => (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals') && !mine.has(a.id)).map(a => appTile(a).replace(/--i:\d+/, `--i:${Math.min(k++, 16)}`)); };
+    host.dataset.wamN = String(APPS.length);
+    window.WosApps.renderMyApps(host, { shell: true, get extraTiles() { return shellTiles(); }, onGetApps: wamOpenStore, onApp: a => wamOpenCard(a, 'apps') })
+      .then(() => { if (!live && host.isConnected && WAM.mode === 'apps' && !$('#search').value.trim()) body.scrollTop = body.scrollHeight; });
+  }
+  function wamOpenStore() {
+    if (!window.WosApps) return;
+    if (sheet !== 'launcher') openSheet('launcher');
+    WAM.mode = 'store'; const s = $('#search'); s.value = '';
+    const host = document.createElement('div'); host.className = 'wam-host wam-store';
+    const api = window.WosApps.renderStore(host, { shell: true, chipsEl: wamChips(), onBack: wamBackToApps, onApp: a => wamOpenCard(a, 'store') });
+    WAM.store = { host, api }; wamStoreUi(true);
+    const body = $('#launcherBody'); body.replaceChildren(host); body.__lhtml = ''; body.scrollTop = 0;
+    window.__wamLog = (window.__wamLog || []).concat('store').slice(-30);
+  }
+  function wamOpenCard(a, from) {
+    WAM.mode = 'card'; WAM.from = from;
+    const card = document.createElement('div'); card.className = 'wam-host';
+    window.WosApps.renderCard(card, a, { shell: true, from, onBack: from === 'store' ? wamBackToStore : wamBackToApps });
+    WAM.card = card; wamStoreUi(false);
+    const body = $('#launcherBody'); body.replaceChildren(card); body.__lhtml = ''; body.scrollTop = 0;
+    window.__wamLog = (window.__wamLog || []).concat('card:' + a.id).slice(-30);
+  }
+  function wamBackToStore() {
+    if (!WAM.store) return wamBackToApps();
+    WAM.mode = 'store'; WAM.card = null; wamStoreUi(true);
+    const body = $('#launcherBody'); body.replaceChildren(WAM.store.host); WAM.store.api.repaint();
+    window.__wamLog = (window.__wamLog || []).concat('store').slice(-30);
+  }
+  function wamBackToApps() {
+    WAM.mode = 'apps'; WAM.store = null; WAM.card = null; wamStoreUi(false);
+    const s = $('#search'); s.value = ''; const body = $('#launcherBody'); body.__lhtml = ''; renderLauncher('');
+    window.__wamLog = (window.__wamLog || []).concat('apps').slice(-30);
+  }
+  function wamReset() { if (WAM.mode === 'apps' && !WAM.store) return; WAM.mode = 'apps'; WAM.store = null; WAM.card = null; wamStoreUi(false); }
+  // One Back step inside the Apps sheet; '' when My Apps is showing (the sheet itself closes next).
+  function wamBack() {
+    if (sheet !== 'launcher' || WAM.mode === 'apps') return '';
+    if (WAM.mode === 'card' && WAM.from === 'store' && WAM.store) { wamBackToStore(); return 'app-card'; }
+    const was = WAM.mode; wamBackToApps(); return was === 'card' ? 'app-card' : 'store';
+  }
+  $('#search').addEventListener('input', e => {
+    if (WAM.mode !== 'apps') { if (WAM.mode === 'card') wamBackToStore(); WAM.store?.api.setQuery(e.target.value); return; }
+    renderLauncher(e.target.value);
+  });
   $('#searchForm').addEventListener('submit', e => {
-    e.preventDefault(); const q = $('#search').value.trim(); if (!q) return;
+    e.preventDefault();
+    if (WAM.mode !== 'apps') { WAM.store?.api.setQuery($('#search').value); $('#search').blur(); return; }
+    const q = $('#search').value.trim(); if (!q) return;
     const sel = $('#launcherBody .lrow.sel');
     if (sel?.dataset.app) { launch(APP[sel.dataset.app]); return; }
     closeSheets(); runUtterance(q, 'command', true);
@@ -2483,6 +2554,7 @@
     if (closeOverview()) return 'overview';
     if (closeReviewCoach()) return 'review-coach';
     if (menuFor) { closeMenu(); return 'menu'; }
+    { const wb = wamBack(); if (wb) return wb; } // App Store / app card → My Apps, before the sheet closes
     if (sheet) { closeSheets(); return 'sheet'; }
     const d = desks[idx], f = W[d.focus];
     if (f) {
@@ -2688,6 +2760,7 @@
     toast,
   });
   window.__wos = {
+    get wam() { return { mode: WAM.mode, from: WAM.from }; }, wamOpenStore, wamBack,
     get links() { return LINKS; },
     live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
@@ -2722,6 +2795,8 @@
       closeSheets(true);
       if (v === 'inbox') return openSheet('inbox');
       if (v === 'apps') return openSheet('launcher');
+      if (v === 'store') return wamOpenStore();
+      if (v === 'resources') { openSettings(); const go = (n = 40) => { const r = $('#settingsBody [data-wam-res]'); if (r && r.querySelector('.st-group')) return r.scrollIntoView({ block: 'start' }); if (n > 0) setTimeout(() => go(n - 1), 100); }; return go(); }
       if (v === 'settings' || v === 'usage') return openSettings();
       if (v === 'day' || v === 'week' || v === 'month') return openReview(v);
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); toast('◇', 'Files isn’t on this Wizard', 1800); return; }
