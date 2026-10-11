@@ -376,7 +376,7 @@ window.WizCore.chats = function createChats(H) {
   const COPY_SVG = '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
   const SHARE_SVG = '<svg viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>';
   const CHECK_SVG = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
-  const timeTag = ms => isFinite(ms) ? `<time title="${esc(KIT.time.full(ms))}">${esc(KIT.time.clock(ms))}</time>` : '';
+  const timeTag = ms => isFinite(ms) ? `<time title="${esc(KIT.time.full(ms))}">${esc(KIT.time.stamp(ms))}</time>` : '';
   // A note another agent thread wrote into this one: never shown as the owner's message. Collapsed to one labelled
   // line (who sent it); tap to read it.
   function noteHtml(n) {

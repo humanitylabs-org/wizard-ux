@@ -326,6 +326,15 @@
       return F(k.slice(0, 4) === D.format(now).slice(0, 4) ? O_DATE : O_DATEY).format(ms);
     },
     full: ms => isFinite(ms) ? `${F(O_FULL).format(ms)} Bangkok` : '',
+    // Message stamp (James, 11 Oct): today's messages show only the time; any other day shows its date
+    // too ("Sat 10 Oct, 18:16"; year added outside the current year), so a scrolled-to message is never
+    // ambiguous when its day divider is off screen.
+    stamp(ms, now = Date.now()) {
+      if (!isFinite(ms)) return '';
+      const D = F(O_DAY), k = D.format(ms), clk = F(O_TIME).format(ms);
+      if (k === D.format(now)) return clk;
+      return `${F(k.slice(0, 4) === D.format(now).slice(0, 4) ? O_DATE : O_DATEY).format(ms)}, ${clk}`;
+    },
   };
 
   /* ================= drafts: one per thread, kept across reloads ================= */
