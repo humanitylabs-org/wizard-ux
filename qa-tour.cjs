@@ -29,6 +29,8 @@ async function session(b, { mic = true } = {}) {
     if (/\/v1\/runs$|\/api\/sessions/.test(u.pathname)) S.runs++;
     return r.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
   });
+  // The skin picker (beat 0, qa-skins.cjs) runs first on a fresh install; this suite covers the beats after it.
+  if (!process.env.QA_TOUR_PICKER) await ctx.addInitScript(() => { try { if (location.protocol.startsWith('http')) localStorage.setItem('wos.skin', 'nebula'); } catch (e) {} });
   if (!mic) await ctx.addInitScript(() => { try { navigator.mediaDevices.getUserMedia = () => Promise.reject(Object.assign(new Error('denied'), { name: 'NotAllowedError' })); } catch (e) {} });
   const p = await ctx.newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e)));

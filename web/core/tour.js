@@ -18,6 +18,7 @@
   const KEY = 'wos.tour.v1';
   let H = null, el = null, step = 0, helpEl = null, timers = [];
   let misses = 0, typed = false, inbox = false, busy = false;
+  let picking = false, picked = false; // beat 0: choose your skin (core/skins.js)
   const $ = (s, r = document) => r.querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
@@ -41,7 +42,9 @@
       <button type="button" class="tr-skip" data-tskip>Skip</button>
       <div class="tr-steps" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="tr-stage"></div>
-      <div class="tr-copy" aria-live="polite"><small></small><b></b><span class="tr-alt"></span></div>`;
+      <div class="tr-copy" aria-live="polite"><small></small><b></b><span class="tr-alt"></span></div>
+      <div class="sk-pick"><div class="sk-flash"></div><div class="sk-panel"><div class="sk-eb">Choose your skin</div><div class="sk-name"></div><div class="sk-who"></div>
+        <div class="sk-dots"></div><div class="sk-hint">Swipe to try them on</div><button type="button" class="sk-wear"><i></i><span></span></button></div></div>`;
     el.addEventListener('click', e => {
       if (e.target.closest('[data-tskip]')) return finish('skip');
       if (e.target.closest('[data-ttype]')) { typed = true; return go(step); }
@@ -76,6 +79,7 @@
   }
   function go(n) {
     clearTimers(); step = n; busy = false; inbox = false; log('beat:' + n);
+    if (picking) unpick();
     if (n !== 1 && n !== 2) misses = 0;
     el.dataset.step = String(n);
     [...el.querySelectorAll('.tr-steps i')].forEach((d, i) => d.classList.toggle('on', i < n));
@@ -128,7 +132,85 @@
     if (type === 'desk' && step <= 3 && !busy && !d.home) { H.goHome(); return nudge('That moves between desks. Try the beat above.'); }
   }
 
-  const active = () => !!(el && step > 0);
+
+  /* ---------------- Beat 0: choose your skin ----------------
+   * The real Home stays live underneath; swiping anywhere above the dock re-dresses it (WosSkin.preview blends
+   * tokens, background and orb continuously). Hold "Wear …" to choose; the tour then continues in that skin. */
+  let pk = null, pkBound = false;
+  function pick() {
+    clearTimers(); step = 0; picking = true; log('beat:skin');
+    const S = window.WosSkin, L = S.list, N = L.length;
+    el.classList.add('tr-pick'); el.dataset.step = '0'; H.goHome(); spot('open');
+    H.orbWrap.classList.remove('tr-pulse');
+    const root = $('.sk-pick', el), name = $('.sk-name', root), who = $('.sk-who', root), dots = $('.sk-dots', root), wear = $('.sk-wear', root), fill = $('i', wear), lbl = $('span', wear);
+    dots.innerHTML = L.map((s, i) => `<b data-sk="${i}" aria-label="${esc(s.name)}"></b>`).join('');
+    const start = S.chosen ? S.index(S.chosen) : Math.round(S.pos);
+    pk = { pos: start, target: start, drag: null, raf: 0, shown: -1, held: 0, hold: null };
+    const label = i => { if (pk.shown === i) return; pk.shown = i; name.textContent = L[i].name; who.textContent = L[i].who; lbl.textContent = `Hold to wear ${L[i].name}`; [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i)); };
+    const W = () => H.device.getBoundingClientRect().width || 400;
+    const tick = () => {
+      pk.raf = 0; if (!picking) return;
+      if (!pk.drag) { const d = pk.target - pk.pos; pk.pos += d * .2; if (Math.abs(d) < .001) pk.pos = pk.target; }
+      S.preview(pk.pos); label(Math.max(0, Math.min(N - 1, Math.round(pk.pos))));
+      if (pk.drag || pk.pos !== pk.target) pk.raf = requestAnimationFrame(tick);
+    };
+    const kick = () => { if (!pk.raf) pk.raf = requestAnimationFrame(tick); };
+    pk.kick = kick; pk.go = i => { pk.target = Math.max(0, Math.min(N - 1, i)); kick(); };
+    label(Math.round(start)); kick();
+    pk.holdStart = holdStart; pk.holdEnd = holdEnd; pk.els = { wear, fill };
+    if (!pkBound) {
+      pkBound = true;
+      root.addEventListener('pointerdown', e => {
+        e.stopPropagation(); if (!picking) return;
+        const d = e.target.closest('[data-sk]'); if (d) { pk.go(+d.dataset.sk); return; }
+        if (e.target.closest('.sk-wear')) return pk.holdStart(e);
+        pk.drag = { x0: e.clientX, p0: pk.pos, lx: e.clientX, lt: performance.now(), v: 0 }; root.setPointerCapture(e.pointerId); kick();
+      });
+      root.addEventListener('pointermove', e => {
+        e.stopPropagation();
+        // A sideways drag that starts on the Wear button is browsing, not wearing.
+        if (pk && pk.hold && Math.abs(e.clientX - pk.hx) > 12) { cancelAnimationFrame(pk.hold); pk.hold = null; pk.els.wear.classList.remove('held'); pk.els.fill.style.transform = 'scaleX(0)'; pk.drag = { x0: e.clientX, p0: pk.pos, lx: e.clientX, lt: performance.now(), v: 0 }; kick(); }
+        const g = pk && pk.drag; if (!g) return; const now = performance.now();
+        g.v = (e.clientX - g.lx) / Math.max(1, now - g.lt) * .8 + g.v * .2; g.lx = e.clientX; g.lt = now;
+        let raw = g.p0 - (e.clientX - g.x0) / W(); const n = window.WosSkin.list.length;
+        if (raw < 0) raw *= .3; if (raw > n - 1) raw = n - 1 + (raw - n + 1) * .3;
+        pk.pos = pk.target = raw; if (Math.abs(e.clientX - g.x0) > 14) $('.sk-hint', el).style.visibility = 'hidden';
+      });
+      const end = e => {
+        e.stopPropagation(); if (pk && pk.hold) return pk.holdEnd();
+        const g = pk && pk.drag; if (!g) return; pk.drag = null; const base = Math.round(g.p0), dx = e.clientX - g.x0;
+        pk.go(Math.abs(g.v) > .35 && Math.abs(dx) > 20 ? base + (g.v < 0 ? 1 : -1) : Math.round(pk.pos));
+      };
+      root.addEventListener('pointerup', end); root.addEventListener('pointercancel', end);
+      root.addEventListener('click', e => e.stopPropagation());
+    }
+    function holdStart(e) {
+      wear.setPointerCapture(e.pointerId); wear.classList.add('held'); const t0 = performance.now(); pk.hx = e.clientX; H.vib(6);
+      const step_ = () => { const p = Math.min(1, (performance.now() - t0) / 700); fill.style.transform = `scaleX(${p})`; if (p >= 1) return choose(); pk.hold = requestAnimationFrame(step_); };
+      pk.hold = requestAnimationFrame(step_); pk.t0 = t0;
+    }
+    function holdEnd() {
+      cancelAnimationFrame(pk.hold); pk.hold = null; wear.classList.remove('held');
+      if (performance.now() - pk.t0 < 280) nudgePick('Press and hold to wear it');
+      fill.style.transition = 'transform .25s'; fill.style.transform = 'scaleX(0)'; setTimeout(() => { fill.style.transition = ''; }, 260);
+    }
+    function choose() {
+      cancelAnimationFrame(pk.hold); pk.hold = null; wear.classList.remove('held');
+      const id = S.commit(pk.pos); picked = true; H.vib(20); log('skin:' + id);
+      const f = $('.sk-flash', el); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+      H.toast('✦', `Wearing ${L[S.index(id)].name}`, 1600);
+      later(() => { fill.style.transform = 'scaleX(0)'; if (picking) go(1); }, 700);
+    }
+  }
+  function nudgePick(t) { const h = $('.sk-hint', el); if (!h) return; h.style.visibility = ''; h.textContent = t; later(() => { if (picking) h.textContent = 'Swipe to try them on'; }, 1800); }
+  /* Leaving the picker without choosing (skip / Back) puts back the skin that was on before. */
+  function unpick(restore) {
+    picking = false; if (el) el.classList.remove('tr-pick');
+    if (pk) { cancelAnimationFrame(pk.raf); pk.raf = 0; pk.drag = null; }
+    if (restore && window.WosSkin) { const c = window.WosSkin.chosen; window.WosSkin.preview(window.WosSkin.index(c || 'nebula')); }
+  }
+
+  const active = () => !!(el && (step > 0 || picking));
   // While the tour runs, only the orb, the voice controls and the tour itself take taps.
   const allowed = t => !!(t.closest && t.closest('.tour, #orbWrap, #voice, .arc, #txChips, .help-sheet, #dock, #inbox'));
   window.addEventListener('pointerdown', e => { if (active() && !allowed(e.target)) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
@@ -140,11 +222,14 @@
     if (!el) build();
     typed = !!(H.noMic && H.noMic()); misses = 0;
     el.hidden = false; el.classList.add('on'); H.device.classList.add('touring'); log('start:' + (why || ''));
-    go(1); return true;
+    picked = false;
+    if (window.WosSkin && (why === 'skin' || ((why === 'first-run' || why === 'link') && !window.WosSkin.chosen))) pick(); else go(1);
+    return true;
   }
   function finish(how) {
     if (!el) return;
     clearTimers(); log('finish:' + how);
+    if (picking) unpick(true);
     step = 0; inbox = false; busy = false; mark();
     H.orbWrap.classList.remove('tr-pulse');
     el.classList.remove('on'); H.device.classList.remove('touring');
@@ -156,7 +241,8 @@
     if (helpEl) { closeHelp(); return 'help'; }
     if (!active()) return '';
     if (el.classList.contains('tr-live')) return ''; // recording: Back navigates as always, the tour stays
-    if (step === 1) { finish('skip'); return 'tour-skip'; }
+    if (picking) { finish('skip'); return 'tour-skip'; }
+    if (step === 1) { if (picked) { pick(); return 'tour-step'; } finish('skip'); return 'tour-skip'; }
     if (step === 2) { go(1); return 'tour-step'; }
     if (step === 3) { if (inbox) { H.closeSheets(); return 'tour-step'; } go(2); return 'tour-step'; }
     finish('done'); return 'tour-done';
@@ -177,10 +263,11 @@
     helpEl = document.createElement('div'); helpEl.className = 'help-sheet'; helpEl.setAttribute('role', 'dialog'); helpEl.setAttribute('aria-label', 'Gestures and help');
     helpEl.innerHTML = `<div class="hs-card"><div class="hs-h"><b>How Wizard works</b><button type="button" class="hs-x" data-hsx aria-label="Close">✕</button></div>
       ${HELP.map(r => { const say = typeof r.say === 'function' ? r.say() : r.say; return `<div class="hs-row"><span class="tr-gi ${r.k}"><i></i></span><span class="hs-tx"><b>${r.a}</b><small>${r.b}</small>${say ? `<span class="hs-say">${say.map(s => `<button type="button" data-hsay="${esc(s)}" data-hkind="${r.k === 'hold' ? 'command' : 'auto'}">${esc(s)}</button>`).join('')}</span>` : ''}</span></div>`; }).join('')}
-      <button type="button" class="hs-go" data-hsgo>Practice again</button></div>`;
+      <button type="button" class="hs-go" data-hsgo>Practice again</button>${window.WosSkin ? '<button type="button" class="hs-go hs-skin" data-hsskin>Change skin</button>' : ''}</div>`;
     helpEl.addEventListener('click', e => {
       if (e.target.closest('[data-hsx]') || e.target === helpEl) return closeHelp();
       if (e.target.closest('[data-hsgo]')) { closeHelp(); return start('help'); }
+      if (e.target.closest('[data-hsskin]')) { closeHelp(); return start('skin'); }
       const s = e.target.closest('[data-hsay]'); if (s) { closeHelp(); H.say(s.dataset.hsay, s.dataset.hkind); }
     });
     H.device.appendChild(helpEl); void helpEl.offsetWidth; helpEl.classList.add('open'); log('help:open');
@@ -192,7 +279,7 @@
     attach(host) { H = host; },
     start, finish, back, event, openHelp, closeHelp, _go: n => active() && go(n),
     isHelp: t => HELP_RE.test(String(t || '').trim()),
-    get active() { return active(); }, get step() { return step; }, get helpOpen() { return !!helpEl; }, get typed() { return typed; },
+    get active() { return active(); }, get step() { return step; }, get picking() { return picking; }, pick: () => active() && pick(), get helpOpen() { return !!helpEl; }, get typed() { return typed; },
     done, mark,
   };
 })();

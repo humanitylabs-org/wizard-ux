@@ -2793,8 +2793,9 @@
     // ?session= takes exactly the path the Android app's ACTION_THREAD intent takes.
     thread: id => window.__wosHandoff({ action: 'thread', id }),
     view(v, section) {
-      if (window.WosTour?.active && v !== 'tour') window.WosTour.finish('deeplink');
+      if (window.WosTour?.active && v !== 'tour' && v !== 'skin') window.WosTour.finish('deeplink');
       if (v === 'tour') return window.WosTour?.start('link');
+      if (v === 'skin') return window.WosTour?.start('skin');
       if (v === 'help') { closeSheets(true); return window.WosTour?.openHelp(); }
       closeSheets(true);
       if (v === 'inbox') return openSheet('inbox');
