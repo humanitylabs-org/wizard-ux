@@ -44,7 +44,7 @@ async function boot(b, { native = false } = {}) {
   const errs = [];
   p.on('pageerror', e => errs.push(String(e)));
   await p.addInitScript(({ native }) => {
-    try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.done', '1'); } catch (e) {}
+    try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.v1', 'true'); } catch (e) {}
     if (!native || location.protocol === 'about:') return;
     // Stand-in for the Android bridges (same method names / JSON shapes as DeviceBridge.java).
     const S = window.__dev = JSON.parse(sessionStorage.getItem('qa.dev') || 'null') || { calls: [], takes: {}, active: null, cancelled: [], clip: null };
