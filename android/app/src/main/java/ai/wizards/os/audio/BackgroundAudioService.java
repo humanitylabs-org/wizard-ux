@@ -69,7 +69,7 @@ public final class BackgroundAudioService extends MediaSessionService {
                 if(!ready && (reason==Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY || reason==Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS)) { userWant=false; transportActive=false; }
             }
             @Override public void onIsPlayingChanged(boolean playing) { if (playing) reportPlayed(); }
-            @Override public void onPlaybackStateChanged(int state) { if (state == Player.STATE_ENDED) { advanceAfterRefill = true; maybeRefill(); } }
+            @Override public void onPlaybackStateChanged(int state) { if (state == Player.STATE_ENDED) { if(station==null) requestPlaying(false); else { advanceAfterRefill = true; maybeRefill(); } } }
             @Override public void onPlayerError(@NonNull PlaybackException e) {
                 error = "This track could not be played. Skipping."; final int g = generation; final String event = playEvent;
                 main.postDelayed(() -> { if (!destroyed && g == generation && event.equals(playEvent) && player.getPlayWhenReady()) {
@@ -150,7 +150,7 @@ public final class BackgroundAudioService extends MediaSessionService {
                 tracks.clear(); tracks.addAll(history); tracks.addAll(add); station = st; generation++; revision++; refillAttempts=0; advanceAfterRefill=false;
                 refillKey=UUID.randomUUID().toString(); player.setMediaItems(items,index,0); player.prepare(); requestPlaying(true); break;
             }
-            case "play": if (player.getPlaybackState()==Player.STATE_IDLE) player.prepare(); requestPlaying(true); maybeRefill(); break;
+            case "play": if(player.getPlaybackState()==Player.STATE_ENDED) player.seekTo(0); if (player.getPlaybackState()==Player.STATE_IDLE) player.prepare(); requestPlaying(true); maybeRefill(); break;
             case "pause": advanceAfterRefill=false; requestPlaying(false); break;
             case "seek": player.seekTo(Math.max(0,p.optLong("positionMs"))); break;
             case "next": report("skipped"); if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); requestPlaying(true); } else { advanceAfterRefill=true; requestPlaying(true); maybeRefill(); } break;
