@@ -12,7 +12,7 @@
 (() => {
   'use strict';
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const pct = v => { const n = Number(v); return isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null; };
+  const pct = v => { if (v == null || v === '') return null; const n = Number(v); return isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null; };
   const iso = v => (typeof v === 'string' && isFinite(Date.parse(v)) ? v : null);
   function normalize(j) {
     const providers = (Array.isArray(j?.providers) ? j.providers : []).map(p => {
