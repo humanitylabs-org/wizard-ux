@@ -6,7 +6,7 @@ import android.widget.Toast;
 
 import java.util.List;
 
-/** Voice into Usuals: "order my usual kra pao" heard by any orb runs that usual instead of going to Wizard. */
+/** Voice into Food (was Usuals): "order my usual kra pao" heard by any orb runs that usual instead of going to Wizard. */
 public final class UsualsVoice {
     private UsualsVoice() { }
 
@@ -15,8 +15,12 @@ public final class UsualsVoice {
      * (browse Grab, save the route); else null.
      */
     public static String match(Context c, String said) {
-        if (UsualsPolicy.isBrowse(said)) return UsualsRunner.NEW;
         List<UsualsStore.Usual> l = UsualsStore.all(c);
+        // A saved order he named "Lunch" wins over the "order lunch" spell; otherwise the spell opens Grab.
+        if (UsualsPolicy.isBrowse(said)) {
+            int n = UsualsPolicy.namedExactly(UsualsStore.names(l), said);
+            return n >= 0 ? l.get(n).id : UsualsRunner.NEW;
+        }
         if (l.isEmpty()) return null;
         int i = UsualsPolicy.matchVoice(UsualsStore.names(l), said);
         return i >= 0 ? l.get(i).id : null;
@@ -26,8 +30,8 @@ public final class UsualsVoice {
         UsualsRunner r = UsualsRunner.get(c);
         String b = UsualsRunner.NEW.equals(id) ? r.teach("") : r.run(id);
         if (b.isEmpty()) return;
-        String why = "accessibility".equals(b) ? "Usuals needs Wizard OS accessibility switched on"
-                : "grab".equals(b) ? "Grab isn't installed" : "busy".equals(b) ? "Finish teaching first" : "That usual is gone";
+        String why = "accessibility".equals(b) ? "Food needs Wizard OS accessibility switched on"
+                : "grab".equals(b) ? "Grab isn't installed" : "busy".equals(b) ? "Finish teaching first" : "That order is gone";
         Log.i(UsualsRunner.TAG, "voice run refused: " + b);
         Toast.makeText(c, why, Toast.LENGTH_LONG).show();
     }

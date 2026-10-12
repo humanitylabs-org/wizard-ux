@@ -202,7 +202,7 @@ with (BASE / 'worker.lock').open('a') as lock:
 
         # A. app list + blocker without accessibility
         has = pg.ev("!!(window.WizardOSNative && window.WizardOSNative.usuals) && !!window.__wos.openApp && (window.WizCore?.apps?.find?.('usuals') || true)")
-        pg.ev("window.__wos.openApp({ id: 'usuals', name: 'Usuals', kind: 'usuals' })"); time.sleep(1.5)
+        pg.ev("window.__wos.openApp({ id: 'usuals', name: 'Food', kind: 'usuals' })"); time.sleep(1.5)
         txt = pg.ev("document.querySelector('[data-usuals]')?.innerText || ''")
         check('A: Usuals window opens and asks for the accessibility switch first', has and 'One switch first' in (txt or ''), (txt or '')[:160])
         shot('a-needs-switch')
@@ -280,8 +280,8 @@ with (BASE / 'worker.lock').open('a') as lock:
               placed and gl.count('ORDER PLACED') == 1 and 'ORDER PLACED total=200 items=2x Kra pao moo saap; 1x Thai iced tea;' in gl, gl[-300:])
         saved = wait_for(lambda: find(r'^Rename$'), 8, .5)
         cv, _ = cviews()
-        check('B: Wizard saves it by itself: "Saved to Usuals" with Rename over Grab\'s tracking screen',
-              saved is not None and any('Saved to Usuals' in n['text'] for n in cv) and GPKG in top(), (cv, top()))
+        check('B: Wizard saves it by itself: "Saved to Food" with Rename over Grab\'s tracking screen',
+              saved is not None and any('Saved to Food' in n['text'] for n in cv) and GPKG in top(), (cv, top()))
         shot('b-saved-card')
         lst = json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}')
         u = (lst.get('list') or [{}])[0]
@@ -332,7 +332,7 @@ with (BASE / 'worker.lock').open('a') as lock:
 
         # E. Run again and order from the cover
         bring_wos(); pg.close(); pg = page()
-        pg.ev("window.__wos.openApp({ id: 'usuals', name: 'Usuals', kind: 'usuals' })"); time.sleep(1)
+        pg.ev("window.__wos.openApp({ id: 'usuals', name: 'Food', kind: 'usuals' })"); time.sleep(1)
         pg.ev("document.querySelector('[data-us=run]').click()")
         ready = wait_for(lambda: find(r'^Place order'), 90, 1)
         check('E: second run reaches checkout', ready is not None, uslog()[-400:])
@@ -368,10 +368,28 @@ with (BASE / 'worker.lock').open('a') as lock:
         pg.close(); pg = page()
         c1 = len(json.loads(pg.ev("window.WizardOSNative.usuals()") or '{}').get('list') or [])
         check('F: ✕ (don\'t save) → back in Wizard OS, no new usual, no order', PKG in top() and c1 == c0 and grablog().count('ORDER PLACED') == 2, (top(), c0, c1))
+        # Food spells (James, 12 Oct): "order grab" / "order food" / "I want to order lunch" open Grab for a new order
+        for said in ('Order grab', 'Order food.', 'I want to order lunch'):
+            pg.close(); pg = page(); n0 = len(WRITES)
+            m = pg.ev(f"window.WosUsuals.match({json.dumps(said)})")
+            pg.ev(f"window.__wos.handleText({json.dumps(said)}, 'auto')")
+            card = wait_for(lambda: find(r'^Save$'), 15, .5)
+            check(f'F: spell "{said}" opens Grab with the Saving card (native match {m!r}), nothing to Wizard',
+                  card is not None and GPKG in top() and len(WRITES) == n0 and m == '+new', (m, top(), WRITES[n0:]))
+            tap_text(r'^✕$'); time.sleep(2.5)
+        # "Food" on its own opens the Food app, titled Food
+        pg.close(); pg = page(); bring_wos(); time.sleep(1); n0 = len(WRITES)
+        pg.ev("window.__wos.handleText('Food', 'command')"); time.sleep(1.5)
+        opened = pg.ev("!!document.querySelector('[data-usuals]')")
+        title = pg.ev("(document.querySelector('.win.focus .wt, .win .wt, .win-title')||{}).innerText || ''")
+        spells = pg.ev("document.querySelector('.us-spells')?.innerText || ''")
+        shot('f-food-spells')
+        check('F: "Food" opens the Food app with the spells listed, nothing to Wizard',
+              opened and 'order food' in (spells or '') and len(WRITES) == n0, (opened, title, spells[:120], WRITES[n0:]))
 
         # G. Back from the edit sheet stays in the app
         pg.close(); pg = page()
-        pg.ev("window.__wos.openApp({ id: 'usuals', name: 'Usuals', kind: 'usuals' })"); time.sleep(1)
+        pg.ev("window.__wos.openApp({ id: 'usuals', name: 'Food', kind: 'usuals' })"); time.sleep(1)
         pg.ev("document.querySelector('[data-us=edit]').click()"); time.sleep(.6)
         shot('g-edit')
         sheet = pg.ev("!!document.querySelector('.us-sheet')")
