@@ -28,6 +28,9 @@ async function boot(b, opts = {}) {
       return r.fulfill({ status: 200, contentType: ct, body: require('fs').readFileSync(p) });
     }
     if (q.method() !== 'GET') writes.push(u.pathname);
+    // The current send contract requires an authoritative fixture route, just like the real model/options API.
+    if (/\/hermes\/api\/model\/options$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ provider: 'openai-codex', model: 'gpt-6.1-sol', providers: [{ slug: 'openai-codex', authenticated: true, is_current: true, models: ['gpt-6.1-sol'] }] }) });
+    if (/\/api\/sessions\/[^/]+\/model$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runtime: { ...q.postDataJSON(), model_lock: 'accepted', selection_version: 1 } }) });
     if (/\/files\/upload$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ file: { id: 'qa-file-1', filename: 'shot.png', mime: 'image/png', bytes: 68 } }) });
     if (/\/hermes\/v1\/runs$/.test(u.pathname)) { runs.push(q.postDataJSON()); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ run_id: 'qa-run' }) }); }
     if (/\/api\/transcribe$/.test(u.pathname)) { await new Promise(res => { slowSend = res; setTimeout(res, SEND_MS); }); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'something for archimedes about the week', ms: 300 }) }).catch(() => {}); }

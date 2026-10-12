@@ -2154,6 +2154,9 @@
   async function startVoice(kind) {
     V.onAt = performance.now();
     if (V.state !== 'idle') return;
+    // An app-feedback take can start before any chat/model picker opened. Warm authoritative options;
+    // the exact route is still sealed at Send, and unavailable routes remain fail-closed.
+    window.WosModels?.load().catch(() => {});
     clearTimeout(txHideT);
     Object.assign(V, { kind, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat

@@ -44,6 +44,7 @@ async function swipe(ctx,p,dx,dy=0){const r=await p.locator('#orbWrap').bounding
  ok(noGesture.result.value==='Tap Screenshot to capture this app','capture requires real user activation before arming native request',noGesture.result.value);
  for(const width of [360,412]){
   await p.setViewportSize({width,height:892});await tapOrb(p);
+  if(width===360) ok(await p.evaluate(()=>WosModels.ready&&WosModels.defaultOption()?.value==='gpt-6.1-sol'),'first app-feedback take loads authoritative default without opening model picker');
   const g=await p.evaluate(()=>{const dock=document.querySelector('#dock').getBoundingClientRect();const ids=['arcCancel','arcPause','orbWrap','arcScreen','arcAttach'];return ids.map(id=>{const e=document.getElementById(id);if(!e)return {id,missing:true};const r=e.getBoundingClientRect();return {id,x:r.x,w:r.width,h:r.height,inDock:r.y>=dock.y&&r.bottom<=dock.bottom,hit:e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)),opacity:+getComputedStyle(e).opacity};});});
   ok(g.every(x=>!x.missing&&x.inDock&&x.w>=44&&x.h>=44&&x.hit&&x.opacity>.9),width+'px: all five controls inside dock and hit-testable',JSON.stringify(g));
   ok(g.every((x,i)=>!i||x.x>=g[i-1].x+g[i-1].w),width+'px: order X Pause Orb Screenshot Attach, no overlap');
