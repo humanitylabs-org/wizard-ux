@@ -155,6 +155,16 @@
   function toggleMono() { const d = ws[cur]; if (d.wins.length < 2) return; d.mono = !d.mono; save(); layout(); }
 
   /* Open an app the desktop way: Chats and apps already open get focused, not duplicated. */
+  // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
+  const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
+  window.WizCanOpen = id => !!hostedOpenable(id);
+  // Only the App Store and System windows may ask; the sender is checked by its actual frame, not by anything it says.
+  addEventListener('message', e => {
+    const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
+    const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
+    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system'].includes(w.appId)) return;
+    const a = hostedOpenable(d.id); if (a) openApp(a);
+  });
   function openApp(a, opts = {}) {
     if (!a) return false;
     if (a.kind === 'view' && a.view === 'inbox') { openInbox(); return true; }
@@ -372,7 +382,7 @@
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     const n = new Date();
     const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
-    const quick = ['wizard', 'wizard-signal', 'wisdom', 'shopping', 'mizel', 'files', 'console', 'legacy-wizard'].map(id => APP[id]).filter(Boolean);
+    const quick = ['wizard', 'wizard-signal', 'wisdom', 'shopping', 'mizel', 'files', 'console', 'legacy-wizard', 'system', 'app-store'].map(id => APP[id]).filter(Boolean);
     return `<div class="home-in">
       <div class="home-time">${window.WizConfig.hm()}</div>
       <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })} · Workspace ${i + 1}</div>
@@ -450,6 +460,8 @@
   let palItems = [], palSel = 0;
   function commands() {
     return [
+      { kind: 'cmd', name: 'Get apps', icon: '+', run: () => openApp(APP['app-store']) },
+      { kind: 'cmd', name: 'Your system', icon: '◈', run: () => openApp(APP.system) },
       { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}Enter`, run: () => newChat() },
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
       { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
@@ -752,6 +764,10 @@
     if (VOICE.state === 'listen') { if (vMode === 'dictate') dictate('cancel'); else talk('cancel'); return 'voice'; }
     const f = focused();
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
+    if (f?.appId === 'app-store' || f?.appId === 'system') {
+      try { if (winEl(f.id)?.querySelector('iframe')?.contentWindow.__wizardCloseOverlay?.()) return 'store-card'; } catch (_) {}
+      if (!ws[cur].mono) { closeWin(f.id); return 'store-parent'; }
+    }
     if (ws[cur].mono) { toggleMono(); return 'mono'; }
     return '';
   }
@@ -814,7 +830,7 @@
   /* ---------------- browser Back never leaves the app ----------------
    * The desktop has Esc for layers, but a mouse back button or ⌘[ still fires popstate. Keep one guard
    * entry and treat Back as Esc; at the root it stays put and says so. */
-  history.replaceState({ wux: 'root' }, ''); history.pushState({ wux: 'guard' }, '');
+  if (history.state?.wux !== 'guard') { history.replaceState({ wux: 'root' }, ''); history.pushState({ wux: 'guard' }, ''); }
   addEventListener('popstate', () => {
     const did = escStep(); log('back:' + (did || 'root'));
     history.pushState({ wux: 'guard' }, '');
@@ -891,8 +907,11 @@
   C.deeplink.handle({
     thread: sid => openThread(sid),
     view(v, section) {
+      if (v === 'home') return $('#clock').click();
       if (v === 'inbox') return openInbox();
       if (v === 'apps') return openPalette();
+      if (v === 'store') return openApp(APP['app-store']);
+      if (v === 'system') return openApp(APP.system);
       if (v === 'settings' || v === 'usage') return openSettings();
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); return toast('◇', 'Files isn’t on this Wizard', 1800); }
       if (v === 'day' || v === 'week' || v === 'month') { const a = APP['v-' + v]; if (a?.url) return openApp(a); }

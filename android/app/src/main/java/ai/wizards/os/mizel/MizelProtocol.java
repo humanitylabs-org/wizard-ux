@@ -10,7 +10,7 @@ import java.util.Locale;
  * every message shape is unit-tested off-device.
  */
 public final class MizelProtocol {
-    public static final String START = "start", PAUSE = "pause", RESUME = "resume", STOP = "stop", STATUS = "status";
+    public static final String START = "start", PAUSE = "pause", RESUME = "resume", STOP = "stop", STATUS = "status", PCM = "pcm";
 
     public static final String E_BAD_REQUEST = "bad_request", E_UNKNOWN_CMD = "unknown_cmd", E_BAD_MEETING_ID = "bad_meeting_id",
             E_MIC_PERMISSION = "mic_permission", E_MIC_BUSY = "mic_busy", E_BUSY_OTHER = "busy_other_meeting",
@@ -22,6 +22,7 @@ public final class MizelProtocol {
         /** The page's id, echoed back unchanged (string or number); JSONObject.NULL when absent. */
         public Object id = JSONObject.NULL;
         public String cmd, meetingId, error;
+        public boolean enabled;
     }
 
     public static Cmd parse(String data) {
@@ -32,10 +33,11 @@ public final class MizelProtocol {
         Object id = o.opt("id");
         if (id instanceof String || id instanceof Number) c.id = id;
         c.cmd = o.optString("cmd", "");
+        c.enabled = o.optBoolean("enabled", false);
         String mid = o.isNull("meetingId") ? null : o.optString("meetingId", null);
         c.meetingId = mid == null || mid.isEmpty() ? null : mid;
         switch (c.cmd) {
-            case START:
+            case START: case PCM:
                 if (c.meetingId == null || !MizelPolicy.validMeetingId(c.meetingId)) c.error = E_BAD_MEETING_ID;
                 break;
             case PAUSE: case RESUME: case STOP: case STATUS:
@@ -64,13 +66,19 @@ public final class MizelProtocol {
             return new JSONObject().put("recording", recording).put("paused", paused)
                     .put("meetingId", meetingId == null ? JSONObject.NULL : meetingId).put("mediaMs", mediaMs)
                     .put("pendingChunks", pendingChunks).put("pausedMs", pausedMs)
-                    .put("phase", phase).put("pauseTimeoutMs", pauseTimeoutMs);
+                    .put("phase", phase).put("pauseTimeoutMs", pauseTimeoutMs).put("livePcm", true);
         } catch (JSONException e) { return new JSONObject(); }
     }
 
     public static String statePush(JSONObject state) {
         try { return new JSONObject(state.toString()).put("type", "state").toString(); }
         catch (JSONException e) { return "{\"type\":\"state\"}"; }
+    }
+
+    public static String pcmPush(String meetingId, byte[] pcm, long startMs) {
+        try { return new JSONObject().put("type", "pcm").put("meetingId", meetingId).put("startMs", startMs)
+                .put("pcm", java.util.Base64.getEncoder().encodeToString(pcm)).toString(); }
+        catch (JSONException e) { return "{}"; }
     }
 
     public static String levelPush(float me) {

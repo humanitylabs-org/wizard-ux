@@ -4,6 +4,8 @@
   'use strict';
   const { norm } = window.WizCore;
   const ALL = [
+    { id: 'app-store', kind: 'wizard', name: 'App Store', icon: '+', g: ['#8f63ff', '#ff5ccf'], url: '/wizard-os-home/store/index.html', desc: 'Get apps · Browse the Wizard App Index' },
+    { id: 'system', kind: 'wizard', name: 'System', icon: '◈', g: ['#3fe0ff', '#8f63ff'], url: '/wizard-os-home/system/index.html', desc: 'Your agents, agent apps, connections and routines' },
     // Wizard OS views
     { id: 'v-day', kind: 'view', name: 'Day in review', icon: '☀', g: ['#ff8a5c', '#ff5ccf'], view: 'day', desc: 'What we did yesterday, by project, person and call' },
     { id: 'v-week', kind: 'view', name: 'Week in review', icon: '◐', g: ['#8f63ff', '#ff5ccf'], view: 'week', desc: 'Seven days, one compression level up' },
@@ -85,13 +87,14 @@
       window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
     };
     rebuild(); listeners.add(rebuild);
-  function findApp(q) {
+  function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
       if (!q) return null;
       const alias = { wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', 'yesterday': 'v-day', 'day review': 'v-day', 'day in review': 'v-day', 'week review': 'v-week', 'month review': 'v-month', notifications: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'v-inbox', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel', usual: 'usuals', usuals: 'usuals', 'food app': 'usuals', 'my food': 'usuals', 'grab app': 'usuals', 'saved orders': 'usuals', eats: 'usuals', 'wizard eats': 'usuals', bites: 'usuals', 'wizard bites': 'usuals', 'wizard food': 'usuals', grab: 'usuals', 'my usuals': 'usuals', 'grab food': 'usuals', food: 'usuals', 'order food': 'usuals' };
       // "Open music" is Wizard Music when this Wizard has it; Spotify only by name or as the fallback.
       if (/^(music|my music|the music|songs|music app|music player|wizard music)$/.test(q) && APP['wizard-music']) return APP['wizard-music'];
       if (alias[q] && APP[alias[q]]) return APP[alias[q]];
+      if (exact) return null; // appByName: name or alias only, no fuzzy guess
       let best = null, bs = 0;
       for (const a of APPS) {
         const n = norm(a.name);
@@ -99,6 +102,16 @@
         if (s > bs) { bs = s; best = a; }
       }
       return bs >= 50 ? best : null;
+    }
+    // A bare app name said on its own ("Calendar.", "my calendar", "the calendar app", "Wizard Music") — exact
+    // matches only (name, name without its "Wizard" prefix, or an alias), so ordinary words never open apps.
+    function appByName(q) {
+      q = norm(q).replace(/^(open |the |my )+/, '').replace(/ (app|application)$/, '');
+      if (!q || q.split(' ').length > 4) return null;
+      const bare = n => n.replace(/^wizard /, '');
+      const hit = APPS.find(a => a.kind !== 'view' && (norm(a.name) === q || bare(norm(a.name)) === bare(q)));
+      if (hit) return hit;
+      return findApp(q, true);
     }
     // Ranked fuzzy search over names and descriptions (launcher, palette).
     function searchApps(q) {
@@ -115,7 +128,7 @@
       u.searchParams.set('q', query); if (tab === 'images') u.searchParams.set('tab', 'images');
       return u.pathname + u.search;
     }
-    return { APPS, APP, findApp, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
+    return { APPS, APP, findApp, appByName, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
   }
   /* "image search capybaras", "pictures of eames chairs", "search why is the sky blue", "quick search …".
    * Returns { query, tab: 'images' | 'all' } or null. Thread/app searches ("search my chats for …") stay with the shell. */

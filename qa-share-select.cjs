@@ -144,6 +144,44 @@ const tap = (p, id) => p.evaluate(id => document.querySelector(`.selmenu [data-s
   // 7 colour
   const col = await p.evaluate(() => getComputedStyle(document.querySelector('.msg .bub p'), '::selection').backgroundColor);
   ok(/143, 99, 255/.test(col), '7 selected words are highlighted in Wizard violet', col);
+  // 8 drag the menu off the words (James, 12 Oct): real touch stream through CDP, so touch-action and pointer capture count
+  const cdp = await ctx.newCDPSession(p);
+  const touch = async (pts) => {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pts[0][0], y: pts[0][1] }] });
+    for (const [x, y] of pts.slice(1)) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] }); await sleep(16); }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  const line = (x0, y0, x1, y1, n = 14) => Array.from({ length: n + 1 }, (_, i) => [x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n]);
+  const mrect = () => p.evaluate(() => { const r = document.querySelector('.selmenu').getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; });
+  const centre = sel => p.evaluate(sel => { const r = document.querySelector(sel).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, sel);
+  await select(p, '.msg.a .bub p', 0, 40); await menu(p); await N(p);
+  ok(await p.evaluate(() => !!document.querySelector('.selmenu [data-smgrip]')), '8 the menu shows a grip so it reads as movable');
+  await sleep(300); const r0 = await mrect();
+  const [sx, sy] = await centre('.selmenu [data-sm="share"]'); // start the drag ON a button: it must move, not share
+  await touch(line(sx, sy, sx + 30, sy + 260)); await sleep(500);
+  const r1 = await mrect(), st8 = await p.evaluate(() => ({ ...window.WosSelMenu.state, sel: String(getSelection()) })), n8 = await N(p);
+  ok(Math.abs(r1.t - r0.t - 260) <= 3 && Math.abs(r1.l - r0.l - 30) <= 3, '8 dragging the menu moves it with the finger', { r0, r1 });
+  ok(st8.open && st8.sel.length > 20 && st8.moved, '8 after the drop the menu stays open and the words stay selected', st8);
+  ok(!n8.some(c => c[0] === 'shareText'), '8 a drag that started on Share did not share', n8);
+  await p.screenshot({ path: '/home/telos/.hermes/cache/scratch/wos097/menu-dragged.png' });
+  // 8b scrolling the thread leaves a moved menu where it was dropped
+  await p.evaluate(() => { const t = eval(window.__T); const m = t.querySelector('.ch-msgs'); m.scrollTop = Math.max(0, m.scrollTop - 40); m.dispatchEvent(new Event('scroll')); }); await sleep(500);
+  const r2 = await mrect();
+  ok(Math.abs(r2.t - r1.t) <= 1 && await p.evaluate(() => window.WosSelMenu.state.open), '8 scrolling keeps the moved menu where it was dropped', { r1, r2 });
+  // 8c the menu stays on screen however far it is flung
+  await touch(line((r2.l + r2.r) / 2, (r2.t + r2.b) / 2, 900, 2000)); await sleep(300);
+  const r3 = await mrect(); const vp = await p.evaluate(() => [innerWidth, innerHeight]);
+  ok(r3.l >= 0 && r3.r <= vp[0] && r3.t >= 0 && r3.b <= vp[1], '8 a moved menu is kept on screen', { r3, vp });
+  // 8d a short tap still runs the button after a move
+  const [cx, cy] = await centre('.selmenu [data-sm="copy"]');
+  await touch([[cx, cy], [cx + 2, cy + 1]]); await sleep(400);
+  const clip8 = await p.evaluate(() => navigator.clipboard.readText()), o8 = await p.evaluate(() => window.WosSelMenu.state.open);
+  ok(clip8 === ANSWER.slice(0, 40).trim() && !o8, '8 a tap (under 6 px of movement) on Copy still copies after a move', { clip8, o8 });
+  // 8e the next selection is placed above the words again
+  await select(p, '.msg.a .bub p', 0, 22); const m8 = await menu(p);
+  const geo8 = await p.evaluate(() => { const m = document.querySelector('.selmenu').getBoundingClientRect(), r = getSelection().getRangeAt(0).getBoundingClientRect(); return { m: [m.top, m.bottom], r: [r.top, r.bottom] }; });
+  ok(m8 && !m8.moved && (geo8.m[1] <= geo8.r[0] || geo8.m[0] >= geo8.r[1]), '8 a new selection places the menu next to its words again', { m8, geo8 });
+  await p.evaluate(() => getSelection().removeAllRanges()); await sleep(200);
   ok(!errs.length, 'no page errors', errs);
   await p.close();
   // 6 old app / browser

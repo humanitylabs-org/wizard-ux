@@ -27,6 +27,7 @@ async function boot(b, { native = true } = {}) {
     if (m && (q.method() === 'GET' || q.method() === 'HEAD') && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = path.join(WEB, 'web', f);
       // Each "deploy" moves the web/ tree id the commit hooks write to ux-version.txt; W.noVersion = an origin without it.
+      if (f === 'ux-changes.json') return W.changes ? r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(W.changes) }) : r.fulfill({ status: 404, body: '' });
       if (f === 'ux-version.txt') return W.noVersion ? r.fulfill({ status: 404, body: '' }) : r.fulfill({ status: 200, contentType: 'text/plain', body: (0xabc0000 + W.assetVer).toString(16) + '\n' });
       if (!fs.existsSync(p) || /^(data|summaries)\.js$/.test(f)) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
       const ct = f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : f.endsWith('.png') ? 'image/png' : f.endsWith('.webmanifest') ? 'application/manifest+json' : 'application/javascript';
@@ -351,6 +352,63 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     ok(await p.locator('#dvWeb').isVisible(), 'fallback: a change to core/chat-kit.js alone raises the prompt');
     W.noVersion = false; W.lenBump = 0;
     ok(errs.length === 0, 'no page errors (deploy prompt)', errs.join(' | '));
+    await ctx.close();
+  }
+
+  /* ---- #22c the update banner names the thread it came from and links there (James, 12 Oct) ---- */
+  {
+    const V = n => (0xabc0000 + n).toString(16);
+    const { ctx, p, errs } = await boot(b, { native: false });
+    await open(p); await sleep(2200);
+    const base = W.assetVer;
+    W.changes = { v: 1, head: V(base + 1), updates: [
+      { before: V(base), after: V(base + 1), at: Date.now() / 1000, changes: [{ sha: 'aaa1111', what: 'Drop the edge tabs', thread: 'qa_bound_views', title: 'Wizard OS · Bound views' }] },
+      { before: V(base - 1), after: V(base), at: Date.now() / 1000 - 3600, changes: [{ sha: 'old0000', what: 'Older change', thread: 'qa_old', title: 'Wizard OS · Old thing' }] },
+    ] };
+    W.assetVer++;
+    await p.evaluate(() => window.WosDevice.checkWeb(true)); await sleep(700);
+    const msg = await p.locator('#dvWeb .dv-um').evaluate(e => [...e.children].map(x => x.textContent).join(' / ')).catch(() => '');
+    ok(msg === 'Update ready / Bound views', 'banner names the thread the update came from', msg);
+    ok(await p.locator('#dvWeb [data-web-thread="qa_bound_views"]').isVisible(), 'a small Thread button sits beside Reload');
+    ok(await p.locator('#dvWeb .dv-wtop button').evaluateAll(bs => bs.map(x => x.textContent).join('|')) === 'Thread|Reload', 'order: Thread then Reload');
+    const box = await p.locator('#dvWeb').boundingBox();
+    ok(box && box.height < 64, 'one thread: banner stays compact', JSON.stringify(box));
+    await p.locator('#dvWeb [data-web-thread]').click(); await sleep(600);
+    ok(await p.evaluate(() => Object.values(window.__wos.wins).some(w => w.app === 'chats' && w.thread === 'qa_bound_views')), 'Thread opens that thread in Chats');
+    ok(await p.locator('#dvWeb').isVisible(), 'the Reload banner stays up after opening the thread');
+    await p.screenshot({ path: path.join(SHOTS, 'update-thread-one.png') });
+    // A second deploy while the banner is up adds its thread; an older one this page already had is left out.
+    W.changes.updates.unshift({ before: V(base + 1), after: V(base + 2), at: Date.now() / 1000, changes: [
+      { sha: 'bbb2222', what: 'Selection menu drags out of the way', thread: 'qa_selmenu', title: 'Wizard OS · Selection menu drag' },
+      { sha: 'ccc3333', what: 'Tidy whitespace', thread: null, title: null }] });
+    W.assetVer++;
+    await p.evaluate(() => window.WosDevice.checkWeb(true)); await sleep(700);
+    const msg2 = await p.locator('#dvWeb .dv-um').evaluate(e => [...e.children].map(x => x.textContent).join(' / ')).catch(() => '');
+    ok(msg2 === 'Update ready / Selection menu drag', 'a second deploy joins the banner (newest first)', msg2);
+    ok((await p.locator('#dvWeb [data-web="list"]').textContent()).startsWith('Threads'), 'several threads: a "Threads" button');
+    await p.locator('#dvWeb [data-web="list"]').click(); await sleep(300);
+    const rows = await p.locator('#dvWeb .dv-wr b').allTextContents();
+    ok(rows.join('|') === 'Selection menu drag|Tidy whitespace|Bound views', 'list shows each thread once, older update left out', rows.join('|'));
+    ok(await p.locator('#dvWeb .dv-wr.static').count() === 1, 'a change with no thread is listed but not a link');
+    await p.screenshot({ path: path.join(SHOTS, 'update-thread-list.png') });
+    // Back closes the list and the app stays open (Back never exits).
+    const r = await p.evaluate(() => window.WosDevice.back());
+    ok(r === 'device-weblist' && await p.locator('#dvWeb .dv-wl').count() === 0 && await p.locator('#dvWeb').isVisible(), 'Back closes the thread list, banner and app stay', String(r));
+    await p.locator('#dvWeb [data-web="list"]').click(); await sleep(300);
+    await p.locator('#dvWeb [data-web-thread="qa_selmenu"]').click(); await sleep(600);
+    ok(await p.evaluate(() => Object.values(window.__wos.wins).some(w => w.app === 'chats' && w.thread === 'qa_selmenu')), 'a row opens its thread');
+    ok(await p.locator('#dvWeb .dv-wl').count() === 0, 'list folds away after opening a thread');
+    // 360 px: still one tidy row.
+    await p.setViewportSize({ width: 360, height: 780 }); await sleep(300);
+    const fits = await p.evaluate(() => { const el = document.querySelector('#dvWeb'), r = el.getBoundingClientRect(); return r.right <= innerWidth && [...el.querySelectorAll('.dv-wtop button')].every(b => b.getBoundingClientRect().right <= r.right + 0.5); });
+    ok(fits, '360 px: banner and both buttons fit');
+    ok(await p.evaluate(() => { const b = document.querySelector('#dvWeb .dv-um b'); return b.scrollWidth <= b.clientWidth + 1 && b.scrollHeight <= b.clientHeight + 1; }), '360 px: the thread name is shown whole (wraps, not cut off)');
+    await p.screenshot({ path: path.join(SHOTS, 'update-thread-360.png') });
+    await p.locator('#dvWeb [data-web="go"]').click();
+    await p.waitForFunction(() => window.WosDevice && window.WosDevice.ready, null, { timeout: 20000 }); await sleep(2200);
+    ok(await p.evaluate(() => !document.querySelector('#dvWeb')), 'Reload still reloads');
+    W.changes = null;
+    ok(errs.length === 0, 'no page errors (update thread link)', errs.join(' | '));
     await ctx.close();
   }
 

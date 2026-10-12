@@ -11,7 +11,11 @@
  *
  *   WosSelMenu.back()      → 'selection' when Back closed the menu (and cleared the selection), else ''
  *   WosSelMenu.html()      → the Settings group;  WosSelMenu.act(el) → handles a tap inside it
- *   WosSelMenu.state       → QA probe { open, items, text }
+ *   WosSelMenu.state       → QA probe { open, items, text, moved }
+ *
+ * Drag to move (James, 12 Oct): press anywhere on the menu (the ⋮⋮ grip shows it) and slide it off the words you
+ * want to read. It stays where it was dropped, clamped on screen, through scrolls and handle drags, until that
+ * selection ends; the next selection places it above the words again. A press that moves under 6 px is still a tap.
  */
 (() => {
   'use strict';
@@ -39,15 +43,51 @@
   function setEnabled(list) { try { localStorage.setItem(KEY, JSON.stringify(list)); } catch (e) {} }
 
   let el = null, cur = null, settleT = 0, down = false, scrolling = 0;
+  let pos = null, drag = null, dragged = false; // pos: where the user dropped the menu for this selection
+  const DRAG_PX = 6;
   function mount() {
     if (el) return el;
     el = document.createElement('div'); el.className = 'selmenu'; el.setAttribute('role', 'menu'); el.hidden = true;
     // Keep the selection: a press on the menu must never move focus or collapse it.
     for (const t of ['pointerdown', 'mousedown', 'touchstart']) el.addEventListener(t, e => { e.stopPropagation(); if (e.cancelable && t !== 'touchstart') e.preventDefault(); }, { passive: t === 'touchstart' });
-    el.addEventListener('click', e => { const b = e.target.closest('[data-sm]'); if (b) { e.preventDefault(); e.stopPropagation(); run(b.dataset.sm); } });
+    // Drag to move: press anywhere on the menu and slide.
+    el.addEventListener('pointerdown', e => {
+      if (e.button > 0) return;
+      dragged = false; // a fresh press: its click is a real tap unless it turns into a drag
+      const r = el.getBoundingClientRect();
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, l: r.left, t: r.top, on: false };
+    });
+    el.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.on && Math.hypot(dx, dy) < DRAG_PX) return;
+      if (!drag.on) { drag.on = true; el.classList.add('drag'); clearTimeout(settleT); try { el.setPointerCapture(e.pointerId); } catch (err) {} } // capture only once it is a drag: a tap keeps its button
+      e.preventDefault();
+      pos = clampPos(drag.l + dx, drag.t + dy); paint(pos);
+    });
+    // A press that never became a drag is a tap: run its button on release (the click that may follow is swallowed),
+    // so taps work the same whether or not the WebView turns this press into a click.
+    const end = (e, up) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const was = drag; drag = null;
+      if (was.on) { dragged = true; el.classList.remove('drag'); return; } // the drop is not a tap
+      const b = up && document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.selmenu [data-sm]');
+      if (b) { dragged = true; run(b.dataset.sm); }
+    };
+    el.addEventListener('pointerup', e => end(e, true)); el.addEventListener('pointercancel', e => end(e, false));
+    el.addEventListener('click', e => {
+      if (dragged) { dragged = false; e.preventDefault(); e.stopPropagation(); return; } // already handled on release
+      const b = e.target.closest('[data-sm]'); if (b) { e.preventDefault(); e.stopPropagation(); run(b.dataset.sm); } // keyboard / a11y
+    });
     document.body.appendChild(el);
     return el;
   }
+  const safeTop = () => 8 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-t')) || 0);
+  function clampPos(x, y) {
+    const vw = window.innerWidth, vh = window.innerHeight, mw = el.offsetWidth, mh = el.offsetHeight;
+    return { x: Math.round(Math.max(8, Math.min(vw - mw - 8, x))), y: Math.round(Math.max(safeTop(), Math.min(vh - mh - 8, y))) };
+  }
+  const paint = p => { el.style.transform = `translate(${p.x}px, ${p.y}px)`; };
 
   const elOfNode = n => n && (n.nodeType === 1 ? n : n.parentElement);
   function current() {
@@ -69,27 +109,29 @@
     const ids = enabled().filter(id => id !== 'quote' || c.wid).filter(id => id !== 'search' || window.__wos?.openSearch);
     if (!ids.length) return hide();
     const m = mount();
-    m.innerHTML = ids.map(id => { const it = ITEMS.find(i => i.id === id); return `<button type="button" role="menuitem" data-sm="${id}">${svg(it.icon)}<span>${esc(it.label)}</span></button>`; }).join('');
+    m.innerHTML = `<span class="sm-grip" data-smgrip aria-label="Drag to move" title="Drag to move">${svg('<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>')}</span>`
+      + ids.map(id => { const it = ITEMS.find(i => i.id === id); return `<button type="button" role="menuitem" data-sm="${id}">${svg(it.icon)}<span>${esc(it.label)}</span></button>`; }).join('');
     m.hidden = false; m.classList.remove('on');
     place(); requestAnimationFrame(() => m.classList.add('on'));
   }
   function place() {
     if (!el || el.hidden || !cur) return;
+    if (pos) { el.classList.remove('off'); pos = clampPos(pos.x, pos.y); paint(pos); return; } // where the user put it
     const rects = [...cur.range.getClientRects()].filter(r => r.width || r.height);
     const r = rects.length ? rects.reduce((a, b) => ({ top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom), left: Math.min(a.left, b.left), right: Math.max(a.right, b.right) })) : cur.range.getBoundingClientRect();
     const vw = window.innerWidth, vh = window.innerHeight, mw = el.offsetWidth, mh = el.offsetHeight, gap = 12;
     if (r.bottom < 0 || r.top > vh) { el.classList.add('off'); return; }
     el.classList.remove('off');
     let top = r.top - mh - gap;
-    const safeTop = 8 + (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-t')) || 0);
-    if (top < safeTop) top = Math.min(vh - mh - 8, r.bottom + 34); // below the selection, clear of the handles
+    const st = safeTop();
+    if (top < st) top = Math.min(vh - mh - 8, r.bottom + 34); // below the selection, clear of the handles
     const left = Math.max(8, Math.min(vw - mw - 8, (r.left + r.right) / 2 - mw / 2));
-    el.style.transform = `translate(${Math.round(left)}px, ${Math.round(Math.max(safeTop, top))}px)`;
+    el.style.transform = `translate(${Math.round(left)}px, ${Math.round(Math.max(st, top))}px)`;
   }
   function hide(selectionGone) {
     if (selectionGone) tell(0);
     if (el && !el.hidden) { el.hidden = true; el.classList.remove('on'); }
-    if (selectionGone) cur = null;
+    if (selectionGone) { cur = null; pos = null; drag = null; if (el) el.classList.remove('drag'); }
   }
   const clear = () => { try { window.getSelection().removeAllRanges(); } catch (e) {} hide(true); };
 
@@ -137,7 +179,7 @@
       if (el && !el.hidden && !down) hide();
       settle(down ? 400 : 160);
     });
-    document.addEventListener('scroll', () => { if (!el || el.hidden && !cur) return; hide(); clearTimeout(scrolling); scrolling = setTimeout(() => { scrolling = 0; if (cur) show(); }, 220); }, true);
+    document.addEventListener('scroll', () => { if (!el || el.hidden && !cur) return; if (pos && !el.hidden) return; /* moved by hand: it stays put */ hide(); clearTimeout(scrolling); scrolling = setTimeout(() => { scrolling = 0; if (cur) show(); }, 220); }, true);
     window.addEventListener('resize', () => place());
     window.addEventListener('blur', () => { if (cur) tell(0); }); // focus went into a hosted app: its own menu applies
   }
@@ -162,5 +204,5 @@
   function back() { if (cur && el && !el.hidden || cur && !window.getSelection().isCollapsed) { clear(); return 'selection'; } return ''; }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind); else bind();
-  window.WosSelMenu = { back, html, act, ITEMS, enabled, setEnabled, show, hide, get state() { return { open: !!el && !el.hidden, items: el && !el.hidden ? [...el.querySelectorAll('[data-sm]')].map(b => b.dataset.sm) : [], text: cur?.text || '', own: own() }; } };
+  window.WosSelMenu = { back, html, act, ITEMS, enabled, setEnabled, show, hide, get state() { return { open: !!el && !el.hidden, items: el && !el.hidden ? [...el.querySelectorAll('[data-sm]')].map(b => b.dataset.sm) : [], text: cur?.text || '', own: own(), moved: pos ? { ...pos } : null }; } };
 })();

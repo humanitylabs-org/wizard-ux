@@ -28,6 +28,9 @@ body {
   }
 }
 
+/* A Store input must scroll its app document, never the fixed shell's hidden outer stage. */
+.device:has(.store-window) { overflow: clip; }
+
 .stars { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; }
 .nebula { position: absolute; inset: -20%; z-index: -1; pointer-events: none; transition: transform 900ms var(--ease); }
 .nebula i { position: absolute; border-radius: 50%; filter: blur(60px); opacity: .5; mix-blend-mode: screen; animation: drift 26s ease-in-out infinite alternate; }
@@ -79,7 +82,16 @@ body {
 .desk-label b { color: var(--ink); font-weight: 800; }
 
 /* ---------- Home desk ---------- */
-.home { display: flex; flex-direction: column; height: 100%; }
+.home { display: flex; flex-direction: column; height: 100%; min-height: 0; box-sizing: border-box; padding-bottom: 14px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+/* Full-height Home (James, 12 Oct): time on top, attention in the middle band, resources anchored just above the dock.
+ * Free height splits evenly between the two gaps so the screen fills without one blank band. */
+.home-top, .home-attn { flex-shrink: 0; }
+.home-gap { flex: 1 1 0; min-height: 16px; }
+.home-attn { display: flex; flex-direction: column; gap: clamp(14px, 1.8dvh, 18px); }
+.home-attn > .constellation { gap: inherit; }
+.home-attn > * { margin-top: 0; margin-bottom: 0; }
+.home .now-card { min-height: 68px; padding-top: 16px; padding-bottom: 16px; }
+.home [data-home-resources] { margin-top: 0; flex-shrink: 0; }
 .home-top { padding: 22px 6px 0; }
 .home-date { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
 .home-time { font-size: 84px; line-height: .95; font-weight: 200; letter-spacing: -.045em; margin-top: 6px;
@@ -785,6 +797,23 @@ body {
 .dv-um { flex: 1; min-width: 0; font-weight: 600; }
 .dv-update button { padding: 7px 14px; border-radius: 99px; background: var(--violet); color: #fff; font-weight: 700; font-size: 13px; }
 .dv-update button.later { padding: 7px 9px; background: transparent; color: var(--ink-3); }
+/* Web update banner: which thread it came from (James, 12 Oct). Top row: message · Thread · Reload; the list of
+ * threads drops below when one update carries several. */
+.dv-update.web { flex-direction: column; align-items: stretch; gap: 0; padding-left: 14px; }
+.dv-wtop { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dv-update.web .dv-um { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-update.web .dv-um.two { display: flex; flex-direction: column; line-height: 1.25; white-space: normal; }
+.dv-um.two small { font-size: 11.5px; font-weight: 500; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-um.two b { white-space: normal; font-weight: 650; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; } /* a long thread name wraps once rather than being cut */
+.dv-update button.dv-wt { flex: none; padding: 5px 9px; border: 1px solid var(--line-2); color: var(--ink-2); font-weight: 600; font-size: 12px; }
+.dv-update.web .dv-wtop > button[data-web="go"] { flex: none; padding: 7px 12px; }
+.dv-wl { display: flex; flex-direction: column; margin-top: 8px; max-height: 46vh; overflow-y: auto; border-top: 1px solid var(--line); }
+.dv-update .dv-wr { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; text-align: left; padding: 9px 4px; border-radius: 0; background: transparent; color: var(--ink); font-weight: 400; border-bottom: 1px solid var(--line); }
+.dv-wr:last-child { border-bottom: 0; }
+.dv-wr b { grid-column: 1; font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-wr small { grid-column: 1; color: var(--ink-3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-wr .dv-wgo { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--ink-3); font-size: 16px; }
+.dv-wr.static { opacity: .7; }
 /* ================= Immersive full screen (James, 9 Oct) =================
  * A full-screen window owns the whole display: no window title bar, no bottom bar, no desk label.
  * Out: pinch in, swipe up from the bottom edge, or Back. In Chats the orb stays, small, bottom-right,
@@ -857,3 +886,9 @@ body {
 .cx-text { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(0, 0, 0, .22); font-size: 14px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; max-height: 40vh; overflow: auto; user-select: text; -webkit-user-select: text; }
 .cx-err { margin-top: 6px; font-size: 12.5px; color: #ffbe55; }
 .cx-row .ub-a button[disabled] { opacity: .6; }
+
+/* Home: "Your system" entry (opens the System app) */
+.sys-card .sys-glyph { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; font-size: 17px; color: #fff;
+  background: linear-gradient(140deg, #3fe0ff, #8f63ff); box-shadow: 0 6px 18px rgba(63, 224, 255, .28); }
+.sys-card .side-go { flex: 0 0 auto; padding: 7px 14px; border-radius: 99px; background: rgba(63, 224, 255, .14); color: var(--cyan); font-size: 13px; font-weight: 700; }
+.sys-card { margin-top: 9px; }

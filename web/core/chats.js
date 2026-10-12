@@ -14,6 +14,8 @@
  *   owner(id)        → (optional) the window a pane belongs to (the desktop's list pane id::list → id)
  *   overlay(open)         → (optional) the media viewer opened/closed (the phone arms its Back guard)
  *   vib(ms)               → (optional) haptic tick
+ *   threadShown(id, el)   → (optional) a window painted a loaded thread (el) or its list (null); the phone binds
+ *                           the view the latest reply links to that thread (bound views, app.js)
  *
  * Parsing, Markdown, Bangkok time, drafts, copy/share and the media viewer live in core/chat-kit.js
  * (window.WosChat), loaded before this file by both shells.
@@ -169,7 +171,15 @@ window.WizCore.chats = function createChats(H) {
     const keys = subjectSort([...groups.keys()], (a, b) => (a === 'Other') - (b === 'Other') || waits(groups.get(b)) - waits(groups.get(a)) || groups.get(b).length - groups.get(a).length || a.localeCompare(b));
     const ar = (dir, k, off, label, glyph) => `<button type="button" data-subjmove="${dir}" data-subjkey="${esc(k)}" aria-label="${label} ${esc(k)}"${off ? ' disabled' : ''}>${glyph}</button>`;
     return bar + keys.map((k, i) => { const l = groups.get(k), wN = waits(l), last = i === keys.length - 1;
-      return `<div class="ch-subj"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${l.length}</small><span class="ch-subj-mv" role="group" aria-label="Reorder ${esc(k)}">${ar('top', k, !i, 'Move to top', '⤒')}${ar('up', k, !i, 'Move up', '↑')}${ar('down', k, last, 'Move down', '↓')}</span></div>` + l.map(rowFn).join(''); }).join('');
+      return `<div class="ch-subj"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${l.length}</small><span class="ch-subj-mv" role="group" aria-label="Reorder ${esc(k)}">${ar('top', k, !i, 'Move to top', '<span class="ch-subj-2up" aria-hidden="true"><i>↑</i><i>↑</i></span>')}${ar('up', k, !i, 'Move up', '↑')}${ar('down', k, last, 'Move down', '↓')}</span></div>` + l.map(rowFn).join(''); }).join('');
+  }
+  /* Android Back on the list puts Ready back to Newest, the default (James, 12 Oct 2026: "go back to the default
+   * thread list, which is sequential", so no reach to the top bar). Runs after search and filter chips come off. */
+  function readyBack() {
+    if (readyOrder === 'newest') return false;
+    readyOrder = 'newest'; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (e) {}
+    for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); }
+    return true;
   }
   /* By subject order is James's (12 Oct 2026): ↑ / ↓ / move-to-top on each subject header, remembered on this
    * device. Subjects he has placed keep his order at the top; subjects he never placed follow in the default
@@ -278,6 +288,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function renderChatList(w, el) {
     if (!el) return;
+    H.threadShown?.(w.id, null); // the list is showing: nothing is bound to this window
     const c = ch(w.id), n = norm(c.q);
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, SJ = c.subject || '';
     const fids = F?.ids ? F.ids() : null;
@@ -701,6 +712,8 @@ window.WizCore.chats = function createChats(H) {
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
     growTa(el.querySelector('textarea'));
     PW?.paint(w.id, el);
+    // The shell may bind the view this thread's latest reply links (phone: bound views beside the thread).
+    if (!isNew && turns) H.threadShown?.(w.id, el);
   }
   /* ---- drafts: one per thread (and one for a new chat), kept across reloads ---- */
   const draftKey = w => w.thread === '__new__' ? 'new' : 'direct:' + w.thread;
@@ -1147,7 +1160,7 @@ window.WizCore.chats = function createChats(H) {
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
-  return { CH, ch, click, bind, PW, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { CH, ch, click, bind, PW, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
 };
