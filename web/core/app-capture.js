@@ -110,6 +110,7 @@
     const chunks = await parts(row.id);
     const blob = row.pcm ? wav(chunks, chunks.reduce((n, c) => n + c.size, 0)) : new Blob(chunks, { type: row.mime });
     const meta = { ...row.meta };
+    if (row.status === 'recoverable') meta.captureRecovery = { resumable: true, error: row.recoveryError || null };
     if (row.tracks?.them) {
       const them = await parts(row.id, 'them');
       meta.captureTracks = [{ source: 'them', blob: wav(them, them.reduce((n, c) => n + c.size, 0)), mime: 'audio/wav', startMs: row.tracks.them.startMs || 0 }];
@@ -278,14 +279,15 @@
         else {
           const systemSource = ctx.createMediaStreamSource(s.display), systemAnalyser = ctx.createAnalyser();
           systemAnalyser.fftSize = 512; systemSource.connect(systemAnalyser); s.nodes.push(systemSource, systemAnalyser);
-          addTap('them', systemAnalyser); s.systemAnalyser = systemAnalyser;
+          addTap('them', systemAnalyser, taps[0].ms); s.systemAnalyser = systemAnalyser;
         }
       }
       s.engine = {
         stop: async () => {
           if (ctx.state === 'suspended') await ctx.resume();
           await Promise.all(taps.map(tap => new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(fail('pcm_flush_timeout', 'Final PCM has not been saved; retry Stop.')), 5000);
+            if (tap.ended) return resolve();
+            const timeout = setTimeout(() => { tap.flushed = null; reject(fail('pcm_flush_timeout', 'Final PCM has not been saved; retry Stop.')); }, 5000);
             tap.flushed = () => { clearTimeout(timeout); resolve(); }; tap.node.port.postMessage('flush');
           })));
         }, cancel: async () => {}, pause: () => ctx.suspend(), resume: () => ctx.resume()
@@ -510,7 +512,7 @@
       await put(s.row);
       if (native) {
         s.row.native = native.name || 'configured';
-        if (s.row.native === 'wizard-meetings') s.row.nativeId = opts.meta?.meetingId;
+        if (s.row.native === 'wizard-meetings') s.row.nativeId = opts.meta?.meetingId || s.row.nativeId;
         await put(s.row);
         s.engine = await native.start(opts, { level: value => level(s, value), chunk: (blob, source, startMs) => enqueue(s, blob, source, startMs) }, opts.resumeId ? s.row : null);
         s.row.nativeId = s.engine.nativeId; s.row.mime = s.engine.mime || 'audio/wav'; s.row.pcm = !!s.engine.pcm;
@@ -551,7 +553,7 @@
       const row = (await rows()).find(r => r.id === id && r.appId === appId);
       if (!row) throw fail('not_found', 'No pending capture belongs to this app.');
       if (row.status !== 'pending') throw fail('capture_active', 'A recoverable native recording must be stopped before acknowledgment.');
-      if (row.nativeId) await adapter({ kind: row.kind }, row).ack?.(row);
+      if (row.nativeId && row.native !== 'wizard-meetings') await adapter({ kind: row.kind }, row).ack?.(row);
       await remove(id);
     });
   }
