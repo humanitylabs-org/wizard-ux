@@ -42,5 +42,10 @@
       "destination": "tools/store-index-views.mjs",
       "retrieval": "git show <commit>:<path>"
     }
-  ]
+  ],
+  "redesign": {
+    "date": "2026-10-12",
+    "by": "Archimedes (Opus) for James",
+    "note": "James asked for a beautiful app-discovery store; the Store UI was rewritten (store.js/store.css). The App Manager data contract (index search/tags, installed list, uses/provides) and the idea of showing what an app connects to come from Miguel & Oscar's wizard-views; the vendored wizard-store.js/css port is no longer used."
+  }
 }

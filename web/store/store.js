@@ -1,42 +1,190 @@
-/* Store is an app document, not a Wizard shell or launcher panel. */
+/* Wizard App Store: an app-discovery app that runs in its own Wizard window (or on its own).
+ * Listings come from the public Wizard App Index; "installed" from this Wizard's Runtipi; "Open" asks the shell.
+ * Browse-only until App installation lands: Get explains instead of installing. Back: detail → list → Store root,
+ * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
+  const DATA = '../store-data/';
   const framed = window.top !== window;
-  const ctx = { api: '../store-data/api', wizard: '../store-data/wizard/v1', index: '../store-data/wizard/v1/index', lifecycleApi: '/api', browseOnly: true, chipsEl: $('chips'), onApp: showCard, onOpen: openInstalled };
-  let card = null, scroll = 0;
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const KINDS = [
+    { id: 'apps', type: 'view', one: 'App', many: 'Apps', blurb: 'Things you open and use' },
+    { id: 'agent-apps', type: 'service', one: 'Agent app', many: 'Agent apps', blurb: 'New skills for your agent' },
+    { id: 'agents', type: 'agent', one: 'Agent', many: 'Agents', blurb: 'The minds that run your Wizard' },
+    { id: 'connections', type: 'external', one: 'Connection', many: 'Connections', blurb: 'Accounts your agents can use' },
+  ];
+  const KIND_OF = Object.fromEntries(KINDS.map(k => [k.type, k]));
+  const kindOf = a => KIND_OF[a.type] || KINDS[1];
+  const FEATURED = ['defleur-video', 'hermes-agent', 'transcriber', 'secret-drop', 'wizard-ai-accounts', 'browser'];
+  const TOPIC_ART = { productivity: ['#8f63ff', '#3f6bff', '✦'], automation: ['#3fe0ff', '#3f6bff', '⟳'], security: ['#4ff0b0', '#13805a', '◈'], audio: ['#ff5ccf', '#8f63ff', '◉'],
+    communication: ['#ffbe55', '#ff6b86', '✉'], data: ['#3fe0ff', '#8f63ff', '▤'], research: ['#b99bff', '#ff5ccf', '⌕'], video: ['#ff8a5c', '#ff5ccf', '▶'] };
+  const PALETTE = [['#6b46ff', '#c04dff'], ['#3fe0ff', '#3f6bff'], ['#ff5ccf', '#5c3bff'], ['#4ff0b0', '#2f8cff'], ['#ffbe55', '#ff6b86'], ['#ff8a5c', '#ff5ccf']];
+  const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
+  const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+
+  const S = { apps: [], tags: [], installed: new Map(), stack: [], q: '', loaded: false, error: '' };
   if (/\.staging\.wizard001\.com$/.test(location.hostname)) $('preview').hidden = false;
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
-  const store = WosStore.renderStore($('catalog'), ctx);
-  $('query').addEventListener('input', () => store.setQuery($('query').value));
-  function showCard(app) {
-    scroll = document.scrollingElement.scrollTop; card = app;
-    $('browse').hidden = true; $('query').disabled = true; $('card').hidden = false;
-    WosStore.renderCard($('card'), app, { ...ctx, from: 'store', onBack: back });
-    document.scrollingElement.scrollTop = 0;
+
+  /* ---------------- data ---------------- */
+  const get = p => fetch(DATA + p, { credentials: 'same-origin', cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+  async function load() {
+    const [idx, tags, inst] = await Promise.allSettled([get('wizard/v1/index/search?limit=100'), get('wizard/v1/index/tags'), get('api/apps/installed')]);
+    if (idx.status !== 'fulfilled') { S.error = 'The App Index isn’t reachable right now.'; S.loaded = true; return paint(); }
+    S.apps = (idx.value.apps || []).filter(a => a && /^[a-z0-9][a-z0-9-]{0,63}$/.test(a.id || '')).filter(a => a.id !== 'wizard-shell');
+    S.tags = tags.status === 'fulfilled' ? (tags.value.tags || []) : [];
+    if (inst.status === 'fulfilled') for (const x of inst.value.installed || []) {
+      const id = x?.info?.id; if (!id) continue; const prev = S.installed.get(id);
+      if (!prev || x.app?.status === 'running') S.installed.set(id, { status: x.app?.status || 'unknown' });
+    }
+    S.loaded = true; paint();
   }
-  function back() {
-    if (!card) return false;
-    card = null; $('card').hidden = true; $('browse').hidden = false; $('query').disabled = false;
-    document.scrollingElement.scrollTop = scroll; return true;
+  const isInstalled = a => S.installed.has(a.id);
+  // The shell knows which apps have a view it can open; only those get "Open".
+  const canOpen = a => { try { return framed && typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(a.id); } catch (_) { return false; } };
+
+  /* ---------------- pieces ---------------- */
+  function icon(a, size = 'm') {
+    const [c1, c2] = hue(a.id);
+    const letter = esc((a.name || a.id).trim().charAt(0).toUpperCase());
+    const img = a.logo ? `<img src="${DATA}logo/${esc(a.id)}" alt="" loading="lazy" decoding="async">` : '';
+    return `<span class="ic ic-${size}" style="--c1:${c1};--c2:${c2}"><b>${letter}</b>${img}</span>`;
   }
-  // Canonical hosted-app Back hook: parent owns joint session history. No framed root sentinel or child guard.
-  window.__wizardCloseOverlay = back;
-  window.addEventListener('keydown', e => { if (e.key === 'Escape' && back()) { e.preventDefault(); e.stopPropagation(); } });
-  async function openInstalled(app) {
-    try {
-      const u = new URL(app.open, location.origin);
-      if (!app.installed || u.origin !== location.origin || !/^\/[a-zA-Z0-9_-]+\//.test(u.pathname) || u.pathname.startsWith('/wizard-os-home/')) throw new Error();
-      // Parent verifies the installed registry's id/URL and uses its existing normal openApp path.
-      if (!framed || !parent.WizStoreOpen?.(app.id, u.pathname + u.search + u.hash)) throw new Error();
-    } catch (_) { $('message').textContent = 'App view is not connected yet'; }
+  function action(a, cls = '') {
+    if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(a.id)}">Open</button>`;
+    if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
+    return `<button class="get ${cls}" data-get="${esc(a.id)}">Get</button>`;
   }
+  const tile = a => `<div class="tile" data-app="${esc(a.id)}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b><small>${esc(a.summary)}</small></span>${action(a)}</div>`;
+  const row = a => `<div class="row" data-app="${esc(a.id)}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b><small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;
+
+  function hero(list) {
+    if (!list.length) return '';
+    return list.map((a, i) => {
+      const [c1, c2] = hue(a.id);
+      return `<div class="feat" data-app="${esc(a.id)}" role="button" tabindex="0" style="--c1:${c1};--c2:${c2}">
+        <div class="feat-art" aria-hidden="true">${a.logo ? `<img src="${DATA}logo/${esc(a.id)}" alt="" decoding="async">` : ''}<i></i><i></i></div>
+        <div class="feat-tx"><span class="eyebrow">${i === 0 ? 'Featured' : 'Spotlight'} · ${esc(kindOf(a).one)}</span><h3>${esc(a.name)}</h3><p>${esc(a.summary)}</p></div>
+        <div class="feat-foot">${icon(a, 's')}<span class="by">${esc(a.publisher || '')}</span>${action(a, 'light')}</div></div>`;
+    }).join('');
+  }
+  function shelf(title, sub, list, kind) {
+    if (!list.length) return '';
+    return `<section class="shelf"><div class="shelf-head"><div><h2>${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ''}</div>${kind ? `<button class="see" data-kind="${kind}">See all</button>` : ''}</div>
+      <div class="rail ${list.length > 2 ? 'rail3' : ''}">${list.map(tile).join('')}</div></section>`;
+  }
+
+  /* ---------------- screens ---------------- */
+  function paint() {
+    if (!S.loaded) { $('hero').innerHTML = '<div class="feat skel"></div>'; $('shelves').innerHTML = '<div class="skel-rows"><i></i><i></i><i></i></div>'; return; }
+    if (S.error) { $('hero').innerHTML = ''; $('shelves').innerHTML = `<p class="empty">${esc(S.error)}</p>`; return; }
+    const feat = FEATURED.map(id => S.apps.find(a => a.id === id)).filter(Boolean).slice(0, 4);
+    $('hero').innerHTML = hero(feat.length ? feat : S.apps.slice(0, 3));
+    $('kinds').innerHTML = KINDS.map(k => { const n = S.apps.filter(a => kindOf(a) === k).length; return n ? `<button class="kind k-${k.id}" data-kind="${k.id}"><b>${esc(k.many)}</b><small>${n}</small></button>` : ''; }).join('');
+    const by = k => S.apps.filter(a => kindOf(a).id === k);
+    const fresh = [...S.apps].sort((a, b) => (b.checked_at || 0) - (a.checked_at || 0)).slice(0, 6);
+    $('shelves').innerHTML = [
+      shelf('Give your agent new skills', 'Agent apps run in the background. Your agent uses them for you.', by('agent-apps'), 'agent-apps'),
+      shelf('Apps you can open', 'They get their own window in Wizard.', by('apps'), 'apps'),
+      shelf('Connect your accounts', 'Sign in once and every agent can use it.', by('connections'), 'connections'),
+      shelf('Agents', '', by('agents'), 'agents'),
+      shelf('New on the Index', '', fresh, ''),
+    ].join('');
+    $('topics').innerHTML = S.tags.map(t => { const [c1, c2, g] = TOPIC_ART[t.id] || [...hue(t.id), '◇']; return `<button class="topic" data-tag="${esc(t.id)}" style="--c1:${c1};--c2:${c2}"><span class="tg">${g}</span><b>${esc(cap(t.id))}</b><small>${t.count} app${t.count === 1 ? '' : 's'}</small></button>`; }).join('');
+  }
+
+  function showList(title, list, sub = '') {
+    $('results').innerHTML = `<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ''}</div></div>
+      ${list.length ? `<div class="rows">${list.map(row).join('')}</div>` : `<p class="empty">Nothing matches “${esc(S.q)}”. Try another word.</p>`}`;
+  }
+  function search(q) {
+    S.q = q.trim(); const n = S.q.toLowerCase();
+    if (!n) { if (top() === 'search') pop(); return; }
+    const hits = S.apps.map(a => {
+      const hay = [a.name, a.summary, a.publisher, ...(a.tags || []), ...(a.provides || []), kindOf(a).one].join(' ').toLowerCase();
+      const s = a.name.toLowerCase().startsWith(n) ? 3 : a.name.toLowerCase().includes(n) ? 2 : hay.includes(n) ? 1 : 0;
+      return [s, a];
+    }).filter(([s]) => s).sort((x, y) => y[0] - x[0]).map(([, a]) => a);
+    if (top() !== 'search') push('search');
+    showList('Results', hits, `${hits.length} for “${S.q}”`);
+  }
+
+  function showDetail(id) {
+    const a = S.apps.find(x => x.id === id); if (!a) return;
+    const k = kindOf(a), [c1, c2] = hue(a.id);
+    const uses = (a.uses || []).map(u => S.apps.find(x => x.id === u) || { id: u, name: cap(u.replace(/-/g, ' ')) });
+    const needs = uses.length ? `<section class="d-sec"><h3>Works with</h3><p class="d-note">${esc(a.name)} uses these. Wizard installs anything missing first.</p><div class="dep">${uses.map(u =>
+      `<div class="dep-i" ${S.apps.includes(u) ? `data-app="${esc(u.id)}" role="button" tabindex="0"` : ''}>${icon(u, 's')}<b>${esc(u.name)}</b><small>${isInstalled(u) ? '✓ Installed' : 'Will be added'}</small></div>`).join('')}</div></section>` : '';
+    const usedBy = S.apps.filter(x => (x.uses || []).includes(a.id));
+    const powers = usedBy.length ? `<section class="d-sec"><h3>Powers</h3><div class="dep">${usedBy.map(u => `<div class="dep-i" data-app="${esc(u.id)}" role="button" tabindex="0">${icon(u, 's')}<b>${esc(u.name)}</b><small>${esc(kindOf(u).one)}</small></div>`).join('')}</div></section>` : '';
+    const gives = (a.provides || []).length ? `<section class="d-sec"><h3>Gives your agent</h3><div class="chips">${a.provides.map(p => `<span>${esc(p.replace(/-/g, ' '))}</span>`).join('')}</div></section>` : '';
+    const how = { view: 'Opens in its own Wizard window.', service: 'Runs in the background. Ask your agent to use it — no screen needed.', agent: 'An agent that lives on your Wizard.', external: 'Connect an account once; every agent can use it.' }[a.type] || '';
+    const info = [['Kind', k.one], ['Publisher', a.publisher], ['Version', a.version], ['Category', cap(a.category)], ['Runs on', (a.architectures || []).join(' · ')], ['Installs', a.installs > 0 ? String(a.installs) : 'New']]
+      .filter(([, v]) => v).map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v)}</dd></div>`).join('');
+    $('detail').innerHTML = `<div class="d-hero" style="--c1:${c1};--c2:${c2}"><button class="back" data-back aria-label="Back">‹</button>
+        ${icon(a, 'l')}<div class="d-id"><h2>${esc(a.name)}</h2><p>${esc(k.one)}${a.publisher ? ` · ${esc(a.publisher)}` : ''}</p>${action(a, 'big')}</div></div>
+      <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc(a.version || '—')}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>
+      <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
+      ${needs}${powers}${gives}
+      <section class="d-sec"><h3>Information</h3><dl class="info">${info}</dl>${a.url && /^https:\/\/github\.com\//.test(a.url) ? `<a class="src" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">View source on GitHub ↗</a>` : ''}</section>`;
+    window.scrollTo(0, 0);
+  }
+
+  /* ---------------- navigation stack: discover → list/search → detail ---------------- */
+  const scrolls = [];
+  const top = () => S.stack[S.stack.length - 1]?.t;
+  function render() {
+    const t = top();
+    $('discover').hidden = !!t; $('results').hidden = !(t === 'list' || t === 'search'); $('detail').hidden = t !== 'detail';
+  }
+  function push(t, arg) { scrolls.push(window.scrollY); S.stack.push({ t, arg }); render(); }
+  function pop() {
+    if (!S.stack.length) return false;
+    const was = S.stack.pop(); render();
+    if (was.t === 'search') { $('q').value = ''; S.q = ''; }
+    const under = S.stack[S.stack.length - 1];
+    if (under?.t === 'detail') showDetail(under.arg); else if (under?.t === 'list') openKind(under.arg, true);
+    const y = scrolls.pop() || 0; requestAnimationFrame(() => window.scrollTo(0, y));
+    return true;
+  }
+  function openKind(id, keep) {
+    const tag = id.startsWith('tag:') ? id.slice(4) : null; const k = KINDS.find(x => x.id === id);
+    const list = tag ? S.apps.filter(a => (a.tags || []).includes(tag)) : S.apps.filter(a => kindOf(a) === k);
+    if (!keep) push('list', id);
+    showList(tag ? cap(tag) : k.many, list, tag ? `${list.length} app${list.length === 1 ? '' : 's'}` : k.blurb);
+    if (!keep) window.scrollTo(0, 0);
+  }
+  function openApp(id) { push('detail', id); showDetail(id); }
+
+  let toastT = 0;
+  function toast(html) { const t = $('toast'); t.innerHTML = html; t.hidden = false; requestAnimationFrame(() => t.classList.add('on')); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { t.hidden = true; }, 250); }, 3600); }
+
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-back]')) { pop(); return; }
+    const g = e.target.closest('[data-get]');
+    if (g) { e.stopPropagation(); const a = S.apps.find(x => x.id === g.dataset.get); toast(`<b>Installing from the Store is almost here.</b><span>For now, ask your agent: “install ${esc(a?.name || 'it')}”.</span>`); return; }
+    const o = e.target.closest('[data-open]');
+    if (o) { e.stopPropagation(); try { parent.WizOpenApp(o.dataset.open); } catch (_) { toast('<b>Open it from your apps.</b>'); } return; }
+    const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);
+    const t = e.target.closest('[data-tag]'); if (t) return openKind('tag:' + t.dataset.tag);
+    const a = e.target.closest('[data-app]'); if (a) return openApp(a.dataset.app);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.matches?.('[role="button"]')) { e.target.click(); return; }
+    if (e.key === 'Escape' && pop()) { e.preventDefault(); e.stopPropagation(); }
+  });
+  $('q').addEventListener('input', () => search($('q').value));
+  $('q').addEventListener('keydown', e => { if (e.key === 'Enter') $('q').blur(); });
+
+  // Canonical hosted-app Back hook: the shell owns history and calls this; true = handled one layer.
+  window.__wizardCloseOverlay = pop;
   if (!framed) {
-    // Reuse an armed guard after reload; each real Back re-arms exactly one, never accumulating entries.
-    if (history.state?.store !== 'guard') { history.replaceState({ store:'root' }, ''); history.pushState({ store:'guard' }, ''); }
-    addEventListener('popstate', () => { back(); history.pushState({ store:'guard' }, ''); });
-    let watcher;
-    const arm = () => { if (!watcher && 'CloseWatcher' in window) { watcher = new CloseWatcher(); watcher.onclose = () => { watcher = null; back(); arm(); }; } };
-    addEventListener('pointerdown', arm, true); arm();
+    if (history.state?.store !== 'guard') { history.replaceState({ store: 'root' }, ''); history.pushState({ store: 'guard' }, ''); }
+    addEventListener('popstate', () => { pop(); history.pushState({ store: 'guard' }, ''); });
   }
+  // Broken or missing logos fall back to the gradient letter (inline onerror is blocked by CSP).
+  document.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.remove(); }, true);
+  window.__store = { state: () => ({ layers: S.stack.map(x => x.t), apps: S.apps.length, installed: [...S.installed.keys()], q: S.q }) };
+  paint(); load();
 })();

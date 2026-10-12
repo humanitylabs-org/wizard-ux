@@ -7,9 +7,12 @@ import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { createIndexProxy, readCapped, readWizardApps } from './store-index-views.mjs';
+import { buildOverview, gatherSources } from './system-overview.mjs';
 export const PREFIX = '/wizard-os-home/store-data/';
 const APPS = join(homedir(), '.wizard-os/apps.json');
 const ENV = join(homedir(), 'runtipi/.env');
+const SERVICE = 'http://127.0.0.1:8923';
+const LOGO_HOST = /^https:\/\/raw\.githubusercontent\.com\/[\w.-]+\/[\w.-]+\/[0-9a-f]{7,40}\/[\w./-]{1,120}\.(png|jpe?g|webp|gif|svg)$/i;
 // Every emitted value is rebuilt from a validated scalar: an allowed key holding an object never leaks through.
 const str = (v, max, re) => typeof v === 'string' && v.length <= max && (!re || re.test(v)) ? v : undefined;
 const ver = v => (typeof v === 'number' && Number.isFinite(v)) ? v : str(v, 32, /^[\w.+-]+$/);
@@ -29,11 +32,22 @@ function runtipi() {
   const now = Math.floor(Date.now()/1000), h=b64({alg:'HS256',typ:'JWT'}), p=b64({sub:'cli',iat:now,nbf:now,exp:now+60});
   return { base:`http://${env.INTERNAL_IP || '127.0.0.1'}:${env.NGINX_PORT || 80}`, token:`${h}.${p}.${createHmac('sha256',env.JWT_SECRET).update(`${h}.${p}`).digest('base64url')}` };
 }
-export function createStoreDataRoutes({ fetchImpl = fetch, index = createIndexProxy(), readApps = () => readWizardApps(APPS), readRuntipi = runtipi } = {}) {
+export function createStoreDataRoutes({ fetchImpl = fetch, index = createIndexProxy(), readApps = () => readWizardApps(APPS), readRuntipi = runtipi, overview } = {}) {
+  // Installed list straight from Runtipi, reduced to validated scalars (used by the Store and the System overview).
+  const installedList = async () => {
+    const auth=readRuntipi();
+    const r=await fetchImpl(auth.base+'/api/apps/installed',{headers:{Authorization:'Bearer '+auth.token},redirect:'error',signal:AbortSignal.timeout(8000)});
+    if (!r.ok) throw new Error('app_data_unavailable');
+    return installedMetadata(await r.json());
+  };
+  const serviceJson = async (p) => { const r=await fetchImpl(SERVICE+p,{redirect:'error',signal:AbortSignal.timeout(8000)}); if (!r.ok) throw new Error('service'); return JSON.parse((await readCapped(r,2*1024*1024)).toString('utf8')); };
+  const getOverview = overview || (async () => buildOverview(await gatherSources({ fetchJson: serviceJson, readInstalled: installedList })));
+  let ovCache = null;
+  const logos = new Map();
   return async (req,res) => {
     const send = (status, data, type='application/json') => {
       const body = Buffer.isBuffer(data) ? data : Buffer.from(JSON.stringify(data));
-      res.writeHead(status, {'Content-Type':type,'Content-Length':body.length,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}); res.end(req.method === 'HEAD' ? undefined : body);
+      res.writeHead(status, {'Content-Type':type,'Content-Length':body.length,'Cache-Control':type.startsWith('image/')?'private, max-age=3600':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}); res.end(req.method === 'HEAD' ? undefined : body);
     };
     if (!['GET','HEAD'].includes(req.method)) { send(405,{error:'read_only'}); return; }
     try {
@@ -44,6 +58,26 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = createIndexPr
       const path=u.pathname.slice(PREFIX.length);
       if (path === 'wizard/v1/wizard-apps') { send(200,readApps()); return; }
       if (path.startsWith('wizard/v1/index/')) { const r=await index('/'+path.slice('wizard/v1/index/'.length),u.searchParams); send(r.status,r.body); return; }
+      if (path === 'system/v1/overview') {
+        if (u.search) { send(400,{error:'invalid_query'}); return; }
+        if (!ovCache || Date.now()-ovCache.at > 30000) ovCache = { at: Date.now(), body: await getOverview() };
+        send(200, ovCache.body); return;
+      }
+      const logoId = path.match(/^logo\/([a-z0-9][a-z0-9-]{0,63})$/)?.[1];
+      if (logoId) {
+        if (u.search) { send(400,{error:'invalid_query'}); return; }
+        const hit = logos.get(logoId); if (hit) { send(200, hit.body, hit.type); return; }
+        // Only the logo URL the public App Index lists for this exact app id, on GitHub's raw host at a pinned commit.
+        const r = await index('/search', new URLSearchParams({ limit: '100' }));
+        const src = (r.status === 200 && Array.isArray(r.body?.apps) ? r.body.apps : []).find(a => a?.id === logoId)?.logo;
+        if (typeof src !== 'string' || !LOGO_HOST.test(src)) { send(404,{error:'no_logo'}); return; }
+        const lr = await fetchImpl(src,{redirect:'error',signal:AbortSignal.timeout(8000)});
+        const type=(lr.headers.get('content-type') || '').split(';')[0];
+        if (!lr.ok || !/^image\/(png|jpeg|webp|gif|svg\+xml)$/.test(type)) { send(502,{error:'invalid_image'}); return; }
+        let body; try { body=await readCapped(lr,1024*1024); } catch (_) { send(502,{error:'image_too_large'}); return; }
+        if (logos.size > 200) logos.clear();
+        logos.set(logoId, { body, type }); send(200, body, type); return;
+      }
       const isInstalled=path === 'api/apps/installed';
       const logo=/^api\/marketplace\/apps\/[a-z0-9-]{1,64}(?::|%3[aA])[a-z0-9-]{1,64}\/image$/.test(path);
       if (!isInstalled && !logo) { send(404,{error:'not_found'}); return; }
