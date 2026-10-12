@@ -68,6 +68,6 @@ async function checkStore(p,mobile){
  let h=await p.evaluate(()=>history.length);await p.reload();await p.frameLocator('iframe[title="App Store"]').locator('[data-wam-id="transcriber"]').waitFor();await wait(700);ok(await p.locator('iframe[title="App Store"]').count()===1&&await p.evaluate(()=>history.length)<=h,(mobile?'phone':'desktop')+': reload restores one app frame without duplicate history');
  await p.mouse.click(8,8);await back(p,'direct Store to parent');for(let i=0;i<2;i++){await wait(2200);await p.mouse.click(8,8);await back(p,'parent root '+i);}ok(p.url().startsWith(BASE)&&await p.evaluate(()=>history.length)<=h,(mobile?'phone':'desktop')+': repeated real parent-root Back stays without history growth');
  await c.close();}
- ok(!unsafe.some(u=>/\/v1\/runs\b|\/app-lifecycle\//.test(u)),'zero real agent submissions or lifecycle attempts',unsafe.join('\n'));
+ ok(unsafe.length===0,'zero unsafe requests of any kind (no agent submissions or lifecycle attempts)',unsafe.join('\n'));
  }finally{await b.close();fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({host:require('os').hostname(),source:process.env.SOURCE_SHA,base:BASE,pass,fail,cases,unsafe,popstateReceipts:receipts},null,2));console.log(`${pass} passed, ${fail} failed`);}process.exitCode=fail?1:0;
 })().catch(e=>{console.error(e);process.exitCode=1;});

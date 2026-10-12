@@ -7,6 +7,19 @@ test('installed metadata is an allowlist (nested generated credentials never emi
   const result=installedMetadata({installed:[{info:{id:'transcriber',name:'Transcriber',form_fields:[{password:'secret'}]},app:{status:'running',version:1,config:{password:'secret'},userConfig:{secret:'secret'}},metadata:{latestVersion:2,password:'secret'},config:'secret'}]});
   assert.deepEqual(result,{installed:[{info:{id:'transcriber',name:'Transcriber'},app:{status:'running',version:1},metadata:{latestVersion:2}}]});
 });
+test('allowed keys holding nested objects are dropped, never passed through',()=>{
+  const nested={password:'secret'};
+  const out=JSON.stringify(installedMetadata({installed:[{info:{id:'x',urn:nested,name:nested,short_desc:nested,categories:[nested,'audio'],no_gui:nested},app:{status:nested,version:nested,ignoredVersion:nested},metadata:{latestVersion:nested}}]}));
+  assert.ok(!out.includes('secret'),out);
+  assert.deepEqual(JSON.parse(out),{installed:[{info:{id:'x',categories:['audio']},app:{},metadata:{}}]});
+});
+test('oversized upstream image is refused without buffering it all',async()=>{
+  const handler=createStoreDataRoutes({readRuntipi:()=>({base:'http://fixture',token:'t'}),fetchImpl:async()=>new Response(new ReadableStream({pull(c){c.enqueue(new Uint8Array(1024*1024));}}),{headers:{'content-type':'image/png'}})});
+  const s=http.createServer(handler); await new Promise(r=>s.listen(0,'127.0.0.1',r));
+  try { assert.equal((await fetch(`http://127.0.0.1:${s.address().port}${PREFIX}api/marketplace/apps/a:b/image`)).status,502);
+        assert.equal((await fetch(`http://127.0.0.1:${s.address().port}${PREFIX}%E0%A4%A`)).status,400); }
+  finally {s.closeAllConnections();await new Promise(r=>s.close(r));}
+});
 test('prefix, methods, traversal, HEAD, index and installed data are bounded',async()=>{
   let remote=0;
   const handler=createStoreDataRoutes({index:async(p,q)=>p==='/search'?{status:200,body:{apps:[{id:q.get('q')}]}}:{status:404,body:{}},readApps:()=>({apps:[]}),readRuntipi:()=>({base:'http://fixture',token:'private'}),fetchImpl:async()=>{remote++;return {ok:true,json:async()=>({installed:[]})};}});

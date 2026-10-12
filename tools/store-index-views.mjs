@@ -53,6 +53,23 @@ export function readWizardApps(appsJsonPath) {
   return { schema: 1, store: text(doc?.store, 40) || 'wizardapps', apps }
 }
 
+/** Reads at most limit bytes; aborts (throws) beyond it so a misbehaving upstream cannot exhaust memory. */
+export async function readCapped(r, limit) {
+  const len = Number(r.headers?.get?.('content-length') || 0)
+  if (len > limit) throw new Error('too_large')
+  if (!r.body?.getReader) { const b = Buffer.from(await r.arrayBuffer()); if (b.length > limit) throw new Error('too_large'); return b }
+  const reader = r.body.getReader(), parts = []
+  let n = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    n += value.length
+    if (n > limit) { try { await reader.cancel() } catch {} throw new Error('too_large') }
+    parts.push(value)
+  }
+  return Buffer.concat(parts.map(v => Buffer.from(v)))
+}
+
 /** Builds the index proxy with a small cache. fetchImpl and now are injectable for tests. */
 export function createIndexProxy({ base = APP_INDEX_URL, fetchImpl = fetch, now = Date.now, timeoutMs = 8000 } = {}) {
   const cache = new Map()
@@ -65,8 +82,8 @@ export function createIndexProxy({ base = APP_INDEX_URL, fetchImpl = fetch, now 
     if (hit && now() - hit.at < TTL_MS) return { status: 200, body: hit.body, cached: true }
     try {
       const r = await fetchImpl(target, { headers: { Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(timeoutMs) })
-      const raw = await r.text()
-      if (raw.length > INDEX_LIMIT) return { status: 502, body: { error: 'index_too_large' } }
+      let raw
+      try { raw = (await readCapped(r, INDEX_LIMIT)).toString('utf8') } catch (e) { if (e.message === 'too_large') return { status: 502, body: { error: 'index_too_large' } }; throw e }
       let body
       try { body = JSON.parse(raw) } catch { return { status: 502, body: { error: 'index_unreadable' } } }
       if (!r.ok) return { status: r.status === 404 ? 404 : 502, body: { error: r.status === 404 ? 'not_found' : 'index_unavailable' } }

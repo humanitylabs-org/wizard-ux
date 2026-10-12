@@ -6,15 +6,20 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import { createIndexProxy, readWizardApps } from './store-index-views.mjs';
+import { createIndexProxy, readCapped, readWizardApps } from './store-index-views.mjs';
 export const PREFIX = '/wizard-os-home/store-data/';
 const APPS = join(homedir(), '.wizard-os/apps.json');
 const ENV = join(homedir(), 'runtipi/.env');
-const pick = (v, keys) => Object.fromEntries(keys.filter(k => v?.[k] !== undefined).map(k => [k, v[k]]));
+// Every emitted value is rebuilt from a validated scalar: an allowed key holding an object never leaks through.
+const str = (v, max, re) => typeof v === 'string' && v.length <= max && (!re || re.test(v)) ? v : undefined;
+const ver = v => (typeof v === 'number' && Number.isFinite(v)) ? v : str(v, 32, /^[\w.+-]+$/);
+const clean = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 export function installedMetadata(doc) {
-  return { installed: (Array.isArray(doc?.installed) ? doc.installed : []).filter(x => /^[a-z0-9][a-z0-9-]{0,63}$/.test(x?.info?.id || '')).map(x => ({
-    info: pick(x.info, ['id','urn','name','short_desc','categories','no_gui']),
-    app: pick(x.app, ['status','version','ignoredVersion']), metadata: pick(x.metadata, ['latestVersion'])
+  return { installed: (Array.isArray(doc?.installed) ? doc.installed : []).filter(x => /^[a-z0-9][a-z0-9-]{0,63}$/.test(x?.info?.id || '')).slice(0, 500).map(x => ({
+    info: clean({ id: x.info.id, urn: str(x.info.urn, 130, /^[a-z0-9-]{1,64}:[a-z0-9-]{1,64}$/), name: str(x.info.name, 80), short_desc: str(x.info.short_desc, 300),
+      categories: Array.isArray(x.info.categories) ? x.info.categories.filter(c => str(c, 32, /^[\w -]+$/)).slice(0, 12) : undefined, no_gui: typeof x.info.no_gui === 'boolean' ? x.info.no_gui : undefined }),
+    app: clean({ status: str(x.app?.status, 24, /^[a-z_-]+$/), version: ver(x.app?.version), ignoredVersion: ver(x.app?.ignoredVersion) }),
+    metadata: clean({ latestVersion: ver(x.metadata?.latestVersion) })
   })) };
 }
 function runtipi() {
@@ -32,7 +37,7 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = createIndexPr
     };
     if (!['GET','HEAD'].includes(req.method)) { send(405,{error:'read_only'}); return; }
     try {
-      const raw = req.url.split('?')[0], decoded=decodeURIComponent(raw);
+      const raw = req.url.split('?')[0]; let decoded; try { decoded=decodeURIComponent(raw); } catch (_) { send(400,{error:'invalid_path'}); return; }
       if (decoded.includes('\\') || decoded.split('/').some(s => s === '..' || s === '.') || /%2f|%5c|%25/i.test(raw)) { send(400,{error:'invalid_path'}); return; }
       const u=new URL(req.url,'http://localhost');
       if (!u.pathname.startsWith(PREFIX)) { send(404,{error:'not_found'}); return; }
@@ -49,8 +54,7 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = createIndexPr
       if (isInstalled) { send(200,installedMetadata(await r.json())); return; }
       const type=r.headers.get('content-type') || '';
       if (!/^image\/(png|jpeg|webp|gif|svg\+xml)(;|$)/.test(type)) { send(502,{error:'invalid_image'}); return; }
-      const body=Buffer.from(await r.arrayBuffer());
-      if (body.length>2*1024*1024) { send(502,{error:'image_too_large'}); return; }
+      let body; try { body=await readCapped(r,2*1024*1024); } catch (_) { send(502,{error:'image_too_large'}); return; }
       send(200,body,type);
     } catch (_) { send(502,{error:'browse_data_unavailable'}); }
   };
