@@ -2894,6 +2894,7 @@
       if (v === 'tour') return window.WosTour?.start('link');
       if (v === 'help') { closeSheets(true); return window.WosTour?.openHelp(); }
       closeSheets(true);
+      if (v === 'home') { window.WosResources?.back(); return goDesk(0, true); }
       if (v === 'inbox') return openSheet('inbox');
       if (v === 'apps') return openSheet('launcher');
       if (v === 'settings' || v === 'usage') return openSettings();
