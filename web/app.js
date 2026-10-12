@@ -288,10 +288,12 @@
     else if (w.app !== 'frame') $('.wbody', el).innerHTML = winBody(w);
     applyLayout(deskOf(id));
   }
+  let paintStars = () => {};
   function placeTrack(dx, anim) {
     track.classList.toggle('anim', !!anim);
     track.style.transform = `translate3d(calc(${-idx * 100}% + ${dx}px),0,0)`;
     $('.nebula').style.transform = `translate3d(${(-idx + 2) * -3 + dx * .01}%,0,0)`;
+    paintStars();
   }
   let labelT = 0;
   /* Parking: hosted apps on desks out of view stay loaded but go quiet, so swipes stay smooth.
@@ -2723,24 +2725,34 @@
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { LIVE && LIVE.refresh(); markVisibleThreadsSeen(); } });
 
+  // The phone keeps a still resting orb; live voice/agent feedback stays animated.
+  // Shared native Everywhere hosts retain their existing cadence.
+  Orb.setRestingMotion?.(false);
+
   /* ---------------- starfield ---------------- */
   (function stars() {
     const c = $('#stars'), x = c.getContext('2d'); let Wd, H, pts = [];
     function size() { const r = Math.min(devicePixelRatio || 1, 2); Wd = c.width = c.clientWidth * r; H = c.height = c.clientHeight * r;
       pts = Array.from({ length: 170 }, () => ({ x: Math.random() * Wd * 1.4, y: Math.random() * H, r: Math.random() * 1.3 * r + .2, p: Math.random() * 6.28, s: .4 + Math.random() * 1.4, d: Math.random() })); }
-    size(); addEventListener('resize', size);
-    let last = 0;
-    (function f(t) {
-      requestAnimationFrame(f); if (t - last < 33) return; last = t;
+    // Scenery is event-driven: no self-rescheduling loop after the page settles.
+    let raf = 0;
+    const draw = () => {
+      raf = 0; if (document.hidden) return;
       x.clearRect(0, 0, Wd, H);
       const off = -idx * Wd * .05;
       for (const p of pts) {
-        const a = .25 + .75 * Math.abs(Math.sin(p.p + t / 1000 * p.s));
+        const a = .25 + .75 * Math.abs(Math.sin(p.p));
         x.globalAlpha = a * (.35 + p.d * .65); x.fillStyle = p.d > .85 ? '#d9c8ff' : '#ffffff';
         const px = ((p.x + off * (p.d + .2)) % (Wd * 1.4) + Wd * 1.4) % (Wd * 1.4) - Wd * .2;
         x.beginPath(); x.arc(px, p.y, p.r, 0, 6.28); x.fill();
       }
-    })(0);
+    };
+    paintStars = () => { if (!document.hidden && !raf) raf = requestAnimationFrame(draw); };
+    const resize = () => { size(); paintStars(); };
+    resize(); addEventListener('resize', resize);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else paintStars();
+    });
   })();
 
   /* ---------------- boot ---------------- */

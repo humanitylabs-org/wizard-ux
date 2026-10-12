@@ -262,6 +262,14 @@ body {
 @keyframes shock { from { opacity: .9; transform: scale(.9); } to { opacity: 0; transform: scale(2.3); } }
 .orb-wrap.dragging .orb { transition: none; }
 .moons { position: absolute; inset: -18px; pointer-events: none; animation: spin 24s linear infinite; }
+/* Foreground resting motion: keep the sky and blurred ornaments still.
+ * Desk slides, voice feedback and Working indicators retain their own motion. */
+.device .nebula i { animation: none; }
+.device .orb-wrap:is([data-mode="idle"], [data-mode="type"], [data-mode="paused"]) .orb-halo,
+.device .orb-wrap:is([data-mode="idle"], [data-mode="type"], [data-mode="paused"]) .orb-ring::before,
+.device .orb-wrap:is([data-mode="idle"], [data-mode="type"], [data-mode="paused"]) .orb-ring::after,
+.device .orb-wrap:is([data-mode="idle"], [data-mode="type"], [data-mode="paused"]) .moons { animation-play-state: paused; }
+.device[data-voice="idle"] .timer::before { animation: none; }
 .moons i { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
 
 .timer { position: absolute; left: 50%; bottom: -24px; transform: translateX(-50%) translateY(6px); opacity: 0; transition: opacity 220ms, transform 260ms var(--ease);

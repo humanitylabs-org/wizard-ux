@@ -337,7 +337,11 @@ window.WizCore.chats = function createChats(H) {
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
     const fab = '<button type="button" class="ch-fab" data-chnew data-chfab aria-label="New chat"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>';
-    el.innerHTML = `<div class="ch-list">${head}<div class="ch-scroll">${sugHtml}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
+    const html = `<div class="ch-list">${head}<div class="ch-scroll">${sugHtml}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
+    // Unchanged list reads keep the same nodes, caret, scroll and text selection.
+    // A thread/list remount invalidates the identity guard even when its HTML matches.
+    if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
+    el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
     const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = scroll;
     PW?.paint(w.id, el);
     if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
@@ -794,7 +798,16 @@ window.WizCore.chats = function createChats(H) {
   async function loadThread(w, force) {
     const c = ch(w.id); if (!w.thread || w.thread === '__new__' || c.loading) return;
     const s = LIVE.session(w.thread);
-    const fresh = c.loadedFor === w.thread && Date.now() - c.at < (s && WORKING_ST.has(s.status) ? 3500 : 15000);
+    // Cache finished history while its session revision is unchanged. Its existing session poll remains live;
+    // any new message/activity/status immediately invalidates this cache, with a 60 s safety re-read.
+    // Working, approvals, failed reads and pending send/steer receipts keep their existing cadence.
+    const revision = s ? JSON.stringify([s.id, s.messageCount, s.status, s.runId, s.updatedAt, s.activityAt,
+      s.lastUserAt, s.lastAssistantAt, s.previewAt, s.preview]) : '';
+    // The Agent Service omits status for settled historical sessions. A local in-flight override is live.
+    const quiet = s && (!s.status || ['completed', 'cancelled', 'failed', 'interrupted'].includes(s.status))
+      && Number.isSafeInteger(s.messageCount) && !LIVE.busy(w.thread) && !c.err && !pendingFor(w).length;
+    const age = s && WORKING_ST.has(s.status) ? 3500 : quiet ? 60000 : 15000;
+    const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
     if (fresh && !force) { if (c.loadedFor === w.thread && hk !== c.hk) { c.hk = hk; const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el); } return; }
@@ -805,7 +818,7 @@ window.WizCore.chats = function createChats(H) {
       const turns = toTurns(rows);
       const sig = JSON.stringify(turns.slice(-3));
       let changed = c.loadedFor !== w.thread || sig !== c.sig;
-      Object.assign(c, { turns, loadedFor: w.thread, at: Date.now(), err: '', sig });
+      Object.assign(c, { turns, loadedFor: w.thread, at: Date.now(), err: '', sig, readRevision: revision });
       // A sent message has landed once a recent user turn in the thread matches it.
       const sent = OUTBOX ? OUTBOX.forThread(w.thread).filter(p => p.state === 'sent') : [];
       if (sent.length) {

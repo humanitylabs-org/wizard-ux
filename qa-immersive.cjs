@@ -43,7 +43,10 @@ async function boot(b) {
   return { ctx, p, errs };
 }
 const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(SHOTS, n + '.png') }); };
-const state = p => p.evaluate(() => {
+// Wait for actual finite transitions, not a fixed wall-clock delay on a busy SwiftShader host.
+const settle = p => p.waitForFunction(() => !document.getAnimations().some(a =>
+  a.playState === 'running' && Number.isFinite(a.effect?.getComputedTiming().endTime)), null, { timeout: 6000 });
+const state = async p => { await settle(p); return p.evaluate(() => {
   const d = __wos.desks[__wos.idx], id = d.focus, we = document.querySelector(`.win[data-win="${id}"]`);
   const r = el => { if (!el) return null; const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, r: b.right, b: b.bottom }; };
   const vis = el => !!el && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden' && +getComputedStyle(el).opacity > .2 && el.getBoundingClientRect().height > 0 && el.getBoundingClientRect().top < innerHeight;
@@ -51,7 +54,7 @@ const state = p => p.evaluate(() => {
   const send = we?.querySelector('.ch-compose button[type=submit]');
   return { full: !!d.full, imm: document.querySelector('#device').classList.contains('immersive'), corner: document.querySelector('#device').classList.contains('orb-corner'),
     win: r(we), bar: vis(bar), orbVis: vis(orb), dockVis: vis(dock), orb: r(orb), send: r(send), sheet: __wos.sheet, voice: __wos.voice, app: __wos.wins[id]?.app };
-});
+}); };
 async function swipe(p, x, y0, y1, steps = 8) {
   const c = await p.context().newCDPSession(p);
   await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: y0, id: 1 }] });
@@ -162,6 +165,7 @@ async function pinch(p, cx, cy, d0, d1) {
     const wid = await p.evaluate(u => __wos.openWin({ app: 'frame', url: u, title: 'Edge' }).id, path);
     await p.waitForTimeout(1200);
     await p.evaluate(id => __wos.setFull(id, true), wid); await p.waitForTimeout(1300);
+    await settle(p);
     const e = await p.evaluate(id => { const we = document.querySelector(`.win[data-win="${id}"]`), f = we.querySelector('iframe');
       return { own: we.classList.contains('edge-own'), winTop: we.getBoundingClientRect().top, frameTop: f.getBoundingClientRect().top, bg: getComputedStyle(we).backgroundColor,
         cut: f.contentDocument.documentElement.style.getPropertyValue('--wos-cutout') }; }, wid);
