@@ -6,14 +6,17 @@
   function snapshot(frame) {
     const s=getComputedStyle(document.documentElement), light=(window.WosSkin?.current||document.documentElement.dataset.skin)==='paper';
     const bg=color(s,'bg','#05030c'), ink=color(s,'ink','#f3efff'), accent=color(s,'violet-2','#b99bff');
+    // The shell owns the backdrop: apps paint a transparent canvas and sit on the same window glass as Chats.
+    const win=color(s,'wz-window','rgba(12,8,26,.82)'), sheet=color(s,'glass-2','rgba(28,19,58,.72)');
     return {version:1,revision,skin:window.WosSkin?.current||document.documentElement.dataset.skin||'nebula',comparison,colorScheme:light?'light':'dark',presentation:frame.closest('.win.full')?'immersive':'window',tokens:{
-      canvas:bg,surface:color(s,'glass','rgba(18,12,38,.58)'),
-      'surface-raised':light?'#fffdf8':`color-mix(in srgb, ${bg} 88%, ${ink} 12%)`,text:ink,
+      canvas:'transparent',base:bg,chrome:win,overlay:sheet,
+      surface:`color-mix(in srgb, ${ink} 6%, transparent)`,
+      'surface-raised':`color-mix(in srgb, ${ink} 10%, transparent)`,text:ink,
       'text-secondary':color(s,'ink-2','#b9b0d8'),
-      'text-muted':`color-mix(in srgb, ${ink} 65%, ${bg} 35%)`,border:color(s,'line-2','rgba(205,190,255,.24)'),accent,
+      'text-muted':color(s,'ink-3','#7d74a3'),border:color(s,'line-2','rgba(205,190,255,.24)'),accent,
       'accent-soft':`color-mix(in srgb, ${accent} 16%, transparent)`,
       'on-accent':light?'#fffdf8':bg,
-      'reader-surface':light?'#fffdf8':`color-mix(in srgb, ${bg} 94%, ${ink} 6%)`
+      'reader-surface':'transparent'
     }};
   }
   function send(frame, force=false) {
@@ -24,6 +27,7 @@
     const appearance=snapshot(frame),sig=JSON.stringify({...appearance,revision:0});
     if(!force&&known.get(frame)?.signature===sig)return;
     known.set(frame,{signature:sig,appearance,ack:false});
+    frame.closest('.win')?.classList.add('wz-themed'); // drop the legacy opaque frame fill for skin-aware apps
     frame.contentWindow.postMessage({type:'wizard:appearance',appearance},origin);
   }
   function sync(force=false){revision++;document.querySelectorAll('iframe.appframe').forEach(f=>send(f,force));}

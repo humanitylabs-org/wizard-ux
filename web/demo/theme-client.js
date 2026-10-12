@@ -2,8 +2,8 @@
 (() => {
   'use strict';
   const root = document.documentElement;
-  const names = ['canvas','surface','surface-raised','text','text-secondary','text-muted','border','accent','accent-soft','on-accent','reader-surface'];
-  const fallback = {canvas:'#05030c',surface:'rgba(18,12,38,.58)','surface-raised':'rgba(28,19,58,.92)',text:'#f3efff','text-secondary':'#b9b0d8','text-muted':'#a59abf',border:'rgba(205,190,255,.24)',accent:'#b99bff','accent-soft':'rgba(143,99,255,.16)','on-accent':'#160b32','reader-surface':'#0e0919'};
+  const names = ['canvas','base','chrome','overlay','surface','surface-raised','text','text-secondary','text-muted','border','accent','accent-soft','on-accent','reader-surface'];
+  const fallback = {canvas:'#05030c',base:'#05030c',chrome:'rgba(12,8,26,.94)',overlay:'rgba(28,19,58,.96)',surface:'rgba(18,12,38,.58)','surface-raised':'rgba(28,19,58,.92)',text:'#f3efff','text-secondary':'#b9b0d8','text-muted':'#a59abf',border:'rgba(205,190,255,.24)',accent:'#b99bff','accent-soft':'rgba(143,99,255,.16)','on-accent':'#160b32','reader-surface':'#0e0919'};
   const trustedHost = location.origin; // Preview only. Installed app manifest supplies its exact trusted host origin.
   let current = null, connected = false;
   function valid(a) {

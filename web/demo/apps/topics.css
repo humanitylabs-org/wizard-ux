@@ -5,7 +5,7 @@
 
 /* ---------- colour layer: unified (Wizard OS tokens) ---------- */
 :root {
-  --bg: var(--wz-canvas, #06040f); --ink: var(--wz-text, #f4f0ff); --ink-2: var(--wz-text-secondary, #bdb4dc); --ink-3: var(--wz-text-muted, #7e76a4);
+  --bg: var(--wz-base, #06040f); --canvas: var(--wz-canvas, var(--bg)); --chrome: var(--wz-chrome, var(--bg)); --overlay: var(--wz-overlay, #0d0820); --ink: var(--wz-text, #f4f0ff); --ink-2: var(--wz-text-secondary, #bdb4dc); --ink-3: var(--wz-text-muted, #7e76a4);
   --line: color-mix(in srgb, var(--wz-border, rgba(205,190,255,.22)) 55%, transparent); --line-2: var(--wz-border, rgba(205,190,255,.22));
   --card: var(--wz-surface, rgba(22,15,46,.72)); --card-2: var(--wz-surface-raised, rgba(32,22,66,.86));
   --violet: var(--wz-accent, #8f63ff); --violet-2: color-mix(in srgb, var(--wz-accent, #b99bff) 78%, var(--wz-text, #fff));
@@ -13,8 +13,8 @@
   --hi-grad: linear-gradient(135deg, var(--cyan), color-mix(in srgb, var(--cyan) 62%, var(--ink)));
   --hi-soft: var(--wz-accent-soft, rgba(63,224,255,.1)); --hi-glow: color-mix(in srgb, var(--cyan) 55%, transparent);
   --amber: #ffbe55; --green: #4ff0b0; --red: #ff6b86;
-  --sky: radial-gradient(130% 55% at 50% -12%, color-mix(in srgb, var(--cyan) 16%, var(--bg)) 0%, var(--bg) 62%);
-  --bar: color-mix(in srgb, var(--bg) 92%, transparent); --sheet: var(--wz-surface-raised, #0d0820); --pop: var(--wz-surface-raised, #1d1440);
+  --sky: radial-gradient(130% 55% at 50% -12%, color-mix(in srgb, var(--cyan) 9%, transparent) 0%, transparent 62%), var(--canvas);
+  --bar: color-mix(in srgb, var(--chrome) 70%, transparent); --sheet: var(--overlay); --pop: var(--overlay);
   --tint: color-mix(in srgb, var(--ink) 3%, transparent); --code: color-mix(in srgb, var(--ink) 7%, transparent);
   --dive: linear-gradient(160deg, var(--hi-soft), color-mix(in srgb, var(--violet) 8%, transparent));
   --font: var(--wz-font-ui, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
@@ -26,7 +26,7 @@ html[data-color-scheme="light"] { color-scheme: light; --amber: #a86a00; --green
 
 /* ---------- colour layer: original (shipped Topics) ---------- */
 html[data-comparison="original"] {
-  --bg: #06040f; --ink: #f4f0ff; --ink-2: #bdb4dc; --ink-3: #7e76a4;
+  --bg: #06040f; --canvas: #06040f; --chrome: #06040f; --overlay: #0d0820; --ink: #f4f0ff; --ink-2: #bdb4dc; --ink-3: #7e76a4;
   --line: rgba(205,190,255,.12); --line-2: rgba(205,190,255,.22);
   --card: rgba(22,15,46,.72); --card-2: rgba(32,22,66,.86);
   --violet: #8f63ff; --violet-2: #b99bff; --cyan: #3fe0ff; --on-hi: #0b0620;
@@ -39,11 +39,10 @@ html[data-comparison="original"] {
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 15.5px/1.45 var(--font); overflow: hidden; overscroll-behavior: none; }
+html, body { margin: 0; height: 100%; background: var(--canvas); color: var(--ink); font: 15.5px/1.45 var(--font); overflow: hidden; overscroll-behavior: none; }
 body { background: var(--sky); }
-/* Paint our own canvas in every presentation: the shell's iframe sits on a fixed dark fill, so a transparent page
-   would put a light skin's ink on near-black. (Overrides ui.css's window transparency for this app only.) */
-html[data-app="topics"] { background: var(--bg); }
+/* Hosted: transparent canvas on the shell's window glass (same material as Chats). Standalone: own base. */
+html[data-app="topics"] { background: var(--canvas); }
 html[data-app="topics"] body { background: var(--sky); }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 a { color: var(--violet-2); text-decoration: none; }
@@ -52,7 +51,7 @@ input, textarea { font: inherit; color: var(--ink); }
 .sr-only { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 /* top */
-.top { position: fixed; inset: 0 0 auto 0; height: var(--top); padding: calc(var(--safe-t) + 10px) 16px 0; display: flex; align-items: center; gap: 10px; z-index: 6; background: linear-gradient(var(--bg) 72%, transparent); }
+.top { position: fixed; inset: 0 0 auto 0; height: var(--top); padding: calc(var(--safe-t) + 10px) 16px 0; display: flex; align-items: center; gap: 10px; z-index: 6; background: linear-gradient(var(--bar) 72%, transparent); }
 .brand { display: flex; align-items: center; gap: 9px; }
 .brand h1 { margin: 0; font-size: 21px; letter-spacing: .2px; font-weight: 700; }
 .glyph { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-size: 16px; background: linear-gradient(135deg, var(--cyan), var(--violet)); color: var(--on-hi); font-weight: 800; box-shadow: 0 0 18px color-mix(in srgb, var(--cyan) 25%, transparent); }
@@ -127,7 +126,7 @@ body[data-view="archive"] .fab { display: none; }
 
 /* sheet */
 .scrim { position: fixed; inset: 0; background: rgba(3,2,10,.6); z-index: 8; backdrop-filter: blur(2px); }
-.sheet { position: fixed; left: 0; right: 0; bottom: 0; top: calc(var(--safe-t) + 26px); z-index: 9; background: var(--sheet); border-top: 1px solid var(--line-2); border-radius: 22px 22px 0 0; overflow-y: auto; padding: 8px 18px calc(var(--safe-b) + 40px); animation: up .28s var(--ease); }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; top: calc(var(--safe-t) + 26px); z-index: 9; background: var(--sheet); -webkit-backdrop-filter: blur(20px) saturate(1.2); backdrop-filter: blur(20px) saturate(1.2); border-top: 1px solid var(--line-2); border-radius: 22px 22px 0 0; overflow-y: auto; padding: 8px 18px calc(var(--safe-b) + 40px); animation: up .28s var(--ease); }
 @keyframes up { from { transform: translateY(40px); opacity: 0; } }
 .grab { width: 40px; height: 4px; border-radius: 4px; background: var(--line-2); margin: 2px auto 10px; }
 .sheet-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -175,7 +174,7 @@ details summary { cursor: pointer; color: var(--ink-3); font-size: 13px; margin-
 .hint { color: var(--ink-3); font-size: 13px; margin: 8px 0 0; }
 
 .empty { color: var(--ink-3); text-align: center; padding: 40px 20px; }
-.toast { position: fixed; left: 50%; bottom: calc(var(--nav) + 76px); transform: translateX(-50%); z-index: 20; background: var(--pop); border: 1px solid var(--line-2); padding: 10px 16px; border-radius: 12px; font-size: 14px; display: flex; gap: 14px; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,.5); max-width: calc(100% - 32px); }
+.toast { position: fixed; left: 50%; bottom: calc(var(--nav) + 76px); transform: translateX(-50%); z-index: 20; background: var(--pop); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid var(--line-2); padding: 10px 16px; border-radius: 12px; font-size: 14px; display: flex; gap: 14px; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,.5); max-width: calc(100% - 32px); }
 .toast button { min-height: 32px; color: var(--cyan); font-weight: 700; }
 @media (min-width: 760px) { .pane, .sheet { padding-left: calc(50% - 340px); padding-right: calc(50% - 340px); } }
 @media (prefers-reduced-motion: reduce) { #pager, .sheet { transition: none; animation: none; } }

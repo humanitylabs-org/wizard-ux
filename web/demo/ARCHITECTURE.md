@@ -1,88 +1,78 @@
-# Shell · Skin · App — proposed appearance contract
+# Appearance: shell, skin, app
 
-Status: isolated executable preview. This is a proposal, not an approved platform standard or live app migration.
+**Status: layering locked (James, 12 Oct 2026). Appearance v1 tokens and transport: approved by James, implemented in the isolated preview; Miguel to confirm the `wizard.md` field.**
+Preview: `https://app-styling.staging.wizard001.com/wizard-os-home/` (tailnet, read-only). Decisions #50–#53.
 
-## The three layers
+Every app you open should feel like part of one operating system, and changing the skin should re-dress every app at once, without flattening what makes each app itself.
 
-**Shell = how you move.** It owns the orb, desks, swipe navigation, tile/window arrangement, fullscreen entry, window chrome and the outer Back stack. Another shell may use a sidebar, a single pane or a different workspace paradigm. An app should run inside all of them unchanged.
+## Three layers
 
-**Skin = how the system looks and feels.** It supplies semantic colors, backgrounds, surface treatments, type roles, corner shapes, control appearance and motion preferences. A skin can dress compatible shell elements, but does not introduce another navigation model. Switching navigation models means switching the shell.
+| Layer | Owns | Never owns |
+|---|---|---|
+| **Shell** (`shell` slot, [SHELL.md](SHELL.md)) | How you move: orb, desks, windows and tiles, fullscreen, outer Back stack, launcher, the backdrop every window sits on | What an app shows or how it lays it out |
+| **Skin** (`~/.wizard-os/theme.json`) | How the whole system looks: colours, window material, surfaces, ink, accent, type roles, radius, motion | Navigation. A different way of moving is a different shell, not a skin |
+| **App** | What you do: content, layout, interactions, its own state, intentional typography (Wisdom's serif) and content art | The canvas behind it, or which shell it runs in |
 
-**App = what you do.** It owns its information layout, reader/player/feed interactions, content and app state. Wisdom owns its editorial serif, reading measure and pacing. Music owns its player; Signal owns its feed. App-specific typography remains first-class.
+An app never imports shell code and never checks which shell it is in. The shell resolves the active skin and hands each app a small appearance context. Swap the skin: every open app re-dresses live. Swap the shell: the same app runs unchanged.
 
-The layering is shell + selected skin + app, rather than an app importing the shell's implementation. Each shell resolves the same skin contract and sends a normalized appearance context to the app.
+## The rule that makes it seamless
 
-## What this preview actually implements
+**When hosted, an app's canvas is transparent. The shell owns the backdrop.**
 
-- Yesterday's six skins dress the existing Wizard windowed shell.
-- A small host adapter reads the resolved skin and sends appearance to registered preview frames.
-- Four frozen sample app views consume semantic CSS properties through one framework-neutral client.
-- Appearance has window / immersive / standalone modes. Window backgrounds can be transparent; fullscreen reading gets a stable opaque reader surface.
-- Original / Unified compares the same sample content with native app colors or the shared palette.
-- Appearance changes arrive without reloading the app document. Fonts, scroll and local interaction state can survive because the app DOM is not replaced.
-- A second minimal host on the architecture page loads the same Wisdom document with the same client. That is a bounded demonstration of shell independence, not a replacement shell release.
-- Staging has a fixture-only backend with no connection to production data, agent tools, microphone or writes.
+An app sits on the same window material as Chats. It never paints its own full-page background, because one opaque fill (`#000`, `#0f1014`) is exactly what makes an app look pasted on. Inside the canvas an app draws only semantic surfaces (cards, chips, bars, sheets) from the skin. Standalone (opened in a plain tab) it paints its own base colour so it still works alone.
 
-Prototype scope: same-origin registered frames, color roles, presentation mode and comparison state. Production cross-origin installation, durable per-owner skin settings, packaged components, font-role negotiation and app-store conformance are the next implementation steps.
+Content art keeps its own treatment: album covers, portraits, photographs with a shade for white type. Where there is no art, the app falls back to the skin's surfaces, not a black plate.
 
 ## Appearance v1
 
-The host sends a typed message:
+The shell posts one typed message to each app frame; the app's small client validates it and writes `--wz-*` CSS properties.
 
 ```json
-{"type":"wizard:appearance","appearance":{"version":1,"revision":12,"skin":"nebula","colorScheme":"dark","presentation":"window","comparison":"unified","tokens":{"canvas":"#05030c","surface":"rgba(18,12,38,.58)","surface-raised":"#211a30","text":"#f3efff","text-secondary":"#b9b0d8","text-muted":"#a59abf","border":"rgba(205,190,255,.24)","accent":"#b99bff","accent-soft":"rgba(143,99,255,.16)","on-accent":"#160b32","reader-surface":"#0e0919"}}}
+{"type":"wizard:appearance","appearance":{"version":1,"revision":12,"skin":"nebula","colorScheme":"dark","presentation":"window",
+ "tokens":{"canvas":"transparent","base":"#05030c","chrome":"rgba(12,8,26,.82)","overlay":"rgba(28,19,58,.72)",
+  "surface":"color-mix(in srgb,#f3efff 6%,transparent)","surface-raised":"color-mix(in srgb,#f3efff 10%,transparent)",
+  "text":"#f3efff","text-secondary":"#b9b0d8","text-muted":"#7d74a3","border":"rgba(205,190,255,.24)",
+  "accent":"#b99bff","accent-soft":"color-mix(in srgb,#b99bff 16%,transparent)","on-accent":"#05030c","reader-surface":"transparent"}}}
 ```
 
-The app adapter writes `--wz-*` properties and dispatches `wizard:theme`. App CSS references their meaning, e.g. `color: var(--wz-text)` and `background: var(--wz-surface)`. App code never checks whether it is inside the orb shell, a sidebar shell or a future shell.
+| Token | Meaning |
+|---|---|
+| `canvas` | Page background. `transparent` when hosted; the shell's window shows through |
+| `base` | The skin's solid ground colour: text on light buttons, standalone pages, anything that must be opaque |
+| `chrome` | The window material itself: sticky bars and headers (usually ~70% with a blur) |
+| `overlay` | The shell's sheet material: in-app sheets, full players, toasts (with a blur) |
+| `surface`, `surface-raised` | Cards, chips, inputs: ink tints, so they work on any material |
+| `text`, `text-secondary`, `text-muted`, `border` | Ink and hairlines |
+| `accent`, `accent-soft`, `on-accent` | The skin's one accent colour and its pairings |
+| `reader-surface` | Behind long-form reading (same as canvas today; a skin may deepen it) |
 
-The app announces `wizard:appearance:ready` after loading. The host replies with the current context and the app acknowledges the applied revision. Newly opened apps get the current skin, and already-open apps get later revisions. Stale revisions are ignored. Theme changes are event-driven, not polling.
+- `presentation` is `window`, `immersive` (fullscreen) or `standalone`. It describes the host; it never dictates the app's layout.
+- The app announces `wizard:appearance:ready`; the shell replies with the current context; the app acknowledges each applied `revision`. Stale revisions are ignored. Changes are pushed, never polled, and never reload the app (scroll, reading position and playback survive).
+- Both sides check exact origin, source window and schema. Token values are colours only (no `url()`, no `;{}`); an appearance message grants no data, API, microphone or agent rights.
+- Iframe colour schemes must match the host (`color-scheme: inherit` on the frame) or the browser paints an opaque backdrop.
 
-`presentation` describes the host environment; it does not tell the app its layout. A reader can use the opaque `reader-surface` in immersive mode, while a windowed library can use transparent canvas + system surfaces. The host also needs to supply safe-area/inset and available-size signals in the production contract; CSS container queries handle the app's own layout.
+## Type without flattening
 
-## Typography without flattening identity
+Skins supply type **roles** (`font-ui`, `font-reading`, `font-display`, `font-mono`); apps declare which roles they accept. Small controls usually take `font-ui`. Wisdom keeps its own reading and display serif. A skin change never rewrites every element's font.
 
-Use separate roles: `font-ui`, `font-reading`, `font-display`, `font-mono`. The skin can supply defaults and an app can declare which roles it accepts. Wisdom's reading and display roles are app-owned by default; its small controls can adopt the common UI role. A skin change should never quietly overwrite all descendants' font-family.
+## Building an app that conforms by default
 
-Content-owned things stay content-owned: album covers, publication portraits, charts and status meanings. An app can retain a restrained identity accent, resolved against each skin for legibility. This preview deliberately tests stronger palette inheritance first so James can judge whether Wisdom still feels right.
+1. Start from the app template, which includes the appearance client and the shared primitives (`@wizard/ui`: buttons, inputs, panels, tabs, sheets, empty/loading states) wired to the tokens above.
+2. Background rule: `html, body { background: var(--wz-canvas) }`. Bars use `--wz-chrome`, sheets `--wz-overlay`, cards `--wz-surface`.
+3. Declare it in `wizard.md`: `appearance: 1` and the accepted type roles (field to confirm with Miguel).
+4. The checker mounts the app in a test host under a dark and a light skin, window and fullscreen, and fails on an opaque full-page canvas, horizontal overflow, contrast below AA, or a Back that leaves the app.
 
-## Shared package and app recipe
-
-Proposed `@wizard/ui` package (or equivalent static files) contains:
-
-1. A versioned appearance schema and small host/client adapters.
-2. Semantic token CSS with standalone defaults.
-3. Framework-neutral primitive classes for controls, search fields, tabs, menus, panels and empty/loading states; optional framework bindings sit above those.
-4. A conformance fixture that mounts a new app under light/dark skins, small/large containers and window/fullscreen modes.
-
-A new app starts from a template importing the client + primitives. Its manifest declares appearance version, supported type roles and host integration capabilities. Its `wizard.md` describes the same interface to the app-builder agent. Specific manifest fields remain proposed; they are not an already-approved extension to wizard.md.
-
-Apps do not need all shared controls. They do need the semantic roles wherever they draw system-like backgrounds, labels and controls. Colors for content visualization remain deliberate exceptions.
-
-## Container and origin boundaries
-
-CSS does not cross an iframe boundary. Sharing a stylesheet alone gives common defaults but does not tell an already-open app which skin is active. The runtime adapter is the small missing link.
-
-Production App Manager knows the installed app's origin and allowed shell origin. Each side sends to an exact target origin and verifies source window + origin + schema. Only appearance values pass across this connection; it grants no API, filesystem, microphone or agent permission. Installation/pairing supplies trust, not an arbitrary query parameter or a claimed app ID.
-
-Use a finite token schema with validated color/length/type values. Avoid arbitrary HTML, script or remote stylesheet URLs in a theme payload. Theme assets can be packaged and served through the existing trusted app/skin distribution route.
-
-Old or third-party apps can still open in themed chrome. Full interior reskinning requires adoption of the client/token contract; the shell should not reach into unknown DOM and guess at its styling.
+Apps that don't adopt the client still open in themed window chrome; the shell never reaches into an unknown app's DOM to guess at its styling.
 
 ## State, updates and Back
 
-Appearance updates must not remount an app, reset its scroll or stop playback. Theme preference is owner/system configuration, persisted outside app storage and reapplied on connect. The current preview persists the skin on its isolated origin only; box-level theme.json persistence is future work.
+- The skin choice is owner configuration in `theme.json`, reapplied on every connect; apps never store it.
+- App Back closes its own overlay or nested view first and reports handled / at-root; the shell then leaves fullscreen or changes desk; a single Back never exits Wizard.
+- Pin the appearance version. Older hosts or no host: the app runs on its standalone defaults.
 
-App Back first closes its own overlay or nested view and reports handled / at-root. The shell then exits fullscreen or changes workspace; a single Back never exits Wizard. A future asynchronous cross-origin Back RPC needs a bounded response and one action per request. The preview uses the existing honest same-origin `__wizardCloseOverlay` hook as compatibility glue, not as the proposed portable contract.
+## Next
 
-Pin the appearance version and shared package version. Retain standalone defaults if the host is older or absent. Prefer compatible additions and explicit capabilities over app forks tied to each shell release.
-
-## Recommended adoption sequence
-
-1. Judge this preview's colors and Wisdom reading experience.
-2. Lock the smallest v1 semantic surface/color contract and appearance transport.
-3. Integrate theme resolution in the shell and persist owner selection.
-4. Migrate these representative apps, preserving their workflows and fonts.
-5. Add the app template + checker to the existing app-builder lane after approval; don't create a parallel builder.
-6. Migrate the remaining apps individually. Files needs its fuller UI makeover on this foundation.
-
-The release check is an experience: switch skins with multiple apps open, preserve reading/player state, reload and reopen, then use nested and root Back. Same app document in two hosts proves shell independence. Contrast, focus and touch targets must pass in both light and dark modes.
+1. Persist the skin in `theme.json` and resolve it in `wizard-ux` (not only the preview origin).
+2. Extract the tokens and primitives into `style/` as `@wizard/ui`; add the template and checker step to `wizard-app-builder`.
+3. Migrate apps one at a time, keeping each layout and typography: Topics, Music, Signal, Wisdom first (preview-proven), then Calendar, Projects, Mizel, Android Apps; Files gets its makeover on this foundation.
+4. Cross-origin pairing for installed apps through the App Manager (exact origins, no query-string trust).

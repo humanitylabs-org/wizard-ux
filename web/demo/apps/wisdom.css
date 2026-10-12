@@ -9,7 +9,7 @@
  --sans:var(--wz-font-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,system-ui,sans-serif);
  --wb-text:var(--serif);--wb-display:var(--serif);
  --top:max(env(safe-area-inset-top),var(--wos-cutout,0px));
- --bg:var(--wz-canvas,#0d0c0b);
+ --bg:var(--wz-base,#0d0c0b);--canvas:var(--wz-canvas,var(--bg));--chrome:var(--wz-chrome,var(--bg));
  --raised:var(--wz-surface-raised,#1a1816);
  --ink:var(--wz-text,#e7e9ea);
  --ink2:var(--wz-text-secondary,#c5c9cc);
@@ -25,27 +25,28 @@
  --wb-paper:var(--wz-reader-surface,#0d0c0b);
  --wb-ink:var(--ink);--wb-ink2:var(--ink2);--wb-mute:var(--muted);
  --wb-hi:var(--ink);                                   /* emphasis ink on page (shipped: #fff) */
- --wb-card:color-mix(in srgb,var(--raised) 70%,var(--bg));  /* quiet cards (shipped: #141210) */
+ --wb-card:var(--wz-surface,#141210);  /* quiet cards (shipped: #141210) */
  --wb-card-press:var(--raised);
  --wb-edge:var(--line);                                /* card hairlines (shipped: #3a332a / #2c2721) */
  --wb-track:color-mix(in srgb,var(--wb-ink) 14%,transparent);
  --wb-epi:color-mix(in srgb,var(--wb-paper) 88%,var(--wb-ink) 12%);
  --wb-request:radial-gradient(130% 160% at 0 0,var(--accent-soft),var(--wb-card) 70%);
- --wb-hero-end:var(--bg);
- /* Art stand-ins (no portrait): always a dark plate, tinted by the theme accent */
- --wb-noart:radial-gradient(120% 80% at 30% 20%,color-mix(in srgb,var(--accent) 34%,#120f0c),#120f0c 70%);
- --wb-initial:radial-gradient(120% 90% at 30% 15%,color-mix(in srgb,var(--accent) 40%,#14100c),#14100c 70%);
- --wb-initial-ink:color-mix(in srgb,var(--accent) 80%,#fff);
+ --wb-hero-end:var(--chrome);
+ /* Art stand-ins (no portrait): an accent glow on the window glass, never a black plate */
+ --wb-noart:radial-gradient(120% 80% at 30% 20%,color-mix(in srgb,var(--accent) 22%,transparent),color-mix(in srgb,var(--ink) 4%,transparent) 70%);
+ --wb-initial:radial-gradient(120% 90% at 30% 15%,color-mix(in srgb,var(--accent) 28%,transparent),color-mix(in srgb,var(--ink) 5%,transparent) 70%);
+ --wb-initial-ink:color-mix(in srgb,var(--accent) 70%,var(--ink));
  /* On-image colours sit on photographs and dark shades: the same in every theme */
  --img-ink:#fff;--img-ink2:rgba(255,255,255,.78);--img-ink3:rgba(255,255,255,.65);
  --pill-bg:#f3ede3;--pill-ink:#16120d;--pill-hover:#fff;
- --round-bg:rgba(20,18,16,.55);--round-ink:#f3ede3;
+ --round-bg:var(--wz-overlay,rgba(20,18,16,.55));--round-ink:var(--ink);
  color-scheme:dark}
 html[data-color-scheme="light"]{color-scheme:light;--wb-hero-end:rgba(8,7,6,.94)}
 
 /* ---------- colour layer: original (shipped dark Wisdom) ---------- */
 html[data-comparison="original"]{
- --bg:#0d0c0b;--raised:#1a1816;--ink:#e7e9ea;--ink2:#c5c9cc;--muted:#8b9095;
+ --round-bg:rgba(20,18,16,.55);--round-ink:#f3ede3;
+ --bg:#0d0c0b;--canvas:#0d0c0b;--chrome:#0d0c0b;--raised:#1a1816;--ink:#e7e9ea;--ink2:#c5c9cc;--muted:#8b9095;
  --line:#26231f;--line-strong:#4a4f53;--hover:rgba(231,233,234,.03);--press:rgba(231,233,234,.09);
  --accent:#e8b46a;--accent-ink:#1a1206;--accent-soft:rgba(232,180,106,.14);
  --wb-gold:#e8b46a;--wb-paper:#0d0c0b;--wb-ink:#ece6dc;--wb-ink2:#b9b1a5;--wb-mute:#8a8277;
@@ -56,11 +57,11 @@ html[data-comparison="original"]{
  color-scheme:dark}
 
 /* ---------- base (static/base.css) ---------- */
-html{background:var(--bg)}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 var(--sans);overflow-x:clip;-webkit-font-smoothing:antialiased}
-#app{min-height:100dvh;background:var(--bg)}
-/* Own canvas in every presentation (the shell's iframe sits on a fixed dark fill; see opus-design-notes.md) */
-html[data-app="wisdom"],html[data-app="wisdom"] body{background:var(--bg)}
+html{background:var(--canvas)}
+body{margin:0;background:var(--canvas);color:var(--ink);font:15px/1.4 var(--sans);overflow-x:clip;-webkit-font-smoothing:antialiased}
+#app{min-height:100dvh;background:var(--canvas)}
+/* Hosted: transparent canvas on the shell's window glass (same material as Chats). Standalone: own base. */
+html[data-app="wisdom"],html[data-app="wisdom"] body{background:var(--canvas)}
 button,input,textarea,select{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none;padding:0;text-align:inherit}
 button:disabled{opacity:.5;cursor:default}
@@ -80,7 +81,7 @@ h1,h2,h3{margin:0;line-height:1.2;font-weight:800;letter-spacing:-.01em}
 :root.wb-open body{overflow:hidden;overscroll-behavior:none}
 
 /* ---------- library views + rows (wisdom.css) ---------- */
-.wisdom-views{position:sticky;top:var(--top);z-index:15;display:flex;border-bottom:1px solid var(--line);background:var(--bg);background:color-mix(in srgb,var(--bg) 88%,transparent);-webkit-backdrop-filter:saturate(180%) blur(14px);backdrop-filter:saturate(180%) blur(14px);overflow-x:auto;scrollbar-width:none}
+.wisdom-views{position:sticky;top:var(--top);z-index:15;display:flex;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--chrome) 70%,transparent);-webkit-backdrop-filter:saturate(180%) blur(14px);backdrop-filter:saturate(180%) blur(14px);overflow-x:auto;scrollbar-width:none}
 .wisdom-views::-webkit-scrollbar{display:none}
 .wisdom-views>a{position:relative;display:flex;flex:1 0 auto;align-items:center;justify-content:center;gap:4px;min-width:0;min-height:50px;padding:0 9px;color:var(--muted);font-size:14px;font-weight:500;white-space:nowrap;transition:background .15s,color .15s}
 .wisdom-views>a:hover{background:var(--press);color:var(--ink)}
@@ -348,3 +349,18 @@ h1,h2,h3{margin:0;line-height:1.2;font-weight:800;letter-spacing:-.01em}
 
 @media (min-width:1000px){.wb-hero{height:520px}.wb-cover{flex-basis:156px}}
 @media (prefers-reduced-motion:reduce){.wb-opener-art,.wb-opener-copy,.wb-swipe b{animation:none}.wb-track,.wb-bar>span{transition:none!important}}
+
+/* ---------- no artwork: the page sits on the OS glass (unified only) ----------
+   The photo treatment (white type over a dark shade) belongs to real art. Without art, the opener and the hero card
+   read as part of the window: theme ink, an accent glow, no black shade. */
+html:not([data-comparison="original"]) .wb-opener:has(.wb-noart),
+html:not([data-comparison="original"]) .wb-hero:has(.wb-noart){color:var(--wb-ink)}
+html:not([data-comparison="original"]) .wb-opener:has(.wb-noart) .wb-noart{position:absolute;inset:0;width:100%;height:100%}
+html:not([data-comparison="original"]) :is(.wb-opener,.wb-hero):has(.wb-noart) .wb-hero-shade{display:none}
+html:not([data-comparison="original"]) .wb-hero:has(.wb-noart){background:var(--wb-card);box-shadow:none;border:1px solid var(--wb-edge)}
+html:not([data-comparison="original"]) .wb-opener:has(.wb-noart) .wb-opener-copy p{color:var(--wb-ink2)}
+html:not([data-comparison="original"]) .wb-opener:has(.wb-noart) .wb-swipe,
+html:not([data-comparison="original"]) .wb-hero:has(.wb-noart) .wb-hero-foot{color:var(--wb-mute)}
+html:not([data-comparison="original"]) .wb-hero:has(.wb-noart) .wb-hero-deck{color:var(--wb-ink2)}
+html:not([data-comparison="original"]) .wb-opener:has(.wb-noart) .wb-sample-tag{border-color:var(--wb-edge);color:var(--wb-mute)}
+html:not([data-comparison="original"]) .wb-hero:has(.wb-noart) .wb-pill{background:var(--accent);color:var(--accent-ink)}
