@@ -56,7 +56,7 @@ function routeFor() {
     }
     // The apps the links open come from their real local services (read-only GETs).
     const LOCAL = { '/meditation/': 9420, '/files/': 8954 };
-    for (const [pre, port] of Object.entries(LOCAL)) if (u.pathname.startsWith(pre) || u.pathname === pre.slice(0, -1)) { const res = await r.fetch({ url: `http://127.0.0.1:${port}${u.pathname}${u.search}` }).catch(() => null); return res ? r.fulfill({ response: res }) : r.abort(); }
+    if (/127\.0\.0\.1/.test(origin)) for (const [pre, port] of Object.entries(LOCAL)) if (u.pathname.startsWith(pre) || u.pathname === pre.slice(0, -1)) { const res = await r.fetch({ url: `http://127.0.0.1:${port}${u.pathname}${u.search}` }).catch(() => null); return res ? r.fulfill({ response: res }) : r.abort(); }
     if (!u.pathname.startsWith('/wizard/')) return r.continue();
     if (u.pathname === '/wizard/hermes/api/sessions' && (u.searchParams.get('offset') || '0') === '0') {
       const res = await r.fetch(); const p = await res.json();
