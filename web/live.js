@@ -83,6 +83,7 @@
       assignedAt: optIso(item.wizard_assigned_at),
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
+      helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
       // Thread titles (Agent Service thread-titles.mjs): every rename with its time, so the thread shows
