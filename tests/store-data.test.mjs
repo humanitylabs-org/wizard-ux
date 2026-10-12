@@ -16,7 +16,7 @@ test('prefix, methods, traversal, HEAD, index and installed data are bounded',as
     assert.equal((await fetch(base+'/wizard/v1/index/search')).status,404);
     assert.equal((await fetch(base+PREFIX+'unknown')).status,404);
     assert.equal((await fetch(base+PREFIX+'api/apps/installed?secret=x')).status,400);
-    const raw=await new Promise(resolve=>{http.get(base+PREFIX+'%2e%2e/api/apps/installed',r=>{r.resume();resolve(r.statusCode);});}); assert.equal(raw,400);
+    const raw=await new Promise(resolve=>{http.get({hostname:'127.0.0.1',port:s.address().port,path:PREFIX+'%2e%2e/api/apps/installed'},r=>{r.resume();resolve(r.statusCode);});}); assert.equal(raw,400);
     assert.equal((await fetch(base+PREFIX+'api%2fapps/installed')).status,400);
     assert.deepEqual(await (await fetch(base+PREFIX+'wizard/v1/index/search?q=transcri')).json(),{apps:[{id:'transcri'}]});
     const head=await fetch(base+PREFIX+'wizard/v1/wizard-apps',{method:'HEAD'}); assert.equal(head.status,200);assert.equal(await head.text(),'');
