@@ -288,6 +288,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function renderChatList(w, el) {
     if (!el) return;
+    ch(w.id).heldList = false;
     H.threadShown?.(w.id, null); // the list is showing: nothing is bound to this window
     const c = ch(w.id), n = norm(c.q);
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, SJ = c.subject || '';
@@ -352,7 +353,7 @@ window.WizCore.chats = function createChats(H) {
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
-    el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
+    clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
     const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = scroll;
     PW?.paint(w.id, el);
     if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
@@ -623,8 +624,50 @@ window.WizCore.chats = function createChats(H) {
    * wait while a finger is down on the messages or text is selected in them, and land once the selection clears. */
   // A selection holds updates for two minutes at most, so a forgotten one never freezes a working thread.
   const SEL = { down: null, at: 0, x: 0, y: 0, since: 0 }, SEL_MAX = 120000;
+  // Native scrolling cancels Pointer Events before the finger lifts. Touch Events retain ownership;
+  // scroll events keep the same nodes through inertia. Only background paints use these guards.
+  const TOUCH = new Map(), SCROLL_IDLE = 350;
+  let idleT = 0;
+  function scheduleHeld() { clearTimeout(idleT); idleT = setTimeout(flushHeld, SCROLL_IDLE); }
+  function readingIn(el) {
+    const g = ch(idOf(el)).reading;
+    if (!g || !g.node.isConnected || !el.contains(g.node)) return false;
+    // Recovery for a lost end event, not a 15-second deadline on a genuine slow drag.
+    if (g.touches.size && Date.now() - g.at < SEL_MAX) return true;
+    return Date.now() < g.until;
+  }
+  function readGuard(node) {
+    const c = ch(idOf(node));
+    if (!c.reading || c.reading.node !== node) c.reading = { node, touches: new Set(), at: 0, until: 0 };
+    return c.reading;
+  }
+  function clearReading(id) {
+    const g = CH[id]?.reading; if (!g) return;
+    for (const [key, owner] of TOUCH) if (owner === g) TOUCH.delete(key);
+    if (SEL.down === g.node) SEL.down = null;
+    delete CH[id].reading; // explicit navigation/remount must not retain a detached touch target
+  }
+  function resetReading() {
+    TOUCH.clear(); SEL.down = null;
+    for (const c of Object.values(CH)) if (c.reading) { c.reading.touches.clear(); c.reading.until = 0; }
+    scheduleHeld();
+  }
+  document.addEventListener('touchend', endTouches, { capture: true, passive: true });
+  document.addEventListener('touchcancel', endTouches, { capture: true, passive: true });
+  function endTouches(e) {
+    for (const t of e.changedTouches) {
+      const g = TOUCH.get(t.identifier); if (!g) continue;
+      g.touches.delete(t.identifier); g.until = Date.now() + SCROLL_IDLE; TOUCH.delete(t.identifier);
+    }
+    if (!TOUCH.size) SEL.down = null;
+    scheduleHeld();
+  }
+  document.addEventListener('visibilitychange', () => { resetReading(); });
+  window.addEventListener('pagehide', resetReading);
+  window.addEventListener('blur', resetReading);
   function selectingIn(el) {
-    if (SEL.down && el.contains(SEL.down) && Date.now() - SEL.at < 15000) return true;
+    if (readingIn(el)) return true;
+    if (SEL.down && el.contains(SEL.down) && Date.now() - SEL.at < SEL_MAX) return true;
     const s = window.getSelection?.(); if (!s || s.isCollapsed || !s.rangeCount) return false;
     if (SEL.since && Date.now() - SEL.since > SEL_MAX) return false;
     const n = s.anchorNode, e = n && (n.nodeType === 1 ? n : n.parentElement);
@@ -638,9 +681,16 @@ window.WizCore.chats = function createChats(H) {
   }
   function flushHeld() {
     for (const id of Object.keys(CH)) {
-      const c = CH[id], w = W[id]; if (!c.held || !w?.thread) continue;
-      const el = track.querySelector(`[data-chats="${id}"]`); if (!el) { c.held = false; continue; }
-      if (!selectingIn(el)) { c.held = false; renderThread(w, el); }
+      const c = CH[id], w = W[id]; if (!w || (!c.held && !c.heldList)) continue;
+      const el = elOf(id); if (!el) { c.held = c.heldList = false; continue; }
+      if (document.hidden) continue;
+      if (w.thread) {
+        c.heldList = false;
+        if (c.held && !selectingIn(el)) { c.held = false; renderThread(w, el); }
+      } else {
+        c.held = false;
+        if (c.heldList && !holdList(id)) renderChatList(w, el);
+      }
     }
   }
   let selT = 0;
@@ -649,9 +699,10 @@ window.WizCore.chats = function createChats(H) {
     if (!on) SEL.since = 0; else if (!SEL.since) SEL.since = Date.now();
     clearTimeout(selT); selT = setTimeout(flushHeld, 250);
   });
-  setInterval(() => { if (SEL.since && Date.now() - SEL.since > SEL_MAX) flushHeld(); }, 10000);
+  setInterval(flushHeld, 10000); // bounded recovery for lost touch/selection-end or an external sheet close
   const PAGE = 60;
   function renderThread(w, el, keep) {
+    ch(w.id).held = false; // explicit actions/navigation may repaint immediately
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
     const working = !!s && WORKING_ST.has(s.status);
     const sub = isNew ? `Starts a new thread with ${window.WizConfig.agent()}` : s?.status === 'stopping' ? 'Stopping…' : working ? (s.waitingOn === 'helper' ? `A helper is finishing this for ${window.WizConfig.agent()}` : `${window.WizConfig.agent()} is working`) : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s?.deferred && !s.archived ? 'Deferred' : s?.archived ? 'Archived' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
@@ -697,6 +748,7 @@ window.WizCore.chats = function createChats(H) {
     const chip = PW ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
+    clearReading(w.id);
     el.innerHTML = `<div class="ch-thread">
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
@@ -736,6 +788,18 @@ window.WizCore.chats = function createChats(H) {
   let lp = null, lpUntil = 0;
   // Long-press / swipe / right-click on rows, and paste-to-attach; bound to each shell's root in bind().
   function bindGestures(root) {
+    root.addEventListener('touchstart', e => {
+      const node = e.target.closest?.('.ch-msgs, .ch-scroll'); if (!node) return;
+      const g = readGuard(node); g.at = Date.now();
+      for (const t of e.changedTouches) { g.touches.add(t.identifier); TOUCH.set(t.identifier, g); }
+    }, { capture: true, passive: true });
+    root.addEventListener('touchmove', e => {
+      for (const t of e.changedTouches) { const g = TOUCH.get(t.identifier); if (g) g.at = Date.now(); }
+    }, { capture: true, passive: true });
+    root.addEventListener('scroll', e => {
+      if (!e.target.matches?.('.ch-msgs, .ch-scroll')) return;
+      const g = readGuard(e.target); g.until = Date.now() + SCROLL_IDLE; scheduleHeld();
+    }, { capture: true, passive: true });
     // A finger on the messages holds background re-renders (see selectingIn) until it lifts.
     root.addEventListener('pointerdown', e => { const m = e.target.closest?.('.ch-msgs'); if (m && e.button <= 0) Object.assign(SEL, { down: m, at: Date.now(), x: e.clientX, y: e.clientY }); }, true);
     const lift = () => { if (!SEL.down) return; SEL.down = null; clearTimeout(selT); selT = setTimeout(flushHeld, 350); };
@@ -751,7 +815,7 @@ window.WizCore.chats = function createChats(H) {
       }
       lift();
     }, true);
-    root.addEventListener('pointercancel', () => setTimeout(lift, 900), true);
+    root.addEventListener('pointercancel', e => { if (e.pointerType !== 'touch') lift(); }, true);
     root.addEventListener('pointerdown', e => {
       const row = e.target.closest('.ch-list [data-chopen]'); if (!row || e.button > 0) return;
       const wid = idOf(row);
@@ -1136,10 +1200,14 @@ window.WizCore.chats = function createChats(H) {
     ta.setSelectionRange(a + text.length, a + text.length); ch(id).draft = ta.value; saveDraft(id); growTa(ta); syncSend(ta.form, ch(id));
     return true;
   }
-  const forget = id => { delete CH[id]; };
+  const forget = id => { clearReading(id); delete CH[id]; };
   function justPressed() { return Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
-  const holdList = id => rowSheet?.wid === id || (!!lp && lp.wid === id) || !!PW?.holds(id);
+  const holdList = id => {
+    const el = elOf(id), hold = rowSheet?.wid === id || (!!lp && lp.wid === id) || !!PW?.holds(id) || (!!el && readingIn(el));
+    if (hold) ch(id).heldList = true;
+    return hold;
+  };
   // Back / Esc: the media viewer, then the actions sheet. Returns what it closed, or ''.
   function closeFilterSheet() { for (const id of Object.keys(CH)) { const c = CH[id]; if (c.sheet) { c.sheet = false; const w = H.win(id); if (w) rerenderList(w); return true; } } return false; }
   const closeOverlay = () => (closeFilterSheet() ? 'filter-sheet' : null) || (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
