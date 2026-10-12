@@ -69,20 +69,23 @@
       const shell = window.__wos || window.__wux;
       if (shell?.voice && shell.voice !== 'idle') throw Object.assign(fault('Microphone held by Wizard voice'), { code: 'busy', appId: 'wizard-voice' });
       const h = hold('Recording');
+      const resource = window.WizAppCapture;
+      const release = () => { h.release(); removeEventListener('wizard-app-capture-state', onCaptureState); };
+      const onCaptureState = () => { if (resource.getState?.().active === false) release(); }; // actual recorder state, never elapsed time
+      addEventListener('wizard-app-capture-state', onCaptureState);
       try {
-        const resource = window.WizAppCapture;
         const session = await (opts?.resumeId && resource.resume ? resource.resume(st.appId, opts.resumeId, opts) : resource.start(st.appId, opts));
         let finished;
         const finish = method => {
           check();
-          if (!finished) finished = Promise.resolve().then(() => session[method]()).then(r => { h.release(); return r; }, e => { finished = null; throw e; });
+          if (!finished) finished = Promise.resolve().then(() => session[method]()).then(r => { release(); return r; }, e => { finished = null; throw e; });
           return finished;
         };
         return Object.freeze({ id: session.id, onLevel(fn) { check(); return session.onLevel(fn); },
           stop: () => finish('stop'), cancel: () => finish('cancel'),
           pause() { check(); if (!session.pause) return Promise.reject(fault('Capture pause unavailable')); return session.pause(); },
           resume() { check(); if (!session.resume) return Promise.reject(fault('Capture resume unavailable')); return session.resume(); } });
-      } catch (e) { h.release(); throw e; }
+      } catch (e) { release(); throw e; }
     };
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,

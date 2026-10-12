@@ -9,7 +9,7 @@ const entries = [
  ['wizard-signal','/wizard-signal/'],['wizard-search','/wizard-search/'],['wisdom','/wisdom/'],['meditation','/meditation/'],['wizard-music','/wizard-music/'],['shopping','/wizard-shopping/'],['mizel','/mizel-live/'],['topics','/wizard-topics-preview/'],['projects','/wizard-projects/'],['calendar','/wizard-calendar/'],['trackhunt','/trackhunt/'],['cinequeue','/cinequeue/'],['social','/wizard-social/'],['files','/files/'],['iching','/iching/'],['console','/console/'],['android-apps','/android-apps/'],
 ];
 const apps = entries.map(([id,url]) => ({ id,url,name:id,colors:['#777777','#888888'] }));
-const captureMock = `(() => {let active=null, pending=[];window.WizAppCapture={getState:()=>({active:!!active,appId:active?.appId}),async start(appId,opts){if(active)throw new Error('busy:'+active.appId);active={appId};let s={id:'qa-capture',onLevel(fn){fn(.5);return()=>{}},async stop(){active=null;const r={id:s.id,blob:new Blob(['fixture']),mime:'audio/webm',durationMs:1,startedAt:Date.now(),meta:opts?.meta};pending.push({...r,appId});return r},async cancel(){active=null}};return s},async pending(appId){return pending.filter(p=>p.appId===appId)},async ack(appId,id){pending=pending.filter(p=>p.appId!==appId||p.id!==id)}}})();`;
+const captureMock = `(() => {let active=null, pending=[],failStop=false;window._qaCapture={failNextStop:()=>{failStop=true},finish:()=>active?.session.stop()};window.WizAppCapture={getState:()=>({active:!!active,appId:active?.appId}),async start(appId,opts){if(active)throw new Error('busy:'+active.appId);active={appId};let s={id:'qa-capture',onLevel(fn){fn(.5);return()=>{}},async stop(){if(failStop){failStop=false;throw new Error('fixture-stop-retry')}active=null;const r={id:s.id,blob:new Blob(['fixture']),mime:'audio/webm',durationMs:1,startedAt:Date.now(),meta:opts?.meta};pending.push({...r,appId});dispatchEvent(new CustomEvent('wizard-app-capture-state'));return r},async cancel(){active=null;dispatchEvent(new CustomEvent('wizard-app-capture-state'))}};active.session=s;return s},async pending(appId){return pending.filter(p=>p.appId===appId)},async ack(appId,id){pending=pending.filter(p=>p.appId!==appId||p.id!==id)}}})();`;
 function appHTML(id) { return `<!doctype html><html data-app="${id}"><meta name="viewport" content="width=device-width"><title>${id} fixture</title><body><h1>${id}</h1><input id="draft" value="unsaved fixture"><button id="open">Nested</button><button id="close">Close</button><button id="share">Share</button><output id="state">0</output><script src="/wizard-os-home/core/app-client.js"></script><script>
 window.depth=0;window.calls=0;window.unreg=WizardApp.back.register({canGoBack:()=>depth>0,back:()=>{calls++;if(!depth)return false;depth--;paint();return true}});
 function paint(){document.querySelector('#state').textContent=depth}function nested(){depth++;paint()}
@@ -107,6 +107,13 @@ let origin;
    ok('existing shell voice cannot acquire second microphone',await p.evaluate(m=>(m?__wos:__wux).voice==='idle',mobile));
    await fr.evaluate(()=>session.stop());ok('stop releases capture hold',!await p.evaluate(()=>WizAppServices.update.busy()));
    ok('pending/ack delegated by registered appId',await fr.evaluate(async()=>{const r=await WizardApp.capture.pending();await WizardApp.capture.ack(r[0].id);return r.length===1&&(await WizardApp.capture.pending()).length===0}));
+   await fr.evaluate(()=>WizardApp.capture.start({kind:'audio'}).then(s=>window.session=s));
+   await p.evaluate(()=>_qaCapture.failNextStop());
+   ok('failed Stop keeps active recording hold',await fr.evaluate(()=>session.stop().then(()=>false,()=>true))&&await p.evaluate(()=>WizAppServices.update.busy()));
+   await fr.evaluate(()=>session.stop());ok('failed Stop is retryable',!await p.evaluate(()=>WizAppServices.update.busy()));
+   await fr.evaluate(()=>WizardApp.capture.start({kind:'audio'}).then(s=>window.session=s));
+   await p.evaluate(()=>_qaCapture.finish());
+   ok('automatic physical stop releases recording hold without an elapsed-time guess',!await p.evaluate(()=>WizAppServices.update.busy()));
    // Real update UI: neither visibility nor explicit Reload bypasses a hold.
    await (mobile?p.evaluate(()=>WosDevice.checkWeb(true)):p.evaluate(()=>WizAppUpdates.check()));
    await fr.evaluate(()=>window.hold=WizardApp.update.hold('Unsaved fixture'));version='abc0002';
@@ -122,6 +129,10 @@ let origin;
   // Isolated host verifies privilege and lifecycle boundaries, no shell special cases.
   const ctx=await context(b,false),p=await ctx.newPage();await p.goto(origin+'/harness/');const fr=await waitFrame(p,origin+'/wizard-signal/');await fr.waitForFunction(()=>WizardApp.hosted);
   ok('host ready version negotiation',await fr.evaluate(async()=>{const x=await WizardApp.ready({name:'fixture',version:'1'});return x.version===1&&x.hosted&&WizardApp.version===1}));
+  ok('allowlisted message share has source-verified outcome receipt',await fr.evaluate(()=>new Promise(resolve=>{const id='qa-message-share';setTimeout(()=>resolve('timeout'),2500);const listener=e=>{if(e.source===parent&&e.origin===location.origin&&e.data?.type==='wizard:app:reply'&&e.data.id===id){removeEventListener('message',listener);resolve(e.data.value)}};addEventListener('message',listener);parent.postMessage({type:'wizard:app:request',version:1,id,op:'share.text',args:{text:'message fixture'}},location.origin)}))==='shared');
+  await p.evaluate(()=>nativeOutcome=new Promise(()=>{}));
+  ok('native pending Promise bounded to unsupported',await fr.evaluate(()=>WizardApp.share.text({text:'timeout fixture'}))==='unsupported');
+  await p.evaluate(()=>nativeOutcome='shared');
   await fr.evaluate(()=>{window.one=WizardApp.back.push(()=>{window.order=(window.order||[]).concat(1)});window.two=WizardApp.back.push(()=>{window.order=(window.order||[]).concat(2)})});
   await p.evaluate(()=>WizAppServices.back(document.querySelector('#frame')));await p.evaluate(()=>WizAppServices.back(document.querySelector('#frame')));
   ok('overlay callbacks LIFO',await fr.evaluate(()=>JSON.stringify(order)==='[2,1]'));
@@ -133,10 +144,15 @@ let origin;
   await fr.evaluate(()=>{window.h=WizardApp.update.hold('lifecycle');window.saved=parent.WizAppServices.connect(window,{back:()=>false})});
   await p.evaluate(()=>{const rogue=document.createElement('iframe');rogue.id='rogue';rogue.src='/rogue/';document.body.append(rogue)});const rogue=await waitFrame(p,origin+'/rogue/');
   ok('unregistered source denied',await rogue.evaluate(()=>parent.WizAppServices.connect(window,{back:()=>false})===null));
+  await fr.evaluate(()=>WizardApp.update.onAvailable(x=>window.incomingUpdate=x));
+  await rogue.evaluate(()=>parent.document.querySelector('#frame').contentWindow.postMessage({type:'wizard:app:update',version:1,available:{version:'rogue'}},location.origin));
+  await p.waitForTimeout(100);ok('client ignores sibling-window host impersonation',await fr.evaluate(()=>!window.incomingUpdate));
   const denied=await fr.evaluate(()=>{const f=parent.document.querySelector('#frame');f.setAttribute('src','/rogue/');try{saved.share.text({text:'denied'});return false}catch(e){return true}});ok('src/path changed immediately denies old capability',denied);
   await p.waitForFunction(()=>!WizAppServices.update.busy());ok('navigation reconciles old document holds',!await p.evaluate(()=>WizAppServices.update.busy()));
   await p.evaluate(()=>{const f=document.querySelector('#frame');f.src='/wizard-signal/'});const fr2=await waitFrame(p,origin+'/wizard-signal/');await fr2.waitForFunction(()=>WizardApp.hosted);
-  await fr2.evaluate(()=>WizardApp.update.hold('removed'));await p.evaluate(()=>document.querySelector('#frame').remove());
+  await fr2.evaluate(()=>WizardApp.capture.start({kind:'audio'}));await p.evaluate(()=>document.querySelector('#frame').remove());
+  ok('removed frame never cancels capture or bypasses recording busy guard',await p.evaluate(()=>WizAppCapture.getState().active&&WizAppServices.update.busy()));
+  await p.evaluate(()=>_qaCapture.finish());
   ok('removed frame releases lifecycle holds',!await p.evaluate(()=>WizAppServices.update.busy()));
   // Real browser SW/cache storage: exact reviewed app targets only, never the root or shell.
   await p.evaluate(async()=>{
