@@ -779,7 +779,7 @@
    * normal copy on a desk of its own, ✕ closes it for this reply. Leaving the thread (Back to the list, another
    * thread) closes the bound view; opening the thread again, or a new reply with a new link, binds again.
    * Binding = the first in-app link in the latest reply (an agent-declared view can replace this later). */
-  var boundOff = {}, boundBusy = false, boundEdge = null;
+  var boundOff = {}, boundBusy = false;
   const BOUND_NOT = /^\/wizard\/(files|attachments|hermes|v1|api)\b|\.(png|jpe?g|gif|webp|avif|bmp|svg|pdf|apk|zip|mp4|mov|webm|mp3|m4a|wav|ogg)$/i;
   // Install and update pages are not views (James, 12 Oct: a Wizard OS release reply docked its download page). They
   // are about updating an app on the phone, not something to look at beside the thread. Wizard OS's own shell paths
@@ -852,15 +852,11 @@
   function boundTip(wid) {
     const n = store.get('boundTips', 0); if (n >= 3) return;
     store.set('boundTips', n + 1);
-    const b = boundOf(wid); if (b) toast('▸', `<b>${esc(clip(winTitle(b), 28))}</b> is open beside this thread · tap the edge to look`, 2600);
+    const b = boundOf(wid); if (b) toast('▸', `<b>${esc(clip(winTitle(b), 28))}</b> is open beside this thread · swipe the bottom bar to look`, 2600);
   }
-  /* The peek: the bound desk slides 26 px into view over the thread's right edge, faded in, with a tab. */
+  /* The peek (James, 12 Oct 2026: no tab, the bottom bar swipe is enough): on the thread the bound desk leans
+   * 36 px in from the right; on the bound view its thread leans 12 px in from the left. */
   function syncPeek() {
-    if (!boundEdge) {
-      boundEdge = document.createElement('button'); boundEdge.type = 'button'; boundEdge.id = 'boundEdge'; boundEdge.className = 'bound-edge'; boundEdge.hidden = true;
-      boundEdge.innerHTML = '<span class="be-glow" aria-hidden="true"></span><span class="be-tab"><span class="be-ic"></span><svg class="be-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></span>';
-      device.appendChild(boundEdge); wireEdge(boundEdge);
-    }
     const f = W[desks[idx]?.focus], b0 = f && f.app === 'chats' && f.thread ? boundOf(f.id) : null, b = b0 && b0.bsid === f.thread ? b0 : null;
     const on = !!(b && deskOf(b.id) === idx + 1);
     const owner = f?.bound ? W[f.bound] : null;
@@ -879,33 +875,6 @@
     if (vsec) vsec.classList.add('bound-view-host');
     device.classList.toggle('bound-peeking', on);
     device.classList.toggle('bound-view-peeking', left);
-    boundEdge.hidden = !(on || left);
-    boundEdge.classList.toggle('left', left);
-    if (on || left) {
-      const target = left ? owner : b, a = winApp(target), key = target.id;
-      boundEdge.dataset.direction = left ? '-1' : '1';
-      boundEdge.dataset.target = target.id;
-      if (boundEdge.dataset.for !== key) { boundEdge.dataset.for = key; boundEdge.querySelector('.be-ic').innerHTML = ico('span', 'be-sg', a); }
-      boundEdge.setAttribute('aria-label', left ? `Return to ${winTitle(owner)}, this view's thread` : `Open ${winTitle(b)}, bound to this thread`);
-    }
-  }
-  // Tap the tab → the bound desk. Drag it left → the desk follows the finger; release past ~70 px lands there.
-  function wireEdge(el) {
-    let P = null;
-    el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); el.setPointerCapture(e.pointerId); P = { x: e.clientX, t: performance.now(), dx: 0, live: false, dir: Number(el.dataset.direction) || 1, target: el.dataset.target }; });
-    el.addEventListener('pointermove', e => {
-      if (!P) return; P.dx = P.dir === -1 ? Math.max(0, e.clientX - P.x) : Math.min(0, e.clientX - P.x);
-      if (!P.live && Math.abs(P.dx) > 8) { P.live = true; device.classList.add('bound-drag'); }
-      if (P.live) placeTrack(P.dx * 1.05, false);
-    });
-    const end = (e, cancel) => {
-      if (!P) return; const p = P; P = null; device.classList.remove('bound-drag');
-      const v = p.dx / ((performance.now() - p.t) || 1);
-      if (!cancel && (!p.live || Math.abs(p.dx) > 70 || Math.abs(v) > .5)) { const at = deskOf(p.target); if (at >= 0) goDesk(at); vib(10); }
-      else placeTrack(0, true);
-    };
-    el.addEventListener('pointerup', e => end(e, false));
-    el.addEventListener('pointercancel', e => end(e, true));
   }
   // "Open app": a normal copy on a desk of its own, beside the bound one; the bound view stays with the thread.
   function detachBound(id) {
@@ -938,7 +907,7 @@
     rvCoach.innerHTML = `<div class="rv-card"><div class="rv-h"><i></i>Review mode</div>
       <p><b>Tap the orb and talk.</b> Your feedback goes to <b>${esc(clip(LIVE?.session(f.from.sid)?.title || (f.from.title !== 'Thread' && f.from.title) || 'the thread you came from', 48))}</b>.</p>
       <p><b>Open app</b> keeps the app on its own desk${f.bound ? ", while this review stays with the thread" : ""}.</p>
-      <p>${f.bound ? "<b>Tap the left edge or swipe right</b> to return to the thread. <b>Back</b> returns too; leaving the thread closes its review view." : "<b>Back</b> or <b>✕</b> closes the review and takes you back."}</p>
+      <p>${f.bound ? "<b>Swipe right on the bottom bar</b> to return to the thread. <b>Back</b> returns too; leaving the thread closes its review view." : "<b>Back</b> or <b>✕</b> closes the review and takes you back."}</p>
       <button class="rv-ok" type="button">Got it</button></div>`;
     rvCoach.addEventListener('click', () => closeReviewCoach());
     device.appendChild(rvCoach); void rvCoach.offsetWidth; rvCoach.classList.add('open');
