@@ -17,7 +17,7 @@
   const C = window.WizCore = window.WizCore || {};
   const SESSION_ID = /^(?!\.{1,2}$)[A-Za-z0-9._:-]{1,180}$/;
   const VIDEO_ID = /^[a-f0-9]{32}$/;
-  const VIEWS = new Set(['home', 'inbox', 'work', 'chats', 'apps', 'settings', 'files', 'day', 'week', 'month', 'usage', 'help', 'tour']);
+  const VIEWS = new Set(['home', 'inbox', 'work', 'chats', 'apps', 'store', 'system', 'settings', 'files', 'day', 'week', 'month', 'usage', 'help', 'tour', 'skin']);
   const SECTIONS = new Set(['errors', 'working', 'ready', 'yesterday', 'pastWeek', 'deferred', 'archive', 'drafts']);
   const KEYS = ['session', 'view', 'section', 'video', 'open'];
   let H = null;

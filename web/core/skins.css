@@ -1,0 +1,79 @@
+/* Wizard OS skins (core/skins.js). A skin re-dresses the real shell: same DOM, same sizes, same gestures.
+ * It changes only design tokens (inline on <html>, blended while browsing), the clock typeface, the living
+ * background (#skinA/#skinB canvases) and the orb's colour (a CSS filter, so orb.js stays byte-identical
+ * with the Android copy). Nebula = the original look: no overrides at all. Five skins (Paper retired 12 Oct).
+ * Motion: core/scenery.js gates the canvases; nothing in this file animates. */
+@font-face { font-family: 'Sk Fraunces'; src: url(skins/Fraunces-300-normal.woff2) format('woff2'); font-weight: 300; font-display: swap; }
+@font-face { font-family: 'Sk Fraunces'; src: url(skins/Fraunces-600-normal.woff2) format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Sk Jost'; src: url(skins/Jost-200-normal.woff2) format('woff2'); font-weight: 200; font-display: swap; }
+@font-face { font-family: 'Sk Jost'; src: url(skins/Jost-400-normal.woff2) format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Sk Cormorant'; src: url(skins/Cormorant-300-italic.woff2) format('woff2'); font-weight: 300; font-style: italic; font-display: swap; }
+@font-face { font-family: 'Sk Cormorant'; src: url(skins/Cormorant-500-italic.woff2) format('woff2'); font-weight: 500; font-style: italic; font-display: swap; }
+@font-face { font-family: 'Sk Mono'; src: url(skins/JetBrainsMono-200-normal.woff2) format('woff2'); font-weight: 200; font-display: swap; }
+@font-face { font-family: 'Sk Mono'; src: url(skins/JetBrainsMono-500-normal.woff2) format('woff2'); font-weight: 500; font-display: swap; }
+
+:root {
+  --sk-time-a: #ffffff; --sk-time-b: #b8a6ff;
+  --sk-dock: rgba(8, 5, 18, .94); --sk-dock-line: rgba(205, 190, 255, .10);
+  --sk-ddot: rgba(205, 190, 255, .45);
+  --sk-orb: none;
+  --sk-tour: rgba(8, 5, 18, .78); --sk-dim: rgba(3, 1, 10, .74);
+  --sk-skin-a: 1;
+  --sk-win: rgba(12, 8, 26, .82);
+}
+.skin-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0; }
+
+/* token-driven pieces of the real shell that were hard-coded to the space look */
+.home-time { background: linear-gradient(180deg, var(--sk-time-a) 30%, var(--sk-time-b) 100%); -webkit-background-clip: text; background-clip: text; }
+.dock { background: var(--sk-dock); border-top-color: var(--sk-dock-line); }
+.ddot { border-color: var(--sk-ddot); }
+.ddot.filled { background: var(--sk-ddot); }
+.orb, .orb-halo, .orb-ring, .orb-fallback { filter: var(--sk-orb); }
+.orb-halo { filter: blur(9px) var(--sk-orb); }
+.tr-copy { background: var(--sk-tour); }
+.tr-spot { box-shadow: 0 0 0 200vmax var(--sk-dim); }
+.tour.tr-live .tr-spot, .tour.tr-open .tr-spot { box-shadow: 0 0 0 200vmax rgba(0, 0, 0, 0); }
+
+/* typefaces: the clock carries the skin's voice; sizes and positions stay the shell's */
+html[data-skin="grove"] .home-time { font-family: 'Sk Fraunces', Georgia, serif; font-weight: 300; letter-spacing: -.03em; }
+html[data-skin="tide"] .home-time { font-family: 'Sk Jost', ui-sans-serif, sans-serif; font-weight: 200; letter-spacing: -.03em; }
+html[data-skin="ember"] .home-time { font-family: 'Sk Cormorant', Georgia, serif; font-style: italic; font-weight: 300; letter-spacing: -.02em; }
+html[data-skin="signal"] .home-time { font-family: 'Sk Mono', ui-monospace, monospace; font-weight: 200; letter-spacing: -.07em; }
+html[data-skin="signal"] .now-card .k, html[data-skin="signal"] .home-date { font-family: 'Sk Mono', ui-monospace, monospace; font-weight: 500; }
+
+/* card shape per skin (same padding and size) */
+html[data-skin="grove"] .now-card { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), inset 0 -10px 20px rgba(0, 0, 0, .16); }
+html[data-skin="ember"] .now-card { box-shadow: 0 0 30px -10px rgba(255, 138, 61, .35); }
+html[data-skin="signal"] .now-card { border-radius: 2px; }
+html[data-skin="signal"] .now-card::before, html[data-skin="signal"] .now-card::after { content: ""; position: absolute; width: 8px; height: 8px; border: 1.5px solid var(--green); pointer-events: none; }
+html[data-skin="signal"] .now-card { position: relative; }
+html[data-skin="signal"] .now-card::before { left: -1px; top: -1px; border-right: 0; border-bottom: 0; }
+html[data-skin="signal"] .now-card::after { right: -1px; bottom: -1px; border-left: 0; border-top: 0; }
+html[data-skin="signal"] .now-card .pip { border-radius: 1px; }
+
+/* the space-only layers fade out under other skins (opacity set by skins.js while browsing) */
+.stars, .nebula { opacity: var(--sk-space, 1); }
+
+.tr-skip { background: var(--sk-tour); color: var(--ink); }
+
+/* Panels the space look paints with literal violet-blacks: every other skin paints them from its own tokens.
+   Same boxes, same blur; only the fill and text colour change. */
+/* Windows (Chats and every hosted app) sit on the skin's window material: near-black tinted with the skin's hue,
+   like Nebula's. Sheets and cards keep the richer --glass-2. (James, 12 Oct: app backgrounds closer to black.) */
+html:not([data-skin="nebula"]) .win { background: var(--sk-win); color: var(--ink); }
+html:not([data-skin="nebula"]) :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: var(--glass-2); color: var(--ink); }
+html:not([data-skin="nebula"]) .ov-card.ov-home { background: var(--glass-2); }
+html:not([data-skin="nebula"]) :is(.desk-label, .timer, .arc, .transcript, .toast, .scrub .sc-label, .dv-update, .ch-pill, .wx-banner) { background: var(--sk-tour); color: var(--ink); }
+html:not([data-skin="nebula"]) .device { background: var(--bg); }
+
+/* ---------- Settings → Look → Skin (picker: five swatches, tap applies at once) ---------- */
+.sk-row { display: block; padding: 12px 10px 10px; }
+.sk-row .sk-head { display: flex; align-items: center; gap: 12px; padding: 0 2px 10px; }
+.sk-sw { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.sk-opt { position: relative; min-height: 70px; min-width: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 2px; border-radius: 14px; border: 1px solid transparent; background: none; color: var(--ink-2); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.sk-opt[aria-pressed="true"] { border-color: var(--line-2); background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+.sk-dot { position: relative; width: 34px; height: 34px; border-radius: 50%; background: var(--sk-bg); border: 1px solid rgba(255, 255, 255, .16);
+  box-shadow: inset 0 0 0 7px var(--sk-bg), inset 0 0 0 20px var(--sk-ac); }
+.sk-opt[aria-pressed="true"] .sk-dot::after { content: "✓"; position: absolute; right: -5px; bottom: -4px; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--violet-2); color: var(--bg); font-size: 10px; font-weight: 900; line-height: 1; }

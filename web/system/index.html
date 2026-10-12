@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" data-skin="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#06040e">
+<title>System</title>
+<link rel="stylesheet" href="../core/base.css">
+<link rel="stylesheet" href="system.css">
+<script defer src="system.js"></script>
+</head>
+<body>
+<main class="sys">
+  <header class="top">
+    <h1>Your system</h1>
+    <p id="sub">Everything your Wizard runs on</p>
+  </header>
+  <nav class="stats" id="stats" aria-label="Summary"></nav>
+  <section class="map-card" aria-label="System map">
+    <div class="map-head"><h2>Map</h2><p id="mapHint">Tap anything to see what it’s connected to</p></div>
+    <div class="map" id="map"><svg id="wires" aria-hidden="true"></svg></div>
+    <div class="focus" id="focus" hidden></div>
+  </section>
+  <div id="sections"></div>
+  <p class="foot">Ask your agent to change any of this · <button id="more" class="link">Find more agent apps</button></p>
+</main>
+</body>
+</html>
