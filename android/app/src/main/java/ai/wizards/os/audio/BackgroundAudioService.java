@@ -30,7 +30,8 @@ public final class BackgroundAudioService extends MediaSessionService {
     private ExoPlayer player;
     private MediaSession session;
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final ExecutorService net = Executors.newSingleThreadExecutor();
+    private final ExecutorService net = Executors.newFixedThreadPool(2);
+    private final ExecutorService artwork = Executors.newFixedThreadPool(2);
     private final List<JSONObject> tracks = new ArrayList<>();
     private final LinkedHashMap<String,JSONObject> reports = new LinkedHashMap<>();
     private JSONObject station;
@@ -87,7 +88,7 @@ public final class BackgroundAudioService extends MediaSessionService {
         };
         session = new MediaSession.Builder(this, controls)
             .setSessionActivity(PendingIntent.getActivity(this, 7410, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT))
-            .setBitmapLoader(new DataSourceBitmapLoader(MoreExecutors.listeningDecorator(net), source))
+            .setBitmapLoader(new DataSourceBitmapLoader(MoreExecutors.listeningDecorator(artwork), source))
             .setCallback(new MediaSession.Callback() {
                 @Override public MediaSession.ConnectionResult onConnect(MediaSession s, MediaSession.ControllerInfo c) {
                     if (!getPackageName().equals(c.getPackageName()) && !c.isTrusted()) return MediaSession.ConnectionResult.reject();
@@ -112,7 +113,7 @@ public final class BackgroundAudioService extends MediaSessionService {
     @Override public void onDestroy() {
         AudioRecordingGate.observe(null);
         destroyed = true; live = null; main.removeCallbacksAndMessages(null); saveReports();
-        if (session != null) session.release(); if (player != null) player.release(); net.shutdownNow(); super.onDestroy();
+        if (session != null) session.release(); if (player != null) player.release(); net.shutdownNow(); artwork.shutdownNow(); super.onDestroy();
     }
     JSONObject snapshot(int known) throws JSONException {
         JSONObject o = new JSONObject().put("v",1).put("sessionId",sessionId).put("appId","wizard-music")
