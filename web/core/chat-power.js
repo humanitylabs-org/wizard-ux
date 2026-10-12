@@ -154,6 +154,12 @@ window.WosChatPower = function chatPower(A) {
   /* ================= #11/#12 failure recovery ================= */
   const failedShown = s => !!s && FAILED.has(s.status) && !(E && E.dismissed(s.id));
   function failureHtml(w, s) {
+    if (s?.backgroundResult) {
+      const busy = ch(w.id).continuing === s.backgroundResult.id;
+      return `<section class="ch-fail" role="status"><span class="lb">Background result ready</span>
+        <p>This work finished while Wizard wasn’t available. Continue from its saved result when you’re ready.</p>
+        <div class="ch-fail-b"><button type="button" data-background-continue="${esc(s.backgroundResult.id)}" ${busy ? 'disabled' : ''}>${busy ? 'Continuing…' : 'Continue'}</button></div></section>`;
+    }
     if (!M || !failedShown(s)) return '';
     const c = ch(w.id), busy = E?.busy.get(s.id) || (c.retrying === s.id ? 'retry' : '');
     const req = requestOf(w, s);
@@ -339,6 +345,25 @@ window.WosChatPower = function chatPower(A) {
       if (!w?.thread || !H.recordReply) return true;
       const r = H.recordReply(id, w.thread);
       Promise.resolve(r).then(st => { if (st === 'busy') toast('…', 'Finishing the last recording', 1400); });
+      return true;
+    }
+    const continueButton = t.closest('[data-background-continue]');
+    if (continueButton && w?.thread) {
+      const sid = w.thread, rid = continueButton.dataset.backgroundContinue, c = ch(w.id);
+      if (c.continuing || LIVE.session(sid)?.backgroundResult?.id !== rid) return true;
+      c.continuing = rid; continueButton.disabled = true; continueButton.textContent = 'Continuing…';
+      (async () => {
+        try {
+          const r = await fetch(`/wizard/background-results/${encodeURIComponent(rid)}/continue`, {
+            method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sid }),
+          });
+          if (!r.ok) { toast('!', r.status === 409 ? 'This thread changed · its latest request stays in charge' : 'Couldn’t continue · tap again', 2600); return; }
+          await r.json(); const s = LIVE.session(sid); if (s) s.backgroundResult = null;
+          toast('↻', 'Continuing from the saved result', 1600);
+          LIVE.refresh?.();
+        } catch (e) { toast('!', 'Couldn’t reach Wizard · tap Continue again', 2600); }
+        finally { c.continuing = ''; rerenderAll(); }
+      })();
       return true;
     }
     // Failed thread panel
