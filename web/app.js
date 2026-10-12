@@ -161,6 +161,7 @@
     openLink: (url, title) => openLinkDesk(url, null),
     overlay: open => { if (open) { closeMenu(); armBack(); } },
     vib: ms => vib(ms),
+    threadShown: (wid, el) => threadShown(wid, el),
   });
   const { CH, ch, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, refreshCompose, toggleVoice, markVisibleThreadsSeen, MIC_SVG } = CHATS;
   const CHATS_APP = { id: 'wizard', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'] };
@@ -211,9 +212,9 @@
     const a = winApp(w);
     const el = document.createElement('article');
     const rv = !!(w.from && w.from.sid);
-    el.className = `win app-${w.app}${rv ? ' reviewing' : ''}`; el.dataset.win = w.id;
+    el.className = `win app-${w.app}${rv ? ' reviewing' : ''}${w.bound ? ' bound' : ''}`; el.dataset.win = w.id;
     el.innerHTML = `<header class="wbar">${ico('span', 'wic', a)}<span class="wt">${esc(winTitle(w))}</span>${rv ? '<span class="rv-tag">Review</span>' : ''}
-      ${w.from ? '<button class="wb wpin" data-wact="pin" aria-label="Pin this desk" title="Keep it as a normal desk"><svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3v1H7v-1l3-3-1-6zM12 14v6"/></svg><span>Pin</span></button>' : ''}
+      ${w.bound ? '<button class="wb wpin wopen" data-wact="detach" aria-label="Open as an app on its own desk" title="Keep a copy open on its own desk"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span>Open app</span></button>' : w.from ? '<button class="wb wpin" data-wact="pin" aria-label="Pin this desk" title="Keep it as a normal desk"><svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3v1H7v-1l3-3-1-6zM12 14v6"/></svg><span>Pin</span></button>' : ''}
       <button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
       <button class="wb" data-wact="menu" aria-label="Window options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
       <button class="wb" data-wact="close" aria-label="Close window"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button></header>
@@ -334,7 +335,7 @@
     const moved = n !== idx; idx = n;
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
-    placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip();
+    placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip(); syncBound();
     if (moved && LINKS && LINKS.isOpen()) LINKS.close(); // a link is a peek over this desk: moving desks dismisses it
     if (moved) vib(8);
     if (!silent) announce(`<b>${esc(deskName(idx))}</b>`);
@@ -570,13 +571,17 @@
     if (t < 0) { t = insertPos(); desks.splice(t, 0, blank({ wins: [w.id], focus: w.id })); syncDesks(); }
     else { const d = desks[t]; d.wins.push(w.id); d.focus = w.id; d.full = false; }
     renderDesk(t); save(); renderDots();
+    if (opts.stay) return w; // opened beside, out of view (a bound view): the desk in front stays in front
     if (t !== idx) goDesk(t, true);
     announce(`Opened <b>${esc(winApp(w).name)}</b>`);
     return w;
   }
-  function closeWin(id) {
+  function closeWin(id, quiet) {
     const i = deskOf(id); if (i < 0) return;
     const w = W[id], d = desks[i], name = winTitle(w);
+    if (quiet) { d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id]; if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null; if (!d.wins.length) d.full = false; renderDesk(i); pruneDesks(); return; }
+    // ✕ on a bound view: it stays closed for this reply (opening the thread again, or a new reply, binds again).
+    if (w.bound) boundOff[w.bound] = w.bsid + '|' + w.bkey;
     const back = w.from && i === idx && desks.some(x => x.id === w.from.desk) ? w.from : null;
     d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id];
     if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null;
@@ -716,6 +721,140 @@
     const from = fromOf(srcId);
     window.__ovLog = (window.__ovLog || []).concat('link:' + rel).slice(-30);
     return !!openWin({ app: 'frame', appId: 'link', url: rel, title: linkTitle(u), from });
+  }
+  /* ---------------- bound views ----------------
+   * James, 12 Oct 2026: "as soon as I open the thread, I'm reading your response, but there's a view bound to it."
+   * A thread whose latest reply links a page or app (the thing that was built or changed) opens that view on the
+   * desk right beside the thread the moment the thread opens, out of view. The thread's right edge blends into it
+   * (the next desk peeks in, with a tab carrying the app's sigil): tap the tab or swipe the bar to look. On the
+   * view: the orb sends feedback to the thread (review mode), Back slides back to the thread, "Open app" keeps a
+   * normal copy on a desk of its own, ✕ closes it for this reply. Leaving the thread (Back to the list, another
+   * thread) closes the bound view; opening the thread again, or a new reply with a new link, binds again.
+   * Binding = the first in-app link in the latest reply (an agent-declared view can replace this later). */
+  var boundOff = {}, boundBusy = false, boundEdge = null;
+  const BOUND_NOT = /^\/wizard\/(files|attachments|hermes|v1|api)\b|\.(png|jpe?g|gif|webp|avif|bmp|svg|pdf|apk|zip|mp4|mov|webm|mp3|m4a|wav|ogg)$/i;
+  // Staging/sibling previews treat the live private hosts as this origin, so real replies bind there too.
+  const BOUND_HOME = ['private.wizard001.com', 'wizard.tailc0f369.ts.net'];
+  function boundAbs(href) {
+    let u; try { u = new URL(href, location.href); } catch (e) { return null; }
+    const sib = /\.staging\.wizard001\.com$|^127\.0\.0\.1$|^localhost$/.test(location.hostname);
+    if (sib && u.protocol === 'https:' && BOUND_HOME.includes(u.hostname)) u = new URL(u.pathname + u.search + u.hash, location.origin);
+    return u;
+  }
+  // What the latest reply in this painted thread points at: { key, app } or { key, url, title }, else null.
+  function boundTarget(el) {
+    const all = el.querySelectorAll('.ch-msgs .msg.a'), last = all[all.length - 1]; if (!last) return null;
+    const rk = all.length + ':' + last.textContent.length; // which reply this is (a new reply reloads the same view)
+    for (const a of last.querySelectorAll('.bub a[href]')) {
+      if (a.hasAttribute('data-session') || a.hasAttribute('data-mlink') || a.closest('[data-mi]')) continue;
+      const u = boundAbs(a.getAttribute('href')); if (!u || !/^https?:$/.test(u.protocol) || u.origin !== location.origin) continue;
+      if (BOUND_NOT.test(u.pathname)) continue;
+      const DL = window.WizCore.deeplink;
+      if (DL && DL.isOwn(u)) {
+        const d = DL.parse(u.href), app = d && d.open && !d.video ? (findApp(d.open) || APP[d.open]) : null;
+        if (app && app.kind === 'wizard' && app.url) return { key: 'app:' + app.id, win: { app: 'frame', appId: app.id }, rk };
+        if (app && app.id === 'usuals') return { key: 'app:usuals', win: { app: 'usuals' }, rk };
+        continue; // ?session= / ?view= links are this shell's own screens, not a view to review
+      }
+      const rel = u.pathname + u.search + u.hash;
+      return { key: 'url:' + rel, win: { app: 'frame', appId: 'link', url: rel, title: linkTitle(u) }, rk };
+    }
+    return null;
+  }
+  const boundOf = wid => Object.values(W).find(x => x.bound === wid && deskOf(x.id) >= 0) || null;
+  function unbind(wid) { const b = boundOf(wid); if (b) closeWin(b.id, true); }
+  // Called by Chats whenever a window paints a loaded thread (el) or its list (null).
+  function threadShown(wid, el) {
+    if (boundBusy) return; const w = W[wid]; if (!w || w.app !== 'chats') return;
+    boundBusy = true;
+    try {
+      const b = boundOf(wid), sid = el && w.thread && w.thread !== '__new__' ? w.thread : '';
+      if (!sid) { if (b) closeWin(b.id, true); delete boundOff[wid]; return; }
+      if (b && b.bsid !== sid) { closeWin(b.id, true); delete boundOff[wid]; }
+      const cur = boundOf(wid);
+      if (cur && el.querySelector('.ch-msgs details.steps.live')) return; // a reply is being written: keep the view until it lands
+      const t = boundTarget(el);
+      if (!t) { if (cur) closeWin(cur.id, true); return; }
+      if (cur && cur.bkey === t.key) {
+        // Same view, newer reply (the change after James's feedback): reload it, unless he is looking at it.
+        if (cur.brk !== t.rk && deskOf(cur.id) !== idx) { cur.brk = t.rk; save(); const f = winEl(cur.id)?.querySelector('iframe'); if (f) { try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; } } }
+        return;
+      }
+      if (boundOff[wid] === sid + '|' + t.key) return;
+      const at = deskOf(wid);
+      if (at !== idx) return; // binds when James is on the thread (goDesk re-checks)
+      if (cur) { if (deskOf(cur.id) === idx) return; closeWin(cur.id, true); } // never swap a view he is looking at
+      const from = fromOf(wid), base = { from, bound: wid, bsid: sid, bkey: t.key, brk: t.rk };
+      openWin({ ...t.win, ...base }, { stay: true });
+      boundTip(wid);
+    } finally { boundBusy = false; syncPeek(); }
+  }
+  // Re-check every open thread (after a desk change) and drop bound views whose thread went away.
+  function syncBound() {
+    if (boundBusy) return;
+    for (const w of Object.values(W)) if (w.bound && deskOf(w.id) >= 0) { const c = W[w.bound]; if (!c || deskOf(c.id) < 0 || c.thread !== w.bsid) { boundBusy = true; try { closeWin(w.id, true); } finally { boundBusy = false; } } }
+    const f = W[desks[idx]?.focus];
+    if (f && f.app === 'chats' && f.thread && f.thread !== '__new__') { const el = winEl(f.id)?.querySelector('[data-chats]'); if (el && el.querySelector('.ch-thread') && CHATS.ch(f.id).loadedFor === f.thread) threadShown(f.id, el); }
+    syncPeek();
+  }
+  function boundTip(wid) {
+    const n = store.get('boundTips', 0); if (n >= 3) return;
+    store.set('boundTips', n + 1);
+    const b = boundOf(wid); if (b) toast('▸', `<b>${esc(clip(winTitle(b), 28))}</b> is open beside this thread · tap the edge to look`, 2600);
+  }
+  /* The peek: the bound desk slides 26 px into view over the thread's right edge, faded in, with a tab. */
+  function syncPeek() {
+    if (!boundEdge) {
+      boundEdge = document.createElement('button'); boundEdge.type = 'button'; boundEdge.id = 'boundEdge'; boundEdge.className = 'bound-edge'; boundEdge.hidden = true;
+      boundEdge.innerHTML = '<span class="be-glow" aria-hidden="true"></span><span class="be-tab"><span class="be-ic"></span><svg class="be-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></span>';
+      device.appendChild(boundEdge); wireEdge(boundEdge);
+    }
+    const f = W[desks[idx]?.focus], b0 = f && f.app === 'chats' && f.thread ? boundOf(f.id) : null, b = b0 && b0.bsid === f.thread ? b0 : null;
+    const on = !!(b && deskOf(b.id) === idx + 1);
+    const nsec = on ? secOf(idx + 1) : null;
+    const hsec = on ? secOf(idx) : null;
+    $$('.desk.bound-peek', track).forEach(s => { if (s !== nsec) s.classList.remove('bound-peek'); });
+    $$('.desk.bound-host', track).forEach(s => { if (s !== hsec) s.classList.remove('bound-host'); });
+    if (nsec) nsec.classList.add('bound-peek');
+    if (hsec) hsec.classList.add('bound-host');
+    device.classList.toggle('bound-peeking', on);
+    boundEdge.hidden = !on;
+    if (on) {
+      const a = winApp(b), key = b.id;
+      if (boundEdge.dataset.for !== key) { boundEdge.dataset.for = key; boundEdge.querySelector('.be-ic').innerHTML = ico('span', 'be-sg', a); }
+      boundEdge.setAttribute('aria-label', `Open ${winTitle(b)}, bound to this thread`);
+    }
+  }
+  // Tap the tab → the bound desk. Drag it left → the desk follows the finger; release past ~70 px lands there.
+  function wireEdge(el) {
+    let P = null;
+    el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); el.setPointerCapture(e.pointerId); P = { x: e.clientX, t: performance.now(), dx: 0, live: false }; });
+    el.addEventListener('pointermove', e => {
+      if (!P) return; P.dx = Math.min(0, e.clientX - P.x);
+      if (!P.live && P.dx < -8) { P.live = true; device.classList.add('bound-drag'); }
+      if (P.live) placeTrack(P.dx * 1.05, false);
+    });
+    const end = (e, cancel) => {
+      if (!P) return; const p = P; P = null; device.classList.remove('bound-drag');
+      const v = p.dx / ((performance.now() - p.t) || 1);
+      if (!cancel && (!p.live || p.dx < -70 || v < -.5)) { goDesk(idx + 1); vib(10); }
+      else placeTrack(0, true);
+    };
+    el.addEventListener('pointerup', e => end(e, false));
+    el.addEventListener('pointercancel', e => end(e, true));
+  }
+  // "Open app": a normal copy on a desk of its own, beside the bound one; the bound view stays with the thread.
+  function detachBound(id) {
+    const w = W[id]; if (!w || !w.bound) return;
+    const href = frameHref(id) || w.url || '';
+    const a = w.appId && w.appId !== 'link' ? (findApp(w.appId) || APP[w.appId]) : null;
+    if (w.app === 'usuals') { const here = Object.keys(W).find(k => W[k].app === 'usuals' && !W[k].bound && deskOf(k) >= 0); if (here) goDesk(deskOf(here)); else openWin({ app: 'usuals' }); }
+    else if (a) {
+      const here = Object.keys(W).find(k => W[k].app === 'frame' && W[k].appId === a.id && !W[k].from && deskOf(k) >= 0);
+      if (here) { bringBeside(here); goDesk(deskOf(here), true); focusWin(here); }
+      else openWin({ app: 'frame', appId: a.id, ...(href && href !== a.url ? { url: href } : {}) });
+    } else openWin({ app: 'frame', appId: 'link', url: href, title: winTitle(w) });
+    toast('↗', `${esc(clip(winTitle(w), 30))} has its own desk now · the review view stays with the thread`, 2200);
   }
   function pinWin(id) {
     const w = W[id]; if (!w || !w.from) return;
@@ -1365,6 +1504,7 @@
     const wa = e.target.closest('[data-wact]')?.dataset.wact;
     if (wa === 'close') return closeWin(id);
     if (wa === 'pin') return pinWin(id);
+    if (wa === 'detach') return detachBound(id);
     if (wa === 'full') { const d = desks[deskOf(id)]; return setFull(id, !(d.full && d.focus === id)); }
     if (wa === 'menu') return openMenu(id);
     if (e.target.closest('.wbar')) {
@@ -2587,6 +2727,8 @@
       if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { try { selfPop(winEl(f.id).querySelector('iframe').contentWindow); } catch (e) {} nav.back(); return 'frame'; } }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }
       if (d.full) { setFull(f.id, false); return 'tile'; }
+      // A bound view: Back slides back to its thread; the view stays beside it until James leaves the thread.
+      if (f.bound && W[f.bound] && deskOf(f.bound) >= 0) { goDesk(deskOf(f.bound)); return 'bound-back'; }
       if (f.from) { closeWin(f.id); return 'review-close'; } // a link's desk: Back closes it and lands where it came from
     }
     if (idx !== HOME) { goDesk(HOME); return 'home'; }

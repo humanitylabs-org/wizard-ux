@@ -14,6 +14,8 @@
  *   owner(id)        → (optional) the window a pane belongs to (the desktop's list pane id::list → id)
  *   overlay(open)         → (optional) the media viewer opened/closed (the phone arms its Back guard)
  *   vib(ms)               → (optional) haptic tick
+ *   threadShown(id, el)   → (optional) a window painted a loaded thread (el) or its list (null); the phone binds
+ *                           the view the latest reply links to that thread (bound views, app.js)
  *
  * Parsing, Markdown, Bangkok time, drafts, copy/share and the media viewer live in core/chat-kit.js
  * (window.WosChat), loaded before this file by both shells.
@@ -258,6 +260,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function renderChatList(w, el) {
     if (!el) return;
+    H.threadShown?.(w.id, null); // the list is showing: nothing is bound to this window
     const c = ch(w.id), n = norm(c.q);
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, SJ = c.subject || '';
     const fids = F?.ids ? F.ids() : null;
@@ -677,6 +680,8 @@ window.WizCore.chats = function createChats(H) {
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
     growTa(el.querySelector('textarea'));
     PW?.paint(w.id, el);
+    // The shell may bind the view this thread's latest reply links (phone: bound views beside the thread).
+    if (!isNew && turns) H.threadShown?.(w.id, el);
   }
   /* ---- drafts: one per thread (and one for a new chat), kept across reloads ---- */
   const draftKey = w => w.thread === '__new__' ? 'new' : 'direct:' + w.thread;

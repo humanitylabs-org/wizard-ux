@@ -87,7 +87,7 @@ function routeFor() {
     const d = __wos.desks[__wos.idx], f = __wos.wins[d?.focus];
     const chat = Object.values(__wos.wins).find(w => w.app === 'chats');
     return { idx: __wos.idx, focusApp: f?.app, focusAppId: f?.appId || '', from: !!f?.from, thread: chat?.thread ?? null,
-      medOpen: Object.values(__wos.wins).filter(w => w.appId === 'meditation').length, desks: __wos.desks.length };
+      medOpen: Object.values(__wos.wins).filter(w => w.appId === 'meditation' && !w.bound).length, medBound: Object.values(__wos.wins).filter(w => w.appId === 'meditation' && w.bound).length, desks: __wos.desks.length };
   });
   const wid = () => p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats')?.id);
   const alive = () => p.evaluate(() => !!window.__wos && document.visibilityState === 'visible' && !!document.querySelector('.win'));
@@ -109,14 +109,15 @@ function routeFor() {
     await back();
     const s2 = await st();
     ok(s2.idx === s0.idx && s2.thread === 'qa_al_t', '1 ONE Back lands on the same thread (not Home)', s2);
-    ok(s2.medOpen === 0, '1 Back closed the app (it is not left open on another desk)', s2);
+    // Bound views (12 Oct 2026): the app this reply links stays bound beside the thread until James leaves it.
+    ok(s2.medOpen === 0 && s2.medBound === 1, '1 Back leaves no extra copy; the linked app stays bound beside the thread', s2);
     ok(await alive(), '1 Wizard still open');
     await p.screenshot({ path: path.join(OUT, '1-after-back.png') });
 
     // 2. Same again (no stale state); then a second link kind (relative) behaves the same.
     await tapLink('Meditate'); await back();
     const s3 = await st();
-    ok(s3.thread === 'qa_al_t' && s3.medOpen === 0, '2 repeat: open → Back → thread again', s3);
+    ok(s3.thread === 'qa_al_t' && s3.medOpen === 0 && s3.medBound === 1, '2 repeat: open → Back → thread again', s3);
     await tapLink('Files'); const s4 = await st();
     ok(s4.focusAppId === 'files' && s4.from, '2 relative ?open= link carries the trail too', s4);
     await back(); const s5 = await st();
