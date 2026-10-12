@@ -2,7 +2,7 @@
 # Wizard Agent Service (its own container and app). Android/Mac native wrappers load this same surface.
 FROM nginx:1.28-alpine
 COPY web /usr/share/nginx/wizard-ux
-COPY packaging/nginx.conf.template packaging/static.conf packaging/proxy.conf /etc/wizard-shell/
+COPY packaging/nginx.conf.template packaging/static.conf packaging/proxy.conf packaging/proxy-mcp.conf /etc/wizard-shell/
 COPY packaging/entrypoint.sh /usr/local/bin/wizard-shell-entrypoint
 COPY packaging/health.sh /usr/local/bin/wizard-shell-health
 ENV WIZARD_AGENT_SERVICE_ORIGIN=http://wizard-agent-service:8787 WIZARD_SHELL_LISTEN=8788
