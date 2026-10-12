@@ -28,6 +28,7 @@
   window.WosScreenCapture = {
     async capture({ signal, conceal } = {}) {
       if (signal?.aborted) throw abortError(signal);
+      if (navigator.userActivation && !navigator.userActivation.isActive) throw new Error('Tap Screenshot to capture this app');
       const port = window.wizardScreenPort;
       if (typeof port?.postMessage === 'function') {
         const id = crypto.randomUUID().replace(/-/g, '');

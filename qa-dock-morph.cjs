@@ -39,6 +39,9 @@ async function swipe(ctx,p,dx,dy=0){const r=await p.locator('#orbWrap').bounding
    },lag);
  });
  await p.evaluate(()=>{window.WizardOSNative={sideButton:()=> '{}',keepAwake(){},haptic(){}};window.wizardScreenPort={postMessage:id=>window.fixtureCapture(id)};});
+ await p.waitForTimeout(5200);
+ const noGesture=await (await ctx.newCDPSession(p)).send('Runtime.evaluate',{expression:"(async()=>{try{await WosScreenCapture.capture();return 'unexpected capture';}catch(e){return e.message;}})()",awaitPromise:true,returnByValue:true,userGesture:false});
+ ok(noGesture.result.value==='Tap Screenshot to capture this app','capture requires real user activation before arming native request',noGesture.result.value);
  for(const width of [360,412]){
   await p.setViewportSize({width,height:892});await tapOrb(p);
   const g=await p.evaluate(()=>{const dock=document.querySelector('#dock').getBoundingClientRect();const ids=['arcCancel','arcPause','orbWrap','arcScreen','arcAttach'];return ids.map(id=>{const e=document.getElementById(id);if(!e)return {id,missing:true};const r=e.getBoundingClientRect();return {id,x:r.x,w:r.width,h:r.height,inDock:r.y>=dock.y&&r.bottom<=dock.bottom,hit:e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)),opacity:+getComputedStyle(e).opacity};});});
