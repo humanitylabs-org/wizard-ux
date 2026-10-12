@@ -781,6 +781,10 @@
    * Binding = the first in-app link in the latest reply (an agent-declared view can replace this later). */
   var boundOff = {}, boundBusy = false, boundEdge = null;
   const BOUND_NOT = /^\/wizard\/(files|attachments|hermes|v1|api)\b|\.(png|jpe?g|gif|webp|avif|bmp|svg|pdf|apk|zip|mp4|mov|webm|mp3|m4a|wav|ogg)$/i;
+  // Install and update pages are not views (James, 12 Oct: a Wizard OS release reply docked its download page). They
+  // are about updating an app on the phone, not something to look at beside the thread. Wizard OS's own shell paths
+  // are excluded too: the shell is already in front. Matching links are skipped; a later real view still binds.
+  const BOUND_INSTALL = /^\/(downloads)\/|^\/reports\/(wizard-os|wizard-lock)(\/|$)|^\/wizard-os-home\/(?!(index|desktop)\.html$)./i;
   // Staging/sibling previews treat the live private hosts as this origin, so real replies bind there too.
   const BOUND_HOME = ['private.wizard001.com', 'wizard.tailc0f369.ts.net'];
   function boundAbs(href) {
@@ -796,7 +800,7 @@
     for (const a of last.querySelectorAll('.bub a[href]')) {
       if (a.hasAttribute('data-session') || a.hasAttribute('data-mlink') || a.closest('[data-mi]')) continue;
       const u = boundAbs(a.getAttribute('href')); if (!u || !/^https?:$/.test(u.protocol) || u.origin !== location.origin) continue;
-      if (BOUND_NOT.test(u.pathname)) continue;
+      if (BOUND_NOT.test(u.pathname) || BOUND_INSTALL.test(u.pathname)) continue;
       const DL = window.WizCore.deeplink;
       if (DL && DL.isOwn(u)) {
         const d = DL.parse(u.href), app = d && d.open && !d.video ? (findApp(d.open) || APP[d.open]) : null;

@@ -27,6 +27,8 @@ let appReply = 'Shipped. **Open it:** [Meditate](https://wizard.tailc0f369.ts.ne
 const FIX = {
   qa_bv_app: { title: 'Meditate · Player', t: now - 20, rows: () => [row('user', 'Make the player remember my place', now - 300), row('assistant', appReply, now - 250)] },
   qa_bv_url: { title: 'Files · Preview', t: now - 30, rows: () => [row('user', 'Fix file previews', now - 300), row('assistant', 'Fixed. See it here: [Files](/files/). Thread ref [other](/wizard/?session=qa_bv_none).', now - 250)] },
+  qa_bv_dl: { title: 'Wizard OS · Release', t: now - 35, rows: () => [row('user', 'Ship the menu', now - 300), row('assistant', 'Live. Open a thread: https://wizard.tailc0f369.ts.net/wizard-os-home/?open=chats\n\nIf it has not updated, download it here: https://wizard.tailc0f369.ts.net/reports/wizard-os/ or [the APK](/downloads/wizard-os/) or [Wizard Lock](/reports/wizard-lock/).', now - 250)] },
+  qa_bv_dlview: { title: 'Files · After update', t: now - 36, rows: () => [row('user', 'Ship it', now - 300), row('assistant', 'Update first: [download](/reports/wizard-os/). Then look: [Files](/files/).', now - 250)] },
   qa_bv_none: { title: 'Research · Question', t: now - 40, rows: () => [row('user', 'What is DAPEL?', now - 300), row('assistant', 'A framework. No link here, and [GitHub](https://github.com/x/y) is outside.', now - 250)] },
   qa_bv_old: { title: 'Older link only', t: now - 50, rows: () => [row('user', 'a', now - 500), row('assistant', 'Earlier: [Files](/files/).', now - 450), row('user', 'b', now - 300), row('assistant', 'Latest reply has no link.', now - 250)] },
 };
@@ -184,6 +186,10 @@ function routeFor() {
     // 8. A plain path link binds as a page; a thread with no in-app link, only an older one, or only external links does not.
     await openThread('qa_bv_url'); const s8 = await st();
     ok(s8.nBound === 1 && s8.bAppId === 'link' && s8.bUrl === '/files/', '8 a plain in-app path binds as a page (session refs skipped)', s8);
+    await openThread('qa_bv_dl'); const sdl = await st();
+    ok(sdl.nBound === 0 && !sdl.edge, '8 a release reply binds no view (Wizard OS download / update / install pages are not views)', sdl);
+    await openThread('qa_bv_dlview'); const sdv = await st();
+    ok(sdv.nBound === 1 && sdv.bUrl === '/files/', '8 after a download link, the real view in the same reply still binds', sdv);
     await openThread('qa_bv_none'); const s9 = await st();
     ok(s9.nBound === 0 && !s9.edge, '8 switching to a thread with no in-app link drops the old binding', s9);
     await openThread('qa_bv_old'); const s10 = await st();
