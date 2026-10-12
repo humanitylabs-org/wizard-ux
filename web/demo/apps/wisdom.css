@@ -5,6 +5,7 @@
 
 /* ---------- colour layer: unified (Wizard OS tokens) ---------- */
 :root{
+  --app-hue:78; /* sigil hue: this app's one identity colour */
  --serif:Georgia,"Iowan Old Style",Charter,"Times New Roman",serif;
  --sans:var(--wz-font-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,system-ui,sans-serif);
  --wb-text:var(--serif);--wb-display:var(--serif);
@@ -18,9 +19,9 @@
  --line-strong:var(--wz-border,#4a4f53);
  --hover:color-mix(in srgb,var(--ink) 3%,transparent);
  --press:color-mix(in srgb,var(--ink) 9%,transparent);
- --accent:var(--wz-accent,#e8b46a);
- --accent-ink:var(--wz-on-accent,#1a1206);
- --accent-soft:var(--wz-accent-soft,rgba(232,180,106,.14));
+ --accent:var(--wz-app-accent,#e8b46a);
+ --accent-ink:var(--wz-app-on-accent,#1a1206);
+ --accent-soft:var(--wz-app-accent-soft,rgba(232,180,106,.14));
  --wb-gold:var(--accent);
  --wb-paper:var(--wz-reader-surface,#0d0c0b);
  --wb-ink:var(--ink);--wb-ink2:var(--ink2);--wb-mute:var(--muted);

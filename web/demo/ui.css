@@ -1,4 +1,8 @@
 /* Shared primitive layer: semantic colors. Editorial typography stays app-owned. */
+/* App identity accent (proposed #54): the skin owns materials and ink; each app keeps ONE hue of its own (its sigil
+   hue), and the system resolves its lightness for the current colour scheme so it always reads. */
+:root{--wz-app-accent:oklch(.8 .14 var(--app-hue,290));--wz-app-on-accent:var(--wz-base,#05030c);--wz-app-accent-soft:color-mix(in oklab,var(--wz-app-accent) 16%,transparent)}
+html[data-color-scheme="light"]{--wz-app-accent:oklch(.52 .15 var(--app-hue,290));--wz-app-on-accent:#fff}
 :root {--wz-font-ui:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--wz-radius:14px}
 *{box-sizing:border-box}html{color:var(--wz-text,#f3efff);font-family:var(--wz-font-ui);-webkit-text-size-adjust:100%}
 body{margin:0;color:var(--wz-text,#f3efff);background:var(--wz-canvas,#05030c);-webkit-font-smoothing:antialiased}

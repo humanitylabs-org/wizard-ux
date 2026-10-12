@@ -5,6 +5,7 @@
 
 /* ---------- colour layer: unified (Wizard OS tokens) ---------- */
 :root{
+  --app-hue:205; /* sigil hue: this app's one identity colour */
  --sans:var(--wz-font-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,system-ui,sans-serif);
  --serif:Georgia,"Iowan Old Style",Charter,"Times New Roman",serif;
  --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
@@ -14,7 +15,7 @@
  --ink:var(--wz-text,#e7e9ea);--ink2:var(--wz-text-secondary,#c5c9cc);--muted:var(--wz-text-muted,#8b9095);
  --line:color-mix(in srgb,var(--wz-border,#2f3336) 70%,transparent);--line-strong:var(--wz-border,#4a4f53);--media-line:var(--line);
  --hover:color-mix(in srgb,var(--ink) 3%,transparent);--press:color-mix(in srgb,var(--ink) 9%,transparent);
- --accent:var(--wz-accent,#4aa8f2);--accent-ink:var(--wz-on-accent,#00121f);--accent-soft:var(--wz-accent-soft,rgba(29,155,240,.16));
+ --accent:var(--wz-app-accent,#4aa8f2);--accent-ink:var(--wz-app-on-accent,#00121f);--accent-soft:var(--wz-app-accent-soft,rgba(29,155,240,.16));
  --danger:#f4837d;--danger-soft:color-mix(in srgb,#f4837d 14%,transparent);--warn:#f0b35a;--warn-soft:color-mix(in srgb,#f0b35a 12%,transparent);
  --scrim:color-mix(in srgb,var(--bg) 55%,transparent);
  --shadow:0 0 18px color-mix(in srgb,var(--ink) 12%,transparent),0 0 2px 1px color-mix(in srgb,var(--ink) 14%,transparent);

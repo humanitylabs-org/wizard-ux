@@ -5,13 +5,14 @@
 
 /* ---------- colour layer: unified (Wizard OS tokens) ---------- */
 :root {
+  --app-hue:178; /* sigil hue: this app's one identity colour */
   --bg: var(--wz-base, #06040f); --canvas: var(--wz-canvas, var(--bg)); --chrome: var(--wz-chrome, var(--bg)); --overlay: var(--wz-overlay, #0d0820); --ink: var(--wz-text, #f4f0ff); --ink-2: var(--wz-text-secondary, #bdb4dc); --ink-3: var(--wz-text-muted, #7e76a4);
   --line: color-mix(in srgb, var(--wz-border, rgba(205,190,255,.22)) 55%, transparent); --line-2: var(--wz-border, rgba(205,190,255,.22));
   --card: var(--wz-surface, rgba(22,15,46,.72)); --card-2: var(--wz-surface-raised, rgba(32,22,66,.86));
-  --violet: var(--wz-accent, #8f63ff); --violet-2: color-mix(in srgb, var(--wz-accent, #b99bff) 78%, var(--wz-text, #fff));
-  --cyan: var(--wz-accent, #3fe0ff); --on-hi: var(--wz-on-accent, #0b0620);
+  --violet: var(--wz-app-accent, #8f63ff); --violet-2: color-mix(in srgb, var(--wz-app-accent, #b99bff) 78%, var(--wz-text, #fff));
+  --cyan: var(--wz-app-accent, #3fe0ff); --on-hi: var(--wz-app-on-accent, #0b0620);
   --hi-grad: linear-gradient(135deg, var(--cyan), color-mix(in srgb, var(--cyan) 62%, var(--ink)));
-  --hi-soft: var(--wz-accent-soft, rgba(63,224,255,.1)); --hi-glow: color-mix(in srgb, var(--cyan) 55%, transparent);
+  --hi-soft: var(--wz-app-accent-soft, rgba(63,224,255,.1)); --hi-glow: color-mix(in srgb, var(--cyan) 55%, transparent);
   --amber: #ffbe55; --green: #4ff0b0; --red: #ff6b86;
   --sky: radial-gradient(130% 55% at 50% -12%, color-mix(in srgb, var(--cyan) 9%, transparent) 0%, transparent 62%), var(--canvas);
   --bar: color-mix(in srgb, var(--chrome) 70%, transparent); --sheet: var(--overlay); --pop: var(--overlay);
