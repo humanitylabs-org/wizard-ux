@@ -100,6 +100,7 @@ let origin;
    await fr.waitForFunction(()=>{let seen=false;WizardApp.update.onAvailable(x=>{seen=x.version==='fixture-update'});return seen});
    ok('availability delivery without route reload',await fr.evaluate(()=>depth===1));
    await fr.evaluate(()=>hold.release());ok('explicit release reconciles holds',!await p.evaluate(()=>WizAppServices.update.busy()));
+   ok('apps cannot impersonate legacy Wizard voice native kinds',await fr.evaluate(()=>WizardApp.capture.start({kind:'auto'}).then(()=>false,()=>true))&&!await p.evaluate(()=>WizAppCapture.getState().active));
    await fr.evaluate(()=>WizardApp.capture.start({kind:'audio',meta:{fixture:true}}).then(s=>window.session=s));
    ok('capture session automatically holds update',await p.evaluate(()=>WizAppServices.update.busy()));
    await p.evaluate(m=>m?__wosNativeBack():__wux.escStep(),mobile);
@@ -203,6 +204,8 @@ let origin;
   await np.locator('#open').click();await np.keyboard.press('Escape');await np.waitForTimeout(100);
   await np.goBack({waitUntil:'domcontentloaded'});await np.waitForTimeout(100);await np.goBack({waitUntil:'domcontentloaded'});await np.waitForTimeout(100);
   ok('standalone native Mac root consumes repeated Back and never offers exit',np.url()===origin+'/wizard-search/'&&await np.evaluate(()=>depth===0&&!document.querySelector('#wizard-app-back-notice')));
+  await np.addScriptTag({url:origin+'/wizard-os-home/core/app-capture.js'});
+  ok('standalone capture without app metadata has a valid stable owner',await np.evaluate(async()=>{delete document.documentElement.dataset.app;const s=await WizardApp.capture.start({kind:'audio'});const owner=WizAppCapture.getState().appId;const valid=/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(owner);await s.stop();const pending=await WizardApp.capture.pending();await WizardApp.capture.ack(pending[0].id);return valid&&owner==='standalone-wizard-search'&&pending.length===1&&(await WizardApp.capture.pending()).length===0}));
   await nativeStandalone.close();
   ok('zero network writes / agent writes',writes.length===0,writes);ok('no external requests escaped local fixture route',receipt.blockedExternal.length===0,receipt.blockedExternal);
  } finally {await b.close();await new Promise(r=>server.close(r));fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify(receipt,null,2));}

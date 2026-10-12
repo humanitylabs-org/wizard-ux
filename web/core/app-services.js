@@ -66,6 +66,7 @@
     // Capture holds start before permission, end only after stop/cancel settles. Lifecycle never cancels capture.
     const start = async opts => {
       check(); if (!window.WizAppCapture) throw fault('Shared capture unavailable');
+      if (['auto', 'command'].includes(opts?.kind)) throw fault('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata');
       const shell = window.__wos || window.__wux;
       if (shell?.voice && shell.voice !== 'idle') throw Object.assign(fault('Microphone held by Wizard voice'), { code: 'busy', appId: 'wizard-voice' });
       const h = hold('Recording');

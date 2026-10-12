@@ -67,10 +67,29 @@
 
   /* ================= #14 background recording: resume, notification Stop/Send, recovery ================= */
   const handledTakes = new Set();
+  const voiceKind = take => {
+    if (!take || !['auto', 'command'].includes(take.kind)) return false;
+    try { const ids = window.WizAppCapture?.getState?.()?.nativeDeviceTakeIds; return !Array.isArray(ids) || !ids.includes(take.id); }
+    catch (_) { return false; }
+  };
+  function nativeOwner(id) {
+    const capture = window.WizAppCapture;
+    if (!capture) return 'voice'; // legacy-only shell
+    try {
+      const state = capture.getState?.();
+      if (state?.active || state?.recording) return 'app';
+      if (state?.nativeOwnershipReady !== true || !Array.isArray(state.nativeDeviceTakeIds)) return 'unknown';
+      return state.nativeDeviceTakeIds.includes(id) ? 'app' : 'voice';
+    } catch (_) { return 'unknown'; }
+  }
   function syncRecorder(why) {
     const d = DEV(), w = W$(); if (!d || !w || typeof d.recActive !== 'function') return;
     const a = J(d.recActive());
-    if (a && a.id && w.voice === 'idle') { if (w.nativeResume(a)) log('rec:resume', a.id, why); }
+    if (a && a.id && w.voice === 'idle') {
+      const owner = nativeOwner(a.id);
+      if (owner === 'voice') { if (w.nativeResume(a)) log('rec:resume', a.id, why); }
+      else log('rec:owner', a.id, owner); // retain unknown/app takes; never adopt them into Chats
+    }
     if (w.V.native && (!a || a.id !== w.V.native)) {
       // The take ended outside the page (notification Stop/Send, or the recorder failed) while we were away.
       const id = w.V.native; w.V.native = null; w.setVoice('idle'); w.txHide();
@@ -81,7 +100,7 @@
   }
   function offerPending(why) {
     const d = DEV(); if (!d || sheet) return;
-    const list = (J(d.recPending()) || []).filter(t => !handledTakes.has(t.id));
+    const list = (J(d.recPending()) || []).filter(t => voiceKind(t) && !handledTakes.has(t.id));
     if (!list.length) return;
     // Send was already pressed in the notification: the owner said send, so send.
     const go = list.filter(t => t.send);
@@ -106,7 +125,7 @@
   /* A take that ended outside the page goes straight to the durable outbox (which transcribes and sends it),
    * then the native copy is deleted. Saved before anything goes over the network, so it can't be lost. */
   async function sendTake(t, how) {
-    const d = DEV(), w = W$(); if (!d || !w || handledTakes.has(t.id)) return;
+    const d = DEV(), w = W$(); if (!d || !w || !voiceKind(t) || handledTakes.has(t.id)) return;
     handledTakes.add(t.id);
     if (!J(d.recClaim(t.id))) return;
     const blob = readBlob(off => d.recRead(t.id, off), 'audio/aac');
@@ -323,6 +342,7 @@
   // Safe to reload: not recording, nothing uploading, no sheet or share in progress.
   function webBusy() {
     if (window.WizAppServices?.update.busy()) return true;
+    try { if (J(DEV()?.recActive?.())?.id) return true; } catch (_) { return true; }
     const w = W$(); if (!w) return true;
     if (w.voice !== 'idle' || sheet) return true;
     return Object.keys(w.wins).some(k => (w.chatState(k).files || []).some(f => f.uploading));
@@ -454,5 +474,6 @@
   });
   addEventListener('pagehide', saveDrafts);
   addEventListener('wizard:app-holds', () => { if (webPending) renderWeb(); });
+  addEventListener('wizard-app-capture-state', () => { if (api.ready) syncRecorder('app-capture'); });
   boot();
 })();

@@ -149,7 +149,15 @@
     return 'unsupported';
   }
   function captureModule() { if (!window.WizAppCapture) throw new Error('Load shared app-capture.js before app-client.js for standalone capture'); return window.WizAppCapture; }
-  const standaloneId = () => document.documentElement.dataset.app || location.pathname.replace(/\/$/, '') || 'standalone';
+  // A fallback owner is generated, not a raw pathname (capture IDs cannot contain
+  // slashes). Capture it once so ordinary in-app route changes do not change owner.
+  const standaloneOwner = (() => {
+    const root = location.pathname.split('/').filter(Boolean)[0] || 'root';
+    if (/^[A-Za-z0-9][A-Za-z0-9._-]{0,100}$/.test(root)) return 'standalone-' + root;
+    let hash = 2166136261; for (const c of root) hash = Math.imul(hash ^ c.codePointAt(0), 16777619) >>> 0;
+    return 'standalone-' + hash.toString(36);
+  })();
+  const standaloneId = () => document.documentElement.dataset.app || standaloneOwner;
   function stayBack() {
     if (back()) return;
     // Installed apps consume root. A browser tab may leave only after a second Back within two seconds.
@@ -184,7 +192,7 @@
     theme: Object.freeze({ get: () => currentTheme || window.WizardTheme?.current || null, onChange: fn => listen(themes, fn, currentTheme || window.WizardTheme?.current) }),
     share: Object.freeze({ text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts) }),
     update: Object.freeze({ hold, onAvailable: fn => listen(updates, fn, updateAvailable || service?.update.available()) }),
-    capture: Object.freeze({ start: async opts => { if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); return captureModule().start(standaloneId(), opts); },
+    capture: Object.freeze({ start: async opts => { if (['auto', 'command'].includes(opts?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata'); if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); return captureModule().start(standaloneId(), opts); },
       pending: async () => service ? service.capture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
   });
   ready();
