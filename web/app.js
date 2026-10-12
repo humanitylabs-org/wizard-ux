@@ -1288,7 +1288,7 @@
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
-      f.addEventListener('load', () => {
+      f.addEventListener('load', async () => {
         let ok = false, why = '';
         try { const doc = f.contentDocument; why = doc ? doc.location.href : 'nodoc'; ok = !!doc && doc.location.href !== 'about:blank'; } catch (e) { ok = false; why = 'x:' + e.name; }
         window.__frameLog = (window.__frameLog || []).concat(why).slice(-40); // bounded: the shell may run for weeks
@@ -1299,6 +1299,7 @@
           return;
         }
         if (ok) { try { f._lastUrl = f.contentWindow.location.href; } catch (e) {} }
+        if (!ok && await window.WizCore.apps.confirmManagedFrame(f)) { wrap?.classList.remove('blocked'); return; }
         wrap?.classList.toggle('blocked', !ok);
         if (ok) bridgeFrame(f);
         if (ok) { const sec = f.closest('.desk'); if (sec && sec.dataset.did !== desks[idx]?.id) frameSetHidden(f, true); } // opened or reloaded off-screen: park at once

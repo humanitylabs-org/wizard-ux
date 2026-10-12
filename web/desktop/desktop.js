@@ -291,10 +291,11 @@
   }
   function watchFrame(f, el) {
     if (!f) return;
-    f.addEventListener('load', () => {
+    f.addEventListener('load', async () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
       try { const d = f.contentDocument; bad = !d || /^chrome-error:|^about:blank/.test(d.URL || '') && f.getAttribute('src') !== 'about:blank'; } catch (e) { bad = true; }
+      if (bad && await C.apps.confirmManagedFrame(f)) { el.querySelector('.frame-fallback')?.classList.remove('on'); return; }
       el.querySelector('.frame-fallback')?.classList.toggle('on', bad);
       // Clicking inside a same-origin app focuses its window; Esc inside it still reaches the shell.
       try {

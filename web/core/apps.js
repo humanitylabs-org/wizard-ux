@@ -150,6 +150,17 @@
     if (m) return { query: m[1].trim(), tab: 'all', strong: false };
     return null;
   }
+  // A registered /apps/<id>/ response is opaque by design (CSP sandbox); that isn't a refused frame.
+  // Confirm it at the Service, and keep every same-origin DOM/keyboard bridge off for the isolated document.
+  registry.confirmManagedFrame = async (frame) => {
+    const src = frame.src;
+    try {
+      const u = new URL(src, location.href);
+      if (u.origin !== location.origin || !/^\/apps\/[a-z0-9][a-z0-9-]{0,63}\//.test(u.pathname)) return false;
+      const r = await fetch(u, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store', redirect: 'error' });
+      return frame.src === src && r.ok && /text\/html/i.test(r.headers.get('content-type') || '') && /^sandbox(?:\s|;|$)/.test(r.headers.get('content-security-policy') || '');
+    } catch { return false; }
+  };
   registry.refresh = loadRemote;
   window.WizCore.apps = registry;
 })();
