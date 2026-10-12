@@ -27,6 +27,8 @@ let appReply = 'Shipped. **Open it:** [Meditate](https://wizard.tailc0f369.ts.ne
 const FIX = {
   qa_bv_app: { title: 'Meditate · Player', t: now - 20, rows: () => [row('user', 'Make the player remember my place', now - 300), row('assistant', appReply, now - 250)] },
   qa_bv_url: { title: 'Files · Preview', t: now - 30, rows: () => [row('user', 'Fix file previews', now - 300), row('assistant', 'Fixed. See it here: [Files](/files/). Thread ref [other](/wizard/?session=qa_bv_none).', now - 250)] },
+  qa_bv_dl: { title: 'Wizard OS · Release', t: now - 35, rows: () => [row('user', 'Ship the menu', now - 300), row('assistant', 'Live. Open a thread: https://wizard.tailc0f369.ts.net/wizard-os-home/?open=chats\n\nIf it has not updated, download it here: https://wizard.tailc0f369.ts.net/reports/wizard-os/ or [the APK](/downloads/wizard-os/) or [Wizard Lock](/reports/wizard-lock/).', now - 250)] },
+  qa_bv_dlview: { title: 'Files · After update', t: now - 36, rows: () => [row('user', 'Ship it', now - 300), row('assistant', 'Update first: [download](/reports/wizard-os/). Then look: [Files](/files/).', now - 250)] },
   qa_bv_none: { title: 'Research · Question', t: now - 40, rows: () => [row('user', 'What is DAPEL?', now - 300), row('assistant', 'A framework. No link here, and [GitHub](https://github.com/x/y) is outside.', now - 250)] },
   qa_bv_old: { title: 'Older link only', t: now - 50, rows: () => [row('user', 'a', now - 500), row('assistant', 'Earlier: [Files](/files/).', now - 450), row('user', 'b', now - 300), row('assistant', 'Latest reply has no link.', now - 250)] },
 };
@@ -82,10 +84,12 @@ function routeFor() {
     const bound = Object.values(__wos.wins).filter(w => w.bound && __wos.desks.some(x => x.wins.includes(w.id)));
     const bd = bound[0] ? __wos.desks.findIndex(x => x.wins.includes(bound[0].id)) : -1;
     const cd = chat ? __wos.desks.findIndex(x => x.wins.includes(chat.id)) : -1;
-    const edge = document.getElementById('boundEdge');
+    const wl = sel => { const e = document.querySelector(sel); return e ? Math.round(e.getBoundingClientRect().left) : null; };
+    const view = document.querySelector('.desk.bound-view-host .tiles'), chatPeek = document.querySelector('.desk.bound-chat-peek .win');
     return { idx: __wos.idx, cd, bd, nBound: bound.length, bAppId: bound[0]?.appId || '', bUrl: bound[0]?.url || '', bsid: bound[0]?.bsid || '',
       focusApp: f?.app, focusAppId: f?.appId || '', focusBound: !!f?.bound, thread: chat?.thread ?? null, desks: __wos.desks.length,
-      edge: !!edge && !edge.hidden && getComputedStyle(edge).visibility !== 'hidden', peek: !!document.querySelector('.desk.bound-peek'),
+      edge: !!document.querySelector('#boundEdge, .bound-edge, .be-tab'), viewLeft: view ? Math.round(view.getBoundingClientRect().left) : null,
+      chatVisible: chatPeek ? Math.round(Math.max(0, chatPeek.getBoundingClientRect().right)) : null, peek: !!document.querySelector('.desk.bound-peek'),
       detached: Object.values(__wos.wins).filter(w => w.app === 'frame' && !w.bound && __wos.desks.some(x => x.wins.includes(w.id))).map(w => w.appId) };
   });
   const wid = () => p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats')?.id);
@@ -96,7 +100,18 @@ function routeFor() {
     await p.waitForFunction(id => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); return w?.thread === id && document.querySelector(`[data-chats="${w.id}"] .ch-msgs .msg.a`); }, id, { timeout: 20000 }).catch(() => {});
     await sleep(900);
   }
-  async function tapEdge() { await p.locator('#boundEdge .be-tab').tap(); await sleep(900); }
+  // The bottom navigation bar swipe (no tab): direction -1 = to the right desk, +1 = to the left desk.
+  let cdp0 = null;
+  async function barSwipe(direction, cancelled = false) {
+    cdp0 = cdp0 || await ctx.newCDPSession(p);
+    const r = await p.locator('#dock').boundingBox(), W_ = (await p.viewportSize()).width;
+    const x = direction < 0 ? W_ - 30 : 30, y = r.y + r.height / 2;
+    await cdp0.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] });
+    for (let k = 1; k <= 8; k++) { await sleep(20); await cdp0.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + direction * 115 * k / 8, y, id: 1 }] }); }
+    await cdp0.send('Input.dispatchTouchEvent', { type: cancelled ? 'touchCancel' : 'touchEnd', touchPoints: [] });
+    await sleep(1000);
+  }
+  const toView = () => barSwipe(-1), toThread = () => barSwipe(1);
   try {
     // 1. Open a thread whose latest reply links an app (?open=, written on the live host): bound beside, not in front.
     await openThread('qa_bv_app');
@@ -105,21 +120,22 @@ function routeFor() {
     ok(s1.nBound === 1 && s1.bAppId === 'meditation' && s1.bsid === 'qa_bv_app', '1 the linked app is bound to the thread', s1);
     ok(s1.bd === s1.cd + 1, '1 bound view sits on the desk right beside the thread', s1);
     ok(s1.idx === s1.cd && s1.focusApp === 'chats', '1 the thread stays in front (James reads the reply first)', s1);
-    ok(s1.edge && s1.peek, '1 the edge tab and the peek of the next desk show', s1);
+    ok(!s1.edge && s1.peek, '1 the next desk peeks in, with no edge tab', s1);
     await p.screenshot({ path: path.join(OUT, '1-thread-with-peek.png') });
 
-    // 2. Tap the edge → the bound view, in review mode with Open app.
-    await tapEdge();
+    // 2. Swipe the bottom bar → the bound view, in review mode with Open app.
+    await toView();
     const s2 = await st();
-    ok(s2.idx === s1.bd && s2.focusBound, '2 tapping the edge lands on the bound view', s2);
-    ok(s2.edge && !s2.peek && await p.locator('#boundEdge.left').count() === 1, '2 bound view shows the matching left edge back to its thread', s2);
-    ok(await p.locator('.desk.bound-chat-peek').count() === 1, '2 the chat panel peeks from the left');
+    ok(s2.idx === s1.bd && s2.focusBound, '2 a bottom-bar swipe lands on the bound view', s2);
+    ok(!s2.edge && !s2.peek && await p.locator('.desk.bound-chat-peek').count() === 1, '2 the thread peeks from the left, no tab', s2);
+    ok(s2.viewLeft != null && s2.viewLeft <= 22 && s2.viewLeft >= 16, '2 the view is indented only ~20 px on the left', s2);
+    ok(s2.chatVisible != null && s2.chatVisible >= 6 && s2.chatVisible <= 14, '2 a sliver of the thread stays visible', s2);
     ok(await p.locator('[data-wact="menu"]').count() === 0, '2 three-dot window menu removed');
     // Exercise first-run coaching instead of pre-marking it seen.
     await p.evaluate(() => { localStorage.removeItem('wos.rvCoached'); const z = __wos.idx; __wos.goDesk(z - 1); __wos.goDesk(z); });
     await p.waitForTimeout(300);
     const coaching = await p.locator('.rv-card').innerText();
-    ok(coaching.includes('Open app') && !/\bPin\b/.test(coaching) && coaching.includes('left edge'), '2 coach explains current Open app and shared edge', coaching);
+    ok(coaching.includes('Open app') && !/\bPin\b/.test(coaching) && coaching.includes('bottom bar') && !/edge/.test(coaching), '2 coach explains Open app and the bottom-bar swipe', coaching);
     await p.locator('.rv-ok').tap(); await sleep(350);
     const bar = await p.evaluate(() => { const w = document.querySelector('.desk .win.bound'); return w ? { reviewing: w.classList.contains('reviewing'), open: !!w.querySelector('[data-wact="detach"]'), pin: !!w.querySelector('[data-wact="pin"]') } : null; });
     ok(bar && bar.reviewing && bar.open && !bar.pin, '2 view shows the amber review frame and "Open app" (no Pin)', bar);
@@ -130,32 +146,14 @@ function routeFor() {
     await back();
     const s3 = await st();
     ok(s3.idx === s3.cd && s3.thread === 'qa_bv_app', '3 Back on the view returns to the thread', s3);
-    ok(s3.nBound === 1 && s3.bd === s3.cd + 1 && s3.edge, '3 the view is still bound beside the thread', s3);
+    ok(s3.nBound === 1 && s3.bd === s3.cd + 1 && s3.peek, '3 the view is still bound beside the thread', s3);
     ok(await alive(), '3 Wizard still open');
 
-    // 4. Drag the edge left → lands on the view.
-    const box = await p.locator('#boundEdge .be-tab').boundingBox();
-    const cdp = await ctx.newCDPSession(p);
-    const tp = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
-    let x = box.x + box.width / 2, y = box.y + box.height / 2;
-    await tp('touchStart', x, y); for (let k = 0; k < 8; k++) { x -= 18; await tp('touchMove', x, y); await sleep(16); } await tp('touchEnd'); await sleep(900);
-    const s4 = await st(); if (!s4.focusBound) { await p.screenshot({ path: path.join(OUT, '4-fail.png') }); console.log('msgs', await p.evaluate(() => document.querySelector('.ch-msgs')?.innerText.slice(0, 300))); }
-    ok(s4.idx === s3.bd && s4.focusBound, '4 dragging the edge left lands on the view', s4, s4);
-    await back();
-
-    // Match the new left edge: tap and real finger drag both return to the thread.
-    await tapEdge(); await tapEdge();
-    ok((await st()).focusApp === 'chats', '4 left edge tap returns to chat');
-    await tapEdge();
-    const lb = await p.locator('#boundEdge.left .be-tab').boundingBox();
-    x = lb.x + lb.width / 2; y = lb.y + lb.height / 2;
-    await tp('touchStart', x, y); for (let k = 0; k < 8; k++) { x += 18; await tp('touchMove', x, y); await sleep(25); } await tp('touchEnd'); await sleep(900);
-    ok((await st()).focusApp === 'chats', '4 dragging the left edge right returns to chat');
-    await tapEdge();
-    const cb = await p.locator('#boundEdge.left .be-tab').boundingBox();
-    x = cb.x + cb.width / 2; y = cb.y + cb.height / 2;
-    await tp('touchStart', x, y); await tp('touchMove', x + 50, y); await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); await sleep(700);
-    ok((await st()).focusBound, '4 cancelled left-edge drag preserves bound view');
+    // 4. Bottom-bar swipes both ways; a cancelled swipe stays put; browser Back returns to the thread.
+    await toView(); ok((await st()).focusBound, '4 swipe left on the bar → the view');
+    await toThread(); ok((await st()).focusApp === 'chats', '4 swipe right on the bar → the thread');
+    await toView(); await barSwipe(1, true);
+    ok((await st()).focusBound, '4 a cancelled swipe keeps the bound view');
     await p.evaluate(() => history.back()); await sleep(900);
     ok((await st()).focusApp === 'chats' && await alive(), '4 browser Back returns to thread and Wizard stays open');
 
@@ -184,13 +182,17 @@ function routeFor() {
     // 8. A plain path link binds as a page; a thread with no in-app link, only an older one, or only external links does not.
     await openThread('qa_bv_url'); const s8 = await st();
     ok(s8.nBound === 1 && s8.bAppId === 'link' && s8.bUrl === '/files/', '8 a plain in-app path binds as a page (session refs skipped)', s8);
+    await openThread('qa_bv_dl'); const sdl = await st();
+    ok(sdl.nBound === 0 && !sdl.edge, '8 a release reply binds no view (Wizard OS download / update / install pages are not views)', sdl);
+    await openThread('qa_bv_dlview'); const sdv = await st();
+    ok(sdv.nBound === 1 && sdv.bUrl === '/files/', '8 after a download link, the real view in the same reply still binds', sdv);
     await openThread('qa_bv_none'); const s9 = await st();
     ok(s9.nBound === 0 && !s9.edge, '8 switching to a thread with no in-app link drops the old binding', s9);
     await openThread('qa_bv_old'); const s10 = await st();
     ok(s10.nBound === 0, '8 only the latest reply binds (an older link does not)', s10);
 
     // 9. ✕ on the bound view closes it for this reply; re-render does not rebind; leaving and reopening binds again.
-    await openThread('qa_bv_app'); await tapEdge();
+    await openThread('qa_bv_app'); await toView();
     await p.locator('.win.bound [data-wact="close"]').tap(); await sleep(900);
     const s11 = await st();
     ok(s11.nBound === 0 && s11.idx === s11.cd, '9 ✕ closes the view and lands on the thread', s11);
