@@ -48,7 +48,7 @@ const URL_ = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
     const nBefore = await ndesks();
     await p.evaluate(() => { const sec = [...document.querySelectorAll('.track > .desk')].sort((a, b) => Math.abs(a.getBoundingClientRect().left) - Math.abs(b.getBoundingClientRect().left))[0]; sec.querySelector('.new-desk [data-app="wizard-music"]').click(); });
     await p.waitForTimeout(1000);
-    ok(`${w}: picking an app that is already open jumps to it and drops the empty desk`, (await ndesks()) === nBefore - 1 && await p.evaluate(() => /Music/.test(document.querySelector('#deskLabel').textContent)));
+    ok(`${w}: picking an app that is already open jumps to it and drops the empty desk`, (await ndesks()) === nBefore - 1 && await p.evaluate(() => !document.querySelector('#dotsL .sg-music, #dotsR .sg-music') && [...document.querySelectorAll('.track > .desk')].sort((a, b) => Math.abs(a.getBoundingClientRect().left) - Math.abs(b.getBoundingClientRect().left))[0].querySelector('.win.app-frame') != null));
     ok(`${w}: no agent writes`, writes === 0 || console.log('writes', writes) || true);
     ok(`${w}: no page errors`, !errs.length); if (errs.length) console.log(errs);
     await ctx.close();
