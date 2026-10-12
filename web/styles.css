@@ -274,9 +274,12 @@ body {
 @keyframes shock { from { opacity: .9; transform: scale(.9); } to { opacity: 0; transform: scale(2.3); } }
 .orb-wrap.dragging .orb { transition: none; }
 .moons { position: absolute; inset: -18px; pointer-events: none; animation: spin 24s linear infinite; }
-/* Foreground resting motion: keep the sky and blurred ornaments still.
+/* Foreground resting motion: the sky moves only while core/scenery.js says Home is live (.scenery-live: Home in
+ * front, nothing over it, page visible, touched in the last 45 s) and the skin is Nebula (other skins hide the sky).
+ * Everywhere else the drift is paused where it is, so the frozen sky never jumps.
  * Desk slides, voice feedback and Working indicators retain their own motion. */
-.device .nebula i { animation: none; }
+.device:not(.scenery-live) .nebula i, html:not([data-skin="nebula"]) .nebula i { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .device .nebula i { animation: none; } }
 .device .orb-wrap:is([data-mode="idle"], [data-mode="type"], [data-mode="paused"]) .orb-halo,
 .device .orb-wrap:is([data-mode="idle"], [data-mode="type"], [data-mode="paused"]) .orb-ring::before,
 .device .orb-wrap:is([data-mode="idle"], [data-mode="type"], [data-mode="paused"]) .orb-ring::after,
