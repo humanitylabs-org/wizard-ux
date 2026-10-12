@@ -445,6 +445,9 @@ public class MeetingRecorderService extends Service {
             byte[] bytes = new byte[buf.length * 2];
             committed = store.mediaSamples(l.meetingId);
             int errors = 0;
+            LivePcmFrames pcm = new LivePcmFrames((data, at) -> {
+                if (MizelHub.wantsPcm()) MizelHub.pushPcm(MizelProtocol.pcmPush(l.meetingId, data, at));
+            });
             try {
                 while (running) {
                     int n = read(buf);
@@ -473,6 +476,7 @@ public class MeetingRecorderService extends Service {
                         l.mediaSamples = committed + chunkSamples;
                         if (chunkSamples >= Wav.CHUNK_SAMPLES) closeChunk();
                     }
+                    if (MizelHub.wantsPcm()) pcm.append(buf, n, l.mediaSamples - n); else pcm.reset();
                     levelSamples += n;
                     if (levelSamples >= Wav.RATE / 5) { // ~5 level pushes a second
                         MizelHub.push(MizelProtocol.levelPush(Math.min(1f, levelPeak / 12000f)));
@@ -483,6 +487,7 @@ public class MeetingRecorderService extends Service {
             } catch (IOException e) {
                 Log.e(TAG, "chunk write failed", e);
             } finally {
+                pcm.flush();
                 try { if (out != null) closeChunk(); } catch (IOException e) { Log.e(TAG, "last chunk failed", e); }
                 if (rec != null) {
                     try { rec.stop(); } catch (IllegalStateException ignored) { }
