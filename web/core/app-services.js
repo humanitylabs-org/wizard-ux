@@ -187,7 +187,7 @@
   }, 15000);
   function guardBack(step, toast) {
     let watcher = null, armed = false, exitUntil = 0;
-    const installed = () => matchMedia('(display-mode: standalone)').matches || !!window.WizardOSNative;
+    const installed = () => matchMedia('(display-mode: standalone)').matches || !!window.WizardOSNative || !!window.WizardNative || !!window.webkit?.messageHandlers?.wizardNative;
     function consume() {
       if (step()) return true;
       if (installed()) { toast?.('⌂', "You're home", 1400); return true; }

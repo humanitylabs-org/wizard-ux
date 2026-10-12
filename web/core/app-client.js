@@ -153,7 +153,7 @@
   function stayBack() {
     if (back()) return;
     // Installed apps consume root. A browser tab may leave only after a second Back within two seconds.
-    if (matchMedia('(display-mode: standalone)').matches || window.WizardOSNative) return;
+    if (matchMedia('(display-mode: standalone)').matches || window.WizardOSNative || window.WizardNative || window.webkit?.messageHandlers?.wizardNative) return;
     exitUntil = Date.now() + 2000;
     let el = document.getElementById('wizard-app-back-notice');
     if (!el) { el = document.createElement('div'); el.id = 'wizard-app-back-notice'; el.setAttribute('role', 'status'); el.style.cssText = 'position:fixed;bottom:20px;left:20px;z-index:2147483647;background:#222;color:white;padding:12px;border-radius:8px'; document.body.appendChild(el); }

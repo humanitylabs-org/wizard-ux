@@ -124,8 +124,13 @@ let origin;
    await p.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))});await p.waitForTimeout(300);
    ok('background visibility never forces unsaved reload',await fr.evaluate(()=>document.querySelector('#draft').value==='unsaved fixture'));
    await fr.evaluate(()=>hold.release());
+   if (!mobile) await p.evaluate(()=>{window.WizardOSNative=null;window.webkit={messageHandlers:{wizardNative:{postMessage(){}}}};});
    await p.goBack({waitUntil:'domcontentloaded'});await p.waitForTimeout(100);
    ok((mobile?'phone':'desktop')+' browser Back keeps root app and shell open',p.url().startsWith(origin+'/wizard-os-home/')&&await fr.evaluate(()=>WizardApp.hosted));
+   if (!mobile) {
+     await p.goBack({waitUntil:'domcontentloaded'});await p.waitForTimeout(100);
+     ok('Mac native bridge root consumes repeated browser Back without exit warning',p.url().startsWith(origin+'/wizard-os-home/')&&await fr.evaluate(()=>WizardApp.hosted)&&await p.evaluate(()=>!document.querySelector('#toast')?.textContent.includes('Press back again to exit')));
+   }
    ok((mobile?'phone':'desktop')+' no page errors',!errs.length,errs);
    await p.screenshot({path:path.join(OUT,mobile?'phone.png':'desktop.png')});await ctx.close();version='abc0001';
   }
@@ -193,6 +198,12 @@ let origin;
   await sp.goBack({waitUntil:'domcontentloaded'});await sp.waitForTimeout(100);
   ok('standalone first browser Back at root stays and warns',sp.url()===origin+'/wizard-search/'&&await sp.locator('#wizard-app-back-notice').textContent()==='Press back again to exit');
   await standalone.close();
+  const nativeStandalone=await b.newContext(),np=await nativeStandalone.newPage();
+  await np.addInitScript(()=>{window.webkit={messageHandlers:{wizardNative:{postMessage(){}}}};});await np.goto(origin+'/wizard-search/');
+  await np.locator('#open').click();await np.keyboard.press('Escape');await np.waitForTimeout(100);
+  await np.goBack({waitUntil:'domcontentloaded'});await np.waitForTimeout(100);await np.goBack({waitUntil:'domcontentloaded'});await np.waitForTimeout(100);
+  ok('standalone native Mac root consumes repeated Back and never offers exit',np.url()===origin+'/wizard-search/'&&await np.evaluate(()=>depth===0&&!document.querySelector('#wizard-app-back-notice')));
+  await nativeStandalone.close();
   ok('zero network writes / agent writes',writes.length===0,writes);ok('no external requests escaped local fixture route',receipt.blockedExternal.length===0,receipt.blockedExternal);
  } finally {await b.close();await new Promise(r=>server.close(r));fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify(receipt,null,2));}
  console.log('RECEIPT',path.join(OUT,'receipt.json'),receipt.tests.length+' passed');
