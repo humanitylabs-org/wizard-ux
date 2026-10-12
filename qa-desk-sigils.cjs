@@ -16,19 +16,19 @@ const URL_ = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
     const ndesks = () => p.evaluate(() => document.querySelectorAll('.track > .desk').length);
     const s0 = await strip(); console.log(w, s0);
     ok(`${w}: neighbour desks show their app sigil (music note, house)`, await p.evaluate(() => !!document.querySelector('.dock .sg-music') && !!document.querySelector('.dock .sg-home')));
+    ok(`${w}: Home sits level with the other dock sigils (no .home page styles on the dock)`, await p.evaluate(() => { const m = [...document.querySelectorAll('#dock .ddot.sig .dsg')].map(g => { const r = g.getBoundingClientRect(); return r.top + r.height / 2; }); return m.length > 1 && Math.max(...m) - Math.min(...m) < 1 && !document.querySelector('#dock .home'); }));
     ok(`${w}: ＋ is last on the right, on screen, thumb-sized`, await p.evaluate(W => { const r = [...document.querySelectorAll('#dotsR > *')], l = r[r.length - 1], bx = l.getBoundingClientRect(); return l.matches('[data-plus]') && bx.right <= W && bx.width >= 28 && bx.height >= 36; }, w));
     // ＋ → straight onto a new desk at the end, showing app tiles, no sheet
     const n0 = await ndesks();
     await p.locator('[data-plus]').tap(); await p.waitForTimeout(800);
     const s1 = await strip(); console.log(w, 'after ＋', s1);
-    ok(`${w}: ＋ adds one desk and you are on it, at the very end`, (await ndesks()) === n0 + 1 && /\[ORB\] ＋$/.test(s1));
+    ok(`${w}: ＋ adds one desk and the orb occupies the final plus position`, (await ndesks()) === n0 + 1 && /\[ORB\] $/.test(s1));
     ok(`${w}: no pop-up sheet opened`, await p.evaluate(() => !document.querySelector('#launcher').classList.contains('open') && !document.body.querySelector('.device.sheet-open')));
     const tiles = await p.evaluate(() => { const sec = [...document.querySelectorAll('.track > .desk')].sort((a, b) => Math.abs(a.getBoundingClientRect().left) - Math.abs(b.getBoundingClientRect().left))[0]; return sec ? sec.querySelectorAll('.new-desk [data-app]').length : -1; });
     ok(`${w}: the new desk shows app tiles (${tiles})`, tiles >= 6);
     await p.screenshot({ path: `${process.env.QA_OUT || 'qa'}/new-desk-${w}.png` });
-    // ＋ again while on the empty desk: no second empty desk
-    await p.locator('[data-plus]').tap(); await p.waitForTimeout(500);
-    ok(`${w}: ＋ again reuses the empty desk`, (await ndesks()) === n0 + 1);
+    // On the empty picker, the orb represents the plus destination; no second plus is rendered.
+    ok(`${w}: no additional plus beside orb on picker`, (await ndesks()) === n0 + 1 && await p.locator('#dock [data-plus]').count() === 0);
     // tap a tile: it opens on this desk
     await p.evaluate(() => { const sec = [...document.querySelectorAll('.track > .desk')].sort((a, b) => Math.abs(a.getBoundingClientRect().left) - Math.abs(b.getBoundingClientRect().left))[0]; sec.querySelector('.new-desk [data-app="wisdom"]').click(); });
     await p.waitForTimeout(1200);

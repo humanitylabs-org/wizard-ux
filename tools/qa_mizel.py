@@ -39,9 +39,9 @@ env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libe
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
 env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5698; S = f'emulator-{PORT}'; DEVTOOLS = 9351; FAKE = 18791
-ORIGIN = 'https://private.wizard001.com'
+ORIGIN = 'https://wizard.tailc0f369.ts.net'
 RES = []
-def check(group, n, ok, d=''):
+def check(group, n, ok, d: object = ''):
     RES.append({'group': group, 'name': n, 'ok': bool(ok), 'detail': d if isinstance(d, (str, int, float, bool, list, dict, type(None))) else str(d)})
     print(('PASS ' if ok else 'FAIL ') + f'[{group}] ' + n + (' — ' + (json.dumps(d) if not isinstance(d, str) else d)[:600] if d not in ('', None) else ''), flush=True)
 def sh(*a, stdin=None, binary=False, timeout=120):
@@ -164,13 +164,14 @@ PAGES = {
  '/mizel-qa/host.html': """<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'><title>mizel-qa host</title>
 <body style='background:#111;color:#eee;font:16px sans-serif'><h3>Mizel QA host</h3><div id=s></div>
 <script>
-window.R={pushes:[],replies:{},frames:{},levels:0,states:0};
+window.R={pushes:[],replies:{},frames:{},levels:0,states:0,pcm:[]};
 addEventListener('message',e=>{ if(e.data&&e.data.qa) R.frames[e.data.qa]=e.data; });
 const P=window.wizardMizelPort; R.hasPort=typeof P;
 const W={}; let rawW=null;
-if(P){P.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}; if(m.type){ if(m.type==='level')R.levels++; else {R.states++; R.last=m;} R.pushes.push(Object.assign({t:Date.now()},m)); if(R.pushes.length>600)R.pushes.splice(0,300);} else { R.replies[m.id]=m; if(W[m.id]){W[m.id](m); delete W[m.id];} else if(m.id===null && rawW){rawW(m); rawW=null;} } };}
+if(P){P.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}; if(m.type){ if(m.type==='level')R.levels++; else if(m.type==='pcm'){R.pcm.push({t:Date.now(),meetingId:m.meetingId,startMs:m.startMs,bytes:atob(m.pcm).length});delete m.pcm;} else {R.states++; R.last=m;} R.pushes.push(Object.assign({t:Date.now()},m)); if(R.pushes.length>600)R.pushes.splice(0,300);} else { R.replies[m.id]=m; if(W[m.id]){W[m.id](m); delete W[m.id];} else if(m.id===null && rawW){rawW(m); rawW=null;} } };}
 let n=0;
 window.mz=(cmd,meetingId)=>new Promise(res=>{ if(!P) return res({noport:true}); const id='q'+(++n); const o={id,cmd}; if(meetingId)o.meetingId=meetingId; W[id]=res; setTimeout(()=>{ if(W[id]){delete W[id]; res({timeout:true});} },15000); P.postMessage(JSON.stringify(o)); });
+window.pcm=(enabled,mid)=>new Promise(res=>{const id='pcm'+(++n);W[id]=res;P.postMessage(JSON.stringify({id,cmd:'pcm',enabled,meetingId:mid}));});
 window.mzRaw=(s)=>new Promise(res=>{ rawW=res; setTimeout(()=>{ if(rawW===res){rawW=null; res({timeout:true});} },5000); P.postMessage(s); });
 setInterval(()=>{document.getElementById('s').textContent=JSON.stringify(R.last||{})},500);
 </script>
@@ -179,7 +180,7 @@ setInterval(()=>{document.getElementById('s').textContent=JSON.stringify(R.last|
 </body>""",
  '/mizel-qa/frame.html': """<!doctype html><meta charset=utf-8><body style='color:#9f9'>same-origin frame<script>
 parent.postMessage({qa:'same', port: typeof window.wizardMizelPort},'*');
-const P=window.wizardMizelPort; if(P){P.onmessage=e=>parent.postMessage({qa:'same-reply',data:e.data},'*'); P.postMessage(JSON.stringify({id:'f1',cmd:'status'}));}
+const P=window.wizardMizelPort; if(P){P.onmessage=e=>{let m=JSON.parse(e.data);if(m.type==='pcm')parent.postMessage({qa:'same-pcm',got:true},'*');else parent.postMessage({qa:'same-reply',data:e.data},'*');}; P.postMessage(JSON.stringify({id:'f1',cmd:'status'}));}
 </script>""",
  '/mizel-live/': """<!doctype html><meta charset=utf-8><title>mizel-live qa</title><body style='background:#123;color:#fff'>Mizel Live (QA stand-in)<div id=h></div><script>document.getElementById('h').textContent=location.href; window.QA_LIVE={href:location.href, port: typeof window.wizardMizelPort};</script>""",
  'example.org/qa-foreign.html': """<!doctype html><meta charset=utf-8><body style='color:#f99'>foreign frame<script>
@@ -350,7 +351,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         summary.update(version=ver, uid=uid, api=sx('getprop ro.build.version.sdk').strip())
         sx(f'run-as {PKG} mkdir -p files')
         sx(f"run-as {PKG} sh -c 'echo http://10.0.2.2:{FAKE} > files/qa_origin.txt'")
-        qa_cfg = {'pauseTimeoutMs': 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 1, 'staticNotification': 1}
+        qa_cfg = {'pauseTimeoutMs': 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 2 if os.environ.get('QA_PCM_ONLY') == '1' else 1, 'staticNotification': 1}
         (job / 'qa_mizel.json').write_text(json.dumps(qa_cfg))
         sh(ADB, '-s', S, 'push', job / 'qa_mizel.json', '/data/local/tmp/qa_mizel.json')
         sx(f'run-as {PKG} cp /data/local/tmp/qa_mizel.json files/qa_mizel.json')
@@ -359,18 +360,19 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('logcat -c'); sx('logcat -G 16M')
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(9)
         pg = Page(); pg.pump(4)
+        pg.ev("try {localStorage.setItem('wos.tour.v1','true'); window.WosTour?.finish('qa');}catch(e){}")
         pg.ev("new Promise(r => { const t0=Date.now(); const t = () => (window.__wos || Date.now()-t0>20000) ? r() : setTimeout(t, 200); t(); })")
         pg.ev("(() => { const c = document.querySelector('#coach'); if (c && !c.hidden) document.querySelector('#coachGo').click(); return true; })()")
         shot('00-shell')
         inst = mlog('meeting bridge installed|WEB_MESSAGE_LISTENER|addWebMessageListener')
-        check('bridge', 'WebView supports WEB_MESSAGE_LISTENER; bridge installed for the private origin', 'installed for https://private.wizard001.com' in inst, inst)
+        check('bridge', 'WebView supports WEB_MESSAGE_LISTENER; bridge installed for the private origin', ('installed for ' + ORIGIN) in inst, inst)
 
         # ------------------------------------------------ (f) origin scoping + iframe reach
         shell_port = pg.ev("typeof window.wizardMizelPort")
         check('bridge', 'shell main frame (https://private.wizard001.com/wizard-os-home/) has wizardMizelPort', shell_port == 'object', shell_port)
         # The real Mizel app window is an iframe (/mizel-live/, the canonical view) inside the shell: open it and look inside.
-        pg.ev("window.dispatchEvent(new CustomEvent('wizard:open', {detail: {app: 'mizel'}}))")
-        probe = "(() => { const f=[...document.querySelectorAll('iframe')].map(f => { try { return [f.contentWindow.location.href, typeof f.contentWindow.wizardMizelPort, f.contentDocument && f.contentDocument.readyState] } catch (e) { return [f.src, 'x:' + e.name] } }); return f.some(x => x[0].includes('/meetings/') && x[2] === 'complete') ? f : null })()"
+        pg.ev("window.__wos.openApp('mizel')")
+        probe = "(() => { const f=[...document.querySelectorAll('iframe')].map(f => { try { return [f.contentWindow.location.href, typeof f.contentWindow.wizardMizelPort, f.contentDocument && f.contentDocument.readyState] } catch (e) { return [f.src, 'x:' + e.name] } }); return f.some(x => x[0].includes('/mizel-live/') && x[2] === 'complete') ? f : null })()"
         frames = pg.pump(25, lambda: pg.ev(probe), 1.0)
         frames = frames or pg.ev("[...document.querySelectorAll('iframe')].map(f => { try { return [f.src, typeof f.contentWindow.wizardMizelPort] } catch (e) { return [f.src, 'x'] } })")
         shot('01-shell-mizel-window')
@@ -391,6 +393,38 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('bridge', 'protocol errors: bad_request / unknown_cmd / bad_meeting_id / not_recording; status works idle',
               bad.get('error') == 'bad_request' and unk.get('error') == 'unknown_cmd' and badid.get('error') == 'bad_meeting_id' and nr.get('error') == 'not_recording' and st0.get('ok') and st0['status']['recording'] is False,
               {'bad': bad, 'unk': unk, 'badid': badid, 'nr': nr, 'status': st0})
+
+        if os.environ.get('QA_PCM_ONLY') == '1':
+            mid='qa_mz_pcm'
+            start=mz(pg,'start',mid)
+            check('pcm','native service advertises live PCM',start.get('ok') and start['status'].get('livePcm'),start)
+            subscribed=pg.ev(f"pcm(true,{json.dumps(mid)})")
+            check('pcm','matching private frame subscribes',subscribed.get('ok'),subscribed)
+            t0=time.time(); pg.pump(2)
+            packets=pg.ev('R.pcm')
+            check('pcm','quarter-second packets arrive before first five-second WAV',len(packets)>=4 and packets[0]['startMs']<1000,{'count':len(packets),'first':packets[:2]})
+            check('pcm','every packet is bounded 250ms PCM16',all(0<p['bytes']<=8000 and p['bytes']%2==0 and p['meetingId']==mid for p in packets))
+            check('pcm','unsubscribed same-origin iframe receives no PCM',not pg.ev("!!R.frames['same-pcm']"))
+            wrong=pg.ev("pcm(true,'qa_mz_wrong')")
+            check('pcm','wrong meeting subscription is refused',wrong.get('error')=='wrong_meeting',wrong)
+            count=pg.ev('R.pcm.length');pg.ev(f"pcm(false,{json.dumps(mid)})");pg.pump(1)
+            check('pcm','unsubscribe stops transient PCM',pg.ev('R.pcm.length')==count)
+            pg.ev(f"pcm(true,{json.dumps(mid)})");pg.pump(1)
+            sx('input keyevent KEYCODE_HOME');time.sleep(1);count=pg.ev('R.pcm.length');pg.pump(6)
+            check('pcm','background produces no page PCM',pg.ev('R.pcm.length')==count)
+            check('pcm','durable five-second WAV upload continues in background',len(ST['chunks'].get(mid,{}))>=2)
+            sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity');time.sleep(2);pg.pump(2)
+            packets=pg.ev('R.pcm')
+            check('pcm','foreground restores PCM stream',len(packets)>count)
+            stopped=mz(pg,'stop',mid);pg.pump(8)
+            check('pcm','stop succeeds',stopped.get('ok'),stopped)
+            verify_meeting('pcm',mid,'user',expect_min_chunks=2)
+            sx('input keyevent KEYCODE_BACK');time.sleep(1)
+            check('back','Back leaves Wizard open',PKG in top(),top())
+            check('pcm','no Wizard crashes','ai.wizards.os' not in sx('logcat -b crash -d'))
+            summary['results']=RES;summary['passed']=sum(r['ok'] for r in RES);summary['failed']=sum(not r['ok'] for r in RES)
+            save('summary.json',summary);print(f"{summary['passed']}/{len(RES)} passed",flush=True)
+            raise SystemExit(1 if summary['failed'] else 0)
 
         # ------------------------------------------------ (a)(e) long run, screen off, outage, airplane
         A = 'qa_mz_long'

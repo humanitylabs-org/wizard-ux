@@ -71,7 +71,12 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private PermissionRequest pendingMic;
     private ValueCallback<Uri[]> pendingFiles;
-    private boolean showingError;
+    /** The native "can't reach your Wizard" screen over the WebView (ReachScreen / ReachPolicy). */
+    private ReachScreen reach;
+    private volatile boolean mainFailed; // this main-frame load failed: its error page must not count as "landed"
+    private volatile String wantUrl;     // the page the last main-frame load was for (Try again reloads it)
+    private boolean resumed;
+    private android.net.ConnectivityManager.NetworkCallback netWatch;
     /** Native-parity features (background recorder, share, reply notifications, in-app update): device/DeviceBridge. */
     private ai.wizards.os.device.DeviceBridge device;
     private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
@@ -107,8 +112,10 @@ public class MainActivity extends Activity {
         getWindow().setAttributes(lp);
         setContentView(root);
         buildWebView();
+        reach = new ReachScreen(this, root, this::retryReach, this::openTailscale);
+        watchNetwork();
         if (state != null) web.restoreState(state);
-        if (web.getUrl() == null) web.loadUrl(startUrl(getIntent()));
+        if (web.getUrl() == null) go(startUrl(getIntent()));
         installBack();
         ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(cmd -> main.post(() -> {
             if (web != null) web.evaluateJavascript("(window.__wosVoiceCmd && window.__wosVoiceCmd(" + Handoff.quote(cmd) + "))", null);
@@ -123,6 +130,7 @@ public class MainActivity extends Activity {
         web = new SelectionWebView(this); // its own text-selection menu in chats (SelectionWebView)
         web.setBackgroundColor(Color.rgb(5, 3, 12));
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (reach != null) reach.toFront(); // a rebuilt WebView goes under the connection screen
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -150,11 +158,11 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
                 // A main-frame hop to the retired private.wizard001.com lands on the same page under this Wizard's own name.
-                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying && !ai.wizards.os.device.AppState.legacyFallback) { view.loadUrl(Origin.toHome(u.toString())); return true; }
+                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying && !ai.wizards.os.device.AppState.legacyFallback) { go(Origin.toHome(u.toString())); return true; }
                 // Under the safety net the tailnet name is unreachable: its links open the same page on the old name.
-                if (req.isForMainFrame() && Origin.isHome(u) && ai.wizards.os.device.AppState.legacyFallback) { view.loadUrl(Origin.toLegacy(u.toString())); return true; }
-                if (carrying && Carry.isPage(MainActivity.this, u.toString())) return false;
-                if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) return false;
+                if (req.isForMainFrame() && Origin.isHome(u) && ai.wizards.os.device.AppState.legacyFallback) { go(Origin.toLegacy(u.toString())); return true; }
+                if (carrying && Carry.isPage(MainActivity.this, u.toString())) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
+                if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
                 if (!req.isForMainFrame()) return false; // hosted app frames stay inside their window
                 openOutside(u);
                 return true;
@@ -162,14 +170,49 @@ public class MainActivity extends Activity {
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
+                // A load replaced by a newer one (Try again over a hanging attempt) is not a failure of the new one.
+                if (req.isForMainFrame() && err.getErrorCode() == ERROR_UNKNOWN && String.valueOf(err.getDescription()).contains("ERR_ABORTED")) return;
                 if (req.isForMainFrame() && carrying) { endCarry("unreachable"); return; } // old name gone: just go home
                 // Safety net: the tailnet name unreachable from this phone → same page on the old name for this run.
                 // (A failing old-name page is not isHome, so this cannot loop; both failing ends on the offline page.)
                 if (req.isForMainFrame() && Origin.isHome(req.getUrl()) && ai.wizards.os.device.AppState.useLegacy(MainActivity.this)) {
-                    view.loadUrl(Origin.toLegacy(req.getUrl().toString()));
+                    mainFailed = true;
+                    go(Origin.toLegacy(req.getUrl().toString()));
                     return;
                 }
-                if (req.isForMainFrame()) showOffline(String.valueOf(err.getDescription()));
+                if (req.isForMainFrame()) { mainFailed = true; showOffline(String.valueOf(err.getDescription())); }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest req, android.webkit.WebResourceResponse resp) {
+                // The gateway answered but the Wizard behind it didn't (502 while it restarts): same screen, it retries.
+                if (!req.isForMainFrame() || resp == null || !ReachPolicy.httpFailure(resp.getStatusCode())) return;
+                mainFailed = true;
+                showOffline("Wizard answered " + resp.getStatusCode());
+            }
+
+            @Override
+            public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
+                // Reloads and anything else not started by go() or a link: watch it too (not reached when a service
+                // worker answers the page, hence go() and shouldOverrideUrlLoading). Never intercepts anything.
+                if (req.isForMainFrame()) {
+                    final String u = req.getUrl().toString();
+                    if (!u.equals(wantUrl)) { wantUrl = u; mainFailed = false; main.post(MainActivity.this::armReach); }
+                }
+                return null;
+            }
+
+            @Override
+            public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                // A commit (also a same-document hop). Never fires for a load that was abandoned or still hangs.
+                if (isWeb(url) && !mainFailed && sameHost(url, wantUrl) && reach != null && reach.isShowing() && !reach.isOffline()) landed();
+            }
+
+            @Override
+            public void onPageCommitVisible(WebView view, String url) {
+                // A real page painted: the connection screen leaves by itself (also after Tailscale comes back).
+                // Same host as the load we're waiting on, so a late paint of an abandoned attempt can't count.
+                if (isWeb(url) && !mainFailed && sameHost(url, wantUrl)) landed();
             }
 
             @Override
@@ -180,7 +223,6 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (!url.startsWith("data:")) showingError = false;
                 // Back must never land on the one-time carry page: drop it from history once the shell is up.
                 if (clearAfterCarry && !carrying && !Carry.isPage(MainActivity.this, url)) { clearAfterCarry = false; view.clearHistory(); }
                 topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
@@ -192,7 +234,7 @@ public class MainActivity extends Activity {
                 root.removeView(web);
                 web.destroy();
                 buildWebView();
-                web.loadUrl(BuildConfig.HOME_URL);
+                go(BuildConfig.HOME_URL);
                 return true;
             }
         });
@@ -236,14 +278,14 @@ public class MainActivity extends Activity {
     }
 
     void handleBack() {
-        if (showingError) { web.loadUrl(ai.wizards.os.device.AppState.homeUrl(this)); return; }
+        if (reach != null && reach.isOffline()) { retryReach(); return; } // Back on the connection screen: try again, stay
         web.evaluateJavascript("(window.__wosNativeBack ? window.__wosNativeBack() : 'nojs')", result -> {
             String r = result == null ? "" : result.replace("\"", "");
             if (!r.equals("nojs") && !r.isEmpty() && !r.equals("null")) return; // the shell handled it
             // The shell is not loaded (or is a page off the shell): step back in the WebView, else go home.
             String url = web.getUrl();
             if (web.canGoBack()) web.goBack();
-            else if (url == null || !url.startsWith(ai.wizards.os.device.AppState.homeUrl(this))) web.loadUrl(ai.wizards.os.device.AppState.homeUrl(this));
+            else if (url == null || !url.startsWith(ai.wizards.os.device.AppState.homeUrl(this))) go(ai.wizards.os.device.AppState.homeUrl(this));
             else Toast.makeText(this, "You're home", Toast.LENGTH_SHORT).show();
         });
     }
@@ -286,7 +328,7 @@ public class MainActivity extends Activity {
         String next = carryNext != null ? carryNext : ai.wizards.os.device.AppState.homeUrl(this);
         carryNext = null;
         clearAfterCarry = true;
-        if (web != null) web.loadUrl(next);
+        if (web != null) go(next);
     }
 
     @Override
@@ -296,7 +338,7 @@ public class MainActivity extends Activity {
         Uri data = intent.getData();
         if (data != null && Origin.isInApp(data)) {
             if (carrying) carryNext = inAppUrl(data.toString());
-            else web.loadUrl(inAppUrl(data.toString()));
+            else go(inAppUrl(data.toString()));
         }
         if (ACTION_ACCESSIBILITY.equals(intent.getAction())) { intent.setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); return; }
         queueHandoff(intent);
@@ -365,17 +407,135 @@ public class MainActivity extends Activity {
         }
     }
 
+    /* ---------------- Can't reach your Wizard (James, 12 Oct: Tailscale off gave a pure black screen) ----------------
+     * Every main-frame load arms two marks. A page that paints (onPageCommitVisible) disarms them and hides the screen.
+     * CONNECTING_MS: no network or Tailscale off → say why now; else "Connecting to your Wizard…".
+     * GIVE_UP_MS or a load error / 5xx: the offline screen. The load keeps going underneath; the app retries on
+     * return to the app, on a network change (Tailscale turning on), and every RETRY_MS while in front. */
+
+    static boolean isWeb(String url) {
+        return url != null && (url.startsWith("https://") || url.startsWith("http://"));
+    }
+
+    static String noFragment(String u) {
+        int i = u.indexOf('#');
+        return i < 0 ? u : u.substring(0, i);
+    }
+
+    static boolean sameHost(String a, String b) {
+        if (a == null || b == null) return false;
+        String ha = Uri.parse(a).getHost(), hb = Uri.parse(b).getHost();
+        return ha != null && ha.equalsIgnoreCase(hb);
+    }
+
+    private final Runnable reachMark = () -> {
+        if (reach == null) return;
+        boolean[] n = ReachScreen.net(this);
+        if (!carrying && ReachPolicy.failNow(n[0], n[1])) showOffline(null);
+        else reach.connecting();
+    };
+
+    private final Runnable reachGiveUp = () -> { if (!carrying) showOffline(null); };
+
+    private final Runnable reachRetry = new Runnable() {
+        @Override
+        public void run() {
+            main.removeCallbacks(this);
+            if (reach == null || !reach.isOffline() || !resumed) return;
+            retryReach();
+        }
+    };
+
+    /** Every native page load. onPageStarted only fires once a response commits, so a connection that never answers
+     *  (Tailscale off) never reaches it: the connection screen is armed here, before the network. */
+    void go(String url) {
+        navStarted(url);
+        web.loadUrl(url);
+    }
+
+    /** A main-frame load is leaving for the network: watch it until a page paints. */
+    void navStarted(String url) {
+        if (!isWeb(url)) return;
+        String now = pageUrl;
+        if (now != null && url.contains("#") && noFragment(url).equals(noFragment(now))) return; // same page, a #hop
+        mainFailed = false;
+        wantUrl = url;
+        armReach();
+    }
+
+    void armReach() {
+        if (mainFailed) return; // this load already failed fast (its screen is up)
+        main.removeCallbacks(reachMark);
+        main.removeCallbacks(reachGiveUp);
+        main.postDelayed(reachMark, ReachPolicy.CONNECTING_MS);
+        main.postDelayed(reachGiveUp, ReachPolicy.GIVE_UP_MS);
+    }
+
+    void landed() {
+        main.removeCallbacks(reachMark);
+        main.removeCallbacks(reachGiveUp);
+        main.removeCallbacks(reachRetry);
+        if (reach != null && reach.isShowing()) android.util.Log.i("WizardOSReach", "reached " + pageUrl);
+        if (reach != null) reach.hide();
+    }
+
     private void showOffline(String why) {
-        showingError = true;
-        ai.wizards.os.device.AppState.legacyFallback = false; // both names failed: Retry tries the tailnet name first again
-        String html = "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
-                + "<body style='margin:0;background:#05030c;color:#e9e4ff;font:16px system-ui;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center'>"
-                + "<div style='padding:24px'><div style='font-size:44px;color:#9b7bff'>◉</div>"
-                + "<h2 style='font-weight:600'>Can't reach Wizard OS</h2>"
-                + "<p style='opacity:.75'>Check that Tailscale is connected on this phone, then tap retry.</p>"
-                + "<a href='" + ai.wizards.os.device.AppState.homeUrl(this) + "' style='display:inline-block;margin-top:12px;padding:12px 22px;border-radius:999px;background:#2a1d5c;color:#fff;text-decoration:none'>Retry</a>"
-                + "<p style='opacity:.4;font-size:12px;margin-top:18px'>" + android.text.Html.escapeHtml(why) + "</p></div></body>";
-        web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
+        main.removeCallbacks(reachMark);
+        main.removeCallbacks(reachGiveUp);
+        ai.wizards.os.device.AppState.legacyFallback = false; // Try again goes to the tailnet name first again
+        if (reach == null) return;
+        ReachPolicy.Why w = ReachScreen.why(this);
+        reach.offline(w, why, ReachScreen.tailscaleInstalled(this));
+        android.util.Log.i("WizardOSReach", "offline " + w + " " + why);
+        main.removeCallbacks(reachRetry);
+        if (resumed) main.postDelayed(reachRetry, ReachPolicy.RETRY_MS);
+    }
+
+    /** Try the page again with the explanation still up; it leaves only when a page paints. */
+    void retryReach() {
+        if (web == null || reach == null) return;
+        reach.trying();
+        ai.wizards.os.device.AppState.legacyFallback = false;
+        String u = wantUrl;
+        if (!isWeb(u) || Carry.isPage(this, u)) u = ai.wizards.os.device.AppState.homeUrl(this);
+        else if (Origin.isLegacy(Uri.parse(u))) u = Origin.toHome(u);
+        android.util.Log.i("WizardOSReach", "retry " + u);
+        go(u);
+        main.removeCallbacks(reachRetry);
+        if (resumed) main.postDelayed(reachRetry, ReachPolicy.RETRY_MS);
+    }
+
+    void openTailscale() {
+        android.content.Intent i = getPackageManager().getLaunchIntentForPackage(ReachPolicy.TAILSCALE_PKG);
+        if (i == null) { Toast.makeText(this, "Tailscale isn't installed on this phone", Toast.LENGTH_SHORT).show(); return; }
+        startActivity(i); // coming back (onResume) tries again
+    }
+
+    /** Tailscale turning on (or the network coming back) retries at once instead of waiting for the next tick. */
+    private void watchNetwork() {
+        try {
+            android.net.ConnectivityManager cm = getSystemService(android.net.ConnectivityManager.class);
+            if (cm == null) return;
+            netWatch = new android.net.ConnectivityManager.NetworkCallback() {
+                @Override public void onAvailable(android.net.Network n) { main.post(MainActivity.this::netChanged); }
+                @Override public void onLost(android.net.Network n) { main.post(MainActivity.this::netChanged); }
+                @Override public void onCapabilitiesChanged(android.net.Network n, android.net.NetworkCapabilities c) { main.post(MainActivity.this::netChanged); }
+            };
+            cm.registerDefaultNetworkCallback(netWatch);
+        } catch (RuntimeException e) { netWatch = null; }
+    }
+
+    private final Runnable netSettled = () -> {
+        if (reach == null || !reach.isOffline()) return;
+        ReachPolicy.Why now = ReachScreen.why(this);
+        if (ReachPolicy.retryOnChange(reach.shown(), now)) { if (resumed) retryReach(); }
+        else if (now != reach.shown()) reach.offline(now, null, ReachScreen.tailscaleInstalled(this));
+    };
+
+    void netChanged() {
+        if (reach == null || !reach.isOffline()) return;
+        main.removeCallbacks(netSettled);
+        main.postDelayed(netSettled, ReachPolicy.NET_SETTLE_MS);
     }
 
     /* ---------------- Microphone for the orb ---------------- */
@@ -514,6 +674,9 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         web.onResume();
+        resumed = true;
+        if (reach != null && reach.isOffline()) main.postDelayed(this::retryReach, 300); // back from Tailscale: try now
+        if (mizel != null) mizel.setPcmForeground(true);
         if (everywhereSetup) {
             everywhereSetup = false;
             boolean ok = ai.wizards.os.everywhere.EverywhereService.overlayAllowed(this);
@@ -564,9 +727,12 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        if (mizel != null) mizel.setPcmForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).
         if (!ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
         CookieManager.getInstance().flush();
+        resumed = false;
+        main.removeCallbacks(reachRetry);
         super.onPause();
     }
 
@@ -689,6 +855,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (device != null) device.onDestroy();
+        main.removeCallbacks(reachMark); main.removeCallbacks(reachGiveUp); main.removeCallbacks(reachRetry); main.removeCallbacks(netSettled);
+        if (netWatch != null) { try { getSystemService(android.net.ConnectivityManager.class).unregisterNetworkCallback(netWatch); } catch (RuntimeException ignored) {} netWatch = null; }
         ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(null);
         if (ai.wizards.os.everywhere.EverywhereService.appIsRecording()) ai.wizards.os.everywhere.EverywhereService.appVoiceState(this, "idle", 0);
         if (mizel != null) { mizel.detach(); mizel = null; }
