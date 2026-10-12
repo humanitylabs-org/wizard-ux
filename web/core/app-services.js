@@ -90,7 +90,13 @@
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); return { version: VERSION, hosted: true, appId: st.appId }; },
-      share: Object.freeze({ text(data) { check(); return window.WosChat?.sharePayload(data) || Promise.resolve('unsupported'); },
+      share: Object.freeze({ text(data) {
+        check();
+        if (data?.url && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(String(data.url))) {
+          try { data = { ...data, url: new URL(String(data.url), source.location.href).href }; } catch (_) { return Promise.resolve('unsupported'); }
+        }
+        return window.WosChat?.sharePayload(data) || Promise.resolve('unsupported');
+      },
         file(file, opts) { check(); if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file))) return Promise.resolve('unsupported'); return window.WosChat?.shareFile(file, opts) || Promise.resolve('unsupported'); } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),

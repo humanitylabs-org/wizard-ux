@@ -88,6 +88,7 @@ let origin;
    await fr.locator('#share').click();ok('native receipt share immediate from gesture',await fr.evaluate(()=>sharePromise)==='shared');
    ok('ancestor transient activation retained for share',await p.evaluate(()=>nativeActivations.at(-1)));
    ok('native share preserves URL and title',await p.evaluate(()=>nativeCalls.at(-1)[1]==='fixture text\nhttps://example.org/exact?q=a#b'&&nativeCalls.at(-1)[2]==='Fixture title'));
+   ok('relative share URL resolves against the app, not the shell',await fr.evaluate(()=>WizardApp.share.text({url:'item?q=a#b'}))==='shared'&&await p.evaluate(()=>nativeCalls.at(-1)[1]===location.origin+'/android-apps/item?q=a#b'));
    await p.evaluate(()=>nativeOutcome='cancelled');await fr.locator('#share').click();ok('native receipt cancellation not success',await fr.evaluate(()=>sharePromise)==='cancelled');
    await p.evaluate(()=>nativeOutcome=undefined);await fr.locator('#share').click();ok('void native transport does not invent success',await fr.evaluate(()=>sharePromise)==='unsupported');
    await p.evaluate(()=>nativeOutcome=Promise.resolve({status:'shared'}));

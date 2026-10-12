@@ -389,7 +389,7 @@
     const payload = {};
     for (const k of ['text', 'title', 'url']) if (data[k] != null && String(data[k])) payload[k] = String(data[k]);
     if ((!payload.text && !payload.url) || (payload.text || '').length > 90000 || (payload.title || '').length > 1024 || (payload.url || '').length > 8192) return 'unsupported';
-    if (payload.url) { try { if (!/^https?:$/.test(new URL(payload.url).protocol)) return 'unsupported'; } catch (_) { return 'unsupported'; } }
+    if (payload.url) { try { const parsed = new URL(payload.url, location.href); if (!/^https?:$/.test(parsed.protocol)) return 'unsupported'; if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(payload.url)) payload.url = parsed.href; } catch (_) { return 'unsupported'; } }
     const n = native();
     if (n && typeof n.shareText === 'function') {
       // ACTION_SEND has one EXTRA_TEXT field: don't silently lose a URL or turn it into a title.
