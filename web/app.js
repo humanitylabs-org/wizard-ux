@@ -53,6 +53,7 @@
   /* ---------------- apps ---------------- */
   // The registry lives in core/apps.js (shared with the desktop shell); the phone gets its own list.
   const { APPS, APP, findApp, appByName, quickSearch, searchUrl } = window.WizCore.apps('mobile');
+  window.WizBackgroundAudio?.init(() => APP);
   const norm = window.WizCore.norm;
 
   /* ---------------- state ---------------- */
