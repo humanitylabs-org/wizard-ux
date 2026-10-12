@@ -86,6 +86,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         admitted=wait(lambda: any(f['id'] in r['body'].get('wizard_file_ids',[]) for r in ST['runs']),35,.5)
         check('native voice send includes the captured screenshot file ID in one request',bool(admitted),[r['body'].get('wizard_file_ids') for r in ST['runs']])
         check('fixture received one voice run, no duplicate sends',len(ST['runs'])==1,len(ST['runs']))
+        pg.ev('__wos.goDesk(0,true)'); sx('input keyevent KEYCODE_BACK'); time.sleep(.3); sx('input keyevent KEYCODE_BACK'); time.sleep(.3)
+        check('repeated Android Back at true root never exits Wizard',front())
         sweep();check('emulator contacted only the fake Wizard',not FOREIGN,FOREIGN)
         crash=sx('logcat -d -s AndroidRuntime:E').strip();check('no Android crash',not crash,crash)
         receipt.update(status='ok' if all(res) else 'failed',host='thales',source_web=str(WEB),apk_sha256=hashlib.sha256(APK.read_bytes()).hexdigest(),passed=sum(res),failed=len(res)-sum(res))
