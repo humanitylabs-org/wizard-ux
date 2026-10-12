@@ -59,8 +59,8 @@ let browser;
  const post=async(p,b)=>fetch('http://127.0.0.1:'+http+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
  await post('/qa/reset',{});await post('/qa/offline',{down:true});
  await audio('load',{queue:[fixture.tracks[0]].map(t=>({...t,stream:'http://10.0.2.2:'+http+t.stream,art:'http://10.0.2.2:'+http+t.art})),index:0,station});
- await audio('seek',{positionMs:11000});await wait(1800);const offline=await snap();check('offline continuation preserves wanted playback and reports retry',offline.wantPlaying&&!!offline.error,offline);
- await post('/qa/offline',{down:false});for(let i=0;i<20;i++){await wait(500);if((await snap()).playing)break;}
+ await audio('seek',{positionMs:11000});for(let i=0;i<40;i++){await wait(250);if((await snap()).error)break;}const offline=await snap();check('offline continuation preserves wanted playback and reports retry',offline.wantPlaying&&!!offline.error,offline);
+ await post('/qa/offline',{down:false});for(let i=0;i<40;i++){await wait(250);const s=await snap();if(s.playing&&s.queue.length>offline.queue.length)break;}
  const recovered=await snap();check('station recovers after network returns with no view-owned refill',recovered.playing&&recovered.queue.length>offline.queue.length,recovered);
  // Correlated frame/session adversaries: native main-frame port alone is never a hosted-app permission.
  const stale=await audio('pause',{sessionId:'obsolete'});check('stale session commands refused',!stale.ok);

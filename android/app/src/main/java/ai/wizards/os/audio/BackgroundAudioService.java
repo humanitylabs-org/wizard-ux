@@ -91,7 +91,7 @@ public final class BackgroundAudioService extends MediaSessionService {
             .setCallback(new MediaSession.Callback() {
                 @Override public MediaSession.ConnectionResult onConnect(MediaSession s, MediaSession.ControllerInfo c) {
                     if (!getPackageName().equals(c.getPackageName()) && !c.isTrusted()) return MediaSession.ConnectionResult.reject();
-                    Player.Commands commands=player.getAvailableCommands().buildUpon()
+                    Player.Commands commands=new Player.Commands.Builder().addAllCommands()
                         .remove(Player.COMMAND_CHANGE_MEDIA_ITEMS).remove(Player.COMMAND_SET_MEDIA_ITEM)
                         .remove(Player.COMMAND_SET_PLAYLIST_METADATA).remove(Player.COMMAND_SET_REPEAT_MODE)
                         .remove(Player.COMMAND_SET_SHUFFLE_MODE).remove(Player.COMMAND_STOP).build();
