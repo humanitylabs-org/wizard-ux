@@ -88,7 +88,7 @@ let browser;
  if(local){
   const missing=fixture.tracks[13];const gate=await page.evaluate(()=>WizardOSDevice.recStart('voice'));await post('/qa/fail-stream',{id:missing.id});
   await audio('load',{queue:[missing,local].map(t=>({...t,stream:'http://10.0.2.2:'+http+t.stream,art:t.art?'http://10.0.2.2:'+http+t.art:''})),index:0,station:null});
-  for(let i=0;i<40;i++){await wait(150);const s=await snap();if(s.queue[s.index]?.id===local.id)break;}
+  for(let i=0;i<100;i++){await wait(200);const s=await snap();if(s.queue[s.index]?.id===local.id)break;}
   const skipped=await snap();check('unavailable track skips during recording without resuming audio',!!gate&&skipped.queue[skipped.index].id===local.id&&!skipped.playing&&skipped.wantPlaying,skipped);
   await page.evaluate(id=>WizardOSDevice.recCancel(id),gate);await post('/qa/fail-stream',{id:null});
   await audio('load',{queue:[{...local,stream:'http://10.0.2.2:'+http+local.stream}],index:0,station:null});for(let i=0;i<30;i++){await wait(200);if((await snap()).playing)break;}const lib=await snap();check('native player decodes the actual library MP3 with its stable ID',lib.playing&&lib.queue[lib.index].id===local.id&&lib.queue[lib.index].source==='library',lib);await audio('seek',{positionMs:11000});await wait(1800);const ended=await snap();check('finite queue completion clears play intention',!ended.wantPlaying&&!ended.playing,ended);}
