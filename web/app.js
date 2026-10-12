@@ -2192,6 +2192,8 @@
     return null;
   }
   function localParse(t, snap, kind) {
+    // The music search spell ("music search Home Tides") wins everywhere, even over the Chats list's "search …".
+    { const ms = window.WosMusic?.available() && window.WosMusic.parse(t, false, false); if (ms && ms.op === 'search') return { action: 'music', cmd: ms }; }
     { const cv = chatsVoice(t, snap || sendSnap(), kind); if (cv) return cv; }
     // "Order my usual kra pao": a taught usual runs on the phone (Grab under a cover), nothing goes to Wizard.
     const us = window.WosUsuals?.match(t); if (us) return { action: 'usual', id: us };
@@ -2199,8 +2201,9 @@
     // music phrase; a tap only the unmistakable ones ("play …", "pause the music"), so chat words stay chat.
     // In front of Wizard Music a held orb is always for the player ("Guy Barato Trap" = play it).
     if (window.WosMusic?.available()) {
-      const inMusic = kind === 'command' && W[(snap || sendSnap()).id]?.appId === 'wizard-music';
-      const mc = window.WosMusic.parse(t, inMusic);
+      const front = W[(snap || sendSnap()).id]?.appId === 'wizard-music';
+      const inMusic = kind === 'command' && front;
+      const mc = window.WosMusic.parse(t, inMusic, front);
       const v0 = (snap || sendSnap()).view;
       const tapOk = mc && (mc.strong || (mc.op === 'play' && v0?.kind !== 'chat thread' && norm(t).split(' ').length <= 8));
       if (mc && (kind === 'command' || tapOk)) return { action: 'music', cmd: mc };
