@@ -1192,7 +1192,7 @@
     const W0 = LIVE && LIVE.ok ? (LIVE.workGroups().working || []) : [], working = W0.length;
     const yd = byDay[YESTERDAY] || [];
     const now = new Date();
-    return `<div class="home">${gearBtn()}
+    return `<div class="home"><nav class="home-tools" aria-label="System and settings"><button class="home-system" data-act="system" aria-label="Your system" title="Your system"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/></svg></button>${gearBtn()}</nav>
       <div class="home-top">
         <div class="home-date" id="homeDate">${(() => { const p = window.WizConfig.dayParts(now.getTime()); return `${DOWL[p.dow]} · ${p.d} ${MON[p.m - 1]}`; })()}</div>
         <div class="home-time" id="homeTime">${window.WizConfig.hm()}</div>
@@ -1206,7 +1206,6 @@
       </div>
       ${unsentCard()}
       ${sideCard()}
-      <button class="now-card wz-home-widget sys-card" style="--c:var(--cyan)" data-act="system"><span class="sys-glyph" aria-hidden="true">◈</span><span class="meta"><span class="k">Your system</span><span class="v">Agents, apps, connections</span></span><span class="side-go">Open</span></button>
       </div>
       <div class="home-gap home-gap-b"></div>
       ${window.WosResources?.home() || ''}
