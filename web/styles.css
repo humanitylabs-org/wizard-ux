@@ -28,6 +28,9 @@ body {
   }
 }
 
+/* A Store input must scroll its app document, never the fixed shell's hidden outer stage. */
+.device:has(.store-window) { overflow: clip; }
+
 .stars { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; }
 .nebula { position: absolute; inset: -20%; z-index: -1; pointer-events: none; transition: transform 900ms var(--ease); }
 .nebula i { position: absolute; border-radius: 50%; filter: blur(60px); opacity: .5; mix-blend-mode: screen; animation: drift 26s ease-in-out infinite alternate; }

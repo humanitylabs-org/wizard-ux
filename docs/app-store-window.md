@@ -9,6 +9,8 @@
 
 This extracts only Oscar/Miguel's Store/card renderers from frozen native preview 7afcc94, retaining GPL-3.0, source hashes and provenance. It does not introduce PR3's My Apps/System/dotted-service redesign, graph design or Resources code. Existing launcher order remains; Get apps uses each shell's normal app opening/reuse path. Installation actions are disabled explicitly. Canonical lifecycle URL/session/CSRF/idempotency adapter remains dormant for the installation owner; no Service edits or real lifecycle tests occur here.
 
+The phone's Store window is marked `store-window`; only while that normal frame exists, `.device:has(.store-window)` clips the fixed outer stage without creating a scroll container. Real touch/iframe focus had otherwise scrolled the shell's `overflow:hidden` container to `(73,192)`, clipping the app and dock. App-document scrolling remains native and the rest of the shell's rules stay intact.
+
 Store's synchronous `__wizardCloseOverlay` hook handles card → Store. The phone treats this hook's truthful boolean as authoritative rather than applying the legacy layout-signature timer, which otherwise can unwind a second shell layer. Store at root delegates to the parent. Standalone root owns one guard. Both shells reuse an already armed guard after reload. Desktop Back at Store root returns to the existing desktop parent; phone Back returns to Home, retaining its normal app desk.
 
 Installed card Open accepts only the installed view's same-origin URL and a matching parent registry id/URL, then calls the existing shell openApp mechanism. Missing/unregistered routes remain honestly unavailable. No window.open or nested Wizard shell is used by the Store.

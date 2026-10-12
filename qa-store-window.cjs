@@ -22,7 +22,7 @@ async function checkStore(p,mobile){
  const data=await p.evaluate(async()=>{const pre='/wizard-os-home/store-data/';return Promise.all(['wizard/v1/index/search?q=transcri','wizard/v1/index/tags','api/apps/installed','wizard/v1/wizard-apps'].map(async s=>{const r=await fetch(pre+s);return {status:r.status,body:await r.json()};}));});
  ok(data.every(d=>d.status===200)&&data[0].body.apps.some(a=>a.id==='transcriber')&&data[1].body.tags.length>0,label+': real index/search/tags and installed sources');
  ok(data[2].body.installed.some(a=>a.info.id==='transcriber')&&!/"(?:config|userConfig|form_fields|JWT_SECRET|mcp|health)"/.test(JSON.stringify(data.slice(2))),label+': real installed mark data without secret fields');
- for(const file of ['app.js','core/apps.js','core/deeplink.js','desktop/desktop.js','store/store.js','store/store.css','store/wizard-store.js','store/wizard-store.css']) {
+ for(const file of ['app.js','styles.css','core/apps.js','core/deeplink.js','desktop/desktop.js','store/store.js','store/store.css','store/wizard-store.js','store/wizard-store.css']) {
  const served=await p.evaluate(file=>fetch('/wizard-os-home/'+file).then(r=>r.text()),file);const local=fs.readFileSync(path.join(__dirname,'web',file),'utf8');
  ok(crypto.createHash('sha256').update(served).digest('hex')===crypto.createHash('sha256').update(local).digest('hex'),label+': peer serves exact '+file); }
  const rect=await p.locator('iframe[title="App Store"]').boundingBox();
