@@ -1160,7 +1160,7 @@ window.WizCore.chats = function createChats(H) {
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
-  return { CH, ch, click, bind, PW, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null), leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
 };

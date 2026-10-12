@@ -655,7 +655,7 @@
     const sealAt = rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
     if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { vReply = rp; toast('…', 'Still uploading · send when it finishes', 2000); return 'busy'; }
     let modelRoute;
-    try { modelRoute = window.WosModels.snapshot(sealAt?.sid || ''); }
+    try { modelRoute = CHATS.modelRoute(sealAt?.wid, sealAt?.sid || ''); }
     catch (e) { vReply = rp; toast('!', String(e.message || e), 2400); return 'busy'; }
     const t = sealAt ? CHATS.takeComposer(sealAt.wid, sealAt.sid) : null;
     const sealed = t && (t.text || t.files.length) ? t : false;

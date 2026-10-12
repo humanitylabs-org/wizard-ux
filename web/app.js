@@ -2106,7 +2106,7 @@
     V.raf = requestAnimationFrame(tick);
     V.native = null;
     const dev = DEV();
-    if (dev) { let id = ''; try { id = dev.recStart(kind === 'command' ? 'command' : 'auto') || ''; if (id) { const route = window.WosModels.snapshot(V.replyTo?.sid || (V.snap?.view?.kind === 'chat thread' ? V.snap.view.thread : '')); if (route) saveVoiceRoute(id, route); } } catch (e) {}
+    if (dev) { let id = ''; try { id = dev.recStart(kind === 'command' ? 'command' : 'auto') || ''; if (id) { const route = CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) {}
       if (id) { V.native = id; reportVoice(V.state); if (V.stopAsked) finishVoice(); return; } } // '' = no mic permission yet: the page asks below
     try {
       if (!(await openRec())) return;
@@ -2194,8 +2194,8 @@
     const sealAt = sealTarget();
     if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
     try {
-      const pin = sealAt || (V.snap.view?.kind === 'chat thread' ? { sid: V.snap.view.thread } : null);
-      V.snap.route = window.WosModels.snapshot(pin?.sid || '');
+      const pin = sealAt || (V.snap.view?.thread ? { wid: V.snap.view.id, sid: V.snap.view.thread } : null);
+      V.snap.route = CHATS.modelRoute(pin?.wid, pin?.sid || '');
       if (!V.snap.route) { toast('!', 'Choose a model before sending', 2200); return; }
       if (V.native) saveVoiceRoute(V.native, V.snap.route);
     } catch (e) { toast('!', String(e.message || e), 2200); return; }
