@@ -137,5 +137,6 @@
     if (m) return { query: m[1].trim(), tab: 'all', strong: false };
     return null;
   }
+  registry.refresh = loadRemote;
   window.WizCore.apps = registry;
 })();
