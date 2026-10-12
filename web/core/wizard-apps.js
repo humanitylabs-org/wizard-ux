@@ -55,20 +55,45 @@ async function req(url, opts = {}) {
     body = { message: text.slice(0, 120) };
   }
   if (r.status === 403 && /refuses writes|read.only/i.test(body.error || body.message || '')) throw new ReadOnly(READ_ONLY_NOTE); // WUX
-  if (!r.ok) throw new Error(body.message || body.error || `HTTP ${r.status}`);
+  if (!r.ok) throw Object.assign(new Error(body.message || body.error || `HTTP ${r.status}`), { code: body.error || '', status: r.status });
   return body;
 }
 // Same-origin owner session: CSRF is session-bound; the privileged manager bearer stays on the Service.
-let ownerSession;
-async function post(url, data, method = 'POST', key) {
-  if (!ownerSession) ownerSession = await req('/wizard/v1/app-lifecycle/session');
-  return req(url, { method, headers: { 'Content-Type': 'application/json',
-    'X-Wizard-CSRF': ownerSession.csrf, 'Idempotency-Key': key || crypto.randomUUID() }, body: JSON.stringify(data || {}) });
+// One session request at a time, renewed a minute before it lapses and after a Service restart.
+let ownerSession = null;
+let ownerSessionLoad = null;
+function session(force = false) {
+  if (!force && ownerSession && Date.now() < ownerSession.until) return Promise.resolve(ownerSession);
+  if (!ownerSessionLoad) {
+    ownerSessionLoad = req('/wizard/v1/app-lifecycle/session')
+      .then((s) => (ownerSession = { csrf: s.csrf, until: Date.now() + Math.max(0, Number(s.expires_in || 0) - 60) * 1000 }))
+      .finally(() => { ownerSessionLoad = null; });
+  }
+  return ownerSessionLoad;
 }
+/** A lifecycle write. The key names the operation, so a retry (or a lost response) never runs it twice. */
+async function post(url, data, method, key) {
+  const send = (s) => req(url, { method, headers: { 'Content-Type': 'application/json', 'X-Wizard-CSRF': s.csrf, 'Idempotency-Key': key }, body: JSON.stringify(data || {}) });
+  try {
+    return await send(await session());
+  } catch (e) {
+    if (e.code !== 'owner_session_required') throw e;
+    return send(await session(true)); // expired or restarted Service: same key, once
+  }
+}
+// Operation keys outlive the card: Back and reopen keep an uncertain operation's identity until it settles.
+const operations = new Map();
+const opKey = (id, k) => {
+  if (!operations.has(`${id}:${k}`)) operations.set(`${id}:${k}`, crypto.randomUUID().replace(/-/g, ''));
+  return operations.get(`${id}:${k}`);
+};
+const uncertain = (e) => !e.status || e.status >= 500 || e.code === 'operation_unconfirmed' || e.code === 'app_manager_unavailable';
+/** Launcher + agent pick up the change; a failed read here never turns a done operation into an error. */
 async function refreshLauncher() {
-  const d = await req('/wizard/v1/apps');
-  if (window.WizCore?.apps?.refresh) await window.WizCore.apps.refresh();
-  window.dispatchEvent(new CustomEvent('wizard:apps-changed', { detail: d }));
+  try {
+    if (window.WizCore?.apps?.refresh) await window.WizCore.apps.refresh();
+    window.dispatchEvent(new CustomEvent('wizard:apps-changed'));
+  } catch { /* the launcher's own focus refresh catches up */ }
 }
 
 // ---- data --------------------------------------------------------------------------------------------------------
@@ -229,6 +254,7 @@ const note = (t) => `<p class="st-note wam-note">${esc(t)}</p>`;
 
 // ---- My Apps -----------------------------------------------------------------------------------------------------
 async function renderMyApps(el, ctx = {}) {
+  el._wamOwner = null; // a card's background poll stops painting here
   el.classList.add('wam');
   bindImages(el);
   const getApps = '<button class="lapp" data-wam-get><span class="ic wam-get">+</span><span class="nm">Get apps</span></button>';
@@ -264,7 +290,10 @@ function renderCard(el, app, ctx = {}) {
   let busy = '';
   let msg = '';
   let ro = false;
-  const operationKeys = new Map();
+  // This card owns the element until something else renders into it; stale polls stop painting then.
+  const owner = Symbol('card');
+  el._wamOwner = owner;
+  const mine = () => el._wamOwner === owner && el.isConnected;
   const paint = () => {
     const st = a.installed ? STATUS[a.status] || `${a.status.charAt(0).toUpperCase()}${a.status.slice(1)}…` : a.have ? 'Installed' : '';
     const btn = (k, label, cls = '') =>
@@ -276,7 +305,7 @@ function renderCard(el, app, ctx = {}) {
       if (a.update) acts.push(btn('update', 'Update', 'primary'));
       if (a.status === 'running') acts.push(btn('stop', 'Stop'));
       else if (!BUSY.has(a.status)) acts.push(btn('start', 'Start'));
-    } else if (!a.have) acts.push(btn('install', 'Install', 'primary'));
+    } else if (!a.have) acts.push(btn('install', busy === '' && msg ? 'Try again' : 'Install', 'primary'));
     el.innerHTML = `<div class="wam-card">
       <button class="wam-back" data-wam-back>‹ ${ctx.from === 'store' ? 'App Store' : 'My apps'}</button>
       <div class="wam-panel">
@@ -288,37 +317,54 @@ function renderCard(el, app, ctx = {}) {
       </div>
     </div>`;
   };
-  const settle = async () => {
-    for (let k = 0; k < 60; k++) {
+  /** Poll until the app leaves its busy state. 'done' | 'gone' (missing after an install: it failed) | 'pending'. */
+  const settle = async (k) => {
+    let missing = 0;
+    for (let i = 0; i < 90; i++) {
       await sleep(2000);
-      const now = (await loadInstalled(ctx, true).catch(() => [])).find((x) => x.id === a.id);
-      if (now) a = now;
-      paint();
-      if (now && !BUSY.has(now.status)) return;
+      let list;
+      try { list = await loadInstalled(ctx, true); } catch { continue; }
+      const now = list.find((x) => x.id === a.id);
+      if (now) { a = now; missing = 0; } else missing++;
+      if (mine()) paint();
+      if (now && !BUSY.has(now.status)) return 'done';
+      if (!now && k === 'install' && missing >= 3) return 'gone';
+      if (!now && k === 'uninstall') return 'done';
     }
+    return 'pending';
   };
+  const show = () => { if (mine()) paint(); };
   const run = async (k) => {
     if (isReadOnly()) { msg = READ_ONLY_NOTE; ro = true; return paint(); } // WUX
     busy = k;
     msg = '';
     paint();
+    const key = opKey(a.id, k);
     try {
-      if (!operationKeys.has(k)) operationKeys.set(k, crypto.randomUUID());
-      const key = operationKeys.get(k);
       if (k === 'install') await install(a, c, key);
       else if (k === 'update') await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/update`, { performBackup: true }, 'PATCH', key);
-      else await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/${k}`, {}, k === 'uninstall' ? 'DELETE' : 'POST', key);
-      operationKeys.delete(k);
-      cache.apps = null;
-      await refreshLauncher();
-      busy = '';
-      await settle();
+      else if (k === 'uninstall') await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/uninstall`, { removeBackups: false }, 'DELETE', key);
+      else await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/${k}`, {}, 'POST', key);
     } catch (e) {
       busy = '';
-      if (e instanceof ReadOnly) { msg = READ_ONLY_NOTE; ro = true; return paint(); } // WUX
-      msg = k === 'install' ? `Couldn’t install: ${e.message}. Ask your agent to install ${a.name}.` : `Couldn’t ${k}: ${e.message}`;
-      paint();
+      if (e instanceof ReadOnly) { operations.delete(`${a.id}:${k}`); msg = READ_ONLY_NOTE; ro = true; return show(); } // WUX
+      // Lost response: the operation may have run. Keep its key so Try again replays it instead of repeating it.
+      if (!uncertain(e)) operations.delete(`${a.id}:${k}`);
+      msg = uncertain(e) ? `Not sure the ${k} went through. Tap ${k === 'install' ? 'Try again' : 'it'} again to check.`
+        : k === 'install' ? `Couldn’t install: ${e.message}. Ask your agent to install ${a.name}.` : `Couldn’t ${k}: ${e.message}`;
+      return show();
     }
+    operations.delete(`${a.id}:${k}`);
+    busy = '';
+    cache.apps = null;
+    show();
+    const end = await settle(k);
+    await refreshLauncher();
+    if (end === 'gone') {
+      a = { ...a, installed: false, have: false, status: 'missing' };
+      msg = `${a.name} didn’t install. Try again, or ask your agent to install it.`;
+    } else if (end === 'pending') msg = `${a.name} is still ${a.status}. It keeps going in the background.`;
+    show();
   };
   bindClicks(el, (e) => {
     if (e.target.closest('[data-wam-back]')) {
@@ -341,12 +387,13 @@ function renderCard(el, app, ctx = {}) {
 /** Runtipi install (uses first, like `wam install`), then count it in the index. */
 async function install(a, c, key) {
   const have = new Set((await loadInstalled(c, true)).map((x) => x.id));
-  const form = { openPort: false, exposed: false, exposedLocal: false };
+  // The bridge takes only the app's own form fields; exposure and host ports are never the browser's to choose.
+  const form = {};
   for (const dep of a.uses || []) {
-    if (have.has(dep)) continue;
-    await post(`${c.api}/app-lifecycle/${encodeURIComponent(`${dep}:${STORE}`)}/install`, form, 'POST', key + '.' + dep);
+    if (have.has(dep) || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(dep)) continue;
+    await post(`${c.api}/app-lifecycle/${encodeURIComponent(`${dep}:${STORE}`)}/install`, form, 'POST', `${key}_${dep}`.slice(0, 128));
   }
-  await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/install`, { ...form, ...(a.repo ? { repo: a.repo } : {}) }, 'POST', key);
+  await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/install`, form, 'POST', key);
   a.installed = true;
   a.status = 'installing';
   // Installation accounting belongs to the manager; browser writes never reach the public index.
@@ -361,6 +408,7 @@ const SORTS = [
 
 function renderStore(el, ctx = {}) {
   const c = conf(ctx);
+  el._wamOwner = null;
   el.classList.add('wam');
   bindImages(el);
   let chips = ctx.chipsEl;
@@ -428,7 +476,7 @@ function renderStore(el, ctx = {}) {
     e.stopPropagation();
     const a = s.items.find((x) => x.id === t.dataset.wamId);
     const mine = (cache.apps || []).find((x) => x.id === a?.id);
-    if (a) ctx.onApp ? ctx.onApp(mine || a, 'store') : renderCard(el, mine || a, { ...ctx, from: 'store', onBack: () => paint() });
+    if (a) ctx.onApp ? ctx.onApp(mine || a, 'store') : renderCard(el, mine || a, { ...ctx, from: 'store', onBack: () => { el._wamOwner = null; paint(); } });
   });
 
   paintChips();
@@ -471,14 +519,15 @@ async function renderResources(el, ctx = {}) {
   };
   const r = (ic, title, sub, pct) =>
     `<div class="st-row static"><span class="st-ic">${ic}</span><span class="st-tx"><b>${title}</b><small>${esc(sub)}</small></span>${meter(pct)}</div>`;
-  const acts = () =>
+  // WUX: batch Start/Stop/Restart all need an owner-authorized batch route the Service doesn't expose yet.
+  const acts = () => (!ctx.batch ? '' :
     `<div class="wam-acts wam-all">${[
       ['start-all', 'Start all'],
       ['stop-all', 'Stop all'],
       ['restart-all', 'Restart all'],
     ]
       .map(([k, l]) => `<button class="wam-btn" data-wam-all="${k}">${armed === k ? 'Tap again' : l}</button>`)
-      .join('')}</div>`;
+      .join('')}</div>`);
   const paint = (d) => {
     const memUsed = (Number(d.memoryTotal) * Number(d.percentUsedMemory)) / 100;
     el.innerHTML = `<div class="st-group"><h4>Resources</h4>
@@ -507,7 +556,8 @@ async function renderResources(el, ctx = {}) {
     b.disabled = true;
     b.textContent = '…';
     try {
-      await post(`${c.api}/app-lifecycle/${k}`);
+      await post(`${c.api}/app-lifecycle/${k}`, {}, 'POST', opKey('all', k));
+      operations.delete(`all:${k}`);
       if (m) m.textContent = k === 'stop-all' ? 'Stopping every app' : k === 'start-all' ? 'Starting every app' : 'Restarting every app';
     } catch (err) {
       if (m && err instanceof ReadOnly) { m.textContent = READ_ONLY_NOTE; m.classList.add('wam-ro'); } // WUX
