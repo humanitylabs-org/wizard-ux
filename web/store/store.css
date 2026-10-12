@@ -1,5 +1,5 @@
-html,body { height:100%; overflow:auto; }
-body { display:block; margin:0; background:var(--bg,#120b26); color:var(--ink); touch-action:pan-y; user-select:text; }
+html { height:100%; overflow:auto; }
+body { height:auto; min-height:100%; overflow:visible; display:block; margin:0; background:var(--bg,#120b26); color:var(--ink); touch-action:pan-y; user-select:text; }
 .store { width:100%; max-width:840px; margin:auto; padding:16px; min-height:100%; }
 h1 { font-size:22px; margin:0 0 8px; }
 header .st-note { margin:8px 0; }

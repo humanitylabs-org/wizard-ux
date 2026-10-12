@@ -34,7 +34,7 @@ async function checkStore(p,mobile){
  await f.locator('[data-wam-back]').click();
  ok(await f.locator('#query').inputValue()==='transcri'&&await f.locator('#browse').isVisible(),label+': card UI Back preserves query');
  await f.locator('[data-wam-id="transcriber"]').click();await back(p,label+' card');
- ok(await f.locator('#browse').isVisible()&&await f.locator('#query').inputValue()==='transcri',label+': real browser Back card → same Store');
+ ok(await f.locator('#browse').isVisible()&&await f.locator('#query').inputValue()==='transcri'&&(!mobile||await p.evaluate(()=>window.__wos.idx!==0)),label+': real browser Back card → same Store');
  await back(p,label+' Store parent');
  if(mobile) ok(await p.evaluate(()=>window.__wos.idx===0)&&p.url().includes('/wizard-os-home/'),label+': real browser Back Store → Wizard Home');
  else ok(await p.locator('iframe[title="App Store"]').count()===0&&p.url().includes('/wizard-os-home/desktop.html'),label+': real browser Back Store → desktop parent');

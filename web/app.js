@@ -2708,7 +2708,7 @@
    *      in this document and in every same-origin framed app;
    *   2. a history guard entry pushed during a user gesture; popstate → one step. */
   const EXIT_MS = 2000;
-  let exitUntil = 0, exitT = 0, guardOn = false, ignorePop = 0;
+  let exitUntil = 0, exitT = 0, guardOn = history.state?.wos === 'guard', ignorePop = 0;
   const watchers = new Set();
   // LEGACY-BRIDGE (remove when Legacy Wizard retires, or replace with the spec'd app Back contract — see
   // wizard-os docs/WORK_OUTSTANDING.md "Back button contract"): the hook name and the layout-signature guess below
@@ -2726,6 +2726,8 @@
     let win; try { win = winEl(f.id)?.querySelector('iframe')?.contentWindow; } catch (e) { return null; }
     let hook; try { hook = win && win.__wizardCloseOverlay; } catch (e) { return null; }
     if (typeof hook !== 'function') return null;
+    // Store's canonical hook returns handled/not-handled synchronously; never apply the legacy layout guess.
+    if (f.appId === 'app-store') { try { return hook.call(win) === true ? 'store-card' : null; } catch (_) { return null; } }
     const before = frameSig(win);
     let r; try { r = hook.call(win); } catch (e) { return null; }
     if (r === false) return null;
