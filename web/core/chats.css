@@ -421,3 +421,10 @@ body > .mviewer { position: fixed; z-index: 200; }
 .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: calc(var(--corner-b) + var(--corner-orb) + 96px); }
 .ch-list:has(.ch-fab) .ch-pill { animation-name: ch-pill-in-l; }
 @keyframes ch-pill-in-l { from { opacity: 0; transform: translateY(8px); } }
+/* Helper status stays inside the existing Working row. */
+.wk-helper{display:flex;flex-direction:column;gap:8px;margin:10px 0;padding:12px;border:1px solid var(--line, #35403e);border-radius:12px;}
+.wk-helper b{font-weight:550;}
+.wk-helper small{color:var(--muted,#97aaa5);font-size:12px;line-height:1.45;}
+.wk-helper.stalled{border-color:#a87837;}
+.wk-helper button{align-self:flex-start;min-height:44px;border:1px solid #567966;background:#233d31;color:#e1f9e9;padding:8px 14px;border-radius:10px;font:inherit;}
+.wk-helper button:disabled{opacity:.55;}
