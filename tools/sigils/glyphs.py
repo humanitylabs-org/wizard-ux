@@ -217,6 +217,12 @@ def g_month():
     moon = D(circle(232, 262, 162), circle(320, 206, 136))
     return U(moon, spark(330, 196, 62, 0.15))
 
+@glyph('meditate', 'A seated figure with light cut into the heart: resting as radiant awareness.')
+def g_meditate():
+    head = circle(256, 132, 48)
+    body = P("M232 196 H280 C316 196 330 230 338 272 C344 302 360 318 398 326 C432 334 436 376 404 394 C380 406 132 406 108 394 C76 376 80 334 114 326 C152 318 168 302 174 272 C182 230 196 196 232 196 Z")
+    return D(U(head, body), circle(256, 276, 26))
+
 @glyph('inbox', 'A drop with an arrow cut through: things land here for you.')
 def g_inbox():
     drop = P("M256 72 L355.5 264.6 A112 112 0 1 1 156.5 264.6 Z")

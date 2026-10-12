@@ -51,6 +51,7 @@ HOUSE = {
     'android-apps':  ('android',  150, None),
     'topics':        ('eye',      178, None),
     'wizard-signal': ('signal',   205, None),
+    'meditation':    ('meditate', 218, None),
     'files':         ('files',    232, None),
     'wizard-search': ('search',   256, None),
     'projects':      ('projects', 276, None),
