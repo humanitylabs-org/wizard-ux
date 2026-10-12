@@ -700,6 +700,11 @@
     const app = APPS.find(x => x.url && u.pathname.startsWith(x.url.replace(/[#?].*$/, '')));
     return app ? app.name : seg.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
+  // Where a tapped link came from: Back or ✕ on what it opened closes that and lands here again.
+  function fromOf(srcId) {
+    const src = W[srcId], sid = src?.app === 'chats' && src.thread && src.thread !== '__new__' ? src.thread : '';
+    return { desk: desks[deskOf(srcId)]?.id || desks[idx].id, win: srcId || '', sid, title: sid ? (LIVE?.session(sid)?.title || winTitle(src)) : (src ? winTitle(src) : '') };
+  }
   function openLinkDesk(href, fromEl) {
     let u; try { u = new URL(href, location.href); } catch (e) { return false; }
     if (u.origin !== location.origin) return false;
@@ -707,8 +712,7 @@
     const src = W[srcId], rel = u.pathname + u.search + u.hash;
     if (src && src.from && src.app === 'frame') { const f = winEl(srcId)?.querySelector('iframe'); if (f) { try { f.contentWindow.location.href = u.href; } catch (e) { f.src = u.href; } return true; } }
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
-    const sid = src?.app === 'chats' && src.thread && src.thread !== '__new__' ? src.thread : '';
-    const from = { desk: desks[deskOf(srcId)]?.id || desks[idx].id, win: srcId || '', sid, title: sid ? (LIVE?.session(sid)?.title || winTitle(src)) : (src ? winTitle(src) : '') };
+    const from = fromOf(srcId);
     window.__ovLog = (window.__ovLog || []).concat('link:' + rel).slice(-30);
     return !!openWin({ app: 'frame', appId: 'link', url: rel, title: linkTitle(u), from });
   }
@@ -758,6 +762,14 @@
       const here = Object.keys(W).find(id => W[id].app === 'chats' && deskOf(id) >= 0);
       if (here && opts.desk == null) { const t = deskOf(here); if (t !== idx) goDesk(t); focusWin(here); return true; }
       openWin({ app: 'chats', thread: null }, opts); return true;
+    }
+    if (a.kind === 'wizard' && a.url && opts.from) {
+      // Opened from a link in a thread (James, 12 Oct 2026): it opens on its own desk beside the thread, and
+      // Back closes it and lands on that thread again, exactly like any other link. A copy already opened from
+      // a link is reused; a normal (pinned) desk of the same app is left alone.
+      const here = Object.keys(W).find(id => W[id].app === 'frame' && W[id].appId === a.id && W[id].from && deskOf(id) >= 0);
+      if (here) { W[here].from = opts.from; const t = deskOf(here); if (t !== idx) goDesk(t); focusWin(here); save(); return true; }
+      openWin({ app: 'frame', appId: a.id, from: opts.from }); return true;
     }
     if (a.kind === 'wizard' && a.url) {
       // Already open somewhere: go to it rather than opening a second copy.
@@ -2812,9 +2824,12 @@
       const cw = W[desks[idx].focus]; if (cw?.app === 'chats' && cw.thread) chatsBack(cw);
       showSection(section);
     },
-    app(id) {
-      const a = findApp(id) || APP[id]; if (a) return openApp(a);
-      Promise.resolve(window.WizCore.appsLoaded?.()).then(() => { const b = findApp(id) || APP[id]; if (b) openApp(b); });
+    app(id, srcEl) {
+      // A tapped link inside a window (a Chats thread) remembers where it came from.
+      const srcId = srcEl && srcEl.closest ? srcEl.closest('.win')?.dataset.win : '';
+      const opts = srcId && W[srcId] ? { from: fromOf(srcId) } : {};
+      const a = findApp(id) || APP[id]; if (a) return openApp(a, {}, opts);
+      Promise.resolve(window.WizCore.appsLoaded?.()).then(() => { const b = findApp(id) || APP[id]; if (b) openApp(b, {}, opts); });
     },
     video: item => { closeSheets(true); return CHATS.KIT.viewer.open([item]); },
     toast,

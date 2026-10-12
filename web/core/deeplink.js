@@ -50,11 +50,11 @@
       return !!H?.video?.({ url, mime, name, kind: 'video', id });
     } catch (e) { log('video:error'); return false; }
   }
-  function run(d) {
+  function run(d, src) {
     if (!d || !H) return false;
     if (d.session) { log('session:' + d.session); H.thread(d.session); }
     else if (d.view) { log('view:' + d.view); H.view(d.view, d.section || ''); }
-    else if (d.open) { log('open:' + d.open); H.app?.(d.open); }
+    else if (d.open) { log('open:' + d.open); H.app?.(d.open, src || null); }
     if (d.video) playVideo(d.video);
     return true;
   }
@@ -68,8 +68,9 @@
     handle(h) { H = h; },
     /* Use the page's own deep link once, then take it out of the address bar. */
     consume() { const d = parse(location.href); strip(); if (d) run(d); return d; },
-    /* A link clicked inside the app. True when it was ours and is now open in-app. */
-    route(href) { let u; try { u = new URL(href, location.href); } catch (e) { return false; } if (!isOwn(u)) return false; const d = parse(u.href); if (!d) return false; run(d); return true; },
+    /* A link clicked inside the app. True when it was ours and is now open in-app. src = the tapped link, so
+     * an app it opens knows where it came from (Back closes it and lands there again). */
+    route(href, src) { let u; try { u = new URL(href, location.href); } catch (e) { return false; } if (!isOwn(u)) return false; const d = parse(u.href); if (!d) return false; run(d, src); return true; },
     get log() { return window.__deeplinkLog || []; },
   };
 })();
