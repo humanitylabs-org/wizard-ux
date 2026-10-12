@@ -21,7 +21,7 @@ const ok = (c, n, detail = '') => { c ? pass++ : fail++; console.log(c ? 'PASS' 
     await p.goto(url); await p.waitForFunction(() => window.__wos?.desks); await p.waitForTimeout(1800);
     await p.evaluate(() => { WizCore.deeplink.route(location.pathname + '?open=wizard-music'); }); await p.waitForTimeout(800);
     await p.evaluate(() => __wos.goDesk(__wos.desks.length - 1, true)); await p.waitForTimeout(800);
-    const state = () => p.evaluate(() => { const s = __wos, d = s.desks[s.idx], sec = document.querySelectorAll('.track > .desk')[s.idx]; return { n: s.desks.length, idx: s.idx, wins: d.wins.length, picker: d.wins.length === 0 && !!sec?.querySelector('.new-desk'), tiles: sec?.querySelectorAll('.new-desk [data-app]').length || 0, transform: document.querySelector('.track').style.transform }; });
+    const state = () => p.evaluate(() => { const s = __wos, d = s.desks[s.idx], sec = document.querySelectorAll('.track > .desk')[s.idx], orb = document.querySelector('#orbWrap').getBoundingClientRect(); return { n: s.desks.length, idx: s.idx, wins: d.wins.length, picker: d.wins.length === 0 && !!sec?.querySelector('.new-desk'), tiles: sec?.querySelectorAll('.new-desk [data-app]').length || 0, plus: document.querySelectorAll('#dock [data-plus]').length, orbCentered: Math.abs(orb.x + orb.width / 2 - innerWidth / 2) < 2, transform: document.querySelector('.track').style.transform }; });
     const cdp = await ctx.newCDPSession(p);
     const swipe = async (direction, distance = 115, cancelled = false) => {
       const rect = await p.locator(control === 'orb' ? '#orbWrap' : '#dock').boundingBox();
@@ -33,18 +33,24 @@ const ok = (c, n, detail = '') => { c ? pass++ : fail++; console.log(c ? 'PASS' 
       await p.waitForTimeout(900);
     };
     const tag = `${width} ${control}`; const before = await state();
+    ok(before.plus === 1, `${tag}: occupied desk has one next plus destination`, before);
     await swipe(-1, 30); let s = await state(); ok(s.n === before.n && s.idx === before.idx, `${tag}: short drag stays on occupied desk`, s);
     await swipe(-1, 110, true); s = await state(); ok(s.n === before.n && s.idx === before.idx, `${tag}: cancelled swipe stays on occupied desk`, s);
     await swipe(-1); s = await state();
     ok(s.n === before.n + 1 && s.idx === before.n && s.picker && s.tiles >= 6, `${tag}: next swipe opens one app-selection desk`, s);
     if (s.picker) {
+      ok(s.plus === 0 && s.orbCentered, `${tag}: orb occupies plus position, no extra plus and stays centred`, s);
       await p.screenshot({ path: `${out}/${width}-${control}-picker.png` });
       await swipe(-1); s = await state(); ok(s.n === before.n + 1 && s.idx === before.n, `${tag}: another swipe reuses picker`, s);
+      ok(s.plus === 0, `${tag}: repeated end swipe does not create another plus`, s);
       await swipe(1); s = await state(); ok(s.n === before.n && s.idx === before.idx && !s.picker, `${tag}: reverse swipe removes unused picker and returns`, s);
+      ok(s.plus === 1, `${tag}: leaving picker restores one plus destination`, s);
       await swipe(-1); s = await state();
       await p.locator('.track > .desk').nth(s.idx).locator('.new-desk [data-app="wisdom"]').tap(); await p.waitForTimeout(1200); s = await state();
       ok(s.n === before.n + 1 && s.idx === before.n && s.wins === 1 && !s.picker, `${tag}: app selection fills same desk`, s);
+      ok(s.plus === 1, `${tag}: choosing an app restores one next plus destination`, s);
       await swipe(-1); s = await state(); ok(s.n === before.n + 2 && s.picker, `${tag}: next occupied desk can reach picker again`, s);
+      ok(s.plus === 0 && s.orbCentered, `${tag}: next picker is again represented only by orb`, s);
       await p.evaluate(() => window.__wosNativeBack()); await p.waitForTimeout(800); s = await state();
       ok(s.idx === 0 && s.n === before.n + 1 && !!await p.locator('#dock').count(), `${tag}: Back returns Home, removes empty desk, keeps Wizard open`, s);
     }
