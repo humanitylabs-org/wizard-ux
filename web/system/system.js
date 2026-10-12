@@ -14,7 +14,7 @@
     { id: 'conns', title: 'Connections', color: '#4ff0b0' },
   ];
   const MAX = { views: 6, agents: 5, apps: 12, conns: 9 };
-  let D = null, sel = null;
+  let D = null, sel = null, showAll = false;
   const nodes = new Map(); // id -> { id, layer, name, sub, status }
   const links = new Map(); // id -> Set(id)
   const link = (a, b) => { if (!nodes.has(a) || !nodes.has(b)) return; (links.get(a) || links.set(a, new Set()).get(a)).add(b); (links.get(b) || links.set(b, new Set()).get(b)).add(a); };
@@ -105,17 +105,18 @@
     const apps = D.apps.map(a => `<div class="item"><span class="av" style="--c:${a.kind === 'Agent tool' ? '#3fe0ff' : '#8f63ff'}">${esc(a.name.charAt(0))}</span><span class="tx"><b>${esc(a.name)}</b><small>${esc(a.kind)}${a.summary ? ` · ${esc(a.summary)}` : ''}</small></span><span class="st">${dot(a.status === 'running' || a.status === 'connected' ? 'ok' : a.status === 'stopped' ? 'off' : 'warn')}${esc(a.status === 'connected' ? 'On' : a.status.charAt(0).toUpperCase() + a.status.slice(1))}</span></div>`).join('');
     const groups = {}; for (const c of D.connections) (groups[c.group] = groups[c.group] || []).push(c);
     const conns = Object.entries(groups).sort((x, y) => (y[0] === 'AI account') - (x[0] === 'AI account')).map(([g, list]) => `<h4>${esc(g)}</h4><div class="chips">${list.map(c => `<span class="chip">${dot(c.status === 'connected' ? 'ok' : 'warn')}${esc(c.name)}${c.detail ? `<small>${esc(c.detail)}</small>` : ''}</span>`).join('')}</div>`).join('');
-    const rs = [...D.routines].sort((a, b) => (b.status === 'error') - (a.status === 'error'));
+    const rs = [...D.routines].sort((a, b) => (b.status === 'error') - (a.status === 'error')).slice(0, showAll ? undefined : Math.max(8, D.routines.filter(r => r.status === 'error').length));
     const routines = rs.map(r => `<div class="item r ${r.status === 'error' ? 'bad' : ''}"><span class="tx"><b>${esc(r.name)}</b><small>${esc(r.when)}${r.lastRun ? ` · ran ${esc(ago(r.lastRun))}` : ''}</small></span><span class="st">${dot(r.status === 'error' ? 'bad' : r.status === 'ok' ? 'ok' : 'idle')}${r.status === 'error' ? 'Failed' : r.status === 'ok' ? 'OK' : 'New'}</span></div>`).join('');
     $('sections').innerHTML = `
       <section class="sec" id="s-agents"><h2>Agents</h2><div class="list">${agents}</div></section>
       <section class="sec" id="s-apps"><h2>Agent apps &amp; tools</h2><p class="hint">Installed apps and tools your agents can use. They have no screen of their own.</p><div class="list">${apps}</div></section>
       <section class="sec" id="s-conns"><h2>Connections</h2><p class="hint">Accounts and keys your agents use. Keys never leave your Wizard.</p>${conns}</section>
-      <section class="sec" id="s-routines"><h2>Routines</h2><p class="hint">What your agents do on their own, on a schedule.</p><div class="list">${routines}</div></section>`;
+      <section class="sec" id="s-routines"><h2>Routines</h2><p class="hint">What your agents do on their own, on a schedule.</p><div class="list">${routines}</div>${!showAll && D.routines.length > rs.length ? `<button class="more-btn" data-all>Show all ${D.routines.length}</button>` : ''}</section>`;
   }
 
   document.addEventListener('click', e => {
     const n = e.target.closest('[data-node]'); if (n) { focusNode(sel === n.dataset.node ? null : n.dataset.node); return; }
+    if (e.target.closest('[data-all]')) { showAll = true; sections(); return; }
     const j = e.target.closest('[data-jump]'); if (j) { $('s-' + j.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     if (e.target.closest('#more')) { if (framed) parent.postMessage({ type: 'wizard:open-app', id: 'app-store' }, location.origin); else location.href = '../store/index.html'; }
   });

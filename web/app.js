@@ -1182,7 +1182,7 @@
       </div>
       ${unsentCard()}
       ${sideCard()}
-      <button class="now-card wz-home-widget sys-card" style="--c:var(--cyan)" data-act="system"><span class="sys-glyph" aria-hidden="true">◈</span><span class="meta"><span class="k">Your system</span><span class="v">Agents, agent apps, connections</span></span><span class="side-go">Open</span></button>
+      <button class="now-card wz-home-widget sys-card" style="--c:var(--cyan)" data-act="system"><span class="sys-glyph" aria-hidden="true">◈</span><span class="meta"><span class="k">Your system</span><span class="v">Agents, apps, connections</span></span><span class="side-go">Open</span></button>
       </div>
       <div class="home-gap home-gap-b"></div>
       ${window.WosResources?.home() || ''}

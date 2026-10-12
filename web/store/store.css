@@ -30,12 +30,12 @@ h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
   transition: transform .25s var(--ease); }
 .feat:active { transform: scale(.985); }
 .feat-art { position: absolute; inset: 0; z-index: -1; }
-.feat-art img { position: absolute; right: -8%; top: -6%; width: 62%; aspect-ratio: 1; object-fit: cover; border-radius: 28%; transform: rotate(-12deg);
+.feat-art img { position: absolute; right: -10%; top: -10%; width: 56%; aspect-ratio: 1; object-fit: cover; border-radius: 28%; transform: rotate(-12deg);
   box-shadow: 0 30px 60px rgba(0, 0, 0, .45); opacity: .95; }
 .feat-art i { position: absolute; border-radius: 50%; filter: blur(30px); }
 .feat-art i:first-of-type { width: 60%; height: 60%; left: -15%; bottom: -20%; background: rgba(0, 0, 0, .35); }
 .feat-art i:last-of-type { width: 45%; height: 45%; right: 10%; top: 30%; background: rgba(255, 255, 255, .14); }
-.feat::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, transparent 30%, rgba(8, 4, 20, .78)); }
+.feat::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, transparent 25%, rgba(8, 4, 20, .82)), linear-gradient(90deg, rgba(8, 4, 20, .55), transparent 65%); }
 .eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: rgba(255, 255, 255, .78); }
 .feat h3 { margin: 4px 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
 .feat p { margin: 0; font-size: 14px; line-height: 1.35; color: rgba(255, 255, 255, .84); max-width: 34ch; }
@@ -143,6 +143,8 @@ h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
   .top { padding-left: 32px; padding-right: 32px; } .search-row { max-width: 520px; }
   .hero { grid-auto-columns: calc((100% - 64px - 14px) / 2); padding: 6px 32px 4px; scroll-padding: 32px; }
   .feat { min-height: 320px; }
+  .feat-art img { width: 44%; right: -6%; top: -14%; }
+  .feat p { max-width: 40ch; }
   .kinds, .topics, .layer, .shelf-head, .d-sec, .credit { padding-left: 32px; padding-right: 32px; }
   .rail { grid-auto-columns: calc((100% - 64px - 36px) / 3); padding: 0 32px; scroll-padding: 32px; }
   .topics { grid-template-columns: repeat(4, 1fr); }
