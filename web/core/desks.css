@@ -114,6 +114,42 @@
 .ov-add b { color: var(--ink-2); font-size: 14px; font-weight: 600; }
 .ov-hint { margin: 18px 12px 0; text-align: center; color: var(--ink-3); font-size: 12px; line-height: 1.6; }
 .device.ov-open .dock, .device.ov-open .desk-label { opacity: 0; pointer-events: none; }
+
+/* ---------------- bound views (James, 12 Oct 2026) ----------------
+ * A thread whose latest reply links the thing that was built opens that view on the desk beside it. While the
+ * thread is in front, the thread narrows by 36 px and that desk leans into the gap, its edge fading in: an
+ * extended canvas. The tab carries the view's sigil; tap or drag it left to look. */
+.desk.bound-peek { transform: translate3d(-36px, 0, 0); z-index: 3; transition: transform 520ms var(--ease), opacity 400ms, filter 400ms; }
+.desk.bound-peek .tiles { -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,.6), #000 26px); mask-image: linear-gradient(90deg, rgba(0,0,0,.6), #000 26px); }
+.desk.bound-peek > .tiles .win { box-shadow: -10px 0 28px rgba(255, 170, 60, .16); }
+.device.bound-drag .desk.bound-peek { transition: none; }
+.device.bound-peeking .desk.bound-host .tiles { right: 36px; } /* the thread narrows; the bound view fills the gap: two panels */
+.bound-edge { position: absolute; z-index: 40; right: 0; top: calc(var(--sb) + var(--safe-t) + 60px); bottom: calc(var(--dock-h) + var(--safe-b) + 20px); width: 34px; padding: 0; border: 0; background: transparent; display: flex; align-items: center; justify-content: flex-end; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.bound-edge[hidden] { display: none; }
+.bound-edge .be-glow { position: absolute; right: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px 0 0 3px; background: linear-gradient(180deg, transparent, rgba(255, 184, 77, .75) 30%, rgba(255, 184, 77, .75) 70%, transparent); box-shadow: 0 0 14px rgba(255, 170, 60, .45); animation: be-breathe 3.2s ease-in-out infinite; }
+.bound-edge .be-tab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 4px 6px 6px; margin-right: 0; border-radius: 13px 0 0 13px; background: rgba(28, 20, 46, .86); border: 1px solid rgba(255, 184, 77, .5); border-right: 0; box-shadow: -6px 0 20px rgba(0, 0, 0, .35), 0 0 16px rgba(255, 170, 60, .18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: be-in 520ms var(--ease) both; }
+.bound-edge .be-ic .be-sg, .bound-edge .be-ic > * { width: 22px !important; height: 22px !important; font-size: 13px; border-radius: 7px; }
+.bound-edge .be-chev { width: 14px; height: 14px; fill: none; stroke: var(--rv-2, #ffcf85); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.bound-edge:active .be-tab { transform: translateX(-3px); }
+.device.sheet-open .bound-edge, .device.immersive .bound-edge, .device.bound-drag .bound-edge .be-tab { opacity: 0; pointer-events: none; }
+.device.sheet-open .bound-edge, .device.immersive .bound-edge { visibility: hidden; }
+@keyframes be-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes be-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* On the bound view itself: the amber review frame plus "Open app" in the bar. */
+.win.bound .wbar .wopen span { white-space: nowrap; }
+/* On the bound view, its thread peeks back in from the left: the same shared canvas in both directions. */
+.desk.bound-chat-peek { transform: translate3d(36px, 0, 0); z-index: 3; transition: transform 520ms var(--ease); }
+.desk.bound-chat-peek .tiles { -webkit-mask-image: linear-gradient(270deg, rgba(0,0,0,.6), #000 26px); mask-image: linear-gradient(270deg, rgba(0,0,0,.6), #000 26px); }
+.desk.bound-chat-peek > .tiles .win { box-shadow: 10px 0 28px rgba(255, 170, 60, .16); }
+.device.bound-view-peeking .desk.bound-view-host .tiles { left: 36px; }
+.device.bound-drag .desk.bound-chat-peek { transition: none; }
+.bound-edge.left { left: 0; right: auto; justify-content: flex-start; }
+.bound-edge.left .be-glow { left: 0; right: auto; border-radius: 0 3px 3px 0; }
+.bound-edge.left .be-tab { padding: 7px 6px 6px 4px; border-radius: 0 13px 13px 0; border-left: 0; border-right: 1px solid rgba(255, 184, 77, .5); box-shadow: 6px 0 20px rgba(0,0,0,.35); animation-name: be-in-left; }
+.bound-edge.left .be-chev { transform: rotate(180deg); }
+.bound-edge.left:active .be-tab { transform: translateX(3px); }
+@keyframes be-in-left { from { transform: translateX(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bound-edge .be-glow, .bound-edge .be-tab { animation: none; } .desk.bound-peek, .desk.bound-chat-peek { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .ov, .ov-card { transition: none; } }
 
 /* ＋ after the last desk: a new desk, starting from the app list */
@@ -127,3 +163,4 @@
 .new-desk .nd-head span { font-size: 13.5px; color: var(--ink-3); }
 .new-desk .lgroup { margin-bottom: 22px; }
 .new-desk .lgroup h4 { margin: 0 4px 12px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
