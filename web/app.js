@@ -914,6 +914,7 @@
       </div>
       ${window.WizCore.voiceStatus?.card() || ''}
       ${window.WosCancelled ? window.WosCancelled.html() : ''}
+      ${window.WosSelMenu ? window.WosSelMenu.html() : ''}
       <div class="st-group"><h4>Wizard</h4>
         <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · ${esc(location.host)}</small></span></div>
         ${window.WosDevice?.settingsHtml?.() || ''}
@@ -1524,6 +1525,7 @@
   settingsEl.addEventListener('click', e => {
     if (e.target.closest('[data-stclose]')) return closeSheets();
     if (window.WosCancelled?.act(e.target)) return;
+    if (window.WosSelMenu?.act(e.target)) return;
     const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
     if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); return setTimeout(onUnsentChange, 300); }
     const st = e.target.closest('[data-st]')?.dataset.st;
@@ -2562,6 +2564,7 @@
   }
   function backStep(skipHosted) {
     { const t = window.WosTour?.back(); if (t) return t; } // the first-run tour and the Help sheet sit above everything
+    { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
@@ -2791,6 +2794,7 @@
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
     HOME, get idx() { return idx; }, get desks() { return desks; }, get ovLog() { return window.__ovLog || []; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
+    openSearch,
     startVoice, finishVoice, cancelVoice, outbox: OUTBOX, openSettings, unsentAll, renderSettings,
     chats: CHATS, chat: CHATS.KIT, get viewer() { return CHATS.KIT.viewer.state; }, threadAct: CHATS.threadAct, openRowSheet: CHATS.openRowSheet,
     // web/device.js (share, recovery, update banner, hot reload) works through these.
