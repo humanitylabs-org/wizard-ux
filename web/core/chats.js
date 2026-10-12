@@ -583,6 +583,38 @@ window.WizCore.chats = function createChats(H) {
     renderThreadNow(w); if (ap.resolved) LIVE.refresh();
   }
   function renderThreadNow(w) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && w.thread) renderThread(w, el); }
+  /* Selecting text (James, 12 Oct): a working thread re-renders on every new step, which replaced the bubble under
+   * a long-press (Android cancels the press) and wiped any selection a few seconds later. Background updates now
+   * wait while a finger is down on the messages or text is selected in them, and land once the selection clears. */
+  // A selection holds updates for two minutes at most, so a forgotten one never freezes a working thread.
+  const SEL = { down: null, at: 0, x: 0, y: 0, since: 0 }, SEL_MAX = 120000;
+  function selectingIn(el) {
+    if (SEL.down && el.contains(SEL.down) && Date.now() - SEL.at < 15000) return true;
+    const s = window.getSelection?.(); if (!s || s.isCollapsed || !s.rangeCount) return false;
+    if (SEL.since && Date.now() - SEL.since > SEL_MAX) return false;
+    const n = s.anchorNode, e = n && (n.nodeType === 1 ? n : n.parentElement);
+    return !!e && el.contains(e) && !!e.closest('.ch-msgs');
+  }
+  function renderThreadLive(w) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && w.thread) renderLive(w, el); }
+  function renderLive(w, el) {
+    const c = ch(w.id);
+    if (selectingIn(el)) { c.held = true; return; }
+    c.held = false; renderThread(w, el);
+  }
+  function flushHeld() {
+    for (const id of Object.keys(CH)) {
+      const c = CH[id], w = W[id]; if (!c.held || !w?.thread) continue;
+      const el = track.querySelector(`[data-chats="${id}"]`); if (!el) { c.held = false; continue; }
+      if (!selectingIn(el)) { c.held = false; renderThread(w, el); }
+    }
+  }
+  let selT = 0;
+  document.addEventListener('selectionchange', () => {
+    const s = window.getSelection?.(), on = !!s && !s.isCollapsed;
+    if (!on) SEL.since = 0; else if (!SEL.since) SEL.since = Date.now();
+    clearTimeout(selT); selT = setTimeout(flushHeld, 250);
+  });
+  setInterval(() => { if (SEL.since && Date.now() - SEL.since > SEL_MAX) flushHeld(); }, 10000);
   const PAGE = 60;
   function renderThread(w, el, keep) {
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
@@ -667,6 +699,22 @@ window.WizCore.chats = function createChats(H) {
   let lp = null, lpUntil = 0;
   // Long-press / swipe / right-click on rows, and paste-to-attach; bound to each shell's root in bind().
   function bindGestures(root) {
+    // A finger on the messages holds background re-renders (see selectingIn) until it lifts.
+    root.addEventListener('pointerdown', e => { const m = e.target.closest?.('.ch-msgs'); if (m && e.button <= 0) Object.assign(SEL, { down: m, at: Date.now(), x: e.clientX, y: e.clientY }); }, true);
+    const lift = () => { if (!SEL.down) return; SEL.down = null; clearTimeout(selT); selT = setTimeout(flushHeld, 350); };
+    // A quick tap away from the selected words clears the selection, as anywhere on Android (WebView keeps it when
+    // the tap lands on the non-selectable shell around the bubbles).
+    root.addEventListener('pointerup', e => {
+      const quick = SEL.down && Date.now() - SEL.at < 450 && Math.hypot(e.clientX - SEL.x, e.clientY - SEL.y) < 10;
+      const s = window.getSelection?.();
+      if (quick && s && !s.isCollapsed && s.rangeCount && !e.target.closest?.('button, a, textarea, input')) {
+        const r = s.getRangeAt(0), anchor = s.anchorNode && (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement);
+        const hit = [...r.getClientRects()].some(b => e.clientX >= b.left - 4 && e.clientX <= b.right + 4 && e.clientY >= b.top - 4 && e.clientY <= b.bottom + 4);
+        if (!hit && anchor && root.contains(anchor) && anchor.closest('.ch-msgs')) s.removeAllRanges();
+      }
+      lift();
+    }, true);
+    root.addEventListener('pointercancel', () => setTimeout(lift, 900), true);
     root.addEventListener('pointerdown', e => {
       const row = e.target.closest('.ch-list [data-chopen]'); if (!row || e.button > 0) return;
       const wid = idOf(row);
@@ -729,7 +777,7 @@ window.WizCore.chats = function createChats(H) {
     const fresh = c.loadedFor === w.thread && Date.now() - c.at < (s && WORKING_ST.has(s.status) ? 3500 : 15000);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
-    if (fresh && !force) { if (c.loadedFor === w.thread && hk !== c.hk) { c.hk = hk; const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderThread(w, el); } return; }
+    if (fresh && !force) { if (c.loadedFor === w.thread && hk !== c.hk) { c.hk = hk; const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el); } return; }
     c.loading = true;
     try {
       const rows = await LIVE.messages(w.thread);
@@ -764,7 +812,7 @@ window.WizCore.chats = function createChats(H) {
       if (await loadApproval(w, LIVE.session(w.thread))) changed = true;
       const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId].join('|') : '';
       if (hk2 !== c.hk) { c.hk = hk2; changed = true; }
-      if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && W[w.id].thread === w.thread) renderThread(W[w.id], el); }
+      if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && W[w.id].thread === w.thread) renderLive(W[w.id], el); }
     } catch (e) { c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now(); }
     finally { c.loading = false; }
   }
@@ -1054,7 +1102,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';

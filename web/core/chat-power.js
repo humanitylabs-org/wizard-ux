@@ -131,7 +131,7 @@ window.WosChatPower = function chatPower(A) {
   function ensureModels() {
     if (!M || modelsAsked) return;
     modelsAsked = true;
-    M.load().then(() => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) A.renderThreadNow(w); } });
+    M.load().then(() => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } }); // background: waits for a selection
   }
   async function pickModel(o) {
     const sh = sheet; if (!sh || sh.type !== 'model') return;
