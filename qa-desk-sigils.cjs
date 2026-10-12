@@ -16,6 +16,7 @@ const URL_ = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
     const ndesks = () => p.evaluate(() => document.querySelectorAll('.track > .desk').length);
     const s0 = await strip(); console.log(w, s0);
     ok(`${w}: neighbour desks show their app sigil (music note, house)`, await p.evaluate(() => !!document.querySelector('.dock .sg-music') && !!document.querySelector('.dock .sg-home')));
+    ok(`${w}: Home sits level with the other dock sigils (no .home page styles on the dock)`, await p.evaluate(() => { const m = [...document.querySelectorAll('#dock .ddot.sig .dsg')].map(g => { const r = g.getBoundingClientRect(); return r.top + r.height / 2; }); return m.length > 1 && Math.max(...m) - Math.min(...m) < 1 && !document.querySelector('#dock .home'); }));
     ok(`${w}: ＋ is last on the right, on screen, thumb-sized`, await p.evaluate(W => { const r = [...document.querySelectorAll('#dotsR > *')], l = r[r.length - 1], bx = l.getBoundingClientRect(); return l.matches('[data-plus]') && bx.right <= W && bx.width >= 28 && bx.height >= 36; }, w));
     // ＋ → straight onto a new desk at the end, showing app tiles, no sheet
     const n0 = await ndesks();
