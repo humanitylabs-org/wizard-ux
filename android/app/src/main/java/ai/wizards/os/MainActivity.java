@@ -1036,6 +1036,58 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public int insetTop() { return topCss; }
 
+        /** Explicit Screenshot in the in-app recording dock. Captures this WebView only, no permission dialog.
+         * PixelCopy includes composited canvas/WebGL and iframe pixels; View.draw does not reliably do that. */
+        @JavascriptInterface
+        public void captureScreen(String id) {
+            if (id == null || !id.matches("[a-fA-F0-9]{32}")) return;
+            runOnUiThread(() -> {
+                final WebView target = web;
+                final String url = target == null ? "" : target.getUrl();
+                boolean trusted = Origin.isShell(Uri.parse(url == null ? "" : url));
+                if (BuildConfig.DEBUG) {
+                    String home = ai.wizards.os.device.AppState.homeUrl(MainActivity.this);
+                    trusted = trusted || (url != null && url.startsWith(home));
+                }
+                if (!trusted || target == null || target.getWidth() < 1 || target.getHeight() < 1) {
+                    screenResult(target, id, "", "Screen capture unavailable"); return;
+                }
+                // Let the page's capture-only hidden controls paint before sampling the window.
+                target.postOnAnimation(() -> target.postOnAnimation(() -> {
+                    try {
+                        int[] xy = new int[2]; target.getLocationInWindow(xy);
+                        android.graphics.Rect rect = new android.graphics.Rect(xy[0], xy[1], xy[0] + target.getWidth(), xy[1] + target.getHeight());
+                        float scale = Math.min(1f, 1600f / Math.max(rect.width(), rect.height()));
+                        final android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(
+                                Math.max(1, Math.round(rect.width() * scale)), Math.max(1, Math.round(rect.height() * scale)), android.graphics.Bitmap.Config.ARGB_8888);
+                        android.view.PixelCopy.request(getWindow(), rect, bitmap, result -> {
+                            if (result != android.view.PixelCopy.SUCCESS) {
+                                bitmap.recycle(); screenResult(target, id, "", "Screen capture failed · tap Screenshot again"); return;
+                            }
+                            new Thread(() -> {
+                                String data = "", error = "";
+                                try {
+                                    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                                    if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)) throw new java.io.IOException("PNG encoding failed");
+                                    if (out.size() > 8 * 1024 * 1024) throw new java.io.IOException("Screen capture too large");
+                                    data = "data:image/png;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP);
+                                } catch (Exception e) { error = "Screen capture failed"; }
+                                finally { bitmap.recycle(); }
+                                final String image = data, failure = error;
+                                runOnUiThread(() -> { if (web == target && java.util.Objects.equals(url, target.getUrl())) screenResult(target, id, image, failure); });
+                            }, "WizardScreenPNG").start();
+                        }, main);
+                    } catch (Exception e) { screenResult(target, id, "", "Screen capture failed"); }
+                }));
+            });
+        }
+
+        private void screenResult(WebView target, String id, String data, String error) {
+            if (target == null || web != target) return;
+            target.evaluateJavascript("window.__wosScreenResult && window.__wosScreenResult(" + Handoff.quote(id) + ","
+                    + Handoff.quote(data) + "," + Handoff.quote(error) + ")", null);
+        }
+
         /* ---- Share (James, 12 Oct): Android's share sheet for a message, selected words or a file. ---- */
         @JavascriptInterface
         public void shareText(String text, String title) {

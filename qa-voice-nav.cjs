@@ -112,7 +112,8 @@ const deskIdx = p => p.evaluate(() => __wos.idx ?? null);
   ok((await look(p)).voice === 'listen' && !c.shown, 'recording: no Listening / tap-to-send card covering the screen', JSON.stringify(c));
   if (SHOTS) await p.screenshot({ path: `${SHOTS}/voice-recording.png` });
   const a = await arcs(p);
-  ok(a.length === 3 && a.some(x => /Cancel/.test(x)) && a.some(x => /Pause/.test(x)) && a.some(x => /Attach/.test(x)), 'recording: buttons are Cancel, Pause, Attach', JSON.stringify(a));
+  const expectedControls = (await p.$('#arcScreen')) ? 4 : 3;
+  ok(a.length === expectedControls && a.some(x => /Cancel/.test(x)) && a.some(x => /Pause/.test(x)) && a.some(x => /Attach/.test(x)), 'recording: buttons are Cancel, Pause, optional Screenshot, Attach', JSON.stringify(a));
   ok(!(await p.$('#arcRoute')), 'the Auto/route button is gone');
 
   /* 3. Back while recording navigates instead of discarding */

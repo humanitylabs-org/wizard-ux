@@ -647,6 +647,34 @@ body {
 .coach p { bottom: 160px; }
 .coach-go { bottom: 330px; }
 
+/* Dock morph: four buttons flank the unchanged orb; its gesture hit zone stays untouched.
+ * All chrome lives inside the existing 66px bar, including timer / first-use tip. */
+.device:not(.orb-corner) .voice .arc {
+  bottom: calc(var(--safe-b) + 38px); width: 44px; height: 44px;
+  margin: 0 0 -22px -22px; backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: none; background: rgba(25, 15, 49, .9); transform: scale(.6);
+}
+.device:not(.orb-corner) .voice.on .arc-left { transform: translate(-124px, 0) scale(1); }
+.device:not(.orb-corner) .voice.on .arc-mid { transform: translate(-66px, 0) scale(1); }
+.device:not(.orb-corner) .voice.on .arc-screen { transform: translate(66px, 0) scale(1); }
+.device:not(.orb-corner) .voice.on .arc-right { transform: translate(124px, 0) scale(1); }
+.device:not(.orb-corner)[data-voice="paused"] .voice .arc-mid { background: rgba(255,190,85,.18); border-color: rgba(255,190,85,.5); color: var(--amber); }
+.device:not(.orb-corner) .voice .arc small { display: none; }
+.device:is([data-voice="listen"], [data-voice="paused"]) .desk-dots { opacity: 0; pointer-events: none; }
+.device:not(.orb-corner) .timer { top: 44px; min-width: 0; font-size: 10px; line-height: 12px; padding: 0; border: 0; background: none; }
+.device:not(.orb-corner) .timer::before { width: 4px; height: 4px; margin-right: 4px; }
+.device:not(.orb-corner):is([data-voice="listen"], [data-voice="paused"]) .scrub { pointer-events: none; opacity: 0; }
+.device:not(.orb-corner) .voice.on .transcript.brief.tip { bottom: calc(var(--safe-b) + 2px); padding: 0; border: 0; background: none; box-shadow: none; backdrop-filter: none; }
+.device:not(.orb-corner) .voice.on .transcript.brief.tip .tx-route { font-size: 10px; }
+.device:not(.orb-corner) .voice.on .transcript.brief.tip .tx-route b { display: none; }
+.device:not(.orb-corner):has(.voice.on .transcript.brief.tip) .timer { opacity: 0; }
+/* Full-screen Chats keeps its established corner orb. The extra chip joins that fan. */
+.device.orb-corner .arc-screen { display: none; }
+.arc-screen.busy svg { opacity: .4; }
+.arc:disabled { pointer-events: none !important; }
+/* Capture app pixels without recorder controls or transient shell notices in the picture. */
+.device.capturing-screen :is(#voice, #dock, #toast, #deskLabel) { visibility: hidden !important; }
+
 /* ---------- Mizel.ai recordings: shade source + strip on the Mizel desk ---------- */
 .note .ic.rec { background: rgba(63, 224, 255, .14); color: #3fe0ff; font-size: 18px; box-shadow: inset 0 0 0 1px rgba(63, 224, 255, .35); }
 .note .tp .src.mizel { color: #3fe0ff; }

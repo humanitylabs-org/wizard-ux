@@ -1974,16 +1974,52 @@
     $('#attachCount').textContent = n ? String(n) : '';
     $('#attachLabel').textContent = V.files.some(f => f.uploading) ? 'Uploading' : n ? (n === 1 ? '1 file' : `${n} files`) : 'Attach';
   }
+  const sameTake = files => V.files === files && (V.state === 'listen' || V.state === 'paused');
+  async function uploadVoiceFile(file, files, f) {
+    try {
+      const result = await CHATS.uploadFile(file);
+      if (!sameTake(files) || !files.includes(f)) return;
+      Object.assign(f, result, { uploading: false });
+    } catch (e) {
+      const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
+      if (sameTake(files)) toast('!', e.user ? e.message : 'Upload failed · not attached', 3200);
+    }
+    if (sameTake(files)) renderVoiceFiles();
+  }
   voicePicker.addEventListener('change', async () => {
-    const list = [...voicePicker.files]; voicePicker.value = '';
+    const list = [...voicePicker.files], files = V.files; voicePicker.value = '';
     for (const file of list) {
-      if (V.state === 'idle') break;
-      if (V.files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); break; }
+      if (!sameTake(files)) break;
+      if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); break; }
       const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true };
-      V.files.push(f); renderVoiceFiles();
-      try { Object.assign(f, await CHATS.uploadFile(file), { uploading: false }); }
-      catch (e) { V.files = V.files.filter(x => x !== f); toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
-      renderVoiceFiles();
+      files.push(f); renderVoiceFiles();
+      await uploadVoiceFile(file, files, f);
+    }
+  });
+  $('#arcScreen').addEventListener('click', async () => {
+    if (!sameTake(V.files) || $('#arcScreen').disabled) return;
+    const files = V.files;
+    if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); return; }
+    // Reserve before asynchronous capture so an immediate Send cannot omit the screenshot.
+    const f = { name: 'Screenshot', mime: 'image/png', uploading: true };
+    files.push(f); renderVoiceFiles();
+    const screen = $('#arcScreen'); screen.disabled = true; screen.classList.add('busy');
+    device.classList.add('capturing-screen');
+    // Capture may fail or stall. Restore controls promptly so Cancel/navigation always remain available.
+    const restore = setTimeout(() => device.classList.remove('capturing-screen'), 500);
+    try {
+      // Native PixelCopy runs after two painted frames; the browser uses its own explicit chooser.
+      const file = await window.WosScreenCapture.capture();
+      device.classList.remove('capturing-screen');
+      if (!sameTake(files) || !files.includes(f)) return;
+      Object.assign(f, { name: file.name, mime: file.type, bytes: file.size });
+      await uploadVoiceFile(file, files, f);
+      if (sameTake(files) && f.id) toast('▣', 'Screenshot attached', 1800);
+    } catch (e) {
+      const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
+      if (sameTake(files)) { renderVoiceFiles(); toast('!', e.message || 'Screen capture failed · not attached', 3200); }
+    } finally {
+      clearTimeout(restore); device.classList.remove('capturing-screen'); screen.disabled = false; screen.classList.remove('busy');
     }
   });
   // Files that finished uploading, in the shape the outbox sends as wizard_file_ids.
