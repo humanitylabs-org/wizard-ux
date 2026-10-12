@@ -26,37 +26,76 @@
   /* ---- storage (IndexedDB; falls back to memory+localStorage text if IDB is unavailable) ---- */
   function open() {
     return new Promise((res, rej) => {
-      const r = indexedDB.open(DB, 1);
-      r.onupgradeneeded = () => r.result.createObjectStore(STORE, { keyPath: 'id' });
-      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+      let settled = false;
+      const fail = e => { if (!settled) { settled = true; clearTimeout(deadline); rej(e || new Error('Recording storage unavailable')); } };
+      const deadline = setTimeout(() => fail(new Error('Recording storage timed out')), 2000);
+      let r;
+      try { r = indexedDB.open(DB, 1); } catch (e) { fail(e); return; }
+      r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE, { keyPath: 'id' }); };
+      r.onblocked = () => fail(new Error('Recording storage blocked by another window'));
+      r.onsuccess = () => {
+        if (settled) { r.result.close(); return; }
+        settled = true; clearTimeout(deadline);
+        r.result.onversionchange = () => { r.result.close(); db = null; };
+        res(r.result);
+      };
+      r.onerror = () => fail(r.error);
     });
   }
   function tx(mode, fn) {
-    if (!db) return Promise.resolve();
-    return new Promise((res, rej) => { const t = db.transaction(STORE, mode); const out = fn(t.objectStore(STORE)); t.oncomplete = () => res(out?.result); t.onerror = () => rej(t.error); });
+    if (!db) return Promise.reject(new Error('Recording storage unavailable'));
+    return new Promise((res, rej) => {
+      const t = db.transaction(STORE, mode);
+      const deadline = setTimeout(() => { try { t.abort(); } catch (e) {} rej(new Error('Recording storage timed out')); }, 3000);
+      let out;
+      t.oncomplete = () => { clearTimeout(deadline); res(out?.result); };
+      t.onerror = t.onabort = () => { clearTimeout(deadline); rej(t.error || new Error('Recording storage transaction aborted')); };
+      try { out = fn(t.objectStore(STORE)); } catch (e) { clearTimeout(deadline); try { t.abort(); } catch (_) {} rej(e); }
+    });
   }
   const LS = 'wos.outbox.fallback';
-  function lsSave() { if (db) return; try { localStorage.setItem(LS, JSON.stringify([...items.values()].map(({ audio, ...x }) => x))); } catch (e) {} }
-  async function put(it) { items.set(it.id, it); lsSave(); try { await tx('readwrite', s => s.put(it)); } catch (e) { console.warn('outbox put', e); } emit(); }
-  async function del(id) { items.delete(id); lsSave(); try { await tx('readwrite', s => s.delete(id)); } catch (e) {} emit(); }
+  // Never write a fake recoverable voice item without its bytes to the text-only fallback.
+  function lsSave() { if (db) return; try { localStorage.setItem(LS, JSON.stringify([...items.values()].filter(x => !x.audio))); } catch (e) {} }
+  async function put(it) {
+    items.set(it.id, it);
+    try {
+      const saved = { ...it, durable: true, storageError: '' };
+      await tx('readwrite', s => s.put(saved));
+      it.durable = true; it.storageError = '';
+    } catch (e) {
+      it.durable = false;
+      if (it.audio) {
+        it.storageError = 'Recording not saved on this device. Keep this window open; download audio before reloading.';
+        if (it.kind !== 'dictation') { it.state = 'failed'; it.error = it.storageError; it.nextAt = 0; }
+      }
+      console.warn('outbox put', e);
+    }
+    lsSave(); emit(); return it.durable;
+  }
+  async function del(id) {
+    const it = items.get(id);
+    try { await tx('readwrite', s => s.delete(id)); }
+    catch (e) {
+      if (it?.durable) { it.error = 'Could not remove saved recording · retry discard'; emit(); return false; }
+    }
+    items.delete(id); lsSave(); emit(); return true;
+  }
   // Unsent messages carried over from the retired private.wizard001.com (core/carry-in.js): stored by id
   // (never twice), then the app is told it can drop its copy. Voice audio comes back as a Blob.
   async function adoptCarried() {
     const C = window.WosCarry; if (!C || !Array.isArray(C.outbox)) return;
-    window.WosCarry = null;
+    let saved = true;
     for (const x of C.outbox) {
-      if (items.has(x.id)) continue;
+      if (items.has(x.id)) { if (!items.get(x.id).durable) saved = false; continue; }
       const it = { ...x }; delete it.audio64;
       if (x.audio64) {
         try { const bin = atob(x.audio64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); it.audio = new Blob([u8], { type: x.audioType || 'audio/webm' }); }
-        catch (e) { it.audio = null; }
+        catch (e) { saved = false; continue; }
       }
       if (it.state === 'sending') it.state = 'waiting';
-      items.set(it.id, it);
-      try { await tx('readwrite', s => s.put(it)); } catch (e) { console.warn('outbox carry', e); }
+      if (!await put(it)) saved = false;
     }
-    lsSave();
-    try { C.done(); } catch (e) {}
+    if (saved) { window.WosCarry = null; try { C.done(); } catch (e) {} }
   }
   function load() {
     if (ready) return ready;
@@ -64,7 +103,7 @@
       try {
         db = await open();
         const all = await tx('readonly', s => s.getAll()) || [];
-        for (const it of all) { if (it.state === 'sending') it.state = 'waiting'; items.set(it.id, it); }
+        for (const it of all) { if (it.state === 'sending') it.state = 'waiting'; if (it.kind === 'dictation' && it.state === 'transcribing') it.state = 'held'; it.durable = true; it.storageError = ''; items.set(it.id, it); }
       } catch (e) {
         db = null;
         try { for (const it of JSON.parse(localStorage.getItem(LS) || '[]')) items.set(it.id, it); } catch (x) {}
@@ -108,13 +147,16 @@
     return { id: String(f.id), name: String(f.filename || name), mime: String(f.mime || it.audioType || ''), bytes: Number(f.bytes) || it.audio.size };
   }
 
+  async function checkpoint(it) {
+    if (!await put(it) && it.audio) throw new HttpError(409, it.storageError);
+  }
   async function deliver(it) {
     if (!it.model || !it.provider) {
       if (it.body) throw new HttpError(409, 'Older message has no confirmed model · choose a model and resend');
       const M = window.WosModels;
       if (!M) throw new HttpError(409, 'Model selector unavailable · reload Wizard');
       Object.assign(it, await M.resolveRoute(M.snapshot(it.kind === 'reply' ? it.sessionId : '', it.model ? { model: it.model, provider: it.provider } : null)));
-      await put(it);
+      await checkpoint(it);
     }
     // A durable body from an earlier client cannot be silently admitted with no lock.
     if (it.body) {
@@ -127,11 +169,11 @@
     // composeVoiceTurnText). A recording with no speech still sends when it carries typed words.
     if (!it.text && it.audio) {
       const text = String(await transcribe(it) || '').trim(), typed = String(it.typed || '').trim();
-      if (!text && !typed) { it.state = 'empty'; it.error = 'No speech in that recording'; await put(it); return; }
-      it.text = [typed, text].filter(Boolean).join('\n\n').slice(0, 64000); await put(it);
+      if (!text && !typed) { it.state = 'empty'; it.error = 'No speech in that recording'; await checkpoint(it); return; }
+      it.text = [typed, text].filter(Boolean).join('\n\n').slice(0, 64000); await checkpoint(it);
     }
     // 2. The recording rides along as a voice note, so the original audio is on the server too.
-    if (it.audio && !it.audioFile) { it.audioFile = await uploadAudio(it); it.files = [...(it.files || []), it.audioFile]; await put(it); }
+    if (it.audio && !it.audioFile) { it.audioFile = await uploadAudio(it); it.files = [...(it.files || []), it.audioFile]; await checkpoint(it); }
     const fileIds = (it.files || []).map(f => f.id).filter(Boolean).slice(0, 8);
     const input = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
     // 3. Steer a live run: only on the very first try. Steers have no idempotency key, so a retry
@@ -153,7 +195,7 @@
       if (it.model) { sb.model = it.model; if (it.provider) sb.provider = it.provider; } // the picker's route for a new chat
       try { await call('/wizard/hermes/api/sessions', { method: 'POST', headers: J, body: JSON.stringify(sb) }); }
       catch (e) { if (e.status !== 409) throw e; }
-      it.sessionReady = true; await put(it);
+      it.sessionReady = true; await checkpoint(it);
     }
     // 5. Admit the run. Same key + same bytes on every try → Wizard replays instead of duplicating.
     if (!it.body) {
@@ -162,7 +204,7 @@
       if (fileIds.length) body.wizard_file_ids = fileIds;
       if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model and resend');
       Object.assign(body, { model: it.model, provider: it.provider, require_model_lock: true });
-      it.body = JSON.stringify(body); await put(it);
+      it.body = JSON.stringify(body); await checkpoint(it);
     }
     const r = await call('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': it.id }, body: it.body });
     const run = await r.json().catch(() => ({}));
@@ -177,8 +219,7 @@
   const sentHooks = new Set();
 
   async function attempt(it) {
-    it.state = 'sending'; await put(it);
-    try { await deliver(it); }
+    try { it.state = 'sending'; await checkpoint(it); await deliver(it); }
     catch (e) {
       it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.lastAttemptAt = now();
       if (transient(e) && it.attempts < AUTO_TRIES) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[it.attempts - 1]; }
@@ -191,12 +232,12 @@
     try {
       await load();
       for (;;) {
-        const due = [...items.values()].filter(it => (it.state === 'queued' || it.state === 'waiting') && (it.nextAt || 0) <= now()).sort((a, b) => a.createdAt - b.createdAt)[0];
+        const due = [...items.values()].filter(it => it.kind !== 'dictation' && (it.state === 'queued' || it.state === 'waiting') && (it.nextAt || 0) <= now()).sort((a, b) => a.createdAt - b.createdAt)[0];
         if (!due) break;
         await attempt(due);
       }
       // Sent items stay a little while so the chat can swap the pending bubble for the real turn.
-      for (const it of [...items.values()]) if ((it.state === 'sent' && now() - it.sentAt > 10 * 60e3) || (it.state === 'empty' && now() - it.createdAt > 60e3)) await del(it.id);
+      for (const it of [...items.values()]) if ((it.state === 'sent' && now() - it.sentAt > 10 * 60e3) || (it.state === 'empty' && !it.audio && now() - it.createdAt > 60e3)) await del(it.id);
     } finally { pumping = false; schedule(); }
   }
   function schedule(ms) {
@@ -211,7 +252,28 @@
   const newSessionId = () => `wizard_${now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
 
   const api = {
-    /* kind 'new' (new thread) or 'reply' (existing thread). Persisted before this resolves. */
+    // Dictation shares this store and transcriber, but NEVER enters message delivery.
+    async retainDictation(audio) {
+      await load();
+      const it = { id: 'wos-' + crypto.randomUUID(), kind: 'dictation', state: 'held', createdAt: now(), audio, audioType: audio.type || 'audio/webm', text: '', error: '' };
+      await put(it); return it;
+    },
+    async transcribeDictation(id) {
+      await load();
+      const it = items.get(id);
+      if (!it || it.kind !== 'dictation' || it.state === 'transcribing') return null;
+      it.state = 'transcribing'; it.error = ''; emit();
+      // Even when storage is unavailable, the live Blob remains downloadable.
+      if (!db) { try { db = await open(); } catch (e) {} }
+      await put(it);
+      try {
+        it.text = String(await transcribe(it) || '').trim();
+        if (!it.text) throw new Error('No speech detected · recording kept');
+      } catch (e) { it.error = String(e.message || e); }
+      it.state = 'held'; await put(it); return it;
+    },
+    recordings() { return [...items.values()].filter(it => it.audio && (it.kind === 'dictation' || it.storageError || it.state === 'empty')); },
+    /* kind 'new' (new thread) or 'reply' (existing thread). Inspect durable/storageError on return. */
     async enqueue(o) {
       const M = window.WosModels;
       const snapshot = M?.snapshot(o.kind === 'reply' ? o.sessionId : '', o.model ? { model: o.model, provider: o.provider } : null);
@@ -230,22 +292,31 @@
       await put(it); pump();
       return it;
     },
-    retry(id) { const it = items.get(id); if (!it || it.state === 'sent' || it.state === 'sending') return; Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); put(it).then(pump); },
-    retryAll() { for (const it of items.values()) if (it.state === 'failed' || it.state === 'waiting') Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); Promise.all([...items.values()].map(put)).then(pump); },
-    remove: del,
+    async retry(id) {
+      const it = items.get(id); if (!it || it.kind === 'dictation' || it.state === 'sent' || it.state === 'sending') return;
+      if (!db) { try { db = await open(); } catch (e) {} }
+      Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); await put(it); pump();
+    },
+    async retryAll() {
+      const retry = [...items.values()].filter(it => it.kind !== 'dictation' && (it.state === 'failed' || it.state === 'waiting'));
+      for (const it of retry) await api.retry(it.id);
+    },
     /* Not yet accepted by Wizard (what the Unsent list shows). */
-    unsent() { return [...items.values()].filter(it => it.state !== 'sent' && it.state !== 'empty').sort((a, b) => a.createdAt - b.createdAt); },
+    unsent() { return [...items.values()].filter(it => it.kind !== 'dictation' && it.state !== 'sent' && (it.state !== 'empty' || it.audio)).sort((a, b) => a.createdAt - b.createdAt); },
     /* What a chat window shows as pending bubbles: unsent, plus sent-but-not-yet-in-the-thread. */
-    forThread(sessionId, wid) { return [...items.values()].filter(it => it.state !== 'empty' && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
+    forThread(sessionId, wid) { return [...items.values()].filter(it => it.kind !== 'dictation' && it.state !== 'empty' && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     get(id) { return items.get(id) || null; },
     landed(id) { const it = items.get(id); if (it && it.state === 'sent') del(id); },
     // Dismiss a failed item for good (the Errors section's Dismiss on an unsent voice note, after a confirm).
-    remove(id) { const it = items.get(id); if (!it || it.state === 'sending') return false; del(id); return true; },
+    remove(id) { const it = items.get(id); if (!it || it.state === 'sending' || it.state === 'transcribing') return false; del(id); return true; },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     onSent(fn) { sentHooks.add(fn); return () => sentHooks.delete(fn); },
     pump, load,
     _items: items, AUTO_TRIES, BACKOFF,
   };
+  addEventListener('beforeunload', e => {
+    if ([...items.values()].some(it => it.audio && !it.durable)) { e.preventDefault(); e.returnValue = ''; }
+  });
   addEventListener('online', () => api.retryAll());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { for (const it of items.values()) if (it.state === 'waiting') it.nextAt = 0; pump(); } });
   window.WosOutbox = api;

@@ -374,8 +374,10 @@
   $('#clock').addEventListener('click', () => { const i = ws.findIndex(d => !d.wins.length); goWs(i >= 0 ? i : cur); });
   $('#keysBtn').addEventListener('click', () => toggleKeys());
   $('#micBtn').addEventListener('click', () => talk());
-  // No transcriber on this Wizard: the mic button hides (the outbox still keeps typed messages safe).
-  window.WizConfig?.ready.then(() => { $('#micBtn').hidden = !window.WizConfig.has('voice'); });
+  // Capability changes include background native Parakeet preparation, not just bootstrap.
+  const paintVoiceCapability = () => { $('#micBtn').hidden = !window.WizConfig.has('voice'); };
+  window.WizConfig?.ready.then(paintVoiceCapability);
+  window.addEventListener('wizard:config', paintVoiceCapability);
 
   /* ---------------- home (empty workspace) ---------------- */
   function homeHtml(i) {
@@ -637,7 +639,7 @@
     onLevel: l => { $('#voiceLvl').style.width = Math.round(l * 100) + '%'; },
   });
   async function talk(action = 'toggle') {
-    if (VOICE.state === 'think') return 'busy';
+    if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (action === 'cancel') { if (VOICE.state !== 'idle') { vReply = null; VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
     if (VOICE.state === 'idle') {
@@ -673,7 +675,7 @@
   // Composer mic: tap to record a reply to this thread, tap again (or Right ⌘) to send it there. The thread is
   // fixed when recording starts, so switching threads mid-take can't send it somewhere else.
   async function recordReply(wid, sid) {
-    if (VOICE.state === 'think') return 'busy';
+    if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (VOICE.state === 'listen') { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
     if (!sid) return 'busy';
     vMode = 'talk'; vTarget = wid; vReply = { wid, sid };
@@ -694,8 +696,46 @@
     el.setRangeText(pre + text, a, b, 'end'); el.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   }
+  // Recovery is a view of the existing outbox, not a second recorder/store/native pipeline.
+  const recovery = document.createElement('section');
+  recovery.id = 'recordingRecovery'; recovery.className = 'recording-recovery';
+  recovery.setAttribute('aria-label', 'Retained recordings'); recovery.hidden = true;
+  document.body.appendChild(recovery);
+  function paintRecordings() {
+    const takes = window.WosOutbox?.recordings() || [];
+    recovery.hidden = !takes.length;
+    recovery.innerHTML = takes.map(it => `<article>
+      <strong>${it.kind === 'dictation' ? 'Dictation' : 'Voice recording'} kept</strong>
+      <p role="status">${esc(it.storageError || (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
+      <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || (it.text ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
+      ${it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
+      <button data-record-retry="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Retry</button>
+      <button data-record-download="${esc(it.id)}">Download audio</button>
+      <button data-record-discard="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Discard</button>
+    </article>`).join('');
+  }
+  recovery.addEventListener('click', async e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const O = window.WosOutbox;
+    const id = b.dataset.recordRetry || b.dataset.recordDownload || b.dataset.recordCopy || b.dataset.recordDiscard;
+    const it = O.get(id); if (!it) return;
+    if (b.dataset.recordRetry) {
+      if (it.kind === 'dictation') await O.transcribeDictation(id); else O.retry(id);
+    } else if (b.dataset.recordDownload) {
+      const url = URL.createObjectURL(it.audio), a = document.createElement('a');
+      const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /wav/.test(it.audioType) ? 'wav' : 'webm';
+      a.href = url; a.download = `wizard-recording-${id}.${ext}`; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } else if (b.dataset.recordCopy) {
+      try { await navigator.clipboard.writeText(it.text); toast('📋', 'Transcript copied · recording kept until you discard it', 2600); }
+      catch (e) { toast('!', 'Select and copy the transcript above', 2600); }
+    } else if (confirm('Discard this retained recording and transcript?')) O.remove(id);
+  });
+  window.WosOutbox?.onChange(paintRecordings);
+  window.WosOutbox?.load().then(paintRecordings);
+  let dictationFinishing = false;
   async function dictate(action = 'toggle') {
-    if (VOICE.state === 'think') return 'busy';
+    if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (VOICE.state !== 'idle' && vMode === 'talk') return 'busy';
     if (action === 'cancel') { if (VOICE.state !== 'idle') { VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
     if (VOICE.state === 'idle') {
@@ -705,15 +745,24 @@
       try { await VOICE.start(); } catch (e) { vMode = 'talk'; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
       return 'dictating';
     }
-    const r = await VOICE.finish({ transcribe: true });
-    vMode = 'talk';
-    const text = (r && r.text || '').trim();
-    if (!text) { toast('🎙', r?.error ? 'Transcription failed: ' + r.error : 'Didn’t catch that', 2200); return 'none'; }
-    window.__wuxLastDictation = text;
-    if (insertAt(dTarget, text)) { dTarget = null; return 'inserted'; }
-    dTarget = null;
-    try { await navigator.clipboard.writeText(text); toast('📋', `Copied: “${clip(text, 60)}” · ⌘V to paste`, 2600); return 'copied'; }
-    catch (e) { toast('✎', clip(text, 120), 6000); return 'shown'; }
+    dictationFinishing = true;
+    const target = dTarget; dTarget = null;
+    try {
+      const r = await VOICE.finish({ transcribe: false });
+      if (!r?.blob) { toast('🎙', r?.error || 'Didn’t catch that', 2200); return 'none'; }
+      const O = window.WosOutbox;
+      const take = await O.retainDictation(r.blob);
+      const it = await O.transcribeDictation(take.id);
+      const text = it?.text || '';
+      if (!text) { toast('🎙', 'Transcription failed · recording kept below', 2600); return 'retained'; }
+      window.__wuxLastDictation = text;
+      if (insertAt(target, text)) { if (it.durable) O.remove(it.id); return 'inserted'; }
+      try {
+        await navigator.clipboard.writeText(text);
+        if (it.durable) O.remove(it.id);
+        toast('📋', `Copied: “${clip(text, 60)}” · ⌘V to paste`, 2600); return 'copied';
+      } catch (e) { toast('✎', 'Transcript and recording kept below', 2600); return 'retained'; }
+    } finally { vMode = 'talk'; dictationFinishing = false; }
   }
 
   // Right ⌘ / Right ⌥ as tap keys: press and release alone, quickly (a chord like ⌘C never counts).
