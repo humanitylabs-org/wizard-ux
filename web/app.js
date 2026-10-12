@@ -3046,7 +3046,9 @@
     const sec = track.querySelector(`.win[data-win="${desks[idx].focus}"] [data-sec="${k}"]`);
     if (!sec) { if (tries > 0) setTimeout(() => showSection(k, tries - 1), 100); return; }
     if (!sec.classList.contains('open')) sec.querySelector('[data-sectoggle]')?.click();
-    track.querySelector(`.win[data-win="${desks[idx].focus}"] [data-sec="${k}"]`)?.scrollIntoView({ block: 'start' });
+    const target = track.querySelector(`.win[data-win="${desks[idx].focus}"] [data-sec="${k}"]`);
+    const scroller = target?.closest('.ch-scroll');
+    if (scroller) scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
   }
   window.WizCore.deeplink?.handle({
     // ?session= takes exactly the path the Android app's ACTION_THREAD intent takes.
