@@ -412,17 +412,34 @@
    * Tap a desk to go there · ✕ closes it · hold and drag to reorder (Home stays first) · pinch two desks
    * together to merge them into one desk · spread a desk that holds several windows to split them apart. */
   let ovEl = null, OV = null, ovTapBlock = 0;
+  // Overview: the same app sigil and colour as the dock, large enough to recognize before reading.
+  function ovMark(a) {
+    const S = window.WizSigil, s = S.of(a.sigil || a);
+    return { color: a.sgc || s.color, glyph: a.sgh || S.html(a.sigil || a) };
+  }
   function ovCard(i) {
-    const d = desks[i], wins = d.wins.map(id => W[id]).filter(Boolean), rv = isReviewDesk(i);
-    const body = d.home ? `<span class="ov-home"><b>${esc(window.WizConfig.hm())}</b><small>Home</small></span>`
-      : wins.map(w => { const a = winApp(w); return `<span class="ov-win${w.from?.sid ? ' rv' : ''}">${ico('i', '', a)}<em>${esc(clip(winTitle(w), 46))}</em></span>`; }).join('');
-    return `<div class="ov-card${i === idx ? ' here' : ''}${d.home ? ' home' : ''}${rv ? ' review' : ''}" data-ov="${d.id}" role="button" aria-label="${esc(deskName(i))}">
-      <div class="ov-top"><b>${esc(clip(rv ? 'Review · ' + deskName(i) : deskName(i), 26))}</b>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(deskName(i))}">✕</button>`}</div>
-      <div class="ov-body ov-n${Math.min(wins.length, 4)}">${body}</div></div>`;
+    const d = desks[i], wins = d.wins.map(id => W[id]).filter(Boolean), rv = isReviewDesk(i), here = i === idx;
+    const lead = W[d.focus] || wins[0], primary = lead ? ovMark(winApp(lead)) : { color: '#C9BEFF' };
+    const second = wins.find(w => w !== lead), c2 = second ? ovMark(winApp(second)).color : primary.color;
+    const name = d.home ? 'Home' : !wins.length ? 'New desk' : deskName(i);
+    let body;
+    if (d.home) body = `<span class="ov-symbol" style="--c:${primary.color}">${window.WizSigil.named('home')}</span>`;
+    else if (!wins.length) body = '<span class="ov-empty-symbol" aria-hidden="true">＋</span>';
+    else body = wins.map(w => {
+      const a = winApp(w), m = ovMark(a), same = wins.filter(x => winApp(x).id === a.id).length > 1;
+      const label = same ? winTitle(w) : a.name;
+      return `<span class="ov-win${w.from?.sid ? ' rv' : ''}"><span class="ov-symbol" style="--c:${m.color}">${m.glyph}</span>${wins.length > 1 ? `<em>${esc(label)}</em>` : ''}</span>`;
+    }).join('');
+    const cap = wins.length === 1 && winTitle(wins[0]) !== winApp(wins[0]).name ? winTitle(wins[0]) : '';
+    return `<div class="ov-card${here ? ' here' : ''}${d.home ? ' home' : ''}${rv ? ' review' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} style="--ov-c:${primary.color};--ov-c2:${c2}" aria-label="${esc(name)}${here ? ', current desk' : ''}${rv ? ', review' : ''}">
+      <div class="ov-chrome"><span class="ov-state">${here ? '<span class="ov-here">Here</span>' : ''}${rv ? '<span class="ov-review">Review</span>' : ''}</span>${d.home ? '' : `<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>
+      <div class="ov-body ov-n${Math.min(wins.length, 4)}">${body}</div>
+      <div class="ov-top"><b>${esc(name)}</b>${cap ? `<small>${esc(cap)}</small>` : ''}</div></div>`;
   }
   function renderOverview() {
-    ovEl.innerHTML = `<div class="ov-head"><b>Desks</b><span>${desks.length - 1} open</span><button class="ov-done" data-ovdone>Done</button></div>
-      <div class="ov-grid">${desks.map((_, i) => ovCard(i)).join('')}<button class="ov-card ov-add" data-ovadd><span>＋</span><small>Open an app</small></button></div>
+    const open = desks.filter(d => !d.home && d.wins.length).length;
+    ovEl.innerHTML = `<div class="ov-head"><b>Desks</b><span>${open} open</span><button class="ov-done" data-ovdone>Done</button></div>
+      <div class="ov-grid">${desks.map((_, i) => ovCard(i)).join('')}<button class="ov-card ov-add" data-ovadd aria-label="New desk: pick an app"><span aria-hidden="true">＋</span><b>New desk</b></button></div>
       <p class="ov-hint">Hold and drag to reorder · pinch two desks together to merge · spread one apart to split</p>`;
   }
   function openOverview() {
@@ -438,11 +455,15 @@
   function ovLog(s) { window.__ovLog = (window.__ovLog || []).concat(s).slice(-30); }
   function bindOverview(el) {
     el.addEventListener('contextmenu', e => e.preventDefault());
+    el.addEventListener('keydown', e => {
+      const c = e.target.closest('[data-ov]');
+      if (c && e.target === c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); c.click(); }
+    });
     el.addEventListener('click', e => {
       if (Date.now() < ovTapBlock) return;
       if (e.target.closest('[data-ovdone]')) return closeOverview();
       const x = e.target.closest('[data-ovx]'); if (x) { closeDesk(posOf(x.dataset.ovx)); if (desks.length) renderOverview(); return; }
-      if (e.target.closest('[data-ovadd]')) { closeOverview(); return openSheet('launcher'); }
+      if (e.target.closest('[data-ovadd]')) { closeOverview(); return newDesk(); }
       const c = e.target.closest('[data-ov]'); if (c) { const i = posOf(c.dataset.ov); closeOverview(); if (i >= 0) goDesk(i); return; }
       if (e.target === el || e.target.classList.contains('ov-grid')) closeOverview();
     });
