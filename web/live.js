@@ -157,10 +157,18 @@
   /* Every thread Wizard lists (same endpoint, same paging). A full walk runs at boot and
    * every few minutes; in between only the recent pages are re-read and merged over it,
    * so the Chats list always holds the whole history, including the archive. */
+  let backgroundPollTimer = null, backgroundPollUntil = 0;
+  function scheduleBackgroundPoll() {
+    if (backgroundPollTimer || document.hidden) return;
+    if (!backgroundPollUntil) backgroundPollUntil = Date.now() + 60000;
+    if (Date.now() > backgroundPollUntil) return;
+    backgroundPollTimer = setTimeout(() => { backgroundPollTimer = null; if (!document.hidden) L.refresh(); }, 1000);
+  }
   async function withBackgroundResults(out, complete) {
     try {
       const p = await (await req('/wizard/background-results')).json();
-      if (p.scanning) setTimeout(() => L.refresh(), 700);
+      if (p.scanning) scheduleBackgroundPoll();
+      else { if (backgroundPollTimer) clearTimeout(backgroundPollTimer); backgroundPollTimer = null; backgroundPollUntil = 0; }
       const byId = new Map(out.map(row => [row.id, row]));
       // A finished result can outlive the normal history window. Add its original thread once; this neither
       // starts work nor replaces a current reply/gate with a manufactured message.

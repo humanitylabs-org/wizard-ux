@@ -365,7 +365,7 @@ window.WosChatPower = function chatPower(A) {
             LIVE.refresh?.(); return;
           }
           const s = LIVE.session(sid); if (s) s.backgroundResult = null;
-          toast('↻', 'Continuing from the saved result', 1600);
+          toast('↻', outcome.status === 'completed' ? 'Already continued from the saved result' : 'Continuing from the saved result', 1600);
           LIVE.refresh?.();
         } catch (e) { toast('!', 'Couldn’t reach Wizard · tap Continue again', 2600); }
         finally { c.continuing = ''; rerenderAll(); }
