@@ -58,7 +58,18 @@ async function req(url, opts = {}) {
   if (!r.ok) throw new Error(body.message || body.error || `HTTP ${r.status}`);
   return body;
 }
-const post = (url, data, method = 'POST') => req(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data || {}) });
+// Same-origin owner session: CSRF is session-bound; the privileged manager bearer stays on the Service.
+let ownerSession;
+async function post(url, data, method = 'POST', key) {
+  if (!ownerSession) ownerSession = await req('/wizard/v1/app-lifecycle/session');
+  return req(url, { method, headers: { 'Content-Type': 'application/json',
+    'X-Wizard-CSRF': ownerSession.csrf, 'Idempotency-Key': key || crypto.randomUUID() }, body: JSON.stringify(data || {}) });
+}
+async function refreshLauncher() {
+  const d = await req('/wizard/v1/apps');
+  if (window.WizCore?.apps?.refresh) await window.WizCore.apps.refresh();
+  window.dispatchEvent(new CustomEvent('wizard:apps-changed', { detail: d }));
+}
 
 // ---- data --------------------------------------------------------------------------------------------------------
 const cache = { apps: null, at: 0, index: null, indexAt: 0 };
@@ -253,6 +264,7 @@ function renderCard(el, app, ctx = {}) {
   let busy = '';
   let msg = '';
   let ro = false;
+  const operationKeys = new Map();
   const paint = () => {
     const st = a.installed ? STATUS[a.status] || `${a.status.charAt(0).toUpperCase()}${a.status.slice(1)}…` : a.have ? 'Installed' : '';
     const btn = (k, label, cls = '') =>
@@ -291,9 +303,14 @@ function renderCard(el, app, ctx = {}) {
     msg = '';
     paint();
     try {
-      if (k === 'install') await install(a, c);
-      else if (k === 'update') await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/update`, { performBackup: true }, 'PATCH');
-      else await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/${k}`);
+      if (!operationKeys.has(k)) operationKeys.set(k, crypto.randomUUID());
+      const key = operationKeys.get(k);
+      if (k === 'install') await install(a, c, key);
+      else if (k === 'update') await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/update`, { performBackup: true }, 'PATCH', key);
+      else await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/${k}`, {}, k === 'uninstall' ? 'DELETE' : 'POST', key);
+      operationKeys.delete(k);
+      cache.apps = null;
+      await refreshLauncher();
       busy = '';
       await settle();
     } catch (e) {
@@ -322,17 +339,17 @@ function renderCard(el, app, ctx = {}) {
 }
 
 /** Runtipi install (uses first, like `wam install`), then count it in the index. */
-async function install(a, c) {
+async function install(a, c, key) {
   const have = new Set((await loadInstalled(c, true)).map((x) => x.id));
   const form = { openPort: false, exposed: false, exposedLocal: false };
   for (const dep of a.uses || []) {
     if (have.has(dep)) continue;
-    await post(`${c.api}/app-lifecycle/${encodeURIComponent(`${dep}:${STORE}`)}/install`, form).catch(noop);
+    await post(`${c.api}/app-lifecycle/${encodeURIComponent(`${dep}:${STORE}`)}/install`, form, 'POST', key + '.' + dep);
   }
-  await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/install`, form);
+  await post(`${c.api}/app-lifecycle/${encodeURIComponent(a.urn)}/install`, { ...form, ...(a.repo ? { repo: a.repo } : {}) }, 'POST', key);
   a.installed = true;
   a.status = 'installing';
-  post(`${c.index}/installs`, { id: a.id, repo: a.repo }).catch(noop);
+  // Installation accounting belongs to the manager; browser writes never reach the public index.
 }
 
 // ---- App Store ---------------------------------------------------------------------------------------------------
