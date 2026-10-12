@@ -297,6 +297,11 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-rdy-bar button.on { color: var(--ink); border-color: rgba(185, 155, 255, .45); background: rgba(143, 99, 255, .14); }
 .ch-subj { display: flex; align-items: baseline; gap: 8px; padding: 12px 10px 4px; font-size: 12.5px; font-weight: 750; color: var(--violet-2); }
 .ch-subj small { font-size: 11.5px; font-weight: 650; color: var(--ink-3); }
+.ch-subj { align-items: center; padding-right: 4px; }
+.ch-subj-mv { margin-left: auto; display: flex; gap: 2px; }
+.ch-subj-mv button { width: 34px; height: 30px; display: grid; place-items: center; border-radius: 9px; font-size: 15px; font-weight: 700; line-height: 1; color: var(--ink-2); background: transparent; border: 0; }
+.ch-subj-mv button:active { background: rgba(143, 99, 255, .18); color: var(--ink); }
+.ch-subj-mv button:disabled { opacity: .22; }
 
 /* A note from another agent thread (coordinator / cross-thread): a quiet labelled row, not a James bubble. */
 .msg.agentnote { margin: 10px 0 2px; align-self: stretch; }

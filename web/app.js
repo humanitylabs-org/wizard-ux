@@ -2169,7 +2169,11 @@
    * new or reply, the context note) is decided from this snapshot, never from what is in front later. */
   function sendSnap(id) {
     const d = desks[idx], fid = id || d.focus;
-    return { id: fid, desk: idx, view: viewOf(fid), others: d.wins.filter(x => x !== fid).map(x => winTitle(W[x])) };
+    const view = viewOf(fid);
+    // The words on screen at that moment, so "this step" or "that button" resolves. A chat thread's text is
+    // already the conversation, so it is not repeated.
+    const screen = view && view.kind !== 'chat thread' ? (window.WizScreen?.read(winEl(fid)) || '') : '';
+    return { id: fid, desk: idx, view, screen, others: d.wins.filter(x => x !== fid).map(x => winTitle(W[x])) };
   }
   function viewContext(id, how = 'voice', snap = null) {
     const S = snap || sendSnap(id), v = S.view, others = S.others;
@@ -2177,6 +2181,7 @@
     return [
       `[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by ${how} from Wizard UX on their phone.`,
       v ? `Window in front: ${v.name} (${v.kind}${v.url ? `, ${v.url}` : ''})${z}.` : `They were on desk ${S.desk + 1} with no window open.`,
+      S.screen ? `Visible on screen: ${S.screen}` : '',
       others.length ? `Also open on this desk: ${others.join(', ')}.` : '',
       'When they say "this", "here", or "it", they likely mean that window. Use this as background only.',
     ].filter(Boolean).join(' ');
@@ -2189,7 +2194,8 @@
   function reviewContext(v) {
     return [`[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by voice from Wizard UX on their phone while reviewing a page this thread linked.`,
       `Page under review: ${v.name.replace(/^Review of /, '')} (${v.url}).`,
-      'Treat the message as feedback on that page; "this", "here" and "it" mean that page.'].join(' ');
+      (s => s ? `Visible on screen: ${s}` : '')(window.WizScreen?.read(winEl(v.id)) || ''),
+      'Treat the message as feedback on that page; "this", "here" and "it" mean that page.'].filter(Boolean).join(' ');
   }
   function sendReview(v, text, audio, files = []) {
     const wid = reviewSink(v); if (!wid) return false;
