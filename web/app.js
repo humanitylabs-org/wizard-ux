@@ -329,6 +329,12 @@
     const wake = () => { let busy = false; try { busy = !!(G || DS); } catch (e) {} if (busy) parkT = setTimeout(wake, 250); else parkDesks(true); };
     parkT = setTimeout(wake, 900);
   }
+  function swipeDesk(step) {
+    // The ＋ is the next destination after the last occupied desk, for swipes as well as taps.
+    if (step > 0 && idx === desks.length - 1) return newDesk();
+    goDesk(idx + step);
+  }
+  function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
@@ -395,7 +401,7 @@
     if (!DS || e.pointerId !== DS.id) return;
     const dx = e.clientX - DS.x, dy = e.clientY - DS.y;
     if (!DS.h) { if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return; DS.h = true; endDotHold(); try { $('#dock').setPointerCapture(e.pointerId); } catch (_) {} }
-    let d = dx; if ((idx === 0 && d > 0) || (idx === desks.length - 1 && d < 0)) d *= .28;
+    let d = dx; if ((idx === 0 && d > 0) || (atPickerEnd() && d < 0)) d *= .28;
     placeTrack(d * 1.1, false);
   });
   const dockEnd = e => {
@@ -403,8 +409,8 @@
     if (!s.h) return;
     const dx = e.clientX - s.x, v = dx / ((performance.now() - s.t) || 1);
     dockSwiped = Date.now();
-    if (e.type !== 'pointercancel' && (dx < -60 || v < -.5)) { goDesk(idx + 1); tourEv('desk', { home: idx === HOME }); }
-    else if (e.type !== 'pointercancel' && (dx > 60 || v > .5)) { goDesk(idx - 1); tourEv('desk', { home: idx === HOME }); }
+    if (e.type !== 'pointercancel' && (dx < -60 || v < -.5)) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); }
+    else if (e.type !== 'pointercancel' && (dx > 60 || v > .5)) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); }
     else placeTrack(0, true);
   };
   $('#dock').addEventListener('pointerup', dockEnd); $('#dock').addEventListener('pointercancel', dockEnd);
@@ -2528,9 +2534,9 @@
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
     }
     if (G.mode === 'h' && !sheet) {
-      let dx = G.dx; if ((idx === 0 && dx > 0) || (idx === desks.length - 1 && dx < 0)) dx *= .28;
+      let dx = G.dx; if ((idx === 0 && dx > 0) || (atPickerEnd() && dx < 0)) dx *= .28;
       placeTrack(dx * 1.1, false);
-      orbWrap.dataset.dir = Math.abs(G.dx) > 50 ? (G.dx < 0 ? (idx < desks.length - 1 ? `${clip(deskName(idx + 1), 16)} →` : '') : (idx > 0 ? `← ${clip(deskName(idx - 1), 16)}` : '')) : '';
+      orbWrap.dataset.dir = Math.abs(G.dx) > 50 ? (G.dx < 0 ? (idx < desks.length - 1 ? `${clip(deskName(idx + 1), 16)} →` : atPickerEnd() ? '' : 'New desk →') : (idx > 0 ? `← ${clip(deskName(idx - 1), 16)}` : '')) : '';
     } else if (G.mode === 'v') {
       if (!sheet) {
         const p = Math.min(1, Math.abs(G.dy) / 240);
@@ -2560,8 +2566,9 @@
       return finishVoice();
     } else if (g.mode === 'h') {
       if (sheet) return;
+      if (cancelled) return placeTrack(0, true);
       const v = g.dx / vt;
-      if (g.dx < -60 || v < -.5) { goDesk(idx + 1); tourEv('desk', { home: idx === HOME }); } else if (g.dx > 60 || v > .5) { goDesk(idx - 1); tourEv('desk', { home: idx === HOME }); } else placeTrack(0, true);
+      if (g.dx < -60 || v < -.5) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); } else if (g.dx > 60 || v > .5) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); } else placeTrack(0, true);
     } else if (g.mode === 'v') {
       [launcher, inboxEl].forEach(el => el.classList.remove('dragging'));
       launcher._rendered = inboxEl._rendered = false;
