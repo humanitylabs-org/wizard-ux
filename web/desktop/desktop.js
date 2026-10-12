@@ -891,6 +891,7 @@
   C.deeplink.handle({
     thread: sid => openThread(sid),
     view(v, section) {
+      if (v === 'home') return $('#clock').click();
       if (v === 'inbox') return openInbox();
       if (v === 'apps') return openPalette();
       if (v === 'settings' || v === 'usage') return openSettings();
