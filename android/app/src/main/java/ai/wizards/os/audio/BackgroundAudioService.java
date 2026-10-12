@@ -73,8 +73,8 @@ public final class BackgroundAudioService extends MediaSessionService {
             @Override public void onPlaybackStateChanged(int state) { if (state == Player.STATE_ENDED) { if(station==null) requestPlaying(false); else { advanceAfterRefill = true; maybeRefill(); } } }
             @Override public void onPlayerError(@NonNull PlaybackException e) {
                 error = "This track could not be played. Skipping."; final int g = generation; final String event = playEvent;
-                main.postDelayed(() -> { if (!destroyed && g == generation && event.equals(playEvent) && player.getPlayWhenReady()) {
-                    report("skipped"); if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.prepare(); } else { advanceAfterRefill = true; maybeRefill(); }
+                main.postDelayed(() -> { if (!destroyed && g == generation && event.equals(playEvent) && userWant) {
+                    report("skipped"); if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.prepare(); syncIntent(); } else { advanceAfterRefill = true; maybeRefill(); }
                 } }, 900);
             }
         });

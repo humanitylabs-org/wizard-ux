@@ -62,7 +62,9 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
                     if not cmd.startswith(('input keyevent ','wm dismiss-keyguard','am start ','am broadcast ','dumpsys ','pidof ','cmd media_session ')):return self.body(400,{'error':'command'})
                     return self.body(200,{'result':sx(cmd)})
                 if p.startswith('/wizard-music/stream/') or p.startswith('/wizard-music/art/'):
-                    tid=urllib.parse.unquote(p).rsplit(':',1)[-1];kind='stream' if '/stream/' in p else 'art';f=clips/(tid+('.mp3' if kind=='stream' else '.jpg'))
+                    tid=urllib.parse.unquote(p).rsplit(':',1)[-1]
+                    if '/stream/' in p and state.get('fail_stream') and state['fail_stream'].split(':',1)[1]==tid:return self.body(404,{'error':'injected_unavailable_stream'})
+                    kind='stream' if '/stream/' in p else 'art';f=clips/(tid+('.mp3' if kind=='stream' else '.jpg'))
                     if not f.exists():return self.body(404,{})
                     raw=f.read_bytes();total=len(raw);start=0;end=total-1;status=200;hdr={'Accept-Ranges':'bytes'}
                     r=re.match(r'bytes=(\d+)-(\d*)',self.headers.get('Range',''))
@@ -101,6 +103,7 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
                     t=next((t for t in state['tracks'] if t['id']==data.get('id')),state['tracks'][0]);return self.body(200,{'ok':True,'track':t,'drop':[],'learned':None})
                 if p=='/qa/offline':state['down']=bool(data.get('down'));return self.body(200,{'ok':True})
                 if p=='/qa/reset':state['next']=3;state['batches']={};return self.body(200,{'ok':True})
+                if p=='/qa/fail-stream':state['fail_stream']=data.get('id');return self.body(200,{'ok':True})
                 return self.body(403,{'error':'isolated_qa'})
         server=http.server.ThreadingHTTPServer(('127.0.0.1',HTTP),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
         sh(SDK/'cmdline-tools/latest/bin/avdmanager','create','avd','-n','q','-k','system-images;android-35;google_apis;arm64-v8a','-d','pixel_7','-p',out/'dev',stdin='no\n')
