@@ -14,11 +14,14 @@ window.WizCore={apps:()=>({APPS:[{id:'mizel',url:'/mizel-qa/capture-frame.html'}
 """
     mount = """const f=document.querySelector('iframe');const task=location.search.includes('task');f.src=task?'/mizel-qa/task-frame.html':'/mizel-qa/capture-frame.html';WizAppServices.attach(f,{appId:task?'trackhunt':'mizel',path:f.src});
 window.__wosNativeBack=()=>{WizAppServices.back(f);return 'shared-back';};"""
-    frame = """window.stats={pcm:0,bytes:0,levels:0,raw:0,depth:0};
+    frame = """window.stats={pcm:0,bytes:0,levels:0,raw:0,depth:0,webShares:0};
+navigator.share=()=>{stats.webShares++;return Promise.resolve();};
 if(navigator.mediaDevices) navigator.mediaDevices.getUserMedia=()=>{stats.raw++;throw Error('App raw capture is forbidden');};
 WizardApp.back.register({canGoBack:()=>stats.depth>0,back:()=>{if(stats.depth){stats.depth--;return true;}return false;}});
 window.begin=async()=>{const current=WizardApp.capture.current();window.take=await WizardApp.capture.start({kind:document.documentElement.dataset.app==='mizel'?'meeting':'audio',resumeId:current?.id,meta:{meetingId:'qa_shared_native'}});
 take.onPcm(f=>{stats.pcm++;stats.bytes+=f.pcm.byteLength});take.onLevel(()=>stats.levels++);return {id:take.id,info:take.getInfo()};};
+window.shareText=async()=>{window.shareOutcome=await WizardApp.share.text({title:'Synthetic share',text:'Staged native share fixture'});};
+window.shareFile=async()=>{window.shareOutcome=await WizardApp.share.file(new File(['Synthetic staged file'],'fixture.txt',{type:'text/plain'}),{title:'Synthetic file'});};
 """
     html = '<!doctype html><div id="device"></div><iframe style="height:600px;width:100%"></iframe><script>' + boot + '</script>'
     for name in ['core/app-capture.js', 'core/app-services.js', 'device.js']:
@@ -26,7 +29,7 @@ take.onPcm(f=>{stats.pcm++;stats.bytes+=f.pcm.byteLength});take.onLevel(()=>stat
     html += '<script>' + mount + '</script>'
     result = {'/mizel-qa/shared-native.html': html}
     for name, app in [('capture', 'mizel'), ('task', 'trackhunt')]:
-        result[f'/mizel-qa/{name}-frame.html'] = '<!doctype html><html data-app="' + app + '"><button onclick="stats.depth++">Nested</button><script>' + scripts['core/app-client.js'] + '</script><script>' + frame + '</script></html>'
+        result[f'/mizel-qa/{name}-frame.html'] = '<!doctype html><html data-app="' + app + '"><button onclick="stats.depth++">Nested</button><button id="share-text" onclick="shareText()">Share text</button><button id="share-file" onclick="shareFile()">Share file</button><script>' + scripts['core/app-client.js'] + '</script><script>' + frame + '</script></html>'
     return result, {name: hashlib.sha256(data.encode()).hexdigest() for name, data in scripts.items()}
 
 
@@ -85,9 +88,20 @@ def run(pg, sx, top, check, save, origin, pkg, state, lock):
     frame('WizardApp.capture.ack(' + json.dumps(result['id']) + ')')
     check('shared-device', 'ack deletes only the exact native task take', not pg.ev("JSON.parse(WizardOSDevice.recPending()).some(t=>t.id===" + json.dumps(active['id']) + ')'))
     legacy = pg.ev("WizardOSDevice.recStart('auto')")
+    reverse=pg.ev("wizardNative.meetings.start({meetingId:'qa_conflicting_native'}).then(()=>null,e=>e.code)")
+    check('shared-device','native meeting admission refuses an actual DeviceBridge recorder',reverse=='mic_busy',reverse)
     pg.ev("dispatchEvent(new Event('wos-native-resume'))");pg.pump(.5)
     check('shared-device', 'legacy voice resumes after ownership readiness', pg.ev('resumes') == [legacy], pg.ev('resumes'))
     pg.ev('WizardOSDevice.recCancel(' + json.dumps(legacy) + ')')
+    for kind in ['text','file']:
+        bounds=pg.ev("(()=>{const f=document.querySelector('iframe'),a=f.getBoundingClientRect(),b=f.contentDocument.querySelector('#share-"+kind+"').getBoundingClientRect();return {x:a.left+b.left+b.width/2,y:a.top+b.top+b.height/2}})()")
+        pg.call('Input.dispatchMouseEvent',type='mousePressed',button='left',clickCount=1,**bounds)
+        pg.call('Input.dispatchMouseEvent',type='mouseReleased',button='left',clickCount=1,**bounds)
+        pg.pump(1.5)
+        chooser=top()
+        check('shared-share','real native '+kind+' chooser launches; void outcome stays truthful and no duplicate browser fallback',
+              ('ChooserActivity' in chooser or 'ResolverActivity' in chooser) and frame('shareOutcome')=='unsupported' and frame('stats.webShares')==0, {'activity':chooser,'outcome':frame('shareOutcome')})
+        sx('input keyevent KEYCODE_BACK');pg.pump(.5)
     frame('stats.depth=1');sx('input keyevent KEYCODE_BACK');pg.pump(1)
     check('shared-back', 'native Back closes nested shared app and never exits', frame('stats.depth') == 0 and pkg in top(), top())
     save('shared-native-snapshot.json', {'device': snapshot, 'task': result, 'nativeByteHash': native_hash})

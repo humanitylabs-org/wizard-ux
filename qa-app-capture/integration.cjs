@@ -10,9 +10,9 @@ module.exports=async({browser,root,evidence,test})=>{
   function run(source,rate,name,options){let Type,out=[];class Base{constructor(){this.port={postMessage:m=>{if(m.samples)out.push(new Int16Array(m.samples));}};}}
    const sandbox={AudioWorkletProcessor:Base,sampleRate:rate,registerProcessor:(n,t)=>{if(n===name)Type=t;},Int16Array,Math,globalThis:null};sandbox.globalThis=sandbox;vm.runInNewContext(source,sandbox);const p=new Type(options);
    for(let k=0;k<710;k++){const l=new Float32Array(128),r=new Float32Array(128);for(let i=0;i<128;i++){l[i]=Math.sin((k*128+i)*.123)*.8;r[i]=Math.cos((k*128+i)*.081)*.4;}p.process([[l,r]]);}
-   p.port.onmessage({data:name==='wizard-app-pcm'?'flush':{type:'flush'}});return Buffer.concat(out.map(a=>Buffer.from(a.buffer)));
+   p.port.onmessage({data:name==='wizard-capture-pcm'?'flush':{type:'flush'}});return Buffer.concat(out.map(a=>Buffer.from(a.buffer)));
   }
-  for(const rate of [48000,44100])assert.deepEqual(run(core,rate,'wizard-app-pcm',{}),run(donor,rate,'pcm16-downsampler',{processorOptions:{chunkSeconds:5,targetRate:16000}}));
+  for(const rate of [48000,44100])assert.deepEqual(run(core,rate,'wizard-capture-pcm',{}),run(donor,rate,'pcm16-downsampler',{processorOptions:{chunkSeconds:5,targetRate:16000}}));
  });
  const records=new Map(),writes=[],blocked=[],socketFrames=[],events=[];let next=0,corrupt=false,nativeCalls=[];
  const fresh=id=>({id,title:'Synthetic meeting',status:'recording',source:'meetings',created_at:new Date().toISOString(),duration_ms:0,notes:'',notes_rev:0,segments:[],enhanced:null,asks:[],jobs:{transcribe_pending:0},audio:{tracks:[]}});
