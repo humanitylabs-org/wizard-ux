@@ -170,6 +170,8 @@ public class MainActivity extends Activity {
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
+                // A load replaced by a newer one (Try again over a hanging attempt) is not a failure of the new one.
+                if (req.isForMainFrame() && err.getErrorCode() == ERROR_UNKNOWN && String.valueOf(err.getDescription()).contains("ERR_ABORTED")) return;
                 if (req.isForMainFrame() && carrying) { endCarry("unreachable"); return; } // old name gone: just go home
                 // Safety net: the tailnet name unreachable from this phone → same page on the old name for this run.
                 // (A failing old-name page is not isHome, so this cannot loop; both failing ends on the offline page.)
@@ -201,6 +203,12 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                // A commit (also a same-document hop). Never fires for a load that was abandoned or still hangs.
+                if (isWeb(url) && !mainFailed && sameHost(url, wantUrl) && reach != null && reach.isShowing() && !reach.isOffline()) landed();
+            }
+
+            @Override
             public void onPageCommitVisible(WebView view, String url) {
                 // A real page painted: the connection screen leaves by itself (also after Tailscale comes back).
                 // Same host as the load we're waiting on, so a late paint of an abandoned attempt can't count.
@@ -215,7 +223,6 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (isWeb(url) && !mainFailed && sameHost(url, wantUrl)) landed(); // also same-document hops
                 // Back must never land on the one-time carry page: drop it from history once the shell is up.
                 if (clearAfterCarry && !carrying && !Carry.isPage(MainActivity.this, url)) { clearAfterCarry = false; view.clearHistory(); }
                 topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again

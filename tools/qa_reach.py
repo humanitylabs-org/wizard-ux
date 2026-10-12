@@ -29,6 +29,7 @@ env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libe
 env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5708; S = 'emulator-%d' % PORT; DEVTOOLS = 9359
 OK_PORT, DEAD_PORT = 18795, 18796
+WIZ2 = 'http://localhost:18797'
 WIZ, DEAD = 'http://localhost:%d' % OK_PORT, 'http://10.0.2.2:19'  # nothing listens: a real refusal
 res = []
 
@@ -104,8 +105,11 @@ class H(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         m = MODE['m']
-        if m == 'hang':
-            time.sleep(150); self.close_connection = True; return  # never answers (a tailnet IP with Tailscale off)
+        if m == 'hang':  # never answers (a tailnet IP with Tailscale off) until the Wizard is reachable again
+            t0 = time.time()
+            while MODE['m'] == 'hang' and time.time() - t0 < 150: time.sleep(0.2)
+            if MODE['m'] == 'hang': self.close_connection = True; return
+            m = MODE['m']
         if m != '502' and self.path.startswith('/wizard-os-home/sw.js'): code, body, ct = 200, SW, 'text/javascript'
         elif m == '502': code, body, ct = 502, b'Bad Gateway', 'text/html'
         elif self.path.startswith('/wizard-os-home'): code, body, ct = 200, SHELL, 'text/html'
@@ -119,6 +123,8 @@ class H(http.server.BaseHTTPRequestHandler):
 
 srv = http.server.ThreadingHTTPServer(('127.0.0.1', OK_PORT), H); srv.daemon_threads = True
 threading.Thread(target=srv.serve_forever, daemon=True).start()
+srv2 = http.server.ThreadingHTTPServer(('127.0.0.1', 18797), H); srv2.daemon_threads = True
+threading.Thread(target=srv2.serve_forever, daemon=True).start()
 
 
 def launch():
@@ -147,7 +153,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('input keyevent KEYCODE_WAKEUP'); sx('wm dismiss-keyguard'); sx('svc power stayon true')
         out = sh(ADB, '-s', S, 'install', '-r', APK).strip().splitlines()[-1]
         check('install the QA build', out == 'Success', out)
-        for p in (OK_PORT,): sh(ADB, '-s', S, 'reverse', 'tcp:%d' % p, 'tcp:%d' % p)
+        for p in (OK_PORT, 18797): sh(ADB, '-s', S, 'reverse', 'tcp:%d' % p, 'tcp:%d' % p)
         sx('pm grant %s android.permission.POST_NOTIFICATIONS' % PKG)
         sx('logcat -c')
 
@@ -198,24 +204,26 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('#7 refused connection → the screen at once', ok, '%.1fs' % (time.time() - t0))
         shot('07-refused')
 
-        # 8 502
-        MODE['m'] = '502'; home(WIZ, 'on'); launch()
+        # 8 502 (a second fake on another port: no service worker there, as on a fresh install; under the shell's
+        #   worker a 5xx page is the worker's answer and WebView reports no HTTP error, so this path can't see it)
+        MODE['m'] = '502'; home(WIZ2, 'on'); launch()
         ok = seen("Can't reach your Wizard", 8)
         check('#8 gateway 502 → the screen', ok and 'Wizard answered 502' in ui())
         shot('08-502')
         MODE['m'] = 'ok'; tap('Try again')
         check('#8 …Try again recovers', shell_up(15) and gone('Try again', 6), title())
 
-        # 9 airplane mode
-        MODE['m'] = 'ok'; home(WIZ, 'on')
+        # 9 airplane mode, real origins (localhost via adb reverse works even offline)
+        runas('rm -f files/qa_home.txt files/qa_origin.txt files/qa_vpn.txt')
         sx('cmd connectivity airplane-mode enable'); time.sleep(4)
         launch()
         ok = seen("You're offline", 8)
         check('#9 airplane mode → "You\'re offline"', ok)
+        check('#9 …no Open Tailscale while offline', 'Open Tailscale' not in ui())
         shot('09-offline')
         sx('cmd connectivity airplane-mode disable'); t0 = time.time()
-        ok = shell_up(40)
-        check('#9 …network back → the shell by itself', ok and gone("You're offline", 5), '%.1fs' % (time.time() - t0))
+        ok = seen('Tailscale is off', 30)
+        check('#9 …network back → it tries again by itself (now "Tailscale is off")', ok, '%.1fs' % (time.time() - t0))
 
         # 10 the real build origins, no Tailscale, dead DNS (exactly the phone)
         runas('rm -f files/qa_home.txt files/qa_origin.txt files/qa_vpn.txt'); launch(); t0 = time.time()
