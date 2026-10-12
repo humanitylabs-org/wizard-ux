@@ -77,9 +77,9 @@
     if (!capture) return 'voice'; // legacy-only shell
     try {
       const state = capture.getState?.();
-      if (state?.active || state?.recording) return 'app';
-      if (state?.nativeOwnershipReady !== true || !Array.isArray(state.nativeDeviceTakeIds)) return 'unknown';
-      return state.nativeDeviceTakeIds.includes(id) ? 'app' : 'voice';
+      if (Array.isArray(state?.nativeDeviceTakeIds) && state.nativeDeviceTakeIds.includes(id)) return 'app';
+      if (state?.nativeOwnershipReady !== true || !Array.isArray(state.nativeDeviceTakeIds) || state.active || state.recording) return 'unknown';
+      return 'voice';
     } catch (_) { return 'unknown'; }
   }
   function syncRecorder(why) {

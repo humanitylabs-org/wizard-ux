@@ -30,7 +30,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (!st.frame.isConnected || !registered(st)) { st.detach(); continue; }
@@ -75,14 +75,24 @@
       const onCaptureState = () => { if (resource.getState?.().active === false) release(); }; // actual recorder state, never elapsed time
       addEventListener('wizard-app-capture-state', onCaptureState);
       try {
-        const session = await (opts?.resumeId && resource.resume ? resource.resume(st.appId, opts.resumeId, opts) : resource.start(st.appId, opts));
+        const safe = {}; for (const key of ['kind','mime','audio','pcm','chunkMs','maxMs','maxBytes','systemAudio','meta','seqBase','offsetMs','preparedId','resumeId']) if(opts?.[key] !== undefined) safe[key]=opts[key];
+        const session = await (safe.resumeId && resource.resume ? resource.resume(st.appId, safe.resumeId, safe) : resource.start(st.appId, safe));
         let finished;
         const finish = method => {
           check();
           if (!finished) finished = Promise.resolve().then(() => session[method]()).then(r => { release(); return r; }, e => { finished = null; throw e; });
           return finished;
         };
-        return Object.freeze({ id: session.id, onLevel(fn) { check(); return session.onLevel(fn); },
+        check();
+        const observe = (method, fn) => {
+          check(); if (typeof fn !== 'function' || !session[method]) throw fault('Capture listener unavailable');
+          const off=session[method](value=>{ if(valid(st,doc)) { try { fn(value); } catch (_) {} } });
+          st.captureOffs ||= new Set(); const release=()=>{off();st.captureOffs.delete(release);};st.captureOffs.add(release);return release;
+        };
+        const call = (method, ...args) => { check(); if(!session[method]) throw fault('Capture method unavailable');return session[method](...args); };
+        return Object.freeze({ id: session.id, onLevel: fn=>observe('onLevel',fn),
+          onPcm: fn=>observe('onPcm',fn), onChunk: fn=>observe('onChunk',fn), onState: fn=>observe('onState',fn), onWarn: fn=>observe('onWarn',fn),
+          getInfo: ()=>call('getInfo'), chunks: ()=>call('chunks'), setSystemAudio: on=>call('setSystemAudio',on),
           stop: () => finish('stop'), cancel: () => finish('cancel'),
           pause() { check(); if (!session.pause) return Promise.reject(fault('Capture pause unavailable')); return session.pause(); },
           resume() { check(); if (!session.resume) return Promise.reject(fault('Capture resume unavailable')); return session.resume(); } });
@@ -101,7 +111,18 @@
         file(file, opts) { check(); if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file))) return Promise.resolve('unsupported'); return window.WosChat?.shareFile(file, opts) || Promise.resolve('unsupported'); } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
-      capture: Object.freeze({ start, pending() { check(); if (!window.WizAppCapture) return Promise.reject(fault('Shared capture unavailable')); return window.WizAppCapture.pending(st.appId); },
+      capture: Object.freeze({ start,
+        prepare(opts) {
+          check(); const shell=window.__wos||window.__wux;
+          if(shell?.voice && shell.voice!=='idle') throw Object.assign(fault('Microphone held by Wizard voice'),{code:'busy',appId:'wizard-voice'});
+          if(!window.WizAppCapture?.prepare) throw fault('Capture preparation unavailable');
+          const p=window.WizAppCapture.prepare(st.appId,opts);st.captureOffs ||= new Set();
+          const release=()=>{p.release();st.captureOffs.delete(release);};st.captureOffs.add(release);
+          return Object.freeze({id:p.id,release});
+        },
+        capabilities(opts) {check();return window.WizAppCapture?.capabilities?.(opts) || {};},
+        current() {check();return window.WizAppCapture?.current?.(st.appId) || null;},
+        pending() { check(); if (!window.WizAppCapture) return Promise.reject(fault('Shared capture unavailable')); return window.WizAppCapture.pending(st.appId); },
         ack(id) { check(); if (!window.WizAppCapture) return Promise.reject(fault('Shared capture unavailable')); return window.WizAppCapture.ack(st.appId, id); } }),
       alive() { check(); return true; },
     });
@@ -131,7 +152,7 @@
     if ([...frames.values()].some(st => st.holds.size)) return true;
     try {
       const s = window.WizAppCapture?.getState?.();
-      if (s && (s.active || s.recording || s.session || s.appId || /record|start|stop|permission/.test(s.state || s.status || ''))) return true;
+      if (s && (s.hold || s.active || s.recording || s.session || s.appId || /record|start|stop|permission/.test(s.state || s.status || ''))) return true;
     } catch (_) { return true; }
     return false;
   }

@@ -17,18 +17,32 @@
     registerProcessor('wizard-capture-pcm',CapturePCM);
     return;
   }
-  if (W.WizAppCapture) return;
+  if (W.WizAppCapture || W.parent !== W) return; // Hosted frames never own a second resource.
   const WORKLET_URL = W.document?.currentScript?.src || Array.from(W.document?.scripts || []).find(s => /\/app-capture\.js(?:[?#]|$)/.test(s.src))?.src;
   const DB_NAME = 'wizard-app-capture-v1', LOCK = DB_NAME + ':microphone';
   const MAX_CHUNK = 1024 * 1024, DEFAULT_LIMIT = 512 * 1024 * 1024;
   let dbPromise, active = null, configuredNative = null, attachedMeetingBridge = null, recoveryError = null;
   const fail = (code, message, extra) => Object.assign(new Error(message), { code }, extra);
   const safeCall = (fn, ...args) => { try { fn?.(...args); } catch (_) { /* observer cannot break capture */ } };
+  let ownershipLoaded = false;
+  const ownedRows = new Map(), recoveryLive = new Set(), preparations = new Map();
   function state() {
-    return { version: 1, active: !!active, recording: !!active,
-      appId: active?.row.appId || null, id: active?.row.id || null,
-      phase: active?.phase || 'idle', native: !!active?.row.native,
-      hold: !!active, error: active?.error?.code || recoveryError?.code || null };
+    const deviceRows = [...ownedRows.values()].filter(r => r.native === 'wizard-device');
+    const nativeDeviceTakeIds = [...new Set(deviceRows.map(r => r.nativeId).filter(Boolean))];
+    let live = [...recoveryLive].map(id => ownedRows.get(id)).find(Boolean);
+    try {
+      const a = JSON.parse(W.WizardOSDevice?.recActive?.() || 'null');
+      live ||= deviceRows.find(r => r.nativeId && r.nativeId === a?.id);
+      if(a?.id && !live)live=deviceRows.find(r=>!r.nativeId); // Physical hold without falsely asserting a take id.
+    } catch (_) { /* Do not guess physical ownership. */ }
+    const recording = !!active || !!live;
+    return { version: 1, active: !!active, recording,
+      appId: active?.row.appId || live?.appId || null, id: active?.row.id || live?.id || null,
+      phase: active?.phase || (live ? 'recoverable' : 'idle'), native: !!active?.row.native || !!live,
+      hold: recording || preparations.size > 0 || [...ownedRows.values()].some(r=>r.native && !r.nativeId && r.status==='recoverable'),
+      nativeOwnershipReady: ownershipLoaded && !deviceRows.some(r => !r.nativeId) &&
+        !(active?.row.native === 'wizard-device' && !active.row.nativeId), nativeDeviceTakeIds,
+      error: active?.error?.code || recoveryError?.code || null };
   }
   function changed() { W.dispatchEvent(new CustomEvent('wizard-app-capture-state', { detail: state() })); }
   function openDB() {
@@ -63,7 +77,8 @@
     });
     return values;
   }
-  const put = row => transaction(['sessions'], 'readwrite', tx => tx.objectStore('sessions').put(row));
+  const put = async row => { await transaction(['sessions'], 'readwrite', tx => tx.objectStore('sessions').put(row));
+    ownedRows.set(row.id, row); changed(); channel?.postMessage('changed'); };
   async function parts(id, source = 'me') {
     let values;
     await transaction(['chunks'], 'readonly', tx => {
@@ -77,6 +92,7 @@
       const req = tx.objectStore('chunks').index('id').openCursor(IDBKeyRange.only(id));
       req.onsuccess = () => { const c = req.result; if (c) { c.delete(); c.continue(); } };
     });
+    ownedRows.delete(id); recoveryLive.delete(id); changed(); channel?.postMessage('changed');
   }
   function validate(appId, opts) {
     if (typeof appId !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(appId)) throw fail('invalid_app', 'Invalid capture owner.');
@@ -85,6 +101,7 @@
       if (opts[key] != null && (!Number.isFinite(opts[key]) || opts[key] <= 0)) throw fail('invalid_options', key + ' must be positive.');
     }
     if (opts.meta != null && (typeof opts.meta !== 'object' || Array.isArray(opts.meta))) throw fail('invalid_options', 'Capture metadata must be an object.');
+    if (['auto', 'command'].includes(opts.kind)) throw fail('reserved_kind', 'Wizard voice owns this capture kind.');
     const meta = JSON.parse(JSON.stringify(opts.meta || {}));
     if (JSON.stringify(meta).length > 16384) throw fail('invalid_options', 'Capture metadata is too large.');
     return meta;
@@ -130,7 +147,7 @@
       meta.captureTracks = [{ source: 'them', blob: wav(them, them.reduce((n, c) => n + c.size, 0)), mime: 'audio/wav', startMs: row.tracks.them.startMs || 0 }];
     }
     return { id: row.id, blob, mime: row.mime, startedAt: row.startedAt,
-      durationMs: row.durationMs || 0, meta, ...(row.partial ? { partial: true } : {}) };
+      durationMs: row.durationMs || 0, meta, streamChunks: await streamChunks(row), ...(row.partial ? { partial: true } : {}) };
   }
   // Atomically save each bounded piece AND its recovery metadata. The queue keeps
   // failed writes for an explicit stop retry; never acknowledge/delete on a failed save.
@@ -140,14 +157,16 @@
     if (s.phase !== 'starting') s.writes = s.writes.then(() => drain(s));
   }
   function uploadChunk(s, source, blob, startMs, final = false) {
-    if (!s.opts.onChunk || s.row.native === 'wizard-meetings') return;
+    if (s.row.native === 'wizard-meetings') return;
     s.uploads ||= {};
     const u = s.uploads[source] ||= { parts: [], bytes: 0, seq: s.opts.seqBase?.[source] || 0, startMs };
-    if (blob?.size) { u.parts.push(blob); u.bytes += blob.size; }
+    if (blob?.size) { if (!u.bytes) u.startMs=startMs; u.parts.push(blob); u.bytes += blob.size; }
     const target = 32 * Math.max(100, Math.min(5000, s.opts.chunkMs || 5000));
     if (u.bytes && (final || !s.row.pcm || u.bytes >= target)) {
       const out = s.row.pcm ? wav(u.parts, u.bytes) : new Blob(u.parts, { type: s.row.mime });
-      safeCall(s.opts.onChunk, { id: s.row.id, seq: u.seq++, blob: out, startMs: (s.opts.offsetMs || 0) + u.startMs, source });
+      const item={id:s.row.id,seq:u.seq++,blob:out,startMs:(s.opts.offsetMs||0)+u.startMs,source};
+      s.row.delivery ||= {};s.row.delivery.history ||= [];s.row.delivery.history.push({source,seq:item.seq,startMs:item.startMs,bytes:u.bytes});
+      emit(s, 'chunk', item);
       u.startMs += s.row.pcm ? u.bytes / 32 : 0; u.parts = []; u.bytes = 0;
     }
   }
@@ -166,10 +185,10 @@
         durationMs: s.row.pcm ? Math.max(...Object.values(tracks).map(t => t.startMs + t.bytes / 32)) : (s.pausedAt || Date.now()) - s.row.startedAt - (s.pausedTotal || 0) };
       try {
         await transaction(['sessions', 'chunks'], 'readwrite', tx => {
-          tx.objectStore('chunks').put({ id: row.id, seq: s.row.seq, blob, source });
+          tx.objectStore('chunks').put({ id: row.id, seq: s.row.seq, blob, source, startMs: startMs ?? (track.startMs + track.bytes / 32) });
           tx.objectStore('sessions').put(row);
         });
-        s.row = row; s.queue.shift(); s.error = null;
+        s.row = row; ownedRows.set(row.id, row); s.queue.shift(); s.error = null;
         uploadChunk(s, source, blob, startMs ?? (track.startMs + track.bytes / 32));
       } catch (e) {
         s.error = fail('storage_failed', 'Capture storage failed; stop and retry saving before leaving.', { cause: e });
@@ -193,7 +212,7 @@
   }
   function release(s) {
     cleanup(s); s.unlock?.(); s.unlock = null;
-    if (active === s) active = null; changed();
+    if(s.inputStopped || s.discard)recoveryLive.delete(s.row.id); if (active === s) active = null; changed();
   }
   function finish(s, partial = false) {
     if (s.discard || s.cancelPromise) return Promise.reject(fail('cancelled', 'Capture was cancelled.'));
@@ -211,25 +230,99 @@
       for (const source of Object.keys(s.uploads || {})) uploadChunk(s, source, null, 0, true);
       if (s.final?.meta) s.row.meta = { ...s.row.meta, native: s.final.meta };
       if (s.final?.partial) s.partial = true;
-      const row = { ...s.row, status: 'pending', partial: !!s.partial, durationMs: s.final?.durationMs ?? (s.row.durationMs || (s.row.pcm ? 0 : Date.now() - s.row.startedAt)) };
+      const row = { ...s.row, status: 'pending', partial: !!s.partial, durationMs: s.final?.durationMs ?? (s.row.durationMs || (s.row.pcm && !s.row.native ? 0 : (s.pausedAt || Date.now()) - s.row.startedAt - (s.pausedTotal || 0))) };
+      recoveryLive.delete(row.id);
       await put(row); s.row = row;
       const out = await result(row); release(s); return out;
     })();
     s.finishPromise.catch(e => { s.error = e; s.finishPromise = null; changed(); });
     return s.finishPromise;
   }
+  function emit(s, key, value) { for (const cb of [...(s.listeners?.[key] || [])]) safeCall(cb, value); }
+  function observe(s, key, cb) {
+    if (typeof cb !== 'function') throw fail('invalid_callback', 'A capture listener is required.');
+    s.listeners ||= {}; (s.listeners[key] ||= new Set()).add(cb); return () => s.listeners[key]?.delete(cb);
+  }
+  function capabilities(opts = {}) {
+    const a = adapter(opts);
+    const b = attachedMeetingBridge || W.wizardNative?.meetings;
+    return { native: a?.name || null, pcm: !a || a.name === 'wizard-meetings', pause: true,
+      systemAudioStart: a ? !!b && (b.systemAudio === true || typeof b.onState !== 'function') : !!navigator.mediaDevices?.getDisplayMedia,
+      systemAudio: a ? !!b?.setSystemAudio : !!navigator.mediaDevices?.getDisplayMedia };
+  }
+  // Sync activation before app domain requests. Tokens are owner-bound and never time-expire.
+  function prepare(appId, opts = {}) {
+    validate(appId, opts);
+    let nativeActive;try{nativeActive=JSON.parse(W.WizardOSDevice?.recActive?.()||'null');}catch(_){throw fail('busy','Native recorder ownership is unknown.');}
+    if(nativeActive?.id)throw fail('busy','An existing native recorder is held.',{appId:'native-recording'});
+    const st = state(); if (st.hold) throw fail('busy', 'Microphone held by ' + (st.appId || 'another app'), { appId: st.appId });
+    const p = { id: crypto.randomUUID(), appId, ctx: null, display: null };
+    if (!adapter(opts)) {
+      const AC = W.AudioContext || W.webkitAudioContext;
+      if (AC) { p.ctx = new AC(); void p.ctx.resume().catch(() => {}); }
+      if (opts.systemAudio) {
+        if (!navigator.mediaDevices?.getDisplayMedia) { void p.ctx?.close(); throw fail('system_audio_unavailable', 'Computer audio sharing is unavailable.'); }
+        p.display = navigator.mediaDevices.getDisplayMedia({ audio: true, video: true }); p.display.catch(() => {});
+      }
+    }
+    preparations.set(p.id, p); changed();
+    return Object.freeze({ id: p.id, release: () => discardPrepared(appId, p.id) });
+  }
+  function discardPrepared(appId, id) {
+    const p = preparations.get(id); if (!p || p.appId !== appId) return;
+    preparations.delete(id); void p.ctx?.close().catch(() => {});
+    p.display?.then(st => st.getTracks().forEach(t => t.stop())).catch(() => {}); changed();
+  }
+  async function streamChunks(row) {
+    if (!row.pcm || row.native === 'wizard-meetings') return [];
+    let saved;
+    await transaction(['chunks'], 'readonly', tx => { tx.objectStore('chunks').index('id').getAll(row.id).onsuccess = e => { saved = e.target.result; }; });
+    const d = row.delivery || {}, target = 32 * Math.max(100, Math.min(5000, d.chunkMs || 5000)), out = [];
+    if (d.history?.length) {
+      for (const source of [...new Set(saved.map(c=>c.source||'me'))]) {
+        const raw=new Blob(saved.filter(c=>(c.source||'me')===source).sort((a,b)=>a.seq-b.seq).map(c=>c.blob));
+        let offset=0,last=null;
+        for(const h of d.history.filter(h=>h.source===source)) {out.push({source,seq:h.seq,startMs:h.startMs,durationMs:h.bytes/32,blob:wav([raw.slice(offset,offset+h.bytes)],h.bytes)});offset+=h.bytes;last=h;}
+        if(offset<raw.size) {const n=raw.size-offset;out.push({source,seq:last?last.seq+1:(d.seqBase?.[source]||0),startMs:last?last.startMs+last.bytes/32:(d.offsetMs||0)+(row.tracks?.[source]?.startMs||0),durationMs:n/32,blob:wav([raw.slice(offset)],n)});}
+      }
+      return out;
+    }
+    for (const source of [...new Set(saved.map(c => c.source || 'me'))]) {
+      const list = saved.filter(c => (c.source || 'me') === source).sort((a,b) => a.seq-b.seq);
+      let seq = d.seqBase?.[source] || 0, startMs = (d.offsetMs || 0) + (row.tracks?.[source]?.startMs || 0), group = [], bytes = 0;
+      const flush = () => { if (!bytes) return; out.push({ source, seq: seq++, startMs, durationMs: bytes/32, blob: wav(group,bytes) }); startMs += bytes/32; group=[];bytes=0; };
+      for (let i=0; i<list.length; i++) {
+        const at = (d.offsetMs || 0) + (list[i].startMs ?? (startMs + bytes/32 - (d.offsetMs || 0)));
+        if (Math.abs(at - (startMs + bytes/32)) > .01) { flush(); startMs=at; }
+        group.push(list[i].blob); bytes += list[i].blob.size;
+        if (bytes >= target || i === list.length - 1) flush();
+      }
+    }
+    return out;
+  }
   function session(s) {
     return Object.freeze({ id: s.row.id,
+      getInfo: () => ({ native: s.row.native || null, backendStopOwned: !!s.engine?.backendStopOwned, livePcm: s.engine?.livePcm !== false,
+        hasSystemAudio: !!s.hasSystemAudio, paused: s.phase === 'paused',
+        durationMs: s.nativeState?.mediaMs ?? (s.row.pcm && !s.row.native ? s.row.durationMs : (s.pausedAt || Date.now()) - s.row.startedAt - (s.pausedTotal || 0)),
+        state: s.nativeState || null, meta: JSON.parse(JSON.stringify(s.row.meta)), capabilities: capabilities({ kind: s.row.kind }) }),
+      onPcm: fn => observe(s,'pcm',fn), onChunk: fn => observe(s,'chunk',fn),
+      onState: fn => observe(s,'state',fn), onWarn: fn => observe(s,'warn',fn),
+      chunks: async () => { const all = await streamChunks(s.row);
+        return all.filter(c => c.seq < (s.uploads?.[c.source]?.seq ?? (s.opts.seqBase?.[c.source] || 0))); },
+      setSystemAudio: on => { if (active !== s) throw fail('capture_inactive', 'This capture has stopped.');
+        if (!s.engine?.setSystemAudio) throw fail('system_audio_unavailable', 'Computer audio cannot be changed here.');
+        return s.engine.setSystemAudio(!!on); },
       onLevel(fn) { if (typeof fn !== 'function') throw fail('invalid_callback', 'A level listener is required.'); s.levels.add(fn); return () => s.levels.delete(fn); },
       stop() { return finish(s); },
       async pause() {
         if (active !== s || s.phase !== 'recording') return;
         if (!s.engine.pause) throw fail('pause_unavailable', 'This recorder cannot pause.');
-        await s.engine.pause(); s.pausedAt = Date.now(); s.phase = 'paused'; changed();
+        await s.engine.pause(); s.pausedAt = Date.now(); s.phase = 'paused'; emit(s,'state',{paused:true,recording:true}); changed();
       },
       async resume() {
         if (active !== s || s.phase !== 'paused') return;
-        await s.engine.resume(); s.pausedTotal = (s.pausedTotal || 0) + Date.now() - s.pausedAt; s.pausedAt = 0; s.phase = 'recording'; changed();
+        await s.engine.resume(); s.pausedTotal = (s.pausedTotal || 0) + Date.now() - s.pausedAt; s.pausedAt = 0; s.phase = 'recording'; emit(s,'state',{paused:false,recording:true}); changed();
       },
       cancel() {
         if (s.cancelPromise) return s.cancelPromise;
@@ -261,7 +354,12 @@
       if (!WORKLET_URL) throw fail('pcm_module_url_missing', 'Load the shared capture resource through its external script URL.');
       await ctx.audioWorklet.addModule(WORKLET_URL);
       const sink = ctx.createGain(); sink.gain.value = 0; sink.connect(ctx.destination); s.nodes.push(sink);
-      const taps = [];
+      const taps = []; let systemTap = null;
+      const flushTap = tap => new Promise((resolve,reject) => {
+        if (tap.ended) return resolve();
+        const timeout = setTimeout(() => { tap.flushed=null; reject(fail('pcm_flush_timeout','Final PCM has not been saved; retry Stop.')); },5000);
+        tap.flushed=()=>{clearTimeout(timeout);resolve();}; tap.node.port.postMessage('flush');
+      });
       const addTap = (name, input, baseMs = 0) => {
         const node = new AudioWorkletNode(ctx, 'wizard-capture-pcm'); input.connect(node); node.connect(sink); s.nodes.push(node);
         const tap = { node, ms: baseMs, flushed: null }; taps.push(tap);
@@ -271,31 +369,46 @@
           if (samples?.length) {
             const pcm = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength), at = tap.ms;
             tap.ms += pcm.byteLength / 32; enqueue(s, new Blob([pcm]), name, at);
-            if (name === 'me') safeCall(s.opts.onPcm, { pcm, startMs: (s.opts.offsetMs || 0) + at, source: name });
+            if (name === 'me') emit(s, 'pcm', { pcm, startMs: (s.opts.offsetMs || 0) + at, source: name });
           }
           if (final) { tap.ended = true; tap.flushed?.(); }
         };
+        return tap;
       };
       addTap('me', analyser);
-      s.display = await s.displayPromise;
-      if (s.display) {
-        s.display.getVideoTracks().forEach(t => { t.stop(); s.display.removeTrack(t); });
-        if (!s.display.getAudioTracks().length) { s.display.getTracks().forEach(t => t.stop()); safeCall(s.opts.onWarn, 'No computer audio was shared.'); }
-        else {
-          const systemSource = ctx.createMediaStreamSource(s.display), systemAnalyser = ctx.createAnalyser();
-          systemAnalyser.fftSize = 512; systemSource.connect(systemAnalyser); s.nodes.push(systemSource, systemAnalyser);
-          addTap('them', systemAnalyser, taps[0].ms); s.systemAnalyser = systemAnalyser;
-        }
-      }
+      const attachSystem = stream => {
+        if (!stream) return;
+        stream.getVideoTracks().forEach(t=>{t.stop();stream.removeTrack(t);});
+        if (!stream.getAudioTracks().length) { stream.getTracks().forEach(t=>t.stop()); emit(s,'warn','No computer audio was shared.'); return; }
+        s.display=stream; s.hasSystemAudio=true;
+        const input=ctx.createMediaStreamSource(stream), an=ctx.createAnalyser(); an.fftSize=512;input.connect(an);
+        s.nodes.push(input,an); s.systemAnalyser=an; systemTap=addTap('them',an,taps[0].ms);
+        systemTap.input=input;systemTap.an=an;
+        stream.getAudioTracks().forEach(t=>t.addEventListener('ended',()=>{ if(s.hasSystemAudio && !s.inputStopped) void s.engine?.setSystemAudio(false).catch(()=>{}); },{once:true}));
+      };
+      attachSystem(await s.displayPromise);
+      let changing = null;
       s.engine = {
         stop: async () => {
+          if (changing) await changing;
           if (ctx.state === 'suspended') await ctx.resume();
-          await Promise.all(taps.map(tap => new Promise((resolve, reject) => {
-            if (tap.ended) return resolve();
-            const timeout = setTimeout(() => { tap.flushed = null; reject(fail('pcm_flush_timeout', 'Final PCM has not been saved; retry Stop.')); }, 5000);
-            tap.flushed = () => { clearTimeout(timeout); resolve(); }; tap.node.port.postMessage('flush');
-          })));
-        }, cancel: async () => {}, pause: () => ctx.suspend(), resume: () => ctx.resume()
+          await Promise.all(taps.map(flushTap));
+        }, cancel: async () => { if (changing) await changing; }, pause: () => ctx.suspend(), resume: () => ctx.resume(),
+        setSystemAudio: on => {
+          if (changing) return Promise.reject(fail('busy','Computer audio is already changing.'));
+          if (on === !!s.hasSystemAudio) return Promise.resolve();
+          // Invoke the picker before the first await, in the originating user gesture.
+          const request = on ? navigator.mediaDevices.getDisplayMedia({audio:true,video:true}) : null;
+          changing=(async()=>{
+            if(on) { const stream=await request; if(s.inputStopped||s.discard) {stream.getTracks().forEach(t=>t.stop());return;} attachSystem(stream); }
+            else {
+              const tap=systemTap; if(tap) {await flushTap(tap); tap.input.disconnect();tap.an.disconnect();tap.node.disconnect();await s.writes;await drain(s);uploadChunk(s,'them',null,0,true);await put(s.row);}
+              s.hasSystemAudio=false;s.systemAnalyser=null;systemTap=null;
+              const display=s.display;s.display=null;display?.getTracks().forEach(t=>t.stop());
+            }
+            emit(s,'state',{recording:true,paused:s.phase==='paused',hasSystemAudio:!!s.hasSystemAudio});changed();
+          })().finally(()=>{changing=null;});return changing;
+        }
       };
     } else {
       if (!W.MediaRecorder) throw fail('unsupported', 'Audio recording is unavailable.');
@@ -398,15 +511,16 @@
             throw e;
           }
         };
-        return { nativeId: meetingId, mime: 'audio/wav', pcm: true,
+        return { nativeId: meetingId, mime: 'audio/wav', pcm: true, livePcm: !!pcm, backendStopOwned: typeof b.onState === 'function',
+          ...(b.setSystemAudio ? { setSystemAudio: on => b.setSystemAudio(on) } : {}),
           stop: async () => { const final = await stopNative(); await detach(); safeCall(opts.onNativeState, final);
             // The existing bridge owns full-quality 5s uploads + final_seq. PCM tee
             // is a recoverable local *partial* backup, never a replacement upload.
-            return { partial: true, durationMs: final?.mediaMs || 0, meta: { meetingId, status: final, backendOwned: true } }; },
+            return { partial: true, ...(final?.mediaMs != null ? {durationMs:final.mediaMs} : {}), meta: { meetingId, status: final, backendOwned: true, backendStopOwned: typeof b.onState === 'function' } }; },
           cancel: async () => { await stopNative(); await detach(); }, pause: () => b.pause?.(), resume: () => b.resume?.(), detach: () => { offs.forEach(off => safeCall(off)); }
         };
       },
-      async recover(row) { const st = await b.status?.(); return st?.recording && st.meetingId === row.nativeId ? { live: true } : { partial: true, meta: { meetingId: row.nativeId, status: st, backendOwned: true } }; },
+      async recover(row) { const st = await b.status?.(); return st?.recording && st.meetingId === row.nativeId ? { live: true } : { partial: true, meta: { meetingId: row.nativeId, status: st, backendOwned: true, backendStopOwned: typeof b.onState === 'function' } }; },
       ack: async () => {} // native meeting chunks follow the task backend's own retention policy
     };
   }
@@ -457,14 +571,26 @@
     return null;
   }
   async function recoverLocked() {
-    for (const row of await rows()) {
+    let all = await rows(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id, r); ownershipLoaded = true; changed();
+    const meeting = attachedMeetingBridge || W.wizardNative?.meetings || (W.wizardMizelPort ? nativeMeetingPort() : null);
+    if (meeting?.status) {
+      const st = await meeting.status();
+      if (st?.recording && st.meetingId && !all.some(r=>r.native==='wizard-meetings' && r.nativeId===st.meetingId)) {
+        const row={id:crypto.randomUUID(),appId:'mizel',kind:'meeting',native:'wizard-meetings',nativeId:st.meetingId,
+          status:'recoverable',partial:true,startedAt:Date.now()-(st.mediaMs||0),durationMs:st.mediaMs||0,seq:0,bytes:0,pcm:true,mime:'audio/wav',meta:{meetingId:st.meetingId}};
+        recoveryLive.add(row.id);await put(row);all=await rows();
+      }
+    }
+    for (const row of all) {
       if (!['starting', 'recording', 'recoverable'].includes(row.status)) continue;
+      if (row.native && !row.nativeId) { await put({ ...row, status: 'recoverable', partial: true, recoveryError: 'native_owner_uncertain' }); continue; }
       if (active?.row.id === row.id) continue;
       try {
       if (row.native && row.nativeId) {
         const a = adapter({ kind: row.kind }, row);
         const recovered = await a.recover?.(row);
-        if (recovered?.live) { await put({ ...row, status: 'recoverable', partial: true, recoveryError: null }); continue; }
+        if (recovered?.live) { recoveryLive.add(row.id); await put({ ...row, status: 'recoverable', partial: true, recoveryError: null }); continue; }
+        recoveryLive.delete(row.id);
         if (recovered?.blob && !row.bytes) {
           const s = { row, queue: [], writes: Promise.resolve(), opts: {}, limit: DEFAULT_LIMIT };
           enqueue(s, recovered.blob); await s.writes; if (s.error) throw s.error; Object.assign(row, s.row);
@@ -484,21 +610,27 @@
   async function recover() {
     let unlock;
     try { unlock = await acquire(); recoveryError = null; await recoverLocked(); }
-    catch (e) { if (e.code !== 'busy') { recoveryError = e; throw e; } }
+    catch (e) { if (e.code !== 'busy') { recoveryError = e; throw e; }
+      const all = await rows(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id,r); ownershipLoaded = true; changed(); }
     finally { unlock?.(); }
   }
   async function start(appId, opts = {}) {
     const meta = validate(appId, opts);
+    const prepared = opts.preparedId ? preparations.get(opts.preparedId) : null;
+    if (opts.preparedId && (!prepared || prepared.appId !== appId)) throw fail('invalid_preparation', 'Preparation belongs to another app.');
     if (active) throw fail('busy', 'Microphone held by ' + active.row.appId, { appId: active.row.appId });
-    const s = { row: { id: crypto.randomUUID(), appId, kind: opts.kind || 'audio', status: 'starting', startedAt: Date.now(), durationMs: 0, seq: 0, bytes: 0, mime: '', meta },
-      phase: 'starting', opts, levels: new Set(), offs: [], queue: [], writes: Promise.resolve(), limit: Math.min(DEFAULT_LIMIT, opts.maxBytes || DEFAULT_LIMIT) };
+    const s = { row: { id: crypto.randomUUID(), appId, kind: opts.kind || 'audio', status: 'starting', startedAt: Date.now(), durationMs: 0, seq: 0, bytes: 0, mime: '', meta, delivery: { chunkMs: opts.chunkMs || 5000, offsetMs: opts.offsetMs || 0, seqBase: opts.seqBase || { me: 0, them: 0 } } },
+      phase: 'starting', opts: { ...opts }, listeners: {}, levels: new Set(), offs: [], queue: [], writes: Promise.resolve(), limit: Math.min(DEFAULT_LIMIT, opts.maxBytes || DEFAULT_LIMIT) };
+    for (const [key,opt] of [['pcm','onPcm'],['chunk','onChunk'],['state','onNativeState'],['warn','onWarn']])
+      if (typeof opts[opt] === 'function') observe(s,key,opts[opt]);
+    if (prepared) { preparations.delete(prepared.id); s.ctx = prepared.ctx; s.displayPromise = prepared.display?.catch(e => { emit(s,'warn','Computer audio was not captured: ' + e.message); return null; }); }
     active = s; changed();
     // WebAudio activation happens synchronously in the gesture, before IDB awaits.
     try {
       let native = adapter(opts);
       if (!native) {
-        const AC = W.AudioContext || W.webkitAudioContext; if (AC) { s.ctx = new AC(); void s.ctx.resume().catch(() => {}); }
-        if (opts.systemAudio) {
+        const AC = W.AudioContext || W.webkitAudioContext; if (AC && !s.ctx) { s.ctx = new AC(); void s.ctx.resume().catch(() => {}); }
+        if (opts.systemAudio && !s.displayPromise) {
           if (!navigator.mediaDevices?.getDisplayMedia) throw fail('system_audio_unavailable', 'Computer audio sharing is unavailable.');
           s.displayPromise = navigator.mediaDevices.getDisplayMedia({ audio: true, video: true }).catch(e => { safeCall(opts.onWarn, 'Computer audio was not captured: ' + e.message); return null; });
         }
@@ -509,7 +641,7 @@
       if (opts.resumeId) {
         const row = (await rows()).find(r => r.id === opts.resumeId && r.appId === appId && r.status === 'recoverable');
         if (!row) throw fail('not_recoverable', 'No native recording is available to resume.');
-        s.row = row; s.partial = false; native = adapter({ ...opts, kind: row.kind }, row);
+        s.row = row; recoveryLive.delete(row.id); s.partial = false; s.opts = { ...row.delivery, ...s.opts }; native = adapter({ ...opts, kind: row.kind }, row);
         if (!native) throw fail('native_unavailable', 'Restore the native bridge before resuming this take.');
       }
       // The persistence request is advisory; the IDB write itself is mandatory.
@@ -519,12 +651,14 @@
         s.row.native = native.name || 'configured';
         if (s.row.native === 'wizard-meetings') s.row.nativeId = opts.meta?.meetingId || s.row.nativeId;
         await put(s.row);
-        s.engine = await native.start(opts, { level: value => level(s, value), chunk: (blob, source, startMs) => enqueue(s, blob, source, startMs) }, opts.resumeId ? s.row : null);
+        s.hasSystemAudio = !!opts.systemAudio && capabilities(opts).systemAudioStart;
+        s.engine = await native.start({ ...opts, onPcm: frame => emit(s,'pcm',frame), onNativeState: st => { if(!st)return; s.nativeState=st; if(st.hasSystemAudio != null)s.hasSystemAudio=!!st.hasSystemAudio;
+          emit(s,'state',st); if(st.recording===false && active===s && ['recording','paused'].includes(s.phase) && !s.finishPromise) void finish(s).catch(()=>{}); }, onWarn: msg => emit(s,'warn',msg) }, { level: value => level(s, value), chunk: (blob, source, startMs) => enqueue(s, blob, source, startMs) }, opts.resumeId ? s.row : null);
         s.row.nativeId = s.engine.nativeId; s.row.mime = s.engine.mime || 'audio/wav'; s.row.pcm = !!s.engine.pcm;
         if (s.engine.detach) s.offs.push(s.engine.detach);
       } else await browserEngine(s);
       s.row.status = 'recording'; s.row.startedAt = opts.resumeId ? s.row.startedAt : Date.now(); await put(s.row);
-      s.phase = 'recording'; s.writes = s.writes.then(() => drain(s)); changed();
+      s.phase = s.nativeState?.paused ? 'paused' : 'recording';if(s.nativeState?.paused)s.pausedAt=Date.now(); s.writes = s.writes.then(() => drain(s)); changed();
       if (s.interrupted) void finish(s, true).catch(() => {});
       if (opts.maxMs) s.maxTimer = setTimeout(() => { void finish(s).catch(() => {}); }, Math.min(opts.maxMs, 2147483647));
       return session(s);
@@ -536,7 +670,9 @@
         cleanup(s);
         // A native start might have succeeded before its bridge reply failed.
         // Keep the reservation recoverable instead of deleting the only owner hint.
-        if (s.row.native) { s.row.status = 'recoverable'; s.row.partial = true; try { await put(s.row); } catch (_) {} }
+        if (s.row.native && !['mic_permission','native_busy','permission_denied','busy'].includes(e.code) && e.name!=='NotAllowedError') {
+          s.row.status='recoverable';s.row.partial=true;try {await put(s.row);const recovered=await adapter(opts)?.recover?.(s.row);if(recovered?.live)recoveryLive.add(s.row.id);}catch(_){}
+        }
         else { try { await remove(s.row.id); } catch (_) {} }
         release(s);
       }
@@ -562,10 +698,14 @@
       await remove(id);
     });
   }
-  const ready = openDB().then(() => recover()).catch(e => { recoveryError = e; });
+  const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(DB_NAME + ':ownership') : null;
+  if (channel) channel.onmessage = () => { rows().then(all => { ownedRows.clear(); for (const r of all) ownedRows.set(r.id,r); ownershipLoaded = true; changed(); }).catch(() => {}); };
+  const ready = openDB().then(() => recover()).catch(e => { recoveryError = e; changed(); });
   // Host-only adapter seam. Apps get only the frozen facade via app-services;
   // never expose configureNative through RPC or allow arbitrary bridge eval.
-  W.WizAppCapture = Object.freeze({ version: 1, start, pending, ack, getState: state,
+  W.WizAppCapture = Object.freeze({ version: 1, start, pending, ack, prepare, discardPrepared, capabilities, getState: state,
+    current(appId) { validate(appId,{}); const r=active?.row.appId===appId ? active.row : [...recoveryLive].map(id=>ownedRows.get(id)).find(r=>r?.appId===appId);
+      return r ? {id:r.id,meta:JSON.parse(JSON.stringify(r.meta)),phase:active?.row.id===r.id ? active.phase : 'recoverable'} : null; },
     configureNativeBridge(bridge) {
       if (active) throw fail('busy', 'Cannot replace an active meeting bridge.');
       if (bridge && (typeof bridge.start !== 'function' || typeof bridge.stop !== 'function')) throw fail('invalid_adapter', 'Meeting bridge must implement start/stop.');
@@ -575,6 +715,8 @@
     async resume(appId, id, opts = {}) {
       if (active?.row.appId === appId && active.row.id === id) {
         if (active.phase === 'starting') throw fail('capture_starting', 'Wait for capture to finish starting.');
+        for (const [key,opt] of [['pcm','onPcm'],['chunk','onChunk'],['state','onNativeState'],['warn','onWarn']])
+          if (typeof opts[opt] === 'function') active.listeners[key]=new Set([opts[opt]]);
         return session(active);
       }
       return start(appId, { ...opts, resumeId: id });

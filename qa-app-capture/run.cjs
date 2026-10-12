@@ -221,6 +221,7 @@ async function begin(page, appId = 'mizel', opts = {}) {
     assert.equal(await p.evaluate(async () => { try { await session.stop(); } catch (e) { return e.code; } }), 'cancelled');
     await p.evaluate(async () => { IDBDatabase.prototype.transaction = cancelTxn; await session.cancel(); WizAppCapture.configureNative(null); });
   });
+  if(process.env.MIZEL_WEB) await require('./integration.cjs')({browser,root,evidence,test});
   await p.screenshot({ path: path.join(evidence, 'capture-contract.png') });
   assert.deepEqual(errors, []);
   fs.writeFileSync(path.join(evidence, 'receipt.json'), JSON.stringify({ hostname: os.hostname(), sourceSHA: process.env.SOURCE_SHA, treeHash: process.env.SOURCE_TREE, moduleSHA256: crypto.createHash('sha256').update(fs.readFileSync(path.join(root, 'web/core/app-capture.js'))).digest('hex'), command: 'node qa-app-capture/run.cjs', browser: browser.version(), receipts, errors, limitation: 'Native contract mocks only, not Android hardware/native foreground service QA. Synthetic browser microphone; no production task upload.' }, null, 2));
