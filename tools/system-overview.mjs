@@ -42,7 +42,7 @@ const TOOLS = {
 };
 const MODEL_NAMES = [[/opus-5-5/, 'Claude Opus 5.5'], [/opus/, 'Claude Opus'], [/sonnet/, 'Claude Sonnet'], [/gpt-5\.6-sol/, 'GPT-5.6 Sol'], [/gpt-5\.5/, 'GPT-5.5'],
   [/grok-4\.5/, 'Grok 4.5'], [/grok-4\.3/, 'Grok 4.3'], [/kimi-k3/, 'Kimi K3'], [/glm-5-3/, 'GLM 5.3']];
-export const modelName = m => { const s = str(m, 80); for (const [re, n] of MODEL_NAMES) if (re.test(s)) return n; return s.replace(/^[\w-]+\//, ''); };
+export const modelName = m => { const s = /^[\w.:/-]{1,80}$/.test(m || '') ? m : ''; for (const [re, n] of MODEL_NAMES) if (re.test(s)) return n; return s.replace(/^[\w-]+\//, ''); };
 
 // Tiny YAML reader for the two scalar fields we need (model.default/provider and mcp_servers keys). No secrets read.
 export function configFacts(text) {

@@ -28,12 +28,25 @@
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
 
   /* ---------------- data ---------------- */
+  // Every listing is rebuilt from typed, bounded fields: the public index is untrusted input.
+  const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  const txt = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
+  const ids = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string' && ID.test(x)).slice(0, 24) : []);
+  const words = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string' && x.length <= 40).slice(0, 24) : []);
+  function clean(a) {
+    if (!a || typeof a !== 'object' || !ID.test(a.id || '')) return null;
+    return { id: a.id, name: txt(a.name, 60) || a.id, summary: txt(a.summary, 280), publisher: txt(a.publisher, 60), version: txt(a.version, 40),
+      type: ['view', 'service', 'agent', 'external'].includes(a.type) ? a.type : 'service', category: txt(a.category, 24), logo: typeof a.logo === 'string' && /^https:\/\//.test(a.logo),
+      url: txt(a.url, 200), tags: words(a.tags), provides: words(a.provides), uses: ids(a.uses), architectures: words(a.architectures),
+      installs: Number.isSafeInteger(a.installs) && a.installs > 0 ? a.installs : 0, checked_at: Number.isFinite(a.checked_at) ? a.checked_at : 0 };
+  }
   const get = p => fetch(DATA + p, { credentials: 'same-origin', cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
   async function load() {
     const [idx, tags, inst] = await Promise.allSettled([get('wizard/v1/index/search?limit=100'), get('wizard/v1/index/tags'), get('api/apps/installed')]);
     if (idx.status !== 'fulfilled') { S.error = 'The App Index isn’t reachable right now.'; S.loaded = true; return paint(); }
-    S.apps = (idx.value.apps || []).filter(a => a && /^[a-z0-9][a-z0-9-]{0,63}$/.test(a.id || '')).filter(a => a.id !== 'wizard-shell');
-    S.tags = tags.status === 'fulfilled' ? (tags.value.tags || []) : [];
+    S.apps = (Array.isArray(idx.value.apps) ? idx.value.apps : []).map(clean).filter(Boolean).filter(a => a.id !== 'wizard-shell');
+    S.tags = (tags.status === 'fulfilled' && Array.isArray(tags.value.tags) ? tags.value.tags : [])
+      .filter(t => t && ID.test(t.id || '')).map(t => ({ id: t.id, count: Number.isSafeInteger(t.count) && t.count > 0 ? t.count : 0 })).filter(t => t.count);
     if (inst.status === 'fulfilled') for (const x of inst.value.installed || []) {
       const id = x?.info?.id; if (!id) continue; const prev = S.installed.get(id);
       if (!prev || x.app?.status === 'running') S.installed.set(id, { status: x.app?.status || 'unknown' });
@@ -165,7 +178,7 @@
     const g = e.target.closest('[data-get]');
     if (g) { e.stopPropagation(); const a = S.apps.find(x => x.id === g.dataset.get); toast(`<b>Installing from the Store is almost here.</b><span>For now, ask your agent: “install ${esc(a?.name || 'it')}”.</span>`); return; }
     const o = e.target.closest('[data-open]');
-    if (o) { e.stopPropagation(); try { parent.WizOpenApp(o.dataset.open); } catch (_) { toast('<b>Open it from your apps.</b>'); } return; }
+    if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
     const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);
     const t = e.target.closest('[data-tag]'); if (t) return openKind('tag:' + t.dataset.tag);
     const a = e.target.closest('[data-app]'); if (a) return openApp(a.dataset.app);

@@ -158,7 +158,13 @@
   // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
-  window.WizOpenApp = id => { const a = hostedOpenable(id); return a ? !!openApp(a) : false; };
+  // Only the App Store and System windows may ask; the sender is checked by its actual frame, not by anything it says.
+  addEventListener('message', e => {
+    const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
+    const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
+    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system'].includes(w.appId)) return;
+    const a = hostedOpenable(d.id); if (a) openApp(a);
+  });
   function openApp(a, opts = {}) {
     if (!a) return false;
     if (a.kind === 'view' && a.view === 'inbox') { openInbox(); return true; }

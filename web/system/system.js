@@ -117,7 +117,7 @@
   document.addEventListener('click', e => {
     const n = e.target.closest('[data-node]'); if (n) { focusNode(sel === n.dataset.node ? null : n.dataset.node); return; }
     const j = e.target.closest('[data-jump]'); if (j) { $('s-' + j.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
-    if (e.target.closest('#more')) { try { if (!parent.WizOpenApp?.('app-store')) location.href = '../store/index.html'; } catch (_) { location.href = '../store/index.html'; } }
+    if (e.target.closest('#more')) { if (framed) parent.postMessage({ type: 'wizard:open-app', id: 'app-store' }, location.origin); else location.href = '../store/index.html'; }
   });
   addEventListener('resize', () => D && requestAnimationFrame(wires));
   // Canonical hosted-app Back hook: clears a focused node; otherwise the shell takes the step.
