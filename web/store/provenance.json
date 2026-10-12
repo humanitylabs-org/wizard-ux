@@ -1,0 +1,18 @@
+{
+  "license": "GPL-3.0-only",
+  "upstream": "https://github.com/humanitylabs-org/wizard-app-manager",
+  "source": "wizard-views/wizard-apps.js",
+  "nativeCommit": "a612285",
+  "adapterCommit": "23db0d10281f4b570ec845d0cb882b3bfda1fdcf",
+  "frozenPreviewCommit": "7afcc94",
+  "indexAdapterCommit": "2d22e8770a5fb5e0879a2cecf02dffa1524a547a",
+  "authors": [
+    "Oscar",
+    "Miguel"
+  ],
+  "changes": [
+    "Store/card-only extraction",
+    "Browse-only lifecycle controls",
+    "Normal URL-backed app frame"
+  ]
+}

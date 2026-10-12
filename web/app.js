@@ -938,6 +938,12 @@
     focusWin(here); save();
     return W[here];
   }
+  window.WizStoreOpen = (id, url) => {
+    const a = APP[id]; if (!a?.url || id === 'app-store') return false;
+    const u = new URL(a.url, location.origin);
+    if (u.origin !== location.origin || u.pathname + u.search + u.hash !== url || u.pathname.startsWith('/wizard-os-home/')) return false;
+    return openApp(a);
+  };
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
@@ -1717,7 +1723,7 @@
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native').slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
         <div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>
-        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals').length}</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals').map(appTile).join('')}</div></div>`); // the per-desk window list never renders in the launcher: it read as stray text
+        <div class="lgroup"><h4>My apps <span>${APPS.filter(a => a.id !== 'app-store' && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => a.id !== 'app-store' && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
       return;
     }
     const n = norm(q);
@@ -3009,6 +3015,7 @@
       if (v === 'home') { window.WosResources?.back(); return goDesk(0, true); }
       if (v === 'inbox') return openSheet('inbox');
       if (v === 'apps') return openSheet('launcher');
+      if (v === 'store') return openApp(APP['app-store']);
       if (v === 'settings' || v === 'usage') return openSettings();
       if (v === 'day' || v === 'week' || v === 'month') return openReview(v);
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); toast('◇', 'Files isn’t on this Wizard', 1800); return; }
