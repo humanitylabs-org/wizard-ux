@@ -188,6 +188,17 @@ async function begin(page, appId = 'mizel', opts = {}) {
     assert.ok(await p.evaluate(() => deviceCalls.includes('done')));
     await p.evaluate(() => { delete window.WizardOSDevice; });
   });
+  await test('native-null-claim-stays-recoverable-and-cannot-be-acked', async () => {
+    await p.reload(); await ready(p); await begin(p, 'trackhunt', { kind: 'song' }); const id = await p.evaluate(() => session.id);
+    await p.evaluate(() => { WizardOSDevice.recStop(JSON.parse(WizardOSDevice.recActive()).id); localStorage.setItem('qa-null-claim', '1'); });
+    await p.reload(); await ready(p);
+    const st = await p.evaluate(async () => { const r = (await WizAppCapture.pending('trackhunt'))[0]; return { id: r.id, recovery: r.meta.captureRecovery }; });
+    assert.equal(st.id, id); assert.equal(st.recovery.error, 'native_claim_pending');
+    assert.equal(await p.evaluate(async id => { try { await WizAppCapture.ack('trackhunt', id); } catch (e) { return e.code; } }, id), 'capture_active');
+    await p.evaluate(() => localStorage.removeItem('qa-null-claim'));
+    assert.equal(await p.evaluate(async () => (await WizAppCapture.pending('trackhunt'))[0].blob.size), 8);
+    await p.evaluate(id => WizAppCapture.ack('trackhunt', id), id); await p.evaluate(() => { delete window.WizardOSDevice; });
+  });
   await test('existing-native-meeting-mock-keeps-task-upload-authority-and-live-pcm', async () => {
     await p.evaluate(installMeetingMock);
     await p.evaluate(() => { const original = wizardNative.meetings.stop; wizardNative.meetings.stop = async () => { await original(); throw Object.assign(new Error('injected ambiguous stop timeout'), { code: 'native_timeout' }); }; });
