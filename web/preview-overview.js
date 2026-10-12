@@ -1,7 +1,7 @@
 /* Staging only: open representative real apps and land directly on the overview being judged.
  * Remove this script and its index.html tag before promotion. Never changes the production origin. */
 (async () => {
-  if (!location.hostname.endsWith('.staging.wizard001.com')) return;
+  if (!location.hostname.endsWith('.staging.wizard001.com') || new URLSearchParams(location.search).has('qaNoPreview')) return;
   await new Promise(resolve => window.addEventListener('load', resolve, { once: true }));
   for (let n = 0; n < 60 && !window.__wos; n++) await new Promise(r => setTimeout(r, 100));
   if (!window.__wos) return;

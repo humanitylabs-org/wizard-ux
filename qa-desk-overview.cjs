@@ -10,9 +10,10 @@ const ok = (c, s) => { c ? pass++ : fail++; console.log(c ? 'PASS' : 'FAIL', s);
   const b = await pw.chromium.launch({ executablePath: process.env.QA_CHROME || undefined });
   for (const width of [393, 360]) {
     const ctx = await b.newContext({ viewport: { width, height: 852 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, ignoreHTTPSErrors: true });
-    await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.rvCoach', 'true'); } catch {} });
+    await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.rvCoached', 'true'); } catch {} });
     let agents = 0;
-    await ctx.route('**/*', r => { const q = r.request(); if (!['GET', 'HEAD'].includes(q.method())) { if (/\/runs$|\/sessions$|\/steer/.test(q.url())) agents++; return r.fulfill({ status: 403, contentType: 'application/json', body: '{}' }); } return r.continue(); });
+    const isolatedApps = new Set(['/wizard-music/', '/calendar/', '/wisdom/', '/topics/', '/mizel/']);
+    await ctx.route('**/*', r => { const q = r.request(); if (!['GET', 'HEAD'].includes(q.method())) { if (/\/runs$|\/sessions$|\/steer/.test(q.url())) agents++; return r.fulfill({ status: 403, contentType: 'application/json', body: '{}' }); } if (q.isNavigationRequest() && q.frame().parentFrame() && [...isolatedApps].some(path => new URL(q.url()).pathname.startsWith(path))) return r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>QA app body</title><body style="background:#110e1c;color:white">App content excluded: testing shell navigation only</body>' }); return r.continue(); });
     const p = await ctx.newPage(), errs = []; p.on('pageerror', e => errs.push(String(e)));
     await p.goto(URL_); await p.waitForFunction(() => window.__wos); await p.waitForTimeout(3500);
     await p.evaluate(() => __wos.closeOverview());
@@ -38,6 +39,7 @@ const ok = (c, s) => { c ? pass++ : fail++; console.log(c ? 'PASS' : 'FAIL', s);
     ok(info.keyboard && info.close, `${width}: cards keyboard reachable, close targets ≥36px`);
     ok(info.fit, `${width}: two-column cards fit the phone`);
     await p.screenshot({ path: path.join(out, `${width}-overview.png`) });
+    if (!info.big) { console.log('Baseline has no redesigned overview; recognition checks above are the expected failures.'); await ctx.close(); continue; }
     // Tap the glyph; event goes through to its card.
     const cal = p.locator('.ov-card[data-ov]').filter({ has: p.locator('.sg-calendar') }).first();
     const did = await cal.getAttribute('data-ov'); await cal.tap(); await p.waitForTimeout(500);
@@ -66,6 +68,17 @@ const ok = (c, s) => { c ? pass++ : fail++; console.log(c ? 'PASS' : 'FAIL', s);
     ok(await p.evaluate(() => /^\d+ open$/.test(document.querySelector('.ov-head span').textContent) && parseInt(document.querySelector('.ov-head span').textContent) === __wos.desks.filter(d => !d.home && d.wins.length).length), `${width}: open count excludes Home and unpicked empty desk`);
     const empty = p.locator('.ov-card.here [data-ovx]'); await empty.tap(); await p.waitForTimeout(400);
     ok(await p.evaluate(n => __wos.desks.length === n, n), `${width}: close empty card removes only that desk`);
+    // Reviews keep their amber cue even when current; long chat titles remain as a caption.
+    await p.evaluate(() => { __wos.closeOverview(); __wos.openWin({ app: 'frame', appId: 'wizard-search', from: { sid: 'qa-overview-review', desk: __wos.desks[0].id } }); __wos.openOverview(); });
+    await p.waitForTimeout(400);
+    ok(await p.evaluate(() => { const c = document.querySelector('.ov-card.here.review'); return !!c?.querySelector('.ov-here') && !!c?.querySelector('.ov-review') && c.getAttribute('aria-label').includes('review'); }), `${width}: review and current desk states are both visible`);
+    await p.screenshot({ path: path.join(out, `${width}-review.png`) });
+    await p.evaluate(() => { __wos.closeOverview(); __wos.openWin({ app: 'chats', thread: '__new__' }); __wos.openOverview(); });
+    await p.waitForTimeout(400);
+    ok(await p.evaluate(() => { const c = document.querySelector('.ov-card.here'); return c.querySelector('.ov-top small')?.textContent === 'New chat' && !!c.querySelector('.sg-chats'); }), `${width}: a chat desk retains its thread caption`);
+    await p.evaluate(() => document.querySelector('#overview').scrollTop = document.querySelector('#overview').scrollHeight); await p.waitForTimeout(300);
+    ok(await p.locator('[data-ovadd]').isVisible() && await p.locator('.ov-hint').isVisible(), `${width}: New desk and the gesture hint are reachable at the bottom`);
+    await p.screenshot({ path: path.join(out, `${width}-bottom.png`) });
     ok(!agents, `${width}: zero agent-run attempts`);
     ok(!errs.length, `${width}: no page errors${errs.length ? ' ' + errs.join(';') : ''}`);
     await ctx.close();
