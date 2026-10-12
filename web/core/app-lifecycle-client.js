@@ -5,6 +5,9 @@
   const KEY = /^[A-Za-z0-9_-]{16,128}$/;
   const ACTIONS = { install: 'POST', start: 'POST', stop: 'POST', restart: 'POST', update: 'PATCH', uninstall: 'DELETE' };
   const BUSY = new Set(['installing', 'starting', 'stopping', 'updating', 'restarting', 'uninstalling']);
+  // Outcomes that may hide an effect: the retry must reuse the same key so the bridge replays or reconciles it.
+  const UNCERTAIN = new Set(['operation_unconfirmed', 'terminal_status_unconfirmed', 'projection_refresh_failed']);
+  const uncertainError = e => !e.status || UNCERTAIN.has(e.code);
   let current = null, sessionLoad = null;
   const keys = new Map();
   try {
@@ -25,7 +28,8 @@
     if (!force && current && Date.now() < current.until) return current;
     if (!sessionLoad) sessionLoad = json('/wizard/v1/app-lifecycle/session').then(s => {
       if (typeof s.csrf !== 'string' || !s.csrf) throw error('Owner session unavailable.', 'owner_session_required', 403);
-      return (current = { csrf: s.csrf, until: Date.now() + Math.max(0, Number(s.expires_in || 0) - 60) * 1000 });
+      // Renew two minutes early (the Service rotates then too), so no write starts on a session about to expire.
+      return (current = { csrf: s.csrf, until: Date.now() + Math.max(0, Number(s.expires_in || 0) - 120) * 1000 });
     }).finally(() => { sessionLoad = null; });
     return sessionLoad;
   }
@@ -62,9 +66,11 @@
         try { result = await send(await session(false)); }
         catch (e) { if (e.code !== 'owner_session_required') throw e; result = await send(await session(true)); }
       } catch (e) {
-        // Network/5xx means the operation may have run; keeping its key makes retry reconcile safely.
-        if (e.status && e.status < 500 && e.code !== 'operation_unconfirmed') clear(name);
-        progress?.({ state: 'error', action, id, uncertain: !e.status || e.status >= 500, error: e.code });
+        // Only a lost reply or an unconfirmed outcome keeps the key (retry replays it). A definitive failure, 5xx
+        // included (bridge unavailable, store refresh failed), is journaled under its key: retry after repair
+        // needs a new one, and the bridge still refuses a new key while that app has an unfinished operation.
+        if (!uncertainError(e)) clear(name);
+        progress?.({ state: 'error', action, id, uncertain: uncertainError(e), error: e.code });
         throw e;
       }
       // The production bridge waits for terminal state. Verify the published read projection, too.
@@ -84,7 +90,7 @@
         } catch (e) { if (e.code === 'lifecycle_failed' || e.code === 'operation_unconfirmed') throw e; }
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      // Keep the key if publication is still uncertain; never re-submit a new install identity.
+      // Publication still pending: keep the key, so a retry replays this operation instead of submitting a new one.
       await refresh();
       return { ...result, status: hadRead && last ? last.app?.status || 'pending' : 'pending', pending: true };
     })().finally(() => { active.delete(name); });
@@ -95,6 +101,8 @@
     if (!ID.test(app?.id || '')) throw error('Invalid app dependency.', 'invalid_dependency', 400);
     const have = new Map((await installed()).map(x => [x.info.id, x.app?.status]));
     if (have.get(app.id) === 'running') { await refresh(); return { success: true, status: 'running', existing: true }; }
+    // Installed but stopped (the app or a dependency): Get starts it; an install would be a no-op.
+    if (have.get(app.id) === 'stopped') return operate(app.id, 'start', {}, progress);
     if (seen.has(app.id)) throw error('Invalid app dependency.', 'invalid_dependency', 400);
     seen.add(app.id);
     for (const id of (Array.isArray(app.uses) ? app.uses : []).filter(x => ID.test(x)).slice(0, 24)) {
