@@ -113,6 +113,16 @@ async function begin(page, appId = 'mizel', opts = {}) {
     assert.ok(out.bytes > 0); assert.ok(out.partial); assert.equal(await p.evaluate(() => WizAppCapture.getState().hold), false);
     await p.evaluate(id => WizAppCapture.ack('trackhunt', id), out.id);
   });
+  await test('pcm-timeout-late-final-and-retry-stop-succeeds', async () => {
+    await p.evaluate(() => { window.realPost = MessagePort.prototype.postMessage; window.realTimeout = setTimeout; let delayed = false; MessagePort.prototype.postMessage = function(message, ...args) { if (message === 'flush' && !delayed) { delayed = true; realTimeout(() => realPost.call(this, message, ...args), 120); return; } return realPost.call(this, message, ...args); }; window.setTimeout = (fn, ms, ...args) => realTimeout(fn, ms === 5000 ? 40 : ms, ...args); });
+    await begin(p, 'mizel', { kind: 'meeting' }); await p.waitForTimeout(350);
+    assert.equal(await p.evaluate(async () => { try { await session.stop(); } catch (e) { return e.code; } }), 'pcm_flush_timeout');
+    await p.waitForTimeout(200);
+    await p.evaluate(() => { MessagePort.prototype.postMessage = realPost; window.setTimeout = realTimeout; });
+    const out = await p.evaluate(async () => { const r = await session.stop(); return { id: r.id, bytes: r.blob.size }; });
+    assert.ok(out.bytes > 44); assert.equal(await p.evaluate(() => WizAppCapture.getState().hold), false);
+    await p.evaluate(id => WizAppCapture.ack('mizel', id), out.id);
+  });
   await test('ack-previous-upload-while-new-take-owns-mic', async () => {
     await begin(p, 'trackhunt', { chunkMs: 100 }); await p.waitForTimeout(200);
     const id = await p.evaluate(async () => (await session.stop()).id);
