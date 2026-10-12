@@ -179,8 +179,9 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('#3 …and the screen stays up', seen('Tailscale is off', 4))
 
         # 4 Wizard back + Try again
-        MODE['m'] = 'ok'; home(WIZ, 'on')
         check('#4 Try again is tappable', tap('Try again'))
+        check('#4 …the screen stays up and says it is trying', seen('Trying again', 3) and 'Tailscale is off' in ui())
+        MODE['m'] = 'ok'; home(WIZ, 'on')
         check('#4 …the shell opens and the screen leaves', shell_up(15) and gone('Try again', 6), title())
         shot('04-recovered')
 
