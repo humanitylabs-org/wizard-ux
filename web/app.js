@@ -2790,7 +2790,7 @@
     let hook; try { hook = win && win.__wizardCloseOverlay; } catch (e) { return null; }
     if (typeof hook !== 'function') return null;
     // Store's canonical hook returns handled/not-handled synchronously; never apply the legacy layout guess.
-    if (f.appId === 'app-store' || f.appId === 'system') { try { return hook.call(win) === true ? 'store-card' : null; } catch (_) { return null; } }
+    if (f.appId === 'app-store' || f.appId === 'system' || win?.WizardApp?.version === 1) { try { return hook.call(win) === true ? 'app-step' : null; } catch (_) { return null; } }
     const before = frameSig(win);
     let r; try { r = hook.call(win); } catch (e) { return null; }
     if (r === false) return null;
