@@ -25,9 +25,10 @@ async function checkStore(p,mobile){
   await choice.click();await f.locator('#results:not([hidden]) .row').first().waitFor();
   ok(await f.locator('#results .row').count()>0&&await f.locator('#discover').isHidden(),label+': '+kind+' opens its existing clean list');
   await f.locator('#results .row').first().click();await f.locator('#detail:not([hidden])').waitFor();
+  const detailBox=await p.locator('iframe[title="App Store"]').boundingBox();ok(detailBox&&detailBox.x>=0&&detailBox.y>=0&&detailBox.x+detailBox.width<=p.viewportSize().width+1,label+': '+kind+' detail keeps the app frame on-screen',JSON.stringify(detailBox));
   await back(p,label+' '+kind+' detail');ok(await f.locator('#results').isVisible(),label+': '+kind+' detail Back returns to its list');
   await back(p,label+' '+kind+' list');ok(await f.locator('#discover').isVisible(),label+': '+kind+' list Back returns to four choices');
-  const box=await p.locator('iframe[title="App Store"]').boundingBox();ok(box.x>=0&&box.y>=0&&box.x+box.width<=p.viewportSize().width+1,label+': '+kind+' navigation keeps the app frame on-screen',JSON.stringify(box));
+  const box=await p.locator('iframe[title="App Store"]').boundingBox();ok(box&&box.x>=0&&box.y>=0&&box.x+box.width<=p.viewportSize().width+1,label+': '+kind+' navigation keeps the app frame on-screen',JSON.stringify(box));
  }
  await p.screenshot({path:path.join(OUT,label+'-browse.png')});
  ok(await p.locator('iframe[title="App Store"]').count()===1,label+': one normal URL-backed Store frame');

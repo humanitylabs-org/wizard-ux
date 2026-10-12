@@ -18,9 +18,9 @@ function ok(value, label, detail) { cases.push({ label, pass: !!value, detail })
     await p.screenshot({ path: path.join(OUT, 'browse-' + width + '.png') });
     if (width < 500) {
       await p.goto(BASE + '?shell=phone'); await p.locator('.home-tools .home-system').waitFor();
-      const layout = await p.evaluate(() => { const box = q => { const r = document.querySelector(q).getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }; return { system: box('.home-system'), settings: box('.home-tools .gear'), date: box('.home-date'), clock: box('.home-time'), resources: !!document.querySelector('[data-home-resources] .rs-widget') }; });
+      const layout = await p.evaluate(() => { const box = q => { const r = document.querySelector(q).getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }; return { system: box('.home-system'), settings: box('.home-tools .gear'), date: (() => { const range = document.createRange(); range.selectNodeContents(document.querySelector('.home-date')); const r = range.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })(), clock: box('.home-time'), resources: !!document.querySelector('[data-home-resources] .rs-widget') }; });
       const r = layout.system, g = layout.settings, d = layout.date;
-      ok(r.w === 44 && r.h === 44 && g.x >= r.x + r.w && g.x + g.w <= width && r.y + r.h <= d.y + 10 && layout.resources, width + ': compact System/Settings fit above date; resource widget preserved', layout);
+      ok(r.w === 44 && r.h === 44 && g.x >= r.x + r.w && g.x + g.w <= width && (r.y + r.h <= d.y - 4) && layout.resources, width + ': compact System/Settings fit above date; resource widget preserved', layout);
       await p.screenshot({ path: path.join(OUT, 'home-' + width + '.png') });
       if (process.env.QA_SW === 'allow') {
         const sw = await p.evaluate(async () => { await Promise.race([navigator.serviceWorker.ready, new Promise((_, reject) => setTimeout(() => reject(new Error('no SW ready')), 10000))]); return (await navigator.serviceWorker.getRegistrations()).map(r => r.scope); });

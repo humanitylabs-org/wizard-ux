@@ -893,6 +893,7 @@ body {
 .cx-row .ub-a button[disabled] { opacity: .6; }
 
 /* Home utility shortcuts stay quiet beside Settings, away from attention cards. */
+.home .home-top { padding-top: 40px; } /* reserve the 44px shortcut row, including long dates on narrow phones */
 .home-tools { position: absolute; z-index: 5; top: calc(var(--sb) + var(--safe-t) + 8px); right: 12px; display: flex; align-items: center; gap: 6px; }
 .home-tools .gear { position: relative; top: auto; right: auto; width: 44px; height: 44px; }
 .home-system { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: transparent; border: 1px solid var(--line); color: var(--ink-3); }
