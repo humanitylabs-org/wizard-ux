@@ -1,5 +1,5 @@
 // Dock morph acceptance: real touch gestures + current-take screenshot custody. API writes are fixtures only.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
 const W = process.env.QA_WEB_DIR || __dirname;
 const URL_ = 'https://private.wizard001.com/wizard-os-home/';
@@ -16,12 +16,29 @@ async function swipe(ctx,p,dx,dy=0){const r=await p.locator('#orbWrap').bounding
  const b=await chromium.launch({args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  const {ctx,p,errs,runs}=await boot(b);
  await p.evaluate(()=>{localStorage.setItem('wos.tour.v1','true');window.WosTour?.finish('qa');});
- const uploads=[];
- await ctx.route('**/files/upload',async r=>{uploads.push(r.request().postDataBuffer());await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({file:{id:'qa-shot-'+uploads.length,filename:'screen.png',mime:'image/png',bytes:100}})});});
+ const uploads=[], held=[]; let holdUploads=false;
+ await ctx.route('**/files/upload',async r=>{
+   if (holdUploads) { held.push(r); return; }
+   uploads.push(r.request().postDataBuffer());
+   await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({file:{id:'qa-shot-'+uploads.length,filename:'screen.png',mime:'image/png',bytes:100}})});
+ });
  // Mock only the new native primitive. Its pixels are a real browser capture; native PixelCopy has a separate device gate.
  let delay=80, failure='';
- await p.exposeFunction('fixtureCapture',async id=>{const lag=delay,error=failure;const shot=await p.screenshot();setTimeout(()=>p.evaluate(({id,data,error})=>window.__wosScreenResult?.(id,data,error),{id,data:'data:image/png;base64,'+shot.toString('base64'),error}).catch(()=>{}),lag);});
- await p.evaluate(()=>{window.WizardOSNative={sideButton:()=> '{}',captureScreen:id=>window.fixtureCapture(id),keepAwake(){},haptic(){}};});
+ const sampling=[];
+ await p.exposeFunction('fixtureCapture',id=>{
+   if (id.startsWith('cancel:')) return;
+   const lag=delay,error=failure;
+   setTimeout(async()=>{
+     try {
+       const admitted=await p.evaluate(id=>window.__wosScreenSample(id),id); if (!admitted) return;
+       sampling.push(await p.evaluate(()=>getComputedStyle(document.getElementById('dock')).visibility));
+       const shot=await p.screenshot();
+       await p.evaluate(id=>window.__wosScreenSampled(id),id);
+       await p.evaluate(({id,data,error})=>window.__wosScreenResult?.(id,data,error),{id,data:'data:image/png;base64,'+shot.toString('base64'),error});
+     } catch(e) {}
+   },lag);
+ });
+ await p.evaluate(()=>{window.WizardOSNative={sideButton:()=> '{}',keepAwake(){},haptic(){}};window.wizardScreenPort={postMessage:id=>window.fixtureCapture(id)};});
  for(const width of [360,412]){
   await p.setViewportSize({width,height:892});await tapOrb(p);
   const g=await p.evaluate(()=>{const dock=document.querySelector('#dock').getBoundingClientRect();const ids=['arcCancel','arcPause','orbWrap','arcScreen','arcAttach'];return ids.map(id=>{const e=document.getElementById(id);if(!e)return {id,missing:true};const r=e.getBoundingClientRect();return {id,x:r.x,w:r.width,h:r.height,inDock:r.y>=dock.y&&r.bottom<=dock.bottom,hit:e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)),opacity:+getComputedStyle(e).opacity};});});
@@ -47,6 +64,25 @@ async function swipe(ctx,p,dx,dy=0){const r=await p.locator('#orbWrap').bounding
  delay=1500;await p.locator('#arcScreen').tap();await p.waitForTimeout(600);await p.locator('#arcCancel').tap();await p.waitForTimeout(300);await tapOrb(p);await p.waitForTimeout(1800);ok(await p.locator('#attachCount').textContent()===''&&uploads.length===1,'late capture after Cancel/new take never attaches to new take');
  delay=1400;await p.locator('#arcScreen').tap();await p.waitForTimeout(600);await tapOrb(p);ok(await p.evaluate(()=>__wos.voice==='listen'),'send while capture pending waits rather than omitting screenshot');await p.waitForTimeout(1600);ok(await p.locator('#attachCount').textContent()==='1','pending shot completes on original take');
  await p.locator('#arcCancel').tap();await p.waitForTimeout(500);ok(await p.evaluate(()=>__wos.voice==='idle'),'X still cancels');
+ // Reviewer regression: a stalled upload must never own controls on the next take.
+ delay=80;holdUploads=true;await tapOrb(p);
+ let uploading=p.waitForRequest(r=>r.url().endsWith('/files/upload'));
+ await p.locator('#arcScreen').tap();await uploading;await p.waitForTimeout(100);
+ ok(await p.locator('#arcScreen').isDisabled(),'stalled upload owns Screenshot only on current take');
+ await p.locator('#arcCancel').tap();await tapOrb(p);
+ ok(await p.locator('#arcScreen').isEnabled(),'Cancel/new take immediately releases Screenshot during stalled upload');
+ holdUploads=false;await p.locator('#arcScreen').tap();await p.waitForFunction(()=>!document.getElementById('arcScreen').disabled);
+ ok(await p.locator('#attachCount').textContent()==='1','new take can capture while previous upload is abandoned');
+ await p.locator('#arcCancel').tap();await p.waitForTimeout(400);
+ // Real fetch abort deadline, not a simulated successful response.
+ holdUploads=true;await tapOrb(p);uploading=p.waitForRequest(r=>r.url().endsWith('/files/upload'));
+ await p.locator('#arcScreen').tap();await uploading;
+ await p.waitForFunction(()=>!document.getElementById('arcScreen').disabled,null,{timeout:23000});
+ ok(await p.locator('#attachCount').textContent()===''&&await p.evaluate(()=>__wos.voice==='listen'),'stalled upload deadline clears reservation and leaves take usable');
+ ok(await p.locator('#arcScreen').isEnabled(),'upload timeout restores Screenshot without a reload');
+ ok(sampling.every(s=>s==='hidden'),'chrome hidden at actual sample even for delayed capture',sampling.join(','));
+ await p.locator('#arcCancel').tap();holdUploads=false;
+ for(const r of held) await r.abort().catch(()=>{});
  ok(errs.length===0,'no page errors',errs.join('|'));
  await b.close();console.log(pass+' pass '+fail+' fail');process.exit(fail?1:0);
 })().catch(e=>{console.error(e);process.exit(2)});

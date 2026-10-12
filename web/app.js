@@ -2002,15 +2002,27 @@
     $('#attachLabel').textContent = V.files.some(f => f.uploading) ? 'Uploading' : n ? (n === 1 ? '1 file' : `${n} files`) : 'Attach';
   }
   const sameTake = files => V.files === files && (V.state === 'listen' || V.state === 'paused');
+  function releaseScreenOperation(op) {
+    if (V.screenOp !== op) return;
+    V.screenOp = null;
+    device.classList.remove('capturing-screen');
+    $('#arcScreen').disabled = false; $('#arcScreen').classList.remove('busy');
+  }
+  function cancelTakeFiles() {
+    for (const f of V.files || []) f.abort?.abort();
+    if (V.screenOp) { const op = V.screenOp; op.abort.abort(); releaseScreenOperation(op); }
+  }
   async function uploadVoiceFile(file, files, f) {
+    const abort = f.abort || (f.abort = new AbortController());
+    const deadline = setTimeout(() => abort.abort(new Error('Upload timed out · try attaching again')), 20000);
     try {
-      const result = await CHATS.uploadFile(file);
+      const result = await CHATS.uploadFile(file, { signal: abort.signal });
       if (!sameTake(files) || !files.includes(f)) return;
       Object.assign(f, result, { uploading: false });
     } catch (e) {
       const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
-      if (sameTake(files)) toast('!', e.user ? e.message : 'Upload failed · not attached', 3200);
-    }
+      if (sameTake(files)) toast('!', e.user || abort.signal.reason?.message ? (abort.signal.reason?.message || e.message) : 'Upload failed · not attached', 3200);
+    } finally { clearTimeout(deadline); delete f.abort; }
     if (sameTake(files)) renderVoiceFiles();
   }
   voicePicker.addEventListener('change', async () => {
@@ -2030,24 +2042,24 @@
     // Reserve before asynchronous capture so an immediate Send cannot omit the screenshot.
     const f = { name: 'Screenshot', mime: 'image/png', uploading: true };
     files.push(f); renderVoiceFiles();
+    const op = { files, abort: new AbortController() }; V.screenOp = op; f.abort = op.abort;
     const screen = $('#arcScreen'); screen.disabled = true; screen.classList.add('busy');
-    device.classList.add('capturing-screen');
-    // Capture may fail or stall. Restore controls promptly so Cancel/navigation always remain available.
-    const restore = setTimeout(() => device.classList.remove('capturing-screen'), 500);
+    const conceal = () => {
+      if (V.screenOp !== op || op.abort.signal.aborted) return () => {};
+      device.classList.add('capturing-screen');
+      return () => { if (V.screenOp === op) device.classList.remove('capturing-screen'); };
+    };
     try {
-      // Native PixelCopy runs after two painted frames; the browser uses its own explicit chooser.
-      const file = await window.WosScreenCapture.capture();
-      device.classList.remove('capturing-screen');
-      if (!sameTake(files) || !files.includes(f)) return;
+      // The capture adapter conceals chrome only at actual sampling, after the desktop picker returns.
+      const file = await window.WosScreenCapture.capture({ signal: op.abort.signal, conceal });
+      if (!sameTake(files) || !files.includes(f) || V.screenOp !== op) return;
       Object.assign(f, { name: file.name, mime: file.type, bytes: file.size });
       await uploadVoiceFile(file, files, f);
       if (sameTake(files) && f.id) toast('▣', 'Screenshot attached', 1800);
     } catch (e) {
       const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
       if (sameTake(files)) { renderVoiceFiles(); toast('!', e.message || 'Screen capture failed · not attached', 3200); }
-    } finally {
-      clearTimeout(restore); device.classList.remove('capturing-screen'); screen.disabled = false; screen.classList.remove('busy');
-    }
+    } finally { releaseScreenOperation(op); }
   });
   // Files that finished uploading, in the shape the outbox sends as wizard_file_ids.
   const takeFiles = () => V.files.filter(f => f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes }));
@@ -2240,6 +2252,7 @@
     try { V.rec.state !== 'inactive' && V.rec.stop(); } catch (e) { onRecStop(); }
   }
   function cancelVoice(quiet) {
+    cancelTakeFiles();
     V.cancelled = true; if (V.replyTo) { replyTake(null); V.replyTo = null; }
     unseal();
     // A long take cancelled by accident is kept (Settings → Cancelled recordings, James 11 Oct); a quick one is gone.
