@@ -73,8 +73,12 @@ public final class BackgroundAudioService extends MediaSessionService {
             @Override public void onPlaybackStateChanged(int state) { if (state == Player.STATE_ENDED) { if(station==null) requestPlaying(false); else { advanceAfterRefill = true; maybeRefill(); } } }
             @Override public void onPlayerError(@NonNull PlaybackException e) {
                 error = "This track could not be played. Skipping."; final int g = generation; final String event = playEvent;
-                main.postDelayed(() -> { if (!destroyed && g == generation && event.equals(playEvent) && userWant) {
-                    report("skipped"); if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.prepare(); syncIntent(); } else { advanceAfterRefill = true; maybeRefill(); }
+                main.postDelayed(() -> { if (!destroyed && event.equals(playEvent) && userWant && player.getPlayerError()==e) {
+                    report("skipped"); int next=player.getCurrentMediaItemIndex()+1;
+                    if(next<tracks.size()) {
+                        try { seekCanonical(next); syncIntent(); } catch(JSONException bad) { error="Could not advance the music queue."; requestPlaying(false); }
+                    } else if(station!=null) { advanceAfterRefill = true; maybeRefill(); }
+                    else requestPlaying(false);
                 } }, 900);
             }
         });
@@ -134,6 +138,13 @@ public final class BackgroundAudioService extends MediaSessionService {
         if (AudioPolicy.trusted(t.optString("art"),origin,"art")) m.setArtworkUri(Uri.parse(t.optString("art")));
         return new MediaItem.Builder().setMediaId(t.getString("id")).setUri(t.getString("stream")).setMediaMetadata(m.build()).build();
     }
+    private void seekCanonical(int at) throws JSONException {
+        // ExoPlayer's failed timeline can report no next item although the canonical queue has one.
+        if(player.getPlayerError()!=null) {
+            List<MediaItem> restored=new ArrayList<>(); for(JSONObject t:tracks) restored.add(item(t));
+            player.setMediaItems(restored,at,0); player.prepare();
+        } else player.seekTo(at,0);
+    }
     void command(String method, JSONObject p) throws JSONException {
         if (!"load".equals(method) && !"state".equals(method) && !"attach".equals(method) && !sessionId.equals(p.optString("sessionId"))) throw new SecurityException("Stale audio session");
         switch (method) {
@@ -154,9 +165,9 @@ public final class BackgroundAudioService extends MediaSessionService {
             case "play": if(player.getPlaybackState()==Player.STATE_ENDED) player.seekTo(0); if (player.getPlaybackState()==Player.STATE_IDLE) player.prepare(); requestPlaying(true); maybeRefill(); break;
             case "pause": advanceAfterRefill=false; requestPlaying(false); break;
             case "seek": player.seekTo(Math.max(0,p.optLong("positionMs"))); break;
-            case "next": report("skipped"); if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); requestPlaying(true); } else { advanceAfterRefill=true; requestPlaying(true); maybeRefill(); } break;
-            case "previous": player.seekToPrevious(); requestPlaying(true); break;
-            case "jump": { int i=p.optInt("index",-1); if (i>=0 && i<tracks.size()) { player.seekTo(i,0); requestPlaying(true); } break; }
+            case "next": report("skipped"); if (player.getCurrentMediaItemIndex()+1<tracks.size()) { seekCanonical(player.getCurrentMediaItemIndex()+1); requestPlaying(true); } else { advanceAfterRefill=true; requestPlaying(true); maybeRefill(); } break;
+            case "previous": if(player.getPlayerError()!=null) seekCanonical(Math.max(0,player.getCurrentMediaItemIndex()-1)); else player.seekToPrevious(); requestPlaying(true); break;
+            case "jump": { int i=p.optInt("index",-1); if (i>=0 && i<tracks.size()) { seekCanonical(i); requestPlaying(true); } break; }
             case "enqueueNext": {
                 JSONObject t=p.getJSONObject("track"); MediaItem mi=item(t); int at=player.getCurrentMediaItemIndex();
                 for(int i=tracks.size()-1;i>at;i--) if(tracks.get(i).optString("id").equals(t.optString("id"))) { tracks.remove(i); player.removeMediaItem(i); }
