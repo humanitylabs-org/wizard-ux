@@ -1,18 +1,18 @@
 /* Quiet Instrument: Opus 5.5 Home vitals direction, shell token-aligned. */
 [data-home-resources]{margin-top:14px;flex-shrink:0}
 .rs-widget{overflow:hidden;position:relative}
-.rs-zone{display:block;width:100%;padding:12px 15px 14px;text-align:left;color:var(--ink);background:transparent;border:0;font-variant-numeric:tabular-nums}
+.rs-zone{display:block;width:100%;padding:12px 15px 14px;text-align:left;color:inherit;background:transparent;border:0;font-variant-numeric:tabular-nums}
 .rs-zone+.rs-zone{border-top:1px solid var(--line)}
 .rs-zone:active{background:rgba(255,255,255,.035)}
 .rs-zone:focus-visible{outline:2px solid var(--violet-2);outline-offset:-3px}
 .rs-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;gap:8px}
-.rs-heading>span{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:750;color:var(--ink-2)}
-.rs-heading i{font-style:normal;font-weight:400;color:var(--ink-3)}
-.rs-heading em{font-style:normal;margin-left:3px;color:var(--ink-3)}
-.rs-heading small{font-size:10px;color:var(--ink-3);white-space:nowrap}
+.rs-heading>span{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:750;color:var(--wz-text-secondary,var(--ink-2))}
+.rs-heading i{font-style:normal;font-weight:400;color:var(--wz-text-muted,var(--ink-3))}
+.rs-heading em{font-style:normal;margin-left:3px;color:var(--wz-text-muted,var(--ink-3))}
+.rs-heading small{font-size:10px;color:var(--wz-text-muted,var(--ink-3));white-space:nowrap}
 .rs-meters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}
 .rs-meter{min-width:0;display:block}
-.rs-k{display:block;font-size:11px;color:var(--ink-3);letter-spacing:.07em}
+.rs-k{display:block;font-size:11px;color:var(--wz-text-muted,var(--ink-3));letter-spacing:.07em}
 .rs-meter b{display:block;font-size:22px;font-weight:350;line-height:1.3;font-variant-numeric:tabular-nums}
 .rs-meter b:has(+.rs-na){font-size:11px;line-height:26px}
 .rs-bar{display:block;height:3px;margin-top:5px;border-radius:4px;overflow:hidden;background:var(--line)}
@@ -20,10 +20,10 @@
 .rs-accounts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px}
 .rs-account{display:block;min-width:0}
 .rs-account-line{display:flex;align-items:baseline;justify-content:space-between;gap:5px;font-size:12px}
-.rs-account-line>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2)}
+.rs-account-line>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--wz-text-secondary,var(--ink-2))}
 .rs-account-line b{font-size:13px;font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}
 .rs-account .rs-bar i{background:var(--cyan)}
-.rs-account small{display:block;font-size:10px;margin-top:3px;color:var(--ink-3)}
+.rs-account small{display:block;font-size:10px;margin-top:3px;color:var(--wz-text-muted,var(--ink-3))}
 .rs-bar.rs-high i{background:var(--violet-2)}
 .rs-bar.rs-hot i,.rs-bar.rs-low i{background:var(--amber)}
 .rs-warning,.rs-heading .rs-warning{color:var(--amber)}
@@ -32,26 +32,26 @@
 .rs-na{background:repeating-linear-gradient(90deg,var(--line-2) 0 3px,transparent 3px 7px)}
 .rs-na i{display:none}
 .rs-stale .rs-meters,.rs-account.rs-stale,.rs-detail-meters.rs-stale{opacity:.65}
-.rs-unavailable{font-size:12px;color:var(--ink-2);grid-column:1/-1;min-height:34px}
+.rs-unavailable{font-size:12px;color:var(--wz-text-secondary,var(--ink-2));grid-column:1/-1;min-height:34px}
 .rs-sheet{position:absolute;z-index:120;inset:calc(var(--safe-t) + 12px) 10px calc(var(--dock-h) + var(--safe-b) + 12px);display:flex;flex-direction:column;overflow:hidden}
 .rs-detail-head{display:flex;align-items:center;gap:12px;padding:14px 14px 8px;flex-shrink:0}
 .rs-detail-head h2{font-size:18px;margin:0;flex:1;font-weight:650}
-.rs-detail-head button{width:40px;height:40px;display:grid;place-items:center;background:var(--glass);border:1px solid var(--line);border-radius:13px;color:var(--ink);font-size:24px}
+.rs-detail-head button{width:40px;height:40px;display:grid;place-items:center;background:var(--glass);border:1px solid var(--line);border-radius:13px;color:var(--wz-text,var(--ink));font-size:24px}
 .rs-tabs{display:flex;gap:6px;padding:4px 18px 16px;border-bottom:1px solid var(--line);flex-shrink:0}
-.rs-tabs button{flex:1;border-radius:12px;padding:10px;border:1px solid transparent;background:transparent;color:var(--ink-2);font-size:13px}
+.rs-tabs button{flex:1;border-radius:12px;padding:10px;border:1px solid transparent;background:transparent;color:var(--wz-text-secondary,var(--ink-2));font-size:13px}
 .rs-tabs .selected{border-color:var(--line-2);background:var(--wz-accent-soft,var(--glass));color:var(--violet-2)}
 .rs-detail-body{padding:20px 18px;overflow:auto;min-height:0;flex:1;overscroll-behavior:contain}
 .rs-detail-body .st-group{margin:0;padding:0;background:transparent;border:0}
 .rs-sheet .us-row{display:block}
 .rs-sheet .us-t b{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.45;font-size:13px}
-.rs-sheet .us-p{white-space:nowrap;flex-shrink:0}
+.rs-sheet .us-p{white-space:nowrap;flex-shrink:0;color:var(--wz-text,var(--ink))}
 .rs-sheet .us-bar{margin:9px 0 7px}
 .rs-sheet .us-r{display:block;line-height:1.5}
 .rs-detail-card h3{margin:0 0 5px;font-size:15px}
-.rs-detail-note{color:var(--ink-3);font-size:12px;margin:0 0 20px}
+.rs-detail-note{color:var(--wz-text-muted,var(--ink-3));font-size:12px;margin:0 0 20px}
 .rs-detail-meters{display:flex;flex-direction:column;gap:26px;margin:22px 0}
 .rs-detail-meters .rs-k{font-size:13px}
 .rs-detail-meters .rs-meter b{font-size:34px}
-.rs-detail-meters .rs-meter small{display:block;color:var(--ink-2);font-size:12px;margin-top:7px}
+.rs-detail-meters .rs-meter small{display:block;color:var(--wz-text-secondary,var(--ink-2));font-size:12px;margin-top:7px}
 .rs-detail-meters .rs-bar{height:5px}
 @media(max-height:800px){.home-top{padding-top:12px}.home-time{font-size:72px}.home-line{font-size:15px;margin-top:8px}.home .constellation{gap:8px}.home .now-card{padding-top:10px;padding-bottom:10px}[data-home-resources]{margin-top:12px}.rs-zone{padding-top:10px;padding-bottom:12px}.rs-accounts{row-gap:9px}.rs-meter b{font-size:20px}}
