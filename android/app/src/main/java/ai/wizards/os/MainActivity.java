@@ -1084,12 +1084,20 @@ public class MainActivity extends Activity {
                 // Main frame acknowledges this specific operation before chrome is hidden and two frames paint.
                 target.evaluateJavascript("window.__wosScreenSample && window.__wosScreenSample(" + Handoff.quote(id) + ")", ack -> {
                     if (!id.equals(screenCaptureId)) return;
-                    if (!"true".equals(ack)) { screenResult(target, id, "", "Screen capture cancelled"); return; }
+                    final org.json.JSONObject bounds;
+                    try { bounds = new org.json.JSONObject(ack); }
+                    catch (Exception e) { screenResult(target, id, "", "Screen capture cancelled"); return; }
+                    target.postVisualStateCallback(android.os.SystemClock.uptimeMillis(), new WebView.VisualStateCallback() {
+                    @Override public void onComplete(long requestId) {
                     target.postOnAnimation(() -> target.postOnAnimation(() -> {
                     if (!id.equals(screenCaptureId) || web != target || !java.util.Objects.equals(url, target.getUrl())) return;
                     try {
                         int[] xy = new int[2]; target.getLocationInWindow(xy);
-                        android.graphics.Rect rect = new android.graphics.Rect(xy[0], xy[1], xy[0] + target.getWidth(), xy[1] + target.getHeight());
+                        double viewportHeight = bounds.getDouble("height"), appHeight = bounds.getDouble("contentHeight");
+                        if (!Double.isFinite(viewportHeight) || viewportHeight <= 0 || !Double.isFinite(appHeight) || appHeight <= 0) throw new IllegalArgumentException("Invalid capture bounds");
+                        // The dock is not part of the app. Crop it out even on a late compositor frame.
+                        int height = Math.max(1, Math.min(target.getHeight(), (int) Math.floor(target.getHeight() * Math.min(appHeight, viewportHeight) / viewportHeight)));
+                        android.graphics.Rect rect = new android.graphics.Rect(xy[0], xy[1], xy[0] + target.getWidth(), xy[1] + height);
                         float scale = Math.min(1f, 1600f / Math.max(rect.width(), rect.height()));
                         final android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(
                                 Math.max(1, Math.round(rect.width() * scale)), Math.max(1, Math.round(rect.height() * scale)), android.graphics.Bitmap.Config.ARGB_8888);
@@ -1114,6 +1122,8 @@ public class MainActivity extends Activity {
                         }, main);
                     } catch (Exception e) { screenResult(target, id, "", "Screen capture failed"); }
                     }));
+                    }
+                    });
                 });
             });
         }

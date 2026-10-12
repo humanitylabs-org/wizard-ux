@@ -10,7 +10,9 @@
   }
   window.__wosScreenSample = id => {
     const p = pending.get(id); if (!p || p.signal?.aborted) return false;
-    p.release = p.conceal?.(); return true;
+    p.release = p.conceal?.();
+    const dock = document.getElementById('dock')?.getBoundingClientRect();
+    return { width: innerWidth, height: innerHeight, contentHeight: Math.min(innerHeight, Math.max(1, dock?.top ?? innerHeight)) };
   };
   window.__wosScreenSampled = id => { const p = pending.get(id); p?.release?.(); if (p) p.release = null; };
   window.__wosScreenResult = (id, data, error) => {
