@@ -28,6 +28,31 @@ public final class MizelHub {
     private static final List<Listener> listeners = new ArrayList<>();
     private static final Map<Integer, Consumer<String>> waiting = new HashMap<>();
     private static int nextReq = 1;
+    private static final java.util.Set<Object> pcmOwners = new java.util.HashSet<>();
+    private static volatile boolean pcmWanted;
+    private static final java.util.ArrayDeque<String> pcmQueue = new java.util.ArrayDeque<>();
+    private static boolean pcmScheduled;
+    public static boolean wantsPcm() { return pcmWanted; }
+    public static void wantPcm(Object owner, boolean want) {
+        onMain(() -> { if (want) pcmOwners.add(owner); else pcmOwners.remove(owner); pcmWanted = !pcmOwners.isEmpty();
+            if (!pcmWanted) synchronized (pcmQueue) { pcmQueue.clear(); } });
+    }
+    static void pushPcm(String json) {
+        if (!pcmWanted) return;
+        synchronized (pcmQueue) {
+            if (pcmQueue.size() >= 4) pcmQueue.removeFirst(); // at most one second of transient frames
+            pcmQueue.addLast(json);
+            if (pcmScheduled) return;
+            pcmScheduled = true;
+        }
+        main.post(() -> {
+            while (true) {
+                String packet;
+                synchronized (pcmQueue) { packet = pcmQueue.pollFirst(); if (packet == null) { pcmScheduled = false; return; } }
+                if (pcmWanted) for (Listener l : new ArrayList<>(listeners)) l.onPush(packet);
+            }
+        });
+    }
     private static MizelStore store;
 
     private MizelHub() {}
