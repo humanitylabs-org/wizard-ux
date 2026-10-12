@@ -105,10 +105,10 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= #17 work receipt ================= */
   const turnKey = tn => `${tn.u?.at ?? tn.at ?? ''}:${(tn.u?.text || '').length}`;
-  function workHtml(c, tn, live) {
+  function workHtml(c, tn, live, helperStatus) {
     if (!WK) return null;
     const key = turnKey(tn);
-    return WK.html(tn, { live, open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
+    return WK.html(tn, { live, helperStatus, open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
   }
 
   /* ================= #11 models ================= */

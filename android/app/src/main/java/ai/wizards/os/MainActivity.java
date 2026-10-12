@@ -83,6 +83,30 @@ public class MainActivity extends Activity {
     private ai.wizards.os.audio.BackgroundAudioBridge audio;
     private ai.wizards.os.apps.AppsBridge apps; // window.wizardAppsPort: the shell only (Android Apps relay)
 
+    private String screenCaptureId;
+
+    /** Same established main-frame/origin boundary as wizardAppsPort; hosted app frames cannot request captures. */
+    private void installScreenPort(WebView target) {
+        if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER)) return;
+        java.util.Set<String> origins = new java.util.HashSet<>();
+        origins.add(ai.wizards.os.device.AppState.primaryOrigin(this));
+        if (BuildConfig.ORIGIN.equals(ai.wizards.os.device.AppState.primaryOrigin(this))) origins.add(ai.wizards.os.device.AppState.LEGACY_ORIGIN);
+        androidx.webkit.WebViewCompat.addWebMessageListener(target, "wizardScreenPort", origins,
+                (view, message, sourceOrigin, isMainFrame, reply) -> {
+                    if (!isMainFrame || web != target || sourceOrigin == null) return;
+                    String source = sourceOrigin.getScheme() + "://" + sourceOrigin.getHost()
+                            + (sourceOrigin.getPort() == -1 ? "" : ":" + sourceOrigin.getPort());
+                    if (!origins.contains(source)) return;
+                    String data = message == null ? null : message.getData();
+                    if (data != null && data.startsWith("cancel:")) {
+                        String id = data.substring(7);
+                        if (id.equals(screenCaptureId)) screenCaptureId = null;
+                        return;
+                    }
+                    new Bridge().captureScreen(data);
+                });
+    }
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -144,6 +168,7 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         web.addJavascriptInterface(new Bridge(), "WizardOSNative");
+        installScreenPort(web);
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         web.addJavascriptInterface(device, "WizardOSDevice");
         if (mizel != null) mizel.detach();
@@ -221,6 +246,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 pageUrl = url;
+                screenCaptureId = null;
                 setKeepAwake(false);
             }
 
@@ -1039,6 +1065,79 @@ public class MainActivity extends Activity {
         /** Status bar inset in CSS px the page draws under (0 in immersive full screen). */
         @JavascriptInterface
         public int insetTop() { return topCss; }
+
+        /** Explicit Screenshot in the in-app recording dock. Captures this WebView only, no permission dialog.
+         * PixelCopy includes composited canvas/WebGL and iframe pixels; View.draw does not reliably do that. */
+        private void captureScreen(String id) {
+            if (id == null || !id.matches("[a-fA-F0-9]{32}")) return;
+            runOnUiThread(() -> {
+                final WebView target = web;
+                final String url = target == null ? "" : target.getUrl();
+                boolean trusted = Origin.isShell(Uri.parse(url == null ? "" : url));
+                if (BuildConfig.DEBUG) {
+                    Uri u = Uri.parse(url == null ? "" : url);
+                    trusted = trusted || (ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)
+                            && u.getPath() != null && Origin.isShellPath(u.getPath()));
+                }
+                if (!trusted || target == null || target.getWidth() < 1 || target.getHeight() < 1) {
+                    screenResult(target, id, "", "Screen capture unavailable"); return;
+                }
+                if (screenCaptureId != null) { screenResult(target, id, "", "Screen capture already in progress"); return; }
+                screenCaptureId = id;
+                main.postDelayed(() -> { if (id.equals(screenCaptureId)) screenResult(target, id, "", "Screen capture timed out"); }, 8000);
+                // Main frame acknowledges this specific operation before chrome is hidden and two frames paint.
+                target.evaluateJavascript("window.__wosScreenSample && window.__wosScreenSample(" + Handoff.quote(id) + ")", ack -> {
+                    if (!id.equals(screenCaptureId)) return;
+                    final org.json.JSONObject bounds;
+                    try { bounds = new org.json.JSONObject(ack); }
+                    catch (Exception e) { screenResult(target, id, "", "Screen capture cancelled"); return; }
+                    target.postVisualStateCallback(android.os.SystemClock.uptimeMillis(), new WebView.VisualStateCallback() {
+                    @Override public void onComplete(long requestId) {
+                    target.postOnAnimation(() -> target.postOnAnimation(() -> {
+                    if (!id.equals(screenCaptureId) || web != target || !java.util.Objects.equals(url, target.getUrl())) return;
+                    try {
+                        int[] xy = new int[2]; target.getLocationInWindow(xy);
+                        double viewportHeight = bounds.getDouble("height"), appHeight = bounds.getDouble("contentHeight");
+                        if (!Double.isFinite(viewportHeight) || viewportHeight <= 0 || !Double.isFinite(appHeight) || appHeight <= 0) throw new IllegalArgumentException("Invalid capture bounds");
+                        // The dock is not part of the app. Crop it out even on a late compositor frame.
+                        int height = Math.max(1, Math.min(target.getHeight(), (int) Math.floor(target.getHeight() * Math.min(appHeight, viewportHeight) / viewportHeight)));
+                        android.graphics.Rect rect = new android.graphics.Rect(xy[0], xy[1], xy[0] + target.getWidth(), xy[1] + height);
+                        float scale = Math.min(1f, 1600f / Math.max(rect.width(), rect.height()));
+                        final android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(
+                                Math.max(1, Math.round(rect.width() * scale)), Math.max(1, Math.round(rect.height() * scale)), android.graphics.Bitmap.Config.ARGB_8888);
+                        android.view.PixelCopy.request(getWindow(), rect, bitmap, result -> {
+                            if (!id.equals(screenCaptureId)) { bitmap.recycle(); return; }
+                            target.evaluateJavascript("window.__wosScreenSampled && window.__wosScreenSampled(" + Handoff.quote(id) + ")", null);
+                            if (result != android.view.PixelCopy.SUCCESS) {
+                                bitmap.recycle(); screenResult(target, id, "", "Screen capture failed · tap Screenshot again"); return;
+                            }
+                            new Thread(() -> {
+                                String data = "", error = "";
+                                try {
+                                    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                                    if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)) throw new java.io.IOException("PNG encoding failed");
+                                    if (out.size() > 8 * 1024 * 1024) throw new java.io.IOException("Screen capture too large");
+                                    data = "data:image/png;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP);
+                                } catch (Exception e) { error = "Screen capture failed"; }
+                                finally { bitmap.recycle(); }
+                                final String image = data, failure = error;
+                                runOnUiThread(() -> { if (web == target && java.util.Objects.equals(url, target.getUrl())) screenResult(target, id, image, failure); });
+                            }, "WizardScreenPNG").start();
+                        }, main);
+                    } catch (Exception e) { screenResult(target, id, "", "Screen capture failed"); }
+                    }));
+                    }
+                    });
+                });
+            });
+        }
+
+        private void screenResult(WebView target, String id, String data, String error) {
+            if (id.equals(screenCaptureId)) screenCaptureId = null;
+            if (target == null || web != target) return;
+            target.evaluateJavascript("window.__wosScreenResult && window.__wosScreenResult(" + Handoff.quote(id) + ","
+                    + Handoff.quote(data) + "," + Handoff.quote(error) + ")", null);
+        }
 
         /* ---- Share (James, 12 Oct): Android's share sheet for a message, selected words or a file. ---- */
         @JavascriptInterface

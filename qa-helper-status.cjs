@@ -1,0 +1,51 @@
+const {chromium}=require(process.env.PW_MODULE || '/Volumes/ThalesMedia/wizard-stockint-20261012/qa/node_modules/playwright');
+const fs=require('fs');
+const ROOT=process.env.QA_OUT||process.cwd();
+const ORIGIN=process.env.QA_ORIGIN || 'https://helper-status.staging.wizard001.com';
+let passed=0; const errors=[];
+const ok=(c,name)=>{if(!c)throw new Error(name);console.log('PASS',name);passed++;};
+(async()=>{
+ const b=await chromium.launch({headless:true, executablePath:process.env.QA_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+ for(const shell of ['phone','desktop']) {
+  const ctx=await b.newContext({viewport:shell==='phone'?{width:412,height:892}:{width:1440,height:960},isMobile:shell==='phone',hasTouch:shell==='phone',ignoreHTTPSErrors:true});
+  const p=await ctx.newPage(); p.on('pageerror',e=>errors.push(e.message));
+  await p.addInitScript(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.voiceTipSeen','true');});
+  await p.goto(ORIGIN+'/wizard-os-home/?open=chats&session=wizard_preview_helpers_stalled&shell='+shell,{waitUntil:'domcontentloaded'});
+  await p.waitForFunction(()=>window.WizLive?.session('wizard_preview_helpers_stalled')&&!!document.querySelector('[data-wk]'),null,{timeout:90000});
+  ok(await p.locator('[data-wk] summary').last().textContent().then(t=>t.includes('Stuck · helpers returned')),shell+' exact link opens stalled example');
+  await p.locator('[data-wk] summary').last().click();
+  ok(await p.locator('[data-helper-continue]').isVisible(),shell+' Continue is exposed in Working drop-down');
+  const size=await p.locator('[data-helper-continue]').boundingBox();ok(size.height>=44,shell+' Continue has touch-sized target');
+  await p.screenshot({path:ROOT+'/'+shell+'-stalled.png'});
+  const api=await ctx.request.get(ORIGIN+'/wizard/hermes/api/sessions?limit=50'); const rows=(await api.json()).data;
+  ok(rows.some(r=>r.id==='wizard_preview_helpers_running'&&r.wizard_helper_status.pending===2),shell+' pending helper count exposed');
+  ok(rows.some(r=>!r.id.startsWith('wizard_preview_')),shell+' real threads also loaded');
+  await p.locator('[data-helper-continue]').click();
+  await p.waitForFunction(()=>WizLive.session('wizard_preview_helpers_stalled')?.helperStatus?.phase==='integrating');
+  await p.waitForFunction(()=>document.querySelector('[data-wk] summary')?.textContent.includes('finishing your answer'),null,{timeout:12000});
+  ok(true,shell+' Continue becomes active main agent');
+  ok(await p.locator('[data-helper-continue]').count()===0,shell+' repeat Continue removed once active');
+  await p.waitForTimeout(3500);await p.evaluate(()=>WizLive.refresh());
+  await p.waitForFunction(()=>WizLive.session('wizard_preview_helpers_stalled')?.status==='completed');
+  ok(true,shell+' resumed example settles only after completion');
+  const forbidden=await ctx.request.post(ORIGIN+'/wizard/helper-continue',{data:{session_id:'wizard_real_do_not_touch'}});ok(forbidden.status()===403,shell+' live continuation blocked in preview');
+  const refuse=await ctx.request.post(ORIGIN+'/wizard/hermes/v1/runs',{data:{session_id:'wizard_real_do_not_touch',input:'Blocked QA write'}});ok(refuse.status()===403,shell+' live run writes blocked');
+  // Change only the browser window's route, not any live thread state.
+  await p.goto(ORIGIN+'/wizard-os-home/?open=chats&session=wizard_preview_helpers_running&shell='+shell,{waitUntil:'domcontentloaded'});
+  await p.waitForFunction(()=>document.querySelector('[data-wk] summary')?.textContent.includes('Waiting on 2 helpers'),null,{timeout:90000});
+  await p.locator('[data-wk] summary').last().click();
+  ok((await p.locator('.wk-helper').innerText()).includes('1 helper returned.'),shell+' partial completion stays visible');
+  await p.screenshot({path:ROOT+'/'+shell+'-running.png'});
+  await p.goto(ORIGIN+'/wizard-os-home/?open=chats&session=wizard_preview_helpers_finishing&shell='+shell,{waitUntil:'domcontentloaded'});
+  await p.waitForFunction(()=>document.querySelector('[data-wk] summary')?.textContent.includes('finishing your answer'),null,{timeout:90000});ok(true,shell+' finished helpers separate from completed task');
+  if(shell==='phone') await p.locator('[data-chback]').first().click(); else await p.keyboard.press('Escape');
+  await p.waitForTimeout(400);
+  ok((await p.locator('[data-sec="working"]').first().innerText()).includes('Waiting on 2 helpers'),shell+' list row gives pending helper status');
+  ok((await p.locator('[data-sec="working"]').first().innerText()).includes('Helpers returned · finishing'),shell+' list row gives main-agent status');
+  ok(await p.locator('[data-chats]').count()>0,shell+' Back keeps Chats open');
+  await p.screenshot({path:ROOT+'/'+shell+'-list.png'});
+  await ctx.close();
+ }
+ ok(errors.length===0,'no browser runtime errors');
+ await b.close();console.log(JSON.stringify({passed,errors,host:require('os').hostname()}));
+})().catch(e=>{console.error(e);process.exit(1)});
