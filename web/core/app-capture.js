@@ -4,7 +4,21 @@
  */
 (function (W) {
   'use strict';
+  // SAME file also serves its worklet under script-src 'self': no blob/eval.
+  if (typeof AudioWorkletProcessor !== 'undefined' && typeof registerProcessor === 'function') {
+    class CapturePCM extends AudioWorkletProcessor {
+    constructor() { super(); this.buf=new Int16Array(4000); this.len=0; this.acc=0; this.n=0; this.pos=0;
+      this.port.onmessage=e=>{if(e.data==='flush')this.emit(true);}; }
+    emit(final) { const out=this.buf.slice(0,this.len); this.port.postMessage({samples:out,final},[out.buffer]); this.len=0; }
+    process(inputs) { const a=inputs[0]; if(!a?.[0])return true;
+      for(let i=0;i<a[0].length;i++){let x=0;for(const c of a)x+=c[i];this.acc+=x/a.length;this.n++;this.pos++;
+        if(this.pos>=sampleRate/16000){this.pos-=sampleRate/16000;const v=Math.max(-1,Math.min(1,this.acc/this.n));this.acc=0;this.n=0;
+          this.buf[this.len++]=v<0?v*32768:v*32767;if(this.len===4000)this.emit(false);}}return true;}}
+    registerProcessor('wizard-capture-pcm',CapturePCM);
+    return;
+  }
   if (W.WizAppCapture) return;
+  const WORKLET_URL = W.document?.currentScript?.src || Array.from(W.document?.scripts || []).find(s => /\/app-capture\.js(?:[?#]|$)/.test(s.src))?.src;
   const DB_NAME = 'wizard-app-capture-v1', LOCK = DB_NAME + ':microphone';
   const MAX_CHUNK = 1024 * 1024, DEFAULT_LIMIT = 512 * 1024 * 1024;
   let dbPromise, active = null, configuredNative = null, attachedMeetingBridge = null, recoveryError = null;
@@ -232,17 +246,8 @@
       }
     });
   }
-  // Worklet algorithm adapted from Mizel capture-worklet.js: retained 16 kHz
-  // mono box-filter downsampling and 250 ms live PCM, not compressed STT input.
-  const PCM_WORKLET = `class CapturePCM extends AudioWorkletProcessor {
-    constructor() { super(); this.buf=new Int16Array(4000); this.len=0; this.acc=0; this.n=0; this.pos=0;
-      this.port.onmessage=e=>{if(e.data==='flush')this.emit(true);}; }
-    emit(final) { const out=this.buf.slice(0,this.len); this.port.postMessage({samples:out,final},[out.buffer]); this.len=0; }
-    process(inputs) { const a=inputs[0]; if(!a?.[0])return true;
-      for(let i=0;i<a[0].length;i++){let x=0;for(const c of a)x+=c[i];this.acc+=x/a.length;this.n++;this.pos++;
-        if(this.pos>=sampleRate/16000){this.pos-=sampleRate/16000;const v=Math.max(-1,Math.min(1,this.acc/this.n));this.acc=0;this.n=0;
-          this.buf[this.len++]=v<0?v*32768:v*32767;if(this.len===4000)this.emit(false);}}return true;}}
-    registerProcessor('wizard-capture-pcm',CapturePCM);`;
+  // PCM algorithm above retains Mizel mono16k box-filter downsampling and
+  // 250 ms live PCM rather than compressed STT input.
   async function browserEngine(s) {
     if (!navigator.mediaDevices?.getUserMedia) throw fail('unsupported', 'Microphone capture is unavailable.');
     s.stream = await navigator.mediaDevices.getUserMedia({ audio: s.opts.audio ?? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -253,8 +258,8 @@
     if (isPCM) {
       if (!ctx?.audioWorklet) throw fail('pcm_unavailable', 'This browser cannot provide meeting PCM capture.');
       s.row.pcm = true; s.row.mime = 'audio/wav';
-      const url = URL.createObjectURL(new Blob([PCM_WORKLET], { type: 'text/javascript' }));
-      try { await ctx.audioWorklet.addModule(url); } finally { URL.revokeObjectURL(url); }
+      if (!WORKLET_URL) throw fail('pcm_module_url_missing', 'Load the shared capture resource through its external script URL.');
+      await ctx.audioWorklet.addModule(WORKLET_URL);
       const sink = ctx.createGain(); sink.gain.value = 0; sink.connect(ctx.destination); s.nodes.push(sink);
       const taps = [];
       const addTap = (name, input, baseMs = 0) => {
@@ -579,4 +584,4 @@
   // shell unload request a last compressed chunk; durable prior chunks survive a
   // process kill. Web capture cannot physically continue through shell destruction.
   W.addEventListener('pagehide', () => { try { if (active?.rec?.state === 'recording') active.rec.requestData(); } catch (_) {} });
-})(window);
+})(typeof window === 'undefined' ? globalThis : window);
