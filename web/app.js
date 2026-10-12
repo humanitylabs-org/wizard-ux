@@ -362,7 +362,8 @@
     const R = []; for (let i = idx + 1; i <= Math.min(desks.length - 1, idx + 3); i++) R.push(i);
     const homeExtra = L.length && L[0] > 0;
     $('#dotsL').innerHTML = (homeExtra ? mk(0) + (L[0] > 1 ? '<i class="dmore"></i>' : '') : '') + L.map(mk).join('');
-    $('#dotsR').innerHTML = R.map(mk).join('') + (R.length && R[R.length - 1] < desks.length - 1 ? '<i class="dmore"></i>' : '');
+    $('#dotsR').innerHTML = R.map(mk).join('') + (R.length && R[R.length - 1] < desks.length - 1 ? '<i class="dmore"></i>' : '')
+      + '<button class="ddot sig dplus" data-plus aria-label="New desk: pick an app"><span class="dsg"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></button>';
   }
   /* Dots: tap = jump to that desk. Long-press any dot = peek every desk as a
    * stack of cards (Android recents feel); tap a card to land there. */
@@ -374,6 +375,7 @@
   const endDotHold = () => { clearTimeout(dotHold); dotHold = null; };
   $('#dock').addEventListener('pointerup', endDotHold); $('#dock').addEventListener('pointercancel', endDotHold); $('#dock').addEventListener('pointerleave', endDotHold);
   $('#dock').addEventListener('click', e => {
+    if (e.target.closest('[data-plus]')) { if (Date.now() - dockSwiped < 400) return; openSheet('launcher'); plusEnd = true; $('#search').placeholder = 'Pick an app for a new desk'; tourEv('desk-plus', {}); return; }
     const b = e.target.closest('[data-goto]'); if (!b) return;
     if (Date.now() - peekJustOpened < 600 || Date.now() - dockSwiped < 400) return;
     goDesk(+b.dataset.goto); tourEv('desk', { home: idx === HOME });
@@ -573,7 +575,9 @@
    * user aim, opts.here) may share an existing desk; app openers pass opts through and never pick a desk. */
   // Directly beside the desk in front, Home included (James, 11 Oct 2026: from Home, Yesterday and every other
   // app open on the desk right next to Home; Chats just moves one to the right).
-  function insertPos() { return idx + 1; }
+  // The ＋ after the last desk (James, 12 Oct 2026) opens the app list; the app picked there lands on a new desk at the end.
+  let plusEnd = false, endNext = false;
+  function insertPos() { return endNext ? desks.length : idx + 1; }
   function openWin(obj, opts = {}) {
     const w = { id: newId(), ...obj }; W[w.id] = w;
     let t = opts.desk != null ? Math.max(0, Math.min(desks.length - 1, opts.desk)) : opts.here ? idx : -1;
@@ -1526,6 +1530,7 @@
   }
   function closeSheets(quiet) {
     if (!sheet && quiet) return;
+    plusEnd = false; $('#search').placeholder = 'Search, or type a command';
     const was = sheet; sheet = null; if (was) tourEv('sheet-closed', { which: was }); device.classList.remove('sheet-open');
     launcher.classList.remove('open'); inboxEl.classList.remove('open'); settingsEl.classList.remove('open');
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
@@ -1595,7 +1600,7 @@
   function launch(a) {
     if (!a) return;
     const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
-    closeSheets(); setTimeout(() => openApp(a), 120);
+    const end = plusEnd; closeSheets(); setTimeout(() => { endNext = end; try { openApp(a); } finally { endNext = false; } }, 120);
   }
   launcher.addEventListener('click', e => {
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);

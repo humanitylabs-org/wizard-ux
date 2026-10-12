@@ -96,3 +96,7 @@
 .ov-add small { color: var(--ink-3); font-size: 12px; }
 .ov-hint { margin: 18px 6px 0; text-align: center; color: var(--ink-3); font-size: 12.5px; line-height: 1.5; }
 .device.ov-open .dock, .device.ov-open .desk-label { opacity: 0; pointer-events: none; }
+/* ＋ after the last desk: a new desk, starting from the app list */
+.ddot.dplus .dsg { opacity: .55; }
+.ddot.dplus svg { width: 18px; height: 18px; fill: none; stroke: #C9BEFF; stroke-width: 2.2; stroke-linecap: round; }
+.ddot.dplus:active .dsg { opacity: 1; }
