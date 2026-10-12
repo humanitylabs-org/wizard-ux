@@ -1091,7 +1091,6 @@
   }
   function renderFrame(w) {
     const a = APP[w.appId] || winApp(w);
-    if (w.appId === 'mizel') return `<div class="mizel-split"><div class="rec-strip">${recStripHtml()}</div>${renderFrameCore(w, a)}</div>`;
     return renderFrameCore(w, a);
   }
   function renderFrameCore(w, a) {
