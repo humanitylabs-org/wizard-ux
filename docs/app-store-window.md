@@ -46,7 +46,22 @@ From an exact committed source snapshot on Thales:
 ```
 SOURCE_SHA=<full SHA> QA_OUT=<absolute evidence directory> \
 /usr/bin/lockf -k /Volumes/ThalesMedia/AndroidBuilds/worker.lock \
-/bin/sh -c '/opt/homebrew/bin/node --test tests/store-data.test.mjs && /opt/homebrew/bin/node qa-store-window.cjs'
+/bin/sh -c '/opt/homebrew/bin/node --test tests/store-data.test.mjs && /opt/homebrew/bin/node qa-store-system.cjs'
 ```
 
 The browser suite uses actual peer HTTPS, real index/installed data, actual Meta+k and touch My Apps/Get apps. Every context intercepts all unsafe requests. Real top/frame popstate observers are registered before product handlers. It verifies bounded routing, read-only controls, catalog/search/tags, regular window reuse, Back card/query/scroll retention, parent/root/reload history, normal controls, Home smoke, and exact served asset hashes. Browser/Chromium-touch evidence is not a physical Android Back receipt; parent owns the final live/device promotion gate.
+
+## 12 Oct redesign (James: "design this as a beautiful app store for an app discovery platform")
+
+- **App Store** (`web/store/`) rewritten as a discovery app: featured carousel, four kinds (Apps, Agent apps, Agents,
+  Connections), shelves, topics, search, and an app page (what it does, works with / powers, gives your agent,
+  information, source). Get is browse-only until App installation lands; installed apps show ✓ Installed or Open.
+- **System** (`web/system/`, app id `system`): agents, agent apps & tools, connections and routines, with a layered map
+  after Miguel's graph mockup (lines only between layers; tap a node to light its lineage). Entry: Home "Your system"
+  card (phone), Home chips and Cmd-K "Your system" (desktop), `?view=system`. Not a launcher tile: the app list stays
+  things you open.
+- **Data**: `GET /wizard-os-home/store-data/system/v1/overview` (tools/system-overview.mjs) emits names and status only;
+  secret values are never read into the response. `GET …/store-data/logo/<id>` serves the Index logo for that id from
+  raw.githubusercontent.com at a pinned commit only.
+- Hosted apps ask the shell to open another app with `postMessage({type:'wizard:open-app', id})`; the shell checks the
+  sender is the App Store or System frame.
