@@ -15,11 +15,30 @@
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9ก-๙ ]+/g, ' ').replace(/\s+/g, ' ').trim();
   const MUSIC = '(?: the)?(?: music| song| track| tune| playback| it| this)?';
   const MUSIC_WORD = /\b(music|song|songs|track|tune|tunes|playlist|radio|spotify)\b/;
+  // Search shows the results list in Wizard Music; it never plays the first hit (James, 12 Oct 2026).
+  // The spell, said anywhere: "music search Home Tides" (also "search music for …", "search … in music",
+  // "open music and search for …"). Plain "search for X" is the player's only with Wizard Music in front.
+  const FIND = '(?:search|find|look up|look for)(?: for)?(?: me)?';
+  const SPELL = [
+    new RegExp(`^(?:open )?(?:wizard )?music(?: and| then)? ${FIND} (.+)$`),
+    new RegExp(`^(?:search|find|look up|look for) (?:wizard |my )?music(?: for)? (.+)$`),
+    new RegExp(`^${FIND} (.+?) (?:in|on) (?:wizard |my )?music$`),
+  ];
+  const PLAIN_FIND = new RegExp(`^${FIND} (.+)$`);
+  /** The words as said (case kept) for the query the normalised grammar found. */
+  const asSaid = (text, found) => {
+    const words = found.split(' ').filter(Boolean).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const m = words.length ? String(text).match(new RegExp(words.join('[^a-z0-9ก-๙]+'), 'i')) : null;
+    return m ? m[0] : found;
+  };
 
-  /** -> {op, ...} | null. `strong` marks a phrase that can only mean music (safe on a tap). */
-  function parse(text, inMusic) {
+  /** -> {op, ...} | null. `strong` marks a phrase that can only mean music (safe on a tap).
+   * inMusic: a held take with Wizard Music in front (anything is for the player). front: Music is in front. */
+  function parse(text, inMusic, front) {
     const s = norm(text).replace(/^(?:hey |ok |okay )?(?:wizard|archimedes)\s*/, '').replace(/ (?:please|for me|now)$/, '').replace(/^(?:(?:can|could|would|will) you |please |maybe |just |go ahead and )+/, '');
     if (!s) return null;
+    for (const rx of SPELL) { const q = s.match(rx); if (q) return { op: 'search', query: asSaid(text, q[1]), strong: true }; }
+    { const q = (inMusic || front) ? s.match(PLAIN_FIND) : null; if (q) return { op: 'search', query: asSaid(text, q[1]), strong: true }; }
     const strong = MUSIC_WORD.test(s);
     const c = cmd => ({ ...cmd, strong: strong || cmd.strong || false });
     if (new RegExp(`^(?:pause|stop|hold)${MUSIC}$|^(?:shut up|silence)$`).test(s)) return c({ op: 'pause' });
@@ -78,11 +97,12 @@
     if (!host) return false;
     let win = host.findWin();
     if (!win) {
-      // Nothing to control without the player; "play …" (and resume) opens Wizard Music on this desk.
-      if (cmd.op !== 'play' && cmd.op !== 'resume') { host.toast('♪', 'Nothing is playing · say “play …” to start', 2600); return true; }
+      // Nothing to control without the player; "play …", "music search …" (and resume) open Wizard Music on this desk.
+      if (cmd.op !== 'play' && cmd.op !== 'resume' && cmd.op !== 'search') { host.toast('♪', 'Nothing is playing · say “play …” to start', 2600); return true; }
       win = host.openMusic();
       if (!win) return false;
     }
+    if (cmd.op === 'search') host.toast('♫', `Searching music for “${String(cmd.query).replace(/[<>&]/g, '')}”…`, 4000);
     if (cmd.op === 'play') {
       const what = String(cmd.said || '').replace(/^\s*(?:play|put on)\s+/i, '').replace(/[.!?]+$/, '');
       host.toast('♫', what && !/^(?:some |the )?music$/i.test(what) ? `Finding “${what.replace(/[<>&]/g, '')}”…` : 'Starting your music…', 4000);

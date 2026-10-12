@@ -217,6 +217,12 @@ def g_month():
     moon = D(circle(232, 262, 162), circle(320, 206, 136))
     return U(moon, spark(330, 196, 62, 0.15))
 
+@glyph('meditate', 'A seated figure with light cut into the heart: resting as radiant awareness.')
+def g_meditate():
+    head = circle(256, 132, 48)
+    body = P("M232 196 H280 C316 196 330 230 338 272 C344 302 360 318 398 326 C432 334 436 376 404 394 C380 406 132 406 108 394 C76 376 80 334 114 326 C152 318 168 302 174 272 C182 230 196 196 232 196 Z")
+    return D(U(head, body), circle(256, 276, 26))
+
 @glyph('inbox', 'A drop with an arrow cut through: things land here for you.')
 def g_inbox():
     drop = P("M256 72 L355.5 264.6 A112 112 0 1 1 156.5 264.6 Z")
@@ -271,6 +277,13 @@ def g_bolt():
 def g_pin():
     body = U(circle(256, 214, 128), P("M146 280 L256 424 L366 280 Z"))
     return D(body, circle(256, 210, 52))
+
+@glyph('home', 'A house with a pitched roof and an arched door cut out: the home desk.')
+def g_home():
+    body = U(poly((256, 92), (432, 244), (400, 244), (400, 404), (112, 404), (112, 244), (80, 244)),
+             rrect(332, 116, 44, 96, 8))
+    door = P("M218 404 V320 A38 38 0 0 1 294 320 V404 Z")
+    return D(U(body, stroke(body, 24)), door)
 
 @glyph('letter', 'Placeholder ring for apps without a sigil yet.')
 def g_letter():

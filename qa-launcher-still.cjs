@@ -65,6 +65,21 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   ok(searchStill, 'search results stay still across live refreshes');
   await p.fill('#search', '');
 
+  // James, 11 Oct: "searched wisdom and it didn't pop up". The sheet is bottom-anchored, so with the keyboard up
+  // (sheet ~300 px) the best app match must sit right above the search bar, in view, and be the Enter pick.
+  await p.setViewportSize({ width: 412, height: 520 });
+  await p.fill('#search', 'wisdom'); await p.waitForTimeout(300);
+  const kb = await p.evaluate(() => {
+    const body = document.querySelector('#launcherBody'), br = body.getBoundingClientRect();
+    const rows = [...body.querySelectorAll('.lrow')]; const last = rows[rows.length - 1];
+    const w = body.querySelector('.lrow[data-app="wisdom"]'); const r = w && w.getBoundingClientRect();
+    return { last: last?.dataset.app || last?.dataset.cmd || '', sel: body.querySelector('.lrow.sel')?.dataset.app || '',
+      visible: !!r && r.top >= br.top - 1 && r.bottom <= br.bottom + 1, h: Math.round(br.height) };
+  });
+  ok(kb.last === 'wisdom' && kb.visible, 'keyboard up: "wisdom" shows the Wisdom app right above the search bar', JSON.stringify(kb));
+  ok(kb.sel === 'wisdom', 'keyboard up: Wisdom is the Enter pick', JSON.stringify(kb));
+  await p.fill('#search', ''); await p.setViewportSize({ width: 412, height: 892 });
+
   // One real poll cycle (15 s) with the sheet open: no repaint.
   const real = await p.evaluate(async () => {
     const body = document.querySelector('#launcherBody'); body.scrollTop = 0; let n = 0, e = 0;

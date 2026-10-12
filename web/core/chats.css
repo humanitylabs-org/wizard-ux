@@ -150,7 +150,7 @@ a.fchip { color: inherit; text-decoration: none; }
 .msg { flex-direction: column; align-items: flex-start; }
 .msg.u { align-items: flex-end; }
 /* Message text is selectable and copyable (the shell itself stays non-selectable). */
-.msg .bub, .msg .bub *, .note-line, .appr pre, .mviewer .mv-doc { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
+.msg .bub, .msg .bub *, .note-line, .appr pre, .mviewer .mv-doc, .wk-steps li > span, .wk-plan li > span { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; }
 .msg .bub button, .msg .bub button * { user-select: none; -webkit-user-select: none; }
 .mmeta { display: flex; align-items: center; gap: 2px; margin-top: 3px; min-height: 0; font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .msg.u .mmeta { padding-right: 4px; }
@@ -297,6 +297,11 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-rdy-bar button.on { color: var(--ink); border-color: rgba(185, 155, 255, .45); background: rgba(143, 99, 255, .14); }
 .ch-subj { display: flex; align-items: baseline; gap: 8px; padding: 12px 10px 4px; font-size: 12.5px; font-weight: 750; color: var(--violet-2); }
 .ch-subj small { font-size: 11.5px; font-weight: 650; color: var(--ink-3); }
+.ch-subj { align-items: center; padding-right: 4px; }
+.ch-subj-mv { margin-left: auto; display: flex; gap: 2px; }
+.ch-subj-mv button { width: 34px; height: 30px; display: grid; place-items: center; border-radius: 9px; font-size: 15px; font-weight: 700; line-height: 1; color: var(--ink-2); background: transparent; border: 0; }
+.ch-subj-mv button:active { background: rgba(143, 99, 255, .18); color: var(--ink); }
+.ch-subj-mv button:disabled { opacity: .22; }
 
 /* A note from another agent thread (coordinator / cross-thread): a quiet labelled row, not a James bubble. */
 .msg.agentnote { margin: 10px 0 2px; align-self: stretch; }
@@ -360,12 +365,55 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-row .pv em.att.fyi { color: #ffd84a; }
 .ch-row .pv em.att.deferred { color: var(--violet-2); }
 .ch-row .pv em.att.failed { color: #ff6b6b; }
-/* Filtered list from Home's Unread / Working cards */
-.ch-filter { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 6px 6px; padding: 8px 6px 8px 10px; }
-.ch-fl { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: .01em; }
-.ch-fl small { font-size: 12px; font-weight: 500; color: var(--ink-3); }
-.ch-fdot { width: 8px; height: 8px; border-radius: 50%; background: var(--pink, #ff5ccf); box-shadow: 0 0 10px currentColor; }
-.ch-fdot.unread { background: var(--pink, #ff5ccf); color: var(--pink, #ff5ccf); }
-.ch-fdot.working { background: var(--violet-2, #b79bff); color: var(--violet-2, #b79bff); animation: blink 1.6s ease-in-out infinite; }
-.ch-fx { border: 1px solid var(--line-2, rgba(205,190,255,.18)); background: rgba(205, 190, 255, .05); color: var(--ink-2); border-radius: 99px; padding: 6px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
-.ch-flist { border-top: 0; }
+/* Filters live in the search field as chips (core/chats.js STATUS / subjects). */
+.ch-search.has-chips { padding-left: 10px; padding-right: 8px; gap: 6px; }
+.ch-search.has-chips > svg:first-child { display: none; }
+.ch-search.has-chips input { min-width: 64px; }
+.ch-chip { flex: 0 1 auto; min-width: 0; max-width: 46%; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 10px; border-radius: 99px; background: rgba(185, 155, 255, .16); border: 1px solid rgba(185, 155, 255, .32); color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-chip button { width: 22px; height: 22px; flex: 0 0 22px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); font-size: 11px; background: rgba(255, 255, 255, .06); }
+.ch-fdot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--violet-2, #b99bff); }
+.ch-fdot.unread { background: var(--pink, #ff5ccf); }
+.ch-fdot.needs { background: var(--amber, #ffbe55); }
+.ch-fdot.check { background: #5cd6ff; }
+.ch-fdot.working { background: var(--violet-2, #b99bff); animation: blink 1.6s ease-in-out infinite; }
+.ch-fdot.yesterday { background: #ff8a5c; }
+.ch-fdot.deferred { background: var(--ink-3, #7d74a3); }
+.ch-fdot.subject { background: #7dffb5; }
+.ch-fbtn { flex: 0 0 auto; width: 32px; height: 32px; margin-right: -4px; border-radius: 10px; display: grid; place-items: center; }
+.ch-fbtn svg { width: 18px; height: 18px; fill: none; stroke: var(--ink-2); stroke-width: 2.2; stroke-linecap: round; }
+.ch-fbtn.on svg { stroke: var(--violet-2, #b99bff); }
+.ch-fbtn:active { background: rgba(205, 190, 255, .1); }
+.ch-count { padding: 0 16px 4px; font-size: 12px; color: var(--ink-3); display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.ch-coach { color: var(--violet-2, #b99bff); }
+.ch-fclear { margin-top: 12px; padding: 8px 14px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--ink); font-size: 13px; }
+/* Suggestions under the field while typing */
+.ch-sug { margin: 0 10px 8px; border-radius: 14px; background: rgba(205, 190, 255, .05); border: 1px solid var(--line); overflow: hidden; }
+.ch-sugrow { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 14px; text-align: left; font-size: 14px; color: var(--ink-2); border-top: 1px solid var(--line); }
+.ch-sugrow:first-child { border-top: 0; }
+.ch-sugrow b { color: var(--ink); font-weight: 600; }
+.ch-sugic { width: 22px; flex: 0 0 22px; text-align: center; color: var(--violet-2, #b99bff); font-size: 15px; }
+.ch-sugrow:active { background: rgba(205, 190, 255, .08); }
+/* Filter sheet: rises from the bottom, inside the Chats window */
+.ch-fsheet { position: absolute; inset: 0; z-index: 30; display: flex; align-items: flex-end; background: rgba(3, 1, 10, .5); animation: fade 200ms both; }
+.ch-fcard { width: 100%; max-height: 78%; overflow-y: auto; padding: 14px 14px 18px; border-radius: 20px 20px 0 0; background: #120b26; border-top: 1px solid var(--line-2); box-shadow: 0 -12px 40px rgba(0, 0, 0, .5); animation: chSheetUp 260ms var(--ease, ease) both; }
+@keyframes chSheetUp { from { transform: translateY(30px); opacity: 0; } }
+.ch-fh { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 8px; }
+.ch-fh b { font-size: 16px; }
+.ch-fh button { font-size: 13px; color: var(--violet-2, #b99bff); padding: 6px 8px; }
+.ch-fcard h5 { margin: 10px 4px 8px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.ch-fopts { display: flex; flex-wrap: wrap; gap: 8px; }
+.ch-fopt { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--line-2); font-size: 14px; color: var(--ink); background: rgba(205, 190, 255, .04); }
+.ch-fopt.on { background: rgba(185, 155, 255, .2); border-color: rgba(185, 155, 255, .5); }
+.ch-fopt b { color: var(--violet-2, #b99bff); font-size: 12px; }
+
+/* New chat button: bottom-right of the Chats list, clear of the orb (dock sits below the window; corner orb lifts it). */
+.ch-fab { position: absolute; right: 16px; bottom: 16px; z-index: 5; width: 54px; height: 54px; border-radius: 18px; display: grid; place-items: center;
+  background: linear-gradient(145deg, #9b6bff, #6d45e6); color: #fff; box-shadow: 0 10px 26px rgba(70, 30, 160, .55), inset 0 1px 0 rgba(255, 255, 255, .22); }
+.ch-fab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.ch-fab:active { transform: scale(.94); }
+.ch-list .ch-scroll { padding-bottom: 84px; }
+.ch-list:has(.ch-fab) .ch-pill { left: 16px; transform: none; max-width: calc(100% - 100px); }
+.device.orb-corner .win.full .ch-fab { bottom: calc(var(--safe-b) + var(--corner-b) + var(--corner-orb) + 14px); right: calc(var(--corner-r) - 5px); }
+.device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: calc(var(--corner-b) + var(--corner-orb) + 96px); }
+.ch-list:has(.ch-fab) .ch-pill { animation-name: ch-pill-in-l; }
+@keyframes ch-pill-in-l { from { opacity: 0; transform: translateY(8px); } }

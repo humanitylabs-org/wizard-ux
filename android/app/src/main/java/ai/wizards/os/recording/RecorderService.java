@@ -1,5 +1,6 @@
 package ai.wizards.os.recording;
 
+import org.json.JSONObject;
 import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -182,7 +183,10 @@ public class RecorderService extends Service {
                 if (id != null && id.equals(activeId)) {
                     String take = activeId;
                     finishTake("cancelled", "app");
-                    RecordingStore.get(this).delete(take);
+                    RecordingStore st = RecordingStore.get(this);
+                    JSONObject m = st.read(take); // a long take cancelled by accident is kept for Settings → Cancelled recordings
+                    CancelledTakes.keep(this, st.audio(take), m == null ? 0 : m.optLong("ms"), "app", RecordingStore.MIME);
+                    st.delete(take);
                 }
                 break;
             default:

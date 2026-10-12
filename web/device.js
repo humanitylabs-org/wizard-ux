@@ -314,9 +314,20 @@
     }
     if (n) log('drafts:restored', n);
   }
+  // An app window playing sound (Wizard Music, Meditate…): a reload would cut it off, so never do that behind your back.
+  function mediaPlaying() {
+    return [...document.querySelectorAll('iframe')].some(f => {
+      try {
+        const w = f.contentWindow, d = f.contentDocument; if (!w || !d) return false;
+        if (w.navigator.mediaSession && w.navigator.mediaSession.playbackState === 'playing') return true;
+        return [...d.querySelectorAll('audio,video')].some(m => !m.paused && !m.ended);
+      } catch (e) { return false; }
+    });
+  }
   function applyWeb() {
     if (!webPending) return;
-    if (document.hidden && !webBusy()) { reloadNow('hidden'); return; } // the owner is away: swap it in quietly
+    // The owner is away: swap it in quietly, unless music is playing (then the banner waits for your tap).
+    if (document.hidden && !webBusy()) { if (!mediaPlaying()) { reloadNow('hidden'); return; } log('web:hold', 'media'); }
     let el = $('#dvWeb');
     if (!el) {
       el = document.createElement('div'); el.id = 'dvWeb'; el.className = 'dv-update web'; el.setAttribute('role', 'status');
@@ -354,7 +365,7 @@
         <div class="st-row static"><span class="st-ic">✉</span><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
         <button class="st-row" data-dvupd><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
     },
-    saveDrafts, checkWeb, sweepReadNotes, _state: () => ({ sheet: sheet?.kind || null, upd, webPending, print0: !!print0 }),
+    saveDrafts, checkWeb, sweepReadNotes, mediaPlaying, _state: () => ({ sheet: sheet?.kind || null, upd, webPending, print0: !!print0 }),
   };
   document.addEventListener('click', e => {
     if (!e.target.closest('[data-dvupd]')) return;

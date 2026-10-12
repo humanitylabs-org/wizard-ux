@@ -1142,9 +1142,13 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private void cancelByUser() {
         if (!listening) return;
         Log.i(TAG, "cancelled");
+        // A long take cancelled by accident is kept (Settings → Cancelled recordings); a quick one is just gone.
+        long ms = SystemClock.elapsedRealtime() - startedAt;
+        dropRecorder(); // closes the file so it is playable
+        boolean kept = !dictating && recording != null && ai.wizards.os.recording.CancelledTakes.keep(this, recording, ms, "everywhere", "audio/mp4");
         discard();
         buzz(14);
-        toast("Discarded");
+        toast(kept ? "Cancelled · kept in Wizard OS Settings for a week" : "Discarded");
     }
 
     /** Screen: hide the orb, capture what is behind it, attach it to this message (up to four). */

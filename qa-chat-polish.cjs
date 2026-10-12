@@ -229,12 +229,12 @@ const ours = p => p.url().startsWith(BASE);
   /* ---- #33 Drafts for unsent new chats ---- */
   try {
     const wid = (await chatsWin()).id, W$ = s => `.win[data-win="${wid}"] ${s}`;
-    await p.click(W$('[data-chnew]')); await sleep(300);
+    await p.click(W$('[data-chsearch]')); await sleep(300); await p.click(W$('[data-chnew]')); await sleep(300);
     await p.fill(W$('.ch-compose textarea'), 'Half-written idea about the garden'); await sleep(100);
     await back(); // to the list: the new-chat draft is kept
     let drafts = await p.evaluate(s => [...document.querySelectorAll(s)].map(r => r.textContent), W$('[data-sec="drafts"] .ch-row'));
     ok(drafts.length === 1 && /Half-written idea/.test(drafts[0]) && /Draft · saved on this device/.test(drafts[0]), '#33 the list shows a Drafts section with the unsent new chat', drafts);
-    await p.click(W$('[data-chnew]')); await sleep(300);
+    await p.click(W$('[data-chsearch]')); await sleep(300); await p.click(W$('[data-chnew]')); await sleep(300);
     ok((await p.inputValue(W$('.ch-compose textarea'))) === '', '#33 "+" starts an empty new chat; the old draft is kept aside');
     await p.fill(W$('.ch-compose textarea'), 'Second unsent thought'); await sleep(100);
     await back();

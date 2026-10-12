@@ -110,7 +110,11 @@ const outboxN = p => p.evaluate(() => (window.__wos.outbox?.unsent?.() || []).le
   await hold(p, 'What is the capital of Peru'); await sleep(1000);
   let c = await card(p);
   ok(agentWrites(writes).length === 0, 'held non-command: nothing sent to the agent', JSON.stringify(writes));
-  ok(c.chips.includes('search') && c.chips.includes('agent') && c.chips.includes('drop'), 'held non-command shows Search / Send / Dismiss choices', JSON.stringify(c));
+  ok(c.chips.includes('search') && c.chips.includes('agent'), 'held non-command shows Search / Send choices', JSON.stringify(c));
+  const xs = () => p.evaluate(() => { const x = document.querySelector('#txClose'), r = x.getBoundingClientRect(), vis = getComputedStyle(x).display !== 'none' && r.width >= 28;
+    const hit = vis && x.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); return { vis, hit, w: Math.round(r.width), up: document.querySelector('#voice').classList.contains('tx') }; });
+  let x = await xs();
+  ok(x.vis && x.hit, 'choice card has a tappable × (hit-tested)', JSON.stringify(x));
   ok(/nothing sent/i.test(c.label), 'card says nothing was sent', c.label);
   ok(await outboxN(p) === ob0, 'outbox unchanged');
   await shot(p, '3-held-nomatch');
@@ -120,6 +124,26 @@ const outboxN = p => p.evaluate(() => (window.__wos.outbox?.unsent?.() || []).le
   ok(s.open && /q=What\+is\+the\+capital\+of\+Peru/.test(s.url), 'tapping Search the web opens Wizard Search', JSON.stringify(s));
   ok(agentWrites(writes).length === 0, 'still nothing sent', JSON.stringify(writes));
   await closeSheet(p);
+
+  // 3b. × closes the card at once, nothing sent (James, 11 Oct).
+  writes.length = 0;
+  await hold(p, 'What is the capital of Peru'); await sleep(800);
+  await p.locator('#txClose').tap(); await sleep(450);
+  c = await card(p); x = await xs();
+  ok(c.chips.length === 0 && !x.up && !x.vis, 'tapping × closes the choice card', JSON.stringify({ c, x }));
+  ok(agentWrites(writes).length === 0 && p.url().startsWith(URL_), '× sends nothing and stays in Wizard', JSON.stringify(writes));
+  // 3c. It no longer lingers: gone on its own within ~4 s (was 9 s).
+  await hold(p, 'What is the capital of Peru'); await sleep(3000);
+  x = await xs(); ok(x.up, 'card still readable at 3 s', JSON.stringify(x));
+  await sleep(1800); x = await xs();
+  ok(!x.up, 'card auto-hides by ~4.5 s (was 9 s)', JSON.stringify(x));
+  ok(agentWrites(writes).length === 0, 'auto-hide sends nothing', JSON.stringify(writes));
+  c = await card(p); ok(c.chips.length === 0, 'auto-hide clears the hidden choices (next Back navigates, no invisible card)', JSON.stringify(c));
+  // A plain transcript/pill never shows the ×.
+  await p.evaluate(() => window.__wos.handleText('What is the capital of Peru', 'auto', false, 300, null)); await sleep(300);
+  x = await xs(); ok(!x.vis, 'no × on a plain send pill', JSON.stringify(x));
+  await sleep(2600); writes.length = 0;
+  await p.evaluate(() => { const o = window.__wos.outbox; for (const it of o.unsent()) o.remove(it.id); });
 
   // 4. Back clears the choice card and stays in Wizard.
   await hold(p, 'What is the capital of Peru'); await sleep(800);

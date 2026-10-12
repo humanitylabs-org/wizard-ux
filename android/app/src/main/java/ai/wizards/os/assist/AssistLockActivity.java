@@ -205,7 +205,7 @@ public class AssistLockActivity extends Activity implements VoiceCapture.View {
 
     private void stopAndSend(String via) { capture.send(via); }
 
-    private void discardRecording() { capture.discard(); }
+    private void discardRecording() { capture.cancelByUser(); }
 
     @Override public void onBegin() { main.removeCallbacks(closeAfterSend); js("W.begin()"); }
 

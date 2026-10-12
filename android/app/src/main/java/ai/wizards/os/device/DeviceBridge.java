@@ -22,6 +22,7 @@ import java.util.List;
 
 import ai.wizards.os.notify.ReplyWatcher;
 import ai.wizards.os.recording.RecorderService;
+import ai.wizards.os.recording.CancelledTakes;
 import ai.wizards.os.recording.RecordingStore;
 import ai.wizards.os.share.ShareStore;
 import ai.wizards.os.update.Updater;
@@ -178,6 +179,31 @@ public final class DeviceBridge implements RecorderService.Listener {
     public String recPending() {
         List<JSONObject> l = RecordingStore.get(activity).pending(RecorderService.active());
         return RecordingStore.json(l);
+    }
+
+    /* --- cancelled recordings (Settings → Cancelled recordings) --- */
+
+    /** Long takes that were cancelled, newest first: [{id, at, ms, source, mime, bytes}]. */
+    @JavascriptInterface
+    public String cancelledList() { return CancelledTakes.listJson(activity); }
+
+    @JavascriptInterface
+    public String cancelledRead(String id, int offset) { return readChunk(CancelledTakes.audio(activity, String.valueOf(id)), offset); }
+
+    @JavascriptInterface
+    public void cancelledDelete(String id) { CancelledTakes.delete(activity, String.valueOf(id)); }
+
+    /** Put text on the clipboard natively (the page's async clipboard needs a fresh tap, and transcribing takes seconds). */
+    @JavascriptInterface
+    public boolean clip(String text) {
+        final String t = String.valueOf(text);
+        activity.runOnUiThread(() -> {
+            try {
+                android.content.ClipboardManager cm = activity.getSystemService(android.content.ClipboardManager.class);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("Wizard", t));
+            } catch (RuntimeException e) { Log.w(TAG, "clip: " + e); }
+        });
+        return true;
     }
 
     /* --- share --- */

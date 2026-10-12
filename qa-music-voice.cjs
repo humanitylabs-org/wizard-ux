@@ -144,11 +144,46 @@ const server = http.createServer((req, res) => {
   ok(/Playing Bonobo/.test(t), 'held "throw on some bonobo" from another desk plays Bonobo', t);
   await p.evaluate(() => window.__wos.goDesk(window.__wos.idx - 1)); await sleep(800);
 
+  // 7. Search shows results and never plays (James, 12 Oct 2026: "I said search for Home Tides … it put on Tides by
+  //    Lingua Lustra … I didn't say pick the first one and start playing it. It should show me the search results.")
+  const sends = () => p.evaluate(() => (window.__musicLog || []).filter(x => x === 'send:search').length);
+  const results = fr => fr.waitForFunction(() => { const h = document.querySelector('.music-results h3')?.textContent || ''; const rows = [...document.querySelectorAll('.music-results .music-row-text')]; return !/Searching/.test(h) && rows.length ? { h, rows: rows.slice(0, 3).map(r => `${r.querySelector('strong').textContent} · ${r.querySelector('small').textContent}`) } : false; }, null, { timeout: 60000 }).then(h => h.jsonValue()).catch(() => ({}));
+  const before = await nowPlaying(f); const plays0 = await f.evaluate(() => window.__media.filter(m => m.op === 'play').length);
+  routes.length = 0; writes.length = 0;
+  await hold('Search for Home Tides.'); t = await waitToast(/results? for “Home Tides”|Nothing matched/, 60000);
+  let r = await results(f);
+  ok(/results? for “Home Tides”/.test(t), 'held "Search for Home Tides." over Music: orb says "N results for “Home Tides”"', t);
+  ok(/Results for “Home Tides”/.test(r.h || '') && /^Tides · Home/.test((r.rows || [])[0] || ''), 'results list shows, exact match "Tides · Home" first', JSON.stringify(r));
+  const after = await nowPlaying(f); const plays1 = await f.evaluate(() => window.__media.filter(m => m.op === 'play').length);
+  ok(after.title === before.title && plays1 === plays0, 'search did not change or start the song', JSON.stringify({ before, after, plays0, plays1 }));
+  ok(routes.length === 0 && agentWrites().length === 0, 'search resolved on the phone (no router, no agent)', JSON.stringify({ routes, w: agentWrites() }));
+  if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'music-voice-search.png') });
+  // The spell from another desk and from Chats: "Music search …" reaches the existing player.
+  await f.evaluate(() => document.querySelector('.music-clear')?.click()); await sleep(300);
+  await p.evaluate(() => window.__wos.goDesk(0)); await sleep(800);
+  await hold('Music search Home Tides.'); t = await waitToast(/results? for “Home Tides”/, 60000);
+  r = await results(f);
+  ok(/results? for “Home Tides”/.test(t) && /^Tides · Home/.test((r.rows || [])[0] || '') && await musicWins() === 1, 'spell "Music search Home Tides" from Home searches the open player', JSON.stringify({ t, r }));
+  // With no player open, the spell (tapped) opens Wizard Music straight onto the results.
+  await p.evaluate(() => { const id = Object.keys(window.__wos.wins).find(k => window.__wos.wins[k].appId === 'wizard-music'); window.__wos.closeWin(id); }); await sleep(600);
+  await tap('Open Wizard Music and search for Home Tides.'); t = await waitToast(/results? for “Home Tides”/, 60000);
+  const f2 = await frame(); r = await results(f2);
+  ok(await musicWins() === 1 && /^Tides · Home/.test((r.rows || [])[0] || ''), 'tapped "Open Wizard Music and search for Home Tides" opens Music on the results', JSON.stringify({ t, r }));
+  // (Reopening Music may resume the last session by design; the search itself must not start a result.)
+  const np3 = await nowPlaying(f2); const srcs = await f2.evaluate(() => window.__media.map(m => m.src).join(' '));
+  ok(np3.title !== 'Tides' && !/1pHgLmKhu0Y|GnTA0XlE2n0/.test(srcs), 'search on a fresh player did not play a result', JSON.stringify({ np3, srcs: srcs.slice(0, 200) }));
+  if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'music-voice-search-fresh.png') });
+  // Plain "search for X" away from Music stays the shell's quick search.
+  await p.evaluate(() => window.__wos.goDesk(0)); await sleep(800);
+  const s0 = await sends(); await tap('search for home tides'); await sleep(800);
+  ok(await sends() === s0, 'plain "search for …" away from Music is not hijacked', String(await sends() - s0));
+  await p.evaluate(() => window.__wos.closeSheets?.(true)); await sleep(300);
+
   // 6. Chat stays chat: a tap with music-ish words that isn't a command still goes to the router/agent as before.
   routes.length = 0;
   await tap('remind me to pause the newsletter next week'); await sleep(800);
   ok(routes.length === 1, 'tapped non-command sentence is not hijacked by music', JSON.stringify(routes.map(r => r.text)));
-  await hold('pause'); await waitToast(/Paused/, 6000); // leave it quiet
+  await hold('pause'); await sleep(1500); // leave it quiet
 
   ok(!errs.length, 'no page errors', errs.join(' | '));
   console.log(`\n${pass} passed, ${fail} failed`);

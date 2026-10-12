@@ -222,7 +222,7 @@
       if (inApp(u) && isImage(u) && viewImage(u, a.ownerDocument)) return;
       // A link to this app itself (…/wizard-os-home/?session=…, ?view=…) opens in place, not in a sheet.
       const DL = window.WizCore && window.WizCore.deeplink;
-      if (DL && DL.route(u.href)) return;
+      if (DL && DL.route(u.href, a)) return;
       // The phone shell can claim a link (sheet.route) to open it on a desk of its own instead of the sheet.
       if (sheet.route && sheet.route(u.href, a)) return;
       sheet.open(u.href);

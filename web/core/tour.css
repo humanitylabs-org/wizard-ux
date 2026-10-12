@@ -25,38 +25,6 @@
 .tour[data-step="4"] .tr-copy { top: 28%; }
 .tr-stage { position: absolute; inset: 0; }
 /* Beat 1/2: the words, typing above the orb */
-.tr-bubble { position: absolute; left: 50%; bottom: calc(var(--safe-b) + var(--dock-h) + 44px); transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
-  padding: 10px 16px; border-radius: 18px; background: rgba(20, 13, 44, .92); border: 1px solid rgba(185, 155, 255, .3); color: var(--ink); font-size: 16px; white-space: nowrap;
-  box-shadow: 0 10px 30px rgba(80, 40, 200, .25); animation: trIn 260ms var(--ease) both; }
-.tr-bubble.cmd { border-color: rgba(63, 224, 255, .45); box-shadow: 0 10px 30px rgba(63, 224, 255, .18); }
-.tr-said:empty::after { content: "…"; color: var(--ink-3); }
-.tr-wave { display: inline-flex; gap: 2px; align-items: center; height: 16px; }
-.tr-wave i { width: 3px; border-radius: 2px; background: var(--violet-2); animation: trWave 900ms ease-in-out infinite; }
-.tr-bubble.cmd .tr-wave i { background: #3fe0ff; }
-.tr-wave i:nth-child(1) { animation-delay: -.1s; } .tr-wave i:nth-child(2) { animation-delay: -.5s; } .tr-wave i:nth-child(3) { animation-delay: -.2s; } .tr-wave i:nth-child(4) { animation-delay: -.7s; } .tr-wave i:nth-child(5) { animation-delay: -.35s; }
-@keyframes trWave { 0%, 100% { height: 4px; } 50% { height: 15px; } }
-.tr-pill { position: absolute; transform: translate(-50%, -50%); padding: 8px 14px; border-radius: 99px; background: linear-gradient(135deg, #6b46ff, #c04dff); color: #fff; font-size: 14px;
-  font-weight: 600; white-space: nowrap; box-shadow: 0 0 24px rgba(160, 90, 255, .6); transition: transform 560ms cubic-bezier(.5, 0, .3, 1), opacity 560ms ease-in; }
-.now-card.tr-lit { box-shadow: 0 0 0 1.5px var(--violet-2), 0 0 28px rgba(185, 155, 255, .45); transition: box-shadow 300ms; }
-/* Beat 2: the desk you're aiming at, sliding in from the right with your thumb */
-.tr-ghost { --k: 0; position: absolute; top: 18%; bottom: calc(var(--safe-b) + var(--dock-h) + 120px); width: 64%; right: 0; transform: translateX(calc(92% - var(--k) * 60%));
-  border-radius: 22px; border: 1.5px dashed rgba(63, 224, 255, calc(.25 + var(--k) * .55)); background: rgba(63, 224, 255, calc(var(--k) * .07)); display: grid; place-items: center;
-  transition: transform 90ms linear, border-color 200ms; }
-.tr-ghost span { color: #9eefff; font-size: 14px; letter-spacing: .04em; opacity: calc(.3 + var(--k) * .7); }
-.tr-ghost.aimed { border-style: solid; }
-.tr-ghost.land { transition: transform 260ms var(--ease), opacity 260ms; transform: translateX(-60%) scale(1.06); opacity: 0; }
-/* Beat 3: the practice reply */
-.tr-inbox { position: absolute; left: 14px; right: 14px; top: calc(var(--safe-t, 0px) + 70px); padding: 14px; border-radius: 22px; background: rgba(16, 10, 36, .97); border: 1px solid var(--line-2);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, .6); animation: trDrop 420ms var(--ease) both; }
-.tr-inbox.out { animation: trUp 300ms var(--ease) both; }
-@keyframes trDrop { from { opacity: 0; transform: translateY(-40px); } }
-@keyframes trUp { to { opacity: 0; transform: translateY(-30px); } }
-.tr-ih { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin: 0 4px 10px; }
-.tr-card { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 16px; background: rgba(185, 155, 255, .07); box-shadow: inset 2px 0 0 var(--violet-2); }
-.tr-av { flex: 0 0 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, #6b46ff, #c04dff); color: #fff; font-size: 15px; }
-.tr-ct { display: flex; flex-direction: column; gap: 3px; font-size: 14.5px; line-height: 1.4; color: var(--ink-2); flex: 1; }
-.tr-ct b { color: var(--ink); font-size: 15px; }
-.tr-tag { font-style: normal; font-size: 11px; padding: 3px 8px; border-radius: 99px; background: rgba(185, 155, 255, .15); color: var(--violet-2); }
 /* Beat 4 + Help: gesture glyphs */
 .tr-glyphs { position: absolute; left: 0; right: 0; top: 42%; display: flex; justify-content: center; gap: 30px; }
 .tr-g { display: flex; flex-direction: column; align-items: center; gap: 8px; animation: trIn 420ms var(--ease) both; }
@@ -70,8 +38,7 @@
 @keyframes gTap { 0%, 100% { transform: scale(1); } 12% { transform: scale(.7); } 24% { transform: scale(1); } }
 @keyframes gRing { 0%, 12% { opacity: 0; transform: scale(.4); } 30% { opacity: .9; } 100% { opacity: 0; transform: scale(1.4); } }
 .tr-gi.hold { border-color: rgba(63, 224, 255, .3); background: conic-gradient(#3fe0ff var(--tr-hold, 0%), transparent 0); animation: gHold 2.2s linear infinite; }
-.tr-gi.hold i { background: #3fe0ff; animation: gHoldDot 2.2s ease-in-out infinite; }
-@keyframes gHoldDot { 0%, 15% { transform: none; } 55%, 80% { transform: translateX(10px) scale(1.15); box-shadow: 0 0 14px #3fe0ff; } 100% { transform: none; } }
+.tr-gi.hold i { background: #3fe0ff; }
 @property --tr-hold { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
 @keyframes gHold { 0% { --tr-hold: 0%; } 50% { --tr-hold: 100%; } 100% { --tr-hold: 100%; } }
 .tr-gi.hold::before { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: #0c0820; }
@@ -103,3 +70,18 @@
   background: linear-gradient(135deg, #6b46ff, #c04dff); cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .tour *, .help-sheet * { animation: none !important; transition: none !important; } }
 .tour[data-step="4"] { pointer-events: auto; cursor: pointer; }
+
+/* v2: real voice. While the user is really talking (or the shell shows a result), the dim lifts so the real
+   transcript, arc and desks show; the copy moves to the top out of their way. */
+.tour.tr-live .tr-spot, .tour.tr-open .tr-spot { box-shadow: 0 0 0 200vmax rgba(3, 1, 10, 0); }
+.tour.tr-live .tr-spot::after, .tour.tr-open .tr-spot::after { display: none; }
+.tour.tr-live .tr-copy, .tour.tr-open .tr-copy { top: calc(var(--safe-t, 0px) + 64px); }
+.tr-spot { transition: left 420ms var(--ease), top 420ms var(--ease), width 420ms var(--ease), height 420ms var(--ease), border-radius 420ms var(--ease), box-shadow 320ms; }
+.tr-alt:empty { display: none; }
+.tr-alt { display: flex; justify-content: center; margin-top: 6px; pointer-events: auto; }
+.tr-link { font-size: 14px; color: var(--violet-2); padding: 6px 10px; text-decoration: underline; text-underline-offset: 3px; }
+.tr-type { display: flex; gap: 8px; width: 100%; }
+.tr-type input { flex: 1; min-width: 0; height: 42px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line-2); background: rgba(205, 190, 255, .06); color: var(--ink); font: inherit; font-size: 16px; outline: 0; }
+.tr-type button, .tr-cmd { height: 42px; padding: 0 18px; border-radius: 12px; background: linear-gradient(140deg, #7a4dff, #c04dff); color: #fff; font-weight: 600; font-size: 15px; }
+.tr-mic { position: absolute; left: 28px; right: 28px; top: 62%; text-align: center; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
+.tr-steps i:nth-child(n+4) { display: none; }

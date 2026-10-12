@@ -145,7 +145,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
   /* 1. chat list: search + New chat only */
   try {
     const top = await p.evaluate(sel => { const t = document.querySelector(sel); return t && { files: !!t.querySelector('[data-chfiles]'), btns: [...t.querySelectorAll('button')].filter(x => !x.matches('.ch-sclear')).map(x => x.getAttribute('aria-label')) }; }, await S('.ch-top'));
-    ok(top && !top.files && top.btns.join('|') === 'New chat', '1 list: the Files icon is gone, search + New chat remain', top);
+    ok(top && !top.files && top.btns.join('|') === 'Filter chats', '1 list: the Files icon is gone; search with an in-field filter button (New chat lives in search, James 11 Oct)', top);
     await p.screenshot({ path: `${OUT}/01-list.png` });
   } catch (e) { ok(false, 'list section crashed', String(e).split('\n')[0]); }
 
@@ -169,6 +169,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     ok((await thread()) === 'qa_pw_ready' && !(await p.evaluate(() => !!document.querySelector('.ch-psheet'))), '3 header: Back closes the picker and stays in the thread');
     // new chat shares the same header shape
     await p.click(await S('[data-chback]')); await sleep(400);
+    await p.fill(await S('[data-chsearch]'), 'qa header shape'); await sleep(300);
     await p.click(await S('[data-chnew]')); await sleep(500);
     const nh = await p.evaluate(sel => { const hd = document.querySelector(sel); const kids = [...hd.children]; return { chipLast: kids[kids.length - 1]?.matches('[data-chmodel]'), small: !!hd.querySelector('small'), emo: !!hd.querySelector('.emo') }; }, await S('.ch-head'));
     ok(nh.chipLast && !nh.small && !nh.emo, '3 new chat: same minimal header with the model at the far right', nh);
