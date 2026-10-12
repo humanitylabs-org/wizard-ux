@@ -825,7 +825,7 @@
   /* ---------------- browser Back never leaves the app ----------------
    * The desktop has Esc for layers, but a mouse back button or ⌘[ still fires popstate. Keep one guard
    * entry and treat Back as Esc; at the root it stays put and says so. */
-  history.replaceState({ wux: 'root' }, ''); history.pushState({ wux: 'guard' }, '');
+  if (history.state?.wux !== 'guard') { history.replaceState({ wux: 'root' }, ''); history.pushState({ wux: 'guard' }, ''); }
   addEventListener('popstate', () => {
     const did = escStep(); log('back:' + (did || 'root'));
     history.pushState({ wux: 'guard' }, '');
