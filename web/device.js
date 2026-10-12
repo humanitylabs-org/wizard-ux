@@ -453,5 +453,6 @@
     else if (api.ready) { checkWeb(false); syncRecorder('visible'); }
   });
   addEventListener('pagehide', saveDrafts);
+  addEventListener('wizard:app-holds', () => { if (webPending) renderWeb(); });
   boot();
 })();

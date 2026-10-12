@@ -30,6 +30,8 @@
     };
     async function start() {
       if (V.state !== 'idle') return false;
+      const shared = window.WizAppCapture?.getState?.();
+      if (shared?.active) throw Object.assign(new Error('Microphone held by ' + (shared.appId || 'another app')), { code: 'busy', appId: shared.appId });
       V.chunks = []; V.t0 = performance.now(); V.cancelled = false; set('listen');
       try {
         if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('This browser has no microphone access here.');

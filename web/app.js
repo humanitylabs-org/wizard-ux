@@ -2083,6 +2083,7 @@
       return 'busy';
     }
     if (V.state !== 'idle' || !sid) return 'busy';
+    if (window.WizAppCapture?.getState?.().active) { toast('🎙', 'Microphone held by another app', 2000); return 'busy'; }
     startVoice('auto');
     V.replyTo = { wid, sid };
     if (V.native) replyTake(V.native, { wid, sid });
@@ -2094,6 +2095,8 @@
   async function startVoice(kind) {
     V.onAt = performance.now();
     if (V.state !== 'idle') return;
+    const shared = window.WizAppCapture?.getState?.();
+    if (shared?.active) { toast('🎙', 'Microphone held by ' + (shared.appId || 'another app'), 2200); return 'busy'; }
     clearTimeout(txHideT);
     Object.assign(V, { kind, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat

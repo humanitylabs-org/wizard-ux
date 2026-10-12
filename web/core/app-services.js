@@ -30,7 +30,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { st.holds.clear(); st.messageHolds?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (!st.frame.isConnected || !registered(st)) { st.detach(); continue; }
@@ -66,13 +66,22 @@
     // Capture holds start before permission, end only after stop/cancel settles. Lifecycle never cancels capture.
     const start = async opts => {
       check(); if (!window.WizAppCapture) throw fault('Shared capture unavailable');
+      const shell = window.__wos || window.__wux;
+      if (shell?.voice && shell.voice !== 'idle') throw Object.assign(fault('Microphone held by Wizard voice'), { code: 'busy', appId: 'wizard-voice' });
       const h = hold('Recording');
       try {
-        const session = await window.WizAppCapture.start(st.appId, opts);
+        const resource = window.WizAppCapture;
+        const session = await (opts?.resumeId && resource.resume ? resource.resume(st.appId, opts.resumeId, opts) : resource.start(st.appId, opts));
         let finished;
+        const finish = method => {
+          check();
+          if (!finished) finished = Promise.resolve().then(() => session[method]()).then(r => { h.release(); return r; }, e => { finished = null; throw e; });
+          return finished;
+        };
         return Object.freeze({ id: session.id, onLevel(fn) { check(); return session.onLevel(fn); },
-          stop() { check(); return finished ||= Promise.resolve(session.stop()).then(r => { h.release(); return r; }); },
-          cancel() { check(); return finished ||= Promise.resolve(session.cancel()).then(r => { h.release(); return r; }); } });
+          stop: () => finish('stop'), cancel: () => finish('cancel'),
+          pause() { check(); if (!session.pause) return Promise.reject(fault('Capture pause unavailable')); return session.pause(); },
+          resume() { check(); if (!session.resume) return Promise.reject(fault('Capture resume unavailable')); return session.resume(); } });
       } catch (e) { h.release(); throw e; }
     };
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
@@ -82,12 +91,13 @@
         file(file, opts) { check(); if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file))) return Promise.resolve('unsupported'); return window.WosChat?.shareFile(file, opts) || Promise.resolve('unsupported'); } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
-      capture: Object.freeze({ start, pending() { check(); return window.WizAppCapture?.pending(st.appId) || Promise.resolve([]); },
+      capture: Object.freeze({ start, pending() { check(); if (!window.WizAppCapture) return Promise.reject(fault('Shared capture unavailable')); return window.WizAppCapture.pending(st.appId); },
         ack(id) { check(); if (!window.WizAppCapture) return Promise.reject(fault('Shared capture unavailable')); return window.WizAppCapture.ack(st.appId, id); } }),
       alive() { check(); return true; },
     });
   }
   const frameOf = st => st.frame;
+  addEventListener('wizard-app-capture-state', changed);
   function back(frame) {
     const st = frames.get(frame); if (!st || !registered(st) || !frame.isConnected) return 'notReady';
     if (st.url.origin !== ORIGIN) {
@@ -140,6 +150,7 @@
   addEventListener('message', async e => {
     const d = e.data; if (!d || d.type !== 'wizard:app:request' || d.version !== VERSION || !OPS.has(d.op) || typeof d.id !== 'string' || d.id.length > 96) return;
     const st = from(e.source); if (!st || e.origin !== ORIGIN || !valid(st, st.doc)) return;
+    st.requests ||= new Set(); if (st.requests.size >= 32 || st.requests.has(d.id)) return; st.requests.add(d.id);
     // Bounded message transport handles serializable operations only. Session functions never cross it.
     const reply = (value, error) => { if (valid(st, st.doc)) e.source.postMessage({ type: 'wizard:app:reply', version: VERSION, id: d.id, value, error }, ORIGIN); };
     try {
@@ -153,6 +164,7 @@
       if (d.op === 'update.release') { st.messageHolds?.get(d.args?.id)?.release(); st.messageHolds?.delete(d.args?.id); value = true; }
       reply(value);
     } catch (err) { reply(null, String(err.message || err).slice(0, 200)); }
+    finally { st.requests.delete(d.id); }
   });
   function mount() { new MutationObserver(reconcile).observe(document.body, { childList: true, subtree: true }); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true }); else mount();

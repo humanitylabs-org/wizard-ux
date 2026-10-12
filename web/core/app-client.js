@@ -5,11 +5,22 @@
   'use strict';
   if (window.WizardApp) return;
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
-  let service = null, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0;
+  let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
+  const requests = new Map();
   const framed = parent !== window;
   const detached = () => !service;
   const localHolds = new Map();
   const notify = (set, value) => { for (const fn of set) try { fn(value); } catch (e) { console.warn('WizardApp subscriber', e); } };
+  function request(op, args, timeout = 15000) {
+    if (!framed || requests.size >= 32) return Promise.reject(new Error('Shared app transport unavailable'));
+    const id = 'wa-' + (++requestId) + '-' + Math.random().toString(36).slice(2);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { requests.delete(id); reject(new Error('Shared app transport timed out')); }, timeout);
+      requests.set(id, { resolve, reject, timer });
+      try { parent.postMessage({ type: 'wizard:app:request', version: VERSION, id, op, args }, ORIGIN); }
+      catch (e) { clearTimeout(timer); requests.delete(id); reject(e); }
+    });
+  }
   function back() {
     const top = overlays[overlays.length - 1];
     if (top) { if (top.fn() === false) return false; top.release(); return true; }
@@ -27,7 +38,12 @@
       if (service) { try { rootWatcher?.destroy(); } catch (_) {} rootWatcher = null; }
       parent.postMessage({ type: 'wizard:appearance:ready', version: VERSION, app: String(meta.name || '').slice(0, 96) }, ORIGIN);
     }
-    return Promise.resolve(service ? service.ready() : { version: VERSION, hosted: false });
+    if (service) return Promise.resolve(service.ready());
+    if (!framed) return Promise.resolve({ version: VERSION, hosted: false });
+    return request('ready', null, 1500).then(result => {
+      transportReady = result?.version === VERSION && result.hosted === true;
+      return transportReady ? result : { version: VERSION, hosted: false };
+    }, () => { transportReady = false; return { version: VERSION, hosted: false }; });
   }
   function register({ canGoBack, back: fn }) {
     if (typeof canGoBack !== 'function' || typeof fn !== 'function') throw new TypeError('Back needs synchronous canGoBack/back callbacks');
@@ -63,6 +79,7 @@
     if (!a || a.version !== VERSION || !Number.isSafeInteger(a.revision) || a.revision < 0 || !['window', 'immersive'].includes(a.presentation) || !['light', 'dark'].includes(a.colorScheme) || !/^[a-z0-9-]{1,40}$/.test(a.skin || '') || !a.tokens) return false;
     if (!TOKENS.every(k => typeof a.tokens[k] === 'string' && a.tokens[k].length < 96 && a.tokens[k].length > 0 && !/[;{}]|url\(/i.test(a.tokens[k]) && (!window.CSS?.supports || CSS.supports('color', a.tokens[k])))) return false;
     if (currentTheme && a.revision < currentTheme.revision) return false;
+    if (currentTheme && a.revision === currentTheme.revision && JSON.stringify(a) === JSON.stringify(currentTheme)) return true;
     const root = document.documentElement;
     for (const k of TOKENS) root.style.setProperty('--wz-' + k, a.tokens[k]);
     root.style.colorScheme = a.colorScheme;
@@ -78,20 +95,42 @@
   addEventListener('message', e => {
     if (!framed || e.source !== parent || e.origin !== ORIGIN || !e.data) return;
     const d = e.data;
+    if (d.type === 'wizard:app:reply' && d.version === VERSION && requests.has(d.id)) {
+      const pending = requests.get(d.id); clearTimeout(pending.timer); requests.delete(d.id);
+      if (d.error) pending.reject(new Error(String(d.error))); else pending.resolve(d.value);
+    }
     if (d.type === 'wizard:appearance' && applyTheme(d.appearance)) parent.postMessage({ type: 'wizard:appearance:ack', version: VERSION, revision: currentTheme.revision }, ORIGIN);
     if (d.type === 'wizard:app:update' && d.version === VERSION) { updateAvailable = d.available; notify(updates, updateAvailable); }
   });
   function hold(reason) {
     if (service) return service.update.hold(reason);
+    if (transportReady) {
+      const pending = request('update.hold', { reason }); let released = false;
+      pending.catch(() => {});
+      return { release() { if (released) return; released = true; pending.then(id => request('update.release', { id })).catch(() => {}); } };
+    }
     const id = {}; localHolds.set(id, String(reason || 'Unsaved work'));
     return { release() { localHolds.delete(id); } };
+  }
+  async function nativeReceipt(invoke) {
+    let timer;
+    try {
+      let result = await Promise.race([Promise.resolve(invoke()), new Promise(resolve => { timer = setTimeout(() => resolve('unsupported'), 15000); })]);
+      if (typeof result === 'string') { try { result = JSON.parse(result); } catch (_) {} }
+      const outcome = result && typeof result === 'object' ? result.status || result.outcome : result;
+      return ['shared', 'copied', 'cancelled', 'unsupported'].includes(outcome) ? outcome : 'unsupported';
+    } catch (e) { return e?.name === 'AbortError' ? 'cancelled' : 'unsupported'; }
+    finally { clearTimeout(timer); }
   }
   async function fallbackText(data = {}) {
     if (window.WosChat?.sharePayload) return window.WosChat.sharePayload(data);
     const payload = {};
     for (const k of ['title', 'text', 'url']) if (data[k] != null && String(data[k])) payload[k] = String(data[k]);
     if (!payload.text && !payload.url) return 'unsupported';
+    if ((payload.text || '').length > 90000 || (payload.title || '').length > 1024 || (payload.url || '').length > 8192) return 'unsupported';
     if (payload.url) { try { if (!/^https?:$/.test(new URL(payload.url).protocol)) return 'unsupported'; } catch (_) { return 'unsupported'; } }
+    const native = window.WizardOSNative;
+    if (!framed && typeof native?.shareText === 'function') return nativeReceipt(() => native.shareText([payload.text, payload.url].filter(Boolean).join('\n'), payload.title || ''));
     if (navigator.share) {
       try { await navigator.share(payload); return 'shared'; } catch (e) { if (e?.name === 'AbortError') return 'cancelled'; return 'unsupported'; }
     }
@@ -99,6 +138,13 @@
   }
   async function fallbackFile(file, { title } = {}) {
     if (window.WosChat?.shareFile) return window.WosChat.shareFile(file, { title });
+    if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file)) || file.size > 32 * 1024 * 1024) return 'unsupported';
+    const native = window.WizardOSNative;
+    if (!framed && typeof native?.shareFile === 'function') {
+      let bytes;
+      try { bytes = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1] || ''); reader.onerror = reject; reader.readAsDataURL(file); }); } catch (_) { return 'unsupported'; }
+      return nativeReceipt(() => native.shareFile(bytes, file.name || 'wizard-file', file.type));
+    }
     try { if (navigator.share && navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], ...(title ? { title } : {}) }); return 'shared'; } } catch (e) { if (e?.name === 'AbortError') return 'cancelled'; }
     return 'unsupported';
   }
@@ -132,13 +178,14 @@
       guarded = false; stayBack(); if (!exitUntil) { history.pushState({ ...history.state, __wizardAppGuard: true }, ''); guarded = true; }
     });
   }
-  window.WizardApp = Object.freeze({ version: VERSION, get hosted() { return !!service; }, ready,
+  const sharedResult = promise => promise.then(value => ['shared', 'copied', 'cancelled', 'unsupported'].includes(value) ? value : 'unsupported', () => 'unsupported');
+  window.WizardApp = Object.freeze({ version: VERSION, get hosted() { return !!service || transportReady; }, ready,
     back: Object.freeze({ register, push, useHistory }),
     theme: Object.freeze({ get: () => currentTheme || window.WizardTheme?.current || null, onChange: fn => listen(themes, fn, currentTheme || window.WizardTheme?.current) }),
-    share: Object.freeze({ text: data => service ? service.share.text(data) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : fallbackFile(file, opts) }),
+    share: Object.freeze({ text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts) }),
     update: Object.freeze({ hold, onAvailable: fn => listen(updates, fn, updateAvailable || service?.update.available()) }),
-    capture: Object.freeze({ start: opts => service ? service.capture.start(opts) : captureModule().start(standaloneId(), opts),
-      pending: () => service ? service.capture.pending() : captureModule().pending(standaloneId()), ack: id => service ? service.capture.ack(id) : captureModule().ack(standaloneId(), id) }),
+    capture: Object.freeze({ start: async opts => { if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); return captureModule().start(standaloneId(), opts); },
+      pending: async () => service ? service.capture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
   });
   ready();
 })();

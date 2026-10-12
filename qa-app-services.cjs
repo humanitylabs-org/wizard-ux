@@ -51,8 +51,8 @@ async function context(b, mobile) {
  await ctx.addInitScript(() => {
   if (window!==parent) return;
   localStorage.setItem('wos.coached','true');localStorage.setItem('wos.shell','mobile');
-  window.nativeCalls=[];window.nativeOutcome='shared';
-  window.WizardOSNative={platform:()=> 'android:fixture',unsent:()=> '[]',everywhere:()=> '{}',appUnsent(){},haptic(){},keepAwake(){},shareText(...a){nativeCalls.push(['text',...a]);return window.nativeOutcome},shareFile(...a){nativeCalls.push(['file',...a]);return window.nativeOutcome}};
+  window.nativeCalls=[];window.nativeActivations=[];window.nativeOutcome='shared';
+  window.WizardOSNative={platform:()=> 'android:fixture',unsent:()=> '[]',everywhere:()=> '{}',appUnsent(){},haptic(){},keepAwake(){},shareText(...a){nativeActivations.push(navigator.userActivation.isActive);nativeCalls.push(['text',...a]);return window.nativeOutcome},shareFile(...a){nativeCalls.push(['file',...a]);return window.nativeOutcome}};
  });
  return ctx;
 }
@@ -63,7 +63,7 @@ let origin;
  try {
   for (const mobile of [true,false]) {
    const ctx=await context(b,mobile),p=await ctx.newPage(),errs=[];p.on('pageerror',e=>errs.push(String(e)));
-   await p.goto(origin+'/wizard-os-home/'+(mobile?'':'desktop.html'));
+   await p.goto(origin+'/wizard-os-home/'+(mobile?'?shell=phone':'desktop.html?shell=desktop'));
    await p.waitForFunction(m=>m?!!window.__wos:!!window.__wux,mobile);
    await p.evaluate(()=>WizCore.appsLoaded());
    const frames=[];ok('fixture registry has all approved app IDs',await p.evaluate(m=>WizCore.apps(m?'mobile':'desktop').APPS.filter(a=>a.url&&!['app-store','system'].includes(a.id)).length===17,mobile));
@@ -78,6 +78,7 @@ let origin;
     await fr.locator('#close').click();ok(id+' on-screen close parity',await fr.evaluate(()=>depth===0&&calls===2));
     const root=await p.evaluate(m=>m?__wosNativeBack():__wux.escStep(),mobile);
     await p.waitForTimeout(250);ok(id+' root stays open',await fr.evaluate(()=>depth===0&&calls===2),root);
+    if (id!==entries.at(-1)[0]) await p.evaluate(({id,mobile})=>{const shell=mobile?__wos:__wux;const w=Object.values(shell.wins).find(w=>w.appId===id);shell.closeWin(w.id)},{id,mobile});
    }
    const fr=frames[frames.length-1];
    await fr.locator('#open').click();
@@ -85,6 +86,7 @@ let origin;
    await fr.waitForFunction(()=>WizardApp.theme.get()?.colorScheme==='light');
    ok((mobile?'phone':'desktop')+' Appearance v1 preserves route/draft',await fr.evaluate(()=>depth===1&&document.querySelector('#draft').value==='unsaved fixture'&&document.documentElement.style.getPropertyValue('--wz-text')==='#111111'));
    await fr.locator('#share').click();ok('native receipt share immediate from gesture',await fr.evaluate(()=>sharePromise)==='shared');
+   ok('ancestor transient activation retained for share',await p.evaluate(()=>nativeActivations.at(-1)));
    ok('native share preserves URL and title',await p.evaluate(()=>nativeCalls.at(-1)[1]==='fixture text\nhttps://example.org/exact?q=a#b'&&nativeCalls.at(-1)[2]==='Fixture title'));
    await p.evaluate(()=>nativeOutcome='cancelled');await fr.locator('#share').click();ok('native receipt cancellation not success',await fr.evaluate(()=>sharePromise)==='cancelled');
    await p.evaluate(()=>nativeOutcome=undefined);await fr.locator('#share').click();ok('void native transport does not invent success',await fr.evaluate(()=>sharePromise)==='unsupported');
@@ -101,6 +103,8 @@ let origin;
    ok('capture session automatically holds update',await p.evaluate(()=>WizAppServices.update.busy()));
    await p.evaluate(m=>m?__wosNativeBack():__wux.escStep(),mobile);
    ok('Back does not cancel recording',await p.evaluate(()=>WizAppCapture.getState().active));
+   await p.evaluate(async m=>{if(m)await __wos.startVoice('auto');else await __wux.talk('start')},mobile);
+   ok('existing shell voice cannot acquire second microphone',await p.evaluate(m=>(m?__wos:__wux).voice==='idle',mobile));
    await fr.evaluate(()=>session.stop());ok('stop releases capture hold',!await p.evaluate(()=>WizAppServices.update.busy()));
    ok('pending/ack delegated by registered appId',await fr.evaluate(async()=>{const r=await WizardApp.capture.pending();await WizardApp.capture.ack(r[0].id);return r.length===1&&(await WizardApp.capture.pending()).length===0}));
    // Real update UI: neither visibility nor explicit Reload bypasses a hold.
@@ -136,20 +140,20 @@ let origin;
   ok('removed frame releases lifecycle holds',!await p.evaluate(()=>WizAppServices.update.busy()));
   // Real browser SW/cache storage: exact reviewed app targets only, never the root or shell.
   await p.evaluate(async()=>{
-    for (const [script,scope] of [['/sw.js','/'],['/wizard-os-home/sw.js','/wizard-os-home/'],['/unrelated/sw.js','/unrelated/'],['/wizard-shopping/sw.js?v=20260726-shopping-assistant-v7','/wizard-shopping/']]) {
+    for (const [script,scope] of [['/sw.js','/'],['/wizard-os-home/sw.js','/wizard-os-home/'],['/unrelated/sw.js','/unrelated/'],['/trackhunt/sw.js','/trackhunt/']]) {
       const reg=await navigator.serviceWorker.register(script,{scope});
       if (!reg.active) await new Promise(resolve=>{const w=reg.installing||reg.waiting;if(!w)return resolve();w.addEventListener('statechange',()=>{if(w.state==='activated')resolve()})});
     }
-    for (const name of ['root-shell-cache','shopping-assistant-20260726-shopping-assistant-v7','shopping-assistant-20260726-shopping-assistant-v7-extra']) await caches.open(name);
-    const f=document.createElement('iframe');f.id='shopping';f.src='/wizard-shopping/';document.querySelector('.win').appendChild(f);
+    for (const name of ['root-shell-cache','trackhunt-v1-20260711d','trackhunt-v1-20260711d-extra']) await caches.open(name);
+    const f=document.createElement('iframe');f.id='shopping';f.src='/trackhunt/';document.querySelector('.win').appendChild(f);
     await new Promise(resolve=>f.addEventListener('load',resolve,{once:true}));
-    WizAppServices.attach(f,{appId:'shopping',path:'/wizard-shopping/'});
+    WizAppServices.attach(f,{appId:'trackhunt',path:'/trackhunt/'});
   });
-  await p.waitForFunction(async()=>!(await navigator.serviceWorker.getRegistrations()).some(r=>r.scope.endsWith('/wizard-shopping/')));
+  await p.waitForFunction(async()=>!(await navigator.serviceWorker.getRegistrations()).some(r=>r.scope.endsWith('/trackhunt/')));
   ok('exact app worker scope removed, root/shell/unrelated preserved',await p.evaluate(async()=>{const regs=await navigator.serviceWorker.getRegistrations();return ['/', '/wizard-os-home/','/unrelated/'].every(scope=>regs.some(r=>r.scope===location.origin+scope))}));
-  ok('only exact named app cache removed',await p.evaluate(async()=>{const names=await caches.keys();return !names.includes('shopping-assistant-20260726-shopping-assistant-v7')&&names.includes('root-shell-cache')&&names.includes('shopping-assistant-20260726-shopping-assistant-v7-extra')}));
+  ok('only exact named app cache removed',await p.evaluate(async()=>{const names=await caches.keys();return !names.includes('trackhunt-v1-20260711d')&&names.includes('root-shell-cache')&&names.includes('trackhunt-v1-20260711d-extra')}));
   // No arbitrary resource operation and no item-URL fetch through the file service.
-  const shopping=await waitFrame(p,origin+'/wizard-shopping/');
+  const shopping=await waitFrame(p,origin+'/trackhunt/');
   ok('host file resource rejects URL-shaped payload',await shopping.evaluate(()=>WizardApp.share.file({url:'/private-secret'}))==='unsupported');
   await ctx.close();
   // Standalone: no parent rights; the same client resource, Web Share/clipboard readback and root guard.
