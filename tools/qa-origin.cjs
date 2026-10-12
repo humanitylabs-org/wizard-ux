@@ -29,7 +29,8 @@ http.createServer((req, res) => {
     return p.end();
   }
   let rel = u.pathname.startsWith('/wizard-os-home/') ? u.pathname.slice('/wizard-os-home/'.length) : u.pathname === '/wizard-os-home' ? '' : null;
-  if (rel == null) { res.writeHead(302, { location: '/wizard-os-home/' }); return res.end(); }
+  // An unavailable app must stay unavailable: redirecting it to the shell nests Wizard inside an iframe.
+  if (rel == null) { res.writeHead(404); return res.end('App is not available on this preview origin'); }
   rel = decodeURIComponent(rel) || 'index.html';
   if (rel.includes('..') || rel.split('/').some(s => s.startsWith('.'))) { res.writeHead(404); return res.end(); }
   let f = path.join(WEB, rel);

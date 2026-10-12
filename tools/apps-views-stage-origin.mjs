@@ -40,7 +40,15 @@ http.createServer(async (req, res) => {
       return res.end(body)
     } catch { res.writeHead(502); return res.end('{}') }
   }
-  const p = http.request({ host: '127.0.0.1', port: UP, method: req.method, path: req.url, headers: req.headers }, (r) => { res.writeHead(r.statusCode, r.headers); r.pipe(res) })
+  // Read-only launch paths mirror existing daily routes. Unknown app paths stay 404, never recurse into Wizard.
+  const appPorts = { wisdom: 9200, 'wizard-music': 9205, 'wizard-signal': 9196,
+    'mizel-live': 9191, 'wizard-shopping': 9191, meditation: 9191, 'wizard-search': 9191,
+    'wizard-calendar': 9191, 'wizard-topics-preview': 9191, 'wizard-projects': 9191, 'android-apps': 9191 };
+  const appPort = appPorts[u.pathname.split('/')[1]];
+  const target = appPort || UP;
+  const headers = { ...req.headers }; delete headers.origin; delete headers.referer;
+  if (appPort) headers.host = new URL(JSON.parse(readFileSync(join(homedir(), '.wizard-os/settings.json'), 'utf8')).network.base_url).host;
+  const p = http.request({ host: '127.0.0.1', port: target, method: req.method, path: req.url, headers }, (r) => { res.writeHead(r.statusCode, r.headers); r.pipe(res) })
   p.on('error', () => { res.writeHead(502); res.end() })
   req.pipe(p)
 }).listen(PORT, '127.0.0.1', () => console.log(`apps-views front :${PORT} → qa-origin :${UP}`))

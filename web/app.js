@@ -2653,8 +2653,7 @@
    * Android Back is an in-app back gesture, one step at a time:
    *   recording → menu → sheet → the focused window's own back (thread → list,
    *   framed app history, review dive) → full screen → Home desk.
-   * On Home with nothing left to undo, the first Back only warns; a second Back
-   * within 2 s exits. Two mechanisms, so it holds on every Chrome:
+   * On Home with nothing left to undo, Back stays in Wizard. Two mechanisms:
    *   1. CloseWatcher (Chrome 120+) consumes Back, re-armed after every press,
    *      in this document and in every same-origin framed app;
    *   2. a history guard entry pushed during a user gesture; popstate → one step. */
@@ -2726,12 +2725,10 @@
   }
   function onBack() {
     const did = backStep();
-    window.__backLog = (window.__backLog || []).concat(did || 'exit-warn').slice(-30);
-    if (did) { exitUntil = 0; return; }
-    // Nothing left to undo: warn, then let the very next Back leave.
-    exitUntil = Date.now() + EXIT_MS; toast('↩', 'Press back again to exit Wizard OS', EXIT_MS);
-    disarmAll(); dropGuard();
-    clearTimeout(exitT); exitT = setTimeout(() => { exitUntil = 0; armBack(); }, EXIT_MS);
+    window.__backLog = (window.__backLog || []).concat(did || 'root-stay').slice(-30);
+    exitUntil = 0;
+    if (!did) toast('⌂', "You're home", 1200);
+    ensureGuard(true);
   }
   function makeWatcher(win, rearm) {
     if (!win || !('CloseWatcher' in win) || Date.now() < exitUntil) return null;
@@ -2784,6 +2781,7 @@
   addEventListener('keydown', () => { if (Date.now() >= exitUntil) armBack(); }, true);
   if (history.state?.wos !== 'root' && history.state?.wos !== 'guard') history.replaceState({ wos: 'root' }, '');
   if (history.state?.wos === 'guard') guardOn = true;
+  ensureGuard(true); // deep-link entry has a root guard before the first Back, including after reload
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !('CloseWatcher' in window)) { onBack(); return; }
