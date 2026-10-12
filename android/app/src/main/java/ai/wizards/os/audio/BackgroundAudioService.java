@@ -39,6 +39,7 @@ public final class BackgroundAudioService extends MediaSessionService {
     private int revision, generation, refillAttempts;
     private boolean refilling, reporting, destroyed, advanceAfterRefill;
     private volatile boolean transportActive;
+    private PlaybackException failure;
     private boolean userWant;
     private void requestPlaying(boolean want) { userWant=want; syncIntent(); }
     private void syncIntent() {
@@ -62,18 +63,20 @@ public final class BackgroundAudioService extends MediaSessionService {
         player.addListener(new Player.Listener() {
             @Override public void onEvents(Player p, Player.Events events) { transportActive=userWant && p.getMediaItemCount()>0; }
             @Override public void onMediaItemTransition(@Nullable MediaItem item, int reason) {
-                playEvent = UUID.randomUUID().toString(); error = "";
+                playEvent = UUID.randomUUID().toString(); error = ""; failure=null;
                 Log.i("WizardAudio", "transition " + (item == null ? "none" : item.mediaId) + " session=" + sessionId);
                 maybeRefill(); reportPlayed();
             }
             @Override public void onPlayWhenReadyChanged(boolean ready,int reason) {
                 if(!ready && (reason==Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY || reason==Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS)) { userWant=false; transportActive=false; }
             }
-            @Override public void onIsPlayingChanged(boolean playing) { if (playing) reportPlayed(); }
+            @Override public void onIsPlayingChanged(boolean playing) { if (playing) { failure=null; reportPlayed(); } }
             @Override public void onPlaybackStateChanged(int state) { if (state == Player.STATE_ENDED) { if(station==null) requestPlaying(false); else { advanceAfterRefill = true; maybeRefill(); } } }
             @Override public void onPlayerError(@NonNull PlaybackException e) {
-                error = "This track could not be played. Skipping."; final int g = generation; final String event = playEvent;
-                main.postDelayed(() -> { if (!destroyed && event.equals(playEvent) && userWant && player.getPlayerError()==e) {
+                error = "This track could not be played. Skipping."; failure=e; final String event = playEvent;
+                Log.i("WizardAudio","error index="+player.getCurrentMediaItemIndex()+" wanted="+userWant+" gate="+AudioRecordingGate.held());
+                main.postDelayed(() -> { if (!destroyed && event.equals(playEvent) && userWant && failure==e) {
+                    Log.i("WizardAudio","recover error index="+player.getCurrentMediaItemIndex()+" gate="+AudioRecordingGate.held());
                     report("skipped"); int next=player.getCurrentMediaItemIndex()+1;
                     if(next<tracks.size()) {
                         try { seekCanonical(next); syncIntent(); } catch(JSONException bad) { error="Could not advance the music queue."; requestPlaying(false); }
@@ -140,7 +143,8 @@ public final class BackgroundAudioService extends MediaSessionService {
     }
     private void seekCanonical(int at) throws JSONException {
         // ExoPlayer's failed timeline can report no next item although the canonical queue has one.
-        if(player.getPlayerError()!=null) {
+        if(failure!=null || player.getPlayerError()!=null) {
+            failure=null;
             List<MediaItem> restored=new ArrayList<>(); for(JSONObject t:tracks) restored.add(item(t));
             player.setMediaItems(restored,at,0); player.prepare();
         } else player.seekTo(at,0);
@@ -162,7 +166,7 @@ public final class BackgroundAudioService extends MediaSessionService {
                 tracks.clear(); tracks.addAll(history); tracks.addAll(add); station = st; generation++; revision++; refillAttempts=0; advanceAfterRefill=false;
                 refillKey=UUID.randomUUID().toString(); player.setMediaItems(items,index,0); player.prepare(); requestPlaying(true); break;
             }
-            case "play": if(player.getPlaybackState()==Player.STATE_ENDED) player.seekTo(0); if (player.getPlaybackState()==Player.STATE_IDLE) player.prepare(); requestPlaying(true); maybeRefill(); break;
+            case "play": failure=null; if(player.getPlaybackState()==Player.STATE_ENDED) player.seekTo(0); if (player.getPlaybackState()==Player.STATE_IDLE) player.prepare(); requestPlaying(true); maybeRefill(); break;
             case "pause": advanceAfterRefill=false; requestPlaying(false); break;
             case "seek": player.seekTo(Math.max(0,p.optLong("positionMs"))); break;
             case "next": report("skipped"); if (player.getCurrentMediaItemIndex()+1<tracks.size()) { seekCanonical(player.getCurrentMediaItemIndex()+1); requestPlaying(true); } else { advanceAfterRefill=true; requestPlaying(true); maybeRefill(); } break;
