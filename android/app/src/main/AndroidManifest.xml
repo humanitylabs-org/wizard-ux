@@ -230,6 +230,12 @@
             android:authorities="${applicationId}.updates"
             android:exported="false"
             android:grantUriPermissions="true" />
+        <!-- Share: one file the user shares from a chat, handed to the app they pick (read-only, one-off grant). -->
+        <provider
+            android:name=".share.OutShareProvider"
+            android:authorities="${applicationId}.outshare"
+            android:exported="false"
+            android:grantUriPermissions="true" />
         <!-- Android Apps: install session results, and the background update job for apps Wizard OS installed. -->
         <receiver
             android:name=".apps.AppsInstallReceiver"

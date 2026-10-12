@@ -53,19 +53,21 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   m.slept = await rate(() => { Orb.sleep && Orb.sleep(true); });
   m.wokeDraws = await pg.evaluate(async () => { const a = window.__orbDraws; Orb.sleep && Orb.sleep(false); await new Promise(r => setTimeout(r, 1000)); return window.__orbDraws - a; });
   m.wokeRest = await rate(() => {});
+  m.sharedDefault = await rate(() => { Orb.setRestingMotion?.(true); });
   m.canvasPx = await pg.evaluate(() => { const c = document.getElementById('orb'); return [c.width, c.height, c.clientWidth]; });
   m.errors = errs;
   console.log(JSON.stringify(m));
   ok(webgl, 'orb renders with WebGL');
-  ok(m.idle <= 15 * 60 && m.idle >= 8 * 60, 'idle orb rests at 8-15 fps', m.idle);
+  ok(m.idle === 0, 'phone idle orb holds a still frame', m.idle);
   // Full rate = whatever this GPU sustains (SwiftShader ~20 fps, a phone 60-120): live must clearly out-draw rest.
-  ok(m.listen >= Math.min(m.idle * 1.8, 50 * 60), 'listening orb draws at full rate', m.listen + ' vs idle ' + m.idle);
-  ok(m.think >= Math.min(m.idle * 1.8, 50 * 60), 'thinking orb draws at full rate', m.think);
-  ok(m.idleAgain <= 15 * 60, 'back to resting rate after a take', m.idleAgain);
+  ok(m.listen >= 5 * 60, 'listening orb remains animated', m.listen);
+  ok(m.think >= 5 * 60, 'thinking orb remains animated', m.think);
+  ok(m.idleAgain === 0, 'back to a still frame after a take', m.idleAgain);
   ok(m.hidden === 0, 'hidden page: zero orb frames', m.hidden);
-  ok(m.shown >= 8 * 60, 'visible again: orb resumes', m.shown);
+  ok(m.shown === 0, 'visible again: orb settles to a still frame', m.shown);
   ok(m.slept === 0, 'Orb.sleep(true): zero frames', m.slept);
-  ok(m.wokeDraws >= 5 && m.wokeRest >= 6 * 60, 'Orb.sleep(false): orb wakes and keeps resting-rate frames', m.wokeDraws + '/' + m.wokeRest);
+  ok(m.wokeDraws >= 5 && m.wokeRest === 0, 'Orb.sleep(false): orb wakes and settles', m.wokeDraws + '/' + m.wokeRest);
+  ok(m.sharedDefault >= 8 * 60 && m.sharedDefault <= 15 * 60, 'shared default retains 8-15 fps', m.sharedDefault);
   ok(m.canvasPx[0] <= m.canvasPx[2] * 2 + 1, 'canvas resolution capped at 2x', JSON.stringify(m.canvasPx));
   ok(errs.length === 0, 'no page errors', errs.join(' | '));
   console.log(`${pass}/${pass + fail} passed`);

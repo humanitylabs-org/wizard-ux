@@ -453,23 +453,37 @@ public final class UsualsPolicy {
 
     private static String clip(String s) { return s.length() > 40 ? s.substring(0, 39).trim() + "…" : s; }
 
-    private static final Pattern BROWSE_ORDER = Pattern.compile(
-            "(something|anything)( new| different| else)?( to eat)?( (from|on) grab)?|(some )?food( (from|on) grab)?|(from |on )?grab( ?food)?");
-    private static final Pattern BROWSE_GET = Pattern.compile(
-            "(some )?food( (from|on) grab)?|something (new )?to eat( (from|on) grab)?|something (new )?(from|on) grab|grab( ?food)?");
+    /*
+     * Food spells (James, 12 Oct: "order grab", "order food" — easy to cast). Mirrors NEW_SPELL in web/usuals.js so the
+     * in-app orb and the side button / floating orb hear the same words.
+     */
+    private static final Pattern NEW_SPELL = Pattern.compile(
+            "^(?!(?:.* )?get (?:me |us )?something$)(?:(?:please |can you |could you |let'?s |i(?: want to| wanna| would like to|'d like to) )?(?:order|get)(?: me| us)? "
+            + "(?:some |a |my )?(?:food|foods|grab|grab ?food|lunch|dinner|breakfast|brunch|supper|a snack|snacks|takeout|takeaway"
+            + "|take out|take away|delivery|food delivery|something(?: new| different| else)?(?: to eat)?)(?: (?:from|on|with|through) grab)?"
+            + "|order (?:from|on) grab|(?:a )?(?:food|grab|grab food) order|grab (?:me )?(?:some )?food|grab me something(?: new)? to eat"
+            + "|new (?:food|grab) order)$");
 
     /**
-     * "Order something new", "order food", "get me some food from Grab": open Grab to browse (and save the route)
-     * instead of running a usual. "I want something else" on its own is ordinary talk, not food.
+     * "Order food", "order grab", "order lunch", "get me some food from Grab", "order something new": open Grab to browse
+     * (and save the route) instead of running a usual. "I want something else" on its own is ordinary talk, not food.
      */
     public static boolean isBrowse(String said) {
-        String s = norm(said).replaceAll("[.!?]+$", "");
+        String s = norm(said).replace('\u2019', '\'').replaceAll("[.!?,]+", " ").replaceAll("\\s+", " ").trim();
         s = WAKE.matcher(s).replaceFirst("").trim();
-        Matcher m = VERB.matcher(s);
-        if (!m.matches()) return false;
-        String verb = m.group(3).trim(), rest = m.group(7).trim().replaceAll("^(me |us )", "").trim();
-        boolean order = verb.startsWith("order") || verb.startsWith("reorder") || verb.startsWith("re-order");
-        return (order ? BROWSE_ORDER : BROWSE_GET).matcher(rest).matches();
+        s = s.replaceAll(" (please|now|for me)$", "").trim();
+        return NEW_SPELL.matcher(s).matches();
+    }
+
+    /** The saved order whose whole name ends what he said ("order lunch" with one named "Lunch"), or -1. */
+    public static int namedExactly(List<String> names, String said) {
+        String s = " " + norm(said).replace('\u2019', '\'').replaceAll("[.!?,]+", " ").replaceAll("\\s+", " ").trim()
+                .replaceAll(" (please|now|for me)$", "");
+        for (int i = 0; i < names.size(); i++) {
+            String n = norm(names.get(i)).replaceAll("[.!?,]+", " ").replaceAll("\\s+", " ").trim();
+            if (!n.isEmpty() && s.endsWith(" " + n)) return i;
+        }
+        return -1;
     }
 
     /** Ms a step may look for its target before the run gives up on it. */

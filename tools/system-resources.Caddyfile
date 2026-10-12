@@ -1,0 +1,17 @@
+# Insert inside the existing private_routes snippet; exact-path, authenticated read adapter.
+# Existing app/voice/API routing remains untouched.
+handle /api/system/load {
+    route {
+        request_header -Tailscale-User-Login
+        request_header -Tailscale-User-Name
+        request_header -X-Private-Peer
+        forward_auth 127.0.0.1:19447 {
+            uri /verify?
+            header_up X-Private-Peer {http.request.remote.host}
+            header_up -Origin
+            header_up -Sec-Fetch-Site
+            copy_headers Tailscale-User-Login
+        }
+        reverse_proxy 127.0.0.1:9582
+    }
+}

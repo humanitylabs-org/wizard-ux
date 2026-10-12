@@ -120,7 +120,7 @@ public class MainActivity extends Activity {
 
     private void buildWebView() {
         if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true); // QA build only
-        web = new WebView(this);
+        web = new SelectionWebView(this); // its own text-selection menu in chats (SelectionWebView)
         web.setBackgroundColor(Color.rgb(5, 3, 12));
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         WebSettings s = web.getSettings();
@@ -867,6 +867,47 @@ public class MainActivity extends Activity {
         /** Status bar inset in CSS px the page draws under (0 in immersive full screen). */
         @JavascriptInterface
         public int insetTop() { return topCss; }
+
+        /* ---- Share (James, 12 Oct): Android's share sheet for a message, selected words or a file. ---- */
+        @JavascriptInterface
+        public void shareText(String text, String title) {
+            String t = SelectionPolicy.shareText(text);
+            runOnUiThread(() -> {
+                Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, t);
+                if (title != null && !title.isEmpty()) send.putExtra(Intent.EXTRA_SUBJECT, title);
+                try { startActivity(Intent.createChooser(send, null)); }
+                catch (Exception e) { android.util.Log.w("WizardOS", "share sheet failed", e); }
+            });
+        }
+
+        @JavascriptInterface
+        public void shareFile(String b64, String name, String mime) {
+            try {
+                byte[] bytes = android.util.Base64.decode(b64 == null ? "" : b64, android.util.Base64.DEFAULT);
+                java.io.File root = ai.wizards.os.share.OutShareProvider.dir(MainActivity.this);
+                long cutoff = System.currentTimeMillis() - 24L * 3600 * 1000;
+                java.io.File[] old = root.listFiles();
+                if (old != null) for (java.io.File d : old) if (d.lastModified() < cutoff) { java.io.File[] fs = d.listFiles(); if (fs != null) for (java.io.File f : fs) f.delete(); d.delete(); }
+                String token = java.util.UUID.randomUUID().toString().replace("-", "");
+                java.io.File dir = new java.io.File(root, token); dir.mkdirs();
+                String fn = SelectionPolicy.fileName(name);
+                java.io.File out = new java.io.File(dir, fn);
+                try (java.io.FileOutputStream o = new java.io.FileOutputStream(out)) { o.write(bytes); }
+                Uri uri = new Uri.Builder().scheme("content").authority(ai.wizards.os.share.OutShareProvider.authority(MainActivity.this)).appendPath(token).appendPath(fn).build();
+                String type = mime == null || mime.isEmpty() ? "application/octet-stream" : mime;
+                runOnUiThread(() -> {
+                    Intent send = new Intent(Intent.ACTION_SEND).setType(type).putExtra(Intent.EXTRA_STREAM, uri)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    send.setClipData(android.content.ClipData.newRawUri(fn, uri));
+                    try { startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)); }
+                    catch (Exception e) { android.util.Log.w("WizardOS", "file share failed", e); }
+                });
+            } catch (Exception e) { android.util.Log.w("WizardOS", "file share failed", e); }
+        }
+
+        /** The page's selection state for SelectionWebView: 1 press on text, 2 press in a field, 3 own selection, 0 none. */
+        @JavascriptInterface
+        public void selection(int state) { WebView w = web; if (w instanceof SelectionWebView) ((SelectionWebView) w).selectionState(state); }
 
         @JavascriptInterface
         public void haptic(int ms) {

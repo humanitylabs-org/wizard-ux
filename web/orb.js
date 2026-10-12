@@ -124,6 +124,8 @@ void main(){
        - resting (idle, type, paused, settled): IDLE_FPS, woken by setTimeout, so nothing ticks between frames;
        - page hidden, canvas not laid out, or Orb.sleep(true): no frames at all until it is back. */
   const IDLE_FPS = 12;
+  // Hosts opt into a still resting orb. Native Everywhere keeps its existing cadence by default.
+  let restingMotion = true;
   const LIVE = { listen: 1, command: 1, think: 1, agent: 1, typing: 1, done: 1 };
   let raf = 0, timer = 0, asleep = false, settleUntil = 0, frames = 0;
   const hidden = () => asleep || document.hidden;
@@ -134,7 +136,7 @@ void main(){
     if (raf || timer || hidden()) return;
     if (busy(now)) raf = requestAnimationFrame(frame);
     // The next rAF lands up to one vsync after the timer, so aim a little early to keep ~IDLE_FPS.
-    else timer = setTimeout(() => { timer = 0; if (!hidden()) raf = requestAnimationFrame(frame); },
+    else if (restingMotion) timer = setTimeout(() => { timer = 0; if (!hidden()) raf = requestAnimationFrame(frame); },
       Math.max(0, 1000 / IDLE_FPS - (performance.now() - now) - 8));
   }
   function wake() { settleUntil = performance.now() + 1600; if (timer) { clearTimeout(timer); timer = 0; } schedule(performance.now()); }
@@ -168,6 +170,7 @@ void main(){
     schedule(now);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { last = performance.now(); wake(); } });
+  window.addEventListener('resize', wake);
 
   let ok = false;
   if (gl) { try { init(); ok = true; } catch (e) { console.warn('orb shader', e); } }
@@ -185,6 +188,7 @@ void main(){
       wake();
     },
     get mode() { return mode; },
+    setRestingMotion(on) { restingMotion = !!on; wake(); },
     setLevel(v) { const l = Math.max(0, Math.min(1, v)); if (l !== level) { level = l; if (!raf) schedule(performance.now()); } },
     press(on) { pressT = on ? 1 : 0; wake(); },
     /** Native hosts call sleep(true) when the orb's window is off screen or the display is off. */

@@ -11,6 +11,27 @@
 .ddot.review.filled { background: rgba(255, 184, 77, .7); }
 .dmore { flex: 0 0 auto; width: 3px; height: 3px; border-radius: 50%; background: rgba(205, 190, 255, .35); }
 
+/* ---------- desk sigils (James, 12 Oct 2026): the bare app glyph instead of a dot ----------
+ * Each side takes half the bar, so the orb stays centred; every desk is a thumb-sized button (36px tall)
+ * with the glyph at 20px in its app colour. Neighbours sit a little dim; pressing lights one up. */
+.dock { padding-left: 10px; padding-right: 10px; gap: 10px; }
+.desk-dots { flex: 1 1 0; width: auto; min-width: 0; gap: 2px; }
+.ddot.sig { flex: 0 1 38px; min-width: 28px; width: auto; height: 38px; border: 0; border-radius: 12px; background: none;
+  display: grid; place-items: center; transform: none; transition: background 160ms, transform 220ms var(--spring); }
+.ddot.sig::before { inset: -6px 0; }
+.ddot.sig.home, .ddot.sig.home.pop { transform: none; }
+.ddot.sig.filled, .ddot.sig.review.filled { background: none; }
+.ddot.sig:active { background: rgba(205, 190, 255, .10); transform: scale(.9); }
+.dsg { --c: #C9BEFF; position: relative; width: 21px; height: 21px; display: grid; place-items: center; opacity: .78; transition: opacity 160ms; }
+.ddot.sig:active .dsg { opacity: 1; }
+.dsg .sgi { width: 100%; height: 100%; filter: drop-shadow(0 0 5px color-mix(in oklab, var(--c) 45%, transparent)); }
+.dsg .sgi.sgl { font-size: 15px; }
+.dsg.empty { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid rgba(205, 190, 255, .4); opacity: 1; }
+.dsg .dn { position: absolute; right: -7px; bottom: -5px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px;
+  font: 700 9px/13px system-ui, sans-serif; text-align: center; color: #0c0814; background: var(--c); }
+/* a review desk (link opened from a thread) keeps its amber cue: a short underline */
+.ddot.sig.review::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 12px; height: 2px; margin-left: -6px; border-radius: 2px; background: rgba(255, 184, 77, .85); }
+
 /* ---------- review mode ---------- */
 :root { --rv: #ffb84d; --rv-2: #ffcf85; }
 .win.reviewing { border-color: rgba(255, 184, 77, .55); box-shadow: 0 0 0 1px rgba(255, 184, 77, .35), 0 10px 40px rgba(255, 160, 40, .12); }
@@ -33,47 +54,65 @@
 .device.reviewing .orb-ring { box-shadow: 0 0 0 2px rgba(255, 184, 77, .55), 0 0 22px rgba(255, 170, 60, .35); border-radius: 50%; }
 .device.reviewing .desk-label { display: none; }
 
-/* ---------- overview ---------- */
-.ov { position: absolute; inset: 0; z-index: 72; overflow-y: auto; overscroll-behavior: contain; padding: calc(var(--safe-t, 0px) + 34px) 14px calc(var(--safe-b) + 30px);
-  background: rgba(5, 3, 12, .8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease);
+/* ---------- overview: sigil-first visual map ---------- */
+.ov { position: absolute; inset: 0; z-index: 72; overflow-y: auto; overscroll-behavior: contain; padding: calc(var(--safe-t, 0px) + 24px) 14px calc(var(--safe-b) + 24px);
+  background: rgba(7, 5, 15, .94); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease);
   touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .ov.open { opacity: 1; pointer-events: auto; }
 .ov.dragging { touch-action: none; }
-.ov-head { display: flex; align-items: baseline; gap: 10px; padding: 4px 6px 14px; }
-.ov-head b { font-size: 22px; font-weight: 800; color: var(--ink); }
+.ov-head { display: flex; align-items: center; gap: 10px; padding: 0 4px 16px; }
+.ov-head b { font-size: 25px; font-weight: 700; color: var(--ink); letter-spacing: -.03em; }
 .ov-head span { color: var(--ink-3); font-size: 13px; flex: 1; }
-.ov-done { border: 0; border-radius: 99px; padding: 8px 16px; background: rgba(143, 99, 255, .25); color: var(--ink); font: inherit; font-weight: 700; font-size: 14px; }
-.ov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.ov-card { position: relative; display: flex; flex-direction: column; gap: 8px; height: 188px; padding: 10px; border-radius: 20px; text-align: left; color: var(--ink);
-  background: linear-gradient(180deg, rgba(40, 28, 80, .78), rgba(14, 10, 30, .88)); border: 1px solid var(--line-2); box-shadow: 0 14px 34px rgba(0, 0, 0, .45);
+.ov-done { height: 40px; border: 1px solid var(--line-2); border-radius: 12px; padding: 0 16px; background: rgba(205, 190, 255, .07); color: var(--ink); font: inherit; font-size: 14px; font-weight: 650; }
+.ov-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ov-card { --ov-c: #C9BEFF; --ov-c2: var(--ov-c); position: relative; display: flex; flex-direction: column; min-width: 0; height: auto; min-height: 184px; padding: 12px; border-radius: 20px; text-align: left; color: var(--ink);
+  background: #110e1c; border: 1px solid #30283e;
+  background: radial-gradient(140% 110% at 15% 0%, color-mix(in oklab, var(--ov-c) 14%, transparent), transparent 65%),
+    radial-gradient(90% 70% at 100% 100%, color-mix(in oklab, var(--ov-c2) 8%, transparent), transparent 75%), #110e1c;
+  border: 1px solid color-mix(in oklab, var(--ov-c) 20%, #211c30); box-shadow: 0 8px 20px rgba(0, 0, 0, .15);
   transform: scale(.94); transition: transform 300ms var(--spring), box-shadow 200ms, border-color 200ms, opacity 200ms; }
 .ov.open .ov-card { transform: scale(1); }
-.ov-card.here { border-color: var(--violet-2); box-shadow: 0 0 0 1px var(--violet-2), 0 14px 34px rgba(143, 99, 255, .3); }
-.ov-card.review { border-color: rgba(255, 184, 77, .55); }
-.ov-card.review .ov-top b { color: var(--rv-2); }
-.ov-card.home { background: linear-gradient(160deg, rgba(90, 60, 190, .55), rgba(20, 14, 44, .9)); }
+.ov-card.here { border-color: var(--violet-2); box-shadow: 0 0 0 1px var(--violet-2), 0 8px 24px rgba(143, 99, 255, .13); }
+.ov-card:focus-visible, .ov-done:focus-visible, .ov-x:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.ov-card.review { border-color: rgba(255, 184, 77, .6); }
+.ov-card.review.here { border-color: var(--violet-2); }
 .ov-card.drag { opacity: .25; }
 .ov-card.ghost { position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none; opacity: .96; box-shadow: 0 26px 60px rgba(0, 0, 0, .6); transition: none; }
 .ov-card.merging { transform: scale(.9); border-color: var(--violet-2); box-shadow: 0 0 0 2px var(--violet-2), 0 0 30px rgba(143, 99, 255, .5); }
 .ov-card.splitting { transform: scale(1.05); border-color: #5cd6ff; box-shadow: 0 0 0 2px #5cd6ff, 0 0 30px rgba(92, 214, 255, .4); }
-.ov-top { display: flex; align-items: center; gap: 6px; min-height: 26px; }
-.ov-top b { flex: 1; min-width: 0; font-size: 13px; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ov-x { flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .1); color: var(--ink); font-size: 13px; display: grid; place-items: center; }
-.ov-x::before { content: ""; position: absolute; inset: -8px; }
-.ov-x { position: relative; }
-.ov-body { flex: 1; display: grid; gap: 6px; min-height: 0; pointer-events: none; }
-.ov-n0, .ov-n1 { grid-template-rows: 1fr; } .ov-n2 { grid-template-rows: 1fr 1fr; } .ov-n3, .ov-n4 { grid-template: 1fr 1fr / 1fr 1fr; }
-.ov-win { display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; padding: 8px; border-radius: 13px; background: rgba(205, 190, 255, .07); border: 1px solid var(--line); overflow: hidden; }
-.ov-win.rv { border-color: rgba(255, 184, 77, .4); background: rgba(255, 184, 77, .07); }
-.ov-win i { font-style: normal; width: 26px; height: 26px; border-radius: 9px; display: grid; place-items: center; background: linear-gradient(135deg, var(--g1), var(--g2)); font-size: 13px; }
-.ov-win em { font-style: normal; font-size: 12px; font-weight: 650; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.ov-home { display: grid; place-content: center; text-align: center; gap: 4px; }
-.ov-home b { font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
-.ov-home small { color: var(--ink-3); font-size: 12px; }
-.ov-add { display: grid; place-content: center; gap: 6px; text-align: center; background: transparent; border: 1.5px dashed var(--line-2); box-shadow: none; font: inherit; }
-.ov-add span { font-size: 30px; color: var(--violet-2); }
-.ov-add small { color: var(--ink-3); font-size: 12px; }
-.ov-hint { margin: 18px 6px 0; text-align: center; color: var(--ink-3); font-size: 12.5px; line-height: 1.5; }
+.ov-chrome { position: absolute; top: 4px; left: 10px; right: 4px; display: flex; align-items: center; justify-content: space-between; min-height: 36px; }
+.ov-state { display: flex; gap: 4px; align-items: center; }
+.ov-here, .ov-review { font-size: 10px; line-height: 20px; font-weight: 700; padding: 0 7px; border-radius: 7px; }
+.ov-here { color: #e8ddff; background: rgba(143, 99, 255, .24); }
+.ov-review { color: var(--rv-2); background: rgba(255, 184, 77, .12); }
+.ov-x { flex: 0 0 auto; width: 36px; height: 36px; border: 0; border-radius: 12px; background: transparent; color: var(--ink-3); font-size: 17px; display: grid; place-items: center; }
+.ov-x:active { background: rgba(255, 255, 255, .09); color: var(--ink); }
+.ov-body { flex: 1; display: grid; place-items: center; gap: 4px; min-height: 0; padding-top: 18px; pointer-events: none; }
+.ov-n0, .ov-n1 { grid-template: 1fr / 1fr; }
+.ov-n2 { grid-template: 1fr / minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.ov-card:has(.ov-n3), .ov-card:has(.ov-n4) { min-height: 224px; }
+.ov-n3, .ov-n4 { grid-template: 1fr 1fr / minmax(0, 1fr) minmax(0, 1fr); padding-top: 24px; gap: 4px 6px; }
+.ov-n3 .ov-win:last-child { grid-column: 1 / -1; max-width: 50%; }
+.ov-win { min-width: 0; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.ov-symbol { --c: #C9BEFF; display: block; width: 90px; height: 90px; flex: 0 0 auto; }
+.ov-symbol .sgi { width: 100%; height: 100%; filter: drop-shadow(0 3px 8px color-mix(in oklab, var(--c) 18%, transparent)); }
+.ov-symbol .sgi.sgl { font-size: 45px; }
+.ov-n2 .ov-symbol { width: 62px; height: 62px; }
+.ov-n3 .ov-symbol, .ov-n4 .ov-symbol { width: 44px; height: 44px; }
+.ov-n2 .sgi.sgl { font-size: 28px; }
+.ov-n3 .sgi.sgl, .ov-n4 .sgi.sgl { font-size: 20px; }
+.ov-win em { min-width: 0; max-width: 100%; font-style: normal; font-size: 11px; font-weight: 600; line-height: 1.2; color: var(--ink-2); text-align: center; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ov-n3 .ov-win em, .ov-n4 .ov-win em { height: 2.4em; } /* reserve both lines so a wrapped name never lifts its sigil */
+.ov-win.rv .ov-symbol { position: relative; }
+.ov-win.rv .ov-symbol::after { content: ''; position: absolute; right: 0; top: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--rv-2); }
+.ov-top { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; padding-top: 6px; min-width: 0; text-align: center; }
+.ov-top b { font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-top small { font-size: 11px; color: var(--ink-3); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ov-empty-symbol { font-size: 40px; font-weight: 300; color: var(--ink-3); }
+.ov-add { display: flex; align-items: center; justify-content: center; gap: 12px; text-align: center; background: transparent; border: 1px dashed var(--line-2); box-shadow: none; font: inherit; }
+.ov-add span { font-size: 40px; font-weight: 300; line-height: 1; color: var(--violet-2); }
+.ov-add b { color: var(--ink-2); font-size: 14px; font-weight: 600; }
+.ov-hint { margin: 18px 12px 0; text-align: center; color: var(--ink-3); font-size: 12px; line-height: 1.6; }
 .device.ov-open .dock, .device.ov-open .desk-label { opacity: 0; pointer-events: none; }
 
 /* ---------------- bound views (James, 12 Oct 2026) ----------------
@@ -98,3 +137,17 @@
 @keyframes be-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 /* On the bound view itself: the amber review frame plus "Open app" in the bar. */
 .win.bound .wbar .wopen span { white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .ov, .ov-card { transition: none; } }
+
+/* ＋ after the last desk: a new desk, starting from the app list */
+.ddot.dplus .dsg { opacity: .55; }
+.ddot.dplus svg { width: 18px; height: 18px; fill: none; stroke: #C9BEFF; stroke-width: 2.2; stroke-linecap: round; }
+.ddot.dplus:active .dsg { opacity: 1; }
+/* A new (empty) desk is a page of app tiles */
+.new-desk { padding: calc(18px + var(--safe-t, 0px)) 18px 20px; }
+.new-desk .nd-head { display: flex; align-items: baseline; gap: 10px; margin: 6px 4px 18px; }
+.new-desk .nd-head b { font-size: 22px; font-weight: 700; }
+.new-desk .nd-head span { font-size: 13.5px; color: var(--ink-3); }
+.new-desk .lgroup { margin-bottom: 22px; }
+.new-desk .lgroup h4 { margin: 0 4px 12px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
