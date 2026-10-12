@@ -42,8 +42,10 @@
     });
   }
   /* Installed Wizard apps (apps.json) and the owner's own links (launcher.json), from the Agent Service.
-   * Cached on the device so the launcher paints instantly; refreshed at start and on focus. */
+   * Cached on the device so the launcher paints instantly; refreshed at start, on focus, and every few seconds while
+   * visible (the agent or `wam` can install an app without a click here). An unchanged list rebuilds nothing. */
   const REMOTE_KEY = 'wux.apps.v1';
+  const POLL_MS = 5000;
   const PALETTE = [['#6b46ff', '#c04dff'], ['#3fe0ff', '#3f6bff'], ['#ff5ccf', '#5c3bff'], ['#4ff0b0', '#2f8cff'], ['#ffbe55', '#ff6b86'], ['#ff8a5c', '#ff5ccf']];
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const toTile = a => ({
@@ -52,9 +54,12 @@
     ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '',
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
-  let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
+  let remoteSig = (() => { try { return localStorage.getItem(REMOTE_KEY) || '[]'; } catch (e) { return '[]'; } })();
+  let REMOTE = (() => { try { return (JSON.parse(remoteSig) || []).map(toTile); } catch (e) { return []; } })();
   const listeners = new Set();
+  let loads = 0;
   async function loadRemote() {
+    const seq = ++loads;
     try {
       if (window.WizConfig?.ready) await window.WizConfig.ready;
       const url = window.WizConfig?.endpoint('apps');
@@ -62,7 +67,11 @@
       const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
       if (!r.ok) return;
       const list = ((await r.json()).apps || []).filter(a => a && a.id && a.url && a.id !== 'wizard');
-      try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); } catch (e) {}
+      const sig = JSON.stringify(list);
+      // A newer load already started (it answers last), or nothing changed: keep the desktops and frames as they are.
+      if (seq !== loads || sig === remoteSig) return;
+      remoteSig = sig;
+      try { localStorage.setItem(REMOTE_KEY, sig); } catch (e) {}
       REMOTE = list.map(toTile);
       listeners.forEach(fn => fn());
     } catch (e) {}
@@ -70,7 +79,14 @@
   const firstLoad = loadRemote();
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
   window.WizCore.appsLoaded = () => firstLoad;
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
+  // One timer at most, only while the page is visible.
+  let poll = 0;
+  const schedule = () => {
+    clearTimeout(poll);
+    poll = document.hidden ? 0 : setTimeout(() => { loadRemote().finally(schedule); }, POLL_MS);
+  };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); schedule(); });
+  schedule();
 
   function registry(shell) {
     // One live array per shell, updated in place, so existing references stay valid.
