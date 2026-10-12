@@ -11,19 +11,23 @@
   const KINDS = [
     { id: 'apps', type: 'view', one: 'App', many: 'Apps', blurb: 'Things you open and use' },
     { id: 'agent-apps', type: 'service', one: 'Agent app', many: 'Agent apps', blurb: 'New skills for your agent' },
-    { id: 'agents', type: 'agent', one: 'Agent', many: 'Agents', blurb: 'The minds that run your Wizard' },
+    { id: 'agents', type: 'agent', one: 'Agent', many: 'Agents', blurb: 'The minds that run Wizard' },
     { id: 'connections', type: 'external', one: 'Connection', many: 'Connections', blurb: 'Accounts your agents can use' },
   ];
   const KIND_OF = Object.fromEntries(KINDS.map(k => [k.type, k]));
   const kindOf = a => KIND_OF[a.type] || KINDS[1];
-  const FEATURED = ['defleur-video', 'hermes-agent', 'transcriber', 'secret-drop', 'wizard-ai-accounts', 'browser'];
-  const TOPIC_ART = { productivity: ['#8f63ff', '#3f6bff', '✦'], automation: ['#3fe0ff', '#3f6bff', '⟳'], security: ['#4ff0b0', '#13805a', '◈'], audio: ['#ff5ccf', '#8f63ff', '◉'],
-    communication: ['#ffbe55', '#ff6b86', '✉'], data: ['#3fe0ff', '#8f63ff', '▤'], research: ['#b99bff', '#ff5ccf', '⌕'], video: ['#ff8a5c', '#ff5ccf', '▶'] };
+  // Four quiet entry points; category lists and app details retain their existing layout.
+  const KIND_ICONS = {
+    apps: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    'agent-apps': '<path d="m14 3-9 11h7l-2 7 9-11h-7l2-7Z"/>',
+    agents: '<rect x="4" y="7" width="16" height="13" rx="4"/><path d="M12 3v4M8 12h.01M16 12h.01M9 16h6"/>',
+    connections: '<path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 3 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/>',
+  };
   const PALETTE = [['#6b46ff', '#c04dff'], ['#3fe0ff', '#3f6bff'], ['#ff5ccf', '#5c3bff'], ['#4ff0b0', '#2f8cff'], ['#ffbe55', '#ff6b86'], ['#ff8a5c', '#ff5ccf']];
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], tags: [], installed: new Map(), stack: [], q: '', loaded: false, error: '' };
+  const S = { apps: [], installed: new Map(), stack: [], q: '', loaded: false, error: '' };
   if (/\.staging\.wizard001\.com$/.test(location.hostname)) $('preview').hidden = false;
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
 
@@ -42,11 +46,9 @@
   }
   const get = p => fetch(DATA + p, { credentials: 'same-origin', cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
   async function load() {
-    const [idx, tags, inst] = await Promise.allSettled([get('wizard/v1/index/search?limit=100'), get('wizard/v1/index/tags'), get('api/apps/installed')]);
+    const [idx, inst] = await Promise.allSettled([get('wizard/v1/index/search?limit=100'), get('api/apps/installed')]);
     if (idx.status !== 'fulfilled') { S.error = 'The App Index isn’t reachable right now.'; S.loaded = true; return paint(); }
     S.apps = (Array.isArray(idx.value.apps) ? idx.value.apps : []).map(clean).filter(Boolean).filter(a => a.id !== 'wizard-shell');
-    S.tags = (tags.status === 'fulfilled' && Array.isArray(tags.value.tags) ? tags.value.tags : [])
-      .filter(t => t && ID.test(t.id || '')).map(t => ({ id: t.id, count: Number.isSafeInteger(t.count) && t.count > 0 ? t.count : 0 })).filter(t => t.count);
     if (inst.status === 'fulfilled') for (const x of inst.value.installed || []) {
       const id = x?.info?.id; if (!id) continue; const prev = S.installed.get(id);
       if (!prev || x.app?.status === 'running') S.installed.set(id, { status: x.app?.status || 'unknown' });
@@ -69,42 +71,16 @@
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
     return `<button class="get ${cls}" data-get="${esc(a.id)}">Get</button>`;
   }
-  const tile = a => `<div class="tile" data-app="${esc(a.id)}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b><small>${esc(a.summary)}</small></span>${action(a)}</div>`;
   const row = a => `<div class="row" data-app="${esc(a.id)}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b><small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;
-
-  function hero(list) {
-    if (!list.length) return '';
-    return list.map((a, i) => {
-      const [c1, c2] = hue(a.id);
-      return `<div class="feat" data-app="${esc(a.id)}" role="button" tabindex="0" style="--c1:${c1};--c2:${c2}">
-        <div class="feat-art" aria-hidden="true">${a.logo ? `<img src="${DATA}logo/${esc(a.id)}" alt="" decoding="async">` : ''}<i></i><i></i></div>
-        <div class="feat-tx"><span class="eyebrow">${i === 0 ? 'Featured' : 'Spotlight'} · ${esc(kindOf(a).one)}</span><h3>${esc(a.name)}</h3><p>${esc(a.summary)}</p></div>
-        <div class="feat-foot">${icon(a, 's')}<span class="by">${esc(a.publisher || '')}</span>${action(a, 'light')}</div></div>`;
-    }).join('');
-  }
-  function shelf(title, sub, list, kind) {
-    if (!list.length) return '';
-    return `<section class="shelf"><div class="shelf-head"><div><h2>${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ''}</div>${kind ? `<button class="see" data-kind="${kind}">See all</button>` : ''}</div>
-      <div class="rail ${list.length > 2 ? 'rail3' : ''}">${list.map(tile).join('')}</div></section>`;
-  }
 
   /* ---------------- screens ---------------- */
   function paint() {
-    if (!S.loaded) { $('hero').innerHTML = '<div class="feat skel"></div>'; $('shelves').innerHTML = '<div class="skel-rows"><i></i><i></i><i></i></div>'; return; }
-    if (S.error) { $('hero').innerHTML = ''; $('shelves').innerHTML = `<p class="empty">${esc(S.error)}</p>`; return; }
-    const feat = FEATURED.map(id => S.apps.find(a => a.id === id)).filter(Boolean).slice(0, 4);
-    $('hero').innerHTML = hero(feat.length ? feat : S.apps.slice(0, 3));
-    $('kinds').innerHTML = KINDS.map(k => { const n = S.apps.filter(a => kindOf(a) === k).length; return n ? `<button class="kind k-${k.id}" data-kind="${k.id}"><b>${esc(k.many)}</b><small>${n}</small></button>` : ''; }).join('');
-    const by = k => S.apps.filter(a => kindOf(a).id === k);
-    const fresh = [...S.apps].sort((a, b) => (b.checked_at || 0) - (a.checked_at || 0)).slice(0, 6);
-    $('shelves').innerHTML = [
-      shelf('Give your agent new skills', 'Agent apps run in the background. Your agent uses them for you.', by('agent-apps'), 'agent-apps'),
-      shelf('Apps you can open', 'They get their own window in Wizard.', by('apps'), 'apps'),
-      shelf('Connect your accounts', 'Sign in once and every agent can use it.', by('connections'), 'connections'),
-      shelf('Agents', '', by('agents'), 'agents'),
-      shelf('New on the Index', '', fresh, ''),
-    ].join('');
-    $('topics').innerHTML = S.tags.map(t => { const [c1, c2, g] = TOPIC_ART[t.id] || [...hue(t.id), '◇']; return `<button class="topic" data-tag="${esc(t.id)}" style="--c1:${c1};--c2:${c2}"><span class="tg">${g}</span><b>${esc(cap(t.id))}</b><small>${t.count} app${t.count === 1 ? '' : 's'}</small></button>`; }).join('');
+    $('kinds').innerHTML = KINDS.map(k => `<button type="button" class="kind" data-kind="${k.id}"${!S.loaded || S.error ? ' disabled' : ''}>
+      <svg class="kind-icon" viewBox="0 0 24 24" aria-hidden="true">${KIND_ICONS[k.id]}</svg>
+      <span class="kind-copy"><b>${esc(k.many)}</b><small>${esc(k.blurb)}</small></span>
+      <span class="kind-go" aria-hidden="true">›</span></button>`).join('');
+    $('browse-status').hidden = S.loaded && !S.error;
+    $('browse-status').textContent = S.error || 'Loading the App Index…';
   }
 
   function showList(title, list, sub = '') {
