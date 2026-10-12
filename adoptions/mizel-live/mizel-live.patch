@@ -1,5 +1,5 @@
 diff --git a/web/app.js b/web/app.js
-index d3b9360..2265424 100644
+index d3b9360..2c3535e 100644
 --- a/web/app.js
 +++ b/web/app.js
 @@ -401,7 +401,7 @@ function renderSuggestions() {
@@ -511,7 +511,8 @@ index d3b9360..2265424 100644
 +  toast(`${pluralize(lost, 'chunk')} retained by shared capture. Reconnect and retry saving.`, {error:true,action:{label:'Retry save',fn:()=>stopRecording()}});
  }
  async function finishWithoutAudio(m) {
-   if (state.rec?.meetingId === m.id) { try { await state.rec.engine?.abort?.(); } catch { /* ignore */ } endRecSession(); }
+-  if (state.rec?.meetingId === m.id) { try { await state.rec.engine?.abort?.(); } catch { /* ignore */ } endRecSession(); }
++  if (state.rec?.meetingId === m.id) { await stopRecording(); return; }
    await finishStop(m.id);
  }
 -function endRecSession() { live.stop(); stopPillClock(); state.rec = null; renderRecBanner(); renderPill(); renderAskBar(); els.docPane.dataset.rec = ''; if (state.current) renderHeader(state.current); notifyNative(); }
@@ -579,7 +580,12 @@ index d3b9360..2265424 100644
  //   mizel.open(id) · mizel.newMeeting() · mizel.stop() · mizel.state()
  //   mizel.setNativeRecorder(true)  → hides the in-page recorder while a native floating pill is shown
  //   mizel.onNativeEvent({type:'level', me, them}) → feeds the in-page meters
-@@ -1894,13 +1690,25 @@ window.mizel = Object.freeze({
+@@ -1890,17 +1686,29 @@ window.mizel = Object.freeze({
+   stop: () => stopRecording(),
+   state: () => ({ view: state.route.view, meetingId: state.route.id, recording: state.rec?.phase === 'recording', recordingMeetingId: state.rec?.meetingId || null }),
+   setNativeRecorder: (on) => { document.documentElement.dataset.nativeRecorder = on ? '1' : ''; },
+-  onNativeEvent: (evt) => { if (evt?.type === 'level') updateLevel(evt); else if (evt?.type === 'stopped' && state.rec) finishStop(state.rec.meetingId); },
++  onNativeEvent: (evt) => { if (evt?.type === 'level') updateLevel(evt); else if (evt?.type === 'stopped' && state.rec) void stopRecording(); },
  });
  
  // Wizard Back closes the current app layer before taking a shell step.

@@ -88,7 +88,7 @@ def run(pg, sx, top, check, save, origin, pkg, state, lock):
     frame('WizardApp.capture.ack(' + json.dumps(result['id']) + ')')
     check('shared-device', 'ack deletes only the exact native task take', not pg.ev("JSON.parse(WizardOSDevice.recPending()).some(t=>t.id===" + json.dumps(active['id']) + ')'))
     legacy = pg.ev("WizardOSDevice.recStart('auto')")
-    reverse=pg.ev("wizardNative.meetings.start({meetingId:'qa_conflicting_native'}).then(()=>null,e=>e.code)")
+    reverse=pg.ev("WizAppCapture.start('mizel',{kind:'meeting',meta:{meetingId:'qa_conflicting_native'}}).then(()=>null,e=>e.code)")
     check('shared-device','native meeting admission refuses an actual DeviceBridge recorder',reverse=='mic_busy',reverse)
     pg.ev("dispatchEvent(new Event('wos-native-resume'))");pg.pump(.5)
     check('shared-device', 'legacy voice resumes after ownership readiness', pg.ev('resumes') == [legacy], pg.ev('resumes'))

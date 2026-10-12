@@ -40,14 +40,14 @@ module.exports=async({browser,root,evidence,test})=>{
   if(match){const [,id,op]=match,r=get(id);
    if(op==='chunks'){const bytes=[];for await(const b of req)bytes.push(b);const source=u.searchParams.get('source'),seq=+u.searchParams.get('seq'),startMs=+u.searchParams.get('start_ms');const key=source+':'+seq;const body=Buffer.concat(bytes);if(r.chunks.has(key))assert.deepEqual(r.chunks.get(key).bytes,body,'Replayed seq must retain exact PCM bytes');else r.chunks.set(key,{source,seq,startMs,bytes:body});return send({stored:true});}
    if(op==='stop'){let body='';for await(const b of req)body+=b;r.doc.status='processing';r.stop=JSON.parse(body||'{}');events.push({type:'stop',id,body:r.stop});return send(detail(id));}
-   if(op==='audio.wav'){const n=Math.round(detail(id).duration_ms*16),mixed=new Int32Array(n);for(const c of r.chunks.values()){const offset=Math.round(c.startMs*16);for(let i=44;i<c.bytes.length;i+=2)mixed[offset+(i-44)/2]+=c.bytes.readInt16LE(i);}const raw=Buffer.alloc(n*2);for(let i=0;i<n;i++)raw.writeInt16LE(Math.max(-32768,Math.min(32767,mixed[i])),i*2);if(corrupt&&raw.length)raw[0]^=1;return send(wav(raw),'audio/wav');}
+   if(op==='audio.wav'){const n=Math.max(0,...[...r.chunks.values()].map(c=>Math.round(c.startMs*16)+(c.bytes.length-44)/2)),mixed=new Int32Array(n);for(const c of r.chunks.values()){const offset=Math.round(c.startMs*16);for(let i=44;i<c.bytes.length;i+=2)mixed[offset+(i-44)/2]+=c.bytes.readInt16LE(i);}const raw=Buffer.alloc(n*2);for(let i=0;i<n;i++)raw.writeInt16LE(Math.max(-32768,Math.min(32767,mixed[i])),i*2);if(corrupt&&raw.length)raw[0]^=1;return send(wav(raw),'audio/wav');}
    if(op==='segments')return send({segments:[],transcribe_pending:0,status:r.doc.status});return send(detail(id));
   }
   if(u.pathname.startsWith('/mizel-live/')){const f=path.resolve(mizel,u.pathname.slice('/mizel-live/'.length)||'index.html');if(!f.startsWith(path.resolve(mizel)+path.sep)||!fs.existsSync(f))return send('','text/plain',404);return send(fs.readFileSync(f),f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml');}
   send({},'application/json');
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
- let ctx;
+ let ctx,p;
  try{
   ctx=await browser.newContext({viewport:{width:1440,height:1100}});
   await ctx.route('**/*',r=>{if(new URL(r.request().url()).origin!==origin){blocked.push(r.request().url());return r.abort();}return r.continue();});
@@ -55,7 +55,7 @@ module.exports=async({browser,root,evidence,test})=>{
   await ctx.addInitScript(()=>{if(window!==parent){window.rawCaptureAttempts=0;for(const name of ['getUserMedia','getDisplayMedia'])if(navigator.mediaDevices?.[name])navigator.mediaDevices[name]=()=>{rawCaptureAttempts++;throw new Error('Raw capture in hosted app is forbidden');};for(const name of ['AudioContext','MediaRecorder'])if(window[name])window[name]=function(){rawCaptureAttempts++;throw new Error('Raw capture in hosted app is forbidden');};return;}
    window.displayPrompts=[];window.mediaAdmissions=0;const gum=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=(...a)=>{mediaAdmissions++;return gum(...a);};navigator.mediaDevices.getDisplayMedia=()=>{displayPrompts.push({active:navigator.userActivation.isActive,at:Date.now()});return gum({audio:true}).then(st=>{window.displayStreams||=[];displayStreams.push(st);return st;});};
   });
-  const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
+  p=await ctx.newPage();const errors=[];p.on('pageerror',e=>errors.push(e.message));
   await test('Mizel-actual-core-client-host-gesture-stream-reload-system-toggle-durable-ack',async()=>{
    await p.goto(origin+'/host/');const f=()=>p.frames().find(f=>f.url().includes('/mizel-live/'));
    await p.waitForFunction(()=>document.querySelector('iframe').contentWindow.WizardApp?.hosted);
@@ -76,7 +76,7 @@ module.exports=async({browser,root,evidence,test})=>{
    assert.equal(await p.evaluate(()=>displayPrompts[1].active),true,'Mid-recording picker kept activation');
    await f().click('#pill button[aria-label="Pause"]');await p.waitForTimeout(400);await f().click('#pill button[aria-label="Resume"]');await p.waitForTimeout(900);
    await f().click('#pill .stop');await p.waitForFunction(()=>!WizAppCapture.getState().recording);await p.waitForFunction(async()=>!(await WizAppCapture.pending('mizel')).length);
-   assert.equal(await p.evaluate(()=>WizAppServices.update.busy()),false);assert.equal(await f().evaluate(()=>rawCaptureAttempts),0);
+   await p.waitForFunction(()=>!WizAppServices.update.busy());assert.equal(await f().evaluate(()=>rawCaptureAttempts),0);
    const r=[...records.values()][0];for(const source of ['me','them']){const cs=[...r.chunks.values()].filter(c=>c.source===source).sort((a,b)=>a.seq-b.seq);assert.deepEqual(cs.map(c=>c.seq),cs.map((c,i)=>i));assert.equal(r.stop.final_seq[source],cs.at(-1).seq);}
    await f().screenshot({path:path.join(evidence,'mizel-shared-desktop.png')});
    assert.deepEqual(errors,[]);
@@ -104,5 +104,5 @@ module.exports=async({browser,root,evidence,test})=>{
    await q.evaluate(()=>WizardOSDevice.recCancel(legacyId));await q.close();
   });
   fs.writeFileSync(path.join(evidence,'integration-manifest.json'),JSON.stringify({mizelSHA256:crypto.createHash('sha256').update(fs.readFileSync(path.join(mizel,'app.js'))).digest('hex'),coreSHA256:crypto.createHash('sha256').update(core).digest('hex'),writes,blocked,socketFrames,events,limitations:['Synthetic backend/microphone/display/native-port; physical/native service acceptance is separate.'],productionWrites:0},null,2));
- }finally{await ctx?.close();await new Promise(r=>server.close(r));}
+ }catch(e){if(p)fs.writeFileSync(path.join(evidence,'seam-failure-context.json'),JSON.stringify(await p.evaluate(()=>({capture:WizAppCapture.getState(),host:WizAppServices.inspect(),app:document.querySelector('iframe')?.contentWindow?.mizel?.state?.(),toasts:document.querySelector('iframe')?.contentDocument?.querySelector('#toasts')?.textContent})),null,2));throw e;}finally{await ctx?.close();await new Promise(r=>server.close(r));}
 };

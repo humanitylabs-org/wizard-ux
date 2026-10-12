@@ -17,7 +17,7 @@
     "web/wizard-style.css": "c94915a7385e681eb2ce9b3806bc65ea340383a86fc405ba28ee33f5900f3ea3"
   },
   "candidate_files": {
-    "web/app.js": "27bd05c190b99ca8c878a6f061603f38d9404100f419b9caae981d81b8316766",
+    "web/app.js": "7f4522e6825053f8a496ab12e113fd3f7f84b3d7352531a44a769b5e6134fdf3",
     "web/apple-touch-icon.png": "93fe4e7c6bd653a4217520ac4bbe003d9939eabe52ff8b334f864f4f4bcc507c",
     "web/icon-192.png": "a1a0347984fbfcec379c69a7da9322593ef564682025b98ffaa921bf875c145d",
     "web/icon-512.png": "107841329c3598260c473b97e6cc55641e646127aa4de05c2d21c9ae0e313f35",
@@ -38,7 +38,7 @@
   "deleted": [
     "web/capture-worklet.js"
   ],
-  "patch_sha256": "1850b453b3d819522d6d55479ca18c5c21d958ab67a1a0925453c2f75e928b0d",
+  "patch_sha256": "93f3aa5a0ae9428eb3318a3a9a21018a7f19df67b4517bb8ab24b28384b726ee",
   "staged": "/home/telos/.hermes/cache/scratch/shared-app-services/other-apps/staged/mizel-live",
   "deployed": false,
   "backend_edited": false,

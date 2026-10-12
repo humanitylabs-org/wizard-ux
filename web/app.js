@@ -1975,6 +1975,9 @@
   /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
   function nativeResume(a) {
     if (V.state !== 'idle' || !a?.id) return false;
+    // Recovery can precede any Chats/model-picker visit, just like a cold first recording.
+    // Warm authority now; the exact route still seals at Send and remains fail-closed.
+    window.WosModels?.load().catch(() => {});
     Object.assign(V, { native: a.id, kind: a.kind === 'command' ? 'command' : 'auto', target: null, snap: null, seal: null, replyTo: replyTake(a.id), chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');

@@ -354,7 +354,7 @@
       if (!WORKLET_URL) throw fail('pcm_module_url_missing', 'Load the shared capture resource through its external script URL.');
       await ctx.audioWorklet.addModule(WORKLET_URL);
       const sink = ctx.createGain(); sink.gain.value = 0; sink.connect(ctx.destination); s.nodes.push(sink);
-      const taps = []; let systemTap = null;
+      const taps = []; let systemTap = null, systemEndMs = 0;
       const flushTap = tap => new Promise((resolve,reject) => {
         if (tap.ended) return resolve();
         const timeout = setTimeout(() => { tap.flushed=null; reject(fail('pcm_flush_timeout','Final PCM has not been saved; retry Stop.')); },5000);
@@ -382,7 +382,7 @@
         if (!stream.getAudioTracks().length) { stream.getTracks().forEach(t=>t.stop()); emit(s,'warn','No computer audio was shared.'); return; }
         s.display=stream; s.hasSystemAudio=true;
         const input=ctx.createMediaStreamSource(stream), an=ctx.createAnalyser(); an.fftSize=512;input.connect(an);
-        s.nodes.push(input,an); s.systemAnalyser=an; systemTap=addTap('them',an,taps[0].ms);
+        s.nodes.push(input,an); s.systemAnalyser=an; systemTap=addTap('them',an,Math.max(taps[0].ms,systemEndMs));
         systemTap.input=input;systemTap.an=an;
         stream.getAudioTracks().forEach(t=>t.addEventListener('ended',()=>{ if(s.hasSystemAudio && !s.inputStopped) void s.engine?.setSystemAudio(false).catch(()=>{}); },{once:true}));
       };
@@ -402,7 +402,7 @@
           changing=(async()=>{
             if(on) { const stream=await request; if(s.inputStopped||s.discard) {stream.getTracks().forEach(t=>t.stop());return;} attachSystem(stream); }
             else {
-              const tap=systemTap; if(tap) {await flushTap(tap); tap.input.disconnect();tap.an.disconnect();tap.node.disconnect();await s.writes;await drain(s);uploadChunk(s,'them',null,0,true);await put(s.row);}
+              const tap=systemTap; if(tap) {await flushTap(tap); systemEndMs=Math.ceil(tap.ms); tap.input.disconnect();tap.an.disconnect();tap.node.disconnect();await s.writes;await drain(s);uploadChunk(s,'them',null,0,true);await put(s.row);}
               s.hasSystemAudio=false;s.systemAnalyser=null;systemTap=null;
               const display=s.display;s.display=null;display?.getTracks().forEach(t=>t.stop());
             }
@@ -670,7 +670,7 @@
         cleanup(s);
         // A native start might have succeeded before its bridge reply failed.
         // Keep the reservation recoverable instead of deleting the only owner hint.
-        if (s.row.native && !['mic_permission','native_busy','permission_denied','busy'].includes(e.code) && e.name!=='NotAllowedError') {
+        if (s.row.native && !['mic_permission','mic_busy','native_busy','busy_other_meeting','bad_meeting_id','permission_denied','busy'].includes(e.code) && e.name!=='NotAllowedError') {
           s.row.status='recoverable';s.row.partial=true;try {await put(s.row);const recovered=await adapter(opts)?.recover?.(s.row);if(recovered?.live)recoveryLive.add(s.row.id);}catch(_){}
         }
         else { try { await remove(s.row.id); } catch (_) {} }

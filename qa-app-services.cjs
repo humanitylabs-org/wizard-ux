@@ -80,7 +80,10 @@ let origin;
     await p.waitForTimeout(250);ok(id+' root stays open',await fr.evaluate(()=>depth===0&&calls===2),root);
     if (id!==entries.at(-1)[0]) await p.evaluate(({id,mobile})=>{const shell=mobile?__wos:__wux;const w=Object.values(shell.wins).find(w=>w.appId===id);shell.closeWin(w.id)},{id,mobile});
    }
-   const fr=frames[frames.length-1];
+   // Root Back returns to shell home; reopen the last fixture before gesture/share acceptance.
+   const [lastId,lastUrl]=entries.at(-1);
+   await p.evaluate(({id,mobile})=>{const a=WizCore.apps(mobile?'mobile':'desktop').APP[id];(mobile?__wos:__wux).openApp(a)},{id:lastId,mobile});
+   const fr=await waitFrame(p,origin+lastUrl);await fr.waitForFunction(()=>WizardApp.hosted);
    await fr.locator('#open').click();
    await p.evaluate(()=>{document.documentElement.style.setProperty('--bg','#eeeeee');document.documentElement.style.setProperty('--ink','#111111');document.documentElement.style.colorScheme='light';WizAppearance.sync()});
    await fr.waitForFunction(()=>WizardApp.theme.get()?.colorScheme==='light');
