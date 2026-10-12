@@ -29,7 +29,7 @@ function boot() {
    if(url.endsWith('/api/model/options'))return response(200,options);
    if(url.endsWith('/model')) {
     if(delayLock)await delayLock;
-    return response(200,{runtime:{...payload,provider:badAck?'wrong-provider':payload.provider,model_lock:'accepted'}});
+    return response(200,{runtime:{...payload,provider:badAck?'wrong-provider':payload.provider,model_lock:'accepted',selection_version:100}});
    }
    if(/\/v1\/runs\/[^/]+$/.test(url)&&method==='GET')return response(200,{runtime:runRuntime,status:'running'});
    if(url.endsWith('/steer'))return response(200,{status:'accepted'});
@@ -78,6 +78,12 @@ async function settled(b,id) { for(let i=0;i<150;i++){const it=b.c.WosOutbox.get
    assert.equal(b.calls.filter(x=>x.url.endsWith('/steer')).length,before);
    assert.equal(JSON.parse(b.bodies.at(-1).body).model,'glm-5-3');
   });
+  await check('actual wrong provider cannot be hidden by requested provider metadata',async()=>{
+   const before=b.calls.filter(x=>x.url.endsWith('/steer')).length;
+   b.runtime({model:'glm-5-3',provider:'wrong-public-provider',requested:{model:'glm-5-3',provider:'custom:tinfoil-operator'}});
+   const it=await b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic wrong provider',steerRunId:'wrong-active'});await settled(b,it.id);
+   assert.equal(b.calls.filter(x=>x.url.endsWith('/steer')).length,before);
+  });
   await check('same-model active run permits verified steer',async()=>{
    b.runtime({model:'glm-5-3',provider:'custom:tinfoil-operator'});
    const it=await b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic',steerRunId:'glm-active'});assert((await settled(b,it.id)).steered);
@@ -91,6 +97,19 @@ async function settled(b,id) { for(let i=0;i<150;i++){const it=b.c.WosOutbox.get
    let res;const p=new Promise(r=>res=r);b.lockDelay(p);
    const task=b.c.WosModels.setThreadModel('s1',{value:'gpt-6.1-sol',provider:'openai-codex'});
    await assert.rejects(b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic'}),/saving/);res();await task;b.lockDelay(null);
+  });
+  await check('newer authoritative selection on another device replaces local override',async()=>{
+   const s=b.sessions.get('s1');s.model='glm-5-3';s.provider='custom:tinfoil-operator';s.modelLockAt=90;
+   b.c.WosModels.reconcile([s]);assert.equal(b.c.WosModels.snapshot('s1').model,'gpt-6.1-sol');
+   s.modelLockAt=101;b.c.WosModels.reconcile([s]);assert.equal(b.c.WosModels.snapshot('s1').model,'glm-5-3');
+   await b.c.WosModels.setThreadModel('s1',{value:'gpt-6.1-sol',provider:'openai-codex'});
+  });
+  await check('native recovery reads persisted send-time route after selector changes and page reload',async()=>{
+   const store=new Map(), storage={getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)};b.c.localStorage=storage;
+   b.c.WosModels.keepVoiceRoute('synthetic-native-take',{model:'glm-5-3',provider:'custom:tinfoil-operator'});
+   const recovered=boot();recovered.c.localStorage=storage;
+   const frozen=recovered.c.WosModels.voiceRoute('synthetic-native-take');assert.equal(frozen.model,'glm-5-3');assert.equal(frozen.provider,'custom:tinfoil-operator');
+   recovered.c.WosModels.forgetVoiceRoute('synthetic-native-take');assert.equal(recovered.c.WosModels.voiceRoute('synthetic-native-take'),null);recovered.close();
   });
   await check('wrong backend acknowledgement never claims model selected',async()=>{
    b.badAck(true);await assert.rejects(b.c.WosModels.setThreadModel('s1',{value:'glm-5-3',provider:'custom:tinfoil-operator'}),/confirm/);

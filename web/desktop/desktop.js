@@ -536,10 +536,10 @@
 
   /* Ask Archimedes from anywhere: a new thread, through the durable outbox, delegated in the background.
    * Nothing opens or takes focus; the thread shows up in Chats and the Inbox when James wants it. */
-  async function ask(text, how = 'typing in the desktop launcher', audio = null) {
+  async function ask(text, how = 'typing in the desktop launcher', audio = null, route = null) {
     text = String(text || '').trim(); if (!text && !audio) return;
     const ctx = viewContext(ws[cur].focus, how);
-    await OUTBOX.enqueue({ kind: 'new', text, audio, instructions: ctx, source: 'orb', how });
+    await OUTBOX.enqueue({ ...(route || {}), kind: 'new', text, audio, instructions: ctx, source: 'orb', how });
     if (!audio) toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600);
   }
 
@@ -654,15 +654,18 @@
     // Text, photos and voice go as ONE message (legacy H4): that thread's composer, taken at the send key.
     const sealAt = rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
     if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { vReply = rp; toast('…', 'Still uploading · send when it finishes', 2000); return 'busy'; }
+    let modelRoute;
+    try { modelRoute = window.WosModels.snapshot(sealAt?.sid || ''); }
+    catch (e) { vReply = rp; toast('!', String(e.message || e), 2400); return 'busy'; }
     const t = sealAt ? CHATS.takeComposer(sealAt.wid, sealAt.sid) : null;
     const sealed = t && (t.text || t.files.length) ? t : false;
     const r = await VOICE.finish({ transcribe: false });
     if ((!r || !r.blob) && sealed) sealed.putBack();
     if (!r || !r.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
-    if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { sid: aimSid, seal: sealed });
-    else { if (sealed) sealed.putBack(); ask('', 'voice', r.blob); }
+    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed, modelRoute); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
+    if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { sid: aimSid, seal: sealed, route: modelRoute });
+    else { if (sealed) sealed.putBack(); ask('', 'voice', r.blob, modelRoute); }
     toast('✦', `Sent to ${window.WizConfig.agent()}`, 1400);
     return 'sent';
   }

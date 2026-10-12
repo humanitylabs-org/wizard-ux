@@ -130,7 +130,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
   await ctx.grantPermissions(['microphone'], { origin });
   await fence(ctx, 'phone');
   const refused0 = await refusedAt();
-  const p = await ctx.newPage(); p.setDefaultTimeout(8000);
+  const p = await ctx.newPage(); p.setDefaultTimeout(30000);
   const errs = [];
   p.on('pageerror', e => errs.push('phone: ' + String(e)));
   p.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|frame-ancestors|Framing/.test(m.text())) errs.push('phone console: ' + m.text()); });

@@ -977,7 +977,7 @@ window.WizCore.chats = function createChats(H) {
     const dkey = isNew ? 'new' : 'direct:' + sid;
     if (here && !voice) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; }
     if (here) c.follow = true;
-    const nm = isNew && PW ? PW.newModel(c) : null; // a model picked for this new chat (#11)
+    const nm = opts.route || (isNew && PW ? PW.newModel(c) : null); // a model picked for this new chat (#11)
     if (nm) c.newModel = null;
     // Send and go (James, 10 Oct 2026): on the phone every send steps back to the thread list, a new thread
     // and a reply alike, so he never waits on the screen to watch it go. Keyed on the pinned thread: a thread

@@ -113,9 +113,11 @@
     if (blob.size < 600) { d.recDone(t.id); return; }
     // A voice reply started from a thread's composer mic stays that thread's, even when it ended outside the page.
     const pin = window.__wosReplyTake?.(t.id); if (pin) window.__wosReplyTake(null);
-    const it = await OUTBOX.enqueue({ kind: pin ? 'reply' : 'new', sessionId: pin ? pin.sid : '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
+    const route = window.WosModels.voiceRoute(t.id);
+    const it = await OUTBOX.enqueue({ ...(route || {}), kind: pin ? 'reply' : 'new', sessionId: pin ? pin.sid : '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
       instructions: (window.WizConfig.owner() ? window.WizConfig.owner() + ' recorded' : 'The owner recorded') + ' this with the Wizard OS orb on their Android phone' + (pin ? ' as a voice reply in this thread' : '') + (how === 'recovered' ? '; the recording was interrupted and recovered' : '') + '. The original recording is attached as a voice note.' });
     d.recDone(t.id);
+    try { window.WosModels.forgetVoiceRoute(t.id); } catch (e) {}
     log('rec:sent', t.id, it.id, how);
     toast('✦', how === 'recovered' ? `Recording sent to ${window.WizConfig.agent()}` : 'Sending your recording', 2000);
     try { w.openWizardThread(it.sessionId); } catch (e) {}

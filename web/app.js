@@ -2079,7 +2079,7 @@
     V.raf = requestAnimationFrame(tick);
     V.native = null;
     const dev = DEV();
-    if (dev) { let id = ''; try { id = dev.recStart(kind === 'command' ? 'command' : 'auto') || ''; } catch (e) {}
+    if (dev) { let id = ''; try { id = dev.recStart(kind === 'command' ? 'command' : 'auto') || ''; if (id) { const route = window.WosModels.snapshot(V.replyTo?.sid || (V.snap?.view?.kind === 'chat thread' ? V.snap.view.thread : '')); if (route) saveVoiceRoute(id, route); } } catch (e) {}
       if (id) { V.native = id; reportVoice(V.state); if (V.stopAsked) finishVoice(); return; } } // '' = no mic permission yet: the page asks below
     try {
       if (!(await openRec())) return;
@@ -2153,6 +2153,9 @@
   // A take that sends nothing gives the composer it took back (words, photos, files: chats.js takeComposer).
   function unseal(seal) { const t = seal || V.seal; if (!seal) V.seal = null; try { t?.putBack(); } catch (e) { console.error(e); } }
   function dropHold() { if (V.hold) { LIVE.releaseSend?.(V.hold); V.hold = null; } }
+  function saveVoiceRoute(id, route) {
+    try { window.WosModels.keepVoiceRoute(id, route); } catch (e) { throw new Error('Could not save the recording’s model route'); }
+  }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
     V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
@@ -2163,6 +2166,12 @@
     // goes into is taken now, at the tap, and rides with the recording (chats.js takeComposer).
     const sealAt = sealTarget();
     if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
+    try {
+      const pin = sealAt || (V.snap.view?.kind === 'chat thread' ? { sid: V.snap.view.thread } : null);
+      V.snap.route = window.WosModels.snapshot(pin?.sid || '');
+      if (!V.snap.route) { toast('!', 'Choose a model before sending', 2200); return; }
+      if (V.native) saveVoiceRoute(V.native, V.snap.route);
+    } catch (e) { toast('!', String(e.message || e), 2200); return; }
     if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length ? t : null; }
     leaveOnSend(V.snap);
     if (V.native) {
@@ -2225,7 +2234,7 @@
     if (V.replyTo) {
       const rt = V.replyTo, files = takeFiles(); V.replyTo = null; replyTake(null);
       setVoice('idle'); txPill('✦', 'Voice reply · saved to this thread', 'agent'); txHide(1800);
-      Promise.all(blobs.map((part, i) => Promise.resolve(CHATS.sendVoiceTo(rt.wid, rt.sid, part, i === 0 ? files : [], i === 0 ? snap.seal || false : false)).catch(() => {}))).finally(() => recDone(nid));
+      Promise.all(blobs.map((part, i) => Promise.resolve(CHATS.sendVoiceTo(rt.wid, rt.sid, part, i === 0 ? files : [], i === 0 ? snap.seal || false : false, snap.route)).catch(() => {}))).finally(() => recDone(nid));
       return;
     }
     try {
@@ -2253,8 +2262,8 @@
       const files = takeFiles();
       const queued = (blobs.length ? blobs : [blob]).map((part, i) => {
         const fl = i === 0 ? files : [];   // attached files ride with the first part only
-        if (aim == null && sv?.review) return sendReview(sv, '', part, fl);
-        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { sid: sv.thread, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
+        if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route);
+        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
         const sl = i === 0 ? snap.seal : null; // the window is gone: the taken composer still rides with it
         return toAgent('', 'Saved · sends when Wizard is reachable', { audio: part, desk: aim, source: 'orb', files: [...fl, ...(sl ? sl.files : [])].slice(0, 8), typed: sl?.text || '', snap })
           .then(() => sl?.done(), e => { sl?.putBack(); throw e; });
@@ -2347,17 +2356,17 @@
       (s => s ? `Visible on screen: ${s}` : '')(window.WizScreen?.read(winEl(v.id)) || ''),
       'Treat the message as feedback on that page; "this", "here" and "it" mean that page.'].filter(Boolean).join(' ');
   }
-  function sendReview(v, text, audio, files = []) {
+  function sendReview(v, text, audio, files = [], route = null) {
     const wid = reviewSink(v); if (!wid) return false;
     window.__ovLog = (window.__ovLog || []).concat('review-send:' + v.thread).slice(-30);
-    sendChat(wid, text, 'voice, aimed at the page under review', audio, { sid: v.thread, files, instructions: reviewContext(v), away: true });
+    sendChat(wid, text, 'voice, aimed at the page under review', audio, { sid: v.thread, route, files, instructions: reviewContext(v), away: true });
     return true;
   }
   function deliverToView(v, text, snap) {
-    if (v.review) return sendReview(v, text, null);
+    if (v.review) return sendReview(v, text, null, [], snap?.route);
     const w = W[v.id]; if (!w) return false;
     // The thread that was open when James sent, even if the window shows another one by now.
-    if (w.app === 'chats' && (v.thread || w.thread)) { sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread || w.thread, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); return true; }
+    if (w.app === 'chats' && (v.thread || w.thread)) { sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); return true; }
     if (w.app === 'frame') {
       try { const f = winEl(v.id).querySelector('iframe'); f.contentWindow.postMessage({ type: 'wizard-os:voice', text }, location.origin); return true; } catch (e) { return false; }
     }
@@ -2461,8 +2470,8 @@
     if (files.length || seal) {
       const nf = files.length + (seal ? seal.files.length : 0);
       const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : ''].filter(Boolean).join(' + ');
-      if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback sent with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, null, files); }
-      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Sent with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+      if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback sent with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, null, files, snap.route); }
+      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Sent with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
       const all = [...files, ...(seal ? seal.files : [])].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
       return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all }).then(() => seal?.done(), e => { seal?.putBack(); throw e; });
     }
@@ -2605,7 +2614,7 @@
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice', opts.snap);
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    await OUTBOX.enqueue({ kind: 'new', text, typed: opts.typed || '', instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
+    await OUTBOX.enqueue({ kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
     renderMoons(); refreshHome(); renderDots();
   }
   OUTBOX?.onSent((it, res) => {

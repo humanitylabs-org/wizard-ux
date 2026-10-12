@@ -90,6 +90,7 @@
       renames: Array.isArray(item.wizard_title_renames) ? item.wizard_title_renames.filter(r => r && typeof r.from === 'string' && isFinite(r.at)).slice(-6).map(r => ({ from: r.from.slice(0, 120), to: String(r.to || '').slice(0, 120), at: Number(r.at), by: r.by === 'you' ? 'you' : 'agent' })) : [],
       // The thread's model route (chat-models.js shows and changes it).
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
+      modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
       request: userText,
     };
@@ -371,6 +372,7 @@
           const full = !this.fullAt || Date.now() - this.fullAt > FULL_EVERY;
           const [got, deferred, remote] = await Promise.all([fetchSessions(full), fetchDispositions(), fetchSeen().catch(() => null)]);
           let sessions = got.sessions;
+          window.WosModels?.reconcile(sessions);
           if (got.complete) this.fullAt = Date.now();
           else { const fresh = new Set(sessions.map(s => s.id)); sessions = sessions.concat(this.sessions.filter(s => !fresh.has(s.id) && !s.optimistic)); }
           for (const s of sessions) {
@@ -436,7 +438,7 @@
       if (s && WORKING.has(s.status) && s.runId) {
         try {
           const active = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}`)).json();
-          if (active.runtime?.model !== route.model || (active.runtime?.requested?.provider || active.runtime?.provider) !== route.provider)
+          if (!M.matchesRuntime(active.runtime, route))
             throw Object.assign(new Error('Queue on the selected model'), { status: 409 });
           const steer = { input, ...route, require_model_lock: true };
           if (opts.fileIds?.length) steer.wizard_file_ids = opts.fileIds.slice(0, 8);

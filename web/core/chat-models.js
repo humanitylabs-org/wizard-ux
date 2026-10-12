@@ -149,6 +149,28 @@
       if (!route) return null;
       return { model: route.model || route.value, provider: route.provider || '' };
     },
+    keepVoiceRoute(id, route) {
+      const all = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}');
+      all[id] = { model: route.model, provider: route.provider };
+      localStorage.setItem('wos.voice-model-routes.v1', JSON.stringify(all));
+    },
+    voiceRoute(id) { try { return JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}')[id] || null; } catch { throw new Error('Saved recording model route is unreadable'); } },
+    forgetVoiceRoute(id) {
+      const all = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}'); delete all[id];
+      localStorage.setItem('wos.voice-model-routes.v1', JSON.stringify(all));
+    },
+    matchesRuntime(runtime, route) {
+      if (runtime?.model !== route.model) return false;
+      if (runtime.provider === route.provider) return true;
+      return runtime.provider === 'custom' && route.provider.startsWith('custom:') && runtime.requested?.provider === route.provider;
+    },
+    reconcile(sessions) {
+      for (const s of sessions) {
+        const selected = M.selections.get(s.id); if (!selected) continue;
+        if ((s.model === selected.model && s.provider === selected.provider) ||
+            (selected.version > 0 && s.modelLockAt >= selected.version)) M.selections.delete(s.id);
+      }
+    },
     async resolveRoute(snapshot) {
       if (!M.ready || !snapshot?.provider) await M.load();
       const route = snapshot || M.snapshot('');
@@ -174,7 +196,7 @@
         const ack = await r.json();
         if (ack.runtime?.model_lock !== 'accepted' || ack.runtime?.model !== route.model || ack.runtime?.provider !== route.provider)
           throw new Error('Wizard did not confirm the selected model');
-        M.selections.set(sid, route);
+        M.selections.set(sid, { ...route, version: Number(ack.runtime.selection_version) || 0 });
         return route;
       })();
       M.pending.set(sid, task);

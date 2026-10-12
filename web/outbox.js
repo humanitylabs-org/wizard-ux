@@ -139,7 +139,7 @@
     if (it.kind === 'reply' && it.steerRunId && !it.attempts) {
       try {
         const run = await (await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}`)).json();
-        if (run.runtime?.model !== it.model || (run.runtime?.requested?.provider || run.runtime?.provider) !== it.provider)
+        if (!window.WosModels.matchesRuntime(run.runtime, it))
           throw new HttpError(409, 'Active run uses another model · queueing on the selected model');
         const steer = { input, model: it.model, provider: it.provider, require_model_lock: true }; if (fileIds.length) steer.wizard_file_ids = fileIds;
         const sr = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}/steer`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
