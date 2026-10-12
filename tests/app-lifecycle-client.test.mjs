@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../web/core/app-lifecycle-client.js', import.meta.url), 'utf8');
 // The fake bridge journals every outcome under its Idempotency-Key and replays it for the same key, like
 // wam/lifecycle.py: a definitive failure is journaled too. `failNext` = the next new key's journaled failure.
-function fixture({ rejectOnce = false, uncertainOnce = false, refreshFails = false, host = '127.0.0.1', installedInitially = [], failNext = null, busyFor = 0 } = {}) {
+function fixture({ rejectOnce = false, uncertainOnce = false, refreshFails = false, host = '127.0.0.1', installedInitially = [], failNext = null, busyFor = 0, proxyLosesNext = false } = {}) {
   let clock = 0, boot = 0, writes = 0, csrf = 'session-1';
   let rows = installedInitially; const calls = []; const saved = new Map(); const journal = new Map();
   class MockDate extends Date { static now() { return clock; } }
@@ -33,6 +33,7 @@ function fixture({ rejectOnce = false, uncertainOnce = false, refreshFails = fal
         }
       }
       const out = journal.get(key);
+      if (proxyLosesNext) { proxyLosesNext = false; return new Response('Bad Gateway', { status: 502, headers: { 'content-type': 'text/plain' } }); }
       return Response.json(out.body, { status: out.status });
     }
     throw Error('unexpected URL: ' + path);
@@ -106,4 +107,11 @@ test('the owner session renews in its last two minutes, before the Service would
   const f = fixture();
   await f.client.operate('one', 'install'); assert.equal(f.boot(), 1);
   f.advance(3600_000 - 110_000); await f.client.operate('one', 'stop'); assert.equal(f.boot(), 2);
+});
+test('a reply lost behind the outer proxy (non-JSON 502 after the operation ran) keeps the key; retry replays it', async () => {
+  const f = fixture({ proxyLosesNext: true });
+  await assert.rejects(f.client.operate('hello', 'install'), e => e.code === 'invalid_response' && e.status === 502);
+  assert.equal((await f.client.operate('hello', 'install')).status, 'running');
+  const [first, second] = f.writes();
+  assert.equal(first.opts.headers['Idempotency-Key'], second.opts.headers['Idempotency-Key']);
 });

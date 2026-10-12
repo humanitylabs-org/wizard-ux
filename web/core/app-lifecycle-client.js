@@ -6,7 +6,9 @@
   const ACTIONS = { install: 'POST', start: 'POST', stop: 'POST', restart: 'POST', update: 'PATCH', uninstall: 'DELETE' };
   const BUSY = new Set(['installing', 'starting', 'stopping', 'updating', 'restarting', 'uninstalling']);
   // Outcomes that may hide an effect: the retry must reuse the same key so the bridge replays or reconciles it.
-  const UNCERTAIN = new Set(['operation_unconfirmed', 'terminal_status_unconfirmed', 'projection_refresh_failed']);
+  // invalid_response: a reply that isn't the Service's JSON, e.g. an outer proxy's 502/504 page after the Service
+  // dropped the connection mid-operation (Tailscale Serve answers so) -- a lost reply, not a definitive failure.
+  const UNCERTAIN = new Set(['operation_unconfirmed', 'terminal_status_unconfirmed', 'projection_refresh_failed', 'invalid_response']);
   const uncertainError = e => !e.status || UNCERTAIN.has(e.code);
   let current = null, sessionLoad = null;
   const keys = new Map();

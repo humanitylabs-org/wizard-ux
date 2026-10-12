@@ -198,7 +198,7 @@
       const rows = await client().installed().catch(() => null);
       if (rows) S.installed = new Map(rows.map(x => [x.info.id, { status: x.app?.status || 'unknown' }]));
     } catch (e) {
-      const uncertain = !e.status || ['operation_unconfirmed', 'terminal_status_unconfirmed', 'projection_refresh_failed'].includes(e.code);
+      const uncertain = !e.status || ['operation_unconfirmed', 'terminal_status_unconfirmed', 'projection_refresh_failed', 'invalid_response'].includes(e.code);
       toast(uncertain ? `<b>Checking ${esc(a.name)} is still pending.</b><span>Tap the same action again to safely check it.</span>`
         : `<b>Couldn’t ${action === 'uninstall' ? 'remove' : esc(action)} ${esc(a.name)}.</b><span>${esc(e.message)}</span>`);
     } finally { S.working.delete(id); repaintActions(); }
