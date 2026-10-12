@@ -78,7 +78,7 @@ function routeFor() {
   const p = await ctx.newPage(); p.setDefaultTimeout(8000);
   const errs = [];
   p.on('pageerror', e => errs.push(String(e)));
-  await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); if (!sessionStorage.getItem('qaInit')) { sessionStorage.setItem('qaInit', '1'); localStorage.removeItem('wos.chats.readyBySubject.v1'); localStorage.removeItem('wos.chats.readyOrder.v1'); } } catch (e) {} });
+  await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); if (!sessionStorage.getItem('qaInit')) { sessionStorage.setItem('qaInit', '1'); localStorage.removeItem('wos.chats.readyBySubject.v1'); localStorage.removeItem('wos.chats.readyOrder.v1'); localStorage.removeItem('wos.chats.subjectOrder.v1'); } } catch (e) {} });
   await p.goto(URL_, { waitUntil: 'domcontentloaded' });
   await p.waitForFunction(() => window.__wos?.live?.ok && window.__wos.live.session('qa_rs_needs'), null, { timeout: 90000 }).catch(() => {});
   ok(await p.evaluate(() => !!window.__wos?.live?.session('qa_rs_needs')), 'thread list loaded with fixture threads');
@@ -180,6 +180,34 @@ function routeFor() {
     await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
     await p.screenshot({ path: path.join(OUT, '2-ready-by-subject.png') });
     ok(await p.evaluate(() => localStorage.getItem('wos.chats.readyOrder.v1')) === 'subject', '3 the choice is remembered');
+    // 3b. James, 12 Oct 2026: "next to each subject on the right side … an up arrow and a down arrow … and move to
+    // top, and you keep a memory of the order". Each header carries ⤒ ↑ ↓; the order survives a reload.
+    const names = async () => p.$$eval(await R('.ch-subj'), els => els.map(e => e.querySelector('span')?.textContent));
+    const mv = async (dir, name) => { const sel = await R(`.ch-subj [data-subjmove="${dir}"][data-subjkey="${name}"]`);
+      const hit = await p.evaluate(s => { const b = document.querySelector(s); if (!b) return 'missing'; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); const t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return t === b || b.contains(t) ? 'ok' : (t?.className || 'none'); }, sel);
+      if (hit === 'ok') await p.locator(sel).tap(); await sleep(350); return hit; };
+    const n0 = await names();
+    const sj0 = await p.$$eval(await R('.ch-subj'), els => els.map(e => { const bs = [...e.querySelectorAll('[data-subjmove]')]; const r = e.getBoundingClientRect(); return { n: bs.length, dis: bs.filter(b => b.disabled).map(b => b.dataset.subjmove).join(','), right: bs.length ? r.right - bs[bs.length - 1].getBoundingClientRect().right : -1, h: bs[0]?.getBoundingClientRect().height || 0 }; }));
+    ok(n0.length >= 3 && sj0.every(x => x.n === 3 && x.right < 12 && x.h >= 28), '3b every subject header has ⤒ ↑ ↓ at its right edge, thumb-sized', sj0);
+    ok(sj0[0].dis === 'top,up' && sj0[sj0.length - 1].dis === 'down', '3b first subject cannot go up, last cannot go down', sj0.map(x => x.dis));
+    const h1 = await mv('up', n0[1]); const n1 = await names();
+    ok(h1 === 'ok' && n1[0] === n0[1] && n1[1] === n0[0], '3b ↑ swaps a subject with the one above', { h1, n0, n1 });
+    const h2 = await mv('down', n1[0]); const n2 = await names();
+    ok(h2 === 'ok' && JSON.stringify(n2) === JSON.stringify(n0), '3b ↓ moves it back down', { h2, n2 });
+    const lastN = n0[n0.length - 1]; const h3 = await mv('top', lastN); const n3 = await names();
+    ok(h3 === 'ok' && n3[0] === lastN && n3.length === n0.length, '3b ⤒ moves the last subject (Other) to the top', { h3, n3 });
+    const saved = await p.evaluate(() => JSON.parse(localStorage.getItem('wos.chats.subjectOrder.v1') || '[]'));
+    ok(saved[0] === lastN, '3b the order is remembered on the device', saved);
+    await p.evaluate(sel => document.querySelector(sel)?.scrollIntoView({ block: 'start' }), await R('.ch-sec-h')); await sleep(300);
+    await p.screenshot({ path: path.join(OUT, '2b-subject-reordered.png') });
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(() => window.__wos?.live?.ok && window.__wos.live.session('qa_rs_needs'), null, { timeout: 90000 }).catch(() => {});
+    await p.evaluate(() => __wos.goDesk(1)); await sleep(1000); await expandReady(); await sleep(150);
+    const n4 = await names();
+    ok(JSON.stringify(n4) === JSON.stringify(n3), '3b the order survives a reload', { n3, n4 });
+    ok(!writes.some(x => /\/v1\/runs|\/api\/sessions/.test(x.p)), '3b reordering writes nothing to Archimedes', writes.map(x => x.p));
+    await mv('top', n0[0]); // leave the fixture order roughly as it was for the rest of the suite
+    await p.evaluate(() => localStorage.removeItem('wos.chats.subjectOrder.v1'));
     await p.locator(await R('[data-rdyorder="newest"]')).tap(); await sleep(400);
     ok((await p.$$(await R('.ch-subj'))).length === 0, '3 Newest turns grouping off');
     // The old two-way toggle's "By subject" carries over to the three-way choice.

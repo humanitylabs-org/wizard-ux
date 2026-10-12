@@ -166,8 +166,28 @@ window.WizCore.chats = function createChats(H) {
     for (const s of list) { const k = attOf(s)?.subject || 'Other'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
     // Subjects with something waiting on James first, then by size; "Other" last.
     const waits = l => l.filter(waitsOn).length;
-    const keys = [...groups.keys()].sort((a, b) => (a === 'Other') - (b === 'Other') || waits(groups.get(b)) - waits(groups.get(a)) || groups.get(b).length - groups.get(a).length || a.localeCompare(b));
-    return bar + keys.map(k => { const l = groups.get(k), wN = waits(l); return `<div class="ch-subj"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${l.length}</small></div>` + l.map(rowFn).join(''); }).join('');
+    const keys = subjectSort([...groups.keys()], (a, b) => (a === 'Other') - (b === 'Other') || waits(groups.get(b)) - waits(groups.get(a)) || groups.get(b).length - groups.get(a).length || a.localeCompare(b));
+    const ar = (dir, k, off, label, glyph) => `<button type="button" data-subjmove="${dir}" data-subjkey="${esc(k)}" aria-label="${label} ${esc(k)}"${off ? ' disabled' : ''}>${glyph}</button>`;
+    return bar + keys.map((k, i) => { const l = groups.get(k), wN = waits(l), last = i === keys.length - 1;
+      return `<div class="ch-subj"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${l.length}</small><span class="ch-subj-mv" role="group" aria-label="Reorder ${esc(k)}">${ar('top', k, !i, 'Move to top', '⤒')}${ar('up', k, !i, 'Move up', '↑')}${ar('down', k, last, 'Move down', '↓')}</span></div>` + l.map(rowFn).join(''); }).join('');
+  }
+  /* By subject order is James's (12 Oct 2026): ↑ / ↓ / move-to-top on each subject header, remembered on this
+   * device. Subjects he has placed keep his order at the top; subjects he never placed follow in the default
+   * order (waiting first, then size, Other last). */
+  const SUBJ_ORDER_KEY = 'wos.chats.subjectOrder.v1';
+  const subjOrder = () => { try { const v = JSON.parse(localStorage.getItem(SUBJ_ORDER_KEY) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; } catch (e) { return []; } };
+  function subjectSort(keys, dflt) {
+    const saved = subjOrder(), rank = new Map(saved.map((k, i) => [k, i]));
+    return keys.sort((a, b) => { const ra = rank.has(a) ? rank.get(a) : Infinity, rb = rank.has(b) ? rank.get(b) : Infinity; return ra !== rb ? ra - rb : dflt(a, b); });
+  }
+  function moveSubject(key, dir, shown) {
+    const keys = shown.slice(), i = keys.indexOf(key); if (i < 0) return false;
+    const j = dir === 'top' ? 0 : dir === 'up' ? i - 1 : i + 1; if (j < 0 || j >= keys.length || j === i) return false;
+    keys.splice(i, 1); keys.splice(j, 0, key);
+    // The shown order becomes the remembered order; subjects not in today's Ready keep their old relative place after it.
+    const next = keys.concat(subjOrder().filter(k => !keys.includes(k)));
+    try { localStorage.setItem(SUBJ_ORDER_KEY, JSON.stringify(next.slice(0, 60))); } catch (e) {}
+    return true;
   }
   // A thread James just wrote to sits in Working from the tap on; its status follows the message (live.js PEND).
   const PEND_LABEL = { sending: 'Sending…', queued: 'Sending…', waiting: 'Offline · will retry', starting: 'Starting…' };
@@ -1007,6 +1027,9 @@ window.WizCore.chats = function createChats(H) {
       if (k === 'status') { c.filter = key; c.filterFrom = null; } else c.subject = key; c.lastChip = k; window.WizCore.chatSearch?.cancel(id); rerenderList(w); return true; }
     if (e.target.closest('[data-chsclear]')) { ch(id).q = ''; window.WizCore.chatSearch?.cancel(id); renderChatList(w, elOf(id)); elOf(id)?.querySelector('[data-chsearch]')?.focus(); return true; }
     const sec = e.target.closest('[data-sectoggle]'); if (sec) { toggleSection(w, sec.dataset.sectoggle); return true; }
+    const sm = e.target.closest('[data-subjmove]');
+    if (sm) { const shown = [...(sm.closest('[data-sec]') || document).querySelectorAll('[data-subjmove="up"]')].map(b => b.dataset.subjkey);
+      if (!sm.disabled && moveSubject(sm.dataset.subjkey, sm.dataset.subjmove, shown)) for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const rg = e.target.closest('[data-rdyorder]');
     if (rg) { if (READY_ORDERS.includes(rg.dataset.rdyorder)) readyOrder = rg.dataset.rdyorder; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
