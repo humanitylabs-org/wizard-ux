@@ -1946,6 +1946,22 @@
   }
   /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
   function nativeFinish(id, stopped) {
+    // Notification/Everywhere Send enters here directly, bypassing finishVoice. Seal the model before claiming
+    // audio or awaiting STT. A recreated page restores the last route saved for this native take.
+    const hadSnap = !!V.snap;
+    const snap = V.snap || sendSnap();
+    try {
+      if (!snap.route) {
+        const pin = V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null);
+        snap.route = (!hadSnap && window.WosModels.voiceRoute(id)) || CHATS.modelRoute(pin?.wid, pin?.sid || '');
+      }
+      if (!snap.route?.model || !snap.route?.provider) throw new Error('Choose a model before sending');
+      saveVoiceRoute(id, snap.route); V.snap = snap;
+    } catch (e) {
+      // The native file remains on disk; no claim, transcription or inference happens on an uncertain route.
+      V.native = null; dropHold(); unseal(); setVoice('idle'); txHide();
+      toast('!', 'Recording saved · ' + String(e.message || e), 3200); return;
+    }
     const dev = DEV(); let meta = null;
     try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (e) {}
     V.native = null;
@@ -1953,7 +1969,7 @@
     V.acc = Math.max(V.acc, Number(meta.ms) || 0);
     onRecStop(nativeBlob(id), id);
   }
-  const recDone = id => { try { id && DEV()?.recDone(id); } catch (e) {} };
+  const recDone = id => { try { id && DEV()?.recDone(id); if (id) window.WosModels.forgetVoiceRoute(id); } catch (e) {} };
   /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
   function nativeResume(a) {
     if (V.state !== 'idle' || !a?.id) return false;
