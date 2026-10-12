@@ -288,10 +288,12 @@
     else if (w.app !== 'frame') $('.wbody', el).innerHTML = winBody(w);
     applyLayout(deskOf(id));
   }
+  let paintStars = () => {};
   function placeTrack(dx, anim) {
     track.classList.toggle('anim', !!anim);
     track.style.transform = `translate3d(calc(${-idx * 100}% + ${dx}px),0,0)`;
     $('.nebula').style.transform = `translate3d(${(-idx + 2) * -3 + dx * .01}%,0,0)`;
+    paintStars();
   }
   let labelT = 0;
   /* Parking: hosted apps on desks out of view stay loaded but go quiet, so swipes stay smooth.
@@ -341,6 +343,7 @@
     const from = desks[idx], to = desks[n];
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to; idx = n;
+    if (moved) window.WosResources?.back();
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
     placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip();
@@ -348,6 +351,7 @@
     if (moved) vib(8);
     if (!silent) announce(`<b>${esc(deskName(idx))}</b>`);
     markVisibleThreadsSeen();
+    window.WosResources?.sync();
   }
   function announce(html) {
     const L = $('#deskLabel'); L.innerHTML = html; L.classList.add('show'); document.body.classList.add('labeling');
@@ -1036,14 +1040,14 @@
         <div class="home-time" id="homeTime">${window.WizConfig.hm()}</div>
         <div class="home-line">${LIVE.ok ? `<b>${needs} need${needs === 1 ? 's' : ''} you</b>, ${ready} unread, ${working} working.` : LIVE.error === 'access' ? 'Sign in to Wizard to see your threads.' : 'Connecting to Wizard…'}</div>
       </div>
-      <div class="home-spacer"></div>
-      <div class="constellation">
-        <button class="now-card" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="unread"><span class="pip"></span><span class="meta"><span class="k">${needs ? 'Needs you' : 'Unread'}</span><span class="v">${esc(L.needs[0]?.title || L.ready[0]?.title || 'Nothing waiting')}</span></span><span class="n">${needs + ready}</span></button>
-        <button class="now-card" style="--c:var(--violet-2)" data-act="working"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span><span class="v">${esc(W0[0]?.title || 'Idle')}</span></span><span class="n">${working}</span></button>
-        <button class="now-card" style="--c:var(--pink)" data-act="yesterday"><span class="pip"></span><span class="meta"><span class="k">Yesterday</span><span class="v">${esc(clip(S.days[YESTERDAY] || `${yd.length} threads`, 70))}</span></span><span class="n">${yd.length}</span></button>
+      <div class="constellation" style="margin-top:20px">
+        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="unread"><span class="pip"></span><span class="meta"><span class="k">${needs ? 'Needs you' : 'Unread'}</span><span class="v">${esc(L.needs[0]?.title || L.ready[0]?.title || 'Nothing waiting')}</span></span><span class="n">${needs + ready}</span></button>
+        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span><span class="v">${esc(W0[0]?.title || 'Idle')}</span></span><span class="n">${working}</span></button>
       </div>
       ${unsentCard()}
       ${sideCard()}
+      ${window.WosResources?.home() || ''}
+      <div class="home-spacer"></div>
     </div>`;
   }
   setInterval(() => {
@@ -1563,6 +1567,7 @@
   function openSheet(which, q) {
     closeSheets(true); closeMenu();
     sheet = which; device.classList.add('sheet-open'); tourEv('sheet', { which });
+    window.WosResources?.back(); window.WosResources?.sync();
     if (which === 'launcher') { renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
     else if (which === 'settings') { renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; }
     else { renderInbox(); inboxEl.classList.add('open'); }
@@ -1575,6 +1580,7 @@
     launcher.classList.remove('open'); inboxEl.classList.remove('open'); settingsEl.classList.remove('open');
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
     $('#search').blur();
+    window.WosResources?.sync();
   }
   $('#scrim').addEventListener('click', () => closeSheets());
   settingsEl.addEventListener('click', e => {
@@ -2634,6 +2640,7 @@
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
+    if (window.WosResources?.back()) return 'resources';
     { const fw = W[desks[idx]?.focus]; if (fw?.app === 'usuals') { const u = window.WosUsuals?.back?.(); if (u) return u; } }
     if (closeOverview()) return 'overview';
     if (closeReviewCoach()) return 'review-coach';
@@ -2729,24 +2736,34 @@
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { LIVE && LIVE.refresh(); markVisibleThreadsSeen(); } });
 
+  // The phone keeps a still resting orb; live voice/agent feedback stays animated.
+  // Shared native Everywhere hosts retain their existing cadence.
+  Orb.setRestingMotion?.(false);
+
   /* ---------------- starfield ---------------- */
   (function stars() {
     const c = $('#stars'), x = c.getContext('2d'); let Wd, H, pts = [];
     function size() { const r = Math.min(devicePixelRatio || 1, 2); Wd = c.width = c.clientWidth * r; H = c.height = c.clientHeight * r;
       pts = Array.from({ length: 170 }, () => ({ x: Math.random() * Wd * 1.4, y: Math.random() * H, r: Math.random() * 1.3 * r + .2, p: Math.random() * 6.28, s: .4 + Math.random() * 1.4, d: Math.random() })); }
-    size(); addEventListener('resize', size);
-    let last = 0;
-    (function f(t) {
-      requestAnimationFrame(f); if (t - last < 33) return; last = t;
+    // Scenery is event-driven: no self-rescheduling loop after the page settles.
+    let raf = 0;
+    const draw = () => {
+      raf = 0; if (document.hidden) return;
       x.clearRect(0, 0, Wd, H);
       const off = -idx * Wd * .05;
       for (const p of pts) {
-        const a = .25 + .75 * Math.abs(Math.sin(p.p + t / 1000 * p.s));
+        const a = .25 + .75 * Math.abs(Math.sin(p.p));
         x.globalAlpha = a * (.35 + p.d * .65); x.fillStyle = p.d > .85 ? '#d9c8ff' : '#ffffff';
         const px = ((p.x + off * (p.d + .2)) % (Wd * 1.4) + Wd * 1.4) % (Wd * 1.4) - Wd * .2;
         x.beginPath(); x.arc(px, p.y, p.r, 0, 6.28); x.fill();
       }
-    })(0);
+    };
+    paintStars = () => { if (!document.hidden && !raf) raf = requestAnimationFrame(draw); };
+    const resize = () => { size(); paintStars(); };
+    resize(); addEventListener('resize', resize);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else paintStars();
+    });
   })();
 
   /* ---------------- boot ---------------- */
