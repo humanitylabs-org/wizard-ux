@@ -1,4 +1,4 @@
-/* Usuals: James's regular Grab orders, one tap (or "order my usual …") away.
+/* Food (was Usuals, renamed 12 Oct): James's Grab orders, one tap or one spell ("order food", "order kra pao") away.
  * Native does the work (android/.../usuals/*). "Order something new" opens Grab to browse: whatever he ends up
  * ordering is saved as a usual, named after the food (rename after). A saved usual replays under a cover and stops on
  * Grab's checkout. Placing the order is always James's tap: in Grab, or on the cover.
@@ -28,8 +28,8 @@
   };
 
   function blockerCard(b) {
-    if (b === 'native') return `<div class="us-note">Usuals runs on the Wizard OS Android app. Open it there to teach and order.</div>`;
-    if (b === 'accessibility') return `<button class="us-note us-fix" data-us="a11y"><b>One switch first</b><span>Usuals taps through Grab with Wizard OS accessibility (the same switch as voice typing). Tap to turn it on.</span></button>`;
+    if (b === 'native') return `<div class="us-note">Food runs on the Wizard OS Android app. Open it there to order.</div>`;
+    if (b === 'accessibility') return `<button class="us-note us-fix" data-us="a11y"><b>One switch first</b><span>Food taps through Grab with Wizard OS accessibility (the same switch as voice typing). Tap to turn it on.</span></button>`;
     if (b === 'grab') return `<div class="us-note"><b>Grab isn't on this phone</b><span>Install Grab and sign in, then come back.</span></div>`;
     return '';
   }
@@ -54,19 +54,21 @@
         <button class="us-go" data-us="run" data-id="${esc(u.id)}" ${b ? 'disabled' : ''} aria-label="Order ${esc(u.name)}"><span class="us-ic">🍜</span><span class="us-meta"><b>${esc(u.name)}</b><small>${esc(lastLine(u))}</small></span><span class="us-cta">Order</span></button>
         <button class="us-more" data-us="edit" data-id="${esc(u.id)}" aria-label="Edit ${esc(u.name)}">⋯</button></div>`).join('');
     const newBtn = `<button class="us-new" data-us="new" ${b ? 'disabled' : ''}><span class="us-ic">🛵</span><span class="us-meta"><b>Order something new</b><small>Browse Grab. What you order is saved here.</small></span></button>`;
-    const empty = !list.length ? `<div class="us-empty"><div class="us-big">🍜</div><h3>Your usuals, one tap away</h3>
-        <p>Tap <b>Order something new</b> and order in Grab like normal. Whatever you order is saved here, named after the food. Next time, tap it or say <i>“order my usual ${'kra pao'}”</i>. Wizard fills the basket and stops at checkout for your <b>Place order</b>.</p></div>` : '';
+    const ex = list.length ? (list[0].name || '').split(/ \+ | · /)[0].toLowerCase() : 'kra pao';
+    const spells = `<div class="us-spells"><b>Say it to the orb</b><span><i>“order food”</i> or <i>“order grab”</i> · a new order in Grab</span><span><i>“order ${esc(ex)}”</i> · a saved order, straight to checkout</span><span><i>“food”</i> · opens this</span></div>`;
+    const empty = !list.length ? `<div class="us-empty"><div class="us-big">🍜</div><h3>Your Grab orders, one tap away</h3>
+        <p>Tap <b>Order something new</b> and order in Grab like normal. Whatever you order is saved here, named after the food. Next time, tap it or say <i>“order kra pao”</i>. Wizard fills the basket and stops at checkout for your <b>Place order</b>.</p></div>` : '';
     const teach = teachName != null
       ? `<form class="us-teach" data-us-form="teach"><input name="n" maxlength="40" placeholder="Name it, e.g. Kra pao" value="${esc(teachName)}" autocomplete="off" enterkeyhint="go"><button type="submit" ${b ? 'disabled' : ''}>Open Grab</button></form>` : '';
     const log = st.log && st.log.length && st.mode === 'failed' ? `<details class="us-log"><summary>What the last run did</summary><pre>${esc(st.log.slice(-12).join('\n'))}</pre></details>` : '';
-    return `<div class="desk-scroll us-wrap">${blockerCard(b)}${live}${nameUi}${empty}${newBtn}${teach}<div class="us-list">${cards}</div>
+    return `<div class="desk-scroll us-wrap">${blockerCard(b)}${live}${nameUi}${empty}${newBtn}${teach}<div class="us-list">${cards}</div>${spells}
       <p class="us-fine">Runs on this phone with Grab on screen. Your Grab login, card and address stay in Grab. Wizard never presses Place order for you: you tap it, in Grab or on the cover.</p>${log}</div>${editSheet(list)}`;
   }
 
   function editSheet(list) {
     if (!editing) return '';
     const u = list.find(x => x.id === editing.id); if (!u) { editing = null; return ''; }
-    return `<div class="us-sheet" data-us-sheet><form data-us-form="edit" data-id="${esc(u.id)}"><h4>Edit usual</h4>
+    return `<div class="us-sheet" data-us-sheet><form data-us-form="edit" data-id="${esc(u.id)}"><h4>Edit order</h4>
       <label>Name<input name="n" maxlength="40" value="${esc(u.name)}"></label>
       <label>Steps <small>one per line · “tap Name”, “tap Add @ Item”, “type words”, “search”, “wait 1500”</small><textarea name="s" rows="8" spellcheck="false">${esc(u.script || '')}</textarea></label>
       <div class="us-row"><button type="button" data-us="delete" data-id="${esc(u.id)}" class="us-del">Delete</button><button type="button" data-us="reteach" data-id="${esc(u.id)}">Teach again</button><button type="submit" class="us-save">Save</button></div></form></div>`;
@@ -76,7 +78,7 @@
 
   function toast(i, t) { window.__wos?.toast?.(i, t, 2600); }
   function why(b) {
-    return b === 'accessibility' ? 'Turn on Wizard OS accessibility first' : b === 'grab' ? "Grab isn't installed" : b === 'busy' ? 'Finish the order in progress first' : b === 'missing' ? 'That usual is gone' : b;
+    return b === 'accessibility' ? 'Turn on Wizard OS accessibility first' : b === 'grab' ? "Grab isn't installed" : b === 'busy' ? 'Finish the order in progress first' : b === 'missing' ? 'That order is gone' : b;
   }
 
   function onClick(e) {
@@ -88,7 +90,7 @@
     if (a === 'keep') { N().usualsKeepName?.(id); paint(); return; }
     if (a === 'run') { const r = N().usualsRun(id); if (r) toast('🍜', why(r)); return; }
     if (a === 'edit') { editing = { id }; paint(); return; }
-    if (a === 'delete') { if (!confirm('Delete this usual?')) return; N().usualsDelete(id); editing = null; paint(); return; }
+    if (a === 'delete') { if (!confirm('Delete this saved order?')) return; N().usualsDelete(id); editing = null; paint(); return; }
     if (a === 'reteach') { const u = (read().list || []).find(x => x.id === id); editing = null; const r = N().usualsTeach(u ? u.name : ''); if (r) toast('🍜', why(r)); else N().usualsDelete(id); paint(); return; }
   }
   function onSubmit(e) {
@@ -113,6 +115,17 @@
     }
   }
 
+  /* Spells (James, 12 Oct: "I need voice commands that are easy to cast"). Same words the native side knows
+   * (UsualsPolicy.isBrowse), so the in-app orb casts them even on an app build that predates the newer phrases. */
+  const NEW_SPELL = /^(?!(?:.* )?get (?:me |us )?something$)(?:(?:please |can you |could you |let'?s |i(?: want to| wanna| would like to|'d like to) )?(?:order|get)(?: me| us)? (?:some |a |my )?(?:food|foods|grab|grab ?food|lunch|dinner|breakfast|brunch|supper|a snack|snacks|takeout|takeaway|take out|take away|delivery|food delivery|something(?: new| different| else)?(?: to eat)?)(?: (?:from|on|with|through) grab)?|order (?:from|on) grab|(?:a )?(?:food|grab|grab food) order|grab (?:me )?(?:some )?food|grab me something(?: new)? to eat|new (?:food|grab) order)$/;
+  const OPEN_SPELL = /^(?:food|wizard food|wizard eats|eats|my food|grab food app|food app|my orders|my saved orders|saved orders|my usuals|usuals)$/;
+  function spell(text) {
+    const s = String(text || '').toLowerCase().replace(/[’]/g, "'").replace(/[.!?,]+/g, ' ').replace(/\s+/g, ' ').trim()
+      .replace(/^(hey |ok |okay )?(wizard|archimedes) /, '').replace(/ (please|now|for me)$/, '').trim();
+    if (NEW_SPELL.test(s)) return 'new';
+    if (OPEN_SPELL.test(s)) return 'open';
+    return '';
+  }
   window.WosUsuals = {
     available: has,
     mount(el) {
@@ -129,6 +142,9 @@
       if (teachName != null) { teachName = null; paint(); return 'usuals-teach'; }
       return null;
     },
+    available: has,
+    /** Food spells the shell checks after match(): 'new' (open Grab for a new order), 'open' (open Food), or ''. */
+    spell,
     /** "order my usual kra pao": the usual's id when the words are an order for one. */
     match(text) { if (!has() || typeof N().usualsMatch !== 'function') return ''; try { return N().usualsMatch(String(text || '')) || ''; } catch (e) { return ''; } },
     run(id) { const r = N().usualsRun(id); if (r) toast('🍜', why(r)); return !r; },

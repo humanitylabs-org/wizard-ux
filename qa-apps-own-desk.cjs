@@ -83,6 +83,37 @@ const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else {
     if (r[0]) await p.evaluate(w => __wos.closeWin(w), r[0]); await p.waitForTimeout(250);
   }
   ok(tested.length >= 8, `sweep covered ${tested.length} openers`, JSON.stringify(appIds));
+
+  // 5. Already open somewhere far down the strip: every app comes back beside you, never a second copy.
+  const reuse = [
+    ['usuals', o => `__wos.execute({ action: 'open_app', app: 'usuals' }, 'open usuals', o)`, w => w.app === 'usuals'],
+    ['day review', o => `__wos.execute({ action: 'open_app', app: 'yesterday' }, 'open yesterday', o)`, w => w.app === 'review'],
+    ['wizard app', o => `__wos.openApp({ id: 'qa-frame', kind: 'wizard', url: '/qa-page/frame/', name: 'QA Frame' }, {}, o)`, w => w.appId === 'qa-frame'],
+    ['android app', o => `__wos.openApp({ id: 'qa-native', kind: 'native', name: 'QA Native' }, {}, o)`, w => w.appId === 'qa-native'],
+    ['maps', o => `__wos.execute({ action: 'maps_search', query: 'coffee' }, 'map coffee', o)`, w => w.app === 'maps'],
+  ];
+  for (const [name, code] of reuse) {
+    // open it, then park three other desks after it so it sits far away, then stand on Home
+    await p.evaluate(() => __wos.goDesk(1, true)); await p.waitForTimeout(250);
+    const first = await p.evaluate(([c, o]) => { const before = new Set(Object.keys(__wos.wins)); (new Function('o', c))(o); return Object.keys(__wos.wins).find(x => !before.has(x)); }, [code(), snap()]);
+    for (let k = 0; k < 3; k++) { await p.evaluate(k => { __wos.goDesk(1, true); __wos.openWin({ app: 'frame', appId: 'link', url: '/qa-page/filler' + k + '/', title: 'Filler' }); }, k); await p.waitForTimeout(200); }
+    await p.evaluate(() => __wos.goDesk(0, true)); await p.waitForTimeout(300);
+    const far = await p.evaluate(id => __wos.desks.findIndex(d => d.wins.includes(id)), first);
+    s0 = await S();
+    const n0w = await p.evaluate(() => Object.keys(__wos.wins).length);
+    await p.evaluate(([c, o]) => (new Function('o', c))(o), [code(), snap()]); await p.waitForTimeout(700);
+    s = await S();
+    const st = await p.evaluate(id => ({ at: __wos.desks.findIndex(d => d.wins.includes(id)), alone: (__wos.desks.find(d => d.wins.includes(id)) || {}).wins?.length === 1, nw: Object.keys(__wos.wins).length, focus: __wos.desks[__wos.idx].focus === id }), first);
+    ok(far >= 3 && st.nw === n0w && st.at === 1 && s.idx === 1 && st.focus && st.alone, `${name} already open far away: brought to the desk right beside, no second copy`, JSON.stringify({ far, st, s0: s0.names, s: s.names }));
+    // tidy: close everything except Home and Chats
+    await p.evaluate(() => { for (const id of Object.keys(__wos.wins)) if (__wos.wins[id].app !== 'chats') __wos.closeWin(id); }); await p.waitForTimeout(400);
+  }
+  // 6. Chats is the hub: opening it never moves its desk.
+  await p.evaluate(() => { __wos.goDesk(1, true); __wos.openWin({ app: 'frame', appId: 'link', url: '/qa-page/x/', title: 'X' }); }); await p.waitForTimeout(400);
+  s0 = await S();
+  await p.evaluate(o => __wos.execute({ action: 'open_app', app: 'chats' }, 'open chats', o), snap()); await p.waitForTimeout(500);
+  s = await S();
+  ok(s.idx === 1 && JSON.stringify(s.names) === JSON.stringify(s0.names), 'open chats: goes to the Chats desk where it is (hub stays put)', JSON.stringify({ s0, s }));
   ok(!errs.length, 'no page errors', errs.slice(0, 3).join(' | '));
   console.log(`\n${pass} passed, ${fail} failed · apps: ${tested.join(', ')}`);
   await b.close(); process.exit(fail ? 1 : 0);

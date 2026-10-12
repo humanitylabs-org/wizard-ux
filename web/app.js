@@ -172,7 +172,7 @@
     if (w.app === 'chats') return CHATS_APP;
     if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'] || { name: 'Review', icon: '◐', g: ['#444a60', '#22263a'] };
     if (w.app === 'maps') return APP.maps;
-    if (w.app === 'usuals') return APP.usuals || { name: 'Usuals', icon: '🍜', g: ['#00b14f', '#0a5c32'] };
+    if (w.app === 'usuals') return APP.usuals || { name: 'Food', icon: '🍜', g: ['#00b14f', '#0a5c32'] };
     return APP[w.appId] || { name: w.title || 'Page', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
   function winTitle(w) {
@@ -767,6 +767,21 @@
     closeSheets(true); mountLinks(); if (!LINKS) return false;
     LINKS.open(url); return true;
   }
+  /* THE placement rule for every app (James, 12 Oct 2026: apps always open in a new tab, as system behaviour,
+   * never per app). An app opener only says what to show (obj) and how to spot its open copy (mine); it never
+   * picks a desk. Not open yet: its own desk right beside the one in front (openWin). Already open: that window,
+   * brought beside the desk in front on a desk of its own (refresh lets the app take the new query/date).
+   * Chats is the hub and stays where it is; an explicit user placement (opts.desk) always gets a fresh window. */
+  function placeApp(mine, obj, opts = {}, refresh) {
+    const here = opts.desk == null ? Object.keys(W).find(id => deskOf(id) >= 0 && mine(W[id])) : null;
+    if (!here) return openWin(obj, opts);
+    if (W[here].app !== 'chats') bringBeside(here);
+    const t = deskOf(here);
+    if (refresh) refresh(W[here], t);
+    if (t !== idx) goDesk(t, true);
+    focusWin(here); save();
+    return W[here];
+  }
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
@@ -775,45 +790,30 @@
       openReview(a.view, extra.date, opts); return true;
     }
     if (a.id === 'usuals') { openUsuals(opts); return true; }
-    if (a.id === 'maps') { openWin({ app: 'maps', dest: extra.query || '', mode: extra.query ? 'search' : 'home' }, opts); return true; }
-    if (a.kind === 'chats') {
-      const here = Object.keys(W).find(id => W[id].app === 'chats' && deskOf(id) >= 0);
-      if (here && opts.desk == null) { const t = deskOf(here); if (t !== idx) goDesk(t); focusWin(here); return true; }
-      openWin({ app: 'chats', thread: null }, opts); return true;
-    }
+    if (a.id === 'maps') { openMaps(extra.query ? 'search' : 'home', extra.query || '', opts); return true; }
+    if (a.kind === 'chats') { placeApp(w => w.app === 'chats', { app: 'chats', thread: null }, opts); return true; }
     if (a.kind === 'wizard' && a.url && opts.from) {
-      // Opened from a link in a thread (James, 12 Oct 2026): it opens on its own desk beside the thread, and
-      // Back closes it and lands on that thread again, exactly like any other link. A copy already opened from
-      // a link is reused; a normal (pinned) desk of the same app is left alone.
-      const here = Object.keys(W).find(id => W[id].app === 'frame' && W[id].appId === a.id && W[id].from && deskOf(id) >= 0);
-      if (here) { W[here].from = opts.from; const t = deskOf(here); if (t !== idx) goDesk(t); focusWin(here); save(); return true; }
-      openWin({ app: 'frame', appId: a.id, from: opts.from }); return true;
+      // Opened from a link in a thread (James, 12 Oct 2026): Back closes it and lands on that thread again,
+      // exactly like any other link. A copy already opened from a link is reused; a normal desk of the app is left alone.
+      placeApp(w => w.app === 'frame' && w.appId === a.id && w.from, { app: 'frame', appId: a.id, from: opts.from }, {}, w => { w.from = opts.from; });
+      return true;
     }
-    if (a.kind === 'wizard' && a.url) {
-      // Already open somewhere: go to it rather than opening a second copy.
-      const here = Object.keys(W).find(id => W[id].app === 'frame' && W[id].appId === a.id && !W[id].from);
-      if (here && opts.desk == null) { const t = deskOf(here); if (t !== idx) goDesk(t); focusWin(here); return true; }
-      openWin({ app: 'frame', appId: a.id }, opts); return true;
-    }
-    openWin({ app: 'app', appId: a.id, query: extra.query || '' }, opts);
+    if (a.kind === 'wizard' && a.url) { placeApp(w => w.app === 'frame' && w.appId === a.id && !w.from, { app: 'frame', appId: a.id }, opts); return true; }
+    const q = extra.query || '';
+    placeApp(w => w.app === 'app' && w.appId === a.id, { app: 'app', appId: a.id, query: q }, opts, q ? (w, t) => { w.query = q; renderDesk(t); } : null);
     return true;
+  }
+  function openMaps(mode, dest, opts = {}) {
+    closeSheets(true);
+    placeApp(w => w.app === 'maps', { app: 'maps', dest, mode }, opts, dest || mode === 'home' ? (w, t) => { if (!dest && w.dest) return; w.dest = dest; w.mode = mode; renderDesk(t); } : null);
   }
   function openUsuals(opts = {}) {
     closeSheets(true);
-    const here = Object.keys(W).find(id => W[id].app === 'usuals' && deskOf(id) >= 0);
-    if (here && opts.desk == null) { const d = deskOf(here); if (d !== idx) goDesk(d); focusWin(here); window.WosUsuals?.refresh(); return; }
-    openWin({ app: 'usuals' }, opts); // the shell places it (own desk beside this one), like every other app
+    placeApp(w => w.app === 'usuals', { app: 'usuals' }, opts, () => window.WosUsuals?.refresh());
   }
   function openReview(level, date, opts = {}) {
     const z = level === 'month' ? { level: 'month' } : level === 'week' ? { level: 'week', week: weekOf(date || YESTERDAY) } : { level: 'day', day: date || YESTERDAY };
-    const here = Object.keys(W).find(id => W[id].app === 'review' && deskOf(id) >= 0);
-    if (here && opts.desk == null) {
-      // From a Home card it opens like any app, on the desk beside this one, even if an old review desk sits
-      // further down the strip (James, 11 Oct: Yesterday was jumping to a far desk).
-      if (opts.beside) bringBeside(here);
-      const t = deskOf(here); W[here].z = z; W[here].zd = 0; if (t !== idx) goDesk(t); focusWin(here); mountReview(here, null); applyLayout(t); save(); return;
-    }
-    openWin({ app: 'review', z }, opts);
+    placeApp(w => w.app === 'review', { app: 'review', z }, opts, (w, t) => { w.z = z; w.zd = 0; setTimeout(() => { mountReview(w.id, null); applyLayout(deskOf(w.id)); }, 0); });
   }
   /* Move an open window to where a new app would open (insertPos: right beside this desk, Home included.
    * A window alone on its desk takes its whole desk along; one sharing a desk gets a desk of its own. */
@@ -931,6 +931,7 @@
       </div>
       ${window.WizCore.voiceStatus?.card() || ''}
       ${window.WosCancelled ? window.WosCancelled.html() : ''}
+      ${window.WosSelMenu ? window.WosSelMenu.html() : ''}
       <div class="st-group"><h4>Wizard</h4>
         <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · ${esc(location.host)}</small></span></div>
         ${window.WosDevice?.settingsHtml?.() || ''}
@@ -1384,7 +1385,7 @@
     if (act === 'inbox') return openSheet('inbox');
     if (act === 'settings') return openSettings(false);
     if (act === 'unsent') return openSettings(true);
-    if (act === 'yesterday') return openReview('day', YESTERDAY, { beside: true });
+    if (act === 'yesterday') return openReview('day', YESTERDAY);
     if (act === 'unread' || act === 'working') return openChatsFiltered(act, { card: true });
     if (act === 'side-button') return sideButtonTap(false);
     if (act === 'side-button-hide') { store.set('sideHidden', true); return refreshHome(true); }
@@ -1552,6 +1553,7 @@
   settingsEl.addEventListener('click', e => {
     if (e.target.closest('[data-stclose]')) return closeSheets();
     if (window.WosCancelled?.act(e.target)) return;
+    if (window.WosSelMenu?.act(e.target)) return;
     const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
     if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); return setTimeout(onUnsentChange, 300); }
     const st = e.target.closest('[data-st]')?.dataset.st;
@@ -2241,8 +2243,14 @@
     // The music search spell ("music search Home Tides") wins everywhere, even over the Chats list's "search …".
     { const ms = window.WosMusic?.available() && window.WosMusic.parse(t, false, false); if (ms && ms.op === 'search') return { action: 'music', cmd: ms }; }
     { const cv = chatsVoice(t, snap || sendSnap(), kind); if (cv) return cv; }
-    // "Order my usual kra pao": a taught usual runs on the phone (Grab under a cover), nothing goes to Wizard.
+    // Food spells (James, 12 Oct): "order food" / "order grab" / "order lunch" open Grab for a new order; "order kra pao"
+    // or "order my usual kra pao" runs a saved one; "food" on its own opens the Food app. All on the phone, nothing to Wizard.
     const us = window.WosUsuals?.match(t); if (us) return { action: 'usual', id: us };
+    if (window.WosUsuals?.available()) {
+      const fs = window.WosUsuals.spell(t);
+      if (fs === 'new') return { action: 'usual', id: '+new' };
+      if (fs === 'open' && (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'open_app', app: (APP.usuals || {}).name || 'Food' };
+    }
     // Music (play …, pause, next, louder, I like this): on-device, straight to Wizard Music. A held orb takes any
     // music phrase; a tap only the unmistakable ones ("play …", "pause the music"), so chat words stay chat.
     // In front of Wizard Music a held orb is always for the player ("Guy Barato Trap" = play it).
@@ -2389,14 +2397,14 @@
     const a = String(c.action || '').toLowerCase();
     const arg = c.app || c.target || c.destination || c.query || c.view || '';
     const f = desks[idx].focus;
-    if (/direction|navigat|route/.test(a)) { closeSheets(); openWin({ app: 'maps', dest: c.destination || c.target || c.query || text, mode: 'dir' }, opts); return true; }
-    if (/maps_search|map/.test(a)) { closeSheets(); openWin({ app: 'maps', dest: c.query || c.target || text, mode: 'search' }, opts); return true; }
+    if (/direction|navigat|route/.test(a)) { openMaps('dir', c.destination || c.target || c.query || text, opts); return true; }
+    if (/maps_search|map/.test(a)) { openMaps('search', c.query || c.target || text, opts); return true; }
     if (a === 'music') return window.WosMusic.run(c.cmd);
     if (/music|play/.test(a)) {
       // The router's play_music: Wizard Music when installed (it fixes misheard names), else Spotify search.
       const q = c.query || c.target || '';
       if (window.WosMusic?.available()) return window.WosMusic.run({ op: 'play', said: q ? `play ${q}` : text });
-      closeSheets(); openWin({ app: 'app', appId: 'spotify', query: q }, opts); return true;
+      closeSheets(); openApp(APP.spotify || { id: 'spotify', name: 'Spotify' }, { query: q }, opts); return true;
     }
     if (a === 'zoom') {
       let id = W[f]?.app === 'review' ? f : desks[idx].wins.find(x => W[x].app === 'review');
@@ -2590,6 +2598,7 @@
   }
   function backStep(skipHosted) {
     { const t = window.WosTour?.back(); if (t) return t; } // the first-run tour and the Help sheet sit above everything
+    { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
@@ -2809,7 +2818,7 @@
       const mine = id => W[id]?.app === 'frame' && W[id].appId === 'wizard-music';
       return desks[idx].wins.find(mine) || Object.keys(W).find(id => mine(id) && deskOf(id) >= 0) || null;
     },
-    openMusic: () => { closeSheets(true); const w = openWin({ app: 'frame', appId: 'wizard-music' }); return w ? w.id : null; },
+    openMusic: () => { closeSheets(true); const w = placeApp(x => x.app === 'frame' && x.appId === 'wizard-music' && !x.from, { app: 'frame', appId: 'wizard-music' }); return w ? w.id : null; },
     frameOf: id => winEl(id)?.querySelector('iframe.appframe') || null,
     toast,
   });
@@ -2819,6 +2828,7 @@
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
     HOME, get idx() { return idx; }, get desks() { return desks; }, get ovLog() { return window.__ovLog || []; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
+    openSearch,
     startVoice, finishVoice, cancelVoice, outbox: OUTBOX, openSettings, unsentAll, renderSettings,
     chats: CHATS, chat: CHATS.KIT, get viewer() { return CHATS.KIT.viewer.state; }, threadAct: CHATS.threadAct, openRowSheet: CHATS.openRowSheet,
     // web/device.js (share, recovery, update banner, hot reload) works through these.

@@ -182,12 +182,12 @@ final class UsualsCover {
         bg.setColor(Color.argb(245, 14, 34, 22));
         bg.setStroke(dp(1), Color.argb(150, 0, 200, 95));
         card.setBackground(bg);
-        card.addView(text("Saved to Usuals ✓", 12, Color.rgb(120, 230, 160), true));
+        card.addView(text("Saved to Food ✓", 12, Color.rgb(120, 230, 160), true));
         TextView n = text(name, 15, Color.WHITE, true); n.setSingleLine(true); n.setEllipsize(android.text.TextUtils.TruncateAt.END);
         card.addView(n);
         LinearLayout btns = row();
         Button ok = button("OK", false); ok.setOnClickListener(v -> hide());
-        Button ren = button("Rename", true); ren.setContentDescription("Rename this usual");
+        Button ren = button("Rename", true); ren.setContentDescription("Rename this order");
         ren.setOnClickListener(v -> runner.renameSaved());
         btns.addView(ok, new LinearLayout.LayoutParams(dp(64), dp(38)));
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(38)); rl.leftMargin = dp(8);

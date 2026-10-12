@@ -6,6 +6,10 @@
         <item name="android:navigationBarColor">@color/wos_bg</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
+        <!-- Selection handles and cursor in Wizard violet. -->
+        <item name="android:colorAccent">@color/wos_violet</item>
+        <item name="android:colorControlActivated">@color/wos_violet</item>
+        <item name="android:textColorHighlight">#668F63FF</item>
     </style>
     <!-- Side-button assistant: opaque full-screen surface over the real keyguard. -->
     <style name="Theme.WizardOS.AssistSurface" parent="Theme.WizardOS">
