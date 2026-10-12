@@ -173,7 +173,10 @@ class Page:
 def page():
     for _ in range(3):
         try:
-            pg = Page(); pg.ev("new Promise(r => { const t = () => window.__wos ? r() : setTimeout(t, 200); t(); })"); return pg
+            pg = Page(); pg.ev("new Promise(r => { const t = () => window.__wos ? r() : setTimeout(t, 200); t(); })")
+            # A fresh install opens the first-run tour (0.9.3+), which swallows every tap outside itself.
+            pg.ev("(() => { try { localStorage.setItem('wos.tour.v1', 'true'); window.WosTour && window.WosTour.finish('qa'); } catch (e) {} return 1; })()")
+            return pg
         except Exception as e: print('  page retry', e); time.sleep(2)
     raise RuntimeError('no page')
 
