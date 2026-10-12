@@ -52,7 +52,8 @@ const NATIVE = withSel => `(() => { window.__qaN = []; const c = (k, ...a) => wi
 async function open(ctx, withSel = true) {
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.addInitScript(NATIVE(withSel));
-  await p.goto(URL_ + '?open=chats'); await p.waitForTimeout(4000);
+  const url = new URL(URL_); url.searchParams.set('open', 'chats');
+  await p.goto(url.href); await p.waitForTimeout(4000);
   await p.evaluate(sid => { const r = [...document.querySelectorAll(`.ch-list [data-chopen="${sid}"]`)].find(x => x.getBoundingClientRect().width > 0); r && r.click(); }, SID);
   await until(() => p.evaluate(() => !!document.querySelector('.ch-msgs .msg.a .bub p')), 8000);
   return { p, errs };

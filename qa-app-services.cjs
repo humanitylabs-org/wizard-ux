@@ -123,6 +123,8 @@ let origin;
    await p.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))});await p.waitForTimeout(300);
    ok('background visibility never forces unsaved reload',await fr.evaluate(()=>document.querySelector('#draft').value==='unsaved fixture'));
    await fr.evaluate(()=>hold.release());
+   await p.goBack({waitUntil:'domcontentloaded'});await p.waitForTimeout(100);
+   ok((mobile?'phone':'desktop')+' browser Back keeps root app and shell open',p.url().startsWith(origin+'/wizard-os-home/')&&await fr.evaluate(()=>WizardApp.hosted));
    ok((mobile?'phone':'desktop')+' no page errors',!errs.length,errs);
    await p.screenshot({path:path.join(OUT,mobile?'phone.png':'desktop.png')});await ctx.close();version='abc0001';
   }
@@ -181,6 +183,8 @@ let origin;
   ok('clipboard waits for successful write',!await sp.evaluate(()=>copySettled));await sp.evaluate(()=>completeCopy());ok('copy payload keeps URL',await sp.evaluate(()=>copy)==='copied'&&await sp.evaluate(()=>copyText)==='text\nhttps://example.org/path');
   await sp.locator('#open').click();await sp.keyboard.press('Escape');await sp.waitForTimeout(100);
   ok('standalone CloseWatcher nested Back stays open',sp.url()===origin+'/wizard-search/'&&await sp.evaluate(()=>depth===0));
+  await sp.goBack({waitUntil:'domcontentloaded'});await sp.waitForTimeout(100);
+  ok('standalone first browser Back at root stays and warns',sp.url()===origin+'/wizard-search/'&&await sp.locator('#wizard-app-back-notice').textContent()==='Press back again to exit');
   await standalone.close();
   ok('zero network writes / agent writes',writes.length===0,writes);ok('no external requests escaped local fixture route',receipt.blockedExternal.length===0,receipt.blockedExternal);
  } finally {await b.close();await new Promise(r=>server.close(r));fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify(receipt,null,2));}
