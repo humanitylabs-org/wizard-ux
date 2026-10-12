@@ -38,6 +38,10 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
             except Exception:pass
             state['tracks'].append({'id':'yt:'+file.stem,'title':row[0],'artist':row[1],'album':row[2],'durationMs':12000,'source':'youtube','stream':'/wizard-music/stream/yt%3A'+file.stem,'art':'/wizard-music/art/yt%3A'+file.stem})
             if len(state['tracks'])>=14:break
+        for tid,title,artist,album,file in con.execute("SELECT id,title,artist,album,path FROM tracks WHERE source='library' LIMIT 3"):
+            if not P(file).is_file():continue
+            key=tid.split(':',1)[1];sh('ffmpeg','-v','error','-y','-i',file,'-t','12','-ar','44100','-ac','2','-b:a','96k',clips/(key+'.mp3'))
+            state['tracks'].append({'id':tid,'title':title,'artist':artist,'album':album,'durationMs':12000,'source':'library','stream':'/wizard-music/stream/lib%3A'+key,'art':''});break
         assert len(state['tracks'])>=8, 'Need distinct actual cached songs'
         class Handler(http.server.BaseHTTPRequestHandler):
             def log_message(self,format,*args):pass
