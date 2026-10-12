@@ -160,13 +160,14 @@
   async function withBackgroundResults(out, complete) {
     try {
       const p = await (await req('/wizard/background-results')).json();
+      if (p.scanning) setTimeout(() => L.refresh(), 700);
       const byId = new Map(out.map(row => [row.id, row]));
       // A finished result can outlive the normal history window. Add its original thread once; this neither
       // starts work nor replaces a current reply/gate with a manufactured message.
       for (const raw of p.sessions || []) {
         const s = normalize(raw); if (!s || !s.backgroundResult) continue;
         const current = byId.get(s.id);
-        if (current) { current.backgroundResult = s.backgroundResult; if (!WORKING.has(current.status)) current.attention = s.attention; }
+        if (current) { if (WORKING.has(current.status)) continue; current.backgroundResult = s.backgroundResult; current.attention = s.attention; }
         else { out.push(s); byId.set(s.id, s); }
       }
     } catch (e) { /* an older Agent Service lacks this route; normal Chats still works */ }

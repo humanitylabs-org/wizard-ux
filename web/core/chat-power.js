@@ -357,8 +357,14 @@ window.WosChatPower = function chatPower(A) {
           const r = await fetch(`/wizard/background-results/${encodeURIComponent(rid)}/continue`, {
             method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sid }),
           });
-          if (!r.ok) { toast('!', r.status === 409 ? 'This thread changed · its latest request stays in charge' : 'Couldn’t continue · tap again', 2600); return; }
-          await r.json(); const s = LIVE.session(sid); if (s) s.backgroundResult = null;
+          const outcome = await r.json().catch(() => ({}));
+          if (!r.ok || ['failed', 'cancelled', 'interrupted'].includes(outcome.status)) {
+            const stale = r.status === 409 || ['failed', 'cancelled', 'interrupted'].includes(outcome.status);
+            if (stale) { const s = LIVE.session(sid); if (s) s.backgroundResult = null; }
+            toast('!', stale ? 'This thread changed · its latest request stays in charge' : 'Couldn’t continue · tap again', 2600);
+            LIVE.refresh?.(); return;
+          }
+          const s = LIVE.session(sid); if (s) s.backgroundResult = null;
           toast('↻', 'Continuing from the saved result', 1600);
           LIVE.refresh?.();
         } catch (e) { toast('!', 'Couldn’t reach Wizard · tap Continue again', 2600); }
