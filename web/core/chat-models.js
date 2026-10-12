@@ -118,13 +118,13 @@
   }
 
   const M = {
-    options: [], ready: false, error: '', at: 0, loading: null,
+    options: [], providers: [], selections: new Map(), pending: new Map(), ready: false, error: '', at: 0, loading: null,
     load(force) {
       if (M.loading) return M.loading;
       if (!force && M.ready && Date.now() - M.at < 5 * 60e3) return Promise.resolve(M.options);
       M.loading = fetch('/wizard/hermes/api/model/options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw new Error(`Models unavailable (${r.status})`); return r.json(); })
-        .then(j => { M.options = normalize(j); M.ready = true; M.error = ''; M.at = Date.now(); return M.options; })
+        .then(j => { M.providers = arr(obj(j).providers); M.options = normalize(j); M.ready = true; M.error = ''; M.at = Date.now(); return M.options; })
         .catch(e => { M.error = String(e.message || e); return M.options; })
         .finally(() => { M.loading = null; });
       return M.loading;
@@ -141,11 +141,66 @@
       const o = M.find(model, provider);
       return (o ? o.name : friendly(model)).replace(/^Claude /, '').split(' · ')[0];
     },
-    async setThreadModel(sid, o) {
-      const body = { model: o.value }; if (o.provider) body.provider = o.provider;
-      const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(sid)}/model`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!r.ok) throw Object.assign(new Error(`Model not changed (${r.status})`), { status: r.status });
-      return true;
+    // One route contract for the chip and every send path. Capture before the outbox awaits storage/STT.
+    snapshot(sid, choice) {
+      if (sid && M.pending.has(sid)) throw new Error('Model change is still saving · send after it finishes');
+      const s = sid && window.WizLive?.session(sid);
+      const route = choice?.model ? choice : sid && M.selections.get(sid) || (s?.model ? { model: s.model, provider: s.provider } : M.defaultOption());
+      if (!route) return null;
+      return { model: route.model || route.value, provider: route.provider || '' };
+    },
+    keepVoiceRoute(id, route) {
+      const all = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}');
+      all[id] = { model: route.model, provider: route.provider };
+      localStorage.setItem('wos.voice-model-routes.v1', JSON.stringify(all));
+    },
+    voiceRoute(id) { try { return JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}')[id] || null; } catch { throw new Error('Saved recording model route is unreadable'); } },
+    forgetVoiceRoute(id) {
+      const all = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}'); delete all[id];
+      localStorage.setItem('wos.voice-model-routes.v1', JSON.stringify(all));
+    },
+    matchesRuntime(runtime, route) {
+      if (runtime?.model !== route.model) return false;
+      if (runtime.provider === route.provider) return true;
+      return runtime.provider === 'custom' && route.provider.startsWith('custom:') && runtime.requested?.provider === route.provider;
+    },
+    reconcile(sessions) {
+      for (const s of sessions) {
+        const selected = M.selections.get(s.id); if (!selected) continue;
+        if ((s.model === selected.model && s.provider === selected.provider) ||
+            (selected.version > 0 && s.modelLockAt >= selected.version)) M.selections.delete(s.id);
+      }
+    },
+    async resolveRoute(snapshot) {
+      if (!M.ready || !snapshot?.provider) await M.load();
+      const route = snapshot || M.snapshot('');
+      if (!route?.model) throw new Error('Model unavailable · choose a model before sending');
+      let provider = route.provider;
+      if (!provider) {
+        const matches = M.options.filter(o => o.value === route.model);
+        if (matches.length === 1) provider = matches[0].provider;
+      }
+      // Old recap metadata used a display label; the transport needs the configured provider slug.
+      if (provider === 'tinfoil') provider = 'custom:tinfoil-operator';
+      if (provider && M.providers.some(p => p.slug === provider && p.is_user_defined)) provider = 'custom:' + provider;
+      if (!provider) throw new Error('Model provider unavailable · choose the model again');
+      return { model: route.model, provider };
+    },
+    setThreadModel(sid, o) {
+      if (M.pending.has(sid)) return Promise.reject(new Error('A model change is already saving'));
+      const task = (async () => {
+        const route = await M.resolveRoute({ model: o.value, provider: o.provider });
+        const body = { ...route, require_model_lock: true };
+        const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(sid)}/model`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!r.ok) throw Object.assign(new Error(`Model not changed (${r.status})`), { status: r.status });
+        const ack = await r.json();
+        if (ack.runtime?.model_lock !== 'accepted' || ack.runtime?.model !== route.model || ack.runtime?.provider !== route.provider)
+          throw new Error('Wizard did not confirm the selected model');
+        M.selections.set(sid, { ...route, version: Number(ack.runtime.selection_version) || 0 });
+        return route;
+      })();
+      M.pending.set(sid, task);
+      return task.finally(() => M.pending.delete(sid));
     },
     /* The picker. mode: 'new' | 'thread' | 'retry'; cur = { model, provider }; all = show the full catalogue. */
     sheetHtml({ mode, cur, all, title }) {
