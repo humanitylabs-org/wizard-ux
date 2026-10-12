@@ -28,7 +28,7 @@ async function until(fn, ms = 6000) { const end = Date.now() + ms; while (Date.n
       const q = r.request(), u = new URL(q.url()), m = q.method();
       const json = body => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
       if (m !== 'GET' && m !== 'HEAD') { writes.push({ method: m, path: u.pathname }); return json({ ok: true, state: { initializedAt: Date.now(), threads: {} } }); }
-      if (u.pathname.startsWith('/wizard-os-home/')) {
+      if (process.env.QA_LIVE !== '1' && u.pathname.startsWith('/wizard-os-home/')) {
         const f = decodeURIComponent(u.pathname.slice('/wizard-os-home/'.length)) || 'index.html';
         if (!f.includes('..')) { const fp = path.join(WEB, 'web', f); if (fs.existsSync(fp) && fs.statSync(fp).isFile()) return r.fulfill({ status: 200, contentType: f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : f.endsWith('.js') ? 'application/javascript' : undefined, body: fs.readFileSync(fp) }); }
       }
