@@ -557,8 +557,9 @@
   scrub.addEventListener('pointerup', scEnd); scrub.addEventListener('pointercancel', scEnd);
 
   /* ---------------- window operations ---------------- */
-  /* Every new thing opens on its own desk, right beside the one in front (never between Home and Chats).
-   * opts.desk (hold the orb, speak, swipe toward a desk) or opts.here puts it on an existing desk instead. */
+  /* Every new thing opens on its own desk, right beside the one in front (James, 12 Oct 2026: apps always open
+   * in a new tab, as one shell rule, never a per-app setting). Only an explicit user placement (opts.desk from a
+   * user aim, opts.here) may share an existing desk; app openers pass opts through and never pick a desk. */
   // Directly beside the desk in front, Home included (James, 11 Oct 2026: from Home, Yesterday and every other
   // app open on the desk right next to Home; Chats just moves one to the right).
   function insertPos() { return idx + 1; }
@@ -782,10 +783,9 @@
   }
   function openUsuals(opts = {}) {
     closeSheets(true);
-    const t = opts.desk == null ? idx : opts.desk;
-    const here = Object.keys(W).find(id => W[id].app === 'usuals');
-    if (here) { const d = deskOf(here); if (d !== idx) goDesk(d); focusWin(here); window.WosUsuals?.refresh(); return; }
-    openWin({ app: 'usuals' }, { ...opts, desk: t });
+    const here = Object.keys(W).find(id => W[id].app === 'usuals' && deskOf(id) >= 0);
+    if (here && opts.desk == null) { const d = deskOf(here); if (d !== idx) goDesk(d); focusWin(here); window.WosUsuals?.refresh(); return; }
+    openWin({ app: 'usuals' }, opts); // the shell places it (own desk beside this one), like every other app
   }
   function openReview(level, date, opts = {}) {
     const z = level === 'month' ? { level: 'month' } : level === 'week' ? { level: 'week', week: weekOf(date || YESTERDAY) } : { level: 'day', day: date || YESTERDAY };
