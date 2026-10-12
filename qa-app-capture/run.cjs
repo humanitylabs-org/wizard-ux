@@ -12,6 +12,7 @@ fs.mkdirSync(evidence, { recursive: true });
 const receipts = [], errors = [];
 for (const name of ['receipt.json', 'failure.json', 'progress.json']) { try { fs.unlinkSync(path.join(evidence, name)); } catch (e) { if (e.code !== 'ENOENT') throw e; } }
 const server = http.createServer((req, res) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; connect-src 'self'; media-src 'self' blob:; frame-src 'self'");
   if (req.url === '/core/app-capture.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(fs.readFileSync(path.join(root, 'web/core/app-capture.js'))); }
   else { res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><button id="gesture">Capture</button><iframe id="app" src="/frame"></iframe>' + (req.url === '/frame' ? '' : '<script src="/core/app-capture.js"></script>')); }
 });

@@ -4,7 +4,7 @@ Only `web/core/app-capture.js` and this QA directory belong to this slice. No li
 
 ## Interface
 
-Load the module in the shell before app-services, once. Standalone app-client must import the **same** file rather than recreate recording code.
+Load the module through its external script src in the shell before app-services, once. The same file registers its PCM processor when loaded by AudioWorklet, preserving shell script-src 'self' CSP; no blob/eval/CSP relaxation or extra worklet asset. Standalone app-client must import the **same** file rather than recreate recording code.
 
 - `WizAppCapture.start(appId, opts)` -> Promise of Session `{id,onLevel(fn),stop(),cancel()}`. `onLevel` returns unsubscribe; `stop` resolves a Result after IndexedDB commits.
 - Result `{id,blob,mime,durationMs,startedAt,meta,partial?}`.
