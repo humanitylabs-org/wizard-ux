@@ -14,18 +14,21 @@ const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inl
 let refused = 0;
 const helperModule = import('/home/telos/work/was-helper-status/server/helper-status.mjs');
 const demos = new Map();
+const demoStarts = new Map();
 const DEMO = ['running','finishing','stalled'];
 function demoRows(key) {
   const now=Date.now()/1000, resumed=demos.get(key)||0;
+  if(!demoStarts.has(key)) demoStarts.set(key,now);
+  const at=demoStarts.get(key);
   return DEMO.map((mode,i)=>{
     const finished=mode==='stalled' && resumed && now-resumed>3;
     const phase=mode==='running'?'running':mode==='finishing' || resumed && !finished?'integrating':'stalled';
     const id='wizard_preview_helpers_'+mode;
-    return {id,source:'wizard-mobile',title:'Preview · '+({running:'Helpers running',finishing:'Finishing answer',stalled:'Stalled helpers'}[mode]),status:finished?'completed':'running',started_at:now-2200,wizard_last_user_at:now-2200,wizard_last_assistant_at:finished?now-1:0,wizard_activity_at:now-1,message_count:2,archived:false,hidden:false,
-      wizard_helper_status:finished?null:{phase,pending:mode==='running'?2:0,returned:mode==='running'?1:2,since:mode==='running'?now-2040:mode==='finishing'?now-22:resumed||now-720,checkedAt:now,resumeEligible:mode==='stalled'&&!resumed,preview:true},
+    return {id,source:'wizard-mobile',title:'Preview · '+({running:'Helpers running',finishing:'Finishing answer',stalled:'Stalled helpers'}[mode]),status:finished?'completed':'running',started_at:at-2200,wizard_last_user_at:at-2200,wizard_last_assistant_at:finished?resumed+3:0,wizard_activity_at:finished?resumed+3:at-1,message_count:2,archived:false,hidden:false,
+      wizard_helper_status:finished?null:{phase,pending:mode==='running'?2:0,returned:mode==='running'?1:2,since:mode==='running'?at-2040:mode==='finishing'?at-22:resumed||at-720,checkedAt:now,resumeEligible:mode==='stalled'&&!resumed,preview:true},
       wizard_attention:finished?{state:'done',ask:'Example request completed after Continue',subject:'Wizard OS'}:null,
-      latest_message:{role:'assistant',content:finished?'The preview request is complete. Continue resumed it, and this example has moved to Ready. Live work was unchanged.':'Illustrative helper-status example. Live work is unchanged.',timestamp:now-1},
-      last_user_message:{role:'user',content:'Example only: finish this request after its helpers return.',timestamp:now-2200}};
+      latest_message:{role:'assistant',content:finished?'The preview request is complete. Continue resumed it, and this example has moved to Ready. Live work was unchanged.':'Illustrative helper-status example. Live work is unchanged.',timestamp:finished?resumed+3:at-1},
+      last_user_message:{role:'user',content:'Example only: finish this request after its helpers return.',timestamp:at-2200}};
   });
 }
 async function helperPreview(req,res,u) {

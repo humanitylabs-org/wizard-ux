@@ -24,6 +24,13 @@ Opens directly on **Preview · Stalled helpers**, phone shell. Tap the existing 
 - Parent inspected phone stalled and list screenshots. Screenshots: `~/.hermes/cache/scratch/helper-status-shots/` and Thales `/Users/thales/helper-status-qa/`.
 - Small remote browser QA used `/Users/thales/helper-status-qa` after the external ThalesMedia disk disconnected; it installed only playwright-core and reused installed Chrome. No sustained build or media staging on VPS.
 
+## Viewport repair verification
+
+- Removed this preview's staging `focus` selector after reproducing hidden `#device.scrollTop = 278`, which shifted the chat header above the browser viewport. The shell now stays unscrolled; no live shell/layout changes.
+- Fixed example request/message timestamps to stay stable across polling, preserving the expanded Working receipt.
+- `qa-helper-viewport.cjs`: **30/30 on Thales**. Delayed initial focus, four phone browser viewport sizes, keyboard-sized resize/restore, 15-second polling expansion, clickable Continue, completion, Back, zero page errors.
+- Re-ran original phone/desktop suite after the repair: **31/31**. Final exact HTTPS preview origin remains live.
+
 ## Delivery checkpoint
 
 UX source: `/home/telos/worktrees/wos-helper-status`, branch `feature/helper-status-preview` from `daily`.
