@@ -9,7 +9,9 @@ let browser;
 (async()=>{
  browser=await chromium.connectOverCDP('http://127.0.0.1:'+cdp,{isWebView:true,noDefaults:true});
  const ctx=browser.contexts()[0],page=ctx.pages()[0],errors=[]; page.on('pageerror',e=>errors.push(String(e)));
+ await page.addInitScript(()=>localStorage.setItem('wos.coached','true'));
  await page.goto('http://10.0.2.2:'+http+'/wizard-os-home/?open=wizard-music');
+ await page.evaluate(()=>WizCore.appsLoaded());
  await page.evaluate(()=>{localStorage.setItem('wos.coached','true');document.cookie='qa_audio=session;path=/';});
  await page.waitForTimeout(2000);
  let frame=()=>page.frames().find(f=>/\/wizard-music\/$/.test(f.url()));

@@ -13,6 +13,8 @@ def sh(*args,stdin=None,timeout=120):
     if r.returncode: raise RuntimeError('command failed '+str(args)[:180]+'\n'+r.stderr[-2000:]+'\n'+r.stdout[-2000:])
     return r.stdout
 def sx(cmd): return sh(ADB,'-s',SERIAL,'shell',cmd)
+registry=json.load(urllib.request.urlopen('https://music-background.staging.wizard001.com/wizard/v1/apps',timeout=20))
+bootstrap=json.load(urllib.request.urlopen('https://music-background.staging.wizard001.com/wizard/v1/bootstrap',timeout=20))
 state={'tracks':[], 'events':[], 'bytes':0,'gets':[], 'refills':0,'batches':{},'next':3,'down':False}
 LOCK=threading.Lock(); em=None;server=None
 with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
@@ -73,7 +75,8 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
                         if key not in state['batches']:
                             a=state['next'];batch=state['tracks'][a:a+6];state['next']+=len(batch);state['refills']+=1;state['batches'][key]=batch
                         return self.body(200,{'tracks':state['batches'][key]})
-                if p=='/wizard/v1/apps':return self.body(200,{'apps':[]})
+                if p=='/wizard/v1/apps':return self.body(200,registry)
+                if p=='/wizard/v1/bootstrap':return self.body(200,bootstrap)
                 if p=='/reports/wizard-os/latest.json':return self.body(200,{'app':'ai.wizards.os','versionCode':0,'version':'0','bytes':1,'sha256':'0'*64,'url':'no.apk','signer':'0'*64})
                 if p.startswith(('/wizard/','/v1/','/hermes/','/meetings/')):return self.body(200,{'data':[],'sessions':[],'threads':[],'ok':True})
                 if p=='/':return self.body(200,b'<a href="/wizard-os-home/?open=wizard-music">Open Music</a>','text/html')
