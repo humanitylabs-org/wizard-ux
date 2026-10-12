@@ -2762,6 +2762,7 @@
         if (did === 'chip' && !CHATS.hasFilter(f)) { c.fromCard = false; c.coach = false; c.filterFrom = null; const p = back ? desks.findIndex(x => x.id === back) : -1; if (p >= 0 && p !== idx) goDesk(p); }
         if (did) return did === 'search' ? 'search' : 'filter';
       }
+      if (f.app === 'chats' && CHATS.readyBack?.()) return 'ready-order'; // Priority / By subject → Newest
       if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
       if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { try { selfPop(winEl(f.id).querySelector('iframe').contentWindow); } catch (e) {} nav.back(); return 'frame'; } }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }
