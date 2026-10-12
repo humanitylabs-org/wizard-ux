@@ -29,7 +29,7 @@ env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libe
 env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5708; S = 'emulator-%d' % PORT; DEVTOOLS = 9359
 OK_PORT, DEAD_PORT = 18795, 18796
-WIZ, DEAD = 'http://localhost:%d' % OK_PORT, 'http://localhost:%d' % DEAD_PORT
+WIZ, DEAD = 'http://localhost:%d' % OK_PORT, 'http://10.0.2.2:%d' % DEAD_PORT  # nothing listens: a real refusal
 res = []
 
 
@@ -143,7 +143,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('input keyevent KEYCODE_WAKEUP'); sx('wm dismiss-keyguard'); sx('svc power stayon true')
         out = sh(ADB, '-s', S, 'install', '-r', APK).strip().splitlines()[-1]
         check('install the QA build', out == 'Success', out)
-        for p in (OK_PORT, DEAD_PORT): sh(ADB, '-s', S, 'reverse', 'tcp:%d' % p, 'tcp:%d' % p)
+        for p in (OK_PORT,): sh(ADB, '-s', S, 'reverse', 'tcp:%d' % p, 'tcp:%d' % p)
         sx('pm grant %s android.permission.POST_NOTIFICATIONS' % PKG)
         sx('logcat -c')
 
@@ -222,8 +222,8 @@ with (BASE / 'worker.lock').open('a') as lock:
 
         log = sx('logcat -d -s WizardOSReach')
         (job / 'reach.log').write_text(log)
-        crashed = sx('logcat -d -b crash')
-        check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
+        crashed = '\n'.join(l for l in sx('logcat -d -b crash').splitlines() if PKG in l or 'ai.wizards.os' in l)
+        check('no Wizard OS crashes (UiAutomation harness crashes ignored)', 'FATAL' not in crashed and 'ai.wizards.os' not in crashed, crashed[:300])
     except Exception as e:
         check('harness', False, repr(e))
     finally:

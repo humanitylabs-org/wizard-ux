@@ -190,6 +190,15 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
+                // The one place every main-frame load passes through before the network (loadUrl, links, reloads).
+                // onPageStarted only fires once a response commits, so a connection that never answers (Tailscale
+                // off) never reaches it: arm the connection screen here instead. Never intercepts anything.
+                if (req.isForMainFrame()) { final String u = req.getUrl().toString(); main.post(() -> navStarted(u)); }
+                return null;
+            }
+
+            @Override
             public void onPageCommitVisible(WebView view, String url) {
                 // A real page painted: the connection screen leaves by itself (also after Tailscale comes back).
                 // Same host as the load we're waiting on, so a late paint of an abandoned attempt can't count.
@@ -200,7 +209,6 @@ public class MainActivity extends Activity {
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 pageUrl = url;
                 setKeepAwake(false);
-                if (isWeb(url)) { mainFailed = false; wantUrl = url; armReach(); }
             }
 
             @Override
@@ -422,6 +430,14 @@ public class MainActivity extends Activity {
             retryReach();
         }
     };
+
+    /** A main-frame load is leaving for the network: watch it until a page paints. */
+    void navStarted(String url) {
+        if (!isWeb(url)) return;
+        mainFailed = false;
+        wantUrl = url;
+        armReach();
+    }
 
     void armReach() {
         main.removeCallbacks(reachMark);
