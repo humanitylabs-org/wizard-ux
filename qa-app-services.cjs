@@ -24,13 +24,14 @@ const server = http.createServer((req,res) => {
  if (u.pathname.endsWith('/ux-version.txt')) return send(version,'text/plain');
  if (u.pathname.endsWith('/ux-changes.json')) return send('[]','application/json');
  if (u.pathname === '/wizard/v1/apps') return send(JSON.stringify({apps}),'application/json');
+ if (u.pathname === '/wizard/v1/bootstrap') return send(JSON.stringify({bootstrap:1,endpoints:{apps:'/wizard/v1/apps'},settings:{agent:{name:'Fixture Wizard'}},capabilities:{}}),'application/json');
  if (u.pathname === '/wizard/hermes/api/sessions') return send(JSON.stringify({data:[],has_more:false}),'application/json');
  if (u.pathname.endsWith('/thread-seen')) return send(JSON.stringify({state:{initializedAt:Date.now(),threads:{}}}),'application/json');
  if (u.pathname.endsWith('/thread-dispositions')) return send(JSON.stringify({state:{}}),'application/json');
  if (u.pathname.startsWith('/wizard/')) return send('{}','application/json');
  if (u.pathname === '/sw.js' || u.pathname.endsWith('/sw.js')) return send("self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));",'application/javascript');
  if (u.pathname === '/wizard-os-home/core/app-capture.js') return send(captureMock,'application/javascript');
- if (u.pathname === '/harness/') return send('<!doctype html><html><body><div class="win"><iframe id="frame" src="/wizard-signal/"></iframe></div><script src="/wizard-os-home/core/core.js"></script><script src="/wizard-os-home/core/apps.js"></script><script src="/wizard-os-home/core/appearance-host.js"></script><script src="/wizard-os-home/core/chat-kit.js"></script><script src="/wizard-os-home/core/app-capture.js"></script><script src="/wizard-os-home/core/app-services.js"></script><script>WizCore.appsLoaded().then(()=>WizAppServices.attach(document.querySelector("iframe"),{appId:"wizard-signal",path:"/wizard-signal/"}));</script></body></html>');
+ if (u.pathname === '/harness/') return send('<!doctype html><html><body><div class="win"><iframe id="frame" src="/wizard-signal/"></iframe></div><script src="/wizard-os-home/core/core.js"></script><script src="/wizard-os-home/core/config.js"></script><script src="/wizard-os-home/core/apps.js"></script><script src="/wizard-os-home/core/appearance-host.js"></script><script src="/wizard-os-home/core/chat-kit.js"></script><script src="/wizard-os-home/core/app-capture.js"></script><script src="/wizard-os-home/core/app-services.js"></script><script>WizCore.appsLoaded().then(()=>WizAppServices.attach(document.querySelector("iframe"),{appId:"wizard-signal",path:"/wizard-signal/"}));</script></body></html>');
  const app = entries.find(([,p])=>u.pathname.startsWith(p)); if (app) return send(appHTML(app[0]));
  if (u.pathname === '/rogue/') return send(appHTML('rogue'));
  if (u.pathname.startsWith('/wizard-os-home/')) {
@@ -65,7 +66,7 @@ let origin;
    await p.goto(origin+'/wizard-os-home/'+(mobile?'':'desktop.html'));
    await p.waitForFunction(m=>m?!!window.__wos:!!window.__wux,mobile);
    await p.evaluate(()=>WizCore.appsLoaded());
-   const frames=[];
+   const frames=[];ok('fixture registry has all approved app IDs',await p.evaluate(m=>WizCore.apps(m?'mobile':'desktop').APPS.filter(a=>a.url&&!['app-store','system'].includes(a.id)).length===17,mobile));
    for (const [id,url] of entries) {
     await p.evaluate(({id,mobile})=>{const a=WizCore.apps(mobile?'mobile':'desktop').APP[id];(mobile?__wos:__wux).openApp(a)},{id,mobile});
     const fr=await waitFrame(p,origin+url);frames.push(fr);
@@ -120,6 +121,11 @@ let origin;
   await fr.evaluate(()=>{window.one=WizardApp.back.push(()=>{window.order=(window.order||[]).concat(1)});window.two=WizardApp.back.push(()=>{window.order=(window.order||[]).concat(2)})});
   await p.evaluate(()=>WizAppServices.back(document.querySelector('#frame')));await p.evaluate(()=>WizAppServices.back(document.querySelector('#frame')));
   ok('overlay callbacks LIFO',await fr.evaluate(()=>JSON.stringify(order)==='[2,1]'));
+  await fr.evaluate(()=>{unreg();window.historyOff=WizardApp.back.useHistory({isRoot:()=>!location.hash});history.pushState({fixture:true},'', '#nested')});
+  ok('history adapter uses one real app entry',await p.evaluate(()=>WizAppServices.back(document.querySelector('#frame')))==='handled');
+  await fr.waitForFunction(()=>!location.hash);
+  ok('history adapter root is synchronous atRoot',await p.evaluate(()=>WizAppServices.back(document.querySelector('#frame')))==='atRoot');
+  await fr.evaluate(()=>historyOff());
   await fr.evaluate(()=>{window.h=WizardApp.update.hold('lifecycle');window.saved=parent.WizAppServices.connect(window,{back:()=>false})});
   await p.evaluate(()=>{const rogue=document.createElement('iframe');rogue.id='rogue';rogue.src='/rogue/';document.body.append(rogue)});const rogue=await waitFrame(p,origin+'/rogue/');
   ok('unregistered source denied',await rogue.evaluate(()=>parent.WizAppServices.connect(window,{back:()=>false})===null));
@@ -128,6 +134,23 @@ let origin;
   await p.evaluate(()=>{const f=document.querySelector('#frame');f.src='/wizard-signal/'});const fr2=await waitFrame(p,origin+'/wizard-signal/');await fr2.waitForFunction(()=>WizardApp.hosted);
   await fr2.evaluate(()=>WizardApp.update.hold('removed'));await p.evaluate(()=>document.querySelector('#frame').remove());
   ok('removed frame releases lifecycle holds',!await p.evaluate(()=>WizAppServices.update.busy()));
+  // Real browser SW/cache storage: exact reviewed app targets only, never the root or shell.
+  await p.evaluate(async()=>{
+    for (const [script,scope] of [['/sw.js','/'],['/wizard-os-home/sw.js','/wizard-os-home/'],['/unrelated/sw.js','/unrelated/'],['/wizard-shopping/sw.js?v=20260726-shopping-assistant-v7','/wizard-shopping/']]) {
+      const reg=await navigator.serviceWorker.register(script,{scope});
+      if (!reg.active) await new Promise(resolve=>{const w=reg.installing||reg.waiting;if(!w)return resolve();w.addEventListener('statechange',()=>{if(w.state==='activated')resolve()})});
+    }
+    for (const name of ['root-shell-cache','shopping-assistant-20260726-shopping-assistant-v7','shopping-assistant-20260726-shopping-assistant-v7-extra']) await caches.open(name);
+    const f=document.createElement('iframe');f.id='shopping';f.src='/wizard-shopping/';document.querySelector('.win').appendChild(f);
+    await new Promise(resolve=>f.addEventListener('load',resolve,{once:true}));
+    WizAppServices.attach(f,{appId:'shopping',path:'/wizard-shopping/'});
+  });
+  await p.waitForFunction(async()=>!(await navigator.serviceWorker.getRegistrations()).some(r=>r.scope.endsWith('/wizard-shopping/')));
+  ok('exact app worker scope removed, root/shell/unrelated preserved',await p.evaluate(async()=>{const regs=await navigator.serviceWorker.getRegistrations();return ['/', '/wizard-os-home/','/unrelated/'].every(scope=>regs.some(r=>r.scope===location.origin+scope))}));
+  ok('only exact named app cache removed',await p.evaluate(async()=>{const names=await caches.keys();return !names.includes('shopping-assistant-20260726-shopping-assistant-v7')&&names.includes('root-shell-cache')&&names.includes('shopping-assistant-20260726-shopping-assistant-v7-extra')}));
+  // No arbitrary resource operation and no item-URL fetch through the file service.
+  const shopping=await waitFrame(p,origin+'/wizard-shopping/');
+  ok('host file resource rejects URL-shaped payload',await shopping.evaluate(()=>WizardApp.share.file({url:'/private-secret'}))==='unsupported');
   await ctx.close();
   // Standalone: no parent rights; the same client resource, Web Share/clipboard readback and root guard.
   const standalone=await b.newContext(),sp=await standalone.newPage();await sp.goto(origin+'/wizard-search/');

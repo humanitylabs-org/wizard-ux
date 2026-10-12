@@ -43,7 +43,7 @@
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
     const st = { frame, appId, url, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
-    const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} };
+    const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); };
     frames.set(frame, st); frame.addEventListener('load', load);
     // App scripts can run before the frame load event. Attach when mounting, not only on load.
@@ -79,7 +79,7 @@
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); return { version: VERSION, hosted: true, appId: st.appId }; },
       share: Object.freeze({ text(data) { check(); return window.WosChat?.sharePayload(data) || Promise.resolve('unsupported'); },
-        file(file, opts) { check(); return window.WosChat?.shareFile(file, opts) || Promise.resolve('unsupported'); } }),
+        file(file, opts) { check(); if (!file || !['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(file))) return Promise.resolve('unsupported'); return window.WosChat?.shareFile(file, opts) || Promise.resolve('unsupported'); } }),
       theme: Object.freeze({ get() { check(); return window.WizAppearance?.get(frameOf(st)) || null; } }),
       update: Object.freeze({ hold, available() { check(); return available; } }),
       capture: Object.freeze({ start, pending() { check(); return window.WizAppCapture?.pending(st.appId) || Promise.resolve([]); },
@@ -124,16 +124,17 @@
   }
   // The shell supplies reviewed exact migration entries; apps cannot ask to unregister workers or delete caches.
   async function cleanupLegacy(st) {
-    const policy = window.WizCore.appMigrations?.[st.appId]; if (!policy || !registered(st) || st.url.origin !== ORIGIN) return [];
+    const policy = window.WizCore.appMigrations?.[st.appId]; if (!policy || !valid(st) || st.url.origin !== ORIGIN) return [];
     const scope = new URL(policy.scope, ORIGIN), scripts = policy.scripts.map(path => new URL(path, ORIGIN));
     if (!within(scope, st.url) || scripts.some(script => !within(script, st.url)) || scope.pathname === '/') return [];
     const removed = [];
     for (const reg of await navigator.serviceWorker?.getRegistrations?.() || []) {
+      if (!valid(st)) return removed;
       const workers = [reg.active, reg.waiting, reg.installing].filter(Boolean);
       if (reg.scope !== scope.href || !workers.length || workers.some(w => !scripts.some(script => w.scriptURL === script.href))) continue;
       if (await reg.unregister()) removed.push(reg.scope);
     }
-    for (const name of policy.caches) if (await window.caches?.delete(name)) removed.push(name);
+    for (const name of policy.caches) { if (!valid(st)) return removed; if (await window.caches?.delete(name)) removed.push(name); }
     return removed;
   }
   addEventListener('message', async e => {
