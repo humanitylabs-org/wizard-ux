@@ -90,7 +90,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function setSubject(w, k) { const c = ch(w.id); if (w.thread) chatsBack(w); c.subject = k || ''; rerenderList(w); return true; }
   function addFilter(w, f) { if (!f) return false; if (f.kind === 'subject') return setSubject(w, f.key); const c = ch(w.id); if (w.thread) chatsBack(w); c.filter = f.key; c.filterFrom = null; rerenderList(w); return true; }
-  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
+  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
   /* Back on a filtered list: search text first, then the most recent chip. */
   function clearFilter(w) {
     if (!w || w.thread) return false;
@@ -203,7 +203,7 @@ window.WizCore.chats = function createChats(H) {
   const PEND_LABEL = { sending: 'Sending…', queued: 'Sending…', waiting: 'Offline · will retry', starting: 'Starting…' };
   function workLabel(s) {
     if (s.pend && PEND_LABEL[s.pend]) return PEND_LABEL[s.pend];
-    return s.status === 'stopping' ? 'Stopping…' : s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working';
+    return s.status === 'stopping' ? 'Stopping…' : window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working');
   }
   /* ---- Drafts: unsent new chats (legacy newThreadDrafts.ts). The new-chat composer owns the 'new' slot;
    * "+" moves unsent words out of it into a saved 'new:<id>' slot, so a new chat always starts empty and
@@ -286,6 +286,26 @@ window.WizCore.chats = function createChats(H) {
       <h5>Status</h5><div class="ch-fopts">${Object.entries(STATUS).map(([k, f]) => opt('status', k, f.label, c.filter === k)).join('')}</div>
       ${sj.length ? `<h5>Subject</h5><div class="ch-fopts">${sj.map(k => opt('subject', k, k, c.subject === k)).join('')}</div>` : ''}</div></div>`;
   }
+  // The phone replaces the list with the thread. Keep a bounded return bookmark before
+  // that replacement, including nearby row anchors so Done or live updates above it
+  // can remove/reorder rows without moving the surviving row under James's eyes.
+  function listPlace(el) {
+    const sc = el?.querySelector('.ch-scroll'); if (!sc) return null;
+    const top = sc.scrollTop, edge = sc.getBoundingClientRect().top;
+    const rows = top > 0 ? [...sc.querySelectorAll('[data-chopen]')].filter(r => r.getBoundingClientRect().bottom > edge).slice(0, 8) : [];
+    return { top, rows: rows.map(r => ({ id: r.dataset.chopen, section: r.closest('[data-sec]')?.dataset.sec, y: r.getBoundingClientRect().top - edge })) };
+  }
+  function restoreListPlace(sc, place) {
+    if (!sc || !place) return;
+    sc.scrollTop = place.top;
+    const rows = [...sc.querySelectorAll('[data-chopen]')];
+    for (const anchor of place.rows) {
+      // Done can leave the same ID visible in expanded Archive. Follow a surviving
+      // neighbor in the original section, never the archived row to its new home.
+      const row = rows.find(r => r.dataset.chopen === anchor.id && r.closest('[data-sec]')?.dataset.sec === anchor.section);
+      if (row) { sc.scrollTop += row.getBoundingClientRect().top - sc.getBoundingClientRect().top - anchor.y; break; }
+    }
+  }
   function renderChatList(w, el) {
     if (!el) return;
     ch(w.id).heldList = false;
@@ -344,7 +364,7 @@ window.WizCore.chats = function createChats(H) {
         ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
     }).join('');
     if (bs && LIVE.ok) body += BS.footer(bs);
-    const scroll = el.querySelector('.ch-scroll')?.scrollTop || 0;
+    const place = listPlace(el) || c.listPlace;
     // Results stream in while typing: keep the search box focused with the caret where it was.
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
@@ -354,7 +374,7 @@ window.WizCore.chats = function createChats(H) {
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
     clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
-    const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = scroll;
+    restoreListPlace(el.querySelector('.ch-scroll'), place);
     PW?.paint(w.id, el);
     if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
   }
@@ -368,10 +388,10 @@ window.WizCore.chats = function createChats(H) {
   const fileKind = f => /^audio\//.test(f.mime || '') || /^wizard-voice-/.test(f.name || '') ? 'voice' : /^image\//.test(f.mime || '') ? 'image' : 'file';
   const fsize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
   const fileUrl = id => `/wizard/files/${encodeURIComponent(id)}/content`;
-  async function uploadFile(file) {
+  async function uploadFile(file, { signal } = {}) {
     if (file.size > MAX_BYTES) throw Object.assign(new Error('That file is larger than the 64 MB upload limit.'), { user: true });
     const r = await fetch('/wizard/files/upload', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
-      headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': file.name || 'upload', 'X-Wizard-Mime': file.type || 'application/octet-stream' }, body: file });
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': file.name || 'upload', 'X-Wizard-Mime': file.type || 'application/octet-stream' }, body: file, signal });
     if (!r.ok) throw Object.assign(new Error(r.status === 413 ? 'That file is too large for Wizard Files.' : `Wizard Files is unavailable (${r.status}).`), { status: r.status, user: true });
     const f = (await r.json()).file || {};
     if (!f.id) throw new Error('Wizard Files returned an invalid upload receipt.');
@@ -494,14 +514,14 @@ window.WizCore.chats = function createChats(H) {
     const from = n.from ? `From the \u201c${esc(n.from)}\u201d thread` : 'From another agent thread';
     return `<details class="msg agentnote" data-agentnote><summary><span class="an-ic">\u21aa</span><span class="an-from">${from}</span>${timeTag(n.at)}</summary><div class="an-body">${md(n.text)}</div></details>`;
   }
-  function turnHtml(c, tn, last, working) {
+  function turnHtml(c, tn, last, working, helperStatus) {
     let h = '';
     if (tn.u) h += `<div class="msg u"><div class="bub">${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += `<div class="msg laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(tn.later.at)}</div>`;
     const live = last && working;
     const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
-    const wk = PW ? PW.workHtml(c, tn, live) : null; // the work receipt (chat-work.js #17)
+    const wk = PW ? PW.workHtml(c, tn, live, helperStatus) : null; // the work receipt (chat-work.js #17)
     if (wk != null) h += wk;
     else if (tn.steps || tn.notes.length || live) {
       const label = live ? (tn.notes.length ? esc(clip(tn.notes[tn.notes.length - 1], 90)) : 'Working') : `Worked through ${tn.steps} step${tn.steps === 1 ? '' : 's'}`;
@@ -705,7 +725,7 @@ window.WizCore.chats = function createChats(H) {
     ch(w.id).held = false; // explicit actions/navigation may repaint immediately
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
     const working = !!s && WORKING_ST.has(s.status);
-    const sub = isNew ? `Starts a new thread with ${window.WizConfig.agent()}` : s?.status === 'stopping' ? 'Stopping…' : working ? (s.waitingOn === 'helper' ? `A helper is finishing this for ${window.WizConfig.agent()}` : `${window.WizConfig.agent()} is working`) : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s?.deferred && !s.archived ? 'Deferred' : s?.archived ? 'Archived' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
+    const sub = isNew ? `Starts a new thread with ${window.WizConfig.agent()}` : s?.status === 'stopping' ? 'Stopping…' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${window.WizConfig.agent()}` : `${window.WizConfig.agent()} is working`)) : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s?.deferred && !s.archived ? 'Deferred' : s?.archived ? 'Archived' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
     const turns = c.loadedFor === w.thread ? c.turns || [] : null;
     c.media = []; c.texts = [];
     let msgs;
@@ -727,7 +747,7 @@ window.WizCore.chats = function createChats(H) {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);
           const div = dk && dk !== day ? `<div class="ch-day"><span>${esc(KIT.time.day(at))}</span></div>` : '';
           if (dk) day = dk;
-          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working);
+          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus);
         }).join('')
         + rns.splice(0).map(rnHtml).join('')
         + approvalHtml(c, s)
@@ -931,6 +951,7 @@ window.WizCore.chats = function createChats(H) {
    * reviews each one, taps Done, and lands back on the summary). Opening a thread any other way starts a fresh trail. */
   function openChat(wid, sid, opts = {}) {
     const w = W[wid]; if (!w) return;
+    if (!w.thread) { const place = listPlace(elOf(wid)); if (place) ch(wid).listPlace = place; }
     if (w.thread) saveDraft(wid);
     closeRowSheet();
     const c = ch(wid); c.approval = null;
@@ -1094,6 +1115,14 @@ window.WizCore.chats = function createChats(H) {
   /* Clicks inside a Chats window. Returns true when it handled the click. */
   function click(e, id) {
     const w = H.win(id); if (!w) return false;
+    const hc = e.target.closest('[data-helper-continue]');
+    if (hc) {
+      if (hc.disabled) return true; hc.disabled=true; hc.textContent='Resuming…';
+      fetch(hc.dataset.preview ? '/wizard/preview/helper-continue' : '/wizard/helper-continue', {method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:w.thread})})
+        .then(async r=>{ if(!r.ok) throw new Error(r.status===409 ? 'Already active or no longer resumable' : 'Could not resume'); await LIVE.refresh(); toast('↻','Continuing the same request',1800); })
+        .catch(err=>{ hc.disabled=false; hc.textContent=hc.dataset.preview ? 'Try Continue · example only' : 'Continue'; toast('!',''+err.message,2600); });
+      return true;
+    }
     const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); H.toast('↻', 'Sending again', 1400); return true; }
     if (e.target.closest('[data-obretryall]')) { OUTBOX.retryAll(); H.toast('↻', 'Sending again', 1400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }

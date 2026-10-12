@@ -1,6 +1,6 @@
 # Chats slow-touch-scroll candidate QA
 
-Status: isolated, **not deployed**. Base `dff3b59` (daily); branch `feature/chat-scroll-stability`.
+Status: **live on daily**, source `7ba02b9`, integrated with daily `c4f61a7`. Original isolated baseline `dff3b59`; branch `feature/chat-scroll-stability`. The physical handset's black-pixel symptom remains unverified.
 
 ## Diagnosis and bounded change
 
@@ -41,4 +41,15 @@ ssh thales 'export NODE_PATH=/Users/thales/workspace/wizard-mobile-link-candidat
 
 During harness development, a clock jump restored backwards caused cache timestamps to remain in the future; the final expiry probe keeps time monotonic. A touchend after navigating synthesized a new-list row tap, so the navigation recovery probe cancels the old touch rather than conflating release with an explicit tap. One concurrent selection run missed its fixture in its existing fixed 4.5 s startup window; the final two-browser run passed without altering that test. Final counts above come from completed runs, not the earlier aborted probes.
 
-Review/integration, service-worker activation and Samsung live acceptance remain parent-owned. No merge, push, restart or deployment was performed.
+Original helper handoff stopped before integration/deployment; parent then completed the following live delivery.
+
+## Parent integration and live verification
+
+- Integrated the newer `daily c4f61a7` source, preserving concurrent model-route and Store changes; committed focused QA's `QA_LIVE=1` mode at `7ba02b9` and fast-forwarded canonical daily. Static files are served directly by `wizard-mobile.service` on 8923; no backend restart needed or performed. Version hook emitted web tree `e791f37e6967d9e7c534af6263e655ca1a539f6c`.
+- Integrated real-touch regression **25/25**, selection **15/15**, Ready **51/51**, model-route contracts **14/14** on Thales. Exact-live focused regression, with all candidate asset overrides removed, **25/25** at the canonical origin. Sustained list and transcript drags each moved 183 px, retained their original nodes, and had zero subtree replacements; updates continued loading and flushed automatically afterward.
+- Fresh phone and desktop live browsers loaded the exact repaired `core/chats.js` SHA-256 `130f05a5d72bd9a5515b4cd536d57cbd0f0df9e2142cf031b3b0a33d8486636e`. Phone service worker activated and page reloaded under its control; desktop intentionally does not register a worker. Both rendered real rows with zero page errors; screenshots inspected. Smoke made zero non-GET/HEAD requests. Final local served hash/version remained unchanged.
+- Latest broad Chats parity **29 pass / 2 fail on both untouched daily and candidate** (reply-attachment send fixture and tray clear), independently baseline-compared. Original helper's 31/31 belongs to the older base. A temporary model-lock acknowledgement fixture did not alter those failures and was discarded; production send/model code is unchanged by this repair.
+- Twenty-round accelerated real-data/churn phone soak passed: baseline heap +0.83 MB, nodes -8; candidate heap +0.79 MB, nodes -1108; no listener or document growth. Desktop soak failed pre-existing DOM growth in both baseline and candidate (~100k nodes); candidate additionally narrowly crossed heap budget (+6.34 MB vs baseline +5.89 MB). This is an open broader desktop stability finding, not a passing gate or evidence about Samsung pixels. Soaks used 100x timer compression, not actual elapsed hours. No adjacent production fix was attempted.
+- Parent remote evidence: `/Users/thales/.hermes/cache/scratch/chat-scroll-parent/` (`integrated.log`, `qa-select-text.log`, `qa-ready-status.log`, `qa-model-route-contract.log`, `parity-baseline.log`, `soak/`, `soak-candidate/`, `live.log`, `live-regression/receipt.json`, `live-smoke/smoke.json`). Local live receipt and screenshots: `/home/telos/.hermes/cache/scratch/chat-scroll-live-receipt.json`, `/home/telos/.hermes/cache/scratch/chat-scroll-live-smoke/`.
+- The reported physical handset's intermittent blacked-out text remains unverified. The app-side redraw defect is reproduced, repaired and verified live; next observation is whether the symptom recurs after reloading the updated interface. No APK is required.
+

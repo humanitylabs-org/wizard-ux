@@ -2016,17 +2016,65 @@
     $('#attachCount').textContent = n ? String(n) : '';
     $('#attachLabel').textContent = V.files.some(f => f.uploading) ? 'Uploading' : n ? (n === 1 ? '1 file' : `${n} files`) : 'Attach';
   }
+  const sameTake = files => V.files === files && (V.state === 'listen' || V.state === 'paused');
+  function releaseScreenOperation(op) {
+    if (V.screenOp !== op) return;
+    V.screenOp = null;
+    device.classList.remove('capturing-screen');
+    $('#arcScreen').disabled = false; $('#arcScreen').classList.remove('busy');
+  }
+  function cancelTakeFiles() {
+    for (const f of V.files || []) f.abort?.abort();
+    if (V.screenOp) { const op = V.screenOp; op.abort.abort(); releaseScreenOperation(op); }
+  }
+  async function uploadVoiceFile(file, files, f) {
+    const abort = f.abort || (f.abort = new AbortController());
+    const deadline = setTimeout(() => abort.abort(new Error('Upload timed out · try attaching again')), 20000);
+    try {
+      const result = await CHATS.uploadFile(file, { signal: abort.signal });
+      if (!sameTake(files) || !files.includes(f)) return;
+      Object.assign(f, result, { uploading: false });
+    } catch (e) {
+      const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
+      if (sameTake(files)) toast('!', e.user || abort.signal.reason?.message ? (abort.signal.reason?.message || e.message) : 'Upload failed · not attached', 3200);
+    } finally { clearTimeout(deadline); delete f.abort; }
+    if (sameTake(files)) renderVoiceFiles();
+  }
   voicePicker.addEventListener('change', async () => {
-    const list = [...voicePicker.files]; voicePicker.value = '';
+    const list = [...voicePicker.files], files = V.files; voicePicker.value = '';
     for (const file of list) {
-      if (V.state === 'idle') break;
-      if (V.files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); break; }
+      if (!sameTake(files)) break;
+      if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); break; }
       const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true };
-      V.files.push(f); renderVoiceFiles();
-      try { Object.assign(f, await CHATS.uploadFile(file), { uploading: false }); }
-      catch (e) { V.files = V.files.filter(x => x !== f); toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
-      renderVoiceFiles();
+      files.push(f); renderVoiceFiles();
+      await uploadVoiceFile(file, files, f);
     }
+  });
+  $('#arcScreen').addEventListener('click', async () => {
+    if (!sameTake(V.files) || $('#arcScreen').disabled) return;
+    const files = V.files;
+    if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); return; }
+    // Reserve before asynchronous capture so an immediate Send cannot omit the screenshot.
+    const f = { name: 'Screenshot', mime: 'image/png', uploading: true };
+    files.push(f); renderVoiceFiles();
+    const op = { files, abort: new AbortController() }; V.screenOp = op; f.abort = op.abort;
+    const screen = $('#arcScreen'); screen.disabled = true; screen.classList.add('busy');
+    const conceal = () => {
+      if (V.screenOp !== op || op.abort.signal.aborted) return () => {};
+      device.classList.add('capturing-screen');
+      return () => { if (V.screenOp === op) device.classList.remove('capturing-screen'); };
+    };
+    try {
+      // The capture adapter conceals chrome only at actual sampling, after the desktop picker returns.
+      const file = await window.WosScreenCapture.capture({ signal: op.abort.signal, conceal });
+      if (!sameTake(files) || !files.includes(f) || V.screenOp !== op) return;
+      Object.assign(f, { name: file.name, mime: file.type, bytes: file.size });
+      await uploadVoiceFile(file, files, f);
+      if (sameTake(files) && f.id) toast('▣', 'Screenshot attached', 1800);
+    } catch (e) {
+      const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
+      if (sameTake(files)) { renderVoiceFiles(); toast('!', e.message || 'Screen capture failed · not attached', 3200); }
+    } finally { releaseScreenOperation(op); }
   });
   // Files that finished uploading, in the shape the outbox sends as wizard_file_ids.
   const takeFiles = () => V.files.filter(f => f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes }));
@@ -2106,6 +2154,9 @@
   async function startVoice(kind) {
     V.onAt = performance.now();
     if (V.state !== 'idle') return;
+    // An app-feedback take can start before any chat/model picker opened. Warm authoritative options;
+    // the exact route is still sealed at Send, and unavailable routes remain fail-closed.
+    window.WosModels?.load().catch(() => {});
     clearTimeout(txHideT);
     Object.assign(V, { kind, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
@@ -2228,6 +2279,7 @@
     try { V.rec.state !== 'inactive' && V.rec.stop(); } catch (e) { onRecStop(); }
   }
   function cancelVoice(quiet) {
+    cancelTakeFiles();
     V.cancelled = true; if (V.replyTo) { replyTake(null); V.replyTo = null; }
     unseal();
     // A long take cancelled by accident is kept (Settings → Cancelled recordings, James 11 Oct); a quick one is gone.
@@ -3046,7 +3098,9 @@
     const sec = track.querySelector(`.win[data-win="${desks[idx].focus}"] [data-sec="${k}"]`);
     if (!sec) { if (tries > 0) setTimeout(() => showSection(k, tries - 1), 100); return; }
     if (!sec.classList.contains('open')) sec.querySelector('[data-sectoggle]')?.click();
-    track.querySelector(`.win[data-win="${desks[idx].focus}"] [data-sec="${k}"]`)?.scrollIntoView({ block: 'start' });
+    const target = track.querySelector(`.win[data-win="${desks[idx].focus}"] [data-sec="${k}"]`);
+    const scroller = target?.closest('.ch-scroll');
+    if (scroller) scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
   }
   window.WizCore.deeplink?.handle({
     // ?session= takes exactly the path the Android app's ACTION_THREAD intent takes.
