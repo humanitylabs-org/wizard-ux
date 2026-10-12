@@ -25,8 +25,8 @@ let refused = 0
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x')
   if (u.pathname === '/__qa/refused-apps') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ refused })) }
-  const ours = u.pathname === '/wizard/v1/wizard-apps' || u.pathname.startsWith('/wizard/v1/index') || RUNTIPI_READ.test(u.pathname) || /^\/api\/app-lifecycle\//.test(u.pathname)
-  if (ours && req.method !== 'GET' && req.method !== 'HEAD') { refused++; res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"qa-origin refuses writes"}') }
+  // This entire origin is a browse preview: never forward an unsafe method, even on unknown routes.
+  if (req.method !== 'GET' && req.method !== 'HEAD') { refused++; res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"qa-origin refuses writes"}') }
   if (u.pathname.startsWith('/wizard/v1/') && await routes(req, res, u)) return
   if (RUNTIPI_READ.test(u.pathname)) {
     try {
