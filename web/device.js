@@ -67,10 +67,29 @@
 
   /* ================= #14 background recording: resume, notification Stop/Send, recovery ================= */
   const handledTakes = new Set();
+  const voiceKind = take => {
+    if (!take || !['auto', 'command'].includes(take.kind)) return false;
+    try { const ids = window.WizAppCapture?.getState?.()?.nativeDeviceTakeIds; return !Array.isArray(ids) || !ids.includes(take.id); }
+    catch (_) { return false; }
+  };
+  function nativeOwner(id) {
+    const capture = window.WizAppCapture;
+    if (!capture) return 'voice'; // legacy-only shell
+    try {
+      const state = capture.getState?.();
+      if (state?.active || state?.recording) return 'app';
+      if (state?.nativeOwnershipReady !== true || !Array.isArray(state.nativeDeviceTakeIds)) return 'unknown';
+      return state.nativeDeviceTakeIds.includes(id) ? 'app' : 'voice';
+    } catch (_) { return 'unknown'; }
+  }
   function syncRecorder(why) {
     const d = DEV(), w = W$(); if (!d || !w || typeof d.recActive !== 'function') return;
     const a = J(d.recActive());
-    if (a && a.id && w.voice === 'idle') { if (w.nativeResume(a)) log('rec:resume', a.id, why); }
+    if (a && a.id && w.voice === 'idle') {
+      const owner = nativeOwner(a.id);
+      if (owner === 'voice') { if (w.nativeResume(a)) log('rec:resume', a.id, why); }
+      else log('rec:owner', a.id, owner); // retain unknown/app takes; never adopt them into Chats
+    }
     if (w.V.native && (!a || a.id !== w.V.native)) {
       // The take ended outside the page (notification Stop/Send, or the recorder failed) while we were away.
       const id = w.V.native; w.V.native = null; w.setVoice('idle'); w.txHide();
@@ -81,7 +100,7 @@
   }
   function offerPending(why) {
     const d = DEV(); if (!d || sheet) return;
-    const list = (J(d.recPending()) || []).filter(t => !handledTakes.has(t.id));
+    const list = (J(d.recPending()) || []).filter(t => voiceKind(t) && !handledTakes.has(t.id));
     if (!list.length) return;
     // Send was already pressed in the notification: the owner said send, so send.
     const go = list.filter(t => t.send);
@@ -106,7 +125,7 @@
   /* A take that ended outside the page goes straight to the durable outbox (which transcribes and sends it),
    * then the native copy is deleted. Saved before anything goes over the network, so it can't be lost. */
   async function sendTake(t, how) {
-    const d = DEV(), w = W$(); if (!d || !w || handledTakes.has(t.id)) return;
+    const d = DEV(), w = W$(); if (!d || !w || !voiceKind(t) || handledTakes.has(t.id)) return;
     handledTakes.add(t.id);
     if (!J(d.recClaim(t.id))) return;
     const blob = readBlob(off => d.recRead(t.id, off), 'audio/aac');
@@ -288,7 +307,7 @@
     if (p === print0 || p === printNow) return;
     printNow = p;
     if (!webPending) { webPending = true; log('web:changed'); }
-    await loadChanges(); applyWeb();
+    await loadChanges(); window.WizAppServices?.update.announce({ version: p, changes }); applyWeb();
   }
   /* Which threads made the update: web/ux-changes.json (tools/write-ux-changes.py) lists every web/ change
    * newest first with the thread that committed it. Take the ones since the version this page loaded. */
@@ -324,6 +343,8 @@
   }
   // Safe to reload: not recording, nothing uploading, no sheet or share in progress.
   function webBusy() {
+    if (window.WizAppServices?.update.busy()) return true;
+    try { if (J(DEV()?.recActive?.())?.id) return true; } catch (_) { return true; }
     const w = W$(); if (!w) return true;
     if (w.voice !== 'idle' || sheet) return true;
     return Object.keys(w.wins).some(k => (w.chatState(k).files || []).some(f => f.uploading));
@@ -366,8 +387,7 @@
   }
   function applyWeb() {
     if (!webPending) return;
-    // The owner is away: swap it in quietly, unless music is playing (then the banner waits for your tap).
-    if (document.hidden && !webBusy()) { if (!mediaPlaying()) { reloadNow('hidden'); return; } log('web:hold', 'media'); }
+    // Updates are explicit. Visibility/elapsed time cannot prove an app has no unsaved data.
     renderWeb();
   }
   /* The banner says which thread the update came from and links there, so you can see what a reload brings
@@ -380,7 +400,7 @@
       el = document.createElement('div'); el.id = 'dvWeb'; el.className = 'dv-update web'; el.setAttribute('role', 'status');
       ($('#device') || document.body).appendChild(el);
       el.addEventListener('click', e => {
-        if (e.target.closest('[data-web="go"]')) { if (webBusy()) toast('◌', 'Finish recording first', 1600); else reloadNow('tap'); return; }
+        if (e.target.closest('[data-web="go"]')) { if (webBusy()) toast('◌', 'Finish recording or save your work first', 2000); else reloadNow('tap'); return; }
         const t = e.target.closest('[data-web-thread]'); if (t) { goThread(t.dataset.webThread); return; }
         if (e.target.closest('[data-web="list"]')) { listOpen = !listOpen; log('web:list', listOpen ? 'open' : 'close'); renderWeb(); }
       });
@@ -398,7 +418,7 @@
     el.classList.toggle('open', !!list);
     el.innerHTML = `<div class="dv-wtop">${changes.length ? '' : '<span class="dv-ui">✦</span>'}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}<button data-web="go">Reload</button></div>${list}`;
   }
-  function reloadNow(why) { saveDrafts(); log('web:reload', why); window.__wosReloading = why; location.reload(); }
+  function reloadNow(why) { if (webBusy()) { toast('◌', 'Finish recording or save your work first', 2000); return; } saveDrafts(); log('web:reload', why); window.__wosReloading = why; location.reload(); }
 
   /* ================= wiring ================= */
   const api = window.WosDevice = {
@@ -455,5 +475,7 @@
     else if (api.ready) { checkWeb(false); syncRecorder('visible'); }
   });
   addEventListener('pagehide', saveDrafts);
+  addEventListener('wizard:app-holds', () => { if (webPending) renderWeb(); });
+  addEventListener('wizard-app-capture-state', () => { if (api.ready) syncRecorder('app-capture'); });
   boot();
 })();

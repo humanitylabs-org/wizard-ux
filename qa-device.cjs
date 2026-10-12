@@ -332,6 +332,28 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     await ctx.close();
   }
 
+  /* Shared app native takes are never adopted or sent/deleted by the legacy Wizard voice importer. */
+  {
+    const { ctx, p, errs } = await boot(b);
+    await open(p); const before = W.runs.length;
+    await p.evaluate(() => {
+      const id = 'rec-app-owned';
+      __dev.takes[id] = { id, kind: 'audio', state: 'recording', startedAt: Date.now(), data: Array.from({ length: 5000 }, (_, i) => i & 255) }; __dev.active = id;
+      window.WizAppCapture = { getState: () => ({ active: false, recording: false, nativeOwnershipReady: true, nativeDeviceTakeIds: [id] }) };
+      dispatchEvent(new Event('wos-native-resume'));
+    }); await sleep(300);
+    ok(await p.evaluate(() => __wos.voice === 'idle' && !__wos.V.native && __dev.active === 'rec-app-owned'), 'app-owned recovered native take never becomes Wizard voice');
+    await p.evaluate(() => __wos.startVoice('auto')); await sleep(100);
+    ok(await p.evaluate(() => __wos.voice === 'idle' && __dev.active === 'rec-app-owned'), 'orb cannot reuse another app native recorder');
+    await p.evaluate(() => { __dev.active = null; __dev.takes['rec-app-owned'].state = 'stopped'; __dev.takes['rec-app-owned'].send = true; WosDevice.event('rec', { type: 'send', id: 'rec-app-owned' }); }); await sleep(500);
+    const owned = await dev(p);
+    ok(W.runs.length === before && !!owned.takes['rec-app-owned'] && !owned.calls.some(c => ['recClaim','recDone'].includes(c[0]) && c[1] === 'rec-app-owned'), 'app native notification never posts to Chats or claims/deletes its take');
+    await p.evaluate(() => { const id = 'rec-legacy-owner'; __dev.takes[id] = { id, kind: 'auto', state: 'recording', startedAt: Date.now(), data: [1,2,3] }; __dev.active = id; dispatchEvent(new Event('wos-native-resume')); }); await sleep(200);
+    ok(await p.evaluate(() => __wos.voice === 'listen' && __wos.V.native === 'rec-legacy-owner'), 'legacy native voice resumes once ownership snapshot is ready');
+    await p.evaluate(() => __wos.cancelVoice(true));
+    ok(!errs.length, 'no page errors (native ownership broker)', errs.join(' | '));
+    await ctx.close();
+  }
   /* ---- #22b the prompt follows every deploy, not a hand-kept file list (James, 11 Oct) ---- */
   {
     const { ctx, p, errs } = await boot(b, { native: false });
