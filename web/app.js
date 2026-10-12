@@ -1040,14 +1040,17 @@
         <div class="home-time" id="homeTime">${window.WizConfig.hm()}</div>
         <div class="home-line">${LIVE.ok ? `<b>${needs} need${needs === 1 ? 's' : ''} you</b>, ${ready} unread, ${working} working.` : LIVE.error === 'access' ? 'Sign in to Wizard to see your threads.' : 'Connecting to Wizard…'}</div>
       </div>
-      <div class="constellation" style="margin-top:20px">
+      <div class="home-gap home-gap-a"></div>
+      <div class="home-attn">
+      <div class="constellation">
         <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="unread"><span class="pip"></span><span class="meta"><span class="k">${needs ? 'Needs you' : 'Unread'}</span><span class="v">${esc(L.needs[0]?.title || L.ready[0]?.title || 'Nothing waiting')}</span></span><span class="n">${needs + ready}</span></button>
         <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span><span class="v">${esc(W0[0]?.title || 'Idle')}</span></span><span class="n">${working}</span></button>
       </div>
       ${unsentCard()}
       ${sideCard()}
+      </div>
+      <div class="home-gap home-gap-b"></div>
       ${window.WosResources?.home() || ''}
-      <div class="home-spacer"></div>
     </div>`;
   }
   setInterval(() => {

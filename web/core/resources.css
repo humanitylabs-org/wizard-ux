@@ -54,4 +54,4 @@
 .rs-detail-meters .rs-meter b{font-size:34px}
 .rs-detail-meters .rs-meter small{display:block;color:var(--wz-text-secondary,var(--ink-2));font-size:12px;margin-top:7px}
 .rs-detail-meters .rs-bar{height:5px}
-@media(max-height:800px){.home-top{padding-top:12px}.home-time{font-size:72px}.home-line{font-size:15px;margin-top:8px}.home .constellation{gap:8px}.home .now-card{padding-top:10px;padding-bottom:10px}[data-home-resources]{margin-top:12px}.rs-zone{padding-top:10px;padding-bottom:12px}.rs-accounts{row-gap:9px}.rs-meter b{font-size:20px}}
+@media(max-height:800px){.home-top{padding-top:12px}.home-time{font-size:72px}.home-line{font-size:15px;margin-top:8px}.rs-zone{padding-top:10px;padding-bottom:12px}.rs-accounts{row-gap:9px}.rs-meter b{font-size:20px}.home .now-card{min-height:64px;padding-top:14px;padding-bottom:14px}}
