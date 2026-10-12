@@ -29,7 +29,7 @@ env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libe
 env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5708; S = 'emulator-%d' % PORT; DEVTOOLS = 9359
 OK_PORT, DEAD_PORT = 18795, 18796
-WIZ, DEAD = 'http://localhost:%d' % OK_PORT, 'http://10.0.2.2:%d' % DEAD_PORT  # nothing listens: a real refusal
+WIZ, DEAD = 'http://localhost:%d' % OK_PORT, 'http://10.0.2.2:19'  # nothing listens: a real refusal
 res = []
 
 
@@ -94,7 +94,8 @@ def shell_up(secs):
 
 # ------------------------------------------------------------------ the fake Wizard: ok / hang / 502 on demand
 MODE = {'m': 'ok'}
-SHELL = b'<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><title>wizard-shell-ok</title><body style="background:#1d3b2a;color:#fff;font:28px sans-serif;padding:40px">WIZARD SHELL OK'
+SHELL = b'<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><title>wizard-shell-ok</title><body style="background:#1d3b2a;color:#fff;font:28px sans-serif;padding:40px">WIZARD SHELL OK<script>navigator.serviceWorker && navigator.serviceWorker.register("/wizard-os-home/sw.js", {scope: "/wizard-os-home/"})</script>'
+SW = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sw.js'), 'rb').read()  # the real shell's worker
 
 
 class H(http.server.BaseHTTPRequestHandler):
@@ -105,8 +106,11 @@ class H(http.server.BaseHTTPRequestHandler):
         m = MODE['m']
         if m == 'hang':
             time.sleep(150); self.close_connection = True; return  # never answers (a tailnet IP with Tailscale off)
-        code, body = (502, b'Bad Gateway') if m == '502' else (200, SHELL if self.path.startswith('/wizard-os-home') else b'{}')
-        self.send_response(code); self.send_header('Content-Type', 'text/html' if code != 200 or body is SHELL else 'application/json')
+        if m != '502' and self.path.startswith('/wizard-os-home/sw.js'): code, body, ct = 200, SW, 'text/javascript'
+        elif m == '502': code, body, ct = 502, b'Bad Gateway', 'text/html'
+        elif self.path.startswith('/wizard-os-home'): code, body, ct = 200, SHELL, 'text/html'
+        else: code, body, ct = 200, b'{}', 'application/json'
+        self.send_response(code); self.send_header('Content-Type', ct)
         self.send_header('Content-Length', str(len(body))); self.send_header('Cache-Control', 'no-store'); self.end_headers()
         self.wfile.write(body)
 
@@ -151,6 +155,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         MODE['m'] = 'ok'; home(WIZ, 'on'); launch()
         ok = shell_up(20); x = ui()
         check('#1 a normal open lands on the shell', ok, title())
+        time.sleep(3)  # the shell's service worker installs (the real shell has one; later loads go through it)
         check('#1 …and never shows the connection screen', 'Connecting to your Wizard' not in x and "Can't reach" not in x)
         shot('01-normal')
 
