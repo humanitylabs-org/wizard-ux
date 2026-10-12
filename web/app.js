@@ -344,9 +344,20 @@
     const L = $('#deskLabel'); L.innerHTML = html; L.classList.add('show'); document.body.classList.add('labeling');
     clearTimeout(labelT); labelT = setTimeout(() => { L.classList.remove('show'); document.body.classList.remove('labeling'); }, 1300);
   }
-  // Any number of desks: up to three dots each side (Home always shows at the far left), a faint tick for more.
+  // Any number of desks: up to three each side (Home always shows at the far left), a faint tick for more.
+  // Desk sigils (James, 12 Oct 2026): each neighbour shows the glyph of the app it holds, bare (no tile), in
+  // that app's colour; Home is a house; an empty desk is a faint ring; a desk with several windows carries a
+  // small count. The current desk is the orb. Each is a thumb-sized button, so one tap jumps there.
+  function deskSigil(i) {
+    const d = desks[i], S = window.WizSigil;
+    if (!S) return '';
+    if (d.home) return `<span class="dsg" style="--c:#C9BEFF">${S.named('home')}</span>`;
+    const f = W[d.focus] || W[d.wins[0]]; if (!f) return '<span class="dsg empty"></span>';
+    const a = winApp(f), s = S.of(a.sigil || a), c = a.sgc || s.color, g = a.sgh || S.html(a.sigil || a);
+    return `<span class="dsg" style="--c:${c}">${g}${d.wins.length > 1 ? `<b class="dn">${d.wins.length}</b>` : ''}</span>`;
+  }
   function renderDots() {
-    const mk = i => `<button class="ddot${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' home' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}"></button>`;
+    const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' home' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
     const L = []; for (let i = Math.max(0, idx - 3); i < idx; i++) L.push(i);
     const R = []; for (let i = idx + 1; i <= Math.min(desks.length - 1, idx + 3); i++) R.push(i);
     const homeExtra = L.length && L[0] > 0;

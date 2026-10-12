@@ -278,6 +278,13 @@ def g_pin():
     body = U(circle(256, 214, 128), P("M146 280 L256 424 L366 280 Z"))
     return D(body, circle(256, 210, 52))
 
+@glyph('home', 'A house with a pitched roof and an arched door cut out: the home desk.')
+def g_home():
+    body = U(poly((256, 92), (432, 244), (400, 244), (400, 404), (112, 404), (112, 244), (80, 244)),
+             rrect(332, 116, 44, 96, 8))
+    door = P("M218 404 V320 A38 38 0 0 1 294 320 V404 Z")
+    return D(U(body, stroke(body, 24)), door)
+
 @glyph('letter', 'Placeholder ring for apps without a sigil yet.')
 def g_letter():
     return D(circle(256, 256, 156), circle(256, 256, 120))
