@@ -23,7 +23,9 @@
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], tags: [], installed: new Map(), stack: [], q: '', loaded: false, error: '' };
+  const S = { apps: [], tags: [], installed: new Map(), stack: [], q: '', loaded: false, error: '', lifecycle: false, working: new Set() };
+  let removeArmed = '';
+  const client = () => window.WizAppLifecycle;
   if (/\.staging\.wizard001\.com$/.test(location.hostname)) $('preview').hidden = false;
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
 
@@ -42,11 +44,13 @@
   }
   const get = p => fetch(DATA + p, { credentials: 'same-origin', cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
   async function load() {
-    const [idx, tags, inst] = await Promise.allSettled([get('wizard/v1/index/search?limit=100'), get('wizard/v1/index/tags'), get('api/apps/installed')]);
+    const [idx, tags, inst, capability] = await Promise.allSettled([get('wizard/v1/index/search?limit=100'), get('wizard/v1/index/tags'), get('api/apps/installed'), client()?.available?.() || Promise.resolve(false)]);
+    S.lifecycle = capability.status === 'fulfilled' && capability.value === true;
     if (idx.status !== 'fulfilled') { S.error = 'The App Index isn’t reachable right now.'; S.loaded = true; return paint(); }
     S.apps = (Array.isArray(idx.value.apps) ? idx.value.apps : []).map(clean).filter(Boolean).filter(a => a.id !== 'wizard-shell');
     S.tags = (tags.status === 'fulfilled' && Array.isArray(tags.value.tags) ? tags.value.tags : [])
       .filter(t => t && ID.test(t.id || '')).map(t => ({ id: t.id, count: Number.isSafeInteger(t.count) && t.count > 0 ? t.count : 0 })).filter(t => t.count);
+    if (inst.status === 'fulfilled') S.installed = new Map();
     if (inst.status === 'fulfilled') for (const x of inst.value.installed || []) {
       const id = x?.info?.id; if (!id) continue; const prev = S.installed.get(id);
       if (!prev || x.app?.status === 'running') S.installed.set(id, { status: x.app?.status || 'unknown' });
@@ -65,7 +69,8 @@
     return `<span class="ic ic-${size}" style="--c1:${c1};--c2:${c2}"><b>${letter}</b>${img}</span>`;
   }
   function action(a, cls = '') {
-    if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(a.id)}">Open</button>`;
+    if (S.working.has(a.id)) return `<button class="get ${cls}" disabled>Working…</button>`;
+    if (isInstalled(a) && S.installed.get(a.id)?.status === 'running' && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(a.id)}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
     return `<button class="get ${cls}" data-get="${esc(a.id)}">Get</button>`;
   }
@@ -132,6 +137,7 @@
     const usedBy = S.apps.filter(x => (x.uses || []).includes(a.id));
     const powers = usedBy.length ? `<section class="d-sec"><h3>Powers</h3><div class="dep">${usedBy.map(u => `<div class="dep-i" data-app="${esc(u.id)}" role="button" tabindex="0">${icon(u, 's')}<b>${esc(u.name)}</b><small>${esc(kindOf(u).one)}</small></div>`).join('')}</div></section>` : '';
     const gives = (a.provides || []).length ? `<section class="d-sec"><h3>Gives your agent</h3><div class="chips">${a.provides.map(p => `<span>${esc(p.replace(/-/g, ' '))}</span>`).join('')}</div></section>` : '';
+    const controls = S.lifecycle && isInstalled(a) ? `<div class="chips">${S.installed.get(a.id)?.status === 'running' ? `<button class="get" data-life="stop" data-id="${esc(a.id)}">Stop</button>` : `<button class="get" data-life="start" data-id="${esc(a.id)}">Start</button>`}<button class="get" data-life="uninstall" data-id="${esc(a.id)}">Remove</button></div>` : '';
     const how = { view: 'Opens in its own Wizard window.', service: 'Runs in the background. Ask your agent to use it — no screen needed.', agent: 'An agent that lives on your Wizard.', external: 'Connect an account once; every agent can use it.' }[a.type] || '';
     const info = [['Kind', k.one], ['Publisher', a.publisher], ['Version', a.version], ['Runs on', (a.architectures || []).join(' · ')], ['Installs', a.installs > 0 ? String(a.installs) : 'New']]
       .filter(([, v]) => v).map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v)}</dd></div>`).join('');
@@ -139,7 +145,7 @@
         ${icon(a, 'l')}<div class="d-id"><h2>${esc(a.name)}</h2><p>${esc(k.one)}${a.publisher ? ` · ${esc(a.publisher)}` : ''}</p>${action(a, 'big')}</div></div>
       <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc((a.version || '—').split(/[-+]/)[0])}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
-      ${needs}${powers}${gives}
+      ${controls}${needs}${powers}${gives}
       <section class="d-sec"><h3>Information</h3><dl class="info">${info}</dl>${a.url && /^https:\/\/github\.com\//.test(a.url) ? `<a class="src" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">View source on GitHub ↗</a>` : ''}</section>`;
     window.scrollTo(0, 0);
   }
@@ -173,10 +179,36 @@
   let toastT = 0;
   function toast(html) { const t = $('toast'); t.innerHTML = html; t.hidden = false; requestAnimationFrame(() => t.classList.add('on')); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { t.hidden = true; }, 250); }, 3600); }
 
+  const repaintActions = () => {
+    paint();
+    const layer = S.stack[S.stack.length - 1];
+    if (layer?.t === 'detail') showDetail(layer.arg);
+  };
+  async function perform(id, action) {
+    const a = S.apps.find(x => x.id === id);
+    if (!a || S.working.has(id)) return;
+    if (!S.lifecycle) { toast('<b>This preview is browse-only.</b><span>Installation is available on the connected test box.</span>'); return; }
+    if (action === 'uninstall' && removeArmed !== id) { removeArmed = id; toast(`<b>Remove ${esc(a.name)}?</b><span>Tap Remove again to confirm.</span>`); return; }
+    removeArmed = '';
+    S.working.add(id); repaintActions();
+    try {
+      const outcome = action === 'install' ? await client().install(a) : await client().operate(id, action);
+      if (outcome.pending) toast(`<b>${esc(a.name)} is still changing.</b><span>It keeps going; reopen its details to check.</span>`);
+      else toast(`<b>${esc(a.name)} ${action === 'uninstall' ? 'removed' : action === 'stop' ? 'stopped' : 'ready'}.</b>`);
+      const rows = await client().installed().catch(() => null);
+      if (rows) S.installed = new Map(rows.map(x => [x.info.id, { status: x.app?.status || 'unknown' }]));
+    } catch (e) {
+      const uncertain = !e.status || e.status >= 500 || e.code === 'operation_unconfirmed';
+      toast(uncertain ? `<b>Checking ${esc(a.name)} is still pending.</b><span>Tap the same action again to safely check it.</span>`
+        : `<b>Couldn’t ${action === 'uninstall' ? 'remove' : esc(action)} ${esc(a.name)}.</b><span>${esc(e.message)}</span>`);
+    } finally { S.working.delete(id); repaintActions(); }
+  }
   document.addEventListener('click', e => {
     if (e.target.closest('[data-back]')) { pop(); return; }
     const g = e.target.closest('[data-get]');
-    if (g) { e.stopPropagation(); const a = S.apps.find(x => x.id === g.dataset.get); toast(`<b>Installing from the Store is almost here.</b><span>For now, ask your agent: “install ${esc(a?.name || 'it')}”.</span>`); return; }
+    if (g) { e.stopPropagation(); perform(g.dataset.get, 'install'); return; }
+    const life = e.target.closest('[data-life]');
+    if (life) { e.stopPropagation(); perform(life.dataset.id, life.dataset.life); return; }
     const o = e.target.closest('[data-open]');
     if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
     const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);
