@@ -55,7 +55,9 @@ body {
 @media (min-width: 560px) and (min-height: 700px) { .statusbar { padding-top: 16px; display: flex !important; } :root { --sb: 34px; } }
 
 /* Desks */
-.desks { position: absolute; inset: 0; z-index: 1; overflow: hidden; }
+/* Desks move through track transforms, never ancestor scrolling. Browser focus inside
+ * an embedded Store detail must not horizontally scroll this hidden viewport. */
+.desks { position: absolute; inset: 0; z-index: 1; overflow: clip; }
 .track { position: absolute; inset: 0; display: flex; will-change: transform; }
 .track.anim { transition: transform 520ms var(--ease); }
 .desk {
