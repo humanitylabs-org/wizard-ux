@@ -545,7 +545,19 @@
     return true;
   }
   const save = it => saveFile(it).then(r => r === 'downloading' ? null : K.notify(r === 'unsupported' ? '!' : '⤓', r === 'saved' ? 'Saved' : r === 'shared' ? 'Choose where to save' : r === 'cancelled' ? 'Not saved' : 'Saving isn’t available here')).catch(() => K.notify('!', 'Couldn’t save this file'));
-  const share = it => shareFile(it).then(r => r === 'unsupported' ? shareText(location.origin + it.url, it.name).then(x => K.notify(x === 'copied' ? '⧉' : '↗', x === 'copied' ? 'Link copied' : 'Shared')) : r === 'shared' && K.notify('↗', 'Shared')).catch(() => K.notify('!', 'Couldn’t share this file'));
+  const share = async it => {
+    try {
+      let result = await shareFile(it);
+      // An old native bridge may already have opened the file chooser without an
+      // outcome receipt. Never open a second text chooser or claim Shared then.
+      if (result === 'unsupported' && typeof native()?.shareFile !== 'function') {
+        result = await sharePayload({ url: new URL(it.url, location.href).href, title: it.name });
+      }
+      if (result === 'shared') K.notify('↗', 'Shared');
+      else if (result === 'copied') K.notify('⧉', 'Link copied');
+      else if (result === 'unsupported') K.notify('!', 'Sharing unavailable or not confirmed');
+    } catch (_) { K.notify('!', 'Couldn’t share this file'); }
+  };
   function reset() { V.s = 1; V.x = 0; V.y = 0; paint(); }
   function paint() {
     const img = V.el?.querySelector('.mv-stage img'); if (!img) return;

@@ -132,8 +132,14 @@ let origin;
   // Isolated host verifies privilege and lifecycle boundaries, no shell special cases.
   const ctx=await context(b,false),p=await ctx.newPage();await p.goto(origin+'/harness/');const fr=await waitFrame(p,origin+'/wizard-signal/');await fr.waitForFunction(()=>WizardApp.hosted);
   ok('host ready version negotiation',await fr.evaluate(async()=>{const x=await WizardApp.ready({name:'fixture',version:'1'});return x.version===1&&x.hosted&&WizardApp.version===1}));
+  await p.evaluate(()=>{window.viewerNotices=[];WosChat.K.notify=(...args)=>viewerNotices.push(args);nativeCalls=[];nativeOutcome=undefined;WosChat.viewer.open([{url:'data:text/plain;base64,ZXhhY3Q=',name:'fixture.txt',mime:'text/plain',kind:'file'}])});
+  await p.locator('.mviewer [data-mv="share"]').click({force:true});await p.waitForFunction(()=>viewerNotices.length);
+  ok('legacy void file bridge opens exactly one chooser and never claims Shared',await p.evaluate(()=>nativeCalls.length===1&&nativeCalls[0][0]==='file'&&viewerNotices[0][1]==='Sharing unavailable or not confirmed'));
+  await p.evaluate(()=>{viewerNotices=[];nativeCalls=[];nativeOutcome='cancelled'});await p.locator('.mviewer [data-mv="share"]').click({force:true});await p.waitForTimeout(100);
+  ok('file viewer cancellation has no false success toast',await p.evaluate(()=>nativeCalls.length===1&&!viewerNotices.length));
+  await p.evaluate(()=>{WosChat.viewer.close();nativeOutcome='shared'});
   ok('allowlisted message share has source-verified outcome receipt',await fr.evaluate(()=>new Promise(resolve=>{const id='qa-message-share';setTimeout(()=>resolve('timeout'),2500);const listener=e=>{if(e.source===parent&&e.origin===location.origin&&e.data?.type==='wizard:app:reply'&&e.data.id===id){removeEventListener('message',listener);resolve(e.data.value)}};addEventListener('message',listener);parent.postMessage({type:'wizard:app:request',version:1,id,op:'share.text',args:{text:'message fixture'}},location.origin)}))==='shared');
-  await p.evaluate(()=>nativeOutcome=new Promise(()=>{}));
+  await p.evaluate(()=>{nativeOutcome=new Promise(()=>{});});
   ok('native pending Promise bounded to unsupported',await fr.evaluate(()=>WizardApp.share.text({text:'timeout fixture'}))==='unsupported');
   await p.evaluate(()=>nativeOutcome='shared');
   await fr.evaluate(()=>{window.one=WizardApp.back.push(()=>{window.order=(window.order||[]).concat(1)});window.two=WizardApp.back.push(()=>{window.order=(window.order||[]).concat(2)})});
