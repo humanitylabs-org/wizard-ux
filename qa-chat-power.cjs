@@ -37,9 +37,9 @@ const row = (role, content, ts, extra = {}) => ({ id: rid++, session_id: '', rol
 const call = (id, label, extra = {}) => ({ id, type: 'function', function: { name: 'tool', arguments: '{}' }, display_label: label, ...extra });
 const PLAN3 = st => [{ id: 'p1', content: 'Read the calendar', status: st[0] }, { id: 'p2', content: 'Draft the summary', status: st[1] }, { id: 'p3', content: 'Send it to the team', status: st[2] }];
 const FIX = {
-  qa_pw_ready: { title: 'QA power ready', status: 'completed', model: 'claude-opus-5-5', provider: 'anthropic', t: now - 50, rows: () => [row('user', 'Ready question', now - 300), row('assistant', 'Ready answer.', now - 250)] },
+  qa_pw_ready: { title: 'QA power ready', status: 'completed', model: 'claude-opus-5-5[1m]', provider: 'claude-subscription-directsdk-experimental', t: now - 50, rows: () => [row('user', 'Ready question', now - 300), row('assistant', 'Ready answer.', now - 250)] },
   qa_pw_other: { title: 'QA power other', status: 'completed', t: now - 52, rows: () => [row('user', 'Other question', now - 300), row('assistant', 'Other answer.', now - 250)] },
-  qa_pw_fail: { title: 'QA power failed', status: 'failed', model: 'claude-opus-5-5', provider: 'anthropic', t: now - 40, rows: () => [row('user', 'Summarise the quarterly numbers', now - 120)] },
+  qa_pw_fail: { title: 'QA power failed', status: 'failed', model: 'claude-opus-5-5[1m]', provider: 'claude-subscription-directsdk-experimental', t: now - 40, rows: () => [row('user', 'Summarise the quarterly numbers', now - 120)] },
   qa_pw_intr: { title: 'QA power interrupted', status: 'interrupted', t: now - 45, rows: () => [row('user', 'Tidy the downloads folder', now - 200)] },
   qa_pw_fail2: { title: 'QA power failed two', status: 'failed', t: now - 46, rows: () => [row('user', 'Check the invoices', now - 220)] },
   qa_pw_fail3: { title: 'QA power failed three', status: 'failed', t: now - 47, rows: () => [row('user', 'Rename the photos', now - 230)] },
@@ -90,7 +90,7 @@ function routeFor(tag) {
       if (/\/(transcribe)$/.test(u.pathname)) return json(200, { text: 'QA voice reply words', ms: 5 });
       if (/\/route$/.test(u.pathname)) { routeCalls++; return json(200, { ms: 5, cmd: { route: 'agent', thread: 'qa_pw_other' } }); }
       if (/\/wizard\/files\/upload$/.test(u.pathname)) { if (failUpload) return json(403, { error: 'qa: upload refused' }); return json(201, { file: { id: 'drop_qavoice' + writes.length, filename: q.headers()['x-wizard-filename'] || 'voice.webm', mime: q.headers()['x-wizard-mime'] || 'audio/webm', bytes: buf.length } }); }
-      if (/\/api\/sessions\/[^/]+\/model$/.test(u.pathname)) { await sleep(150); return json(200, { ok: true }); }
+      if (/\/api\/sessions\/[^/]+\/model$/.test(u.pathname)) { await sleep(150); const data = JSON.parse(w.body); return json(200, { runtime: { model: data.model, provider: data.provider, model_lock: 'accepted' } }); }
       if (/\/wizard\/attention\/[^/]+\/(retry|dismiss)$/.test(u.pathname)) { const id = decodeURIComponent(u.pathname.split('/')[3]); attention = attention.filter(a => a.id !== id); await sleep(150); return json(200, { ok: true }); }
       if (/\/wizard\/session-failure\/[^/]+\/dismiss$/.test(u.pathname)) { await sleep(150); return json(200, { ok: true }); }
       if (/\/api\/sessions$/.test(u.pathname)) return json(200, { session: { id: JSON.parse(w.body || '{}').id || 'qa-fake-session' } });
@@ -191,7 +191,8 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); __wos.openChat(w.id, '__new__'); });
     await sleep(600);
     const chip = await p.evaluate(sel => document.querySelector(sel)?.textContent.trim() || null, await S('[data-chmodel]'));
-    ok(chip && /^Opus/.test(chip), '#11 phone: a new chat starts on the Hermes default model', chip);
+    const expectedDefaultChip = await p.evaluate(() => { const d = WosModels.defaultOption(); return WosModels.short(d.value, d.provider) + '▾'; });
+    ok(chip === expectedDefaultChip, '#11 phone: a new chat starts on the Hermes default model', chip);
     await p.click(await S('[data-chmodel]')); await sleep(300);
     const t = await p.evaluate(() => document.querySelector('.ch-psheet .ch-sheet-t')?.textContent);
     ok(/Model for this new chat/.test(t || ''), '#11 phone: the new-chat picker says it is for this new chat', t);
@@ -232,7 +233,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await p.click(await S('[data-chretry]'));
     const rr = await until(() => runsTo('qa_pw_fail', n0)[0]);
     const rw = writes.slice(n0).find(w => /\/v1\/runs$/.test(w.p));
-    ok(rr && rr.input === 'Summarise the quarterly numbers' && rr.model === 'claude-opus-5-5' && !!rw?.idem, '#11 phone: Retry re-sends the last request on the same model through the outbox (Idempotency-Key, intercepted)', { rr, idem: rw?.idem });
+    ok(rr && rr.input === 'Summarise the quarterly numbers' && rr.model === 'claude-opus-5-5[1m]' && !!rw?.idem, '#11 phone: Retry re-sends the last request on the same model through the outbox (Idempotency-Key, intercepted)', { rr, idem: rw?.idem });
     ok(await p.evaluate(() => __wos.outbox.unsent().length === 0 || __wos.outbox.unsent().every(it => it.state !== 'failed')), '#11 the retried message is delivered by the outbox');
     await sleep(400);
     ok(!(await p.evaluate(sel => document.querySelector(sel), await S('.ch-fail'))), '#11 phone: after Retry the Needs-retry panel clears');
@@ -567,7 +568,9 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
   const real = writes.filter(w => /\/v1\/runs\/(?!qa-run-)/.test(w.p));
   ok(real.length === 0, 'no write touched a real run (steer/stop/approval)', real);
   ok(continuedWrites.length === 0, 'every Wizard write was intercepted (none continued to Wizard)', continuedWrites);
-  const runsN = writes.filter(w => /\/v1\/runs$/.test(w.p)).length;
+  const admitted = writes.filter(w => /\/v1\/runs$/.test(w.p)).map(w => JSON.parse(w.body));
+  ok(admitted.length > 0 && admitted.every(r => r.model && r.provider && r.require_model_lock === true), 'TRUST: every phone and desktop send carries model, provider and model lock', admitted.map(r => ({model:r.model,provider:r.provider,lock:r.require_model_lock})));
+  const runsN = admitted.length;
   ok(runsN > 0, `the fence saw the sends it intercepted (${runsN} POST /v1/runs, all fulfilled locally)`);
   const refused1 = await refusedAt();
   if (refused0 != null) ok(refused1 === refused0, 'QA origin refused zero writes (nothing got past the browser fence)', { refused0, refused1 });

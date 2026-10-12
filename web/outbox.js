@@ -109,6 +109,19 @@
   }
 
   async function deliver(it) {
+    if (!it.model || !it.provider) {
+      if (it.body) throw new HttpError(409, 'Older message has no confirmed model · choose a model and resend');
+      const M = window.WosModels;
+      if (!M) throw new HttpError(409, 'Model selector unavailable · reload Wizard');
+      Object.assign(it, await M.resolveRoute(M.snapshot(it.kind === 'reply' ? it.sessionId : '', it.model ? { model: it.model, provider: it.provider } : null)));
+      await put(it);
+    }
+    // A durable body from an earlier client cannot be silently admitted with no lock.
+    if (it.body) {
+      const frozen = JSON.parse(it.body);
+      if (frozen.model !== it.model || frozen.provider !== it.provider || frozen.require_model_lock !== true)
+        throw new HttpError(409, 'Older message has no model lock · choose a model and resend');
+    }
     // 1. Words: a voice item that never got its transcript gets one now.
     // Words typed or pasted with it (it.typed: a link, say) go first, then what was said: one message (legacy
     // composeVoiceTurnText). A recording with no speech still sends when it carries typed words.
@@ -125,7 +138,10 @@
     //    becomes a queued run (with one) instead of risking a doubled steer.
     if (it.kind === 'reply' && it.steerRunId && !it.attempts) {
       try {
-        const steer = { input }; if (fileIds.length) steer.wizard_file_ids = fileIds;
+        const run = await (await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}`)).json();
+        if (run.runtime?.model !== it.model || (run.runtime?.requested?.provider || run.runtime?.provider) !== it.provider)
+          throw new HttpError(409, 'Active run uses another model · queueing on the selected model');
+        const steer = { input, model: it.model, provider: it.provider, require_model_lock: true }; if (fileIds.length) steer.wizard_file_ids = fileIds;
         const sr = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}/steer`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
         const ack = await sr.json().catch(() => ({}));
         return done(it, { steered: true, runId: it.steerRunId, steerQueued: ack?.status === 'queued' });
@@ -144,7 +160,8 @@
       const body = { session_id: it.sessionId, input };
       if (it.instructions) body.instructions = String(it.instructions).slice(0, 2000);
       if (fileIds.length) body.wizard_file_ids = fileIds;
-      if (it.model) { body.model = it.model; if (it.provider) body.provider = it.provider; }
+      if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model and resend');
+      Object.assign(body, { model: it.model, provider: it.provider, require_model_lock: true });
       it.body = JSON.stringify(body); await put(it);
     }
     const r = await call('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': it.id }, body: it.body });
@@ -196,6 +213,10 @@
   const api = {
     /* kind 'new' (new thread) or 'reply' (existing thread). Persisted before this resolves. */
     async enqueue(o) {
+      const M = window.WosModels;
+      const snapshot = M?.snapshot(o.kind === 'reply' ? o.sessionId : '', o.model ? { model: o.model, provider: o.provider } : null);
+      if (!M) throw new Error('Model selector unavailable · reload Wizard before sending');
+      const route = await M.resolveRoute(snapshot);
       await load();
       const it = {
         id: 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'queued',
@@ -205,7 +226,7 @@
         wid: o.wid || '', how: o.how || '', source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60),
       };
       // A route chosen in the model picker (sealed with the message, like legacy's admit()).
-      if (o.model) { it.model = String(o.model); it.provider = String(o.provider || ''); }
+      Object.assign(it, route);
       await put(it); pump();
       return it;
     },

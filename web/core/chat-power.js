@@ -114,6 +114,7 @@ window.WosChatPower = function chatPower(A) {
   /* ================= #11 models ================= */
   const MOVER = new Map(); // sid -> { model, provider, at }: a change Wizard's list hasn't caught up with yet
   function threadModel(s) {
+    const selected = s && M?.selections.get(s.id); if (selected) return selected;
     const o = s && MOVER.get(s.id);
     if (o && Date.now() - o.at < 120e3 && !(s.model === o.model && (!o.provider || s.provider === o.provider))) return o;
     if (o) MOVER.delete(s.id);
@@ -141,10 +142,11 @@ window.WosChatPower = function chatPower(A) {
     const cur = threadModel(s);
     const same = cur.model === o.value && (!o.provider || cur.provider === o.provider);
     if (!same) {
-      try { await M.setThreadModel(sh.sid, o); }
+      let route;
+      try { route = await M.setThreadModel(sh.sid, o); }
       catch (e) { toast('!', 'Couldn’t change the model · try again', 2600); return; }
-      MOVER.set(sh.sid, { model: o.value, provider: o.provider, at: Date.now() });
-      Object.assign(s, { model: o.value, provider: o.provider });
+      MOVER.set(sh.sid, { ...route, at: Date.now() });
+      Object.assign(s, route);
     }
     if (sh.mode === 'retry') return retryThread(sh.wid, sh.sid, o);
     toast('◇', same ? `Already on ${o.name}` : `This thread now uses ${o.name}`, 1600);
