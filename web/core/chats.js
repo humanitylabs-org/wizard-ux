@@ -90,7 +90,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function setSubject(w, k) { const c = ch(w.id); if (w.thread) chatsBack(w); c.subject = k || ''; rerenderList(w); return true; }
   function addFilter(w, f) { if (!f) return false; if (f.kind === 'subject') return setSubject(w, f.key); const c = ch(w.id); if (w.thread) chatsBack(w); c.filter = f.key; c.filterFrom = null; rerenderList(w); return true; }
-  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
+  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
   /* Back on a filtered list: search text first, then the most recent chip. */
   function clearFilter(w) {
     if (!w || w.thread) return false;
@@ -286,6 +286,26 @@ window.WizCore.chats = function createChats(H) {
       <h5>Status</h5><div class="ch-fopts">${Object.entries(STATUS).map(([k, f]) => opt('status', k, f.label, c.filter === k)).join('')}</div>
       ${sj.length ? `<h5>Subject</h5><div class="ch-fopts">${sj.map(k => opt('subject', k, k, c.subject === k)).join('')}</div>` : ''}</div></div>`;
   }
+  // The phone replaces the list with the thread. Keep a bounded return bookmark before
+  // that replacement, including nearby row anchors so Done or live updates above it
+  // can remove/reorder rows without moving the surviving row under James's eyes.
+  function listPlace(el) {
+    const sc = el?.querySelector('.ch-scroll'); if (!sc) return null;
+    const top = sc.scrollTop, edge = sc.getBoundingClientRect().top;
+    const rows = top > 0 ? [...sc.querySelectorAll('[data-chopen]')].filter(r => r.getBoundingClientRect().bottom > edge).slice(0, 8) : [];
+    return { top, rows: rows.map(r => ({ id: r.dataset.chopen, section: r.closest('[data-sec]')?.dataset.sec, y: r.getBoundingClientRect().top - edge })) };
+  }
+  function restoreListPlace(sc, place) {
+    if (!sc || !place) return;
+    sc.scrollTop = place.top;
+    const rows = [...sc.querySelectorAll('[data-chopen]')];
+    for (const anchor of place.rows) {
+      // Done can leave the same ID visible in expanded Archive. Follow a surviving
+      // neighbor in the original section, never the archived row to its new home.
+      const row = rows.find(r => r.dataset.chopen === anchor.id && r.closest('[data-sec]')?.dataset.sec === anchor.section);
+      if (row) { sc.scrollTop += row.getBoundingClientRect().top - sc.getBoundingClientRect().top - anchor.y; break; }
+    }
+  }
   function renderChatList(w, el) {
     if (!el) return;
     ch(w.id).heldList = false;
@@ -344,7 +364,7 @@ window.WizCore.chats = function createChats(H) {
         ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
     }).join('');
     if (bs && LIVE.ok) body += BS.footer(bs);
-    const scroll = el.querySelector('.ch-scroll')?.scrollTop || 0;
+    const place = listPlace(el) || c.listPlace;
     // Results stream in while typing: keep the search box focused with the caret where it was.
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
@@ -354,7 +374,7 @@ window.WizCore.chats = function createChats(H) {
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
     clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
-    const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = scroll;
+    restoreListPlace(el.querySelector('.ch-scroll'), place);
     PW?.paint(w.id, el);
     if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
   }
@@ -931,6 +951,7 @@ window.WizCore.chats = function createChats(H) {
    * reviews each one, taps Done, and lands back on the summary). Opening a thread any other way starts a fresh trail. */
   function openChat(wid, sid, opts = {}) {
     const w = W[wid]; if (!w) return;
+    if (!w.thread) { const place = listPlace(elOf(wid)); if (place) ch(wid).listPlace = place; }
     if (w.thread) saveDraft(wid);
     closeRowSheet();
     const c = ch(wid); c.approval = null;
