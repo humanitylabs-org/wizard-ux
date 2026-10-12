@@ -44,6 +44,14 @@
   /* Installed Wizard apps (apps.json) and the owner's own links (launcher.json), from the Agent Service.
    * Cached on the device so the launcher paints instantly; refreshed at start and on focus. */
   const REMOTE_KEY = 'wux.apps.v1';
+  // Reviewed legacy migrations, not supplied by apps or guessed from cache prefixes.
+  // Never migrate /sw.js at scope / (Social's historical root worker is not app-owned).
+  window.WizCore.appMigrations = Object.freeze({
+    'wizard-signal': { scope: '/wizard-signal/', scripts: ['/wizard-signal/sw.js'], caches: [] },
+    wisdom: { scope: '/wisdom/', scripts: ['/wisdom/sw.js'], caches: [] },
+    social: { scope: '/wizard-social/', scripts: ['/wizard-social/sw.js'], caches: [] },
+    shopping: { scope: '/wizard-shopping/', scripts: ['/wizard-shopping/sw.js?v=20260726-shopping-assistant-v7'], caches: ['shopping-assistant-20260726-shopping-assistant-v7'] },
+  });
   const PALETTE = [['#6b46ff', '#c04dff'], ['#3fe0ff', '#3f6bff'], ['#ff5ccf', '#5c3bff'], ['#4ff0b0', '#2f8cff'], ['#ffbe55', '#ff6b86'], ['#ff8a5c', '#ff5ccf']];
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const toTile = a => ({

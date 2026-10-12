@@ -369,13 +369,37 @@
     let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} ta.remove(); return ok;
   }
   const native = () => window.WizardOSNative || null;
-  // Share sheet where the platform has one; otherwise copy. Returns 'shared' | 'copied' | 'cancelled' | 'failed'.
-  async function shareText(text, title) {
-    const n = native();
-    if (n && typeof n.shareText === 'function') { try { n.shareText(String(text), String(title || '')); return 'shared'; } catch (e) {} }
-    if (navigator.share) { try { await navigator.share({ text: String(text), ...(title ? { title } : {}) }); return 'shared'; } catch (e) { if (e?.name === 'AbortError') return 'cancelled'; } }
-    return (await copyText(text)) ? 'copied' : 'failed';
+  // Native success needs a receipt, not a fire-and-forget invocation. Older Android
+  // bridges still launch the sheet, but cannot attest selection/cancellation (unsupported).
+  const shareOutcome = value => {
+    if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) {} }
+    const status = typeof value === 'object' && value ? value.status || value.outcome : value;
+    return ['shared', 'copied', 'cancelled', 'unsupported'].includes(status) ? status : 'unsupported';
+  };
+  async function nativeShare(invoke) {
+    let timer;
+    try {
+      const result = invoke(); // immediate, while transient user activation is live
+      return shareOutcome(await Promise.race([Promise.resolve(result), new Promise(resolve => { timer = setTimeout(() => resolve('unsupported'), 15000); })]));
+    } catch (e) { return e?.name === 'AbortError' ? 'cancelled' : 'unsupported'; }
+    finally { clearTimeout(timer); }
   }
+  async function sharePayload(data = {}) {
+    if (!data || typeof data !== 'object') return 'unsupported';
+    const payload = {};
+    for (const k of ['text', 'title', 'url']) if (data[k] != null && String(data[k])) payload[k] = String(data[k]);
+    if ((!payload.text && !payload.url) || (payload.text || '').length > 90000 || (payload.title || '').length > 1024 || (payload.url || '').length > 8192) return 'unsupported';
+    if (payload.url) { try { if (!/^https?:$/.test(new URL(payload.url).protocol)) return 'unsupported'; } catch (_) { return 'unsupported'; } }
+    const n = native();
+    if (n && typeof n.shareText === 'function') {
+      // ACTION_SEND has one EXTRA_TEXT field: don't silently lose a URL or turn it into a title.
+      const text = [payload.text, payload.url].filter(Boolean).join('\n');
+      return nativeShare(() => n.shareText(text, payload.title || ''));
+    }
+    if (navigator.share) { try { await navigator.share(payload); return 'shared'; } catch (e) { if (e?.name === 'AbortError') return 'cancelled'; return 'unsupported'; } }
+    return (await copyText([payload.text, payload.url].filter(Boolean).join('\n'))) ? 'copied' : 'unsupported';
+  }
+  function shareText(text, title) { return sharePayload({ text, title }); }
   async function fetchBlob(url) {
     if (url.startsWith('data:')) { const r = await fetch(url); return r.blob(); }
     const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
@@ -391,12 +415,21 @@
     if (extFor(type) && !/\.[a-z0-9]{2,5}$/i.test(name)) name += extFor(type); // a search title has no extension
     return new File([blob], name, { type });
   }
-  async function shareFile(item) {
-    const file = await asFile(item), n = native();
-    if (n && typeof n.shareFile === 'function') { n.shareFile(await b64(file), file.name, file.type); return 'shared'; }
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: file.name }); return 'shared'; } catch (e) { if (e?.name === 'AbortError') return 'cancelled'; }
+  async function shareFile(item, { title } = {}) {
+    let file;
+    const isBlob = value => value && ['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(value));
+    try { file = isBlob(item) ? item : await asFile(item); } catch (_) { return 'unsupported'; }
+    if (!isBlob(file) || file.size > 32 * 1024 * 1024) return 'unsupported';
+    const n = native(), name = file.name || 'wizard-file';
+    if (n && typeof n.shareFile === 'function') {
+      let bytes; try { bytes = await b64(file); } catch (_) { return 'unsupported'; }
+      return nativeShare(() => n.shareFile(bytes, name, file.type));
     }
+    try {
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: title || name }); return 'shared';
+      }
+    } catch (e) { if (e?.name === 'AbortError') return 'cancelled'; }
     return 'unsupported';
   }
   // The Android app (0.8.4+) hands any download its WebView sees to Android's download manager: the file lands in
@@ -588,5 +621,5 @@
     return action && choices.length ? { requestId: str(it.request_id, it.id) || undefined, action, choices } : null;
   }
 
-  window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, shareText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, sharePayload, shareText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

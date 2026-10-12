@@ -286,7 +286,7 @@
     if (p === print0 || p === printNow) return;
     printNow = p;
     if (!webPending) { webPending = true; log('web:changed'); }
-    await loadChanges(); applyWeb();
+    await loadChanges(); window.WizAppServices?.update.announce({ version: p, changes }); applyWeb();
   }
   /* Which threads made the update: web/ux-changes.json (tools/write-ux-changes.py) lists every web/ change
    * newest first with the thread that committed it. Take the ones since the version this page loaded. */
@@ -322,6 +322,7 @@
   }
   // Safe to reload: not recording, nothing uploading, no sheet or share in progress.
   function webBusy() {
+    if (window.WizAppServices?.update.busy()) return true;
     const w = W$(); if (!w) return true;
     if (w.voice !== 'idle' || sheet) return true;
     return Object.keys(w.wins).some(k => (w.chatState(k).files || []).some(f => f.uploading));
@@ -364,8 +365,7 @@
   }
   function applyWeb() {
     if (!webPending) return;
-    // The owner is away: swap it in quietly, unless music is playing (then the banner waits for your tap).
-    if (document.hidden && !webBusy()) { if (!mediaPlaying()) { reloadNow('hidden'); return; } log('web:hold', 'media'); }
+    // Updates are explicit. Visibility/elapsed time cannot prove an app has no unsaved data.
     renderWeb();
   }
   /* The banner says which thread the update came from and links there, so you can see what a reload brings
@@ -378,7 +378,7 @@
       el = document.createElement('div'); el.id = 'dvWeb'; el.className = 'dv-update web'; el.setAttribute('role', 'status');
       ($('#device') || document.body).appendChild(el);
       el.addEventListener('click', e => {
-        if (e.target.closest('[data-web="go"]')) { if (webBusy()) toast('◌', 'Finish recording first', 1600); else reloadNow('tap'); return; }
+        if (e.target.closest('[data-web="go"]')) { if (webBusy()) toast('◌', 'Finish recording or save your work first', 2000); else reloadNow('tap'); return; }
         const t = e.target.closest('[data-web-thread]'); if (t) { goThread(t.dataset.webThread); return; }
         if (e.target.closest('[data-web="list"]')) { listOpen = !listOpen; log('web:list', listOpen ? 'open' : 'close'); renderWeb(); }
       });
@@ -396,7 +396,7 @@
     el.classList.toggle('open', !!list);
     el.innerHTML = `<div class="dv-wtop">${changes.length ? '' : '<span class="dv-ui">✦</span>'}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}<button data-web="go">Reload</button></div>${list}`;
   }
-  function reloadNow(why) { saveDrafts(); log('web:reload', why); window.__wosReloading = why; location.reload(); }
+  function reloadNow(why) { if (webBusy()) { toast('◌', 'Finish recording or save your work first', 2000); return; } saveDrafts(); log('web:reload', why); window.__wosReloading = why; location.reload(); }
 
   /* ================= wiring ================= */
   const api = window.WosDevice = {

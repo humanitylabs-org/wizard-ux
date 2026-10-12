@@ -291,6 +291,8 @@
   }
   function watchFrame(f, el) {
     if (!f) return;
+    const w = W[el.dataset.win], a = w && APP[w.appId];
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
@@ -761,11 +763,14 @@
     if (setEl && !setEl.hidden) { closeSettings(); return 'settings'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
-    if (VOICE.state === 'listen') { if (vMode === 'dictate') dictate('cancel'); else talk('cancel'); return 'voice'; }
+    // Back navigates while recording; only the explicit Cancel control may discard audio.
     const f = focused();
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
+    if (f?.app === 'frame') {
+      const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
+      if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
+    }
     if (f?.appId === 'app-store' || f?.appId === 'system') {
-      try { if (winEl(f.id)?.querySelector('iframe')?.contentWindow.__wizardCloseOverlay?.()) return 'store-card'; } catch (_) {}
       if (!ws[cur].mono) { closeWin(f.id); return 'store-parent'; }
     }
     if (ws[cur].mono) { toggleMono(); return 'mono'; }
@@ -781,7 +786,7 @@
     // Link pane: ⌘Enter keeps it as a window, ⌘⇧Enter opens it in the browser.
     if (LINKS && LINKS.isOpen() && (e.metaKey || e.ctrlKey) && k === 'Enter') return hit(() => LINKS.el.querySelector(shift ? '[data-ls="out"]' : '[data-ls="keep"]')?.click());
     if (k === 'Escape' && LINKS && LINKS.isOpen() && fromFrame) { const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } return; }
-    if (k === 'Escape') { if (fromFrame && pal.hidden && keysEl.hidden && ib.hidden && VOICE.state !== 'listen') return; const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
+    if (k === 'Escape') { const did = escStep(); if (did || fromFrame) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
     if (!pal.hidden) return; // the palette owns the keyboard while open
     if (setEl && !setEl.hidden && !(e.altKey && code === 'Comma')) return; // so does Settings (⌥, closes it)
     // Chats: ↑/↓ or j/k walk the thread list (from the list, the search box or an empty thread pane), / focuses search.
@@ -936,4 +941,5 @@
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
+  window.WizAppServices?.guardBack(escStep, toast);
 })();

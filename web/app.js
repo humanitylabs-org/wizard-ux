@@ -1284,7 +1284,7 @@
       if (!win || win.__wosTamed || !win.history) return;
       win.__wosTamed = true;
       const h = win.history, push = h.pushState.bind(h), rep = h.replaceState.bind(h);
-      h.pushState = function (st, t, u) { const r = (win.navigator.userActivation?.isActive ? push : rep)(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
+      h.pushState = function (st, t, u) { const r = (st?.__wizardApp?.version === 1 || win.navigator.userActivation?.isActive ? push : rep)(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
       h.replaceState = function (st, t, u) { const r = rep(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
       // The app stepping back through its own entries (collapse a section with history.back()) is the app's
       // step, never the user's Back: mark it so the frame popstate below lets the app handle it (James, 10 Oct:
@@ -1309,6 +1309,8 @@
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
+      const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.appId];
+      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
@@ -1348,6 +1350,7 @@
     // navigation (the URL changes) stays the app's own back step.
     try { win.__wosHref = win.location.href; } catch (e) {}
     try { win.addEventListener('popstate', e => {
+      if (win.WizardApp?.hosted && e.state?.__wizardApp?.version === 1) { takeSelfPop(win); return; }
       if (Date.now() < dropUntil) { e.stopImmediatePropagation(); ignorePop = 0; dropUntil = 0; return; } // the shell's guard drop landed here
       if (Date.now() < exitUntil) { e.stopImmediatePropagation(); history.back(); return; }
       // The app (or the shell on its behalf) stepped back through the app's own entry: the app's step.
@@ -2749,36 +2752,10 @@
   const EXIT_MS = 2000;
   let exitUntil = 0, exitT = 0, guardOn = history.state?.wos === 'guard', ignorePop = 0;
   const watchers = new Set();
-  // LEGACY-BRIDGE (remove when Legacy Wizard retires, or replace with the spec'd app Back contract — see
-  // wizard-os docs/WORK_OUTSTANDING.md "Back button contract"): the hook name and the layout-signature guess below
-  // exist only because Legacy Wizard's hook always answers true. A spec'd hook returns handled/not-handled honestly,
-  // which deletes frameSig() and the timeout. Regression: qa-hosted-back.cjs.
-  // A hosted app that keeps its screens in app state (Legacy Wizard: thread → list, viewers, sheets) has no frame
-  // history to walk. It exposes its own Back as window.__wizardCloseOverlay() — the hook its Android app calls.
-  // That hook answers true even at its own root, so the shell compares a small layout signature after React
-  // settles: if nothing moved, the press was a no-op in the app and the shell takes the step instead.
-  function frameSig(win) {
-    try { const d = win.document; return [win.location.href, d.querySelectorAll('[role="dialog"],[aria-modal="true"],.open').length,
-      [...d.querySelectorAll('h1,[aria-label^="Back"]')].map(e => e.getAttribute('aria-label') || e.textContent).join('|')].join('#'); } catch (e) { return ''; }
-  }
   function hostedBack(f) {
-    let win; try { win = winEl(f.id)?.querySelector('iframe')?.contentWindow; } catch (e) { return null; }
-    let hook; try { hook = win && win.__wizardCloseOverlay; } catch (e) { return null; }
-    if (typeof hook !== 'function') return null;
-    // Store's canonical hook returns handled/not-handled synchronously; never apply the legacy layout guess.
-    if (f.appId === 'app-store' || f.appId === 'system') { try { return hook.call(win) === true ? 'store-card' : null; } catch (_) { return null; } }
-    const before = frameSig(win);
-    let r; try { r = hook.call(win); } catch (e) { return null; }
-    if (r === false) return null;
-    const fid = f.id;
-    setTimeout(() => {
-      if (frameSig(win) !== before) return;
-      // The app was already at its root: take the shell step now (without asking the app again).
-      const did = backStep(fid);
-      window.__backLog = (window.__backLog || []).concat('hosted-noop:' + (did || 'root')).slice(-30);
-      if (!did) toast('⌂', "You're home", 1200);
-    }, 180);
-    return 'hosted';
+    const frame = winEl(f.id)?.querySelector('iframe');
+    const result = window.WizAppServices?.back(frame);
+    return result || 'notReady';
   }
   function backStep(skipHosted) {
     { const t = window.WosTour?.back(); if (t) return t; } // the first-run tour and the Help sheet sit above everything
@@ -2806,8 +2783,11 @@
         if (did) return did === 'search' ? 'search' : 'filter';
       }
       if (f.app === 'chats' && CHATS.readyBack?.()) return 'ready-order'; // Priority / By subject → Newest
-      if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
-      if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { try { selfPop(winEl(f.id).querySelector('iframe').contentWindow); } catch (e) {} nav.back(); return 'frame'; } }
+      if (f.app === 'frame' && skipHosted !== f.id) {
+        const result = hostedBack(f);
+        if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
+        if (result === 'notReady') { const nav = frameNav(f.id); if (nav?.canGoBack) { try { selfPop(winEl(f.id).querySelector('iframe').contentWindow); } catch (e) {} nav.back(); return 'frame'; } }
+      }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }
       if (d.full) { setFull(f.id, false); return 'tile'; }
       // A bound view: Back slides back to its thread; the view stays beside it until James leaves the thread.
