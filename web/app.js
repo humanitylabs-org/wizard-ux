@@ -1032,14 +1032,13 @@
         <div class="home-time" id="homeTime">${window.WizConfig.hm()}</div>
         <div class="home-line">${LIVE.ok ? `<b>${needs} need${needs === 1 ? 's' : ''} you</b>, ${ready} unread, ${working} working.` : LIVE.error === 'access' ? 'Sign in to Wizard to see your threads.' : 'Connecting to Wizard…'}</div>
       </div>
-      <div class="home-spacer"></div>
-      <div class="constellation">
+      <div class="constellation" style="margin-top:20px">
         <button class="now-card" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="unread"><span class="pip"></span><span class="meta"><span class="k">${needs ? 'Needs you' : 'Unread'}</span><span class="v">${esc(L.needs[0]?.title || L.ready[0]?.title || 'Nothing waiting')}</span></span><span class="n">${needs + ready}</span></button>
         <button class="now-card" style="--c:var(--violet-2)" data-act="working"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span><span class="v">${esc(W0[0]?.title || 'Idle')}</span></span><span class="n">${working}</span></button>
-        <button class="now-card" style="--c:var(--pink)" data-act="yesterday"><span class="pip"></span><span class="meta"><span class="k">Yesterday</span><span class="v">${esc(clip(S.days[YESTERDAY] || `${yd.length} threads`, 70))}</span></span><span class="n">${yd.length}</span></button>
       </div>
       ${unsentCard()}
       ${sideCard()}
+      <div class="home-spacer"></div>
     </div>`;
   }
   setInterval(() => {
