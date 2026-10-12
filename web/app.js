@@ -53,7 +53,8 @@
   /* ---------------- apps ---------------- */
   // The registry lives in core/apps.js (shared with the desktop shell); the phone gets its own list.
   const { APPS, APP, findApp, appByName, quickSearch, searchUrl } = window.WizCore.apps('mobile');
-  window.WizBackgroundAudio?.init(() => APP);
+  const audioFrames = new WeakSet();
+  window.WizBackgroundAudio?.init(() => APP, f => { const id=f.closest('.win')?.dataset.win; return audioFrames.has(f) && W[id]?.appId === 'wizard-music' && deskOf(id) >= 0; });
   const norm = window.WizCore.norm;
 
   /* ---------------- state ---------------- */
@@ -1309,6 +1310,8 @@
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
+      const audioId=f.closest('.win')?.dataset.win;
+      if(W[audioId]?.appId === 'wizard-music') audioFrames.add(f);
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }

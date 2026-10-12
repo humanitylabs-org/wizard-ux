@@ -7,7 +7,7 @@ const server=async p=>fetch('http://127.0.0.1:'+http+p).then(r=>r.json());
 const sx=cmd=>server('/qa/sx?cmd='+encodeURIComponent(cmd));
 let browser;
 (async()=>{
- browser=await chromium.connectOverCDP('http://127.0.0.1:'+cdp);
+ browser=await chromium.connectOverCDP('http://127.0.0.1:'+cdp,{isWebView:true,noDefaults:true});
  const ctx=browser.contexts()[0],page=ctx.pages()[0],errors=[]; page.on('pageerror',e=>errors.push(String(e)));
  await page.goto('http://10.0.2.2:'+http+'/wizard-os-home/?open=wizard-music');
  await page.evaluate(()=>{localStorage.setItem('wos.coached','true');document.cookie='qa_audio=session;path=/';});
@@ -49,12 +49,12 @@ let browser;
  // Correlated frame/session adversaries: native main-frame port alone is never a hosted-app permission.
  const stale=await audio('pause',{sessionId:'obsolete'});check('stale session commands refused',!stale.ok);
  const forged=await audio('load',{queue:[{...down.queue[down.index],stream:'https://evil.test/music.mp3'}],index:0,station:null});check('foreign media URL rejected before network',!forged.ok);
- await page.evaluate(()=>{const f=document.createElement('iframe');f.className='appframe';f.src='/wizard-os-home/';f.id='audio-evil';document.body.appendChild(f);});await wait(400);
- const foreign=page.frames().find(f=>f.url().endsWith('/wizard-os-home/'));if(foreign){check('unregistered same-origin frame lacks capability',!await foreign.evaluate(()=>parent.WizBackgroundAudio.canAttach(window)));}
+ await page.evaluate(()=>{const f=document.createElement('iframe');f.className='appframe';f.src='/wizard-music/';f.id='audio-evil';document.body.appendChild(f);});await wait(400);
+ const foreign=page.frames().find(f=>f !== frame() && f.url().endsWith('/wizard-music/'));if(foreign){check('unregistered Music-path same-origin frame lacks capability',!await foreign.evaluate(()=>parent.WizBackgroundAudio.canAttach(window)));}
  await page.evaluate(()=>document.querySelector('#audio-evil')?.remove());
- const hold=await snap();await page.evaluate(()=>{const f=[...document.querySelectorAll('iframe.appframe')].find(f=>f.src.includes('/wizard-music/'));window.qaReopen=()=>f.parentNode.appendChild(f.cloneNode());window.qaContainer=f.parentNode;window.qaFrame=f.cloneNode();f.remove();});await wait(1500);
+ const hold=await snap();await page.evaluate(()=>{const id=Object.values(__wos.wins).find(w=>w.appId==='wizard-music')?.id;__wos.closeWin(id,true);});await wait(1500);
  const service=await sx('dumpsys activity services '+PKG);check('closing Music UI leaves foreground audio service alive',service.result.includes('BackgroundAudioService'));
- await page.evaluate(()=>window.qaContainer.appendChild(window.qaFrame));await wait(900);await frame().locator('.music-row-main').first().waitFor();const reattached=await snap();check('recreated Music UI sees live native session',reattached.sessionId===hold.sessionId&&reattached.wantPlaying,reattached);
+ await page.evaluate(()=>__wos.openApp('wizard-music'));await wait(900);await frame().locator('.music-row-main').first().waitFor();const reattached=await snap();check('recreated Music UI sees live native session',reattached.sessionId===hold.sessionId&&reattached.wantPlaying,reattached);
  // Nested Now Playing Back is an actual Android key, and must retain Wizard.
  await frame().locator('.music-mini-open').click();await wait(300);await sx('input keyevent KEYCODE_BACK');await wait(600);const top=await sx('dumpsys activity activities');check('Android nested Back retains Wizard Activity',top.result.includes(PKG+'/ai.wizards.os.MainActivity'));
  const last=await server('/qa/stats');const events=last.events.filter(e=>e.action==='played');const keys=events.map(e=>e.eventId);check('native only reports playback; no UI duplicates',keys.length>0&&keys.every(Boolean)&&new Set(keys).size===keys.length,events);

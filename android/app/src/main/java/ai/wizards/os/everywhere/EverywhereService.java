@@ -210,6 +210,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     public static void appVoiceState(Context c, String state, long elapsedMs) {
         boolean rec = "listen".equals(state) || "paused".equals(state);
         String was = appVoice;
+        ai.wizards.os.audio.AudioRecordingGate.set("appVoice", rec);
         appVoice = rec ? state : null;
         appVoiceElapsed = Math.max(0, elapsedMs);
         if (!rec && was == null) return;

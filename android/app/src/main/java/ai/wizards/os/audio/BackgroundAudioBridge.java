@@ -40,12 +40,24 @@ public final class BackgroundAudioBridge {
             if("detach".equals(method) && BackgroundAudioService.current()==null) { answer(reply,id,new JSONObject(),null); return; }
             if(pending>=16) { answer(reply,id,null,"Audio busy"); return; }
             pending++;
-            if(controller==null) controller=new MediaController.Builder(activity,new SessionToken(activity,new ComponentName(activity,BackgroundAudioService.class))).buildAsync();
+            if(controller==null) controller=new MediaController.Builder(activity,new SessionToken(activity,new ComponentName(activity,BackgroundAudioService.class)))
+                .setListener(new MediaController.Listener() {
+                    @Override public void onDisconnected(MediaController c) {
+                        try {
+                            if(controller!=null && controller.isDone() && controller.get()==c) { MediaController.releaseFuture(controller); controller=null; }
+                        } catch(Exception ignored) { controller=null; }
+                    }
+                }).buildAsync();
             final ListenableFuture<MediaController> connected=controller;
             connected.addListener(() -> {
                 pending--; if(detached) return;
                 try {
-                    connected.get(); BackgroundAudioService s=BackgroundAudioService.current(); if(s==null) throw new IllegalStateException();
+                    try { connected.get(); } catch(Exception bad) {
+                        if(controller==connected) { MediaController.releaseFuture(connected); controller=null; }
+                        throw bad;
+                    }
+                    BackgroundAudioService s=BackgroundAudioService.current();
+                    if(s==null) { if(controller==connected) { MediaController.releaseFuture(connected); controller=null; } throw new IllegalStateException(); }
                     s.command(method,r); answer(reply,id,s.snapshot(r.optInt("knownQueueRevision",-1)),null);
                 } catch(Exception e) { answer(reply,id,null,"Music command failed"); }
             },activity.getMainExecutor());

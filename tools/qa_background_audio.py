@@ -33,7 +33,7 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
             try:
                 req=urllib.request.Request('http://127.0.0.1:8793/art/yt:'+file.stem,headers={'Authorization':'Bearer '+tok});art.write_bytes(urllib.request.urlopen(req,timeout=12).read())
             except Exception:pass
-            state['tracks'].append({'id':'yt:'+file.stem,'title':row[0],'artist':row[1],'album':row[2],'durationMs':12000,'source':'youtube','stream':'/wizard-music/stream/yt:'+file.stem,'art':'/wizard-music/art/yt:'+file.stem})
+            state['tracks'].append({'id':'yt:'+file.stem,'title':row[0],'artist':row[1],'album':row[2],'durationMs':12000,'source':'youtube','stream':'/wizard-music/stream/yt%3A'+file.stem,'art':'/wizard-music/art/yt%3A'+file.stem})
             if len(state['tracks'])>=14:break
         assert len(state['tracks'])>=8, 'Need distinct actual cached songs'
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -55,7 +55,7 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
                     if not cmd.startswith(('input keyevent ','wm dismiss-keyguard','am start ','am broadcast ','dumpsys ','pidof ','cmd media_session ')):return self.body(400,{'error':'command'})
                     return self.body(200,{'result':sx(cmd)})
                 if p.startswith('/wizard-music/stream/') or p.startswith('/wizard-music/art/'):
-                    tid=p.rsplit(':',1)[-1];kind='stream' if '/stream/' in p else 'art';f=clips/(tid+('.mp3' if kind=='stream' else '.jpg'))
+                    tid=urllib.parse.unquote(p).rsplit(':',1)[-1];kind='stream' if '/stream/' in p else 'art';f=clips/(tid+('.mp3' if kind=='stream' else '.jpg'))
                     if not f.exists():return self.body(404,{})
                     raw=f.read_bytes();total=len(raw);start=0;end=total-1;status=200;hdr={'Accept-Ranges':'bytes'}
                     r=re.match(r'bytes=(\d+)-(\d*)',self.headers.get('Range',''))
@@ -102,7 +102,7 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
             except Exception:pass
             time.sleep(3)
         sx('input keyevent KEYCODE_WAKEUP');sx('wm dismiss-keyguard');sh(ADB,'-s',SERIAL,'install',apk)
-        (out/'qaorigin').write_text('http://10.0.2.2:'+str(HTTP));sh(ADB,'-s',SERIAL,'push',out/'qaorigin','/data/local/tmp/qaorigin');sx(f'run-as {PKG} mkdir -p files');sx(f'run-as {PKG} cp /data/local/tmp/qaorigin files/qa_origin.txt')
+        (out/'qaorigin').write_text('http://10.0.2.2:'+str(HTTP));sh(ADB,'-s',SERIAL,'push',out/'qaorigin','/data/local/tmp/qaorigin');sx(f'run-as {PKG} mkdir -p files');sx(f'run-as {PKG} cp /data/local/tmp/qaorigin files/qa_home.txt')
         sx(f'pm grant {PKG} android.permission.POST_NOTIFICATIONS');sx(f'pm grant {PKG} android.permission.RECORD_AUDIO');sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity');time.sleep(5)
         pid=sx('pidof '+PKG).strip();sh(ADB,'-s',SERIAL,'forward',f'tcp:{CDP}',f'localabstract:webview_devtools_remote_{pid}')
         r=subprocess.run(['/opt/homebrew/bin/node',str(shell/'tools/qa-background-audio.cjs'),str(CDP),str(HTTP),str(out)],env=ENV,text=True,capture_output=True,timeout=450)

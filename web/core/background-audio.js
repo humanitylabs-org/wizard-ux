@@ -3,13 +3,13 @@
   'use strict';
   const TYPE = 'wizard:background-audio:v1', pending = new Map();
   const METHODS = new Set(['capabilities','attach','state','load','play','pause','seek','next','previous','jump','enqueueNext','removeCurrent','removeUpcoming','volume','detach','stop']);
-  let registry = () => ({}), seq = 0, boundPort;
+  let registry = () => ({}), admit = () => false, seq = 0, boundPort;
   function frameOk(win, origin = location.origin) {
     if (!win || win === window || origin !== location.origin) return false;
     const app = registry()['wizard-music'];
     if (!app?.url) return false;
     const f = [...document.querySelectorAll('iframe.appframe')].find(f => f.contentWindow === win);
-    if (!f?.isConnected || f.hasAttribute('srcdoc')) return false;
+    if (!f?.isConnected || !admit(f) || f.hasAttribute('srcdoc')) return false;
     try {
       const src = new URL(f.getAttribute('src'), location.href), live = new URL(win.location.href), expected = new URL(app.url, location.href);
       return [src, live, expected].every(u => u.origin === location.origin && u.pathname === '/wizard-music/') && !!win.document.documentElement;
@@ -40,5 +40,5 @@
     try { pt.postMessage(JSON.stringify({...d.params,id,v:1,appId:'wizard-music',method:d.method})); }
     catch (_) { pending.delete(id); clearTimeout(p.timer); reply(p,{ok:false,error:'Audio unavailable'}); }
   });
-  window.WizBackgroundAudio = {init:fn => {registry=fn;}, frameOk, canAttach:win => !!port() && frameOk(win), lastState:null};
+  window.WizBackgroundAudio = {init:(fn, grant) => {registry=fn;admit=grant;}, frameOk, canAttach:win => !!port() && frameOk(win), lastState:null};
 })();
