@@ -42,6 +42,7 @@ def tone(h, c=None):
 # id: (glyph, hue, chroma or None for vivid). The vivid apps sit ~24° apart round the wheel;
 # the quiet ones (system, legacy, tools) keep their hue at low chroma.
 HOUSE = {
+    'stoa':          ('stoa', 356, None),  # private personal preview only
     'calendar':      ('calendar', 8,   None),
     'mizel':         ('mic',      30,  None),
     'shopping':      ('bag',      55,  None),

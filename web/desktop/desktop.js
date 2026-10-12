@@ -767,7 +767,8 @@
     if (VOICE.state === 'listen') { if (vMode === 'dictate') dictate('cancel'); else talk('cancel'); return 'voice'; }
     const f = focused();
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
-    if (f?.appId === 'app-store' || f?.appId === 'system') {
+    let appContract=false;try{appContract=winEl(f?.id)?.querySelector('iframe')?.contentWindow.WizardApp?.version===1}catch{}
+    if (f?.appId === 'app-store' || f?.appId === 'system' || appContract) {
       try { if (winEl(f.id)?.querySelector('iframe')?.contentWindow.__wizardCloseOverlay?.()) return 'store-card'; } catch (_) {}
       if (!ws[cur].mono) { closeWin(f.id); return 'store-parent'; }
     }
@@ -784,7 +785,7 @@
     // Link pane: ⌘Enter keeps it as a window, ⌘⇧Enter opens it in the browser.
     if (LINKS && LINKS.isOpen() && (e.metaKey || e.ctrlKey) && k === 'Enter') return hit(() => LINKS.el.querySelector(shift ? '[data-ls="out"]' : '[data-ls="keep"]')?.click());
     if (k === 'Escape' && LINKS && LINKS.isOpen() && fromFrame) { const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } return; }
-    if (k === 'Escape') { if (fromFrame && pal.hidden && keysEl.hidden && ib.hidden && VOICE.state !== 'listen') return; const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
+    if (k === 'Escape') { if (fromFrame && pal.hidden && keysEl.hidden && ib.hidden && VOICE.state !== 'listen') { let appContract=false;try{appContract=winEl(focused()?.id)?.querySelector('iframe')?.contentWindow.WizardApp?.version===1}catch{}if(!appContract)return; } const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
     if (!pal.hidden) return; // the palette owns the keyboard while open
     if (setEl && !setEl.hidden && !(e.altKey && code === 'Comma')) return; // so does Settings (⌥, closes it)
     // Chats: ↑/↓ or j/k walk the thread list (from the list, the search box or an empty thread pane), / focuses search.
@@ -923,7 +924,14 @@
       const show = (tries = 50) => { const f = focused(); const sec = f && winEl(f.id)?.querySelector(`.pane-list [data-sec="${section}"]`); if (!sec) { if (tries > 0) setTimeout(() => show(tries - 1), 100); return; } if (!sec.classList.contains('open')) sec.querySelector('[data-sectoggle]')?.click(); winEl(f.id)?.querySelector(`.pane-list [data-sec="${section}"]`)?.scrollIntoView({ block: 'start' }); };
       if (section) show();
     },
-    app(id) { const a = findApp(id) || APP[id]; if (a) openApp(a); },
+    app(id) {
+      // Hosted apps arrive asynchronously from the registry on a cold load.
+      // Retain this exact deep-link intent until it resolves or the user acts.
+      let done=false,tries=0;const cancel=()=>{done=true;cleanup()};
+      const cleanup=()=>{removeEventListener('wizard:apps',tick);removeEventListener('pointerdown',cancel);removeEventListener('keydown',cancel)};
+      const tick=()=>{if(done)return;const a=findApp(id)||APP[id];if(a){done=true;cleanup();openApp(a);return}if(++tries>=100){done=true;cleanup();toast('◇','This app is not available on this Wizard',1800);return}setTimeout(tick,100)};
+      addEventListener('wizard:apps',tick);addEventListener('pointerdown',cancel,{once:true});addEventListener('keydown',cancel,{once:true});tick();
+    },
     video: item => CHATS.KIT.viewer.open([item]),
     toast,
   });

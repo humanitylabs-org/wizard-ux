@@ -303,6 +303,11 @@ def normalise(p, scale=1.0, dy=0, target=318):
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     return T(p, s, 256 - cx * s, 256 - cy * s + dy)
 
+@glyph('stoa', 'A portico with its doorway open to the ground: exploration remains open.')
+def g_stoa():
+    body = U(poly((92, 180), (256, 88), (420, 180)), rrect(112, 164, 288, 256, 12))
+    return D(body, rrect(186, 220, 140, 230, 64))
+
 def build():
     out = {}
     for name, g in G.items():
