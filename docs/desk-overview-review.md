@@ -1,6 +1,6 @@
 # Desk overview review handoff
 
-Status: isolated candidate preview; no live merge authorized on this turn. James requested expert redesign of the pinch-out desk navigation using the established sigils.
+Status: James approved shipping the sigil-first overview. Release removes the staging-only seed and preserves the reviewed layout.
 
 ## Chosen design
 Large bare glyphs + app-colored card tint. Home house. App name beneath, thread caption when relevant. Here badge plus outline; independent Review badge. Grouped windows retain their app/thread labels and a window count. Multi labels reserve two lines and grouped cards grow to 224px to prevent overlap. Close targets 36px; keyboard activation ignores nested buttons. New desk goes directly to the live app-tile desk path.
