@@ -1,0 +1,137 @@
+[
+  {
+    "path": "web/demo/apps/topics.css",
+    "sha256": "3f6d9215fed3e94f50575ccec5acb00a5d5ae490ee4acc53e3cc950d871d530c",
+    "bytes": 14722
+  },
+  {
+    "path": "web/demo/apps/signal.js",
+    "sha256": "ec108d0305e03ac92915622cee0500b1cb1ee826e66582cfe57236fb8b05f190",
+    "bytes": 21261
+  },
+  {
+    "path": "web/demo/apps/wisdom.html",
+    "sha256": "51e2df144a6d1537fb3598a0f0024ba61a18a5c7b944ecd0a41f5dcebde3bc14",
+    "bytes": 692
+  },
+  {
+    "path": "web/demo/apps/wisdom.css",
+    "sha256": "956acc70d5a5155d3d4479ddb286a77ab3cc5dc72db2f102d2829418cc2587d7",
+    "bytes": 31478
+  },
+  {
+    "path": "web/demo/apps/signal.css",
+    "sha256": "a2046420565a310afd7f29571580f4b5690f69154137baac2586a6a37c121039",
+    "bytes": 19783
+  },
+  {
+    "path": "web/demo/apps/topics.js",
+    "sha256": "fa43f08ffbcb520741cc3e4483ef6a92a7728225b56578b6bb8e0725864d9e16",
+    "bytes": 24809
+  },
+  {
+    "path": "web/demo/apps/signal.html",
+    "sha256": "639d32079793af4e2087a9c9319a8182e48ad5437dc241d0b2080b291378e25b",
+    "bytes": 726
+  },
+  {
+    "path": "web/demo/apps/wisdom.js",
+    "sha256": "b837220e0ddadcf37cd58425b54858c0ee2ad176994f6c6c27284c809f313239",
+    "bytes": 36947
+  },
+  {
+    "path": "web/demo/apps/music.html",
+    "sha256": "9e468389ba16e2db56266cdf8a22f9ef72ab85dfb735d53dfc888bf3757716d2",
+    "bytes": 528
+  },
+  {
+    "path": "web/demo/apps/music.css",
+    "sha256": "2e3eef906b1a49a6a5517085b3a7edc82df5d9234d057288079e44473ca6e5d8",
+    "bytes": 14787
+  },
+  {
+    "path": "web/demo/apps/music.js",
+    "sha256": "4f54c707a6d43df8042a51a6cb91cfe4aa3434296abcd440c460eb84edd08c00",
+    "bytes": 19299
+  },
+  {
+    "path": "web/demo/apps/topics.html",
+    "sha256": "43d2d99070ed518e99c6e5774c46d45f0b4271bfb42271d3d79c85874a863363",
+    "bytes": 1581
+  },
+  {
+    "path": "web/demo/apps/shared/fixture.js",
+    "sha256": "7f9edaa7ac3f91c27d6942ec2a9913116cd7fee476f496f7c880b9f3dcc0b4d4",
+    "bytes": 2913
+  },
+  {
+    "path": "web/demo/apps/assets/adam-smith.jpg",
+    "sha256": "3257151426fb6122e8a8706c88bfead4a6eaa0eb342c7bb4ab3133e0e33a4798",
+    "bytes": 94205
+  },
+  {
+    "path": "web/demo/apps/assets/bertrand-russell.jpg",
+    "sha256": "a89fa3e2ff503529d46b1ab903b030e0e9ba910c319c72b6b4bd5a5db9541565",
+    "bytes": 70376
+  },
+  {
+    "path": "web/demo/apps/assets/alfred-korzybski.jpg",
+    "sha256": "e984fe3ac42bfbf44101e6a1bcfa26214a18121eb21dbd2af6ab0c5a3f8bf8dd",
+    "bytes": 47309
+  },
+  {
+    "path": "web/demo/apps/assets/baruch-spinoza.jpg",
+    "sha256": "9cc06824b94d99e89cab4b2407e061a7ad04a7ef638f747a4df45fdfd048944a",
+    "bytes": 145486
+  },
+  {
+    "path": "web/demo/apps/assets/black-mirror.jpg",
+    "sha256": "1e2c13678fd5649b2dda9c5f6c13f7ec1c1ff471c1a3592b559cdef730088da2",
+    "bytes": 36841
+  },
+  {
+    "path": "web/demo/apps/assets/avalokiteshvara.jpg",
+    "sha256": "29618d8e5d4d17b3ade77d102dbff6eb7828fea4b533a0887e3baff7562e277a",
+    "bytes": 195573
+  },
+  {
+    "path": "web/demo/preview-controls.css",
+    "sha256": "4a2f7e8ca1ba672340f73d3745e1e9937d4c5da724ea5e2e4478c72d27f4a84e",
+    "bytes": 5495
+  },
+  {
+    "path": "web/demo/preview-controls.js",
+    "sha256": "fcef6d6ed54c1c5fbb8bb6f13e3549eb498a13655d9b5990e4225bc65bbcb939",
+    "bytes": 8118
+  },
+  {
+    "path": "web/demo/preview-boot.js",
+    "sha256": "61ef0ad49d7b89fc5da46758397bbd068aea42f6ebca76e17a9cc9ae225b2874",
+    "bytes": 5178
+  },
+  {
+    "path": "web/index.html",
+    "sha256": "219da8026967bae34cb36a90514167e13b0ca0edbb7fc1148b68eaeb462a7432",
+    "bytes": 7380
+  },
+  {
+    "path": "web/data.js",
+    "sha256": "569fe084937473273545d2feb0be756d7aa9eee7a6ca7ef69d3be945e711dd3c",
+    "bytes": 200
+  },
+  {
+    "path": "web/summaries.js",
+    "sha256": "36700c0dc2f35eeb5a60e424f9d35ee343623bdd3d5a92e0ec5fb23c5c495887",
+    "bytes": 196
+  },
+  {
+    "path": "web/core/skins.js",
+    "sha256": "6d5920b178ae0ce7441027c6f19d1af9c32e9393de5d143599d74484ed6c9dc5",
+    "bytes": 20814
+  },
+  {
+    "path": "web/core/skins.css",
+    "sha256": "951c0b5e04e4d37b65d0373274f997915e42567e4fa9ef20e3e668532dc41e1f",
+    "bytes": 9022
+  }
+]

@@ -1,0 +1,70 @@
+[
+  {
+    "source": "/home/telos/apps/wizard-wisdom/static/base.css",
+    "snapshot": "docs/evidence/reference/wisdom/base.css"
+  },
+  {
+    "source": "/home/telos/apps/wizard-wisdom/static/wisdom.css",
+    "snapshot": "docs/evidence/reference/wisdom/wisdom.css"
+  },
+  {
+    "source": "/home/telos/apps/wizard-wisdom/static/wisdom.js",
+    "snapshot": "docs/evidence/reference/wisdom/wisdom.js"
+  },
+  {
+    "source": "/home/telos/apps/wizard-wisdom/static/app.js",
+    "snapshot": "docs/evidence/reference/wisdom/app.js"
+  },
+  {
+    "source": "/home/telos/apps/wizard-wisdom/static/collections.css",
+    "snapshot": "docs/evidence/reference/wisdom/collections.css"
+  },
+  {
+    "source": "/home/telos/apps/wizard-wisdom/static/app.css",
+    "snapshot": "docs/evidence/reference/wisdom/app.css"
+  },
+  {
+    "source": "/home/telos/apps/wizard-wisdom/static/index.html",
+    "snapshot": "docs/evidence/reference/wisdom/index.html"
+  },
+  {
+    "source": "/home/telos/apps/wizard-signal/static/social.css",
+    "snapshot": "docs/evidence/reference/signal/social.css"
+  },
+  {
+    "source": "/home/telos/apps/wizard-signal/static/signal.css",
+    "snapshot": "docs/evidence/reference/signal/signal.css"
+  },
+  {
+    "source": "/home/telos/apps/wizard-signal/static/app.js",
+    "snapshot": "docs/evidence/reference/signal/app.js"
+  },
+  {
+    "source": "/home/telos/apps/wizard-signal/static/index.html",
+    "snapshot": "docs/evidence/reference/signal/index.html"
+  },
+  {
+    "source": "/home/telos/apps/wizard-music/src/app.css",
+    "snapshot": "docs/evidence/reference/music/app.css"
+  },
+  {
+    "source": "/home/telos/apps/wizard-music/src/music/music.css",
+    "snapshot": "docs/evidence/reference/music/music/music.css"
+  },
+  {
+    "source": "/home/telos/apps/wizard-music/src/music/MusicApp.tsx",
+    "snapshot": "docs/evidence/reference/music/music/MusicApp.tsx"
+  },
+  {
+    "source": "/home/telos/apps/wizard-topics-preview/web/styles.css",
+    "snapshot": "docs/evidence/reference/topics/styles.css"
+  },
+  {
+    "source": "/home/telos/apps/wizard-topics-preview/web/index.html",
+    "snapshot": "docs/evidence/reference/topics/index.html"
+  },
+  {
+    "source": "/home/telos/apps/wizard-topics-preview/web/app.js",
+    "snapshot": "docs/evidence/reference/topics/app.js"
+  }
+]

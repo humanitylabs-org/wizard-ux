@@ -1,0 +1,115 @@
+{
+  "sourceSnapshots": [
+    {
+      "source": "/home/telos/apps/wizard-wisdom/static/base.css",
+      "sha256": "3c673eec5e7ab4c133b46e8f9e9c30e73c796dfe90e7306db59d8157fed7377f",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-wisdom/static/wisdom.css",
+      "sha256": "da68d105cd8bbce633004244de5c3350b70d7fdb5bb8b5c02d5e3b94464a6d8b",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-wisdom/static/wisdom.js",
+      "sha256": "e8d7fa79e0de333d1ddc66a8ab7cc9560aab606892c68fa2eb6b77af2cd006e4",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-wisdom/static/app.js",
+      "sha256": "9198c97e955bfc905447ec25753a156b36036a5f60fec542aefaa34775e1d385",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-wisdom/static/collections.css",
+      "sha256": "c60ba14dc838b1176556dc4880c17b5dc04e2409bf75bbdc49593d4a3a6ac4b4",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-wisdom/static/app.css",
+      "sha256": "a05f7c450777f5b67df66051a79fca7fba4ea3ac452a5995e2f7487c83882c28",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-wisdom/static/index.html",
+      "sha256": "055dcede400a0b2d89b586d8a8ff3b60577d09238bf90192eb43c410be9052a1",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-signal/static/social.css",
+      "sha256": "5fb88cf42bad5fe0c8230915f3ffe958513d1690acf86cda93bec414205e1517",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-signal/static/signal.css",
+      "sha256": "753020cc7f215c1008910ffcb463b933e0b4e5959ee9cd894863c32a4cdeccfc",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-signal/static/app.js",
+      "sha256": "3ae1a7af6455d37553fb1bedb0d8822f41cce67a5ddfd570c106ff7d471fab3e",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-signal/static/index.html",
+      "sha256": "6dfe0566765de308a635da3b82e81ea1fd0be8bd16f2f1400d328052dca5711c",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-music/src/app.css",
+      "sha256": "31f06fc00b88f0b4f69ea31344dc260bf48da744c028e9a11b4298eebb1d36de",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-music/src/music/music.css",
+      "sha256": "acbd5c294fe83cb92a7984ea35c1c588984046ace10941d94498c14cbb37567f",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-music/src/music/MusicApp.tsx",
+      "sha256": "f47d44b48ebf1974d7ec6534e36248fb2e18323fe2a9dd6085a82bd5439504cd",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-topics-preview/web/styles.css",
+      "sha256": "8e8e1b3633a97bd2d296c940ca67cd0e6d802a073a3c43d0e1c6cdf400f0ccaa",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-topics-preview/web/index.html",
+      "sha256": "c0d41a50c5f598dded90e107b0412dd406e43b4fea11fdc1256b406f30da12f4",
+      "matchesSnapshot": true
+    },
+    {
+      "source": "/home/telos/apps/wizard-topics-preview/web/app.js",
+      "sha256": "f8ecfd66b02b6f1b02b64a7b38444044250d02b01be765e8606967b132a01c69",
+      "matchesSnapshot": true
+    }
+  ],
+  "shellAndSkin": [
+    {
+      "file": "web/app.js",
+      "unchanged": true
+    },
+    {
+      "file": "web/orb.js",
+      "unchanged": true
+    },
+    {
+      "file": "web/styles.css",
+      "unchanged": true
+    },
+    {
+      "file": "web/core/apps.js",
+      "unchanged": true
+    },
+    {
+      "file": "web/core/skins.js",
+      "unchanged": true
+    },
+    {
+      "file": "web/core/skins.css",
+      "unchanged": true
+    }
+  ]
+}

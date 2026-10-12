@@ -1,0 +1,9 @@
+/* Wisdom standalone layout. Reading column + collections rail on wide screens. */
+:root{--top:max(env(safe-area-inset-top),var(--wos-cutout,0px))}
+.w-layout{display:grid;grid-template-columns:minmax(0,640px) 320px;gap:0 28px;justify-content:center;min-height:100dvh}
+.w-main{min-width:0;min-height:100dvh;padding:max(env(safe-area-inset-top),var(--wos-cutout,0px)) 0 calc(32px + env(safe-area-inset-bottom))}
+.w-rail{position:sticky;top:0;height:100dvh;padding:24px 0;overflow-y:auto;scrollbar-width:none}
+:root.wb-open .w-rail{display:none}
+:root.wb-open body{overflow:hidden;overscroll-behavior:none}
+@media (max-width:999px){.w-layout{display:block}.w-rail{display:none}}
+#toast{bottom:calc(24px + env(safe-area-inset-bottom))}

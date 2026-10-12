@@ -1,0 +1,497 @@
+{
+  "passed": 116,
+  "failed": 0,
+  "checks": [
+    {
+      "pass": true,
+      "message": "Exact staging entry loads without login"
+    },
+    {
+      "pass": true,
+      "message": "All four app fixtures mounted"
+    },
+    {
+      "pass": true,
+      "message": "Phone Preview has an actual 44px touch target",
+      "detail": {
+        "x": 12,
+        "y": 790,
+        "width": 60.4375,
+        "height": 44
+      }
+    },
+    {
+      "pass": true,
+      "message": "A real skin button switches the connected apps"
+    },
+    {
+      "pass": true,
+      "message": "nebula reaches wisdom"
+    },
+    {
+      "pass": true,
+      "message": "nebula preserves wisdom document and font"
+    },
+    {
+      "pass": true,
+      "message": "nebula has no horizontal overflow in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "nebula has no duplicate staging badge in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "nebula reaches music"
+    },
+    {
+      "pass": true,
+      "message": "nebula preserves music document and font"
+    },
+    {
+      "pass": true,
+      "message": "nebula has no horizontal overflow in music"
+    },
+    {
+      "pass": true,
+      "message": "nebula has no duplicate staging badge in music"
+    },
+    {
+      "pass": true,
+      "message": "nebula reaches signal"
+    },
+    {
+      "pass": true,
+      "message": "nebula preserves signal document and font"
+    },
+    {
+      "pass": true,
+      "message": "nebula has no horizontal overflow in signal"
+    },
+    {
+      "pass": true,
+      "message": "nebula has no duplicate staging badge in signal"
+    },
+    {
+      "pass": true,
+      "message": "nebula reaches topics"
+    },
+    {
+      "pass": true,
+      "message": "nebula preserves topics document and font"
+    },
+    {
+      "pass": true,
+      "message": "nebula has no horizontal overflow in topics"
+    },
+    {
+      "pass": true,
+      "message": "nebula has no duplicate staging badge in topics"
+    },
+    {
+      "pass": true,
+      "message": "grove reaches wisdom"
+    },
+    {
+      "pass": true,
+      "message": "grove preserves wisdom document and font"
+    },
+    {
+      "pass": true,
+      "message": "grove has no horizontal overflow in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "grove has no duplicate staging badge in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "grove reaches music"
+    },
+    {
+      "pass": true,
+      "message": "grove preserves music document and font"
+    },
+    {
+      "pass": true,
+      "message": "grove has no horizontal overflow in music"
+    },
+    {
+      "pass": true,
+      "message": "grove has no duplicate staging badge in music"
+    },
+    {
+      "pass": true,
+      "message": "grove reaches signal"
+    },
+    {
+      "pass": true,
+      "message": "grove preserves signal document and font"
+    },
+    {
+      "pass": true,
+      "message": "grove has no horizontal overflow in signal"
+    },
+    {
+      "pass": true,
+      "message": "grove has no duplicate staging badge in signal"
+    },
+    {
+      "pass": true,
+      "message": "grove reaches topics"
+    },
+    {
+      "pass": true,
+      "message": "grove preserves topics document and font"
+    },
+    {
+      "pass": true,
+      "message": "grove has no horizontal overflow in topics"
+    },
+    {
+      "pass": true,
+      "message": "grove has no duplicate staging badge in topics"
+    },
+    {
+      "pass": true,
+      "message": "paper reaches wisdom"
+    },
+    {
+      "pass": true,
+      "message": "paper preserves wisdom document and font"
+    },
+    {
+      "pass": true,
+      "message": "paper has no horizontal overflow in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "paper has no duplicate staging badge in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "paper reaches music"
+    },
+    {
+      "pass": true,
+      "message": "paper preserves music document and font"
+    },
+    {
+      "pass": true,
+      "message": "paper has no horizontal overflow in music"
+    },
+    {
+      "pass": true,
+      "message": "paper has no duplicate staging badge in music"
+    },
+    {
+      "pass": true,
+      "message": "paper reaches signal"
+    },
+    {
+      "pass": true,
+      "message": "paper preserves signal document and font"
+    },
+    {
+      "pass": true,
+      "message": "paper has no horizontal overflow in signal"
+    },
+    {
+      "pass": true,
+      "message": "paper has no duplicate staging badge in signal"
+    },
+    {
+      "pass": true,
+      "message": "paper reaches topics"
+    },
+    {
+      "pass": true,
+      "message": "paper preserves topics document and font"
+    },
+    {
+      "pass": true,
+      "message": "paper has no horizontal overflow in topics"
+    },
+    {
+      "pass": true,
+      "message": "paper has no duplicate staging badge in topics"
+    },
+    {
+      "pass": true,
+      "message": "tide reaches wisdom"
+    },
+    {
+      "pass": true,
+      "message": "tide preserves wisdom document and font"
+    },
+    {
+      "pass": true,
+      "message": "tide has no horizontal overflow in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "tide has no duplicate staging badge in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "tide reaches music"
+    },
+    {
+      "pass": true,
+      "message": "tide preserves music document and font"
+    },
+    {
+      "pass": true,
+      "message": "tide has no horizontal overflow in music"
+    },
+    {
+      "pass": true,
+      "message": "tide has no duplicate staging badge in music"
+    },
+    {
+      "pass": true,
+      "message": "tide reaches signal"
+    },
+    {
+      "pass": true,
+      "message": "tide preserves signal document and font"
+    },
+    {
+      "pass": true,
+      "message": "tide has no horizontal overflow in signal"
+    },
+    {
+      "pass": true,
+      "message": "tide has no duplicate staging badge in signal"
+    },
+    {
+      "pass": true,
+      "message": "tide reaches topics"
+    },
+    {
+      "pass": true,
+      "message": "tide preserves topics document and font"
+    },
+    {
+      "pass": true,
+      "message": "tide has no horizontal overflow in topics"
+    },
+    {
+      "pass": true,
+      "message": "tide has no duplicate staging badge in topics"
+    },
+    {
+      "pass": true,
+      "message": "ember reaches wisdom"
+    },
+    {
+      "pass": true,
+      "message": "ember preserves wisdom document and font"
+    },
+    {
+      "pass": true,
+      "message": "ember has no horizontal overflow in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "ember has no duplicate staging badge in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "ember reaches music"
+    },
+    {
+      "pass": true,
+      "message": "ember preserves music document and font"
+    },
+    {
+      "pass": true,
+      "message": "ember has no horizontal overflow in music"
+    },
+    {
+      "pass": true,
+      "message": "ember has no duplicate staging badge in music"
+    },
+    {
+      "pass": true,
+      "message": "ember reaches signal"
+    },
+    {
+      "pass": true,
+      "message": "ember preserves signal document and font"
+    },
+    {
+      "pass": true,
+      "message": "ember has no horizontal overflow in signal"
+    },
+    {
+      "pass": true,
+      "message": "ember has no duplicate staging badge in signal"
+    },
+    {
+      "pass": true,
+      "message": "ember reaches topics"
+    },
+    {
+      "pass": true,
+      "message": "ember preserves topics document and font"
+    },
+    {
+      "pass": true,
+      "message": "ember has no horizontal overflow in topics"
+    },
+    {
+      "pass": true,
+      "message": "ember has no duplicate staging badge in topics"
+    },
+    {
+      "pass": true,
+      "message": "signal reaches wisdom"
+    },
+    {
+      "pass": true,
+      "message": "signal preserves wisdom document and font"
+    },
+    {
+      "pass": true,
+      "message": "signal has no horizontal overflow in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "signal has no duplicate staging badge in wisdom"
+    },
+    {
+      "pass": true,
+      "message": "signal reaches music"
+    },
+    {
+      "pass": true,
+      "message": "signal preserves music document and font"
+    },
+    {
+      "pass": true,
+      "message": "signal has no horizontal overflow in music"
+    },
+    {
+      "pass": true,
+      "message": "signal has no duplicate staging badge in music"
+    },
+    {
+      "pass": true,
+      "message": "signal reaches signal"
+    },
+    {
+      "pass": true,
+      "message": "signal preserves signal document and font"
+    },
+    {
+      "pass": true,
+      "message": "signal has no horizontal overflow in signal"
+    },
+    {
+      "pass": true,
+      "message": "signal has no duplicate staging badge in signal"
+    },
+    {
+      "pass": true,
+      "message": "signal reaches topics"
+    },
+    {
+      "pass": true,
+      "message": "signal preserves topics document and font"
+    },
+    {
+      "pass": true,
+      "message": "signal has no horizontal overflow in topics"
+    },
+    {
+      "pass": true,
+      "message": "signal has no duplicate staging badge in topics"
+    },
+    {
+      "pass": true,
+      "message": "Wisdom reading position and content survive comparison and skin switches"
+    },
+    {
+      "pass": true,
+      "message": "Wisdom keeps its exact serif typography"
+    },
+    {
+      "pass": true,
+      "message": "Original and Unified visibly differ in reading palette"
+    },
+    {
+      "pass": true,
+      "message": "Fullscreen is the actual shell window transition"
+    },
+    {
+      "pass": true,
+      "message": "Fullscreen roundtrip keeps reading position"
+    },
+    {
+      "pass": true,
+      "message": "Native Back closes Preview only, preserving reader"
+    },
+    {
+      "pass": true,
+      "message": "Nested reader Back returns to Wisdom library and stays open"
+    },
+    {
+      "pass": true,
+      "message": "Music local player state survives skin change"
+    },
+    {
+      "pass": true,
+      "message": "Sample player remains explicitly silent"
+    },
+    {
+      "pass": true,
+      "message": "Music nested Back keeps shell open"
+    },
+    {
+      "pass": true,
+      "message": "Small-phone Preview target remains 44px",
+      "detail": {
+        "x": 12,
+        "y": 740,
+        "width": 60.4375,
+        "height": 44
+      }
+    },
+    {
+      "pass": true,
+      "message": "Preview opens at 360px"
+    },
+    {
+      "pass": true,
+      "message": "Preview sheet fits 360px viewport",
+      "detail": {
+        "x": 12,
+        "y": 232.828125,
+        "width": 336,
+        "height": 497.171875
+      }
+    },
+    {
+      "pass": true,
+      "message": "Preview opens at 1280px"
+    },
+    {
+      "pass": true,
+      "message": "Preview sheet fits 1280px viewport",
+      "detail": {
+        "x": 470,
+        "y": 55,
+        "width": 340,
+        "height": 481.078125
+      }
+    },
+    {
+      "pass": true,
+      "message": "Architecture opens from the real Preview control"
+    }
+  ],
+  "error": "TimeoutError: frame.waitForFunction: Timeout 30000ms exceeded.",
+  "errors": [],
+  "writes": []
+}

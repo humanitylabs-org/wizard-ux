@@ -1,0 +1,64 @@
+{
+  "host": "thales.local",
+  "base": "https://app-styling.staging.wizard001.com/wizard-os-home/",
+  "checks": [
+    {
+      "id": "wisdom",
+      "state": {
+        "h1": "Begin the morning",
+        "skin": "nebula",
+        "comparison": "unified",
+        "connected": true,
+        "scrollWidth": 371,
+        "width": 371,
+        "bodyFont": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"
+      }
+    },
+    {
+      "id": "wisdom",
+      "afterNativeBack": {
+        "h1": "Wisdom library",
+        "rootHook": false
+      },
+      "shellStillOpen": true
+    },
+    {
+      "id": "wizard-music",
+      "state": {
+        "h1": "Music",
+        "skin": "nebula",
+        "comparison": "unified",
+        "connected": true,
+        "scrollWidth": 371,
+        "width": 371,
+        "bodyFont": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"
+      }
+    },
+    {
+      "id": "wizard-signal",
+      "state": {
+        "h1": "Signal",
+        "skin": "nebula",
+        "comparison": "unified",
+        "connected": true,
+        "scrollWidth": 371,
+        "width": 371,
+        "bodyFont": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"
+      }
+    },
+    {
+      "id": "topics",
+      "state": {
+        "h1": "Topics · Today",
+        "skin": "nebula",
+        "comparison": "unified",
+        "connected": true,
+        "scrollWidth": 371,
+        "width": 371,
+        "bodyFont": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif"
+      }
+    }
+  ],
+  "errors": [],
+  "writes": []
+}

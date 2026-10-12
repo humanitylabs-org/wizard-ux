@@ -2620,6 +2620,8 @@
     return 'hosted';
   }
   function backStep(skipHosted) {
+    // Isolated app-styling preview owns its top sheet before the app or shell takes a step.
+    const previewStep = window.WosPreviewControls?.back?.(); if (previewStep) return previewStep;
     { const t = window.WosTour?.back(); if (t) return t; } // the first-run tour and the Help sheet sit above everything
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.

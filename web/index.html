@@ -2,15 +2,17 @@
 <html lang="en" data-shell="phone">
 <head>
   <meta charset="utf-8">
+  <!-- PREVIEW CANDIDATE (sample apps, read-only). Differences from the shipped index: demo/preview-boot.js runs
+       first (phone shell at every width, sample app registry and desks, no writes, no microphone); core/shell.js,
+       core/tour.js and the PWA install/service worker are not loaded; core/skins.*, demo/theme-host.js and the
+       preview controls are added. Shell code itself is unchanged. -->
+  <script src="demo/preview-boot.js"></script>
   <script src="core/carry-in.js"></script>
-  <script src="core/shell.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#05030c">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>Wizard OS</title>
-  <link rel="manifest" href="manifest.webmanifest">
-  <script src="pwa-install.js" data-pwa-name="Wizard OS" data-pwa-origin=""></script>
+  <title>Wizard OS · Preview</title>
   <link rel="icon" href="icon-192.png" type="image/png">
   <link rel="stylesheet" href="core/base.css">
   <link rel="stylesheet" href="motion/wizard-motion.css">
@@ -24,6 +26,8 @@
   <link rel="stylesheet" href="usuals.css">
   <link rel="stylesheet" href="core/desks.css">
   <link rel="stylesheet" href="core/tour.css">
+  <link rel="stylesheet" href="core/skins.css">
+  <link rel="stylesheet" href="demo/preview-controls.css">
 </head>
 <body>
   <div id="device" class="device">
@@ -134,8 +138,10 @@
   <script src="orb.js"></script>
   <script src="usuals.js"></script>
   <script src="core/music-voice.js"></script>
-  <script src="core/tour.js"></script>
   <script src="app.js"></script>
+  <script src="core/skins.js"></script>
+  <script src="demo/theme-host.js"></script>
+  <script src="demo/preview-controls.js"></script>
   <script src="device.js"></script>
   <script src="motion/wizard-motion.js"></script>
   <script src="live-mode.js"></script>

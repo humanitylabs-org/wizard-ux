@@ -1,0 +1,34 @@
+{
+  "host": "thales.local",
+  "target": {
+    "x": 14,
+    "y": 6.75,
+    "width": 77.34375,
+    "height": 13
+  },
+  "skinLabels": [
+    "Nebula",
+    "Grove",
+    "Paper",
+    "Tide",
+    "Ember",
+    "Signal"
+  ],
+  "reader": {
+    "skin": "paper",
+    "page": "3 / 6",
+    "serif": "Georgia,\"Iowan Old Style\",Charter,\"Times New Roman\",serif",
+    "bodyFont": "Georgia, \"Iowan Old Style\", Charter, \"Times New Roman\", serif",
+    "text": "rgb(29, 27, 23)",
+    "readerSurface": "#fffdf8",
+    "rootBg": "rgb(246, 243, 236)"
+  },
+  "sameTextAcrossComparison": true,
+  "afterBack": {
+    "h1": "Wisdom library",
+    "rootHook": false
+  },
+  "architectureFrameOpened": true,
+  "errors": [],
+  "writes": []
+}

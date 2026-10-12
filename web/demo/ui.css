@@ -1,0 +1,15 @@
+/* Shared primitive layer: semantic colors. Editorial typography stays app-owned. */
+:root {--wz-font-ui:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--wz-radius:14px}
+*{box-sizing:border-box}html{color:var(--wz-text,#f3efff);font-family:var(--wz-font-ui);-webkit-text-size-adjust:100%}
+body{margin:0;color:var(--wz-text,#f3efff);background:var(--wz-canvas,#05030c);-webkit-font-smoothing:antialiased}
+html[data-presentation="window"],html[data-presentation="window"] body{background:transparent}
+button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+a{color:var(--wz-accent,#b99bff)}:focus-visible{outline:2px solid var(--wz-accent);outline-offset:3px}
+.wz-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 15px;border:1px solid var(--wz-border);border-radius:var(--wz-radius);background:var(--wz-surface);color:var(--wz-text);font-family:var(--wz-font-ui)}
+.wz-button.primary{background:var(--wz-accent);color:var(--wz-on-accent);border-color:transparent}
+.wz-input{min-height:44px;border:1px solid var(--wz-border);border-radius:var(--wz-radius);padding:10px 13px;background:var(--wz-surface);color:var(--wz-text)}
+.wz-panel{background:var(--wz-surface);border:1px solid var(--wz-border);border-radius:var(--wz-radius)}
+.wz-muted{color:var(--wz-text-secondary)}
+/* The host labels the preview once; embedded apps never duplicate that badge. */
+html[data-presentation="window"] #wiz-staging-tag,html[data-presentation="immersive"] #wiz-staging-tag,html[data-preview-hosted] #wiz-staging-tag{display:none!important}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}

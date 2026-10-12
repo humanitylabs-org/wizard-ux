@@ -1,0 +1,26 @@
+{
+  "workingDirectory": "/home/telos/worktrees/wos-app-styling",
+  "HOME": "/home/telos",
+  "modelArgument": "claude-opus-5-5",
+  "effort": "high",
+  "claudeVersion": "2.1.280",
+  "tools": [
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep"
+  ],
+  "strictMcpConfig": {
+    "mcpServers": {}
+  },
+  "permissionMode": "acceptEdits",
+  "noSessionPersistence": true,
+  "outputFormat": "json",
+  "memoryHigh": "2G",
+  "memoryMax": "4G",
+  "scope": "run-u9062283.scope",
+  "round1Prompt": "docs/evidence/opus-round1-prompt.md",
+  "round1Response": "docs/evidence/opus-round1-response.json",
+  "recordedAt": "2026-10-12T12:46:18.105846+00:00"
+}

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#06040f">
+<title>Wizard · Topics</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css?v=11">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="glyph" aria-hidden="true">◇</span><h1>Topics</h1></div>
+  <div id="meta" class="meta"></div>
+</header>
+<div id="jobs" class="jobs" hidden></div>
+<main id="pager">
+  <section id="v-today" class="pane" data-view="today" aria-label="Today"></section>
+  <section id="v-following" class="pane" data-view="following" aria-label="Following"></section>
+  <section id="v-archive" class="pane" data-view="archive" aria-label="Archive"></section>
+</main>
+<button id="fab" class="fab" type="button" aria-label="Follow a topic"><span>+</span> Follow</button>
+<nav class="tabs" role="tablist">
+  <button role="tab" data-view="today"><b>◉</b><span>Today</span></button>
+  <button role="tab" data-view="following"><b>◇</b><span>Following</span></button>
+  <button role="tab" data-view="archive"><b>☰</b><span>Archive</span></button>
+</nav>
+<div id="scrim" class="scrim" hidden></div>
+<section id="sheet" class="sheet" hidden aria-modal="true" role="dialog"></section>
+<div id="toast" class="toast" hidden></div>
+<script src="app.js?v=11"></script>
+</body>
+</html>

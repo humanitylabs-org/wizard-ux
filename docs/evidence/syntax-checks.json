@@ -1,0 +1,37 @@
+[
+  {
+    "file": "web/demo/apps/signal.js",
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "file": "web/demo/apps/topics.js",
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "file": "web/demo/apps/wisdom.js",
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "file": "web/demo/apps/music.js",
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "file": "web/demo/apps/shared/fixture.js",
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "file": "web/demo/preview-controls.js",
+    "returncode": 0,
+    "output": ""
+  },
+  {
+    "file": "web/demo/preview-boot.js",
+    "returncode": 0,
+    "output": ""
+  }
+]
