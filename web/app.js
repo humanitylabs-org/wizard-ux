@@ -214,9 +214,8 @@
     const rv = !!(w.from && w.from.sid);
     el.className = `win app-${w.app}${rv ? ' reviewing' : ''}${w.bound ? ' bound' : ''}`; el.dataset.win = w.id;
     el.innerHTML = `<header class="wbar">${ico('span', 'wic', a)}<span class="wt">${esc(winTitle(w))}</span>${rv ? '<span class="rv-tag">Review</span>' : ''}
-      ${w.bound ? '<button class="wb wpin wopen" data-wact="detach" aria-label="Open as an app on its own desk" title="Keep a copy open on its own desk"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span>Open app</span></button>' : w.from ? '<button class="wb wpin" data-wact="pin" aria-label="Pin this desk" title="Keep it as a normal desk"><svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3v1H7v-1l3-3-1-6zM12 14v6"/></svg><span>Pin</span></button>' : ''}
+      ${w.from ? '<button class="wb wpin wopen" data-wact="detach" aria-label="Open as an app on its own desk" title="Keep a copy open on its own desk"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span>Open app</span></button>' : ''}
       <button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
-      <button class="wb" data-wact="menu" aria-label="Window options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
       <button class="wb" data-wact="close" aria-label="Close window"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button></header>
       <div class="wbody">${winBody(w)}</div><div class="shield" aria-hidden="true"></div>`;
     return el;
@@ -860,33 +859,45 @@
     }
     const f = W[desks[idx]?.focus], b0 = f && f.app === 'chats' && f.thread ? boundOf(f.id) : null, b = b0 && b0.bsid === f.thread ? b0 : null;
     const on = !!(b && deskOf(b.id) === idx + 1);
+    const owner = f?.bound ? W[f.bound] : null;
+    const left = !!(owner && owner.thread === f.bsid && deskOf(owner.id) === idx - 1);
     const nsec = on ? secOf(idx + 1) : null;
+    const psec = left ? secOf(idx - 1) : null;
     const hsec = on ? secOf(idx) : null;
+    const vsec = left ? secOf(idx) : null;
     $$('.desk.bound-peek', track).forEach(s => { if (s !== nsec) s.classList.remove('bound-peek'); });
+    $$('.desk.bound-chat-peek', track).forEach(s => { if (s !== psec) s.classList.remove('bound-chat-peek'); });
     $$('.desk.bound-host', track).forEach(s => { if (s !== hsec) s.classList.remove('bound-host'); });
+    $$('.desk.bound-view-host', track).forEach(s => { if (s !== vsec) s.classList.remove('bound-view-host'); });
     if (nsec) nsec.classList.add('bound-peek');
+    if (psec) psec.classList.add('bound-chat-peek');
     if (hsec) hsec.classList.add('bound-host');
+    if (vsec) vsec.classList.add('bound-view-host');
     device.classList.toggle('bound-peeking', on);
-    boundEdge.hidden = !on;
-    if (on) {
-      const a = winApp(b), key = b.id;
+    device.classList.toggle('bound-view-peeking', left);
+    boundEdge.hidden = !(on || left);
+    boundEdge.classList.toggle('left', left);
+    if (on || left) {
+      const target = left ? owner : b, a = winApp(target), key = target.id;
+      boundEdge.dataset.direction = left ? '-1' : '1';
+      boundEdge.dataset.target = target.id;
       if (boundEdge.dataset.for !== key) { boundEdge.dataset.for = key; boundEdge.querySelector('.be-ic').innerHTML = ico('span', 'be-sg', a); }
-      boundEdge.setAttribute('aria-label', `Open ${winTitle(b)}, bound to this thread`);
+      boundEdge.setAttribute('aria-label', left ? `Return to ${winTitle(owner)}, this view's thread` : `Open ${winTitle(b)}, bound to this thread`);
     }
   }
   // Tap the tab → the bound desk. Drag it left → the desk follows the finger; release past ~70 px lands there.
   function wireEdge(el) {
     let P = null;
-    el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); el.setPointerCapture(e.pointerId); P = { x: e.clientX, t: performance.now(), dx: 0, live: false }; });
+    el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); el.setPointerCapture(e.pointerId); P = { x: e.clientX, t: performance.now(), dx: 0, live: false, dir: Number(el.dataset.direction) || 1, target: el.dataset.target }; });
     el.addEventListener('pointermove', e => {
-      if (!P) return; P.dx = Math.min(0, e.clientX - P.x);
-      if (!P.live && P.dx < -8) { P.live = true; device.classList.add('bound-drag'); }
+      if (!P) return; P.dx = P.dir === -1 ? Math.max(0, e.clientX - P.x) : Math.min(0, e.clientX - P.x);
+      if (!P.live && Math.abs(P.dx) > 8) { P.live = true; device.classList.add('bound-drag'); }
       if (P.live) placeTrack(P.dx * 1.05, false);
     });
     const end = (e, cancel) => {
       if (!P) return; const p = P; P = null; device.classList.remove('bound-drag');
       const v = p.dx / ((performance.now() - p.t) || 1);
-      if (!cancel && (!p.live || p.dx < -70 || v < -.5)) { goDesk(idx + 1); vib(10); }
+      if (!cancel && (!p.live || Math.abs(p.dx) > 70 || Math.abs(v) > .5)) { const at = deskOf(p.target); if (at >= 0) goDesk(at); vib(10); }
       else placeTrack(0, true);
     };
     el.addEventListener('pointerup', e => end(e, false));
@@ -894,7 +905,8 @@
   }
   // "Open app": a normal copy on a desk of its own, beside the bound one; the bound view stays with the thread.
   function detachBound(id) {
-    const w = W[id]; if (!w || !w.bound) return;
+    const w = W[id]; if (!w || !w.from) return;
+    if (!w.bound) return pinWin(id); // a manually opened review becomes its own app desk
     const href = frameHref(id) || w.url || '';
     const a = w.appId && w.appId !== 'link' ? (findApp(w.appId) || APP[w.appId]) : null;
     if (w.app === 'usuals') { const here = Object.keys(W).find(k => W[k].app === 'usuals' && !W[k].bound && deskOf(k) >= 0); if (here) goDesk(deskOf(here)); else openWin({ app: 'usuals' }); }
@@ -908,8 +920,8 @@
   function pinWin(id) {
     const w = W[id]; if (!w || !w.from) return;
     delete w.from; save();
-    const el = winEl(id); if (el) { el.classList.remove('reviewing'); el.querySelector('[data-wact="pin"]')?.remove(); el.querySelector('.rv-tag')?.remove(); }
-    applyLayout(deskOf(id)); renderDots(); syncReviewChip(); toast('📌', 'Pinned · it stays as a normal desk', 1600);
+    const el = winEl(id); if (el) { el.classList.remove('reviewing'); el.querySelector('[data-wact="detach"]')?.remove(); el.querySelector('.rv-tag')?.remove(); }
+    applyLayout(deskOf(id)); renderDots(); syncReviewChip(); toast('↗', 'Open app · it now has its own desk', 1600);
   }
   /* Review mode: the amber orb ring is the only lasting marker (James, 10 Oct 2026: no persistent chip).
    * The first time a review desk opens, a one-off card explains it; tap anywhere or Back dismisses it. */
@@ -921,8 +933,8 @@
     rvCoach = document.createElement('div'); rvCoach.className = 'rv-coach'; rvCoach.setAttribute('role', 'dialog'); rvCoach.setAttribute('aria-label', 'Review mode');
     rvCoach.innerHTML = `<div class="rv-card"><div class="rv-h"><i></i>Review mode</div>
       <p><b>Tap the orb and talk.</b> Your feedback goes to <b>${esc(clip(LIVE?.session(f.from.sid)?.title || (f.from.title !== 'Thread' && f.from.title) || 'the thread you came from', 48))}</b>.</p>
-      <p><b>Pin</b> keeps this as a normal desk.</p>
-      <p><b>Back</b> or <b>✕</b> closes it and takes you back.</p>
+      <p><b>Open app</b> keeps the app on its own desk${f.bound ? ", while this review stays with the thread" : ""}.</p>
+      <p>${f.bound ? "<b>Tap the left edge or swipe right</b> to return to the thread. <b>Back</b> returns too; leaving the thread closes its review view." : "<b>Back</b> or <b>✕</b> closes the review and takes you back."}</p>
       <button class="rv-ok" type="button">Got it</button></div>`;
     rvCoach.addEventListener('click', () => closeReviewCoach());
     device.appendChild(rvCoach); void rvCoach.offsetWidth; rvCoach.classList.add('open');
@@ -1566,7 +1578,7 @@
     if (wa === 'pin') return pinWin(id);
     if (wa === 'detach') return detachBound(id);
     if (wa === 'full') { const d = desks[deskOf(id)]; return setFull(id, !(d.full && d.focus === id)); }
-    if (wa === 'menu') return openMenu(id);
+
     if (e.target.closest('.wbar')) {
       // Use the input timestamp, not handling time: a busy page (an app loading in
       // another tile) must not turn a quick double-tap into two single taps.
@@ -1593,35 +1605,10 @@
   });
   CHATS.bind(track);
 
-  /* Window menu: full screen, move to a neighbouring desk, close. */
+  /* Window actions live in the title bar; desk arrangement lives in the overview. */
   const menuEl = $('#wmenu');
   let menuFor = null;
-  function openMenu(id) {
-    const i = deskOf(id); if (i < 0) return;
-    menuFor = id; const d = desks[i], full = d.full && d.focus === id;
-    const btn = (k, label, dis) => `<button data-mact="${k}" ${dis ? 'disabled' : ''}>${label}</button>`;
-    menuEl.innerHTML = `<div class="wm-title">${esc(winTitle(W[id]))}</div>
-      ${btn('full', full ? '⤡ Back to tiles' : '⤢ Full screen')}
-      <div class="wm-row">${btn('left', '← Onto left desk', i <= 1)}${btn('right', 'Onto right desk →', i >= desks.length - 1)}</div>
-      ${d.wins.length > 1 ? btn('own', '⇱ Own desk') : ''}
-      ${btn('close', '✕ Close')}`;
-    const r = winEl(id).querySelector('[data-wact="menu"]').getBoundingClientRect(), dr = device.getBoundingClientRect();
-    menuEl.style.top = `${Math.min(r.bottom - dr.top + 6, dr.height - 260)}px`;
-    menuEl.style.right = `${Math.max(10, dr.right - r.right - 4)}px`;
-    menuEl.classList.add('open'); vib(6);
-  }
-  function closeMenu() { menuFor = null; menuEl.classList.remove('open'); }
-  menuEl.addEventListener('click', e => {
-    const a = e.target.closest('[data-mact]')?.dataset.mact; const id = menuFor; if (!a || !id) return;
-    closeMenu();
-    const i = deskOf(id);
-    if (a === 'full') { const d = desks[i]; setFull(id, !(d.full && d.focus === id)); }
-    else if (a === 'left') moveWin(id, i - 1);
-    else if (a === 'right') moveWin(id, i + 1);
-    else if (a === 'own') moveWin(id, 'own');
-    else if (a === 'close') closeWin(id);
-  });
-  document.addEventListener('pointerdown', e => { if (menuFor && !e.target.closest('#wmenu') && !e.target.closest('[data-wact="menu"]')) closeMenu(); }, true);
+  function closeMenu() { menuFor = null; menuEl?.classList.remove('open'); }
 
   /* Pinch a window: spread to fill the screen, pinch in to tile it again.
    * Review windows keep their own pinch for Day → Week → Month. */

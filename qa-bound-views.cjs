@@ -51,7 +51,7 @@ function routeFor() {
       return json(200, { ok: true });
     }
     const LOCAL = { '/meditation/': 9420, '/files/': 8954 };
-    for (const [pre, port] of Object.entries(LOCAL)) if (u.pathname.startsWith(pre) || u.pathname === pre.slice(0, -1)) { const res = await r.fetch({ url: `http://127.0.0.1:${port}${u.pathname}${u.search}` }).catch(() => null); return res ? r.fulfill({ response: res }) : r.fulfill({ status: 200, contentType: 'text/html', body: `<body style="background:#123;color:#fff;font:20px sans-serif">${pre}</body>` }); }
+    for (const [pre, port] of Object.entries(LOCAL)) if (!process.env.QA_REAL_APPS && (u.pathname.startsWith(pre) || u.pathname === pre.slice(0, -1))) { const res = await r.fetch({ url: `http://127.0.0.1:${port}${u.pathname}${u.search}` }).catch(() => null); return res ? r.fulfill({ response: res }) : r.fulfill({ status: 200, contentType: 'text/html', body: `<body style="background:#123;color:#fff;font:20px sans-serif">${pre}</body>` }); }
     if (!u.pathname.startsWith('/wizard/')) return r.continue();
     if (u.pathname === '/wizard/hermes/api/sessions' && (u.searchParams.get('offset') || '0') === '0') {
       const res = await r.fetch(); const p = await res.json();
@@ -67,7 +67,7 @@ function routeFor() {
 
 (async () => {
   const b = await chromium.launch({ executablePath: fs.existsSync(EXEC) ? EXEC : undefined });
-  const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true });
+  const ctx = await b.newContext({ viewport: { width: Number(process.env.QA_WIDTH) || 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true });
   await ctx.route('**/*', routeFor());
   const p = await ctx.newPage(); p.setDefaultTimeout(8000);
   const errs = [];
@@ -112,7 +112,15 @@ function routeFor() {
     await tapEdge();
     const s2 = await st();
     ok(s2.idx === s1.bd && s2.focusBound, '2 tapping the edge lands on the bound view', s2);
-    ok(!s2.edge && !s2.peek, '2 edge and peek go away on the view itself', s2);
+    ok(s2.edge && !s2.peek && await p.locator('#boundEdge.left').count() === 1, '2 bound view shows the matching left edge back to its thread', s2);
+    ok(await p.locator('.desk.bound-chat-peek').count() === 1, '2 the chat panel peeks from the left');
+    ok(await p.locator('[data-wact="menu"]').count() === 0, '2 three-dot window menu removed');
+    // Exercise first-run coaching instead of pre-marking it seen.
+    await p.evaluate(() => { localStorage.removeItem('wos.rvCoached'); const z = __wos.idx; __wos.goDesk(z - 1); __wos.goDesk(z); });
+    await p.waitForTimeout(300);
+    const coaching = await p.locator('.rv-card').innerText();
+    ok(coaching.includes('Open app') && !/\bPin\b/.test(coaching) && coaching.includes('left edge'), '2 coach explains current Open app and shared edge', coaching);
+    await p.locator('.rv-ok').tap(); await sleep(350);
     const bar = await p.evaluate(() => { const w = document.querySelector('.desk .win.bound'); return w ? { reviewing: w.classList.contains('reviewing'), open: !!w.querySelector('[data-wact="detach"]'), pin: !!w.querySelector('[data-wact="pin"]') } : null; });
     ok(bar && bar.reviewing && bar.open && !bar.pin, '2 view shows the amber review frame and "Open app" (no Pin)', bar);
     await sleep(800);
@@ -134,6 +142,22 @@ function routeFor() {
     const s4 = await st(); if (!s4.focusBound) { await p.screenshot({ path: path.join(OUT, '4-fail.png') }); console.log('msgs', await p.evaluate(() => document.querySelector('.ch-msgs')?.innerText.slice(0, 300))); }
     ok(s4.idx === s3.bd && s4.focusBound, '4 dragging the edge left lands on the view', s4, s4);
     await back();
+
+    // Match the new left edge: tap and real finger drag both return to the thread.
+    await tapEdge(); await tapEdge();
+    ok((await st()).focusApp === 'chats', '4 left edge tap returns to chat');
+    await tapEdge();
+    const lb = await p.locator('#boundEdge.left .be-tab').boundingBox();
+    x = lb.x + lb.width / 2; y = lb.y + lb.height / 2;
+    await tp('touchStart', x, y); for (let k = 0; k < 8; k++) { x += 18; await tp('touchMove', x, y); await sleep(25); } await tp('touchEnd'); await sleep(900);
+    ok((await st()).focusApp === 'chats', '4 dragging the left edge right returns to chat');
+    await tapEdge();
+    const cb = await p.locator('#boundEdge.left .be-tab').boundingBox();
+    x = cb.x + cb.width / 2; y = cb.y + cb.height / 2;
+    await tp('touchStart', x, y); await tp('touchMove', x + 50, y); await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); await sleep(700);
+    ok((await st()).focusBound, '4 cancelled left-edge drag preserves bound view');
+    await p.evaluate(() => history.back()); await sleep(900);
+    ok((await st()).focusApp === 'chats' && await alive(), '4 browser Back returns to thread and Wizard stays open');
 
     // 5. Tapping the link in the thread goes to the same bound view (no second copy).
     await p.locator(`[data-chats="${await wid()}"] .ch-msgs .msg.a a`, { hasText: 'open Meditate' }).last().tap(); await sleep(1000);

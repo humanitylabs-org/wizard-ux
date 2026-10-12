@@ -137,6 +137,19 @@
 @keyframes be-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 /* On the bound view itself: the amber review frame plus "Open app" in the bar. */
 .win.bound .wbar .wopen span { white-space: nowrap; }
+/* On the bound view, its thread peeks back in from the left: the same shared canvas in both directions. */
+.desk.bound-chat-peek { transform: translate3d(36px, 0, 0); z-index: 3; transition: transform 520ms var(--ease); }
+.desk.bound-chat-peek .tiles { -webkit-mask-image: linear-gradient(270deg, rgba(0,0,0,.6), #000 26px); mask-image: linear-gradient(270deg, rgba(0,0,0,.6), #000 26px); }
+.desk.bound-chat-peek > .tiles .win { box-shadow: 10px 0 28px rgba(255, 170, 60, .16); }
+.device.bound-view-peeking .desk.bound-view-host .tiles { left: 36px; }
+.device.bound-drag .desk.bound-chat-peek { transition: none; }
+.bound-edge.left { left: 0; right: auto; justify-content: flex-start; }
+.bound-edge.left .be-glow { left: 0; right: auto; border-radius: 0 3px 3px 0; }
+.bound-edge.left .be-tab { padding: 7px 6px 6px 4px; border-radius: 0 13px 13px 0; border-left: 0; border-right: 1px solid rgba(255, 184, 77, .5); box-shadow: 6px 0 20px rgba(0,0,0,.35); animation-name: be-in-left; }
+.bound-edge.left .be-chev { transform: rotate(180deg); }
+.bound-edge.left:active .be-tab { transform: translateX(3px); }
+@keyframes be-in-left { from { transform: translateX(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bound-edge .be-glow, .bound-edge .be-tab { animation: none; } .desk.bound-peek, .desk.bound-chat-peek { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .ov, .ov-card { transition: none; } }
 
 /* ＋ after the last desk: a new desk, starting from the app list */
