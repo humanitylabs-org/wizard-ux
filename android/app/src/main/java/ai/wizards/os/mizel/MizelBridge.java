@@ -29,6 +29,10 @@ public final class MizelBridge implements MizelHub.Listener {
     private final Context app;
     /** Frames that have spoken to us since they loaded; the same proxy object stands for one frame. */
     private final LinkedHashSet<JavaScriptReplyProxy> frames = new LinkedHashSet<>();
+    private final java.util.Map<JavaScriptReplyProxy, String> pcmFrames = new java.util.HashMap<>();
+    private boolean foreground;
+    public void setPcmForeground(boolean on) { foreground = on; syncPcm(); }
+    private void syncPcm() { MizelHub.wantPcm(this, foreground && !pcmFrames.isEmpty()); }
 
     private MizelBridge(Context app) { this.app = app; }
 
@@ -54,7 +58,7 @@ public final class MizelBridge implements MizelHub.Listener {
 
     public void detach() {
         MizelHub.removeListener(this);
-        frames.clear();
+        frames.clear(); pcmFrames.clear(); syncPcm();
     }
 
     private void onMessage(WebView view, WebMessageCompat message, Uri sourceOrigin, boolean isMainFrame, JavaScriptReplyProxy reply) {
@@ -63,22 +67,41 @@ public final class MizelBridge implements MizelHub.Listener {
         if (src == null || !(MizelConfig.DEFAULT_ORIGIN.equals(src) || ai.wizards.os.device.AppState.LEGACY_ORIGIN.equals(src))) return;
         frames.remove(reply);
         frames.add(reply);
-        while (frames.size() > MAX_FRAMES) frames.remove(frames.iterator().next());
+        while (frames.size() > MAX_FRAMES) { JavaScriptReplyProxy old = frames.iterator().next(); frames.remove(old); pcmFrames.remove(old); }
+        syncPcm();
         String data = message == null ? null : message.getData();
         MizelProtocol.Cmd c = MizelProtocol.parse(data);
         Log.i(MizelHub.TAG, "page " + (isMainFrame ? "main" : "frame") + " → " + c.cmd + (c.meetingId != null ? " " + c.meetingId : "") + (c.error != null ? " (" + c.error + ")" : ""));
+        if (MizelProtocol.PCM.equals(c.cmd) && c.error == null) {
+            MeetingRecorderService.Live live = MeetingRecorderService.live();
+            if (c.enabled && (live == null || !c.meetingId.equals(live.meetingId))) {
+                post(reply, MizelProtocol.reply(c.id, false, MizelProtocol.E_WRONG_MEETING, MizelHub.state(app))); return;
+            }
+            if (c.enabled) pcmFrames.put(reply, c.meetingId); else pcmFrames.remove(reply);
+            syncPcm(); post(reply, MizelProtocol.reply(c.id, true, null, MizelHub.state(app))); return;
+        }
         MizelHub.command(app, c, r -> post(reply, r));
     }
 
     @Override
     public void onPush(String json) {
+        try {
+            org.json.JSONObject data = new org.json.JSONObject(json);
+            if ("state".equals(data.optString("type")) && !data.optBoolean("recording")) { pcmFrames.clear(); syncPcm(); }
+            if ("pcm".equals(data.optString("type"))) {
+                if (!foreground) return;
+                String mid = data.optString("meetingId");
+                for (JavaScriptReplyProxy p : new ArrayList<>(pcmFrames.keySet())) if (mid.equals(pcmFrames.get(p))) post(p, json);
+                return;
+            }
+        } catch (org.json.JSONException ignored) { return; }
         List<JavaScriptReplyProxy> to = new ArrayList<>(frames);
         for (JavaScriptReplyProxy p : to) post(p, json);
     }
 
     private void post(JavaScriptReplyProxy p, String json) {
         try { p.postMessage(json); }
-        catch (RuntimeException e) { frames.remove(p); }
+        catch (RuntimeException e) { frames.remove(p); pcmFrames.remove(p); syncPcm(); }
     }
 
     /** For a status line in logs/QA. */

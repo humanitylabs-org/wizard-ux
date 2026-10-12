@@ -676,6 +676,7 @@ public class MainActivity extends Activity {
         web.onResume();
         resumed = true;
         if (reach != null && reach.isOffline()) main.postDelayed(this::retryReach, 300); // back from Tailscale: try now
+        if (mizel != null) mizel.setPcmForeground(true);
         if (everywhereSetup) {
             everywhereSetup = false;
             boolean ok = ai.wizards.os.everywhere.EverywhereService.overlayAllowed(this);
@@ -726,6 +727,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        if (mizel != null) mizel.setPcmForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).
         if (!ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
         CookieManager.getInstance().flush();

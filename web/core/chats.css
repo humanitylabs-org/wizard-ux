@@ -302,6 +302,10 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-subj-mv button { width: 34px; height: 30px; display: grid; place-items: center; border-radius: 9px; font-size: 15px; font-weight: 700; line-height: 1; color: var(--ink-2); background: transparent; border: 0; }
 .ch-subj-mv button:active { background: rgba(143, 99, 255, .18); color: var(--ink); }
 .ch-subj-mv button:disabled { opacity: .22; }
+/* Move to top = two up arrows almost touching (James, 12 Oct 2026: ⤒ wasn't clear). */
+.ch-subj-2up { display: inline-flex; }
+.ch-subj-2up i { font-style: normal; }
+.ch-subj-2up i + i { margin-left: -4px; }
 
 /* A note from another agent thread (coordinator / cross-thread): a quiet labelled row, not a James bubble. */
 .msg.agentnote { margin: 10px 0 2px; align-self: stretch; }
