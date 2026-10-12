@@ -4,6 +4,7 @@ import fcntl, hashlib, http.server, json, mimetypes, os, pathlib, plistlib, re, 
 P=pathlib.Path
 if not str(P.cwd()).startswith('/Volumes/ThalesMedia/'):
     raise SystemExit('Thales media worker required')
+source_sha=sys.argv[5]
 apk,shell,music,out=map(P,sys.argv[1:5]); out.mkdir(parents=True,exist_ok=True)
 SDK=P('/opt/homebrew/share/android-commandlinetools'); PKG='ai.wizards.os.musicpreview'; PORT=5704; ADB=str(SDK/'platform-tools/adb'); SERIAL=f'emulator-{PORT}'; HTTP=18794; CDP=9354
 ENV=os.environ.copy();ENV.update(JAVA_HOME='/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home',ANDROID_HOME=str(SDK),ANDROID_SDK_ROOT=str(SDK),ANDROID_AVD_HOME=str(out/'avd'));ENV['PATH']='/opt/homebrew/bin:'+ENV['JAVA_HOME']+'/bin:'+ENV['PATH'];(out/'avd').mkdir(exist_ok=True)
@@ -111,7 +112,7 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
         (out/'qa.log').write_text(r.stdout+'\n'+r.stderr);print(r.stdout,flush=True);print(r.stderr,flush=True)
         log=sx('logcat -d -b crash');(out/'crash.log').write_text(log);(out/'service.log').write_text(sx('logcat -d -s WizardAudio:*'))
         (out/'http-state.json').write_text(json.dumps(state,indent=2))
-        receipt={'host':socket.gethostname(),'apk_sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'shell_sha':sh('git','-C',shell,'rev-parse','HEAD').strip() if (shell/'.git').exists() else shell.name,'music_source':music.name,'qa_exit':r.returncode,'crashes':'FATAL EXCEPTION' in log,'real_tracks':len(state['tracks']),'stream_bytes':state['bytes'],'refills':state['refills'],'out':str(out)}
+        receipt={'host':socket.gethostname(),'apk_sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'shell_sha':source_sha,'music_source':music.name,'qa_exit':r.returncode,'crashes':'FATAL EXCEPTION' in log,'real_tracks':len(state['tracks']),'stream_bytes':state['bytes'],'refills':state['refills'],'out':str(out)}
         (out/'remote-receipt.json').write_text(json.dumps(receipt,indent=2))
         if r.returncode or receipt['crashes']:raise SystemExit(1)
     finally:

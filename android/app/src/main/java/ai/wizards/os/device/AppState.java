@@ -37,7 +37,7 @@ public final class AppState {
 
     /** The Wizard OS shell URL: the private origin, or the QA fake (debug builds with files/qa_home.txt only). */
     public static String homeUrl(Context c) {
-        return origin(c) + "/wizard-os-home/";
+        return origin(c) + "/wizard-os-home/" + (BuildConfig.APPLICATION_ID.endsWith(".musicpreview") ? "?open=wizard-music" : "");
     }
 
     /** The retired name. The same Wizard still answers on it while the move settles. */
@@ -57,7 +57,7 @@ public final class AppState {
 
     /** Switch this process to the old name once. False for QA fakes or when it is already in use. */
     public static boolean useLegacy(Context c) {
-        if (qaOrigin(c) != null || legacyFallback) return false;
+        if (!BuildConfig.ORIGIN.equals("https://wizard.tailc0f369.ts.net") || qaOrigin(c) != null || legacyFallback) return false;
         legacyFallback = true;
         android.util.Log.w("WizardOS", "tailnet name unreachable; using " + LEGACY_ORIGIN + " for this run");
         return true;
