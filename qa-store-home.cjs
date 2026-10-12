@@ -8,7 +8,15 @@ function ok(value, label, detail) { cases.push({ label, pass: !!value, detail })
   const b = await chromium.launch({ headless: true });
   for (const width of [320, 390, 1024]) {
     const c = await b.newContext({ viewport: { width, height: 844 }, isMobile: width < 500, hasTouch: width < 500, ignoreHTTPSErrors: true, serviceWorkers: process.env.QA_SW === 'allow' ? 'allow' : 'block' });
-    await c.route('**/*', r => { if (!['GET', 'HEAD'].includes(r.request().method())) { unsafe.push(r.request().url()); return r.fulfill({ status: 403, body: '{}' }); } return r.continue(); });
+    await c.route('**/*', r => {
+      const q=r.request(), u=new URL(q.url());
+      if (!['GET','HEAD'].includes(q.method())) { unsafe.push(q.url()); return r.fulfill({status:403,body:'{}'}); }
+      if(process.env.QA_WEB_DIR && u.pathname.startsWith('/wizard-os-home/') && !u.pathname.includes('/store-data/')) {
+        const rel=u.pathname.slice('/wizard-os-home/'.length)||'index.html', f=path.join(process.env.QA_WEB_DIR,'web',rel);
+        if(!rel.includes('..')&&fs.existsSync(f)&&fs.statSync(f).isFile()) return r.fulfill({status:200,contentType:({'js':'application/javascript','css':'text/css','html':'text/html','json':'application/json','png':'image/png','svg':'image/svg+xml','woff2':'font/woff2','webmanifest':'application/manifest+json'})[f.split('.').pop()]||'application/octet-stream',body:fs.readFileSync(f)});
+      }
+      return r.continue();
+    });
     await c.addInitScript(() => { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.done', '1'); });
     const p = await c.newPage(); const errors = []; p.on('pageerror', e => errors.push(String(e)));
     await p.goto(BASE + 'store/index.html'); await p.locator('.kind:not([disabled])').first().waitFor();

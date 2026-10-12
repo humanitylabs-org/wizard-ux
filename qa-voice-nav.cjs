@@ -3,7 +3,7 @@
 // recording navigates (only Cancel discards); desk swipes work while recording and from anywhere on
 // the bottom bar; the desk label names the app, not the thread; an attached file rides with the take.
 // Usage: QA_WEB_DIR=<repo> node qa-voice-nav.cjs [url]. Every Hermes/Wizard write is intercepted.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/home/telos/node_modules/playwright');
 const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
@@ -28,6 +28,9 @@ async function boot(b, opts = {}) {
       return r.fulfill({ status: 200, contentType: ct, body: require('fs').readFileSync(p) });
     }
     if (q.method() !== 'GET') writes.push(u.pathname);
+    // The current send contract requires an authoritative fixture route, just like the real model/options API.
+    if (/\/hermes\/api\/model\/options$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ provider: 'openai-codex', model: 'gpt-6.1-sol', providers: [{ slug: 'openai-codex', authenticated: true, is_current: true, models: ['gpt-6.1-sol'] }] }) });
+    if (/\/api\/sessions\/[^/]+\/model$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runtime: { ...q.postDataJSON(), model_lock: 'accepted', selection_version: 1 } }) });
     if (/\/files\/upload$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ file: { id: 'qa-file-1', filename: 'shot.png', mime: 'image/png', bytes: 68 } }) });
     if (/\/hermes\/v1\/runs$/.test(u.pathname)) { runs.push(q.postDataJSON()); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ run_id: 'qa-run' }) }); }
     if (/\/api\/transcribe$/.test(u.pathname)) { await new Promise(res => { slowSend = res; setTimeout(res, SEND_MS); }); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'something for archimedes about the week', ms: 300 }) }).catch(() => {}); }
@@ -112,7 +115,8 @@ const deskIdx = p => p.evaluate(() => __wos.idx ?? null);
   ok((await look(p)).voice === 'listen' && !c.shown, 'recording: no Listening / tap-to-send card covering the screen', JSON.stringify(c));
   if (SHOTS) await p.screenshot({ path: `${SHOTS}/voice-recording.png` });
   const a = await arcs(p);
-  ok(a.length === 3 && a.some(x => /Cancel/.test(x)) && a.some(x => /Pause/.test(x)) && a.some(x => /Attach/.test(x)), 'recording: buttons are Cancel, Pause, Attach', JSON.stringify(a));
+  const expectedControls = (await p.$('#arcScreen')) ? 4 : 3;
+  ok(a.length === expectedControls && a.some(x => /Cancel/.test(x)) && a.some(x => /Pause/.test(x)) && a.some(x => /Attach/.test(x)), 'recording: buttons are Cancel, Pause, optional Screenshot, Attach', JSON.stringify(a));
   ok(!(await p.$('#arcRoute')), 'the Auto/route button is gone');
 
   /* 3. Back while recording navigates instead of discarding */
