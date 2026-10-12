@@ -12,6 +12,7 @@ import java.util.*;
 import ai.wizards.os.device.AppState;
 
 /** Main-frame origin-bound port. Hosted apps reach it only through the registered-frame relay. */
+@androidx.annotation.OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)
 public final class BackgroundAudioBridge {
     private final Activity activity;
     private final WebView web;

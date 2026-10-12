@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /** No redirects: credentials and bytes are confined to the bound app and origin. */
+@androidx.annotation.OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)
 final class AudioHttp extends BaseDataSource {
     private final String origin;
     private HttpURLConnection connection;

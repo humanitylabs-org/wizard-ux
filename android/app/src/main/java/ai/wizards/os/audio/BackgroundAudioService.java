@@ -22,10 +22,11 @@ import ai.wizards.os.MainActivity;
 import ai.wizards.os.device.AppState;
 
 /** Reusable transport pilot; queue policy/catalog/taste remain server-owned. Main-thread canonical state. */
+@androidx.annotation.OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)
 public final class BackgroundAudioService extends MediaSessionService {
-    private static BackgroundAudioService live;
+    private static volatile BackgroundAudioService live;
     static BackgroundAudioService current() { return live; }
-    public static boolean active() { return live != null && live.player != null && live.player.getPlayWhenReady() && live.player.getMediaItemCount() > 0; }
+    public static boolean active() { BackgroundAudioService s=live; return s != null && s.transportActive; }
     private ExoPlayer player;
     private MediaSession session;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -36,6 +37,17 @@ public final class BackgroundAudioService extends MediaSessionService {
     private String origin, sessionId = UUID.randomUUID().toString(), error = "", playEvent = "", reportedPlay = "", transitionId = "";
     private int revision, generation, refillAttempts;
     private boolean refilling, reporting, destroyed, advanceAfterRefill;
+    private volatile boolean transportActive;
+    private boolean micResume;
+    private final Runnable micMonitor = new Runnable() {
+        @Override public void run() {
+            if(destroyed || player==null) return;
+            boolean held=ai.wizards.os.MicOwner.holder()!=null;
+            if(held && player.getPlayWhenReady()) { micResume=true; player.pause(); }
+            else if(!held && micResume) { micResume=false; player.play(); }
+            main.postDelayed(this,player.getPlayWhenReady() || micResume ? 200 : 1000);
+        }
+    };
     private String refillKey = UUID.randomUUID().toString();
     @Override public void onCreate() {
         super.onCreate(); live = this; origin = AppState.origin(this);
@@ -44,6 +56,7 @@ public final class BackgroundAudioService extends MediaSessionService {
             .setAudioAttributes(new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_NETWORK).setMaxSeekToPreviousPositionMs(4000).build();
         player.addListener(new Player.Listener() {
+            @Override public void onEvents(Player p, Player.Events events) { transportActive=(p.getPlayWhenReady() || micResume) && p.getMediaItemCount()>0; }
             @Override public void onMediaItemTransition(@Nullable MediaItem item, int reason) {
                 playEvent = UUID.randomUUID().toString(); error = "";
                 Log.i("WizardAudio", "transition " + (item == null ? "none" : item.mediaId) + " session=" + sessionId);
@@ -70,11 +83,13 @@ public final class BackgroundAudioService extends MediaSessionService {
                     return new MediaSession.ConnectionResult.AcceptedResultBuilder(s).build();
                 }
                 @Override public int onPlayerCommandRequest(MediaSession s, MediaSession.ControllerInfo c, int command) {
+                    if (command == Player.COMMAND_PLAY_PAUSE && micResume) micResume=false;
                     if (command == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM || command == Player.COMMAND_SEEK_TO_NEXT) report("skipped");
                     return androidx.media3.session.SessionResult.RESULT_SUCCESS;
                 }
             }).build();
         restoreReports();
+        main.post(micMonitor);
         Log.i("WizardAudio", "created session=" + sessionId);
     }
     @Nullable @Override public MediaSession onGetSession(@NonNull MediaSession.ControllerInfo c) { return session; }
@@ -86,7 +101,7 @@ public final class BackgroundAudioService extends MediaSessionService {
     JSONObject snapshot(int known) throws JSONException {
         JSONObject o = new JSONObject().put("v",1).put("sessionId",sessionId).put("appId","wizard-music")
             .put("index",tracks.isEmpty() ? -1 : player.getCurrentMediaItemIndex()).put("playing",player.isPlaying())
-            .put("wantPlaying",player.getPlayWhenReady()).put("buffering",player.getPlaybackState() == Player.STATE_BUFFERING)
+            .put("wantPlaying",player.getPlayWhenReady() || micResume).put("buffering",player.getPlaybackState() == Player.STATE_BUFFERING)
             .put("positionMs",Math.max(0,player.getCurrentPosition())).put("durationMs",player.getDuration() == C.TIME_UNSET ? 0 : player.getDuration())
             .put("volume",player.getVolume()).put("error",error).put("station",station == null ? JSONObject.NULL : station)
             .put("queueRevision",revision).put("generation",generation).put("reporter","native");
@@ -116,8 +131,8 @@ public final class BackgroundAudioService extends MediaSessionService {
                 tracks.clear(); tracks.addAll(history); tracks.addAll(add); station = st; generation++; revision++; refillAttempts=0; advanceAfterRefill=false;
                 refillKey=UUID.randomUUID().toString(); player.setMediaItems(items,index,0); player.prepare(); player.play(); break;
             }
-            case "play": if (player.getPlaybackState()==Player.STATE_IDLE) player.prepare(); player.play(); break;
-            case "pause": advanceAfterRefill=false; player.pause(); break;
+            case "play": if (player.getPlaybackState()==Player.STATE_IDLE) player.prepare(); player.play(); if(ai.wizards.os.MicOwner.holder()!=null) { micResume=true; player.pause(); } break;
+            case "pause": micResume=false; advanceAfterRefill=false; player.pause(); break;
             case "seek": player.seekTo(Math.max(0,p.optLong("positionMs"))); break;
             case "next": report("skipped"); if (player.hasNextMediaItem()) { player.seekToNextMediaItem(); player.play(); } else { advanceAfterRefill=true; player.play(); maybeRefill(); } break;
             case "previous": player.seekToPrevious(); player.play(); break;
@@ -140,7 +155,7 @@ public final class BackgroundAudioService extends MediaSessionService {
                 maybeRefill(); break;
             }
             case "volume": player.setVolume((float)Math.max(0,Math.min(1,p.optDouble("value",1)))); break;
-            case "stop": generation++; station=null; player.stop(); player.clearMediaItems(); tracks.clear(); revision++; break;
+            case "stop": micResume=false; generation++; station=null; player.stop(); player.clearMediaItems(); tracks.clear(); revision++; break;
             case "attach": case "state": case "detach": break;
             default: throw new IllegalArgumentException("Unknown audio method");
         }

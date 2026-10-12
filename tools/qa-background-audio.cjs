@@ -1,0 +1,65 @@
+const { chromium } = require('/Users/thales/node_modules/playwright');
+const fs = require('fs'),path=require('path');
+const cdp=process.argv[2], http=process.argv[3], out=process.argv[4], PKG='ai.wizards.os.musicpreview';
+const rows=[];const check=(name,ok,detail)=>{rows.push({name,ok:!!ok,detail});console.log(ok?'PASS':'FAIL',name,JSON.stringify(detail||''));};
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const server=async p=>fetch('http://127.0.0.1:'+http+p).then(r=>r.json());
+const sx=cmd=>server('/qa/sx?cmd='+encodeURIComponent(cmd));
+let browser;
+(async()=>{
+ browser=await chromium.connectOverCDP('http://127.0.0.1:'+cdp);
+ const ctx=browser.contexts()[0],page=ctx.pages()[0],errors=[]; page.on('pageerror',e=>errors.push(String(e)));
+ await page.goto('http://10.0.2.2:'+http+'/wizard-os-home/?open=wizard-music');
+ await page.evaluate(()=>{localStorage.setItem('wos.coached','true');document.cookie='qa_audio=session;path=/';});
+ await page.waitForTimeout(2000);
+ let frame=()=>page.frames().find(f=>/\/wizard-music\/$/.test(f.url()));
+ for(let i=0;i<30&&!frame();i++)await wait(500);
+ if(!frame())await page.evaluate(()=>__wos.openApp('wizard-music'));
+ await frame().locator('.music-row-main').first().waitFor({timeout:30000});
+ check('actual Music candidate attaches native; no HTML audio',await frame().evaluate(()=>!!window.WizardNativeMusic && document.querySelectorAll('audio').length===0));
+ const audio=async(method,params={})=>frame().evaluate(({method,params})=>new Promise(resolve=>{
+  const id='qa-'+Math.random();const listener=e=>{if(e.source===parent&&e.origin===location.origin&&e.data?.type==='wizard:background-audio:v1'&&e.data.id===id){removeEventListener('message',listener);resolve(e.data);}};
+  addEventListener('message',listener);parent.postMessage({type:'wizard:background-audio:v1',id,method,params:{sessionId:parent.WizBackgroundAudio.lastState?.sessionId,...params}},location.origin);setTimeout(()=>{removeEventListener('message',listener);resolve({timeout:true});},23000);
+ }),{method,params});
+ const snap=async()=>{const r=await audio('state',{knownQueueRevision:-1});if(!r.ok)throw new Error(JSON.stringify(r));return r.result;};
+ await frame().locator('.music-row-main').first().click();
+ for(let i=0;i<30;i++){const s=await snap();if(s.playing)break;await wait(500);}
+ const a=await snap();check('real streamed song decoder plays',a.playing&&a.positionMs>0,a);
+ await wait(1800); const before=await snap();await page.reload();await wait(1300);await frame().locator('.music-row-main').first().waitFor();const after=await snap();
+ check('full UX reload leaves service/session and advancing clock unchanged',after.sessionId===before.sessionId&&after.queue[after.index].id===before.queue[before.index].id&&after.positionMs>before.positionMs,{before,after});
+ await frame().evaluate(()=>location.reload());await wait(1000);await frame().locator('.music-row-main').first().waitFor();const reload=await snap();
+ check('Music view reload reconnects with one native player and same session',reload.sessionId===after.sessionId&&reload.positionMs>after.positionMs&&await frame().evaluate(()=>document.querySelectorAll('audio').length===0),reload);
+ const streams=await server('/qa/stats');check('authenticated fetch uses cookies; seek-capable media bytes arrived',streams.bytes>10000&&streams.gets.some(g=>g.cookie),{bytes:streams.bytes,requests:streams.gets});
+ const start=await snap(), stats0=await server('/qa/stats');await sx('input keyevent KEYCODE_HOME');await sx('input keyevent KEYCODE_SLEEP');await wait(55000);
+ const stats1=await server('/qa/stats');const ms=await sx('dumpsys media_session');fs.writeFileSync(path.join(out,'screen-off-media.txt'),ms.result);
+ check('screen-off real playback crosses two track boundaries',new Set(stats1.events.filter(e=>e.action==='played').map(e=>e.id)).size>=3,stats1.events);
+ check('native endless continuation refills with page suspended',stats1.refills>stats0.refills,{before:stats0.refills,after:stats1.refills});
+ check('system MediaSession remains active while UI is absent',/ai.wizards.os.musicpreview/.test(ms.result)&&/PlaybackState/.test(ms.result));
+ await sx('input keyevent KEYCODE_WAKEUP');await sx('wm dismiss-keyguard');await sx('cmd media_session dispatch pause');await wait(600);await sx('am start -W -n '+PKG+'/ai.wizards.os.MainActivity');await wait(600);
+ const paused=await snap();check('system pause reflected on reopened Music',!paused.wantPlaying&&!paused.playing,paused);
+ await wait(1700);const stayed=await snap();check('explicit pause remains paused through continuation and reattach',!stayed.wantPlaying&&Math.abs(stayed.positionMs-paused.positionMs)<200,stayed);
+ await sx('cmd media_session dispatch play');await wait(700);const played=await snap();check('headset/media-button play reaches same session',played.playing&&played.sessionId===start.sessionId,played);
+ await sx('cmd media_session dispatch next');await wait(500);const next=await snap();check('system Next changes canonical queue and UI',next.index>played.index,next);
+ await audio('seek',{positionMs:0});await sx('cmd media_session dispatch previous');await wait(500);const prev=await snap();check('system Previous replays played history',prev.index<next.index,prev);
+ await audio('volume',{value:0.35});check('gain round-trip',Math.abs((await snap()).volume-0.35)<0.01);
+ const original=await snap(); const upcoming=original.queue[original.index+2];await audio('enqueueNext',{track:upcoming});const queued=await snap();check('Play next reorders without duplicate upcoming entries',queued.queue[queued.index+1].id===upcoming.id&&queued.queue.slice(queued.index+1).filter(t=>t.id===upcoming.id).length===1);
+ await audio('removeUpcoming',{ids:[upcoming.id]});const removed=await snap();check('queue prune never removes current song',removed.queue[removed.index].id===queued.queue[queued.index].id&&!removed.queue.slice(removed.index+1).some(t=>t.id===upcoming.id));
+ await audio('jump',{index:Math.max(0,removed.index-1)});check('Played replay uses canonical history', (await snap()).index===Math.max(0,removed.index-1));
+ await audio('removeCurrent');const down=await snap();check('thumbs-down transport instantly removes/skips current',!down.queue.some(t=>t.id===removed.queue[Math.max(0,removed.index-1)].id));
+ // Correlated frame/session adversaries: native main-frame port alone is never a hosted-app permission.
+ const stale=await audio('pause',{sessionId:'obsolete'});check('stale session commands refused',!stale.ok);
+ const forged=await audio('load',{queue:[{...down.queue[down.index],stream:'https://evil.test/music.mp3'}],index:0,station:null});check('foreign media URL rejected before network',!forged.ok);
+ await page.evaluate(()=>{const f=document.createElement('iframe');f.className='appframe';f.src='/wizard-os-home/';f.id='audio-evil';document.body.appendChild(f);});await wait(400);
+ const foreign=page.frames().find(f=>f.url().endsWith('/wizard-os-home/'));if(foreign){check('unregistered same-origin frame lacks capability',!await foreign.evaluate(()=>parent.WizBackgroundAudio.canAttach(window)));}
+ await page.evaluate(()=>document.querySelector('#audio-evil')?.remove());
+ const hold=await snap();await page.evaluate(()=>{const f=[...document.querySelectorAll('iframe.appframe')].find(f=>f.src.includes('/wizard-music/'));window.qaReopen=()=>f.parentNode.appendChild(f.cloneNode());window.qaContainer=f.parentNode;window.qaFrame=f.cloneNode();f.remove();});await wait(1500);
+ const service=await sx('dumpsys activity services '+PKG);check('closing Music UI leaves foreground audio service alive',service.result.includes('BackgroundAudioService'));
+ await page.evaluate(()=>window.qaContainer.appendChild(window.qaFrame));await wait(900);await frame().locator('.music-row-main').first().waitFor();const reattached=await snap();check('recreated Music UI sees live native session',reattached.sessionId===hold.sessionId&&reattached.wantPlaying,reattached);
+ // Nested Now Playing Back is an actual Android key, and must retain Wizard.
+ await frame().locator('.music-mini').click();await wait(300);await sx('input keyevent KEYCODE_BACK');await wait(600);const top=await sx('dumpsys activity activities');check('Android nested Back retains Wizard Activity',top.result.includes(PKG+'/ai.wizards.os.MainActivity'));
+ const last=await server('/qa/stats');const events=last.events.filter(e=>e.action==='played');const keys=events.map(e=>e.eventId);check('native only reports playback; no UI duplicates',keys.length>0&&keys.every(Boolean)&&new Set(keys).size===keys.length,events);
+ const notif=await sx('dumpsys notification --noredact');fs.writeFileSync(path.join(out,'notification.txt'),notif.result);check('media notification contains track title/artist and artwork',/android.mediaSession/.test(notif.result)&&last.tracks.some(t=>notif.result.includes(t.title))&&/android.largeIcon|Icon\(typ=BITMAP/.test(notif.result));
+ check('no unexpected candidate JS errors',errors.length===0,errors);await page.screenshot({path:path.join(out,'music-native.png')});
+ fs.writeFileSync(path.join(out,'results.json'),JSON.stringify(rows,null,2));console.log(rows.filter(r=>r.ok).length+'/'+rows.length+' passed');
+ await browser.close();process.exit(rows.some(r=>!r.ok)?1:0);
+})().catch(async e=>{console.error(e.stack);fs.writeFileSync(path.join(out,'results.json'),JSON.stringify(rows,null,2));if(browser)await browser.close();process.exit(1)});
