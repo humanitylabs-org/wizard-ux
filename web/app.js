@@ -331,7 +331,10 @@
   }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
-    const moved = n !== idx; idx = n;
+    // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
+    const from = desks[idx], to = desks[n];
+    if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
+    const moved = from !== to; idx = n;
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
     placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip();
@@ -375,7 +378,7 @@
   const endDotHold = () => { clearTimeout(dotHold); dotHold = null; };
   $('#dock').addEventListener('pointerup', endDotHold); $('#dock').addEventListener('pointercancel', endDotHold); $('#dock').addEventListener('pointerleave', endDotHold);
   $('#dock').addEventListener('click', e => {
-    if (e.target.closest('[data-plus]')) { if (Date.now() - dockSwiped < 400) return; openSheet('launcher'); plusEnd = true; $('#search').placeholder = 'Pick an app for a new desk'; tourEv('desk-plus', {}); return; }
+    if (e.target.closest('[data-plus]')) { if (Date.now() - dockSwiped < 400) return; newDesk(); tourEv('desk-plus', {}); return; }
     const b = e.target.closest('[data-goto]'); if (!b) return;
     if (Date.now() - peekJustOpened < 600 || Date.now() - dockSwiped < 400) return;
     goDesk(+b.dataset.goto); tourEv('desk', { home: idx === HOME });
@@ -575,13 +578,12 @@
    * user aim, opts.here) may share an existing desk; app openers pass opts through and never pick a desk. */
   // Directly beside the desk in front, Home included (James, 11 Oct 2026: from Home, Yesterday and every other
   // app open on the desk right next to Home; Chats just moves one to the right).
-  // The ＋ after the last desk (James, 12 Oct 2026) opens the app list; the app picked there lands on a new desk at the end.
-  let plusEnd = false, endNext = false;
-  function insertPos() { return endNext ? desks.length : idx + 1; }
+  function insertPos() { return idx + 1; }
   function openWin(obj, opts = {}) {
     const w = { id: newId(), ...obj }; W[w.id] = w;
     let t = opts.desk != null ? Math.max(0, Math.min(desks.length - 1, opts.desk)) : opts.here ? idx : -1;
     if (t >= 0 && (desks[t].home || desks[t].wins.length >= MAXW)) t = -1;
+    if (t < 0 && !desks[idx].home && !desks[idx].wins.length) t = idx; // the empty desk in front takes it
     if (t < 0) { t = insertPos(); desks.splice(t, 0, blank({ wins: [w.id], focus: w.id })); syncDesks(); }
     else { const d = desks[t]; d.wins.push(w.id); d.focus = w.id; d.full = false; }
     renderDesk(t); save(); renderDots();
@@ -1023,9 +1025,18 @@
   const refreshHome = force => { if (!desks[HOME].wins.length) { const g = secOf(HOME)?.querySelector('.glance'); if (g) g.innerHTML = renderHome(); } };
 
   /* ---------------- empty desk, app cards, maps, frames ---------------- */
+  /* ＋ after the last desk (James, 12 Oct 2026): jump straight to a new desk at the end of the strip. An empty desk
+   * is a page of app tiles, not a pop-up: tap one and it opens right here. Leave without picking and the desk goes. */
+  function newDesk() {
+    const last = desks.length - 1;
+    if (last > 0 && !desks[last].wins.length) return goDesk(last);
+    desks.push(blank({})); syncDesks(); renderDots(); goDesk(desks.length - 1, true); announce('<b>New desk</b>');
+  }
   function renderEmpty(i) {
-    return `${gearBtn()}<div class="empty-desk"><div><div class="ring"><span class="num">${i + 1}</span></div>
-      <h3>Empty desk</h3><p>Tap the orb and say what belongs here.<br>Hold it and say a command, like “Open Calendar”.</p></div></div>`;
+    const grp = (h, list) => list.length ? `<div class="lgroup"><h4>${h}</h4><div class="lgrid">${list.map(appTile).join('')}</div></div>` : '';
+    const wiz = APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals'), views = APPS.filter(a => a.kind === 'view');
+    tileN = 0;
+    return `<div class="desk-scroll new-desk"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${grp('Apps', wiz)}${grp('Views', views)}</div>`;
   }
   function renderApp(w) {
     const a = APP[w.appId] || {};
@@ -1367,6 +1378,8 @@
   }, true);
   track.addEventListener('click', e => {
     const say = e.target.closest('[data-say]'); if (say) return runUtterance(say.dataset.say, 'auto');
+    const pick = e.target.closest('.new-desk [data-app]');
+    if (pick) { const a = APP[pick.dataset.app]; if (a) { const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8)); openApp(a); } return; }
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'inbox') return openSheet('inbox');
     if (act === 'settings') return openSettings(false);
@@ -1530,7 +1543,6 @@
   }
   function closeSheets(quiet) {
     if (!sheet && quiet) return;
-    plusEnd = false; $('#search').placeholder = 'Search, or type a command';
     const was = sheet; sheet = null; if (was) tourEv('sheet-closed', { which: was }); device.classList.remove('sheet-open');
     launcher.classList.remove('open'); inboxEl.classList.remove('open'); settingsEl.classList.remove('open');
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
@@ -1600,7 +1612,7 @@
   function launch(a) {
     if (!a) return;
     const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
-    const end = plusEnd; closeSheets(); setTimeout(() => { endNext = end; try { openApp(a); } finally { endNext = false; } }, 120);
+    closeSheets(); setTimeout(() => openApp(a), 120);
   }
   launcher.addEventListener('click', e => {
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);

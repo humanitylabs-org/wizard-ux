@@ -100,3 +100,10 @@
 .ddot.dplus .dsg { opacity: .55; }
 .ddot.dplus svg { width: 18px; height: 18px; fill: none; stroke: #C9BEFF; stroke-width: 2.2; stroke-linecap: round; }
 .ddot.dplus:active .dsg { opacity: 1; }
+/* A new (empty) desk is a page of app tiles */
+.new-desk { padding: calc(18px + var(--safe-t, 0px)) 18px 20px; }
+.new-desk .nd-head { display: flex; align-items: baseline; gap: 10px; margin: 6px 4px 18px; }
+.new-desk .nd-head b { font-size: 22px; font-weight: 700; }
+.new-desk .nd-head span { font-size: 13.5px; color: var(--ink-3); }
+.new-desk .lgroup { margin-bottom: 22px; }
+.new-desk .lgroup h4 { margin: 0 4px 12px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
