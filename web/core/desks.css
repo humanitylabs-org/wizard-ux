@@ -114,6 +114,23 @@
 .ov-add b { color: var(--ink-2); font-size: 14px; font-weight: 600; }
 .ov-hint { margin: 18px 12px 0; text-align: center; color: var(--ink-3); font-size: 12px; line-height: 1.6; }
 .device.ov-open .dock, .device.ov-open .desk-label { opacity: 0; pointer-events: none; }
+
+/* ---------------- bound views (James, 12 Oct 2026) ----------------
+ * A thread whose latest reply links the thing that was built opens that view on the desk beside it. While the
+ * thread is in front, the thread narrows by 36 px and that desk leans into the gap, its edge fading in: an
+ * extended canvas. No tab: swipe the bottom bar to move between them. */
+.desk.bound-peek { transform: translate3d(-36px, 0, 0); z-index: 3; transition: transform 520ms var(--ease), opacity 400ms, filter 400ms; }
+.desk.bound-peek .tiles { -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,.6), #000 26px); mask-image: linear-gradient(90deg, rgba(0,0,0,.6), #000 26px); }
+.desk.bound-peek > .tiles .win { box-shadow: -10px 0 28px rgba(255, 170, 60, .16); }
+.device.bound-peeking .desk.bound-host .tiles { right: 36px; } /* the thread narrows; the bound view fills the gap: two panels */
+/* On the bound view itself: the amber review frame plus "Open app" in the bar. */
+.win.bound .wbar .wopen span { white-space: nowrap; }
+/* On the bound view, its thread peeks back in from the left: the same shared canvas in both directions. */
+.desk.bound-chat-peek { transform: translate3d(20px, 0, 0); z-index: 3; transition: transform 520ms var(--ease); }
+.desk.bound-chat-peek .tiles { -webkit-mask-image: linear-gradient(270deg, rgba(0,0,0,.6), #000 10px); mask-image: linear-gradient(270deg, rgba(0,0,0,.6), #000 10px); }
+.desk.bound-chat-peek > .tiles .win { box-shadow: 10px 0 28px rgba(255, 170, 60, .16); }
+.device.bound-view-peeking .desk.bound-view-host .tiles { left: 20px; } /* a hint of the thread, the view keeps nearly full width */
+@media (prefers-reduced-motion: reduce) { .desk.bound-peek, .desk.bound-chat-peek { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .ov, .ov-card { transition: none; } }
 
 /* ＋ after the last desk: a new desk, starting from the app list */
@@ -127,3 +144,4 @@
 .new-desk .nd-head span { font-size: 13.5px; color: var(--ink-3); }
 .new-desk .lgroup { margin-bottom: 22px; }
 .new-desk .lgroup h4 { margin: 0 4px 12px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+

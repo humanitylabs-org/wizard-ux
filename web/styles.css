@@ -79,7 +79,16 @@ body {
 .desk-label b { color: var(--ink); font-weight: 800; }
 
 /* ---------- Home desk ---------- */
-.home { display: flex; flex-direction: column; height: 100%; }
+.home { display: flex; flex-direction: column; height: 100%; min-height: 0; box-sizing: border-box; padding-bottom: 14px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+/* Full-height Home (James, 12 Oct): time on top, attention in the middle band, resources anchored just above the dock.
+ * Free height splits evenly between the two gaps so the screen fills without one blank band. */
+.home-top, .home-attn { flex-shrink: 0; }
+.home-gap { flex: 1 1 0; min-height: 16px; }
+.home-attn { display: flex; flex-direction: column; gap: clamp(14px, 1.8dvh, 18px); }
+.home-attn > .constellation { gap: inherit; }
+.home-attn > * { margin-top: 0; margin-bottom: 0; }
+.home .now-card { min-height: 68px; padding-top: 16px; padding-bottom: 16px; }
+.home [data-home-resources] { margin-top: 0; flex-shrink: 0; }
 .home-top { padding: 22px 6px 0; }
 .home-date { font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
 .home-time { font-size: 84px; line-height: .95; font-weight: 200; letter-spacing: -.045em; margin-top: 6px;

@@ -49,11 +49,11 @@ const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else {
   const before = await S();
   await p.tap('#qalink'); await p.waitForTimeout(1500);
   s = await S();
-  const rv = await p.evaluate(() => { const f = __wos.wins[__wos.desks[__wos.idx].focus]; const d = __wos.desks[__wos.idx]; const el = document.querySelector(`.win[data-win="${d.focus}"]`); return { from: f && f.from, url: f && f.url, sheet: __wos.links.isOpen(), tag: !!el?.querySelector('.rv-tag'), pin: !!el?.querySelector('[data-wact="pin"]'), chip: document.querySelector('#device').classList.contains('reviewing'), chipEl: !!document.querySelector('#rvChip, .rv-chip'), coach: document.querySelector('.rv-coach')?.textContent || '', title1st: !!el?.querySelector('.wt + .rv-tag'), rect: el?.getBoundingClientRect().height, dev: document.querySelector('#device').getBoundingClientRect().height }; });
+  const rv = await p.evaluate(() => { const f = __wos.wins[__wos.desks[__wos.idx].focus]; const d = __wos.desks[__wos.idx]; const el = document.querySelector(`.win[data-win="${d.focus}"]`); return { from: f && f.from, url: f && f.url, sheet: __wos.links.isOpen(), tag: !!el?.querySelector('.rv-tag'), pin: !!el?.querySelector('[data-wact="detach"]'), chip: document.querySelector('#device').classList.contains('reviewing'), chipEl: !!document.querySelector('#rvChip, .rv-chip'), coach: document.querySelector('.rv-coach')?.textContent || '', title1st: !!el?.querySelector('.wt + .rv-tag'), rect: el?.getBoundingClientRect().height, dev: document.querySelector('#device').getBoundingClientRect().height }; });
   ok(s.n === before.n + 1 && s.idx === before.idx + 1 && !rv.sheet && rv.url === '/qa-page/review-me/', 'tapping a link in a thread opens it on a new desk right beside Chats (no sheet)', JSON.stringify({ s, rv }));
-  ok(rv.from && rv.from.sid === sid && rv.tag && rv.pin && rv.chip && rv.title1st, 'that desk is in review mode: app name then Review tag, Pin button, amber orb ring', JSON.stringify(rv));
+  ok(rv.from && rv.from.sid === sid && rv.tag && rv.pin && rv.chip && rv.title1st, 'that desk is in review mode: app name then Review tag, Open app button, amber orb ring', JSON.stringify(rv));
   ok(!rv.chipEl, 'no persistent feedback chip above the orb', JSON.stringify(rv));
-  ok(/Review mode/.test(rv.coach) && /orb/i.test(rv.coach) && /Pin/.test(rv.coach), 'first review desk shows the one-time Review mode card', JSON.stringify(rv.coach));
+  ok(/Review mode/.test(rv.coach) && /orb/i.test(rv.coach) && /Open app/.test(rv.coach) && !/\bPin\b/.test(rv.coach), 'first review desk shows the one-time Review mode card', JSON.stringify(rv.coach));
   await p.waitForTimeout(400); await p.screenshot({ path: `${SHOTS}/03a-coach.png` });
   await p.evaluate(() => document.querySelector('.rv-coach')?.click()); await p.waitForTimeout(400);
   ok(!(await p.evaluate(() => !!document.querySelector('.rv-coach'))), 'tapping the card dismisses it', '');
@@ -80,9 +80,9 @@ const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else {
   await p.tap('#qalink'); await p.waitForTimeout(1200);
   ok(!(await p.evaluate(() => !!document.querySelector('.rv-coach'))), 'the Review mode card only shows the first time', '');
   await p.screenshot({ path: `${SHOTS}/03b-review-bar.png` });
-  await p.tap('.win.reviewing [data-wact="pin"]'); await p.waitForTimeout(500);
+  await p.tap('.win.reviewing [data-wact="detach"]'); await p.waitForTimeout(500);
   const pinned = await p.evaluate(() => { const f = __wos.wins[__wos.desks[__wos.idx].focus]; return { from: !!f.from, chip: document.querySelector('#device').classList.contains('reviewing') }; });
-  ok(!pinned.from && !pinned.chip, 'Pin turns it into a normal desk (no review tint, orb back to normal)', JSON.stringify(pinned));
+  ok(!pinned.from && !pinned.chip, 'Open app turns it into a normal desk (no review tint, orb back to normal)', JSON.stringify(pinned));
   const pinIdx = (await S()).idx;
   await p.evaluate(() => window.__wosNativeBack()); await p.waitForTimeout(700);
   s = await S(); ok(s.n === before.n + 1, 'a pinned desk stays open after Back', JSON.stringify(s));

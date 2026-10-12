@@ -189,13 +189,12 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     await p.waitForFunction(() => __wos.desks[1].full === false, null, { timeout: 3000 }).catch(() => {});
     s = await state(p);
     ok(s.desks[1].full === false, 'pinch in → back to tiles');
-    // Move Chats to desk 5 via its menu; close CineQueue.
+    // Window overflow retired: expand and close stay in the bar; arrangement is covered by overview QA.
     const chatWin = p.locator(`.desk[data-desk="${1}"]`).locator('.win.app-chats');
-    await chatWin.locator('[data-wact="menu"]').tap(); await p.waitForTimeout(300);
-    ok(await p.locator('#wmenu.open').count() === 1, 'window menu opens');
-    await p.locator('#wmenu [data-mact="right"]').tap(); await p.waitForTimeout(700);
+    ok(await chatWin.locator('[data-wact="menu"]').count() === 0, 'window bar has no three-dot menu');
+    await p.evaluate(() => { const w = Object.values(__wos.wins).find(w => w.app === 'chats'); __wos.moveWin(w.id, 2); }); await p.waitForTimeout(700);
     s = await state(p);
-    ok(s.desks[2].wins.some(w => w.app === 'chats') || s.desks.findIndex(d => d.wins.some(w => w.app === 'chats')) === 2, 'menu → move Chats one desk right', JSON.stringify(s.desks.map(d => d.wins.map(w => w.app))));
+    ok(s.desks[2].wins.some(w => w.app === 'chats') || s.desks.findIndex(d => d.wins.some(w => w.app === 'chats')) === 2, 'shell can move Chats one desk right', JSON.stringify(s.desks.map(d => d.wins.map(w => w.app))));
     ok(s.idx === 2, 'view follows the moved window');
     await p.evaluate(() => __wos.goDesk(1)); await p.waitForTimeout(700);
     const fr = p.locator(`.desk[data-desk="${1}"]`).locator('.win.app-frame');
