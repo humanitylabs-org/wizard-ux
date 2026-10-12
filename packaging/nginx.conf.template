@@ -1,0 +1,48 @@
+worker_processes auto;
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+events { worker_connections 1024; }
+http {
+  include /etc/nginx/mime.types;
+  default_type application/octet-stream;
+  access_log /dev/stdout;
+  client_body_temp_path /tmp/client_temp;
+  proxy_temp_path /tmp/proxy_temp;
+  client_max_body_size 100m;
+  map $http_upgrade $connection_upgrade { default upgrade; '' ''; }
+  # Docker/Runtipi embedded DNS; resolve again after independent Service replacement.
+  resolver 127.0.0.11 valid=5s ipv6=off;
+  server {
+    listen 8788;
+    server_name _;
+    set $wizard_api "${WIZARD_AGENT_SERVICE_ORIGIN}";
+    location = /shell-health { default_type application/json; return 200 '{"ok":true,"component":"wizard-shell"}'; }
+    location = / { return 302 /wizard-os-home/$is_args$args; }
+    location = /wizard-os-home { return 302 /wizard-os-home/$is_args$args; }
+    location = /wizard-ux { return 302 /wizard-ux/$is_args$args; }
+    location /wizard-os-home/ {
+      alias /usr/share/nginx/wizard-ux/;
+      index index.html;
+      add_header Cache-Control "no-cache" always;
+    }
+    location /wizard-ux/ {
+      alias /usr/share/nginx/wizard-ux/;
+      index index.html;
+      add_header Cache-Control "no-cache" always;
+    }
+    location / {
+      proxy_pass $wizard_api$request_uri;
+      proxy_http_version 1.1;
+      proxy_set_header Host $http_host;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $connection_upgrade;
+      proxy_buffering off;
+      proxy_request_buffering off;
+      proxy_cache off;
+      proxy_read_timeout 3600s;
+      proxy_send_timeout 3600s;
+    }
+  }
+}
