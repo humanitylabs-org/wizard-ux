@@ -170,6 +170,7 @@ public final class BackgroundAudioService extends MediaSessionService {
                 } break;
             }
             case "removeUpcoming": {
+                generation++; refillKey=UUID.randomUUID().toString(); refillAttempts=0;
                 JSONArray ids=p.optJSONArray("ids"); Set<String> drop=new HashSet<>(); if(ids!=null) for(int i=0;i<ids.length();i++) drop.add(ids.optString(i));
                 for(int i=tracks.size()-1;i>player.getCurrentMediaItemIndex();i--) if(drop.contains(tracks.get(i).optString("id"))) { tracks.remove(i); player.removeMediaItem(i); revision++; }
                 maybeRefill(); break;

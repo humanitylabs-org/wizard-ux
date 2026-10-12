@@ -67,6 +67,10 @@ let browser;
  await audio('seek',{positionMs:11000});for(let i=0;i<40;i++){await wait(250);if((await snap()).error)break;}const offline=await snap();check('offline continuation preserves wanted playback and reports retry',offline.wantPlaying&&!!offline.error,offline);
  await post('/qa/offline',{down:false});for(let i=0;i<40;i++){await wait(250);const s=await snap();if(s.playing&&s.queue.length>offline.queue.length)break;}
  const recovered=await snap();check('station recovers after network returns with no view-owned refill',recovered.playing&&recovered.queue.length>offline.queue.length,recovered);
+ await post('/qa/reset',{next:10});await post('/qa/more-delay',{seconds:1.5});
+ await audio('load',{queue:[{...fixture.tracks[0],stream:'http://10.0.2.2:'+http+fixture.tracks[0].stream,art:'http://10.0.2.2:'+http+fixture.tracks[0].art}],index:0,station});
+ const fenceBefore=await snap();await audio('removeUpcoming',{ids:[fixture.tracks[12].id]});await wait(3500);const fenceAfter=await snap();await post('/qa/more-delay',{seconds:0});
+ check('queue policy mutation fences out stale in-flight continuation',fenceAfter.generation>fenceBefore.generation&&!fenceAfter.queue.slice(fenceAfter.index+1).some(t=>t.id===fixture.tracks[12].id),fenceAfter);
  // Correlated frame/session adversaries: native main-frame port alone is never a hosted-app permission.
  const stale=await audio('pause',{sessionId:'obsolete'});check('stale session commands refused',!stale.ok);
  const forged=await audio('load',{queue:[{...down.queue[down.index],stream:'https://evil.test/music.mp3'}],index:0,station:null});check('foreign media URL rejected before network',!forged.ok);

@@ -75,6 +75,7 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
                 if p=='/wizard-music/api/home':return self.body(200,{'sources':[],'vibes':[],'liked':[],'recent':state['tracks'][:3],'library':state['tracks'][:3]})
                 if p=='/wizard-music/api/search':return self.body(200,{'tracks':state['tracks'][:3]})
                 if p.startswith('/wizard-music/api/station/'):
+                    if state.get('delay_more'):time.sleep(state['delay_more'])
                     with LOCK:
                         if state['down']:return self.body(503,{'error':'offline'})
                         key=q.get('requestId',[''])[0]
@@ -102,7 +103,8 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
                     with LOCK:state['events'].append(data)
                     t=next((t for t in state['tracks'] if t['id']==data.get('id')),state['tracks'][0]);return self.body(200,{'ok':True,'track':t,'drop':[],'learned':None})
                 if p=='/qa/offline':state['down']=bool(data.get('down'));return self.body(200,{'ok':True})
-                if p=='/qa/reset':state['next']=3;state['batches']={};return self.body(200,{'ok':True})
+                if p=='/qa/reset':state['next']=int(data.get('next',3));state['batches']={};return self.body(200,{'ok':True})
+                if p=='/qa/more-delay':state['delay_more']=float(data.get('seconds',0));return self.body(200,{'ok':True})
                 if p=='/qa/fail-stream':state['fail_stream']=data.get('id');return self.body(200,{'ok':True})
                 return self.body(403,{'error':'isolated_qa'})
         server=http.server.ThreadingHTTPServer(('127.0.0.1',HTTP),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
