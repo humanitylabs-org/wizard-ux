@@ -15,27 +15,27 @@
     { id: 'nebula', name: 'Nebula', who: 'For dreamers and late-night thinkers. The original.', orb: [0, 1, 1],
       t: T({ bg: '#05030c', ink: '#f3efff', 'ink-2': '#b9b0d8', 'ink-3': '#7d74a3', line: 'rgba(205,190,255,.13)', 'line-2': 'rgba(205,190,255,.24)', glass: 'rgba(18,12,38,.58)', 'glass-2': 'rgba(28,19,58,.72)',
         violet: '#8f63ff', 'violet-2': '#b99bff', pink: '#ff5ccf', cyan: '#3fe0ff', amber: '#ffbe55', green: '#4ff0b0', red: '#ff6b86',
-        'sk-time-a': '#ffffff', 'sk-time-b': '#b8a6ff', 'sk-dock': 'rgba(8,5,18,.94)', 'sk-dock-line': 'rgba(205,190,255,.10)', 'sk-ddot': 'rgba(205,190,255,.45)', 'sk-tour': 'rgba(8,5,18,.78)', 'sk-dim': 'rgba(3,1,10,.74)' }) },
+        'sk-time-a': '#ffffff', 'sk-time-b': '#b8a6ff', 'sk-dock': 'rgba(8,5,18,.94)', 'sk-dock-line': 'rgba(205,190,255,.10)', 'sk-ddot': 'rgba(205,190,255,.45)', 'sk-tour': 'rgba(8,5,18,.78)', 'sk-dim': 'rgba(3,1,10,.74)', 'sk-win': 'rgba(12,8,26,.82)' }) },
     { id: 'grove', name: 'Grove', who: 'For the grounded. Walkers, gardeners, anyone who finds screens too loud.', orb: [-160, .85, 1.08],
-      t: T({ bg: '#0e2116', ink: '#eef5e9', 'ink-2': '#b5cbb9', 'ink-3': '#7f9a86', line: 'rgba(207,232,200,.14)', 'line-2': 'rgba(207,232,200,.26)', glass: 'rgba(12,30,19,.55)', 'glass-2': 'rgba(22,48,32,.72)',
+      t: T({ bg: '#050b07', ink: '#eef5e9', 'ink-2': '#b5cbb9', 'ink-3': '#7f9a86', line: 'rgba(207,232,200,.14)', 'line-2': 'rgba(207,232,200,.26)', glass: 'rgba(10,22,14,.55)', 'glass-2': 'rgba(16,32,22,.78)',
         violet: '#7ddc8a', 'violet-2': '#e6c66b', pink: '#e8a07a', cyan: '#8fd6c4', amber: '#f0b45a', green: '#9be37a', red: '#e8806a',
-        'sk-time-a': '#f6f9ee', 'sk-time-b': '#cfe3a6', 'sk-dock': 'rgba(9,22,14,.94)', 'sk-dock-line': 'rgba(207,232,200,.10)', 'sk-ddot': 'rgba(207,232,200,.45)', 'sk-tour': 'rgba(9,22,14,.82)', 'sk-dim': 'rgba(4,12,7,.72)' }) },
+        'sk-time-a': '#f6f9ee', 'sk-time-b': '#cfe3a6', 'sk-dock': 'rgba(9,22,14,.94)', 'sk-dock-line': 'rgba(207,232,200,.10)', 'sk-ddot': 'rgba(207,232,200,.45)', 'sk-tour': 'rgba(9,22,14,.82)', 'sk-dim': 'rgba(4,12,7,.72)', 'sk-win': 'rgba(8,15,10,.84)' }) },
     { id: 'paper', name: 'Paper', who: 'For minimalists. A phone that looks like a good notebook.', orb: [95, 1.1, 1],
       t: T({ bg: '#f6f3ec', ink: '#1d1b17', 'ink-2': '#57524a', 'ink-3': '#8a8577', line: 'rgba(40,30,15,.12)', 'line-2': 'rgba(40,30,15,.22)', glass: 'rgba(255,253,248,.92)', 'glass-2': 'rgba(255,253,248,1)',
         violet: '#d9462b', 'violet-2': '#c2412a', pink: '#2f6fde', cyan: '#2f6fde', amber: '#c98a12', green: '#2e8b57', red: '#c43d2b',
-        'sk-time-a': '#1d1b17', 'sk-time-b': '#4a443a', 'sk-dock': 'rgba(246,243,236,.97)', 'sk-dock-line': 'rgba(40,30,15,.12)', 'sk-ddot': 'rgba(40,30,15,.35)', 'sk-tour': 'rgba(255,253,248,.95)', 'sk-dim': 'rgba(246,243,236,.74)' }) },
+        'sk-time-a': '#1d1b17', 'sk-time-b': '#4a443a', 'sk-dock': 'rgba(246,243,236,.97)', 'sk-dock-line': 'rgba(40,30,15,.12)', 'sk-ddot': 'rgba(40,30,15,.35)', 'sk-tour': 'rgba(255,253,248,.95)', 'sk-dim': 'rgba(246,243,236,.74)', 'sk-win': 'rgba(255,253,248,1)' }) },
     { id: 'tide', name: 'Tide', who: 'For the calm. Breath, water, slow mornings.', orb: [-95, 1, 1.06],
       t: T({ bg: '#052a36', ink: '#e8f6f8', 'ink-2': '#a9cdd4', 'ink-3': '#6f98a2', line: 'rgba(168,230,238,.15)', 'line-2': 'rgba(168,230,238,.27)', glass: 'rgba(4,38,50,.5)', 'glass-2': 'rgba(8,56,72,.7)',
         violet: '#3fd2c0', 'violet-2': '#7fd8ff', pink: '#ffd08a', cyan: '#7fd8ff', amber: '#ffc070', green: '#8fe3a8', red: '#ff8a8a',
-        'sk-time-a': '#f2fbfc', 'sk-time-b': '#9fe6e6', 'sk-dock': 'rgba(3,26,34,.94)', 'sk-dock-line': 'rgba(168,230,238,.10)', 'sk-ddot': 'rgba(168,230,238,.45)', 'sk-tour': 'rgba(3,26,34,.82)', 'sk-dim': 'rgba(1,14,19,.72)' }) },
+        'sk-time-a': '#f2fbfc', 'sk-time-b': '#9fe6e6', 'sk-dock': 'rgba(3,26,34,.94)', 'sk-dock-line': 'rgba(168,230,238,.10)', 'sk-ddot': 'rgba(168,230,238,.45)', 'sk-tour': 'rgba(3,26,34,.82)', 'sk-dim': 'rgba(1,14,19,.72)', 'sk-win': 'rgba(4,26,34,.82)' }) },
     { id: 'ember', name: 'Ember', who: 'For night owls who want a lamp, not a lab.', orb: [115, 1.15, 1.05],
-      t: T({ bg: '#140a06', ink: '#ffe9d6', 'ink-2': '#d4b49c', 'ink-3': '#a0806a', line: 'rgba(255,176,122,.15)', 'line-2': 'rgba(255,176,122,.27)', glass: 'rgba(36,18,10,.58)', 'glass-2': 'rgba(52,26,14,.74)',
+      t: T({ bg: '#090504', ink: '#ffe9d6', 'ink-2': '#d4b49c', 'ink-3': '#a0806a', line: 'rgba(255,176,122,.15)', 'line-2': 'rgba(255,176,122,.27)', glass: 'rgba(26,13,7,.58)', 'glass-2': 'rgba(36,19,11,.8)',
         violet: '#ff8a3d', 'violet-2': '#ffb470', pink: '#e2553a', cyan: '#ffcf8a', amber: '#ffc24d', green: '#ffd27a', red: '#ff6a4d',
-        'sk-time-a': '#fff1e2', 'sk-time-b': '#ffb27a', 'sk-dock': 'rgba(20,10,6,.95)', 'sk-dock-line': 'rgba(255,176,122,.10)', 'sk-ddot': 'rgba(255,176,122,.45)', 'sk-tour': 'rgba(20,10,6,.84)', 'sk-dim': 'rgba(10,5,3,.74)' }) },
+        'sk-time-a': '#fff1e2', 'sk-time-b': '#ffb27a', 'sk-dock': 'rgba(20,10,6,.95)', 'sk-dock-line': 'rgba(255,176,122,.10)', 'sk-ddot': 'rgba(255,176,122,.45)', 'sk-tour': 'rgba(20,10,6,.84)', 'sk-dim': 'rgba(10,5,3,.74)', 'sk-win': 'rgba(16,9,5,.85)' }) },
     { id: 'signal', name: 'Signal', who: 'For operators. A phone that means business.', orb: [-125, 1.2, 1.1],
       t: T({ bg: '#000000', ink: '#d8ffd8', 'ink-2': '#8fc79a', 'ink-3': '#4f8a5a', line: 'rgba(57,255,140,.16)', 'line-2': 'rgba(57,255,140,.32)', glass: 'rgba(0,10,4,.62)', 'glass-2': 'rgba(0,20,8,.76)',
         violet: '#39ff8c', 'violet-2': '#ffbe55', pink: '#5ad1ff', cyan: '#5ad1ff', amber: '#ffbe55', green: '#39ff8c', red: '#ff5f56',
-        'sk-time-a': '#e6ffe6', 'sk-time-b': '#39ff8c', 'sk-dock': 'rgba(0,0,0,.96)', 'sk-dock-line': 'rgba(57,255,140,.18)', 'sk-ddot': 'rgba(57,255,140,.5)', 'sk-tour': 'rgba(0,8,3,.88)', 'sk-dim': 'rgba(0,0,0,.76)' }) },
+        'sk-time-a': '#e6ffe6', 'sk-time-b': '#39ff8c', 'sk-dock': 'rgba(0,0,0,.96)', 'sk-dock-line': 'rgba(57,255,140,.18)', 'sk-ddot': 'rgba(57,255,140,.5)', 'sk-tour': 'rgba(0,8,3,.88)', 'sk-dim': 'rgba(0,0,0,.76)', 'sk-win': 'rgba(0,10,4,.86)' }) },
   ];
   const N = SKINS.length;
   const idxOf = id => Math.max(0, SKINS.findIndex(s => s.id === id));
@@ -74,7 +74,7 @@
   const BG = {
     grove: {
       init(s, W, H) {
-        const o = mk(W, H), x = o.getContext('2d'); const g = x.createLinearGradient(0, 0, W * .3, H); g.addColorStop(0, '#1b3a26'); g.addColorStop(.5, '#122a1b'); g.addColorStop(1, '#09170f'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+        const o = mk(W, H), x = o.getContext('2d'); const g = x.createLinearGradient(0, 0, W * .3, H); g.addColorStop(0, '#0f2017'); g.addColorStop(.5, '#08130c'); g.addColorStop(1, '#040906'); x.fillStyle = g; x.fillRect(0, 0, W, H);
         s.off = o; s.sh = sprite(64, '3,12,6', .55); s.li = sprite(90, '255,226,140', .35); s.fl = sprite(10, '255,232,150', .5);
         s.shadows = Array.from({ length: 26 }, () => ({ x: rnd(-40, W + 40), y: rnd(-40, H + 40), rx: rnd(50, 120), ry: rnd(24, 60), rot: rnd(0, TAU), ph: rnd(0, TAU), amp: rnd(6, 16) }));
         s.lights = Array.from({ length: 10 }, () => ({ x: rnd(0, W), y: rnd(0, H * .8), r: rnd(40, 110), ph: rnd(0, TAU), sp: rnd(.2, .5) }));
@@ -143,9 +143,9 @@
         s.vig = v; s.sa = sprite(8, '255,140,60', .5); s.sb = sprite(8, '255,214,120', .6); s.sp = Array.from({ length: 60 }, () => this.spawn({}, W, H, true));
       },
       draw(c, s, t, dt, W, H) {
-        c.fillStyle = '#140a06'; c.fillRect(0, 0, W, H);
+        c.fillStyle = '#090504'; c.fillRect(0, 0, W, H);
         const pulse = .78 + .22 * Math.sin(t * .35) + .05 * Math.sin(t * 2.1);
-        const g = c.createRadialGradient(W / 2, H * 1.1, 0, W / 2, H * 1.1, H * .85); g.addColorStop(0, `rgba(255,110,30,${.4 * pulse})`); g.addColorStop(.45, `rgba(180,50,10,${.15 * pulse})`); g.addColorStop(1, 'rgba(80,20,5,0)'); c.fillStyle = g; c.fillRect(0, 0, W, H);
+        const g = c.createRadialGradient(W / 2, H * 1.1, 0, W / 2, H * 1.1, H * .85); g.addColorStop(0, `rgba(255,110,30,${.3 * pulse})`); g.addColorStop(.45, `rgba(180,50,10,${.1 * pulse})`); g.addColorStop(1, 'rgba(80,20,5,0)'); c.fillStyle = g; c.fillRect(0, 0, W, H);
         c.globalCompositeOperation = 'lighter';
         for (const p of s.sp) { p.life -= dt; p.vx += Math.sin(t * 1.7 + p.y * .015 + p.ph) * 26 * dt; p.vx *= .99; p.x += p.vx * dt; p.y += p.vy * dt; if (p.life <= 0 || p.y < -10) this.spawn(p, W, H); const a = Math.min(1, p.life / p.max * 1.6) * (.6 + .4 * Math.sin(t * 9 + p.ph)); c.globalAlpha = Math.max(0, a); const z = p.sz * (.4 + .6 * p.life / p.max) * 2; c.drawImage(p.hot ? s.sb : s.sa, p.x - z, p.y - z, z * 2, z * 2); }
         c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.drawImage(s.vig, 0, 0, W, H);

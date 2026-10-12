@@ -19,6 +19,7 @@
   --sk-orb: none;
   --sk-tour: rgba(8, 5, 18, .78); --sk-dim: rgba(3, 1, 10, .74);
   --sk-skin-a: 1;
+  --sk-win: rgba(12, 8, 26, .82);
 }
 .skin-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0; }
 
@@ -91,7 +92,10 @@ html:not([data-skin="nebula"]) .hs-card { background: var(--bg); }
 
 /* Panels the space look paints with literal violet-blacks: every other skin paints them from its own tokens.
    Same boxes, same blur; only the fill and text colour change. */
-html:not([data-skin="nebula"]) :is(.win, .sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: var(--glass-2); color: var(--ink); }
+/* Windows (Chats and every hosted app) sit on the skin's window material: near-black tinted with the skin's hue,
+   like Nebula's. Sheets and cards keep the richer --glass-2. (James, 12 Oct: app backgrounds closer to black.) */
+html:not([data-skin="nebula"]) .win { background: var(--sk-win); color: var(--ink); }
+html:not([data-skin="nebula"]) :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: var(--glass-2); color: var(--ink); }
 html:not([data-skin="nebula"]) .ov-card.home { background: var(--glass-2); }
 html:not([data-skin="nebula"]) :is(.desk-label, .timer, .arc, .transcript, .toast, .scrub .sc-label, .dv-update, .ch-pill, .wx-banner) { background: var(--sk-tour); color: var(--ink); }
 html:not([data-skin="nebula"]) .device { background: var(--bg); }
