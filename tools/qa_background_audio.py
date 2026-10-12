@@ -37,7 +37,7 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
             if len(state['tracks'])>=14:break
         assert len(state['tracks'])>=8, 'Need distinct actual cached songs'
         class Handler(http.server.BaseHTTPRequestHandler):
-            def log_message(self,*args):pass
+            def log_message(self,format,*args):pass
             def body(self,status,data,ct='application/json',extra=None):
                 raw=json.dumps(data).encode() if ct=='application/json' else data
                 self.send_response(status);self.send_header('Content-Type',ct);self.send_header('Content-Length',str(len(raw)));self.send_header('Cache-Control','no-store')

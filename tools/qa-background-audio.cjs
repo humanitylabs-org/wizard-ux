@@ -1,4 +1,4 @@
-const { chromium } = require('/Users/thales/node_modules/playwright');
+const { chromium } = require('/Volumes/ThalesMedia/WizardMusic/background-audio/toolchain/node_modules/playwright');
 const fs = require('fs'),path=require('path');
 const cdp=process.argv[2], http=process.argv[3], out=process.argv[4], PKG='ai.wizards.os.musicpreview';
 const rows=[];const check=(name,ok,detail)=>{rows.push({name,ok:!!ok,detail});console.log(ok?'PASS':'FAIL',name,JSON.stringify(detail||''));};
@@ -56,7 +56,7 @@ let browser;
  const service=await sx('dumpsys activity services '+PKG);check('closing Music UI leaves foreground audio service alive',service.result.includes('BackgroundAudioService'));
  await page.evaluate(()=>window.qaContainer.appendChild(window.qaFrame));await wait(900);await frame().locator('.music-row-main').first().waitFor();const reattached=await snap();check('recreated Music UI sees live native session',reattached.sessionId===hold.sessionId&&reattached.wantPlaying,reattached);
  // Nested Now Playing Back is an actual Android key, and must retain Wizard.
- await frame().locator('.music-mini').click();await wait(300);await sx('input keyevent KEYCODE_BACK');await wait(600);const top=await sx('dumpsys activity activities');check('Android nested Back retains Wizard Activity',top.result.includes(PKG+'/ai.wizards.os.MainActivity'));
+ await frame().locator('.music-mini-open').click();await wait(300);await sx('input keyevent KEYCODE_BACK');await wait(600);const top=await sx('dumpsys activity activities');check('Android nested Back retains Wizard Activity',top.result.includes(PKG+'/ai.wizards.os.MainActivity'));
  const last=await server('/qa/stats');const events=last.events.filter(e=>e.action==='played');const keys=events.map(e=>e.eventId);check('native only reports playback; no UI duplicates',keys.length>0&&keys.every(Boolean)&&new Set(keys).size===keys.length,events);
  const notif=await sx('dumpsys notification --noredact');fs.writeFileSync(path.join(out,'notification.txt'),notif.result);check('media notification contains track title/artist and artwork',/android.mediaSession/.test(notif.result)&&last.tracks.some(t=>notif.result.includes(t.title))&&/android.largeIcon|Icon\(typ=BITMAP/.test(notif.result));
  check('no unexpected candidate JS errors',errors.length===0,errors);await page.screenshot({path:path.join(out,'music-native.png')});
