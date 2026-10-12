@@ -189,6 +189,8 @@ function routeFor() {
     const n0 = await names();
     const sj0 = await p.$$eval(await R('.ch-subj'), els => els.map(e => { const bs = [...e.querySelectorAll('[data-subjmove]')]; const r = e.getBoundingClientRect(); return { n: bs.length, dis: bs.filter(b => b.disabled).map(b => b.dataset.subjmove).join(','), right: bs.length ? r.right - bs[bs.length - 1].getBoundingClientRect().right : -1, h: bs[0]?.getBoundingClientRect().height || 0 }; }));
     ok(n0.length >= 3 && sj0.every(x => x.n === 3 && x.right < 12 && x.h >= 28), '3b every subject header has ⤒ ↑ ↓ at its right edge, thumb-sized', sj0);
+    const topG = await p.$eval(await R('.ch-subj [data-subjmove="top"]'), b => ({ t: b.textContent, n: b.querySelectorAll('.ch-subj-2up i').length, gap: (() => { const [a, c] = b.querySelectorAll('.ch-subj-2up i'); return a && c ? c.getBoundingClientRect().left - a.getBoundingClientRect().right : 99; })() }));
+    ok(topG.t === '↑↑' && topG.n === 2 && topG.gap < 0, '3b move to top reads as two up arrows set tight side by side', topG);
     ok(sj0[0].dis === 'top,up' && sj0[sj0.length - 1].dis === 'down', '3b first subject cannot go up, last cannot go down', sj0.map(x => x.dis));
     const h1 = await mv('up', n0[1]); const n1 = await names();
     ok(h1 === 'ok' && n1[0] === n0[1] && n1[1] === n0[0], '3b ↑ swaps a subject with the one above', { h1, n0, n1 });

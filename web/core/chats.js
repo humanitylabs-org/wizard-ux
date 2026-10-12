@@ -171,7 +171,7 @@ window.WizCore.chats = function createChats(H) {
     const keys = subjectSort([...groups.keys()], (a, b) => (a === 'Other') - (b === 'Other') || waits(groups.get(b)) - waits(groups.get(a)) || groups.get(b).length - groups.get(a).length || a.localeCompare(b));
     const ar = (dir, k, off, label, glyph) => `<button type="button" data-subjmove="${dir}" data-subjkey="${esc(k)}" aria-label="${label} ${esc(k)}"${off ? ' disabled' : ''}>${glyph}</button>`;
     return bar + keys.map((k, i) => { const l = groups.get(k), wN = waits(l), last = i === keys.length - 1;
-      return `<div class="ch-subj"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${l.length}</small><span class="ch-subj-mv" role="group" aria-label="Reorder ${esc(k)}">${ar('top', k, !i, 'Move to top', '⤒')}${ar('up', k, !i, 'Move up', '↑')}${ar('down', k, last, 'Move down', '↓')}</span></div>` + l.map(rowFn).join(''); }).join('');
+      return `<div class="ch-subj"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${l.length}</small><span class="ch-subj-mv" role="group" aria-label="Reorder ${esc(k)}">${ar('top', k, !i, 'Move to top', '<span class="ch-subj-2up" aria-hidden="true"><i>↑</i><i>↑</i></span>')}${ar('up', k, !i, 'Move up', '↑')}${ar('down', k, last, 'Move down', '↓')}</span></div>` + l.map(rowFn).join(''); }).join('');
   }
   /* By subject order is James's (12 Oct 2026): ↑ / ↓ / move-to-top on each subject header, remembered on this
    * device. Subjects he has placed keep his order at the top; subjects he never placed follow in the default
