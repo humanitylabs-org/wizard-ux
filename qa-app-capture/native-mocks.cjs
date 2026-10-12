@@ -9,7 +9,7 @@ function installDeviceMock() {
     recLevel: () => 50,
     recPause: on => { saved.active.paused = on; save(); },
     recStop: id => { deviceCalls.push('stop'); saved.active = null; save(); return JSON.stringify(saved.takes[id]); },
-    recClaim: id => { deviceCalls.push('claim'); return JSON.stringify(saved.takes[id] || null); },
+    recClaim: id => { deviceCalls.push('claim'); return localStorage.getItem('qa-null-claim') ? 'null' : JSON.stringify(saved.takes[id] || null); },
     recRead: (id, offset) => saved.takes[id] ? JSON.stringify({ b64: btoa('AAC-data'), next: -1 }) : 'null',
     recCancel: id => { deviceCalls.push('cancel'); saved.active = null; delete saved.takes[id]; save(); },
     recDone: id => { deviceCalls.push('done'); delete saved.takes[id]; save(); }

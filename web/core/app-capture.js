@@ -354,7 +354,7 @@
         const a = parse(d.recActive());
         if (a?.id === row.nativeId) return { live: true };
         const meta = parse(d.recClaim(row.nativeId));
-        if (!meta) return null;
+        if (!meta) throw fail('native_claim_pending', 'Native capture is not ready to claim; restore the bridge and retry recovery.');
         return { blob: await read(row.nativeId), durationMs: Number(meta.ms) || 0, meta };
       },
       ack: row => d.recDone(row.nativeId)
@@ -459,7 +459,7 @@
       if (row.native && row.nativeId) {
         const a = adapter({ kind: row.kind }, row);
         const recovered = await a.recover?.(row);
-        if (recovered?.live) { await put({ ...row, status: 'recoverable', partial: true }); continue; }
+        if (recovered?.live) { await put({ ...row, status: 'recoverable', partial: true, recoveryError: null }); continue; }
         if (recovered?.blob && !row.bytes) {
           const s = { row, queue: [], writes: Promise.resolve(), opts: {}, limit: DEFAULT_LIMIT };
           enqueue(s, recovered.blob); await s.writes; if (s.error) throw s.error; Object.assign(row, s.row);
@@ -526,7 +526,7 @@
     } catch (e) {
       // An established recorder must not be deleted on a storage failure. Preserve
       // its owner and expose retryable Stop instead of starting another physical mic.
-      if (s.engine) { s.error = e; s.partial = true; s.phase = 'error'; changed(); void finish(s, true).catch(() => {}); }
+      if (s.engine) { e.id = s.row.id; e.appId = s.row.appId; s.error = e; s.partial = true; s.phase = 'error'; changed(); void finish(s, true).catch(() => {}); }
       else {
         cleanup(s);
         // A native start might have succeeded before its bridge reply failed.
