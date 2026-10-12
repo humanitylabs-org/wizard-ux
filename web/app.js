@@ -288,12 +288,11 @@
     else if (w.app !== 'frame') $('.wbody', el).innerHTML = winBody(w);
     applyLayout(deskOf(id));
   }
-  let paintStars = () => {};
   function placeTrack(dx, anim) {
     track.classList.toggle('anim', !!anim);
     track.style.transform = `translate3d(calc(${-idx * 100}% + ${dx}px),0,0)`;
     $('.nebula').style.transform = `translate3d(${(-idx + 2) * -3 + dx * .01}%,0,0)`;
-    paintStars();
+    window.WosScenery?.still('stars'); // scenery hook: star parallax follows the desk (one still frame; core/scenery.js)
   }
   let labelT = 0;
   /* Parking: hosted apps on desks out of view stay loaded but go quiet, so swipes stay smooth.
@@ -347,6 +346,7 @@
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
     placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip(); syncBound();
+    window.WosScenery?.[idx === HOME ? 'poke' : 'update'](); // scenery hook: Home animates, any other desk freezes it
     if (moved && LINKS && LINKS.isOpen()) LINKS.close(); // a link is a peek over this desk: moving desks dismisses it
     if (moved) vib(8);
     if (!silent) announce(`<b>${esc(deskName(idx))}</b>`);
@@ -700,6 +700,7 @@
     const corner = on && w.app === 'chats';
     device.classList.toggle('immersive', on);
     device.classList.toggle('orb-corner', corner);
+    window.WosScenery?.update(); // scenery hook: full screen freezes the background
     trackCornerLift(corner);
     shareCutout();
     if (on === immOn) return; immOn = on;
@@ -1090,6 +1091,7 @@
       <div class="st-group"><h4>Unsent <span>${all.length || ''}</span></h4>
         ${all.length ? all.map(unsentRow).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">Everything you’ve said reached Wizard.</div>'}
         <p class="st-note">Every message is saved on this phone before it’s sent, and retried until Wizard accepts it.</p></div>
+      ${lookGroup()}
       <div class="st-group"><h4>Assistant</h4>
         <button class="st-row" data-st="everywhere" ${evNative ? '' : 'disabled'}><span class="st-ic">✦</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
         ${evNative && evOn && typeof window.WizardOSNative.voiceTypingSettings === 'function' ? `<button class="st-row" data-st="typing"><span class="st-ic">⌨</span><span class="st-tx" id="stTyping"><b>Voice typing &amp; screenshots</b><small>${esc(ev?.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Off · tap to set up: the orb types into any app and attaches screenshots')}</small></span>${ev?.keyboard ? '<span class="sw on"><i></i></span>' : '<span class="st-go">›</span>'}</button>` : ''}
@@ -1108,6 +1110,23 @@
     // AI usage (#24): read when Settings opens, painted in place when it lands.
     if (window.WosUsage && !window.WosUsage.loading && (!window.WosUsage.snap || Date.now() - window.WosUsage.at > 60e3)) window.WosUsage.load().then(paintUsage);
   }
+  /* Settings → Look (James, 12 Oct 2026): the skin picker. Tap applies at once (WosSkin.set) and is kept on this
+   * device (localStorage wos.skin; box-level theme.json sync is a later step). Hosted apps re-dress through the
+   * appearance host, which watches html[data-skin]/style. */
+  function lookGroup() {
+    const S = window.WosSkin; if (!S) return '';
+    const cur = S.current, nm = (S.list.find(k => k.id === cur) || {}).name || '';
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4>
+      <div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(nm)} · tap to wear</small></span></div>
+        <div class="sk-sw" role="group" aria-label="Skin">${S.list.map(k => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`).join('')}</div></div></div>`;
+  }
+  function pickSkin(id) {
+    const S = window.WosSkin; if (!S) return;
+    const now = S.set(id), nm = (S.list.find(k => k.id === now) || {}).name || '';
+    $$('#settingsBody [data-skinpick]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.skinpick === now)));
+    const n = $('#settingsBody [data-skinname]'); if (n) n.textContent = `${nm} · tap to wear`;
+    vib(8);
+  }
   function paintUsage() { const g = $('#settingsBody [data-usage]'); if (g && sheet === 'settings') g.outerHTML = window.WosUsage.html(); }
   function openFilesScreen() {
     closeSheets(true);
@@ -1118,6 +1137,11 @@
   }
   function openSettings(focusUnsent) {
     openSheet('settings');
+    if (focusUnsent === 'look') { // scroll the sheet body only (scrollIntoView would also move the fixed shell)
+      const body = $('#settingsBody'), g = $('#settingsBody [data-stgroup="look"]');
+      if (body && g) body.scrollTop += g.getBoundingClientRect().top - body.getBoundingClientRect().top - 8;
+      return;
+    }
     if (focusUnsent) { const g = $('#settingsBody .st-group'); g && g.scrollIntoView({ block: 'start' }); }
   }
   function unsentAction(id, origin, a) {
@@ -1687,6 +1711,7 @@
     else if (which === 'settings') { renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; }
     else { renderInbox(); inboxEl.classList.add('open'); }
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
+    window.WosScenery?.update(); // scenery hook: a sheet over Home freezes the background
     vib(6);
   }
   function closeSheets(quiet) {
@@ -1696,10 +1721,12 @@
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
     $('#search').blur();
     window.WosResources?.sync();
+    window.WosScenery?.update(); // scenery hook: sheet closed, Home may animate again
   }
   $('#scrim').addEventListener('click', () => closeSheets());
   settingsEl.addEventListener('click', e => {
     if (e.target.closest('[data-stclose]')) return closeSheets();
+    { const sk = e.target.closest('[data-skinpick]'); if (sk) return pickSkin(sk.dataset.skinpick); }
     if (window.WosCancelled?.act(e.target)) return;
     if (window.WosSelMenu?.act(e.target)) return;
     const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
@@ -2443,6 +2470,7 @@
     let m = s.match(/^move (?:this|it|the window)(?: window| app)? (?:to )?(?:the )?(left|right|next|previous|prev)(?: desk)?$/);
     if (m) return { action: 'move_window', to: /left|prev/.test(m[1]) ? 'prev' : 'next' };
     if (/^(show |open )?(my )?(inbox|notifications)$/.test(s)) return { action: 'open_view', view: 'inbox' };
+    if (/^((change|switch|pick|choose|open|show) )?(the |my |a )?(skins?|themes?)$|^change (the |my )?look$/.test(s)) return { action: 'open_view', view: 'skin' };
     if (/^(show |open )?(my )?(apps|app list|launcher|all apps)$/.test(s)) return { action: 'open_view', view: 'apps' };
     m = s.match(/^(?:open|launch|show|start|go to|switch to)\s+(?:me\s+)?(.+)$/);
     if (m) {
@@ -2594,6 +2622,7 @@
     if (a === 'open_view' || a === 'view' || a === 'show') {
       const v = String(c.view || arg).toLowerCase();
       if (/inbox|notif/.test(v)) { openSheet('inbox'); return true; }
+      if (/skin|theme/.test(v)) { openSettings('look'); return true; }
       if (/apps|launcher/.test(v)) { openSheet('launcher'); return true; }
       closeSheets(); openReview(/month/.test(v) ? 'month' : /week/.test(v) ? 'week' : 'day', c.date, opts); return true;
     }
@@ -2873,34 +2902,12 @@
   // Shared native Everywhere hosts retain their existing cadence.
   Orb.setRestingMotion?.(false);
 
-  /* ---------------- starfield ---------------- */
-  (function stars() {
-    const c = $('#stars'), x = c.getContext('2d'); let Wd, H, pts = [];
-    function size() { const r = Math.min(devicePixelRatio || 1, 2); Wd = c.width = c.clientWidth * r; H = c.height = c.clientHeight * r;
-      pts = Array.from({ length: 170 }, () => ({ x: Math.random() * Wd * 1.4, y: Math.random() * H, r: Math.random() * 1.3 * r + .2, p: Math.random() * 6.28, s: .4 + Math.random() * 1.4, d: Math.random() })); }
-    // Scenery is event-driven: no self-rescheduling loop after the page settles.
-    let raf = 0;
-    const draw = () => {
-      raf = 0; if (document.hidden) return;
-      x.clearRect(0, 0, Wd, H);
-      const off = -idx * Wd * .05;
-      for (const p of pts) {
-        const a = .25 + .75 * Math.abs(Math.sin(p.p));
-        x.globalAlpha = a * (.35 + p.d * .65); x.fillStyle = p.d > .85 ? '#d9c8ff' : '#ffffff';
-        const px = ((p.x + off * (p.d + .2)) % (Wd * 1.4) + Wd * 1.4) % (Wd * 1.4) - Wd * .2;
-        x.beginPath(); x.arc(px, p.y, p.r, 0, 6.28); x.fill();
-      }
-    };
-    paintStars = () => { if (!document.hidden && !raf) raf = requestAnimationFrame(draw); };
-    const resize = () => { size(); paintStars(); };
-    resize(); addEventListener('resize', resize);
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else paintStars();
-    });
-  })();
+  /* Starfield + Nebula drift + skin canvases: core/scenery.js (battery-gated decorative motion). */
 
   /* ---------------- boot ---------------- */
   buildDesks(); setVoice('idle'); armBack();
+  // Decorative motion lives only on a visible, recently touched Home with nothing over it (core/scenery.js).
+  window.WosScenery?.attach({ device, homeInView: () => idx === HOME && !desks[idx]?.full, deskIdx: () => idx });
   if (LIVE) LIVE.refresh();
   $('#clock').textContent = window.WizConfig.hm();
   window.addEventListener('wizard:config', () => { const t = $('#homeTime'), c = $('#clock'), hm = window.WizConfig.hm(); if (t) t.textContent = hm; if (c) c.textContent = hm; });
@@ -3040,6 +3047,7 @@
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'system') return openApp(APP.system);
       if (v === 'settings' || v === 'usage') return openSettings();
+      if (v === 'skin') return openSettings('look');
       if (v === 'day' || v === 'week' || v === 'month') return openReview(v);
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); toast('◇', 'Files isn’t on this Wizard', 1800); return; }
       // work / chats: the Chats window, at the asked-for section.
