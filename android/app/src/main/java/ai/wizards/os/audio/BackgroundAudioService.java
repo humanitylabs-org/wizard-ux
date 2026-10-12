@@ -98,7 +98,7 @@ public final class BackgroundAudioService extends MediaSessionService {
                     return new MediaSession.ConnectionResult.AcceptedResultBuilder(s).setAvailablePlayerCommands(commands).build();
                 }
                 @Override public int onPlayerCommandRequest(MediaSession s, MediaSession.ControllerInfo c, int command) {
-                    if(command==Player.COMMAND_CHANGE_MEDIA_ITEMS || command==Player.COMMAND_SET_MEDIA_ITEM || command==Player.COMMAND_SET_PLAYLIST_METADATA || command==Player.COMMAND_SET_SHUFFLE_MODE || command==Player.COMMAND_SET_REPEAT_MODE || command==Player.COMMAND_STOP) return androidx.media3.session.SessionResult.RESULT_ERROR_NOT_SUPPORTED;
+                    if(command==Player.COMMAND_CHANGE_MEDIA_ITEMS || command==Player.COMMAND_SET_MEDIA_ITEM || command==Player.COMMAND_SET_PLAYLIST_METADATA || command==Player.COMMAND_SET_SHUFFLE_MODE || command==Player.COMMAND_SET_REPEAT_MODE || command==Player.COMMAND_STOP) return androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED;
                     if (command == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM || command == Player.COMMAND_SEEK_TO_NEXT) report("skipped");
                     return androidx.media3.session.SessionResult.RESULT_SUCCESS;
                 }

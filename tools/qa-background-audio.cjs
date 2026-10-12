@@ -14,7 +14,7 @@ let browser;
  await page.waitForTimeout(2000);
  let frame=()=>page.frames().find(f=>/\/wizard-music\/$/.test(f.url()));
  for(let i=0;i<30&&!frame();i++)await wait(500);
- if(!frame())await page.evaluate(()=>__wos.openApp('wizard-music'));
+ if(!frame())await page.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['wizard-music']));
  await frame().locator('.music-row-main').first().waitFor({timeout:30000});
  check('actual Music candidate attaches native; no HTML audio',await frame().evaluate(()=>!!window.WizardNativeMusic && document.querySelectorAll('audio').length===0));
  const audio=async(method,params={})=>frame().evaluate(({method,params})=>new Promise(resolve=>{
@@ -46,6 +46,20 @@ let browser;
  await audio('removeUpcoming',{ids:[upcoming.id]});const removed=await snap();check('queue prune never removes current song',removed.queue[removed.index].id===queued.queue[queued.index].id&&!removed.queue.slice(removed.index+1).some(t=>t.id===upcoming.id));
  await audio('jump',{index:Math.max(0,removed.index-1)});check('Played replay uses canonical history', (await snap()).index===Math.max(0,removed.index-1));
  await audio('removeCurrent');const down=await snap();check('thumbs-down transport instantly removes/skips current',!down.queue.some(t=>t.id===removed.queue[Math.max(0,removed.index-1)].id));
+ // Existing recorder API + canned mic fixture: no routing/input device changes in this test.
+ const rid=await page.evaluate(()=>WizardOSDevice.recStart('voice'));await wait(250);
+ const recording=await snap();check('native recording synchronously suspends music while preserving play intention',!!rid&&!recording.playing&&recording.wantPlaying,recording);
+ await audio('pause');await page.evaluate(id=>WizardOSDevice.recCancel(id),rid);await wait(500);
+ const explicit=await snap();check('explicit pause during recording survives recorder completion',!explicit.playing&&!explicit.wantPlaying,explicit);
+ await audio('play');await wait(400);check('play resumes after recorder releases gate',(await snap()).wantPlaying);
+ // Lost continuation retries preserve request identity; recovered empty queue resumes without JS refill.
+ const fixture=await server('/qa/stats');const station={id:'a'.repeat(16),title:'Recovery QA',more:'http://10.0.2.2:'+http+'/wizard-music/api/station/'+('a'.repeat(16))+'/more'};
+ const post=async(p,b)=>fetch('http://127.0.0.1:'+http+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
+ await post('/qa/reset',{});await post('/qa/offline',{down:true});
+ await audio('load',{queue:[fixture.tracks[0]].map(t=>({...t,stream:'http://10.0.2.2:'+http+t.stream,art:'http://10.0.2.2:'+http+t.art})),index:0,station});
+ await audio('seek',{positionMs:11000});await wait(1800);const offline=await snap();check('offline continuation preserves wanted playback and reports retry',offline.wantPlaying&&!!offline.error,offline);
+ await post('/qa/offline',{down:false});for(let i=0;i<20;i++){await wait(500);if((await snap()).playing)break;}
+ const recovered=await snap();check('station recovers after network returns with no view-owned refill',recovered.playing&&recovered.queue.length>offline.queue.length,recovered);
  // Correlated frame/session adversaries: native main-frame port alone is never a hosted-app permission.
  const stale=await audio('pause',{sessionId:'obsolete'});check('stale session commands refused',!stale.ok);
  const forged=await audio('load',{queue:[{...down.queue[down.index],stream:'https://evil.test/music.mp3'}],index:0,station:null});check('foreign media URL rejected before network',!forged.ok);
@@ -54,7 +68,7 @@ let browser;
  await page.evaluate(()=>document.querySelector('#audio-evil')?.remove());
  const hold=await snap();await page.evaluate(()=>{const id=Object.values(__wos.wins).find(w=>w.appId==='wizard-music')?.id;__wos.closeWin(id,true);});await wait(1500);
  const service=await sx('dumpsys activity services '+PKG);check('closing Music UI leaves foreground audio service alive',service.result.includes('BackgroundAudioService'));
- await page.evaluate(()=>__wos.openApp('wizard-music'));await wait(900);await frame().locator('.music-row-main').first().waitFor();const reattached=await snap();check('recreated Music UI sees live native session',reattached.sessionId===hold.sessionId&&reattached.wantPlaying,reattached);
+ await page.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['wizard-music']));await wait(900);await frame().locator('.music-row-main').first().waitFor();const reattached=await snap();check('recreated Music UI sees live native session',reattached.sessionId===hold.sessionId&&reattached.wantPlaying,reattached);
  // Nested Now Playing Back is an actual Android key, and must retain Wizard.
  await frame().locator('.music-mini-open').click();await wait(300);await sx('input keyevent KEYCODE_BACK');await wait(600);const top=await sx('dumpsys activity activities');check('Android nested Back retains Wizard Activity',top.result.includes(PKG+'/ai.wizards.os.MainActivity'));
  const last=await server('/qa/stats');const events=last.events.filter(e=>e.action==='played');const keys=events.map(e=>e.eventId);check('native only reports playback; no UI duplicates',keys.length>0&&keys.every(Boolean)&&new Set(keys).size===keys.length,events);
