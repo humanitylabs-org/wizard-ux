@@ -54,7 +54,8 @@ async function open(ctx, withSel = true) {
   await p.addInitScript(NATIVE(withSel));
   const url = new URL(URL_); url.searchParams.set('open', 'chats');
   await p.goto(url.href); await p.waitForTimeout(4000);
-  await p.evaluate(sid => { const r = [...document.querySelectorAll(`.ch-list [data-chopen="${sid}"]`)].find(x => x.getBoundingClientRect().width > 0); r && r.click(); }, SID);
+  await p.waitForFunction(() => !!window.__wos);
+  await p.evaluate(sid => window.__wos.openWizardThread(sid), SID);
   await until(() => p.evaluate(() => !!document.querySelector('.ch-msgs .msg.a .bub p')), 8000);
   return { p, errs };
 }
