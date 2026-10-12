@@ -203,7 +203,7 @@ window.WizCore.chats = function createChats(H) {
   const PEND_LABEL = { sending: 'Sending…', queued: 'Sending…', waiting: 'Offline · will retry', starting: 'Starting…' };
   function workLabel(s) {
     if (s.pend && PEND_LABEL[s.pend]) return PEND_LABEL[s.pend];
-    return s.status === 'stopping' ? 'Stopping…' : s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working';
+    return s.status === 'stopping' ? 'Stopping…' : window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working');
   }
   /* ---- Drafts: unsent new chats (legacy newThreadDrafts.ts). The new-chat composer owns the 'new' slot;
    * "+" moves unsent words out of it into a saved 'new:<id>' slot, so a new chat always starts empty and
@@ -494,14 +494,14 @@ window.WizCore.chats = function createChats(H) {
     const from = n.from ? `From the \u201c${esc(n.from)}\u201d thread` : 'From another agent thread';
     return `<details class="msg agentnote" data-agentnote><summary><span class="an-ic">\u21aa</span><span class="an-from">${from}</span>${timeTag(n.at)}</summary><div class="an-body">${md(n.text)}</div></details>`;
   }
-  function turnHtml(c, tn, last, working) {
+  function turnHtml(c, tn, last, working, helperStatus) {
     let h = '';
     if (tn.u) h += `<div class="msg u"><div class="bub">${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += `<div class="msg laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(tn.later.at)}</div>`;
     const live = last && working;
     const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
-    const wk = PW ? PW.workHtml(c, tn, live) : null; // the work receipt (chat-work.js #17)
+    const wk = PW ? PW.workHtml(c, tn, live, helperStatus) : null; // the work receipt (chat-work.js #17)
     if (wk != null) h += wk;
     else if (tn.steps || tn.notes.length || live) {
       const label = live ? (tn.notes.length ? esc(clip(tn.notes[tn.notes.length - 1], 90)) : 'Working') : `Worked through ${tn.steps} step${tn.steps === 1 ? '' : 's'}`;
@@ -705,7 +705,7 @@ window.WizCore.chats = function createChats(H) {
     ch(w.id).held = false; // explicit actions/navigation may repaint immediately
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
     const working = !!s && WORKING_ST.has(s.status);
-    const sub = isNew ? `Starts a new thread with ${window.WizConfig.agent()}` : s?.status === 'stopping' ? 'Stopping…' : working ? (s.waitingOn === 'helper' ? `A helper is finishing this for ${window.WizConfig.agent()}` : `${window.WizConfig.agent()} is working`) : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s?.deferred && !s.archived ? 'Deferred' : s?.archived ? 'Archived' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
+    const sub = isNew ? `Starts a new thread with ${window.WizConfig.agent()}` : s?.status === 'stopping' ? 'Stopping…' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${window.WizConfig.agent()}` : `${window.WizConfig.agent()} is working`)) : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s?.deferred && !s.archived ? 'Deferred' : s?.archived ? 'Archived' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
     const turns = c.loadedFor === w.thread ? c.turns || [] : null;
     c.media = []; c.texts = [];
     let msgs;
@@ -727,7 +727,7 @@ window.WizCore.chats = function createChats(H) {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);
           const div = dk && dk !== day ? `<div class="ch-day"><span>${esc(KIT.time.day(at))}</span></div>` : '';
           if (dk) day = dk;
-          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working);
+          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus);
         }).join('')
         + rns.splice(0).map(rnHtml).join('')
         + approvalHtml(c, s)
@@ -1094,6 +1094,14 @@ window.WizCore.chats = function createChats(H) {
   /* Clicks inside a Chats window. Returns true when it handled the click. */
   function click(e, id) {
     const w = H.win(id); if (!w) return false;
+    const hc = e.target.closest('[data-helper-continue]');
+    if (hc) {
+      if (hc.disabled) return true; hc.disabled=true; hc.textContent='Resuming…';
+      fetch(hc.dataset.preview ? '/wizard/preview/helper-continue' : '/wizard/helper-continue', {method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:w.thread})})
+        .then(async r=>{ if(!r.ok) throw new Error(r.status===409 ? 'Already active or no longer resumable' : 'Could not resume'); await LIVE.refresh(); toast('↻','Continuing the same request',1800); })
+        .catch(err=>{ hc.disabled=false; hc.textContent=hc.dataset.preview ? 'Try Continue · example only' : 'Continue'; toast('!',''+err.message,2600); });
+      return true;
+    }
     const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); H.toast('↻', 'Sending again', 1400); return true; }
     if (e.target.closest('[data-obretryall]')) { OUTBOX.retryAll(); H.toast('↻', 'Sending again', 1400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
