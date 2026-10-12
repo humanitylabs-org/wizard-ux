@@ -193,6 +193,28 @@ public class UsualsPolicyTest {
             assertFalse(s, UsualsPolicy.isBrowse(s));
     }
 
+    /** James, 12 Oct: "I should be able to say order grab or order food or similar". */
+    @Test public void foodSpells() {
+        for (String s : new String[]{"Order grab.", "Order food.", "order Grab food", "order grabfood", "order from Grab", "order on grab",
+                "Order lunch", "order dinner on Grab", "order breakfast from grab", "order a snack", "order takeout", "order delivery",
+                "Hey Wizard, order food please", "Okay Wizard order food", "I want to order food", "I'd like to order dinner",
+                "I\u2019d like to order lunch", "I wanna order food", "let's order food", "can you order food", "please order food",
+                "get food", "get me some food", "grab food", "grab me food", "food order", "a grab order", "new food order", "order foods",
+                "order me some food", "order something new", "order food now"})
+            assertTrue(s, UsualsPolicy.isBrowse(s));
+        for (String s : new String[]{"food", "what food should I order", "food is great", "the grab driver is late", "order a taxi",
+                "order my usual kra pao", "order kra pao", "order the pizza", "I like food", "grab a coffee", "order pizza for the team meeting"})
+            assertFalse(s, UsualsPolicy.isBrowse(s));
+    }
+
+    @Test public void aSavedOrderNamedLikeASpellWins() {
+        List<String> names = Arrays.asList("Kra pao moo saap + Thai iced tea", "Lunch");
+        assertEquals(1, UsualsPolicy.namedExactly(names, "Order lunch."));
+        assertEquals(-1, UsualsPolicy.namedExactly(names, "order food"));
+        assertEquals(-1, UsualsPolicy.namedExactly(names, "order grab"));
+        assertEquals(-1, UsualsPolicy.namedExactly(new ArrayList<>(), "order lunch"));
+    }
+
     @Test public void namesKeepItShort() {
         List<UsualsPolicy.Step> st = Arrays.asList(tap("Krua Thai Kitchen", ""), tap("Add", "Kra pao moo saap"), tap("Add", "Pad thai"),
                 tap("Add", "Thai iced tea"), tap("Add", "Pad thai"));

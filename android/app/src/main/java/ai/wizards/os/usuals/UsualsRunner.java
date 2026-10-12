@@ -192,7 +192,7 @@ public final class UsualsRunner {
         if (u != null) { u.lastResult = ""; u.lastRunAt = 0; UsualsStore.put(app, u); }
     }
 
-    /** Rename on the "Saved" card: Wizard OS opens on Usuals with the name field. */
+    /** Rename on the "Saved" card: Wizard OS opens on Food with the name field. */
     void renameSaved() {
         if (cover != null) cover.hide();
         backToWizard("usuals");

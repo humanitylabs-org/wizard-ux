@@ -172,7 +172,7 @@
     if (w.app === 'chats') return CHATS_APP;
     if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'] || { name: 'Review', icon: '◐', g: ['#444a60', '#22263a'] };
     if (w.app === 'maps') return APP.maps;
-    if (w.app === 'usuals') return APP.usuals || { name: 'Usuals', icon: '🍜', g: ['#00b14f', '#0a5c32'] };
+    if (w.app === 'usuals') return APP.usuals || { name: 'Food', icon: '🍜', g: ['#00b14f', '#0a5c32'] };
     return APP[w.appId] || { name: w.title || 'Page', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
   function winTitle(w) {
@@ -2215,8 +2215,14 @@
     // The music search spell ("music search Home Tides") wins everywhere, even over the Chats list's "search …".
     { const ms = window.WosMusic?.available() && window.WosMusic.parse(t, false, false); if (ms && ms.op === 'search') return { action: 'music', cmd: ms }; }
     { const cv = chatsVoice(t, snap || sendSnap(), kind); if (cv) return cv; }
-    // "Order my usual kra pao": a taught usual runs on the phone (Grab under a cover), nothing goes to Wizard.
+    // Food spells (James, 12 Oct): "order food" / "order grab" / "order lunch" open Grab for a new order; "order kra pao"
+    // or "order my usual kra pao" runs a saved one; "food" on its own opens the Food app. All on the phone, nothing to Wizard.
     const us = window.WosUsuals?.match(t); if (us) return { action: 'usual', id: us };
+    if (window.WosUsuals?.available()) {
+      const fs = window.WosUsuals.spell(t);
+      if (fs === 'new') return { action: 'usual', id: '+new' };
+      if (fs === 'open' && (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'open_app', app: (APP.usuals || {}).name || 'Food' };
+    }
     // Music (play …, pause, next, louder, I like this): on-device, straight to Wizard Music. A held orb takes any
     // music phrase; a tap only the unmistakable ones ("play …", "pause the music"), so chat words stay chat.
     // In front of Wizard Music a held orb is always for the player ("Guy Barato Trap" = play it).

@@ -56,3 +56,7 @@
 .us-name-row input { flex: 1; min-width: 0; padding: 12px 13px; border-radius: 14px; border: 1px solid rgba(0, 200, 95, .4); background: rgba(0, 0, 0, .25); color: #fff; font-size: 16px; }
 .us-name-row button { padding: 0 14px; border-radius: 14px; border: 0; background: #00c85f; color: #06140b; font-weight: 800; }
 .us-keep { align-self: flex-start; padding: 6px 2px; border: 0; background: none; color: rgba(210, 240, 222, .8); font-size: 13px; font-weight: 650; }
+.us-spells { display: flex; flex-direction: column; gap: 5px; padding: 12px 14px; border-radius: 18px; border: 1px dashed rgba(190, 170, 255, .3); background: rgba(143, 99, 255, .06); }
+.us-spells b { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: rgba(210, 200, 245, .75); }
+.us-spells span { font-size: 13px; line-height: 1.4; color: rgba(235, 230, 255, .85); }
+.us-spells i { font-style: normal; font-weight: 700; color: #fff; }
