@@ -8,13 +8,13 @@ import base64, hashlib, json, pathlib, time
 def pages(root):
     root = pathlib.Path(root)
     scripts = {p: (root / 'web' / p).read_text() for p in ['core/app-capture.js', 'core/app-services.js', 'core/app-client.js', 'device.js']}
-    boot = """window.resumes=[]; window.__wos={voice:'idle',V:{native:null},toast(){},txHide(){},setVoice(v){this.voice=v},nativeResume(a){resumes.push(a.id);this.V.native=a.id;this.voice='listen';return true}};
+    boot = """window.sharedQaBoot=crypto.randomUUID();window.resumes=[];window.webShares=0;navigator.share=()=>{webShares++;return Promise.resolve();}; window.__wos={voice:'idle',V:{native:null},toast(){},txHide(){},setVoice(v){this.voice=v},nativeResume(a){resumes.push(a.id);this.V.native=a.id;this.voice='listen';return true}};
 window.WizConfig={agent:()=> 'Synthetic',owner:()=> 'Synthetic'};
 window.WizCore={apps:()=>({APPS:[{id:'mizel',url:'/mizel-qa/capture-frame.html'},{id:'trackhunt',url:'/mizel-qa/task-frame.html'}]})};
 """
     mount = """const f=document.querySelector('iframe');const task=location.search.includes('task');f.src=task?'/mizel-qa/task-frame.html':'/mizel-qa/capture-frame.html';WizAppServices.attach(f,{appId:task?'trackhunt':'mizel',path:f.src});
 window.__wosNativeBack=()=>{WizAppServices.back(f);return 'shared-back';};"""
-    frame = """window.stats={pcm:0,bytes:0,levels:0,raw:0,depth:0,webShares:0};
+    frame = """window.sharedQaBoot=crypto.randomUUID();window.stats={pcm:0,bytes:0,levels:0,raw:0,depth:0,webShares:0};
 navigator.share=()=>{stats.webShares++;return Promise.resolve();};
 if(navigator.mediaDevices) navigator.mediaDevices.getUserMedia=()=>{stats.raw++;throw Error('App raw capture is forbidden');};
 WizardApp.back.register({canGoBack:()=>stats.depth>0,back:()=>{if(stats.depth){stats.depth--;return true;}return false;}});
@@ -35,8 +35,9 @@ window.shareFile=async()=>{window.shareOutcome=await WizardApp.share.file(new Fi
 
 def run(pg, sx, top, check, save, origin, pkg, state, lock):
     def navigate(task=False):
+        old=pg.ev("window.sharedQaBoot||''")
         pg.ev("location.href=" + json.dumps(origin + '/mizel-qa/shared-native.html' + ('?task' if task else '')))
-        assert pg.pump(25, lambda: pg.ev("!!(window.WizAppCapture?.getState().nativeOwnershipReady && document.querySelector('iframe')?.contentWindow?.WizardApp?.hosted)"), .5)
+        assert pg.pump(25, lambda: pg.ev("window.sharedQaBoot!=="+json.dumps(old)+" && !!(window.WizAppCapture?.getState().nativeOwnershipReady && document.querySelector('iframe')?.contentWindow?.WizardApp?.hosted && typeof document.querySelector('iframe').contentWindow.begin==='function')"), .5)
     def frame(expression):
         return pg.ev("document.querySelector('iframe').contentWindow." + expression)
     navigate()
@@ -47,11 +48,11 @@ def run(pg, sx, top, check, save, origin, pkg, state, lock):
     check('shared-native', 'Mizel app never invokes a raw microphone API', stats['raw'] == 0)
     check('shared-native', 'native meeting capture blocks Everywhere recorder', not pg.ev("WizardOSDevice.recStart('auto')"))
     before = pg.ev('WizAppCapture.getState().id')
-    pg.ev("document.querySelector('iframe').contentWindow.location.reload()")
-    pg.pump(2, lambda: pg.ev("!!document.querySelector('iframe').contentWindow.WizardApp?.hosted"), .3)
+    old=frame('sharedQaBoot');pg.ev("document.querySelector('iframe').contentWindow.location.reload()")
+    assert pg.pump(25,lambda:pg.ev("(()=>{const w=document.querySelector('iframe').contentWindow;return w.sharedQaBoot!=="+json.dumps(old)+" && w.WizardApp?.hosted && typeof w.begin==='function'})()"),.3)
     attached = frame('begin()'); pg.pump(2)
     check('shared-native', 'iframe reload rebinds native PCM without a second take', attached['id'] == before and frame('stats.pcm') >= 4)
-    pg.ev('location.reload()'); pg.pump(4)
+    navigate()
     snapshot = pg.ev('WizAppCapture.getState()')
     check('shared-native', 'shell reload reports physical native meeting ownership/hold before logical resume', not snapshot['active'] and snapshot['recording'] and snapshot['hold'], snapshot)
     resumed = frame('begin()'); pg.pump(2)
@@ -75,7 +76,7 @@ def run(pg, sx, top, check, save, origin, pkg, state, lock):
     started = frame('begin()'); pg.pump(2)
     active = pg.ev('JSON.parse(WizardOSDevice.recActive())')
     check('shared-device', 'actual recActive omits kind but exact take id is exported', 'kind' not in active and pg.ev('WizAppCapture.getState().nativeDeviceTakeIds') == [active['id']], active)
-    pg.ev('location.reload()');pg.pump(4)
+    navigate(task=True)
     snapshot = pg.ev('WizAppCapture.getState()')
     check('shared-device', 'real DeviceBridge shared take survives shell restart with physical hold', snapshot['nativeOwnershipReady'] and snapshot['recording'] and snapshot['hold'] and snapshot['nativeDeviceTakeIds'] == [active['id']], snapshot)
     check('shared-device', 'legacy importer neither adopts nor offers shared active take', not pg.ev('resumes.length') and not pg.ev("document.querySelector('.dv-take')!==null"))
@@ -100,7 +101,7 @@ def run(pg, sx, top, check, save, origin, pkg, state, lock):
         pg.pump(1.5)
         chooser=top()
         check('shared-share','real native '+kind+' chooser launches; void outcome stays truthful and no duplicate browser fallback',
-              ('ChooserActivity' in chooser or 'ResolverActivity' in chooser) and frame('shareOutcome')=='unsupported' and frame('stats.webShares')==0, {'activity':chooser,'outcome':frame('shareOutcome')})
+              ('ChooserActivity' in chooser or 'ResolverActivity' in chooser) and frame('shareOutcome')=='unsupported' and frame('stats.webShares')==0 and pg.ev('webShares')==0, {'activity':chooser,'outcome':frame('shareOutcome')})
         sx('input keyevent KEYCODE_BACK');pg.pump(.5)
     frame('stats.depth=1');sx('input keyevent KEYCODE_BACK');pg.pump(1)
     check('shared-back', 'native Back closes nested shared app and never exits', frame('stats.depth') == 0 and pkg in top(), top())

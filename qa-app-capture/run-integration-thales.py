@@ -39,7 +39,7 @@ server=socketserver.ThreadingTCPServer(('127.0.0.1',0),Handler);threading.Thread
 base='http://127.0.0.1:'+str(server.server_address[1])+'/wizard-os-home/'
 try:
  run('capture-and-mizel',['node','qa-app-capture/run.cjs'])
- run('host',['node','-r','./qa-thales-loader.cjs','qa-app-services.cjs'])
+ run('host',['node','-r','./qa-thales-loader.cjs','qa-app-services.cjs'],{'QA_BLOCK_WRITES':'0'}) # Self-contained server; actual SW/cache migration must not be mocked/blocked.
  run('share-ab',['node','-r','./qa-thales-loader.cjs','qa-share-receipt-ab.cjs'],{'QA_BASELINE':env['SHARE_BASELINE']})
  run('device',['node','-r','./qa-thales-loader.cjs','qa-device.cjs'])
  run('chats-return-position',['node','-r','./qa-thales-loader.cjs','qa-chats-return-position.cjs',base])

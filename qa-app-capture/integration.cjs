@@ -30,6 +30,7 @@ module.exports=async({browser,root,evidence,test})=>{
   if(u.pathname==='/mount.js')return send(`const f=document.querySelector('#frame');const id=location.search.includes('trackhunt')?'trackhunt':'mizel';f.src='/'+(id==='mizel'?'mizel-live':id)+'/';WizAppServices.attach(f,{appId:id,path:f.src});`,'application/javascript');
   if(u.pathname==='/trackhunt/')return send(frameHTML,'text/html');
   if(u.pathname.startsWith('/wizard-os-home/')){const file=path.resolve(root,'web',u.pathname.slice('/wizard-os-home/'.length));if(!file.startsWith(path.resolve(root,'web')+path.sep)||!fs.existsSync(file))return send('', 'text/plain',404);return send(fs.readFileSync(file),file.endsWith('.js')?'application/javascript':'text/css');}
+  if(u.pathname==='/mizel-live/asks')return send({asks:[]});
   if(u.pathname==='/mizel-live/api/calendar')return send([]);
   if(u.pathname==='/mizel-live/api/ask')return send({asks:[],thread:[]});
   if(u.pathname==='/mizel-live/api/meetings'){
@@ -78,13 +79,17 @@ module.exports=async({browser,root,evidence,test})=>{
    await f().click('#pill .stop');await p.waitForFunction(()=>!WizAppCapture.getState().recording);await p.waitForFunction(async()=>!(await WizAppCapture.pending('mizel')).length);
    await p.waitForFunction(()=>!WizAppServices.update.busy());assert.equal(await f().evaluate(()=>rawCaptureAttempts),0);
    const r=[...records.values()][0];for(const source of ['me','them']){const cs=[...r.chunks.values()].filter(c=>c.source===source).sort((a,b)=>a.seq-b.seq);assert.deepEqual(cs.map(c=>c.seq),cs.map((c,i)=>i));assert.equal(r.stop.final_seq[source],cs.at(-1).seq);}
-   await f().screenshot({path:path.join(evidence,'mizel-shared-desktop.png')});
+   await p.locator('#frame').screenshot({path:path.join(evidence,'mizel-shared-desktop.png')});
    assert.deepEqual(errors,[]);
   });
   await test('Mizel-mismatched-backend-PCM-retains-shared-custody-and-retry-acks',async()=>{
    await p.goto(origin+'/host/');let f=p.frames().find(f=>f.url().includes('/mizel-live/'));await f.waitForSelector('#btn-new');await f.evaluate(()=>localStorage.setItem('meetings.systemAudio','0'));await f.click('#btn-new');await f.waitForSelector('#pill .stop');await p.waitForTimeout(800);corrupt=true;await f.click('#pill .stop');await f.waitForFunction(()=>document.querySelector('#toasts').textContent.includes('differs'));
    assert.equal(await p.evaluate(async()=>(await WizAppCapture.pending('mizel')).length),1);assert.equal(await p.evaluate(()=>WizAppServices.update.busy()),true);
-   corrupt=false;await f.getByRole('button',{name:'Retry save',exact:true}).click();await p.waitForFunction(async()=>!(await WizAppCapture.pending('mizel')).length);
+   const micCount=await p.evaluate(()=>mediaAdmissions);
+   await f.evaluate(()=>location.reload());f=p.frames().find(f=>f.url().includes('/mizel-live/'));await f.waitForFunction(()=>document.querySelector('#toasts').textContent.includes('differs'));
+   assert.equal(await p.evaluate(async()=>(await WizAppCapture.pending('mizel')).length),1,'Reload retains mismatched backend custody');
+   corrupt=false;await f.getByRole('button',{name:'Try again',exact:true}).click();await p.waitForFunction(async()=>!(await WizAppCapture.pending('mizel')).length);
+   assert.equal(await p.evaluate(()=>mediaAdmissions),micCount,'Domain Retry saves the old Result, never starts another recorder');
    assert.equal(await p.evaluate(()=>WizAppServices.update.busy()),false);
   });
   await test('native-DeviceBridge-ownership-exact-live-recovery-legacy-import-isolation',async()=>{

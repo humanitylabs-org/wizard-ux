@@ -5,6 +5,10 @@ Module._resolveFilename = function (name, ...args) {
   if (name === '/home/telos/node_modules/playwright' || (name === 'playwright-core' && !args[0]?.filename?.includes('/node_modules/'))) name = process.env.PW;
   return resolve.call(this, name, ...args);
 };
+if(process.env.QA_CHROME) {
+  const {chromium}=require(process.env.PW),launch=chromium.launch.bind(chromium);
+  chromium.launch=(...args)=>launch({...args[0],executablePath:args[0]?.executablePath||process.env.QA_CHROME},...args.slice(1));
+}
 if (process.env.QA_BLOCK_WRITES === '1') {
   const { chromium } = require(process.env.PW);
   const launch = chromium.launch.bind(chromium);
