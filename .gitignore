@@ -5,3 +5,4 @@ __pycache__/
 web/data.js
 web/summaries.js
 web/ux-version.txt
+web/ux-changes.json
