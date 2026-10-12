@@ -92,6 +92,7 @@
       renames: Array.isArray(item.wizard_title_renames) ? item.wizard_title_renames.filter(r => r && typeof r.from === 'string' && isFinite(r.at)).slice(-6).map(r => ({ from: r.from.slice(0, 120), to: String(r.to || '').slice(0, 120), at: Number(r.at), by: r.by === 'you' ? 'you' : 'agent' })) : [],
       // The thread's model route (chat-models.js shows and changes it).
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
+      modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
       request: userText,
     };
@@ -397,6 +398,7 @@
           const full = !this.fullAt || Date.now() - this.fullAt > FULL_EVERY;
           const [got, deferred, remote] = await Promise.all([fetchSessions(full), fetchDispositions(), fetchSeen().catch(() => null)]);
           let sessions = got.sessions;
+          window.WosModels?.reconcile(sessions);
           if (got.complete) this.fullAt = Date.now();
           else { const fresh = new Set(sessions.map(s => s.id)); sessions = sessions.concat(this.sessions.filter(s => !fresh.has(s.id) && !s.optimistic)); }
           for (const s of sessions) {
@@ -438,9 +440,12 @@
      * `instructions` rides as Hermes's per-run ephemeral system prompt: the agent
      * sees which view James was looking at, the thread itself stays clean. */
     async send(input, opts = {}) {
+      const M = window.WosModels;
+      if (!M) throw new Error('Model selector unavailable · reload Wizard');
+      const route = await M.resolveRoute(M.snapshot('', opts.model ? { model: opts.model, provider: opts.provider } : null));
       const id = `wizard_${Date.now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
       await req('/wizard/hermes/api/sessions', { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id }) });
-      const body = { session_id: id, input };
+      const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
       if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
       const r = await req('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
@@ -452,16 +457,22 @@
     },
     /* Reply inside an existing thread: steer the live run, or start a new run. */
     async reply(id, input, opts = {}) {
+      const M = window.WosModels;
+      if (!M) throw new Error('Model selector unavailable · reload Wizard');
+      const route = await M.resolveRoute(M.snapshot(id, opts.model ? { model: opts.model, provider: opts.provider } : null));
       const s = this.session(id);
       if (s && WORKING.has(s.status) && s.runId) {
         try {
-          const steer = { input };
+          const active = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}`)).json();
+          if (!M.matchesRuntime(active.runtime, route))
+            throw Object.assign(new Error('Queue on the selected model'), { status: 409 });
+          const steer = { input, ...route, require_model_lock: true };
           if (opts.fileIds?.length) steer.wizard_file_ids = opts.fileIds.slice(0, 8);
           await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}/steer`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
           return { steered: true, runId: s.runId };
         } catch (e) { if (![404, 409, 410].includes(e.status)) throw e; }
       }
-      const body = { session_id: id, input };
+      const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
       if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
       const r = await req('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
