@@ -94,13 +94,18 @@
     function paint(tw) {
       x.clearRect(0, 0, Wd, H);
       const off = -(host ? host.deskIdx() : 0) * Wd * .05;
+      const ratio = Math.min(devicePixelRatio || 1, 2);
       for (const p of pts) {
         const base = .25 + .75 * Math.abs(Math.sin(p.p));
-        // twinkle: a slow, small swing around each star's own brightness (subtle by design)
-        const a = tw ? base * (.72 + .28 * Math.sin(t * p.s * 1.3 + p.p * 3)) : base;
-        x.globalAlpha = a * (.35 + p.d * .65); x.fillStyle = p.d > .85 ? '#d9c8ff' : '#ffffff';
-        const px = ((p.x + off * (p.d + .2)) % (Wd * 1.4) + Wd * 1.4) % (Wd * 1.4) - Wd * .2;
-        x.beginPath(); x.arc(px, p.y, p.r, 0, 6.28); x.fill();
+        // WOS_NEBULA_VISIBLE_V1: visible, depth-dependent drift plus twinkle. Time advances ONLY in
+        // this gated layer's draw(), so the same sky freezes exactly in place behind apps/overlays.
+        const a = tw ? base * (.6 + .4 * Math.sin(t * p.s * 1.1 + p.p * 3)) : base;
+        const travel = t * (2.2 + p.d * 2.8) * ratio;
+        const px = ((p.x + off * (p.d + .2) + travel) % (Wd * 1.4) + Wd * 1.4) % (Wd * 1.4) - Wd * .2;
+        const py = ((p.y - t * (1.2 + p.d * 1.8) * ratio) % H + H) % H;
+        const edge = Math.min(1, py / (14 * ratio), (H - py) / (14 * ratio));
+        x.globalAlpha = a * (.35 + p.d * .65) * edge; x.fillStyle = p.d > .85 ? '#d9c8ff' : '#ffffff';
+        x.beginPath(); x.arc(px, py, p.r, 0, 6.28); x.fill();
       }
       x.globalAlpha = 1;
     }
