@@ -27,10 +27,12 @@ async function checkStore(p,mobile){
  ok(crypto.createHash('sha256').update(served).digest('hex')===crypto.createHash('sha256').update(local).digest('hex'),label+': peer serves exact '+file); }
  const rect=await p.locator('iframe[title="App Store"]').boundingBox();
  ok(rect.x>=0&&rect.x+rect.width<=p.viewportSize().width+1&&rect.y>=0,label+': normal Store frame wholly on visible desk',JSON.stringify(rect));
- await f.locator('[data-sttag="audio"]').click();await f.locator('[data-sttag="audio"].sel').waitFor();await f.locator('[data-wam-id="transcriber"]').waitFor();
- ok(true,label+': real Audio tag filter works');await f.locator('[data-sttag=""]').click();
+ if(rect.x<0||rect.y<0) console.log('GEOMETRY',JSON.stringify(await p.evaluate(()=>({viewport:[innerWidth,innerHeight,scrollX,scrollY],scrolled:[...document.querySelectorAll('*')].filter(e=>e.scrollLeft||e.scrollTop).map(e=>({id:e.id,cls:e.className,scroll:[e.scrollLeft,e.scrollTop]}))}))));
+ await f.locator('[data-wam-tag="audio"]').click();await f.locator('[data-wam-tag="audio"].on').waitFor();await f.locator('[data-wam-id="transcriber"]').waitFor();
+ ok(true,label+': real Audio tag filter works');await f.locator('[data-wam-tag=""]').click();
  await f.locator('#query').fill('transcri');await f.locator('.lrow[data-wam-id="transcriber"] .wam-have').waitFor();
  ok(await f.locator('.lrow[data-wam-id="transcriber"]').innerText().then(t=>/installed/i.test(t)),label+': transcri finds Transcriber marked Installed');
+ const afterSearch=await p.locator('iframe[title="App Store"]').boundingBox();ok(afterSearch.x>=0&&afterSearch.y>=0&&afterSearch.x+afterSearch.width<=p.viewportSize().width+1,label+': Store search keeps parent window on-screen',JSON.stringify(afterSearch));
  await p.screenshot({path:path.join(OUT,label+'-search.png')});
  await f.locator('[data-wam-id="transcriber"]').scrollIntoViewIfNeeded();const frame=p.frames().find(f=>f.url().includes('/store/'));const scroll=await frame.evaluate(()=>document.scrollingElement.scrollTop);
  await f.locator('[data-wam-id="transcriber"]').click();await f.locator('#card:not([hidden])').waitFor();
