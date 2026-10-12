@@ -16,8 +16,14 @@ const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const until = async (p, fn, arg, ms = 12000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await p.evaluate(fn, arg).catch(() => false)) return true; await sleep(150); } return false; };
 const shot = async (p, n) => { if (SHOTS) { await sleep(900); /* sheets and tiles finish their entrance */ fs.mkdirSync(SHOTS, { recursive: true }); await p.screenshot({ path: path.join(SHOTS, n + '.png') }); } };
-// A real browser Back: arm the shell's guard with a user gesture first, then history.back() and wait for the pop.
-const back = async (p) => p.evaluate(() => new Promise(r => { const t = setTimeout(() => r('timeout'), 2500); addEventListener('popstate', () => { clearTimeout(t); setTimeout(() => r('pop'), 350); }, { once: true }); history.back(); }));
+// Browser history is joint with hosted apps: a real pop can land in the top window OR a same-origin frame.
+// The init-script observer runs before shell handlers (which may stop propagation), and records that receipt.
+const back = async (p) => {
+  const n = await p.evaluate(() => window.__qaPopCount || 0);
+  await p.evaluate(() => history.back());
+  try { await p.waitForFunction(n => (window.__qaPopCount || 0) > n, n, { timeout: 2500 }); await sleep(350); return 'pop'; }
+  catch { return 'timeout'; }
+};
 
 async function context(b, mobile) {
   const ctx = await b.newContext(mobile
@@ -33,7 +39,10 @@ async function context(b, mobile) {
   });
   const p = await ctx.newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e).slice(0, 200)));
-  await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.done', '1'); } catch (e) {} });
+  await p.addInitScript(() => {
+    addEventListener('popstate', () => { try { window.top.__qaPopCount = (window.top.__qaPopCount || 0) + 1; } catch {} }, true);
+    try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.done', '1'); } catch (e) {}
+  });
   return { ctx, p, W, errs };
 }
 

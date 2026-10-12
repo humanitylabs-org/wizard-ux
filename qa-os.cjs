@@ -72,10 +72,10 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     await p.keyboard.press('Escape'); await p.waitForTimeout(400);
     s = await state(p);
     const warned = await p.locator('#toast').textContent();
-    ok(s.url.includes('wizard-os-home') && /again to exit/i.test(warned), 'Back on Home only warns: “Press back again to exit”', warned);
+    ok(s.url.includes('wizard-os-home') && !s.back.exitArmed, 'Back on Home stays in Wizard', warned);
     await p.waitForTimeout(2400);
     s = await state(p);
-    ok(s.url.includes('wizard-os-home') && !s.back.exitArmed && s.back.watchers >= 1, 'warning expires after 2 s and Back re-arms', JSON.stringify(s.back));
+    ok(s.url.includes('wizard-os-home') && !s.back.exitArmed && s.back.watchers >= 1, 'root Back stays armed', JSON.stringify(s.back));
     // Many Backs in a row (no taps in between) must each be consumed, never leak to the browser.
     await p.evaluate(() => { __wos.goDesk(0); }); await p.waitForTimeout(300);
     await p.locator(`.desk[data-desk="${0}"]`).tap({ position: { x: 200, y: 300 } }).catch(() => {});
@@ -83,10 +83,10 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     for (let k = 0; k < 2; k++) { await p.keyboard.press('Escape'); await p.waitForTimeout(350); }
     s = await state(p);
     ok(s.url.includes('wizard-os-home') && s.idx === s.home && !s.sheet, 'sheet → Home in two Backs without any tap between', JSON.stringify({ idx: s.idx, log: s.back.log }));
-    // Double Back on Home really exits (the only way out).
+    // Repeated root Back is consumed, including without another tap.
     await p.keyboard.press('Escape'); await p.waitForTimeout(250);
     await p.goBack().catch(() => {}); await p.waitForTimeout(600);
-    ok(p.url() === 'about:blank', 'second Back within 2 s exits (only way out)', p.url());
+    ok(p.url().includes('wizard-os-home'), 'second Back stays in Wizard', p.url());
     ok(errs.length === 0, 'no page errors (CloseWatcher run)', errs.join(' | '));
     ok(!writes.some(w => /\/v1\/runs|\/api\/sessions$/.test(w.u)), 'no messages sent during Back test');
     await ctx.close();
@@ -109,9 +109,9 @@ const tap = async (p, sel) => { await p.locator(sel).first().tap(); await p.wait
     await p.locator('.home-line').tap().catch(() => {});
     await p.waitForTimeout(300);
     await p.goBack(); await p.waitForTimeout(700);
-    ok(p.url().includes('wizard-os-home') && /again to exit/i.test(await p.locator('#toast').textContent()), 'history Back on Home warns and stays', p.url());
+    ok(p.url().includes('wizard-os-home') && !await p.evaluate(() => __wos.back.exitArmed), 'history Back on Home stays', p.url());
     await p.goBack(); await p.waitForTimeout(700);
-    ok(p.url() === 'about:blank', 'second history Back exits', p.url());
+    ok(p.url().includes('wizard-os-home'), 'second history Back stays in Wizard', p.url());
     ok(errs.length === 0, 'no page errors (history run)', errs.join(' | '));
     await ctx.close();
   }
