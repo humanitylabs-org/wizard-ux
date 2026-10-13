@@ -168,7 +168,13 @@
       all[id] = { model: route.model, provider: route.provider };
       localStorage.setItem('wos.voice-model-routes.v1', JSON.stringify(all));
     },
-    voiceRoute(id) { try { return JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}')[id] || null; } catch { throw new Error('Saved recording model route is unreadable'); } },
+    voiceRoute(id) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}')[id];
+        // Complete an older model-only take without replacing its saved model with today's choice.
+        return saved?.model ? M.currentRoute('', saved) : null;
+      } catch { throw new Error('Saved recording model route is unreadable'); }
+    },
     forgetVoiceRoute(id) {
       const all = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}'); delete all[id];
       localStorage.setItem('wos.voice-model-routes.v1', JSON.stringify(all));

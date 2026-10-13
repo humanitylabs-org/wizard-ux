@@ -129,6 +129,11 @@ async function settled(b,id) { for(let i=0;i<150;i++){const it=b.c.WosOutbox.get
    s.modelLockAt=101;b.c.WosModels.reconcile([s]);assert.equal(b.c.WosModels.snapshot('s1').model,'glm-5-3');
    await b.c.WosModels.setThreadModel('s1',{value:'gpt-6.1-sol',provider:'openai-codex'});
   });
+  await check('older native model-only take completes its saved provider without changing model',async()=>{
+   const store=new Map();b.c.localStorage={getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)};
+   b.c.WosModels.keepVoiceRoute('legacy-model-only',{model:'gpt-5.4-mini',provider:''});
+   const saved=b.c.WosModels.voiceRoute('legacy-model-only');assert.equal(saved.model,'gpt-5.4-mini');assert.equal(saved.provider,'openai-codex');
+  });
   await check('native recovery reads persisted send-time route after selector changes and page reload',async()=>{
    const store=new Map(), storage={getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)};b.c.localStorage=storage;
    b.c.WosModels.keepVoiceRoute('synthetic-native-take',{model:'glm-5-3',provider:'custom:tinfoil-operator'});

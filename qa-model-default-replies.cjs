@@ -31,6 +31,13 @@ for(const model of ['fixture-model','']){
  await p.evaluate(()=>__wosNativeBack());
  ok(!p.isClosed()&&await p.evaluate(()=>!!__wos&&!__wos.wins[__wos.desks[__wos.idx].focus]?.thread),'Back returns to chat list and stays in app '+model);
  ok(errs.length===0,'no page errors '+model,errs);
+ if(model){
+  await p.evaluate(()=>__wos.openWizardThread('qa_old_thread'));await p.waitForTimeout(500);const before=W.runs.length;
+  await p.evaluate(()=>{const id=WizardOSDevice.recStart('auto'),wid=__wos.desks[__wos.idx].focus;WosModels.keepVoiceRoute(id,{model:'fixture-model',provider:''});Object.assign(__wos.V,{native:id,kind:'auto',replyTo:{wid,sid:'qa_old_thread'},snap:null,acc:2000,files:[],cancelled:false});__wos.setVoice('think');__wos.nativeFinish(id,false);});
+  await p.waitForTimeout(2300);const recovered=W.runs[before]?.body;
+  ok(W.runs.length===before+1,'older saved model-only native take sends without choosing again');
+  ok(recovered?.model==='fixture-model'&&recovered?.provider==='fixture'&&recovered?.session_id==='qa_old_thread','native recovery preserves saved model and completes provider',recovered);
+ }
  await ctx.close();
 }
 await b.close();console.log(`${pass} pass ${fail} fail`);process.exit(fail?1:0);})().catch(e=>{console.error(e);process.exit(2)});
