@@ -105,18 +105,15 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= #17 work receipt ================= */
   const turnKey = tn => `${tn.u?.at ?? tn.at ?? ''}:${(tn.u?.text || '').length}`;
-  function workHtml(c, tn, live) {
+  function workHtml(c, tn, live, helperStatus) {
     if (!WK) return null;
     const key = turnKey(tn);
-    return WK.html(tn, { live, open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
+    return WK.html(tn, { live, helperStatus, open: !!c.wkOpen?.has(key), md: A.md, esc, clip, key });
   }
 
   /* ================= #11 models ================= */
-  const MOVER = new Map(); // sid -> { model, provider, at }: a change Wizard's list hasn't caught up with yet
   function threadModel(s) {
-    const o = s && MOVER.get(s.id);
-    if (o && Date.now() - o.at < 120e3 && !(s.model === o.model && (!o.provider || s.provider === o.provider))) return o;
-    if (o) MOVER.delete(s.id);
+    const selected = s && M?.selections.get(s.id); if (selected) return selected;
     return s ? { model: s.model || '', provider: s.provider || '' } : { model: '', provider: '' };
   }
   function newModel(c) { return c.newModel || (M?.defaultOption() ? { model: M.defaultOption().value, provider: M.defaultOption().provider, isDefault: true } : null); }
@@ -141,10 +138,10 @@ window.WosChatPower = function chatPower(A) {
     const cur = threadModel(s);
     const same = cur.model === o.value && (!o.provider || cur.provider === o.provider);
     if (!same) {
-      try { await M.setThreadModel(sh.sid, o); }
+      let route;
+      try { route = await M.setThreadModel(sh.sid, o); }
       catch (e) { toast('!', 'Couldn’t change the model · try again', 2600); return; }
-      MOVER.set(sh.sid, { model: o.value, provider: o.provider, at: Date.now() });
-      Object.assign(s, { model: o.value, provider: o.provider });
+      Object.assign(s, route);
     }
     if (sh.mode === 'retry') return retryThread(sh.wid, sh.sid, o);
     toast('◇', same ? `Already on ${o.name}` : `This thread now uses ${o.name}`, 1600);
@@ -225,13 +222,13 @@ window.WosChatPower = function chatPower(A) {
   const micBtn = wid => { if (!H.recordReply) return ''; const sid = H.win(wid)?.thread, on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
   /* A recording made from a thread's composer: always delivered to that thread (pinned when recording started),
    * through the durable outbox, which transcribes it and keeps the recording as a voice note. */
-  async function sendVoiceTo(wid, sid, blob, files = [], seal = true) {
+  async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null) {
     if (!OUTBOX || !blob || !sid) return null;
     const w = H.win(wid), c = ch(wid);
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = s && A.WORKING_ST.has(s.status) && s.runId ? s.runId : '';
-    const nm = isNew ? (c.newModel || null) : null;
+    const nm = route || (isNew ? (c.newModel || null) : null);
     // The thread's composer rides with the recording as ONE message (legacy H4): the words typed or pasted
     // there (a link, say) go before the transcript, its photos and files with the voice note, and the composer
     // empties. seal: the composer taken at the send tap (chats.js takeComposer); true takes it now; false for the

@@ -16,8 +16,21 @@ async function context(b,mobile){
 async function swipeApps(p){const r=await p.locator('#orb').boundingBox();const cdp=await p.context().newCDPSession(p);const x=r.x+r.width/2,y=r.y+r.height/2;await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});for(let i=1;i<=6;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-i*18}]});await wait(30);}await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();await p.locator('#launcher.open').waitFor();await wait(300);}
 async function checkStore(p,mobile){
  const label=mobile?'phone':'desktop';const f=p.frameLocator('iframe[title="App Store"]');
- await f.locator('.tile[data-app="transcriber"]').first().waitFor({timeout:20000});
- ok(await f.locator('.feat[data-app]').count()>=2&&await f.locator('.kind').count()>=3&&await f.locator('.topic').count()>=3,label+': discovery layout: featured, kinds, topics');
+ await f.locator('.kind:not([disabled])').first().waitFor({timeout:20000});
+ ok(await f.locator('#discover .kind').count()===4&&await f.locator('#discover .hero,#discover .shelf,#discover .topic,#discover .tile').count()===0,label+': home contains only four browse choices, no featured/shelves/topics');
+ const kinds=['apps','agent-apps','agents','connections'];
+ for(const kind of kinds){
+  const choice=f.locator('.kind[data-kind="'+kind+'"]');
+  ok((await choice.locator('small').innerText()).length>10,label+': '+kind+' explains what it is for');
+  await choice.click();await f.locator('#results:not([hidden]) .row').first().waitFor();
+  ok(await f.locator('#results .row').count()>0&&await f.locator('#discover').isHidden(),label+': '+kind+' opens its existing clean list');
+  await f.locator('#results .row').first().click();await f.locator('#detail:not([hidden])').waitFor();
+  const detailBox=await p.locator('iframe[title="App Store"]').boundingBox();ok(detailBox&&detailBox.x>=0&&detailBox.y>=0&&detailBox.x+detailBox.width<=p.viewportSize().width+1,label+': '+kind+' detail keeps the app frame on-screen',JSON.stringify(detailBox));
+  await back(p,label+' '+kind+' detail');ok(await f.locator('#results').isVisible(),label+': '+kind+' detail Back returns to its list');
+  await back(p,label+' '+kind+' list');ok(await f.locator('#discover').isVisible(),label+': '+kind+' list Back returns to four choices');
+  const box=await p.locator('iframe[title="App Store"]').boundingBox();ok(box&&box.x>=0&&box.y>=0&&box.x+box.width<=p.viewportSize().width+1,label+': '+kind+' navigation keeps the app frame on-screen',JSON.stringify(box));
+ }
+ await p.screenshot({path:path.join(OUT,label+'-browse.png')});
  ok(await p.locator('iframe[title="App Store"]').count()===1,label+': one normal URL-backed Store frame');
  ok(await p.locator('.wam-pal,.dapps,.dapps-card').count()===0,label+': no Store panel or overlay');
  const data=await p.evaluate(async()=>{const pre='/wizard-os-home/store-data/';return Promise.all(['wizard/v1/index/search?q=transcri','wizard/v1/index/tags','api/apps/installed','wizard/v1/wizard-apps'].map(async s=>{const r=await fetch(pre+s);return {status:r.status,body:await r.json()};}));});
@@ -29,8 +42,8 @@ async function checkStore(p,mobile){
  const rect=await p.locator('iframe[title="App Store"]').boundingBox();
  ok(rect.x>=0&&rect.x+rect.width<=p.viewportSize().width+1&&rect.y>=0,label+': normal Store frame wholly on visible desk',JSON.stringify(rect));
  if(rect.x<0||rect.y<0) console.log('GEOMETRY',JSON.stringify(await p.evaluate(()=>({viewport:[innerWidth,innerHeight,scrollX,scrollY],scrolled:[...document.querySelectorAll('*')].filter(e=>e.scrollLeft||e.scrollTop).map(e=>({id:e.id,cls:e.className,scroll:[e.scrollLeft,e.scrollTop]}))}))));
- await f.locator('.topic[data-tag="audio"]').click();await f.locator('#results .row[data-app="transcriber"]').waitFor();
- ok(true,label+': real Audio topic lists Transcriber');await f.locator('#results [data-back]').click();await f.locator('#discover').waitFor();
+ await f.locator('.kind[data-kind="agent-apps"]').click();await f.locator('#results .row[data-app="transcriber"]').waitFor();
+ ok(true,label+': real Agent apps list includes Transcriber');await f.locator('#results [data-back]').click();await f.locator('#discover').waitFor();
  await f.locator('#q').fill('transcri');await f.locator('#results .row[data-app="transcriber"] .get.have').waitFor();
  ok(await f.locator('#results .row[data-app="transcriber"]').innerText().then(t=>/installed/i.test(t)),label+': transcri finds Transcriber marked Installed');
  const afterSearch=await p.locator('iframe[title="App Store"]').boundingBox();ok(afterSearch.x>=0&&afterSearch.y>=0&&afterSearch.x+afterSearch.width<=p.viewportSize().width+1,label+': Store search keeps parent window on-screen',JSON.stringify(afterSearch));
@@ -45,7 +58,7 @@ async function checkStore(p,mobile){
  await f.locator('#results .row[data-app="transcriber"]').click();await f.locator('#detail:not([hidden])').waitFor();await back(p,label+' card');
  ok(await f.locator('#results').isVisible()&&await f.locator('#q').inputValue()==='transcri'&&(!mobile||await p.evaluate(()=>window.__wos.idx!==0)),label+': real browser Back card → same Store');
  await back(p,label+' search');ok(await f.locator('#discover').isVisible()&&await f.locator('#q').inputValue()==='',label+': real browser Back search → Store front page');
- await f.locator('.see[data-kind="agent-apps"]').click();await f.locator('#results .row').first().waitFor();await f.locator('#results .row[data-app="secret-drop"]').click();await f.locator('#detail:not([hidden])').waitFor();
+ await f.locator('.kind[data-kind="agent-apps"]').click();await f.locator('#results .row').first().waitFor();await f.locator('#results .row[data-app="secret-drop"]').click();await f.locator('#detail:not([hidden])').waitFor();
  await f.locator('#detail [data-get]').click();await f.locator('#toast:not([hidden])').waitFor();ok(/ask your agent/i.test(await f.locator('#toast').innerText()),label+': Get explains browse-only instead of installing');
  await back(p,label+' detail');await back(p,label+' list');ok(await f.locator('#discover').isVisible(),label+': Back unwinds app page → list → front page');
  await back(p,label+' Store parent');
@@ -57,7 +70,7 @@ async function checkStore(p,mobile){
  await p.goto(BASE+(mobile?'?shell=phone&view=apps':'desktop.html'),{waitUntil:'load'});await wait(1200);
  if(mobile){await p.locator('#launcher.open').waitFor();await p.locator('#launcherBody [data-app="shopping"]').first().waitFor();const tiles=await p.locator('#launcherBody [data-app]').evaluateAll(es=>es.map(e=>e.dataset.app));ok(tiles.includes('wizard')&&tiles.includes('shopping')&&!tiles.includes('maps'),'phone: existing My Apps tiles retained, Android natives absent');ok(await p.locator('#launcherBody .headless').count()===0&&!/\bSystem\b/.test(await p.locator('#launcherBody').innerText()),'phone: no PR3 System/dotted tile redesign');ok(!tiles.includes('system')&&tiles.filter(t=>t==='app-store').length===1,'phone: launcher lists only views you open, plus Get apps');await p.locator('#launcherBody [data-app="app-store"]').last().tap();await p.locator('#launcher.open').waitFor({state:'hidden'});}
  else{await p.keyboard.press('Meta+k');await p.locator('#palette:not([hidden])').waitFor();await p.locator('#palette .nm').getByText('Get apps', {exact:true}).click();await p.locator('#palette').waitFor({state:'hidden'});}
- await p.frameLocator('iframe[title="App Store"]').locator('.tile[data-app="transcriber"]').first().waitFor({timeout:20000});
+ await p.frameLocator('iframe[title="App Store"]').locator('.kind:not([disabled])').first().waitFor({timeout:20000});
  const id=await p.locator('iframe[title="App Store"]').evaluate(e=>e.closest('.win').dataset.win);
  if(mobile){await swipeApps(p);await p.locator('#launcherBody [data-app="app-store"]').last().tap();}else{await p.keyboard.press('Meta+k');await p.locator('#palette .nm').getByText('Get apps', {exact:true}).click();}
  await wait(500);ok(await p.locator('iframe[title="App Store"]').count()===1&&await p.locator('iframe[title="App Store"]').evaluate(e=>e.closest('.win').dataset.win)===id,(mobile?'phone':'desktop')+': Get apps reuses/focuses original normal window');
@@ -66,17 +79,22 @@ async function checkStore(p,mobile){
  if(mobile){ok(await p.locator('[data-home-resources] .rs-widget').count()===1,'phone: current Home resource widget preserved');await p.locator('[data-res-open="server"]').tap();await back(p,'phone Home resources');ok(await p.locator('.rs-sheet').count()===0,'phone: resource dashboard browser Back smoke retained');}
  }catch(e){ok(false,(mobile?'phone':'desktop')+': scenario completed',String(e.stack));await p.screenshot({path:path.join(OUT,(mobile?'phone':'desktop')+'-failure.png')}).catch(()=>{});}finally{await c.close();}}
  // Standalone root/reload must stay without history growth, and framed boot must add no Store sentinel.
- const c=await context(b,true),p=await c.newPage();await p.goto(BASE+'store/');await p.locator('.tile[data-app="transcriber"]').first().waitFor();await p.locator('#q').click();let size=await p.evaluate(()=>history.length);for(let i=0;i<3;i++)await back(p,'standalone root '+i);ok(p.url()===BASE+'store/'&&await p.evaluate(()=>history.length)<=size,'standalone: repeated real root Back stays without history growth');await p.reload();await p.locator('#q').click();size=await p.evaluate(()=>history.length);await back(p,'standalone reload');ok(p.url()===BASE+'store/'&&await p.evaluate(()=>history.length)<=size,'standalone: reload reuses root guard');await p.screenshot({path:path.join(OUT,'standalone.png')});await c.close();
+ const c=await context(b,true),p=await c.newPage();await p.goto(BASE+'store/');await p.locator('.kind:not([disabled])').first().waitFor();const standaloneEntry=p.url();ok([BASE+'store/',BASE+'store/index.html'].includes(standaloneEntry),'standalone: directory entry renders the canonical Store document',standaloneEntry);await p.locator('#q').click();let size=await p.evaluate(()=>history.length);for(let i=0;i<3;i++)await back(p,'standalone root '+i);ok(p.url()===standaloneEntry&&await p.evaluate(()=>history.length)<=size,'standalone: repeated real root Back stays without history growth');await p.reload();await p.locator('#q').click();size=await p.evaluate(()=>history.length);await back(p,'standalone reload');ok(p.url()===standaloneEntry&&await p.evaluate(()=>history.length)<=size,'standalone: reload reuses root guard');await p.screenshot({path:path.join(OUT,'standalone.png')});await c.close();
  // Real direct entry, normal window controls, frame boot pushes, reload and parent-root history floor.
- for(const mobile of [true,false]){const c=await context(b,mobile),p=await c.newPage();const root=BASE+(mobile?'?shell=phone&open=app-store':'desktop.html?view=store');await p.goto(root);const f=p.frameLocator('iframe[title="App Store"]');await f.locator('.tile[data-app="transcriber"]').first().waitFor();await wait(700);const frame=p.frames().find(f=>f.url().includes('/store/'));ok(await frame.evaluate(()=>window.__storePushes)===0,(mobile?'phone':'desktop')+': direct deep link uses regular frame with zero framed boot pushes');
+ for(const mobile of [true,false]){const c=await context(b,mobile),p=await c.newPage();const root=BASE+(mobile?'?shell=phone&open=app-store':'desktop.html?view=store');await p.goto(root);const f=p.frameLocator('iframe[title="App Store"]');await f.locator('.kind:not([disabled])').first().waitFor();await wait(700);const frame=p.frames().find(f=>f.url().includes('/store/'));ok(await frame.evaluate(()=>window.__storePushes)===0,(mobile?'phone':'desktop')+': direct deep link uses regular frame with zero framed boot pushes');
  const win=p.locator('.win').filter({has:p.locator('iframe[title="App Store"]')});await win.locator(mobile?'[data-wact="full"]':'[data-wact="mono"]').click();await back(p,'normal full-window');ok(await p.locator('iframe[title="App Store"]').count()===1&&(mobile?await p.evaluate(()=>window.__wos.idx!==0):true),(mobile?'phone':'desktop')+': normal full-window control and Back keep Store');
- let h=await p.evaluate(()=>history.length);await p.reload();await p.frameLocator('iframe[title="App Store"]').locator('.tile[data-app="transcriber"]').first().waitFor();await wait(700);ok(await p.locator('iframe[title="App Store"]').count()===1&&await p.evaluate(()=>history.length)<=h,(mobile?'phone':'desktop')+': reload restores one app frame without duplicate history');
+ let h=await p.evaluate(()=>history.length);await p.reload();await p.frameLocator('iframe[title="App Store"]').locator('.kind:not([disabled])').first().waitFor();await wait(700);ok(await p.locator('iframe[title="App Store"]').count()===1&&await p.evaluate(()=>history.length)<=h,(mobile?'phone':'desktop')+': reload restores one app frame without duplicate history');
  await p.mouse.click(8,8);await back(p,'direct Store to parent');for(let i=0;i<2;i++){await wait(2200);await p.mouse.click(8,8);await back(p,'parent root '+i);}ok(p.url().startsWith(BASE)&&await p.evaluate(()=>history.length)<=h,(mobile?'phone':'desktop')+': repeated real parent-root Back stays without history growth');
  await c.close();}
  // System app: Home entry (phone) and Cmd-K (desktop); real overview, map focus, Back unwinds focus then window.
  for(const mobile of [true,false]){const c=await context(b,mobile),p=await c.newPage();const L=mobile?'phone':'desktop';const errors=[];p.on('pageerror',e=>errors.push(String(e)));try{
   await p.goto(BASE+(mobile?'?shell=phone':'desktop.html'));await wait(2500);
-  if(mobile){await p.evaluate(()=>window.__wos.goDesk(0,true));await p.locator('[data-act="system"]').waitFor();ok(/your system/i.test(await p.locator('[data-act="system"]').innerText()),'phone: Home shows the Your system entry');await p.locator('[data-act="system"]').tap();}
+  if(mobile){await p.evaluate(()=>window.__wos.goDesk(0,true));await p.locator('[data-act="system"]').waitFor();ok(/your system/i.test(await p.locator('[data-act="system"]').getAttribute('aria-label')),'phone: Home System icon has a discoverable accessible name');
+  const s=p.locator('[data-act="system"]'),g=p.locator('.home-tools [data-act="settings"]');const sr=await s.boundingBox(),gr=await g.boundingBox();
+  ok(sr.width>=44&&sr.width<=48&&sr.height>=44&&sr.height<=48&&Math.abs(sr.y-gr.y)<2&&gr.x>=sr.x+sr.width,'phone: compact 44px System sits beside Settings',JSON.stringify({sr,gr}));
+  ok(await p.locator('.home-attn [data-act="system"],.sys-card').count()===0&&await s.evaluate(e=>getComputedStyle(e).backgroundImage==='none'&&getComputedStyle(e).boxShadow==='none'),'phone: System no longer competes with attention cards or glows');
+  await p.screenshot({path:path.join(OUT,'phone-home.png')});
+  await g.tap();await p.locator('#settings.open').waitFor();await back(p,'phone Settings shortcut');ok(await p.locator('#settings.open').count()===0,'phone: adjacent Settings still opens and Back closes it');await p.locator('[data-act="system"]').tap();}
   else{await p.keyboard.press('Meta+k');await p.locator('#palette:not([hidden])').waitFor();await p.locator('#palette .nm').getByText('Your system',{exact:true}).click();}
   const sf=p.frameLocator('iframe[title="System"]');await sf.locator('.node.main').waitFor({timeout:20000});
   const st=await p.frames().find(x=>x.url().includes('/system/')).evaluate(()=>window.__system.state());

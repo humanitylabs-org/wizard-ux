@@ -13,7 +13,7 @@
  *   Right ⌘ tap   talk (tap again to send)    ⌥←↑→↓/HJKL focus window
  *   Right ⌥ tap   dictate (tap again: insert at the cursor, else copy)
  *   ⌥I            inbox                       ⇧⌥←→       swap window
- *   ⌥W            close window                ⌥F         full window (monocle)
+ *   ⌘W / ⌥W       close app                   ⌥F         full screen
  *   ⌥/            all keys                    ⌥[ ⌥]      previous / next workspace
  *   Esc           close the top layer (never leaves the app)
  */
@@ -152,7 +152,13 @@
     if (i < 0 || j < 0 || j >= d.wins.length) return;
     [d.wins[i], d.wins[j]] = [d.wins[j], d.wins[i]]; save(); layout();
   }
-  function toggleMono() { const d = ws[cur]; if (d.wins.length < 2) return; d.mono = !d.mono; save(); layout(); }
+  function toggleMono() {
+    const d = ws[cur]; if (!d.wins.length) return;
+    d.mono = !d.mono; save(); layout();
+    if (d.mono && !store.get('fullHint', false)) {
+      store.set('fullHint', true); toast('⤢', `${MOD}F, Esc or Back leaves full screen`, 2200);
+    }
+  }
 
   /* Open an app the desktop way: Chats and apps already open get focused, not duplicated. */
   // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
@@ -219,8 +225,8 @@
     const a = appOf(w);
     return `<div class="wbar" data-drag>${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>
       ${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
-      <button data-wact="mono" title="Full window (${MOD}F)" aria-label="Full window">⤢</button>
-      <button data-wact="close" title="Close (${MOD}W)" aria-label="Close window">✕</button></div>
+      <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
+      <button data-wact="close" title="Close app (⌘W / ${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
   }
   function bodyHtml(w) {
@@ -291,6 +297,8 @@
   }
   function watchFrame(f, el) {
     if (!f) return;
+    const w = W[el.dataset.win], a = w && APP[w.appId];
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url });
     f.addEventListener('load', async () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
@@ -322,7 +330,10 @@
   /* Tiling: 1 window fills; 2 split; 3+ = master on the left, the rest stacked on the right (Hyprland's dwindle, simplified). */
   function layout() {
     const host = wsEl(cur), d = ws[cur];
-    const W_ = host.clientWidth, H_ = host.clientHeight, g = 8;
+    // Apply chrome before measuring, including a single app, reload and workspace switches.
+    const full = !!d.mono && !!d.wins.length;
+    document.body.classList.toggle('desktop-fullscreen', full);
+    const W_ = host.clientWidth, H_ = host.clientHeight, g = full ? 0 : 8;
     const n = d.wins.length;
     const rects = {};
     if (!n) return;
@@ -338,6 +349,7 @@
     for (const id of d.wins) {
       const el = winEl(id); if (!el) continue; const r = rects[id];
       el.classList.toggle('gone', !r);
+      el.classList.toggle('full', full && id === d.focus);
       if (r) Object.assign(el.style, { left: r[0] + 'px', top: r[1] + 'px', width: r[2] + 'px', height: r[3] + 'px' });
     }
   }
@@ -375,6 +387,7 @@
   $('#clock').addEventListener('click', () => { const i = ws.findIndex(d => !d.wins.length); goWs(i >= 0 ? i : cur); });
   $('#keysBtn').addEventListener('click', () => toggleKeys());
   $('#micBtn').addEventListener('click', () => talk());
+  $('#voiceCancel').addEventListener('click', () => vMode === 'dictate' ? dictate('cancel') : talk('cancel'));
   // No transcriber on this Wizard: the mic button hides (the outbox still keeps typed messages safe).
   window.WizConfig?.ready.then(() => { $('#micBtn').hidden = !window.WizConfig.has('voice'); });
 
@@ -469,8 +482,8 @@
       { kind: 'cmd', name: 'Inbox', icon: '⬇', keys: `${MOD}I`, run: () => openInbox() },
       ...(window.WosFiles ? [{ kind: 'cmd', name: 'Files', icon: '▤', run: () => openFiles() }] : []),
       ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
-      { kind: 'cmd', name: 'Close window', icon: '✕', keys: `${MOD}W`, run: () => focused() && closeWin(focused().id) },
-      { kind: 'cmd', name: 'Full window', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
+      { kind: 'cmd', name: 'Close window', icon: '✕', keys: `⌘W / ${MOD}W`, run: () => focused() && closeWin(focused().id) },
+      { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Keyboard shortcuts', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
       { kind: 'cmd', name: 'Settings', icon: '⚙', keys: `${MOD},`, run: () => openSettings() },
       { kind: 'cmd', name: 'Use the phone layout here', icon: '📱', run: () => { location.href = './?shell=phone'; } },
@@ -537,10 +550,10 @@
 
   /* Ask Archimedes from anywhere: a new thread, through the durable outbox, delegated in the background.
    * Nothing opens or takes focus; the thread shows up in Chats and the Inbox when James wants it. */
-  async function ask(text, how = 'typing in the desktop launcher', audio = null) {
+  async function ask(text, how = 'typing in the desktop launcher', audio = null, route = null) {
     text = String(text || '').trim(); if (!text && !audio) return;
     const ctx = viewContext(ws[cur].focus, how);
-    await OUTBOX.enqueue({ kind: 'new', text, audio, instructions: ctx, source: 'orb', how });
+    await OUTBOX.enqueue({ ...(route || {}), kind: 'new', text, audio, instructions: ctx, source: 'orb', how });
     if (!audio) toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600);
   }
 
@@ -605,9 +618,9 @@
 
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
-    ['Launch', [[`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send, Esc to cancel)`], ['Right ⌥ (tap)', 'Dictate (tap again to insert at the cursor, or copy)']]],
+    ['Launch', [[`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send, Esc to cancel)`], ['Right ⌥ (paused)', 'Wizard PWA dictation is paused; your system voice tool keeps this key']]],
     ['Workspaces', [[`${MOD}1 … ${MOD}9`, 'Go to workspace'], [`⇧${MOD}1 … 9`, 'Send window to workspace'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
-    ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full window'], [`${MOD}W`, 'Close window']]],
+    ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`⌘W / ${MOD}W`, 'Close app']]],
     ['Chats', [[`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list'], ['↑ ↓  or  j k', 'Previous / next chat (in the list)'], [`⇧${MOD}J  ⇧${MOD}K`, 'Next / previous chat (anywhere)'], ['/', 'Search chats and messages'], [`${MOD},`, 'Settings']]],
     ['Wizard for Mac (works in any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to a bound app'], ['Right ⌘', 'Talk to Wizard from anywhere'], ['Right ⌥', 'Dictate into any app']]],
   ];
@@ -655,15 +668,18 @@
     // Text, photos and voice go as ONE message (legacy H4): that thread's composer, taken at the send key.
     const sealAt = rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
     if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { vReply = rp; toast('…', 'Still uploading · send when it finishes', 2000); return 'busy'; }
+    let modelRoute;
+    try { modelRoute = CHATS.modelRoute(sealAt?.wid, sealAt?.sid || ''); }
+    catch (e) { vReply = rp; toast('!', String(e.message || e), 2400); return 'busy'; }
     const t = sealAt ? CHATS.takeComposer(sealAt.wid, sealAt.sid) : null;
     const sealed = t && (t.text || t.files.length) ? t : false;
     const r = await VOICE.finish({ transcribe: false });
     if ((!r || !r.blob) && sealed) sealed.putBack();
     if (!r || !r.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
-    if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { sid: aimSid, seal: sealed });
-    else { if (sealed) sealed.putBack(); ask('', 'voice', r.blob); }
+    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed, modelRoute); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
+    if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { sid: aimSid, seal: sealed, route: modelRoute });
+    else { if (sealed) sealed.putBack(); ask('', 'voice', r.blob, modelRoute); }
     toast('✦', `Sent to ${window.WizConfig.agent()}`, 1400);
     return 'sent';
   }
@@ -720,7 +736,9 @@
   let tapKey = null, tapAt = 0, tapChord = false;
   addEventListener('keydown', e => {
     if (NATIVE_KEYS) return;
-    if ((e.code === 'MetaRight' || e.code === 'AltRight') && !e.repeat) {
+    // Pause PWA dictation so the system's Right Option voice tool owns the key.
+    // Reversible desktop switches are staged separately; native/OS bindings stay intact.
+    if (e.code === 'MetaRight' && !e.repeat) {
       const others = (e.code === 'MetaRight' ? e.altKey : e.metaKey) || e.ctrlKey || e.shiftKey;
       tapKey = e.code; tapAt = performance.now(); tapChord = others; return;
     }
@@ -762,27 +780,34 @@
     if (setEl && !setEl.hidden) { closeSettings(); return 'settings'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
-    if (VOICE.state === 'listen') { if (vMode === 'dictate') dictate('cancel'); else talk('cancel'); return 'voice'; }
+    // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
+    if (ws[cur].mono) { toggleMono(); return 'mono'; }
+    // Back navigates while recording; only the explicit Cancel control may discard audio.
     const f = focused();
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
+    if (f?.app === 'frame') {
+      const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
+      if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
+    }
     if (f?.appId === 'app-store' || f?.appId === 'system') {
-      try { if (winEl(f.id)?.querySelector('iframe')?.contentWindow.__wizardCloseOverlay?.()) return 'store-card'; } catch (_) {}
       if (!ws[cur].mono) { closeWin(f.id); return 'store-parent'; }
     }
-    if (ws[cur].mono) { toggleMono(); return 'mono'; }
     return '';
   }
   function onKey(e, fromFrame = false) {
     const k = e.key, code = e.code, alt = e.altKey && !e.metaKey && !e.ctrlKey, shift = e.shiftKey;
     const digit = /^Digit([1-9])$/.exec(code);
     const hit = fn => { e.preventDefault(); e.stopPropagation(); fn(); };
+    // The native Mac menu forwards ⌘W here instead of closing its NSWindow. Always consume at
+    // the desktop root too; closing the last internal app leaves an empty workspace.
+    if (e.metaKey && !e.ctrlKey && !e.altKey && !shift && code === 'KeyW') return hit(() => { const f = focused(); if (f) closeWin(f.id); });
     // ⌘K / Ctrl+K, ⌥Space: palette, from anywhere (even while typing).
     if ((e.metaKey || e.ctrlKey) && !e.altKey && (k === 'k' || k === 'K')) return hit(() => (pal.hidden ? openPalette() : closePalette()));
     if (alt && code === 'Space') return hit(() => (pal.hidden ? openPalette() : closePalette()));
     // Link pane: ⌘Enter keeps it as a window, ⌘⇧Enter opens it in the browser.
     if (LINKS && LINKS.isOpen() && (e.metaKey || e.ctrlKey) && k === 'Enter') return hit(() => LINKS.el.querySelector(shift ? '[data-ls="out"]' : '[data-ls="keep"]')?.click());
     if (k === 'Escape' && LINKS && LINKS.isOpen() && fromFrame) { const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } return; }
-    if (k === 'Escape') { if (fromFrame && pal.hidden && keysEl.hidden && ib.hidden && VOICE.state !== 'listen') return; const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
+    if (k === 'Escape') { const did = escStep(); if (did || fromFrame) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
     if (!pal.hidden) return; // the palette owns the keyboard while open
     if (setEl && !setEl.hidden && !(e.altKey && code === 'Comma')) return; // so does Settings (⌥, closes it)
     // Chats: ↑/↓ or j/k walk the thread list (from the list, the search box or an empty thread pane), / focuses search.
@@ -813,7 +838,7 @@
     if (code === 'Enter') return hit(() => newChat({ fresh: shift }));
     if (code === 'KeyI') return hit(() => toggleInbox());
     if (code === 'KeyW') return hit(() => { const f = focused(); if (f) closeWin(f.id); });
-    if (code === 'KeyF') return hit(() => toggleMono());
+    if (code === 'KeyF') return hit(() => { if (!e.repeat) toggleMono(); });
     if (code === 'Slash') return hit(() => toggleKeys());
     if (code === 'Comma') return hit(() => (setEl.hidden ? openSettings() : closeSettings()));
     if (code === 'BracketLeft') return hit(() => { lastWs = cur; goWs((cur - 1 + WS_N) % WS_N); });
@@ -921,7 +946,11 @@
       const show = (tries = 50) => { const f = focused(); const sec = f && winEl(f.id)?.querySelector(`.pane-list [data-sec="${section}"]`); if (!sec) { if (tries > 0) setTimeout(() => show(tries - 1), 100); return; } if (!sec.classList.contains('open')) sec.querySelector('[data-sectoggle]')?.click(); winEl(f.id)?.querySelector(`.pane-list [data-sec="${section}"]`)?.scrollIntoView({ block: 'start' }); };
       if (section) show();
     },
-    app(id) { const a = findApp(id) || APP[id]; if (a) openApp(a); },
+    app(id) {
+      const a = APP[id] || findApp(id); if (a) return openApp(a);
+      // Cold launch: the registered app list may still be loading. The same deep link must work in either shell.
+      Promise.resolve(C.appsLoaded?.()).then(() => { const b = APP[id] || findApp(id); if (b) openApp(b); });
+    },
     video: item => CHATS.KIT.viewer.open([item]),
     toast,
   });
@@ -937,4 +966,5 @@
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
+  window.WizAppServices?.guardBack(escStep, toast);
 })();

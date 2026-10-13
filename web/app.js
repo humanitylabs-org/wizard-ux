@@ -288,12 +288,11 @@
     else if (w.app !== 'frame') $('.wbody', el).innerHTML = winBody(w);
     applyLayout(deskOf(id));
   }
-  let paintStars = () => {};
   function placeTrack(dx, anim) {
     track.classList.toggle('anim', !!anim);
     track.style.transform = `translate3d(calc(${-idx * 100}% + ${dx}px),0,0)`;
     $('.nebula').style.transform = `translate3d(${(-idx + 2) * -3 + dx * .01}%,0,0)`;
-    paintStars();
+    window.WosScenery?.still('stars'); // scenery hook: star parallax follows the desk (one still frame; core/scenery.js)
   }
   let labelT = 0;
   /* Parking: hosted apps on desks out of view stay loaded but go quiet, so swipes stay smooth.
@@ -347,6 +346,7 @@
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
     placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip(); syncBound();
+    window.WosScenery?.[idx === HOME ? 'poke' : 'update'](); // scenery hook: Home animates, any other desk freezes it
     if (moved && LINKS && LINKS.isOpen()) LINKS.close(); // a link is a peek over this desk: moving desks dismisses it
     if (moved) vib(8);
     if (!silent) announce(`<b>${esc(deskName(idx))}</b>`);
@@ -700,6 +700,7 @@
     const corner = on && w.app === 'chats';
     device.classList.toggle('immersive', on);
     device.classList.toggle('orb-corner', corner);
+    window.WosScenery?.update(); // scenery hook: full screen freezes the background
     trackCornerLift(corner);
     shareCutout();
     if (on === immOn) return; immOn = on;
@@ -1090,6 +1091,7 @@
       <div class="st-group"><h4>Unsent <span>${all.length || ''}</span></h4>
         ${all.length ? all.map(unsentRow).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">Everything you’ve said reached Wizard.</div>'}
         <p class="st-note">Every message is saved on this phone before it’s sent, and retried until Wizard accepts it.</p></div>
+      ${lookGroup()}
       <div class="st-group"><h4>Assistant</h4>
         <button class="st-row" data-st="everywhere" ${evNative ? '' : 'disabled'}><span class="st-ic">✦</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
         ${evNative && evOn && typeof window.WizardOSNative.voiceTypingSettings === 'function' ? `<button class="st-row" data-st="typing"><span class="st-ic">⌨</span><span class="st-tx" id="stTyping"><b>Voice typing &amp; screenshots</b><small>${esc(ev?.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Off · tap to set up: the orb types into any app and attaches screenshots')}</small></span>${ev?.keyboard ? '<span class="sw on"><i></i></span>' : '<span class="st-go">›</span>'}</button>` : ''}
@@ -1108,6 +1110,23 @@
     // AI usage (#24): read when Settings opens, painted in place when it lands.
     if (window.WosUsage && !window.WosUsage.loading && (!window.WosUsage.snap || Date.now() - window.WosUsage.at > 60e3)) window.WosUsage.load().then(paintUsage);
   }
+  /* Settings → Look (James, 12 Oct 2026): the skin picker. Tap applies at once (WosSkin.set) and is kept on this
+   * device (localStorage wos.skin; box-level theme.json sync is a later step). Hosted apps re-dress through the
+   * appearance host, which watches html[data-skin]/style. */
+  function lookGroup() {
+    const S = window.WosSkin; if (!S) return '';
+    const cur = S.current, nm = (S.list.find(k => k.id === cur) || {}).name || '';
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4>
+      <div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(nm)} · tap to wear</small></span></div>
+        <div class="sk-sw" role="group" aria-label="Skin">${S.list.map(k => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`).join('')}</div></div></div>`;
+  }
+  function pickSkin(id) {
+    const S = window.WosSkin; if (!S) return;
+    const now = S.set(id), nm = (S.list.find(k => k.id === now) || {}).name || '';
+    $$('#settingsBody [data-skinpick]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.skinpick === now)));
+    const n = $('#settingsBody [data-skinname]'); if (n) n.textContent = `${nm} · tap to wear`;
+    vib(8);
+  }
   function paintUsage() { const g = $('#settingsBody [data-usage]'); if (g && sheet === 'settings') g.outerHTML = window.WosUsage.html(); }
   function openFilesScreen() {
     closeSheets(true);
@@ -1118,6 +1137,11 @@
   }
   function openSettings(focusUnsent) {
     openSheet('settings');
+    if (focusUnsent === 'look') { // scroll the sheet body only (scrollIntoView would also move the fixed shell)
+      const body = $('#settingsBody'), g = $('#settingsBody [data-stgroup="look"]');
+      if (body && g) body.scrollTop += g.getBoundingClientRect().top - body.getBoundingClientRect().top - 8;
+      return;
+    }
     if (focusUnsent) { const g = $('#settingsBody .st-group'); g && g.scrollIntoView({ block: 'start' }); }
   }
   function unsentAction(id, origin, a) {
@@ -1168,7 +1192,7 @@
     const W0 = LIVE && LIVE.ok ? (LIVE.workGroups().working || []) : [], working = W0.length;
     const yd = byDay[YESTERDAY] || [];
     const now = new Date();
-    return `<div class="home">${gearBtn()}
+    return `<div class="home"><nav class="home-tools" aria-label="System and settings"><button class="home-system" data-act="system" aria-label="Your system" title="Your system"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/></svg></button>${gearBtn()}</nav>
       <div class="home-top">
         <div class="home-date" id="homeDate">${(() => { const p = window.WizConfig.dayParts(now.getTime()); return `${DOWL[p.dow]} · ${p.d} ${MON[p.m - 1]}`; })()}</div>
         <div class="home-time" id="homeTime">${window.WizConfig.hm()}</div>
@@ -1182,7 +1206,6 @@
       </div>
       ${unsentCard()}
       ${sideCard()}
-      <button class="now-card wz-home-widget sys-card" style="--c:var(--cyan)" data-act="system"><span class="sys-glyph" aria-hidden="true">◈</span><span class="meta"><span class="k">Your system</span><span class="v">Agents, apps, connections</span></span><span class="side-go">Open</span></button>
       </div>
       <div class="home-gap home-gap-b"></div>
       ${window.WosResources?.home() || ''}
@@ -1260,18 +1283,32 @@
       if (!win || win.__wosTamed || !win.history) return;
       win.__wosTamed = true;
       const h = win.history, push = h.pushState.bind(h), rep = h.replaceState.bind(h);
-      h.pushState = function (st, t, u) { const r = (win.navigator.userActivation?.isActive ? push : rep)(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
+      h.pushState = function (st, t, u) { const r = (st?.__wizardApp?.version === 1 || win.navigator.userActivation?.isActive ? push : rep)(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
       h.replaceState = function (st, t, u) { const r = rep(st, t, u); try { win.__wosHref = win.location.href; } catch (e) {} return r; };
       // The app stepping back through its own entries (collapse a section with history.back()) is the app's
       // step, never the user's Back: mark it so the frame popstate below lets the app handle it (James, 10 Oct:
       // collapsing a part in a full-screen app dropped full screen).
       const bk = h.back.bind(h), go = h.go.bind(h);
       h.back = function () { selfPop(win); return bk(); };
-      h.go = function (n) { if (+n < 0) selfPop(win); return go(n); };
+      h.go = function (n) { if (+n < 0) selfPop(win, +n); return go(n); };
     } catch (e) {}
   }
-  function selfPop(win) { try { win.__wosSelfPop = Date.now() + 800; } catch (e) {} }
-  function takeSelfPop(win) { try { if (win.__wosSelfPop && Date.now() < win.__wosSelfPop) { win.__wosSelfPop = 0; return true; } } catch (e) {} return false; }
+  function selfPop(win, delta = -1) {
+    try {
+      // Traversal completion owns its document/target, not an 800 ms guess. Parked frames and busy
+      // WebViews can deliver this much later; it must never become another Back on the visible thread.
+      const nav = win.navigation, entries = nav?.entries?.(), at = nav?.currentEntry?.index;
+      const target = entries && Number.isInteger(at) ? entries[at + delta] : null;
+      if (entries && Number.isInteger(at) && !target) return; // a no-op must not consume the next user Back
+      win.__wosSelfPop = { doc: win.document, key: target?.key || null };
+    } catch (e) {}
+  }
+  function takeSelfPop(win) {
+    try {
+      const pop = win.__wosSelfPop; win.__wosSelfPop = null;
+      return !!pop && pop.doc === win.document && (!pop.key || win.navigation?.currentEntry?.key === pop.key);
+    } catch (e) { return false; }
+  }
   function watchEarly(f) {
     let last = null, n = 0;
     const tick = () => {
@@ -1285,6 +1322,8 @@
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
+      const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.appId];
+      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
@@ -1325,6 +1364,8 @@
     // navigation (the URL changes) stays the app's own back step.
     try { win.__wosHref = win.location.href; } catch (e) {}
     try { win.addEventListener('popstate', e => {
+      if (!f.isConnected || !W[id] || f.contentWindow !== win) return; // a removed preview owns no shell navigation
+      if (win.WizardApp?.hosted && e.state?.__wizardApp?.version === 1) { takeSelfPop(win); return; }
       if (Date.now() < dropUntil) { e.stopImmediatePropagation(); ignorePop = 0; dropUntil = 0; return; } // the shell's guard drop landed here
       if (Date.now() < exitUntil) { e.stopImmediatePropagation(); history.back(); return; }
       // The app (or the shell on its behalf) stepped back through the app's own entry: the app's step.
@@ -1688,6 +1729,7 @@
     else if (which === 'settings') { renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; }
     else { renderInbox(); inboxEl.classList.add('open'); }
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
+    window.WosScenery?.update(); // scenery hook: a sheet over Home freezes the background
     vib(6);
   }
   function closeSheets(quiet) {
@@ -1697,10 +1739,12 @@
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
     $('#search').blur();
     window.WosResources?.sync();
+    window.WosScenery?.update(); // scenery hook: sheet closed, Home may animate again
   }
   $('#scrim').addEventListener('click', () => closeSheets());
   settingsEl.addEventListener('click', e => {
     if (e.target.closest('[data-stclose]')) return closeSheets();
+    { const sk = e.target.closest('[data-skinpick]'); if (sk) return pickSkin(sk.dataset.skinpick); }
     if (window.WosCancelled?.act(e.target)) return;
     if (window.WosSelMenu?.act(e.target)) return;
     const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
@@ -1919,22 +1963,65 @@
     return new Blob(parts, { type: 'audio/aac' });
   }
   /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
+  function nativeTakeAppOwned(id) {
+    const shared = window.WizAppCapture?.getState?.();
+    return !!shared?.active || !!shared?.nativeDeviceTakeIds?.includes(id);
+  }
+  function pauseNativeTake(on) {
+    if (!V.native || nativeTakeAppOwned(V.native)) return false;
+    try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id !== V.native) return false; DEV().recPause(on); return true; } catch (_) { return false; }
+  }
   function nativeFinish(id, stopped) {
+    if (nativeTakeAppOwned(id)) { setVoice('paused'); toast('🎙', 'This recording belongs to another app'); return; }
+    // Notification/Everywhere Send enters here directly, bypassing finishVoice. Seal the model before claiming
+    // audio or awaiting STT. A recreated page restores the last route saved for this native take.
+    const hadSnap = !!V.snap;
+    const snap = V.snap || sendSnap();
+    try {
+      if (!snap.route) {
+        const pin = V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null);
+        snap.route = (!hadSnap && window.WosModels.voiceRoute(id)) || CHATS.modelRoute(pin?.wid, pin?.sid || '');
+      }
+      if (!snap.route?.model || !snap.route?.provider) throw new Error('Choose a model before sending');
+      saveVoiceRoute(id, snap.route); V.snap = snap;
+    } catch (e) {
+      // The native file remains on disk; no claim, transcription or inference happens on an uncertain route.
+      dropHold(); unseal();
+      if (JSON.parse(DEV()?.recActive?.() || 'null')?.id === id) { V.native = id; pauseCommandCapture(); }
+      else { V.native = null; setVoice('idle'); txHide(); }
+      toast('!', 'Recording saved · ' + String(e.message || e), 3200); return;
+    }
     const dev = DEV(); let meta = null;
     try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (e) {}
     V.native = null;
     if (!meta) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
+    // A shipped kind-less recActive bridge reveals the original mode only after an explicit stop.
+    // Preserve command routing even when its older take had no page-side provenance at recovery.
+    if (['auto', 'command'].includes(meta.kind)) V.kind = meta.kind;
     V.acc = Math.max(V.acc, Number(meta.ms) || 0);
     onRecStop(nativeBlob(id), id);
   }
-  const recDone = id => { try { id && DEV()?.recDone(id); } catch (e) {} };
+  const recDone = id => { try { id && DEV()?.recDone(id); if (id) window.WosModels.forgetVoiceRoute(id); } catch (e) {} };
   /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
+  // Positive provenance for the shipped kind-less native ABI. Never infer ownership by claiming audio.
+  const VOICE_TAKE_KEY = 'wos.voice-take.v1';
+  function voiceTake(id, kind) {
+    try {
+      if (kind) localStorage.setItem(VOICE_TAKE_KEY, JSON.stringify({ id, kind }));
+      const row = JSON.parse(localStorage.getItem(VOICE_TAKE_KEY) || 'null');
+      return row?.id === id && ['auto', 'command'].includes(row.kind) ? row : null;
+    } catch (_) { return null; }
+  }
+  window.__wosVoiceTake = id => voiceTake(id);
   function nativeResume(a) {
     if (V.state !== 'idle' || !a?.id) return false;
-    Object.assign(V, { native: a.id, kind: a.kind === 'command' ? 'command' : 'auto', target: null, snap: null, seal: null, replyTo: replyTake(a.id), chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
+    // Recovery can precede any Chats/model-picker visit, just like a cold first recording.
+    // Warm authority now; the exact route still seals at Send and remains fail-closed.
+    window.WosModels?.load().catch(() => {});
+    Object.assign(V, { native: a.id, kind: (a.kind || voiceTake(a.id)?.kind) === 'command' ? 'command' : 'auto', target: null, snap: null, seal: null, replyTo: replyTake(a.id), chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
-    txPill('✦', 'Still recording · tap orb to send', 'agent'); txHide(2600);
+    txPill(a.paused ? '⏸' : '✦', a.paused ? 'Paused · recording kept · tap orb to send' : 'Still recording · tap orb to send', 'agent'); txHide(2600);
     V.raf = requestAnimationFrame(tick);
     return true;
   }
@@ -1959,8 +2046,8 @@
     reportVoice(s);
     keepAwake(s === 'listen' || s === 'paused' || s === 'command' || s === 'think');
     Orb.setMode({ idle: 'idle', listen: 'listen', command: 'command', paused: 'paused', think: 'think', done: 'done', agent: 'agent' }[s] || 'idle');
-    voiceEl.classList.toggle('on', s === 'listen' || s === 'paused');
-    voiceEl.classList.toggle('cmd', s === 'command' || (V.kind === 'command' && s !== 'idle'));
+    voiceEl.classList.toggle('on', s === 'listen' || s === 'paused' || s === 'command');
+    voiceEl.classList.toggle('cmd', V.kind === 'command' && s !== 'idle' && s !== 'listen' && s !== 'paused' && s !== 'command');
     voiceEl.setAttribute('aria-hidden', String(s === 'idle'));
   }
   // The Auto/Agent toggle is gone: the router always decides (commands run, the rest goes to Archimedes).
@@ -1975,17 +2062,65 @@
     $('#attachCount').textContent = n ? String(n) : '';
     $('#attachLabel').textContent = V.files.some(f => f.uploading) ? 'Uploading' : n ? (n === 1 ? '1 file' : `${n} files`) : 'Attach';
   }
+  const sameTake = files => V.files === files && (V.state === 'listen' || V.state === 'paused');
+  function releaseScreenOperation(op) {
+    if (V.screenOp !== op) return;
+    V.screenOp = null;
+    device.classList.remove('capturing-screen');
+    $('#arcScreen').disabled = false; $('#arcScreen').classList.remove('busy');
+  }
+  function cancelTakeFiles() {
+    for (const f of V.files || []) f.abort?.abort();
+    if (V.screenOp) { const op = V.screenOp; op.abort.abort(); releaseScreenOperation(op); }
+  }
+  async function uploadVoiceFile(file, files, f) {
+    const abort = f.abort || (f.abort = new AbortController());
+    const deadline = setTimeout(() => abort.abort(new Error('Upload timed out · try attaching again')), 20000);
+    try {
+      const result = await CHATS.uploadFile(file, { signal: abort.signal });
+      if (!sameTake(files) || !files.includes(f)) return;
+      Object.assign(f, result, { uploading: false });
+    } catch (e) {
+      const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
+      if (sameTake(files)) toast('!', e.user || abort.signal.reason?.message ? (abort.signal.reason?.message || e.message) : 'Upload failed · not attached', 3200);
+    } finally { clearTimeout(deadline); delete f.abort; }
+    if (sameTake(files)) renderVoiceFiles();
+  }
   voicePicker.addEventListener('change', async () => {
-    const list = [...voicePicker.files]; voicePicker.value = '';
+    const list = [...voicePicker.files], files = V.files; voicePicker.value = '';
     for (const file of list) {
-      if (V.state === 'idle') break;
-      if (V.files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); break; }
+      if (!sameTake(files)) break;
+      if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); break; }
       const f = { name: file.name, mime: file.type, bytes: file.size, uploading: true };
-      V.files.push(f); renderVoiceFiles();
-      try { Object.assign(f, await CHATS.uploadFile(file), { uploading: false }); }
-      catch (e) { V.files = V.files.filter(x => x !== f); toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
-      renderVoiceFiles();
+      files.push(f); renderVoiceFiles();
+      await uploadVoiceFile(file, files, f);
     }
+  });
+  $('#arcScreen').addEventListener('click', async () => {
+    if (!sameTake(V.files) || $('#arcScreen').disabled) return;
+    const files = V.files;
+    if (files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); return; }
+    // Reserve before asynchronous capture so an immediate Send cannot omit the screenshot.
+    const f = { name: 'Screenshot', mime: 'image/png', uploading: true };
+    files.push(f); renderVoiceFiles();
+    const op = { files, abort: new AbortController() }; V.screenOp = op; f.abort = op.abort;
+    const screen = $('#arcScreen'); screen.disabled = true; screen.classList.add('busy');
+    const conceal = () => {
+      if (V.screenOp !== op || op.abort.signal.aborted) return () => {};
+      device.classList.add('capturing-screen');
+      return () => { if (V.screenOp === op) device.classList.remove('capturing-screen'); };
+    };
+    try {
+      // The capture adapter conceals chrome only at actual sampling, after the desktop picker returns.
+      const file = await window.WosScreenCapture.capture({ signal: op.abort.signal, conceal });
+      if (!sameTake(files) || !files.includes(f) || V.screenOp !== op) return;
+      Object.assign(f, { name: file.name, mime: file.type, bytes: file.size });
+      await uploadVoiceFile(file, files, f);
+      if (sameTake(files) && f.id) toast('▣', 'Screenshot attached', 1800);
+    } catch (e) {
+      const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
+      if (sameTake(files)) { renderVoiceFiles(); toast('!', e.message || 'Screen capture failed · not attached', 3200); }
+    } finally { releaseScreenOperation(op); }
   });
   // Files that finished uploading, in the shape the outbox sends as wizard_file_ids.
   const takeFiles = () => V.files.filter(f => f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes }));
@@ -2054,6 +2189,9 @@
       return 'busy';
     }
     if (V.state !== 'idle' || !sid) return 'busy';
+    const shared = window.WizAppCapture?.getState?.();
+    if (shared?.active || shared?.recording || shared?.hold) { toast('🎙', 'Microphone held by another app', 2000); return 'busy'; }
+    try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id) { toast('🎙', 'An existing native recording is still held', 2200); return 'busy'; } } catch (_) { return 'busy'; }
     startVoice('auto');
     V.replyTo = { wid, sid };
     if (V.native) replyTake(V.native, { wid, sid });
@@ -2065,8 +2203,15 @@
   async function startVoice(kind) {
     V.onAt = performance.now();
     if (V.state !== 'idle') return;
+    const shared = window.WizAppCapture?.getState?.();
+    if (shared?.active || shared?.recording || shared?.hold) { toast('🎙', 'Microphone held by ' + (shared.appId || 'another app'), 2200); window.WosDevice?.recoverRecorder?.(); return 'busy'; }
+    try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id) { toast('🎙', 'An existing native recording is still held', 2200); return 'busy'; } } catch (_) { return 'busy'; }
+    const captureEpoch = V.captureEpoch = (V.captureEpoch || 0) + 1;
+    // An app-feedback take can start before any chat/model picker opened. Warm authoritative options;
+    // the exact route is still sealed at Send, and unavailable routes remain fail-closed.
+    window.WosModels?.load().catch(() => {});
     clearTimeout(txHideT);
-    Object.assign(V, { kind, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
@@ -2080,12 +2225,14 @@
     V.raf = requestAnimationFrame(tick);
     V.native = null;
     const dev = DEV();
-    if (dev) { let id = ''; try { id = dev.recStart(kind === 'command' ? 'command' : 'auto') || ''; } catch (e) {}
-      if (id) { V.native = id; reportVoice(V.state); if (V.stopAsked) finishVoice(); return; } } // '' = no mic permission yet: the page asks below
+    if (dev) { let id = ''; try { id = dev.recStart(kind === 'command' ? 'command' : 'auto') || ''; if (id) { const route = CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) {}
+      if (id) { V.native = id; voiceTake(id, kind); reportVoice(V.state); if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; } } // '' = no mic permission yet: the page asks below
     try {
-      if (!(await openRec())) return;
-      if (V.stopAsked) finishVoice();
+      if (!(await openRec(captureEpoch))) return;
+      if (V.stopAsked && V.sendAsked) finishVoice();
     } catch (err) {
+      if (captureEpoch !== V.captureEpoch || V.cancelled || V.state === 'idle') return;
+      stopStream(); V.rec = null;
       V.sim = true; NOMIC = true; tourEv('nomic', { kind });
       txShow('', '', '', '✦');
       $('#txRouteText').textContent = kind === 'command' ? 'No mic here · tap a command' : 'No mic here · tap a line to simulate';
@@ -2099,20 +2246,22 @@
   $('#txChips').addEventListener('click', e => { const b = e.target.closest('[data-sim]'); if (!b) return; const k = V.kind; cancelVoice(true); runUtterance(b.dataset.sim, k); });
   // Only a tap (or Cancel) ends a take. If Android takes the mic away (a call, another app, the system), the
   // part recorded so far is kept and the take pauses: tap the orb to send it, or Pause to carry on recording.
-  async function openRec() {
+  async function openRec(epoch = V.captureEpoch) {
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
-    V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    if (V.cancelled || V.state === 'idle') { stopStream(); return false; }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (epoch !== V.captureEpoch || V.cancelled || V.state === 'idle') { stream.getTracks().forEach(t => t.stop()); return false; }
+    V.stream = stream;
     const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
     const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
     const rec = V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
     V.mime = rec.mimeType || mime || 'audio/webm';
-    rec.ondataavailable = e => { if (e.data && e.data.size) V.chunks.push(e.data); };
-    rec.onstop = () => (V.state === 'think' ? onRecStop() : onRecInterrupted(rec));
+    rec.ondataavailable = e => { if (epoch === V.captureEpoch && !V.cancelled && e.data && e.data.size) V.chunks.push(e.data); };
+    rec.onstop = () => { if (epoch !== V.captureEpoch || V.cancelled) return; return V.state === 'think' ? onRecStop() : onRecInterrupted(rec); };
     // A track ended by the system stops the recorder too; onstop handles it.
     V.stream.getAudioTracks().forEach(tr => tr.addEventListener('ended', () => { try { rec.state !== 'inactive' && rec.stop(); } catch (e) {} }));
     rec.start(250);
+    if (V.state === 'paused' || (V.stopAsked && V.kind === 'command')) pauseCommandCapture();
     return true;
   }
   function onRecInterrupted(rec) {
@@ -2154,8 +2303,21 @@
   // A take that sends nothing gives the composer it took back (words, photos, files: chats.js takeComposer).
   function unseal(seal) { const t = seal || V.seal; if (!seal) V.seal = null; try { t?.putBack(); } catch (e) { console.error(e); } }
   function dropHold() { if (V.hold) { LIVE.releaseSend?.(V.hold); V.hold = null; } }
+  function saveVoiceRoute(id, route) {
+    try { window.WosModels.keepVoiceRoute(id, route); } catch (e) { throw new Error('Could not save the recording’s model route'); }
+  }
+  // Release is a capture boundary, independent of model availability, uploads or permission latency.
+  function pauseCommandCapture() {
+    if (V.state !== 'command' && V.state !== 'listen' && V.state !== 'paused' && !(V.state === 'think' && V.native)) return;
+    if (V.state !== 'paused') V.acc += performance.now() - V.t0;
+    if (V.native) pauseNativeTake(true);
+    try { if (V.rec?.state === 'recording') V.rec.pause(); } catch (_) {}
+    setVoice('paused'); txPill('⏸', 'Paused · recording kept · tap orb to send', 'agent');
+  }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
+    V.sendAsked = true;
+    if (V.kind === 'command') { V.stopAsked = true; pauseCommandCapture(); }
     V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
     if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
@@ -2164,6 +2326,12 @@
     // goes into is taken now, at the tap, and rides with the recording (chats.js takeComposer).
     const sealAt = sealTarget();
     if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
+    try {
+      const pin = sealAt || (V.snap.view?.thread ? { wid: V.snap.view.id, sid: V.snap.view.thread } : null);
+      V.snap.route = CHATS.modelRoute(pin?.wid, pin?.sid || '');
+      if (!V.snap.route) { toast('!', 'Choose a model before sending', 2200); return; }
+      if (V.native) saveVoiceRoute(V.native, V.snap.route);
+    } catch (e) { toast('!', String(e.message || e), 2200); return; }
     if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length ? t : null; }
     leaveOnSend(V.snap);
     if (V.native) {
@@ -2178,6 +2346,8 @@
     try { V.rec.state !== 'inactive' && V.rec.stop(); } catch (e) { onRecStop(); }
   }
   function cancelVoice(quiet) {
+    cancelTakeFiles();
+    V.captureEpoch = (V.captureEpoch || 0) + 1;
     V.cancelled = true; if (V.replyTo) { replyTake(null); V.replyTo = null; }
     unseal();
     // A long take cancelled by accident is kept (Settings → Cancelled recordings, James 11 Oct); a quick one is gone.
@@ -2185,12 +2355,14 @@
     const heldMs = voiceElapsed();
     const long = !V.sim && heldMs >= (window.WosCancelled?.KEEP_FROM_MS || 15000);
     const nativeKeeps = !!V.native && typeof DEV()?.cancelledList === 'function';
-    if (V.native) { try { DEV().recCancel(V.native); } catch (e) {} V.native = null; }
+    if (V.native) { try { if (!nativeTakeAppOwned(V.native)) DEV().recCancel(V.native); } catch (e) {} V.native = null; }
     const rec = V.rec, mime = V.mime || rec?.mimeType || 'audio/webm';
     const keepWeb = parts => { const b = new Blob(parts, { type: mime }); window.WosCancelled?.keepWeb(b, heldMs).then(k => k && window.WosCancelled.repaint()); };
     if (long && rec && window.WosCancelled) {
       // Stop the web recorder and keep what it heard (the last chunk arrives with the stop).
       const parts = V.parts.slice(), chunks = V.chunks;
+      // Cancellation owns this final chunk locally, not the next take's mutable V.chunks.
+      rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
       try {
         if (rec.state !== 'inactive') { rec.onstop = () => keepWeb(parts.concat(chunks)); rec.stop(); }
         else keepWeb(parts.concat(chunks));
@@ -2226,7 +2398,7 @@
     if (V.replyTo) {
       const rt = V.replyTo, files = takeFiles(); V.replyTo = null; replyTake(null);
       setVoice('idle'); txPill('✦', 'Voice reply · saved to this thread', 'agent'); txHide(1800);
-      Promise.all(blobs.map((part, i) => Promise.resolve(CHATS.sendVoiceTo(rt.wid, rt.sid, part, i === 0 ? files : [], i === 0 ? snap.seal || false : false)).catch(() => {}))).finally(() => recDone(nid));
+      Promise.all(blobs.map((part, i) => Promise.resolve(CHATS.sendVoiceTo(rt.wid, rt.sid, part, i === 0 ? files : [], i === 0 ? snap.seal || false : false, snap.route)).catch(() => {}))).finally(() => recDone(nid));
       return;
     }
     try {
@@ -2254,8 +2426,8 @@
       const files = takeFiles();
       const queued = (blobs.length ? blobs : [blob]).map((part, i) => {
         const fl = i === 0 ? files : [];   // attached files ride with the first part only
-        if (aim == null && sv?.review) return sendReview(sv, '', part, fl);
-        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { sid: sv.thread, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
+        if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route);
+        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
         const sl = i === 0 ? snap.seal : null; // the window is gone: the taken composer still rides with it
         return toAgent('', 'Saved · sends when Wizard is reachable', { audio: part, desk: aim, source: 'orb', files: [...fl, ...(sl ? sl.files : [])].slice(0, 8), typed: sl?.text || '', snap })
           .then(() => sl?.done(), e => { sl?.putBack(); throw e; });
@@ -2269,12 +2441,13 @@
   $('#voice').addEventListener('click', e => { if (e.target.closest('.arc') && performance.now() - (V.onAt || 0) < 450) { e.stopPropagation(); e.preventDefault(); } }, true);
   $('#arcCancel').addEventListener('click', () => cancelVoice());
   $('#arcPause').addEventListener('click', () => {
-    if (V.state === 'listen') { V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} try { V.native && DEV().recPause(true); } catch (e) {} setVoice('paused'); vib(6); }
-    else if (V.state === 'paused' && !V.native && !V.rec && V.parts.length) {   // after a mic interruption: carry on with a fresh part
+    if (V.state === 'listen' || V.state === 'command') { V.stopAsked = true; V.sendAsked = false; V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} if (V.native) pauseNativeTake(true); setVoice('paused'); vib(6); }
+    else if (V.state === 'paused' && !V.native && !V.rec && V.parts.length) {
+      V.stopAsked = false; V.sendAsked = false;   // after a mic interruption: carry on with a fresh part
       V.t0 = performance.now(); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6);
       openRec().catch(() => { V.acc += performance.now() - V.t0; setVoice('paused'); toast('⏸', 'The mic is busy · tap the orb to send what you have'); });
     }
-    else if (V.state === 'paused') { V.t0 = performance.now(); try { V.rec && V.rec.resume(); } catch (e) {} try { V.native && DEV().recPause(false); } catch (e) {} setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
+    else if (V.state === 'paused') { V.stopAsked = false; V.sendAsked = false; V.t0 = performance.now(); try { V.rec && V.rec.resume(); } catch (e) {} if (V.native) pauseNativeTake(false); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
   });
   // The file picker is a separate screen on Android: pause the take while it is open, resume on return.
   $('#arcAttach').addEventListener('click', () => {
@@ -2348,17 +2521,17 @@
       (s => s ? `Visible on screen: ${s}` : '')(window.WizScreen?.read(winEl(v.id)) || ''),
       'Treat the message as feedback on that page; "this", "here" and "it" mean that page.'].filter(Boolean).join(' ');
   }
-  function sendReview(v, text, audio, files = []) {
+  function sendReview(v, text, audio, files = [], route = null) {
     const wid = reviewSink(v); if (!wid) return false;
     window.__ovLog = (window.__ovLog || []).concat('review-send:' + v.thread).slice(-30);
-    sendChat(wid, text, 'voice, aimed at the page under review', audio, { sid: v.thread, files, instructions: reviewContext(v), away: true });
+    sendChat(wid, text, 'voice, aimed at the page under review', audio, { sid: v.thread, route, files, instructions: reviewContext(v), away: true });
     return true;
   }
   function deliverToView(v, text, snap) {
-    if (v.review) return sendReview(v, text, null);
+    if (v.review) return sendReview(v, text, null, [], snap?.route);
     const w = W[v.id]; if (!w) return false;
     // The thread that was open when James sent, even if the window shows another one by now.
-    if (w.app === 'chats' && (v.thread || w.thread)) { sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread || w.thread, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); return true; }
+    if (w.app === 'chats' && (v.thread || w.thread)) { sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); return true; }
     if (w.app === 'frame') {
       try { const f = winEl(v.id).querySelector('iframe'); f.contentWindow.postMessage({ type: 'wizard-os:voice', text }, location.origin); return true; } catch (e) { return false; }
     }
@@ -2435,6 +2608,7 @@
     let m = s.match(/^move (?:this|it|the window)(?: window| app)? (?:to )?(?:the )?(left|right|next|previous|prev)(?: desk)?$/);
     if (m) return { action: 'move_window', to: /left|prev/.test(m[1]) ? 'prev' : 'next' };
     if (/^(show |open )?(my )?(inbox|notifications)$/.test(s)) return { action: 'open_view', view: 'inbox' };
+    if (/^((change|switch|pick|choose|open|show) )?(the |my |a )?(skins?|themes?)$|^change (the |my )?look$/.test(s)) return { action: 'open_view', view: 'skin' };
     if (/^(show |open )?(my )?(apps|app list|launcher|all apps)$/.test(s)) return { action: 'open_view', view: 'apps' };
     m = s.match(/^(?:open|launch|show|start|go to|switch to)\s+(?:me\s+)?(.+)$/);
     if (m) {
@@ -2462,8 +2636,8 @@
     if (files.length || seal) {
       const nf = files.length + (seal ? seal.files.length : 0);
       const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : ''].filter(Boolean).join(' + ');
-      if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback sent with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, null, files); }
-      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Sent with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+      if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback sent with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, null, files, snap.route); }
+      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Sent with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
       const all = [...files, ...(seal ? seal.files : [])].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
       return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all }).then(() => seal?.done(), e => { seal?.putBack(); throw e; });
     }
@@ -2586,6 +2760,7 @@
     if (a === 'open_view' || a === 'view' || a === 'show') {
       const v = String(c.view || arg).toLowerCase();
       if (/inbox|notif/.test(v)) { openSheet('inbox'); return true; }
+      if (/skin|theme/.test(v)) { openSettings('look'); return true; }
       if (/apps|launcher/.test(v)) { openSheet('launcher'); return true; }
       closeSheets(); openReview(/month/.test(v) ? 'month' : /week/.test(v) ? 'week' : 'day', c.date, opts); return true;
     }
@@ -2606,7 +2781,7 @@
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice', opts.snap);
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    await OUTBOX.enqueue({ kind: 'new', text, typed: opts.typed || '', instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
+    await OUTBOX.enqueue({ kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
     renderMoons(); refreshHome(); renderDots();
   }
   OUTBOX?.onSent((it, res) => {
@@ -2629,8 +2804,9 @@
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
-    e.preventDefault(); orbWrap.setPointerCapture(e.pointerId); closeMenu();
-    G = { x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
+    if (G || e.isPrimary === false) return;
+    e.preventDefault(); try { orbWrap.setPointerCapture(e.pointerId); } catch (_) {} closeMenu();
+    G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
     G.corner = device.classList.contains('orb-corner');
     if (V.state === 'idle' && !sheet) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); vib(18); startVoice('command'); } }, 380);
@@ -2639,7 +2815,7 @@
   // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
   const aimFor = () => null;
   orbWrap.addEventListener('pointermove', e => {
-    if (!G) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
+    if (!G || e.pointerId !== G.pointerId) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
     // A hold that starts travelling right after it fired was really a swipe (slow frame ate the moves).
     if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && Math.hypot(G.dx, G.dy) > 34) {
       cancelVoice(true); G.mode = 'pending';
@@ -2677,7 +2853,7 @@
     }
   });
   function endGesture(e, cancelled) {
-    if (!G) return; const g = G; G = null;
+    if (!G || (e?.pointerId != null && e.pointerId !== G.pointerId)) return; const g = G; G = null;
     clearTimeout(g.hold); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming');
     const vt = (performance.now() - g.t) || 1;
     if (g.mode === 'pending' && !cancelled) {
@@ -2686,7 +2862,8 @@
       if (V.state === 'listen' || V.state === 'paused') { shock(); return finishVoice(); }
       return; // sending: a tap on the orb does nothing until the take is handed off
     } else if (g.mode === 'hold') {
-      if (cancelled) return cancelVoice(true);
+      // Capture loss is not explicit Cancel. Keep the take paused with controls, never discard it.
+      if (cancelled) { V.stopAsked = true; pauseCommandCapture(); return; }
       V.target = g.aim;
       return finishVoice();
     } else if (g.mode === 'h') {
@@ -2706,6 +2883,12 @@
   }
   orbWrap.addEventListener('pointerup', e => endGesture(e, false));
   orbWrap.addEventListener('pointercancel', e => endGesture(e, true));
+  orbWrap.addEventListener('lostpointercapture', e => endGesture(e, true));
+  // Capture may move with the dock/immersive DOM. Id matching makes duplicate and unrelated releases inert.
+  window.addEventListener('pointerup', e => endGesture(e, !orbWrap.hasPointerCapture(e.pointerId)), true);
+  window.addEventListener('pointercancel', e => endGesture(e, true), true);
+  window.addEventListener('blur', () => endGesture(null, true));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) endGesture(null, true); });
   orbWrap.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (V.state === 'idle') startVoice('auto'); else finishVoice(); } });
   orbWrap.tabIndex = 0;
 
@@ -2721,36 +2904,10 @@
   const EXIT_MS = 2000;
   let exitUntil = 0, exitT = 0, guardOn = history.state?.wos === 'guard', ignorePop = 0;
   const watchers = new Set();
-  // LEGACY-BRIDGE (remove when Legacy Wizard retires, or replace with the spec'd app Back contract — see
-  // wizard-os docs/WORK_OUTSTANDING.md "Back button contract"): the hook name and the layout-signature guess below
-  // exist only because Legacy Wizard's hook always answers true. A spec'd hook returns handled/not-handled honestly,
-  // which deletes frameSig() and the timeout. Regression: qa-hosted-back.cjs.
-  // A hosted app that keeps its screens in app state (Legacy Wizard: thread → list, viewers, sheets) has no frame
-  // history to walk. It exposes its own Back as window.__wizardCloseOverlay() — the hook its Android app calls.
-  // That hook answers true even at its own root, so the shell compares a small layout signature after React
-  // settles: if nothing moved, the press was a no-op in the app and the shell takes the step instead.
-  function frameSig(win) {
-    try { const d = win.document; return [win.location.href, d.querySelectorAll('[role="dialog"],[aria-modal="true"],.open').length,
-      [...d.querySelectorAll('h1,[aria-label^="Back"]')].map(e => e.getAttribute('aria-label') || e.textContent).join('|')].join('#'); } catch (e) { return ''; }
-  }
   function hostedBack(f) {
-    let win; try { win = winEl(f.id)?.querySelector('iframe')?.contentWindow; } catch (e) { return null; }
-    let hook; try { hook = win && win.__wizardCloseOverlay; } catch (e) { return null; }
-    if (typeof hook !== 'function') return null;
-    // Store's canonical hook returns handled/not-handled synchronously; never apply the legacy layout guess.
-    if (f.appId === 'app-store' || f.appId === 'system') { try { return hook.call(win) === true ? 'store-card' : null; } catch (_) { return null; } }
-    const before = frameSig(win);
-    let r; try { r = hook.call(win); } catch (e) { return null; }
-    if (r === false) return null;
-    const fid = f.id;
-    setTimeout(() => {
-      if (frameSig(win) !== before) return;
-      // The app was already at its root: take the shell step now (without asking the app again).
-      const did = backStep(fid);
-      window.__backLog = (window.__backLog || []).concat('hosted-noop:' + (did || 'root')).slice(-30);
-      if (!did) toast('⌂', "You're home", 1200);
-    }, 180);
-    return 'hosted';
+    const frame = winEl(f.id)?.querySelector('iframe');
+    const result = window.WizAppServices?.back(frame);
+    return result || 'notReady';
   }
   function backStep(skipHosted) {
     { const t = window.WosTour?.back(); if (t) return t; } // the first-run tour and the Help sheet sit above everything
@@ -2778,8 +2935,11 @@
         if (did) return did === 'search' ? 'search' : 'filter';
       }
       if (f.app === 'chats' && CHATS.readyBack?.()) return 'ready-order'; // Priority / By subject → Newest
-      if (f.app === 'frame' && skipHosted !== f.id) { const h = hostedBack(f); if (h) return h; }
-      if (f.app === 'frame') { const nav = frameNav(f.id); if (nav?.canGoBack) { try { selfPop(winEl(f.id).querySelector('iframe').contentWindow); } catch (e) {} nav.back(); return 'frame'; } }
+      if (f.app === 'frame' && skipHosted !== f.id) {
+        const result = hostedBack(f);
+        if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
+        if (result === 'notReady') { const nav = frameNav(f.id); if (nav?.canGoBack) { try { selfPop(winEl(f.id).querySelector('iframe').contentWindow); } catch (e) {} nav.back(); return 'frame'; } }
+      }
       if (f.app === 'review' && (f.zd || 0) > 0) { zoomOut(f.id); return 'zoom'; }
       if (d.full) { setFull(f.id, false); return 'tile'; }
       // A bound view: Back slides back to its thread; the view stays beside it until James leaves the thread.
@@ -2865,34 +3025,12 @@
   // Shared native Everywhere hosts retain their existing cadence.
   Orb.setRestingMotion?.(false);
 
-  /* ---------------- starfield ---------------- */
-  (function stars() {
-    const c = $('#stars'), x = c.getContext('2d'); let Wd, H, pts = [];
-    function size() { const r = Math.min(devicePixelRatio || 1, 2); Wd = c.width = c.clientWidth * r; H = c.height = c.clientHeight * r;
-      pts = Array.from({ length: 170 }, () => ({ x: Math.random() * Wd * 1.4, y: Math.random() * H, r: Math.random() * 1.3 * r + .2, p: Math.random() * 6.28, s: .4 + Math.random() * 1.4, d: Math.random() })); }
-    // Scenery is event-driven: no self-rescheduling loop after the page settles.
-    let raf = 0;
-    const draw = () => {
-      raf = 0; if (document.hidden) return;
-      x.clearRect(0, 0, Wd, H);
-      const off = -idx * Wd * .05;
-      for (const p of pts) {
-        const a = .25 + .75 * Math.abs(Math.sin(p.p));
-        x.globalAlpha = a * (.35 + p.d * .65); x.fillStyle = p.d > .85 ? '#d9c8ff' : '#ffffff';
-        const px = ((p.x + off * (p.d + .2)) % (Wd * 1.4) + Wd * 1.4) % (Wd * 1.4) - Wd * .2;
-        x.beginPath(); x.arc(px, p.y, p.r, 0, 6.28); x.fill();
-      }
-    };
-    paintStars = () => { if (!document.hidden && !raf) raf = requestAnimationFrame(draw); };
-    const resize = () => { size(); paintStars(); };
-    resize(); addEventListener('resize', resize);
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else paintStars();
-    });
-  })();
+  /* Starfield + Nebula drift + skin canvases: core/scenery.js (battery-gated decorative motion). */
 
   /* ---------------- boot ---------------- */
   buildDesks(); setVoice('idle'); armBack();
+  // Decorative motion lives only on a visible, recently touched Home with nothing over it (core/scenery.js).
+  window.WosScenery?.attach({ device, homeInView: () => idx === HOME && !desks[idx]?.full, deskIdx: () => idx });
   if (LIVE) LIVE.refresh();
   $('#clock').textContent = window.WizConfig.hm();
   window.addEventListener('wizard:config', () => { const t = $('#homeTime'), c = $('#clock'), hm = window.WizConfig.hm(); if (t) t.textContent = hm; if (c) c.textContent = hm; });
@@ -3016,7 +3154,9 @@
     const sec = track.querySelector(`.win[data-win="${desks[idx].focus}"] [data-sec="${k}"]`);
     if (!sec) { if (tries > 0) setTimeout(() => showSection(k, tries - 1), 100); return; }
     if (!sec.classList.contains('open')) sec.querySelector('[data-sectoggle]')?.click();
-    track.querySelector(`.win[data-win="${desks[idx].focus}"] [data-sec="${k}"]`)?.scrollIntoView({ block: 'start' });
+    const target = track.querySelector(`.win[data-win="${desks[idx].focus}"] [data-sec="${k}"]`);
+    const scroller = target?.closest('.ch-scroll');
+    if (scroller) scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
   }
   window.WizCore.deeplink?.handle({
     // ?session= takes exactly the path the Android app's ACTION_THREAD intent takes.
@@ -3032,6 +3172,7 @@
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'system') return openApp(APP.system);
       if (v === 'settings' || v === 'usage') return openSettings();
+      if (v === 'skin') return openSettings('look');
       if (v === 'day' || v === 'week' || v === 'month') return openReview(v);
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); toast('◇', 'Files isn’t on this Wizard', 1800); return; }
       // work / chats: the Chats window, at the asked-for section.
@@ -3045,8 +3186,8 @@
       // A tapped link inside a window (a Chats thread) remembers where it came from.
       const srcId = srcEl && srcEl.closest ? srcEl.closest('.win')?.dataset.win : '';
       const opts = srcId && W[srcId] ? { from: fromOf(srcId) } : {};
-      const a = findApp(id) || APP[id]; if (a) return openApp(a, {}, opts);
-      Promise.resolve(window.WizCore.appsLoaded?.()).then(() => { const b = findApp(id) || APP[id]; if (b) openApp(b, {}, opts); });
+      const a = APP[id] || findApp(id); if (a) return openApp(a, {}, opts);
+      Promise.resolve(window.WizCore.appsLoaded?.()).then(() => { const b = APP[id] || findApp(id); if (b) openApp(b, {}, opts); });
     },
     video: item => { closeSheets(true); return CHATS.KIT.viewer.open([item]); },
     toast,

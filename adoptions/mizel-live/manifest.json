@@ -1,0 +1,47 @@
+{
+  "appId": "mizel",
+  "source": "/home/telos/apps/mizel-live",
+  "base_git_head": "215eee587cae70e3c105773698b29c42cdcf8a5b",
+  "exact_base_files": {
+    "web/app.js": "5d2253de1857cbcd6f6733ddbf6572f2f90c9ae04b4ec885a956ac426e3f5626",
+    "web/apple-touch-icon.png": "93fe4e7c6bd653a4217520ac4bbe003d9939eabe52ff8b334f864f4f4bcc507c",
+    "web/capture-worklet.js": "014db4c4e5eb7ac7d8ff19296f0561738cb8e9f0ba232e73f0da86b092a3f472",
+    "web/icon-192.png": "a1a0347984fbfcec379c69a7da9322593ef564682025b98ffaa921bf875c145d",
+    "web/icon-512.png": "107841329c3598260c473b97e6cc55641e646127aa4de05c2d21c9ae0e313f35",
+    "web/icon.svg": "4356864d68d7dfe09d3835db307ff8d69541b80fc425c75217a309eff57ed317",
+    "web/index.html": "81c47ce409d6321db4f2477ab929ff93290e2e90273a0ac019325779832a85ac",
+    "web/manifest.webmanifest": "e56e84aca517f85265093487fd67bd89fe7a6fa9a3996e04c4e94f199c7487ad",
+    "web/styles.css": "185d103024f67694407f4dba6d72f5415d6da4de3122dc22c53ee19c6e34e694",
+    "web/wizard-appearance.css": "219249b7746d63b92afaebbd1241e9efc71bd0f4ce984d4b56dbf4a7651f7c5e",
+    "web/wizard-appearance.js": "cb14e0aa22760958c66970abf06555c9e20ea3345d72041c8d432f7fae39bf33",
+    "web/wizard-style.css": "c94915a7385e681eb2ce9b3806bc65ea340383a86fc405ba28ee33f5900f3ea3"
+  },
+  "candidate_files": {
+    "web/app.js": "5cfe84d8ffa8259e89dd11ce239989908d0b14ae262477aaa65704735f135740",
+    "web/apple-touch-icon.png": "93fe4e7c6bd653a4217520ac4bbe003d9939eabe52ff8b334f864f4f4bcc507c",
+    "web/icon-192.png": "a1a0347984fbfcec379c69a7da9322593ef564682025b98ffaa921bf875c145d",
+    "web/icon-512.png": "107841329c3598260c473b97e6cc55641e646127aa4de05c2d21c9ae0e313f35",
+    "web/icon.svg": "4356864d68d7dfe09d3835db307ff8d69541b80fc425c75217a309eff57ed317",
+    "web/index.html": "b6af3d4a2fb3a81918fb9fd574c337e28de1baba8c3caf5a867b565b86f399e5",
+    "web/manifest.webmanifest": "e56e84aca517f85265093487fd67bd89fe7a6fa9a3996e04c4e94f199c7487ad",
+    "web/styles.css": "185d103024f67694407f4dba6d72f5415d6da4de3122dc22c53ee19c6e34e694",
+    "web/wizard-appearance.css": "219249b7746d63b92afaebbd1241e9efc71bd0f4ce984d4b56dbf4a7651f7c5e",
+    "web/wizard-appearance.js": "693db3495340fb598beb8eef233685aa7457eae2049ff0d6315f15a39c02e836",
+    "web/wizard-style.css": "c94915a7385e681eb2ce9b3806bc65ea340383a86fc405ba28ee33f5900f3ea3"
+  },
+  "modified": [
+    "web/app.js",
+    "web/capture-worklet.js",
+    "web/index.html",
+    "web/wizard-appearance.js"
+  ],
+  "deleted": [
+    "web/capture-worklet.js"
+  ],
+  "patch_sha256": "2f9325f0fbc5d2e96a39f2548ab57fbb31f27dd40a078a9b15b269e0798b6932",
+  "staged": "/home/telos/.hermes/cache/scratch/shared-app-services/other-apps/staged/mizel-live",
+  "deployed": false,
+  "backend_edited": false,
+  "capture_implementation": "WizardApp.capture only; PCM/native implemented solely in approved shared core",
+  "qa": "Exact candidate/core/native integration receipt: /Volumes/ThalesMedia/WizardApps/shared-services/integration/r8/evidence/receipt.json. Read receipt exits; no physical handset attached."
+}

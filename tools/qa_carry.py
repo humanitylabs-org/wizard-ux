@@ -336,7 +336,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         pg = page(lambda u: True, 20)
         pg.call('Fetch.enable', patterns=[{'urlPattern': 'https://legacy.wizard.example/*'}])
         served = []
-        pg.ev("(() => { const a = document.querySelector('a'); setTimeout(() => a && a.click(), 50); return !!a; })()")
+        # (0.9.10: the offline page is a native screen now; drive the same home load the old Retry link made.)
+        pg._send({'id': 899999, 'method': 'Page.navigate', 'params': {'url': 'https://wizard.tailc0f369.ts.net/wizard-os-home/'}})
         t0 = time.time(); pg.s.settimeout(1.0)
         while time.time() - t0 < 25:
             try: d = pg._recv()

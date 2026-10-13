@@ -90,7 +90,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function setSubject(w, k) { const c = ch(w.id); if (w.thread) chatsBack(w); c.subject = k || ''; rerenderList(w); return true; }
   function addFilter(w, f) { if (!f) return false; if (f.kind === 'subject') return setSubject(w, f.key); const c = ch(w.id); if (w.thread) chatsBack(w); c.filter = f.key; c.filterFrom = null; rerenderList(w); return true; }
-  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
+  function rerenderList(w) { const el = elOf(w.id); if (el && !w.thread) { ch(w.id).listPlace = null; renderChatList(w, el); const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; } }
   /* Back on a filtered list: search text first, then the most recent chip. */
   function clearFilter(w) {
     if (!w || w.thread) return false;
@@ -203,7 +203,7 @@ window.WizCore.chats = function createChats(H) {
   const PEND_LABEL = { sending: 'Sending…', queued: 'Sending…', waiting: 'Offline · will retry', starting: 'Starting…' };
   function workLabel(s) {
     if (s.pend && PEND_LABEL[s.pend]) return PEND_LABEL[s.pend];
-    return s.status === 'stopping' ? 'Stopping…' : s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working';
+    return s.status === 'stopping' ? 'Stopping…' : window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? 'Waiting on a helper' : 'Working');
   }
   /* ---- Drafts: unsent new chats (legacy newThreadDrafts.ts). The new-chat composer owns the 'new' slot;
    * "+" moves unsent words out of it into a saved 'new:<id>' slot, so a new chat always starts empty and
@@ -286,8 +286,29 @@ window.WizCore.chats = function createChats(H) {
       <h5>Status</h5><div class="ch-fopts">${Object.entries(STATUS).map(([k, f]) => opt('status', k, f.label, c.filter === k)).join('')}</div>
       ${sj.length ? `<h5>Subject</h5><div class="ch-fopts">${sj.map(k => opt('subject', k, k, c.subject === k)).join('')}</div>` : ''}</div></div>`;
   }
+  // The phone replaces the list with the thread. Keep a bounded return bookmark before
+  // that replacement, including nearby row anchors so Done or live updates above it
+  // can remove/reorder rows without moving the surviving row under James's eyes.
+  function listPlace(el) {
+    const sc = el?.querySelector('.ch-scroll'); if (!sc) return null;
+    const top = sc.scrollTop, edge = sc.getBoundingClientRect().top;
+    const rows = top > 0 ? [...sc.querySelectorAll('[data-chopen]')].filter(r => r.getBoundingClientRect().bottom > edge).slice(0, 8) : [];
+    return { top, rows: rows.map(r => ({ id: r.dataset.chopen, section: r.closest('[data-sec]')?.dataset.sec, y: r.getBoundingClientRect().top - edge })) };
+  }
+  function restoreListPlace(sc, place) {
+    if (!sc || !place) return;
+    sc.scrollTop = place.top;
+    const rows = [...sc.querySelectorAll('[data-chopen]')];
+    for (const anchor of place.rows) {
+      // Done can leave the same ID visible in expanded Archive. Follow a surviving
+      // neighbor in the original section, never the archived row to its new home.
+      const row = rows.find(r => r.dataset.chopen === anchor.id && r.closest('[data-sec]')?.dataset.sec === anchor.section);
+      if (row) { sc.scrollTop += row.getBoundingClientRect().top - sc.getBoundingClientRect().top - anchor.y; break; }
+    }
+  }
   function renderChatList(w, el) {
     if (!el) return;
+    ch(w.id).heldList = false;
     H.threadShown?.(w.id, null); // the list is showing: nothing is bound to this window
     const c = ch(w.id), n = norm(c.q);
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, SJ = c.subject || '';
@@ -343,7 +364,7 @@ window.WizCore.chats = function createChats(H) {
         ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
     }).join('');
     if (bs && LIVE.ok) body += BS.footer(bs);
-    const scroll = el.querySelector('.ch-scroll')?.scrollTop || 0;
+    const place = listPlace(el) || c.listPlace;
     // Results stream in while typing: keep the search box focused with the caret where it was.
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
@@ -352,8 +373,8 @@ window.WizCore.chats = function createChats(H) {
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
-    el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
-    const sc = el.querySelector('.ch-scroll'); if (sc) sc.scrollTop = scroll;
+    clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
+    restoreListPlace(el.querySelector('.ch-scroll'), place);
     PW?.paint(w.id, el);
     if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
   }
@@ -367,10 +388,10 @@ window.WizCore.chats = function createChats(H) {
   const fileKind = f => /^audio\//.test(f.mime || '') || /^wizard-voice-/.test(f.name || '') ? 'voice' : /^image\//.test(f.mime || '') ? 'image' : 'file';
   const fsize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
   const fileUrl = id => `/wizard/files/${encodeURIComponent(id)}/content`;
-  async function uploadFile(file) {
+  async function uploadFile(file, { signal } = {}) {
     if (file.size > MAX_BYTES) throw Object.assign(new Error('That file is larger than the 64 MB upload limit.'), { user: true });
     const r = await fetch('/wizard/files/upload', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
-      headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': file.name || 'upload', 'X-Wizard-Mime': file.type || 'application/octet-stream' }, body: file });
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': file.name || 'upload', 'X-Wizard-Mime': file.type || 'application/octet-stream' }, body: file, signal });
     if (!r.ok) throw Object.assign(new Error(r.status === 413 ? 'That file is too large for Wizard Files.' : `Wizard Files is unavailable (${r.status}).`), { status: r.status, user: true });
     const f = (await r.json()).file || {};
     if (!f.id) throw new Error('Wizard Files returned an invalid upload receipt.');
@@ -493,14 +514,14 @@ window.WizCore.chats = function createChats(H) {
     const from = n.from ? `From the \u201c${esc(n.from)}\u201d thread` : 'From another agent thread';
     return `<details class="msg agentnote" data-agentnote><summary><span class="an-ic">\u21aa</span><span class="an-from">${from}</span>${timeTag(n.at)}</summary><div class="an-body">${md(n.text)}</div></details>`;
   }
-  function turnHtml(c, tn, last, working) {
+  function turnHtml(c, tn, last, working, helperStatus) {
     let h = '';
     if (tn.u) h += `<div class="msg u"><div class="bub">${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += `<div class="msg laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(tn.later.at)}</div>`;
     const live = last && working;
     const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
-    const wk = PW ? PW.workHtml(c, tn, live) : null; // the work receipt (chat-work.js #17)
+    const wk = PW ? PW.workHtml(c, tn, live, helperStatus) : null; // the work receipt (chat-work.js #17)
     if (wk != null) h += wk;
     else if (tn.steps || tn.notes.length || live) {
       const label = live ? (tn.notes.length ? esc(clip(tn.notes[tn.notes.length - 1], 90)) : 'Working') : `Worked through ${tn.steps} step${tn.steps === 1 ? '' : 's'}`;
@@ -599,10 +620,13 @@ window.WizCore.chats = function createChats(H) {
   }
   async function loadApproval(w, s) {
     const c = ch(w.id);
+    const sid = w.thread, nav = c.readNav;
+    const current = () => W[w.id] === w && w.thread === sid && c.readNav === nav;
     if (!s || s.status !== 'waiting_for_approval' || !s.runId) { if (c.approval && !c.approval.resolved) c.approval = null; return false; }
     if (c.approval && c.approval.runId === s.runId && (c.approval.pending || c.approval.resolved || Date.now() - c.approval.at < 3000)) return false;
     try {
       const run = await LIVE.run(s.runId);
+      if (!current()) return false;
       const ap = KIT.normalizeApproval(run.approval);
       const prev = c.approval;
       c.approval = ap ? { ...ap, runId: s.runId, at: Date.now() } : (run.status === 'waiting_for_approval' ? null : prev?.resolved ? prev : null);
@@ -623,8 +647,50 @@ window.WizCore.chats = function createChats(H) {
    * wait while a finger is down on the messages or text is selected in them, and land once the selection clears. */
   // A selection holds updates for two minutes at most, so a forgotten one never freezes a working thread.
   const SEL = { down: null, at: 0, x: 0, y: 0, since: 0 }, SEL_MAX = 120000;
+  // Native scrolling cancels Pointer Events before the finger lifts. Touch Events retain ownership;
+  // scroll events keep the same nodes through inertia. Only background paints use these guards.
+  const TOUCH = new Map(), SCROLL_IDLE = 350;
+  let idleT = 0;
+  function scheduleHeld() { clearTimeout(idleT); idleT = setTimeout(flushHeld, SCROLL_IDLE); }
+  function readingIn(el) {
+    const g = ch(idOf(el)).reading;
+    if (!g || !g.node.isConnected || !el.contains(g.node)) return false;
+    // Recovery for a lost end event, not a 15-second deadline on a genuine slow drag.
+    if (g.touches.size && Date.now() - g.at < SEL_MAX) return true;
+    return Date.now() < g.until;
+  }
+  function readGuard(node) {
+    const c = ch(idOf(node));
+    if (!c.reading || c.reading.node !== node) c.reading = { node, touches: new Set(), at: 0, until: 0 };
+    return c.reading;
+  }
+  function clearReading(id) {
+    const g = CH[id]?.reading; if (!g) return;
+    for (const [key, owner] of TOUCH) if (owner === g) TOUCH.delete(key);
+    if (SEL.down === g.node) SEL.down = null;
+    delete CH[id].reading; // explicit navigation/remount must not retain a detached touch target
+  }
+  function resetReading() {
+    TOUCH.clear(); SEL.down = null;
+    for (const c of Object.values(CH)) if (c.reading) { c.reading.touches.clear(); c.reading.until = 0; }
+    scheduleHeld();
+  }
+  document.addEventListener('touchend', endTouches, { capture: true, passive: true });
+  document.addEventListener('touchcancel', endTouches, { capture: true, passive: true });
+  function endTouches(e) {
+    for (const t of e.changedTouches) {
+      const g = TOUCH.get(t.identifier); if (!g) continue;
+      g.touches.delete(t.identifier); g.until = Date.now() + SCROLL_IDLE; TOUCH.delete(t.identifier);
+    }
+    if (!TOUCH.size) SEL.down = null;
+    scheduleHeld();
+  }
+  document.addEventListener('visibilitychange', () => { resetReading(); });
+  window.addEventListener('pagehide', resetReading);
+  window.addEventListener('blur', resetReading);
   function selectingIn(el) {
-    if (SEL.down && el.contains(SEL.down) && Date.now() - SEL.at < 15000) return true;
+    if (readingIn(el)) return true;
+    if (SEL.down && el.contains(SEL.down) && Date.now() - SEL.at < SEL_MAX) return true;
     const s = window.getSelection?.(); if (!s || s.isCollapsed || !s.rangeCount) return false;
     if (SEL.since && Date.now() - SEL.since > SEL_MAX) return false;
     const n = s.anchorNode, e = n && (n.nodeType === 1 ? n : n.parentElement);
@@ -638,9 +704,16 @@ window.WizCore.chats = function createChats(H) {
   }
   function flushHeld() {
     for (const id of Object.keys(CH)) {
-      const c = CH[id], w = W[id]; if (!c.held || !w?.thread) continue;
-      const el = track.querySelector(`[data-chats="${id}"]`); if (!el) { c.held = false; continue; }
-      if (!selectingIn(el)) { c.held = false; renderThread(w, el); }
+      const c = CH[id], w = W[id]; if (!w || (!c.held && !c.heldList)) continue;
+      const el = elOf(id); if (!el) { c.held = c.heldList = false; continue; }
+      if (document.hidden) continue;
+      if (w.thread) {
+        c.heldList = false;
+        if (c.held && !selectingIn(el)) { c.held = false; renderThread(w, el); }
+      } else {
+        c.held = false;
+        if (c.heldList && !holdList(id)) renderChatList(w, el);
+      }
     }
   }
   let selT = 0;
@@ -649,12 +722,13 @@ window.WizCore.chats = function createChats(H) {
     if (!on) SEL.since = 0; else if (!SEL.since) SEL.since = Date.now();
     clearTimeout(selT); selT = setTimeout(flushHeld, 250);
   });
-  setInterval(() => { if (SEL.since && Date.now() - SEL.since > SEL_MAX) flushHeld(); }, 10000);
+  setInterval(flushHeld, 10000); // bounded recovery for lost touch/selection-end or an external sheet close
   const PAGE = 60;
   function renderThread(w, el, keep) {
+    ch(w.id).held = false; // explicit actions/navigation may repaint immediately
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
     const working = !!s && WORKING_ST.has(s.status);
-    const sub = isNew ? `Starts a new thread with ${window.WizConfig.agent()}` : s?.status === 'stopping' ? 'Stopping…' : working ? (s.waitingOn === 'helper' ? `A helper is finishing this for ${window.WizConfig.agent()}` : `${window.WizConfig.agent()} is working`) : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s?.deferred && !s.archived ? 'Deferred' : s?.archived ? 'Archived' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
+    const sub = isNew ? `Starts a new thread with ${window.WizConfig.agent()}` : s?.status === 'stopping' ? 'Stopping…' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${window.WizConfig.agent()}` : `${window.WizConfig.agent()} is working`)) : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s?.deferred && !s.archived ? 'Deferred' : s?.archived ? 'Archived' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
     const turns = c.loadedFor === w.thread ? c.turns || [] : null;
     c.media = []; c.texts = [];
     let msgs;
@@ -676,7 +750,7 @@ window.WizCore.chats = function createChats(H) {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);
           const div = dk && dk !== day ? `<div class="ch-day"><span>${esc(KIT.time.day(at))}</span></div>` : '';
           if (dk) day = dk;
-          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working);
+          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus);
         }).join('')
         + rns.splice(0).map(rnHtml).join('')
         + approvalHtml(c, s)
@@ -697,6 +771,7 @@ window.WizCore.chats = function createChats(H) {
     const chip = PW ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
+    clearReading(w.id);
     el.innerHTML = `<div class="ch-thread">
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
@@ -736,6 +811,18 @@ window.WizCore.chats = function createChats(H) {
   let lp = null, lpUntil = 0;
   // Long-press / swipe / right-click on rows, and paste-to-attach; bound to each shell's root in bind().
   function bindGestures(root) {
+    root.addEventListener('touchstart', e => {
+      const node = e.target.closest?.('.ch-msgs, .ch-scroll'); if (!node) return;
+      const g = readGuard(node); g.at = Date.now();
+      for (const t of e.changedTouches) { g.touches.add(t.identifier); TOUCH.set(t.identifier, g); }
+    }, { capture: true, passive: true });
+    root.addEventListener('touchmove', e => {
+      for (const t of e.changedTouches) { const g = TOUCH.get(t.identifier); if (g) g.at = Date.now(); }
+    }, { capture: true, passive: true });
+    root.addEventListener('scroll', e => {
+      if (!e.target.matches?.('.ch-msgs, .ch-scroll')) return;
+      const g = readGuard(e.target); g.until = Date.now() + SCROLL_IDLE; scheduleHeld();
+    }, { capture: true, passive: true });
     // A finger on the messages holds background re-renders (see selectingIn) until it lifts.
     root.addEventListener('pointerdown', e => { const m = e.target.closest?.('.ch-msgs'); if (m && e.button <= 0) Object.assign(SEL, { down: m, at: Date.now(), x: e.clientX, y: e.clientY }); }, true);
     const lift = () => { if (!SEL.down) return; SEL.down = null; clearTimeout(selT); selT = setTimeout(flushHeld, 350); };
@@ -751,7 +838,7 @@ window.WizCore.chats = function createChats(H) {
       }
       lift();
     }, true);
-    root.addEventListener('pointercancel', () => setTimeout(lift, 900), true);
+    root.addEventListener('pointercancel', e => { if (e.pointerType !== 'touch') lift(); }, true);
     root.addEventListener('pointerdown', e => {
       const row = e.target.closest('.ch-list [data-chopen]'); if (!row || e.button > 0) return;
       const wid = idOf(row);
@@ -809,8 +896,9 @@ window.WizCore.chats = function createChats(H) {
     if (w.thread) { renderThread(w, el); loadThread(w); } else renderChatList(w, el);
   }
   async function loadThread(w, force) {
-    const c = ch(w.id); if (!w.thread || w.thread === '__new__' || c.loading) return;
-    const s = LIVE.session(w.thread);
+    const c = ch(w.id), sid = w.thread, nav = c.readNav;
+    if (!sid || sid === '__new__' || (c.loading && c.loading.sid === sid && c.loading.nav === nav)) return;
+    const s = LIVE.session(sid);
     // Cache finished history while its session revision is unchanged. Its existing session poll remains live;
     // any new message/activity/status immediately invalidates this cache, with a 60 s safety re-read.
     // Working, approvals, failed reads and pending send/steer receipts keep their existing cadence.
@@ -824,10 +912,13 @@ window.WizCore.chats = function createChats(H) {
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
     if (fresh && !force) { if (c.loadedFor === w.thread && hk !== c.hk) { c.hk = hk; const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el); } return; }
-    c.loading = true;
+    // Every read owns a captured thread AND navigation generation. A -> B -> A is a new read;
+    // an old completion must neither publish into it nor release its loading lock.
+    const read = { sid, nav }; c.loading = read;
+    const current = () => W[w.id] === w && w.thread === sid && c.readNav === nav && c.loading === read;
     try {
-      const rows = await LIVE.messages(w.thread);
-      if (!W[w.id] || W[w.id].thread !== w.thread) return;
+      const rows = await LIVE.messages(sid);
+      if (!current()) return;
       const turns = toTurns(rows);
       const sig = JSON.stringify(turns.slice(-3));
       let changed = c.loadedFor !== w.thread || sig !== c.sig;
@@ -855,21 +946,25 @@ window.WizCore.chats = function createChats(H) {
         }
         if (gone) changed = true;
       }
-      if (await loadApproval(w, LIVE.session(w.thread))) changed = true;
+      if (await loadApproval(w, LIVE.session(sid))) changed = true;
+      if (!current()) return;
       const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId].join('|') : '';
       if (hk2 !== c.hk) { c.hk = hk2; changed = true; }
-      if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && W[w.id].thread === w.thread) renderLive(W[w.id], el); }
-    } catch (e) { c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now(); }
-    finally { c.loading = false; }
+      if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && current()) renderLive(w, el); }
+    } catch (e) { if (current()) { c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now(); } }
+    finally { if (c.loading === read) c.loading = false; }
   }
   /* Thread trail: a thread opened from a link inside another thread remembers where it came from, so Back,
    * Done and Defer step back to that thread instead of the list (James clicks through a summary thread's links,
    * reviews each one, taps Done, and lands back on the summary). Opening a thread any other way starts a fresh trail. */
   function openChat(wid, sid, opts = {}) {
     const w = W[wid]; if (!w) return;
+    if (!w.thread) { const place = listPlace(elOf(wid)); if (place) ch(wid).listPlace = place; }
     if (w.thread) saveDraft(wid);
     closeRowSheet();
     const c = ch(wid); c.approval = null;
+    c.readNav = (c.readNav || 0) + 1;
+    if (w.thread !== sid) H.threadShown?.(wid, null); // close the old preview immediately, even while the new thread loads
     if (opts.via === 'link' && w.thread && w.thread !== '__new__' && w.thread !== sid) c.trail = (c.trail || []).concat(w.thread).slice(-20);
     else if (!opts.keepTrail) c.trail = [];
     PW?.opened(wid, sid);
@@ -877,7 +972,7 @@ window.WizCore.chats = function createChats(H) {
     if (sid !== '__new__') LIVE.markSeen(sid);
     renderChats(w); applyLayout(deskOf(wid));
   }
-  function chatsBack(w) { if (w.thread) saveDraft(w.id); const c = ch(w.id); c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
+  function chatsBack(w) { if (w.thread) saveDraft(w.id); const c = ch(w.id); c.readNav = (c.readNav || 0) + 1; c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
   /* One step back from a thread: to the thread it was opened from (trail), else to the list. */
   function threadBack(w) {
     const c = ch(w.id), prev = (c.trail || []).pop();
@@ -890,7 +985,7 @@ window.WizCore.chats = function createChats(H) {
   const PHONE = () => (document.documentElement.dataset.shell || 'phone') !== 'desktop';
   function leaveAfterSend(wid, sid, isNew, how = '') {
     const w = W[wid]; if (!w || !sid || w.thread !== sid || !(isNew || PHONE())) return false;
-    const c = ch(wid); w.thread = null; save(); c.loadedFor = ''; c.draftFor = '';
+    const c = ch(wid); c.readNav = (c.readNav || 0) + 1; w.thread = null; save(); c.loadedFor = ''; c.draftFor = '';
     // No toast: the thread is already the top row of Working, its status following the message (Sending… →
     // Starting… → Working). A "Sent" banner over a row still saying "Sending…" contradicted it.
     return true;
@@ -977,7 +1072,7 @@ window.WizCore.chats = function createChats(H) {
     const dkey = isNew ? 'new' : 'direct:' + sid;
     if (here && !voice) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; }
     if (here) c.follow = true;
-    const nm = isNew && PW ? PW.newModel(c) : null; // a model picked for this new chat (#11)
+    const nm = opts.route || (isNew && PW ? PW.newModel(c) : null); // a model picked for this new chat (#11)
     if (nm) c.newModel = null;
     // Send and go (James, 10 Oct 2026): on the phone every send steps back to the thread list, a new thread
     // and a reply alike, so he never waits on the screen to watch it go. Keyed on the pinned thread: a thread
@@ -1030,6 +1125,14 @@ window.WizCore.chats = function createChats(H) {
   /* Clicks inside a Chats window. Returns true when it handled the click. */
   function click(e, id) {
     const w = H.win(id); if (!w) return false;
+    const hc = e.target.closest('[data-helper-continue]');
+    if (hc) {
+      if (hc.disabled) return true; hc.disabled=true; hc.textContent='Resuming…';
+      fetch(hc.dataset.preview ? '/wizard/preview/helper-continue' : '/wizard/helper-continue', {method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:w.thread})})
+        .then(async r=>{ if(!r.ok) throw new Error(r.status===409 ? 'Already active or no longer resumable' : 'Could not resume'); await LIVE.refresh(); toast('↻','Continuing the same request',1800); })
+        .catch(err=>{ hc.disabled=false; hc.textContent=hc.dataset.preview ? 'Try Continue · example only' : 'Continue'; toast('!',''+err.message,2600); });
+      return true;
+    }
     const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); H.toast('↻', 'Sending again', 1400); return true; }
     if (e.target.closest('[data-obretryall]')) { OUTBOX.retryAll(); H.toast('↻', 'Sending again', 1400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
@@ -1136,10 +1239,14 @@ window.WizCore.chats = function createChats(H) {
     ta.setSelectionRange(a + text.length, a + text.length); ch(id).draft = ta.value; saveDraft(id); growTa(ta); syncSend(ta.form, ch(id));
     return true;
   }
-  const forget = id => { delete CH[id]; };
+  const forget = id => { clearReading(id); delete CH[id]; };
   function justPressed() { return Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
-  const holdList = id => rowSheet?.wid === id || (!!lp && lp.wid === id) || !!PW?.holds(id);
+  const holdList = id => {
+    const el = elOf(id), hold = rowSheet?.wid === id || (!!lp && lp.wid === id) || !!PW?.holds(id) || (!!el && readingIn(el));
+    if (hold) ch(id).heldList = true;
+    return hold;
+  };
   // Back / Esc: the media viewer, then the actions sheet. Returns what it closed, or ''.
   function closeFilterSheet() { for (const id of Object.keys(CH)) { const c = CH[id]; if (c.sheet) { c.sheet = false; const w = H.win(id); if (w) rerenderList(w); return true; } } return false; }
   const closeOverlay = () => (closeFilterSheet() ? 'filter-sheet' : null) || (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
@@ -1160,7 +1267,7 @@ window.WizCore.chats = function createChats(H) {
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
-  return { CH, ch, click, bind, PW, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null), leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
 };

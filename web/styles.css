@@ -14,9 +14,11 @@ body {
   touch-action: none;
 }
 
-/* Device frame: full-bleed on phones, framed on desktop */
+/* Device frame: full-bleed on phones, framed on desktop.
+ * Clip without a scroll container: nested focus/scrollIntoView must never scroll
+ * the entire shell and lift its dock, leaving a blank band at the bottom. */
 .device {
-  position: relative; width: 100%; height: 100%; overflow: hidden;
+  position: relative; width: 100%; height: 100%; overflow: clip;
   background: radial-gradient(120% 70% at 50% 108%, #1a0b3d 0%, #0a0518 45%, var(--bg) 75%);
   isolation: isolate;
 }
@@ -55,7 +57,9 @@ body {
 @media (min-width: 560px) and (min-height: 700px) { .statusbar { padding-top: 16px; display: flex !important; } :root { --sb: 34px; } }
 
 /* Desks */
-.desks { position: absolute; inset: 0; z-index: 1; overflow: hidden; }
+/* Desks move through track transforms, never ancestor scrolling. Browser focus inside
+ * an embedded Store detail must not horizontally scroll this hidden viewport. */
+.desks { position: absolute; inset: 0; z-index: 1; overflow: clip; }
 .track { position: absolute; inset: 0; display: flex; will-change: transform; }
 .track.anim { transition: transform 520ms var(--ease); }
 .desk {
@@ -274,9 +278,12 @@ body {
 @keyframes shock { from { opacity: .9; transform: scale(.9); } to { opacity: 0; transform: scale(2.3); } }
 .orb-wrap.dragging .orb { transition: none; }
 .moons { position: absolute; inset: -18px; pointer-events: none; animation: spin 24s linear infinite; }
-/* Foreground resting motion: keep the sky and blurred ornaments still.
+/* Foreground resting motion: the sky moves only while core/scenery.js says Home is live (.scenery-live: Home in
+ * front, nothing over it, page visible, touched in the last 45 s) and the skin is Nebula (other skins hide the sky).
+ * Everywhere else the drift is paused where it is, so the frozen sky never jumps.
  * Desk slides, voice feedback and Working indicators retain their own motion. */
-.device .nebula i { animation: none; }
+.device:not(.scenery-live) .nebula i, html:not([data-skin="nebula"]) .nebula i { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .device .nebula i { animation: none; } }
 .device .orb-wrap:is([data-mode="idle"], [data-mode="type"], [data-mode="paused"]) .orb-halo,
 .device .orb-wrap:is([data-mode="idle"], [data-mode="type"], [data-mode="paused"]) .orb-ring::before,
 .device .orb-wrap:is([data-mode="idle"], [data-mode="type"], [data-mode="paused"]) .orb-ring::after,
@@ -647,6 +654,34 @@ body {
 .coach p { bottom: 160px; }
 .coach-go { bottom: 330px; }
 
+/* Dock morph: four buttons flank the unchanged orb; its gesture hit zone stays untouched.
+ * All chrome lives inside the existing 66px bar, including timer / first-use tip. */
+.device:not(.orb-corner) .voice .arc {
+  bottom: calc(var(--safe-b) + 38px); width: 44px; height: 44px;
+  margin: 0 0 -22px -22px; backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: none; background: rgba(25, 15, 49, .9); transform: scale(.6);
+}
+.device:not(.orb-corner) .voice.on .arc-left { transform: translate(-124px, 0) scale(1); }
+.device:not(.orb-corner) .voice.on .arc-mid { transform: translate(-66px, 0) scale(1); }
+.device:not(.orb-corner) .voice.on .arc-screen { transform: translate(66px, 0) scale(1); }
+.device:not(.orb-corner) .voice.on .arc-right { transform: translate(124px, 0) scale(1); }
+.device:not(.orb-corner)[data-voice="paused"] .voice .arc-mid { background: rgba(255,190,85,.18); border-color: rgba(255,190,85,.5); color: var(--amber); }
+.device:not(.orb-corner) .voice .arc small { display: none; }
+.device:is([data-voice="listen"], [data-voice="paused"]) .desk-dots { opacity: 0; pointer-events: none; }
+.device:not(.orb-corner) .timer { top: 44px; min-width: 0; font-size: 10px; line-height: 12px; padding: 0; border: 0; background: none; }
+.device:not(.orb-corner) .timer::before { width: 4px; height: 4px; margin-right: 4px; }
+.device:not(.orb-corner):is([data-voice="listen"], [data-voice="paused"]) .scrub { pointer-events: none; opacity: 0; }
+.device:not(.orb-corner) .voice.on .transcript.brief.tip { bottom: calc(var(--safe-b) + 2px); padding: 0; border: 0; background: none; box-shadow: none; backdrop-filter: none; }
+.device:not(.orb-corner) .voice.on .transcript.brief.tip .tx-route { font-size: 10px; }
+.device:not(.orb-corner) .voice.on .transcript.brief.tip .tx-route b { display: none; }
+.device:not(.orb-corner):has(.voice.on .transcript.brief.tip) .timer { opacity: 0; }
+/* Full-screen Chats keeps its established corner orb. The extra chip joins that fan. */
+.device.orb-corner .arc-screen { display: none; }
+.arc-screen.busy svg { opacity: .4; }
+.arc:disabled { pointer-events: none !important; }
+/* Capture app pixels without recorder controls or transient shell notices in the picture. */
+.device.capturing-screen :is(#voice, #dock, #toast, #deskLabel) { visibility: hidden !important; }
+
 /* ---------- Mizel.ai recordings: shade source + strip on the Mizel desk ---------- */
 .note .ic.rec { background: rgba(63, 224, 255, .14); color: #3fe0ff; font-size: 18px; box-shadow: inset 0 0 0 1px rgba(63, 224, 255, .35); }
 .note .tp .src.mizel { color: #3fe0ff; }
@@ -887,8 +922,14 @@ body {
 .cx-err { margin-top: 6px; font-size: 12.5px; color: #ffbe55; }
 .cx-row .ub-a button[disabled] { opacity: .6; }
 
-/* Home: "Your system" entry (opens the System app) */
-.sys-card .sys-glyph { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; font-size: 17px; color: #fff;
-  background: linear-gradient(140deg, #3fe0ff, #8f63ff); box-shadow: 0 6px 18px rgba(63, 224, 255, .28); }
-.sys-card .side-go { flex: 0 0 auto; padding: 7px 14px; border-radius: 99px; background: rgba(63, 224, 255, .14); color: var(--cyan); font-size: 13px; font-weight: 700; }
-.sys-card { margin-top: 9px; }
+/* Home utility shortcuts stay quiet beside Settings, away from attention cards. */
+.home .home-top { padding-top: 40px; } /* reserve the 44px shortcut row, including long dates on narrow phones */
+.home-tools { position: absolute; z-index: 5; top: calc(var(--sb) + var(--safe-t) + 8px); right: 12px; display: flex; align-items: center; gap: 6px; }
+.home-tools .gear { position: relative; top: auto; right: auto; width: 44px; height: 44px; }
+.home-system { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: transparent; border: 1px solid var(--line); color: var(--ink-3); }
+.home-system svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.home-system:active { transform: scale(.94); }
+.home-tools button:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
+@media (hover: hover) { .home-system:hover { color: var(--ink); border-color: var(--violet-2); } }
+.device.wx-on .home-tools { top: calc(var(--sb) + var(--safe-t) + 42px); }
+.device.wx-on .home-tools .gear { top: auto; }

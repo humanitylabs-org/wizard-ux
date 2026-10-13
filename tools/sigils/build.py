@@ -50,6 +50,7 @@ HOUSE = {
     'trackhunt':     ('track',    128, None),
     'android-apps':  ('android',  150, None),
     'topics':        ('eye',      178, None),
+    'messenger':     ('chats',    191, None),
     'wizard-signal': ('signal',   205, None),
     'meditation':    ('meditate', 218, None),
     'files':         ('files',    232, None),

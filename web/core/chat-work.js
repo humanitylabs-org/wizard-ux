@@ -74,8 +74,14 @@
     } else {
       label = [fin(r.worked) && r.worked >= 1000 ? `Worked for ${dur(r.worked)}` : 'Worked', progress, r.count ? `${r.count} step${r.count === 1 ? '' : 's'}` : '', r.question?.state === 'unanswered' ? 'question left open' : ''].filter(Boolean).join(' · ');
     }
+    const helper = live ? helperLabel(o.helperStatus, o.now) : '';
+    if (helper) label = helper;
     const icon = live ? '<i class="dots"><b></b><b></b><b></b></i>' : '◇';
     let body = '';
+    if (helper) {
+      const hs = o.helperStatus;
+      body += `<div class="wk-helper ${esc(hs.phase)}" role="status"><b>${esc(helper)}</b><small>${esc(helperDetail(hs))}</small>${hs.resumeEligible ? `<button type="button" data-helper-continue ${hs.preview ? 'data-preview="1"' : ''}>${hs.preview ? 'Try Continue · example only' : 'Continue'}</button>` : ''}${hs.preview ? '<small>Illustrative example · live tasks are unchanged.</small>' : ''}</div>`;
+    }
     if (r.question) {
       const q = r.question, head = q.state === 'answered' ? 'You answered' : q.state === 'unanswered' ? 'No answer recorded' : 'Waiting on you';
       body += `<div class="wk-q ${q.state}" role="group" aria-label="${esc(head)}"><b>${esc(head)}</b><p>${esc(q.text)}</p>`
@@ -92,5 +98,19 @@
     if (notes.length) body += notes.map(x => `<div class="note-line">${md(x)}</div>`).join('');
     return `<details class="steps wk${live ? ' live' : ''}${waiting ? ' asks' : ''}" data-wk="${esc(o.key)}"${open ? ' open' : ''}><summary>${icon} <span class="wk-l">${esc(label)}</span>${waiting ? '<em class="wk-dot" aria-hidden="true"></em>' : ''}</summary>${body}</details>`;
   }
-  window.WosWork = { analyse, html, dur };
+  function helperLabel(h, now = Date.now()) {
+    if (!h || !['running','integrating','waiting','stalled','held','uncertain'].includes(h.phase)) return '';
+    const age = dur(Math.max(0, now - Number(h.since) * 1000));
+    const labels = { running: `Waiting on ${Math.max(1, Number(h.pending) || 1)} helper${Number(h.pending) === 1 ? '' : 's'}`, integrating: 'Helpers returned · finishing your answer', waiting: 'Helpers returned · waiting to resume', stalled: 'Stuck · helpers returned, no agent running', held: 'Waiting on your decision · helpers tracked', uncertain: 'Helper status needs checking' };
+    return labels[h.phase] + (age ? ` · ${age}` : '');
+  }
+  function helperDetail(h) {
+    if (h.phase === 'running') return (h.returned ? `${h.returned} helper${h.returned === 1 ? '' : 's'} returned. ` : '') + 'Still waiting for the remaining results; returned results are not a finished task.';
+    if (h.phase === 'integrating') return 'The main agent is active: checking the results and completing your request.';
+    if (h.phase === 'waiting') return 'Results are saved. Automatic continuation has not started yet.';
+    if (h.phase === 'stalled') return h.resumeEligible ? 'Results are saved. Continue resumes the same request.' : 'Results are saved; recovery eligibility needs checking.';
+    if (h.phase === 'held') return 'Your existing decision stays in control. Helpers do not bypass it.';
+    return 'The last receipt is too old to claim this work is still running.';
+  }
+  window.WosWork = { analyse, html, dur, helperLabel, helperDetail };
 })();

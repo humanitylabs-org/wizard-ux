@@ -7,6 +7,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#05030c">
+  <script src="core/scenery.js"></script>
+  <script src="core/skins.js"></script>
   <meta name="mobile-web-app-capable" content="yes">
   <title>Wizard OS</title>
   <link rel="manifest" href="manifest.webmanifest">
@@ -27,6 +29,7 @@
   <link rel="stylesheet" href="usuals.css">
   <link rel="stylesheet" href="core/desks.css">
   <link rel="stylesheet" href="core/tour.css">
+  <link rel="stylesheet" href="core/skins.css">
 </head>
 <body>
   <div id="device" class="device">
@@ -59,6 +62,7 @@
       </div>
       <button id="arcCancel" class="arc arc-left" aria-label="Cancel recording"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg><small>Cancel</small></button>
       <button id="arcPause" class="arc arc-mid" aria-label="Pause recording"><svg viewBox="0 0 24 24" class="i-pause"><path d="M8 5v14M16 5v14"/></svg><svg viewBox="0 0 24 24" class="i-play"><path d="M7 5l12 7-12 7z"/></svg><small>Pause</small></button>
+      <button id="arcScreen" class="arc arc-screen" aria-label="Attach screenshot of the current screen" title="Screenshot"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="12" cy="12" r="3"/><path d="M8 5l1-2h6l1 2"/></svg><small>Screenshot</small></button>
       <button id="arcAttach" class="arc arc-right" aria-label="Attach a photo or file to this message"><svg viewBox="0 0 24 24"><path d="M21 11.5 12.6 19.9a5.3 5.3 0 0 1-7.5-7.5l8.4-8.4a3.5 3.5 0 0 1 5 5l-8.4 8.4a1.8 1.8 0 0 1-2.5-2.5l7.7-7.7"/></svg><i id="attachCount" class="arc-count"></i><small id="attachLabel">Attach</small></button>
     </div>
 
@@ -114,6 +118,8 @@
   <script src="core/sigils.js"></script>
   <script src="core/apps.js"></script>
   <script src="core/appearance-host.js"></script>
+  <script src="core/app-capture.js"></script>
+  <script src="core/app-services.js"></script>
   <script src="data.js"></script>
   <script src="summaries.js"></script>
   <script src="live.js"></script>
@@ -132,6 +138,7 @@
   <script src="core/voice-status.js"></script>
   <script src="core/cancelled.js"></script>
   <script src="core/screen-text.js"></script>
+  <script src="core/screen-capture.js"></script>
   <script src="core/sel-menu.js"></script>
   <script src="core/links.js"></script>
   <script src="core/bridge.js"></script>

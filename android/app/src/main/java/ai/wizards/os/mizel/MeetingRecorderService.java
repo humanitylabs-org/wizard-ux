@@ -85,6 +85,8 @@ public class MeetingRecorderService extends Service {
     static String canStart(Context c) {
         if (c.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
             return MizelProtocol.E_MIC_PERMISSION;
+        // DeviceBridge's foreground voice/task recorder does not use the side-button MicOwner lease.
+        if (ai.wizards.os.recording.RecorderService.active() != null) return MizelProtocol.E_MIC_BUSY;
         String h = MicOwner.holder();
         if (h != null && !MicOwner.MEETING.equals(h)) {
             Log.i(TAG, "start refused: mic held by " + h);
@@ -202,7 +204,8 @@ public class MeetingRecorderService extends Service {
             MizelHub.done(req, same ? null : MizelProtocol.E_BUSY_OTHER);
             return;
         }
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { refuseStart(req, MizelProtocol.E_MIC_PERMISSION); return; }
+        String admission = canStart(this); // Recheck after the asynchronous service-start hop.
+        if (admission != null) { refuseStart(req, admission); return; }
         if (!MicOwner.tryAcquire(MicOwner.MEETING)) {
             Log.i(TAG, "start refused: mic held by " + MicOwner.holder());
             toast(MicOwner.reason(MicOwner.MEETING));
