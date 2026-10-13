@@ -722,10 +722,45 @@
   // Right ⌘ / Right ⌥ as tap keys: press and release alone, quickly (a chord like ⌘C never counts).
   // Inside Wizard for Mac the native app owns these keys system-wide and sends wizard:orb, so the page stands down.
   const NATIVE_KEYS = !!window.webkit?.messageHandlers?.wizardNative;
+  const HOTKEY_STORE = 'wux.hotkeys.v1';
+  const hotkeyDefaults = () => ({ AltRight: false, MetaRight: true });
+  function readHotkeys(raw) {
+    const prefs = hotkeyDefaults();
+    try { const saved = JSON.parse(raw); for (const key of Object.keys(prefs)) if (typeof saved?.[key] === 'boolean') prefs[key] = saved[key]; } catch (_) {}
+    return prefs;
+  }
+  var hotkeys = hotkeyDefaults();
+  try { hotkeys = readHotkeys(localStorage.getItem(HOTKEY_STORE)); } catch (_) {}
   let tapKey = null, tapAt = 0, tapChord = false;
+  function paintHotkeys() {
+    // Native global keys belong to the Mac app; PWA controls never claim to change them.
+    $('#hotkeySwitches').hidden = NATIVE_KEYS;
+    for (const button of $$('[data-hotkey]')) {
+      const code = button.dataset.hotkey, name = code === 'AltRight' ? 'Right Option dictation' : 'Right Command talk';
+      const enabled = hotkeys[code];
+      button.setAttribute('aria-pressed', String(enabled));
+      button.title = `${name}: ${enabled ? 'on · click to pause' : 'off · click to enable'} (Wizard only)`;
+      button.setAttribute('aria-label', button.title);
+    }
+    mic.title = hotkeys.MetaRight ? 'Talk to Wizard (tap Right ⌘)' : 'Talk to Wizard (keyboard shortcut paused)';
+  }
+  $('#hotkeySwitches').addEventListener('pointerdown', e => e.preventDefault()); // keep the dictation cursor
+  $('#hotkeySwitches').addEventListener('click', e => {
+    const button = e.target.closest('[data-hotkey]'); if (!button || NATIVE_KEYS) return;
+    const code = button.dataset.hotkey; hotkeys[code] = !hotkeys[code]; tapKey = null;
+    try { localStorage.setItem(HOTKEY_STORE, JSON.stringify(hotkeys)); }
+    catch (_) { toast('⌥', 'Changed for this window · browser could not save the preference', 2400); }
+    paintHotkeys();
+  });
+  addEventListener('storage', e => {
+    if (e.key !== HOTKEY_STORE && e.key !== null) return;
+    hotkeys = readHotkeys(e.newValue); tapKey = null; paintHotkeys();
+  });
+  $('#voiceAct').addEventListener('click', () => vMode === 'dictate' ? dictate() : talk());
+  paintHotkeys();
   addEventListener('keydown', e => {
     if (NATIVE_KEYS) return;
-    if ((e.code === 'MetaRight' || e.code === 'AltRight') && !e.repeat) {
+    if ((e.code === 'MetaRight' || e.code === 'AltRight') && hotkeys[e.code] && !e.repeat) {
       const others = (e.code === 'MetaRight' ? e.altKey : e.metaKey) || e.ctrlKey || e.shiftKey;
       tapKey = e.code; tapAt = performance.now(); tapChord = others; return;
     }

@@ -28,10 +28,14 @@
       <button id="clock" class="clock" title="Home"></button>
       <div id="voicePill" class="voice-pill" hidden>
         <i class="rec-dot"></i><span id="voiceTime">0:00</span><span class="lvl"><b id="voiceLvl"></b></span>
-        <span id="voiceText">Listening</span><kbd id="voiceKey">Right ⌘</kbd><small id="voiceAct">send</small><button id="voiceCancel" type="button">Cancel</button>
+        <span id="voiceText">Listening</span><kbd id="voiceKey">Right ⌘</kbd><button id="voiceAct" type="button">Send</button><button id="voiceCancel" type="button">Cancel</button>
       </div>
     </div>
     <div class="bar-r">
+      <div id="hotkeySwitches" class="hotkey-switches" role="group" aria-label="Wizard voice hotkeys">
+        <button type="button" class="hotkey-switch" data-hotkey="AltRight" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M12 5v14M8 19h8"/></svg><span>⌥</span></button>
+        <button type="button" class="hotkey-switch" data-hotkey="MetaRight" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg><span>⌘</span></button>
+      </div>
       <button id="micBtn" class="mic" title="Talk to Wizard (tap Right ⌘)" aria-label="Talk to Wizard"><svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg></button>
       <button id="status" class="status" title="Inbox (⌥I)" aria-label="Inbox"></button>
       <button id="keysBtn" class="keys-btn" title="Keyboard shortcuts (⌥/)">⌥/</button>
