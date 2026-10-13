@@ -930,9 +930,9 @@
       if (section) show();
     },
     app(id) {
-      const a = findApp(id) || APP[id]; if (a) return openApp(a);
+      const a = APP[id] || findApp(id); if (a) return openApp(a);
       // Cold launch: the registered app list may still be loading. The same deep link must work in either shell.
-      Promise.resolve(C.appsLoaded?.()).then(() => { const b = findApp(id) || APP[id]; if (b) openApp(b); });
+      Promise.resolve(C.appsLoaded?.()).then(() => { const b = APP[id] || findApp(id); if (b) openApp(b); });
     },
     video: item => CHATS.KIT.viewer.open([item]),
     toast,
