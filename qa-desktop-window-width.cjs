@@ -1,5 +1,5 @@
 // Remote-safe desktop width QA: real API reads; all writes intercepted; no agent sends.
-// Usage: PLAYWRIGHT_PATH=<package> QA_OUT=<dir> [QA_WEB_DIR=<repo>] node <suite> <base-url>
+// Usage: PLAYWRIGHT_PATH=<package> QA_OUT=<dir> QA_EXPECTED_WEB_DIR=<repo> [QA_WEB_DIR=<override>] node <suite> <base-url>
 const fs = require('fs'), path = require('path'), os = require('os'), crypto = require('crypto');
 let pw; for (const m of [process.env.PLAYWRIGHT_PATH, 'playwright', 'playwright-core'].filter(Boolean)) { try { pw = require(m); break; } catch {} }
 if (!pw) throw Error('Set PLAYWRIGHT_PATH to Playwright');
@@ -37,6 +37,11 @@ const near = (a, b) => Math.abs(a - b) < 1.1;
   }
  });
  const p = await ctx.newPage(); p.on('pageerror', e => errors.push(String(e)));
+ const hashes = {}, hashReads = [];
+ p.on('response', response => {
+  const file = new URL(response.url()).pathname.match(/^\/wizard-os-home\/(desktop\/desktop\.(?:js|css))$/)?.[1];
+  if (file && response.ok()) hashReads.push(response.body().then(body => { hashes[file] = crypto.createHash('sha256').update(body).digest('hex'); }));
+ });
  const wait = () => p.waitForTimeout(400);
  const boot = () => p.waitForFunction(() => window.__wux?.live?.ok, null, { timeout: 45000 });
  const geometry = () => p.evaluate(() => {
@@ -106,8 +111,13 @@ const near = (a, b) => Math.abs(a - b) < 1.1;
  const url = p.url(); await p.keyboard.press('Escape'); await p.evaluate(() => history.back()); await wait();
  const afterBack = { url: p.url(), before: url, app: await p.evaluate(() => !!window.__wux), windows: await p.evaluate(() => window.__wux?.ws[0]?.wins.length), log: await p.evaluate(() => window.__wux?.log) };
  ok(new URL(p.url()).pathname === new URL(url).pathname && new URL(p.url()).origin === new URL(url).origin && afterBack.app && afterBack.windows === 1, 'root Back keeps Wizard open', afterBack);
- const hashes = {};
- for (const file of ['desktop/desktop.js', 'desktop/desktop.css']) { const response = await p.request.get(new URL(file, p.url()).href); hashes[file] = crypto.createHash('sha256').update(await response.body()).digest('hex'); }
+ await Promise.all(hashReads);
+ const expectedRoot = process.env.QA_EXPECTED_WEB_DIR || process.env.QA_WEB_DIR;
+ if (!expectedRoot) throw Error('Set QA_EXPECTED_WEB_DIR for served-preview provenance');
+ for (const file of ['desktop/desktop.js', 'desktop/desktop.css']) {
+  const expected = crypto.createHash('sha256').update(fs.readFileSync(path.join(expectedRoot, 'web', file))).digest('hex');
+  ok(hashes[file] === expected, 'browser-loaded source hash matches ' + file, { loaded: hashes[file], expected });
+ }
  ok(errors.length === 0, 'zero page errors', errors);
  ok(!writes.some(q => /\/v1\/runs|\/api\/sessions$/.test(q.path)), 'zero agent sends', writes);
  await ctx.close();
