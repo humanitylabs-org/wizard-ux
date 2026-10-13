@@ -22,7 +22,7 @@ Browser tabs retain browser-owned Command-N/T/W. Website JavaScript/`preventDefa
 
 Fresh state starts with one desktop. Nine-slot legacy state is migrated once by preserving occupied desktops and the active desktop while removing unused slots. Deliberately created empty desktops subsequently persist. Stable IDs preserve hosted app DOM/state as closing a desktop renumbers the tab strip. App composers save before close; recorded replies keep their original thread even if their source app closes.
 
-The candidate integrates current daily 223ee73, including other owners' microphone recovery and single-app fullscreen fixes. The fullscreen regression was adapted to create its second desktop on demand; all fullscreen behavior is retained.
+The candidate integrates daily e7a4ec7, including other owners' microphone recovery, single-app fullscreen and paused PWA Right Option ownership fixes. PWA Right Option remains unconsumed for the system voice tool; manual Dictate still supplies focused dictation-state tests. The fullscreen regression was adapted to create its second desktop on demand; all fullscreen behavior is retained.
 
 ## Evidence — Thales only
 
@@ -32,7 +32,8 @@ Exact served staging origin: https://desktop-keys.staging.wizard001.com/wizard-o
 - New-chat/new-voice regression: 26 passed.
 - Command-W regression: 13 passed.
 - Existing single-app/hosted fullscreen regression: 22 passed, zero agent sends.
-- Wizard for Mac 0.5.2 actual AppKit event loop/native menu acceptance: 20 passed. Covers all requested keys, empty/root close behavior, autorepeat, new voice audio enqueued once. Generated test tone through actual MediaRecorder; hardware microphone/keyboard testing is not claimed. Native defaults restored with exact semantic readback.
+- Paused PWA Right Option/system-tool ownership regression: 7 passed, zero writes.
+- Wizard for Mac 0.5.2 actual AppKit event loop/native menu acceptance: 22 passed, including first-open preview destination and preservation of saved Wizards. Covers all requested keys, empty/root close behavior, autorepeat, new voice audio enqueued once. Generated test tone through actual MediaRecorder; hardware microphone/keyboard testing is not claimed. Native defaults restored with exact semantic readback.
 
 All QA writes were intercepted/refused or mocked at the outbox. Four `/wizard/thread-seen` attempts were blocked in lifecycle QA; no live messages were sent. Scripts/receipts and built DMG live under `/Volumes/ThalesMedia/Projects/wizard-desktop/dynamic-keys/` on Thales. The current DMG SHA is recorded in the release receipt, not duplicated here before final publication.
 
