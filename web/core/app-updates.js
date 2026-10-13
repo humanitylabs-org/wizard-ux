@@ -20,6 +20,7 @@
       button.addEventListener('click', () => {
         if (busy()) { label.textContent = 'Finish recording or save your work first'; return; }
         for (const el of document.querySelectorAll('[data-compose]')) el.dispatchEvent(new Event('input', { bubbles: true }));
+        window.WizAppReadingPosition?.flush();
         location.reload();
       });
       banner.append(label, button); document.body.appendChild(banner);

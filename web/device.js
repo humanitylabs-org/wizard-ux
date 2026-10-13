@@ -432,7 +432,7 @@
     el.classList.toggle('open', !!list);
     el.innerHTML = `<div class="dv-wtop">${changes.length ? '' : '<span class="dv-ui">✦</span>'}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}<button data-web="go">Reload</button></div>${list}`;
   }
-  function reloadNow(why) { if (webBusy()) { toast('◌', 'Finish recording or save your work first', 2000); return; } saveDrafts(); log('web:reload', why); window.__wosReloading = why; location.reload(); }
+  function reloadNow(why) { if (webBusy()) { toast('◌', 'Finish recording or save your work first', 2000); return; } saveDrafts(); window.WizAppReadingPosition?.flush(); log('web:reload', why); window.__wosReloading = why; location.reload(); }
 
   /* ================= wiring ================= */
   const api = window.WosDevice = {
