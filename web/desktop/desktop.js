@@ -66,7 +66,7 @@
     viewContext: (id, how) => viewContext(id, how),
     visible: () => ws[cur].wins,
     editUnsent: it => editUnsent(it),
-    newChatHint: `Type below and press ${CMD}Enter, or press ${MOD}V and talk.`,
+    newChatHint: `Type below and press ${CMD}Enter, or press ${MOD}⇧V for a new voice chat.`,
     owner: id => String(id).replace(/::list$/, ''),
     // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
@@ -500,7 +500,8 @@
     return [
       { kind: 'cmd', name: 'Get apps', icon: '+', run: () => openApp(APP['app-store']) },
       { kind: 'cmd', name: 'Your system', icon: '◈', run: () => openApp(APP.system) },
-      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}Enter`, run: () => newChat() },
+      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${CMD}N / ${MOD}Enter`, run: () => newChat({ fresh: true }) },
+      { kind: 'cmd', name: 'New voice chat', icon: '🎙', keys: `${CMD}⇧N / ${MOD}⇧V`, run: () => talkNew() },
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
       { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
       { kind: 'cmd', name: 'Inbox', icon: '⬇', keys: `${MOD}I`, run: () => openInbox() },
@@ -642,7 +643,7 @@
 
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
-    ['Launch', [[`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send, Esc to cancel)`], ['Right ⌥ (paused)', 'Wizard PWA dictation is paused; your system voice tool keeps this key']]],
+    ['Launch', [[`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${CMD}N  or  ${MOD}Enter`, 'New chat'], [`${CMD}⇧N  or  ${MOD}⇧V`, 'New voice chat (press again to send)'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send; Cancel discards)`], ['Right ⌥ (paused)', 'Wizard PWA dictation is paused; your system voice tool keeps this key']]],
     ['Workspaces', [[`${MOD}1 … ${MOD}9`, 'Go to workspace'], [`⇧${MOD}1 … 9`, 'Send window to workspace'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
     ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`⌘W / ${MOD}W`, 'Close app']]],
     ['Chats', [[`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list'], ['↑ ↓  or  j k', 'Previous / next chat (in the list)'], [`⇧${MOD}J  ⇧${MOD}K`, 'Next / previous chat (anywhere)'], ['/', 'Search chats and messages'], [`${MOD},`, 'Settings']]],
@@ -658,14 +659,14 @@
    * otherwise starts a new thread. Audio goes through the durable outbox: transcribed there,
    * kept as a voice note, retried if the network drops. */
   const pill = $('#voicePill'), mic = $('#micBtn');
-  let vTarget = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null;
+  let vTarget = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${CMD}⇧N`;
   const VOICE = C.voice({
     onState: st => {
       pill.hidden = st === 'idle'; pill.classList.toggle('think', st === 'think'); mic.classList.toggle('on', st !== 'idle');
       CHATS.PW?.paintMic(st === 'listen' && !!vReply, vReply?.sid || '');
       $('#clock').hidden = st !== 'idle';
       pill.classList.toggle('dict', vMode === 'dictate');
-      $('#voiceKey').textContent = vMode === 'dictate' ? 'Right ⌥' : 'Right ⌘';
+      $('#voiceKey').textContent = vMode === 'dictate' ? 'Right ⌥' : vNewChat ? vNewKey : 'Right ⌘';
       $('#voiceAct').textContent = vMode === 'dictate' ? 'insert' : 'send';
       $('#voiceText').textContent = vMode === 'dictate' ? (st === 'think' ? 'Transcribing…' : 'Dictating')
         : st === 'think' ? 'Sending…' : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
@@ -674,14 +675,22 @@
     },
     onLevel: l => { $('#voiceLvl').style.width = Math.round(l * 100) + '%'; },
   });
-  async function talk(action = 'toggle') {
+  // A separate chord always starts a new thread, even with an existing thread focused.
+  // Never retarget an in-flight reply/dictation or discard it when the new-voice chord is pressed.
+  function talkNew(key = `${CMD}⇧N`) {
+    if (VOICE.state === 'idle') return talk('start', true, key);
+    if (VOICE.state === 'listen' && vMode === 'talk' && vNewChat) return talk('send');
+    toast('🎙', 'Finish the current recording before starting a new voice chat', 2400);
+    return 'busy';
+  }
+  async function talk(action = 'toggle', forceNew = false, newKey = `${CMD}⇧N`) {
     if (VOICE.state === 'think') return 'busy';
     if (action === 'cancel') { if (VOICE.state !== 'idle') { vReply = null; VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
     if (VOICE.state === 'idle') {
       if (action === 'send') return 'none';
-      vMode = 'talk'; vReply = null;
-      const f = focused(); vTarget = f?.app === 'chats' && f.thread ? f.id : null;
+      vMode = 'talk'; vReply = null; vNewChat = forceNew; vNewKey = newKey;
+      const f = focused(); vTarget = !forceNew && f?.app === 'chats' && f.thread ? f.id : null;
       $('#voiceTime').textContent = '0:00';
       try { await VOICE.start(); } catch (e) { toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
       return 'voice';
@@ -714,7 +723,7 @@
     if (VOICE.state === 'think') return 'busy';
     if (VOICE.state === 'listen') { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
     if (!sid) return 'busy';
-    vMode = 'talk'; vTarget = wid; vReply = { wid, sid };
+    vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid };
     $('#voiceTime').textContent = '0:00';
     try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
     return 'recording';
@@ -737,7 +746,7 @@
     if (VOICE.state !== 'idle' && vMode === 'talk') return 'busy';
     if (action === 'cancel') { if (VOICE.state !== 'idle') { VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
     if (VOICE.state === 'idle') {
-      vMode = 'dictate'; vTarget = null;
+      vMode = 'dictate'; vNewChat = false; vTarget = null;
       dTarget = editable(document.activeElement) ? document.activeElement : null;
       $('#voiceTime').textContent = '0:00';
       try { await VOICE.start(); } catch (e) { vMode = 'talk'; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
@@ -825,6 +834,13 @@
     // The native Mac menu forwards ⌘W here instead of closing its NSWindow. Always consume at
     // the desktop root too; closing the last internal app leaves an empty workspace.
     if (e.metaKey && !e.ctrlKey && !e.altKey && !shift && code === 'KeyW') return hit(() => { const f = focused(); if (f) closeWin(f.id); });
+    // Native ⌘N / Ctrl+N: fresh composer; ⇧ adds new-chat voice. Browser-safe voice: ⌥⇧V.
+    // Browser-owned ⌘N/⌘⇧N can stay with the browser; ⌥Enter/⌥⇧V reach Wizard in tabs.
+    if (((e.metaKey || e.ctrlKey) && !(e.metaKey && e.ctrlKey) && !e.altKey && code === 'KeyN') || (alt && shift && code === 'KeyV')) return hit(() => {
+      if (e.repeat) return;
+      closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage();
+      if (shift) talkNew(alt ? `${MOD}⇧V` : `${CMD}⇧N`); else newChat({ fresh: true });
+    });
     // ⌘K / Ctrl+K, ⌥Space: palette, from anywhere (even while typing).
     if ((e.metaKey || e.ctrlKey) && !e.altKey && (k === 'k' || k === 'K')) return hit(() => (pal.hidden ? openPalette() : closePalette()));
     if (alt && code === 'Space') return hit(() => (pal.hidden ? openPalette() : closePalette()));
