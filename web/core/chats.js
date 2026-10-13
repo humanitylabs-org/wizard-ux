@@ -620,10 +620,13 @@ window.WizCore.chats = function createChats(H) {
   }
   async function loadApproval(w, s) {
     const c = ch(w.id);
+    const sid = w.thread, nav = c.readNav;
+    const current = () => W[w.id] === w && w.thread === sid && c.readNav === nav;
     if (!s || s.status !== 'waiting_for_approval' || !s.runId) { if (c.approval && !c.approval.resolved) c.approval = null; return false; }
     if (c.approval && c.approval.runId === s.runId && (c.approval.pending || c.approval.resolved || Date.now() - c.approval.at < 3000)) return false;
     try {
       const run = await LIVE.run(s.runId);
+      if (!current()) return false;
       const ap = KIT.normalizeApproval(run.approval);
       const prev = c.approval;
       c.approval = ap ? { ...ap, runId: s.runId, at: Date.now() } : (run.status === 'waiting_for_approval' ? null : prev?.resolved ? prev : null);
@@ -893,8 +896,9 @@ window.WizCore.chats = function createChats(H) {
     if (w.thread) { renderThread(w, el); loadThread(w); } else renderChatList(w, el);
   }
   async function loadThread(w, force) {
-    const c = ch(w.id); if (!w.thread || w.thread === '__new__' || c.loading) return;
-    const s = LIVE.session(w.thread);
+    const c = ch(w.id), sid = w.thread, nav = c.readNav;
+    if (!sid || sid === '__new__' || (c.loading && c.loading.sid === sid && c.loading.nav === nav)) return;
+    const s = LIVE.session(sid);
     // Cache finished history while its session revision is unchanged. Its existing session poll remains live;
     // any new message/activity/status immediately invalidates this cache, with a 60 s safety re-read.
     // Working, approvals, failed reads and pending send/steer receipts keep their existing cadence.
@@ -908,10 +912,13 @@ window.WizCore.chats = function createChats(H) {
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
     if (fresh && !force) { if (c.loadedFor === w.thread && hk !== c.hk) { c.hk = hk; const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el); } return; }
-    c.loading = true;
+    // Every read owns a captured thread AND navigation generation. A -> B -> A is a new read;
+    // an old completion must neither publish into it nor release its loading lock.
+    const read = { sid, nav }; c.loading = read;
+    const current = () => W[w.id] === w && w.thread === sid && c.readNav === nav && c.loading === read;
     try {
-      const rows = await LIVE.messages(w.thread);
-      if (!W[w.id] || W[w.id].thread !== w.thread) return;
+      const rows = await LIVE.messages(sid);
+      if (!current()) return;
       const turns = toTurns(rows);
       const sig = JSON.stringify(turns.slice(-3));
       let changed = c.loadedFor !== w.thread || sig !== c.sig;
@@ -939,12 +946,13 @@ window.WizCore.chats = function createChats(H) {
         }
         if (gone) changed = true;
       }
-      if (await loadApproval(w, LIVE.session(w.thread))) changed = true;
+      if (await loadApproval(w, LIVE.session(sid))) changed = true;
+      if (!current()) return;
       const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId].join('|') : '';
       if (hk2 !== c.hk) { c.hk = hk2; changed = true; }
-      if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && W[w.id].thread === w.thread) renderLive(W[w.id], el); }
-    } catch (e) { c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now(); }
-    finally { c.loading = false; }
+      if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && current()) renderLive(w, el); }
+    } catch (e) { if (current()) { c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now(); } }
+    finally { if (c.loading === read) c.loading = false; }
   }
   /* Thread trail: a thread opened from a link inside another thread remembers where it came from, so Back,
    * Done and Defer step back to that thread instead of the list (James clicks through a summary thread's links,
@@ -955,6 +963,8 @@ window.WizCore.chats = function createChats(H) {
     if (w.thread) saveDraft(wid);
     closeRowSheet();
     const c = ch(wid); c.approval = null;
+    c.readNav = (c.readNav || 0) + 1;
+    if (w.thread !== sid) H.threadShown?.(wid, null); // close the old preview immediately, even while the new thread loads
     if (opts.via === 'link' && w.thread && w.thread !== '__new__' && w.thread !== sid) c.trail = (c.trail || []).concat(w.thread).slice(-20);
     else if (!opts.keepTrail) c.trail = [];
     PW?.opened(wid, sid);
@@ -962,7 +972,7 @@ window.WizCore.chats = function createChats(H) {
     if (sid !== '__new__') LIVE.markSeen(sid);
     renderChats(w); applyLayout(deskOf(wid));
   }
-  function chatsBack(w) { if (w.thread) saveDraft(w.id); const c = ch(w.id); c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
+  function chatsBack(w) { if (w.thread) saveDraft(w.id); const c = ch(w.id); c.readNav = (c.readNav || 0) + 1; c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
   /* One step back from a thread: to the thread it was opened from (trail), else to the list. */
   function threadBack(w) {
     const c = ch(w.id), prev = (c.trail || []).pop();
@@ -975,7 +985,7 @@ window.WizCore.chats = function createChats(H) {
   const PHONE = () => (document.documentElement.dataset.shell || 'phone') !== 'desktop';
   function leaveAfterSend(wid, sid, isNew, how = '') {
     const w = W[wid]; if (!w || !sid || w.thread !== sid || !(isNew || PHONE())) return false;
-    const c = ch(wid); w.thread = null; save(); c.loadedFor = ''; c.draftFor = '';
+    const c = ch(wid); c.readNav = (c.readNav || 0) + 1; w.thread = null; save(); c.loadedFor = ''; c.draftFor = '';
     // No toast: the thread is already the top row of Working, its status following the message (Sending… →
     // Starting… → Working). A "Sent" banner over a row still saying "Sending…" contradicted it.
     return true;

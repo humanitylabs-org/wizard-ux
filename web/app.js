@@ -1290,11 +1290,25 @@
       // collapsing a part in a full-screen app dropped full screen).
       const bk = h.back.bind(h), go = h.go.bind(h);
       h.back = function () { selfPop(win); return bk(); };
-      h.go = function (n) { if (+n < 0) selfPop(win); return go(n); };
+      h.go = function (n) { if (+n < 0) selfPop(win, +n); return go(n); };
     } catch (e) {}
   }
-  function selfPop(win) { try { win.__wosSelfPop = Date.now() + 800; } catch (e) {} }
-  function takeSelfPop(win) { try { if (win.__wosSelfPop && Date.now() < win.__wosSelfPop) { win.__wosSelfPop = 0; return true; } } catch (e) {} return false; }
+  function selfPop(win, delta = -1) {
+    try {
+      // Traversal completion owns its document/target, not an 800 ms guess. Parked frames and busy
+      // WebViews can deliver this much later; it must never become another Back on the visible thread.
+      const nav = win.navigation, entries = nav?.entries?.(), at = nav?.currentEntry?.index;
+      const target = entries && Number.isInteger(at) ? entries[at + delta] : null;
+      if (entries && Number.isInteger(at) && !target) return; // a no-op must not consume the next user Back
+      win.__wosSelfPop = { doc: win.document, key: target?.key || null };
+    } catch (e) {}
+  }
+  function takeSelfPop(win) {
+    try {
+      const pop = win.__wosSelfPop; win.__wosSelfPop = null;
+      return !!pop && pop.doc === win.document && (!pop.key || win.navigation?.currentEntry?.key === pop.key);
+    } catch (e) { return false; }
+  }
   function watchEarly(f) {
     let last = null, n = 0;
     const tick = () => {
@@ -1349,6 +1363,7 @@
     // navigation (the URL changes) stays the app's own back step.
     try { win.__wosHref = win.location.href; } catch (e) {}
     try { win.addEventListener('popstate', e => {
+      if (!f.isConnected || !W[id] || f.contentWindow !== win) return; // a removed preview owns no shell navigation
       if (win.WizardApp?.hosted && e.state?.__wizardApp?.version === 1) { takeSelfPop(win); return; }
       if (Date.now() < dropUntil) { e.stopImmediatePropagation(); ignorePop = 0; dropUntil = 0; return; } // the shell's guard drop landed here
       if (Date.now() < exitUntil) { e.stopImmediatePropagation(); history.back(); return; }
