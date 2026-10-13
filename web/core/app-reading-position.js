@@ -43,15 +43,15 @@
       if (!doc.body || (current?.doc === doc && current.key === keyFor(w))) return;
       current?.dispose();
       const key = keyFor(w), tracked = new Set(), offs = [];
-      let restoring = true, pending = null, timer = null, saveTimer = null, quiet = null, deadline = null, raf = null;
+      let restoring = true, held = false, pending = null, saveTimer = null, quiet = null, deadline = null, raf = null, budget = WAIT, started = 0;
       try {
         const value = JSON.parse(sessionStorage.getItem(key));
         if (restore && value?.v === 1 && Array.isArray(value.scrolls)) pending = value.scrolls.slice(0, 24).filter(s => typeof s.path === 'string' && s.path.length < 1500 && Number.isFinite(s.y) && s.y >= 0 && Number.isFinite(s.x) && Number.isFinite(s.height));
       } catch (_) {}
       const allowed = () => !stopped && frame.isConnected && authorize() && frame.contentWindow.document === doc && keyFor(w) === key;
       function save() {
-        if (!allowed() || restoring || !visible(frame) || !visible(doc.documentElement)) return;
-        for (const el of tracked) if (!el.isConnected) tracked.delete(el);
+        if (!allowed() || restoring || held || !visible(frame) || !visible(doc.documentElement)) return;
+        for (const el of tracked) if (!el.isConnected || el.ownerDocument !== doc) tracked.delete(el);
         const root = doc.scrollingElement;
         if (root) tracked.add(root);
         // Includes a nested panel whose initial scroll was assigned by its own router.
@@ -67,17 +67,26 @@
           if (keys.length > MAX) keys.sort((a,b) => (JSON.parse(sessionStorage.getItem(a) || '{}').at || 0) - (JSON.parse(sessionStorage.getItem(b) || '{}').at || 0)).slice(0, keys.length - MAX).forEach(k => sessionStorage.removeItem(k));
         } catch (_) {} // storage denial must not break an app or Reload
       }
-      function stopRestore(write = true) {
-        restoring = false; pending = null;
-        clearTimeout(timer); clearTimeout(quiet); clearTimeout(deadline); if (raf) cancelAnimationFrame(raf);
+      function pause() {
+        clearTimeout(quiet); clearTimeout(deadline); deadline = null;
+        if (started) budget = Math.max(0, budget - (performance.now() - started));
+        started = 0;
+      }
+      function stopRestore(reason = 'success') {
+        if (!restoring) return;
+        restoring = false; pending = null; held = reason === 'timeout';
+        pause(); if (raf) cancelAnimationFrame(raf);
         observer.disconnect(); resize.disconnect();
-        if (write) save();
+        if (reason === 'success' || reason === 'user') save();
       }
       function attempt() {
         if (!restoring) return;
-        if (!allowed()) { stopRestore(false); return; }
-        if (!visible(frame) || !visible(doc.documentElement)) return; // parked windows resume on layout/visibility
-        if (!deadline) deadline = setTimeout(() => stopRestore(), WAIT);
+        if (!allowed()) { stopRestore('dispose'); return; }
+        if (doc.hidden || !visible(frame) || !visible(doc.documentElement)) { pause(); return; }
+        if (!deadline) {
+          started = performance.now();
+          deadline = setTimeout(() => { if (doc.hidden || !visible(frame)) pause(); else stopRestore('timeout'); }, budget);
+        }
         let complete = true;
         for (const s of pending || []) {
           const el = find(doc, s.path);
@@ -87,11 +96,13 @@
           let y = s.y;
           if (anchor && hash(anchor) === s.hash && visible(anchor)) y = el.scrollTop + anchor.getBoundingClientRect().top - (root ? 0 : el.getBoundingClientRect().top) - s.offset;
           const max = Math.max(0, el.scrollHeight - el.clientHeight);
-          if (max + 2 < y) complete = false;
+          // Reachable alone is insufficient: a surviving anchor can appear early
+          // while the earlier text is still loading. Keep the original checkpoint.
+          if (max + 2 < y || el.scrollHeight + 2 < s.height) complete = false;
           el.scrollTo({ left: s.x, top: Math.min(y, max), behavior: 'instant' });
         }
         clearTimeout(quiet);
-        if (complete && doc.readyState === 'complete' && doc.fonts?.status !== 'loading' && ![...doc.images].some(img => !img.complete)) quiet = setTimeout(() => stopRestore(), 1000);
+        if (complete && doc.readyState === 'complete' && doc.fonts?.status !== 'loading' && ![...doc.images].some(img => !img.complete)) quiet = setTimeout(() => { if (doc.hidden || !visible(frame)) pause(); else stopRestore(); }, 1000);
       }
       function schedule() {
         if (!restoring || raf) return;
@@ -103,21 +114,29 @@
         if (authorize() && frame.contentWindow.document === doc && keyFor(w) !== key) { bind(false); current?.save(); return; }
         if (!allowed()) return;
         const el = e.target === doc ? doc.scrollingElement : e.target;
-        if (el?.nodeType === 1) tracked.add(el);
+        if (el?.nodeType === 1) {
+          for (const old of tracked) if (!old.isConnected || old.ownerDocument !== doc) tracked.delete(old);
+          if (tracked.size < 24 || tracked.has(el)) tracked.add(el);
+        }
         if (restoring) schedule();
         else { clearTimeout(saveTimer); saveTimer = setTimeout(save, 120); }
       };
-      const user = e => { if (e.isTrusted && (e.type !== 'keydown' || ['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(e.key))) stopRestore(); };
+      const user = e => {
+        if (!e.isTrusted || (e.type === 'keydown' && !['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(e.key))) return;
+        if (restoring) stopRestore('user');
+        else held = false; // after timeout, an actual user action adopts the current place
+      };
+      const routeFlush = () => { if (authorize() && frame.contentWindow.document === doc && keyFor(w) !== key) bind(false); current?.save(); };
       listen(doc, 'scroll', scroll, true);
       for (const t of ['pointerdown','touchstart','wheel','keydown']) listen(doc, t, user, { capture: true, passive: true });
       listen(w, 'pagehide', () => { save(); dispose(); });
-      listen(w, 'beforeunload', save);
+      listen(w, 'beforeunload', routeFlush);
       listen(w, 'resize', schedule);
       listen(w, 'load', schedule, true);
       listen(w, 'hashchange', () => bind(false));
       listen(w, 'popstate', () => { if (keyFor(w) !== key) bind(false); });
-      listen(doc, 'visibilitychange', () => { if (doc.hidden) save(); else schedule(); });
-      function dispose() { save(); stopRestore(false); clearTimeout(saveTimer); offs.forEach(off => off()); }
+      listen(doc, 'visibilitychange', () => { if (doc.hidden) { save(); pause(); } else schedule(); });
+      function dispose() { save(); stopRestore('dispose'); clearTimeout(saveTimer); offs.forEach(off => off()); }
       current = { doc, key, save, dispose };
       if (pending?.length) {
         try { w.history.scrollRestoration = 'manual'; } catch (_) {}
@@ -129,7 +148,7 @@
       } else restoring = false;
     }
     const onLoad = () => { try { bind(); } catch (_) {} };
-    const flush = () => { try { current?.save(); } catch (_) {} };
+    const flush = () => { try { if (current && authorize() && current.doc === frame.contentWindow.document && current.key !== keyFor(frame.contentWindow)) bind(false); current?.save(); } catch (_) {} };
     const detach = () => { flush(); stopped = true; current?.dispose(); frame.removeEventListener('load', onLoad); active.delete(flush); };
     frame.addEventListener('load', onLoad); active.add(flush); onLoad();
     return detach;
