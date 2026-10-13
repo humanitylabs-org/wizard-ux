@@ -30,8 +30,16 @@ for(const shell of ['phone','desktop']){
  else { await p.locator('[data-chmic]:visible').click();await p.waitForTimeout(1400);await p.locator('[data-chmic]:visible').click(); }
  await p.waitForTimeout(2200);const run=W.runs[r0]?.body;
  if(W.runs.length!==r0+1||W.transcribes!==tr0+1||run?.session_id!=='qa_old_thread'||run?.model!==models.model||run?.provider!==models.provider||!run.require_model_lock){console.log('DIAG',await p.evaluate(()=>({voice:(window.__wos||window.__wux)?.voice,calls:window.__dev?.calls,toast:document.getElementById('toast')?.innerText,items:(window.__wos||window.__wux)?.outbox?.list?.(),V:window.__wos?.V&&{state:__wos.V.state,native:__wos.V.native,acc:__wos.V.acc,snap:__wos.V.snap},cfg:window.WizConfig?.urls})));throw Error('Native live JS route mismatch '+JSON.stringify({run,result,runs:W.runs.length-r0,stt:W.transcribes-tr0}));}n++;
+ if(shell==='phone'){
+  await p.evaluate(()=>__wos.openWizardThread('qa_old_thread'));await p.waitForTimeout(500);
+  const before=W.runs.length,stt=W.transcribes;
+  await p.evaluate(model=>{const wid=__wos.desks[__wos.idx].focus,id=WizardOSDevice.recStart('auto');WosModels.keepVoiceRoute(id,{model,provider:''});Object.assign(__wos.V,{native:id,kind:'auto',replyTo:{wid,sid:'qa_old_thread'},snap:null,acc:2000,files:[],cancelled:false});__wos.setVoice('think');__wos.nativeFinish(id,false);},models.model);
+  await p.waitForTimeout(2200);const recovered=W.runs[before]?.body;
+  if(W.runs.length!==before+1||W.transcribes!==stt+1||recovered?.session_id!=='qa_old_thread'||recovered?.model!==models.model||recovered?.provider!==models.provider||!recovered.require_model_lock)throw Error('Saved voice recovery route mismatch '+JSON.stringify(recovered));n++;
+  if(!await p.evaluate(()=>__dev.calls.some(x=>x.startsWith('recDone:'))&&!/Choose a model|Recording saved/.test(document.getElementById('toast')?.innerText||'')))throw Error('Saved take unacknowledged/model warning');n++;
+ }
  if(errs.length)throw Error(errs.join('\n'));n++;
- console.log('PASS',shell,'live assets + displayed/default route + native reply admission',JSON.stringify({model:models.model,provider:models.provider,checks:5}));
+ console.log('PASS',shell,'live assets + displayed/default route + voice reply admission',JSON.stringify({model:models.model,provider:models.provider,checks:shell==='phone'?7:5}));
  await ctx.close();
 }
 await b.close();console.log(n+' live checks passed (mock inference/transcription; real assets/catalogue)');})().catch(e=>{console.error(e);process.exit(1)});
