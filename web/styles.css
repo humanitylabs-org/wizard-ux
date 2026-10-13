@@ -873,7 +873,7 @@ body {
 /* Text entry temporarily reveals the same corner orb; reading immersion remains unchanged. */
 .orb-wrap[data-mode="type"] #orbFallback, .orb-wrap[data-mode="typing"] #orbFallback { filter: sepia(1) saturate(6) hue-rotate(155deg); }
 .transcript.dictation #txText { user-select: text; -webkit-user-select: text; white-space: pre-wrap; }
-.device.field-dictation #arcAttach, .device.field-dictation #arcScreen { display: none; }
+.device.dictation-recording #arcAttach, .device.dictation-recording #arcScreen { display: none; }
 
 /* Chats in full screen: the bottom bar shrinks to just the orb, in the composer row's right corner. */
 .device.orb-corner { --corner-orb: 44px; --corner-r: 12px; --corner-b: 9px; }

@@ -1944,6 +1944,7 @@
     const field = FIELDS?.current;
     const dictating = V.kind === 'dictation' && V.state !== 'idle';
     device.classList.toggle('field-dictation', !!field || dictating);
+    device.classList.toggle('dictation-recording', dictating);
     if (V.state === 'idle') Orb.setMode(field ? 'type' : 'idle');
     else if (dictating && V.state === 'listen') Orb.setMode('typing');
     $('#orbWrap').setAttribute('aria-label', dictating ? 'Stop dictation and insert text' : field ? 'Dictate into focused text field' : 'Talk to Wizard');
@@ -1953,6 +1954,15 @@
     if (w?.app !== 'chats') trackCornerLift(false);
   }
   const DICTATION_KEY = 'wos.dictation-takes.v1';
+  const DICTATION_RECOVERY_KEY = 'wos.dictation-recovery.v1';
+  function dictationRecovery(id, meta) {
+    const rows = JSON.parse(localStorage.getItem(DICTATION_RECOVERY_KEY) || '{}');
+    if (meta === false) delete rows[id];
+    else if (meta) rows[id] = { ...meta, id, kind: 'dictation', send: false };
+    if (meta !== undefined) localStorage.setItem(DICTATION_RECOVERY_KEY, JSON.stringify(rows));
+    return rows;
+  }
+  window.__wosDictationRecovery = () => { try { return Object.values(dictationRecovery()); } catch (_) { return []; } };
   function dictationTake(id, keep) {
     try {
       const rows = JSON.parse(localStorage.getItem(DICTATION_KEY) || '{}');
@@ -1991,14 +2001,20 @@
   // When James leaves the app mid-take, the floating orb (Everywhere) shows and drives this same take
   // through __wosVoiceCmd below; it never starts a second recorder.
   const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : null; };
-  function nativeBlob(id) {
+  function nativeBlob(id, expected) {
     const dev = DEV(), parts = []; let off = 0;
+    const strict = expected !== undefined; let complete = false, size = 0;
+    if (strict && (!Number.isSafeInteger(expected) || expected < 0)) throw new Error('Native recording size unavailable');
     for (let k = 0; k < 4000 && off >= 0; k++) {
       let c = null; try { c = JSON.parse(dev.recRead(id, off)); } catch (e) {}
-      if (!c) break;
+      if (!c) { if (strict) throw new Error('Native audio read incomplete'); break; }
+      if (strict && (typeof c.b64 !== 'string' || !Number.isInteger(c.next))) throw new Error('Native audio chunk invalid');
       const bin = atob(c.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-      parts.push(u); off = c.next;
+      size += u.length;
+      if (strict && (size > expected || (c.next !== -1 && (c.next <= off || c.next !== off + u.length)))) throw new Error('Native audio chunk incomplete');
+      parts.push(u); off = c.next; complete = off === -1;
     }
+    if (strict && (!complete || size !== expected)) throw new Error('Native audio read incomplete');
     return new Blob(parts, { type: 'audio/aac' });
   }
   /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
@@ -2016,11 +2032,15 @@
     // audio or awaiting STT. A recreated page restores the last route saved for this native take.
     if (V.kind === 'dictation' || window.__wosDictationTake(id)) {
       const dev = DEV(); let meta;
+      // Preserve a reload-visible exact-ID recovery owner BEFORE a destructive native claim.
+      try { dictationRecovery(id, { ms: V.acc, state: 'retained' }); }
+      catch (_) { pauseNativeTake(true); setVoice(stopped ? 'idle' : 'paused'); toast('!', 'Storage unavailable · dictation remains on the device'); return; }
       try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (_) {}
       V.native = null; V.kind = 'dictation';
       if (!meta) { setVoice('idle'); txHide(); toast('!', 'Dictation retained · could not read recording'); return; }
       V.acc = Math.max(V.acc, Number(meta.ms) || 0);
-      try { return onRecStop(nativeBlob(id), id); }
+      try { dictationRecovery(id, meta); } catch (_) { /* the exact-ID marker above remains durable */ }
+      try { return onRecStop(nativeBlob(id, Number(meta.bytes)), id); }
       catch (_) { V.field?.release(); V.field = null; setVoice('idle'); txHide(); toast('!', 'Dictation retained · could not read audio · reopen recording recovery'); return; }
     }
     const hadSnap = !!V.snap;
@@ -2049,7 +2069,7 @@
     V.acc = Math.max(V.acc, Number(meta.ms) || 0);
     onRecStop(nativeBlob(id), id);
   }
-  const recDone = id => { try { id && DEV()?.recDone(id); if (id) { window.WosModels.forgetVoiceRoute(id); dictationTake(id, false); } } catch (e) {} };
+  const recDone = id => { try { id && DEV()?.recDone(id); if (id) { window.WosModels.forgetVoiceRoute(id); dictationTake(id, false); dictationRecovery(id, false); } } catch (e) {} };
   /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
   // Positive provenance for the shipped kind-less native ABI. Never infer ownership by claiming audio.
   const VOICE_TAKE_KEY = 'wos.voice-take.v1';
@@ -2390,8 +2410,8 @@
     setVoice('think'); txPill('✎', 'Transcribing retained dictation…', 'dictation');
     nativeFinish(t.id, true); return true;
   }
-  function showDictationCopy(text) {
-    txShow(text, 'Dictation saved · field changed · nothing sent', 'dictation', '✎');
+  function showDictationCopy(text, durable = true, native = false) {
+    txShow(text, durable || native ? 'Dictation saved · field changed · nothing sent' : 'Storage unavailable · copy these words before closing', 'dictation', '✎');
     $('#txChips').innerHTML = '<button data-dictation-copy>Copy text</button>';
     $('#txChips [data-dictation-copy]').addEventListener('click', async () => {
       try { if (DEV()?.clip) DEV().clip(text); else await window.WosChat.copyText(text); toast('⧉', 'Copied · paste into your field'); }
@@ -2430,7 +2450,7 @@
         const kept = await window.WosCancelled.retainWeb(new Blob(blobs, { type: blobs[0]?.type }), ms, text);
         if (kept) recDone(nid);
         if (!live()) return;
-        setVoice('idle'); showDictationCopy(text);
+        setVoice('idle'); showDictationCopy(text, kept, !!nid);
       } else { recDone(nid); setVoice('idle'); txHide(); toast('✎', 'Text inserted · ready to edit', 1400); }
     } catch (error) {
       if (!live()) return;
@@ -2439,7 +2459,7 @@
       if (kept) recDone(nid); // otherwise native audio remains on disk
       if (!live()) return;
       setVoice('idle'); txHide();
-      toast('!', 'Dictation retained in Settings → Cancelled recordings · transcribe & copy', 4000);
+      toast('!', kept ? 'Dictation retained in Settings → Cancelled recordings · transcribe & copy' : nid ? 'Dictation kept on device · reopen recording recovery to retry' : 'Storage unavailable · kept only while this page stays open · retry saving in Settings', 6000);
     } finally { clearTimeout(timer); if (V.dictationOp === op) V.dictationOp = null; }
   }
   function finishVoice() {
@@ -3272,7 +3292,7 @@
     startVoice, finishVoice, cancelVoice, recoverDictation, outbox: OUTBOX, openSettings, unsentAll, renderSettings,
     chats: CHATS, chat: CHATS.KIT, get viewer() { return CHATS.KIT.viewer.state; }, threadAct: CHATS.threadAct, openRowSheet: CHATS.openRowSheet,
     // web/device.js (share, recovery, update banner, hot reload) works through these.
-    chatState: ch, addFiles: CHATS.addFiles, uploadFile: CHATS.uploadFile, renderChats, refreshCompose, toAgent, toast, txShow, txHide, setVoice, nativeFinish, nativeResume, get V() { return V; },
+    chatState: ch, addFiles: CHATS.addFiles, uploadFile: CHATS.uploadFile, renderChats, refreshCompose, toAgent, toast, txShow, txHide, setVoice, nativeFinish, nativeResume, recDone, get V() { return V; },
     reset() { Object.keys(localStorage).filter(k => k.startsWith('wos.')).forEach(k => localStorage.removeItem(k)); location.reload(); },
   };
 

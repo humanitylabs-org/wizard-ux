@@ -114,8 +114,12 @@
     offerPending(why);
   }
   function offerPending(why) {
-    const d = DEV(); if (!d || sheet) return;
-    const list = (J(d.recPending()) || []).filter(t => voiceKind(t) && !handledTakes.has(t.id));
+    const d = DEV(); if (!d || sheet || W$()?.voice !== 'idle') return;
+    const native = J(d.recPending()) || [];
+    const retained = window.__wosDictationRecovery?.() || [];
+    const merged = new Map(native.map(t => [t.id, t]));
+    for (const t of retained) if (!merged.has(t.id)) merged.set(t.id, t);
+    const list = [...merged.values()].filter(t => voiceKind(t) && !handledTakes.has(t.id));
     if (!list.length) return;
     // Send was already pressed in the notification: the owner said send, so send.
     const go = list.filter(t => t.send && !isDictation(t));
@@ -133,7 +137,7 @@
       const b = e.target.closest('[data-takeact]'); if (!b) return;
       const row = b.closest('[data-take]'), t = ask.find(x => x.id === row.dataset.take); if (!t) return;
       row.remove();
-      if (b.dataset.takeact === 'send') sendTake(t, 'recovered'); else { handledTakes.add(t.id); try { d.recClaim(t.id); d.recDone(t.id); } catch (x) {} toast('✕', 'Recording deleted', 1400); }
+      if (b.dataset.takeact === 'send') sendTake(t, 'recovered'); else { handledTakes.add(t.id); try { d.recClaim(t.id); W$().recDone(t.id); } catch (x) {} toast('✕', 'Recording deleted', 1400); }
       if (!el.querySelector('[data-take]')) closeSheet();
     });
   }
@@ -143,7 +147,7 @@
     const d = DEV(), w = W$(); if (!d || !w || !voiceKind(t) || handledTakes.has(t.id)) return;
     if (isDictation(t)) {
       if (nativeOwner(t.id) !== 'voice') return;
-      if (w.recoverDictation(t)) handledTakes.add(t.id);
+      w.recoverDictation(t); // failures remain retryable through their exact-ID recovery marker
       return;
     }
     handledTakes.add(t.id);

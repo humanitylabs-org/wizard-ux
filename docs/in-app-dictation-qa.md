@@ -65,3 +65,18 @@ QA_SYNTHETIC_REGRESSION=1 QA_EVIDENCE_TAG=final \
 ```
 
 Next release gate belongs to the parent: stage an isolated functional preview, test the actual app/physical phone, then seek release approval. No live release authority was assumed.
+
+## Parent review repair and functional preview
+
+The independent read-only review found three recovery faults: the shared ownership classifier omitted kind-bearing dictation; incomplete native audio readback could be treated as silence and deleted; failed IndexedDB retention was reported as durable success. The parent repaired all three, added exact-ID claimed-take recovery markers before native claim, preserved explicit retry through reload, and added an honest session-only browser retention owner with Retry saving. Explicit recovery Delete clears its marker too. The focused-composer MIC keeps the screenshot/attachment dock; its agent send path remains separate.
+
+Final expanded suite on Thales:
+- Reviewed `e638260` source with the SAME expanded suite: 65 passed, 5 failed, exit 2 (the missing recovery UI stops further baseline cases). This is retained as failing evidence, not a complete baseline pass.
+- Repaired candidate: **95 passed, 0 failed**, exit 0. Evidence: `evidence/recovery-final-{reviewed,candidate}.{json,log,exit}`. Covers kind-bearing native recreation, failed first/later/truncated/looping audio read, claimed-file discovery after page reload, repaired explicit retry, explicit Delete, native persistence outage, actual IndexedDB write failure and successful browser save/reload.
+- Voice seal 45/0, held commands 29/0, awake 11/0 remain unchanged in `review-fixed-regression-ab.json`; immersive remains the same 26/1 baseline fixture gap.
+
+Functional human preview: https://in-app-dictation.staging.wizard001.com/wizard-os-home/?shell=phone&open=iching
+
+The parent opened that exact HTTPS deep link on Thales at phone dimensions and used the actual registered I Ching, the user's approval audio as Chromium's fake microphone input, the real browser MediaRecorder, and the selected system STT endpoint. **11 checks passed:** blue orb focus, recording, START-selection insertion, editable unsubmitted question, exactly one real STT request, zero agent/app writes, true-fullscreen keyboard-sized orb hit testing, Back staying in Wizard and zero page errors. This proves the real hosted app/provider integration, not physical-handset capture. The functional preview permits only POST `/wizard/voice/transcribe`; all app/agent mutations return 403.
+
+Preview source lives in a detached durable clone, `/home/telos/.local/share/wizard-stage/in-app-dictation/source/`, behind an enabled restartable `wizard-stage-in-app-dictation.service`. Original live shell and daily remain unchanged. Final candidate source hashes and parent evidence are retained there and on Thales at `release-qa/`. Physical phone feel and release approval remain James's gate.

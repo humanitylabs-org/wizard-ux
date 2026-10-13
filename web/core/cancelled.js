@@ -26,6 +26,7 @@
   const toast = (i, t, ms) => window.__wos?.toast?.(i, t, ms);
   const SRC = { everywhere: 'Floating orb', side: 'Side button', app: 'Orb', web: 'Orb' };
   let web = [];          // [{id, at, ms, source, mime, bytes, blob}]
+  const sessionWeb = new Map(); // Failed durable writes keep an explicit retry owner in this page.
   let busy = new Set(), errs = {}, open = new Set();
   const texts = (() => { try { return JSON.parse(localStorage.getItem(TX_KEY) || '{}'); } catch (e) { return {}; } })();
   const saveTexts = () => { try { localStorage.setItem(TX_KEY, JSON.stringify(texts)); } catch (e) {} };
@@ -47,13 +48,14 @@
   }
   async function loadWeb() {
     try { web = (await tx('readonly', s => s.getAll())) || []; } catch (e) { web = web || []; }
+    for (const t of sessionWeb.values()) if (!web.some(x => x.id === t.id)) web.push(t);
     web.sort((a, b) => b.at - a.at);
     for (const t of web) if (t.text && !texts[t.id]) texts[t.id] = t.text;
     const now = Date.now();
     for (const [i, t] of [...web.entries()]) if (i >= MAX_KEPT || now - t.at > MAX_AGE_MS) await removeWeb(t.id);
     return web;
   }
-  async function removeWeb(id) { web = web.filter(t => t.id !== id); try { await tx('readwrite', s => s.delete(id)); } catch (e) {} }
+  async function removeWeb(id) { sessionWeb.delete(id); web = web.filter(t => t.id !== id); try { await tx('readwrite', s => s.delete(id)); } catch (e) {} }
 
   async function keepWeb(blob, ms, retained = false, text = '') {
     if (!(blob instanceof Blob) || blob.size < (retained ? 1200 : 2000) || (!retained && !(ms >= KEEP_FROM_MS))) return false;
@@ -61,10 +63,21 @@
     let persisted = true;
     if (text) t.text = text;
     try { await tx('readwrite', s => s.put(t)); } catch (e) { persisted = false; /* memory only for this session */ }
+    if (!persisted) { t.sessionOnly = true; sessionWeb.set(t.id, t); }
     if (text) { t.text = text; texts[t.id] = text; saveTexts(); open.add(t.id); }
     web.unshift(t); await loadWeb().catch(() => {}); if (!web.find(x => x.id === t.id)) web.unshift(t);
     repaint();
     return retained ? persisted : true;
+  }
+  async function retrySave(id) {
+    const t = sessionWeb.get(id); if (!t) return;
+    try {
+      const saved = { ...t }; delete saved.sessionOnly;
+      await tx('readwrite', s => s.put(saved));
+      sessionWeb.delete(id); web = web.map(x => x.id === id ? saved : x);
+      toast('✎', 'Recording saved on this device', 2000);
+    } catch (_) { toast('!', 'Storage still unavailable · keep this page open', 3000); }
+    repaint();
   }
 
   function nativeList() { const d = DEV(); if (!d) return []; return (J(d.cancelledList()) || []).map(t => ({ ...t, native: true })); }
@@ -128,6 +141,7 @@
       <div class="cx-t"><b>${fmt(t.ms)}</b> · ${esc(SRC[t.source] || 'Orb')} · ${esc(ago(t.at))}</div>
       ${tx && open.has(t.id) ? `<div class="cx-text" data-cxtext>${esc(tx)}</div>` : ''}
       ${err ? `<div class="cx-err">${esc(err)}</div>` : ''}
+      ${t.sessionOnly ? '<div class="cx-err">Storage unavailable · kept only while this page stays open.</div><button data-cx="save">Retry saving</button>' : ''}
       <div class="ub-a"><button data-cx="copy" ${b ? 'disabled' : ''}>${b ? 'Transcribing…' : tx ? 'Copy again' : 'Transcribe &amp; copy'}</button>${tx ? `<button data-cx="show" class="ghost">${open.has(t.id) ? 'Hide words' : 'Show words'}</button>` : ''}<button data-cx="delete" class="ghost">Delete</button></div></div>`;
   }
   function html() {
@@ -145,11 +159,12 @@
     const id = b.closest('[data-cxid]')?.dataset.cxid; if (!id) return true;
     const a = b.dataset.cx;
     if (a === 'copy') transcribe(id);
+    else if (a === 'save') retrySave(id);
     else if (a === 'delete') remove(id);
     else if (a === 'show') { open.has(id) ? open.delete(id) : open.add(id); repaint(); }
     return true;
   }
 
   loadWeb().then(repaint).catch(() => {});
-  window.WosCancelled = { KEEP_FROM_MS, keepWeb, retainWeb: (blob, ms, text = '') => keepWeb(blob, ms, true, text), html, act, repaint, list: all, transcribe, _texts: texts };
+  window.WosCancelled = { KEEP_FROM_MS, keepWeb, retainWeb: (blob, ms, text = '') => keepWeb(blob, ms, true, text), html, act, repaint, list: all, transcribe, retrySave, _texts: texts };
 })();

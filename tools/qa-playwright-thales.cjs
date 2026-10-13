@@ -34,4 +34,3 @@ if (process.env.QA_SYNTHETIC_REGRESSION === '1') {
     return browser;
   };
 }
-

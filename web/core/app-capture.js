@@ -36,7 +36,7 @@
       if(a?.id && !live) {
         const inPageVoice=W.__wos?.V?.native===a.id && !['idle',undefined].includes(W.__wos?.voice);
         const savedVoice=!a.kind && (!!W.WosModels?.voiceRoute?.(a.id) || !!W.__wosVoiceTake?.(a.id) || !!W.__wosReplyTake?.(a.id)); // Positive persisted legacy voice provenance on older ABIs.
-        if(!['auto','command'].includes(a.kind) && !inPageVoice && !savedVoice){unknownNative=true;live=deviceRows.find(r=>!r.nativeId);}
+        if(!['auto','command','dictation'].includes(a.kind) && !inPageVoice && !savedVoice){unknownNative=true;live=deviceRows.find(r=>!r.nativeId);}
       }
     } catch (_) { unknownNative=true; } // Malformed/unknown bridge truth never authorizes voice/reload.
     const recording = !!active || !!live || unknownNative;

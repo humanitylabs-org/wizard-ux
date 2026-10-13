@@ -26,12 +26,19 @@ function nativeFixture() {
     recActive() { const a = metadata(get().active); if (a && localStorage.getItem('qa.kindless')) delete a.kind; return JSON.stringify(a); },
     recPause(on) { const x = act('pause', on); if (x.active) x.active.paused = on; save(x); },
     recLevel: () => 0,
-    recStop(id) { const x = act('stop', id); if (x.active?.id !== id) return 'null'; const t = metadata(x.active); x.pending.push(t); x.active = null; save(x); return JSON.stringify(t); },
-    recClaim(id) { act('claim', id); return JSON.stringify(get().pending.find(t => t.id === id) || null); },
-    recRead() { return JSON.stringify({ b64: btoa('x'.repeat(4096)), next: -1 }); },
+    recStop(id) { const x = act('stop', id); if (x.active?.id !== id) return 'null'; const t = metadata(x.active); t.claimed = true; x.pending.push(t); x.active = null; save(x); return JSON.stringify(t); },
+    recClaim(id) { const x = act('claim', id), t = x.pending.find(t => t.id === id); if (t) { t.claimed = true; save(x); } return JSON.stringify(t || null); },
+    recRead(id, off) {
+      const failure = localStorage.getItem('qa.read-failure');
+      if (failure === 'first' || (failure === 'later' && off)) return 'null';
+      if (failure === 'truncated') return JSON.stringify({ b64: btoa('x'.repeat(800)), next: -1 });
+      if (failure === 'later') return JSON.stringify({ b64: btoa('x'.repeat(2048)), next: 2048 });
+      if (failure === 'loop') return JSON.stringify({ b64: btoa('x'.repeat(4096)), next: 0 });
+      return JSON.stringify({ b64: btoa('x'.repeat(4096)), next: -1 });
+    },
     recDone(id) { const x = act('done', id); x.pending = x.pending.filter(t => t.id !== id); save(x); },
     recCancel(id) { const x = act('cancel', id); if (x.active?.id === id) x.active = null; save(x); },
-    recPending: () => JSON.stringify(get().pending),
+    recPending: () => JSON.stringify(get().pending.filter(t => !t.claimed)),
     clip: text => { window.__qaClip = text; },
   };
 }
@@ -193,6 +200,7 @@ async function cases(browser) {
   const comp = rp.locator('.win .ch-compose textarea:visible').first(); await comp.fill(''); await comp.click();
   await rp.locator('.win [data-chmic]:visible').first().click(); await sleep(750);
   ok((await state(rp)).kind === 'auto' && await rp.evaluate(() => __wos.V.replyTo?.sid === 'qa-0'), 'composer MIC retains sealed voice-reply behavior despite focused field');
+  ok(await rp.locator('#arcAttach').evaluate(el => getComputedStyle(el).display !== 'none' && !el.disabled) && await rp.locator('#arcScreen').evaluate(el => getComputedStyle(el).display !== 'none' && !el.disabled), 'focused composer MIC retains attachment and screenshot dock controls');
   await tap(rp); await sleep(1000); ok(reply.writes.some(w => /\/hermes\/(?:v1\/runs|api\/sessions)/.test(w.path)), 'composer MIC sends voice reply through unchanged agent pipeline (synthetic accepted write)');
   // Real in-page MediaRecorder path, using Chromium's synthetic microphone, not native bytes.
   const web = await boot(browser, false), wf = await app(web); await select(wf); web.writes.length = 0; await take(web);
@@ -229,10 +237,62 @@ async function cases(browser) {
   ok(await df.locator('#pw').inputValue() === 'secret', 'shared desktop helper also excludes password fields');
   for (const c of contexts) ok(c.errors.length === 0, 'no page errors (' + (c.native ? 'native' : 'web') + ')', c.errors);
 }
+async function recoveryCases(browser) {
+  const kind = await boot(browser), kp = kind.p, kf = await app(kind);
+  await select(kf); await tap(kp); await sleep(650);
+  await kp.reload(); await kp.waitForFunction(() => window.__wos?.live?.ok); await sleep(550);
+  ok((await state(kp)).voice === 'listen' && (await state(kp)).kind === 'dictation', 'kind-bearing native dictation restores recording controls after page recreation');
+  await tap(kp); await sleep(700);
+  ok((await state(kp)).copies === 1 && noAgent(kind).length === 0, 'kind-bearing recovered take transcribes for copy only');
+
+  for (const failure of ['first', 'truncated', 'later', 'loop']) {
+    const f = await boot(browser), p = f.p, frame = await app(f);
+    await select(frame); await p.evaluate(mode => localStorage.setItem('qa.read-failure', mode), failure);
+    f.writes.length = 0; await tap(p); await sleep(650);
+    const id = await p.evaluate(() => __wos.V.native);
+    await tap(p); await sleep(250);
+    ok(await p.evaluate(id => __qaNativeStore().pending.some(t => t.id === id) && !__qaNativeStore().calls.some(c => c[0] === 'done' && c[1] === id), id), failure + ' native read: audio is retained, never recDone');
+    ok(f.writes.filter(w => /transcribe$/.test(w.path)).length === 0 && await frame.locator('#a').inputValue() === 'one OLD three' && noAgent(f).length === 0, failure + ' native read: no partial STT/insertion/agent fallback');
+    await p.reload(); await p.waitForFunction(() => window.__wos?.live?.ok); await sleep(550);
+    ok(await p.locator('[data-take="' + id + '"]').count() === 1 && await p.evaluate(() => JSON.parse(WizardOSDevice.recPending()).length === 0), failure + ' native read: claimed take remains discoverable after page reload');
+    await p.evaluate(() => localStorage.removeItem('qa.read-failure'));
+    await p.locator('[data-take="' + id + '"] [data-takeact="send"]').click(); await sleep(700);
+    ok((await state(p)).copies === 1 && await p.evaluate(id => !__wosDictationRecovery().some(t => t.id === id) && __qaNativeStore().calls.some(c => c[0] === 'done' && c[1] === id), id) && noAgent(f).length === 0, failure + ' native read: explicit repaired retry copies text and releases exact native take');
+  }
+  const deleted = await boot(browser), xp = deleted.p, xf = await app(deleted);
+  await select(xf); await xp.evaluate(() => localStorage.setItem('qa.read-failure', 'first')); await tap(xp); await sleep(650);
+  const xid = await xp.evaluate(() => __wos.V.native); await tap(xp); await sleep(200); await xp.reload(); await xp.waitForFunction(() => window.__wos?.live?.ok); await sleep(500);
+  await xp.locator('[data-take="' + xid + '"] [data-takeact="delete"]').click(); await xp.reload(); await xp.waitForFunction(() => window.__wos?.live?.ok); await sleep(450);
+  ok(await xp.evaluate(id => !__wosDictationRecovery().some(t => t.id === id) && !__qaNativeStore().pending.some(t => t.id === id), xid), 'explicit Delete clears exact retained audio and recovery marker without resurrection');
+  ok(noAgent(deleted).length === 0, 'recovery deletion makes zero agent writes');
+  // Simulate actual cancelled-recording IDB write failure, not a successful-memory mock.
+  const native = await boot(browser), np = native.p, nf = await app(native);
+  await np.evaluate(() => { const fn = IDBDatabase.prototype.transaction; window.__qaTx = fn; IDBDatabase.prototype.transaction = function(...args) { if (this.name === 'wos-cancelled' && args[1] === 'readwrite') throw new DOMException('Synthetic quota failure', 'QuotaExceededError'); return fn.apply(this, args); }; });
+  native.R.down = true; await select(nf); await tap(np); await sleep(650);
+  const nid = await np.evaluate(() => __wos.V.native); await tap(np); await sleep(400);
+  ok(await np.evaluate(id => __wosDictationRecovery().some(t => t.id === id) && !__qaNativeStore().calls.some(c => c[0] === 'done' && c[1] === id), nid), 'failed durable retention keeps reload-visible exact native recovery owner');
+  ok(await np.locator('#toast').innerText().then(x => x.includes('kept on device')), 'failed native persistence reports device custody honestly');
+  native.R.down = false; await np.reload(); await np.waitForFunction(() => window.__wos?.live?.ok); await sleep(550);
+  ok(await np.locator('[data-take="' + nid + '"]').count() === 1, 'failed native persistence remains discoverable even though native recPending excludes claimed files');
+  await np.locator('[data-take="' + nid + '"] [data-takeact="send"]').click(); await sleep(700);
+  ok((await state(np)).copies === 1 && noAgent(native).length === 0, 'failed native persistence explicit retry transcribes and copies');
+
+  const web = await boot(browser, false), wp = web.p, wf = await app(web);
+  await wp.evaluate(() => { const fn = IDBDatabase.prototype.transaction; window.__qaTx = fn; window.__qaStorageDown = true; IDBDatabase.prototype.transaction = function(...args) { if (window.__qaStorageDown && this.name === 'wos-cancelled' && args[1] === 'readwrite') throw new DOMException('Synthetic quota failure', 'QuotaExceededError'); return fn.apply(this, args); }; });
+  web.R.down = true; await select(wf); await take(web);
+  const wid = await wp.evaluate(() => WosCancelled.list().find(t => t.sessionOnly)?.id);
+  ok(!!wid && await wp.evaluate(() => WosCancelled.html().includes('Retry saving') && WosCancelled.html().includes('only while this page')), 'failed browser persistence keeps explicit session-only audio with Retry saving');
+  ok(await wp.locator('#toast').innerText().then(x => x.includes('only while this page stays open')), 'failed browser persistence warns about reload loss instead of claiming success');
+  await wp.evaluate(async id => { window.__qaStorageDown = false; await WosCancelled.retrySave(id); }, wid);
+  ok(await wp.evaluate(id => WosCancelled.list().some(t => t.id === id && !t.sessionOnly), wid), 'browser recovery retries actual durable IDB write');
+  await wp.reload(); await wp.waitForFunction(() => window.__wos?.live?.ok); await sleep(350);
+  ok(await wp.evaluate(id => WosCancelled.list().some(t => t.id === id), wid) && noAgent(web).length === 0, 'successfully retried browser audio survives reload without agent send');
+  for (const f of [kind, native, web]) ok(f.errors.length === 0, 'review recovery fixtures have zero page errors', f.errors);
+}
 (async () => {
   const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   let fatal;
-  try { await cases(browser); } catch (e) { fatal = String(e.stack || e); ok(false, 'suite completed', fatal); }
+  try { await cases(browser); await recoveryCases(browser); } catch (e) { fatal = String(e.stack || e); ok(false, 'suite completed', fatal); }
   const result = { fixture: 'synthetic native ABI + STT/models/API; all requests intercepted', web: WEB, passed: checks.filter(x => x.pass).length, failed: checks.filter(x => !x.pass).length, checks, contexts: contexts.map(c => ({ native: c.native, errors: c.errors, served: [...new Set(c.served)], writes: c.writes })) };
   if (process.env.QA_EVIDENCE) fs.writeFileSync(process.env.QA_EVIDENCE, JSON.stringify(result, null, 2));
   await browser.close(); console.log(`${result.passed} passed, ${result.failed} failed`); process.exitCode = fatal ? 2 : result.failed ? 1 : 0;
