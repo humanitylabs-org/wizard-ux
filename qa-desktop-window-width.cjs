@@ -104,7 +104,8 @@ const near = (a, b) => Math.abs(a - b) < 1.1;
  await p.keyboard.press('Escape'); await wait();
  ok(await p.evaluate(() => !__wux.wins.qa.thread && __wux.ws[0].wins.includes('qa')), 'nested Back returns to list with Chats open');
  const url = p.url(); await p.keyboard.press('Escape'); await p.evaluate(() => history.back()); await wait();
- ok(p.url() === url && await p.evaluate(() => !!__wux), 'root Back keeps Wizard open');
+ const afterBack = { url: p.url(), before: url, app: await p.evaluate(() => !!window.__wux), windows: await p.evaluate(() => window.__wux?.ws[0]?.wins.length), log: await p.evaluate(() => window.__wux?.log) };
+ ok(new URL(p.url()).pathname === new URL(url).pathname && new URL(p.url()).origin === new URL(url).origin && afterBack.app && afterBack.windows === 1, 'root Back keeps Wizard open', afterBack);
  const hashes = {};
  for (const file of ['desktop/desktop.js', 'desktop/desktop.css']) { const response = await p.request.get(new URL(file, p.url()).href); hashes[file] = crypto.createHash('sha256').update(await response.body()).digest('hex'); }
  ok(errors.length === 0, 'zero page errors', errors);
