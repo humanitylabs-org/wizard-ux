@@ -30,3 +30,7 @@ Local artifact mirror: `/home/telos/.hermes/state/wos-microphone-lock-20261013/e
 Run the remote driver with `PW=$HOME/workspace/wizard-mobile-link-candidate/node_modules/playwright`, `QA_CHROME` set to that installation's Chromium executable, and `SOURCE_SHA` set to the committed candidate SHA. Invoke through the shared worker lock. `QA_TREES=baseline,candidate` and optional comma-separated `QA_SUITES` bound reruns. The baseline web tree must remain untouched; sync only the test harnesses into it.
 
 This proves the web implementation and shipped-ABI bridge seam, **not** a physical phone installation or Android hardware/audio-route test. Parent owns final served-source verification and release. An early orchestration SSH call timed out after the tool's 420-second ceiling; the lock-held remote worker continued normally, completed, and was read back before any resync. No worker was killed.
+
+## Parent review
+
+The parent identified a compatibility edge: an explicitly recovered old recording without page-side provenance defaulted to auto routing even if its original native metadata said command. `nativeFinish` now restores the original kind from the metadata returned after the user's explicit stop, before transcription/routing. The additional Thales regression was RED at 24 pass / 1 fail, then GREEN at 25 pass / 0 fail; Hold remained 29 passed and the model-route contract exited 0. Recovery discovery still performs no claim, stop, send or deletion. Final integration and served-source verification are recorded separately in the release receipt.

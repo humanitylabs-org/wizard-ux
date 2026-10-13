@@ -1994,6 +1994,9 @@
     try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (e) {}
     V.native = null;
     if (!meta) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
+    // A shipped kind-less recActive bridge reveals the original mode only after an explicit stop.
+    // Preserve command routing even when its older take had no page-side provenance at recovery.
+    if (['auto', 'command'].includes(meta.kind)) V.kind = meta.kind;
     V.acc = Math.max(V.acc, Number(meta.ms) || 0);
     onRecStop(nativeBlob(id), id);
   }

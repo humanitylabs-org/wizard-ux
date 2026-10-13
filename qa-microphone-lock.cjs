@@ -45,4 +45,6 @@ else ok(await p.evaluate(()=>!__wos.V.native&&!__dev.calls.some(x=>/recPause|rec
 else if(mode==='app-owned')ok(await p.evaluate(()=>!__wos.V.native&&!__dev.calls.some(x=>/recPause|recStop|recCancel|recClaim|recDone/.test(x))),'app-owned native take never adopted or mutated');
 else ok(await p.evaluate(()=>__wos.V.native==='legacy')&&await controls(p),'kind-less '+mode+' reload restores controls');
 ok(await p.evaluate(()=>!__dev.calls.some(x=>/recStop|recCancel|recClaim|recDone/.test(x))),'recovery discovery is read-only '+mode);await ctx.close();}
+// After explicit Stop/Send, native metadata supplies the original kind on a kind-less APK.
+{const {ctx,p}=await boot(b);await open(p);const result=await p.evaluate(()=>{const id=WizardOSDevice.recStart('command');__wos.V.native=id;__wos.V.kind='auto';__wos.V.acc=20000;__wos.V.snap={route:{model:'fixture-model',provider:'fixture'}};__wos.setVoice('think');__wos.nativeFinish(id,false);return {kind:__wos.V.kind,calls:__dev.calls};});ok(result.kind==='command'&&result.calls.some(x=>x.startsWith('recStop:')),'explicit recovered send restores original command kind before routing',result);await ctx.close();}
 await b.close();console.log(`${pass} pass ${fail} fail`);process.exit(fail?1:0);})().catch(e=>{console.error(e);process.exit(2)});
