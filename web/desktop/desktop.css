@@ -8,7 +8,7 @@ body {
     #05030c;
   font-size: 14px;
 }
-:root { --bar-h: 34px; --gap: 8px; --radius: 12px; }
+:root { --bar-h: 34px; --gap: 8px; --radius: 12px; --desktop-window-max-width: 1200px; }
 kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5px; font: 600 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; color: var(--ink-2); background: rgba(205, 190, 255, .08); border: 1px solid var(--line-2); border-bottom-width: 2px; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(205, 190, 255, .14); border-radius: 8px; }
