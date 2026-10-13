@@ -3,13 +3,13 @@
 // Runs against the live origin with real Wizard data. Every write (runs, sessions, uploads,
 // seen/disposition) is intercepted; the suite fails if any write reaches Wizard.
 // QA_WEB_DIR=<dir> serves app.js/live.js/styles.css from a worktree instead of the live server.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:18443';
+const URL_ = process.argv[2] || 'https://legacy.wizard.example/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP legacy.wizard.example 127.0.0.1:18443';
 const WEB = process.env.QA_WEB_DIR || '';
-const OUT = process.env.QA_OUT || '/home/telos/apps/wizard-os-home/qa-live';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || '/home/developer/apps/wizard-os-home/qa-live';
+const EXEC = process.env.QA_CHROME || '/home/developer/.local/bin/google-chrome';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 

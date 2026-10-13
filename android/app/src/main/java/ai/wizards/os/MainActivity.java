@@ -31,7 +31,7 @@ import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
 /**
- * Wizard OS: a native home for James's private Wizard OS shell (wizard.tailc0f369.ts.net/wizard-os-home/; the retired private.wizard001.com still opens).
+ * Wizard OS: a native home for James's private Wizard OS shell (wizard.tail1234.ts.net/wizard-os-home/; the retired legacy.wizard.example still opens).
  *
  * Rules this activity enforces:
  *  - Back never exits. Every Back is handed to the shell (window.__wosNativeBack), which closes the top
@@ -149,7 +149,7 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
-                // A main-frame hop to the retired private.wizard001.com lands on the same page under this Wizard's own name.
+                // A main-frame hop to the retired legacy.wizard.example lands on the same page under this Wizard's own name.
                 if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying && !ai.wizards.os.device.AppState.legacyFallback) { view.loadUrl(Origin.toHome(u.toString())); return true; }
                 // Under the safety net the tailnet name is unreachable: its links open the same page on the old name.
                 if (req.isForMainFrame() && Origin.isHome(u) && ai.wizards.os.device.AppState.legacyFallback) { view.loadUrl(Origin.toLegacy(u.toString())); return true; }
@@ -270,7 +270,7 @@ public class MainActivity extends Activity {
         return ai.wizards.os.device.AppState.legacyFallback ? Origin.toLegacy(url) : Origin.toHome(url);
     }
 
-    /* ---------------- Carry: move local state off the retired private.wizard001.com (see Carry) ---------------- */
+    /* ---------------- Carry: move local state off the retired legacy.wizard.example (see Carry) ---------------- */
 
     private volatile boolean carrying;
     private volatile String pageUrl;

@@ -3,7 +3,7 @@
 // Every write is refused. The app list is the live one plus two stubbed links that prove the fallbacks:
 //   qa-owned  → launcher.json names a glyph ("eye") and a colour, so that glyph + colour win
 //   qa-plain  → no sigil, so it shows its initial on a colour picked from its id
-const { chromium } = (() => { try { return require('playwright'); } catch (e) { try { return require('playwright-core'); } catch (e2) { return require('/home/telos/node_modules/playwright'); } } })();
+const { chromium } = (() => { try { return require('playwright'); } catch (e) { try { return require('playwright-core'); } catch (e2) { return require('/home/developer/node_modules/playwright'); } } })();
 const fs = require('fs'), path = require('path');
 const ORIGIN = process.argv[2] || 'http://127.0.0.1:8923/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || __dirname;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wizard OS address-move QA (runs on Thales): the one-time carry from the retired private.wizard001.com to
+"""Wizard OS address-move QA (runs on Thales): the one-time carry from the retired legacy.wizard.example to
 the tailnet name, on a fresh API 35 emulator with the exact debug APK. Nothing reaches the real Wizard.
 
 usage: qa_carry.py QA_APK WEB_DIR [OUT_DIR]
@@ -334,7 +334,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         runas('rm -f files/qa_home.txt files/qa_origin.txt files/qa_carry_from.txt files/carry.json shared_prefs/carry.xml')
         launch(); time.sleep(6)  # tailnet name fails (dead DNS) → old name fails too → offline page
         pg = page(lambda u: True, 20)
-        pg.call('Fetch.enable', patterns=[{'urlPattern': 'https://private.wizard001.com/*'}])
+        pg.call('Fetch.enable', patterns=[{'urlPattern': 'https://legacy.wizard.example/*'}])
         served = []
         pg.ev("(() => { const a = document.querySelector('a'); setTimeout(() => a && a.click(), 50); return !!a; })()")
         t0 = time.time(); pg.s.settimeout(1.0)
@@ -353,7 +353,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             if p.get('resourceType') == 'Document': time.sleep(2); break
         pg.s.settimeout(30)
         href = pg.ev('location.href'); title = pg.ev('document.title'); pg.close()
-        check('#8 tailnet name unreachable → the shell opens on the old name instead of an error', href.startswith('https://private.wizard001.com/wizard-os-home/') and title == 'legacy-shell', (href, title, served[:3]))
+        check('#8 tailnet name unreachable → the shell opens on the old name instead of an error', href.startswith('https://legacy.wizard.example/wizard-os-home/') and title == 'legacy-shell', (href, title, served[:3]))
         check('#8 the app stays open', PKG in top(), top()[:80])
         shot('08-safety-net')
 

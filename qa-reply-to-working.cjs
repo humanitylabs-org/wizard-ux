@@ -7,7 +7,7 @@
 // list reads until Wizard reports the run, and goes back where it was only if the message truly can't be sent.
 // Usage: node qa-reply-to-working.cjs <origin> (e.g. http://127.0.0.1:9381/wizard-os-home/ from tools/qa-origin.cjs).
 // Real Wizard reads; every write is intercepted (zero writes reach Wizard).
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/developer/node_modules/playwright')); }
 const BASE = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
 const SHOTS = process.env.QA_SHOTS || '';
 const fs = require('fs'), path = require('path');

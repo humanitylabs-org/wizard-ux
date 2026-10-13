@@ -1,13 +1,13 @@
 // Mizel.ai recordings QA: a "🎙 …" thread shows as Mizel.ai in the shade, appears on the Mizel desk strip,
 // and a tap opens it in the Chats window. Every Hermes/Wizard write is intercepted; the run fails on any real /v1/runs.
-const { chromium } = require('/home/telos/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
-const OUT = process.env.QA_OUT || '/home/telos/apps/wizard-os-home/qa-live';
+const { chromium } = require('/home/developer/node_modules/playwright');
+const URL_ = process.argv[2] || 'https://legacy.wizard.example/wizard-os-home/';
+const OUT = process.env.QA_OUT || '/home/developer/apps/wizard-os-home/qa-live';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 
 (async () => {
-  const b = await chromium.launch({ args: ['--host-resolver-rules=MAP private.wizard001.com 127.0.0.1:18443'] });
+  const b = await chromium.launch({ args: ['--host-resolver-rules=MAP legacy.wizard.example 127.0.0.1:18443'] });
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true });
   const writes = [];
   await ctx.route('**/*', r => {

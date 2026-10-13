@@ -1,10 +1,10 @@
 // Mizel.ai inside Wizard OS Home: the Mizel desk frame loads the canonical Mizel Live view.
-const { chromium } = require('/home/telos/node_modules/playwright');
-const URL_ = 'https://private.wizard001.com/wizard-os-home/';
+const { chromium } = require('/home/developer/node_modules/playwright');
+const URL_ = 'https://legacy.wizard.example/wizard-os-home/';
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, x); } };
 (async () => {
-  const b = await chromium.launch({ args: ['--host-resolver-rules=MAP private.wizard001.com 127.0.0.1:18443'] });
+  const b = await chromium.launch({ args: ['--host-resolver-rules=MAP legacy.wizard.example 127.0.0.1:18443'] });
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true });
   await ctx.route('**/*', r => { const q = r.request(); if (q.method() !== 'GET' && /\/v1\/runs|\/wizard\/hermes/.test(q.url())) return r.fulfill({ status: 200, body: '{}' }); return r.continue(); });
   const p = await ctx.newPage();
@@ -39,7 +39,7 @@ const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else {
     const port = await fr.evaluate(() => typeof window.wizardMizelPort).catch(() => 'err');
     console.log('INFO wizardMizelPort in plain browser:', port, '(expected undefined outside the Android app)');
   } else ok(false, 'Mizel Live frame loaded');
-  await p.screenshot({ path: '/home/telos/apps/wizard-os-home/qa-live/mizel-desk.png' });
+  await p.screenshot({ path: '/home/developer/apps/wizard-os-home/qa-live/mizel-desk.png' });
   console.log(`\n${pass}/${pass + fail} passed`);
   await b.close(); process.exit(fail ? 1 : 0);
 })();

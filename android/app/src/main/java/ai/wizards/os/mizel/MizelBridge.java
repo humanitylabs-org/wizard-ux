@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * window.wizardMizelPort for pages (and iframes) on https://private.wizard001.com only. AndroidX
+ * window.wizardMizelPort for pages (and iframes) on https://legacy.wizard.example only. AndroidX
  * addWebMessageListener injects the object solely into frames whose origin matches the allow-list, so a page on any
  * other origin never sees it. The page sends JSON command strings; replies and pushes come back on the same port.
  * Pages never pass URLs or tokens: native holds the base URL. Protocol: android/MIZEL_RECORDER.md.

@@ -299,7 +299,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         VC = vcode(); NEXT_VC = 9000 + VC; LATER_VC = 9100 + VC
         VN0 = re.sub(r'-qa$', '', (re.search(r'versionName=(\S+)', sx('dumpsys package %s' % PKG)) or [None, '0-qa'])[1])
         check('install the 0.7.0 QA build over adb (installer of record: %s)' % installer(), out == 'Success' and VC > 0, '%s versionCode=%d' % (out, VC))
-        resolv = sx('ping -c 1 -W 2 private.wizard001.com 2>&1 | head -2')
+        resolv = sx('ping -c 1 -W 2 legacy.wizard.example 2>&1 | head -2')
         check('the real Wizard is unreachable from the emulator (DNS dead)', 'unknown host' in resolv.lower() or 'bad address' in resolv.lower() or not re.search(r'\d+\.\d+\.\d+\.\d+', resolv), resolv.strip())
         check('fixtures: qanext/qalater share the QA signer, the tampered one does not',
               SIGNERS['next'] == SIGNERS['later'] == SIGNER and SIGNERS['bad'] and SIGNERS['bad'] != SIGNER, SIGNERS)

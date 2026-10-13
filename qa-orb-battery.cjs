@@ -2,7 +2,7 @@
 // Boots the real shell (self-contained, every request fulfilled from QA_WEB_DIR/web), counts actual WebGL
 // orb draws (gl.drawArrays on the #orb canvas) and reports draws/minute idle, listening, hidden, slept.
 // Usage: QA_WEB_DIR=<repo> node qa-orb-battery.cjs   (prints JSON metrics + PASS/FAIL lines)
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const path = require('path'), fs = require('fs');
 const W = process.env.QA_WEB_DIR || __dirname;
 const SECS = +(process.env.QA_SECS || 10);
@@ -14,7 +14,7 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2.625, hasTouch: true, isMobile: true, permissions: ['microphone'] });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (u.hostname !== 'private.wizard001.com') return r.abort();
+    if (u.hostname !== 'legacy.wizard.example') return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET' && !m[1].startsWith('api/')) {
       const f = (m[1] || 'index.html'), p = path.join(W, 'web', f);
@@ -34,7 +34,7 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   });
   const pg = await ctx.newPage();
   const errs = []; pg.on('pageerror', e => errs.push(String(e)));
-  await pg.goto('https://private.wizard001.com/wizard-os-home/', { waitUntil: 'load' });
+  await pg.goto('https://legacy.wizard.example/wizard-os-home/', { waitUntil: 'load' });
   await pg.waitForTimeout(3000);
   const webgl = await pg.evaluate(() => !!(window.Orb && Orb.webgl));
   const rate = async (setup) => {

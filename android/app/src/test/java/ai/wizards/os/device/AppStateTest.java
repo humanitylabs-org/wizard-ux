@@ -11,7 +11,7 @@ public class AppStateTest {
     public void onlyLoopbackFakesCanReplaceTheOrigin() {
         assertTrue(AppState.isQaOrigin("http://localhost:18788"));
         assertTrue(AppState.isQaOrigin("http://10.0.2.2:18788"));
-        assertFalse(AppState.isQaOrigin("https://private.wizard001.com"));
+        assertFalse(AppState.isQaOrigin("https://legacy.wizard.example"));
         assertFalse(AppState.isQaOrigin("http://evil.example:80"));
         assertFalse(AppState.isQaOrigin("http://localhost:18788/path"));
         assertFalse(AppState.isQaOrigin(null));
@@ -23,7 +23,7 @@ public class AppStateTest {
             AppState.legacyFallback = false;
             assertEquals(ai.wizards.os.BuildConfig.ORIGIN, AppState.live(ai.wizards.os.BuildConfig.ORIGIN));
             AppState.legacyFallback = true;
-            assertEquals("https://private.wizard001.com", AppState.live(ai.wizards.os.BuildConfig.ORIGIN));
+            assertEquals("https://legacy.wizard.example", AppState.live(ai.wizards.os.BuildConfig.ORIGIN));
             assertEquals("http://localhost:18788", AppState.live("http://localhost:18788")); // QA fakes never move
         } finally {
             AppState.legacyFallback = false;

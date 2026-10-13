@@ -8,12 +8,12 @@
 //   4. A steer the run finished before reading is replayed as an ordinary message (never silently dropped).
 //   5. Zero writes reach the real Wizard.
 // Usage: node tools/qa-origin.cjs 9371 &  then  QA_WEB_DIR=<worktree> node qa-steer-receipt.cjs [url]
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9371/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/feature-steer-receipt';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || '/home/developer/.hermes/cache/scratch/wizard-audit/shots/feature-steer-receipt';
+const EXEC = process.env.QA_CHROME || '/home/developer/.local/bin/google-chrome';
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, typeof extra === 'string' ? extra : JSON.stringify(extra)); } };

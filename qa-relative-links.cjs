@@ -1,5 +1,5 @@
 // QA: chat links are origin-independent (relative paths), and links to this Wizard's other names
-// (the retired private.wizard001.com, or bootstrap network.aliases) fold back to paths so they open in place.
+// (the retired legacy.wizard.example, or bootstrap network.aliases) fold back to paths so they open in place.
 // Usage: node qa-relative-links.cjs   (pure: loads web/core/chat-kit.js in a fake window; no network)
 const fs = require('fs'), path = require('path'), vm = require('vm');
 let pass = 0, fail = 0;
@@ -21,30 +21,30 @@ function load(host, aliases = []) {
   return win.WosChat;
 }
 
-for (const host of ['wizard.tailc0f369.ts.net', 'localhost']) {
+for (const host of ['wizard.tail1234.ts.net', 'localhost']) {
   const K = load(host, ['wizard-private.tailc0f369.ts.net']);
   const md = s => K.md(s);
   // Relative links render as live links (they open on whatever address this device uses).
   ok(/href="\/cinequeue\/"/.test(md('[CineQueue](/cinequeue/)')), `${host}: relative path is a link`);
   // Old custom-domain links fold to paths, so pre-migration messages open in place.
-  ok(/href="\/reports\/wizard-os\/"/.test(md('[dl](https://private.wizard001.com/reports/wizard-os/)')), `${host}: private.wizard001.com folds to a path`);
+  ok(/href="\/reports\/wizard-os\/"/.test(md('[dl](https://legacy.wizard.example/reports/wizard-os/)')), `${host}: legacy.wizard.example folds to a path`);
   ok(/href="\/reports\/x\/"/.test(md('[x](https://wizard-private.tailc0f369.ts.net/reports/x/)')), `${host}: bootstrap alias folds to a path`);
   ok(/href="\/apps\/\?a=1#b"/.test(md(`[a](https://${host}/apps/?a=1#b)`)), `${host}: own absolute host folds to a path, query+hash kept`);
   // Thread links and private media keep their in-place handling through the old domain.
-  ok(/data-session="abc_1"/.test(md('[t](https://private.wizard001.com/wizard/?session=abc_1)')), `${host}: old-domain thread link opens in place`);
-  ok(/data-mlink="\/wizard\/attachments\/0123456789abcdef0123456789abcdef"/.test(md('[f](https://private.wizard001.com/wizard/attachments/0123456789abcdef0123456789abcdef)')), `${host}: old-domain attachment stays private media`);
+  ok(/data-session="abc_1"/.test(md('[t](https://legacy.wizard.example/wizard/?session=abc_1)')), `${host}: old-domain thread link opens in place`);
+  ok(/data-mlink="\/wizard\/attachments\/0123456789abcdef0123456789abcdef"/.test(md('[f](https://legacy.wizard.example/wizard/attachments/0123456789abcdef0123456789abcdef)')), `${host}: old-domain attachment stays private media`);
   // Foreign hosts stay external and absolute.
   ok(/href="https:\/\/example\.com\/x"/.test(md('[e](https://example.com/x)')), `${host}: external link untouched`);
-  ok(/href="https:\/\/private\.wizard001\.com\.evil\.test\/"/.test(md('[e](https://private.wizard001.com.evil.test/)')), `${host}: lookalike host is not folded`);
+  ok(/href="https:\/\/private\.wizard\.example\.evil\.test\/"/.test(md('[e](https://legacy.wizard.example.evil.test/)')), `${host}: lookalike host is not folded`);
   // Unsafe relative forms are refused.
   ok(!/href="\/\/evil/.test(md('[e](//evil.test/x)')), `${host}: protocol-relative refused`);
   ok(!/href="javascript/.test(md('[e](javascript:alert(1))')), `${host}: javascript: refused`);
   ok(!/href="\/\\/.test(md('[e](/\\evil.test)')), `${host}: backslash host trick refused`);
   // isHomeUrl recognises the old domain for in-place opening.
-  ok(K.isHomeUrl(new URL('https://private.wizard001.com/cinequeue/')), `${host}: isHomeUrl(old domain)`);
+  ok(K.isHomeUrl(new URL('https://legacy.wizard.example/cinequeue/')), `${host}: isHomeUrl(old domain)`);
   ok(!K.isHomeUrl(new URL('https://example.com/')), `${host}: isHomeUrl(foreign) false`);
   // Images: old-domain absolute image becomes a same-origin path; foreign images stay blocked.
-  ok(K.imagesOf({ image_urls: ['https://private.wizard001.com/reports/a.png'] }, '').includes('/reports/a.png'), `${host}: old-domain image folds to path`);
+  ok(K.imagesOf({ image_urls: ['https://legacy.wizard.example/reports/a.png'] }, '').includes('/reports/a.png'), `${host}: old-domain image folds to path`);
   ok(!K.imagesOf({ image_urls: ['https://example.com/a.png'] }, '').length, `${host}: foreign image blocked`);
 }
 console.log(`\n${pass} passed, ${fail} failed`);

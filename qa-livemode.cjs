@@ -1,11 +1,11 @@
 // Live Mode slice QA on the isolated preview: phone viewport, mockup thumbprint (tap or ~300 ms hold;
 // no WebAuthn / real fingerprint, per James), all Hermes/Wizard writes intercepted.
-const { chromium } = require('/home/telos/node_modules/playwright');
-const BASE = 'https://private.wizard001.com';
+const { chromium } = require('/home/developer/node_modules/playwright');
+const BASE = 'https://legacy.wizard.example';
 let pass = 0, fail = 0;
 const ok = (c, name, info = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${name}${!c && info ? ' ' + info : ''}`); };
 (async () => {
-  const b = await chromium.launch({ args: ['--host-resolver-rules=MAP private.wizard001.com 127.0.0.1:18443'] });
+  const b = await chromium.launch({ args: ['--host-resolver-rules=MAP legacy.wizard.example 127.0.0.1:18443'] });
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true });
   const writes = [];
   await ctx.route('**/wizard/hermes/**', r => {

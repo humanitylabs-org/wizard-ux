@@ -1,7 +1,7 @@
 // Wizard OS Home — phone-viewport QA. Usage: node qa.cjs [baseUrl]
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const BASE = process.argv[2] || 'http://127.0.0.1:9271/';
-const OUT = process.env.QA_OUT || '/home/telos/apps/wizard-os-home/qa';
+const OUT = process.env.QA_OUT || '/home/developer/apps/wizard-os-home/qa';
 const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
 
 (async () => {

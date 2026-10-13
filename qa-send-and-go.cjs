@@ -5,9 +5,9 @@
 // a thread, it's supposed to just send the reply and pop me back out to the chat list instead of leaving me
 // staring at my message sending."
 // Usage: QA_WEB_DIR=<repo> node qa-send-and-go.cjs [url]. Real Wizard reads; every write is intercepted.
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
-const BASE = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:18443';
+let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/developer/node_modules/playwright')); }
+const BASE = process.argv[2] || 'https://legacy.wizard.example/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP legacy.wizard.example 127.0.0.1:18443';
 const WD = process.env.QA_WEB_DIR || '';
 const SHOTS = process.env.QA_SHOTS || '';
 const fs = require('fs'), path = require('path');

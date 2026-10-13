@@ -7,7 +7,7 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class OriginTest {
-    static final String HOME = "wizard.tailc0f369.ts.net";
+    static final String HOME = "wizard.tail1234.ts.net";
 
     @Test
     public void homeIsTheTailnetName() {
@@ -21,46 +21,46 @@ public class OriginTest {
         assertTrue(Origin.isPrivate("https", HOME, -1));
         assertTrue(Origin.isPrivate("https", HOME, 443));
         // The retired name is still honoured (old links, notifications).
-        assertTrue(Origin.isPrivate("https", "private.wizard001.com", -1));
-        assertTrue(Origin.isPrivate("https", "PRIVATE.wizard001.com", 443));
-        assertFalse(Origin.isPrivate("http", "private.wizard001.com", -1));
+        assertTrue(Origin.isPrivate("https", "legacy.wizard.example", -1));
+        assertTrue(Origin.isPrivate("https", "PRIVATE.wizard.example", 443));
+        assertFalse(Origin.isPrivate("http", "legacy.wizard.example", -1));
         assertFalse(Origin.isPrivate("http", HOME, -1));
-        assertFalse(Origin.isPrivate("https", "private.wizard001.com.evil.test", -1));
+        assertFalse(Origin.isPrivate("https", "legacy.wizard.example.evil.test", -1));
         assertFalse(Origin.isPrivate("https", HOME + ".evil.test", -1));
         assertFalse(Origin.isPrivate("https", "evil-" + HOME, -1));
-        assertFalse(Origin.isPrivate("https", "wizard001.com", -1));
-        assertFalse(Origin.isPrivate("https", "apps.wizard001.com", -1));
-        assertFalse(Origin.isPrivate("https", "private.wizard001.com", 8443));
+        assertFalse(Origin.isPrivate("https", "wizard.example", -1));
+        assertFalse(Origin.isPrivate("https", "apps.wizard.example", -1));
+        assertFalse(Origin.isPrivate("https", "legacy.wizard.example", 8443));
         assertFalse(Origin.isPrivate("https", HOME, 8443));
         assertFalse(Origin.isPrivate("https", null, -1));
     }
 
     @Test
     public void onlyTheRetiredNameIsLegacy() {
-        assertTrue(Origin.isLegacy("https", "private.wizard001.com", -1));
+        assertTrue(Origin.isLegacy("https", "legacy.wizard.example", -1));
         assertFalse(Origin.isLegacy("https", HOME, -1));
-        assertFalse(Origin.isLegacy("http", "private.wizard001.com", -1));
-        assertFalse(Origin.isLegacy("https", "private.wizard001.com.evil.test", -1));
+        assertFalse(Origin.isLegacy("http", "legacy.wizard.example", -1));
+        assertFalse(Origin.isLegacy("https", "legacy.wizard.example.evil.test", -1));
     }
 
     @Test
     public void retiredNameMovesToTheSamePageOnTheTailnetName() {
-        assertEquals("https://" + HOME + "/wizard-os-home/?session=abc#x", Origin.toHome("https://private.wizard001.com/wizard-os-home/?session=abc#x"));
-        assertEquals("https://" + HOME + "/mizel-live/123", Origin.toHome("https://private.wizard001.com:443/mizel-live/123"));
-        assertEquals("https://" + HOME + "/", Origin.toHome("https://private.wizard001.com"));
-        assertEquals("https://" + HOME + "/?q=1", Origin.toHome("https://private.wizard001.com?q=1"));
-        assertEquals("https://private.wizard001.com.evil.test/x", Origin.toHome("https://private.wizard001.com.evil.test/x"));
+        assertEquals("https://" + HOME + "/wizard-os-home/?session=abc#x", Origin.toHome("https://legacy.wizard.example/wizard-os-home/?session=abc#x"));
+        assertEquals("https://" + HOME + "/mizel-live/123", Origin.toHome("https://legacy.wizard.example:443/mizel-live/123"));
+        assertEquals("https://" + HOME + "/", Origin.toHome("https://legacy.wizard.example"));
+        assertEquals("https://" + HOME + "/?q=1", Origin.toHome("https://legacy.wizard.example?q=1"));
+        assertEquals("https://legacy.wizard.example.evil.test/x", Origin.toHome("https://legacy.wizard.example.evil.test/x"));
         assertEquals("https://" + HOME + "/wizard-os-home/", Origin.toHome("https://" + HOME + "/wizard-os-home/"));
         assertEquals("https://example.com/", Origin.toHome("https://example.com/"));
     }
 
     @Test
     public void safetyNetMovesTheSamePageBackToTheRetiredName() {
-        assertEquals("https://private.wizard001.com/wizard-os-home/?session=abc#x", Origin.toLegacy("https://" + HOME + "/wizard-os-home/?session=abc#x"));
-        assertEquals("https://private.wizard001.com/mizel-live/1", Origin.toLegacy("https://" + HOME + ":443/mizel-live/1"));
+        assertEquals("https://legacy.wizard.example/wizard-os-home/?session=abc#x", Origin.toLegacy("https://" + HOME + "/wizard-os-home/?session=abc#x"));
+        assertEquals("https://legacy.wizard.example/mizel-live/1", Origin.toLegacy("https://" + HOME + ":443/mizel-live/1"));
         assertEquals("https://" + HOME + ".evil.test/x", Origin.toLegacy("https://" + HOME + ".evil.test/x"));
         assertEquals("https://example.com/", Origin.toLegacy("https://example.com/"));
-        assertEquals("https://private.wizard001.com/x", Origin.toLegacy("https://private.wizard001.com/x"));
+        assertEquals("https://legacy.wizard.example/x", Origin.toLegacy("https://legacy.wizard.example/x"));
     }
 
     @Test

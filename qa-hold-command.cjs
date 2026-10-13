@@ -3,9 +3,9 @@
 // command shows choices and sends nothing until one is tapped; a router outage on a hold sends nothing.
 // A tap (not a hold) still reaches the agent / the open thread as before.
 // Usage: QA_WEB_DIR=<tree> node qa-hold-command.cjs. Every Hermes/Wizard write is refused and recorded.
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/developer/node_modules/playwright')); }
 const fs = require('fs'), path = require('path');
-const ORIGIN = 'https://private.wizard001.com', URL_ = ORIGIN + '/wizard-os-home/';
+const ORIGIN = 'https://legacy.wizard.example', URL_ = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;
@@ -23,7 +23,7 @@ async function boot(b) {
   const json = (r, o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
-    if (u.hostname !== 'private.wizard001.com') {
+    if (u.hostname !== 'legacy.wizard.example') {
       // Image hosts the search page may touch directly (favicons): allow, they are read-only.
       return m === 'GET' ? r.continue() : r.abort();
     }

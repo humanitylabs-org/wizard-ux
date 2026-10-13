@@ -98,7 +98,7 @@ On its own, the shell runs with empty data. For live use it's served under one o
 - `/wizard-os-home/` → `server.py` (port 9271)
 - `/wizard/` → Wizard Agent Service (Chats calls `/wizard/hermes/...`, `/wizard/files/...`, `/wizard/thread-seen`, `/wizard/thread-dispositions`)
 
-Both sit behind the private gateway on Tailscale (`https://private.wizard001.com/wizard-os-home/`).
+Both sit behind the private gateway on Tailscale (`https://legacy.wizard.example/wizard-os-home/`).
 
 `server.py` reads these environment variables:
 

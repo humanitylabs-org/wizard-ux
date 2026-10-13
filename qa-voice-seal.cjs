@@ -3,7 +3,7 @@
 // together. They should both be sent together. The images and the text and the voice note should all be sent
 // together." Repro in the run queue: a voice note went in at 13:23:40, the pasted link 21 s later as its own message.
 // Usage: QA_WEB_DIR=<repo> node qa-voice-seal.cjs [url]. Real Wizard reads; every write is intercepted.
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/developer/node_modules/playwright')); }
 const URL_ = process.argv[2] || 'http://127.0.0.1:8923/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || '';
 const SHOTS = process.env.QA_SHOTS || '';

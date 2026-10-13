@@ -5,17 +5,17 @@
 //  4 desktop shell shows it too
 // Every non-GET request is refused; nothing reaches Wizard.
 // Usage: node tools/qa-origin.cjs 9381 <worktree>/web (background), then node qa-newchat-fab.cjs [url]
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/developer/node_modules/playwright')); }
 const fs = require('fs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/newchat-fab';
+const OUT = process.env.QA_OUT || '/home/developer/.hermes/cache/scratch/wizard-audit/shots/newchat-fab';
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, JSON.stringify(x).slice(0, 400)); } };
 const box = (p, sel) => p.evaluate(s => { const e = [...document.querySelectorAll(s)].find(e => { const b = e.getBoundingClientRect(); return b.width && b.left >= -2 && b.right <= innerWidth + 2; }); if (!e) return null; const b = e.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; }, sel);
 const overlap = (a, b) => a && b && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
 (async () => {
-  const br = await chromium.launch({ executablePath: '/home/telos/.local/bin/google-chrome' });
+  const br = await chromium.launch({ executablePath: '/home/developer/.local/bin/google-chrome' });
   const mk = async (vp, mobile) => { const ctx = await br.newContext({ viewport: vp, hasTouch: mobile, isMobile: mobile, deviceScaleFactor: 2 });
     await ctx.route('**/*', r => { const m = r.request().method(); return m !== 'GET' && m !== 'HEAD' ? r.fulfill({ status: 403, body: 'qa' }) : r.continue(); });
     const p = await ctx.newPage(); p.errs = []; p.on('pageerror', e => { if (!/localStorage/.test(e.message)) p.errs.push(e.message); }); return p; };

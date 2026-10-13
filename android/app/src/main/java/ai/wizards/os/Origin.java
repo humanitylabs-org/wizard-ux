@@ -6,10 +6,10 @@ import java.util.Locale;
 
 /** The origins Wizard OS loads in-app. Pure string checks so they are unit-testable off-device.
  *  HOST is this Wizard's own address (its tailnet name, from BuildConfig.ORIGIN). LEGACY_HOST is the retired
- *  private.wizard001.com: still accepted so old links and notifications keep working, and moved to HOST. */
+ *  legacy.wizard.example: still accepted so old links and notifications keep working, and moved to HOST. */
 final class Origin {
     static final String HOST = BuildConfig.ORIGIN.replaceFirst("^https://", "").replaceAll("/+$", "");
-    static final String LEGACY_HOST = "private.wizard001.com";
+    static final String LEGACY_HOST = "legacy.wizard.example";
     static final String SHELL_PATH = "/wizard-os-home/";
     /** Mizel Live (meeting recorder view): the recording notification deep-links here, inside the app. */
     static final String MIZEL_LIVE_PATH = "/mizel-live/";
@@ -42,7 +42,7 @@ final class Origin {
         if (lower.startsWith(legacy + ":443")) rest = url.substring(legacy.length() + 4);
         else if (lower.startsWith(legacy)) rest = url.substring(legacy.length());
         else return url;
-        if (!rest.isEmpty() && "/?#".indexOf(rest.charAt(0)) < 0) return url; // private.wizard001.com.evil.test
+        if (!rest.isEmpty() && "/?#".indexOf(rest.charAt(0)) < 0) return url; // legacy.wizard.example.evil.test
         return "https://" + HOST + (rest.isEmpty() || rest.charAt(0) != '/' ? "/" + rest : rest);
     }
 

@@ -6,7 +6,7 @@
 const http = require('http'), fs = require('fs'), path = require('path');
 const PORT = +(process.argv[2] || process.env.QA_ORIGIN_PORT || 9371);
 const WEB = path.resolve(process.argv[3] || process.env.QA_ORIGIN_WEB || path.join(__dirname, '..', 'web'));
-const FALLBACK = '/home/telos/apps/wizard-os-home/web'; // data.js / summaries.js are untracked build outputs
+const FALLBACK = '/home/developer/apps/wizard-os-home/web'; // data.js / summaries.js are untracked build outputs
 const BACKEND = { host: '127.0.0.1', port: 8923 };
 const STATIC = { '127.0.0.1:9271': '/api/' }; // voice/router endpoints of the prototype server
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.md': 'text/markdown' };

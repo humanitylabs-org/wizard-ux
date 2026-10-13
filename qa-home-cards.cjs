@@ -2,10 +2,10 @@
 // sits far down the strip); Unread and Working open the Chats window filtered to just those threads; Back clears
 // the filter and lands back on Home; the example-phrase chips are gone from Home and empty desks.
 // Usage: node qa-home-cards.cjs [origin=http://127.0.0.1:9431/wizard-os-home/]   (every write is intercepted)
-let pw; try { pw = require('/home/telos/node_modules/playwright'); } catch (e) { pw = require('playwright-core'); }
+let pw; try { pw = require('/home/developer/node_modules/playwright'); } catch (e) { pw = require('playwright-core'); }
 const URL_ = process.argv[2] || 'http://127.0.0.1:9431/wizard-os-home/';
 const ORIGIN = new URL(URL_).origin;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/home-cards';
+const SHOTS = process.env.QA_SHOTS || '/home/developer/.hermes/cache/scratch/home-cards';
 require('fs').mkdirSync(SHOTS, { recursive: true });
 let pass = 0, fail = 0, runs = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, x); } };

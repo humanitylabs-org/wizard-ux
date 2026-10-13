@@ -36,7 +36,7 @@
     return sessionLoad;
   }
   async function available() {
-    if (/\.staging\.wizard001\.com$/.test(location.hostname) || window.WizAppInstallReadOnly === true) return false;
+    if (/\.staging\.wizard\.example$/.test(location.hostname) || window.WizAppInstallReadOnly === true) return false;
     try { return (await json('/wizard/v1/bootstrap')).capabilities?.app_installation === true; } catch { return false; }
   }
   async function installed() {

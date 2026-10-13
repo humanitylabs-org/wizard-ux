@@ -10,7 +10,7 @@ WEB_DIR  the worktree's web/ (served as /wizard-os-home/ by the fake Wizard)
 
 Nothing can reach the real Wizard: the app is pointed (debug-only files/qa_home.txt + qa_origin.txt) at a fake
 Wizard on this Mac, reached from the emulator as http://localhost:PORT through `adb reverse`; the emulator runs
-with a dead DNS server so private.wizard001.com cannot even resolve; and the WebView's resource log is checked
+with a dead DNS server so legacy.wizard.example cannot even resolve; and the WebView's resource log is checked
 for any wizard001 request at the end.
 
 Checks
@@ -309,7 +309,7 @@ with (BASE / 'worker.lock').open('a') as lock:
     fcntl.flock(lock, fcntl.LOCK_EX)
     try:
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'np', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
-        # Dead DNS: nothing on the emulator can resolve private.wizard001.com (QA must never reach the real Wizard).
+        # Dead DNS: nothing on the emulator can resolve legacy.wizard.example (QA must never reach the real Wizard).
         em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'np', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect', '-dns-server', '10.0.2.250'],
                               env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)
         for _ in range(140):
@@ -326,7 +326,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         VN = (re.search(r'versionName=(\S+)', sx('dumpsys package %s' % PKG)) or [None, '0-qa'])[1]
         NEXT_VN = re.sub(r'-qa$', '', VN) + '-qanext'
         check('install the QA build', out == 'Success', out + ' ' + (ver.group(0) if ver else ''))
-        resolv = sx('ping -c 1 -W 2 private.wizard001.com 2>&1 | head -2')
+        resolv = sx('ping -c 1 -W 2 legacy.wizard.example 2>&1 | head -2')
         check('the real Wizard is unreachable from the emulator (DNS dead)', 'unknown host' in resolv.lower() or 'bad address' in resolv.lower() or not re.search(r'\d+\.\d+\.\d+\.\d+', resolv), resolv.strip())
         sh(ADB, '-s', S, 'reverse', 'tcp:%d' % FAKE, 'tcp:%d' % FAKE)
         # QA hooks (debug build only): fake origin for the page + native HTTP, canned microphone.

@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 /**
- * One-time carry of the phone's local Wizard OS state from the retired private.wizard001.com name to this
+ * One-time carry of the phone's local Wizard OS state from the retired legacy.wizard.example name to this
  * Wizard's tailnet name. A WebView keeps localStorage and IndexedDB per origin, so without this the first
  * launch on the new address would start with no drafts, no unsent messages and every thread unread.
  *

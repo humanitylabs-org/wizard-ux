@@ -1,6 +1,6 @@
 // Desk overview recognition and navigation. Real reads; agent writes always intercepted.
 // Usage: node qa-desk-overview.cjs <origin> | QA_OUT=<directory> QA_PW=<playwright module>
-let pw; try { pw = require(process.env.QA_PW || 'playwright-core'); } catch { pw = require('/home/telos/node_modules/playwright'); }
+let pw; try { pw = require(process.env.QA_PW || 'playwright-core'); } catch { pw = require('/home/developer/node_modules/playwright'); }
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9471/wizard-os-home/';
 const out = process.env.QA_OUT || path.join(__dirname, 'qa-overview'); fs.mkdirSync(out, { recursive: true });

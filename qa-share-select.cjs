@@ -10,11 +10,11 @@
 //  7 Selection colour is Wizard violet
 // Fixture thread merged into real Wizard reads; EVERY non-GET request is intercepted, nothing reaches Wizard.
 // Usage: node tools/qa-origin.cjs 9475 <worktree>/web &  then  QA_WEB_DIR=<worktree> node qa-share-select.cjs [url]
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/developer/node_modules/playwright')); }
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9475/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const EXEC = process.env.QA_CHROME || '/home/developer/.local/bin/google-chrome';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, typeof extra === 'string' ? extra : JSON.stringify(extra).slice(0, 500)); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -83,7 +83,7 @@ const tap = (p, id) => p.evaluate(id => document.querySelector(`.selmenu [data-s
   const geo = await p.evaluate(() => { const m = document.querySelector('.selmenu').getBoundingClientRect(), r = getSelection().getRangeAt(0).getBoundingClientRect(); return { m: [m.left, m.top, m.right, m.bottom], r: [r.left, r.top, r.right, r.bottom], vw: innerWidth }; });
   ok(geo.m[3] <= geo.r[1] || geo.m[1] >= geo.r[3], '2 the menu sits above or below the words, never over them', geo);
   ok(geo.m[0] >= 0 && geo.m[2] <= geo.vw, '2 the menu stays on screen', geo);
-  await p.screenshot({ path: '/home/telos/.hermes/cache/scratch/wos097/web-menu.png' });
+  await p.screenshot({ path: '/home/developer/.hermes/cache/scratch/wos097/web-menu.png' });
   // 3a Copy
   await tap(p, 'copy'); await sleep(300);
   const clip = await p.evaluate(() => navigator.clipboard.readText());
@@ -163,7 +163,7 @@ const tap = (p, id) => p.evaluate(id => document.querySelector(`.selmenu [data-s
   ok(Math.abs(r1.t - r0.t - 260) <= 3 && Math.abs(r1.l - r0.l - 30) <= 3, '8 dragging the menu moves it with the finger', { r0, r1 });
   ok(st8.open && st8.sel.length > 20 && st8.moved, '8 after the drop the menu stays open and the words stay selected', st8);
   ok(!n8.some(c => c[0] === 'shareText'), '8 a drag that started on Share did not share', n8);
-  await p.screenshot({ path: '/home/telos/.hermes/cache/scratch/wos097/menu-dragged.png' });
+  await p.screenshot({ path: '/home/developer/.hermes/cache/scratch/wos097/menu-dragged.png' });
   // 8b scrolling the thread leaves a moved menu where it was dropped
   await p.evaluate(() => { const t = eval(window.__T); const m = t.querySelector('.ch-msgs'); m.scrollTop = Math.max(0, m.scrollTop - 40); m.dispatchEvent(new Event('scroll')); }); await sleep(500);
   const r2 = await mrect();

@@ -6,12 +6,12 @@
 //   #21 every send the outbox delivers is handed to the native reply watcher (watchRun).
 //   #22 the native update banner shows/acts; the web hot-reload swaps in new code and keeps chat drafts.
 // Usage: QA_WEB_DIR=<worktree> node qa-device.cjs  (self-contained: every request is routed; nothing leaves the box)
-// Negative control: QA_WEB_DIR=/home/telos/apps/wizard-os-home node qa-device.cjs must FAIL.
-const { chromium } = require('/home/telos/node_modules/playwright');
+// Negative control: QA_WEB_DIR=/home/developer/apps/wizard-os-home node qa-device.cjs must FAIL.
+const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = 'https://private.wizard001.com/wizard-os-home/';
+const URL_ = 'https://legacy.wizard.example/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/native-parity';
+const SHOTS = process.env.QA_SHOTS || '/home/developer/.hermes/cache/scratch/wizard-audit/shots/native-parity';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -22,7 +22,7 @@ async function boot(b, { native = true } = {}) {
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone'] });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (u.hostname !== 'private.wizard001.com') { W.foreign.push(u.href); return r.abort(); }
+    if (u.hostname !== 'legacy.wizard.example') { W.foreign.push(u.href); return r.abort(); }
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && (q.method() === 'GET' || q.method() === 'HEAD') && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = path.join(WEB, 'web', f);

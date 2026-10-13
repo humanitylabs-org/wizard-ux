@@ -12,13 +12,13 @@
 //
 // Real Wizard reads; fixture threads merged in; EVERY write is intercepted (zero reach Archimedes).
 // Usage: QA_WEB_DIR=<tree> node qa-reply-defer.cjs [origin url, default the Agent Service on :8923]
-let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
+let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/developer/node_modules/playwright'); }
 const { chromium } = pw;
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:8923/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wos-reply-defer-shots';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || '/home/developer/.hermes/cache/scratch/wos-reply-defer-shots';
+const EXEC = process.env.QA_CHROME || '/home/developer/.local/bin/google-chrome';
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra === '' ? '' : JSON.stringify(extra).slice(0, 500)); } };

@@ -2,9 +2,9 @@
 // fills the display. Out: swipe up from the bottom edge, pinch in, or Back. Chats keeps a small orb bottom-right
 // beside the composer for voice replies; that orb only talks (no shell swipes). Every write is intercepted.
 // Usage: QA_WEB_DIR=<repo> [QA_SHOTS=dir] node qa-immersive.cjs [url]
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
+const URL_ = process.argv[2] || 'https://legacy.wizard.example/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;
@@ -16,12 +16,12 @@ async function boot(b) {
   const ctx = await b.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone'] });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (!/private\.wizard001\.com$/.test(u.hostname)) return r.abort();
+    if (!/private\.wizard\.example$/.test(u.hostname)) return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET' && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html';
       // data.js / summaries.js are untracked build outputs: fall back to the live tree's copy (same as tools/qa-origin.cjs).
-      let p = path.join(W, 'web', f); if (!fs.existsSync(p) && /^(data|summaries)\.js$/.test(f)) p = path.join('/home/telos/apps/wizard-os-home/web', f);
+      let p = path.join(W, 'web', f); if (!fs.existsSync(p) && /^(data|summaries)\.js$/.test(f)) p = path.join('/home/developer/apps/wizard-os-home/web', f);
       if (!fs.existsSync(p)) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
       const ct = f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : f.endsWith('.png') ? 'image/png' : f.endsWith('.webmanifest') ? 'application/manifest+json' : 'application/javascript';
       return r.fulfill({ status: 200, contentType: ct, body: fs.readFileSync(p) });

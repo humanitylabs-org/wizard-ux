@@ -5,10 +5,10 @@
 // Real stack: the worktree shell (tools/qa-origin style, writes to Wizard refused) + the real Wizard Music app (:9205)
 // + the live music hub. Hub writes made here are plays/skips only (no thumbs), which only feed "Recent".
 // Usage: QA_WEB_DIR=<tree> node qa-music-voice.cjs
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/developer/node_modules/playwright')); }
 const http = require('http'), fs = require('fs'), path = require('path');
 const WEB = path.resolve(process.env.QA_WEB_DIR || __dirname, 'web');
-const FALLBACK = '/home/telos/apps/wizard-os-home/web';
+const FALLBACK = '/home/developer/apps/wizard-os-home/web';
 const SHOTS = process.env.QA_SHOTS || '';
 const PORT = +(process.env.QA_PORT || 18471);
 let pass = 0, fail = 0;

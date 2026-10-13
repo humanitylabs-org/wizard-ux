@@ -4,9 +4,9 @@
 // about food goes to Wizard as before. Native bridge is faked; its usualsMatch() knows only saved orders, like an
 // app build that predates the new phrases, so the web spell has to carry them. Every Hermes/Wizard write is refused.
 // Usage: node qa-food-spells.cjs   (QA_WEB_DIR=<tree> to point at another tree, QA_SHOTS=<dir> for screenshots)
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const ORIGIN = 'https://private.wizard001.com', URL_ = ORIGIN + '/wizard-os-home/';
+const ORIGIN = 'https://legacy.wizard.example', URL_ = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname, SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
@@ -21,7 +21,7 @@ async function boot(b) {
   const json = (r, o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
-    if (u.hostname !== 'private.wizard001.com') return r.abort();
+    if (u.hostname !== 'legacy.wizard.example') return r.abort();
     const sh = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (sh && (m === 'GET' || m === 'HEAD')) {
       const f = sh[1] || 'index.html', p = path.join(WEB, 'web', f);

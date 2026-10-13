@@ -8,10 +8,10 @@
 //  No mic (permission denied) → typed fallback that sends what was typed.
 //  Help: "help" opens the sheet (no agent run); Settings → Gestures & help; Practice again; Skip; ?view=tour.
 // Usage: node qa-tour.cjs [origin=http://127.0.0.1:9431/wizard-os-home/]
-let pw; try { pw = require('/home/telos/node_modules/playwright'); } catch (e) { pw = require('playwright-core'); }
+let pw; try { pw = require('/home/developer/node_modules/playwright'); } catch (e) { pw = require('playwright-core'); }
 const URL_ = process.argv[2] || 'http://127.0.0.1:9431/wizard-os-home/';
 const ORIGIN = new URL(URL_).origin;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/tour';
+const SHOTS = process.env.QA_SHOTS || '/home/developer/.hermes/cache/scratch/tour';
 require('fs').mkdirSync(SHOTS, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, x); } };

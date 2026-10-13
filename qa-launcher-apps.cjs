@@ -1,9 +1,9 @@
 // QA: the launcher shows the current Wizard apps (not retired prototypes), and each tile opens the right URL.
 // Usage: QA_WEB_DIR=$PWD node qa-launcher-apps.cjs [origin]. Every Hermes/Wizard write is intercepted.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:18443';
+const URL_ = process.argv[2] || 'https://legacy.wizard.example/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP legacy.wizard.example 127.0.0.1:18443';
 const W = process.env.QA_WEB_DIR;
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, x); } };
@@ -60,7 +60,7 @@ const RETIRED = ['/shopping-assistant/', '/reader/', '/signal-feed/', '/recall/'
       const hit = await p.evaluate(() => [...document.querySelectorAll('#launcherBody [data-app]')].map(e => e.dataset.app));
       ok(!hit.includes('maps'), 'mobile: searching "maps" in the launcher shows no Android tile', JSON.stringify(hit));
       ok(await p.evaluate(() => (window.WizCore.apps('mobile').findApp('maps') || {}).id === 'maps'), 'mobile: voice "open maps" still resolves to Maps');
-      await p.screenshot({ path: (process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch') + '/launcher-apps-mobile.png' });
+      await p.screenshot({ path: (process.env.QA_SHOTS || '/home/developer/.hermes/cache/scratch') + '/launcher-apps-mobile.png' });
     }
     ok(!errs.length, `${shell}: no shell page errors`, errs.join(' | '));
     ok(!writes.length, `${shell}: zero writes to Archimedes`, writes.join(' '));

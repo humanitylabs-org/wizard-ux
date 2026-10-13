@@ -41,7 +41,7 @@ public final class AppState {
     }
 
     /** The retired name. The same Wizard still answers on it while the move settles. */
-    public static final String LEGACY_ORIGIN = "https://private.wizard001.com";
+    public static final String LEGACY_ORIGIN = "https://legacy.wizard.example";
 
     /**
      * Safety net for the move to the tailnet name: set for this process when the tailnet name cannot be reached

@@ -11,13 +11,13 @@
 //
 // Real Wizard reads; fixture threads merged into the session list; EVERY write is intercepted (zero reach Archimedes).
 // Usage: node tools/qa-origin.cjs 9481 <tree>/web &  then  QA_WEB_DIR=<tree> node qa-ready-status.cjs [url]
-let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
+let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/developer/node_modules/playwright'); }
 const { chromium } = pw;
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9481/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wos-ready-status-shots';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || '/home/developer/.hermes/cache/scratch/wos-ready-status-shots';
+const EXEC = process.env.QA_CHROME || '/home/developer/.local/bin/google-chrome';
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra === '' ? '' : JSON.stringify(extra).slice(0, 400)); } };

@@ -4,7 +4,7 @@
 // it sits at this screen for like 10 seconds… process this in the background, send them back out… and show that
 // something is happening or it's sending but allow them to keep using their phone and not have to hit the back button."
 // Usage: QA_WEB_DIR=<repo> node qa-orb-send-instant.cjs [url]. Real Wizard reads; every write is intercepted.
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/developer/node_modules/playwright')); }
 const URL_ = process.argv[2] || 'http://127.0.0.1:8923/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || '';
 const SHOTS = process.env.QA_SHOTS || '';

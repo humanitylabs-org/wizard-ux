@@ -1,13 +1,13 @@
 // Real-data check of the staged bound-views preview, as James gets it (router + boot.js + front + real hosted apps).
 // Every write is refused by the preview; this script also aborts non-GETs itself.
-let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
+let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/developer/node_modules/playwright'); }
 const fs = require('fs'), path = require('path');
-const HOST = 'bound-views.staging.wizard001.com', OUT = '/home/telos/.hermes/cache/scratch/bv-staged';
+const HOST = 'bound-views.staging.wizard.example', OUT = '/home/developer/.hermes/cache/scratch/bv-staged';
 fs.mkdirSync(OUT, { recursive: true });
 const THREADS = (process.argv[2] || '').split(',').filter(Boolean);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
-  const b = await pw.chromium.launch({ executablePath: '/home/telos/.local/bin/google-chrome', args: [`--host-resolver-rules=MAP ${HOST} 127.0.0.1:9399`] });
+  const b = await pw.chromium.launch({ executablePath: '/home/developer/.local/bin/google-chrome', args: [`--host-resolver-rules=MAP ${HOST} 127.0.0.1:9399`] });
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true,
     userAgent: 'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36 WizardOS-Android/0.9.0' });
   await ctx.route('**/*', r => r.request().method() === 'GET' || r.request().method() === 'HEAD' ? r.continue() : r.fulfill({ status: 403, body: '{}' }));

@@ -13,7 +13,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 
 public class UpdatePolicyTest {
-    static final String FEED = "https://private.wizard001.com/reports/wizard-os/latest.json";
+    static final String FEED = "https://legacy.wizard.example/reports/wizard-os/latest.json";
     static final String SHA = "864663a75a0dd19a134da46fea51931571d1fb03e7e50b0c05d089344039d771";
 
     @Test
@@ -21,7 +21,7 @@ public class UpdatePolicyTest {
         UpdatePolicy.Release r = UpdatePolicy.parse(new JSONObject().put("versionCode", 6).put("versionName", "0.5.1")
                 .put("url", "wizard-os-0.5.1.apk").put("sha256", SHA).put("bytes", 437029), FEED);
         assertNotNull(r);
-        assertEquals("https://private.wizard001.com/reports/wizard-os/wizard-os-0.5.1.apk", r.url);
+        assertEquals("https://legacy.wizard.example/reports/wizard-os/wizard-os-0.5.1.apk", r.url);
         assertEquals(6, r.versionCode);
         assertFalse(UpdatePolicy.newer(r, 6));
         assertTrue(UpdatePolicy.newer(r, 5));
@@ -30,7 +30,7 @@ public class UpdatePolicyTest {
     @Test
     public void rejectsForeignOriginsBadHashesAndDowngrades() throws Exception {
         assertNull(UpdatePolicy.parse(new JSONObject().put("versionCode", 9).put("versionName", "9").put("url", "https://evil.example/x.apk").put("sha256", SHA), FEED));
-        assertNull(UpdatePolicy.parse(new JSONObject().put("versionCode", 9).put("versionName", "9").put("url", "http://private.wizard001.com/x.apk").put("sha256", SHA), FEED));
+        assertNull(UpdatePolicy.parse(new JSONObject().put("versionCode", 9).put("versionName", "9").put("url", "http://legacy.wizard.example/x.apk").put("sha256", SHA), FEED));
         assertNull(UpdatePolicy.parse(new JSONObject().put("versionCode", 9).put("versionName", "9").put("url", "x.apk").put("sha256", "abc"), FEED));
         assertNull(UpdatePolicy.parse(new JSONObject().put("versionCode", 0).put("versionName", "9").put("url", "x.apk").put("sha256", SHA), FEED));
         assertNull(UpdatePolicy.parse(null, FEED));

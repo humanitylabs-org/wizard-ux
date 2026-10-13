@@ -9,11 +9,11 @@
 //   #33 Drafts section for unsent new chats (rotate, reopen, discard, survives reload)
 // Usage: QA_WEB_DIR=<worktree> node qa-chat-polish.cjs   (self-contained: every request is routed, nothing leaves)
 // Negative control: QA_WEB_DIR=<release/parity-0.7 checkout> node qa-chat-polish.cjs must FAIL.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const ORIGIN = 'https://private.wizard001.com', BASE = ORIGIN + '/wizard-os-home/';
+const ORIGIN = 'https://legacy.wizard.example', BASE = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/chat-polish';
+const SHOTS = process.env.QA_SHOTS || '/home/developer/.hermes/cache/scratch/wizard-audit/shots/chat-polish';
 fs.mkdirSync(SHOTS, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, typeof extra === 'string' ? extra : JSON.stringify(extra)); } };

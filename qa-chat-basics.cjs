@@ -9,14 +9,14 @@
 //
 // Usage: node tools/qa-origin.cjs 9371 &  then  node qa-chat-basics.cjs [url]
 //   url defaults to http://127.0.0.1:9371/wizard-os-home/ ; QA_WEB_DIR=<dir> serves web/ from <dir>
-//   (e.g. QA_WEB_DIR=/home/telos/apps/wizard-os-home for the `daily` baseline). QA_OUT=<dir> for screenshots.
-const { chromium } = require('/home/telos/node_modules/playwright');
+//   (e.g. QA_WEB_DIR=/home/developer/apps/wizard-os-home for the `daily` baseline). QA_OUT=<dir> for screenshots.
+const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9371/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/feature-chat-basics';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:18443';
+const OUT = process.env.QA_OUT || '/home/developer/.hermes/cache/scratch/wizard-audit/shots/feature-chat-basics';
+const EXEC = process.env.QA_CHROME || '/home/developer/.local/bin/google-chrome';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP legacy.wizard.example 127.0.0.1:18443';
 const REAL_THREAD = process.env.QA_REAL_THREAD || 'wizard_1791466716358_dd032d92f93f'; // James sent a photo (data-URL part); Archimedes replied with helm_attachments images
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;

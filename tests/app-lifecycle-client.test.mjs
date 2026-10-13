@@ -64,7 +64,7 @@ test('an uncertain write keeps the retry identity; projection refresh failure ne
   assert.equal(writes[0].opts.headers['Idempotency-Key'], writes[1].opts.headers['Idempotency-Key']);
 });
 test('read-only preview makes zero lifecycle writes', async () => {
-  const f = fixture({ host: 'apps.staging.wizard001.com' });
+  const f = fixture({ host: 'apps.staging.wizard.example' });
   await assert.rejects(f.client.operate('hello', 'install'), e => e.code === 'read_only');
   assert.equal(f.calls.filter(c => c.opts.method).length, 0);
 });

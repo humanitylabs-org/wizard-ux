@@ -26,7 +26,7 @@
   const S = { apps: [], tags: [], installed: new Map(), stack: [], q: '', loaded: false, error: '', lifecycle: false, working: new Set() };
   let removeArmed = '';
   const client = () => window.WizAppLifecycle;
-  if (/\.staging\.wizard001\.com$/.test(location.hostname)) $('preview').hidden = false;
+  if (/\.staging\.wizard\.example$/.test(location.hostname)) $('preview').hidden = false;
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
 
   /* ---------------- data ---------------- */

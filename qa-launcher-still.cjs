@@ -4,7 +4,7 @@
 // unchanged content do not touch the DOM; a live refresh never moves the scroll; typing a search still repaints;
 // one real 15 s poll passes with zero repaints. Real Wizard reads through qa-origin; every write intercepted.
 // Usage: node qa-launcher-still.cjs [base=http://127.0.0.1:9381/wizard-os-home/]
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const BASE = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };

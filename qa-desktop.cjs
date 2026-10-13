@@ -2,11 +2,11 @@
 // keyboard, voice key, native bridge v0 events, Back/Esc never leaves. Real Wizard reads; EVERY write
 // is intercepted (no message reaches Archimedes, nothing is marked read on the server).
 // Usage: node qa-desktop.cjs [baseUrl=http://127.0.0.1:9381/wizard-os-home/]   (tools/qa-origin.cjs serves a worktree)
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs');
 const BASE = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wux-desktop-qa';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || '/home/developer/.hermes/cache/scratch/wux-desktop-qa';
+const EXEC = process.env.QA_CHROME || '/home/developer/.local/bin/google-chrome';
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };

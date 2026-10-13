@@ -41,7 +41,7 @@ const noop = () => undefined;
 // WUX: a staging preview (and any qa-origin) refuses writes. Install/Start/Stop then show a calm read-only state
 // instead of an error: the preview is for judging the screens; the box does the real lifecycle.
 const READ_ONLY_NOTE = 'Preview: read-only. Install, Start and Stop run on your box, not in this preview.';
-const isReadOnly = () => !!window.__wamReadOnly || /\.staging\.wizard001\.com$/.test(location.hostname);
+const isReadOnly = () => !!window.__wamReadOnly || /\.staging\.wizard\.example$/.test(location.hostname);
 class ReadOnly extends Error {}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

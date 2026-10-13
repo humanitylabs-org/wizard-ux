@@ -62,7 +62,7 @@
    * address this device reached Wizard through (localhost on the Mac, the tailnet name on a phone). Absolute
    * links to this box's other names (the current host, or a retired custom domain listed in the bootstrap's
    * network.aliases) are folded back to paths, so old messages keep opening in place after a rename. */
-  const LEGACY_HOME_HOSTS = ['private.wizard001.com'];
+  const LEGACY_HOME_HOSTS = ['legacy.wizard.example'];
   function homeHosts() {
     const out = new Set([location.hostname, ...LEGACY_HOME_HOSTS]);
     try { for (const h of (window.WizConfig?.raw?.network?.aliases || [])) if (typeof h === 'string' && h) out.add(h.toLowerCase()); } catch (e) {}

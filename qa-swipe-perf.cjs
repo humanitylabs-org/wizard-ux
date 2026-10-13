@@ -2,10 +2,10 @@
 // Measures frame gaps and main-thread long tasks during (a) finger-drag swipes on the orb and
 // (b) animated desk changes, on a 4x-throttled phone, with and without Legacy Wizard on a desk.
 // Usage: QA_WEB_DIR=$PWD node qa-swipe-perf.cjs [origin]  (QA_WEB_DIR serves the shell from this checkout)
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:18443';
+const URL_ = process.argv[2] || 'https://legacy.wizard.example/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP legacy.wizard.example 127.0.0.1:18443';
 const W = process.env.QA_WEB_DIR, THROTTLE = +(process.env.QA_CPU || 4), STRICT = !!process.env.QA_STRICT;
 
 async function run(b, withLegacy) {

@@ -1,7 +1,7 @@
 // Real Android Back on a real Chrome (Thales emulator): CDP for state + trusted taps, adb KEYCODE_BACK for Back.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('/home/developer/node_modules/playwright');
 const { execSync } = require('child_process');
-const OUT = '/home/telos/apps/wizard-os-home/qa-live/android';
+const OUT = '/home/developer/apps/wizard-os-home/qa-live/android';
 require('fs').mkdirSync(OUT, { recursive: true });
 const adb = c => execSync(`ssh -o ConnectTimeout=8 thales 'export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools; export ANDROID_SERIAL=emulator-5554; ${c}'`, { encoding: 'utf8' });
 const back = () => adb('adb shell input keyevent 4');
