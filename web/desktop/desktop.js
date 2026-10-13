@@ -895,6 +895,7 @@
   function toast(icon, text, ms = 2000) { const t = $('#toast'); t.innerHTML = `<span>${esc(icon)}</span><span>${esc(text)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
 
   /* ---------------- native bridge (Wizard for Mac drives this by events) ---------------- */
+  let dictationFields = null;
   C.bridge.handle({
     orb: d => talk(d.action || 'toggle'),
     open(path, d) {
@@ -910,10 +911,15 @@
       if (path && path.startsWith('/')) newWin({ app: 'frame', url: path, title: path });
     },
     dictation(text) {
+      const fields = dictationFields || (dictationFields = window.WizCore.focusedField.create({
+        frames: () => $$('iframe', stage).filter(f => { const w = W[f.closest('[data-win]')?.dataset.win]; return !!APP[w?.appId]; }),
+        admit: (c, el) => { const win = c.frame?.closest('[data-win]') || el.closest('[data-win]'); return (!win || win.dataset.win === ws[cur].focus) && !!el.getClientRects().length; },
+      }));
+      const target = fields.capture();
+      if (target) { fields.insert(target, text); target.release(); return; }
       const f = focused();
       if (f?.app === 'chats' && f.thread && CHATS.insertText(f.id, text)) return;
       if (f?.app === 'chats') { newChat(); setTimeout(() => CHATS.insertText(focused().id, text), 60); return; }
-      const el = document.activeElement; if (el && /^(TEXTAREA|INPUT)$/.test(el.tagName)) { el.setRangeText(text, el.selectionStart, el.selectionEnd, 'end'); el.dispatchEvent(new Event('input', { bubbles: true })); }
     },
     back() { const did = escStep(); log('native-back:' + (did || 'root')); },
   });

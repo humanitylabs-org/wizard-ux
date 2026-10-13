@@ -67,8 +67,9 @@
 
   /* ================= #14 background recording: resume, notification Stop/Send, recovery ================= */
   const handledTakes = new Set();
+  const isDictation = take => take?.kind === 'dictation' || !!window.__wosDictationTake?.(take?.id);
   const voiceKind = take => {
-    if (!take || !['auto', 'command'].includes(take.kind)) return false;
+    if (!take || (!['auto', 'command'].includes(take.kind) && !isDictation(take))) return false;
     try { const ids = window.WizAppCapture?.getState?.()?.nativeDeviceTakeIds; return !Array.isArray(ids) || !ids.includes(take.id); }
     catch (_) { return false; }
   };
@@ -117,16 +118,16 @@
     const list = (J(d.recPending()) || []).filter(t => voiceKind(t) && !handledTakes.has(t.id));
     if (!list.length) return;
     // Send was already pressed in the notification: the owner said send, so send.
-    const go = list.filter(t => t.send);
+    const go = list.filter(t => t.send && !isDictation(t));
     for (const t of go) sendTake(t, 'notification');
-    const ask = list.filter(t => !t.send);
+    const ask = list.filter(t => !t.send || isDictation(t));
     if (!ask.length) return;
     log('rec:offer', ask.map(t => t.id + ':' + t.state).join(','), why);
     const el = openSheet('recording', `
       <div class="dv-head"><span class="dv-ic">◉</span><div><b>${ask.length > 1 ? `${ask.length} recordings saved` : 'Recording saved'}</b><small>${ask[0].state === 'interrupted' ? 'Wizard OS closed while you were recording. Nothing was lost.' : 'You stopped it from the notification.'}</small></div></div>
       ${ask.map(t => `<div class="dv-take" data-take="${esc(t.id)}"><span class="dv-tk">${fmtMs(t.ms)} · ${esc(fsize(t.bytes || 0))}</span>
-        <button class="dv-btn" data-takeact="delete">Delete</button><button class="dv-btn primary" data-takeact="send">Send</button></div>`).join('')}
-      <p class="dv-note">Send transcribes it and sends it to ${window.WizConfig.agent()} as a new chat, with the recording attached.</p>`);
+        <button class="dv-btn" data-takeact="delete">Delete</button><button class="dv-btn primary" data-takeact="send">${isDictation(t) ? 'Transcribe &amp; copy' : 'Send'}</button></div>`).join('')}
+      <p class="dv-note">Dictation is transcribed for copying only; it is never sent. Send on other recordings sends a new chat to ${window.WizConfig.agent()}.</p>`);
     el.addEventListener('click', e => {
       if (e.target.closest('[data-dvclose]')) return back();
       const b = e.target.closest('[data-takeact]'); if (!b) return;
@@ -140,6 +141,11 @@
    * then the native copy is deleted. Saved before anything goes over the network, so it can't be lost. */
   async function sendTake(t, how) {
     const d = DEV(), w = W$(); if (!d || !w || !voiceKind(t) || handledTakes.has(t.id)) return;
+    if (isDictation(t)) {
+      if (nativeOwner(t.id) !== 'voice') return;
+      if (w.recoverDictation(t)) handledTakes.add(t.id);
+      return;
+    }
     handledTakes.add(t.id);
     if (!J(d.recClaim(t.id))) return;
     const blob = readBlob(off => d.recRead(t.id, off), 'audio/aac');

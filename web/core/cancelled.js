@@ -48,19 +48,23 @@
   async function loadWeb() {
     try { web = (await tx('readonly', s => s.getAll())) || []; } catch (e) { web = web || []; }
     web.sort((a, b) => b.at - a.at);
+    for (const t of web) if (t.text && !texts[t.id]) texts[t.id] = t.text;
     const now = Date.now();
     for (const [i, t] of [...web.entries()]) if (i >= MAX_KEPT || now - t.at > MAX_AGE_MS) await removeWeb(t.id);
     return web;
   }
   async function removeWeb(id) { web = web.filter(t => t.id !== id); try { await tx('readwrite', s => s.delete(id)); } catch (e) {} }
 
-  async function keepWeb(blob, ms) {
-    if (!(blob instanceof Blob) || blob.size < 2000 || !(ms >= KEEP_FROM_MS)) return false;
-    const t = { id: 'w' + Date.now(), at: Date.now(), ms: Math.round(ms), source: 'web', mime: blob.type || 'audio/webm', bytes: blob.size, blob };
-    try { await tx('readwrite', s => s.put(t)); } catch (e) { /* memory only for this session */ }
+  async function keepWeb(blob, ms, retained = false, text = '') {
+    if (!(blob instanceof Blob) || blob.size < (retained ? 1200 : 2000) || (!retained && !(ms >= KEEP_FROM_MS))) return false;
+    const t = { id: 'w' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), at: Date.now(), ms: Math.round(ms), source: 'web', mime: blob.type || 'audio/webm', bytes: blob.size, blob };
+    let persisted = true;
+    if (text) t.text = text;
+    try { await tx('readwrite', s => s.put(t)); } catch (e) { persisted = false; /* memory only for this session */ }
+    if (text) { t.text = text; texts[t.id] = text; saveTexts(); open.add(t.id); }
     web.unshift(t); await loadWeb().catch(() => {}); if (!web.find(x => x.id === t.id)) web.unshift(t);
     repaint();
-    return true;
+    return retained ? persisted : true;
   }
 
   function nativeList() { const d = DEV(); if (!d) return []; return (J(d.cancelledList()) || []).map(t => ({ ...t, native: true })); }
@@ -147,5 +151,5 @@
   }
 
   loadWeb().then(repaint).catch(() => {});
-  window.WosCancelled = { KEEP_FROM_MS, keepWeb, html, act, repaint, list: all, transcribe, _texts: texts };
+  window.WosCancelled = { KEEP_FROM_MS, keepWeb, retainWeb: (blob, ms, text = '') => keepWeb(blob, ms, true, text), html, act, repaint, list: all, transcribe, _texts: texts };
 })();

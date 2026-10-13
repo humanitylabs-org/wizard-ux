@@ -108,7 +108,7 @@
       if (opts[key] != null && (!Number.isFinite(opts[key]) || opts[key] <= 0)) throw fail('invalid_options', key + ' must be positive.');
     }
     if (opts.meta != null && (typeof opts.meta !== 'object' || Array.isArray(opts.meta))) throw fail('invalid_options', 'Capture metadata must be an object.');
-    if (['auto', 'command'].includes(opts.kind)) throw fail('reserved_kind', 'Wizard voice owns this capture kind.');
+    if (['auto', 'command', 'dictation'].includes(opts.kind)) throw fail('reserved_kind', 'Wizard voice owns this capture kind.');
     const meta = JSON.parse(JSON.stringify(opts.meta || {}));
     if (JSON.stringify(meta).length > 16384) throw fail('invalid_options', 'Capture metadata is too large.');
     return meta;

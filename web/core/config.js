@@ -67,7 +67,7 @@
     },
     has(cap) { return B.bootstrap ? !!B.capabilities?.[cap] : (cap === 'voice' || cap === 'router' || cap === 'files' || cap === 'approvals' || cap === 'steer'); },
     /* One audio take → text, through whichever transcription endpoint this box has. */
-    async transcribe(blob, { prompt = '', language = '' } = {}) {
+    async transcribe(blob, { prompt = '', language = '', signal } = {}) {
       const url = C.endpoint('transcribe');
       if (!url) throw Object.assign(new Error('Voice is not set up on this Wizard'), { code: 'no_voice' });
       const t0 = performance.now();
@@ -75,13 +75,13 @@
       if (B.bootstrap) {
         const type = (blob.type || 'audio/webm').split(';')[0];
         const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : type.includes('wav') ? 'wav' : 'webm';
-        r = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': type, 'X-Wizard-Filename': `voice.${ext}` }, body: blob });
+        r = await fetch(url, { method: 'POST', signal, credentials: 'same-origin', headers: { 'Content-Type': type, 'X-Wizard-Filename': `voice.${ext}` }, body: blob });
       } else {
         const fd = new FormData();
         const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
         fd.append('file', blob, `voice.${ext}`); fd.append('language', language || 'en');
         if (prompt) fd.append('prompt', prompt);
-        r = await fetch(url, { method: 'POST', body: fd });
+        r = await fetch(url, { method: 'POST', signal, body: fd });
       }
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw Object.assign(new Error(j.error || ('HTTP ' + r.status)), { status: r.status });
