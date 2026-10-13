@@ -51,6 +51,31 @@ async function settled(b,id) { for(let i=0;i<150;i++){const it=b.c.WosOutbox.get
 (async()=>{
  let b=boot();try {
   await b.c.WosModels.load();
+  await check('Telegram reply with model-only metadata seals the configured default provider before native Send', async()=>{
+   const def=b.c.WosModels.defaultOption();
+   b.sessions.set('telegram',{id:'telegram',model:def.value,provider:''});
+   const route=b.c.WosModels.snapshot('telegram');
+   assert.equal(route.model,def.value);assert.equal(route.provider,def.provider);
+   const it=await b.c.WosOutbox.enqueue({kind:'reply',sessionId:'telegram',audio:new Blob(['synthetic'],{type:'audio/aac'}),model:route.model,provider:route.provider});await settled(b,it.id);
+   const p=JSON.parse(b.bodies.at(-1).body);assert.equal(p.model,def.value);assert.equal(p.provider,def.provider);assert.equal(p.require_model_lock,true);
+  });
+  await check('thread with no model metadata displays and sends the configured default',async()=>{
+   const def=b.c.WosModels.defaultOption();b.sessions.set('blank',{id:'blank',model:'',provider:''});
+   const route=b.c.WosModels.currentRoute('blank');assert.equal(route.model,def.value);assert.equal(route.provider,def.provider);
+   assert.deepEqual(b.c.WosModels.snapshot('blank'),route);
+  });
+  await check('unique model-only route completes its provider without changing model',async()=>{
+   b.sessions.set('unique',{id:'unique',model:'gpt-5.4-mini',provider:''});
+   assert.equal(b.c.WosModels.snapshot('unique').provider,'openai-codex');
+  });
+  await check('ambiguous non-default model stays unresolved; explicit private choice stays exact',async()=>{
+   const m=b.c.WosModels, saved=m.options;
+   m.options=[...saved,{value:'ambiguous',provider:'a'},{value:'ambiguous',provider:'b'}];
+   b.sessions.set('ambiguous',{id:'ambiguous',model:'ambiguous',provider:''});
+   assert.equal(m.snapshot('ambiguous').provider,'');
+   const explicit=m.snapshot('',{model:'glm-5-3',provider:'custom:tinfoil-operator'});assert.equal(explicit.provider,'custom:tinfoil-operator');assert.equal(explicit.model,'glm-5-3');
+   m.options=saved;
+  });
   await check('existing reply seals the displayed model + provider + fail-closed lock',async()=>{
    const it=await b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic reply'});await settled(b,it.id);
    const p=JSON.parse(b.bodies.at(-1).body);assert.equal(p.model,'claude-opus-5-5');assert.equal(p.provider,'anthropic');assert.equal(p.require_model_lock,true);
