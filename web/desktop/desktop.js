@@ -13,7 +13,7 @@
  *   Right ⌘ tap   talk (tap again to send)    ⌥←↑→↓/HJKL focus window
  *   Right ⌥ tap   dictate (tap again: insert at the cursor, else copy)
  *   ⌥I            inbox                       ⇧⌥←→       swap window
- *   ⌥W            close window                ⌥F         full window (monocle)
+ *   ⌘W / ⌥W       close app                   ⌥F         full window (monocle)
  *   ⌥/            all keys                    ⌥[ ⌥]      previous / next workspace
  *   Esc           close the top layer (never leaves the app)
  */
@@ -220,7 +220,7 @@
     return `<div class="wbar" data-drag>${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>
       ${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
       <button data-wact="mono" title="Full window (${MOD}F)" aria-label="Full window">⤢</button>
-      <button data-wact="close" title="Close (${MOD}W)" aria-label="Close window">✕</button></div>
+      <button data-wact="close" title="Close app (⌘W / ${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
   }
   function bodyHtml(w) {
@@ -471,7 +471,7 @@
       { kind: 'cmd', name: 'Inbox', icon: '⬇', keys: `${MOD}I`, run: () => openInbox() },
       ...(window.WosFiles ? [{ kind: 'cmd', name: 'Files', icon: '▤', run: () => openFiles() }] : []),
       ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
-      { kind: 'cmd', name: 'Close window', icon: '✕', keys: `${MOD}W`, run: () => focused() && closeWin(focused().id) },
+      { kind: 'cmd', name: 'Close window', icon: '✕', keys: `⌘W / ${MOD}W`, run: () => focused() && closeWin(focused().id) },
       { kind: 'cmd', name: 'Full window', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Keyboard shortcuts', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
       { kind: 'cmd', name: 'Settings', icon: '⚙', keys: `${MOD},`, run: () => openSettings() },
@@ -609,7 +609,7 @@
   const KEYS = [
     ['Launch', [[`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send, Esc to cancel)`], ['Right ⌥ (tap)', 'Dictate (tap again to insert at the cursor, or copy)']]],
     ['Workspaces', [[`${MOD}1 … ${MOD}9`, 'Go to workspace'], [`⇧${MOD}1 … 9`, 'Send window to workspace'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
-    ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full window'], [`${MOD}W`, 'Close window']]],
+    ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full window'], [`⌘W / ${MOD}W`, 'Close app']]],
     ['Chats', [[`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list'], ['↑ ↓  or  j k', 'Previous / next chat (in the list)'], [`⇧${MOD}J  ⇧${MOD}K`, 'Next / previous chat (anywhere)'], ['/', 'Search chats and messages'], [`${MOD},`, 'Settings']]],
     ['Wizard for Mac (works in any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to a bound app'], ['Right ⌘', 'Talk to Wizard from anywhere'], ['Right ⌥', 'Dictate into any app']]],
   ];
@@ -784,6 +784,9 @@
     const k = e.key, code = e.code, alt = e.altKey && !e.metaKey && !e.ctrlKey, shift = e.shiftKey;
     const digit = /^Digit([1-9])$/.exec(code);
     const hit = fn => { e.preventDefault(); e.stopPropagation(); fn(); };
+    // The native Mac menu forwards ⌘W here instead of closing its NSWindow. Always consume at
+    // the desktop root too; closing the last internal app leaves an empty workspace.
+    if (e.metaKey && !e.ctrlKey && !e.altKey && !shift && code === 'KeyW') return hit(() => { const f = focused(); if (f) closeWin(f.id); });
     // ⌘K / Ctrl+K, ⌥Space: palette, from anywhere (even while typing).
     if ((e.metaKey || e.ctrlKey) && !e.altKey && (k === 'k' || k === 'K')) return hit(() => (pal.hidden ? openPalette() : closePalette()));
     if (alt && code === 'Space') return hit(() => (pal.hidden ? openPalette() : closePalette()));
