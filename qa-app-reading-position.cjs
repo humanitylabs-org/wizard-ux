@@ -7,7 +7,7 @@ fs.mkdirSync(OUT,{recursive:true});
 let version='abc0001', origin, writes=[], errors=[];
 const checks=[];
 function ok(name,value,detail){checks.push({name,pass:!!value,detail});console.log(value?'PASS':'FAIL',name,detail===undefined?'':JSON.stringify(detail));assert.ok(value,name);}
-const apps=[{id:'wisdom',url:'/wisdom/',name:'Wisdom'},{id:'iching',url:process.env.QA_REAL?'/iching/history/83154b50-f7f9-47b3-9ba5-c7bbf8a33d3b':'/iching/',name:'I Ching'}];
+const apps=[{id:'wisdom',url:'/wisdom/',name:'Wisdom'},{id:'iching',url:'/iching/',name:'I Ching'}];
 const paras=Array.from({length:100},(_,i)=>`<p id="p${i}">Paragraph ${i}: a dependable reading place. ${'Long reading content. '.repeat(10)}</p>`).join('');
 function reader(url){const nested=url.includes('nested'),late=url.includes('late');return `<!doctype html><html><meta name="viewport" content="width=device-width"><style>body{margin:0;font:18px/1.8 sans-serif}p{margin:0 12px 20px}#panel{height:80vh;overflow:auto}</style><body>${nested?'<h1>Panel reader</h1><div id="panel">':''}<article id="text">${late?'Loading…':paras}</article>${nested?'</div>':''}<script>
 if(sessionStorage.qaPark==='1')Object.defineProperty(document,'hidden',{configurable:true,get:()=>window.qaPark!==false});
@@ -39,7 +39,7 @@ async function reload(p,url){
  const fr=await waitFrame(p,url);await fr.waitForTimeout(1600);return fr;
 }
 async function close(p,mobile,id){await p.evaluate(({mobile,id})=>{const s=mobile?__wos:__wux;for(const w of Object.values(s.wins))if(w.appId===id)s.closeWin(w.id)},{mobile,id});}
-(async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;const b=await chromium.launch({headless:true});let failure=null;
+(async()=>{if(process.env.QA_REAL){const archive=await(await fetch('https://wizard.tailc0f369.ts.net/iching/api/readings')).json();assert.ok(archive.readings?.[0]?.id,'actual archive has a reading');apps.find(a=>a.id==='iching').url='/iching/history/'+encodeURIComponent(archive.readings[0].id);}await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;const b=await chromium.launch({headless:true});let failure=null;
 try{for(const mobile of [true,false]){const tag=mobile?'phone':'desktop';const{p,ctx}=await boot(b,mobile);
  let fr=await open(p,mobile,'wisdom','/wisdom/');await scroll(fr,false,1650);let saved=await pos(fr,false);fr=await reload(p,'/wisdom/');ok(tag+' root refresh restores exact scroll',Math.abs(await pos(fr,false)-saved)<=2,{saved,actual:await pos(fr,false)});
  // Update-notification Reload is the actual button, not a reload fixture.
@@ -58,7 +58,7 @@ try{for(const mobile of [true,false]){const tag=mobile?'phone':'desktop';const{p
   await close(p,mobile,'wisdom');fr=await open(p,mobile,'wisdom','/wisdom/?parked');await scroll(fr,false,1700);await p.evaluate(()=>{WizAppReadingPosition.flush();sessionStorage.qaPark='1'});await fr.evaluate(()=>location.reload());fr=await waitFrame(p,'/wisdom/?parked');await fr.waitForTimeout(16000);await fr.evaluate(()=>{window.qaPark=false;document.dispatchEvent(new Event('visibilitychange'))});await fr.waitForTimeout(1500);ok('hidden document retains place past the visible restore deadline',Math.abs(await pos(fr,false)-1700)<=2);await p.evaluate(()=>sessionStorage.removeItem('qaPark'));
  }
  await close(p,mobile,'wisdom');await ctx.close();}
- if(process.env.QA_REAL){for(const mobile of [true,false]){const{p,ctx}=await boot(b,mobile);let fr=await open(p,mobile,'iching','/iching/history/83154b50-f7f9-47b3-9ba5-c7bbf8a33d3b');await fr.waitForFunction(()=>document.scrollingElement.scrollHeight>2500);await scroll(fr,false,1800);const saved=await pos(fr,false);fr=await reload(p,'/iching/history/83154b50-f7f9-47b3-9ba5-c7bbf8a33d3b');await fr.waitForTimeout(1800);ok((mobile?'phone':'desktop')+' actual I Ching saved reading reload',Math.abs(await pos(fr,false)-saved)<=2,{saved,actual:await pos(fr,false)});await ctx.close();}}
+ if(process.env.QA_REAL){for(const mobile of [true,false]){const{p,ctx}=await boot(b,mobile);const realPath=apps.find(a=>a.id==='iching').url;let fr=await open(p,mobile,'iching',realPath);await fr.waitForFunction(()=>document.scrollingElement.scrollHeight>2500);await scroll(fr,false,1800);const saved=await pos(fr,false);fr=await reload(p,realPath);await fr.waitForTimeout(1800);ok((mobile?'phone':'desktop')+' actual I Ching saved reading reload',Math.abs(await pos(fr,false)-saved)<=2,{saved,actual:await pos(fr,false)});await ctx.close();}}
  ok('no agent/production writes',writes.length===0,writes);ok('no browser runtime errors',errors.length===0,errors);
 }catch(e){failure=String(e);console.error(e)}finally{await b.close();server.close();fs.writeFileSync(path.join(OUT,'result.json'),JSON.stringify({hostname:os.hostname(),sha:process.env.QA_SHA,webTree:process.env.QA_TREE,checks,writes,errors,failure,scope:process.env.QA_REAL?'candidate shell with actual I Ching served through GET-only proxy + deterministic Wisdom fixture':'deterministic hosted readers; no production requests'},null,2));if(failure)process.exitCode=1;}
 })();
