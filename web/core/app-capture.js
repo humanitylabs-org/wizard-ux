@@ -35,7 +35,7 @@
       live ||= deviceRows.find(r => r.nativeId && r.nativeId === a?.id);
       if(a?.id && !live) {
         const inPageVoice=W.__wos?.V?.native===a.id && !['idle',undefined].includes(W.__wos?.voice);
-        const savedVoice=!a.kind && !!W.WosModels?.voiceRoute?.(a.id); // Positive persisted legacy voice provenance on older ABIs.
+        const savedVoice=!a.kind && (!!W.WosModels?.voiceRoute?.(a.id) || !!W.__wosVoiceTake?.(a.id) || !!W.__wosReplyTake?.(a.id)); // Positive persisted legacy voice provenance on older ABIs.
         if(!['auto','command'].includes(a.kind) && !inPageVoice && !savedVoice){unknownNative=true;live=deviceRows.find(r=>!r.nativeId);}
       }
     } catch (_) { unknownNative=true; } // Malformed/unknown bridge truth never authorizes voice/reload.
@@ -44,6 +44,9 @@
       appId: active?.row.appId || live?.appId || null, id: active?.row.id || live?.id || null,
       phase: active?.phase || (live ? 'recoverable' : 'idle'), native: !!active?.row.native || !!live,
       hold: recording || preparations.size > 0 || [...ownedRows.values()].some(r=>r.native && !r.nativeId && r.status==='recoverable'),
+      // Registry readiness is separate from recorder classification: explicit recovery may inspect an unknown ABI.
+      nativeRegistryReady: ownershipLoaded && !deviceRows.some(r => !r.nativeId) && preparations.size === 0 &&
+        !(active?.row.native === 'wizard-device' && !active.row.nativeId),
       nativeOwnershipReady: ownershipLoaded && !unknownNative && !deviceRows.some(r => !r.nativeId) &&
         !(active?.row.native === 'wizard-device' && !active.row.nativeId), nativeDeviceTakeIds,
       error: active?.error?.code || recoveryError?.code || null };

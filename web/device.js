@@ -82,13 +82,27 @@
       return 'voice';
     } catch (_) { return 'unknown'; }
   }
+  function offerRecorderControls(a) {
+    const state = window.WizAppCapture?.getState?.();
+    if (sheet || a.kind || state?.nativeRegistryReady !== true || state.active || state.appId || state.nativeDeviceTakeIds.includes(a.id)) return;
+    const id = a.id;
+    const el = openSheet('recorder-controls', `<div class="dv-head"><span class="dv-ic">🎙</span><div><b>Wizard microphone still held</b><small>Older recorder · destination unknown · ${fmtMs(a.ms)}</small></div></div>
+      <p class="dv-note">The recording survived reopening. Show its timer, Pause and Cancel controls. Nothing will be sent or discarded automatically.</p>
+      <button class="dv-btn primary" data-rec-controls>Show recording controls</button>`);
+    el.querySelector('[data-rec-controls]').addEventListener('click', () => {
+      // Exact-id and shared ownership fencing at activation, not just when the card painted.
+      const current = J(DEV()?.recActive?.()), shared = window.WizAppCapture?.getState?.();
+      if (current?.id !== id || current.kind || shared?.nativeRegistryReady !== true || shared.active || shared.appId || shared.nativeDeviceTakeIds.includes(id)) { closeSheet(); return; }
+      closeSheet(); W$()?.nativeResume(current);
+    });
+  }
   function syncRecorder(why) {
     const d = DEV(), w = W$(); if (!d || !w || typeof d.recActive !== 'function') return;
     const a = J(d.recActive());
     if (a && a.id && w.voice === 'idle') {
       const owner = nativeOwner(a.id);
       if (owner === 'voice') { if (w.nativeResume(a)) log('rec:resume', a.id, why); }
-      else log('rec:owner', a.id, owner); // retain unknown/app takes; never adopt them into Chats
+      else { log('rec:owner', a.id, owner); if (owner === 'unknown') offerRecorderControls(a); } // retain unknown/app takes; never adopt them into Chats
     }
     if (w.V.native && (!a || a.id !== w.V.native)) {
       // The take ended outside the page (notification Stop/Send, or the recorder failed) while we were away.
@@ -447,6 +461,7 @@
         <div class="st-row static"><span class="st-ic">✉</span><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
         <button class="st-row" data-dvupd><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
     },
+    recoverRecorder: () => syncRecorder('control'),
     saveDrafts, checkWeb, sweepReadNotes, mediaPlaying, _state: () => ({ sheet: sheet?.kind || null, upd, webPending, print0: !!print0, changes, listOpen }),
   };
   document.addEventListener('click', e => {
