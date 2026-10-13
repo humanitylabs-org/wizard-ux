@@ -1962,7 +1962,16 @@
     return new Blob(parts, { type: 'audio/aac' });
   }
   /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
+  function nativeTakeAppOwned(id) {
+    const shared = window.WizAppCapture?.getState?.();
+    return !!shared?.active || !!shared?.nativeDeviceTakeIds?.includes(id);
+  }
+  function pauseNativeTake(on) {
+    if (!V.native || nativeTakeAppOwned(V.native)) return false;
+    try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id !== V.native) return false; DEV().recPause(on); return true; } catch (_) { return false; }
+  }
   function nativeFinish(id, stopped) {
+    if (nativeTakeAppOwned(id)) { setVoice('paused'); toast('🎙', 'This recording belongs to another app'); return; }
     // Notification/Everywhere Send enters here directly, bypassing finishVoice. Seal the model before claiming
     // audio or awaiting STT. A recreated page restores the last route saved for this native take.
     const hadSnap = !!V.snap;
@@ -1976,7 +1985,9 @@
       saveVoiceRoute(id, snap.route); V.snap = snap;
     } catch (e) {
       // The native file remains on disk; no claim, transcription or inference happens on an uncertain route.
-      V.native = null; dropHold(); unseal(); setVoice('idle'); txHide();
+      dropHold(); unseal();
+      if (JSON.parse(DEV()?.recActive?.() || 'null')?.id === id) { V.native = id; pauseCommandCapture(); }
+      else { V.native = null; setVoice('idle'); txHide(); }
       toast('!', 'Recording saved · ' + String(e.message || e), 3200); return;
     }
     const dev = DEV(); let meta = null;
@@ -1988,15 +1999,25 @@
   }
   const recDone = id => { try { id && DEV()?.recDone(id); if (id) window.WosModels.forgetVoiceRoute(id); } catch (e) {} };
   /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
+  // Positive provenance for the shipped kind-less native ABI. Never infer ownership by claiming audio.
+  const VOICE_TAKE_KEY = 'wos.voice-take.v1';
+  function voiceTake(id, kind) {
+    try {
+      if (kind) localStorage.setItem(VOICE_TAKE_KEY, JSON.stringify({ id, kind }));
+      const row = JSON.parse(localStorage.getItem(VOICE_TAKE_KEY) || 'null');
+      return row?.id === id && ['auto', 'command'].includes(row.kind) ? row : null;
+    } catch (_) { return null; }
+  }
+  window.__wosVoiceTake = id => voiceTake(id);
   function nativeResume(a) {
     if (V.state !== 'idle' || !a?.id) return false;
     // Recovery can precede any Chats/model-picker visit, just like a cold first recording.
     // Warm authority now; the exact route still seals at Send and remains fail-closed.
     window.WosModels?.load().catch(() => {});
-    Object.assign(V, { native: a.id, kind: a.kind === 'command' ? 'command' : 'auto', target: null, snap: null, seal: null, replyTo: replyTake(a.id), chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
+    Object.assign(V, { native: a.id, kind: (a.kind || voiceTake(a.id)?.kind) === 'command' ? 'command' : 'auto', target: null, snap: null, seal: null, replyTo: replyTake(a.id), chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
-    txPill('✦', 'Still recording · tap orb to send', 'agent'); txHide(2600);
+    txPill(a.paused ? '⏸' : '✦', a.paused ? 'Paused · recording kept · tap orb to send' : 'Still recording · tap orb to send', 'agent'); txHide(2600);
     V.raf = requestAnimationFrame(tick);
     return true;
   }
@@ -2021,8 +2042,8 @@
     reportVoice(s);
     keepAwake(s === 'listen' || s === 'paused' || s === 'command' || s === 'think');
     Orb.setMode({ idle: 'idle', listen: 'listen', command: 'command', paused: 'paused', think: 'think', done: 'done', agent: 'agent' }[s] || 'idle');
-    voiceEl.classList.toggle('on', s === 'listen' || s === 'paused');
-    voiceEl.classList.toggle('cmd', s === 'command' || (V.kind === 'command' && s !== 'idle'));
+    voiceEl.classList.toggle('on', s === 'listen' || s === 'paused' || s === 'command');
+    voiceEl.classList.toggle('cmd', V.kind === 'command' && s !== 'idle' && s !== 'listen' && s !== 'paused' && s !== 'command');
     voiceEl.setAttribute('aria-hidden', String(s === 'idle'));
   }
   // The Auto/Agent toggle is gone: the router always decides (commands run, the rest goes to Archimedes).
@@ -2179,13 +2200,14 @@
     V.onAt = performance.now();
     if (V.state !== 'idle') return;
     const shared = window.WizAppCapture?.getState?.();
-    if (shared?.active || shared?.recording || shared?.hold) { toast('🎙', 'Microphone held by ' + (shared.appId || 'another app'), 2200); return 'busy'; }
+    if (shared?.active || shared?.recording || shared?.hold) { toast('🎙', 'Microphone held by ' + (shared.appId || 'another app'), 2200); window.WosDevice?.recoverRecorder?.(); return 'busy'; }
     try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id) { toast('🎙', 'An existing native recording is still held', 2200); return 'busy'; } } catch (_) { return 'busy'; }
+    const captureEpoch = V.captureEpoch = (V.captureEpoch || 0) + 1;
     // An app-feedback take can start before any chat/model picker opened. Warm authoritative options;
     // the exact route is still sealed at Send, and unavailable routes remain fail-closed.
     window.WosModels?.load().catch(() => {});
     clearTimeout(txHideT);
-    Object.assign(V, { kind, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
@@ -2200,11 +2222,13 @@
     V.native = null;
     const dev = DEV();
     if (dev) { let id = ''; try { id = dev.recStart(kind === 'command' ? 'command' : 'auto') || ''; if (id) { const route = CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) {}
-      if (id) { V.native = id; reportVoice(V.state); if (V.stopAsked) finishVoice(); return; } } // '' = no mic permission yet: the page asks below
+      if (id) { V.native = id; voiceTake(id, kind); reportVoice(V.state); if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; } } // '' = no mic permission yet: the page asks below
     try {
-      if (!(await openRec())) return;
-      if (V.stopAsked) finishVoice();
+      if (!(await openRec(captureEpoch))) return;
+      if (V.stopAsked && V.sendAsked) finishVoice();
     } catch (err) {
+      if (captureEpoch !== V.captureEpoch || V.cancelled || V.state === 'idle') return;
+      stopStream(); V.rec = null;
       V.sim = true; NOMIC = true; tourEv('nomic', { kind });
       txShow('', '', '', '✦');
       $('#txRouteText').textContent = kind === 'command' ? 'No mic here · tap a command' : 'No mic here · tap a line to simulate';
@@ -2218,20 +2242,22 @@
   $('#txChips').addEventListener('click', e => { const b = e.target.closest('[data-sim]'); if (!b) return; const k = V.kind; cancelVoice(true); runUtterance(b.dataset.sim, k); });
   // Only a tap (or Cancel) ends a take. If Android takes the mic away (a call, another app, the system), the
   // part recorded so far is kept and the take pauses: tap the orb to send it, or Pause to carry on recording.
-  async function openRec() {
+  async function openRec(epoch = V.captureEpoch) {
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
-    V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    if (V.cancelled || V.state === 'idle') { stopStream(); return false; }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (epoch !== V.captureEpoch || V.cancelled || V.state === 'idle') { stream.getTracks().forEach(t => t.stop()); return false; }
+    V.stream = stream;
     const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
     const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
     const rec = V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
     V.mime = rec.mimeType || mime || 'audio/webm';
-    rec.ondataavailable = e => { if (e.data && e.data.size) V.chunks.push(e.data); };
-    rec.onstop = () => (V.state === 'think' ? onRecStop() : onRecInterrupted(rec));
+    rec.ondataavailable = e => { if (epoch === V.captureEpoch && !V.cancelled && e.data && e.data.size) V.chunks.push(e.data); };
+    rec.onstop = () => { if (epoch !== V.captureEpoch || V.cancelled) return; return V.state === 'think' ? onRecStop() : onRecInterrupted(rec); };
     // A track ended by the system stops the recorder too; onstop handles it.
     V.stream.getAudioTracks().forEach(tr => tr.addEventListener('ended', () => { try { rec.state !== 'inactive' && rec.stop(); } catch (e) {} }));
     rec.start(250);
+    if (V.state === 'paused' || (V.stopAsked && V.kind === 'command')) pauseCommandCapture();
     return true;
   }
   function onRecInterrupted(rec) {
@@ -2276,8 +2302,18 @@
   function saveVoiceRoute(id, route) {
     try { window.WosModels.keepVoiceRoute(id, route); } catch (e) { throw new Error('Could not save the recording’s model route'); }
   }
+  // Release is a capture boundary, independent of model availability, uploads or permission latency.
+  function pauseCommandCapture() {
+    if (V.state !== 'command' && V.state !== 'listen' && V.state !== 'paused' && !(V.state === 'think' && V.native)) return;
+    if (V.state !== 'paused') V.acc += performance.now() - V.t0;
+    if (V.native) pauseNativeTake(true);
+    try { if (V.rec?.state === 'recording') V.rec.pause(); } catch (_) {}
+    setVoice('paused'); txPill('⏸', 'Paused · recording kept · tap orb to send', 'agent');
+  }
   function finishVoice() {
     if (V.state === 'idle' || V.state === 'think') return;
+    V.sendAsked = true;
+    if (V.kind === 'command') { V.stopAsked = true; pauseCommandCapture(); }
     V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
     if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
@@ -2307,6 +2343,7 @@
   }
   function cancelVoice(quiet) {
     cancelTakeFiles();
+    V.captureEpoch = (V.captureEpoch || 0) + 1;
     V.cancelled = true; if (V.replyTo) { replyTake(null); V.replyTo = null; }
     unseal();
     // A long take cancelled by accident is kept (Settings → Cancelled recordings, James 11 Oct); a quick one is gone.
@@ -2314,12 +2351,14 @@
     const heldMs = voiceElapsed();
     const long = !V.sim && heldMs >= (window.WosCancelled?.KEEP_FROM_MS || 15000);
     const nativeKeeps = !!V.native && typeof DEV()?.cancelledList === 'function';
-    if (V.native) { try { DEV().recCancel(V.native); } catch (e) {} V.native = null; }
+    if (V.native) { try { if (!nativeTakeAppOwned(V.native)) DEV().recCancel(V.native); } catch (e) {} V.native = null; }
     const rec = V.rec, mime = V.mime || rec?.mimeType || 'audio/webm';
     const keepWeb = parts => { const b = new Blob(parts, { type: mime }); window.WosCancelled?.keepWeb(b, heldMs).then(k => k && window.WosCancelled.repaint()); };
     if (long && rec && window.WosCancelled) {
       // Stop the web recorder and keep what it heard (the last chunk arrives with the stop).
       const parts = V.parts.slice(), chunks = V.chunks;
+      // Cancellation owns this final chunk locally, not the next take's mutable V.chunks.
+      rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
       try {
         if (rec.state !== 'inactive') { rec.onstop = () => keepWeb(parts.concat(chunks)); rec.stop(); }
         else keepWeb(parts.concat(chunks));
@@ -2398,12 +2437,13 @@
   $('#voice').addEventListener('click', e => { if (e.target.closest('.arc') && performance.now() - (V.onAt || 0) < 450) { e.stopPropagation(); e.preventDefault(); } }, true);
   $('#arcCancel').addEventListener('click', () => cancelVoice());
   $('#arcPause').addEventListener('click', () => {
-    if (V.state === 'listen') { V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} try { V.native && DEV().recPause(true); } catch (e) {} setVoice('paused'); vib(6); }
-    else if (V.state === 'paused' && !V.native && !V.rec && V.parts.length) {   // after a mic interruption: carry on with a fresh part
+    if (V.state === 'listen' || V.state === 'command') { V.stopAsked = true; V.sendAsked = false; V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} if (V.native) pauseNativeTake(true); setVoice('paused'); vib(6); }
+    else if (V.state === 'paused' && !V.native && !V.rec && V.parts.length) {
+      V.stopAsked = false; V.sendAsked = false;   // after a mic interruption: carry on with a fresh part
       V.t0 = performance.now(); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6);
       openRec().catch(() => { V.acc += performance.now() - V.t0; setVoice('paused'); toast('⏸', 'The mic is busy · tap the orb to send what you have'); });
     }
-    else if (V.state === 'paused') { V.t0 = performance.now(); try { V.rec && V.rec.resume(); } catch (e) {} try { V.native && DEV().recPause(false); } catch (e) {} setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
+    else if (V.state === 'paused') { V.stopAsked = false; V.sendAsked = false; V.t0 = performance.now(); try { V.rec && V.rec.resume(); } catch (e) {} if (V.native) pauseNativeTake(false); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
   });
   // The file picker is a separate screen on Android: pause the take while it is open, resume on return.
   $('#arcAttach').addEventListener('click', () => {
@@ -2760,8 +2800,9 @@
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
-    e.preventDefault(); orbWrap.setPointerCapture(e.pointerId); closeMenu();
-    G = { x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
+    if (G || e.isPrimary === false) return;
+    e.preventDefault(); try { orbWrap.setPointerCapture(e.pointerId); } catch (_) {} closeMenu();
+    G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
     G.corner = device.classList.contains('orb-corner');
     if (V.state === 'idle' && !sheet) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); vib(18); startVoice('command'); } }, 380);
@@ -2770,7 +2811,7 @@
   // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
   const aimFor = () => null;
   orbWrap.addEventListener('pointermove', e => {
-    if (!G) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
+    if (!G || e.pointerId !== G.pointerId) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
     // A hold that starts travelling right after it fired was really a swipe (slow frame ate the moves).
     if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && Math.hypot(G.dx, G.dy) > 34) {
       cancelVoice(true); G.mode = 'pending';
@@ -2808,7 +2849,7 @@
     }
   });
   function endGesture(e, cancelled) {
-    if (!G) return; const g = G; G = null;
+    if (!G || (e?.pointerId != null && e.pointerId !== G.pointerId)) return; const g = G; G = null;
     clearTimeout(g.hold); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming');
     const vt = (performance.now() - g.t) || 1;
     if (g.mode === 'pending' && !cancelled) {
@@ -2817,7 +2858,8 @@
       if (V.state === 'listen' || V.state === 'paused') { shock(); return finishVoice(); }
       return; // sending: a tap on the orb does nothing until the take is handed off
     } else if (g.mode === 'hold') {
-      if (cancelled) return cancelVoice(true);
+      // Capture loss is not explicit Cancel. Keep the take paused with controls, never discard it.
+      if (cancelled) { V.stopAsked = true; pauseCommandCapture(); return; }
       V.target = g.aim;
       return finishVoice();
     } else if (g.mode === 'h') {
@@ -2837,6 +2879,12 @@
   }
   orbWrap.addEventListener('pointerup', e => endGesture(e, false));
   orbWrap.addEventListener('pointercancel', e => endGesture(e, true));
+  orbWrap.addEventListener('lostpointercapture', e => endGesture(e, true));
+  // Capture may move with the dock/immersive DOM. Id matching makes duplicate and unrelated releases inert.
+  window.addEventListener('pointerup', e => endGesture(e, !orbWrap.hasPointerCapture(e.pointerId)), true);
+  window.addEventListener('pointercancel', e => endGesture(e, true), true);
+  window.addEventListener('blur', () => endGesture(null, true));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) endGesture(null, true); });
   orbWrap.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (V.state === 'idle') startVoice('auto'); else finishVoice(); } });
   orbWrap.tabIndex = 0;
 
