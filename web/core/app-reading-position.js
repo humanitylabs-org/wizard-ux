@@ -50,7 +50,8 @@
       } catch (_) {}
       const allowed = () => !stopped && frame.isConnected && authorize() && frame.contentWindow.document === doc && keyFor(w) === key;
       function save() {
-        if (!allowed() || restoring || !visible(doc.documentElement)) return;
+        if (!allowed() || restoring || !visible(frame) || !visible(doc.documentElement)) return;
+        for (const el of tracked) if (!el.isConnected) tracked.delete(el);
         const root = doc.scrollingElement;
         if (root) tracked.add(root);
         // Includes a nested panel whose initial scroll was assigned by its own router.
@@ -75,7 +76,8 @@
       function attempt() {
         if (!restoring) return;
         if (!allowed()) { stopRestore(false); return; }
-        if (!visible(doc.documentElement)) return; // parked windows resume on layout/visibility
+        if (!visible(frame) || !visible(doc.documentElement)) return; // parked windows resume on layout/visibility
+        if (!deadline) deadline = setTimeout(() => stopRestore(), WAIT);
         let complete = true;
         for (const s of pending || []) {
           const el = find(doc, s.path);
@@ -121,7 +123,7 @@
         try { w.history.scrollRestoration = 'manual'; } catch (_) {}
         observer.observe(doc.body, { childList: true, subtree: true, attributes: true, characterData: true });
         resize.observe(doc.documentElement); resize.observe(frame);
-        deadline = setTimeout(() => stopRestore(), WAIT);
+        // Start the bounded restore window only when this parked app is visible.
         doc.fonts?.ready.then(schedule).catch(() => {});
         attempt();
       } else restoring = false;
