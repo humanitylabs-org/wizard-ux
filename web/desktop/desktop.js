@@ -13,7 +13,7 @@
  *   Right ⌘ tap   talk (tap again to send)    ⌥←↑→↓/HJKL focus window
  *   Right ⌥ tap   dictate (tap again: insert at the cursor, else copy)
  *   ⌥I            inbox                       ⇧⌥←→       swap window
- *   ⌘W / ⌥W       close app                   ⌥F         full window (monocle)
+ *   ⌘W / ⌥W       close app                   ⌥F         full screen
  *   ⌥/            all keys                    ⌥[ ⌥]      previous / next workspace
  *   Esc           close the top layer (never leaves the app)
  */
@@ -152,7 +152,13 @@
     if (i < 0 || j < 0 || j >= d.wins.length) return;
     [d.wins[i], d.wins[j]] = [d.wins[j], d.wins[i]]; save(); layout();
   }
-  function toggleMono() { const d = ws[cur]; if (d.wins.length < 2) return; d.mono = !d.mono; save(); layout(); }
+  function toggleMono() {
+    const d = ws[cur]; if (!d.wins.length) return;
+    d.mono = !d.mono; save(); layout();
+    if (d.mono && !store.get('fullHint', false)) {
+      store.set('fullHint', true); toast('⤢', `${MOD}F, Esc or Back leaves full screen`, 2200);
+    }
+  }
 
   /* Open an app the desktop way: Chats and apps already open get focused, not duplicated. */
   // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
@@ -219,7 +225,7 @@
     const a = appOf(w);
     return `<div class="wbar" data-drag>${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>
       ${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
-      <button data-wact="mono" title="Full window (${MOD}F)" aria-label="Full window">⤢</button>
+      <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
       <button data-wact="close" title="Close app (⌘W / ${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
   }
@@ -323,7 +329,10 @@
   /* Tiling: 1 window fills; 2 split; 3+ = master on the left, the rest stacked on the right (Hyprland's dwindle, simplified). */
   function layout() {
     const host = wsEl(cur), d = ws[cur];
-    const W_ = host.clientWidth, H_ = host.clientHeight, g = 8;
+    // Apply chrome before measuring, including a single app, reload and workspace switches.
+    const full = !!d.mono && !!d.wins.length;
+    document.body.classList.toggle('desktop-fullscreen', full);
+    const W_ = host.clientWidth, H_ = host.clientHeight, g = full ? 0 : 8;
     const n = d.wins.length;
     const rects = {};
     if (!n) return;
@@ -339,6 +348,7 @@
     for (const id of d.wins) {
       const el = winEl(id); if (!el) continue; const r = rects[id];
       el.classList.toggle('gone', !r);
+      el.classList.toggle('full', full && id === d.focus);
       if (r) Object.assign(el.style, { left: r[0] + 'px', top: r[1] + 'px', width: r[2] + 'px', height: r[3] + 'px' });
     }
   }
@@ -472,7 +482,7 @@
       ...(window.WosFiles ? [{ kind: 'cmd', name: 'Files', icon: '▤', run: () => openFiles() }] : []),
       ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
       { kind: 'cmd', name: 'Close window', icon: '✕', keys: `⌘W / ${MOD}W`, run: () => focused() && closeWin(focused().id) },
-      { kind: 'cmd', name: 'Full window', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
+      { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Keyboard shortcuts', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
       { kind: 'cmd', name: 'Settings', icon: '⚙', keys: `${MOD},`, run: () => openSettings() },
       { kind: 'cmd', name: 'Use the phone layout here', icon: '📱', run: () => { location.href = './?shell=phone'; } },
@@ -609,7 +619,7 @@
   const KEYS = [
     ['Launch', [[`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send, Esc to cancel)`], ['Right ⌥ (tap)', 'Dictate (tap again to insert at the cursor, or copy)']]],
     ['Workspaces', [[`${MOD}1 … ${MOD}9`, 'Go to workspace'], [`⇧${MOD}1 … 9`, 'Send window to workspace'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
-    ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full window'], [`⌘W / ${MOD}W`, 'Close app']]],
+    ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`⌘W / ${MOD}W`, 'Close app']]],
     ['Chats', [[`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list'], ['↑ ↓  or  j k', 'Previous / next chat (in the list)'], [`⇧${MOD}J  ⇧${MOD}K`, 'Next / previous chat (anywhere)'], ['/', 'Search chats and messages'], [`${MOD},`, 'Settings']]],
     ['Wizard for Mac (works in any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to a bound app'], ['Right ⌘', 'Talk to Wizard from anywhere'], ['Right ⌥', 'Dictate into any app']]],
   ];
@@ -802,6 +812,8 @@
     if (setEl && !setEl.hidden) { closeSettings(); return 'settings'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
+    // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
+    if (ws[cur].mono) { toggleMono(); return 'mono'; }
     // Back navigates while recording; only the explicit Cancel control may discard audio.
     const f = focused();
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
@@ -812,7 +824,6 @@
     if (f?.appId === 'app-store' || f?.appId === 'system') {
       if (!ws[cur].mono) { closeWin(f.id); return 'store-parent'; }
     }
-    if (ws[cur].mono) { toggleMono(); return 'mono'; }
     return '';
   }
   function onKey(e, fromFrame = false) {
@@ -859,7 +870,7 @@
     if (code === 'Enter') return hit(() => newChat({ fresh: shift }));
     if (code === 'KeyI') return hit(() => toggleInbox());
     if (code === 'KeyW') return hit(() => { const f = focused(); if (f) closeWin(f.id); });
-    if (code === 'KeyF') return hit(() => toggleMono());
+    if (code === 'KeyF') return hit(() => { if (!e.repeat) toggleMono(); });
     if (code === 'Slash') return hit(() => toggleKeys());
     if (code === 'Comma') return hit(() => (setEl.hidden ? openSettings() : closeSettings()));
     if (code === 'BracketLeft') return hit(() => { lastWs = cur; goWs((cur - 1 + WS_N) % WS_N); });

@@ -84,6 +84,13 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5
 .wbar button:hover { background: rgba(205, 190, 255, .1); color: var(--ink); }
 .wbar button[data-wact="close"]:hover { background: rgba(255, 107, 134, .2); color: #fff; }
 .wbody { position: relative; flex: 1; min-height: 0; }
+/* Full screen works with one app: remove shell bars and the tiling gutter.
+ * Keep a live recording's Send/Cancel pill visible so fullscreen never traps a take. */
+.desktop-fullscreen .bar { visibility: hidden; }
+.desktop-fullscreen .stage { inset: 0; }
+.desktop-fullscreen .win.full { border: 0; border-radius: 0; box-shadow: none; }
+.desktop-fullscreen .win.full .wbar { display: none; }
+.desktop-fullscreen .voice-pill:not([hidden]) { visibility: visible; position: fixed; top: 8px; left: 50%; transform: translateX(-50%); background: #170d29; }
 .wbody iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #05030c; }
 /* an unfocused window takes one click to focus without the click landing inside an iframe */
 .win:not(.focus) .wbody iframe { pointer-events: none; }
