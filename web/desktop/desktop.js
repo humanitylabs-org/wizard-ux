@@ -28,7 +28,7 @@
   const OUTBOX = window.WosOutbox || null;
   const { APPS, APP, findApp, searchApps, quickSearch, searchUrl } = C.apps('desktop');
   const store = C.store('wux.desk.');
-  const WS_N = 9;
+  const freshDesk = () => ({ id: 'd' + uid(), wins: [], focus: null, mono: false });
   const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
   const MOD = IS_MAC ? '⌥' : 'Alt+';
   const CMD = IS_MAC ? '⌘' : 'Ctrl+';
@@ -37,22 +37,38 @@
    * W: windows by id ({ id, app: 'chats'|'frame', appId, thread, url })
    * ws: workspaces [{ wins: [ids in tiling order], focus, mono }] */
   let W = store.get('wins', null), ws = store.get('ws', null), cur = store.get('cur', 0);
-  if (!W || typeof W !== 'object' || !Array.isArray(ws) || ws.length !== WS_N) {
-    W = {}; ws = Array.from({ length: WS_N }, () => ({ wins: [], focus: null, mono: false }));
+  if (!W || typeof W !== 'object' || Array.isArray(W) || !Array.isArray(ws) || !ws.length) {
+    W = {}; ws = [freshDesk()];
     // First run: Chats on 1, so Wizard opens on the thing you use most.
     const id = uid(); W[id] = { id, app: 'chats', thread: null }; ws[0].wins.push(id); ws[0].focus = id;
   }
-  ws.forEach(d => { d.wins = d.wins.filter(id => W[id]); if (!d.wins.includes(d.focus)) d.focus = d.wins[0] || null; });
+  const placed = new Set(), deskIds = new Set();
+  ws = ws.map(d => {
+    d = d && typeof d === 'object' ? d : freshDesk();
+    if (typeof d.id !== 'string' || !/^dw[a-z0-9]+$/.test(d.id) || deskIds.has(d.id)) d.id = freshDesk().id;
+    deskIds.add(d.id);
+    d.wins = (Array.isArray(d.wins) ? d.wins : []).filter(id => W[id] && !placed.has(id) && placed.add(id));
+    if (!d.wins.includes(d.focus)) d.focus = d.wins[0] || null;
+    d.mono = !!d.mono && d.wins.length > 1; return d;
+  });
+  if (!Number.isInteger(cur) || cur < 0 || cur >= ws.length) cur = 0;
+  // Migrate fixed workspaces once: retain every populated desktop and the active desktop.
+  // Empty desktops deliberately created after this migration persist across reloads.
+  if (store.get('layoutVersion', 0) < 2) {
+    const active = ws[cur]; ws = ws.filter(d => d.wins.length || d === active); cur = ws.indexOf(active);
+  }
+  store.set('layoutVersion', 2);
   Object.keys(W).forEach(id => { if (!ws.some(d => d.wins.includes(id))) delete W[id]; });
   // Repair only the obsolete management-API window record; keep desktops and every chat/draft.
   for (const w of Object.values(W)) if (w.app === 'frame' && w.appId === 'hermes-agent') {
     w.app = 'chats'; w.thread = null; delete w.appId; delete w.url;
   }
-  if (!(cur >= 0 && cur < WS_N)) cur = 0;
+  if (!(cur >= 0 && cur < ws.length)) cur = 0;
   function uid() { return 'w' + Math.random().toString(36).slice(2, 9); }
   const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); };
   const wsOf = id => ws.findIndex(d => d.wins.includes(id));
   const focused = () => W[ws[cur].focus] || null;
+  save(); // Persist normalization before the layout-version marker can affect another boot.
 
   /* ---------------- chats (shared core) ---------------- */
   const stage = $('#stage');
@@ -109,7 +125,7 @@
   }
 
   function newWin(obj, opts = {}) {
-    const t = opts.ws == null ? cur : opts.ws;
+    const t = Number.isInteger(opts.ws) && ws[opts.ws] ? opts.ws : cur;
     const id = uid(); W[id] = { id, ...obj };
     const d = ws[t];
     // New windows go next to the focused one, like a tiling WM.
@@ -122,6 +138,7 @@
   function closeWin(id) {
     const t = wsOf(id); if (t < 0) return;
     const d = ws[t], i = d.wins.indexOf(id);
+    CHATS.saveDraft(id);
     d.wins.splice(i, 1); delete W[id]; CHATS.forget(id);
     if (d.focus === id) d.focus = d.wins[Math.min(i, d.wins.length - 1)] || null;
     if (d.wins.length < 2) d.mono = false;
@@ -146,7 +163,7 @@
     el.focus({ preventScroll: true });
   }
   function moveWin(id, t) {
-    const from = wsOf(id); if (from < 0 || t === from || t < 0 || t >= WS_N) return;
+    const from = wsOf(id); if (from < 0 || t === from || t < 0 || t >= ws.length) return;
     const d = ws[from]; d.wins = d.wins.filter(x => x !== id); if (d.focus === id) d.focus = d.wins[0] || null; if (d.wins.length < 2) d.mono = false;
     ws[t].wins.push(id); ws[t].focus = id;
     save(); render(); toast('→', `Moved to ${t + 1}`, 1000);
@@ -221,22 +238,23 @@
   /* ---------------- rendering ---------------- */
   const winEl = id => stage.querySelector(`.win[data-win="${id}"]`);
   function wsEl(i) {
-    let el = stage.querySelector(`.wsp[data-ws="${i}"]`);
-    if (!el) { el = document.createElement('div'); el.className = 'wsp'; el.dataset.ws = i; stage.appendChild(el); }
-    return el;
+    const d = ws[i]; if (!d) return null;
+    let el = stage.querySelector(`.wsp[data-desk="${d.id}"]`);
+    if (!el) { el = document.createElement('div'); el.className = 'wsp'; el.dataset.desk = d.id; stage.appendChild(el); }
+    el.dataset.ws = i; return el;
   }
   function winHtml(w) {
     const a = appOf(w);
     return `<div class="wbar" data-drag>${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>
       ${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
-      <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
+      <button data-wact="mono" title="Full screen (${CMD}F / ${MOD}F)" aria-label="Full screen">⤢</button>
       <button data-wact="close" title="Close app (⌘W / ${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
   }
   function bodyHtml(w) {
     if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
-      <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>↑</kbd><kbd>↓</kbd> move through chats · <kbd>/</kbd> search · <kbd>${MOD}Enter</kbd> new chat · <kbd>${CMD}K</kbd> launch · <kbd>${MOD}V</kbd> talk</div></div></div></div>`;
+      <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>↑</kbd><kbd>↓</kbd> move through chats · <kbd>/</kbd> search · <kbd>${MOD}Enter</kbd> new chat · <kbd>${CMD}K</kbd> launch · <kbd>${MOD}⇧V</kbd> new voice chat</div></div></div></div>`;
     const a = appOf(w), url = w.url || a.url || '/';
     return `<iframe src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback" role="status" aria-live="polite"><div><b>${esc(a.name)} couldn’t open</b><p data-frame-reason>The app may be stopped or still starting. Your data hasn’t been removed.</p><div class="frame-recovery"><button type="button" data-frame-retry>Retry</button><button type="button" data-frame-store>App Store</button>${/^\/apps\//.test(url) ? '' : `<a href="${esc(url)}" target="_blank" rel="noopener">Open in a tab ↗</a>`}</div></div></div>`;
@@ -337,16 +355,19 @@
     });
   }
   function render() {
-    for (let i = 0; i < WS_N; i++) {
+    // Stable desktop IDs preserve hosted apps, composers and scroll when desktop indices shift.
+    $$('.win', stage).forEach(el => { if (!W[el.dataset.win]) { el.querySelector('iframe')?._appDetach?.(); el.remove(); } });
+    for (let i = 0; i < ws.length; i++) {
       const host = wsEl(i), d = ws[i];
       // Keep live windows (iframes keep their state); add new ones, drop closed ones.
-      $$('.win', host).forEach(el => { if (!d.wins.includes(el.dataset.win)) el.remove(); });
+      // Move surviving DOM nodes between hosts rather than remounting an iframe or draft.
       for (const id of d.wins) { const ex = stage.querySelector(`.win[data-win="${id}"]`); if (!ex) mountWin(W[id], host); else if (ex.parentNode !== host) host.appendChild(ex); }
       host.hidden = i !== cur;
       let home = host.querySelector('.home');
       if (!d.wins.length) { if (!home) { home = document.createElement('div'); home.className = 'home'; host.appendChild(home); } home.innerHTML = homeHtml(i); }
       else if (home) home.remove();
     }
+    $$('.wsp', stage).forEach(el => { if (!ws.some(d => d.id === el.dataset.desk)) el.remove(); });
     layout(); paintBar(); paintFocus();
   }
   /* Tiling: 1 window fills; 2 split; 3+ = master on the left, the rest stacked on the right (Hyprland's dwindle, simplified). */
@@ -382,12 +403,23 @@
     if (d.mono) layout();
   }
   function goWs(i, { from } = {}) {
-    if (i < 0 || i >= WS_N || i === cur) return;
-    const prev = cur; cur = i; save();
+    if (!Number.isInteger(i) || i < 0 || i >= ws.length || i === cur) return;
+    const prev = cur; lastWs = cur; cur = i; save();
     const el = wsEl(i); el.classList.add(i > prev ? 'from-r' : 'from-l');
     render(); requestAnimationFrame(() => el.classList.remove('from-r', 'from-l'));
     CHATS.markVisibleThreadsSeen();
   }
+
+  function newDesktop() {
+    ws.push(freshDesk()); goWs(ws.length - 1); return ws[cur];
+  }
+  function closeDesktop() {
+    if (ws[cur].wins.length || ws.length === 1) return false;
+    const previous = lastWs !== cur && ws[lastWs] ? ws[lastWs] : ws[cur > 0 ? cur - 1 : 1];
+    ws.splice(cur, 1); cur = ws.indexOf(previous); lastWs = cur; save(); render();
+    if (focused()) focusInside(focused().id); CHATS.markVisibleThreadsSeen(); return true;
+  }
+  function closeCurrent() { const f = focused(); if (f) { closeWin(f.id); return 'app'; } return closeDesktop() ? 'desktop' : 'root'; }
 
   /* ---------------- top bar ---------------- */
   function paintBar() {
@@ -395,15 +427,15 @@
     $('#wsList').innerHTML = ws.map((d, i) => {
       const hot = d.wins.some(id => { const w = W[id]; if (w?.app !== 'chats' || !w.thread) return false; const s = LIVE?.session(w.thread); return s && LIVE.isNew(s); });
       const names = d.wins.map(id => winTitle(W[id])).join(', ');
-      return `<button class="ws${i === cur ? ' cur' : ''}${d.wins.length ? ' used' : ''}${hot ? ' hot' : ''}" data-ws="${i}" title="${esc(names || 'Empty')} (${MOD}${i + 1})">${i + 1}</button>`;
-    }).join('');
+      return `<button class="ws${i === cur ? ' cur' : ''}${d.wins.length ? ' used' : ''}${hot ? ' hot' : ''}" data-ws="${i}" aria-label="Desktop ${i + 1}" title="${esc(names || 'Empty desktop')} (${MOD}${i + 1})">${i + 1}</button>`;
+    }).join('') + `<button class="ws ws-add" data-newdesk aria-label="New desktop" title="New desktop (${CMD}T / ${MOD}T)">+</button>`;
     const st = $('#status');
     if (!LIVE?.ok) st.innerHTML = `<span class="off">${LIVE?.error === 'access' ? 'Sign in to Wizard' : 'Connecting…'}</span>`;
     else st.innerHTML = `${L.needs.length ? `<span title="Needs you"><i class="st needs"></i>${L.needs.length}</span>` : ''}<span title="Unread"><i class="st unread"></i>${L.ready.length}</span>${L.working.length ? `<span title="Working"><i class="st working"></i>${L.working.length}</span>` : ''}`;
   }
   function tickClock() { const C = window.WizConfig; $('#clock').textContent = C.dateLabel() + '  ' + C.hm(); }
   setInterval(tickClock, 15000); tickClock(); window.addEventListener('wizard:config', tickClock);
-  $('#wsList').addEventListener('click', e => { const b = e.target.closest('[data-ws]'); if (b) goWs(+b.dataset.ws); });
+  $('#wsList').addEventListener('click', e => { if (e.target.closest('[data-newdesk]')) return newDesktop(); const b = e.target.closest('[data-ws]'); if (b) goWs(+b.dataset.ws); });
   $('#logo').addEventListener('click', () => openPalette());
   $('#status').addEventListener('click', () => toggleInbox());
   $('#clock').addEventListener('click', () => { const i = ws.findIndex(d => !d.wins.length); goWs(i >= 0 ? i : cur); });
@@ -421,11 +453,11 @@
     const quick = ['wizard', 'wizard-signal', 'wisdom', 'shopping', 'mizel', 'files', 'console', 'legacy-wizard', 'system', 'app-store'].map(id => APP[id]).filter(Boolean);
     return `<div class="home-in">
       <div class="home-time">${window.WizConfig.hm()}</div>
-      <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })} · Workspace ${i + 1}</div>
+      <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })} · Desktop ${i + 1}</div>
       <div class="home-line">${LIVE?.ok ? `<b>${L.needs.length} need${L.needs.length === 1 ? 's' : ''} you</b>, ${L.ready.length} unread, ${L.working.length} working.` : 'Connecting to Wizard…'}</div>
       <div class="home-cols"><div class="home-card"><h4>Needs you · Unread</h4>${rows(L.needs.concat(L.ready))}</div><div class="home-card"><h4>Working</h4>${rows(L.working)}</div></div>
       <div class="home-apps">${quick.map(a => `<button class="app-chip" data-app="${a.id}">${ico('i', '', a)}${esc(a.name)}</button>`).join('')}</div>
-      <div class="home-keys"><span><kbd>${CMD}K</kbd> search and launch</span><span><kbd>${MOD}Enter</kbd> new chat</span><span><kbd>${MOD}V</kbd> talk</span><span><kbd>${MOD}1</kbd>…<kbd>9</kbd> workspaces</span><span><kbd>${MOD}/</kbd> all keys</span></div>
+      <div class="home-keys"><span><kbd>${CMD}K</kbd> search and launch</span><span><kbd>${MOD}Enter</kbd> new chat</span><span><kbd>${MOD}⇧V</kbd> new voice chat</span><span><kbd>${CMD}T</kbd> / <kbd>${MOD}T</kbd> new desktop</span><span><kbd>${MOD}/</kbd> all keys</span></div>
     </div>`;
   }
   stage.addEventListener('click', e => {
@@ -500,6 +532,9 @@
     return [
       { kind: 'cmd', name: 'Get apps', icon: '+', run: () => openApp(APP['app-store']) },
       { kind: 'cmd', name: 'Your system', icon: '◈', run: () => openApp(APP.system) },
+      { kind: 'cmd', name: 'New desktop', icon: '+', keys: `${CMD}T / ${MOD}T`, run: () => newDesktop() },
+      { kind: 'cmd', name: 'Next desktop', icon: '→', keys: `${CMD}⇧]`, run: () => goWs((cur + 1) % ws.length) },
+      { kind: 'cmd', name: 'Previous desktop', icon: '←', keys: `${CMD}⇧[`, run: () => goWs((cur - 1 + ws.length) % ws.length) },
       { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${CMD}N / ${MOD}Enter`, run: () => newChat({ fresh: true }) },
       { kind: 'cmd', name: 'New voice chat', icon: '🎙', keys: `${CMD}⇧N / ${MOD}⇧V`, run: () => talkNew() },
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
@@ -507,8 +542,8 @@
       { kind: 'cmd', name: 'Inbox', icon: '⬇', keys: `${MOD}I`, run: () => openInbox() },
       ...(window.WosFiles ? [{ kind: 'cmd', name: 'Files', icon: '▤', run: () => openFiles() }] : []),
       ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
-      { kind: 'cmd', name: 'Close window', icon: '✕', keys: `⌘W / ${MOD}W`, run: () => focused() && closeWin(focused().id) },
-      { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
+      { kind: 'cmd', name: 'Close app / empty desktop', icon: '✕', keys: `${CMD}W / ${MOD}W`, run: () => closeCurrent() },
+      { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${CMD}F / ${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Keyboard shortcuts', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
       { kind: 'cmd', name: 'Settings', icon: '⚙', keys: `${MOD},`, run: () => openSettings() },
       { kind: 'cmd', name: 'Use the phone layout here', icon: '📱', run: () => { location.href = './?shell=phone'; } },
@@ -644,12 +679,15 @@
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
     ['Launch', [[`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${CMD}N  or  ${MOD}Enter`, 'New chat'], [`${CMD}⇧N  or  ${MOD}⇧V`, 'New voice chat (press again to send)'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send; Cancel discards)`], ['Right ⌥ (paused)', 'Wizard PWA dictation is paused; your system voice tool keeps this key']]],
-    ['Workspaces', [[`${MOD}1 … ${MOD}9`, 'Go to workspace'], [`⇧${MOD}1 … 9`, 'Send window to workspace'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
-    ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`⌘W / ${MOD}W`, 'Close app']]],
-    ['Chats', [[`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list'], ['↑ ↓  or  j k', 'Previous / next chat (in the list)'], [`⇧${MOD}J  ⇧${MOD}K`, 'Next / previous chat (anywhere)'], ['/', 'Search chats and messages'], [`${MOD},`, 'Settings']]],
+    ['Desktops', [[`${CMD}T  or  ${MOD}T`, 'New desktop'], [`${CMD}⇧[  ${CMD}⇧]  or  Ctrl+Tab`, 'Previous / next desktop'], [`${CMD}W  or  ${MOD}W`, 'Close focused app; press again on empty desktop to close it']]],
+    ['Desktop shortcuts', [[`${MOD}1 … ${MOD}9`, 'Go to workspace'], [`⇧${MOD}1 … 9`, 'Send window to workspace'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
+    ['Windows', [[`${CMD}← ↑ → ↓`, 'Focus app in this desktop'], [`${MOD}H J K L`, 'Focus app (browser alternative)'], [`⇧${MOD}← →`, 'Swap window'], [`${CMD}F  or  ${MOD}F`, 'Full screen'], [`⌘W / ${MOD}W`, 'Close app']]],
+    ['Chats', [[`${MOD}↑  ${MOD}↓`, 'Previous / next selected chat'], [`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list'], ['↑ ↓  or  j k', 'Previous / next chat (in the list)'], [`⇧${MOD}J  ⇧${MOD}K`, 'Next / previous chat (anywhere)'], ['/', 'Search chats and messages'], [`${MOD},`, 'Settings']]],
     ['Wizard for Mac (works in any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to a bound app'], ['Right ⌘', 'Talk to Wizard from anywhere'], ['Right ⌥', 'Dictate into any app']]],
   ];
   const keysEl = $('#keys');
+  const nativeDesktop = !!window.webkit?.messageHandlers?.wizardNative;
+  $('#keys .keys-head small').textContent = nativeDesktop ? 'Wizard owns ⌘N, ⌘T and ⌘W. Desktops open on demand.' : 'Browser owns ⌘N/T/W. Use ⌥Enter (chat), ⌥T (desktop), ⌥W (close), ⌥⇧V (new voice).';
   $('#keysBody').innerHTML = KEYS.map(([h, rows]) => `<h4>${h}</h4>` + rows.map(([k, d]) => `<div class="krow"><span>${esc(d)}</span><span>${k.split(/\s{2,}/).map(x => `<kbd>${esc(x)}</kbd>`).join(' or ')}</span></div>`).join('')).join('');
   function toggleKeys(on) { keysEl.hidden = on == null ? !keysEl.hidden : !on; }
   keysEl.addEventListener('click', e => { if (e.target === keysEl || e.target.closest('[data-close]')) toggleKeys(false); });
@@ -659,7 +697,7 @@
    * otherwise starts a new thread. Audio goes through the durable outbox: transcribed there,
    * kept as a voice note, retried if the network drops. */
   const pill = $('#voicePill'), mic = $('#micBtn');
-  let vTarget = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${CMD}⇧N`;
+  let vTarget = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${CMD}⇧N`, vContext = '';
   const VOICE = C.voice({
     onState: st => {
       pill.hidden = st === 'idle'; pill.classList.toggle('think', st === 'think'); mic.classList.toggle('on', st !== 'idle');
@@ -689,8 +727,10 @@
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
     if (VOICE.state === 'idle') {
       if (action === 'send') return 'none';
-      vMode = 'talk'; vReply = null; vNewChat = forceNew; vNewKey = newKey;
+      vMode = 'talk'; vNewChat = forceNew; vNewKey = newKey;
       const f = focused(); vTarget = !forceNew && f?.app === 'chats' && f.thread ? f.id : null;
+      vReply = vTarget ? { wid: f.id, sid: f.thread } : null;
+      vContext = viewContext(vTarget, forceNew ? 'voice, new chat' : 'voice, aimed at this thread');
       $('#voiceTime').textContent = '0:00';
       try { await VOICE.start(); } catch (e) { toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
       return 'voice';
@@ -712,7 +752,11 @@
     const w = vTarget && W[vTarget];
     if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed, modelRoute); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
     if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { sid: aimSid, seal: sealed, route: modelRoute });
-    else { if (sealed) sealed.putBack(); ask('', 'voice', r.blob, modelRoute); }
+    else {
+      if (sealed) sealed.putBack();
+      if (aimSid && aimSid !== '__new__') OUTBOX.enqueue({ ...modelRoute, kind: 'reply', sessionId: aimSid, audio: r.blob, text: '', instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
+      else ask('', 'voice', r.blob, modelRoute);
+    }
     toast('✦', `Sent to ${window.WizConfig.agent()}`, 1400);
     return 'sent';
   }
@@ -723,7 +767,7 @@
     if (VOICE.state === 'think') return 'busy';
     if (VOICE.state === 'listen') { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
     if (!sid) return 'busy';
-    vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid };
+    vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid }; vContext = viewContext(wid, 'voice, aimed at this thread');
     $('#voiceTime').textContent = '0:00';
     try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
     return 'recording';
@@ -833,7 +877,18 @@
     const hit = fn => { e.preventDefault(); e.stopPropagation(); fn(); };
     // The native Mac menu forwards ⌘W here instead of closing its NSWindow. Always consume at
     // the desktop root too; closing the last internal app leaves an empty workspace.
-    if (e.metaKey && !e.ctrlKey && !e.altKey && !shift && code === 'KeyW') return hit(() => { const f = focused(); if (f) closeWin(f.id); });
+    if ((e.metaKey || e.ctrlKey) && !(e.metaKey && e.ctrlKey) && !e.altKey && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
+    if (((e.metaKey || e.ctrlKey) && !(e.metaKey && e.ctrlKey) && !e.altKey) || alt) {
+      if (code === 'KeyT' && !shift) return hit(() => { if (!e.repeat) { closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
+      if ((e.metaKey || e.ctrlKey) && shift && (code === 'BracketLeft' || code === 'BracketRight')) return hit(() => goWs((cur + (code === 'BracketRight' ? 1 : -1) + ws.length) % ws.length));
+    }
+    if (e.ctrlKey && !e.metaKey && !e.altKey && code === 'Tab') return hit(() => goWs((cur + (shift ? -1 : 1) + ws.length) % ws.length));
+    if (e.metaKey && !e.ctrlKey && !e.altKey && !shift) {
+      const direction = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[code];
+      if (direction) return hit(() => dirFocus(...direction));
+      if (code === 'KeyF') return hit(() => { if (!e.repeat) toggleMono(); });
+    }
+    if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown') && focused()?.app === 'chats') return hit(() => stepThread(focused().id, code === 'ArrowDown' ? 1 : -1));
     // Native ⌘N / Ctrl+N: fresh composer; ⇧ adds new-chat voice. Browser-safe voice: ⌥⇧V.
     // Browser-owned ⌘N/⌘⇧N can stay with the browser; ⌥Enter/⌥⇧V reach Wizard in tabs.
     if (((e.metaKey || e.ctrlKey) && !(e.metaKey && e.ctrlKey) && !e.altKey && code === 'KeyN') || (alt && shift && code === 'KeyV')) return hit(() => {
@@ -877,12 +932,12 @@
     if (digit) return hit(() => { const i = +digit[1] - 1; if (shift) { const f = focused(); if (f) moveWin(f.id, i); } else { lastWs = cur; goWs(i); } });
     if (code === 'Enter') return hit(() => newChat({ fresh: shift }));
     if (code === 'KeyI') return hit(() => toggleInbox());
-    if (code === 'KeyW') return hit(() => { const f = focused(); if (f) closeWin(f.id); });
+    if (code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
     if (code === 'KeyF') return hit(() => { if (!e.repeat) toggleMono(); });
     if (code === 'Slash') return hit(() => toggleKeys());
     if (code === 'Comma') return hit(() => (setEl.hidden ? openSettings() : closeSettings()));
-    if (code === 'BracketLeft') return hit(() => { lastWs = cur; goWs((cur - 1 + WS_N) % WS_N); });
-    if (code === 'BracketRight') return hit(() => { lastWs = cur; goWs((cur + 1) % WS_N); });
+    if (code === 'BracketLeft') return hit(() => { lastWs = cur; goWs((cur - 1 + ws.length) % ws.length); });
+    if (code === 'BracketRight') return hit(() => { lastWs = cur; goWs((cur + 1) % ws.length); });
     if (code === 'Tab') return hit(() => { const t = lastWs; lastWs = cur; goWs(t); });
     const dir = { ArrowLeft: [-1, 0], KeyH: [-1, 0], ArrowRight: [1, 0], KeyL: [1, 0], ArrowUp: [0, -1], KeyK: [0, -1], ArrowDown: [0, 1], KeyJ: [0, 1] }[code];
     // ⌥ arrows are word/paragraph jumps while typing on a Mac: leave them to the text field (⌥HJKL still move focus).
@@ -1001,7 +1056,7 @@
   window.__wux = {
     get links() { return LINKS; },
     shell: 'desktop', get ws() { return ws; }, get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS,
-    goWs, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openInbox, talk, ask, escStep, viewContext,
+    goWs, newDesktop, closeDesktop, closeCurrent, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openInbox, talk, ask, escStep, viewContext,
     openFiles, openUsage, recordReply,
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
