@@ -49,8 +49,13 @@
   window.WizCore.appMigrations = Object.freeze({
     'wizard-signal': { scope: '/wizard-signal/', scripts: ['/wizard-signal/sw.js'], caches: [] },
     wisdom: { scope: '/wisdom/', scripts: ['/wisdom/sw.js'], caches: [] },
+    'wisdom-next': { scope: '/wisdom-next/', scripts: ['/wisdom-next/sw.js'], caches: [] },
     social: { scope: '/wizard-social/', scripts: ['/wizard-social/sw.js'], caches: [] },
-    trackhunt: { scope: '/trackhunt/', scripts: ['/trackhunt/sw.js'], caches: ['trackhunt-v1-20260711d'] },
+    trackhunt: { scope: '/trackhunt/', scripts: ['/trackhunt/sw.js', '/trackhunt/__pwa/service-worker.js'], caches: ['trackhunt-v1-20260711d'] },
+    cinequeue: { scope: '/cinequeue/', scripts: ['/cinequeue/__pwa/service-worker.js'], caches: [] },
+    files: { scope: '/files/', scripts: ['/files/__pwa/service-worker.js'], caches: [] },
+    iching: { scope: '/iching/', scripts: ['/iching/__pwa/service-worker.js'], caches: [] },
+    console: { scope: '/console/', scripts: ['/console/__pwa/service-worker.js'], caches: [] },
   });
   const PALETTE = [['#6b46ff', '#c04dff'], ['#3fe0ff', '#3f6bff'], ['#ff5ccf', '#5c3bff'], ['#4ff0b0', '#2f8cff'], ['#ffbe55', '#ff6b86'], ['#ff8a5c', '#ff5ccf']];
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
