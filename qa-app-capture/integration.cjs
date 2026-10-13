@@ -53,7 +53,7 @@ module.exports=async({browser,root,evidence,test})=>{
   ctx=await browser.newContext({viewport:{width:1440,height:1100}});
   await ctx.route('**/*',r=>{if(new URL(r.request().url()).origin!==origin){blocked.push(r.request().url());return r.abort();}return r.continue();});
   await ctx.routeWebSocket('**/live',ws=>{ws.onMessage(data=>{socketFrames.push({url:ws.url(),binary:typeof data!=='string',bytes:Buffer.byteLength(data)});if(typeof data==='string')ws.send(JSON.stringify({type:'status',status:'listening'}));});});
-  await ctx.addInitScript(()=>{if(window!==parent){window.rawCaptureAttempts=0;for(const name of ['getUserMedia','getDisplayMedia'])if(navigator.mediaDevices?.[name])navigator.mediaDevices[name]=()=>{rawCaptureAttempts++;throw new Error('Raw capture in hosted app is forbidden');};for(const name of ['AudioContext','MediaRecorder'])if(window[name])window[name]=function(){rawCaptureAttempts++;throw new Error('Raw capture in hosted app is forbidden');};return;}
+  await ctx.addInitScript(()=>{window.fixtureEpoch=crypto.randomUUID();if(window!==parent){window.rawCaptureAttempts=0;for(const name of ['getUserMedia','getDisplayMedia'])if(navigator.mediaDevices?.[name])navigator.mediaDevices[name]=()=>{rawCaptureAttempts++;throw new Error('Raw capture in hosted app is forbidden');};for(const name of ['AudioContext','MediaRecorder'])if(window[name])window[name]=function(){rawCaptureAttempts++;throw new Error('Raw capture in hosted app is forbidden');};return;}
    window.displayPrompts=[];window.mediaAdmissions=0;const gum=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=(...a)=>{mediaAdmissions++;return gum(...a);};navigator.mediaDevices.getDisplayMedia=()=>{displayPrompts.push({active:navigator.userActivation.isActive,at:Date.now()});return gum({audio:true}).then(st=>{window.displayStreams||=[];displayStreams.push(st);return st;});};
   });
   p=await ctx.newPage();const errors=[];p.on('pageerror',e=>errors.push(e.message));
@@ -68,8 +68,8 @@ module.exports=async({browser,root,evidence,test})=>{
    await p.waitForTimeout(5500);assert.ok(socketFrames.some(x=>x.binary));assert.ok([...records.values()][0].chunks.size>=1);
    assert.equal(await p.evaluate(()=>WizAppServices.update.busy()),true);
    const prior=socketFrames.filter(x=>x.binary).length;
-   await p.evaluate(()=>document.querySelector('iframe').contentWindow.location.reload());
-   await p.waitForFunction(()=>document.querySelector('iframe').contentWindow.WizardApp?.hosted);
+   const oldEpoch=await f().evaluate(()=>fixtureEpoch);await p.evaluate(()=>document.querySelector('iframe').contentWindow.location.reload());
+   await p.waitForFunction(old=>{const w=document.querySelector('iframe').contentWindow;return w.fixtureEpoch!==old&&w.WizardApp?.hosted&&!!w.mizel;},oldEpoch);
    await f().waitForSelector('#pill .stop');await p.waitForTimeout(850);assert.equal(await p.evaluate(()=>WizAppCapture.getState().id),id);assert.ok(socketFrames.filter(x=>x.binary).length>prior,'Fresh iframe receives streaming PCM');
    assert.equal(await p.evaluate(()=>mediaAdmissions),1,'Physical mic did not restart after iframe reload');
    await f().click('#pill button[aria-label="Them: computer audio"]');await f().waitForFunction(()=>document.querySelector('#pill .them').getAttribute('aria-pressed')==='false');
@@ -86,7 +86,9 @@ module.exports=async({browser,root,evidence,test})=>{
    await p.goto(origin+'/host/');let f=p.frames().find(f=>f.url().includes('/mizel-live/'));await f.waitForSelector('#btn-new');await f.evaluate(()=>localStorage.setItem('meetings.systemAudio','0'));await f.click('#btn-new');await f.waitForSelector('#pill .stop');await p.waitForTimeout(800);corrupt=true;await f.click('#pill .stop');await f.waitForFunction(()=>document.querySelector('#toasts').textContent.includes('differs'));
    assert.equal(await p.evaluate(async()=>(await WizAppCapture.pending('mizel')).length),1);assert.equal(await p.evaluate(()=>WizAppServices.update.busy()),true);
    const micCount=await p.evaluate(()=>mediaAdmissions);
-   await f.evaluate(()=>location.reload());f=p.frames().find(f=>f.url().includes('/mizel-live/'));await f.waitForFunction(()=>document.querySelector('#toasts').textContent.includes('differs'));
+   const oldEpoch=await f.evaluate(()=>fixtureEpoch);await f.evaluate(()=>location.reload());
+   await p.waitForFunction(old=>{const w=document.querySelector('iframe').contentWindow;return w.fixtureEpoch!==old&&w.WizardApp?.hosted&&!!w.mizel;},oldEpoch);
+   f=p.frames().find(f=>f.url().includes('/mizel-live/'));await f.waitForFunction(()=>document.querySelector('#toasts').textContent.includes('differs'));
    assert.equal(await p.evaluate(async()=>(await WizAppCapture.pending('mizel')).length),1,'Reload retains mismatched backend custody');
    corrupt=false;await f.getByRole('button',{name:'Try again',exact:true}).click();await p.waitForFunction(async()=>!(await WizAppCapture.pending('mizel')).length);
    assert.equal(await p.evaluate(()=>mediaAdmissions),micCount,'Domain Retry saves the old Result, never starts another recorder');
