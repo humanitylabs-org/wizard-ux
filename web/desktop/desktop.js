@@ -929,7 +929,11 @@
       const show = (tries = 50) => { const f = focused(); const sec = f && winEl(f.id)?.querySelector(`.pane-list [data-sec="${section}"]`); if (!sec) { if (tries > 0) setTimeout(() => show(tries - 1), 100); return; } if (!sec.classList.contains('open')) sec.querySelector('[data-sectoggle]')?.click(); winEl(f.id)?.querySelector(`.pane-list [data-sec="${section}"]`)?.scrollIntoView({ block: 'start' }); };
       if (section) show();
     },
-    app(id) { const a = findApp(id) || APP[id]; if (a) openApp(a); },
+    app(id) {
+      const a = findApp(id) || APP[id]; if (a) return openApp(a);
+      // Cold launch: the registered app list may still be loading. The same deep link must work in either shell.
+      Promise.resolve(C.appsLoaded?.()).then(() => { const b = findApp(id) || APP[id]; if (b) openApp(b); });
+    },
     video: item => CHATS.KIT.viewer.open([item]),
     toast,
   });
