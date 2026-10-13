@@ -18,11 +18,12 @@ function installDeviceMock() {
 function installMeetingMock() {
   window.meetingCalls = [];
   const pcms = new Set(), levels = new Set(), states = new Set(); let current = { recording: false };
+  window.emitMeetingState = st => {current={...current,...st};states.forEach(cb=>cb(current));};
   const b = window.wizardNative = { meetings: {
     status: async () => current,
     start: async ({ meetingId }) => { meetingCalls.push('start'); current = { meetingId, recording: true, livePcm: true, mediaMs: 1000 }; return current; },
     stop: async () => { meetingCalls.push('stop'); current = { ...current, recording: false, final_seq: { me: 0 } }; states.forEach(cb => cb(current)); return current; },
-    pause: async () => ({ ...current, paused: true }), resume: async () => current,
+    pause: async () => {current={...current,paused:true};states.forEach(cb=>cb(current));return current;}, resume: async () => {current={...current,paused:false};states.forEach(cb=>cb(current));return current;},
     pcm: async (id, enabled) => { meetingCalls.push('pcm:' + enabled); if (enabled) setTimeout(() => { pcms.forEach(cb => cb({ meetingId: id, startMs: 0, pcm: new Uint8Array(8000) })); levels.forEach(cb => cb({ me: .6, them: 0 })); }, 20); },
     onPcm: cb => { pcms.add(cb); return () => pcms.delete(cb); },
     onLevel: cb => { levels.add(cb); return () => levels.delete(cb); },

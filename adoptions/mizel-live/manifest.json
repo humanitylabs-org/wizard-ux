@@ -17,7 +17,7 @@
     "web/wizard-style.css": "c94915a7385e681eb2ce9b3806bc65ea340383a86fc405ba28ee33f5900f3ea3"
   },
   "candidate_files": {
-    "web/app.js": "9fa8b73813af0663e0ae7c940933b838c3fa4a2b45a140b98fe75a6fbb5528d9",
+    "web/app.js": "5cfe84d8ffa8259e89dd11ce239989908d0b14ae262477aaa65704735f135740",
     "web/apple-touch-icon.png": "93fe4e7c6bd653a4217520ac4bbe003d9939eabe52ff8b334f864f4f4bcc507c",
     "web/icon-192.png": "a1a0347984fbfcec379c69a7da9322593ef564682025b98ffaa921bf875c145d",
     "web/icon-512.png": "107841329c3598260c473b97e6cc55641e646127aa4de05c2d21c9ae0e313f35",
@@ -38,10 +38,10 @@
   "deleted": [
     "web/capture-worklet.js"
   ],
-  "patch_sha256": "68a12128a1687f4d83ea2d8ba0fccb43efb6528c9bc1ea9514e417e27bce0759",
+  "patch_sha256": "2f9325f0fbc5d2e96a39f2548ab57fbb31f27dd40a078a9b15b269e0798b6932",
   "staged": "/home/telos/.hermes/cache/scratch/shared-app-services/other-apps/staged/mizel-live",
   "deployed": false,
   "backend_edited": false,
   "capture_implementation": "WizardApp.capture only; PCM/native implemented solely in approved shared core",
-  "qa": "Pending exact integration acceptance; no handset attached on Thales"
+  "qa": "Exact candidate/core/native integration receipt: /Volumes/ThalesMedia/WizardApps/shared-services/integration/r5/evidence/receipt.json. Read receipt exits; no physical handset attached."
 }

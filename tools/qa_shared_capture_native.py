@@ -7,7 +7,7 @@ import base64, hashlib, json, pathlib, time
 
 def pages(root):
     root = pathlib.Path(root)
-    scripts = {p: (root / 'web' / p).read_text() for p in ['core/app-capture.js', 'core/app-services.js', 'core/app-client.js', 'device.js']}
+    scripts = {p: (root / 'web' / p).read_text() for p in ['core/app-capture.js', 'core/app-services.js', 'core/app-client.js', 'core/chat-kit.js', 'device.js']}
     boot = """window.sharedQaBoot=crypto.randomUUID();window.resumes=[];window.webShares=0;navigator.share=()=>{webShares++;return Promise.resolve();}; window.__wos={voice:'idle',V:{native:null},toast(){},txHide(){},setVoice(v){this.voice=v},nativeResume(a){resumes.push(a.id);this.V.native=a.id;this.voice='listen';return true}};
 window.WizConfig={agent:()=> 'Synthetic',owner:()=> 'Synthetic'};
 window.WizCore={apps:()=>({APPS:[{id:'mizel',url:'/mizel-qa/capture-frame.html'},{id:'trackhunt',url:'/mizel-qa/task-frame.html'}]})};
@@ -24,7 +24,7 @@ window.shareText=async()=>{window.shareOutcome=await WizardApp.share.text({title
 window.shareFile=async()=>{window.shareOutcome=await WizardApp.share.file(new File(['Synthetic staged file'],'fixture.txt',{type:'text/plain'}),{title:'Synthetic file'});};
 """
     html = '<!doctype html><div id="device"></div><iframe style="height:600px;width:100%"></iframe><script>' + boot + '</script>'
-    for name in ['core/app-capture.js', 'core/app-services.js', 'device.js']:
+    for name in ['core/app-capture.js', 'core/chat-kit.js', 'core/app-services.js', 'device.js']:
         html += '<script>' + scripts[name] + '</script>'
     html += '<script>' + mount + '</script>'
     result = {'/mizel-qa/shared-native.html': html}
@@ -75,7 +75,7 @@ def run(pg, sx, top, check, save, origin, pkg, state, lock):
     navigate(task=True)
     started = frame('begin()'); pg.pump(2)
     active = pg.ev('JSON.parse(WizardOSDevice.recActive())')
-    check('shared-device', 'actual recActive omits kind but exact take id is exported', 'kind' not in active and pg.ev('WizAppCapture.getState().nativeDeviceTakeIds') == [active['id']], active)
+    check('shared-device', 'actual recActive adds read-only kind and exact owned take id is exported', active.get('kind') == 'audio' and pg.ev('WizAppCapture.getState().nativeDeviceTakeIds') == [active['id']], active)
     navigate(task=True)
     snapshot = pg.ev('WizAppCapture.getState()')
     check('shared-device', 'real DeviceBridge shared take survives shell restart with physical hold', snapshot['nativeOwnershipReady'] and snapshot['recording'] and snapshot['hold'] and snapshot['nativeDeviceTakeIds'] == [active['id']], snapshot)
@@ -89,7 +89,7 @@ def run(pg, sx, top, check, save, origin, pkg, state, lock):
     frame('WizardApp.capture.ack(' + json.dumps(result['id']) + ')')
     check('shared-device', 'ack deletes only the exact native task take', not pg.ev("JSON.parse(WizardOSDevice.recPending()).some(t=>t.id===" + json.dumps(active['id']) + ')'))
     legacy = pg.ev("WizardOSDevice.recStart('auto')")
-    reverse=pg.ev("WizAppCapture.start('mizel',{kind:'meeting',meta:{meetingId:'qa_conflicting_native'}}).then(()=>null,e=>e.code)")
+    reverse=pg.ev("new Promise((resolve,reject)=>{const p=wizardMizelPort,old=p.onmessage,id='qa_native_admission_probe';const timer=setTimeout(()=>{p.onmessage=old;reject(Error('native probe timeout'));},12000);p.onmessage=e=>{const m=JSON.parse(e.data);if(m.id===id){clearTimeout(timer);p.onmessage=old;resolve(m.error||null);}else old?.(e);};p.postMessage(JSON.stringify({id,cmd:'start',meetingId:'qa_conflicting_native'}));})")
     check('shared-device','native meeting admission refuses an actual DeviceBridge recorder',reverse=='mic_busy',reverse)
     pg.ev("dispatchEvent(new Event('wos-native-resume'))");pg.pump(.5)
     check('shared-device', 'legacy voice resumes after ownership readiness', pg.ev('resumes') == [legacy], pg.ev('resumes'))

@@ -211,6 +211,12 @@ async function begin(page, appId = 'mizel', opts = {}) {
     await p.evaluate(id => WizAppCapture.ack('mizel', id), out.id);
     await p.evaluate(() => { delete window.wizardNative; });
   });
+  await test('native-notification-pause-resume-updates-the-owned-session-phase',async()=>{
+    await p.evaluate(installMeetingMock);await begin(p,'mizel',{kind:'meeting',meta:{meetingId:'native-pause-fixture'}});
+    await p.evaluate(()=>emitMeetingState({paused:true,recording:true}));assert.equal(await p.evaluate(()=>session.getInfo().paused),true);
+    await p.evaluate(()=>session.resume());assert.equal(await p.evaluate(()=>session.getInfo().paused),false);
+    await p.evaluate(async()=>{const r=await session.stop();await WizAppCapture.ack('mizel',r.id);delete window.wizardNative;});
+  });
   await test('resume-starting-rejects-and-cancelled-storage-retry-cannot-stop', async () => {
     await p.evaluate(() => { WizAppCapture.configureNative({ name: 'synthetic-native', start: () => new Promise(resolve => { window.unblockStart = () => resolve({ nativeId: 'starting-mock', mime: 'audio/aac', stop: async () => {}, cancel: async () => {} }); }), ack: async () => {} }); window.startPromise = WizAppCapture.start('trackhunt'); });
     await p.waitForFunction(() => !!window.unblockStart);
@@ -222,6 +228,14 @@ async function begin(page, appId = 'mizel', opts = {}) {
     await p.evaluate(async () => { IDBDatabase.prototype.transaction = cancelTxn; await session.cancel(); WizAppCapture.configureNative(null); });
   });
   if(process.env.MIZEL_WEB) await require('./integration.cjs')({browser,root,evidence,test});
+  await test('unknown-active-native-kind-never-becomes-legacy-voice-or-ready-by-absence',async()=>{
+    await p.evaluate(()=>{window.WizardOSDevice={recActive:()=>JSON.stringify({id:'unknown-active',ms:100,source:'app'})};});
+    assert.equal(await p.evaluate(()=>WizAppCapture.getState().nativeOwnershipReady),false);assert.equal(await p.evaluate(()=>WizAppCapture.getState().hold),true);
+    await p.evaluate(()=>{WizardOSDevice.recActive=()=>JSON.stringify({id:'unknown-active',kind:'audio',ms:100,source:'app'});});
+    assert.equal(await p.evaluate(()=>WizAppCapture.getState().nativeOwnershipReady),false);
+    await p.evaluate(()=>{WizardOSDevice.recActive=()=>JSON.stringify({id:'known-legacy',kind:'auto',ms:100,source:'app'});});
+    assert.equal(await p.evaluate(()=>WizAppCapture.getState().nativeOwnershipReady),true);await p.evaluate(()=>{delete window.WizardOSDevice;});
+  });
   await p.screenshot({ path: path.join(evidence, 'capture-contract.png') });
   assert.deepEqual(errors, []);
   fs.writeFileSync(path.join(evidence, 'receipt.json'), JSON.stringify({ hostname: os.hostname(), sourceSHA: process.env.SOURCE_SHA, treeHash: process.env.SOURCE_TREE, moduleSHA256: crypto.createHash('sha256').update(fs.readFileSync(path.join(root, 'web/core/app-capture.js'))).digest('hex'), command: 'node qa-app-capture/run.cjs', browser: browser.version(), receipts, errors, limitation: 'Native contract mocks only, not Android hardware/native foreground service QA. Synthetic browser microphone; no production task upload.' }, null, 2));

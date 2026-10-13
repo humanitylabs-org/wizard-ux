@@ -29,18 +29,22 @@
   function state() {
     const deviceRows = [...ownedRows.values()].filter(r => r.native === 'wizard-device');
     const nativeDeviceTakeIds = [...new Set(deviceRows.map(r => r.nativeId).filter(Boolean))];
-    let live = [...recoveryLive].map(id => ownedRows.get(id)).find(Boolean);
+    let live = [...recoveryLive].map(id => ownedRows.get(id)).find(Boolean), unknownNative = false;
     try {
       const a = JSON.parse(W.WizardOSDevice?.recActive?.() || 'null');
       live ||= deviceRows.find(r => r.nativeId && r.nativeId === a?.id);
-      if(a?.id && !live)live=deviceRows.find(r=>!r.nativeId); // Physical hold without falsely asserting a take id.
-    } catch (_) { /* Do not guess physical ownership. */ }
-    const recording = !!active || !!live;
+      if(a?.id && !live) {
+        const inPageVoice=W.__wos?.V?.native===a.id && !['idle',undefined].includes(W.__wos?.voice);
+        const savedVoice=!a.kind && !!W.WosModels?.voiceRoute?.(a.id); // Positive persisted legacy voice provenance on older ABIs.
+        if(!['auto','command'].includes(a.kind) && !inPageVoice && !savedVoice){unknownNative=true;live=deviceRows.find(r=>!r.nativeId);}
+      }
+    } catch (_) { unknownNative=true; } // Malformed/unknown bridge truth never authorizes voice/reload.
+    const recording = !!active || !!live || unknownNative;
     return { version: 1, active: !!active, recording,
       appId: active?.row.appId || live?.appId || null, id: active?.row.id || live?.id || null,
       phase: active?.phase || (live ? 'recoverable' : 'idle'), native: !!active?.row.native || !!live,
       hold: recording || preparations.size > 0 || [...ownedRows.values()].some(r=>r.native && !r.nativeId && r.status==='recoverable'),
-      nativeOwnershipReady: ownershipLoaded && !deviceRows.some(r => !r.nativeId) &&
+      nativeOwnershipReady: ownershipLoaded && !unknownNative && !deviceRows.some(r => !r.nativeId) &&
         !(active?.row.native === 'wizard-device' && !active.row.nativeId), nativeDeviceTakeIds,
       error: active?.error?.code || recoveryError?.code || null };
   }
@@ -78,7 +82,7 @@
     return values;
   }
   const put = async row => { await transaction(['sessions'], 'readwrite', tx => tx.objectStore('sessions').put(row));
-    ownedRows.set(row.id, row); changed(); channel?.postMessage('changed'); };
+    ownedRows.set(row.id, structuredClone(row)); changed(); channel?.postMessage('changed'); };
   async function parts(id, source = 'me') {
     let values;
     await transaction(['chunks'], 'readonly', tx => {
@@ -188,7 +192,7 @@
           tx.objectStore('chunks').put({ id: row.id, seq: s.row.seq, blob, source, startMs: startMs ?? (track.startMs + track.bytes / 32) });
           tx.objectStore('sessions').put(row);
         });
-        s.row = row; ownedRows.set(row.id, row); s.queue.shift(); s.error = null;
+        s.row = row; ownedRows.set(row.id, structuredClone(row)); s.queue.shift(); s.error = null;
         uploadChunk(s, source, blob, startMs ?? (track.startMs + track.bytes / 32));
       } catch (e) {
         s.error = fail('storage_failed', 'Capture storage failed; stop and retry saving before leaving.', { cause: e });
@@ -653,6 +657,10 @@
         await put(s.row);
         s.hasSystemAudio = !!opts.systemAudio && capabilities(opts).systemAudioStart;
         s.engine = await native.start({ ...opts, onPcm: frame => emit(s,'pcm',frame), onNativeState: st => { if(!st)return; s.nativeState=st; if(st.hasSystemAudio != null)s.hasSystemAudio=!!st.hasSystemAudio;
+          if(st.recording && ['recording','paused'].includes(s.phase)) {
+            if(st.paused && s.phase!=='paused'){s.pausedAt=Date.now();s.phase='paused';}
+            else if(!st.paused && s.phase==='paused'){s.pausedTotal=(s.pausedTotal||0)+Date.now()-s.pausedAt;s.pausedAt=0;s.phase='recording';}
+          }
           emit(s,'state',st); if(st.recording===false && active===s && ['recording','paused'].includes(s.phase) && !s.finishPromise) void finish(s).catch(()=>{}); }, onWarn: msg => emit(s,'warn',msg) }, { level: value => level(s, value), chunk: (blob, source, startMs) => enqueue(s, blob, source, startMs) }, opts.resumeId ? s.row : null);
         s.row.nativeId = s.engine.nativeId; s.row.mime = s.engine.mime || 'audio/wav'; s.row.pcm = !!s.engine.pcm;
         if (s.engine.detach) s.offs.push(s.engine.detach);

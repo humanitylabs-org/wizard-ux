@@ -8,7 +8,7 @@ evidence=pathlib.Path(os.environ['INTEGRATION_EVIDENCE']);evidence.mkdir(parents
 if not pathlib.Path('/Volumes/ThalesMedia').exists():raise SystemExit('Thales execution required')
 env=os.environ.copy();env.update(QA_WEB_DIR=str(root),QA_BLOCK_WRITES='1',QA_CHROME=env['CHROMIUM'])
 receipt={'hostname':subprocess.check_output(['hostname'],text=True).strip(),'sourceSHA':env['SOURCE_SHA'],'sourceTree':env['SOURCE_TREE'],'commands':[],'productionWrites':0,'deployed':False}
-files=['web/core/app-capture.js','web/core/app-client.js','web/core/app-services.js','web/device.js','web/app.js','web/desktop/desktop.js','qa-app-capture/integration.cjs','tools/qa_shared_capture_native.py','adoptions/mizel-live/mizel-live.patch','adoptions/mizel-live/manifest.json','android/app/src/main/java/ai/wizards/os/recording/RecorderService.java','android/app/src/main/java/ai/wizards/os/mizel/MeetingRecorderService.java']
+files=['web/core/app-capture.js','web/core/app-client.js','web/core/app-services.js','web/device.js','web/app.js','web/desktop/desktop.js','qa-app-capture/integration.cjs','tools/qa_shared_capture_native.py','adoptions/mizel-live/mizel-live.patch','adoptions/mizel-live/manifest.json','android/app/src/main/java/ai/wizards/os/recording/RecorderService.java','android/app/src/main/java/ai/wizards/os/mizel/MeetingRecorderService.java','android/app/src/main/java/ai/wizards/os/device/DeviceBridge.java']
 receipt['sourceHashes']={name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in files}
 manifest=json.loads((root/'adoptions/mizel-live/manifest.json').read_text())
 for name,expected in manifest['candidate_files'].items():
