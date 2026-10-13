@@ -49,7 +49,7 @@
     deskIds.add(d.id);
     d.wins = (Array.isArray(d.wins) ? d.wins : []).filter(id => W[id] && !placed.has(id) && placed.add(id));
     if (!d.wins.includes(d.focus)) d.focus = d.wins[0] || null;
-    d.mono = !!d.mono && d.wins.length > 1; return d;
+    d.mono = !!d.mono && d.wins.length > 0; return d;
   });
   if (!Number.isInteger(cur) || cur < 0 || cur >= ws.length) cur = 0;
   // Migrate fixed workspaces once: retain every populated desktop and the active desktop.
