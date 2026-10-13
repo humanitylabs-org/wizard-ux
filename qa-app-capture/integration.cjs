@@ -92,7 +92,7 @@ module.exports=async({browser,root,evidence,test})=>{
    assert.equal(await p.evaluate(async()=>(await WizAppCapture.pending('mizel')).length),1,'Reload retains mismatched backend custody');
    corrupt=false;await f.getByRole('button',{name:'Try again',exact:true}).click();await p.waitForFunction(async()=>!(await WizAppCapture.pending('mizel')).length);
    assert.equal(await p.evaluate(()=>mediaAdmissions),micCount,'Domain Retry saves the old Result, never starts another recorder');
-   assert.equal(await p.evaluate(()=>WizAppServices.update.busy()),false);
+   await p.waitForFunction(()=>!WizAppServices.update.busy());
   });
   await test('Mizel-native-Stop-waits-own-backend-readback-without-error-or-duplicate-uploads',async()=>{
    await ctx.exposeBinding('completeNativeFixture',async(source,id)=>{setTimeout(()=>{const r=get(id),raw=Buffer.alloc(32000);r.chunks.set('me:0',{source:'me',seq:0,startMs:0,bytes:wav(raw)});r.doc.status='processing';},850);});

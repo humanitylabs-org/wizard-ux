@@ -43,5 +43,5 @@
   "deployed": false,
   "backend_edited": false,
   "capture_implementation": "WizardApp.capture only; PCM/native implemented solely in approved shared core",
-  "qa": "Exact candidate/core/native integration receipt: /Volumes/ThalesMedia/WizardApps/shared-services/integration/r6/evidence/receipt.json. Read receipt exits; no physical handset attached."
+  "qa": "Exact candidate/core/native integration receipt: /Volumes/ThalesMedia/WizardApps/shared-services/integration/r7/evidence/receipt.json. Read receipt exits; no physical handset attached."
 }
