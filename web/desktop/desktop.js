@@ -617,7 +617,7 @@
 
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
-    ['Launch', [[`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send, Esc to cancel)`], ['Right ⌥ (tap)', 'Dictate (tap again to insert at the cursor, or copy)']]],
+    ['Launch', [[`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${MOD}Enter`, 'New chat'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send, Esc to cancel)`], ['Right ⌥ (paused)', 'Wizard PWA dictation is paused; your system voice tool keeps this key']]],
     ['Workspaces', [[`${MOD}1 … ${MOD}9`, 'Go to workspace'], [`⇧${MOD}1 … 9`, 'Send window to workspace'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
     ['Windows', [[`${MOD}← ↑ → ↓  or  ${MOD}H J K L`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`⌘W / ${MOD}W`, 'Close app']]],
     ['Chats', [[`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list'], ['↑ ↓  or  j k', 'Previous / next chat (in the list)'], [`⇧${MOD}J  ⇧${MOD}K`, 'Next / previous chat (anywhere)'], ['/', 'Search chats and messages'], [`${MOD},`, 'Settings']]],
@@ -735,7 +735,9 @@
   let tapKey = null, tapAt = 0, tapChord = false;
   addEventListener('keydown', e => {
     if (NATIVE_KEYS) return;
-    if ((e.code === 'MetaRight' || e.code === 'AltRight') && !e.repeat) {
+    // Pause PWA dictation so the system's Right Option voice tool owns the key.
+    // Reversible desktop switches are staged separately; native/OS bindings stay intact.
+    if (e.code === 'MetaRight' && !e.repeat) {
       const others = (e.code === 'MetaRight' ? e.altKey : e.metaKey) || e.ctrlKey || e.shiftKey;
       tapKey = e.code; tapAt = performance.now(); tapChord = others; return;
     }
