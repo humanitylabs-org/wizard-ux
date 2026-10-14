@@ -381,8 +381,12 @@
   }
   function goWs(i, { from } = {}) {
     if (!Number.isInteger(i) || i < 0 || i >= ws.length || i === cur) return;
-    const prev = cur; lastWs = cur; cur = i; save();
-    const el = wsEl(i); el.classList.add(i > prev ? 'from-r' : 'from-l');
+    // A desktop exists only while it holds a window (James, 14 Oct): leaving an empty one removes it.
+    const target = ws[i], left = ws[cur], prune = !left.wins.length && ws.length > 1;
+    const prev = cur;
+    if (prune) { ws.splice(cur, 1); i = ws.indexOf(target); }
+    lastWs = prune ? i : prev; cur = i; save();
+    const el = wsEl(i); el.classList.add(i >= prev ? 'from-r' : 'from-l');
     render(); requestAnimationFrame(() => el.classList.remove('from-r', 'from-l'));
     CHATS.markVisibleThreadsSeen();
   }
