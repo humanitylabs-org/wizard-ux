@@ -28,7 +28,7 @@ http.createServer((req,res)=>{
  if(p==='/__preview/receipt'){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({revision,root:ROOT,port:PORT,appTunnelPort:APP_PORT,readOnly:true,immutableAssets:'git-blob',explicitReadAllowlist:true,refused}));}
  if(p==='/__preview/version.js'){res.writeHead(200,{'content-type':'application/javascript','cache-control':'no-store'});return res.end(`(()=>{const label='STAGING · Hat Home · ${revision.slice(0,8)} · read-only';const show=()=>{const e=document.getElementById('wiz-staging-tag');if(e&&e.textContent!==label)e.textContent=label;};new MutationObserver(show).observe(document.documentElement,{childList:true,subtree:true});show();})();`);}
  if(SHELL_READS.some(re=>re.test(p)))return proxy(req,res,{host:'127.0.0.1',port:8923});
- if(p==='/api/system/load')return proxy(req,res,{host:'127.0.0.1',port:9271});
+ if(['/api/system/load','/api/system/devices'].includes(p))return proxy(req,res,{host:'127.0.0.1',port:9271});
  if(hostedRead(p))return proxy(req,res,{host:'127.0.0.1',port:APP_PORT,servername:canonical},true);
  if(p==='/wizard-os-home'){res.writeHead(302,{location:'/wizard-os-home/'});return res.end();}
  if(p.startsWith('/wizard-os-home/')){
