@@ -33,7 +33,7 @@
 
   /* ---------------- data ---------------- */
   const PCOL = { 'wizard-os': '#b99bff', 'wizard-app': '#7c5cff', mizel: '#3fe0ff', clips: '#ffbe55', signal: '#ff5ccf', music: '#4ff0b0', wisdom: '#a6e35f', business: '#ff8a5c', infra: '#8aa0c8', life: '#e9dcff' };
-  const PICON = { 'wizard-os': '✦', 'wizard-app': '◈', mizel: '◉', clips: '▶', signal: '◎', music: '♫', wisdom: '☯', business: '◆', infra: '⌬', life: '✺' };
+  const PICON = { 'wizard-os': window.WizBrand.html, 'wizard-app': '◈', mizel: '◉', clips: '▶', signal: '◎', music: '♫', wisdom: '☯', business: '◆', infra: '⌬', life: '✺' };
   const byDay = {}, byId = {};
   for (const t of D.threads) { (byDay[t.day] = byDay[t.day] || []).push(t); byId[t.id] = t; }
   const allDays = []; { let d = weekOf(D.threads.length ? D.threads.reduce((m, t) => t.day < m ? t.day : m, TODAY) : TODAY); while (d <= TODAY) { allDays.push(d); d = addDays(d, 1); } }
@@ -126,7 +126,7 @@
   /* Live Wizard state: inbox, unread, working come from the real Wizard backend. */
   // Thread emojis are Wizard's own (same-origin storage), read fresh each render.
   let EMO = {}, emoAt = 0;
-  const emoOf = id => { if (Date.now() - emoAt > 2000) { try { EMO = JSON.parse(localStorage.getItem('wizard.thread-emojis.v1') || '{}'); } catch (e) {} emoAt = Date.now(); } return EMO[`direct:${id}`] || '✦'; };
+  const emoOf = id => { if (Date.now() - emoAt > 2000) { try { EMO = JSON.parse(localStorage.getItem('wizard.thread-emojis.v1') || '{}'); } catch (e) {} emoAt = Date.now(); } return EMO[`direct:${id}`] || window.WizBrand.html; };
   const live = () => (LIVE && LIVE.ok ? LIVE.groups() : { needs: [], ready: [], working: [] });
   const ago = iso => {
     const t = Date.parse(iso || ''); if (!isFinite(t)) return '';
@@ -1093,7 +1093,7 @@
         <p class="st-note">Every message is saved on this phone before it’s sent, and retried until Wizard accepts it.</p></div>
       ${lookGroup()}
       <div class="st-group"><h4>Assistant</h4>
-        <button class="st-row" data-st="everywhere" ${evNative ? '' : 'disabled'}><span class="st-ic">✦</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
+        <button class="st-row" data-st="everywhere" ${evNative ? '' : 'disabled'}><span class="st-ic">${window.WizBrand.html}</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
         ${evNative && evOn && typeof window.WizardOSNative.voiceTypingSettings === 'function' ? `<button class="st-row" data-st="typing"><span class="st-ic">⌨</span><span class="st-tx" id="stTyping"><b>Voice typing &amp; screenshots</b><small>${esc(ev?.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Off · tap to set up: the orb types into any app and attaches screenshots')}</small></span>${ev?.keyboard ? '<span class="sw on"><i></i></span>' : '<span class="st-go">›</span>'}</button>` : ''}
         <button class="st-row" data-st="side" ${native ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(side)}</small></span><span class="st-go">›</span></button>
       </div>
@@ -1917,7 +1917,7 @@
   /* ---------------- toast ---------------- */
   let toastT = 0;
   function toast(icon, text, ms = 2200) {
-    const t = $('#toast'); t.innerHTML = `<span class="ti">${icon}</span><span>${text}</span>`; t.classList.add('show');
+    const t = $('#toast'); t.innerHTML = `<span class="ti">${window.WizBrand.icon(icon)}</span><span>${text}</span>`; t.classList.add('show');
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
   }
 
@@ -2125,7 +2125,7 @@
   const takeFiles = () => V.files.filter(f => f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes }));
   function txShow(text, label, cls, icon) {
     tx.className = 'transcript ' + (cls || '');
-    $('#txRouteIcon').textContent = icon || '✦';
+    window.WizBrand.paint($('#txRouteIcon'), icon || '✦');
     $('#txRouteText').innerHTML = label || '';
     $('#txText').textContent = text || '';
     $('#txChips').innerHTML = '';
@@ -2136,7 +2136,7 @@
   // they are already in the thread. Timing/router detail rides in data-detail for diagnostics.
   function txPill(icon, label, cls, detail) {
     tx.className = 'transcript brief ' + (cls || '');
-    $('#txRouteIcon').textContent = icon || '✦';
+    window.WizBrand.paint($('#txRouteIcon'), icon || '✦');
     $('#txRouteText').textContent = label || '';
     tx.dataset.detail = detail || '';
     $('#txChips').innerHTML = '';
@@ -2701,7 +2701,7 @@
         : ($('#txText').textContent || 'Done');
       return txPill(kind === 'command' ? '⚡' : kind === 'view' ? '◧' : '✦', short, kind, label);
     }
-    tx.className = 'transcript ' + kind; $('#txRouteIcon').textContent = kind === 'command' ? '⚡' : kind === 'view' ? '◧' : '✦'; $('#txRouteText').textContent = label;
+    tx.className = 'transcript ' + kind; window.WizBrand.paint($('#txRouteIcon'), kind === 'command' ? '⚡' : kind === 'view' ? '◧' : '✦'); $('#txRouteText').textContent = label;
   }
   function finishCmd(c, text, opts) {
     setVoice('done'); vib([8, 40, 8]);

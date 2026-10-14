@@ -1,0 +1,5 @@
+/* Preserve the designer silhouette; never stretch, redraw or recolour it. */
+.wizard-brand-mark { display: inline-block; width: 1em; height: 1.35em; object-fit: contain; vertical-align: middle; flex-shrink: 0; }
+.logo .wizard-brand-mark { width: 15px; height: 20px; }
+.st-ic .wizard-brand-mark { width: 18px; height: 24px; }
+.dv-ui .wizard-brand-mark { width: 14px; height: 19px; }

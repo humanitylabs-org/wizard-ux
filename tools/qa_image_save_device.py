@@ -273,7 +273,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('cmd connectivity airplane-mode disable')
         val = wait(lambda: 'VALIDATED' in sx('dumpsys connectivity | grep -E "NetworkAgentInfo.*(WIFI|CELLULAR)"'), 40, 2)
         print('network validated:', bool(val), flush=True)
-        resolv = sx('ping -c1 -W2 private.wizard001.com 2>&1')
+        resolv = sx('ping -c1 -W2 wizard.tailc0f369.ts.net 2>&1')
         check('the real Wizard is unreachable from the emulator (DNS dead)', not re.search(r'\(\d+\.\d+\.\d+\.\d+\)', resolv), resolv.strip()[:120])
         inst = sh(ADB, '-s', S, 'install', '-r', APK).strip().splitlines()[-1]
         ver = re.search(r'versionName=(\S+)', sx('dumpsys package %s | grep versionName' % PKG) or '')

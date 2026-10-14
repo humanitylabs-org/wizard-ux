@@ -27,7 +27,7 @@
   };
   const emoOf = (() => {
     let EMO = {}, at = 0;
-    return id => { if (Date.now() - at > 2000) { try { EMO = JSON.parse(localStorage.getItem('wizard.thread-emojis.v1') || '{}'); } catch (e) {} at = Date.now(); } return EMO[`direct:${id}`] || '✦'; };
+    return id => { if (Date.now() - at > 2000) { try { EMO = JSON.parse(localStorage.getItem('wizard.thread-emojis.v1') || '{}'); } catch (e) {} at = Date.now(); } return EMO[`direct:${id}`] || window.WizBrand.html; };
   })();
   window.WizCore = Object.assign(window.WizCore || {}, { esc, clip, norm, store, ago, emoOf, DOW });
 })();
