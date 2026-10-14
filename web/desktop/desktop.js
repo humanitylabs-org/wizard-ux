@@ -459,6 +459,7 @@
   function goHome() {
     for (const id of Object.keys(W)) if (W[id].app === 'chats') CHATS.saveDraft(id);
     closePalette(); toggleKeys(false); closeInbox(); closeSettings(); closeUsage();
+    window.WizWebUpdate?.back(); // Preserve the accepted shared banner; fold its navigation list.
     LINKS?.close();
     for (let i = 0; i < 20 && CHATS.closeOverlay(); i++) { /* Close navigation sheets, never the recorder. */ }
     homeOpen = true; store.set('homeOpen', true); render();
