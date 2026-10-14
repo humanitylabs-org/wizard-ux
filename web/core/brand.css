@@ -3,4 +3,4 @@
  * Icon rows (dock, overview) draw it as a sigil mask instead, so it shares the sigils' size, colour and glow. */
 .wizard-brand-mark { display: inline-block; width: auto; height: 1em; vertical-align: -.12em; flex-shrink: 0; }
 .logo .wizard-brand-mark { height: 16px; }
-.sgi.sg-hat { -webkit-mask: url("/wizard-os-home/brand/wizard-mark-white.png") center / auto 70% no-repeat; mask: url("/wizard-os-home/brand/wizard-mark-white.png") center / auto 70% no-repeat; }
+.sgi.sg-hat { -webkit-mask: url("/wizard-os-home/brand/wizard-mark-white.png") center / auto 62% no-repeat; mask: url("/wizard-os-home/brand/wizard-mark-white.png") center / auto 62% no-repeat; }
