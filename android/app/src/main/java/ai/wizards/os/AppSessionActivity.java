@@ -19,19 +19,29 @@ public final class AppSessionActivity extends MainActivity {
         applyImmersive(true);
         String app = HomeScreenShortcuts.appId(this,getIntent());
         if (app != null) {
-            ShortcutManager manager = getSystemService(ShortcutManager.class);
-            if (manager != null) for (ShortcutInfo shortcut : manager.getPinnedShortcuts()) {
-                if (HomeScreenPolicy.identity(HomeScreenShortcuts.origin(this),app).equals(shortcut.getId())) {
-                    android.graphics.Bitmap bitmap = null;
-                    try {
-                        String png = getSharedPreferences("home-screen-pins",MODE_PRIVATE).getString(shortcut.getId() + ":icon", "");
-                        if (png.startsWith("data:image/png;base64,")) { byte[] bytes = android.util.Base64.decode(png.substring(22),android.util.Base64.DEFAULT); bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes,0,bytes.length); }
-                    } catch (Exception ignored) { /* label remains useful */ }
-                    setTaskDescription(new ActivityManager.TaskDescription(shortcut.getShortLabel().toString(),bitmap,0xff110d1b));
-                    break;
-                }
-            }
+            // ShortcutManager performs binder/disk work; keep it off the first-paint UI thread.
+            new Thread(() -> updateTaskLabel(app), "home-screen-task-label").start();
         }
+    }
+    private void updateTaskLabel(String app) {
+        try {
+            ShortcutManager manager = getSystemService(ShortcutManager.class);
+            if (manager == null) return;
+            for (ShortcutInfo shortcut : manager.getPinnedShortcuts()) {
+                if (!HomeScreenPolicy.identity(HomeScreenShortcuts.origin(this),app).equals(shortcut.getId())) continue;
+                android.graphics.Bitmap bitmap = null;
+                try {
+                    String png = getSharedPreferences("home-screen-pins",MODE_PRIVATE).getString(shortcut.getId() + ":icon", "");
+                    if (png.startsWith("data:image/png;base64,")) {
+                        byte[] bytes = android.util.Base64.decode(png.substring(22),android.util.Base64.DEFAULT);
+                        bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes,0,bytes.length);
+                    }
+                } catch (Exception ignored) { /* label remains useful */ }
+                ActivityManager.TaskDescription label = new ActivityManager.TaskDescription(shortcut.getShortLabel().toString(),bitmap,0xff110d1b);
+                runOnUiThread(() -> { if (!isFinishing() && !isDestroyed()) setTaskDescription(label); });
+                return;
+            }
+        } catch (RuntimeException unavailable) { /* launcher/service unavailable; keep the isolated task */ }
     }
     @Override String startUrl(Intent intent) {
         String app = HomeScreenShortcuts.appId(this,intent);

@@ -57,7 +57,7 @@ public final class AppState {
 
     /** Switch this process to the old name once. False for QA fakes or when it is already in use. */
     public static boolean useLegacy(Context c) {
-        if (BuildConfig.BUILD_TYPE.equals("preview") || qaOrigin(c) != null || legacyFallback) return false;
+        if (BuildConfig.BUILD_TYPE.startsWith("preview") || qaOrigin(c) != null || legacyFallback) return false;
         legacyFallback = true;
         android.util.Log.w("WizardOS", "tailnet name unreachable; using " + LEGACY_ORIGIN + " for this run");
         return true;

@@ -62,6 +62,15 @@ android {
             buildConfigField 'String', 'ORIGIN', '"https://home-screen-apps.staging.wizard001.com"'
             matchingFallbacks = ['release']
         }
+        // Scoped inspection companion: identical Preview origin/source, separate data/package.
+        // Never delivered as the signed non-debuggable Preview acceptance artifact.
+        previewqa {
+            initWith preview
+            debuggable true
+            applicationIdSuffix '.previewqa'
+            versionNameSuffix '-previewqa'
+            matchingFallbacks = ['preview', 'release']
+        }
         // QA fixture for the in-app update test only (built with :app:assembleQanext next to assembleDebug):
         // the QA app again, same debug key, but a far higher version, so the updater has a real newer APK to verify.
         qanext {
