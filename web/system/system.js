@@ -35,7 +35,7 @@
     try {
       const [b, a] = await Promise.all(['/wizard/v1/app-bindings', '/wizard/v1/agents'].map(u => fetch(u, { credentials: 'same-origin', cache: 'no-store' }).then(r => r.ok ? r.json() : null)));
       const agents = new Map(((a && a.agents) || []).map(x => [x.id, x]));
-      const list = (b && (b.apps || b.bindings)) || [];
+      const list = (b && (b.bindings || b.apps)) || [];
       R = list.map(v => ({ id: v.app_id || v.id, label: v.label || v.app_id || v.id, purpose: v.purpose || '', agent: agents.get(v.agent) || null, agentId: v.agent })).filter(v => v.id);
     } catch (_) { R = null; }
     if (D) sections(); else if (R && R.length) $('sections').innerHTML = routesHtml() + '<p class="empty">The rest of your system overview isn’t reachable right now.</p>';

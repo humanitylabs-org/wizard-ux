@@ -15,7 +15,7 @@
 // Contract implemented (agent=<id> as query or body):
 //   GET/POST /wizard/v1/agents · GET/PATCH /wizard/v1/agents/<id> · POST /wizard/v1/agents/<id>/start|stop
 //   GET /wizard/v1/agent-options
-//   GET /wizard/v1/app-bindings · GET/PUT /wizard/v1/apps/<app_id>/binding   (App → agent binding; agents list
+//   GET /wizard/v1/app-bindings → {bindings} · GET/PUT /wizard/v1/apps/<app_id>/binding → {binding}   (App → agent binding; agents list
 //                their bound apps as bound_apps). --binding-apps=id:Label:Purpose,… names the installed apps that
 //                declare agent_binding (default: one universal recorder). No entry = the main agent.
 //   GET/POST /wizard/hermes/api/sessions?agent= · GET/PATCH /wizard/hermes/api/sessions/<sid>?agent=
@@ -252,18 +252,18 @@ async function api(req, res, u) {
     }
     return send(res, 405, { error: 'method' });
   }
-  if (p === '/wizard/v1/app-bindings' && m === 'GET') return send(res, 200, { apps: BIND_APPS.map(bindingView) });
+  if (p === '/wizard/v1/app-bindings' && m === 'GET') return send(res, 200, { bindings: BIND_APPS.map(bindingView) });
   mm = p.match(/^\/wizard\/v1\/apps\/([a-z0-9][a-z0-9._-]{0,63})\/binding$/);
   if (mm) {
     const app = BIND_APPS.find(x => x.id === mm[1]);
     if (!app) return send(res, 404, { error: 'app_not_found', check: 'app.id' });
-    if (m === 'GET') return send(res, 200, bindingView(app));
+    if (m === 'GET') return send(res, 200, { binding: bindingView(app) });
     if (m === 'PUT') {
       const id = typeof body.agent === 'string' ? body.agent : '';
       if (!id) return send(res, 400, { error: 'agent_required', check: 'app.binding.agent' });
       if (!AGENTS.has(id)) return send(res, 404, { error: 'agent_not_found', check: 'agent.id' });
       if (id === 'hermes') BINDINGS.delete(app.id); else BINDINGS.set(app.id, id);
-      return send(res, 200, bindingView(app));
+      return send(res, 200, { binding: bindingView(app) });
     }
     return send(res, 405, { error: 'method' });
   }

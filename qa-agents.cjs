@@ -179,7 +179,7 @@ async function phone(b) {
 }
 
 const BIND = 'meeting-recorder';
-const binding = p => api(p, `/wizard/v1/apps/${BIND}/binding`).then(r => r.body || {});
+const binding = p => api(p, `/wizard/v1/apps/${BIND}/binding`).then(r => (r.body && r.body.binding) || {});
 async function bindingPhone(p, created) {
   let b = await binding(p);
   ok(b.agent === 'hermes' && b.is_default === true, 'binding: a fresh install routes through the main agent (default)', JSON.stringify(b));

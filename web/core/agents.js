@@ -26,8 +26,8 @@
  * App → agent binding (wizard-os spec/AGENTS.md): an installed app that makes work for an agent (recording recaps,
  * reports, automations) declares agent_binding; the owner picks which agent it routes through. No entry = the main
  * agent. A bound agent that is stopped holds the work: it never falls back to another agent.
- *   GET /wizard/v1/app-bindings            → { apps: [{ app_id, label, purpose, required, agent, is_default, problem? }] }
- *   GET/PUT /wizard/v1/apps/<app_id>/binding  PUT { agent } → the same view
+ *   GET /wizard/v1/app-bindings            → { bindings: [{ app_id, label, purpose, required, agent, is_default, problem? }] }
+ *   GET/PUT /wizard/v1/apps/<app_id>/binding  PUT { agent } → { binding: <the same view> }
  *   agents carry bound_apps: [{ id, label, purpose }]   (without the list endpoint the bindings come from these)
  *   WosAgents.loadBindings(force) → Promise<views[]>; bindings / bindingsAvailable
  *   WosAgents.binding(appId)      → { app_id, label, purpose, agent, is_default, problem, target, held } | null
@@ -72,7 +72,7 @@
       if (!force && A.bindingsAt && Date.now() - A.bindingsAt < 30e3) return Promise.resolve(A.bindings);
       A.bindingsLoading = fetch('/wizard/v1/app-bindings', { cache: 'no-store', credentials: 'same-origin' })
         .then(async r => {
-          if (r.ok) { const j = await r.json(); A.bindingsFromList = true; return (Array.isArray(j?.apps) ? j.apps : Array.isArray(j?.bindings) ? j.bindings : []).map(cleanBinding).filter(Boolean); }
+          if (r.ok) { const j = await r.json(); A.bindingsFromList = true; return (Array.isArray(j?.bindings) ? j.bindings : Array.isArray(j?.apps) ? j.apps : []).map(cleanBinding).filter(Boolean); }
           if (r.status !== 404) throw new Error(`App routing unavailable (${r.status})`);
           // No list endpoint: the agents' own bound_apps say the same thing.
           A.bindingsFromList = false;
@@ -98,7 +98,7 @@
         const human = /^[a-z0-9_]+$/.test(code) ? (code[0].toUpperCase() + code.slice(1)).replace(/_/g, ' ') : code || `Request failed (${r.status})`;
         throw Object.assign(new Error(human + (j?.check ? ` (${j.check})` : '')), { status: r.status, check: j?.check || '' });
       }
-      const v = cleanBinding(j);
+      const v = cleanBinding(j && j.binding ? j.binding : j);
       if (v) { const i = A.bindings.findIndex(b => b.app_id === appId); if (i >= 0) A.bindings[i] = v; else A.bindings.push(v); }
       await Promise.all([A.load(true), A.loadBindings(true)]);
       A.emit();
