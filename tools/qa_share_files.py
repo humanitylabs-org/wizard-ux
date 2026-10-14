@@ -269,8 +269,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         em.runas('mkdir -p files && echo %s > files/qa_home.txt && echo %s > files/qa_origin.txt' % (ORIGIN, ORIGIN))
         em.sx('am force-stop %s' % PKG)
         em.sx('input keyevent KEYCODE_HOME')
-        reach = em.sx("printf 'GET /wizard/v1/bootstrap HTTP/1.0\\r\\n\\r\\n' | toybox nc -w 5 10.0.2.2 %d | tail -c 120" % PORT)
-        check('emulator reaches the fixture over its own network (10.0.2.2, not adb reverse)', 'bootstrap' in reach, reach)
+        reach = em.sx("printf 'GET /wizard/v1/bootstrap HTTP/1.0\\r\\n\\r\\n' | toybox nc -w 5 10.0.2.2 %d | tail -c 400" % PORT)
+        check('emulator reaches the fixture over its own network (10.0.2.2, not adb reverse)', '"resumable_uploads":true' in reach, reach[-160:])
 
         # ======== sheet ========
         big = 'qa-big-%dm.bin' % BIG_MB
