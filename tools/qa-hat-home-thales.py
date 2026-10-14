@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Thales-only QA lease. BSD flock and POSIX lockf are separate on macOS;
-acquire both, BSD first to match native workers wrapping POSIX workers.
+"""Thales-only QA lease, using the established POSIX worker lock.
+Live Darwin probes confirmed POSIX lockf excludes BSD flock even in the same
+process: acquire one family, not both. A child proves exclusion of both APIs.
 Never unlink worker.lock (inode identity is the serialization contract).
 """
 import fcntl, json, os, pathlib, socket, subprocess, sys, time
@@ -9,22 +10,15 @@ root = pathlib.Path('/Volumes/ThalesMedia/wizard-branding-20261014/hat-home')
 if 'thales' not in socket.gethostname().lower() or not root.is_dir():
     raise SystemExit('Thales /Volumes/ThalesMedia placement required')
 lock = pathlib.Path('/Volumes/ThalesMedia/AndroidBuilds/worker.lock')
-receipt = {'host': socket.gethostname(), 'pid': os.getpid(), 'lock': str(lock), 'types': ['BSD flock', 'POSIX lockf'], 'queued_at': datetime.now(timezone.utc).isoformat()}
+receipt = {'host': socket.gethostname(), 'pid': os.getpid(), 'lock': str(lock), 'owner_api': 'POSIX fcntl.lockf', 'exclusion_probes': ['BSD flock', 'POSIX lockf'], 'queued_at': datetime.now(timezone.utc).isoformat()}
 print(json.dumps(receipt), flush=True)
 with lock.open('a') as f:
-    # Never retain one lock family while waiting for the other: older workers
-    # can nest them in the opposite order, which otherwise deadlocks the queue.
     until = time.monotonic() + 7200
     while True:
-        bsd = False
         try:
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            bsd = True
             fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             break
         except BlockingIOError:
-            if bsd:
-                fcntl.flock(f, fcntl.LOCK_UN)
             if time.monotonic() >= until:
                 raise SystemExit('shared worker lease wait expired')
             time.sleep(1)
