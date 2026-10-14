@@ -342,6 +342,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 @media (prefers-reduced-motion: reduce) { .ch-row .emo.sti .spin { animation-duration: 3s; } }
 .ch-row .emo.ch-app-icon { font-size: 0; overflow: visible; }
 .ch-row .emo.ch-app-icon .sgi { width: 24px; height: 24px; }
+.ch-row .emo.ch-app-icon .sgl { font-size: 16px; }
 .ch-row .emo.ch-app-state { position: absolute; right: -3px; bottom: -3px; width: 16px; height: 16px; min-width: 0; margin: 0; border-radius: 5px; z-index: 1; border: 1px solid var(--line-2); }
 .ch-row .emo.ch-app-state svg { width: 11px; height: 11px; }
 .ch-row .emo.ch-app-state .spin { width: 11px; height: 11px; }
