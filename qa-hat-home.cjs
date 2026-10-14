@@ -18,7 +18,9 @@ async function context(kind){
  p.on('response',r=>{let u=new URL(r.url());if(u.pathname.startsWith('/wizard-os-home/')&&/\.(js|css)$/.test(u.pathname)&&r.status()===200)r.body().then(x=>{assets[u.pathname]=crypto.createHash('sha256').update(x).digest('hex');}).catch(()=>{});});
  return {c,p};
 }
-const entry=kind=>BASE+(BASE.includes('?')?'&':'?')+'shell='+kind;
+// Exercise the literal delivery URL. Device selection is real UA/touch selection,
+// not a shell query override; the two contexts must resolve it to different shells.
+const entry=kind=>BASE;
 async function shot(p,name){const f=path.join(OUT,name+'.png');await p.screenshot({path:f});screenshots.push(f);}
 async function wait(p,kind){await p.waitForFunction(k=>k==='desktop'?window.__wux?.live?.ok:window.__wos?.live?.ok,kind,{timeout:45000});await nap(800);}
 async function home(p){await p.evaluate(()=>__wux.goHome());await nap(100);}

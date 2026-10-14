@@ -4,6 +4,7 @@ const http=require('http'),https=require('https'),fs=require('fs'),path=require(
 const ROOT=path.resolve(__dirname,'..'),PORT=Number(process.env.HAT_PREVIEW_PORT||9520),APP_PORT=Number(process.env.HAT_APP_TUNNEL_PORT||19144);
 const canonical='wizard.tailc0f369.ts.net';
 const revision=cp.execFileSync('git',['-C',ROOT,'rev-parse','HEAD'],{encoding:'utf8'}).trim();
+const webTree=cp.execFileSync('git',['-C',ROOT,'rev-parse',revision+':web'],{encoding:'utf8'}).trim();
 const types={'.js':'application/javascript','.css':'text/css','.html':'text/html','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json','.svg':'image/svg+xml','.md':'text/markdown','.ico':'image/x-icon'};
 const blobs=new Map();let refused=0;
 const SHELL_READS=[/^\/wizard\/(?:v1\/(?:bootstrap|apps)|thread-seen|thread-dispositions|attention|ai-usage)$/, /^\/wizard\/hermes\/api\/(?:model\/options|sessions(?:\/[^/]+(?:\/messages)?)?)$/, /^\/wizard\/hermes\/v1\/runs\/[^/]+$/, /^\/wizard\/files\/[^/]+\/(?:download|content|thumbnail)$/];
@@ -25,7 +26,7 @@ http.createServer((req,res)=>{
  let p;try{p=decodeURIComponent(new URL(req.url,'http://x').pathname);}catch{res.writeHead(400);return res.end();}
  if(!['GET','HEAD'].includes(req.method))return deny(res,true);
  if(p.split('/').some(s=>s==='..'||s.startsWith('.')))return deny(res);
- if(p==='/__preview/receipt'){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({revision,root:ROOT,port:PORT,appTunnelPort:APP_PORT,readOnly:true,immutableAssets:'git-blob',explicitReadAllowlist:true,refused}));}
+ if(p==='/__preview/receipt'){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify({revision,webTree,root:ROOT,port:PORT,appTunnelPort:APP_PORT,readOnly:true,immutableAssets:'git-blob',explicitReadAllowlist:true,refused}));}
  if(p==='/__preview/version.js'){res.writeHead(200,{'content-type':'application/javascript','cache-control':'no-store'});return res.end(`(()=>{const label='STAGING · Hat Home · ${revision.slice(0,8)} · read-only';const show=()=>{const e=document.getElementById('wiz-staging-tag');if(e&&e.textContent!==label)e.textContent=label;};new MutationObserver(show).observe(document.documentElement,{childList:true,subtree:true});show();})();`);}
  if(SHELL_READS.some(re=>re.test(p)))return proxy(req,res,{host:'127.0.0.1',port:8923});
  if(['/api/system/load','/api/system/devices'].includes(p))return proxy(req,res,{host:'127.0.0.1',port:9271});
@@ -33,7 +34,7 @@ http.createServer((req,res)=>{
  if(p==='/wizard-os-home'){res.writeHead(302,{location:'/wizard-os-home/'});return res.end();}
  if(p.startsWith('/wizard-os-home/')){
   const rel=p.slice('/wizard-os-home/'.length)||'index.html';
-  if(rel==='ux-version.txt'){res.writeHead(200,{'content-type':'text/plain','cache-control':'no-store'});return res.end(revision+'\n');}
+  if(rel==='ux-version.txt'){res.writeHead(200,{'content-type':'text/plain','cache-control':'no-store'});return res.end(webTree+'\n');}
   let body;
   try{
    if(['data.js','summaries.js'].includes(rel))body=fs.readFileSync('/home/telos/apps/wizard-os-home/web/'+rel);
