@@ -889,6 +889,7 @@
   // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
     if (!pal.hidden) { closePalette(); return 'palette'; }
+    if (window.WizWebUpdate?.back()) return 'update-list'; // the update card's thread list folds first
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }
@@ -1100,6 +1101,16 @@
   C.status?.attach({ openInbox, inboxOpen: () => !ib.hidden, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
+  /* "Update ready" pill in the top bar: the same banner as the phone (core/web-update.js), names the thread that made the
+   * update with a Thread button that opens it in a window here; Reload is held while recording or uploading. */
+  window.WizWebUpdate?.init({
+    shell: 'desktop', log: (...a) => { window.__wuxLog = (window.__wuxLog || []).concat(a.join(' ')).slice(-80); },
+    mount: () => document.querySelector('#bar .bar-r') || document.body, prepend: true,
+    openThread: sid => openThread(sid),
+    busy: () => VOICE.state !== 'idle' || Object.values(W).some(win => (CHATS.ch(win.id)?.files || []).some(f => f.uploading)),
+    beforeReload: () => { for (const el of document.querySelectorAll('[data-compose]')) el.dispatchEvent(new Event('input', { bubbles: true })); },
+    toast,
+  });
   window.__wux = {
     get links() { return LINKS; },
     shell: 'desktop', get ws() { return ws; }, get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS,

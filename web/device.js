@@ -46,7 +46,7 @@
     return true;
   }
   function back() {
-    if (listOpen && webPending) { listOpen = false; renderWeb(); return 'device-weblist'; }
+    if (WEB()?.back()) return 'device-weblist';
     if (!sheet) return null;
     const k = sheet.kind, fn = sheet.onBack;
     closeSheet(); try { fn && fn(); } catch (e) {}
@@ -272,89 +272,16 @@
     }
     const [msg, btn] = t(u);
     el.hidden = false; el.dataset.state = u.state;
-    el.innerHTML = `<span class="dv-ui">↻</span><span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${btn ? `<button data-upd="go">${esc(btn)}</button>` : ''}${u.state === 'available' || u.state === 'ready' ? '<button class="later" data-upd="later" aria-label="Later">×</button>' : ''}`;
+    el.innerHTML = `<span class="dv-ui">↻</span><span class="dv-um">${esc(msg)}</span>${btn ? `<button data-upd="go">${esc(btn)}</button>` : ''}${u.state === 'available' || u.state === 'ready' ? '<button class="later" data-upd="later" aria-label="Later">×</button>' : ''}`;
   }
   function onUpdate(u) { upd = u; log('update:' + u.state, u.version || '', u.message || ''); renderUpdate(); if (W$()?.sheet === 'settings') W$().renderSettings(); }
 
-  /* ================= #22 web hot-reload that keeps drafts ================= */
-  // What changed is read from ux-version.txt: the git tree id of web/, rewritten by the repo's commit/merge/
-  // checkout hooks (tools/write-ux-version.sh), so any committed web change flips it. The Agent Service sends no
-  // ETag/Last-Modified, which left the old header fingerprint comparing sizes only: a same-length edit, or a
-  // file missing from a hand-kept list (chat-kit.js), never raised the prompt (James, 11 Oct). Without the
-  // version file, fall back to headers over every script and stylesheet the page actually loaded.
-  const VERSION = 'ux-version.txt';
-  const assets = () => {
-    const base = new URL('.', location.href).href, out = new Set(['index.html']);
-    document.querySelectorAll('script[src], link[rel="stylesheet"][href]').forEach(el => {
-      const u = new URL(el.getAttribute('src') || el.getAttribute('href'), location.href);
-      if (u.origin === location.origin && u.href.startsWith(base) && !/(^|\/)(data|summaries)\.js$/.test(u.pathname)) out.add(u.pathname.slice(new URL(base).pathname.length));
-    });
-    return [...out];
-  };
+  /* ================= #22 web hot-reload that keeps drafts =================
+   * Detection, thread attribution, the banner and the guarded reload live in core/web-update.js, shared with
+   * the desktop shell. This file supplies the phone host: mount, open thread, busy, save drafts first. */
   const DRAFTS = 'wos.drafts.v1';
-  let print0 = '', webPending = false, lastCheck = 0;
-  async function fingerprint() {
-    try {
-      const r = await fetch(VERSION, { cache: 'no-store', credentials: 'same-origin' });
-      const v = r.ok ? (await r.text()).trim() : '';
-      if (/^[0-9a-f]{7,64}$/i.test(v)) return 'v:' + v;
-    } catch (e) { return ''; }
-    const parts = await Promise.all(assets().map(async a => {
-      try {
-        // GET (some proxies mishandle HEAD); only the headers are read, the body is dropped unread.
-        const r = await fetch(a, { cache: 'no-store', credentials: 'same-origin' });
-        try { r.body?.cancel(); } catch (e) {}
-        if (!r.ok) return a + ':' + r.status;
-        const lm = r.headers.get('last-modified') || '', et = r.headers.get('etag') || '', len = r.headers.get('content-length') || '';
-        return a + ':' + (et || lm + '/' + len);
-      } catch (e) { return null; }
-    }));
-    return parts.includes(null) ? '' : parts.join('|');
-  }
-  // Keeps checking while the banner is up, so a second deploy adds its thread to the banner too.
-  let printNow = '';
-  async function checkWeb(force) {
-    if ((!force && Date.now() - lastCheck < 60e3) || !navigator.onLine) return;
-    lastCheck = Date.now();
-    const p = await fingerprint(); if (!p) return;
-    if (!print0) { print0 = printNow = p; return; }
-    if (p === print0 || p === printNow) return;
-    printNow = p;
-    if (!webPending) { webPending = true; log('web:changed'); }
-    await loadChanges(); window.WizAppServices?.update.announce({ version: p, changes }); applyWeb();
-  }
-  /* Which threads made the update: web/ux-changes.json (tools/write-ux-changes.py) lists every web/ change
-   * newest first with the thread that committed it. Take the ones since the version this page loaded. */
-  let changes = [], listOpen = false;
-  const loadedAt = Date.now();
-  async function loadChanges() {
-    if (!print0.startsWith('v:')) { changes = []; return; }
-    try {
-      const r = await fetch('ux-changes.json', { cache: 'no-store', credentials: 'same-origin' });
-      const d = r.ok ? await r.json() : null; const ups = Array.isArray(d?.updates) ? d.updates : [];
-      const mine = print0.slice(2); let since = [];
-      const k = ups.findIndex(u => u.before === mine);
-      if (k >= 0) since = ups.slice(0, k + 1);
-      else since = ups.filter(u => u.at * 1000 > loadedAt - 60e3).slice(0, 8) || [];
-      if (!since.length && ups[0]) since = [ups[0]];
-      // One row per thread, newest first; changes no thread claims keep their own row.
-      const out = [], seen = new Map();
-      for (const u of since) for (const c of u.changes || []) {
-        const key = c.thread || 'c:' + c.sha;
-        if (seen.has(key)) continue;
-        const row = { thread: c.thread || null, title: c.title || '', what: c.what || '' }; seen.set(key, row); out.push(row);
-      }
-      changes = out.slice(0, 8);
-    } catch (e) { changes = []; }
-  }
-  // "Wizard OS · Bound views" → "Bound views": the banner already says what app updated.
-  const shortTitle = t => { const s = String(t || '').trim(); const i = s.indexOf(' · '); return (i > 0 && i < 24 ? s.slice(i + 3) : s) || ''; };
-  const rowName = c => shortTitle(c.title) || c.what || 'A change';
-  function goThread(id) {
-    listOpen = false; renderWeb();
-    const w = W$(); if (!w || !id) return;
-    log('web:thread'); w.openWizardThread?.(id);
-  }
+  const WEB = () => window.WizWebUpdate;
+  const checkWeb = force => WEB()?.check(force);
   // Safe to reload: not recording, nothing uploading, no sheet or share in progress.
   function webBusy() {
     if (window.WizAppServices?.update.busy()) return true;
@@ -399,40 +326,6 @@
       } catch (e) { return false; }
     });
   }
-  function applyWeb() {
-    if (!webPending) return;
-    // Updates are explicit. Visibility/elapsed time cannot prove an app has no unsaved data.
-    renderWeb();
-  }
-  /* The banner says which thread the update came from and links there, so you can see what a reload brings
-   * (James, 12 Oct): "Update ready / Bound views  [Thread] [Reload]". Several threads: "[Threads ▾]" opens a
-   * short list under it; Back closes the list. Nothing known (no change list): "Wizard OS was updated". */
-  function renderWeb() {
-    if (!webPending) return;
-    let el = $('#dvWeb');
-    if (!el) {
-      el = document.createElement('div'); el.id = 'dvWeb'; el.className = 'dv-update web'; el.setAttribute('role', 'status');
-      ($('#device') || document.body).appendChild(el);
-      el.addEventListener('click', e => {
-        if (e.target.closest('[data-web="go"]')) { if (webBusy()) toast('◌', 'Finish recording or save your work first', 2000); else reloadNow('tap'); return; }
-        const t = e.target.closest('[data-web-thread]'); if (t) { goThread(t.dataset.webThread); return; }
-        if (e.target.closest('[data-web="list"]')) { listOpen = !listOpen; log('web:list', listOpen ? 'open' : 'close'); renderWeb(); }
-      });
-    }
-    const linked = changes.filter(c => c.thread), names = changes.map(rowName);
-    // Two lines so the thread name gets the width: "Update ready" small, the thread it came from bold.
-    const msg = !changes.length ? 'Wizard OS was updated'
-      : `<small>Update ready</small><b>${esc(names[0])}</b>`;
-    const sec = !linked.length ? '' : changes.length === 1
-      ? `<button class="later dv-wt" data-web-thread="${esc(linked[0].thread)}" aria-label="Open the thread: ${esc(names[0])}">Thread</button>`
-      : `<button class="later dv-wt" data-web="list" aria-expanded="${listOpen}" aria-label="Show the ${changes.length} threads in this update">Threads${listOpen ? ' ▴' : ' ▾'}</button>`;
-    const list = listOpen && changes.length > 1 ? `<div class="dv-wl" role="list">${changes.map(c => c.thread
-      ? `<button class="dv-wr" role="listitem" data-web-thread="${esc(c.thread)}"><b>${esc(rowName(c))}</b>${c.title && c.what ? `<small>${esc(c.what)}</small>` : ''}<span class="dv-wgo">›</span></button>`
-      : `<div class="dv-wr static" role="listitem"><b>${esc(rowName(c))}</b><small>No thread</small></div>`).join('')}</div>` : '';
-    el.classList.toggle('open', !!list);
-    el.innerHTML = `<div class="dv-wtop">${changes.length ? '' : `<span class="dv-ui">${window.WizBrand.html}</span>`}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}<button data-web="go">Reload</button></div>${list}`;
-  }
-  function reloadNow(why) { if (webBusy()) { toast('◌', 'Finish recording or save your work first', 2000); return; } saveDrafts(); window.WizAppReadingPosition?.flush(); log('web:reload', why); window.__wosReloading = why; location.reload(); }
 
   /* ================= wiring ================= */
   const api = window.WosDevice = {
@@ -462,7 +355,7 @@
         <button class="st-row" data-dvupd><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
     },
     recoverRecorder: () => syncRecorder('control'),
-    saveDrafts, checkWeb, sweepReadNotes, mediaPlaying, _state: () => ({ sheet: sheet?.kind || null, upd, webPending, print0: !!print0, changes, listOpen }),
+    saveDrafts, checkWeb, sweepReadNotes, mediaPlaying, _state: () => { const w = WEB()?._state() || {}; return { sheet: sheet?.kind || null, upd, webPending: !!w.pending, print0: !!w.print0, changes: w.changes || [], listOpen: !!w.listOpen }; },
   };
   document.addEventListener('click', e => {
     if (!e.target.closest('[data-dvupd]')) return;
@@ -481,16 +374,21 @@
       upd = J(d.updateState()); renderUpdate();
       setTimeout(() => { try { d.updateCheck(); } catch (e) {} }, 2500);
     }
-    setTimeout(() => checkWeb(true), 1500);
-    setInterval(() => { if (!document.hidden) checkWeb(false); }, 60e3); // one tiny text file a minute
+    WEB()?.init({
+      shell: 'phone', log,
+      mount: () => $('#device') || document.body,
+      openThread: id => W$()?.openWizardThread?.(id),
+      busy: webBusy,
+      beforeReload: saveDrafts,
+      toast,
+    });
   }
-  addEventListener('wos-native-resume', () => { if (api.ready) { syncRecorder('resume'); checkWeb(false); sweepReadNotes('resume'); } });
+  addEventListener('wos-native-resume', () => { if (api.ready) { syncRecorder('resume'); sweepReadNotes('resume'); } });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { saveDrafts(); if (webPending) applyWeb(); }
-    else if (api.ready) { checkWeb(false); syncRecorder('visible'); }
+    if (document.hidden) saveDrafts();
+    else if (api.ready) syncRecorder('visible');
   });
   addEventListener('pagehide', saveDrafts);
-  addEventListener('wizard:app-holds', () => { if (webPending) renderWeb(); });
   addEventListener('wizard-app-capture-state', () => { if (api.ready) syncRecorder('app-capture'); });
   boot();
 })();
