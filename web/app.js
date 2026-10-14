@@ -169,7 +169,16 @@
   const ico = (tag, cls, a, extra) => window.WizSigil ? window.WizSigil.box(tag, cls, a, extra) : `<${tag} class="${cls}" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}${extra || ''}</${tag}>`;
   const sig = (cls, glyph, color, fb) => window.WizSigil ? window.WizSigil.chip('span', cls, glyph, color) : `<span class="${cls}">${fb}</span>`;
   let tileN = 0;
+  /* Agents MVP: a Chats window pinned to an agent (w.agent) wears that agent's sigil and name. */
+  const agentWin = w => !!(w && w.app === 'chats' && w.agent);
+  const mainChats = w => !!(w && w.app === 'chats' && !w.agent);
+  function agentApp(w) {
+    const AG = window.WosAgents, a = AG?.get(w.agent) || { id: w.agent, label: w.agent, appearance: {}, privacy: 'standard' };
+    const g = AG ? AG.glyph(a) : '', c = AG ? AG.colour(a) : '#b99bff';
+    return { id: 'agent:' + a.id, name: a.label, icon: '✦', g: [c, c], sgc: c, sgh: window.WizSigil ? window.WizSigil.named(g || a.label.charAt(0).toUpperCase()) : '', agent: a.id, private: a.privacy === 'private' };
+  }
   function winApp(w) {
+    if (agentWin(w)) return agentApp(w);
     if (w.app === 'chats') return CHATS_APP;
     if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'] || { name: 'Review', icon: '◐', g: ['#444a60', '#22263a'] };
     if (w.app === 'maps') return APP.maps;
@@ -178,6 +187,7 @@
   }
   function winTitle(w) {
     if (!w) return '';
+    if (agentWin(w) && !w.thread) return `${agentApp(w).name} · Chats`;
     if (w.app === 'chats') return w.thread === '__new__' ? 'New chat' : w.thread ? (LIVE?.session(w.thread)?.title || OUTBOX?.forThread(w.thread)[0]?.title || 'Thread') : 'Chats';
     if (w.app === 'review') return { month: 'Month in review', week: 'Week in review', day: 'Day in review', group: 'Day in review', thread: 'Thread' }[w.z?.level] || 'Review';
     if (w.app === 'maps') return w.dest ? `Maps · ${w.dest}` : 'Maps';
@@ -212,7 +222,7 @@
     const a = winApp(w);
     const el = document.createElement('article');
     const rv = !!(w.from && w.from.sid);
-    el.className = `win app-${w.app}${w.appId === 'app-store' || w.appId === 'system' ? ' store-window' : ''}${rv ? ' reviewing' : ''}${w.bound ? ' bound' : ''}`; el.dataset.win = w.id;
+    el.className = `win app-${w.app}${w.appId === 'app-store' || w.appId === 'system' || w.appId === 'agents' ? ' store-window' : ''}${agentWin(w) ? ' agent-chats' : ''}${rv ? ' reviewing' : ''}${w.bound ? ' bound' : ''}`; el.dataset.win = w.id;
     el.innerHTML = `<header class="wbar">${ico('span', 'wic', a)}<span class="wt">${esc(winTitle(w))}</span>${rv ? '<span class="rv-tag">Review</span>' : ''}
       ${w.from ? '<button class="wb wpin wopen" data-wact="detach" aria-label="Open as an app on its own desk" title="Keep a copy open on its own desk"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span>Open app</span></button>' : ''}
       <button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
@@ -946,9 +956,30 @@
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system'].includes(w.appId)) return;
+    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents'].includes(w.appId)) return;
     const a = hostedOpenable(d.id); if (a) openApp(a);
   });
+  /* The Agents app (and System) open an agent's own Chats. Only those frames may ask; the agent must exist. */
+  addEventListener('message', e => {
+    const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-agent-chats' || typeof d.id !== 'string') return;
+    const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
+    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents'].includes(w.appId)) return;
+    openAgentChats(d.id, { backTo: w.id, thread: d.thread === '__new__' ? '__new__' : '' });
+  });
+  /* An agent's own Chats: one window per agent, on its own desk. The default agent's chats are the main Chats. */
+  async function openAgentChats(id, o = {}) {
+    const AG = window.WosAgents; if (!AG || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id || ''))) return false;
+    if (!AG.get(id)) await AG.load(true);
+    if (!AG.get(id)) { toast('!', 'That agent isn’t on this Wizard', 2000); return false; }
+    if (!AG.isOther(id)) { openApp(APP.wizard); return true; }
+    closeSheets(true);
+    const w = placeApp(x => x.app === 'chats' && x.agent === id, { app: 'chats', thread: null, agent: id }, {}, x => { if (o.backTo) x.backTo = o.backTo; });
+    if (w && o.backTo) { w.backTo = o.backTo; save(); }
+    if (w && o.thread === '__new__') CHATS.openNewDraft(w.id, '');
+    LIVE?.refreshAgents?.().then(() => LIVE.emit());
+    return true;
+  }
+  window.WizOpenAgentChats = openAgentChats;
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
@@ -958,7 +989,7 @@
     }
     if (a.id === 'usuals') { openUsuals(opts); return true; }
     if (a.id === 'maps') { openMaps(extra.query ? 'search' : 'home', extra.query || '', opts); return true; }
-    if (a.kind === 'chats') { placeApp(w => w.app === 'chats', { app: 'chats', thread: null }, opts); return true; }
+    if (a.kind === 'chats') { placeApp(mainChats, { app: 'chats', thread: null }, opts); return true; }
     if (a.kind === 'wizard' && a.url && opts.from) {
       // Opened from a link in a thread (James, 12 Oct 2026): Back closes it and lands on that thread again,
       // exactly like any other link. A copy already opened from a link is reused; a normal desk of the app is left alone.
@@ -1001,8 +1032,8 @@
   function openChatsFiltered(f, opts = {}) {
     closeSheets(true);
     const from = desks[idx].id;
-    let here = Object.keys(W).find(id => W[id].app === 'chats' && deskOf(id) >= 0);
-    if (!here) { openApp(APP.wizard); here = Object.keys(W).find(id => W[id].app === 'chats' && deskOf(id) >= 0); }
+    let here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0);
+    if (!here) { openApp(APP.wizard); here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0); }
     if (!here) return;
     const t = deskOf(here); if (t !== idx) goDesk(t, true);
     focusWin(here); const w = W[here], d = desks[t]; if (d.full && d.focus !== here) setFull(d.focus, false);
@@ -1192,7 +1223,7 @@
     const W0 = LIVE && LIVE.ok ? (LIVE.workGroups().working || []) : [], working = W0.length;
     const yd = byDay[YESTERDAY] || [];
     const now = new Date();
-    return `<div class="home"><nav class="home-tools" aria-label="System and settings"><button class="home-system" data-act="system" aria-label="Your system" title="Your system"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/></svg></button>${gearBtn()}</nav>
+    return `<div class="home"><nav class="home-tools" aria-label="System and settings"><button class="home-system home-agents" data-act="agents" aria-label="Agents" title="Agents"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.3 2.8-5.2 5.5-5.2s4.9 1.9 5.5 5.2"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.6 14.6c2.6-.3 4.4 1.4 4.9 4.4"/></svg></button><button class="home-system" data-act="system" aria-label="Your system" title="Your system"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="18" height="7" rx="1.5"/></svg></button>${gearBtn()}</nav>
       <div class="home-top">
         <div class="home-date" id="homeDate">${(() => { const p = window.WizConfig.dayParts(now.getTime()); return `${DOWL[p.dow]} · ${p.d} ${MON[p.m - 1]}`; })()}</div>
         <div class="home-time" id="homeTime">${window.WizConfig.hm()}</div>
@@ -1228,7 +1259,7 @@
   }
   function renderEmpty(i) {
     const grp = (h, list) => list.length ? `<div class="lgroup"><h4>${h}</h4><div class="lgrid">${list.map(appTile).join('')}</div></div>` : '';
-    const wiz = APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals'), views = APPS.filter(a => a.kind === 'view');
+    const wiz = APPS.filter(a => a.id !== 'agents' && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')), views = APPS.filter(a => a.kind === 'view');
     tileN = 0;
     return `<div class="desk-scroll new-desk"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${grp('Apps', wiz)}${grp('Views', views)}</div>`;
   }
@@ -1395,16 +1426,19 @@
 
   // A Chats window: the one on this desk, else any desk's (and go there).
   function chatsWinAny() {
-    let wid = desks[idx].wins.find(x => W[x].app === 'chats'); if (wid) return wid;
-    const d = desks.findIndex(dd => dd.wins.some(x => W[x].app === 'chats')); if (d < 0) return '';
-    goDesk(d, true); return desks[d].wins.find(x => W[x].app === 'chats');
+    let wid = desks[idx].wins.find(x => mainChats(W[x])); if (wid) return wid;
+    const d = desks.findIndex(dd => dd.wins.some(x => mainChats(W[x]))); if (d < 0) return '';
+    goDesk(d, true); return desks[d].wins.find(x => mainChats(W[x]));
   }
   /* Open a real thread: in a Chats window on this desk, else any Chats window, else a new one here. */
   function openWizardThread(id, opts = {}) {
     if (!id) return;
-    let wid = desks[idx].wins.find(x => W[x].app === 'chats');
-    if (!wid) { const d = desks.findIndex(dd => dd.wins.some(x => W[x].app === 'chats')); if (d >= 0) { wid = desks[d].wins.find(x => W[x].app === 'chats'); goDesk(d, true); } }
-    if (!wid) { const w = openWin({ app: 'chats', thread: null }, opts); if (!w) return; wid = w.id; }
+    // A thread opens in the Chats of the agent it is pinned to (main Chats for the main agent's threads).
+    const ag = LIVE?.agentOf?.(id) || '';
+    const mine = x => W[x] && W[x].app === 'chats' && (W[x].agent || '') === ag;
+    let wid = desks[idx].wins.find(mine);
+    if (!wid) { const d = desks.findIndex(dd => dd.wins.some(mine)); if (d >= 0) { wid = desks[d].wins.find(mine); goDesk(d, true); } }
+    if (!wid) { const w = openWin({ app: 'chats', thread: null, ...(ag ? { agent: ag } : {}) }, opts); if (!w) return; wid = w.id; }
     focusWin(wid); openChat(wid, id);
   }
 
@@ -1599,6 +1633,7 @@
     if (act === 'unread' || act === 'working') return openChatsFiltered(act, { card: true });
     if (act === 'side-button') return sideButtonTap(false);
     if (act === 'system') return openApp(APP.system);
+    if (act === 'agents') return openApp(APP.agents);
     if (act === 'side-button-hide') { store.set('sideHidden', true); return refreshHome(true); }
     const we = e.target.closest('.win'); if (!we) return;
     const id = we.dataset.win, w = W[id]; if (!w) return;
@@ -1773,7 +1808,7 @@
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native').slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
         <div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>
-        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => !['app-store', 'system'].includes(a.id) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'system'].includes(a.id) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
+        <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
       return;
     }
     const n = norm(q);
@@ -2478,6 +2513,11 @@
    * and receive {type:'wizard-os:voice', text} by postMessage. */
   function viewOf(id) {
     const w = W[id]; if (!w) return null;
+    if (agentWin(w)) { // an agent's Chats: what is said here goes to that agent, and private titles never leave it
+      const a = agentApp(w);
+      return { id, mode: 'auto', kind: w.thread ? 'chat thread' : 'agent chats', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
+        name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats` };
+    }
     if (w.app === 'chats' && w.thread) return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, name: w.thread === '__new__' ? 'New chat' : `Chats thread “${winTitle(w)}”` };
     if (w.app === 'frame' && w.from && w.from.sid) return { id, mode: '', kind: 'review', review: true, thread: w.from.sid, threadTitle: w.from.title || '', name: `Review of ${winTitle(w)}`, url: frameHref(id) || w.url };
     if (w.app === 'frame') { const m = frameVoiceMode(id); return { id, mode: m, kind: 'app', name: winApp(w).name, url: frameHref(id) || winApp(w).url }; }
@@ -2495,8 +2535,10 @@
     const view = viewOf(fid);
     // The words on screen at that moment, so "this step" or "that button" resolves. A chat thread's text is
     // already the conversation, so it is not repeated.
-    const screen = view && view.kind !== 'chat thread' ? (window.WizScreen?.read(winEl(fid)) || '') : '';
-    return { id: fid, desk: idx, view, screen, others: d.wins.filter(x => x !== fid).map(x => winTitle(W[x])) };
+    const screen = view && view.kind !== 'chat thread' && !view.private ? (window.WizScreen?.read(winEl(fid)) || '') : '';
+    // A private agent's window is named, never read: its thread titles stay with that agent.
+    const nameOf = x => agentWin(W[x]) && agentApp(W[x]).private ? `${agentApp(W[x]).name} chats (private agent)` : winTitle(W[x]);
+    return { id: fid, desk: idx, view, screen, others: d.wins.filter(x => x !== fid).map(nameOf) };
   }
   function viewContext(id, how = 'voice', snap = null) {
     const S = snap || sendSnap(id), v = S.view, others = S.others;
@@ -2512,7 +2554,7 @@
   // Review mode: what James says about the page goes to the thread that linked it, sent through a Chats window.
   function reviewSink(v) {
     const src = W[W[v.id]?.from?.win]; if (src && src.app === 'chats') return src.id;
-    return Object.keys(W).find(k => W[k].app === 'chats') || '';
+    return Object.keys(W).find(k => mainChats(W[k])) || '';
   }
   function reviewContext(v) {
     return [`[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by voice from Wizard UX on their phone while reviewing a page this thread linked.`,
@@ -2628,6 +2670,15 @@
     const opts = target == null ? { snap } : { desk: target, snap };
     $('#txText').textContent = text;
     const v = snap.view;
+    /* Agents MVP: in an agent's Chats, a tap utterance goes to that agent (its open thread, else a new chat with
+     * it), never to the main agent and never through the cloud router. A held orb is still a phone command, but
+     * only on-device commands run; anything else offers the choices and sends nothing. */
+    if (v?.agent && target == null) {
+      if (kind === 'command' && !typed) { const lc = localParse(text, snap, kind); if (lc) { showRouted('command', `Command · on-device${sttNote}`); return finishCmd(lc, text, opts); } return holdNoMatch(text, opts); }
+      const files = typed ? [] : takeFiles(), seal = typed ? null : snap.seal || null;
+      setVoice('idle'); txPill('✦', `To ${v.agentLabel}${v.thread && v.thread !== '__new__' ? ' · this thread' : ' · new chat'}${sttNote}`, 'agent'); txHide(1400);
+      return sendChat(v.id, text, `voice, in ${v.agentLabel}’s chats`, null, { sid: v.thread || '__new__', route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, `voice, in ${v.agentLabel}’s chats`, snap) });
+    }
     // Attached files mean "look at this": skip command routing and send words + files together. So do words,
     // photos or files waiting in the thread's composer (snap.seal): one message, never a command.
     const files = typed ? [] : takeFiles();
@@ -2934,6 +2985,8 @@
         if (did) return did === 'search' ? 'search' : 'filter';
       }
       if (f.app === 'chats' && CHATS.readyBack?.()) return 'ready-order'; // Priority / By subject → Newest
+      // An agent's Chats opened from the Agents app: Back returns to that app (still open), never out.
+      if (agentWin(f) && f.backTo && W[f.backTo] && deskOf(f.backTo) >= 0 && deskOf(f.backTo) !== idx) { const t = deskOf(f.backTo); f.backTo = ''; save(); goDesk(t); return 'agent-back'; }
       if (f.app === 'frame' && skipHosted !== f.id) {
         const result = hostedBack(f);
         if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
@@ -3131,6 +3184,7 @@
   });
   window.__wos = {
     get links() { return LINKS; },
+    openAgentChats,
     live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
     zoomIn: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomIn(f); }, zoomOut: () => { const f = desks[idx].focus; if (W[f]?.app === 'review') zoomOut(f); },
     HOME, get idx() { return idx; }, get desks() { return desks; }, get ovLog() { return window.__ovLog || []; }, get wins() { return W; }, get voice() { return V.state; }, get sheet() { return sheet; },
@@ -3170,15 +3224,16 @@
       if (v === 'apps') return openSheet('launcher');
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'system') return openApp(APP.system);
+      if (v === 'agents') return openApp(APP.agents);
       if (v === 'settings' || v === 'usage') return openSettings();
       if (v === 'skin') return openSettings('look');
       if (v === 'day' || v === 'week' || v === 'month') return openReview(v);
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); toast('◇', 'Files isn’t on this Wizard', 1800); return; }
       // work / chats: the Chats window, at the asked-for section.
-      const here = desks.findIndex(d => d.wins.some(x => W[x].app === 'chats'));
+      const here = desks.findIndex(d => d.wins.some(x => mainChats(W[x])));
       if (here >= 0 && here !== idx) goDesk(here, true);
       openApp(APP.wizard);
-      const cw = W[desks[idx].focus]; if (cw?.app === 'chats' && cw.thread) chatsBack(cw);
+      const cw = W[desks[idx].focus]; if (mainChats(cw) && cw.thread) chatsBack(cw);
       showSection(section);
     },
     app(id, srcEl) {
@@ -3189,6 +3244,7 @@
       Promise.resolve(window.WizCore.appsLoaded?.()).then(() => { const b = APP[id] || findApp(id); if (b) openApp(b, {}, opts); });
     },
     video: item => { closeSheets(true); return CHATS.KIT.viewer.open([item]); },
+    agent: id => openAgentChats(id),
     toast,
   });
   window.WizCore.deeplink?.consume();

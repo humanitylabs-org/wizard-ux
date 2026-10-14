@@ -78,8 +78,17 @@
   /* ---------------- windows ---------------- */
   // App icons are sigils (core/sigils.js): one silhouette, one bite, one colour per app.
   const ico = (tag, cls, a, extra) => window.WizSigil ? window.WizSigil.box(tag, cls, a, extra) : `<${tag} class="${cls}" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}${extra || ''}</${tag}>`;
+  /* Agents MVP: a Chats window pinned to a non-default agent (w.agent) wears that agent's sigil and name. */
+  const agentWin = w => !!(w && w.app === 'chats' && w.agent);
+  const mainChats = w => !!(w && w.app === 'chats' && !w.agent);
+  function agentApp(w) {
+    const AG = window.WosAgents, a = AG?.get(w.agent) || { id: w.agent, label: w.agent, appearance: {}, privacy: 'standard' };
+    const g = AG ? AG.glyph(a) : '', c = AG ? AG.colour(a) : '#b99bff';
+    return { id: 'agent:' + a.id, name: a.label, icon: '✦', g: [c, c], sgc: c, sgh: window.WizSigil ? window.WizSigil.named(g || a.label.charAt(0).toUpperCase()) : '', agent: a.id, private: a.privacy === 'private' };
+  }
   function appOf(w) {
     if (!w) return null;
+    if (agentWin(w)) return agentApp(w);
     if (w.app === 'chats') return APP.wizard;
     return APP[w.appId] || { name: w.title || w.url || 'App', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
@@ -88,16 +97,18 @@
     if (w.app === 'chats') {
       if (w.thread === '__new__') return 'New chat';
       if (w.thread) return LIVE?.session(w.thread)?.title || OUTBOX?.forThread(w.thread)[0]?.title || 'Thread';
-      return 'Chats';
+      return agentWin(w) ? `${agentApp(w).name} · Chats` : 'Chats';
     }
     return appOf(w).name;
   }
   function viewContext(id, how = 'typing') {
-    const w = W[id || ws[cur].focus], others = ws[cur].wins.filter(x => x !== w?.id).map(x => winTitle(W[x]));
+    // A private agent's window is named, never read: its thread titles stay with that agent.
+    const priv = x => agentWin(x) && agentApp(x).private;
+    const w = W[id || ws[cur].focus], others = ws[cur].wins.filter(x => x !== w?.id).map(x => priv(W[x]) ? `${agentApp(W[x]).name} chats (private agent)` : winTitle(W[x]));
     const a = appOf(w);
     return [
       `[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by ${how} from Wizard UX on their desktop (workspace ${cur + 1}).`,
-      w ? `Window in front: ${winTitle(w)}${a?.url ? ` (${a.url})` : ''}.` : 'No window was open.',
+      w ? `Window in front: ${priv(w) ? `${a.name} chats (private agent)` : winTitle(w)}${a?.url ? ` (${a.url})` : ''}.` : 'No window was open.',
       (s => s ? `Visible on screen: ${s}` : '')(w && w.app !== 'chats' ? (window.WizScreen?.read(winEl(w.id)) || '') : ''),
       others.length ? `Also open on this workspace: ${others.join(', ')}.` : '',
       'When they say "this", "here", or "it", they likely mean that window. Use this as background only.',
@@ -168,14 +179,33 @@
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system'].includes(w.appId)) return;
+    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents'].includes(w.appId)) return;
     const a = hostedOpenable(d.id); if (a) openApp(a);
   });
+  // The Agents app (and System) open an agent's own Chats. Only those frames may ask; the agent must exist.
+  addEventListener('message', e => {
+    const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-agent-chats' || typeof d.id !== 'string') return;
+    const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
+    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents'].includes(w.appId)) return;
+    openAgentChats(d.id, { thread: d.thread === '__new__' ? '__new__' : '' });
+  });
+  async function openAgentChats(id, o = {}) {
+    const AG = window.WosAgents; if (!AG || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id || ''))) return false;
+    if (!AG.get(id)) await AG.load(true);
+    if (!AG.get(id)) { toast('!', 'That agent isn’t on this Wizard', 2000); return false; }
+    if (!AG.isOther(id)) return openApp(APP.wizard);
+    let w = findWin(x => x.app === 'chats' && x.agent === id);
+    if (w) focusWin(w.id); else w = newWin({ app: 'chats', thread: null, agent: id });
+    if (o.thread === '__new__') { CHATS.openNewDraft(w.id, ''); syncChatsPane(w.id); }
+    LIVE?.refreshAgents?.().then(() => LIVE.emit());
+    return true;
+  }
+  window.WizOpenAgentChats = openAgentChats;
   function openApp(a, opts = {}) {
     if (!a) return false;
     if (a.kind === 'view' && a.view === 'inbox') { openInbox(); return true; }
     if (a.kind === 'chats') {
-      const ex = !opts.fresh && findWin(w => w.app === 'chats');
+      const ex = !opts.fresh && findWin(mainChats);
       if (ex) { focusWin(ex.id); return true; }
       newWin({ app: 'chats', thread: null }, opts); return true;
     }
@@ -194,13 +224,17 @@
   }
   function openThread(sid, opts = {}) {
     if (!sid) return;
-    let w = !opts.fresh && (ws[cur].wins.map(id => W[id]).find(x => x.app === 'chats') || findWin(x => x.app === 'chats'));
-    if (!w) w = newWin({ app: 'chats', thread: null }, opts);
+    // A thread opens in the Chats of the agent it is pinned to (main Chats for the main agent's threads).
+    const ag = LIVE?.agentOf?.(sid) || '', mine = x => x.app === 'chats' && (x.agent || '') === ag;
+    let w = !opts.fresh && (ws[cur].wins.map(id => W[id]).find(mine) || findWin(mine));
+    if (!w) w = newWin({ app: 'chats', thread: null, ...(ag ? { agent: ag } : {}) }, opts);
     focusWin(w.id); CHATS.openChat(w.id, sid);
     setTimeout(() => focusInside(w.id), 30);
   }
   function newChat(opts = {}) {
-    let w = !opts.fresh && (ws[cur].wins.map(id => W[id]).find(x => x.app === 'chats'));
+    // ⌘Enter in an agent's Chats starts a chat with that agent; anywhere else, with the main agent.
+    const f0 = focused();
+    let w = !opts.fresh && (f0?.app === 'chats' ? f0 : ws[cur].wins.map(id => W[id]).find(mainChats));
     if (!w) w = newWin({ app: 'chats', thread: null }, opts);
     focusWin(w.id); CHATS.openNewDraft(w.id, '');
     syncChatsPane(w.id); setTimeout(() => focusInside(w.id), 30);
@@ -395,7 +429,7 @@
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     const n = new Date();
     const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
-    const quick = ['wizard', 'wizard-signal', 'wisdom', 'shopping', 'mizel', 'files', 'console', 'legacy-wizard', 'system', 'app-store'].map(id => APP[id]).filter(Boolean);
+    const quick = ['wizard', 'wizard-signal', 'wisdom', 'shopping', 'mizel', 'files', 'console', 'legacy-wizard', 'agents', 'system', 'app-store'].map(id => APP[id]).filter(Boolean);
     return `<div class="home-in">
       <div class="home-time">${window.WizConfig.hm()}</div>
       <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })} · Workspace ${i + 1}</div>
@@ -491,7 +525,7 @@
   }
   function palBuild(q) {
     const n = norm(q), out = [];
-    const apps = (n ? searchApps(q) : APPS.filter(a => a.kind !== 'view')).filter(a => a.kind !== 'native').slice(0, n ? 8 : 12)
+    const apps = (n ? searchApps(q) : APPS.filter(a => a.kind !== 'view' && a.id !== 'agents')).filter(a => a.kind !== 'native').slice(0, n ? 8 : 12)
       .map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, icon: a.icon, g: a.g, run: o => openApp(a, o) }));
     const sessions = LIVE?.ok ? LIVE.sessions.filter(s => !s.hidden) : [];
     let threads;
@@ -558,7 +592,7 @@
 
   /* Wizard Files (#23): the shared Files sheet, in a Chats window (attaches to its open thread, else starts a new chat). */
   function openFiles() {
-    let w = ws[cur].wins.map(id => W[id]).find(x => x.app === 'chats') || findWin(x => x.app === 'chats');
+    let w = ws[cur].wins.map(id => W[id]).find(mainChats) || findWin(mainChats);
     if (!w) w = newWin({ app: 'chats', thread: null });
     focusWin(w.id);
     setTimeout(() => CHATS.PW?.openFiles(w.thread ? w.id : w.id + '::list'), 30);
@@ -656,14 +690,15 @@
     if (VOICE.state === 'idle') {
       if (action === 'send') return 'none';
       vMode = 'talk'; vReply = null;
-      const f = focused(); vTarget = f?.app === 'chats' && f.thread ? f.id : null;
+      const f = focused(); vTarget = f?.app === 'chats' && (f.thread || f.agent) ? f.id : null;
       $('#voiceTime').textContent = '0:00';
       try { await VOICE.start(); } catch (e) { toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
       return 'voice';
     }
     if (action === 'start') return 'voice';
     const rp = vReply; vReply = null; // the thread a composer-mic take belongs to, fixed before anything else runs
-    const aimSid = vTarget && W[vTarget]?.thread; // the thread in front at the send key, before any await
+    // The thread in front at the send key, before any await; an agent's Chats list takes it as a new chat with that agent.
+    const aimSid = vTarget && (W[vTarget]?.thread || (W[vTarget]?.agent ? '__new__' : ''));
     // Text, photos and voice go as ONE message (legacy H4): that thread's composer, taken at the send key.
     const sealAt = rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
     if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { vReply = rp; toast('…', 'Still uploading · send when it finishes', 2000); return 'busy'; }
@@ -679,7 +714,7 @@
     if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed, modelRoute); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
     if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { sid: aimSid, seal: sealed, route: modelRoute });
     else { if (sealed) sealed.putBack(); ask('', 'voice', r.blob, modelRoute); }
-    toast('✦', `Sent to ${window.WizConfig.agent()}`, 1400);
+    toast('✦', `Sent to ${w && agentWin(w) ? agentApp(w).name : window.WizConfig.agent()}`, 1400);
     return 'sent';
   }
 
@@ -937,6 +972,7 @@
       if (v === 'apps') return openPalette();
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'system') return openApp(APP.system);
+      if (v === 'agents') return openApp(APP.agents);
       if (v === 'settings' || v === 'usage') return openSettings();
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); return toast('◇', 'Files isn’t on this Wizard', 1800); }
       if (v === 'day' || v === 'week' || v === 'month') { const a = APP['v-' + v]; if (a?.url) return openApp(a); }
@@ -951,6 +987,7 @@
       Promise.resolve(C.appsLoaded?.()).then(() => { const b = APP[id] || findApp(id); if (b) openApp(b); });
     },
     video: item => CHATS.KIT.viewer.open([item]),
+    agent: id => openAgentChats(id),
     toast,
   });
   C.deeplink.consume();
