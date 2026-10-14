@@ -70,8 +70,10 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  check(await p.evaluate(()=>__wux.homeOpen)&&p.url()===url&&!p.isClosed(),'real repeated root Back and Close stay on Home');
  check(await p.evaluate(n=>history.length<=n,len),'root Back creates no history growth');
  await p.click('#searchBtn');
+ await p.waitForFunction(()=>!document.querySelector('#palette').hidden);
  check(await p.locator('#palette').isVisible(),'explicit search opens palette on Home');
  await p.keyboard.press('Escape');await p.keyboard.press('Meta+k');
+ await p.waitForFunction(()=>!document.querySelector('#palette').hidden);
  check(await p.locator('#palette').isVisible(),'Command-K still opens search');
  await p.keyboard.press('Escape');
  for(const route of ['/apps','/search']){await p.evaluate(path=>dispatchEvent(new CustomEvent('wizard:open',{detail:{path}})),route);check(await p.locator('#palette').isVisible(),'native wizard:open '+route+' retains launch semantics');await p.keyboard.press('Escape');}
@@ -83,7 +85,7 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  await p.evaluate(()=>{window.__seen=[];window.__originalSeen=__wux.live.markSeen;__wux.live.markSeen=sid=>__seen.push(sid);window.__originalNew=__wux.live.isNew;__wux.live.isNew=()=>true;__wux.chats.markVisibleThreadsSeen();});
  check(await p.evaluate(()=>__seen.length===0),'parked threads never marked seen while on Home');
  await p.click('#wsList [data-ws="0"]');
- check(await p.evaluate(()=>__seen.includes(__sid)),'returning visible desktop re-establishes read observation');
+ check(await p.evaluate(()=>__seen.includes(__sid)),'returning visible desktop re-establishes read observation',await p.evaluate(()=>({seen:__seen,sid:__sid,thread:__wux.wins[__wux.ws[__wux.cur].focus]?.thread,hidden:document.hidden,home:__wux.homeOpen,mono:__wux.ws[__wux.cur].mono})));
  await p.evaluate(()=>{__wux.live.markSeen=__originalSeen;__wux.live.isNew=__originalNew;window.__sink=[];__wux.outbox.enqueue=async x=>{__sink.push({kind:x.kind,sid:x.sessionId||'',instructions:x.instructions||'',bytes:x.audio?.size||0});return{id:'qa-home-sink'};};});
  await home(p);await p.evaluate(()=>__wux.ask('QA context sink only'));
  check(await p.evaluate(()=>__sink[0].instructions.includes('Home screen in front.')&&!__sink[0].instructions.includes('Window in front:')),'Home ask context never describes parked app');
@@ -96,21 +98,25 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  await home(p);
  await p.click('#desktopHome .app-chip[data-app="shopping"]');await nap(200);
  const frame=p.frameLocator('.win.focus iframe');
- await frame.locator('body').waitFor();await nap(1500);
+ await frame.locator('.slide .st').first().waitFor({timeout:30000});
  const hosted=await p.evaluate(()=>{const f=document.querySelector('.win.focus iframe');return{url:f.contentWindow.location.href,title:f.contentDocument.title,text:f.contentDocument.body.innerText.slice(0,1800)};});
  check(hosted.url.includes('/wizard-shopping/')&&!hosted.url.includes('/wizard-os-home/')&&hosted.text.length>100,'Home chip loads real registered Shopping, not nested shell',hosted);
- const field=frame.locator('input').first();await field.fill('hat-home retained shopping filter');
+ if(await frame.locator('#affsheet').isVisible()) await frame.locator('#affsheet button').first().click();
+ await frame.locator('.tab[data-tab="browse"]').click();
  const fid=await p.evaluate(()=>{window.__frameRef=document.querySelector('.win.focus iframe');window.__docRef=__frameRef.contentDocument;return __wux.ws[__wux.cur].focus;});
  await shot(p,'desktop-real-shopping');await p.click('#logo');await p.click('#wsList [data-ws="0"]');
- check(await p.evaluate(()=>document.querySelector('.win.focus iframe')===__frameRef&&__frameRef.contentDocument===__docRef)&&await field.inputValue()==='hat-home retained shopping filter','Home retains actual hosted iframe/document and filter draft');
+ check(await p.evaluate(()=>document.querySelector('.win.focus iframe')===__frameRef&&__frameRef.contentDocument===__docRef)&&await frame.locator('body').getAttribute('data-tab')==='browse','Home retains actual hosted iframe/document and local Browse state');
  await p.click('#logo');await p.keyboard.press('Alt+2');
  check(await p.evaluate(()=>__wux.ws.length===2&&__wux.cur===1&&!__wux.homeOpen),'Home plus-slot creates real second desktop');
+ await p.evaluate(()=>__wux.newChat());
  await p.click('#logo');await p.click('#wsList [data-ws="0"]');
- check(await p.evaluate(id=>__wux.ws[0].focus===id,fid)&&await field.inputValue()==='hat-home retained shopping filter','numbered desktop safely restores installed app');
+ check(await p.evaluate(id=>__wux.ws[0].focus===id,fid)&&await frame.locator('body').getAttribute('data-tab')==='browse','numbered desktop safely restores installed app');
  await p.click('#logo');await p.reload();await wait(p,'desktop');
  check(await p.evaluate(()=>__wux.homeOpen&&__wux.ws.length===2&&Object.values(__wux.wins).some(w=>w.appId==='shopping')),'reload persists Home plus parked apps/desktops');
  await p.click('#wsList [data-ws="0"]');await p.evaluate(()=>__wux.focusWin(Object.values(__wux.wins).find(w=>w.thread==='__new__').id));
- check((await p.locator('.win.focus textarea').inputValue())==='QA retained Home draft — never send','reload restores unsent chat draft after Home');
+ const drafted=await p.evaluate(()=>Object.values(__wux.wins).find(w=>w.thread==='__new__'&&__wux.chats.ch(w.id).draft==='QA retained Home draft — never send')?.id);
+ if(drafted) await p.evaluate(id=>__wux.focusWin(id),drafted);
+ check(!!drafted&&(await p.locator('.win.focus textarea').inputValue())==='QA retained Home draft — never send','reload restores unsent chat draft after Home');
  await c.close();
  const m=await context('phone');await m.p.goto(entry('phone'));await wait(m.p,'phone');
  check(await m.p.evaluate(()=>__wos.idx===0),'exact phone deep link opens Home');
@@ -128,6 +134,12 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  check(await m.p.locator('.ddot.sig:not(.dhome) svg').count()>0&&await m.p.locator('#orb').isVisible(),'mobile app sigils and orb retained');
  await m.p.locator('.dhome').first().tap();await nap(300);const mu=m.p.url();await back(m.p);
  check(await m.p.evaluate(()=>__wos.idx===0)&&m.p.url()===mu&&!m.p.isClosed(),'phone real root Back stays in Wizard');
+ const cd=await m.c.newCDPSession(m.p),dock=await m.p.locator('#dock').boundingBox();
+ async function swipe(reverse){const a=dock.x+dock.width-20,b=a-130,y=dock.y+dock.height/2;await cd.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:reverse?b:a,y}]});for(let i=1;i<=12;i++){await cd.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{id:1,x:reverse?b+(a-b)*i/12:a+(b-a)*i/12,y}]});await nap(16);}await cd.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await nap(700);}
+ await swipe(false);
+ check(await m.p.evaluate(id=>__wos.desks[__wos.idx].wins.includes(id),mobileId),'real dock swipe reaches retained installed app');
+ await swipe(true);
+ check(await m.p.evaluate(()=>__wos.idx===0),'real reverse dock swipe returns Home');
  await shot(m.p,'phone-home');
  await m.c.close();
  check(errors.length===0,'zero unexpected page errors',errors);
