@@ -1,6 +1,6 @@
 <resources>
     <style name="Theme.WizardOS" parent="@android:style/Theme.DeviceDefault.NoActionBar">
-        <item name="android:windowBackground">@color/wos_bg</item>
+        <item name="android:windowBackground">@drawable/wizard_launch</item>
         <item name="android:colorBackground">@color/wos_bg</item>
         <item name="android:statusBarColor">@color/wos_bg</item>
         <item name="android:navigationBarColor">@color/wos_bg</item>

@@ -307,7 +307,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         channels(c);
         if (!canNotify(c) || appInFront || it.dictation()) return;
         Notification note = new Notification.Builder(c, CH_REPLIES)
-                .setSmallIcon(android.R.drawable.stat_notify_chat)
+                .setSmallIcon(ai.wizards.os.R.drawable.ic_wizard_notification)
                 .setContentTitle("Archimedes · " + EverywherePolicy.clip(it.text, 50))
                 .setContentText(EverywherePolicy.clip(text, 140))
                 .setStyle(new Notification.BigTextStyle().bigText(EverywherePolicy.clip(text, 600)))
@@ -382,7 +382,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private boolean startForegroundSafe(boolean mic) {
         boolean hid = hidden(this) && !listening && !appRecording();
         Notification n = hid ? new Notification.Builder(this, CH_RUNNING)
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setSmallIcon(ai.wizards.os.R.drawable.ic_wizard_notification)
                 .setContentTitle("Floating orb hidden")
                 .setContentText("Tap to bring it back · opening Wizard OS does too")
                 .setContentIntent(PendingIntent.getService(this, 8, new Intent(this, EverywhereService.class).setAction(ACTION_SHOW),
@@ -390,7 +390,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                 .setOngoing(true)
                 .build()
                 : new Notification.Builder(this, CH_RUNNING)
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setSmallIcon(ai.wizards.os.R.drawable.ic_wizard_notification)
                 .setContentTitle(appRecording() && !listening ? (nativeTake() ? "Floating orb shows your recording" : "paused".equals(appVoice) ? "Wizard OS recording paused" : "Wizard OS is recording")
                         : listening ? (dictating ? "Typing what you say…" : "Listening…") : "Wizard Everywhere is on")
                 .setContentText(appRecording() && !listening ? "Tap the orb to send, or open Wizard OS"

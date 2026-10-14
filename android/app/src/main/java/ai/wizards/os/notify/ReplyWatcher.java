@@ -235,7 +235,7 @@ public final class ReplyWatcher {
         int id = N_BASE + (session.hashCode() & 0x3ff);
         PendingIntent pi = PendingIntent.getActivity(c, id, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification n = new Notification.Builder(c, CH)
-                .setSmallIcon(android.R.drawable.stat_notify_chat)
+                .setSmallIcon(ai.wizards.os.R.drawable.ic_wizard_notification)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(new Notification.BigTextStyle().bigText(text))
