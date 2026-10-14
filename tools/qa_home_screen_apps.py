@@ -76,6 +76,7 @@ with (BASE/'worker.lock').open('a') as lease:
     emu.env['PATH']=emu.env['JAVA_HOME']+'/bin:'+emu.env['PATH']
     def capture(name):
         emu.shot(out,name);(out/(name+'.xml')).write_text(emu.ui());(out/(name+'-activities.txt')).write_text(emu.sx('dumpsys activity activities'))
+        if name=='failure':(out/'failure-logcat.txt').write_text(emu.sx('logcat -d -v threadtime'))
     try:
         emu.boot();check('isolated API35 emulator',emu.sx('getprop ro.build.version.sdk').strip()=='35')
         source=P(build['job'])/'source'
@@ -102,7 +103,16 @@ with (BASE/'worker.lock').open('a') as lease:
         from qa_aa_lib import ADB
         install=emu.sh(ADB,'-s',emu.S,'install','-r',apk)
         check('exact signed-preview APK installs on emulator','Success' in install,install)
-        emu.sx('monkey -p ai.wizards.os.preview -c android.intent.category.LAUNCHER 1')
+        emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
+        point=bounds(emu.ui(),'Wizard Preview')
+        if not point:
+            emu.sx('input swipe 540 2180 540 400 350');time.sleep(1)
+            for _ in range(5):
+                point=bounds(emu.ui(),'Wizard Preview')
+                if point:break
+                emu.sx('input swipe 540 1850 540 600 300');time.sleep(0.4)
+        check('ordinary Preview icon is present in Android launcher',point is not None)
+        emu.sx('input tap %d %d'%point)
         check('ordinary Preview launcher opens MainActivity',wait(lambda:'.MainActivity' in emu.top(),30),emu.top())
         time.sleep(6);capture('ordinary-launch')
         pinned=[]
@@ -129,7 +139,7 @@ with (BASE/'worker.lock').open('a') as lease:
             for n in range(3):emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.3)
             check(label+' repeated root Back retains actual app content',app_content(label,emu.ui()) and emu.front())
             emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
-            emu.sx('monkey -p ai.wizards.os.preview -c android.intent.category.LAUNCHER 1');time.sleep(1)
+            emu.sx('am start -W -n ai.wizards.os.preview/.MainActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER');time.sleep(1)
         emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
         original=tasks(emu.sx('dumpsys activity recents'));check('Wisdom and Signal independent Recents tasks',len(original)==2,original)
         recents=emu.sx('dumpsys activity recents');check('Wizard ordinary task remains separate', '.MainActivity' in recents)
@@ -178,6 +188,16 @@ with (BASE/'worker.lock').open('a') as lease:
         try:capture('failure')
         except Exception:pass
     finally:
+        if os.environ.get('QA_COMPANION')=='1':
+            companion_out=out/'companion'
+            try:
+                env=emu.env.copy();env.update(QA_SERIAL=emu.S,QA_BUILD_SHA=build['source_revision'],QA_SOURCE_SHA=os.environ.get('QA_SOURCE_SHA',''))
+                with (out/'companion.log').open('w') as log:
+                    run=subprocess.run(['node',str(P(__file__).with_name('qa_home_screen_companion.cjs')),sys.argv[1],str(companion_out)],cwd=P(__file__).parent.parent,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=1200)
+                companion=json.loads((companion_out/'receipt.json').read_text())
+                checks.append({'name':'actual exact-source API35 CDP companion','pass':run.returncode==0 and not companion.get('missing'),'detail':{'receipt':str(companion_out/'receipt.json'),'failure':companion.get('failure'),'missing':companion.get('missing'),'totals':companion.get('totals')}})
+            except Exception as error:
+                checks.append({'name':'actual exact-source API35 CDP companion','pass':False,'detail':str(error)})
         emu.kill()
         result={'host':socket.gethostname(),'source_revision':build['source_revision'],'source_manifest_sha256':build['source_manifest_sha256'],'apk':str(apk),'sha256':a['sha256'],'signer_sha256':a['signer_sha256'],'package':a['aapt2'],'checks':checks,'failure':failure,'scope':'actual signed Preview/launcher/API35 UI + candidate staging readback; no debug-CDP substitution','incomplete':incomplete,
                 'acceptance':{'1':'OS pin/name + confirmation; sigil pixels need review','2':'task counts + actual Home/re-tap content/page','3':'actual death restores reader; workspace/isolation/frame-refresh browser+debug companion required','4':'real overlay/nested/root Back; camera/IME/utilities/recovery pending','5':'signed APK + exact staging GET source; browser baseline/regressions separate'}}
