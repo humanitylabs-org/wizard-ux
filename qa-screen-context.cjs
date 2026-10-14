@@ -5,7 +5,7 @@
 // Usage: node qa-screen-context.cjs   (Hermes/Wizard writes are refused and recorded)
 const { chromium } = require('/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const ORIGIN = 'https://private.wizard001.com', URL_ = ORIGIN + '/wizard-os-home/';
+const ORIGIN = 'https://wizard.tailc0f369.ts.net', URL_ = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 15; SM-S928B Build/AP3A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36 WizardOS-Android/0.9.0';
@@ -26,7 +26,7 @@ async function boot(b, ua) {
   const json = (r, o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
-    if (u.hostname !== 'private.wizard001.com') return m === 'GET' ? r.continue() : r.abort();
+    if (u.hostname !== 'wizard.tailc0f369.ts.net') return m === 'GET' ? r.continue() : r.abort();
     if (u.pathname.startsWith('/qa-frame/')) return r.fulfill({ status: 200, contentType: 'text/html', body: FRAME });
     const sh = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (sh && (m === 'GET' || m === 'HEAD')) {

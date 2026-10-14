@@ -9,7 +9,7 @@
 // Negative control: QA_WEB_DIR=/home/telos/apps/wizard-os-home node qa-device.cjs must FAIL.
 const { chromium } = require('/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = 'https://private.wizard001.com/wizard-os-home/';
+const URL_ = 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/native-parity';
 let pass = 0, fail = 0;
@@ -22,7 +22,7 @@ async function boot(b, { native = true } = {}) {
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone'] });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (u.hostname !== 'private.wizard001.com') { W.foreign.push(u.href); return r.abort(); }
+    if (u.hostname !== 'wizard.tailc0f369.ts.net') { W.foreign.push(u.href); return r.abort(); }
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && (q.method() === 'GET' || q.method() === 'HEAD') && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = path.join(WEB, 'web', f);
@@ -37,6 +37,7 @@ async function boot(b, { native = true } = {}) {
       return r.fulfill({ status: 200, contentType: ct, headers: { 'content-length': String(body.length + (f === 'core/chat-kit.js' ? W.lenBump || 0 : 0)) }, body: f === 'core/chat-kit.js' && W.lenBump ? Buffer.concat([body, Buffer.from(' '.repeat(W.lenBump))]) : body });
     }
     const json = (o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
+    if (u.pathname === '/wizard/hermes/api/model/options') return json({model:'fixture-model',provider:'fixture',providers:[{slug:'fixture',name:'Synthetic fixture route',authenticated:true,is_current:true,models:['fixture-model']}]});
     if (u.pathname.endsWith('/api/transcribe')) { W.transcribes++; return json({ text: 'Native recorder QA take', ms: 4 }); }
     if (u.pathname.endsWith('/api/route')) return json({ cmd: { route: 'agent' }, ms: 2 });
     if (u.pathname === '/wizard/hermes/api/sessions' && q.method() === 'GET') return json({ data: [{ id: 'qa_old_thread', title: 'Existing QA thread', status: 'completed', updated_at: new Date().toISOString() }], has_more: false });
@@ -332,6 +333,28 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     await ctx.close();
   }
 
+  /* Shared app native takes are never adopted or sent/deleted by the legacy Wizard voice importer. */
+  {
+    const { ctx, p, errs } = await boot(b);
+    await open(p); const before = W.runs.length;
+    await p.evaluate(() => {
+      const id = 'rec-app-owned';
+      __dev.takes[id] = { id, kind: 'audio', state: 'recording', startedAt: Date.now(), data: Array.from({ length: 5000 }, (_, i) => i & 255) }; __dev.active = id;
+      window.WizAppCapture = { getState: () => ({ active: false, recording: false, nativeOwnershipReady: true, nativeDeviceTakeIds: [id] }) };
+      dispatchEvent(new Event('wos-native-resume'));
+    }); await sleep(300);
+    ok(await p.evaluate(() => __wos.voice === 'idle' && !__wos.V.native && __dev.active === 'rec-app-owned'), 'app-owned recovered native take never becomes Wizard voice');
+    await p.evaluate(() => __wos.startVoice('auto')); await sleep(100);
+    ok(await p.evaluate(() => __wos.voice === 'idle' && __dev.active === 'rec-app-owned'), 'orb cannot reuse another app native recorder');
+    await p.evaluate(() => { __dev.active = null; __dev.takes['rec-app-owned'].state = 'stopped'; __dev.takes['rec-app-owned'].send = true; WosDevice.event('rec', { type: 'send', id: 'rec-app-owned' }); }); await sleep(500);
+    const owned = await dev(p);
+    ok(W.runs.length === before && !!owned.takes['rec-app-owned'] && !owned.calls.some(c => ['recClaim','recDone'].includes(c[0]) && c[1] === 'rec-app-owned'), 'app native notification never posts to Chats or claims/deletes its take');
+    await p.evaluate(() => { const id = 'rec-legacy-owner'; __dev.takes[id] = { id, kind: 'auto', state: 'recording', startedAt: Date.now(), data: [1,2,3] }; __dev.active = id; dispatchEvent(new Event('wos-native-resume')); }); await sleep(200);
+    ok(await p.evaluate(() => __wos.voice === 'listen' && __wos.V.native === 'rec-legacy-owner'), 'legacy native voice resumes once ownership snapshot is ready');
+    await p.evaluate(() => __wos.cancelVoice(true));
+    ok(!errs.length, 'no page errors (native ownership broker)', errs.join(' | '));
+    await ctx.close();
+  }
   /* ---- #22b the prompt follows every deploy, not a hand-kept file list (James, 11 Oct) ---- */
   {
     const { ctx, p, errs } = await boot(b, { native: false });

@@ -116,6 +116,7 @@
 
   window.WizAppearance = {
     version: VERSION,
+    get: f => f && allowed(f) ? context(f) : null,
     sync: () => queue(true),
     inspect: () => [...frames].map(([f, st]) => ({ src: f.getAttribute('src'), acked: st.acked, revision: st.sent && st.sent.revision, presentation: st.sent && st.sent.presentation, themed: !!f.closest('.win.wz-themed') })),
   };

@@ -325,16 +325,23 @@ def fgs():
 def notes():
     return sx('dumpsys notification --noredact')
 
+if os.environ.get('QA_SHARED_CAPTURE_ONLY') == '1':
+    from qa_shared_capture_native import pages as shared_pages
+    extra_pages, shared_hashes = shared_pages(P(__file__).resolve().parent.parent)
+    PAGES.update(extra_pages)
+
 em = None; pg = None; summary = {'job': str(job), 'apk': str(apk), 'long_secs': LONG}
 print('job', job, flush=True)
 with (BASE / 'worker.lock').open('a') as lock:
-    fcntl.flock(lock, fcntl.LOCK_EX)
+    if os.environ.get('QA_EXTERNAL_LOCK') != '1': fcntl.flock(lock, fcntl.LOCK_EX)
     try:
         KEEP = os.environ.get('QA_KEEP_EMU') == '1'   # iteration aid: reuse/keep a running QA emulator
         reuse = KEEP and sx('getprop sys.boot_completed').strip() == '1'
         if not reuse:
           sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'q', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
-          em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'q', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'], env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT, start_new_session=True)
+          config=job / 'dev' / 'config.ini'
+          with config.open('a') as cfg: cfg.write('\nfirstboot.bootFromDownloadableSnapshot=no\nfirstboot.bootFromLocalSnapshot=no\nfirstboot.saveToLocalSnapshot=no\n')
+          em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'q', '-port', str(PORT), '-no-window', '-wipe-data', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'], env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT, start_new_session=True)
           for _ in range(120):
             if sx('getprop sys.boot_completed').strip() == '1': break
             time.sleep(3)
@@ -342,6 +349,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         else:
             sh(ADB, '-s', S, 'uninstall', PKG)
         summary['emulator_reused'] = reuse
+        check('setup','isolated emulator is API35 and user is unlocked',sx('getprop ro.build.version.sdk').strip()=='35' and 'RUNNING_UNLOCKED' in sx('dumpsys user'))
         sx('settings put global window_animation_scale 0'); sx('settings put global transition_animation_scale 0'); sx('settings put global animator_duration_scale 0')
         sx('input keyevent KEYCODE_WAKEUP'); sx('wm dismiss-keyguard'); sx('settings put system screen_off_timeout 1800000')
         out = sh(ADB, '-s', S, 'install', '-r', apk).strip().splitlines()[-1]
@@ -370,6 +378,15 @@ with (BASE / 'worker.lock').open('a') as lock:
         # ------------------------------------------------ (f) origin scoping + iframe reach
         shell_port = pg.ev("typeof window.wizardMizelPort")
         check('bridge', 'shell main frame (https://private.wizard001.com/wizard-os-home/) has wizardMizelPort', shell_port == 'object', shell_port)
+        if os.environ.get('QA_SHARED_CAPTURE_ONLY') == '1':
+            from qa_shared_capture_native import run as run_shared_native
+            summary['shared_source_hashes']=shared_hashes
+            run_shared_native(pg,sx,top,check,save,ORIGIN,PKG,ST,LOCK)
+            shot('02-shared-native-contract')
+            check('shared-native','no native crash','ai.wizards.os' not in sx('logcat -b crash -d'))
+            summary.update(results=RES,passed=sum(r['ok'] for r in RES),failed=sum(not r['ok'] for r in RES))
+            save('summary.json',summary); print(f"{summary['passed']}/{len(RES)} passed",flush=True)
+            raise SystemExit(1 if summary['failed'] else 0)
         # The real Mizel app window is an iframe (/mizel-live/, the canonical view) inside the shell: open it and look inside.
         pg.ev("window.__wos.openApp('mizel')")
         probe = "(() => { const f=[...document.querySelectorAll('iframe')].map(f => { try { return [f.contentWindow.location.href, typeof f.contentWindow.wizardMizelPort, f.contentDocument && f.contentDocument.readyState] } catch (e) { return [f.src, 'x:' + e.name] } }); return f.some(x => x[0].includes('/mizel-live/') && x[2] === 'complete') ? f : null })()"

@@ -67,10 +67,43 @@
 
   /* ================= #14 background recording: resume, notification Stop/Send, recovery ================= */
   const handledTakes = new Set();
+  const voiceKind = take => {
+    if (!take || !['auto', 'command'].includes(take.kind)) return false;
+    try { const ids = window.WizAppCapture?.getState?.()?.nativeDeviceTakeIds; return !Array.isArray(ids) || !ids.includes(take.id); }
+    catch (_) { return false; }
+  };
+  function nativeOwner(id) {
+    const capture = window.WizAppCapture;
+    if (!capture) return 'voice'; // legacy-only shell
+    try {
+      const state = capture.getState?.();
+      if (Array.isArray(state?.nativeDeviceTakeIds) && state.nativeDeviceTakeIds.includes(id)) return 'app';
+      if (state?.nativeOwnershipReady !== true || !Array.isArray(state.nativeDeviceTakeIds) || state.active || state.recording) return 'unknown';
+      return 'voice';
+    } catch (_) { return 'unknown'; }
+  }
+  function offerRecorderControls(a) {
+    const state = window.WizAppCapture?.getState?.();
+    if (sheet || a.kind || state?.nativeRegistryReady !== true || state.active || state.appId || state.nativeDeviceTakeIds.includes(a.id)) return;
+    const id = a.id;
+    const el = openSheet('recorder-controls', `<div class="dv-head"><span class="dv-ic">🎙</span><div><b>Wizard microphone still held</b><small>Older recorder · destination unknown · ${fmtMs(a.ms)}</small></div></div>
+      <p class="dv-note">The recording survived reopening. Show its timer, Pause and Cancel controls. Nothing will be sent or discarded automatically.</p>
+      <button class="dv-btn primary" data-rec-controls>Show recording controls</button>`);
+    el.querySelector('[data-rec-controls]').addEventListener('click', () => {
+      // Exact-id and shared ownership fencing at activation, not just when the card painted.
+      const current = J(DEV()?.recActive?.()), shared = window.WizAppCapture?.getState?.();
+      if (current?.id !== id || current.kind || shared?.nativeRegistryReady !== true || shared.active || shared.appId || shared.nativeDeviceTakeIds.includes(id)) { closeSheet(); return; }
+      closeSheet(); W$()?.nativeResume(current);
+    });
+  }
   function syncRecorder(why) {
     const d = DEV(), w = W$(); if (!d || !w || typeof d.recActive !== 'function') return;
     const a = J(d.recActive());
-    if (a && a.id && w.voice === 'idle') { if (w.nativeResume(a)) log('rec:resume', a.id, why); }
+    if (a && a.id && w.voice === 'idle') {
+      const owner = nativeOwner(a.id);
+      if (owner === 'voice') { if (w.nativeResume(a)) log('rec:resume', a.id, why); }
+      else { log('rec:owner', a.id, owner); if (owner === 'unknown') offerRecorderControls(a); } // retain unknown/app takes; never adopt them into Chats
+    }
     if (w.V.native && (!a || a.id !== w.V.native)) {
       // The take ended outside the page (notification Stop/Send, or the recorder failed) while we were away.
       const id = w.V.native; w.V.native = null; w.setVoice('idle'); w.txHide();
@@ -81,7 +114,7 @@
   }
   function offerPending(why) {
     const d = DEV(); if (!d || sheet) return;
-    const list = (J(d.recPending()) || []).filter(t => !handledTakes.has(t.id));
+    const list = (J(d.recPending()) || []).filter(t => voiceKind(t) && !handledTakes.has(t.id));
     if (!list.length) return;
     // Send was already pressed in the notification: the owner said send, so send.
     const go = list.filter(t => t.send);
@@ -106,7 +139,7 @@
   /* A take that ended outside the page goes straight to the durable outbox (which transcribes and sends it),
    * then the native copy is deleted. Saved before anything goes over the network, so it can't be lost. */
   async function sendTake(t, how) {
-    const d = DEV(), w = W$(); if (!d || !w || handledTakes.has(t.id)) return;
+    const d = DEV(), w = W$(); if (!d || !w || !voiceKind(t) || handledTakes.has(t.id)) return;
     handledTakes.add(t.id);
     if (!J(d.recClaim(t.id))) return;
     const blob = readBlob(off => d.recRead(t.id, off), 'audio/aac');
@@ -288,7 +321,7 @@
     if (p === print0 || p === printNow) return;
     printNow = p;
     if (!webPending) { webPending = true; log('web:changed'); }
-    await loadChanges(); applyWeb();
+    await loadChanges(); window.WizAppServices?.update.announce({ version: p, changes }); applyWeb();
   }
   /* Which threads made the update: web/ux-changes.json (tools/write-ux-changes.py) lists every web/ change
    * newest first with the thread that committed it. Take the ones since the version this page loaded. */
@@ -324,6 +357,8 @@
   }
   // Safe to reload: not recording, nothing uploading, no sheet or share in progress.
   function webBusy() {
+    if (window.WizAppServices?.update.busy()) return true;
+    try { if (J(DEV()?.recActive?.())?.id) return true; } catch (_) { return true; }
     const w = W$(); if (!w) return true;
     if (w.voice !== 'idle' || sheet) return true;
     return Object.keys(w.wins).some(k => (w.chatState(k).files || []).some(f => f.uploading));
@@ -366,8 +401,7 @@
   }
   function applyWeb() {
     if (!webPending) return;
-    // The owner is away: swap it in quietly, unless music is playing (then the banner waits for your tap).
-    if (document.hidden && !webBusy()) { if (!mediaPlaying()) { reloadNow('hidden'); return; } log('web:hold', 'media'); }
+    // Updates are explicit. Visibility/elapsed time cannot prove an app has no unsaved data.
     renderWeb();
   }
   /* The banner says which thread the update came from and links there, so you can see what a reload brings
@@ -380,7 +414,7 @@
       el = document.createElement('div'); el.id = 'dvWeb'; el.className = 'dv-update web'; el.setAttribute('role', 'status');
       ($('#device') || document.body).appendChild(el);
       el.addEventListener('click', e => {
-        if (e.target.closest('[data-web="go"]')) { if (webBusy()) toast('◌', 'Finish recording first', 1600); else reloadNow('tap'); return; }
+        if (e.target.closest('[data-web="go"]')) { if (webBusy()) toast('◌', 'Finish recording or save your work first', 2000); else reloadNow('tap'); return; }
         const t = e.target.closest('[data-web-thread]'); if (t) { goThread(t.dataset.webThread); return; }
         if (e.target.closest('[data-web="list"]')) { listOpen = !listOpen; log('web:list', listOpen ? 'open' : 'close'); renderWeb(); }
       });
@@ -396,9 +430,9 @@
       ? `<button class="dv-wr" role="listitem" data-web-thread="${esc(c.thread)}"><b>${esc(rowName(c))}</b>${c.title && c.what ? `<small>${esc(c.what)}</small>` : ''}<span class="dv-wgo">›</span></button>`
       : `<div class="dv-wr static" role="listitem"><b>${esc(rowName(c))}</b><small>No thread</small></div>`).join('')}</div>` : '';
     el.classList.toggle('open', !!list);
-    el.innerHTML = `<div class="dv-wtop">${changes.length ? '' : '<span class="dv-ui">✦</span>'}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}<button data-web="go">Reload</button></div>${list}`;
+    el.innerHTML = `<div class="dv-wtop">${changes.length ? '' : `<span class="dv-ui">${window.WizBrand.html}</span>`}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}<button data-web="go">Reload</button></div>${list}`;
   }
-  function reloadNow(why) { saveDrafts(); log('web:reload', why); window.__wosReloading = why; location.reload(); }
+  function reloadNow(why) { if (webBusy()) { toast('◌', 'Finish recording or save your work first', 2000); return; } saveDrafts(); window.WizAppReadingPosition?.flush(); log('web:reload', why); window.__wosReloading = why; location.reload(); }
 
   /* ================= wiring ================= */
   const api = window.WosDevice = {
@@ -427,6 +461,7 @@
         <div class="st-row static"><span class="st-ic">✉</span><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
         <button class="st-row" data-dvupd><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
     },
+    recoverRecorder: () => syncRecorder('control'),
     saveDrafts, checkWeb, sweepReadNotes, mediaPlaying, _state: () => ({ sheet: sheet?.kind || null, upd, webPending, print0: !!print0, changes, listOpen }),
   };
   document.addEventListener('click', e => {
@@ -455,5 +490,7 @@
     else if (api.ready) { checkWeb(false); syncRecorder('visible'); }
   });
   addEventListener('pagehide', saveDrafts);
+  addEventListener('wizard:app-holds', () => { if (webPending) renderWeb(); });
+  addEventListener('wizard-app-capture-state', () => { if (api.ready) syncRecorder('app-capture'); });
   boot();
 })();

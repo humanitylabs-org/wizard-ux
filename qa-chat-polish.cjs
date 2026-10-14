@@ -11,7 +11,7 @@
 // Negative control: QA_WEB_DIR=<release/parity-0.7 checkout> node qa-chat-polish.cjs must FAIL.
 const { chromium } = require('/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const ORIGIN = 'https://private.wizard001.com', BASE = ORIGIN + '/wizard-os-home/';
+const ORIGIN = 'https://wizard.tailc0f369.ts.net', BASE = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/chat-polish';
 fs.mkdirSync(SHOTS, { recursive: true });

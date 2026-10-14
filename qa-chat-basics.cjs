@@ -16,7 +16,7 @@ const URL_ = process.argv[2] || 'http://127.0.0.1:9371/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';
 const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/feature-chat-basics';
 const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:18443';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
 const REAL_THREAD = process.env.QA_REAL_THREAD || 'wizard_1791466716358_dd032d92f93f'; // James sent a photo (data-URL part); Archimedes replied with helm_attachments images
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;

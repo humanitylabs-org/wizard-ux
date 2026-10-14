@@ -141,20 +141,40 @@
       const o = M.find(model, provider);
       return (o ? o.name : friendly(model)).replace(/^Claude /, '').split(' · ')[0];
     },
-    // One route contract for the chip and every send path. Capture before the outbox awaits storage/STT.
-    snapshot(sid, choice) {
-      if (sid && M.pending.has(sid)) throw new Error('Model change is still saving · send after it finishes');
+    // One resolved choice for the chip and every send path. Telegram sessions can have a model
+    // but no provider. Complete known metadata before native Send validates/persists the route.
+    currentRoute(sid, choice) {
       const s = sid && window.WizLive?.session(sid);
       const route = choice?.model ? choice : sid && M.selections.get(sid) || (s?.model ? { model: s.model, provider: s.provider } : M.defaultOption());
       if (!route) return null;
-      return { model: route.model || route.value, provider: route.provider || '' };
+      const model = route.model || route.value;
+      let provider = route.provider || '';
+      if (!provider) {
+        const def = M.defaultOption();
+        const matches = M.options.filter(o => o.value === model && o.provider);
+        const providers = [...new Set(matches.map(o => o.provider))];
+        // The configured default is authoritative for its own model; other models need a
+        // unique catalogue route. Keep explicit routes and ambiguous non-defaults unchanged.
+        provider = def?.value === model ? def.provider : providers.length === 1 ? providers[0] : '';
+      }
+      return { model, provider };
+    },
+    snapshot(sid, choice) {
+      if (sid && M.pending.has(sid)) throw new Error('Model change is still saving · send after it finishes');
+      return M.currentRoute(sid, choice);
     },
     keepVoiceRoute(id, route) {
       const all = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}');
       all[id] = { model: route.model, provider: route.provider };
       localStorage.setItem('wos.voice-model-routes.v1', JSON.stringify(all));
     },
-    voiceRoute(id) { try { return JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}')[id] || null; } catch { throw new Error('Saved recording model route is unreadable'); } },
+    voiceRoute(id) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}')[id];
+        // Complete an older model-only take without replacing its saved model with today's choice.
+        return saved?.model ? M.currentRoute('', saved) : null;
+      } catch { throw new Error('Saved recording model route is unreadable'); }
+    },
     forgetVoiceRoute(id) {
       const all = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}'); delete all[id];
       localStorage.setItem('wos.voice-model-routes.v1', JSON.stringify(all));
