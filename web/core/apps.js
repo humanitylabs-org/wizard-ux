@@ -108,7 +108,8 @@
     const rebuild = () => {
       const chats = ALL.findIndex(a => a.kind === 'chats');
       const merged = [...ALL.slice(0, chats + 1), ...REMOTE.filter(r => !ALL.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
-      const list = appsFor(shell, merged);
+      // On desktop the installed engine is used through Chats, not its management HTTP API.
+      const list = appsFor(shell, merged).map(a => shell === 'desktop' && a.id === 'hermes-agent' ? { ...a, kind: 'chats', icon: 'chats' } : a);
       // Every app wears its sigil (core/sigils.js): sgc = its one colour, sgh = the glyph markup.
       if (window.WizSigil) for (const a of list) if (!a.sgh) { const s = window.WizSigil.of(a.sigil || a); a.sgc = s.color; a.sgh = window.WizSigil.html(a.sigil || a); }
       APPS.splice(0, APPS.length, ...list);
@@ -187,7 +188,10 @@
     try {
       const u = new URL(src, location.href);
       if (u.origin !== location.origin || !/^\/apps\/[a-z0-9][a-z0-9-]{0,63}\//.test(u.pathname)) return false;
-      const r = await fetch(u, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store', redirect: 'error' });
+      const mac = !!window.webkit?.messageHandlers?.wizardNative && location.origin === 'http://127.0.0.1:48023';
+      const r = await fetch(u, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store', redirect: mac ? 'follow' : 'error', signal: AbortSignal.timeout(8000) });
+      const final = new URL(r.url);
+      if (final.origin !== u.origin && !(mac && final.origin === 'http://localhost:48023' && final.pathname === u.pathname)) return false;
       return frame.src === src && r.ok && /text\/html/i.test(r.headers.get('content-type') || '') && /^sandbox(?:\s|;|$)/.test(r.headers.get('content-security-policy') || '');
     } catch { return false; }
   };

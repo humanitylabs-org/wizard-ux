@@ -19,6 +19,9 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5
   background: rgba(8, 5, 18, .82); border-bottom: 1px solid rgba(205, 190, 255, .08); backdrop-filter: blur(14px); -webkit-app-region: drag; user-select: none; }
 .bar button, .bar nav { -webkit-app-region: no-drag; }
 .bar-l, .bar-r { display: flex; align-items: center; gap: 6px; }
+html[data-native-chrome="mac"] .bar { padding-left: 96px; }
+html[data-native-chrome="mac"] .bar-l { min-width: 0; }
+html[data-native-chrome="mac"] .ws-list { min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .bar-r { justify-content: flex-end; }
 .logo { width: 26px; height: 24px; border-radius: 7px; font-size: 15px; color: var(--violet-2); }
 .logo:hover { background: rgba(205, 190, 255, .1); }
@@ -90,6 +93,9 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5
 .frame-fallback.on { display: grid; }
 .frame-fallback b { display: block; color: var(--ink); font-size: 15px; margin-bottom: 6px; }
 .frame-fallback a { color: var(--violet-2); }
+.frame-fallback p { max-width: 440px; line-height: 1.5; margin: 0 0 16px; }
+.frame-recovery { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px; }
+.frame-recovery button { padding: 8px 14px; border-radius: 8px; background: rgba(165, 120, 255, .14); color: var(--ink); border: 1px solid var(--line-2); }
 
 /* ---------- Chats on the desktop: list beside thread ---------- */
 .dchats { position: absolute; inset: 0; display: flex; container-type: inline-size; }

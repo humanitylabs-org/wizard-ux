@@ -44,6 +44,10 @@
   }
   ws.forEach(d => { d.wins = d.wins.filter(id => W[id]); if (!d.wins.includes(d.focus)) d.focus = d.wins[0] || null; });
   Object.keys(W).forEach(id => { if (!ws.some(d => d.wins.includes(id))) delete W[id]; });
+  // Repair only the obsolete management-API window record; keep desktops and every chat/draft.
+  for (const w of Object.values(W)) if (w.app === 'frame' && w.appId === 'hermes-agent') {
+    w.app = 'chats'; w.thread = null; delete w.appId; delete w.url;
+  }
   if (!(cur >= 0 && cur < WS_N)) cur = 0;
   function uid() { return 'w' + Math.random().toString(36).slice(2, 9); }
   const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); };
@@ -162,7 +166,7 @@
 
   /* Open an app the desktop way: Chats and apps already open get focused, not duplicated. */
   // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
-  const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
+  const hostedOpenable = id => { const a = APP[id]; if (a?.id === 'hermes-agent' && a.kind === 'chats') return a; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
   // Only the App Store and System windows may ask; the sender is checked by its actual frame, not by anything it says.
   addEventListener('message', e => {
@@ -235,7 +239,7 @@
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>↑</kbd><kbd>↓</kbd> move through chats · <kbd>/</kbd> search · <kbd>${MOD}Enter</kbd> new chat · <kbd>${CMD}K</kbd> launch · <kbd>${MOD}V</kbd> talk</div></div></div></div>`;
     const a = appOf(w), url = w.url || a.url || '/';
     return `<iframe src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
-      <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
+      <div class="frame-fallback" role="status" aria-live="polite"><div><b>${esc(a.name)} couldn’t open</b><p data-frame-reason>The app may be stopped or still starting. Your data hasn’t been removed.</p><div class="frame-recovery"><button type="button" data-frame-retry>Retry</button><button type="button" data-frame-store>App Store</button>${/^\/apps\//.test(url) ? '' : `<a href="${esc(url)}" target="_blank" rel="noopener">Open in a tab ↗</a>`}</div></div></div>`;
   }
   /* Chats on the desktop: list on the left, thread on the right, both from the shared Chats client.
    * The list pane is a second Chats "window" (id::list) that always shows the list. */
@@ -299,12 +303,30 @@
     if (!f) return;
     const w = W[el.dataset.win], a = w && APP[w.appId];
     if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url });
+    let generation = 0;
+    el.querySelector('[data-frame-retry]')?.addEventListener('click', () => {
+      generation++; el.querySelector('.frame-fallback')?.classList.remove('on'); f.src = f.src;
+    });
+    el.querySelector('[data-frame-store]')?.addEventListener('click', () => openApp(APP['app-store']));
+    f.addEventListener('error', () => { generation++; el.querySelector('.frame-fallback')?.classList.add('on'); });
     f.addEventListener('load', async () => {
-      // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
-      let bad = false;
-      try { const d = f.contentDocument; bad = !d || /^chrome-error:|^about:blank/.test(d.URL || '') && f.getAttribute('src') !== 'about:blank'; } catch (e) { bad = true; }
-      if (bad && await C.apps.confirmManagedFrame(f)) { el.querySelector('.frame-fallback')?.classList.remove('on'); return; }
-      el.querySelector('.frame-fallback')?.classList.toggle('on', bad);
+      const own = ++generation;
+      // HTTP failure can load successfully as raw JSON; iframe onerror isn't enough.
+      let bad = false, unavailable = false;
+      try {
+        const d = f.contentDocument;
+        bad = !d || /^chrome-error:|^about:blank/.test(d.URL || '') && f.getAttribute('src') !== 'about:blank';
+        const text = d?.body?.innerText.trim() || '';
+        if (text.startsWith('{')) { try { unavailable = !!JSON.parse(text).error; } catch {} }
+        bad ||= unavailable;
+      } catch (e) { bad = true; }
+      if (bad && !unavailable && await C.apps.confirmManagedFrame(f)) bad = false;
+      if (own !== generation || !el.isConnected) return;
+      const recovery = el.querySelector('.frame-fallback');
+      recovery?.classList.toggle('on', bad);
+      if (recovery) recovery.querySelector('[data-frame-reason]').textContent = unavailable
+        ? 'The app is unavailable. Retry, or open App Store to check its status and start it. Your data hasn’t been removed.'
+        : 'The app didn’t load in this window. Retry, or check its status in App Store.';
       // Clicking inside a same-origin app focuses its window; Esc inside it still reaches the shell.
       try {
         const doc = f.contentDocument; if (!doc || doc.__wuxHooked) return; doc.__wuxHooked = true;
@@ -464,6 +486,8 @@
 
   /* ---------------- palette: one box for apps, threads, commands and asking Archimedes ---------------- */
   const pal = $('#palette'), palIn = $('#palInput'), palList = $('#palList');
+  // Full-size-content native windows overlay traffic lights. Plain browsers reserve nothing.
+  if (window.webkit?.messageHandlers?.wizardNative) document.documentElement.dataset.nativeChrome = 'mac';
   // The agent's name comes from Wizard OS settings; keep static labels in step with it.
   const nameLabels = () => {
     const n = window.WizConfig.agent();
