@@ -144,9 +144,10 @@
   }
   function focusWin(id, { scroll = true } = {}) {
     const t = wsOf(id); if (t < 0) return;
+    const fromHome = homeOpen;
     leaveHome();
     if (t !== cur) goWs(t);
-    if (ws[t].focus === id && document.querySelector(`.win[data-win="${id}"].focus`)) return;
+    if (!fromHome && ws[t].focus === id && document.querySelector(`.win[data-win="${id}"].focus`)) return;
     ws[t].focus = id; save(); paintFocus();
     if (scroll) focusInside(id);
     CHATS.markVisibleThreadsSeen();
@@ -174,6 +175,7 @@
     [d.wins[i], d.wins[j]] = [d.wins[j], d.wins[i]]; save(); layout();
   }
   function toggleMono() {
+    if (homeOpen) return; // Home must not alter a parked desktop's fullscreen preference.
     const d = ws[cur]; if (!d.wins.length) return;
     d.mono = !d.mono; save(); layout();
     if (d.mono && !store.get('fullHint', false)) {
@@ -624,7 +626,7 @@
    * Nothing opens or takes focus; the thread shows up in Chats and the Inbox when James wants it. */
   async function ask(text, how = 'typing in the desktop launcher', audio = null, route = null) {
     text = String(text || '').trim(); if (!text && !audio) return;
-    const ctx = viewContext(ws[cur].focus, how);
+    const ctx = viewContext(null, how);
     await OUTBOX.enqueue({ ...(route || {}), kind: 'new', text, audio, instructions: ctx, source: 'orb', how });
     if (!audio) toast('✦', `New thread started · ${window.WizConfig.agent()} is on it`, 1600);
   }
