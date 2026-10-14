@@ -20,6 +20,7 @@ const origin='https://home-screen-apps.staging.wizard001.com';
 const uri=id=>'wizard-homeapp://'+pkg+'/homeapp-'+crypto.createHash('sha256').update(origin+'\n'+id).digest('hex')+'?app='+id;
 const launch=id=>shell('am start -W -n '+pkg+'/ai.wizards.os.AppSessionActivity -a android.intent.action.VIEW -f 0x10080000 -d '+JSON.stringify(uri(id)));
 const mainLaunch=()=>shell('am start -W -n '+pkg+'/ai.wizards.os.MainActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER');
+function dismissImmersive(){const xml=shell('uiautomator dump /sdcard/immersive.xml >/dev/null; cat /sdcard/immersive.xml');for(const node of xml.match(/<node [^>]*>/g)||[]){if(!/text="Got it"/.test(node))continue;const m=node.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);if(m){shell(`input tap ${Math.round((+m[1]+ +m[3])/2)} ${Math.round((+m[2]+ +m[4])/2)}`);return true;}}return false;}
 async function connect(){
  const pid=shell('pidof '+pkg).trim();if(!/^\d+$/.test(pid))throw Error('Companion process missing');adb('forward','tcp:19396','localabstract:webview_devtools_remote_'+pid);
  for(let n=0;n<30;n++){try{browser=await chromium.connectOverCDP('http://127.0.0.1:19396',{noDefaults:true});ctx=browser.contexts()[0];break;}catch(e){if(n===29)throw e;await pause(500);}}
@@ -43,7 +44,7 @@ const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
  check('companion installation',/Success/.test(adb('install','-r',apk)),null,'identity');shell('am force-stop '+pkg);mainLaunch();await connect();let main=await page();await main.waitForFunction(()=>!!window.__wos?.openSheet,{},{timeout:45000});
  await main.evaluate(()=>__wos.openSheet('launcher'));await nativeTap(main,main.locator('#launcherBody [data-app="wisdom"]').first());
  let normal=main.frames().find(f=>f.url().includes('/wisdom/'));if(!normal){await pause(5000);normal=main.frames().find(f=>f.url().includes('/wisdom/'));}if(!normal)throw Error('Normal Wisdom missing');await normal.waitForFunction(()=>typeof Wisdom!=='undefined');const normalRead=await chapter(normal,2),workspace=await protectedState(main),unscoped=await places(main);
- await shot('ordinary-reading-page2',main);launch('wisdom');let wisdom=await page('wisdom'),wf=await frame(wisdom);const pinnedRead=await chapter(wf,3);await shot('pinned-reading-page3',wisdom);
+ await shot('ordinary-reading-page2',main);launch('wisdom');let wisdom=await page('wisdom'),wf=await frame(wisdom);dismissImmersive();await wisdom.waitForFunction(()=>WizAppearance.inspect().some(x=>x.acked&&x.presentation==='immersive'),{},{timeout:15000});await pause(800);const pinnedRead=await chapter(wf,3);await shot('pinned-reading-page3',wisdom);
  check('actual Wisdom frontend distinct page in simultaneous normal window',pinnedRead.id===normalRead.id&&pinnedRead.count!==normalRead.count,{normal:normalRead,pinned:pinnedRead},'isolation');
  check('native pinned storage before frontend layout',await wf.evaluate(()=>window.__wosPresentationStorage===true),null,'isolation');
  check('protected workspace and unscoped reading checkpoints unchanged',same(workspace,await protectedState(wisdom))&&same(unscoped,await places(wisdom)),{workspace,unscoped},'isolation');

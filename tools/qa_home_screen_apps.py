@@ -166,6 +166,9 @@ with (BASE/'worker.lock').open('a') as lease:
             emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
             point=bounds(emu.ui(),label);check(label+' own home icon/name exists',point is not None)
             emu.sx('input tap %d %d'%point);time.sleep(4)
+            # Dismiss the real Android first-immersive education overlay before
+            # accepting app pixels/geometry; it is not app chrome or a pin sheet.
+            if emu.tap_text(r'^Got it$'):time.sleep(1)
             check(label+' own icon launches correct real frontend content',wait(lambda:app_content(label,emu.ui()),25),emu.top());capture(label.lower()+'-session')
             for n in range(3):emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.3)
             check(label+' repeated root Back retains actual app content',app_content(label,emu.ui()) and emu.front())
