@@ -28,7 +28,6 @@
 
   const SUB = 'claude-subscription-directsdk-experimental';
   const CLAUDE_PROVIDERS = new Set([SUB, 'anthropic']);
-  const SUBSCRIPTIONS = ['openai-codex', SUB];
   const CLAUDE_ORDER = ['fable', 'opus', 'sonnet', 'haiku'];
   const GPT_ORDER = ['astra', 'sol', 'terra', 'luna', 'codex-spark'];
   const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
@@ -58,12 +57,14 @@
   /* normalizers.ts normalizeModels (direct routes only; Wizard UX has no private operator runtime). */
   function normalize(payload) {
     const root = obj(payload);
-    const providers = arr(root.providers).map(obj);
+    // A catalogue entry (or is_current) is not proof of a configured account.
+    // Include every authenticated provider, not a hard-coded subscription wishlist.
+    const providers = arr(root.providers).map(obj).filter(p => p.authenticated === true);
     const curProvider = str(root.provider), curModel = str(root.model);
-    const provider = providers.find(p => str(p.slug) === curProvider) || providers.find(p => p.is_current === true) || providers.find(p => p.authenticated === true && arr(p.models).length > 0);
+    const provider = providers.find(p => str(p.slug) === curProvider) || providers.find(p => p.is_current === true) || providers.find(p => arr(p.models).length > 0);
     if (provider) {
       const pslug = str(provider.slug), pname = str(provider.name) || pslug, defProvider = curProvider || pslug;
-      const visible = [provider, ...providers.filter(p => str(p.slug) !== pslug && SUBSCRIPTIONS.includes(str(p.slug)) && p.authenticated === true)];
+      const visible = [provider, ...providers.filter(p => str(p.slug) !== pslug)];
       const options = visible.flatMap(vp => {
         const slug = str(vp.slug), name = str(vp.name) || slug;
         return arr(vp.models).map(v => {
@@ -80,6 +81,8 @@
         unique.unshift({ value: curModel, provider: pslug, isGlobalDefault: true, name: claudeName(curModel, pslug) || friendly(curModel), description: pname });
       return curModel ? unique.sort((a, b) => Number(!!b.isGlobalDefault) - Number(!!a.isGlobalDefault)) : unique;
     }
+    // A provider-shaped response with no authenticated account must stay empty.
+    if (Array.isArray(root.providers)) return [];
     const raw = Array.isArray(payload) ? payload : arr(root.options).length ? arr(root.options) : arr(root.models);
     return raw.map(v => {
       if (typeof v === 'string') return { value: v, provider: '', name: friendly(v), description: '' };
