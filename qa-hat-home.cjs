@@ -114,8 +114,8 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  await p.click('#logo');await p.reload();await wait(p,'desktop');
  check(await p.evaluate(()=>__wux.homeOpen&&__wux.ws.length===2&&Object.values(__wux.wins).some(w=>w.appId==='shopping')),'reload persists Home plus parked apps/desktops');
  await p.click('#wsList [data-ws="0"]');await p.evaluate(()=>__wux.focusWin(Object.values(__wux.wins).find(w=>w.thread==='__new__').id));
- const drafted=await p.evaluate(()=>Object.values(__wux.wins).find(w=>w.thread==='__new__'&&__wux.chats.ch(w.id).draft==='QA retained Home draft — never send')?.id);
- if(drafted) await p.evaluate(id=>__wux.focusWin(id),drafted);
+ const drafted=await p.evaluate(()=>__wux.chats.newDrafts().find(d=>d.text==='QA retained Home draft — never send')?.key);
+ if(drafted) await p.evaluate(key=>__wux.chats.openNewDraft(__wux.ws[__wux.cur].focus,key),drafted);
  check(!!drafted&&(await p.locator('.win.focus textarea').inputValue())==='QA retained Home draft — never send','reload restores unsent chat draft after Home');
  await c.close();
  const m=await context('phone');await m.p.goto(entry('phone'));await wait(m.p,'phone');
