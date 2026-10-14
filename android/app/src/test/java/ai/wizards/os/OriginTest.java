@@ -7,13 +7,20 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 public class OriginTest {
-    static final String HOME = "wizard.tailc0f369.ts.net";
+    static final String HOME = java.net.URI.create(BuildConfig.ORIGIN).getHost();
+    static final String PRODUCTION_HOME = "wizard.tailc0f369.ts.net";
 
     @Test
-    public void homeIsTheTailnetName() {
+    public void homeMatchesItsConfiguredBuildOrigin() {
         assertEquals(HOME, Origin.HOST);
         assertEquals("https://" + HOME, BuildConfig.ORIGIN);
         assertEquals("https://" + HOME + "/wizard-os-home/", BuildConfig.HOME_URL);
+        if ("preview".equals(BuildConfig.BUILD_TYPE)) {
+            assertEquals("home-screen-apps.staging.wizard001.com", HOME);
+            assertFalse(Origin.isPrivate("https", PRODUCTION_HOME, -1));
+        } else {
+            assertEquals(PRODUCTION_HOME, HOME);
+        }
     }
 
     @Test
