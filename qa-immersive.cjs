@@ -4,7 +4,7 @@
 // Usage: QA_WEB_DIR=<repo> [QA_SHOTS=dir] node qa-immersive.cjs [url]
 const { chromium } = require('/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
+const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;

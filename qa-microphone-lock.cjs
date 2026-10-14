@@ -2,7 +2,7 @@
 // Entire network is intercepted by qa-device's isolated fixtures. No real API writes.
 const {chromium}=require(process.env.PW || '/home/telos/node_modules/playwright');
 const fs=require('fs'),path=require('path');
-const WEB=process.env.QA_WEB_DIR||__dirname,URL_='https://private.wizard001.com/wizard-os-home/';
+const WEB=process.env.QA_WEB_DIR||__dirname,URL_='https://wizard.tailc0f369.ts.net/wizard-os-home/';
 const SHOTS=process.env.QA_SHOTS||path.join(__dirname,'evidence');
 const W={uploads:[],sessions:new Set(),runs:[],keys:new Map(),transcribes:0,assetVer:1,foreign:[]};
 const src=fs.readFileSync(path.join(__dirname,'qa-device.cjs'),'utf8');

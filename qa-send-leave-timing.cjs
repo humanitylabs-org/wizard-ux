@@ -4,8 +4,8 @@
 // commit delayed 1.5 s, as an Android WebView can be), and asserts the message is still saved and delivered.
 // Usage: QA_WEB_DIR=<repo> node qa-send-leave-timing.cjs [url]. Real Wizard reads; every write is intercepted.
 let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
-const BASE = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:18443';
+const BASE = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
 const WD = process.env.QA_WEB_DIR || '';
 const fs = require('fs'), path = require('path');
 let pass = 0, fail = 0;

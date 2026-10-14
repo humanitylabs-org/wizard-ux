@@ -4,7 +4,7 @@
 // the bottom bar; the desk label names the app, not the thread; an attached file rides with the take.
 // Usage: QA_WEB_DIR=<repo> node qa-voice-nav.cjs [url]. Every Hermes/Wizard write is intercepted.
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/home/telos/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
+const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 const SEND_MS = 1500;

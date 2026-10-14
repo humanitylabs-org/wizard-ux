@@ -5,7 +5,7 @@
 // content; a tap on a thread opens it; and recording carries on through all of it.
 // Usage: QA_WEB_DIR=<repo> node qa-voice-nodim.cjs [url]. Every Hermes/Wizard write is intercepted.
 const { chromium } = require('/home/telos/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
+const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;

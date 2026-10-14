@@ -11,8 +11,8 @@
 // QA_WEB_DIR=<worktree> (default: this dir).
 const { chromium } = require('/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:18443';
+const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const OUT = process.env.QA_OUT || path.join(__dirname, 'qa-live');
 const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
