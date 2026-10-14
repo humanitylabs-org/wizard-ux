@@ -208,7 +208,9 @@
       s = s.replace(/!\[([^\]\n]*)\]\(\s*<?([^\s)>]+)>?(?:\s+"[^"]*")?\s*\)/g, (_, alt, url) => put(PRIVATE_MEDIA.test(url) ? linkHtml(url, esc(alt ? `[Image: ${alt}]` : '[Image]')) : `<span class="md-img">${esc(alt ? `[Image: ${alt}]` : '[Image]')}</span>`));
       s = s.replace(/\[((?:[^\[\]\n]|\[[^\]\n]*\])+)\]\(\s*<?([^\s)>]+?(?:\([^\s)]*\)[^\s)>]*)?)>?(?:\s+"[^"]*")?\s*\)/g, (_, text, url) => put(linkHtml(url, inline(text, true))));
       s = s.replace(/<((?:https?:\/\/|mailto:)[^\s>]+)>/g, (_, u) => put(linkHtml(u, esc(u))));
-      s = s.replace(/(^|[\s(“"'])(https?:\/\/[^\s<>"']*[^\s<>"'.,;:!?)\]’”])/g, (_, pre, u) => pre + put(linkHtml(u, esc(u))));
+      // Every bare URL becomes a link, whatever wraps it (**bold**, _italic_, ~~del~~, [brackets], "Link:url").
+      // Emphasis markers and closing punctuation at the end stay outside the link.
+      s = s.replace(/(^|[^A-Za-z0-9/.@=&%+-])(https?:\/\/[^\s<>"'*\u0001\u0002]*[^\s<>"'*_~.,;:!?)\]’”\u0001\u0002])/g, (_, pre, u) => pre + put(linkHtml(u, esc(u))));
       s = s.replace(SESSION_REF, (m, id) => put(`<a href="/wizard/?session=${encodeURIComponent(id)}" class="wsl" data-session="${esc(id)}">${esc(m)}</a>`));
     }
     let h = esc(s)
