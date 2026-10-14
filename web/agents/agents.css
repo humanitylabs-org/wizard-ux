@@ -149,7 +149,7 @@ html:not(.wz-hosted) body { background: radial-gradient(100% 50% at 100% -10%, r
 @media (min-width: 720px) { .ag { padding-top: 24px; } .ag-top h1 { font-size: 30px; } }
 .ag-link { color: var(--c-accent); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
 
-/* ---- app → agent binding: "Routes through" / "Apps that send work here" ---- */
+/* ---- app → agent binding: "Sends its work to" / "Apps that send work here" ---- */
 .ag-routes { padding: 4px 14px; }
 .ag-route { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 0; border-bottom: 1px solid var(--c-border); }
 .ag-route:last-child { border-bottom: 0; }

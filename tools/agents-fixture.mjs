@@ -15,6 +15,8 @@
 // Contract implemented (agent=<id> as query or body):
 //   GET/POST /wizard/v1/agents · GET/PATCH /wizard/v1/agents/<id> · POST /wizard/v1/agents/<id>/start|stop
 //   GET /wizard/v1/agent-options
+//   GET/PUT /wizard/v1/apps/<app_id>/agents → {app_id, kind, agents:[{id,label,privacy,appearance,enabled}]}; PUT {agents:[ids]}
+//                (which agents can use an app, #58; standard ticked, private unticked; writes the agents' app lists)
 //   GET /wizard/v1/app-bindings → {bindings} · GET/PUT /wizard/v1/apps/<app_id>/binding → {binding}   (App → agent binding; agents list
 //                their bound apps as bound_apps). --binding-apps=id:Label:Purpose,… names the installed apps that
 //                declare agent_binding (default: one universal recorder). No entry = the main agent.
@@ -50,7 +52,7 @@ const iso = s => new Date(s * 1000).toISOString();
 const OPTIONS = {
   harnesses: [{ id: 'hermes', label: 'Hermes', description: 'Stock Hermes in its own container: tools, memory and skills of its own.' }],
   providers: [
-    { id: 'tinfoil', label: 'Tinfoil', confidential: true, description: 'Confidential: encrypted, attested hardware. Tinfoil can’t read what it processes.', models: [{ id: 'glm-5-3', label: 'GLM 5.3' }] },
+    { id: 'tinfoil', label: 'Tinfoil (confidential)', confidential: true, description: 'Confidential: encrypted, attested hardware. Tinfoil can’t read what it processes.', models: [{ id: 'glm-5-3', label: 'GLM 5.3' }] },
     { id: 'anthropic', label: 'Claude', confidential: false, description: 'Your Claude account (AI Accounts).', models: [{ id: 'claude-opus-5-5', label: 'Claude Opus 5.5' }, { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' }] },
     { id: 'openai-codex', label: 'ChatGPT', confidential: false, description: 'Your ChatGPT account (AI Accounts).', models: [{ id: 'gpt-5.5', label: 'GPT-5.5' }] },
   ],
@@ -145,13 +147,20 @@ function createAgent(body) {
   return [201, { agent: pub(a) }];
 }
 function patchAgent(a, body) {
-  if (a.is_default) return [409, { error: 'The main agent is managed by your Wizard setup', check: 'agent.main.readonly' }];
+  if (a.is_default) {
+    // #58: only which apps the main agent can use is set here.
+    const keys = Object.keys(body), pk = Object.keys(body.permissions || {});
+    if (keys.some(k => k !== 'permissions') || !pk.length || pk.some(k => !['wizard_apps', 'agent_apps'].includes(k))) return [409, { error: 'The main agent is managed by your Wizard setup', check: 'agent.main' }];
+    const next = { ...a.permissions, ...body.permissions }; const bad = checkPerms(next); if (bad) return [409, { error: 'Permissions are not valid', check: bad }];
+    a.permissions = next; return [200, { agent: pub(a) }];
+  }
+  if (a.privacy === 'private' && body.privacy !== undefined && body.privacy !== 'private') return [409, { error: 'private_agent_sealed', check: 'agent.private_sealed' }];
   if (body.label != null) { const l = String(body.label).trim().slice(0, 40); if (!l) return [400, { error: 'A name is required', check: 'agent.label' }]; a.label = l; }
   if (body.appearance) a.appearance = { ...a.appearance, ...body.appearance };
   if (body.model) {
     const p = provider(body.model.provider || a.model.provider);
     if (!p) return [409, { error: 'Unknown model provider', check: 'agent.model.provider' }];
-    if (a.privacy === 'private' && !p.confidential && body.confirm_downgrade !== true) return [409, { error: 'A private agent keeps a confidential provider', check: 'agent.private.confidential_provider' }];
+    if (a.privacy === 'private' && !p.confidential) return [409, { error: body.confirm_downgrade === true ? 'private_agent_sealed' : 'A private agent keeps a confidential provider', check: body.confirm_downgrade === true ? 'agent.private_sealed' : 'agent.private.confidential_provider' }];
     if (!p.models.some(m => m.id === body.model.model)) return [409, { error: 'That model isn’t offered by this provider', check: 'agent.model.allowed' }];
     a.model = { ...a.model, provider: p.id, model: body.model.model, allowed_models: a.privacy === 'private' ? [body.model.model] : p.models.map(m => m.id) };
   }
@@ -255,6 +264,23 @@ async function api(req, res, u) {
     return send(res, 405, { error: 'method' });
   }
   if (p === '/wizard/v1/app-bindings' && m === 'GET') return send(res, 200, { bindings: BIND_APPS.map(bindingView) });
+  mm = p.match(/^\/wizard\/v1\/apps\/([a-z0-9][a-z0-9._-]{0,63})\/agents$/);
+  if (mm) {
+    const id = mm[1], kind = OPTIONS.wizard_apps.some(x => x.id === id) ? 'wizard_apps' : OPTIONS.agent_apps.some(x => x.id === id) ? 'agent_apps' : '';
+    if (!kind) return send(res, 404, { error: 'app_not_found', check: 'app.id' });
+    const view = () => ({ app_id: id, kind, agents: [...AGENTS.values()].map(a => ({ id: a.id, label: a.label, privacy: a.privacy, appearance: a.appearance, is_default: a.is_default, enabled: [...a.permissions.wizard_apps, ...a.permissions.agent_apps].includes(id) })) });
+    if (m === 'GET') return send(res, 200, view());
+    if (m === 'PUT') {
+      if (!Array.isArray(body.agents)) return send(res, 400, { error: 'invalid_request', check: 'app.agents' });
+      for (const x of body.agents) if (!AGENTS.has(x)) return send(res, 404, { error: 'agent_not_found', check: 'agent.id' });
+      for (const a of AGENTS.values()) {
+        const on = body.agents.includes(a.id);
+        a.permissions = { ...a.permissions, [kind]: on ? [...new Set([...a.permissions[kind], id])] : a.permissions[kind].filter(x => x !== id) };
+      }
+      return send(res, 200, view());
+    }
+    return send(res, 405, { error: 'method' });
+  }
   mm = p.match(/^\/wizard\/v1\/apps\/([a-z0-9][a-z0-9._-]{0,63})\/binding$/);
   if (mm) {
     const app = BIND_APPS.find(x => x.id === mm[1]);
@@ -332,7 +358,7 @@ http.createServer((req, res) => {
   // A stand-in for an installed app that declares agent_binding (QA opens it as a window; the shell adds its route).
   { const am = u.pathname.match(/^\/__fixture\/apps\/([a-z0-9][a-z0-9._-]{0,63})\/$/); const app = am && BIND_APPS.find(x => x.id === am[1]);
     if (app) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${app.label}</title><body style="margin:0;font:15px system-ui;color:#eee;background:#0b0718;padding:24px"><h1 style="font-size:20px">${app.label}</h1><p>${app.purpose}</p><p>Fixture app: its work goes to whichever agent it routes through.</p></body>`); } }
-  const agentsRoute = /^\/wizard\/v1\/(agent(s|-options)|app-bindings$|apps\/[^/]+\/binding$)/.test(u.pathname);
+  const agentsRoute = /^\/wizard\/v1\/(agent(s|-options|-grants)|app-bindings$|apps\/[^/]+\/(binding|agents)$)/.test(u.pathname);
   if (UP && (agentsRoute || (u.pathname.startsWith('/wizard/') && u.searchParams.get('agent') && u.searchParams.get('agent') !== 'hermes'))) return upstream(req, res);
   if (u.pathname.startsWith('/wizard/') || u.pathname.startsWith('/__fixture/')) {
     const fixtureRoute = agentsRoute || u.pathname.startsWith('/__fixture/');

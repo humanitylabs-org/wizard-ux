@@ -34,7 +34,7 @@
     const model = m => typeof m === 'string' ? { id: m, label: AG.friendly(m) } : m && (m.id || m.value) ? { id: String(m.id || m.value), label: String(m.label || m.name || AG.friendly(m.id || m.value)) } : null;
     return {
       harnesses: list(o.harnesses, h => h && h.id ? { id: String(h.id), label: String(h.label || h.id), description: String(h.description || '') } : null),
-      providers: list(o.providers, p => p && p.id ? { id: String(p.id), label: String(p.label || p.id), confidential: p.confidential === true, description: String(p.description || ''), models: list(p.models, model) } : null),
+      providers: list(o.providers, p => p && p.id ? { id: String(p.id), label: AG.cleanProvider(String(p.label || p.id)), confidential: p.confidential === true, description: String(p.description || ''), models: list(p.models, model) } : null),
       presets: list(o.presets, p => typeof p === 'string' ? { id: p, label: p[0].toUpperCase() + p.slice(1), description: '', permissions: null } : p && p.id ? { id: String(p.id), label: String(p.label || p.id), description: String(p.description || p.summary || ''), permissions: p.permissions && typeof p.permissions === 'object' ? p.permissions : null, requires_confidential: p.requires_confidential === true || p.privacy === 'private' || p.id === 'private' } : null),
       wizard_apps: list(o.wizard_apps, a => a && a.id ? { id: String(a.id), label: String(a.label || a.name || a.id), description: String(a.description || a.summary || a.desc || ''), icon: a.icon || '', colors: a.colors || [] } : null),
       // kind: 'tool' | 'connector' when the server says so; otherwise every agent app is just an agent app.
@@ -111,17 +111,17 @@
       ${AG.available ? `<button type="button" class="ag-btn ag-fab" data-new>${PLUS}New agent</button>` : ''}`;
   }
 
-  /* ---------------- app → agent binding ("Routes through") ---------------- */
+  /* ---------------- app → agent binding ("Sends its work to") ---------------- */
   // An app that makes work for an agent (recaps, reports, automations) routes it through one agent the owner picks.
   // Default: the main agent. A private agent needs no extra warning; a bound agent that is stopped holds the work
   // and says so, because it never falls back to another agent.
-  const heldLine = (b, who) => b.held === 'missing' ? `The agent ${b.label} routes through isn’t on this Wizard. Its work can’t be delivered until you pick one.`
+  const heldLine = (b, who) => b.held === 'missing' ? `The agent ${b.label} sends its work to isn’t on this Wizard. Its work can’t be delivered until you pick one.`
     : `${who} is ${b.held === 'error' ? 'not working' : 'stopped'}. Work from ${b.label} waits until it runs again; it never goes to another agent.`;
   function routeRow(b, { agentPage } = {}) {
     const t = b.target;
     return `<div class="ag-route${b.held ? ' held' : ''}" data-route-row="${esc(b.app_id)}"><span class="tx"><b>${esc(b.label)}</b>${b.purpose ? `<small>${esc(b.purpose)}</small>` : ''}</span>
-      <button type="button" class="ag-routebtn" data-route="${esc(b.app_id)}" aria-label="${esc(b.label)} routes through ${esc(t ? t.label : 'no agent')}. Change" style="--ag:${t ? AG.colour(t) : '#ff6b86'}">
-        ${agentPage ? '' : '<span class="lbl">Routes through</span>'}${t ? sigil(t, 'ag-sig xs') : ''}<b>${esc(t ? t.label : 'No agent')}</b>${t && t.privacy === 'private' ? LOCK : ''}<svg class="dd" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <button type="button" class="ag-routebtn" data-route="${esc(b.app_id)}" aria-label="${esc(b.label)} sends its work to ${esc(t ? t.label : 'no agent')}. Change" style="--ag:${t ? AG.colour(t) : '#ff6b86'}">
+        ${agentPage ? '' : '<span class="lbl">Sends its work to</span>'}${t ? sigil(t, 'ag-sig xs') : ''}<b>${esc(t ? t.label : 'No agent')}</b>${t && t.privacy === 'private' ? LOCK : ''}<svg class="dd" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
       ${b.held ? `<p class="ag-note bad" data-held="${esc(b.app_id)}">${esc(heldLine(b, t ? t.label : ''))}</p>` : ''}</div>`;
   }
   function routingHtml() {
@@ -135,7 +135,7 @@
     const ids = new Set([...AG.bindings.filter(b => b.agent === a.id).map(b => b.app_id), ...a.bound_apps.map(x => x.id)]);
     const rows = [...ids].map(id => AG.binding(id) || { ...a.bound_apps.find(x => x.id === id), app_id: id, agent: a.id, target: a, held: ['stopped', 'error'].includes(a.status) ? a.status : '' });
     return `<div class="ag-sec">Apps that send work here</div>
-      <div class="ag-card ag-routes" data-bound-apps>${rows.map(b => routeRow(b, { agentPage: true })).join('') || `<div class="ag-empty-line">${a.is_default ? 'Apps that make work for an agent route here unless you pick another.' : 'None yet. In an app’s settings, pick this agent under “Routes through”.'}</div>`}</div>`;
+      <div class="ag-card ag-routes" data-bound-apps>${rows.map(b => routeRow(b, { agentPage: true })).join('') || `<div class="ag-empty-line">${a.is_default ? 'Apps that make work for an agent route here unless you pick another.' : 'None yet. In an app’s settings, pick this agent under “Sends its work to”.'}</div>`}</div>`;
   }
   async function setRoute(appId, agentId) {
     const b = AG.binding(appId); if (!b || agentId === b.agent) { closeSheet(); return; }
@@ -215,14 +215,14 @@
   }
 
   /* ---------------- permissions (shared by the flow and the detail page) ---------------- */
-  function permsHtml(p, { privacy, editable, draft }) {
+  function permsHtml(p, { privacy, editable, draft, appsEditable = editable }) {
     const o = options(); p = p || {};
     const tools = Array.isArray(p.outside_tools) ? p.outside_tools : [];
     const dis = editable ? '' : 'disabled';
     const appRow = (a, kind) => {
       const meta = (kind === 'wizard' ? o.wizard_apps : o.agent_apps).find(x => x.id === a) || { id: a, label: AG.friendly(a), description: '', kind: 'app' };
       const ic = window.WizSigil ? window.WizSigil.box('span', 'ic', { id: meta.id, name: meta.label, icon: meta.icon, colors: meta.colors }) : '';
-      return `<div class="ag-item">${ic}<span class="tx"><b>${esc(meta.label)}</b><small>${esc(kind === 'wizard' ? 'Wizard app' : meta.kind === 'tool' ? 'Tool' : meta.kind === 'connector' ? 'Connector' : 'Agent app')}${meta.description ? ' · ' + esc(meta.description) : ''}</small></span>${editable ? `<button type="button" class="ag-x" data-remove="${kind}" data-v="${esc(a)}" aria-label="Remove ${esc(meta.label)}">✕</button>` : ''}</div>`;
+      return `<div class="ag-item" data-app-item="${esc(a)}">${ic}<span class="tx"><b>${esc(meta.label)}</b><small>${esc(kind === 'wizard' ? 'Wizard app' : meta.kind === 'tool' ? 'Tool' : meta.kind === 'connector' ? 'Connector' : 'Agent app')}${meta.description ? ' · ' + esc(meta.description) : ''}</small></span>${appsEditable ? `<button type="button" class="ag-x" data-remove="${kind}" data-v="${esc(a)}" aria-label="Remove ${esc(meta.label)}">✕</button>` : ''}</div>`;
     };
     const wa = Array.isArray(p.wizard_apps) ? p.wizard_apps : [], aa = Array.isArray(p.agent_apps) ? p.agent_apps : [];
     return `<div class="ag-sec">Outside tools<small>${tools.length ? `${tools.length} on` : 'All off'}</small></div>
@@ -232,14 +232,14 @@
       <div class="ag-seg" role="radiogroup" aria-label="Files" style="--n:${FILES.length}">${FILES.map(([v, l]) => `<button type="button" role="radio" aria-checked="${p.files === v}" data-files="${v}" ${dis}>${l}</button>`).join('')}</div>
       <p class="ag-note">${esc((FILES.find(f => f[0] === p.files) || [])[2] || '')}</p>
       <div class="ag-sec">Wizard apps<small>${wa.length}</small></div>
-      <div class="ag-card">${wa.map(a => appRow(a, 'wizard')).join('') || '<div class="ag-empty-line">No Wizard apps.</div>'}
-        ${editable ? `<button type="button" class="ag-add" data-add="wizard">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add Wizard app</button>` : ''}</div>
+      <div class="ag-card" data-wizard-apps>${wa.map(a => appRow(a, 'wizard')).join('') || '<div class="ag-empty-line">No Wizard apps.</div>'}
+        ${appsEditable ? `<button type="button" class="ag-add" data-add="wizard">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add Wizard app</button>` : ''}</div>
       <div class="ag-sec">Agent apps<small>tools &amp; connectors · ${aa.length}</small></div>
-      <div class="ag-card">${aa.map(a => appRow(a, 'agent')).join('') || '<div class="ag-empty-line">No agent apps, tools or connectors.</div>'}
-        ${editable ? `<button type="button" class="ag-add" data-add="agent">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add agent app</button><button type="button" class="ag-add" data-add="tool">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add tool or connector</button>` : ''}</div>
+      <div class="ag-card" data-agent-apps>${aa.map(a => appRow(a, 'agent')).join('') || '<div class="ag-empty-line">No agent apps, tools or connectors.</div>'}
+        ${appsEditable ? `<button type="button" class="ag-add" data-add="agent">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add agent app</button><button type="button" class="ag-add" data-add="tool">${PLUS.replace('<svg', '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"')}Add tool or connector</button>` : ''}</div>
       <div class="ag-sec">Other agents</div>
       <div class="ag-seg" role="radiogroup" aria-label="Other agents" style="--n:${o.other_agents.length}">${o.other_agents.map(x => `<button type="button" role="radio" aria-checked="${(p.other_agents || 'none') === x.id}" data-others="${esc(x.id)}" ${dis}>${esc(x.label)}</button>`).join('')}</div>
-      ${draft ? '' : `<p class="ag-note">${privacy === 'private' ? 'Other agents can’t read this agent’s chats, memory or files.' : ''}</p>`}`;
+      ${draft ? '' : `<p class="ag-note">${privacy === 'private' ? 'Sealed: no other agent can read this agent’s chats, memory or files, whatever its own setting says.' : 'Private agents are never readable, whatever this says.'}</p>`}`;
   }
 
   /* ---------------- detail ---------------- */
@@ -259,15 +259,15 @@
       <div class="ag-sec">Harness</div>
       <div class="ag-card"><div class="ag-kv"><span>Harness</span><b>${esc(harness(a.harness).label)}</b></div></div>
       <div class="ag-sec">Model provider</div>
-      <div class="ag-card"><div class="ag-kv"><span>Provider</span><b>${esc(AG.providerLabel(a.model.provider) || '—')}${p?.confidential ? ' · Confidential' : ''}</b></div>
+      <div class="ag-card"><div class="ag-kv"><span>Provider</span><b data-provider-line>${esc(AG.providerLabel(a.model.provider) || '—')}${p?.confidential ? ' · Confidential' : ''}</b></div>
         <div class="ag-kv"><span>Model</span><b>${esc(AG.modelName(a, a.model.model) || '—')}</b></div>
         <div class="ag-kv"><span>Allowed in chats</span><b>${esc(allowed.map(m => AG.modelName(a, m)).join(', ') || '—')}</b></div>
         <div class="ag-kv"><span>Fallback</span><b>${a.model.fallback ? 'On' : 'Off'}</b></div>
         ${editable && (p?.models?.length || 0) > 1 ? '<button type="button" class="ag-add" data-model>Change model</button>' : ''}
         ${a.privacy === 'private' ? '<p class="ag-note">A private agent keeps a confidential provider with no fallback. Its chats can only use the models above.</p>' : ''}</div>
       <div class="ag-sec">Permissions<small>Preset: ${esc(preset(a.permissions.preset).label)}</small></div>
-      ${editable ? '' : '<p class="ag-note">The main agent runs your Wizard’s own setup. Its permissions are managed there.</p>'}
-      ${permsHtml(a.permissions, { privacy: a.privacy, editable })}`;
+      ${editable ? '' : '<p class="ag-note">The main agent runs your Wizard’s own setup. Its other permissions are managed there; pick its apps here.</p>'}
+      ${permsHtml(a.permissions, { privacy: a.privacy, editable, appsEditable: true })}`;
   }
   async function patch(a, body, label = 'Saved') {
     const key = JSON.stringify(Object.keys(body));
@@ -279,11 +279,14 @@
   // An edit to the permissions: the draft in the flow, else the agent (PATCH; the server has the last word).
   function editPerms(fn, msg) {
     if (S.view.name === 'new') { fn(S.draft.perms); render(); return; }
-    const a = AG.get(S.view.id); if (!a || a.is_default) return;
+    const a = AG.get(S.view.id); if (!a) return;
     const p = JSON.parse(JSON.stringify(a.permissions || {}));
     fn(p);
+    // The main agent: only which apps it can use is set here (#58); the rest is its Wizard's own setup.
+    const body = a.is_default ? { wizard_apps: p.wizard_apps || [], agent_apps: p.agent_apps || [] } : p;
+    if (a.is_default && ['outside_tools', 'files', 'other_agents'].some(k => JSON.stringify(p[k]) !== JSON.stringify(a.permissions[k]))) return;
     Object.assign(a.permissions, p); render(); // shown now; reverted by the reload if the server refuses
-    patch(a, { permissions: p }, msg);
+    patch(a, { permissions: body }, msg);
   }
   async function runAction(a, act) {
     S.saving.add('run'); render();
@@ -321,8 +324,8 @@
       const b = AG.binding(sh.app);
       const busy = S.saving.has('route:' + sh.app);
       inner = `<h2>${esc(b ? b.label : sh.app)}</h2><p class="ag-note">${esc(b?.purpose || 'Work from this app goes to one agent.')}</p>
-        <div class="ag-label" style="margin-top:14px">Routes through</div>
-        <div role="radiogroup" aria-label="Routes through">${AG.list.map(x => `<button type="button" class="ag-choice" role="radio" aria-checked="${b?.agent === x.id}" data-routepick="${esc(x.id)}" style="--ag:${AG.colour(x)}" ${busy ? 'disabled' : ''}>${sigil(x, 'ag-sig sm')}<span class="tx"><b>${esc(x.label)}${x.privacy === 'private' ? `<span class="ag-badge priv">${LOCK}Private</span>` : ''}${x.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}</b><small>${statusHtml(x)}</small></span><span class="rd"></span></button>`).join('')}</div>
+        <div class="ag-label" style="margin-top:14px">Sends its work to</div>
+        <div role="radiogroup" aria-label="Sends its work to">${AG.list.map(x => `<button type="button" class="ag-choice" role="radio" aria-checked="${b?.agent === x.id}" data-routepick="${esc(x.id)}" style="--ag:${AG.colour(x)}" ${busy ? 'disabled' : ''}>${sigil(x, 'ag-sig sm')}<span class="tx"><b>${esc(x.label)}${x.privacy === 'private' ? `<span class="ag-badge priv">${LOCK}Private</span>` : ''}${x.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}</b><small>${statusHtml(x)}</small></span><span class="rd"></span></button>`).join('')}</div>
         ${b?.held ? `<p class="ag-note bad">${esc(heldLine(b, b.target ? b.target.label : ''))}</p>` : ''}
         <p class="ag-note">${b?.is_default ? 'Default: your main agent. ' : ''}The app never picks an agent itself.</p>
         <div class="acts" style="grid-template-columns:1fr"><button type="button" class="ag-btn ghost" data-sheetclose>Close</button></div>`;
@@ -408,7 +411,7 @@
   // A starting agent: look again until it settles.
   setInterval(() => { if (!document.hidden && AG.list.some(a => a.status === 'starting')) AG.load(true); }, 3000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) AG.load(true).then(() => AG.loadBindings(true)); });
-  // The shell's "Routes through" sheet → Agents: show that agent's page (sent until the app is up).
+  // The shell's app settings sheet → Agents: show that agent's page (sent until the app is up).
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== ORIGIN || e.source !== parent || !d) return;
     if (d.type === 'wizard:bindings-changed') { AG.load(true).then(() => AG.loadBindings(true)); return; }

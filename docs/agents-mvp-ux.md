@@ -5,7 +5,7 @@ Lane A (spec, Agent Service) owns the API: wizard-os `spec/AGENTS.md`.
 ## What the UX does
 
 - **Agents** is its own system app (`web/agents/`, app id `agents`). Home reaches it from the system area (phone: the people button beside *Your system*; desktop: the Home chip on an empty workspace). System links to it from its header. It is not listed in Apps, the launcher grid, desktop app search defaults, or the App Store.
-- **List**: sigil, name, harness, model provider · model, Private/Standard, status, Main agent; a stopped agent that apps route through shows *N apps waiting*. Below the list, **App routing**: every installed app that sends work to an agent, with *Routes through [agent ▾]*.
+- **List**: sigil, name, harness, model provider · model, Private/Standard, status, Main agent; a stopped agent that apps route through shows *N apps waiting*. Below the list, **App routing**: every installed app that sends work to an agent, with *Sends its work to: [agent ▾]*.
 - **New agent**: three steps, *Harness → Model provider → Permissions*. Permissions start from a preset (Private / Standard) and stay adjustable in the same step: outside tools, files, Wizard apps, agent apps (tools/connectors), other agents. Private needs a confidential provider; the UI says so and does not offer a downgrade.
 - **Agent page**: edit any time — rename, start/stop, model (same provider only), outside tools (a private agent asks before turning one on), files, add/remove Wizard app, add/remove agent app, add tool or connector, other agents. The main agent is shown read-only (its permissions belong to the Wizard setup). **Apps that send work here** lists the apps bound to this agent, each with its route picker.
 - **Per-agent Chats**: *Open chats* opens a Chats window pinned to that agent (`w.agent`). It lists only that agent's threads (`GET /wizard/hermes/api/sessions?agent=<id>`), starts new chats on it, and every thread/run call names it (`?agent=<id>`, plus `agent` in create/run bodies). A persistent strip names the agent on list and thread, phone and desktop: sigil, agent colour (also a coloured window edge), label, model, lock + *Private* for a private agent. The window title and desk label carry the agent's sigil and name. When more than one agent exists, the main Chats shows the main agent's strip too.
@@ -14,11 +14,11 @@ Lane A (spec, Agent Service) owns the API: wizard-os `spec/AGENTS.md`.
 - **Back**: agent page/sheet/flow step → previous screen (WizardApp back facade); agent Chats thread → list → the Agents app it was opened from → Home; at Home, Back stays (native "You're home"; browser tab: "Press back again" floor). The app settings sheet closes first and leaves the app open. Tested in `qa-agents.cjs`.
 - Deep links: `?view=agents`, `?open=agents`, `?agent=<id>` (that agent's Chats).
 
-## App → agent binding ("Routes through")
+## App → agent binding ("Sends its work to")
 
-An installed app that makes work for an agent (recording recaps, reports, automations) declares `agent_binding` in its `wizard.md`; the owner picks the agent it routes through. Default = the main agent (a fresh box has only that one). The app never names an agent.
+An installed app that makes work for an agent (recording recaps, reports, automations) declares `agent_binding` in its `wizard.md`; the owner picks the agent it sends its work to. Default = the main agent (a fresh box has only that one). The app never names an agent.
 
-- **Shell** (`web/core/app-route.js`, both shells): an app with a binding gets a route button in its window bar (arrow + the agent's sigil; red dot when the bound agent is stopped or missing). It opens the app's settings sheet: what the app sends, *Routes through* with every agent (a private agent carries its lock, nothing extra), and the default note. A bound agent that is stopped is said plainly: the work waits, it never goes to another agent. *Agents* opens the Agents app at that agent. Back/Esc closes the sheet only.
+- **Shell** (`web/core/app-route.js`, both shells): an app with a binding gets a route button in its window bar (arrow + the agent's sigil; red dot when the bound agent is stopped or missing). It opens the app's settings sheet: what the app sends, *Sends its work to* with every agent (a private agent carries its lock, nothing extra), and the default note. A bound agent that is stopped is said plainly: the work waits, it never goes to another agent. *Agents* opens the Agents app at that agent. Back/Esc closes the sheet only.
 - **Agents app**: *App routing* on the list, *Apps that send work here* on each agent page, both with the same picker (in-app sheet, WizardApp back).
 - **System**: *App routing* section; tapping a route asks the shell for the app's settings sheet (`wizard:app-route`, only System/Agents frames may ask).
 - After a change the shell tells open System/Agents frames to re-read (`wizard:bindings-changed`).
@@ -50,3 +50,10 @@ API used (wizard-os spec/AGENTS.md, Lane A):
 - `thread-dispositions` and `filings` (Defer/Done) for agent threads send `?agent=`; Lane A must route or refuse them without writing private ids into the main stores.
 - Agent thread lists are re-read every Chats poll (full list per agent); fine for one or two agents.
 - Binding list: the UX prefers `GET /wizard/v1/app-bindings` (shows apps still on the default agent). Without it, apps on the main agent appear only if the main agent's `bound_apps` lists them.
+
+## Which agents can use an app (#58) and sealed private agents (#59)
+
+- **App settings sheet** (`web/core/app-route.js`): *Which agents can use <App>?* — one tick box per agent (standard agents start ticked, private agents unticked; the Agent Service decides, `GET/PUT /wizard/v1/apps/<id>/agents`). Apps agents can use but that send no work get a small settings button in their window bar; apps with a binding keep the route button and the sheet shows both sections. A change reloads the agents, so each agent's page (Wizard apps / Agent apps) shows the same lists; open Agents/System windows are told to look again.
+- **Agent page**: the main agent's apps are editable here too (its other permissions stay in its own setup). The *Other agents* note says private agents are never readable.
+- **Provider line**: a provider label that already says "(confidential)" is shown once: *Tinfoil · Confidential*.
+- Publishing a copy outward from a private agent (owner-approved, logged) is later; no export UI yet.

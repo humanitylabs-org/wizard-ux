@@ -28,8 +28,8 @@
     build(); paint();
     loadRoutes();
   }
-  /* App → agent binding: which agent each app that makes work for an agent routes through. Changing it opens the
-   * shell's "Routes through" sheet (or the Agents app when System runs on its own). Absent API → no section. */
+  /* App → agent binding: which agent each app that makes work for an agent sends its work to. Changing it opens the
+   * shell's app settings sheet ("Sends its work to") (or the Agents app when System runs on its own). Absent API → no section. */
   let R = null;
   async function loadRoutes() {
     try {
@@ -46,10 +46,10 @@
     const rows = R.map(v => {
       const a = v.agent, held = !a ? 'missing' : ['stopped', 'error'].includes(a.status) ? a.status : '';
       return `<div class="item route ${held ? 'bad' : ''}"><span class="tx"><b>${esc(v.label)}</b><small>${esc(v.purpose || 'Sends work to an agent')}</small></span>
-        <button type="button" class="route-btn" data-route="${esc(v.id)}" aria-label="${esc(v.label)} routes through ${esc(a ? a.label : 'no agent')}. Change"><span>Routes through</span><b>${esc(a ? a.label : 'No agent')}</b>${a && a.privacy === 'private' ? lock : ''}<i>▾</i></button>
+        <button type="button" class="route-btn" data-route="${esc(v.id)}" aria-label="${esc(v.label)} sends its work to ${esc(a ? a.label : 'no agent')}. Change"><span>Sends its work to</span><b>${esc(a ? a.label : 'No agent')}</b>${a && a.privacy === 'private' ? lock : ''}<i>▾</i></button>
         ${held ? `<p class="route-held">${esc(held === 'missing' ? 'That agent isn’t on this Wizard. Pick another so its work can be delivered.' : `${a.label} is stopped. Work from ${v.label} waits until it runs again.`)}</p>` : ''}</div>`;
     }).join('');
-    return `<section class="sec" id="s-routes"><h2>App routing</h2><p class="hint">Apps that make work for an agent, and the agent each one routes through.</p><div class="list">${rows}</div></section>`;
+    return `<section class="sec" id="s-routes"><h2>App routing</h2><p class="hint">Apps that make work for an agent, and the agent each one sends its work to.</p><div class="list">${rows}</div></section>`;
   }
 
   function build() {

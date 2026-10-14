@@ -24,7 +24,7 @@
  *   WosAgents.onChange(fn)
  *
  * App → agent binding (wizard-os spec/AGENTS.md): an installed app that makes work for an agent (recording recaps,
- * reports, automations) declares agent_binding; the owner picks which agent it routes through. No entry = the main
+ * reports, automations) declares agent_binding; the owner picks which agent it sends its work to. No entry = the main
  * agent. A bound agent that is stopped holds the work: it never falls back to another agent.
  *   GET /wizard/v1/app-bindings            → { bindings: [{ app_id, label, purpose, required, agent, is_default, problem? }] }
  *   GET/PUT /wizard/v1/apps/<app_id>/binding  PUT { agent } → { binding: <the same view> }
@@ -33,6 +33,13 @@
  *   WosAgents.binding(appId)      → { app_id, label, purpose, agent, is_default, problem, target, held } | null
  *                                    target = the agent object; held = the work waits (agent missing/stopped/error)
  *   WosAgents.setBinding(appId, agentId) → Promise<view> (throws Error with .check on refusal)
+ *
+ * Which agents can use an app (#58, spec/AGENTS.md section 5): separate from the binding. Standard agents start
+ * ticked, private agents unticked; the gateway serves an agent only its own apps.
+ *   GET/PUT /wizard/v1/apps/<app_id>/agents   → { app_id, kind, agents: [{ id, label, privacy, enabled }] }; PUT { agents: [ids] }
+ *   WosAgents.appKnown(appId)        → true when the Agent Service offers the app to agents (agent-options)
+ *   WosAgents.appAgents(appId)       → Promise<{ kind, agents:[{ id, enabled }] } | null> (falls back to permissions)
+ *   WosAgents.setAppAgents(appId, ids) → Promise<same> (reloads the agents so their pages stay in sync)
  */
 (() => {
   'use strict';
@@ -65,7 +72,7 @@
       if (!force && A.options && Date.now() - A.optionsAt < 60e3) return Promise.resolve(A.options);
       return fetch('/wizard/v1/agent-options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw Object.assign(new Error(`Agent options unavailable (${r.status})`), { status: r.status }); return r.json(); })
-        .then(j => { A.options = j && typeof j === 'object' ? j : {}; A.optionsAt = Date.now(); return A.options; });
+        .then(j => { const first = !A.options; A.options = j && typeof j === 'object' ? j : {}; A.optionsAt = Date.now(); if (first) A.emit(); return A.options; });
     },
     loadBindings(force) {
       if (A.bindingsLoading) return A.bindingsLoading;
@@ -134,7 +141,32 @@
     providerLabel(id) {
       const p = (A.options?.providers || []).find(x => x.id === id);
       if (id === 'host') return 'Your Wizard’s setup'; // the main agent runs the host Hermes configuration
-      return p?.label || (id === 'tinfoil' ? 'Tinfoil' : String(id || ''));
+      return A.cleanProvider(p?.label || (id === 'tinfoil' ? 'Tinfoil' : String(id || '')));
+    },
+    // "Tinfoil (confidential)" → "Tinfoil": the UI says Confidential once, as its own badge or suffix.
+    cleanProvider(label) { return String(label || '').replace(/\s*[(·-]\s*confidential\s*\)?\s*$/i, '').trim() || String(label || ''); },
+    appKnown(appId) { const o = A.options || {}; return [...(o.wizard_apps || []), ...(o.agent_apps || [])].some(x => x && (x.id === appId || x === appId)); },
+    async appAgents(appId) {
+      try {
+        const r = await fetch(`/wizard/v1/apps/${encodeURIComponent(appId)}/agents`, { cache: 'no-store', credentials: 'same-origin' });
+        if (r.ok) { const j = await r.json(); if (Array.isArray(j?.agents)) return { kind: String(j.kind || ''), agents: j.agents.filter(x => x && typeof x.id === 'string').map(x => ({ id: x.id, enabled: x.enabled === true })) }; }
+        if (r.status === 404 && (await r.clone().json().catch(() => null))?.check === 'app.id') return null;
+      } catch (_) {}
+      // Older Agent Service: the agents' own app lists say the same thing.
+      if (!A.ready) await A.load();
+      if (!A.appKnown(appId)) return null;
+      return { kind: '', agents: A.list.map(a => ({ id: a.id, enabled: [...(a.permissions.wizard_apps || []), ...(a.permissions.agent_apps || [])].includes(appId) })) };
+    },
+    async setAppAgents(appId, ids) {
+      const r = await fetch(`/wizard/v1/apps/${encodeURIComponent(appId)}/agents`, { method: 'PUT', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agents: ids }) });
+      let j = null; try { j = await r.json(); } catch (_) {}
+      if (!r.ok) {
+        const code = typeof j?.error === 'string' ? j.error : '';
+        const human = /^[a-z0-9_]+$/.test(code) ? (code[0].toUpperCase() + code.slice(1)).replace(/_/g, ' ') : code || `Request failed (${r.status})`;
+        throw Object.assign(new Error(human + (j?.check ? ` (${j.check})` : '')), { status: r.status, check: j?.check || '' });
+      }
+      await A.load(true); A.emit();
+      return { kind: String(j?.kind || ''), agents: (j?.agents || []).map(x => ({ id: x.id, enabled: x.enabled === true })) };
     },
     modelName(a, model) {
       if (!model) return '';
