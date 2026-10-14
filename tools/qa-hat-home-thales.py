@@ -13,15 +13,9 @@ lock = pathlib.Path('/Volumes/ThalesMedia/AndroidBuilds/worker.lock')
 receipt = {'host': socket.gethostname(), 'pid': os.getpid(), 'lock': str(lock), 'owner_api': 'POSIX fcntl.lockf', 'exclusion_probes': ['BSD flock', 'POSIX lockf'], 'queued_at': datetime.now(timezone.utc).isoformat()}
 print(json.dumps(receipt), flush=True)
 with lock.open('a') as f:
-    until = time.monotonic() + 7200
-    while True:
-        try:
-            fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            break
-        except BlockingIOError:
-            if time.monotonic() >= until:
-                raise SystemExit('shared worker lease wait expired')
-            time.sleep(1)
+    # Join the kernel's blocking wait queue instead of repeatedly missing the
+    # brief release gaps between already-queued native workers.
+    fcntl.lockf(f, fcntl.LOCK_EX)
     receipt['acquired_at'] = datetime.now(timezone.utc).isoformat()
     receipt['inode'] = os.fstat(f.fileno()).st_ino
     # A separate process must fail to acquire either family while this parent owns it.
