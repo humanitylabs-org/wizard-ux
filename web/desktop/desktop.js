@@ -376,9 +376,16 @@
       const width = Math.min(maxWidth, Math.max(0, W_ - 2 * g));
       rects[d.wins[0]] = [(W_ - width) / 2, g, width, H_ - 2 * g];
     } else if (n === 2) {
-      const half = Math.min(maxWidth, Math.max(0, (W_ - 3 * g) / 2));
-      const left = (W_ - 2 * half - g) / 2;
-      rects[d.wins[0]] = [left, g, half, H_ - 2 * g]; rects[d.wins[1]] = [left + g + half, g, half, H_ - 2 * g];
+      // A window may ask for its share of a pair (Video Editor: Feedback narrower than the video).
+      const sh = W[d.wins[1]]?.share || (W[d.wins[0]]?.share ? 1 - W[d.wins[0]].share : 0);
+      if (sh > 0.15 && sh < 0.85) {
+        const avail = Math.max(0, W_ - 3 * g), w1 = Math.round(avail * sh), w0 = avail - w1;
+        rects[d.wins[0]] = [g, g, w0, H_ - 2 * g]; rects[d.wins[1]] = [2 * g + w0, g, w1, H_ - 2 * g];
+      } else {
+        const half = Math.min(maxWidth, Math.max(0, (W_ - 3 * g) / 2));
+        const left = (W_ - 2 * half - g) / 2;
+        rects[d.wins[0]] = [left, g, half, H_ - 2 * g]; rects[d.wins[1]] = [left + g + half, g, half, H_ - 2 * g];
+      }
     } else {
       const available = Math.max(0, W_ - 3 * g);
       const naturalMaster = Math.round(available * 0.56);
