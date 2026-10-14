@@ -111,6 +111,14 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  const fid=await p.evaluate(()=>{window.__frameRef=document.querySelector('.win.focus iframe');window.__docRef=__frameRef.contentDocument;return __wux.ws[__wux.cur].focus;});
  await shot(p,'desktop-real-shopping');await p.click('#logo');await p.click('#wsList [data-ws="0"]');
  check(await p.evaluate(()=>document.querySelector('.win.focus iframe')===__frameRef&&__frameRef.contentDocument===__docRef)&&await frame.locator('body').getAttribute('data-tab')==='browse','Home retains actual hosted iframe/document and local Browse state');
+ await home(p);await p.click('#desktopHome .app-chip[data-app="files"]');
+ const files=p.frameLocator('.win.focus iframe');await files.locator('#feed > *').first().waitFor({timeout:30000});
+ check((await files.locator('#result-count').innerText()).length>0,'Home Files chip loads real registered Files with actual indexed data');
+ await files.locator('#search-input').fill('wizard');await nap(600);
+ const filesId=await p.evaluate(()=>{window.__filesRef=document.querySelector('.win.focus iframe');return __wux.ws[__wux.cur].focus;});
+ await shot(p,'desktop-real-files');await home(p);await p.click('#desktopHome .app-chip[data-app="files"]');
+ check(await p.evaluate(()=>document.querySelector('.win.focus iframe')===__filesRef)&&await files.locator('#search-input').inputValue()==='wizard','hat retains real Files iframe and unsent search draft');
+ await home(p);await p.click('#desktopHome .app-chip[data-app="shopping"]');
  await p.click('#logo');await p.keyboard.press('Alt+2');
  check(await p.evaluate(()=>__wux.ws.length===2&&__wux.cur===1&&!__wux.homeOpen),'Home plus-slot creates real second desktop');
  await p.evaluate(()=>__wux.newChat());

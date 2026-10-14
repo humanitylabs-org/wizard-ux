@@ -8,7 +8,7 @@ const types={'.js':'application/javascript','.css':'text/css','.html':'text/html
 const blobs=new Map();let refused=0;
 const SHELL_READS=[/^\/wizard\/(?:v1\/(?:bootstrap|apps)|thread-seen|thread-dispositions|attention|ai-usage)$/, /^\/wizard\/hermes\/api\/(?:model\/options|sessions(?:\/[^/]+(?:\/messages)?)?)$/, /^\/wizard\/hermes\/v1\/runs\/[^/]+$/, /^\/wizard\/files\/[^/]+\/(?:download|content|thumbnail)$/];
 const HOST_ROOTS=['/cinequeue-next/','/meditate-next/','/messenger/','/wisdom-next/','/wizard-signal/','/wizard-search/','/wisdom/','/meditation/','/wizard-music/','/wizard-shopping/','/mizel-live/','/wizard-topics-preview/','/wizard-projects/','/wizard-calendar/','/trackhunt/','/cinequeue/','/wizard-social/','/files/','/iching/','/console/','/android-apps/'];
-const HOST_READS=[/^\/wizard-shopping\/api\/(?:feed|saved|catalog|categories|image|category\/[^/]+)$/, /^\/files\/api\/(?:status|roots|list|search|file|download|thumbnail)(?:\/[^/]+)?$/, /^\/wizard-os-home\/store-data\/(?:system\/v1\/overview|wizard\/v1\/index\/search|api\/apps\/installed|logo\/[^/]+)$/];
+const HOST_READS=[/^\/wizard-shopping\/api\/(?:feed|saved|catalog|categories|image|category\/[^/]+)$/, /^\/files\/api\/(?:index|apps|item\/[^/]+)$/, /^\/files\/(?:thumb|blob)\/[^/]+$/, /^\/wizard-os-home\/store-data\/(?:system\/v1\/overview|wizard\/v1\/index\/search|api\/apps\/installed|logo\/[^/]+)$/];
 // No broad /api or catch-all proxy: unknown API reads and all mutation paths fail closed.
 function hostedRead(p){return HOST_READS.some(re=>re.test(p))||HOST_ROOTS.some(root=>p===root||p===root.slice(0,-1)||p.startsWith(root)&&!p.slice(root.length).split('/').some(x=>x.startsWith('.'))&&!p.includes('/api/')&&/\.(?:html|css|js|json|webmanifest|png|svg|ico|jpe?g|webp|woff2?|ttf|map|mp3|ogg)$/i.test(p));}
 function deny(res,write=false){refused++;res.writeHead(403,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({error:write?'Home preview refuses all writes':'Home preview refuses unapproved read endpoint'}));}
@@ -39,7 +39,8 @@ http.createServer((req,res)=>{
    if(['data.js','summaries.js'].includes(rel))body=fs.readFileSync('/home/telos/apps/wizard-os-home/web/'+rel);
    else{if(!blobs.has(rel))blobs.set(rel,cp.execFileSync('git',['-C',ROOT,'cat-file','blob',revision+':web/'+rel],{maxBuffer:16*1024*1024,stdio:['ignore','pipe','ignore']}));body=blobs.get(rel);}
   }catch{res.writeHead(404);return res.end();}
-  const ext=path.extname(rel),h={'content-type':types[ext]||'application/octet-stream','cache-control':'no-store','permissions-policy':'microphone=(self)','content-security-policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"};
+  const ancestors=['index.html','desktop.html'].includes(rel)?"'none'":"'self'";
+  const ext=path.extname(rel),h={'content-type':types[ext]||'application/octet-stream','cache-control':'no-store','permissions-policy':'microphone=(self)','content-security-policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors "+ancestors};
   res.writeHead(200,h);if(req.method==='HEAD')return res.end();
   if(ext==='.html')return res.end(body.toString('utf8').replace(/<head([^>]*)>/i,'<head$1><script src="/__preview/version.js"></script>'));return res.end(body);
  }
