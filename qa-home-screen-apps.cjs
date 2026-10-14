@@ -23,9 +23,9 @@ async function chapter(f,target=3){
  // Use the real app router after following its real collection/list UI where possible.
  const link=f.locator(`[data-wisdom-route="/read/${entry.id}"]`).first();
  if(await link.count())await link.click();else{await f.evaluate(id=>Wisdom.navigate('/read/'+id),entry.id);}
- await f.locator('.wb-reader').waitFor();await f.waitForFunction(()=>/^\d+\s*\/\s*\d+$/.test(document.querySelector('.wb-count')?.textContent||''));
+ await f.locator('.wb-reader').waitFor();await f.evaluate(()=>document.fonts.ready);await f.page().waitForTimeout(500);await f.waitForFunction(()=>/^\d+\s*\/\s*\d+$/.test(document.querySelector('.wb-count')?.textContent||''));
  const start=await reader(f),total=Number(start.count.split('/')[1]);console.log('READER start',start);if(total<4)throw Error('Actual chapter too short for nonterminal position proof');
- await f.locator('body').click({position:{x:10,y:100}});const initial=Number(start.count.split('/')[0]);for(let n=initial;n<target;n++)await f.page().keyboard.press('ArrowRight');for(let n=initial;n>target;n--)await f.page().keyboard.press('ArrowLeft');await f.page().waitForTimeout(500);
+ await f.locator('.wb-top-title').click();const initial=Number(start.count.split('/')[0]);for(let n=initial;n<target;n++)await f.page().keyboard.press('ArrowRight');for(let n=initial;n>target;n--)await f.page().keyboard.press('ArrowLeft');await f.page().waitForTimeout(500);
  const saved=await reader(f);if(Number(saved.count.split('/')[0])!==target)throw Error('Actual reader did not advance to page '+target);return saved;
 }
 (async()=>{const browser=await chromium.launch({headless:true});const ctx=await browser.newContext({viewport:{width:412,height:892},hasTouch:true,isMobile:true,serviceWorkers:'block'});let failure=null;
@@ -38,7 +38,7 @@ try{
    if(fs.existsSync(p)&&fs.statSync(p).isFile()){const body=fs.readFileSync(p);assets.push({url:u.href,sha256:crypto.createHash('sha256').update(body).digest('hex'),source:'exact shell overlay'});return r.fulfill({body,contentType:rel.endsWith('.js')?'text/javascript':rel.endsWith('.css')?'text/css':rel.endsWith('.html')?'text/html':'application/octet-stream'});}
   }return r.continue();
  });
- ctx.on('page',p=>{p.on('pageerror',e=>errors.push(String(e)));p.on('response',r=>{if(new URL(r.url()).origin===origin&&!r.url().includes('/wizard-os-home/'))network.push({url:r.url(),status:r.status()});});});
+ ctx.on('page',p=>{p.on('pageerror',e=>errors.push({page:p.url(),message:String(e),stack:String(e.stack)}));p.on('response',r=>{if(new URL(r.url()).origin===origin&&!r.url().includes('/wizard-os-home/'))network.push({url:r.url(),status:r.status()});});});
  await ctx.addInitScript(()=>{if(window===top)localStorage.setItem('wos.coached','true');});
  if(process.env.QA_NATIVE_DOCUMENT_START==='1')await ctx.addInitScript(()=>{try{if(window!==top&&parent.WizHomeScreenPolicy?.mode)parent.WizHomeScreenPolicy.installPresentationStorage(window);}catch(_){} });
  const main=await ctx.newPage();await main.goto(origin+'/wizard-os-home/?shell=phone');await main.waitForFunction(()=>!!window.__wos);await main.evaluate(()=>WizCore.appsLoaded());
