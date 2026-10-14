@@ -12,16 +12,22 @@ lock = pathlib.Path('/Volumes/ThalesMedia/AndroidBuilds/worker.lock')
 receipt = {'host': socket.gethostname(), 'pid': os.getpid(), 'lock': str(lock), 'types': ['BSD flock', 'POSIX lockf'], 'queued_at': datetime.now(timezone.utc).isoformat()}
 print(json.dumps(receipt), flush=True)
 with lock.open('a') as f:
-    for fn in (fcntl.flock, fcntl.lockf):
-        until = time.monotonic() + 7200
-        while True:
-            try:
-                fn(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
-                if time.monotonic() >= until:
-                    raise SystemExit('shared worker lease wait expired')
-                time.sleep(1)
+    # Never retain one lock family while waiting for the other: older workers
+    # can nest them in the opposite order, which otherwise deadlocks the queue.
+    until = time.monotonic() + 7200
+    while True:
+        bsd = False
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            bsd = True
+            fcntl.lockf(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            if bsd:
+                fcntl.flock(f, fcntl.LOCK_UN)
+            if time.monotonic() >= until:
+                raise SystemExit('shared worker lease wait expired')
+            time.sleep(1)
     receipt['acquired_at'] = datetime.now(timezone.utc).isoformat()
     receipt['inode'] = os.fstat(f.fileno()).st_ino
     # A separate process must fail to acquire either family while this parent owns it.
