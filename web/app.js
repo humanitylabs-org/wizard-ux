@@ -2074,9 +2074,12 @@
   }
   async function uploadVoiceFile(file, files, f) {
     const abort = f.abort || (f.abort = new AbortController());
-    const deadline = setTimeout(() => abort.abort(new Error('Upload timed out · try attaching again')), 20000);
+    // An idle deadline, not a total one: a big file over the resumable route keeps it alive while bytes move.
+    let deadline = 0;
+    const arm = () => { clearTimeout(deadline); deadline = setTimeout(() => abort.abort(new Error('Upload timed out · try attaching again')), 60000); };
+    arm();
     try {
-      const result = await CHATS.uploadFile(file, { signal: abort.signal });
+      const result = await CHATS.uploadFile(file, { signal: abort.signal, onProgress: (sent, total, state) => { if (state !== 'reconnecting') arm(); } });
       if (!sameTake(files) || !files.includes(f)) return;
       Object.assign(f, result, { uploading: false });
     } catch (e) {
