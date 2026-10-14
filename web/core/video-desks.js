@@ -3,7 +3,7 @@
  * Opening a clip in the Video Editor opens that clip's Feedback view (the same app at ?pane=feedback)
  * right beside it. Phone: the order is Chats → Video → Feedback desks, swipe between them; Add note
  * brings Feedback forward. Desktop: Video and Feedback tile on one desktop with Feedback narrower
- * (W[id].share). Leaving the clip closes its Feedback view. Both views ask through postMessage; this
+ * (W[id].share; Chats | Video | Feedback columns). Leaving the clip closes its Feedback view. Both views ask through postMessage; this
  * module checks the sender by its real frame and only accepts the two Video Editor windows.
  *
  * Messages from the app:  {type:'video-editor:desk', action:'context'|'open-video'|'time', hash, …}
@@ -11,7 +11,7 @@
  */
 (() => {
   'use strict';
-  const APP = 'video-editor', PEER = 'video-editor-feedback', SHARE = 0.36;
+  const APP = 'video-editor', PEER = 'video-editor-feedback', SHARE = 0.26, VIDEO_SHARE = 0.46;
   let videoId = null, feedbackId = null, binding = null;
   const shell = () => window.__wos || window.__wux;
   const phone = () => !!window.__wos;
@@ -25,7 +25,7 @@
     send();
     if (!f.__videoBound) { f.__videoBound = true; f.addEventListener('load', () => { if (binding && id === feedbackId) deliver(id, binding); }); }
   }
-  function closePeer() { const s = shell(); if (feedbackId && s.wins[feedbackId]) s.closeWin(feedbackId, true); feedbackId = null; binding = null; }
+  function closePeer() { const s = shell(); if (videoId && s.wins[videoId]) delete s.wins[videoId].share; if (feedbackId && s.wins[feedbackId]) s.closeWin(feedbackId, true); feedbackId = null; binding = null; }
   function attach(b, source) {
     const s = shell(); if (!s) return;
     if (videoId && videoId !== source && feedbackId) closePeer();
@@ -45,7 +45,8 @@
         const back = s.desks.findIndex(d => d.id === here); if (back >= 0) s.goDesk(back, true);
       } else {
         const before = s.ws[s.cur]?.focus;
-        if (s.wins[videoId]) s.wins[videoId].share = 1 - SHARE;
+        // Chats | Video | Feedback as columns: video gets the most room, Feedback the narrowest column.
+        if (s.wins[videoId]) s.wins[videoId].share = VIDEO_SHARE;
         const peer = s.newWin({ app: 'frame', appId: PEER, url, title, videoOwner: videoId, share: SHARE }, { ws: deskOf(videoId) });
         if (!peer) return; feedbackId = peer.id;
         if (before && s.wins[before]) s.focusWin(before);
