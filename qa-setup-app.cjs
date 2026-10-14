@@ -147,6 +147,17 @@ const setupWin = p => p.evaluate(() => { const w = Object.values(__wos.wins).fin
     await ctx.close();
   }
 
+  /* ================= phone: the tour is unchanged when Setup has nothing to say ================= */
+  for (const [label, body] of [['first_run false', { firstRun: false }], ['old box without the Setup API (404)', { fail: { '/wizard/v1/setup': 404 } }]]) {
+    await fakeReset(); await fake(body);
+    const { ctx, p, T } = await context(b, 'phone', { coached: false });
+    await p.goto(BASE + '?shell=phone', { waitUntil: 'load' });
+    await p.waitForFunction(() => WosTour.active, null, { timeout: 6000 }).catch(() => {});
+    ok(await p.evaluate(() => WosTour.active && WosTour.step === 1 && __wos.idx === 0) && !setupFrame(p) && count(await fakeLog(), 'POST', '/wizard/v1/setup/seen') === 0, `${label}: fresh phone gets the first-run tour on Home as before; Setup stays closed`);
+    ok(!T.errors.length, `${label}: no page errors`, T.errors);
+    await ctx.close();
+  }
+
   /* ================= phone: every state ================= */
   await fakeReset(); await fake({ firstRun: false, startDelayMs: 2500 });
   {
