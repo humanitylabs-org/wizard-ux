@@ -93,6 +93,8 @@ const MAIN_AGENT = { id: 'hermes', label: 'Atlas', harness: 'hermes', privacy: '
   permissions: { preset: 'standard', outside_tools: OPTIONS.presets[1].permissions.outside_tools, files: 'shared-write', wizard_apps: ['meeting-recorder', 'wisdom', 'calendar', 'files'], agent_apps: ['transcriber'], other_agents: 'read' },
   runtime: { kind: 'external', api: 'http://127.0.0.1:8642' }, status: 'running', status_detail: '', is_default: true, created_at: 1790000000 };
 AGENTS.set('hermes', MAIN_AGENT);
+// Proxy mode: the main agent keeps the box's own name (settings.agent.name from the real bootstrap).
+if (MAIN === 'proxy') fetch(new URL('/wizard/v1/bootstrap', MAIN_UP)).then(r => r.json()).then(j => { const n = j?.settings?.agent?.name; if (typeof n === 'string' && n.trim()) MAIN_AGENT.label = n.trim().slice(0, 40); }).catch(() => {});
 const IDEMP = new Map();
 const pub = a => { const { runtime, created_at, ...rest } = a; return { ...rest, bound_apps: appsFor(a.id) }; };
 
