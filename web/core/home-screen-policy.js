@@ -19,7 +19,7 @@
   const id = validId(requested) ? requested : '';
   if (mode) document.documentElement.setAttribute('data-app-session', id || 'unavailable');
   function installPresentationStorage(frame) {
-    if (!mode || !id || frame === window || frame.location.origin !== location.origin || frame.__wosPresentationStorage) return;
+    if (!mode || !id || frame === window || frame.location.origin !== location.origin || (frame.__wosPresentationStorageDocument && frame.__wosPresentationStorageDocument === frame.document)) return;
     const storage = frame.localStorage, prefix = key(location.origin,id) + ':presentation:';
     // Wisdom's paginated reader stores screen position, not content/preferences, under these keys.
     // Keep size/theme, highlights, read/saved state and every other backend/content key shared.
@@ -35,6 +35,7 @@
     });
     Object.defineProperty(frame,'localStorage',{ configurable:true, value:facade });
     frame.__wosPresentationStorage = true;
+    frame.__wosPresentationStorageDocument = frame.document;
   }
   window.WizHomeScreenPolicy = Object.freeze({ validId, isShell, within, key, displayName, mode, id, installPresentationStorage });
 })();

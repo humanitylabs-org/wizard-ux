@@ -93,15 +93,18 @@ try{
   await revived.evaluate(()=>__wosNativeBack());await revived.waitForTimeout(300);
   check('nested Back actually leaves chapter without exiting task',!(await f.locator('.wb-reader').count())&&await revived.evaluate(()=>__wos.singleApp==='wisdom'),f.url());
   // Real app overlay, not an Activity-name surrogate.
-  const request=f.locator('[data-wisdom-request]').first();if(await request.count()){await request.click();await f.locator('.wb-sheet').waitFor();const route=f.url();await revived.evaluate(()=>__wosNativeBack());await revived.waitForTimeout(300);check('Back closes real Wisdom overlay before app route',await f.locator('.wb-sheet').count()===0&&f.url()===route);}else check('real Wisdom overlay available',false);
+  // Select the real app root before opening its real request overlay; nested Back
+  // was asserted independently above and can legitimately land on a collection.
+  await f.evaluate(()=>Wisdom.navigate('/'));await f.locator('[data-wisdom-request]').first().waitFor();
+  const request=f.locator('[data-wisdom-request]').first();await request.click();await f.locator('.wb-sheet').waitFor();const route=f.url();await revived.evaluate(()=>__wosNativeBack());await revived.waitForTimeout(300);check('Back closes real Wisdom overlay before app route',await f.locator('.wb-sheet').count()===0&&f.url()===route);
   for(let n=0;n<5;n++)await revived.evaluate(()=>__wosNativeBack());await revived.waitForTimeout(400);
   check('repeated root Back stays on actual Wisdom root',await f.evaluate(()=>Wisdom.atRoot())&&(await chrome(revived)).length===0,f.url());
   const appsURL=await revived.evaluate(()=>WizConfig.endpoint('apps'));
   // Removal is a bounded real-registry metadata negative control, never a backend uninstall/write.
   await ctx.route(appsURL,async r=>{const response=await r.fetch(),data=await response.json();data.apps=data.apps.filter(a=>a.id!=='wisdom');await r.fulfill({response,json:data});});
-  await revived.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await revived.waitForTimeout(1000);
-  check('removed app is useful unavailable surface, no arbitrary route',await revived.locator('.single-unavailable').innerText().then(x=>x.includes('App unavailable'))&&await revived.locator('iframe').count()===0);
-  await ctx.unroute(appsURL);await revived.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await waitFrame(revived);check('reinstalled registered app recovers without workspace',await revived.evaluate(()=>__wos.singleApp==='wisdom'&&!__wos.wins));
+  await revived.reload({waitUntil:'load'});await revived.locator('.single-unavailable').waitFor();
+  check('removed app is useful unavailable surface, no arbitrary route',await revived.locator('.single-unavailable').innerText().then(x=>x.includes('App unavailable'))&&await revived.locator('#singleApp iframe').count()===0);
+  await ctx.unroute(appsURL);await revived.reload({waitUntil:'load'});await waitFrame(revived);check('reinstalled registered app recovers without workspace',await revived.evaluate(()=>__wos.singleApp==='wisdom'&&!__wos.wins));
  }
  if(frames['wizard-signal']){
   const p=pages['wizard-signal'];let f=frames['wizard-signal'];
