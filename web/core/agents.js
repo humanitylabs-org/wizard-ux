@@ -84,6 +84,7 @@
     },
     providerLabel(id) {
       const p = (A.options?.providers || []).find(x => x.id === id);
+      if (id === 'host') return 'Your Wizard’s setup'; // the main agent runs the host Hermes configuration
       return p?.label || (id === 'tinfoil' ? 'Tinfoil' : String(id || ''));
     },
     modelName(a, model) {

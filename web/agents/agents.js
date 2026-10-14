@@ -23,6 +23,8 @@
   const CHEV = '<svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>';
   const BACK = '<button type="button" class="ag-back" data-back aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>';
   const PLUS = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
+  // Other agents: how much of the OTHER agents' chats this agent may see (Agent Service OTHER_AGENTS_LEVELS).
+  const OTHERS = { none: 'None', titles: 'Titles', search: 'Search', read: 'Read' };
   const FILES = [['none', 'None', 'No files at all'], ['own', 'Own folder', 'Only its own folder'], ['shared-read', 'Read shared', 'Can read your shared files'], ['shared-write', 'Read & write', 'Can read and change your shared files']];
 
   /* ---------------- data ---------------- */
@@ -33,11 +35,12 @@
     return {
       harnesses: list(o.harnesses, h => h && h.id ? { id: String(h.id), label: String(h.label || h.id), description: String(h.description || '') } : null),
       providers: list(o.providers, p => p && p.id ? { id: String(p.id), label: String(p.label || p.id), confidential: p.confidential === true, description: String(p.description || ''), models: list(p.models, model) } : null),
-      presets: list(o.presets, p => typeof p === 'string' ? { id: p, label: p[0].toUpperCase() + p.slice(1), description: '', permissions: null } : p && p.id ? { id: String(p.id), label: String(p.label || p.id), description: String(p.description || ''), permissions: p.permissions && typeof p.permissions === 'object' ? p.permissions : null, requires_confidential: p.requires_confidential === true || p.id === 'private' } : null),
-      wizard_apps: list(o.wizard_apps, a => a && a.id ? { id: String(a.id), label: String(a.label || a.name || a.id), description: String(a.description || a.desc || ''), icon: a.icon || '', colors: a.colors || [] } : null),
+      presets: list(o.presets, p => typeof p === 'string' ? { id: p, label: p[0].toUpperCase() + p.slice(1), description: '', permissions: null } : p && p.id ? { id: String(p.id), label: String(p.label || p.id), description: String(p.description || p.summary || ''), permissions: p.permissions && typeof p.permissions === 'object' ? p.permissions : null, requires_confidential: p.requires_confidential === true || p.privacy === 'private' || p.id === 'private' } : null),
+      wizard_apps: list(o.wizard_apps, a => a && a.id ? { id: String(a.id), label: String(a.label || a.name || a.id), description: String(a.description || a.summary || a.desc || ''), icon: a.icon || '', colors: a.colors || [] } : null),
+      // kind: 'tool' | 'connector' when the server says so; otherwise every agent app is just an agent app.
       agent_apps: list(o.agent_apps, a => a && a.id ? { id: String(a.id), label: String(a.label || a.name || a.id), description: String(a.description || a.summary || ''), kind: ['tool', 'connector'].includes(a.kind) ? a.kind : 'app' } : null),
       outside_tools: list(o.outside_tools, t => typeof t === 'string' ? { id: t, label: AG.friendly(t), description: '' } : t && t.id ? { id: String(t.id), label: String(t.label || t.id), description: String(t.description || '') } : null),
-      other_agents: Array.isArray(o.other_agents) && o.other_agents.length ? list(o.other_agents, x => typeof x === 'string' ? { id: x, label: x === 'none' ? 'None' : AG.friendly(x) } : x && x.id ? { id: String(x.id), label: String(x.label || x.id) } : null) : [{ id: 'none', label: 'None' }, { id: 'ask', label: 'Can ask them' }],
+      other_agents: Array.isArray(o.other_agents) && o.other_agents.length ? list(o.other_agents, x => typeof x === 'string' ? { id: x, label: OTHERS[x] || AG.friendly(x) } : x && x.id ? { id: String(x.id), label: String(x.label || OTHERS[x.id] || x.id) } : null) : [{ id: 'none', label: 'None' }],
     };
   }
   const provider = id => options().providers.find(p => p.id === id) || null;
@@ -48,7 +51,9 @@
     let j = null; try { j = await r.json(); } catch (_) {}
     if (!r.ok) {
       const e = j && (j.error || j.message || j.detail);
-      const msg = typeof e === 'string' ? e : e && (e.message || e.check) ? [e.message, e.check && `(${e.check})`].filter(Boolean).join(' ') : `Request failed (${r.status})`;
+      const human = v => /^[a-z0-9_]+$/.test(v) ? (v[0].toUpperCase() + v.slice(1)).replace(/_/g, ' ') : v;
+      const check = j && typeof j.check === 'string' ? j.check : '';
+      const msg = typeof e === 'string' ? human(e) + (check ? ` (${check})` : '') : e && (e.message || e.check) ? [e.message, e.check && `(${e.check})`].filter(Boolean).join(' ') : `Request failed (${r.status})`;
       throw Object.assign(new Error(msg), { status: r.status, body: j });
     }
     return j || {};
@@ -260,7 +265,8 @@
     const cur = S.view.name === 'new' ? S.draft.perms : AG.get(S.view.id)?.permissions || {};
     if (sh.type === 'add') {
       const have = new Set(sh.kind === 'wizard' ? cur.wizard_apps || [] : cur.agent_apps || []);
-      const pool = sh.kind === 'wizard' ? o.wizard_apps : o.agent_apps.filter(x => sh.kind === 'tool' ? x.kind !== 'app' : x.kind === 'app');
+      const typed = o.agent_apps.some(x => x.kind !== 'app'); // the server names tools/connectors; else one pool
+      const pool = sh.kind === 'wizard' ? o.wizard_apps : typed ? o.agent_apps.filter(x => sh.kind === 'tool' ? x.kind !== 'app' : x.kind === 'app') : o.agent_apps;
       const left = pool.filter(x => !have.has(x.id));
       const title = sh.kind === 'wizard' ? 'Add Wizard app' : sh.kind === 'tool' ? 'Add tool or connector' : 'Add agent app';
       const note = sh.kind === 'wizard' ? 'Wizard apps have their own screen. The agent can use them for you.' : sh.kind === 'tool' ? 'Tools and connectors give the agent one capability or one account.' : 'Agent apps run on your Wizard with no screen of their own.';

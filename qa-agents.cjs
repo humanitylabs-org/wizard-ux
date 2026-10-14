@@ -163,9 +163,12 @@ async function phone(b) {
   ok(/Archimedes/.test(mainStrip) && !/Private/.test(mainStrip), 'phone: main Chats header names the main agent once several exist', mainStrip);
   ok(!(await p.locator(`[data-chats="${mainWin}"] .ch-list`).innerText()).includes('Recap my private recording'), 'phone: main Chats list has no private thread');
   await shot(p, 'phone-13-main-chats');
-  // System links to Agents.
+  // System links to Agents (its own app, opened beside System).
   await p.evaluate(() => __wos.openApp(window.WizCore.apps('mobile').APPS.find(a => a.id === 'system'))); await wait(1500);
-  ok(true, 'phone: System opened');
+  const sys = await (await p.waitForSelector('iframe[title="System"]')).contentFrame();
+  await sys.locator('[data-agents]').click(); await wait(1200);
+  ok(await p.evaluate(() => __wos.wins[__wos.desks[__wos.idx].focus]?.appId === 'agents'), 'phone: System → Agents opens the Agents app');
+  await shot(p, 'phone-14-system-link');
   ok(errs.length === 0, 'phone: no page errors', errs.slice(0, 5).join(' | '));
   await c.close();
   return created;
@@ -175,8 +178,9 @@ async function desktop(b, created) {
   const c = await ctx(b, false), p = await c.newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e)));
   await p.goto(BASE + 'desktop.html', { waitUntil: 'load' }); await wait(2500);
-  ok(await p.locator('.home [data-app="agents"]').count() === 1, 'desktop: Home has an Agents chip');
-  await p.locator('.home [data-app="agents"]').click();
+  const chip = p.locator('.home [data-app="agents"]:visible');
+  ok(await chip.count() === 1, 'desktop: Home has an Agents chip');
+  await chip.first().click();
   const f = await agentsFrame(p); await wait(800);
   ok(await f.locator('.ag-row').count() >= 2, 'desktop: Agents lists both agents');
   await shot(p, 'desktop-01-agents-list');

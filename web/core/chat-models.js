@@ -240,7 +240,8 @@
         const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(sid)}/model${ag ? `?agent=${encodeURIComponent(ag.id)}` : ''}`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (!r.ok) throw Object.assign(new Error(`Model not changed (${r.status})`), { status: r.status });
         const ack = await r.json();
-        if (ack.runtime?.model_lock !== 'accepted' || ack.runtime?.model !== route.model || ack.runtime?.provider !== route.provider)
+        // An agent's own Hermes names its provider its own way (e.g. custom); the model is what must match.
+        if (ack.runtime?.model_lock !== 'accepted' || ack.runtime?.model !== route.model || (!ag && ack.runtime?.provider !== route.provider))
           throw new Error('Wizard did not confirm the selected model');
         M.selections.set(sid, { model: route.model, provider: route.provider, version: Number(ack.runtime.selection_version) || 0 });
         return { model: route.model, provider: route.provider };

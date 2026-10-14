@@ -44,9 +44,9 @@ const OPTIONS = {
     { id: 'openai-codex', label: 'ChatGPT', confidential: false, description: 'Your ChatGPT account (AI Accounts).', models: [{ id: 'gpt-5.5', label: 'GPT-5.5' }] },
   ],
   presets: [
-    { id: 'private', label: 'Private', description: 'Nothing leaves your Wizard: no outside tools, its own folder only, no apps, no fallback. Needs a confidential provider.', requires_confidential: true,
+    { id: 'private', label: 'Private', privacy: 'private', summary: 'Nothing leaves your Wizard: no outside tools, its own folder only, no apps, no fallback. Needs a confidential provider.', requires_confidential: true,
       permissions: { outside_tools: [], files: 'own', wizard_apps: [], agent_apps: [], other_agents: 'none' } },
-    { id: 'standard', label: 'Standard', description: 'Hermes defaults: outside tools on, reads your shared files. Add the apps you want.',
+    { id: 'standard', label: 'Standard', privacy: 'standard', summary: 'Hermes defaults: outside tools on, reads your shared files. Add the apps you want.',
       permissions: { outside_tools: ['web', 'browser', 'image_gen', 'tts', 'vision', 'delegation', 'x_search'], files: 'shared-read', wizard_apps: [], agent_apps: [], other_agents: 'none' } },
   ],
   wizard_apps: [
@@ -70,7 +70,8 @@ const OPTIONS = {
     { id: 'delegation', label: 'Delegation', description: 'Hands work to public models' },
     { id: 'x_search', label: 'X search', description: 'Searches X' },
   ],
-  other_agents: [{ id: 'none', label: 'None' }, { id: 'ask', label: 'Can ask them' }],
+  files: ['none', 'own', 'shared-read', 'shared-write'],
+  other_agents: ['none', 'titles', 'search', 'read'],
 };
 const provider = id => OPTIONS.providers.find(p => p.id === id);
 
@@ -78,7 +79,7 @@ const provider = id => OPTIONS.providers.find(p => p.id === id);
 const AGENTS = new Map();
 const MAIN_AGENT = { id: 'hermes', label: 'Archimedes', harness: 'hermes', privacy: 'standard', appearance: { glyph: 'wizard', hue: 270 },
   model: { provider: 'anthropic', model: 'claude-opus-5-5', allowed_models: [], fallback: true },
-  permissions: { preset: 'standard', outside_tools: OPTIONS.presets[1].permissions.outside_tools, files: 'shared-write', wizard_apps: ['mizel', 'wisdom', 'calendar', 'files'], agent_apps: ['transcriber'], other_agents: 'ask' },
+  permissions: { preset: 'standard', outside_tools: OPTIONS.presets[1].permissions.outside_tools, files: 'shared-write', wizard_apps: ['mizel', 'wisdom', 'calendar', 'files'], agent_apps: ['transcriber'], other_agents: 'read' },
   runtime: { kind: 'external', api: 'http://127.0.0.1:8642' }, status: 'running', status_detail: '', is_default: true, created_at: 1790000000 };
 AGENTS.set('hermes', MAIN_AGENT);
 const IDEMP = new Map();
