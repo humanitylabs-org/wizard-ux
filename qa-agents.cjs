@@ -196,7 +196,7 @@ async function bindingPhone(p, created) {
   ok(await sheet.count() === 1 && /Sends its work to/i.test(await sheet.innerText()) && !/Routes through/i.test(await sheet.innerText()) && await sheet.locator('[data-route-pick="hermes"][aria-checked="true"]').count() === 1, 'phone: app settings sheet: Sends its work to, main agent checked');
   // #58: Which agents can use <App>? Standard ticked, private unticked by default.
   await sheet.locator('[data-access]').waitFor({ timeout: 5000 }).catch(() => {});
-  ok(/Which agents can use Meeting Recorder\?/.test(await sheet.innerText()) && await sheet.locator('[data-access-pick="hermes"][aria-checked="true"]').count() === 1 && await sheet.locator(`[data-access-pick="${created.id}"][aria-checked="false"]`).count() === 1, 'phone: app settings sheet: Which agents can use it? main ticked, Private unticked', await sheet.innerText().catch(() => ''));
+  ok(/Which agents can use Meeting Recorder\?/i.test(await sheet.innerText()) && await sheet.locator('[data-access-pick="hermes"][aria-checked="true"]').count() === 1 && await sheet.locator(`[data-access-pick="${created.id}"][aria-checked="false"]`).count() === 1, 'phone: app settings sheet: Which agents can use it? main ticked, Private unticked', await sheet.innerText().catch(() => ''));
   await sheet.locator(`[data-access-pick="${created.id}"]`).click(); await wait(1000);
   const acc = (await api(p, `/wizard/v1/apps/${BIND}/agents`)).body;
   const privAfter = (await api(p, '/wizard/v1/agents/' + created.id)).body.agent;
@@ -300,7 +300,7 @@ async function desktop(b, created) {
   await dBtn.click(); await wait(500);
   ok(await p.locator('.aroute [data-route-pick]').count() >= 2, 'desktop: Sends its work to lists the agents');
   await p.locator('.aroute [data-access]').waitFor({ timeout: 5000 }).catch(() => {});
-  ok(await p.locator('.aroute [data-access-pick]').count() >= 2 && /Which agents can use/.test(await p.locator('.aroute').innerText()), 'desktop: the sheet has Which agents can use it?');
+  ok(await p.locator('.aroute [data-access-pick]').count() >= 2 && /Which agents can use/i.test(await p.locator('.aroute').innerText()), 'desktop: the sheet has Which agents can use it?');
   await shot(p, 'desktop-04-route-sheet');
   await p.keyboard.press('Escape'); await wait(300);
   ok(await p.locator('.aroute').count() === 0 && await p.evaluate(w => !!__wux.wins[w], dWin), 'desktop: Esc closes the sheet; the app stays open');
