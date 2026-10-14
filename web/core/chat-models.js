@@ -59,7 +59,13 @@
     const root = obj(payload);
     // A catalogue entry (or is_current) is not proof of a configured account.
     // Include every authenticated provider, not a hard-coded subscription wishlist.
-    const providers = arr(root.providers).map(obj).filter(p => p.authenticated === true);
+    // Stock picker hints also mark virtual MoA and the installed experimental
+    // Claude SDK catalogue authenticated, without a configured account. They are
+    // opt-in modes, not additional connected accounts: offer only when explicitly
+    // selected as the saved global route. Do not mutate engine/provider auth.
+    const catalogueOnly = new Set(['moa', 'claude-subscription-directsdk-experimental']);
+    const providers = arr(root.providers).map(obj).filter(p => p.authenticated === true &&
+      (!catalogueOnly.has(str(p.slug)) || str(p.slug) === str(root.provider)));
     const curProvider = str(root.provider), curModel = str(root.model);
     const provider = providers.find(p => str(p.slug) === curProvider) || providers.find(p => p.is_current === true) || providers.find(p => arr(p.models).length > 0);
     if (provider) {

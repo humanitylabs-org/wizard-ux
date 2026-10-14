@@ -6,6 +6,16 @@ const context = vm.createContext({window:{}})
 vm.runInContext(readFileSync(new URL('../web/core/chat-models.js', import.meta.url),'utf8'),context)
 const models = context.window.WosModels
 const norm = v => JSON.parse(JSON.stringify(models.normalize(v)))
+test('stock ambient MoA and experimental SDK hints are not configured accounts',()=>{
+ const opts=norm({provider:'nous',model:'nous/welcome',providers:[{slug:'nous',authenticated:true,is_current:true,models:['nous/welcome']},{slug:'moa',authenticated:true,models:['default']},{slug:'claude-subscription-directsdk-experimental',authenticated:true,models:['claude-sonnet']}]})
+ assert.deepEqual(opts.map(o=>o.provider),['nous'])
+})
+test('saved opt-in mode remains available without rewriting the owner route',()=>{
+ for(const slug of ['moa','claude-subscription-directsdk-experimental']){
+  const opts=norm({provider:slug,model:'selected',providers:[{slug,authenticated:true,is_current:true,models:['selected']}]})
+  assert.equal(opts[0].provider,slug);assert.equal(opts[0].isGlobalDefault,true)
+ }
+})
 test('unconfigured current/catalogue providers never become choices',()=>{
  assert.deepEqual(norm({provider:'anthropic',model:'claude-opus',providers:[{slug:'anthropic',is_current:true,authenticated:false,models:['claude-opus']},{slug:'claude-subscription-directsdk-experimental',authenticated:false,models:['claude-sonnet']}],options:['claude-opus']}),[])
 })
