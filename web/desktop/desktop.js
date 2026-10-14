@@ -147,8 +147,10 @@
     const fromHome = homeOpen;
     leaveHome();
     if (t !== cur) goWs(t);
-    if (!fromHome && ws[t].focus === id && document.querySelector(`.win[data-win="${id}"].focus`)) return;
-    ws[t].focus = id; save(); paintFocus();
+    // goWs may prune an empty desktop and reindex the destination; use its new
+    // current index, not the pre-navigation index of this stable window ID.
+    if (!fromHome && ws[cur].focus === id && document.querySelector(`.win[data-win="${id}"].focus`)) return;
+    ws[cur].focus = id; save(); paintFocus();
     if (scroll) focusInside(id);
     CHATS.markVisibleThreadsSeen();
   }

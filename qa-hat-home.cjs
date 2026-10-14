@@ -76,6 +76,9 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  await p.waitForFunction(()=>!document.querySelector('#palette').hidden);
  check(await p.locator('#palette').isVisible(),'Command-K still opens search');
  await p.keyboard.press('Escape');
+ await p.evaluate(()=>{__wux.openSettings();__wux.openPalette();});await back(p);
+ check(await p.evaluate(()=>document.querySelector('#palette').hidden&&!document.querySelector('#dsettings').hidden),'one browser Back peels one overlay, not two');
+ await p.keyboard.press('Escape');
  for(const route of ['/apps','/search']){await p.evaluate(path=>dispatchEvent(new CustomEvent('wizard:open',{detail:{path}})),route);check(await p.locator('#palette').isVisible(),'native wizard:open '+route+' retains launch semantics');await p.keyboard.press('Escape');}
  await p.evaluate(()=>{__wux.openInbox();__wux.openSettings();__wux.openUsage();__wux.openPalette();__wux.goHome();});
  check(await p.evaluate(()=>['#inbox','#dsettings','.usage-ov','#palette'].every(s=>document.querySelector(s).hidden)),'hat closes navigation sheets');
@@ -117,6 +120,9 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  const drafted=await p.evaluate(()=>__wux.chats.newDrafts().find(d=>d.text==='QA retained Home draft — never send')?.key);
  if(drafted) await p.evaluate(key=>__wux.chats.openNewDraft(__wux.ws[__wux.cur].focus,key),drafted);
  check(!!drafted&&(await p.locator('.win.focus textarea').inputValue())==='QA retained Home draft — never send','reload restores unsent chat draft after Home');
+ await p.evaluate(()=>{__wux.goWs(1);__wux.openApp(WizCore.apps('desktop').APP.shopping,{fresh:true});__wux.goWs(0);for(const id of [...__wux.ws[0].wins])__wux.closeWin(id);__wux.goHome();});
+ await p.click('#desktopHome .app-chip[data-app="shopping"]');await nap(300);
+ check(await p.evaluate(()=>__wux.ws.length===1&&__wux.cur===0&&!__wux.homeOpen&&__wux.wins[__wux.ws[0].focus].appId==='shopping'),'Home restores later app across approved empty-desktop pruning');
  await c.close();
  const m=await context('phone');await m.p.goto(entry('phone'));await wait(m.p,'phone');
  check(await m.p.evaluate(()=>__wos.idx===0),'exact phone deep link opens Home');
