@@ -371,21 +371,22 @@
     if (!n || homeOpen) return;
     const configuredMax = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--desktop-window-max-width'));
     const maxWidth = configuredMax > 0 ? configuredMax : 1200;
+    // Columns on request: a window that sets `share` (Video Editor's video + Feedback pair) lays the desktop out as
+    // side-by-side columns in window order; windows without a share split what is left equally.
+    const shared = !d.mono && n >= 2 && n <= 4 && d.wins.some(id => W[id]?.share > 0);
     if (d.mono) d.wins.forEach(id => { rects[id] = id === d.focus || n === 1 ? [g, g, W_ - 2 * g, H_ - 2 * g] : null; });
-    else if (n === 1) {
+    else if (shared) {
+      const avail = Math.max(0, W_ - (n + 1) * g), asked = d.wins.reduce((t, id) => t + (W[id]?.share > 0 ? W[id].share : 0), 0);
+      const rest = d.wins.filter(id => !(W[id]?.share > 0)).length, scale = rest ? Math.min(1, 0.8 / asked) : 1 / asked;
+      const free = rest ? (1 - asked * scale) / rest : 0;
+      let x = g; for (const id of d.wins) { const w = Math.round(avail * (W[id]?.share > 0 ? W[id].share * scale : free)); rects[id] = [x, g, w, H_ - 2 * g]; x += w + g; }
+    } else if (n === 1) {
       const width = Math.min(maxWidth, Math.max(0, W_ - 2 * g));
       rects[d.wins[0]] = [(W_ - width) / 2, g, width, H_ - 2 * g];
     } else if (n === 2) {
-      // A window may ask for its share of a pair (Video Editor: Feedback narrower than the video).
-      const sh = W[d.wins[1]]?.share || (W[d.wins[0]]?.share ? 1 - W[d.wins[0]].share : 0);
-      if (sh > 0.15 && sh < 0.85) {
-        const avail = Math.max(0, W_ - 3 * g), w1 = Math.round(avail * sh), w0 = avail - w1;
-        rects[d.wins[0]] = [g, g, w0, H_ - 2 * g]; rects[d.wins[1]] = [2 * g + w0, g, w1, H_ - 2 * g];
-      } else {
-        const half = Math.min(maxWidth, Math.max(0, (W_ - 3 * g) / 2));
-        const left = (W_ - 2 * half - g) / 2;
-        rects[d.wins[0]] = [left, g, half, H_ - 2 * g]; rects[d.wins[1]] = [left + g + half, g, half, H_ - 2 * g];
-      }
+      const half = Math.min(maxWidth, Math.max(0, (W_ - 3 * g) / 2));
+      const left = (W_ - 2 * half - g) / 2;
+      rects[d.wins[0]] = [left, g, half, H_ - 2 * g]; rects[d.wins[1]] = [left + g + half, g, half, H_ - 2 * g];
     } else {
       const available = Math.max(0, W_ - 3 * g);
       const naturalMaster = Math.round(available * 0.56);
