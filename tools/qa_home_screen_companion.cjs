@@ -40,7 +40,7 @@ const places=p=>p.evaluate(()=>Object.fromEntries(Object.keys(localStorage).filt
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 (async()=>{try{
  check('companion exact signed bytes',sha===artifact.sha256,{source:build.source_revision,sha,package:pkg},'identity');
- check('companion installation',/Success/.test(adb('install','-r',apk)),null,'identity');mainLaunch();await connect();let main=await page();await main.waitForFunction(()=>!!window.__wos?.openSheet,{},{timeout:45000});
+ check('companion installation',/Success/.test(adb('install','-r',apk)),null,'identity');shell('am force-stop '+pkg);mainLaunch();await connect();let main=await page();await main.waitForFunction(()=>!!window.__wos?.openSheet,{},{timeout:45000});
  await main.evaluate(()=>__wos.openSheet('launcher'));await nativeTap(main,main.locator('#launcherBody [data-app="wisdom"]').first());
  let normal=main.frames().find(f=>f.url().includes('/wisdom/'));if(!normal){await pause(5000);normal=main.frames().find(f=>f.url().includes('/wisdom/'));}if(!normal)throw Error('Normal Wisdom missing');await normal.waitForFunction(()=>typeof Wisdom!=='undefined');const normalRead=await chapter(normal,2),workspace=await protectedState(main),unscoped=await places(main);
  await shot('ordinary-reading-page2',main);launch('wisdom');let wisdom=await page('wisdom'),wf=await frame(wisdom);const pinnedRead=await chapter(wf,3);await shot('pinned-reading-page3',wisdom);
