@@ -1324,7 +1324,8 @@
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
-      const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.appId];
+      // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
+      const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
       if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');

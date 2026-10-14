@@ -323,7 +323,8 @@
   }
   function watchFrame(f, el) {
     if (!f) return;
-    const w = W[el.dataset.win], a = w && APP[w.appId];
+    // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
+    const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
     if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
