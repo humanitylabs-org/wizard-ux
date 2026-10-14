@@ -786,6 +786,10 @@ window.WizCore.chats = function createChats(H) {
     if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
     growTa(el.querySelector('textarea'));
+    // Desktop renders the thread before revealing its pane. Measure again when it is visible;
+    // never leave the first blank field at the zero-height measurement of a hidden ancestor.
+    const field = el.querySelector('textarea');
+    requestAnimationFrame(() => { if (field?.isConnected && field === el.querySelector('textarea')) growTa(field); });
     PW?.paint(w.id, el);
     // The shell may bind the view this thread's latest reply links (phone: bound views beside the thread).
     if (!isNew && turns) H.threadShown?.(w.id, el);
@@ -1110,7 +1114,11 @@ window.WizCore.chats = function createChats(H) {
   document.body.appendChild(picker);
   let pickFor = '';
   picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
-  function growTa(ta) { if (!ta) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; }
+  function growTa(ta) {
+    if (!ta) return;
+    ta.style.height = 'auto';
+    if (ta.getClientRects().length && ta.clientWidth) ta.style.height = Math.min(Math.max(42, ta.scrollHeight + 2), 140) + 'px';
+  }
   // While a thread is on screen, new replies count as read (same rule as Wizard).
   function markVisibleThreadsSeen() {
     if (!LIVE?.ok || document.hidden) return;
