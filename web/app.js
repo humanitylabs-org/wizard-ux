@@ -2201,6 +2201,7 @@
     return 'recording';
   }
   async function startVoice(kind) {
+    if (window.__wizardUpdateFrozen) { toast('…', 'Wizard is preparing an update; recording is paused', 2200); return 'busy'; }
     V.onAt = performance.now();
     if (V.state !== 'idle') return;
     const shared = window.WizAppCapture?.getState?.();

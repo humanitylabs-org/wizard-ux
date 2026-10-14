@@ -29,6 +29,7 @@
       if (V.state === 'listen') V.raf = requestAnimationFrame(tick);
     };
     async function start() {
+      if (window.__wizardUpdateFrozen) throw Object.assign(new Error('Wizard is preparing an update; recording is paused'), { code: 'update_busy' });
       if (V.state !== 'idle') return false;
       const shared = window.WizAppCapture?.getState?.();
       if (shared?.active || shared?.recording || shared?.hold) throw Object.assign(new Error('Microphone held by ' + (shared.appId || 'another app')), { code: 'busy', appId: shared.appId });
