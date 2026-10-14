@@ -182,6 +182,15 @@
     const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents'].includes(w.appId)) return;
     const a = hostedOpenable(d.id); if (a) openApp(a);
   });
+  /* App → agent binding: an app's "Routes through" sheet (core/app-route.js). Its Agents button opens the Agents app
+   * at that agent; System and Agents frames may ask for an app's sheet. */
+  window.WosAppRoute?.init({ openAgents: id => { openApp(APP.agents); if (id) [400, 1100, 2200].forEach(t => setTimeout(() => { for (const f of document.querySelectorAll('iframe[title="Agents"]')) f.contentWindow?.postMessage({ type: 'wizard:agents-show', id }, location.origin); }, t)); } });
+  addEventListener('message', e => {
+    const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:app-route' || typeof d.id !== 'string') return;
+    const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
+    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents'].includes(w.appId)) return;
+    window.WosAppRoute?.open(d.id);
+  });
   // The Agents app (and System) open an agent's own Chats. Only those frames may ask; the agent must exist.
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-agent-chats' || typeof d.id !== 'string') return;
@@ -258,7 +267,7 @@
   function winHtml(w) {
     const a = appOf(w);
     return `<div class="wbar" data-drag>${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>
-      ${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
+      ${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
       <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
       <button data-wact="close" title="Close app (⌘W / ${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
@@ -807,6 +816,7 @@
   // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
     if (!pal.hidden) { closePalette(); return 'palette'; }
+    if (window.WosAppRoute?.back()) return 'app-route'; // an app's "Routes through" settings sheet
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
     if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }

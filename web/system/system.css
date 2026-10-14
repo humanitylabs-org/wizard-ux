@@ -78,3 +78,12 @@ body { margin: 0; min-height: 100vh; color: var(--ink); background:
 @media (max-width: 380px) { .stats { grid-template-columns: repeat(2, 1fr); } }
 .more-btn { display: block; width: 100%; margin-top: 10px; padding: 12px; border-radius: 14px; background: var(--glass); border: 1px solid var(--line); color: var(--violet-2); font-weight: 600; }
 .top .agents-link { margin-top: 12px; text-align: left; }
+
+/* App routing (App → agent binding) */
+.item.route { flex-wrap: wrap; }
+.route-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 10px; border-radius: 12px; font-size: 12.5px; color: var(--ink); background: rgba(143, 99, 255, .14); border: 1px solid var(--line); }
+.route-btn span { color: var(--ink-2); }
+.route-btn b { font-weight: 750; }
+.route-btn i { font-style: normal; opacity: .7; }
+.route-btn .lk { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.route-held { flex: 1 1 100%; margin: 6px 0 0; font-size: 12.5px; color: var(--red, #ff6b86); }

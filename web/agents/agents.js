@@ -1,5 +1,5 @@
 /* Agents — Wizard OS system app (Agents MVP, Lane B). Its own app, reached from Home and from System; never part
- * of Apps or the App Store (James, 14 Oct 2026).
+ * of Apps or the App Store.
  *
  * Screens (state only; Back walks them through the shared WizardApp facade, never out of Wizard):
  *   list            every agent: sigil, name, harness, model provider · model, Private/Standard, status
@@ -81,6 +81,8 @@
   const sigil = (a, cls = 'ag-sig') => AG.sigil(a, cls);
   const statusHtml = a => `<span class="st ${esc(a.status)}"><i></i>${esc({ running: 'Running', stopped: 'Stopped', starting: 'Starting…', error: 'Error' }[a.status] || a.status)}</span>`;
   const privBadge = a => a.privacy === 'private' ? `<span class="ag-badge priv">${LOCK}Private</span>` : `<span class="ag-badge">Standard</span>`;
+  // A stopped agent that apps route through: their work is waiting on it.
+  const waiting = a => { if (!['stopped', 'error'].includes(a.status)) return ''; const n = AG.bindings.filter(b => b.agent === a.id).length; return n ? `<span class="ag-badge held" data-waiting>${n} app${n === 1 ? '' : 's'} waiting</span>` : ''; };
   const providerLine = a => [AG.providerLabel(a.model.provider), AG.modelName(a, a.model.model)].filter(Boolean).join(' · ');
   function toast(text, bad) {
     const t = $('toast'); t.textContent = text; t.classList.toggle('bad', !!bad); t.hidden = false;
@@ -100,12 +102,47 @@
     else if (AG.error && !agents.length) body = `<div class="ag-err">${esc(AG.error)} · <button type="button" class="ag-link" data-reload>Try again</button></div>`;
     else body = `<div class="ag-list">${agents.map(a => `<button type="button" class="ag-row" data-open="${esc(a.id)}" style="--ag:${AG.colour(a)}">${sigil(a)}
         <span class="tx"><b>${esc(a.label)}</b><small>${esc(harness(a.harness).label)} · ${esc(providerLine(a) || 'No model')}</small>
-        <span class="ag-badges">${privBadge(a)}${a.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}${statusHtml(a)}</span></span>${CHEV}</button>`).join('')}</div>`;
+        <span class="ag-badges">${privBadge(a)}${a.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}${statusHtml(a)}${waiting(a)}</span></span>${CHEV}</button>`).join('')}</div>`;
     return `<header class="ag-top"><h1>Agents</h1></header>
       <p class="ag-lede">Each agent has its own harness, model provider, permissions and chats.</p>
       ${body}
+      ${routingHtml()}
       <p class="ag-note">Apps are apps, agents are agents: add Wizard apps and agent apps to an agent from its page.${framed ? ' · <button type="button" class="ag-link" data-system>Your system</button>' : ''}</p>
       ${AG.available ? `<button type="button" class="ag-btn ag-fab" data-new>${PLUS}New agent</button>` : ''}`;
+  }
+
+  /* ---------------- app → agent binding ("Routes through") ---------------- */
+  // An app that makes work for an agent (recaps, reports, automations) routes it through one agent the owner picks.
+  // Default: the main agent. A private agent needs no extra warning; a bound agent that is stopped holds the work
+  // and says so, because it never falls back to another agent.
+  const heldLine = (b, who) => b.held === 'missing' ? `The agent ${b.label} routes through isn’t on this Wizard. Its work can’t be delivered until you pick one.`
+    : `${who} is ${b.held === 'error' ? 'not working' : 'stopped'}. Work from ${b.label} waits until it runs again; it never goes to another agent.`;
+  function routeRow(b, { agentPage } = {}) {
+    const t = b.target;
+    return `<div class="ag-route${b.held ? ' held' : ''}" data-route-row="${esc(b.app_id)}"><span class="tx"><b>${esc(b.label)}</b>${b.purpose ? `<small>${esc(b.purpose)}</small>` : ''}</span>
+      <button type="button" class="ag-routebtn" data-route="${esc(b.app_id)}" aria-label="${esc(b.label)} routes through ${esc(t ? t.label : 'no agent')}. Change" style="--ag:${t ? AG.colour(t) : '#ff6b86'}">
+        ${agentPage ? '' : '<span class="lbl">Routes through</span>'}${t ? sigil(t, 'ag-sig xs') : ''}<b>${esc(t ? t.label : 'No agent')}</b>${t && t.privacy === 'private' ? LOCK : ''}<svg class="dd" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      ${b.held ? `<p class="ag-note bad" data-held="${esc(b.app_id)}">${esc(heldLine(b, t ? t.label : ''))}</p>` : ''}</div>`;
+  }
+  function routingHtml() {
+    if (!AG.ready || !AG.bindingsAvailable) return '';
+    const rows = AG.bindings.map(b => AG.binding(b.app_id)).filter(Boolean);
+    return `<div class="ag-sec">App routing<small>Where each app sends its work</small></div>
+      <div class="ag-card ag-routes">${rows.map(b => routeRow(b)).join('') || '<div class="ag-empty-line">No installed app sends work to an agent yet.</div>'}</div>`;
+  }
+  function boundHtml(a) {
+    if (!AG.bindingsAvailable && !a.bound_apps.length) return '';
+    const ids = new Set([...AG.bindings.filter(b => b.agent === a.id).map(b => b.app_id), ...a.bound_apps.map(x => x.id)]);
+    const rows = [...ids].map(id => AG.binding(id) || { ...a.bound_apps.find(x => x.id === id), app_id: id, agent: a.id, target: a, held: ['stopped', 'error'].includes(a.status) ? a.status : '' });
+    return `<div class="ag-sec">Apps that send work here</div>
+      <div class="ag-card ag-routes" data-bound-apps>${rows.map(b => routeRow(b, { agentPage: true })).join('') || `<div class="ag-empty-line">${a.is_default ? 'Apps that make work for an agent route here unless you pick another.' : 'None yet. In an app’s settings, pick this agent under “Routes through”.'}</div>`}</div>`;
+  }
+  async function setRoute(appId, agentId) {
+    const b = AG.binding(appId); if (!b || agentId === b.agent) { closeSheet(); return; }
+    S.saving.add('route:' + appId); render();
+    try { await AG.setBinding(appId, agentId); const t = AG.get(agentId); closeSheet(); toast(`${b.label} → ${t ? t.label : agentId}`); }
+    catch (e) { toast(`Not changed · ${e.message}`, true); }
+    finally { S.saving.delete('route:' + appId); render(); }
   }
 
   /* ---------------- new agent: Harness → Model provider → Permissions ---------------- */
@@ -218,6 +255,7 @@
         ${editable ? `<button type="button" class="ag-back" data-rename aria-label="Rename ${esc(a.label)}"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg></button>` : ''}</section>
       ${a.status === 'error' && a.status_detail ? `<p class="ag-note bad">${esc(a.status_detail)}</p>` : ''}
       <div class="ag-hero-acts"><button type="button" class="ag-btn" data-chats>Open chats</button>${editable ? `<button type="button" class="ag-btn ghost" data-${running ? 'stop' : 'start'} ${S.saving.has('run') ? 'disabled' : ''}>${running ? 'Stop' : 'Start'}</button>` : ''}</div>
+      ${boundHtml(a)}
       <div class="ag-sec">Harness</div>
       <div class="ag-card"><div class="ag-kv"><span>Harness</span><b>${esc(harness(a.harness).label)}</b></div></div>
       <div class="ag-sec">Model provider</div>
@@ -279,6 +317,15 @@
     } else if (sh.type === 'rename') {
       inner = `<h2>Rename</h2><input id="agRename" class="ag-input" maxlength="40" value="${esc(sh.value)}" style="margin-top:10px">
         <div class="acts"><button type="button" class="ag-btn ghost" data-sheetclose>Cancel</button><button type="button" class="ag-btn" data-renameok>Save</button></div>`;
+    } else if (sh.type === 'route') {
+      const b = AG.binding(sh.app);
+      const busy = S.saving.has('route:' + sh.app);
+      inner = `<h2>${esc(b ? b.label : sh.app)}</h2><p class="ag-note">${esc(b?.purpose || 'Work from this app goes to one agent.')}</p>
+        <div class="ag-label" style="margin-top:14px">Routes through</div>
+        <div role="radiogroup" aria-label="Routes through">${AG.list.map(x => `<button type="button" class="ag-choice" role="radio" aria-checked="${b?.agent === x.id}" data-routepick="${esc(x.id)}" style="--ag:${AG.colour(x)}" ${busy ? 'disabled' : ''}>${sigil(x, 'ag-sig sm')}<span class="tx"><b>${esc(x.label)}${x.privacy === 'private' ? `<span class="ag-badge priv">${LOCK}Private</span>` : ''}${x.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}</b><small>${statusHtml(x)}</small></span><span class="rd"></span></button>`).join('')}</div>
+        ${b?.held ? `<p class="ag-note bad">${esc(heldLine(b, b.target ? b.target.label : ''))}</p>` : ''}
+        <p class="ag-note">${b?.is_default ? 'Default: your main agent. ' : ''}The app never picks an agent itself.</p>
+        <div class="acts" style="grid-template-columns:1fr"><button type="button" class="ag-btn ghost" data-sheetclose>Close</button></div>`;
     } else if (sh.type === 'model') {
       const a = AG.get(S.view.id), p = provider(a?.model.provider);
       inner = `<h2>Model</h2><p class="ag-note">${esc(p?.label || '')} only${a?.privacy === 'private' ? ': a private agent never changes provider here' : ''}.</p>
@@ -314,6 +361,8 @@
     if ('system' in d) { parent.postMessage({ type: 'wizard:open-app', id: 'system' }, ORIGIN); return; }
     if ('new' in d) { startNew(); return; }
     if (d.open) { go({ name: 'detail', id: d.open }); return; }
+    if (d.route) { openSheet({ type: 'route', app: d.route }); return; }
+    if (d.routepick) { setRoute(S.sheet?.app, d.routepick); return; }
     // flow
     if (d.pick && S.view.name === 'new') {
       const dr = S.draft;
@@ -358,13 +407,21 @@
   AG.onChange(() => { if (!S.sheet || S.sheet.type !== 'rename') render(); });
   // A starting agent: look again until it settles.
   setInterval(() => { if (!document.hidden && AG.list.some(a => a.status === 'starting')) AG.load(true); }, 3000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) AG.load(true); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) AG.load(true).then(() => AG.loadBindings(true)); });
+  // The shell's "Routes through" sheet → Agents: show that agent's page (sent until the app is up).
+  addEventListener('message', e => {
+    const d = e.data; if (e.origin !== ORIGIN || e.source !== parent || !d) return;
+    if (d.type === 'wizard:bindings-changed') { AG.load(true).then(() => AG.loadBindings(true)); return; }
+    if (d.type !== 'wizard:agents-show' || typeof d.id !== 'string') return;
+    if (S.view.name === 'detail' && S.view.id === d.id) return;
+    if (AG.get(d.id)) { S.sheet = null; go({ name: 'detail', id: d.id }); }
+  });
   // Deep link inside the app: ?agent=<id> opens its page, ?new=1 the flow.
   const q = new URLSearchParams(location.search);
   APP.ready({ name: 'Agents' });
   render();
-  loadAll(true).then(() => {
+  loadAll(true).then(() => AG.loadBindings(true)).then(() => {
     const id = q.get('agent'); if (id && AG.get(id)) go({ name: 'detail', id }); else if (q.get('new') === '1' && AG.available) startNew(); else render();
   });
-  window.__agents = { state: () => ({ view: S.view, stack: S.stack.length, sheet: S.sheet?.type || '', agents: AG.list.map(a => a.id), draft: S.draft }), back };
+  window.__agents = { state: () => ({ view: S.view, stack: S.stack.length, sheet: S.sheet?.type || '', agents: AG.list.map(a => a.id), draft: S.draft, bindings: AG.bindings.map(b => ({ app: b.app_id, agent: b.agent })) }), back };
 })();

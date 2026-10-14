@@ -148,3 +148,23 @@ html:not(.wz-hosted) body { background: radial-gradient(100% 50% at 100% -10%, r
 .ag-loading { padding: 40px 0; text-align: center; color: var(--c-muted); }
 @media (min-width: 720px) { .ag { padding-top: 24px; } .ag-top h1 { font-size: 30px; } }
 .ag-link { color: var(--c-accent); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---- app → agent binding: "Routes through" / "Apps that send work here" ---- */
+.ag-routes { padding: 4px 14px; }
+.ag-route { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 0; border-bottom: 1px solid var(--c-border); }
+.ag-route:last-child { border-bottom: 0; }
+.ag-route .tx { flex: 1 1 160px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ag-route .tx b { font-size: 14.5px; font-weight: 700; }
+.ag-route .tx small { font-size: 12px; color: var(--c-muted); }
+.ag-route .ag-note { flex: 1 1 100%; margin: 0; padding: 9px 11px; border-radius: 12px; background: rgba(255, 107, 134, .08); border: 1px solid rgba(255, 107, 134, .3); }
+.ag-routebtn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 8px 0 10px; border-radius: 13px; font-size: 13px;
+  background: color-mix(in oklab, var(--ag) 14%, transparent); border: 1px solid color-mix(in oklab, var(--ag) 45%, var(--c-border)); color: var(--c-text); }
+.ag-routebtn .lbl { color: var(--c-text-2); font-weight: 600; }
+.ag-routebtn b { font-weight: 750; color: color-mix(in oklab, var(--ag) 55%, var(--c-text)); }
+.ag-routebtn .ag-lock { color: color-mix(in oklab, var(--ag) 60%, var(--c-text)); }
+.ag-routebtn .dd { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
+.ag-route.held .ag-routebtn { border-color: rgba(255, 107, 134, .55); }
+.ag-sig.xs { width: 22px; height: 22px; border-radius: 7px; font-size: 11px; }
+.ag-sig.sm { width: 34px; height: 34px; border-radius: 11px; font-size: 15px; }
+.ag-choice .ag-badge { margin-left: 2px; }
+.ag-badge.held { color: var(--red); background: rgba(255, 107, 134, .12); border-color: rgba(255, 107, 134, .4); }

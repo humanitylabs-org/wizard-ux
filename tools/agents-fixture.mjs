@@ -3,8 +3,9 @@
 //
 //   node tools/agents-fixture.mjs [port=9640] [webDir=<repo>/web] [--main=fixture|proxy] [--seed=private|none]
 //
-// --main=fixture (default; Thales QA): the main agent ("hermes") is faked here too, with a few threads.
-// --main=proxy   (Telos staged preview): the main agent's reads go to the real Agent Service on 127.0.0.1:8923 and
+// --main=fixture (default; browser QA): the main agent ("hermes") is faked here too, with a few threads.
+// --main=proxy   (staged preview): the main agent's reads go to the real Agent Service (--main-upstream, default
+//                http://127.0.0.1:8923) and
 //                every main-agent write is refused (403), like tools/qa-origin.cjs. Only fixture agents take writes.
 //
 // --agents-upstream=http://host:port  (switch to Lane A): every agents request (/wizard/v1/agent*, and thread/run
@@ -14,6 +15,9 @@
 // Contract implemented (agent=<id> as query or body):
 //   GET/POST /wizard/v1/agents · GET/PATCH /wizard/v1/agents/<id> · POST /wizard/v1/agents/<id>/start|stop
 //   GET /wizard/v1/agent-options
+//   GET /wizard/v1/app-bindings · GET/PUT /wizard/v1/apps/<app_id>/binding   (App → agent binding; agents list
+//                their bound apps as bound_apps). --binding-apps=id:Label:Purpose,… names the installed apps that
+//                declare agent_binding (default: one universal recorder). No entry = the main agent.
 //   GET/POST /wizard/hermes/api/sessions?agent= · GET/PATCH /wizard/hermes/api/sessions/<sid>?agent=
 //   GET /wizard/hermes/api/sessions/<sid>/messages?agent= · POST /wizard/hermes/api/sessions/<sid>/model?agent=
 //   POST /wizard/hermes/v1/runs?agent= · GET /wizard/hermes/v1/runs/<id>?agent= · POST …/stop
@@ -33,8 +37,10 @@ const WEB = path.resolve(pos[1] || path.join(HERE, '..', 'web'));
 const MAIN = flag('main', 'fixture');
 const SEED = flag('seed', 'none');
 const UP = flag('agents-upstream', '') ? new URL(flag('agents-upstream', '')) : null;
-const FALLBACK = '/home/telos/apps/wizard-os-home/web';
-const BACKEND = { host: '127.0.0.1', port: 8923 };
+// Untracked build outputs (data.js, summaries.js) may come from another checkout: WIZARD_UX_FALLBACK_WEB=<web dir>.
+const FALLBACK = process.env.WIZARD_UX_FALLBACK_WEB || '';
+const MAIN_UP = new URL(flag('main-upstream', 'http://127.0.0.1:8923'));
+const BACKEND = { host: MAIN_UP.hostname, port: Number(MAIN_UP.port || 80) };
 const TYPES = { '.js': 'application/javascript', '.mjs': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml' };
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'";
 const now = () => Math.floor(Date.now() / 1000);
@@ -55,7 +61,7 @@ const OPTIONS = {
       permissions: { outside_tools: ['web', 'browser', 'image_gen', 'tts', 'vision', 'delegation', 'x_search'], files: 'shared-read', wizard_apps: [], agent_apps: [], other_agents: 'none' } },
   ],
   wizard_apps: [
-    { id: 'mizel', label: 'Mizel.ai', description: 'Recordings and recaps' },
+    { id: 'meeting-recorder', label: 'Meeting Recorder', description: 'Recordings and recaps' },
     { id: 'wisdom', label: 'Wisdom', description: 'Your reading library' },
     { id: 'calendar', label: 'Calendar', description: 'Your schedule' },
     { id: 'files', label: 'Files', description: 'Your shared files' },
@@ -82,13 +88,25 @@ const provider = id => OPTIONS.providers.find(p => p.id === id);
 
 /* ---------------- agents ---------------- */
 const AGENTS = new Map();
-const MAIN_AGENT = { id: 'hermes', label: 'Archimedes', harness: 'hermes', privacy: 'standard', appearance: { glyph: 'wizard', hue: 270 },
+const MAIN_AGENT = { id: 'hermes', label: 'Atlas', harness: 'hermes', privacy: 'standard', appearance: { glyph: 'wizard', hue: 270 },
   model: { provider: 'anthropic', model: 'claude-opus-5-5', allowed_models: [], fallback: true },
-  permissions: { preset: 'standard', outside_tools: OPTIONS.presets[1].permissions.outside_tools, files: 'shared-write', wizard_apps: ['mizel', 'wisdom', 'calendar', 'files'], agent_apps: ['transcriber'], other_agents: 'read' },
+  permissions: { preset: 'standard', outside_tools: OPTIONS.presets[1].permissions.outside_tools, files: 'shared-write', wizard_apps: ['meeting-recorder', 'wisdom', 'calendar', 'files'], agent_apps: ['transcriber'], other_agents: 'read' },
   runtime: { kind: 'external', api: 'http://127.0.0.1:8642' }, status: 'running', status_detail: '', is_default: true, created_at: 1790000000 };
 AGENTS.set('hermes', MAIN_AGENT);
 const IDEMP = new Map();
-const pub = a => { const { runtime, created_at, ...rest } = a; return rest; };
+const pub = a => { const { runtime, created_at, ...rest } = a; return { ...rest, bound_apps: appsFor(a.id) }; };
+
+/* ---------------- app → agent binding ---------------- */
+const BIND_APPS = flag('binding-apps', 'meeting-recorder:Meeting Recorder:Where your recording recaps go').split(',').map(x => x.split(':'))
+  .filter(([id]) => /^[a-z0-9][a-z0-9._-]{0,63}$/.test(id || '')).map(([id, label, purpose]) => ({ id, label: label || id, required: true, purpose: purpose || '' }));
+const BINDINGS = new Map(); // app id -> agent id (absent = the main agent)
+const agentFor = id => BINDINGS.get(id) || 'hermes';
+function appsFor(agentId) { return BIND_APPS.filter(x => agentFor(x.id) === agentId).map(({ id, label, purpose }) => ({ id, label, purpose })); }
+function bindingView(app) {
+  const a = AGENTS.get(agentFor(app.id));
+  return { app_id: app.id, label: app.label, required: app.required, purpose: app.purpose, agent: agentFor(app.id), is_default: !BINDINGS.has(app.id),
+    agent_info: a ? { id: a.id, label: a.label, privacy: a.privacy, appearance: a.appearance } : null, ...(a ? {} : { problem: 'agent_missing' }) };
+}
 const slug = s => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'agent';
 const PERMS = ['outside_tools', 'files', 'wizard_apps', 'agent_apps', 'other_agents'];
 function checkPerms(p, privacy) {
@@ -169,7 +187,7 @@ function seedPrivate() {
   const [, j] = createAgent({ label: 'Private', harness: 'hermes', model: { provider: 'tinfoil', model: 'glm-5-3' }, permissions: { preset: 'private' }, appearance: { glyph: 'lock', hue: 160 } });
   const a = AGENTS.get(j.agent.id); a.status = 'running';
   const t = now();
-  addSession(a.id, 'wizard_fixture_private_1', 'Recording recap · Thales call', [{ role: 'user', content: 'Recap of today’s recording', timestamp: t - 1800 }, { role: 'assistant', content: 'Recap kept in the Private agent. Nothing left this agent.', timestamp: t - 1750 }]);
+  addSession(a.id, 'wizard_fixture_private_1', 'Recording recap · Team call', [{ role: 'user', content: 'Recap of today’s recording', timestamp: t - 1800 }, { role: 'assistant', content: 'Recap kept in the Private agent. Nothing left this agent.', timestamp: t - 1750 }]);
 }
 if (MAIN === 'fixture') seedMain();
 if (SEED === 'private') seedPrivate();
@@ -234,6 +252,21 @@ async function api(req, res, u) {
     }
     return send(res, 405, { error: 'method' });
   }
+  if (p === '/wizard/v1/app-bindings' && m === 'GET') return send(res, 200, { apps: BIND_APPS.map(bindingView) });
+  mm = p.match(/^\/wizard\/v1\/apps\/([a-z0-9][a-z0-9._-]{0,63})\/binding$/);
+  if (mm) {
+    const app = BIND_APPS.find(x => x.id === mm[1]);
+    if (!app) return send(res, 404, { error: 'app_not_found', check: 'app.id' });
+    if (m === 'GET') return send(res, 200, bindingView(app));
+    if (m === 'PUT') {
+      const id = typeof body.agent === 'string' ? body.agent : '';
+      if (!id) return send(res, 400, { error: 'agent_required', check: 'app.binding.agent' });
+      if (!AGENTS.has(id)) return send(res, 404, { error: 'agent_not_found', check: 'agent.id' });
+      if (id === 'hermes') BINDINGS.delete(app.id); else BINDINGS.set(app.id, id);
+      return send(res, 200, bindingView(app));
+    }
+    return send(res, 405, { error: 'method' });
+  }
   if (p === '/__fixture/log') return send(res, 200, { log });
   // ---- threads/runs ----
   const agentId = agentParam(u, body);
@@ -294,9 +327,13 @@ function upstream(req, res) {
 }
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
-  if (UP && (/^\/wizard\/v1\/agent(s|-options)/.test(u.pathname) || (u.pathname.startsWith('/wizard/') && u.searchParams.get('agent') && u.searchParams.get('agent') !== 'hermes'))) return upstream(req, res);
+  // A stand-in for an installed app that declares agent_binding (QA opens it as a window; the shell adds its route).
+  { const am = u.pathname.match(/^\/__fixture\/apps\/([a-z0-9][a-z0-9._-]{0,63})\/$/); const app = am && BIND_APPS.find(x => x.id === am[1]);
+    if (app) { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${app.label}</title><body style="margin:0;font:15px system-ui;color:#eee;background:#0b0718;padding:24px"><h1 style="font-size:20px">${app.label}</h1><p>${app.purpose}</p><p>Fixture app: its work goes to whichever agent it routes through.</p></body>`); } }
+  const agentsRoute = /^\/wizard\/v1\/(agent(s|-options)|app-bindings$|apps\/[^/]+\/binding$)/.test(u.pathname);
+  if (UP && (agentsRoute || (u.pathname.startsWith('/wizard/') && u.searchParams.get('agent') && u.searchParams.get('agent') !== 'hermes'))) return upstream(req, res);
   if (u.pathname.startsWith('/wizard/') || u.pathname.startsWith('/__fixture/')) {
-    const fixtureRoute = /^\/wizard\/v1\/agent(s|-options)/.test(u.pathname) || u.pathname.startsWith('/__fixture/');
+    const fixtureRoute = agentsRoute || u.pathname.startsWith('/__fixture/');
     if (MAIN === 'proxy' && !fixtureRoute && !u.searchParams.get('agent') && !(req.method !== 'GET' && /\/wizard\/hermes\//.test(u.pathname))) return proxy(req, res);
     return api(req, res, u).catch(e => send(res, 500, { error: String(e) }));
   }
@@ -308,7 +345,7 @@ http.createServer((req, res) => {
   if (rel === 'sw.js') { res.writeHead(404); return res.end(); } // previews never install a worker over the daily
   if (rel.includes('..') || rel.split('/').some(s => s.startsWith('.'))) { res.writeHead(404); return res.end(); }
   let f = path.join(WEB, rel);
-  if (!fs.existsSync(f) && fs.existsSync(FALLBACK)) f = path.join(FALLBACK, rel);
+  if (!fs.existsSync(f) && FALLBACK && fs.existsSync(FALLBACK)) f = path.join(FALLBACK, rel);
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
   res.writeHead(200, { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream', 'cache-control': 'no-store', 'content-security-policy': CSP, 'permissions-policy': 'microphone=(self)' });
   fs.createReadStream(f).pipe(res);

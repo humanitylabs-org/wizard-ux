@@ -225,7 +225,7 @@
     el.className = `win app-${w.app}${w.appId === 'app-store' || w.appId === 'system' || w.appId === 'agents' ? ' store-window' : ''}${agentWin(w) ? ' agent-chats' : ''}${rv ? ' reviewing' : ''}${w.bound ? ' bound' : ''}`; el.dataset.win = w.id;
     el.innerHTML = `<header class="wbar">${ico('span', 'wic', a)}<span class="wt">${esc(winTitle(w))}</span>${rv ? '<span class="rv-tag">Review</span>' : ''}
       ${w.from ? '<button class="wb wpin wopen" data-wact="detach" aria-label="Open as an app on its own desk" title="Keep a copy open on its own desk"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span>Open app</span></button>' : ''}
-      <button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
+      ${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}<button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
       <button class="wb" data-wact="close" aria-label="Close window"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button></header>
       <div class="wbody">${winBody(w)}</div><div class="shield" aria-hidden="true"></div>`;
     return el;
@@ -958,6 +958,15 @@
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
     const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents'].includes(w.appId)) return;
     const a = hostedOpenable(d.id); if (a) openApp(a);
+  });
+  /* App → agent binding: an app's "Routes through" sheet (core/app-route.js). Its Agents button opens the Agents app
+   * at that agent; System and Agents frames may ask for an app's sheet. */
+  window.WosAppRoute?.init({ openAgents: id => { openApp(APP.agents); if (id) [400, 1100, 2200].forEach(t => setTimeout(() => { for (const f of document.querySelectorAll('iframe[title="Agents"]')) f.contentWindow?.postMessage({ type: 'wizard:agents-show', id }, location.origin); }, t)); } });
+  addEventListener('message', e => {
+    const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:app-route' || typeof d.id !== 'string') return;
+    const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
+    const w = host && W[host.dataset.win]; if (!w || !['system', 'agents'].includes(w.appId)) return;
+    window.WosAppRoute?.open(d.id);
   });
   /* The Agents app (and System) open an agent's own Chats. Only those frames may ask; the agent must exist. */
   addEventListener('message', e => {
@@ -2962,6 +2971,7 @@
   function backStep(skipHosted) {
     { const t = window.WosTour?.back(); if (t) return t; } // the first-run tour and the Help sheet sit above everything
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
+    if (window.WosAppRoute?.back()) return 'app-route'; // an app's "Routes through" settings sheet sits above the windows
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;

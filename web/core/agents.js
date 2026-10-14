@@ -22,6 +22,17 @@
  *   WosAgents.modelName(a, model), providerLabel(id)
  *   WosAgents.loadOptions(force) → Promise<agent-options>
  *   WosAgents.onChange(fn)
+ *
+ * App → agent binding (wizard-os spec/AGENTS.md): an installed app that makes work for an agent (recording recaps,
+ * reports, automations) declares agent_binding; the owner picks which agent it routes through. No entry = the main
+ * agent. A bound agent that is stopped holds the work: it never falls back to another agent.
+ *   GET /wizard/v1/app-bindings            → { apps: [{ app_id, label, purpose, required, agent, is_default, problem? }] }
+ *   GET/PUT /wizard/v1/apps/<app_id>/binding  PUT { agent } → the same view
+ *   agents carry bound_apps: [{ id, label, purpose }]   (without the list endpoint the bindings come from these)
+ *   WosAgents.loadBindings(force) → Promise<views[]>; bindings / bindingsAvailable
+ *   WosAgents.binding(appId)      → { app_id, label, purpose, agent, is_default, problem, target, held } | null
+ *                                    target = the agent object; held = the work waits (agent missing/stopped/error)
+ *   WosAgents.setBinding(appId, agentId) → Promise<view> (throws Error with .check on refusal)
  */
 (() => {
   'use strict';
@@ -31,6 +42,7 @@
   const listeners = new Set();
   const A = {
     list: [], ready: false, available: false, error: '', at: 0, loading: null, options: null, optionsAt: 0,
+    bindings: [], bindingsAvailable: false, bindingsFromList: false, bindingsAt: 0, bindingsLoading: null,
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     emit() { for (const fn of listeners) { try { fn(A); } catch (e) { console.error(e); } } },
     load(force) {
@@ -54,6 +66,43 @@
       return fetch('/wizard/v1/agent-options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw Object.assign(new Error(`Agent options unavailable (${r.status})`), { status: r.status }); return r.json(); })
         .then(j => { A.options = j && typeof j === 'object' ? j : {}; A.optionsAt = Date.now(); return A.options; });
+    },
+    loadBindings(force) {
+      if (A.bindingsLoading) return A.bindingsLoading;
+      if (!force && A.bindingsAt && Date.now() - A.bindingsAt < 30e3) return Promise.resolve(A.bindings);
+      A.bindingsLoading = fetch('/wizard/v1/app-bindings', { cache: 'no-store', credentials: 'same-origin' })
+        .then(async r => {
+          if (r.ok) { const j = await r.json(); A.bindingsFromList = true; return (Array.isArray(j?.apps) ? j.apps : Array.isArray(j?.bindings) ? j.bindings : []).map(cleanBinding).filter(Boolean); }
+          if (r.status !== 404) throw new Error(`App routing unavailable (${r.status})`);
+          // No list endpoint: the agents' own bound_apps say the same thing.
+          A.bindingsFromList = false;
+          if (!A.ready) await A.load();
+          return A.list.flatMap(a => a.bound_apps.map(x => ({ app_id: x.id, label: x.label, purpose: x.purpose, required: false, agent: a.id, is_default: !!a.is_default, problem: '' })));
+        })
+        .then(list => { const before = JSON.stringify(A.bindings); A.bindings = list; A.bindingsAvailable = A.bindingsFromList || list.length > 0; A.bindingsAt = Date.now(); if (JSON.stringify(list) !== before) A.emit(); return list; })
+        .catch(() => A.bindings)
+        .finally(() => { A.bindingsLoading = null; });
+      return A.bindingsLoading;
+    },
+    binding(appId) {
+      const v = A.bindings.find(b => b.app_id === appId); if (!v) return null;
+      const target = A.get(v.agent);
+      const held = !target ? 'missing' : ['stopped', 'error'].includes(target.status) ? target.status : '';
+      return { ...v, target, held };
+    },
+    async setBinding(appId, agentId) {
+      const r = await fetch(`/wizard/v1/apps/${encodeURIComponent(appId)}/binding`, { method: 'PUT', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: agentId }) });
+      let j = null; try { j = await r.json(); } catch (_) {}
+      if (!r.ok) {
+        const code = typeof j?.error === 'string' ? j.error : '';
+        const human = /^[a-z0-9_]+$/.test(code) ? (code[0].toUpperCase() + code.slice(1)).replace(/_/g, ' ') : code || `Request failed (${r.status})`;
+        throw Object.assign(new Error(human + (j?.check ? ` (${j.check})` : '')), { status: r.status, check: j?.check || '' });
+      }
+      const v = cleanBinding(j);
+      if (v) { const i = A.bindings.findIndex(b => b.app_id === appId); if (i >= 0) A.bindings[i] = v; else A.bindings.push(v); }
+      await Promise.all([A.load(true), A.loadBindings(true)]);
+      A.emit();
+      return v;
     },
     get(id) { return A.list.find(a => a.id === id) || null; },
     defaultId() { return (A.list.find(a => a.is_default) || {}).id || 'hermes'; },
@@ -126,14 +175,22 @@
       permissions: a.permissions && typeof a.permissions === 'object' ? a.permissions : {},
       status: ['running', 'stopped', 'starting', 'error'].includes(a.status) ? a.status : 'stopped',
       status_detail: String(a.status_detail || ''), is_default: a.is_default === true,
+      bound_apps: (Array.isArray(a.bound_apps) ? a.bound_apps : []).map(x => typeof x === 'string' ? { id: x } : x).filter(x => x && typeof x.id === 'string' && x.id)
+        .map(x => ({ id: x.id, label: String(x.label || x.name || x.id).slice(0, 60), purpose: String(x.purpose || '').slice(0, 160) })),
     };
+  }
+  function cleanBinding(v) {
+    const id = v && (v.app_id || v.id);
+    if (typeof id !== 'string' || !id) return null;
+    return { app_id: id, label: String(v.label || v.name || id).slice(0, 60), purpose: String(v.purpose || '').slice(0, 160), required: v.required === true,
+      agent: typeof v.agent === 'string' && v.agent ? v.agent : (v.agent?.id || 'hermes'), is_default: v.is_default === true, problem: String(v.problem || '') };
   }
   window.WosAgents = A;
   // The shells refresh the list in the background; the Agents app loads it on demand.
   if (document.documentElement.dataset.leaving) return;
   if (!/\/agents\//.test(location.pathname)) {
-    A.load();
+    A.load().then(() => A.loadBindings());
     A.loadOptions().catch(() => {});
-    setInterval(() => { if (!document.hidden) A.load(true); }, 30e3);
+    setInterval(() => { if (!document.hidden) A.load(true).then(() => A.loadBindings(true)); }, 30e3);
   }
 })();

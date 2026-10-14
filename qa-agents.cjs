@@ -19,6 +19,8 @@ async function ctx(b, mobile) {
     ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, colorScheme: 'dark', userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36' }
     : { viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
   await c.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.done', '1'); } catch (e) {} });
+  // An installed app that declares agent_binding (the fixture serves it; the shell's cached app list carries it).
+  await c.addInitScript(() => { try { if (!localStorage.getItem('wux.apps.v1')) localStorage.setItem('wux.apps.v1', JSON.stringify([{ id: 'meeting-recorder', name: 'Meeting Recorder', url: '/__fixture/apps/meeting-recorder/', desc: 'Records meetings and writes recaps', icon: 'R', colors: ['#ff8a5c', '#ff5ccf'] }])); } catch (e) {} });
   // Fence: nothing leaves this origin.
   await c.route('**/*', r => { const u = r.request().url(); if (!u.startsWith(location_origin())) return r.fulfill({ status: 204, body: '' }); return r.continue(); });
   return c;
@@ -41,7 +43,7 @@ async function phone(b) {
   ok(!launcherHas.includes('agents'), 'phone: Agents is not in the Apps launcher', JSON.stringify(launcherHas.slice(0, 30)));
   await p.locator('.home-tools [data-act="agents"]').click();
   let f = await agentsFrame(p); await wait(800);
-  ok(await f.locator('.ag-row').count() >= 1 && /Archimedes/.test(await f.locator('.ag-list').innerText()), 'phone: Agents lists the main agent');
+  ok(await f.locator('.ag-row').count() >= 1 && /Atlas/.test(await f.locator('.ag-list').innerText()), 'phone: Agents lists the main agent');
   ok(/Main agent/.test(await f.locator('.ag-list').innerText()), 'phone: main agent marked as Main agent');
   await shot(p, 'phone-01-agents-list');
   // ---- New agent: Harness → Model provider → Permissions ----
@@ -67,12 +69,12 @@ async function phone(b) {
   ok(await f.locator('[data-files="own"][aria-checked="true"]').count() === 1, 'phone: Private preset: files = own folder');
   await shot(p, 'phone-04-new-permissions');
   // Adjust before create: add a Wizard app.
-  await f.locator('[data-add="wizard"]').click(); await f.locator('[data-addpick="mizel"]').click(); await wait(200);
-  ok(/Mizel/.test(await f.locator('.ag').innerText()), 'phone: Add Wizard app in the flow (Mizel.ai)');
+  await f.locator('[data-add="wizard"]').click(); await f.locator('[data-addpick="meeting-recorder"]').click(); await wait(200);
+  ok(/Meeting Recorder/.test(await f.locator('.ag').innerText()), 'phone: Add Wizard app in the flow (Meeting Recorder)');
   await f.locator('[data-create]').click();
   await f.waitForSelector('.ag-hero', { timeout: 8000 });
   const created = (await api(p, '/wizard/v1/agents')).body.agents.find(a => a.label === 'Private');
-  ok(created && created.privacy === 'private' && created.model.provider === 'tinfoil' && created.model.model === 'glm-5-3' && created.model.fallback === false && created.permissions.wizard_apps.includes('mizel'), 'phone: Create → server agent private · tinfoil · glm-5-3 · no fallback · Mizel added', JSON.stringify(created));
+  ok(created && created.privacy === 'private' && created.model.provider === 'tinfoil' && created.model.model === 'glm-5-3' && created.model.fallback === false && created.permissions.wizard_apps.includes('meeting-recorder'), 'phone: Create → server agent private · tinfoil · glm-5-3 · no fallback · Meeting Recorder added', JSON.stringify(created));
   await wait(1800); await p.evaluate(() => window.WosAgents.load(true)); await f.evaluate(() => window.WosAgents.load(true)); await wait(400);
   ok(/Running/.test(await f.locator('.ag-hero').innerText()), 'phone: the new agent shows as running', await f.locator('.ag-hero').innerText());
   ok(await f.locator('.ag-hero .ag-lock').count() >= 1, 'phone: private agent shows a lock');
@@ -86,9 +88,9 @@ async function phone(b) {
   await shot(p, 'phone-06-outside-tool-confirm');
   await p.evaluate(() => window.__wosNativeBack()); await wait(300);
   ok(await f.locator('.ag-sheet').count() === 0 && await f.locator('.ag-hero').count() === 1, 'phone: Back closes the sheet only (still on the agent page)');
-  await f.locator('[data-remove="wizard"][data-v="mizel"]').click(); await wait(700);
+  await f.locator('[data-remove="wizard"][data-v="meeting-recorder"]').click(); await wait(700);
   const ed = (await api(p, '/wizard/v1/agents/' + created.id)).body.agent;
-  ok(ed.permissions.agent_apps.includes('transcriber') && ed.permissions.agent_apps.includes('tool-pdf') && ed.permissions.files === 'shared-read' && !ed.permissions.wizard_apps.includes('mizel') && ed.permissions.outside_tools.length === 0, 'phone: edits saved server-side (agent app, tool, files; Mizel removed; outside tools still off)', JSON.stringify(ed.permissions));
+  ok(ed.permissions.agent_apps.includes('transcriber') && ed.permissions.agent_apps.includes('tool-pdf') && ed.permissions.files === 'shared-read' && !ed.permissions.wizard_apps.includes('meeting-recorder') && ed.permissions.outside_tools.length === 0, 'phone: edits saved server-side (agent app, tool, files; Meeting Recorder removed; outside tools still off)', JSON.stringify(ed.permissions));
   // ---- Back: agent page → list → shell (app stays open) ----
   await p.evaluate(() => window.__wosNativeBack()); await wait(300);
   ok(await f.locator('.ag-list').count() === 1 && await f.locator('.ag-row').count() === 2, 'phone: Back from agent page → Agents list (2 agents)');
@@ -160,7 +162,7 @@ async function phone(b) {
   await p.evaluate(() => __wos.openApp(__wos.chats && window.WizCore.apps('mobile').APPS.find(a => a.id === 'wizard'))); await wait(1200);
   const mainWin = await p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats' && !w.agent)?.id || '');
   const mainStrip = await p.locator(`[data-chats="${mainWin}"] .ch-agent`).innerText().catch(() => '');
-  ok(/Archimedes/.test(mainStrip) && !/Private/.test(mainStrip), 'phone: main Chats header names the main agent once several exist', mainStrip);
+  ok(/Atlas/.test(mainStrip) && !/Private/.test(mainStrip), 'phone: main Chats header names the main agent once several exist', mainStrip);
   ok(!(await p.locator(`[data-chats="${mainWin}"] .ch-list`).innerText()).includes('Recap my private recording'), 'phone: main Chats list has no private thread');
   await shot(p, 'phone-13-main-chats');
   // System links to Agents (its own app, opened beside System).
@@ -169,16 +171,91 @@ async function phone(b) {
   await sys.locator('[data-agents]').click(); await wait(1200);
   ok(await p.evaluate(() => __wos.wins[__wos.desks[__wos.idx].focus]?.appId === 'agents'), 'phone: System → Agents opens the Agents app');
   await shot(p, 'phone-14-system-link');
+  // ---- App → agent binding ("Routes through"; default = main agent; stopped bound agent shows clearly) ----
+  await bindingPhone(p, created);
   ok(errs.length === 0, 'phone: no page errors', errs.slice(0, 5).join(' | '));
   await c.close();
   return created;
+}
+
+const BIND = 'meeting-recorder';
+const binding = p => api(p, `/wizard/v1/apps/${BIND}/binding`).then(r => r.body || {});
+async function bindingPhone(p, created) {
+  let b = await binding(p);
+  ok(b.agent === 'hermes' && b.is_default === true, 'binding: a fresh install routes through the main agent (default)', JSON.stringify(b));
+  const agMain = (await api(p, '/wizard/v1/agents/hermes')).body.agent;
+  ok((agMain.bound_apps || []).some(x => x.id === BIND), 'binding: the main agent lists the app as bound', JSON.stringify(agMain.bound_apps));
+  // The app's window bar: Routes through <agent>.
+  await p.evaluate(id => __wos.openApp(window.WizCore.apps('mobile').APPS.find(a => a.id === id)), BIND); await wait(1500);
+  const recWin = await p.evaluate(id => Object.values(__wos.wins).find(w => w.appId === id)?.id || '', BIND);
+  const btn = p.locator(`.win[data-win="${recWin}"] .wbar [data-route-open="${BIND}"]`);
+  await btn.waitFor({ timeout: 8000 }).catch(() => {});
+  ok(!!recWin && await btn.count() === 1 && /Routes through Atlas/.test(await btn.getAttribute('aria-label')), 'phone: the app window bar shows Routes through (main agent)', await btn.getAttribute('aria-label').catch(() => ''));
+  await btn.click(); await wait(500);
+  const sheet = p.locator('.aroute');
+  ok(await sheet.count() === 1 && /Routes through/.test(await sheet.innerText()) && await sheet.locator('[data-route-pick="hermes"][aria-checked="true"]').count() === 1, 'phone: app settings sheet: Routes through, main agent checked');
+  ok(await sheet.locator(`[data-route-pick="${created.id}"] .ag-lock`).count() === 1 && await sheet.locator('[data-route-held]').count() === 0, 'phone: a private agent is offered with its lock; no extra warning while it runs');
+  await shot(p, 'phone-15-route-sheet');
+  await p.evaluate(() => window.__wosNativeBack()); await wait(400);
+  ok(await sheet.count() === 0 && await p.evaluate(w => __wos.desks[__wos.idx]?.focus === w && !!__wos.wins[w], recWin), 'Back test phone: Back closes the route sheet only; the app stays open');
+  await btn.click(); await wait(400);
+  await p.locator(`.aroute [data-route-pick="${created.id}"]`).click(); await wait(1200);
+  b = await binding(p);
+  const ag = (await api(p, '/wizard/v1/agents/' + created.id)).body.agent;
+  ok(b.agent === created.id && !b.is_default && (ag.bound_apps || []).some(x => x.id === BIND), 'phone: picking Private saves the binding (PUT) and the agent lists the app', JSON.stringify([b, ag.bound_apps]));
+  ok(/now routes through Private/.test(await p.locator('.aroute').innerText()), 'phone: the sheet confirms the new route');
+  await p.locator('.aroute [data-route-close]').click(); await wait(300);
+  ok(/Routes through Private/.test(await btn.getAttribute('aria-label')), 'phone: the window bar now routes through Private', await btn.getAttribute('aria-label'));
+  // Bound but stopped: shown clearly; the work waits (never another agent).
+  await api(p, `/wizard/v1/agents/${created.id}/stop`, { method: 'POST' });
+  await p.evaluate(() => window.WosAgents.load(true)); await wait(500);
+  ok(await p.locator(`.win[data-win="${recWin}"] .wroute.held`).count() === 1, 'phone: a stopped bound agent marks the route button');
+  await btn.click(); await wait(500);
+  const held = p.locator('.aroute [data-route-held]');
+  ok(await held.count() === 1 && /Private is stopped/.test(await held.innerText()) && /never goes to another agent/.test(await held.innerText()), 'phone: the sheet says the bound private agent is stopped and the work waits', await held.innerText().catch(() => ''));
+  await shot(p, 'phone-16-route-held');
+  await p.evaluate(() => window.__wosNativeBack()); await wait(300);
+  // Agents app: App routing on the list, "Apps that send work here" on the agent page.
+  await p.evaluate(() => __wos.openApp(window.WizCore.apps('mobile').APPS.find(a => a.id === 'agents'))); await wait(1200);
+  const f = await agentsFrame(p); await f.evaluate(() => window.WosAgents.load(true).then(() => window.WosAgents.loadBindings(true))); await wait(500);
+  while (await f.locator('.ag-list').count() === 0 && await f.locator('[data-back]').count()) { await f.locator('[data-back]').first().click(); await wait(300); }
+  ok(await f.locator(`.ag-row[data-open="${created.id}"] [data-waiting]`).count() === 1, 'phone: Agents list: the stopped Private agent shows apps waiting');
+  const routeRow = f.locator(`.ag-routes [data-route-row="${BIND}"]`);
+  ok(await routeRow.count() === 1 && /Routes through/.test(await routeRow.innerText()) && /Private/.test(await routeRow.innerText()), 'phone: Agents list: App routing shows Meeting Recorder → Private', await routeRow.innerText().catch(() => ''));
+  await f.locator(`.ag-row[data-open="${created.id}"]`).click(); await wait(400);
+  const bound = f.locator('[data-bound-apps]');
+  ok(await bound.count() === 1 && /Meeting Recorder/.test(await bound.innerText()) && await bound.locator(`[data-held="${BIND}"]`).count() === 1, 'phone: agent page: Apps that send work here lists the app and the held warning', await bound.innerText().catch(() => ''));
+  ok(/Apps that send work here/.test(await f.locator('.ag').innerText()), 'phone: agent page names the section “Apps that send work here”');
+  await shot(p, 'phone-17-agent-bound-apps');
+  // Change it from the agent page (in-app sheet), back to the main agent.
+  await bound.locator(`[data-route="${BIND}"]`).click(); await wait(300);
+  ok(await f.locator('.ag-sheet [data-routepick="hermes"]').count() === 1, 'phone: agent page: route sheet offers every agent');
+  await f.locator('.ag-sheet [data-routepick="hermes"]').click(); await wait(1200);
+  b = await binding(p);
+  ok(b.agent === 'hermes', 'phone: agent page: moving the app to the main agent saves', JSON.stringify(b));
+  ok(await f.locator('.ag-sheet').count() === 0 && await f.locator('.ag-hero').count() === 1 && !/Meeting Recorder/.test(await f.locator('[data-bound-apps]').innerText()), 'phone: agent page updates (no apps left on Private)');
+  await api(p, `/wizard/v1/agents/${created.id}/start`, { method: 'POST' });
+  await f.locator(`[data-back]`).first().click(); await wait(300);
+  // System: App routing; tapping it opens the shell's Routes through sheet; Back closes only that.
+  await p.evaluate(() => __wos.openApp(window.WizCore.apps('mobile').APPS.find(a => a.id === 'system'))); await wait(1500);
+  const sys = await (await p.waitForSelector('iframe[title="System"]')).contentFrame();
+  await sys.waitForSelector(`#s-routes [data-route="${BIND}"]`, { timeout: 8000 }).catch(() => {});
+  ok(/Atlas/.test(await sys.locator(`#s-routes [data-route="${BIND}"]`).innerText().catch(() => '')), 'phone: System: App routing shows Meeting Recorder → Atlas');
+  await sys.locator(`#s-routes [data-route="${BIND}"]`).click(); await wait(500);
+  ok(await p.locator('.aroute').count() === 1, 'phone: System → Routes through opens the app settings sheet');
+  await shot(p, 'phone-18-system-routes');
+  await p.evaluate(() => window.__wosNativeBack()); await wait(300);
+  ok(await p.locator('.aroute').count() === 0 && await p.evaluate(() => __wos.wins[__wos.desks[__wos.idx].focus]?.appId === 'system'), 'Back test phone: Back from the System route sheet stays in System');
 }
 
 async function desktop(b, created) {
   const c = await ctx(b, false), p = await c.newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e)));
   await p.goto(BASE + 'desktop.html', { waitUntil: 'load' }); await wait(2500);
-  const chip = p.locator('.home [data-app="agents"]:visible');
+  // First run opens Chats on workspace 1; Home (with its app chips) is what an empty workspace shows.
+  ok(await p.evaluate(() => __wux.ws[__wux.cur].wins.length > 0 && !document.querySelector('.wsp:not([hidden]) .home')), 'desktop: first run opens Chats on workspace 1 (no Home there)');
+  await p.evaluate(() => __wux.goWs(1)); await wait(500);
+  const chip = p.locator('.wsp:not([hidden]) .home [data-app="agents"]');
   ok(await chip.count() === 1, 'desktop: Home has an Agents chip');
   await chip.first().click();
   const f = await agentsFrame(p); await wait(800);
@@ -195,6 +272,17 @@ async function desktop(b, created) {
   await p.locator('.dchats .pane-list .ch-row').first().click(); await wait(1800);
   ok(await p.locator('.dchats .ch-agent.thread').count() >= 1, 'desktop: thread pane shows the agent header');
   await shot(p, 'desktop-03-agent-thread');
+  // Routes through on the desktop: the app's window bar and the settings sheet; Esc closes only the sheet.
+  await p.evaluate(id => __wux.openApp(window.WizCore.apps('desktop').APPS.find(a => a.id === id)), BIND); await wait(1500);
+  const dWin = await p.evaluate(id => Object.values(__wux.wins).find(w => w.appId === id)?.id || '', BIND);
+  const dBtn = p.locator(`.win[data-win="${dWin}"] .wbar [data-route-open="${BIND}"]`);
+  await dBtn.waitFor({ timeout: 8000 }).catch(() => {});
+  ok(await dBtn.count() === 1 && /Routes through Atlas/.test(await dBtn.getAttribute('aria-label')), 'desktop: the app window bar shows Routes through', await dBtn.getAttribute('aria-label').catch(() => ''));
+  await dBtn.click(); await wait(500);
+  ok(await p.locator('.aroute [data-route-pick]').count() >= 2, 'desktop: Routes through sheet lists the agents');
+  await shot(p, 'desktop-04-route-sheet');
+  await p.keyboard.press('Escape'); await wait(300);
+  ok(await p.locator('.aroute').count() === 0 && await p.evaluate(w => !!__wux.wins[w], dWin), 'desktop: Esc closes the sheet; the app stays open');
   ok(errs.length === 0, 'desktop: no page errors', errs.slice(0, 5).join(' | '));
   await c.close();
 }

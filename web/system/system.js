@@ -24,8 +24,32 @@
     try {
       const r = await fetch('../store-data/system/v1/overview', { credentials: 'same-origin', cache: 'no-store' });
       if (!r.ok) throw new Error(r.status); D = await r.json();
-    } catch (_) { $('sections').innerHTML = '<p class="empty">Your system overview isn’t reachable right now.</p>'; return; }
+    } catch (_) { $('sections').innerHTML = '<p class="empty">Your system overview isn’t reachable right now.</p>'; loadRoutes(); return; }
     build(); paint();
+    loadRoutes();
+  }
+  /* App → agent binding: which agent each app that makes work for an agent routes through. Changing it opens the
+   * shell's "Routes through" sheet (or the Agents app when System runs on its own). Absent API → no section. */
+  let R = null;
+  async function loadRoutes() {
+    try {
+      const [b, a] = await Promise.all(['/wizard/v1/app-bindings', '/wizard/v1/agents'].map(u => fetch(u, { credentials: 'same-origin', cache: 'no-store' }).then(r => r.ok ? r.json() : null)));
+      const agents = new Map(((a && a.agents) || []).map(x => [x.id, x]));
+      const list = (b && (b.apps || b.bindings)) || [];
+      R = list.map(v => ({ id: v.app_id || v.id, label: v.label || v.app_id || v.id, purpose: v.purpose || '', agent: agents.get(v.agent) || null, agentId: v.agent })).filter(v => v.id);
+    } catch (_) { R = null; }
+    if (D) sections(); else if (R && R.length) $('sections').innerHTML = routesHtml() + '<p class="empty">The rest of your system overview isn’t reachable right now.</p>';
+  }
+  function routesHtml() {
+    if (!R || !R.length) return '';
+    const lock = '<svg class="lk" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+    const rows = R.map(v => {
+      const a = v.agent, held = !a ? 'missing' : ['stopped', 'error'].includes(a.status) ? a.status : '';
+      return `<div class="item route ${held ? 'bad' : ''}"><span class="tx"><b>${esc(v.label)}</b><small>${esc(v.purpose || 'Sends work to an agent')}</small></span>
+        <button type="button" class="route-btn" data-route="${esc(v.id)}" aria-label="${esc(v.label)} routes through ${esc(a ? a.label : 'no agent')}. Change"><span>Routes through</span><b>${esc(a ? a.label : 'No agent')}</b>${a && a.privacy === 'private' ? lock : ''}<i>▾</i></button>
+        ${held ? `<p class="route-held">${esc(held === 'missing' ? 'That agent isn’t on this Wizard. Pick another so its work can be delivered.' : `${a.label} is stopped. Work from ${v.label} waits until it runs again.`)}</p>` : ''}</div>`;
+    }).join('');
+    return `<section class="sec" id="s-routes"><h2>App routing</h2><p class="hint">Apps that make work for an agent, and the agent each one routes through.</p><div class="list">${rows}</div></section>`;
   }
 
   function build() {
@@ -108,7 +132,7 @@
     const rs = [...D.routines].sort((a, b) => (b.status === 'error') - (a.status === 'error')).slice(0, showAll ? undefined : Math.max(8, D.routines.filter(r => r.status === 'error').length));
     const routines = rs.map(r => `<div class="item r ${r.status === 'error' ? 'bad' : ''}"><span class="tx"><b>${esc(r.name)}</b><small>${esc(r.when)}${r.lastRun ? ` · ran ${esc(ago(r.lastRun))}` : ''}</small></span><span class="st">${dot(r.status === 'error' ? 'bad' : r.status === 'ok' ? 'ok' : 'idle')}${r.status === 'error' ? 'Failed' : r.status === 'ok' ? 'OK' : 'New'}</span></div>`).join('');
     $('sections').innerHTML = `
-      <section class="sec" id="s-agents"><h2>Agents</h2><div class="list">${agents}</div></section>
+      <section class="sec" id="s-agents"><h2>Agents</h2><div class="list">${agents}</div></section>${routesHtml()}
       <section class="sec" id="s-apps"><h2>Agent apps &amp; tools</h2><p class="hint">Installed apps and tools your agents can use. They have no screen of their own.</p><div class="list">${apps}</div></section>
       <section class="sec" id="s-conns"><h2>Connections</h2><p class="hint">Accounts and keys your agents use. Keys never leave your Wizard.</p>${conns}</section>
       <section class="sec" id="s-routines"><h2>Routines</h2><p class="hint">What your agents do on their own, on a schedule.</p><div class="list">${routines}</div>${!showAll && D.routines.length > rs.length ? `<button class="more-btn" data-all>Show all ${D.routines.length}</button>` : ''}</section>`;
@@ -117,8 +141,9 @@
   document.addEventListener('click', e => {
     const n = e.target.closest('[data-node]'); if (n) { focusNode(sel === n.dataset.node ? null : n.dataset.node); return; }
     if (e.target.closest('[data-all]')) { showAll = true; sections(); return; }
+    const rt = e.target.closest('[data-route]'); if (rt) { if (framed) parent.postMessage({ type: 'wizard:app-route', id: rt.dataset.route }, location.origin); else location.href = '../agents/index.html'; return; }
     const j = e.target.closest('[data-jump]'); if (j) { $('s-' + j.dataset.jump)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
-    // Agents is its own system app (James, 14 Oct 2026): System links to it, never embeds it.
+    // Agents is its own system app: System links to it, never embeds it.
     if (e.target.closest('[data-agents]')) { if (framed) parent.postMessage({ type: 'wizard:open-app', id: 'agents' }, location.origin); else location.href = '../agents/index.html'; return; }
     if (e.target.closest('#more')) { if (framed) parent.postMessage({ type: 'wizard:open-app', id: 'app-store' }, location.origin); else location.href = '../store/index.html'; }
   });
@@ -126,6 +151,9 @@
   // Canonical hosted-app Back hook: clears a focused node; otherwise the shell takes the step.
   const back = () => { if (sel) { focusNode(null); return true; } return false; };
   window.__wizardCloseOverlay = back;
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRoutes(); });
+  addEventListener('focus', () => loadRoutes());
+  addEventListener('message', e => { if (e.origin === location.origin && e.source === parent && e.data?.type === 'wizard:bindings-changed') loadRoutes(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && back()) { e.preventDefault(); e.stopPropagation(); } });
   if (!framed) {
     if (history.state?.sys !== 'guard') { history.replaceState({ sys: 'root' }, ''); history.pushState({ sys: 'guard' }, ''); }
