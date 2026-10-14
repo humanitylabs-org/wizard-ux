@@ -123,7 +123,7 @@ let origin;
    await (mobile?p.evaluate(()=>WosDevice.checkWeb(true)):p.evaluate(()=>WizAppUpdates.check()));
    await fr.evaluate(()=>window.hold=WizardApp.update.hold('Unsaved fixture'));version='abc0002';
    await (mobile?p.evaluate(()=>WosDevice.checkWeb(true)):p.evaluate(()=>WizAppUpdates.check()));
-   const button=p.locator(mobile?'#dvWeb [data-web="go"]':'#wizard-app-update button');await button.click({force:true});
+   const button=p.locator(mobile?'#dvWeb [data-web="go"]':'#dvWeb [data-web="go"]');await button.click({force:true});
    ok('explicit Reload blocked while held',await fr.evaluate(()=>WizardApp.hosted&&hold!=null));
    await p.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))});await p.waitForTimeout(300);
    ok('background visibility never forces unsaved reload',await fr.evaluate(()=>document.querySelector('#draft').value==='unsaved fixture'));

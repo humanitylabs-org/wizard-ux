@@ -8,7 +8,7 @@ body {
     #05030c;
   font-size: 14px;
 }
-:root { --bar-h: 34px; --gap: 8px; --radius: 12px; }
+:root { --bar-h: 34px; --gap: 8px; --radius: 12px; --desktop-window-max-width: 1200px; }
 kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5px; font: 600 11px/16px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; color: var(--ink-2); background: rgba(205, 190, 255, .08); border: 1px solid var(--line-2); border-bottom-width: 2px; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(205, 190, 255, .14); border-radius: 8px; }
@@ -134,6 +134,9 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 /* ---------- empty workspace: home ---------- */
 .home { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; }
 .home-in { width: min(720px, 100%); }
+.desktop-home[hidden] { display: none !important; }
+.desktop-home { overflow-y: auto; align-items: safe center; }
+.logo[aria-current="page"] { background: rgba(205,190,255,.12); }
 .home-time { font-size: 64px; font-weight: 250; letter-spacing: -.02em; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1; }
 .home-date { margin-top: 6px; font-size: 14px; color: var(--ink-3); letter-spacing: .04em; }
 .home-line { margin: 18px 0 22px; font-size: 16px; color: var(--ink-2); }
@@ -152,7 +155,7 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .home-apps { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
 .app-chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 5px; border-radius: 99px; background: rgba(205, 190, 255, .05); border: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2); }
 .app-chip:hover { background: rgba(205, 190, 255, .1); color: var(--ink); }
-.app-chip i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11px; color: #fff; background: linear-gradient(140deg, var(--g1), var(--g2)); }
+.app-chip > i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11px; color: #fff; background: linear-gradient(140deg, var(--g1), var(--g2)); }
 
 /* ---------- inbox drawer ---------- */
 .inbox { position: fixed; top: calc(var(--bar-h) + 6px); right: 6px; bottom: 6px; width: 380px; z-index: 25; display: flex; flex-direction: column;
