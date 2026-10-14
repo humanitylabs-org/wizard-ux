@@ -193,7 +193,7 @@ async function bindingPhone(p, created) {
   ok(!!recWin && await btn.count() === 1 && /Routes through Atlas/.test(await btn.getAttribute('aria-label')), 'phone: the app window bar shows Routes through (main agent)', await btn.getAttribute('aria-label').catch(() => ''));
   await btn.click(); await wait(500);
   const sheet = p.locator('.aroute');
-  ok(await sheet.count() === 1 && /Routes through/.test(await sheet.innerText()) && await sheet.locator('[data-route-pick="hermes"][aria-checked="true"]').count() === 1, 'phone: app settings sheet: Routes through, main agent checked');
+  ok(await sheet.count() === 1 && /Routes through/i.test(await sheet.innerText()) && await sheet.locator('[data-route-pick="hermes"][aria-checked="true"]').count() === 1, 'phone: app settings sheet: Routes through, main agent checked');
   ok(await sheet.locator(`[data-route-pick="${created.id}"] .ag-lock`).count() === 1 && await sheet.locator('[data-route-held]').count() === 0, 'phone: a private agent is offered with its lock; no extra warning while it runs');
   await shot(p, 'phone-15-route-sheet');
   await p.evaluate(() => window.__wosNativeBack()); await wait(400);
@@ -221,11 +221,11 @@ async function bindingPhone(p, created) {
   while (await f.locator('.ag-list').count() === 0 && await f.locator('[data-back]').count()) { await f.locator('[data-back]').first().click(); await wait(300); }
   ok(await f.locator(`.ag-row[data-open="${created.id}"] [data-waiting]`).count() === 1, 'phone: Agents list: the stopped Private agent shows apps waiting');
   const routeRow = f.locator(`.ag-routes [data-route-row="${BIND}"]`);
-  ok(await routeRow.count() === 1 && /Routes through/.test(await routeRow.innerText()) && /Private/.test(await routeRow.innerText()), 'phone: Agents list: App routing shows Meeting Recorder → Private', await routeRow.innerText().catch(() => ''));
+  ok(await routeRow.count() === 1 && /Routes through/i.test(await routeRow.innerText()) && /Private/.test(await routeRow.innerText()), 'phone: Agents list: App routing shows Meeting Recorder → Private', await routeRow.innerText().catch(() => ''));
   await f.locator(`.ag-row[data-open="${created.id}"]`).click(); await wait(400);
   const bound = f.locator('[data-bound-apps]');
   ok(await bound.count() === 1 && /Meeting Recorder/.test(await bound.innerText()) && await bound.locator(`[data-held="${BIND}"]`).count() === 1, 'phone: agent page: Apps that send work here lists the app and the held warning', await bound.innerText().catch(() => ''));
-  ok(/Apps that send work here/.test(await f.locator('.ag').innerText()), 'phone: agent page names the section “Apps that send work here”');
+  ok(/Apps that send work here/i.test(await f.locator('.ag').innerText()), 'phone: agent page names the section “Apps that send work here”');
   await shot(p, 'phone-17-agent-bound-apps');
   // Change it from the agent page (in-app sheet), back to the main agent.
   await bound.locator(`[data-route="${BIND}"]`).click(); await wait(300);
@@ -264,13 +264,17 @@ async function desktop(b, created) {
   await f.locator('.ag-row[data-open="' + created.id + '"]').click(); await wait(400);
   await shot(p, 'desktop-02-agent-detail');
   await f.locator('[data-chats]').click(); await wait(2000);
-  const head = p.locator('.dchats .ch-agent').first();
+  // Scope to the agent's own Chats window (the main Chats window on workspace 1 is still mounted, hidden).
+  const aw = await p.evaluate(id => Object.values(__wux.wins).find(w => w.app === 'chats' && w.agent === id)?.id || '', created.id);
+  ok(!!aw, 'desktop: Open chats opens a Chats window pinned to the agent', aw);
+  const win = p.locator(`.win[data-win="${aw}"]`);
+  const head = win.locator('.dchats .ch-agent').first();
   ok(await head.count() >= 1 && /Private/.test(await head.innerText()) && await head.locator('.ag-lock').count() === 1, 'desktop: agent Chats has the persistent header with lock');
-  ok(/Private/.test(await p.locator('.win.focus, .win.focused, .win').filter({ has: p.locator('.dchats') }).first().innerText()), 'desktop: the window names the agent');
-  const rows = await p.locator('.dchats .pane-list .ch-row').allInnerTexts();
+  ok(/Private/.test(await win.locator('.wbar').innerText()), 'desktop: the window names the agent', await win.locator('.wbar').innerText().catch(() => ''));
+  const rows = await win.locator('.dchats .pane-list .ch-row').allInnerTexts();
   ok(rows.length >= 1 && rows.some(t => /Recap my private recording/.test(t)) && !rows.some(t => /Groceries/.test(t)), 'desktop: agent list shows only its own thread', JSON.stringify(rows));
-  await p.locator('.dchats .pane-list .ch-row').first().click(); await wait(1800);
-  ok(await p.locator('.dchats .ch-agent.thread').count() >= 1, 'desktop: thread pane shows the agent header');
+  await win.locator('.dchats .pane-list .ch-row').first().click(); await wait(1800);
+  ok(await win.locator('.dchats .ch-agent.thread').count() >= 1, 'desktop: thread pane shows the agent header');
   await shot(p, 'desktop-03-agent-thread');
   // Routes through on the desktop: the app's window bar and the settings sheet; Esc closes only the sheet.
   await p.evaluate(id => __wux.openApp(window.WizCore.apps('desktop').APPS.find(a => a.id === id)), BIND); await wait(1500);
