@@ -44,7 +44,7 @@ def bounds(xml, label):
     for node in E.fromstring(xml).iter('node'):
         text=node.get('text') or node.get('content-desc') or ''
         if text.strip().lower() == label.lower():
-            values=re.findall(r'\d+',node.get('bounds',''))
+            values=re.findall(r'-?\d+',node.get('bounds',''))
             if len(values)==4:
                 x1,y1,x2,y2=map(int,values)
                 if x2>x1 and y2>y1:return ((x1+x2)//2,(y1+y2)//2)
@@ -123,15 +123,24 @@ with (BASE/'worker.lock').open('a') as lease:
             orb=bounds(xml,orb_label) if orb_label else None
             check('actual orb gesture target is visible',orb is not None,orb)
             x,y=orb;emu.sx('input swipe %d %d %d %d 450'%(x,y,x,max(400,y-700)));time.sleep(1)
-            point=None
-            for _ in range(6):
-                point=bounds(emu.ui(),label) or (bounds(emu.ui(),'Wizard Signal') if label=='Signal' else None)
-                if point:break
-                # The real menu opens bottom anchored; scroll only the app list, not the orb.
-                emu.sx('input swipe 540 1250 540 1800 300');time.sleep(0.4)
-            check(label+' appears in real Apps menu',point is not None)
+            # Narrow through the real Apps search so live-registry layout changes cannot
+            # move a different tile under a stale accessibility coordinate.
+            import xml.etree.ElementTree as E
+            search=None
+            for node in E.fromstring(emu.ui()).iter('node'):
+                if node.get('class','').endswith('EditText'):
+                    vals=list(map(int,re.findall(r'-?\d+',node.get('bounds',''))))
+                    if len(vals)==4 and vals[2]>vals[0] and vals[3]>vals[1]:search=((vals[0]+vals[2])//2,(vals[1]+vals[3])//2);break
+            check('actual Apps search is visible',search is not None,search)
+            emu.sx('input tap %d %d'%search);emu.sx('input text '+('wisdom' if label=='Wisdom' else 'signal'));time.sleep(1)
+            emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.8)
+            capture(label.lower()+'-apps-before-hold')
+            point=bounds(emu.ui(),label) or (bounds(emu.ui(),'Wizard Signal') if label=='Signal' else None)
+            check(label+' appears in real Apps menu',point is not None,point)
             x,y=point;emu.sx('input swipe %d %d %d %d 650'%(x,y,x,y));time.sleep(0.5)
             capture(label.lower()+'-pin-action')
+            sheet=' '.join(labels(emu.ui()))
+            check(label+' hold shows the requested app action sheet',(label+' home screen') in sheet or ('Wizard '+label+' home screen') in sheet,sheet[-800:])
             check(label+' hold opens action sheet',bool(emu.tap_text(r'^Add to home screen$')))
             time.sleep(1);capture(label.lower()+'-os-confirm')
             check(label+' request opens actual launcher confirmation',not emu.front(),emu.top())
@@ -148,7 +157,7 @@ with (BASE/'worker.lock').open('a') as lease:
             for n in range(3):emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.3)
             check(label+' repeated root Back retains actual app content',app_content(label,emu.ui()) and emu.front())
             emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
-            emu.sx('am start -W -n ai.wizards.os.preview/.MainActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER');time.sleep(1)
+            emu.sx('am start -W -n ai.wizards.os.preview/ai.wizards.os.MainActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER');time.sleep(1)
         emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
         original=tasks(emu.sx('dumpsys activity recents'));check('Wisdom and Signal independent Recents tasks',len(original)==2,original)
         recents=emu.sx('dumpsys activity recents');check('Wizard ordinary task remains separate', '.MainActivity' in recents)
