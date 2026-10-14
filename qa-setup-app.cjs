@@ -183,8 +183,9 @@ const setupWin = p => p.evaluate(() => { const w = Object.values(__wos.wins).fin
     await p.evaluate(() => __wos.goDesk(0)); await sleep(300); t = Date.now(); await sleep(4500);
     n = count(await fakeLog(), 'GET', '/wizard/v1/setup/phone', t);
     ok(n === 0 && !(await fs_(f)).polling, 'polling stops when Setup is on another desk', n);
-    t = Date.now(); await p.evaluate(d => __wos.goDesk(d), sw.desk); await sleep(900);
-    ok(count(await fakeLog(), 'GET', '/wizard/v1/setup/phone', t) >= 1, 'coming back fetches at once');
+    t = Date.now(); await p.evaluate(d => __wos.goDesk(d), sw.desk);
+    let back1 = 0; while (Date.now() - t < 4000) { const e = (await fakeLog()).find(e => e.method === 'GET' && e.path === '/wizard/v1/setup/phone' && e.t >= t); if (e) { back1 = e.t - t; break; } await sleep(100); }
+    ok(back1 > 0 && back1 <= 1500, 'coming back to the desk fetches at once (no 2 s wait)', back1 + ' ms');
     await f.evaluate(() => { Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
     t = Date.now(); await sleep(4500);
     ok(count(await fakeLog(), 'GET', '/wizard/v1/setup/phone', t) === 0, 'polling stops while the page is hidden');
