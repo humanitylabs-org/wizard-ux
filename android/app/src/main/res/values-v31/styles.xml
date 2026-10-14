@@ -1,0 +1,16 @@
+<resources>
+    <style name="Theme.WizardOS" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@drawable/wizard_launch</item>
+        <item name="android:colorBackground">@color/wos_bg</item>
+        <item name="android:statusBarColor">@color/wos_bg</item>
+        <item name="android:navigationBarColor">@color/wos_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:colorAccent">@color/wos_violet</item>
+        <item name="android:colorControlActivated">@color/wos_violet</item>
+        <item name="android:textColorHighlight">#668F63FF</item>
+        <item name="android:windowSplashScreenBackground">@color/wos_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/wizard_splash</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/wos_bg</item>
+    </style>
+</resources>

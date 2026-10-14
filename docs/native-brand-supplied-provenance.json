@@ -1,0 +1,39 @@
+{
+  "kind": "supplied-designer-native-brand-only",
+  "source_brand_revision": "d39302fb21e6af50bfef8ec7cd3f84555b2cc7d7",
+  "original_source": "https://drive.google.com/drive/folders/1NstTcGF7tIrH3Mgb-sHrmaHNRaewoBcr",
+  "originals": {
+    "AW-icon-sq-purple-white.jpg": "2423bd632b171b3dc86411507b530836109fbb3ed469c15c735e7cbcd50bbd12",
+    "AW-icon-white.png": "66d648382f68615f216adbd557d8223a08e3f768aa94e34a3d89b1519f77e49e",
+    "AW-logo-select-hat.png": "0e5286e67f9ce7065c0acace5fcd292489df0af58a0e4034c8ac2f5cc4b08a4c"
+  },
+  "native_paths": {
+    "android/app/src/main/assets/assist/screen.html": "05db8347cdd2d9d01c8777a963637db93223b4a0e1df31f1fae0f376b53c9ca1",
+    "android/app/src/main/assets/assist/wizard-mark-white.png": "05e6cfe39615fa5ca4a04131c94ac9691939cfb428f389565e9ed052e3aac09a",
+    "android/app/src/main/java/ai/wizards/os/ReachScreen.java": "9ccd64bacfc69c752bbbd7e0c52d024a96aee6552e64694bfcab662c91ad0fe2",
+    "android/app/src/main/java/ai/wizards/os/everywhere/EverywhereService.java": "11491211a24ec57348ddeeabcd3b111f0e033c754e129da2b7b1aa02ba4d4497",
+    "android/app/src/main/java/ai/wizards/os/notify/ReplyWatcher.java": "3bef1c61f7dbbcc9bfabb79e47fca6d11c31e7878100a3e810068827fbd903b8",
+    "android/app/src/main/res/drawable-nodpi/ic_wizard_notification.png": "1527da5943c8a43c7912ceea31fdb67797d93bfef60cd55891afac672fe388cf",
+    "android/app/src/main/res/drawable-nodpi/wizard_mark_white.png": "05e6cfe39615fa5ca4a04131c94ac9691939cfb428f389565e9ed052e3aac09a",
+    "android/app/src/main/res/drawable-nodpi/wizard_splash.png": "b69ceb6a1ebbca0d67b5e919e67930e6b7cc69c739393a6b071516e2437b104d",
+    "android/app/src/main/res/drawable/wizard_launch.xml": "1171005b6ca47119df3584dfe61f3e6efad8fbb7d19eeb17aa7ae9599ab1313c",
+    "android/app/src/main/res/mipmap-anydpi/ic_launcher.xml": "0c6446faf51919e3be928190603af491a25acd213522b9e280f0181861cdd2a2",
+    "android/app/src/main/res/mipmap-hdpi/ic_launcher.png": "ccba50da18718cc12b24da7512169d25a99bee56f4566a2a1c93afdca88d8529",
+    "android/app/src/main/res/mipmap-hdpi/ic_launcher_foreground.png": "1fec6f94e4a23ea0ec9339baf722815556ea405c1ba78ba8ec2b739ad0e19f2e",
+    "android/app/src/main/res/mipmap-mdpi/ic_launcher.png": "2c0593bc84604a32368b1da6997ea076b8148f8428be117c797fd4d4f8a26c48",
+    "android/app/src/main/res/mipmap-mdpi/ic_launcher_foreground.png": "7a6a53d461cfadc2154b39362d3fc98addae4a1cdf1c3b3e605cee6d89cc1683",
+    "android/app/src/main/res/mipmap-xhdpi/ic_launcher.png": "5de3522bbae49a33481c182424cc689974f61fd88d5cfb36aa01e5dc3456676a",
+    "android/app/src/main/res/mipmap-xhdpi/ic_launcher_foreground.png": "2a6bfab21c4b993e0f33122aa8bd9f7337d4be4439216bcec4d75f558e53e136",
+    "android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png": "65af83a81c8787755220a47de109f3c30d9b9286e776d62043e4946ac0bda039",
+    "android/app/src/main/res/mipmap-xxhdpi/ic_launcher_foreground.png": "87b4d2562e0ecd9a2c646a2b41a57dc9d9dda8fff498173ab0752a699be4a513",
+    "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": "692a5bc76dd70163e36f052ec5eab66b0732dc370466db939ff4982daec7462c",
+    "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png": "d69fad1186523126ad9cffba3bf64e790536693a2b65a31640c2dd29e5bf8aec",
+    "android/app/src/main/res/values-v31/styles.xml": "e1d662e8b3b71dbf5ece31f9ee73efe109fc45bf86f1853141c0f9b396788062",
+    "android/app/src/main/res/values/colors.xml": "330ae59cc3d4b1e50f1010aa8af518b394216454c0af3c69b2a0660b7ea69392",
+    "android/app/src/main/res/values/styles.xml": "2824c55a60c50dfc8569306ba2d9574d337a9c8e355bba9f141104d959d5d34c"
+  },
+  "generation": "Original supplied raster derivations from tools/brand-platform-assets.py at source_brand_revision; transparent padding/canvas/downscale only, no invented vector or logo.",
+  "scope": "Launcher/adaptive foreground, native splash, connecting/offline hat, Ask Wizard screen badge, reply/Everywhere branded small icons only.",
+  "preserved": "Semantic recorder/error/upload/download/music icons and interactive orb; runtime behavior, permissions, origin/update/signing configs and sibling version reservations unchanged.",
+  "release": "Source-only handoff. Not a signed APK or publication receipt; no release slot consumed."
+}

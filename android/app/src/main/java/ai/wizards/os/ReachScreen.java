@@ -15,6 +15,7 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.ImageView;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -49,8 +50,11 @@ final class ReachScreen {
         col.setGravity(Gravity.CENTER_HORIZONTAL);
         col.setPadding(dp(32), 0, dp(32), 0);
 
-        TextView orb = text(48, VIOLET, false);
-        orb.setText("◉");
+        ImageView orb = new ImageView(a);
+        orb.setImageResource(R.drawable.wizard_mark_white);
+        orb.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        orb.setContentDescription("Wizard");
+        orb.setLayoutParams(new LinearLayout.LayoutParams(dp(48), dp(64)));
         title = text(22, INK, true);
         body = text(16, INK, false);
         body.setAlpha(0.78f);
