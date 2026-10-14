@@ -182,6 +182,8 @@
   const AG = () => window.WosAgents || null;
   const otherAgent = id => { const a = AG(); return !!id && (a ? a.isOther(id) : id !== 'hermes'); };
   const AGENT_OF = new Map(); // sessionId -> agent id, for threads of non-default agents (incl. not yet listed)
+  const AGENT_SEEN_KEY = 'wos.agentSeen.v1';
+  const AGENT_SEEN = (() => { try { const v = JSON.parse(localStorage.getItem(AGENT_SEEN_KEY) || 'null'); if (v && v.threads) return v; } catch (e) {} return { initializedAt: Date.now(), threads: {} }; })();
   const aq = (sid, sep = '?') => { const a = L.agentOf(sid); return a ? `${sep}agent=${encodeURIComponent(a)}` : ''; };
   const runAgent = runId => { for (const list of [L.sessions, ...Object.values(L.agentSessions)]) { const s = list.find(x => x.runId === runId); if (s) return L.agentOf(s.id); } return ''; };
   const rq = (runId, sep = '?') => { const a = runAgent(runId); return a ? `${sep}agent=${encodeURIComponent(a)}` : ''; };
@@ -362,7 +364,9 @@
     agentSessions: {}, agentStatus: {}, // non-default agents: id -> sessions / { ok, error, at }
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
-    isNew(s) { return hasNew(s, this.seen); },
+    isNew(s) { return hasNew(s, this.seenOf(s)); },
+    // A non-default agent's read state stays on this device (never PUT to the main agent's thread-seen store).
+    seenOf(s) { return s && s.agent && otherAgent(s.agent) ? AGENT_SEEN : this.seen; },
     workGroups(sessions, now) { return groupWork(sessions || this.sessions, now); },
     readyByPriority: byPriority,
     cardAt,
@@ -376,7 +380,7 @@
         if (def) continue;
         const at = Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt);
         if (isFinite(at) && at < now - WEEK) continue;
-        if (!hasNew(s, this.seen)) continue;
+        if (!hasNew(s, this.seenOf(s))) continue;
         if (s.status === 'failed' || s.status === 'interrupted' || s.critical) needs.push(s); else ready.push(s);
       }
       const t = s => Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt) || 0;
@@ -450,9 +454,12 @@
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
     pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
     markSeen(ids) {
-      const list = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
-      if (!list.length) return;
+      const all = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       const ts = Date.now();
+      const mine = all.filter(s => s.agent && otherAgent(s.agent));
+      if (mine.length) { for (const s of mine) AGENT_SEEN.threads[keyOf(s)] = recordFor(s, ts); try { localStorage.setItem(AGENT_SEEN_KEY, JSON.stringify(AGENT_SEEN)); } catch (e) {} this.emit(); }
+      const list = all.filter(s => !mine.includes(s));
+      if (!list.length) return;
       let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
       const threads = { ...state.threads };
       for (const s of list) threads[keyOf(s)] = recordFor(s, ts);
@@ -569,7 +576,8 @@
     },
     async _defer(id, deferred) {
       const s = this.session(id); if (!s) throw new Error('gone');
-      const p = await (await req('/wizard/thread-dispositions', { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', deferred }) })).json();
+      const ag = this.agentOf(id);
+      const p = await (await req('/wizard/thread-dispositions' + aq(id), { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', deferred, ...(ag ? { agent: ag } : {}) }) })).json();
       if (p?.record?.deferred !== deferred || !isFinite(Date.parse(p.record.updatedAt))) throw new Error('Thread disposition was not saved.');
       this.deferred[keyOf(s)] = p.record;
       return p.record;

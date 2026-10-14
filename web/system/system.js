@@ -108,7 +108,7 @@
     const rs = [...D.routines].sort((a, b) => (b.status === 'error') - (a.status === 'error')).slice(0, showAll ? undefined : Math.max(8, D.routines.filter(r => r.status === 'error').length));
     const routines = rs.map(r => `<div class="item r ${r.status === 'error' ? 'bad' : ''}"><span class="tx"><b>${esc(r.name)}</b><small>${esc(r.when)}${r.lastRun ? ` · ran ${esc(ago(r.lastRun))}` : ''}</small></span><span class="st">${dot(r.status === 'error' ? 'bad' : r.status === 'ok' ? 'ok' : 'idle')}${r.status === 'error' ? 'Failed' : r.status === 'ok' ? 'OK' : 'New'}</span></div>`).join('');
     $('sections').innerHTML = `
-      <section class="sec" id="s-agents"><h2>Agents</h2><div class="list">${agents}</div><button class="more-btn" data-agents>Manage agents in Agents</button></section>
+      <section class="sec" id="s-agents"><h2>Agents</h2><div class="list">${agents}</div><button class="more-btn" data-agents>Open Agents</button></section>
       <section class="sec" id="s-apps"><h2>Agent apps &amp; tools</h2><p class="hint">Installed apps and tools your agents can use. They have no screen of their own.</p><div class="list">${apps}</div></section>
       <section class="sec" id="s-conns"><h2>Connections</h2><p class="hint">Accounts and keys your agents use. Keys never leave your Wizard.</p>${conns}</section>
       <section class="sec" id="s-routines"><h2>Routines</h2><p class="hint">What your agents do on their own, on a schedule.</p><div class="list">${routines}</div>${!showAll && D.routines.length > rs.length ? `<button class="more-btn" data-all>Show all ${D.routines.length}</button>` : ''}</section>`;
