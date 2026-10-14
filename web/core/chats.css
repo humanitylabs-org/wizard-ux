@@ -340,6 +340,11 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-row .emo.sti .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(90, 220, 255, .22); border-top-color: var(--cyan); animation: sti-spin .9s linear infinite; }
 @keyframes sti-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ch-row .emo.sti .spin { animation-duration: 3s; } }
+.ch-row .emo.ch-app-icon { font-size: 0; overflow: visible; }
+.ch-row .emo.ch-app-icon .sgi { width: 24px; height: 24px; }
+.ch-row .emo.ch-app-state { position: absolute; right: -3px; bottom: -3px; width: 16px; height: 16px; min-width: 0; margin: 0; border-radius: 5px; z-index: 1; border: 1px solid var(--line-2); }
+.ch-row .emo.ch-app-state svg { width: 11px; height: 11px; }
+.ch-row .emo.ch-app-state .spin { width: 11px; height: 11px; }
 .ch-row .emo.sti .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); opacity: .55; }
 /* Read state is the only thing that sets weight: unread = bold white title + brighter preview + violet time; read = plain. */
 .ch-row .tp b, .ch-row.att-needs .tp b, .ch-row.att-check .tp b { color: var(--ink-2); font-weight: 500; }

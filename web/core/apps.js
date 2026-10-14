@@ -163,5 +163,8 @@
     if (m) return { query: m[1].trim(), tab: 'all', strong: false };
     return null;
   }
+  // MVP allowlist: Topics only. Resolve from the same record the launcher uses.
+  window.WizCore.threadApp = id => id === 'topics'
+    ? (REMOTE.find(a => a.id === id)?.sigil || { id: 'topics', name: 'Topics' }) : null;
   window.WizCore.apps = registry;
 })();
