@@ -21,6 +21,14 @@
     return h >>> 0;
   }
   function visible(el) { return el && el.clientHeight > 0 && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden'; }
+  function flowAnchor(el, owner, doc) {
+    // A sticky/fixed header does not move with the scroller. Its viewport offset
+    // cannot reconstruct a reading place; keep the saved numerical position.
+    for (let n = el; n && n !== owner; n = n.parentElement) {
+      if (['sticky','fixed'].includes(doc.defaultView.getComputedStyle(n).position)) return false;
+    }
+    return true;
+  }
   function snapshot(el, doc) {
     const root = el === doc.scrollingElement, box = root ? { top: 0, bottom: doc.defaultView.innerHeight } : el.getBoundingClientRect();
     // A short visible text block anchors the paragraph as fonts/images above it change.
@@ -28,7 +36,7 @@
       const b = n.getBoundingClientRect();
       let owner = n.parentElement;
       while (owner && owner !== el && !/auto|scroll/.test(doc.defaultView.getComputedStyle(owner).overflowY)) owner = owner.parentElement;
-      return owner === el && b.height > 0 && b.bottom > box.top + 1 && b.top < box.bottom;
+      return owner === el && flowAnchor(n, el, doc) && b.height > 0 && b.bottom > box.top + 1 && b.top < box.bottom;
     });
     return { path: selector(el, doc), x: el.scrollLeft, y: el.scrollTop, height: el.scrollHeight,
       ...(anchor ? { anchor: selector(anchor, doc), hash: hash(anchor), offset: anchor.getBoundingClientRect().top - box.top } : {}) };
@@ -94,7 +102,7 @@
           tracked.add(el); resize.observe(el);
           const root = el === doc.scrollingElement, anchor = s.anchor && find(doc, s.anchor);
           let y = s.y;
-          if (anchor && hash(anchor) === s.hash && visible(anchor)) y = el.scrollTop + anchor.getBoundingClientRect().top - (root ? 0 : el.getBoundingClientRect().top) - s.offset;
+          if (anchor && flowAnchor(anchor, el, doc) && hash(anchor) === s.hash && visible(anchor)) y = el.scrollTop + anchor.getBoundingClientRect().top - (root ? 0 : el.getBoundingClientRect().top) - s.offset;
           const max = Math.max(0, el.scrollHeight - el.clientHeight);
           // Reachable alone is insufficient: a surviving anchor can appear early
           // while the earlier text is still loading. Keep the original checkpoint.
