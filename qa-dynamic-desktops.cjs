@@ -100,6 +100,20 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
  await p.keyboard.press('MetaRight');await p.waitForFunction(()=>__wux.voice==='listen');await nap(1300);
  await p.keyboard.press('Meta+w');await p.keyboard.press('MetaRight');await p.waitForFunction(()=>__deskEnqueues.length===1);
  ok(await p.evaluate(()=>__deskEnqueues[0].kind==='reply'&&__deskEnqueues[0].sid===__voiceSid&&__deskEnqueues[0].bytes>1200),'reply recording retains its original thread when its app closes');
+ // ⌥N one past the last desktop is the + slot: it opens a desktop instead of doing nothing.
+ {const pc=await context(),pp=await pc.newPage();pp.on('pageerror',e=>errors.push(String(e)));await pp.goto(BASE);await pp.waitForFunction(()=>window.__wux?.live?.ok,null,{timeout:45000});
+  ok(await pp.evaluate(()=>__wux.ws.length===1&&__wux.cur===0),'plus-slot fixture starts with one desktop');
+  await pp.keyboard.press('Alt+2');await nap(100);
+  ok(await pp.evaluate(()=>__wux.ws.length===2&&__wux.cur===1&&!__wux.ws[1].wins.length),'Option-2 with one desktop opens desktop 2 like the plus button');
+  await pp.keyboard.press('Alt+1');await pp.keyboard.press('Alt+2');await nap(100);
+  ok(await pp.evaluate(()=>__wux.ws.length===2&&__wux.cur===1),'Option-2 then switches to the existing desktop 2 without creating another');
+  await pp.keyboard.press('Alt+4');await nap(100);
+  ok(await pp.evaluate(()=>__wux.ws.length===2&&__wux.cur===1),'digits beyond the plus slot stay inert');
+  await pp.evaluate(()=>{__wux.goWs(0);__wux.newWin({app:'chats'});window.__plusMove=__wux.ws[0].focus;});
+  await pp.keyboard.press('Alt+Shift+3');await nap(100);
+  ok(await pp.evaluate(()=>__wux.ws.length===3&&__wux.ws[2].wins.includes(__plusMove)&&!__wux.ws[0].wins.includes(__plusMove)),'Option-Shift on the plus slot moves the focused app into a new desktop');
+  ok(await pp.locator('#wsList [data-newdesk]').getAttribute('title').then(t=>t.includes('4')),'plus button names its Option-digit');
+  await pc.close();}
  ok(errors.length===0,'no page errors: '+errors.join(' | '));ok(writes.every(x=>x.startsWith('/wizard/')||x.startsWith('/api/')),'all backend write attempts were intercepted and refused in isolated QA');console.log('INTERCEPTED_WRITES',JSON.stringify(writes));
  fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({pass,results,errors,writes,url},null,2));console.log(`${pass} passed`);
  }finally{await b.close();}})().catch(e=>{console.error(e);process.exitCode=1;});
