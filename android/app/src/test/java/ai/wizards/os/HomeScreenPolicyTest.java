@@ -3,6 +3,20 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class HomeScreenPolicyTest {
+    @Test public void signalHomeNameDoesNotChangeRegistryIdentity() {
+        assertEquals("Signal",HomeScreenPolicy.displayName("wizard-signal","Wizard Signal"));
+        assertEquals("Wisdom",HomeScreenPolicy.displayName("wisdom","Wisdom"));
+    }
+    @Test public void pinNeedsFreshUncanceledTapAndSingleClaim() {
+        HomeScreenPolicy.TapGate gate = new HomeScreenPolicy.TapGate(8);
+        assertEquals(-1,gate.claim(10)); // boot is not a gesture
+        gate.down(10,10); gate.up(100); long claim=gate.claim(101);
+        assertTrue(gate.current(claim)); assertEquals(-1,gate.claim(102));
+        gate.down(10,10); assertFalse(gate.current(claim)); gate.move(30,10); gate.up(200);
+        assertEquals(-1,gate.claim(201));
+        gate.down(10,10); gate.cancel(); gate.up(300); assertEquals(-1,gate.claim(301));
+        gate.down(10,10); gate.up(400); assertEquals(-1,gate.claim(2000));
+    }
     @Test public void stableIdentityIncludesBoxAndApp() {
         String wisdom = HomeScreenPolicy.identity("https://box.example","wisdom");
         assertEquals(wisdom,HomeScreenPolicy.identity("https://box.example","wisdom"));

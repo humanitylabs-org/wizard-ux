@@ -145,9 +145,11 @@ public class MainActivity extends Activity {
         if (!(this instanceof AppSessionActivity)) ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(cmd -> main.post(() -> {
             if (web != null) web.evaluateJavascript("(window.__wosVoiceCmd && window.__wosVoiceCmd(" + Handoff.quote(cmd) + "))", null);
         }));
-        if (ACTION_ACCESSIBILITY.equals(getIntent().getAction())) { getIntent().setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); }
-        queueHandoff(getIntent());
-        device.onIntent(getIntent());
+        if (!(this instanceof AppSessionActivity)) {
+            if (ACTION_ACCESSIBILITY.equals(getIntent().getAction())) { getIntent().setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); }
+            queueHandoff(getIntent());
+            device.onIntent(getIntent());
+        }
     }
 
     private void buildWebView() {
@@ -189,7 +191,19 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
-                if (req.isForMainFrame() && MainActivity.this instanceof AppSessionActivity && !((AppSessionActivity)MainActivity.this).acceptsUrl(u.toString())) { openOutside(u); return true; }
+                if (req.isForMainFrame() && MainActivity.this instanceof AppSessionActivity && !((AppSessionActivity)MainActivity.this).acceptsUrl(u.toString())) {
+                    // Explicit public http(s) links retain the system-browser utility.
+                    // Same-box, shell, custom-scheme and gestureless hops are never forwarded.
+                    if (req.hasGesture() && ("https".equals(u.getScheme()) || "http".equals(u.getScheme()))
+                            && !HomeScreenShortcuts.origin(MainActivity.this).equals(u.getScheme() + "://" + u.getEncodedAuthority())
+                            && !Origin.isPrivate(u) && u.getPath() != null && !Origin.isShellPath(u.getPath())) {
+                        openOutside(u); return true;
+                    }
+                    // Never route a rejected task navigation through ACTION_VIEW: a same-box
+                    // shell/deep link can resolve back to MainActivity and mutate Wizard desks.
+                    Toast.makeText(MainActivity.this,"Use Android Home to switch apps",Toast.LENGTH_SHORT).show();
+                    return true;
+                }
                 // A main-frame hop to the retired private.wizard001.com lands on the same page under this Wizard's own name.
                 if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying && !ai.wizards.os.device.AppState.legacyFallback) { go(Origin.toHome(u.toString())); return true; }
                 // Under the safety net the tailnet name is unreachable: its links open the same page on the old name.

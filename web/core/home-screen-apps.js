@@ -10,7 +10,8 @@
     return new Promise(resolve => {
       const timer = setTimeout(() => { responses.delete(requestId); resolve({ status:'error' }); }, 8000);
       responses.set(requestId, value => { clearTimeout(timer); resolve(value); });
-      port().postMessage(JSON.stringify({ op, requestId, appId:app.id, ...extra }));
+      try { port().postMessage(JSON.stringify({ op, requestId, appId:app.id, ...extra })); }
+      catch (_) { clearTimeout(timer); responses.delete(requestId); resolve({ status:'error' }); }
     });
   }
   function bindPort() {
@@ -41,28 +42,31 @@
   }
   async function show(a) {
     close(); bindPort(); active = a;
+    const name = window.WizHomeScreenPolicy.displayName(a);
     overlay = document.createElement('div'); overlay.className = 'home-pin-backdrop';
-    const sheet = document.createElement('section'); sheet.className = 'home-pin-sheet'; sheet.setAttribute('role','dialog'); sheet.setAttribute('aria-label', a.name + ' home screen');
+    const sheet = document.createElement('section'); sheet.className = 'home-pin-sheet'; sheet.setAttribute('role','dialog'); sheet.setAttribute('aria-label', name + ' home screen');
     const header = document.createElement('header'); header.innerHTML = window.WizSigil.box('span','',a);
-    const title = document.createElement('span'); title.textContent = a.name; header.append(title);
+    const title = document.createElement('span'); title.textContent = name; header.append(title);
     const button = document.createElement('button'); button.type = 'button'; button.disabled = true; button.textContent = 'Add to home screen';
     sheet.append(header, button); overlay.append(sheet); document.body.append(overlay);
     let freshPress = false, png = '';
     overlay.addEventListener('pointerdown', e => { freshPress = e.isTrusted; e.stopPropagation(); });
+    overlay.addEventListener('pointercancel', () => { freshPress = false; });
     // Opening gesture's release/click can never activate the newly mounted action.
     overlay.addEventListener('click', e => {
       if (!freshPress && e.detail !== 0) { e.preventDefault(); e.stopImmediatePropagation(); return; }
       freshPress = false;
       if (e.target === overlay && !pending) close();
     }, true);
-    try { png = await iconPNG(a, header); } catch (_) { paint('error'); return; }
+    try { png = await iconPNG(a, header); } catch (_) { if (active === a) paint('error'); return; }
+    if (active !== a) return;
     const response = await request('status', a);
     if (active !== a) return; paint(response.status);
     button.onclick = e => {
       if (!e.isTrusted || !navigator.userActivation?.isActive || pending || !png) return;
       pending = true; paint('pending');
       // No async work before postMessage: retain the tap's native user activation.
-      request('pin',a,{ name:a.name, icon:png }).then(r => {
+      request('pin',a,{ name, icon:png }).then(r => {
         if (active !== a) return;
         if (r.status !== 'pending') { pending = false; paint(r.status); }
       });
@@ -75,7 +79,7 @@
     menu.addEventListener('pointerdown', e => {
       if (hold) { cancel(); block(); return; }
       const row = e.target.closest('[data-app]'), a = row && appFor(row.dataset.app);
-      if (!e.isTrusted || !e.isPrimary || e.button !== 0 || !a || a.kind !== 'wizard' || !a.url || !window.WizHomeScreenPolicy.validId(a.id) || !window.WizHomeScreenPolicy.within(a.url,a.url)) return;
+      if (!e.isTrusted || !e.isPrimary || e.button !== 0 || !a || a.kind !== 'wizard' || !a.url || !window.WizHomeScreenPolicy.validId(a.id) || window.WizHomeScreenPolicy.isShell(a.url) || !window.WizHomeScreenPolicy.within(a.url,a.url)) return;
       hold = { id:e.pointerId, x:e.clientX, y:e.clientY, a };
       timer = setTimeout(() => { if (!hold || !row.isConnected || !menu.classList.contains('open')) { cancel(); return; } block(); try { navigator.vibrate?.(12); } catch (_) {} show(a); },450);
     }, true);
@@ -86,7 +90,7 @@
     document.addEventListener('pointercancel', () => { if (hold) block(); cancel(); },true);
     menu.addEventListener('contextmenu', e => { if (overlay || hold) e.preventDefault(); },true);
     menu.addEventListener('click', e => { if (overlay || performance.now() < blockedUntil) { e.preventDefault(); e.stopImmediatePropagation(); } },true);
-    document.addEventListener('visibilitychange', () => { cancel(); });
+    document.addEventListener('visibilitychange', () => { if (hold) block(); cancel(); });
   }
   addEventListener('wos-native-resume', async () => {
     if (!pending || !active) return;

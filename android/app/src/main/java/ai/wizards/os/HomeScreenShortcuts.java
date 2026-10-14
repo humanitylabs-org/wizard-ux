@@ -53,8 +53,17 @@ public final class HomeScreenShortcuts {
     }
     public static void attach(Activity activity, WebView web) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return;
-        final long[] touch = {0};
-        web.setOnTouchListener((v,e) -> { if (e.getActionMasked() == MotionEvent.ACTION_UP) touch[0] = SystemClock.elapsedRealtime(); return false; });
+        final HomeScreenPolicy.TapGate touch = new HomeScreenPolicy.TapGate(android.view.ViewConfiguration.get(activity).getScaledTouchSlop());
+        web.setOnTouchListener((v,e) -> {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN: touch.down(e.getX(),e.getY()); break;
+                case MotionEvent.ACTION_MOVE: touch.move(e.getX(),e.getY()); break;
+                case MotionEvent.ACTION_UP: touch.up(SystemClock.elapsedRealtime()); break;
+                case MotionEvent.ACTION_CANCEL:
+                case MotionEvent.ACTION_POINTER_DOWN: touch.cancel(); break;
+            }
+            return false;
+        });
         final String origin = origin(activity);
         WebViewCompat.addWebMessageListener(web, "wizardHomeScreenPort", Collections.singleton(origin),
             (view,message,source,isMainFrame,reply) -> {
@@ -72,10 +81,22 @@ public final class HomeScreenShortcuts {
                     String op = data.optString("op");
                     if ("status".equals(op)) { send.accept(pinned(activity,app) ? "pinned" : "ready"); return; }
                     if (!"pin".equals(op)) return;
-                    if (SystemClock.elapsedRealtime() - touch[0] > 1500) { send.accept("error"); return; }
+                    final long gesture = touch.claim(SystemClock.elapsedRealtime());
+                    final String page = view.getUrl();
+                    if (gesture < 0 || !activity.hasWindowFocus()) { send.accept("error"); return; }
                     // The scoped port proves origin/main-frame, activation proves a current intentional gesture.
-                    view.evaluateJavascript("Boolean(navigator.userActivation && navigator.userActivation.isActive)", result -> {
-                        if (!"true".equals(result) || !trusted(view,origin)) { send.accept("error"); return; }
+                    final long requestedAt = SystemClock.elapsedRealtime();
+                    String activation = "Boolean(navigator.userActivation && navigator.userActivation.isActive"
+                        + " && window.WizHomeScreenApps && WizHomeScreenApps.state.pending"
+                        + " && WizHomeScreenApps.state.appId === " + JSONObject.quote(app)
+                        + " && window.WizCore && window.WizHomeScreenPolicy && (function(){"
+                        + "var a=WizCore.apps('mobile').APP[" + JSONObject.quote(app) + "];"
+                        + "return a && a.kind==='wizard' && a.url && !WizHomeScreenPolicy.isShell(a.url)"
+                        + " && WizHomeScreenPolicy.within(a.url,a.url);})())";
+                    view.evaluateJavascript(activation, result -> {
+                        if (!"true".equals(result) || !touch.current(gesture) || !activity.hasWindowFocus()
+                                || SystemClock.elapsedRealtime() - requestedAt > 1500
+                                || !page.equals(view.getUrl()) || !trusted(view,origin)) { send.accept("error"); return; }
                         try { send.accept(pin(activity,data)); } catch (Exception error) { send.accept("error"); }
                     });
                 } catch (Exception ignored) { /* malformed/untrusted messages fail closed */ }
@@ -83,6 +104,7 @@ public final class HomeScreenShortcuts {
     }
     private static String pin(Context c, JSONObject data) {
         String app = data.optString("appId"), name = data.optString("name"), png = data.optString("icon");
+        name = HomeScreenPolicy.displayName(app,name);
         if (name.trim().isEmpty() || name.length() > 80 || !png.startsWith("data:image/png;base64,") || png.length() > 90000) return "error";
         if (pinned(c,app)) return "pinned";
         byte[] bytes = Base64.decode(png.substring(22),Base64.DEFAULT);

@@ -1,23 +1,27 @@
 #!/usr/bin/env python3
 """Thales API35 signed-preview pin/task probe. Real launcher/UI, no CDP or app doubles.
-Usage on Thales: python3 tools/qa_home_screen_apps.py /Volumes/ThalesMedia/AndroidBuilds/jobs/JOB/receipt.json
+Usage on Thales: QA_SHA=<exact candidate SHA> python3 tools/qa_home_screen_apps.py /Volumes/ThalesMedia/AndroidBuilds/jobs/JOB/receipt.json
 The build must have come from android-build-thales --wait-for-lock. Never runs on VPS/physical phones.
 """
-import fcntl, hashlib, json, os, pathlib, re, socket, sys, time
-from qa_aa_lib import Emu, wait, BASE
+import fcntl, hashlib, json, os, pathlib, re, socket, sys, time, urllib.request, urllib.parse
 P = pathlib.Path
 if sys.platform != 'darwin' or 'thales' not in socket.gethostname().lower():
     raise SystemExit('Thales-only emulator QA')
+from qa_aa_lib import Emu, wait, BASE
 receipt_path = P(sys.argv[1]).resolve()
 if not receipt_path.is_relative_to(BASE) or receipt_path.name != 'receipt.json':
     raise SystemExit('Require canonical remote build receipt under AndroidBuilds')
 build = json.loads(receipt_path.read_text())
 if build.get('status') != 'ok' or build.get('host') != 'thales':
     raise SystemExit('Build receipt is not successful Thales output')
+if not re.fullmatch(r'[a-f0-9]{40}',os.environ.get('QA_SHA','')) or build.get('source_revision') != os.environ['QA_SHA']:
+    raise SystemExit('QA_SHA must match exact remote candidate source revision')
 artifacts = [a for a in build['artifacts'] if a.get('aapt2',{}).get('package') == 'ai.wizards.os.preview']
 if len(artifacts) != 1:
     raise SystemExit('Exactly one signed Preview artifact required')
 a = artifacts[0]
+if str(a['aapt2'].get('version_code')) != '1001' or a['aapt2'].get('version_name') != '0.9.12-homescreen.1-preview' or a['aapt2'].get('application_label') != 'Wizard Preview':
+    raise SystemExit('Wrong coordinated Home-screen Preview version/label')
 if a['signer_sha256'] != '3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd':
     raise SystemExit('Wrong Wizard OS signer')
 apk = P(build['job']) / 'source' / a['path']
@@ -26,6 +30,11 @@ if not apk.resolve().is_relative_to(P(build['job']) / 'source'):
 if hashlib.sha256(apk.read_bytes()).hexdigest() != a['sha256']:
     raise SystemExit('Exact artifact SHA mismatch')
 checks=[]
+origin='https://home-screen-apps.staging.wizard001.com'
+incomplete=['signed WebView exact inner URL/iframe-refresh and per-instance storage readback (debug companion required)',
+            'camera/IME/sigil pixel acceptance and selection/share/capture device interactions',
+            'invalid-native-intent and network/Tailscale recovery device gates',
+            'affected browser regressions and expected-failure baseline receipts']
 def check(name, condition, detail=None):
     checks.append({'name':name,'pass':bool(condition),'detail':detail})
     print(('PASS ' if condition else 'FAIL ') + name, detail or '', flush=True)
@@ -46,6 +55,18 @@ def tasks(raw):
         if 'ai.wizards.os.preview' in block and '.AppSessionActivity' in block
         for m in [re.search(r'Task\{[^\n]* #([0-9]+)',block)] if m))
 
+def labels(xml):
+    import xml.etree.ElementTree as E
+    return [n.get('text') or n.get('content-desc') or '' for n in E.fromstring(xml).iter('node')]
+def reading(xml):
+    return next((s.strip() for s in labels(xml) if re.fullmatch(r'\s*\d+\s*/\s*\d+\s*',s)),None)
+def app_content(label,xml):
+    text=' '.join(labels(xml))
+    if label=='Wisdom': return bool(re.search(r'Currently reading|Suggested|Browse all|Request a new collection',text)) or bool(reading(xml))
+    return 'Signal' in text and bool(re.search(r'For You|Latest|Sources|Saved',text)) and not reading(xml)
+def get_json(url):
+    with urllib.request.urlopen(url,timeout=30) as r:return json.load(r)
+
 # The exact canonical shared heavy-worker lease; no alternate lock or fallback.
 with (BASE/'worker.lock').open('a') as lease:
     fcntl.flock(lease,fcntl.LOCK_EX)
@@ -57,6 +78,17 @@ with (BASE/'worker.lock').open('a') as lease:
         emu.shot(out,name);(out/(name+'.xml')).write_text(emu.ui());(out/(name+'-activities.txt')).write_text(emu.sx('dumpsys activity activities'))
     try:
         emu.boot();check('isolated API35 emulator',emu.sx('getprop ro.build.version.sdk').strip()=='35')
+        source=P(build['job'])/'source'
+        for rel in ('index.html','core/home-screen-policy.js','core/single-app-session.js','core/home-screen-apps.js'):
+            with urllib.request.urlopen(origin+'/wizard-os-home/'+rel,timeout=30) as r:served=r.read()
+            expected=(source/'web'/rel).read_bytes()
+            check('durable staging exact candidate '+rel,hashlib.sha256(served).digest()==hashlib.sha256(expected).digest(),hashlib.sha256(served).hexdigest())
+        registry=get_json(origin+'/wizard/v1/apps')['apps']
+        routes={app['id']:urllib.parse.urljoin(origin,app['url']) for app in registry if app['id'] in ('wisdom','wizard-signal')}
+        check('real registered frontend routes present',set(routes)=={'wisdom','wizard-signal'},routes)
+        live=get_json(urllib.parse.urljoin(routes['wisdom'],'api/wisdom'))
+        unread=[e for e in live['entries'] if not e.get('read')]
+        check('live Wisdom has actual unread reading data',bool(unread))
         from qa_aa_lib import ADB
         install=emu.sh(ADB,'-s',emu.S,'install','-r',apk)
         check('exact signed-preview APK installs on emulator','Success' in install,install)
@@ -67,7 +99,7 @@ with (BASE/'worker.lock').open('a') as lease:
         for label in ('Wisdom','Signal'):
             # Apps is the existing mobile upward swipe from the orb; no synthetic native launch URL.
             emu.sx('input swipe 540 2160 540 1400 450');time.sleep(1)
-            point=bounds(emu.ui(),label)
+            point=bounds(emu.ui(),label) or (bounds(emu.ui(),'Wizard Signal') if label=='Signal' else None)
             check(label+' appears in real Apps menu',point is not None)
             x,y=point;emu.sx('input swipe %d %d %d %d 650'%(x,y,x,y));time.sleep(0.5)
             capture(label.lower()+'-pin-action')
@@ -83,21 +115,52 @@ with (BASE/'worker.lock').open('a') as lease:
             emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
             point=bounds(emu.ui(),label);check(label+' own home icon/name exists',point is not None)
             emu.sx('input tap %d %d'%point);time.sleep(4)
-            check(label+' own icon launches AppSessionActivity','.AppSessionActivity' in emu.top(),emu.top());capture(label.lower()+'-session')
+            check(label+' own icon launches correct real frontend content',wait(lambda:app_content(label,emu.ui()),25),emu.top());capture(label.lower()+'-session')
             for n in range(3):emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.3)
-            check(label+' root Back remains in app task','.AppSessionActivity' in emu.top())
+            check(label+' repeated root Back retains actual app content',app_content(label,emu.ui()) and emu.front())
             emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
             emu.sx('monkey -p ai.wizards.os.preview -c android.intent.category.LAUNCHER 1');time.sleep(1)
         emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
         original=tasks(emu.sx('dumpsys activity recents'));check('Wisdom and Signal independent Recents tasks',len(original)==2,original)
+        recents=emu.sx('dumpsys activity recents');check('Wizard ordinary task remains separate', '.MainActivity' in recents)
         for label in ('Wisdom','Signal','Wisdom'):
             emu.sx('input keyevent KEYCODE_HOME');time.sleep(0.5);point=bounds(emu.ui(),label);check(label+' launcher icon still present',point is not None)
             emu.sx('input tap %d %d'%point);time.sleep(1)
             check(label+' repeated launch reuses existing task set',tasks(emu.sx('dumpsys activity recents'))==original)
+            check(label+' switch/re-tap preserves actual displayed app',app_content(label,emu.ui()))
+        # Actual Wisdom pages, not an Activity-name surrogate or a made-up #/read route.
+        check('Wisdom Browse control opens',bool(emu.tap_text(r'Browse all|Browse & search')))
+        time.sleep(1);check('Wisdom real To read list opens',bool(emu.tap_text(r'^To read$')));time.sleep(1)
+        selected=None
+        for _ in range(8):
+            xml=emu.ui()
+            selected=next((e for e in unread if e['title'] in ' '.join(labels(xml))),None)
+            if selected and emu.tap_text(re.escape(selected['title']),xml):break
+            selected=None;emu.sx('input swipe 540 1850 540 750 300');time.sleep(0.5)
+        check('actual unread Wisdom chapter opened',selected is not None)
+        check('actual paged reader visible',wait(lambda:reading(emu.ui()),20),selected['title'])
+        first=reading(emu.ui());check('real chapter has nonterminal pages',int(first.split('/')[1])>=4,first)
+        for _ in range(2):emu.sx('input keyevent KEYCODE_DPAD_RIGHT');time.sleep(0.4)
+        saved=reading(emu.ui());check('actual reader advanced to page three',bool(saved and int(saved.split('/')[0])==3),saved)
+        capture('wisdom-page-three')
+        for label in ('Signal','Wisdom','Wisdom'):
+            emu.sx('input keyevent KEYCODE_HOME');time.sleep(0.5);point=bounds(emu.ui(),label);check(label+' pinned icon present for reading switch',point is not None)
+            emu.sx('input tap %d %d'%point);time.sleep(1)
+            if label=='Wisdom':check('Wisdom Home/switch/re-tap retains actual chapter/page',reading(emu.ui())==saved and selected['title'] in ' '.join(labels(emu.ui())))
+            else:check('Signal task still displays real Signal frontend',app_content(label,emu.ui()))
         emu.sx('input keyevent KEYCODE_HOME');time.sleep(0.5);emu.sx('am kill ai.wizards.os.preview')
         check('background process death exercised',wait(lambda:not emu.sx('pidof ai.wizards.os.preview').strip(),10))
         point=bounds(emu.ui(),'Wisdom');check('Wisdom icon survives process death',point is not None);emu.sx('input tap %d %d'%point);time.sleep(4)
-        check('Wisdom recreates own task after death','.AppSessionActivity' in emu.top());capture('death-restore')
+        check('Wisdom process death restores actual chapter AND reading page',wait(lambda:reading(emu.ui())==saved and selected['title'] in ' '.join(labels(emu.ui())),25));capture('death-restore')
+        emu.sx('input keyevent KEYCODE_BACK');time.sleep(1)
+        check('nested Back actually leaves reading page, remains Wisdom',reading(emu.ui()) is None and app_content('Wisdom',emu.ui()) and emu.front())
+        # Close a real app overlay before leaving its route; never submit its form.
+        for _ in range(4):emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.3)
+        emu.sx('input swipe 540 1800 540 800 400');time.sleep(0.5)
+        check('Wisdom real request overlay opens',bool(emu.tap_text(r'^Request a new collection$')));time.sleep(0.5)
+        check('Wisdom real request textbox visible','wb-req-text' in emu.ui() or 'What do you want to read' in emu.ui())
+        emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.5)
+        check('overlay Back does not exit or reveal desks',emu.front() and app_content('Wisdom',emu.ui()) and 'What do you want to read' not in emu.ui())
         recents=emu.sx('dumpsys activity recents');(out/'final-recents.txt').write_text(recents)
         check('no duplicate app tasks after death',tasks(recents)==original)
     except Exception as error:
@@ -106,6 +169,8 @@ with (BASE/'worker.lock').open('a') as lease:
         except Exception:pass
     finally:
         emu.kill()
-        result={'host':socket.gethostname(),'source_revision':build['source_revision'],'source_manifest_sha256':build['source_manifest_sha256'],'apk':str(apk),'sha256':a['sha256'],'signer_sha256':a['signer_sha256'],'package':a['aapt2'],'checks':checks,'failure':failure,'scope':'actual signed Preview/launcher/API35; no debug-CDP substitution','incomplete':['real chapter route/reading-position death+refresh comparison','nested app-overlay Back','camera/IME cutouts','removed-app/network recovery','durable staging source readback','affected browser regressions/negative control']}
+        result={'host':socket.gethostname(),'source_revision':build['source_revision'],'source_manifest_sha256':build['source_manifest_sha256'],'apk':str(apk),'sha256':a['sha256'],'signer_sha256':a['signer_sha256'],'package':a['aapt2'],'checks':checks,'failure':failure,'scope':'actual signed Preview/launcher/API35 UI + candidate staging readback; no debug-CDP substitution','incomplete':incomplete,
+                'acceptance':{'1':'OS pin/name + confirmation; sigil pixels need review','2':'task counts + actual Home/re-tap content/page','3':'actual death restores reader; workspace/isolation/frame-refresh browser+debug companion required','4':'real overlay/nested/root Back; camera/IME/utilities/recovery pending','5':'signed APK + exact staging GET source; browser baseline/regressions separate'}}
         (out/'receipt.json').write_text(json.dumps(result,indent=2));print(json.dumps(result,indent=2));print('EVIDENCE',out)
         if failure:raise SystemExit(1)
+        if incomplete:raise SystemExit(2) # a successful subset is not five-outcome acceptance

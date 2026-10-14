@@ -11,7 +11,9 @@
   window.__wosScreenSample = id => {
     const p = pending.get(id); if (!p || p.signal?.aborted) return false;
     p.release = p.conceal?.();
-    const dock = document.getElementById('dock')?.getBoundingClientRect();
+    const rect = document.getElementById('dock')?.getBoundingClientRect();
+    // Hidden workspace dock has top=0 in a pinned task: do not crop its capture to one pixel.
+    const dock = rect?.width > 0 && rect?.height > 0 ? rect : null;
     return { width: innerWidth, height: innerHeight, contentHeight: Math.min(innerHeight, Math.max(1, dock?.top ?? innerHeight)) };
   };
   window.__wosScreenSampled = id => { const p = pending.get(id); p?.release?.(); if (p) p.release = null; };

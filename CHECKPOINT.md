@@ -23,3 +23,13 @@ Missing acceptance: remote Java/Gradle tests+lint/compile/signing/APK metadata/h
 ## Recovery
 
 Repair Thales volume I/O with the Mac/workload owner; preserve siblings and the original canonical shared lease. Re-run from the immutable source commit via the approved runner, signed Preview first; separate debug signer/job if CDP is needed. Parent stages exact web source at `https://home-screen-apps.staging.wizard001.com/wizard-os-home/` before final APK acceptance. Continue native+web ownership as one lane; no worker deploy/merge/feed/service writes or physical-phone install.
+
+## Independent review repair checkpoint
+
+Input candidate `baa5a2027a210e20992ee7c2d83db08b26d58b08` was independently inspected against the brief and actual Wisdom/Signal frontend source. Narrow repairs and updated QA are detailed in `docs/home-screen-apps.md` under Independent source repair review. No remote heavy work was attempted during this review; parent retains Thales I/O diagnosis, staging and Android ownership.
+
+Source findings fixed: one-pixel fullscreen screenshot crop; Signal naming; canceled/stale native tap qualification; invalid/reused intent navigation; Signal route/state loss on iframe refresh; unnecessary Wisdom reader rerender; route-checkpoint race; stale-frame/unavailable recovery; missing selection Search/shared media-link utilities; shell index/desktop/preview masquerading as a frontend. Browser QA now includes actual reading pages/routes, per-instance checkpoint comparisons and required expected-failure baseline/regression controls. Signed UI script explicitly exits incomplete instead of reporting subset success.
+
+Unresolved external frontend boundary: Wisdom's current `layout(false)` ignores saved positions for already-read chapters and end-screen positions. The candidate's shell-level scoping cannot override that frontend decision safely. Do not mark universal process-death position restoration accepted on unread-page tests alone. No external app checkout edits were made.
+
+Review evidence is written under `/home/telos/.hermes/state/home-screen-apps-20261014-evidence/independent-review/`; consult its actual receipt/test TAP, not this document's historical count16. The updated native JUnit, browser and API35 scripts remain unexecuted until the authorized Thales route is available.

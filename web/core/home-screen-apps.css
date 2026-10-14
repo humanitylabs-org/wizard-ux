@@ -3,6 +3,8 @@ html[data-app-session] #device > :not(#singleApp):not(#toast) { display: none !i
 html[data-app-session] #device { width:100%; height:100dvh; max-width:none; border:0; border-radius:0; margin:0; transform:none; }
 html[data-app-session] #singleApp { position:absolute; inset:0; display:block; padding:0; margin:0; border:0; border-radius:0; }
 html[data-app-session] #singleApp iframe { position:absolute; inset:var(--single-cut, 0px) 0 0; width:100%; height:calc(100% - var(--single-cut, 0px)); border:0; background:var(--bg,#05030c); }
+html[data-app-session] .linksheet .ls-keep { display:none; }
+html[data-app-session] .linksheet { position:fixed; padding-top:var(--nat-t,0px); }
 .single-unavailable { padding:calc(32px + var(--nat-t,0px)) 24px; color:var(--ink,#f3efff); }
 .home-pin-backdrop { position:fixed; inset:0; z-index:1500; background:rgba(0,0,0,.3); display:flex; align-items:flex-end; justify-content:center; padding:16px 12px calc(16px + env(safe-area-inset-bottom)); }
 .home-pin-sheet { width:min(100%,380px); padding:12px; border:1px solid var(--line-2,rgba(205,190,255,.24)); border-radius:18px; background:var(--glass-2,#1c133a); backdrop-filter:blur(24px); color:var(--ink,#f3efff); box-shadow:0 12px 36px #0007; }

@@ -16,6 +16,14 @@ function storage() {
   return {getItem:k=>data.get(String(k))??null,setItem:(k,v)=>data.set(String(k),String(v)),removeItem:k=>data.delete(String(k)),get length(){return data.size},key:n=>[...data.keys()][n]??null,data};
 }
 test('normal launcher does not opt into pinned session',()=>{ const {p,attributes}=policy(); assert.equal(p.mode,false); assert.deepEqual(attributes,{}); });
+test('Signal shortcut/task name is independent of unchanged registry/workspace labels',()=>{
+  const {p}=policy(),app={id:'wizard-signal',name:'Wizard Signal'};
+  assert.equal(p.displayName(app),'Signal');assert.equal(app.name,'Wizard Signal');
+});
+test('index, desktop and preview shell routes cannot masquerade as frontend apps',()=>{
+ const {p}=policy();for(const path of ['/wizard-os-home/','/wizard-os-home/index.html','/wizard-os-home/desktop.html','/wizard-os-home-preview/','/wizard-os-home'])assert.equal(p.isShell(path),true,path);
+ assert.equal(p.isShell('/wizard-signal/'),false);assert.equal(p.isShell('/wizard-wisdom/'),false);
+});
 test('canonical stable IDs and malformed links fail closed',()=>{
   const {p,attributes}=policy('?app-session=wizard-signal'); assert.equal(p.id,'wizard-signal'); assert.equal(attributes['data-app-session'],'wizard-signal');
   for (const bad of ['','../wisdom','a/b','x.y','x?open=chats','a'.repeat(97)]) assert.equal(p.validId(bad),false);
@@ -77,7 +85,7 @@ function pinFixture(status='ready') {
   window.WizHomeScreenApps.attach(menu,()=>({id:'wisdom',name:'Wisdom',kind:'wizard',url:'/wisdom/'}));
   const event=(extra={})=>({target:row,isTrusted:true,isPrimary:true,button:0,pointerId:1,clientX:50,clientY:50,detail:1,preventDefault(){this.prevented=true;},stopPropagation(){},stopImmediatePropagation(){this.stopped=true;},...extra});
   const tick=ms=>{now+=ms;for(const [id,t] of [...timers])if(t.ms===ms){timers.delete(id);t.fn();}};
-  return {window,document,body,menu,event,tick,messages,setStatus:s=>actualStatus=s};
+  return {window,document,body,menu,event,tick,messages,ctx,setStatus:s=>actualStatus=s};
 }
 test('long-press cancels on move, scroll, pointercancel and second pointer; ordinary tap survives',()=>{
   for (const action of ['move','scroll','cancel','second']) {
@@ -104,6 +112,33 @@ test('already pinned/unsupported state disables action and canceled OS sheet has
   const f=pinFixture();f.menu.emit('pointerdown',f.event());f.tick(450);await Promise.resolve();await Promise.resolve();await Promise.resolve();f.body.children[0].querySelector('button').onclick(f.event());await Promise.resolve();await f.window['wos-native-resume']();assert.equal(f.window.WizHomeScreenApps.state.open,false);
 });
 
+test('action requires active intentional gesture; canceled action press and port failure fail closed',async()=>{
+  const f=pinFixture();f.menu.emit('pointerdown',f.event());f.tick(450);
+  await Promise.resolve();await Promise.resolve();await Promise.resolve();
+  const overlay=f.body.children[0],button=overlay.querySelector('button');
+  f.ctx.navigator.userActivation.isActive=false;button.onclick(f.event());
+  assert.equal(f.messages.filter(d=>d.op==='pin').length,0);
+  f.ctx.navigator.userActivation.isActive=true;button.onclick(f.event({isTrusted:false}));
+  assert.equal(f.messages.filter(d=>d.op==='pin').length,0);
+  overlay.emit('pointerdown',f.event());overlay.emit('pointercancel',f.event());
+  assert.equal(overlay.emit('click',f.event({target:button})).stopped,true);
+  f.window.wizardHomeScreenPort.postMessage=()=>{throw new Error('closed port')};
+  button.onclick(f.event());await Promise.resolve();await Promise.resolve();
+  assert.equal(f.window.WizHomeScreenApps.state.pending,false);
+  assert.equal(button.textContent,"Couldn't add. Try again");
+});
+test('native screen sampling ignores hidden workspace dock but preserves ordinary shell crop',()=>{
+  for (const [rect,height] of [[{top:0,width:0,height:0},892],[{top:800,width:412,height:64},800]]) {
+    const window={wizardScreenPort:{postMessage(id){window.id=id}}};
+    const ctx=vm.createContext({window,navigator:{userActivation:{isActive:true}},crypto:{randomUUID:()=> 'fixture'},
+      document:{getElementById:()=>({getBoundingClientRect:()=>rect})},innerWidth:412,innerHeight:892,
+      setTimeout:()=>1,clearTimeout(){},Promise,Map});
+    vm.runInContext(read('core/screen-capture.js'),ctx);
+    window.WosScreenCapture.capture().catch(()=>{});
+    assert.equal(window.__wosScreenSample(window.id).contentHeight,height);
+    window.__wosScreenResult(window.id,'','test cleanup');
+  }
+});
 test('mounted session Back consumes app overlay, safe in-app history and forever at root',async()=>{
   const {p}=policy('?app-session=wisdom');const store=storage();let frame,serviceStep='handled',traversals=0,flushes=0;
   const rootDoc={documentElement:{style:{setProperty(){}}},querySelector:()=>null,styleSheets:[]};
