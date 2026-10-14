@@ -43,7 +43,7 @@ function ok(c,n) { assert(c,n); pass++; results.push(n); console.log('PASS',n); 
  await p.locator(`.win[data-win="${pair[1]}"] textarea`).focus();
  await p.keyboard.press('Meta+w');
  ok(await p.evaluate(ids=>!!__wux.wins[ids[0]]&&!__wux.wins[ids[1]]&&__wux.ws[0].focus===ids[0],pair),'Command-W in composer closes only focused app and focuses its neighbour');
- await p.evaluate(()=>{__wux.goWs(1);__wux.newWin({app:'chats',thread:'__new__'});});
+ await p.evaluate(()=>{__wux.newDesktop();__wux.newWin({app:'chats',thread:'__new__'});});
  await p.keyboard.press('Meta+w');
  ok(await p.evaluate(id=>__wux.ws[1].wins.length===0&&!!__wux.wins[id],pair[0]),'Command-W preserves apps on other workspaces');
  await p.evaluate(()=>{__wux.goWs(0);__wux.newWin({app:'frame',appId:'files',url:'/qa-close-frame/'});});

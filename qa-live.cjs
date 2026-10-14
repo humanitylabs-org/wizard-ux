@@ -3,7 +3,7 @@
 // read-state test only touches one thread that the test itself makes look unread.
 const { chromium } = require('/home/telos/node_modules/playwright');
 const fs = require('fs');
-const BASE = 'https://private.wizard001.com';
+const BASE = 'https://wizard.tailc0f369.ts.net';
 const OUT = process.env.QA_OUT || __dirname + '/qa-live';
 fs.mkdirSync(OUT, { recursive: true });
 const TARGET = process.env.QA_THREAD || 'wizard-assistant-8a389cba6c4f4736e0dc6bbcd752aa75';
@@ -11,7 +11,7 @@ let pass = 0, fail = 0;
 const check = (name, ok, detail = '') => { ok ? pass++ : fail++; console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ' — ' + detail : ''}`); };
 
 (async () => {
-  const browser = await chromium.launch({ args: ['--host-resolver-rules=MAP private.wizard001.com 127.0.0.1:18443', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
+  const browser = await chromium.launch({ args: ['--host-resolver-rules=MAP wizard.tailc0f369.ts.net 127.0.0.1:18443', '--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
   const ctx = await browser.newContext({ viewport: { width: 412, height: 860 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const writes = [];
   await ctx.route('**/*', async route => {

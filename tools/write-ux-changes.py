@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Writes web/ux-changes.json: which threads made each recent web/ update, so the shell's
-"Wizard OS update ready · Reload" banner can link to them (web/device.js, James 12 Oct).
+"Wizard OS update ready · Reload" banner can link to them (web/core/web-update.js, both shells; James 12 Oct).
 
 Run by tools/write-ux-version.sh whenever ux-version.txt changes; safe to run by hand.
 Gitignored, so writing it never dirties the tree.
