@@ -56,7 +56,7 @@ def tasks(raw):
     blocks=re.split(r'(?=\s*\* Recent #\d+:)',raw)
     return sorted(set(int(m.group(1)) for block in blocks
         if 'ai.wizards.os.preview' in block and '.AppSessionActivity' in block
-        for m in [re.search(r'Task\{[^\n]* #([0-9]+)',block)] if m))
+        for m in [re.match(r'\s*\* Recent #\d+: Task\{\S+ #([0-9]+) type=standard A=\d+:ai\.wizards\.os\.preview\.homeapp\b',block)] if m))
 
 def labels(xml):
     import xml.etree.ElementTree as E
@@ -67,14 +67,19 @@ def app_content(label,xml):
     text=' '.join(labels(xml))
     if label=='Wisdom': return bool(re.search(r'Currently reading|Suggested|Browse all|Request a new collection',text)) or bool(reading(xml))
     return 'Signal' in text and bool(re.search(r'For You|Latest|Sources|Saved',text)) and not reading(xml)
+def home_point(label):
+    point=bounds(emu.ui(),label)
+    for _ in range(3):
+        if point: return point
+        emu.sx('input swipe 900 1100 150 1100 250');time.sleep(1);point=bounds(emu.ui(),label)
+    return point
 def get_json(url):
     with urllib.request.urlopen(url,timeout=30) as r:return json.load(r)
 
 # The exact canonical shared heavy-worker lease; no alternate lock or fallback.
-with (BASE/'worker.lock').open('a') as lease:
-    fcntl.flock(lease,fcntl.LOCK_EX)
-    out = BASE/'qa'/('home-screen-'+str(int(time.time())))
-    out.mkdir(parents=True);emu=Emu(out,5596,'ai.wizards.os.preview',dns=os.environ.get('QA_DNS','192.168.1.1'));failure=None
+if True:  # caller holds the canonical lease via lockf -k -t 1500 worker.lock
+    out = P(os.environ['QA_OUT'])
+    out.mkdir(parents=True,exist_ok=True);emu=Emu(out,5596,'ai.wizards.os.preview',dns=os.environ.get('QA_DNS','192.168.1.1'));failure=None
     emu.env['JAVA_HOME']='/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'
     emu.env['PATH']=emu.env['JAVA_HOME']+'/bin:'+emu.env['PATH']
     def capture(name):
@@ -82,7 +87,7 @@ with (BASE/'worker.lock').open('a') as lease:
         if name=='failure':(out/'failure-logcat.txt').write_text(emu.sx('logcat -d -v threadtime'))
     try:
         emu.boot();check('isolated API35 emulator',emu.sx('getprop ro.build.version.sdk').strip()=='35')
-        source=P(build['job'])/'source'
+        source=P(os.environ['QA_STAGE_SRC'])  # checkout the parent staging server serves (web/ only differs from APK build)
         for rel in ('index.html','core/home-screen-policy.js','core/single-app-session.js','core/home-screen-apps.js'):
             with urllib.request.urlopen(origin+'/wizard-os-home/'+rel,timeout=30) as r:served=r.read()
             expected=(source/'web'/rel).read_bytes()
@@ -121,18 +126,22 @@ with (BASE/'worker.lock').open('a') as lease:
         pinned=[]
         for label in ('Wisdom','Signal'):
             # Apps is the existing mobile upward swipe from the orb; no synthetic native launch URL.
-            xml=emu.ui();orb_label=next((s for s in labels(xml) if s.startswith('Wizard orb.')),None)
+            xml=wait(lambda:(lambda x:x if any(s.startswith('Wizard orb.') for s in labels(x)) else None)(emu.ui()),40) or emu.ui();orb_label=next((s for s in labels(xml) if s.startswith('Wizard orb.')),None)
             orb=bounds(xml,orb_label) if orb_label else None
             check('actual orb gesture target is visible',orb is not None,orb)
             x,y=orb;emu.sx('input swipe %d %d %d %d 450'%(x,y,x,max(400,y-700)));time.sleep(1)
             # Narrow through the real Apps search so live-registry layout changes cannot
             # move a different tile under a stale accessibility coordinate.
             import xml.etree.ElementTree as E
-            search=None
-            for node in E.fromstring(emu.ui()).iter('node'):
-                if node.get('class','').endswith('EditText'):
-                    vals=list(map(int,re.findall(r'-?\d+',node.get('bounds',''))))
-                    if len(vals)==4 and vals[2]>vals[0] and vals[3]>vals[1]:search=((vals[0]+vals[2])//2,(vals[1]+vals[3])//2);break
+            def find_search():
+                for node in E.fromstring(emu.ui()).iter('node'):
+                    if node.get('class','').endswith('EditText'):
+                        vals=list(map(int,re.findall(r'-?\d+',node.get('bounds',''))))
+                        if len(vals)==4 and vals[2]>vals[0] and vals[3]>vals[1]:return ((vals[0]+vals[2])//2,(vals[1]+vals[3])//2)
+                return None
+            search=wait(find_search,6)
+            if not search:
+                capture(label.lower()+'-apps-sheet-retry');emu.sx('input swipe %d %d %d %d 450'%(x,y,x,max(400,y-700)));search=wait(find_search,8)
             check('actual Apps search is visible',search is not None,search)
             emu.sx('input tap %d %d'%search)
             old=next((n.get('text','') for n in E.fromstring(emu.ui()).iter('node') if n.get('class','').endswith('EditText')),'')
@@ -172,11 +181,16 @@ with (BASE/'worker.lock').open('a') as lease:
             check(label+' own icon launches correct real frontend content',wait(lambda:app_content(label,emu.ui()),25),emu.top());capture(label.lower()+'-session')
             for n in range(3):emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.3)
             check(label+' repeated root Back retains actual app content',app_content(label,emu.ui()) and emu.front())
+            for g in ('input swipe 100 2150 980 2150 300','input swipe 980 2150 100 2150 300','input swipe 540 40 540 1400 300','input swipe 540 1700 540 900 300'):
+                emu.sx(g);time.sleep(0.8)
+            time.sleep(1.5);capture(label.lower()+'-after-gestures');gx=' '.join(labels(emu.ui()))
+            check(label+' fullscreen desk/orb/inbox gestures cannot reveal Wizard desks',emu.front() and app_content(label,emu.ui()) and 'Wizard orb' not in gx and 'New desk' not in gx,gx[-400:])
+            for n in range(3):emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.3)
             emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
             emu.sx('am start -W -n ai.wizards.os.preview/ai.wizards.os.MainActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER');time.sleep(1)
         # Re-requesting a confirmed icon must stop at native pinned-state readback,
         # not launch a second OS pin dialog. The last query is Signal.
-        orb_label=next((s for s in labels(emu.ui()) if s.startswith('Wizard orb.')),None)
+        wait(lambda:any(s.startswith('Wizard orb.') for s in labels(emu.ui())),40);orb_label=next((s for s in labels(emu.ui()) if s.startswith('Wizard orb.')),None)
         orb=bounds(emu.ui(),orb_label) if orb_label else None;check('confirmed repeat has ordinary orb',orb is not None)
         x,y=orb;emu.sx('input swipe %d %d %d %d 450'%(x,y,x,max(400,y-700)));time.sleep(0.8)
         point=bounds(emu.ui(),'Signal',app_row=True) or bounds(emu.ui(),'Wizard Signal',app_row=True)
@@ -185,22 +199,49 @@ with (BASE/'worker.lock').open('a') as lease:
         check('confirmed repeated hold reports Already on home screen without another OS request','Already on home screen' in ' '.join(labels(emu.ui())) and emu.front())
         emu.sx('input keyevent KEYCODE_BACK');emu.sx('input keyevent KEYCODE_BACK')
         emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
+        capture('launcher-pinned-icons')
         home_labels=labels(emu.ui());check('stable confirmed icons are not duplicated',home_labels.count('Wisdom')==1 and home_labels.count('Signal')==1,{'Wisdom':home_labels.count('Wisdom'),'Signal':home_labels.count('Signal')})
-        original=tasks(emu.sx('dumpsys activity recents'));check('Wisdom and Signal independent Recents tasks',len(original)==2,original)
-        recents=emu.sx('dumpsys activity recents');check('Wizard ordinary task remains separate', '.MainActivity' in recents)
+        (out/'recents-before-check.txt').write_text(emu.sx('dumpsys activity recents'));original=tasks(emu.sx('dumpsys activity recents'));check('Wisdom and Signal independent Recents tasks',len(original)==2,original)
+        recents=emu.sx('dumpsys activity recents');(out/'recents-dumpsys.txt').write_text(recents);check('Wizard ordinary task remains separate', '.MainActivity' in recents)
+        emu.sx('input keyevent KEYCODE_APP_SWITCH');time.sleep(2);capture('recents-overview-1')
+        seen=set(labels(emu.ui()))
+        for n in range(2):
+            emu.sx('input swipe 250 1200 950 1200 300');time.sleep(1.2);capture('recents-overview-%d'%(n+2));seen|=set(labels(emu.ui()))
+        (out/'recents-labels.json').write_text(json.dumps(sorted(seen)))
+        check('Recents overview shows Wizard Preview, Wisdom and Signal task labels',all(any(l==x or l.startswith(x+' ') or l.endswith(' '+x) for l in seen) for x in ('Wizard Preview','Wisdom','Signal')),sorted(x for x in seen if x)[:40])
+        emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
         for label in ('Wisdom','Signal','Wisdom'):
-            emu.sx('input keyevent KEYCODE_HOME');time.sleep(0.5);point=bounds(emu.ui(),label);check(label+' launcher icon still present',point is not None)
+            emu.sx('input keyevent KEYCODE_HOME');time.sleep(0.5);point=bounds(emu.ui(),label)
+            for _ in range(3):
+                if point: break
+                emu.sx('input swipe 900 1100 150 1100 250');time.sleep(1);point=bounds(emu.ui(),label)
+            check(label+' launcher icon still present',point is not None)
             emu.sx('input tap %d %d'%point);time.sleep(1)
             check(label+' repeated launch reuses existing task set',tasks(emu.sx('dumpsys activity recents'))==original)
             check(label+' switch/re-tap preserves actual displayed app',app_content(label,emu.ui()))
         # Actual Wisdom pages, not an Activity-name surrogate or a made-up #/read route.
-        check('Wisdom Browse control opens',bool(emu.tap_text(r'Browse all|Browse & search')))
-        time.sleep(1);check('Wisdom real To read list opens',bool(emu.tap_text(r'^To read$')));time.sleep(1)
+        def onscreen(pattern):
+            import xml.etree.ElementTree as E
+            for node in E.fromstring(emu.ui()).iter('node'):
+                t=(node.get('text') or node.get('content-desc') or '').strip()
+                v=list(map(int,re.findall(r'-?\d+',node.get('bounds',''))))
+                if re.search(pattern,t) and len(v)==4 and v[2]>v[0] and v[3]>v[1] and 150<(v[1]+v[3])//2<2250:return ((v[0]+v[2])//2,(v[1]+v[3])//2)
+        bp=tr=None
+        for _ in range(8):
+            bp=onscreen(r'^(Browse all|Browse & search)')
+            if bp:
+                emu.sx('input tap %d %d'%bp);tr=wait(lambda:onscreen(r'^To read$'),6)
+                if tr:break
+            else:emu.sx('input swipe 540 1800 540 1000 400');time.sleep(0.8)
+        check('Wisdom Browse control opens',bool(bp and tr))
+        emu.sx('input tap %d %d'%tr) if tr else None;time.sleep(1.2);check('Wisdom real To read list opens',bool(tr));capture('wisdom-to-read')
         selected=None
         for _ in range(8):
             xml=emu.ui()
-            selected=next((e for e in unread if e['title'] in ' '.join(labels(xml))),None)
-            if selected and emu.tap_text(re.escape(selected['title']),xml):break
+            hit=next(((e,pt) for e in unread for pt in [bounds(xml,e['title'])] if pt and 450<pt[1]<2150),None)
+            selected=hit and hit[0]
+            if hit:
+                emu.sx('input tap %d %d'%hit[1]);break
             selected=None;emu.sx('input swipe 540 1850 540 750 300');time.sleep(0.5)
         check('actual unread Wisdom chapter opened',selected is not None)
         check('actual paged reader visible',wait(lambda:reading(emu.ui()),20),selected['title'])
@@ -209,22 +250,39 @@ with (BASE/'worker.lock').open('a') as lease:
         saved=reading(emu.ui());check('actual reader advanced to page three',bool(saved and int(saved.split('/')[0])==3),saved)
         capture('wisdom-page-three')
         for label in ('Signal','Wisdom','Wisdom'):
-            emu.sx('input keyevent KEYCODE_HOME');time.sleep(0.5);point=bounds(emu.ui(),label);check(label+' pinned icon present for reading switch',point is not None)
+            emu.sx('input keyevent KEYCODE_HOME');time.sleep(0.5);point=home_point(label);check(label+' pinned icon present for reading switch',point is not None)
             emu.sx('input tap %d %d'%point);time.sleep(1)
             if label=='Wisdom':check('Wisdom Home/switch/re-tap retains actual chapter/page',reading(emu.ui())==saved and selected['title'] in ' '.join(labels(emu.ui())))
             else:check('Signal task still displays real Signal frontend',app_content(label,emu.ui()))
         emu.sx('input keyevent KEYCODE_HOME');time.sleep(0.5);emu.sx('am kill ai.wizards.os.preview')
         check('background process death exercised',wait(lambda:not emu.sx('pidof ai.wizards.os.preview').strip(),10))
-        point=bounds(emu.ui(),'Wisdom');check('Wisdom icon survives process death',point is not None);emu.sx('input tap %d %d'%point);time.sleep(4)
+        point=home_point('Wisdom');check('Wisdom icon survives process death',point is not None);emu.sx('input tap %d %d'%point);time.sleep(4)
         check('Wisdom process death restores actual chapter AND reading page',wait(lambda:reading(emu.ui())==saved and selected['title'] in ' '.join(labels(emu.ui())),25));capture('death-restore')
         emu.sx('input keyevent KEYCODE_BACK');time.sleep(1)
         check('nested Back actually leaves reading page, remains Wisdom',reading(emu.ui()) is None and app_content('Wisdom',emu.ui()) and emu.front())
         # Close a real app overlay before leaving its route; never submit its form.
         for _ in range(4):emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.3)
-        emu.sx('input swipe 540 1800 540 800 400');time.sleep(0.5)
-        check('Wisdom real request overlay opens',bool(emu.tap_text(r'^Request a new collection$')));time.sleep(0.5)
+        def req_point():
+            import xml.etree.ElementTree as E
+            for node in E.fromstring(emu.ui()).iter('node'):
+                t=(node.get('text') or node.get('content-desc') or '').strip()
+                v=list(map(int,re.findall(r'-?\d+',node.get('bounds',''))))
+                if t.startswith('Request a new collection') and len(v)==4 and v[3]>v[1] and 200<(v[1]+v[3])//2<2200:return ((v[0]+v[2])//2,(v[1]+v[3])//2)
+        rp=None
+        for _ in range(14):
+            rp=req_point()
+            if rp:break
+            b=onscreen(r'^Browse & search$')
+            if b:emu.sx('input tap %d %d'%b);time.sleep(1.5);continue
+            emu.sx('input swipe 540 1800 540 900 400');time.sleep(0.8)
+        if rp:emu.sx('input tap %d %d'%rp)
+        check('Wisdom real request overlay opens',bool(rp));time.sleep(0.8);capture('wisdom-request-overlay')
         check('Wisdom real request textbox visible','wb-req-text' in emu.ui() or 'What do you want to read' in emu.ui())
-        emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.5)
+        ime=emu.sx('dumpsys input_method')
+        if 'mInputShown=true' in ime:
+            emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.8);capture('wisdom-request-ime-back')
+            check('first Back with IME up only hides keyboard, overlay and app remain',emu.front() and 'What do you want to read' in emu.ui() and 'mInputShown=true' not in emu.sx('dumpsys input_method'))
+        emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.8);capture('wisdom-request-closed')
         check('overlay Back does not exit or reveal desks',emu.front() and app_content('Wisdom',emu.ui()) and 'What do you want to read' not in emu.ui())
         recents=emu.sx('dumpsys activity recents');(out/'final-recents.txt').write_text(recents)
         check('no duplicate app tasks after death',tasks(recents)==original)
