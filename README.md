@@ -98,7 +98,7 @@ On its own, the shell runs with empty data. For live use it's served under one o
 - `/wizard-os-home/` → `server.py` (port 9271)
 - `/wizard/` → Wizard Agent Service (Chats calls `/wizard/hermes/...`, `/wizard/files/...`, `/wizard/thread-seen`, `/wizard/thread-dispositions`)
 
-Both sit behind the private gateway on Tailscale (`https://private.wizard001.com/wizard-os-home/`).
+Both sit behind the private gateway on Tailscale (`https://<machine>.<tailnet>.ts.net/wizard-os-home/`).
 
 `server.py` reads these environment variables:
 
@@ -109,6 +109,11 @@ Both sit behind the private gateway on Tailscale (`https://private.wizard001.com
 | `TINFOIL_PROXY_URL` | `http://127.0.0.1:3301/v1/chat/completions` | LLM used by the orb's command router |
 | `WIZARD_OS_ROUTER_MODEL` | `deepseek-v4-1-flash` | Router model |
 | `TINFOIL_API_KEY` | read from `~/.hermes/.env` | Key for the router |
+| `WIZARD_SETTINGS_PATH` | `~/.wizard-os/settings.json` | Wizard OS settings: same-origin POSTs are accepted from `network.base_url` and `network.aliases`; the router reads `clock.timezone`, `owner.place`, `voice.vocabulary` |
+| `WIZARD_OS_HOME_ORIGINS` | empty | Extra allowed `https://` origins, comma-separated |
+
+Nothing about a particular Wizard (address, owner, place) is built into this repo. The shell reads it at runtime from
+`GET /wizard/v1/bootstrap` (`WizConfig.owner()`, `WizConfig.baseUrl()`, `WizConfig.homeHosts()`).
 
 ### Private review data
 
@@ -117,6 +122,23 @@ The Day, Week and Month reviews read `web/data.js` and `web/summaries.js`. Both 
 ## Android
 
 Package `ai.wizards.os`, currently 0.4.0. Builds run on Thales (the Mac mini build host) through `android-build-thales`. They're signed with the Wizard OS key, so every version installs over the previous one. The signing secrets come from the environment (`WOS_STORE_PASSWORD`, `WOS_KEY_PASSWORD`) and are never stored in the repo. The `qa` build type adds the `.qa` suffix, so QA builds install alongside the real app.
+
+**Address.** No Wizard address is compiled in from source. A builder may set a default in their private
+`~/.gradle/gradle.properties` (on Thales: `$GRADLE_USER_HOME/gradle.properties`, which `android-build-thales` points at
+`/Volumes/ThalesMedia/AndroidBuilds/gradle-cache`):
+
+```properties
+wizardOrigin=https://<machine>.<tailnet>.ts.net
+wizardHomeUrl=https://<machine>.<tailnet>.ts.net/wizard-os-home/      # optional
+wizardLegacyHosts=old-name.example.com                               # optional: older names of the same Wizard
+wizardQaHomeUrl=https://<name>.staging.example.com/wizard-os-home/   # optional: the preview build type
+```
+
+Without them the app opens on **Connect to your Wizard**: paste the address the Setup app shows, or open a
+`wizardos://connect?address=https://<machine>.<tailnet>.ts.net/` link (the Setup app's QR code). The address is kept
+in app storage and every origin check (in-app pages, bridges, notifications, updates) uses it. A build signed with the
+release key refuses to configure without `wizardOrigin` (set `wizardAllowUnconfigured=true` to build a public one).
+Owner and agent names in native text (voice requests, notifications) come from the shell's settings, never from code.
 
 ## Rules
 
@@ -132,6 +154,11 @@ node qa-os.cjs            # shell: Back, desks, windows, voice routing
 node qa-chats-parity.cjs  # Chats against the live Wizard Agent Service (writes intercepted)
 node qa-live.cjs; node qa-livemode.cjs; node qa-motion.cjs; node qa-recordings.cjs
 node qa-android-*.cjs     # on Thales, against the emulator
+node tests/no-private-config.test.mjs   # the tree carries no private address
 ```
+
+QA scripts take the Wizard under test from the environment (`WIZARD_QA_ORIGIN`, `WIZARD_QA_LEGACY_HOST`,
+`WIZARD_QA_PREVIEW_DOMAIN`) and default to `https://wizard.example.ts.net`. Keep your own values in a gitignored
+`qa.local.env` and `set -a; . ./qa.local.env; set +a` before running. See [docs/qa-targets.md](docs/qa-targets.md).
 
 The current pass counts per suite are in [BRANCHES.md](BRANCHES.md).

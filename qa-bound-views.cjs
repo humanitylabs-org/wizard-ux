@@ -7,6 +7,7 @@
 //
 // Real Wizard reads; fixture threads merged into the session list; EVERY write is intercepted (zero reach Archimedes).
 // Usage: node tools/qa-origin.cjs 9482 <tree>/web &  then  QA_WEB_DIR=<tree> node qa-bound-views.cjs [url]
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
 let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
 const { chromium } = pw;
 const fs = require('fs'), path = require('path');
@@ -23,11 +24,11 @@ const origin = new URL(URL_).origin;
 const now = Date.now() / 1000;
 let rid = 1;
 const row = (role, content, ts) => ({ id: rid++, session_id: '', role, content, timestamp: ts });
-let appReply = 'Shipped. **Open it:** [Meditate](https://wizard.tailc0f369.ts.net/wizard-os-home/?open=meditation). The player now remembers where you left off. Or [open Meditate](/wizard-os-home/?open=meditation).';
+let appReply = 'Shipped. **Open it:** [Meditate](' + QA_ORIGIN + '/wizard-os-home/?open=meditation). The player now remembers where you left off. Or [open Meditate](/wizard-os-home/?open=meditation).';
 const FIX = {
   qa_bv_app: { title: 'Meditate · Player', t: now - 20, rows: () => [row('user', 'Make the player remember my place', now - 300), row('assistant', appReply, now - 250)] },
   qa_bv_url: { title: 'Files · Preview', t: now - 30, rows: () => [row('user', 'Fix file previews', now - 300), row('assistant', 'Fixed. See it here: [Files](/files/). Thread ref [other](/wizard/?session=qa_bv_none).', now - 250)] },
-  qa_bv_dl: { title: 'Wizard OS · Release', t: now - 35, rows: () => [row('user', 'Ship the menu', now - 300), row('assistant', 'Live. Open a thread: https://wizard.tailc0f369.ts.net/wizard-os-home/?open=chats\n\nIf it has not updated, download it here: https://wizard.tailc0f369.ts.net/reports/wizard-os/ or [the APK](/downloads/wizard-os/) or [Wizard Lock](/reports/wizard-lock/).', now - 250)] },
+  qa_bv_dl: { title: 'Wizard OS · Release', t: now - 35, rows: () => [row('user', 'Ship the menu', now - 300), row('assistant', 'Live. Open a thread: ' + QA_ORIGIN + '/wizard-os-home/?open=chats\n\nIf it has not updated, download it here: ' + QA_ORIGIN + '/reports/wizard-os/ or [the APK](/downloads/wizard-os/) or [Wizard Lock](/reports/wizard-lock/).', now - 250)] },
   qa_bv_dlview: { title: 'Files · After update', t: now - 36, rows: () => [row('user', 'Ship it', now - 300), row('assistant', 'Update first: [download](/reports/wizard-os/). Then look: [Files](/files/).', now - 250)] },
   qa_bv_none: { title: 'Research · Question', t: now - 40, rows: () => [row('user', 'What is DAPEL?', now - 300), row('assistant', 'A framework. No link here, and [GitHub](https://github.com/x/y) is outside.', now - 250)] },
   qa_bv_old: { title: 'Older link only', t: now - 50, rows: () => [row('user', 'a', now - 500), row('assistant', 'Earlier: [Files](/files/).', now - 450), row('user', 'b', now - 300), row('assistant', 'Latest reply has no link.', now - 250)] },

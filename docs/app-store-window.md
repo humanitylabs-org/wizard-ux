@@ -2,8 +2,8 @@
 
 ## Entry and scope
 
-- Private phone: `https://store-window.staging.wizard001.com/wizard-os-home/?shell=phone&view=apps` → My Apps → Get apps.
-- Private desktop: `https://store-window.staging.wizard001.com/wizard-os-home/desktop.html` → actual Cmd-K → Get apps.
+- Private phone: `https://store-window.staging.<private-domain>/wizard-os-home/?shell=phone&view=apps` → My Apps → Get apps.
+- Private desktop: `https://store-window.staging.<private-domain>/wizard-os-home/desktop.html` → actual Cmd-K → Get apps.
 - Direct normal app: `?open=app-store`; `?view=store` aliases the same normal app.
 - Portable document: `/wizard-os-home/store/index.html` (directory root also works through the private front).
 

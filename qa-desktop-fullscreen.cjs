@@ -1,9 +1,10 @@
 // Remote-safe desktop fullscreen regression: real reads, every API write blocked.
 // QA_WEB_DIR optionally overlays an isolated tree; unset it to verify served live assets.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
 const fs = require('fs'), path = require('path');
 let pw; for (const mod of [process.env.PLAYWRIGHT_PATH, 'playwright', 'playwright-core'].filter(Boolean)) { try { pw = require(mod); break; } catch {} }
 if (!pw) throw Error('Set PLAYWRIGHT_PATH to the worker Playwright package');
-const BASE = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const BASE = process.argv[2] || QA_ORIGIN + '/wizard-os-home/';
 const OUT = process.env.QA_OUT || path.join(process.cwd(), 'fullscreen-evidence');
 fs.mkdirSync(OUT, { recursive: true });
 const origin = new URL(BASE).origin;

@@ -11,13 +11,12 @@ import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 /**
- * window.wizardMizelPort for pages (and iframes) on https://private.wizard001.com only. AndroidX
+ * window.wizardMizelPort for pages (and iframes) on this Wizard's own origin only (device/WizardAddress). AndroidX
  * addWebMessageListener injects the object solely into frames whose origin matches the allow-list, so a page on any
  * other origin never sees it. The page sends JSON command strings; replies and pushes come back on the same port.
  * Pages never pass URLs or tokens: native holds the base URL. Protocol: android/MIZEL_RECORDER.md.
@@ -44,8 +43,8 @@ public final class MizelBridge implements MizelHub.Listener {
         }
         MizelBridge b = new MizelBridge(web.getContext().getApplicationContext());
         try {
-            java.util.Set<String> allow = new java.util.HashSet<>(Collections.singleton(origin));
-            if (MizelConfig.DEFAULT_ORIGIN.equals(origin)) allow.add(ai.wizards.os.device.AppState.LEGACY_ORIGIN);
+            java.util.Set<String> allow = ai.wizards.os.device.WizardAddress.listenerOrigins(origin);
+            if (allow.isEmpty()) return null; // not connected to a Wizard yet
             WebViewCompat.addWebMessageListener(web, NAME, allow, b::onMessage);
         } catch (RuntimeException e) {
             Log.w(MizelHub.TAG, "addWebMessageListener failed: no meeting bridge", e);
@@ -64,7 +63,7 @@ public final class MizelBridge implements MizelHub.Listener {
     private void onMessage(WebView view, WebMessageCompat message, Uri sourceOrigin, boolean isMainFrame, JavaScriptReplyProxy reply) {
         // Belt and braces: the allow-list already guarantees this.
         String src = sourceOrigin == null ? null : sourceOrigin.getScheme() + "://" + sourceOrigin.getAuthority();
-        if (src == null || !(MizelConfig.DEFAULT_ORIGIN.equals(src) || ai.wizards.os.device.AppState.LEGACY_ORIGIN.equals(src))) return;
+        if (src == null || !ai.wizards.os.device.WizardAddress.isTrustedOrigin(src)) return;
         frames.remove(reply);
         frames.add(reply);
         while (frames.size() > MAX_FRAMES) { JavaScriptReplyProxy old = frames.iterator().next(); frames.remove(old); pcmFrames.remove(old); }

@@ -29,6 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import ai.wizards.os.assist.Transcriber;
+import ai.wizards.os.device.OwnerProfile;
 
 /**
  * The Everywhere button's outbox. Same contract as the app's web outbox (web/outbox.js):
@@ -40,34 +41,40 @@ import ai.wizards.os.assist.Transcriber;
  */
 public final class EverywhereOutbox {
     static final String TAG = "WizardEverywhere";
-    public static final String DEFAULT_ORIGIN = ai.wizards.os.BuildConfig.ORIGIN;
-    static final String PROMPT = "Wizard voice request spoken to Archimedes from the floating Wizard button on a phone. "
-            + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
+    /** This Wizard's address ("" until the phone is connected; device/WizardAddress). */
+    public static String defaultOrigin() { return ai.wizards.os.device.WizardAddress.origin(); }
+    /** Speech-to-text hint: who the request is for and the names this Wizard knows (device/OwnerProfile). */
+    static String prompt() {
+        return "Wizard voice request spoken to " + OwnerProfile.agent() + " from the floating Wizard button on a phone. "
+                + OwnerProfile.names();
+    }
     /** Dictation goes to STT bare, like Archimedes Anywhere: a context prompt can leak into typed text. */
     static final String DICTATION_PROMPT = "";
     /** Where a recording came from: the floating orb, the side button (lock screen / corner), or keyboard dictation. */
     public static final String SRC_EVERYWHERE = "everywhere", SRC_SIDE = "side", SRC_DICTATION = "dictation";
 
+    /** What the agent is told about a recording. The owner's name comes from their Wizard's settings (OwnerProfile). */
     static String instructions(Item it) {
         int shots = it.shots == null ? 0 : it.shots.length();
+        String who = OwnerProfile.ownerSubject();
         String where = SRC_SIDE.equals(it.source)
                 ? (it.locked
                     ? "Spoken into the Wizard OS side-button assistant while the Android phone was LOCKED, so the speaker was not verified by an unlock. "
-                    : "James spoke this by holding his Android phone's side button (Wizard OS assistant, phone unlocked). ")
-                : "James spoke this to the Wizard Everywhere floating orb on his Android phone, outside the Wizard OS app (he may be in another app). ";
+                    : who + " spoke this by holding their Android phone's side button (Wizard OS assistant, phone unlocked). ")
+                : who + " spoke this to the Wizard Everywhere floating orb on their Android phone, outside the Wizard OS app (they may be in another app). ";
         return where + "The original recording is attached as a voice note."
-                + (shots > 0 ? " He attached " + shots + " screenshot" + (shots == 1 ? "" : "s") + " of what was on his screen while talking." : "");
+                + (shots > 0 ? " They attached " + shots + " screenshot" + (shots == 1 ? "" : "s") + " of what was on their screen while talking." : "");
     }
 
     /** Debug (QA) builds only: files/qa_origin.txt points the outbox at a fake Wizard on the emulator host. */
     static String qaOrigin(Context c) {
-        if (!ai.wizards.os.BuildConfig.DEBUG) return DEFAULT_ORIGIN;
+        if (!ai.wizards.os.BuildConfig.DEBUG) return defaultOrigin();
         File f = new File(c.getFilesDir(), "qa_origin.txt");
-        if (!f.isFile()) return DEFAULT_ORIGIN;
+        if (!f.isFile()) return defaultOrigin();
         try {
             String o = new String(readAll(new FileInputStream(f)), StandardCharsets.UTF_8).trim();
-            return o.matches("http://10\\.0\\.2\\.2:\\d+") ? o : DEFAULT_ORIGIN;
-        } catch (IOException e) { return DEFAULT_ORIGIN; }
+            return o.matches("http://10\\.0\\.2\\.2:\\d+") ? o : defaultOrigin();
+        } catch (IOException e) { return defaultOrigin(); }
     }
 
     public interface Listener {
@@ -354,7 +361,7 @@ public final class EverywhereOutbox {
         if (it.text.isEmpty()) {
             if (audio == null || !audio.isFile()) throw new HttpError(410, "The recording is gone");
             Transcriber.Result t;
-            try { t = Transcriber.transcribe(audio, ai.wizards.os.device.AppState.live(origin), it.dictation() ? DICTATION_PROMPT : PROMPT); }
+            try { t = Transcriber.transcribe(audio, ai.wizards.os.device.AppState.live(origin), it.dictation() ? DICTATION_PROMPT : prompt()); }
             catch (IOException e) { throw asHttp(e); }
             if (t.text.isEmpty()) {
                 synchronized (this) { it.state = "empty"; it.error = "No speech in that recording"; items.remove(it.id); save(); }

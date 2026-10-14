@@ -1,9 +1,11 @@
 // Real served assets/catalogue; synthetic Telegram metadata and admission/STT stand-ins. No live writes.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
+const QA_HOST = new URL(QA_ORIGIN).hostname;
 const {chromium}=require(process.env.PW||'playwright-core');const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const WEB=__dirname,HOST='wizard.tailc0f369.ts.net',URL_=`https://${HOST}/wizard-os-home/`;
+const WEB=__dirname,HOST=QA_HOST,URL_=`https://${HOST}/wizard-os-home/`;
 const W={uploads:[],sessions:new Set(),runs:[],keys:new Map(),transcribes:0,assetVer:1,foreign:[]};
 const src=fs.readFileSync(path.join(__dirname,'qa-device.cjs'),'utf8');
-eval(src.slice(src.indexOf('async function boot('),src.indexOf('// addInitScript')).replace('async function boot(','global.boot=async function boot(').replaceAll('wizard.tailc0f369.ts.net',HOST));
+eval(src.slice(src.indexOf('async function boot('),src.indexOf('// addInitScript')).replace('async function boot(','global.boot=async function boot(').replaceAll(QA_HOST,HOST));
 (async()=>{const b=await chromium.launch({executablePath:process.env.QA_CHROME,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});let n=0;
 for(const shell of ['phone','desktop']){
  const {ctx,p,errs}=await boot(b);if(shell==='desktop')await p.setViewportSize({width:1440,height:960});

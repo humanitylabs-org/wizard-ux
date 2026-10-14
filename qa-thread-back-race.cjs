@@ -1,10 +1,11 @@
 // James's rare thread Back regression. Run the real shell with delayed fixture reads;
 // run exact history bridge source with deferred traversal callbacks (no wall-clock sleeps).
 // All writes intercepted. Browser execution belongs on Thales.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
 let pw; try { pw = require('playwright-core'); } catch (_) { pw = require('/home/telos/node_modules/playwright'); }
 const { chromium } = pw, fs = require('fs'), path = require('path'), vm = require('vm');
 const WEB = process.env.QA_WEB_DIR || __dirname;
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_ = process.argv[2] || QA_ORIGIN + '/wizard-os-home/';
 let pass=0, fail=0; const ok=(yes,label,data)=>{if(yes)pass++;else fail++;console.log(yes?'PASS':'FAIL',label,yes?'':JSON.stringify(data));};
 const source=fs.readFileSync(path.join(WEB,'web/app.js'),'utf8');
 function fn(name) { const start=source.indexOf('  function '+name+'('); let at=source.indexOf('{',start), depth=0, quote='',escape=false,line=false,block=false; for(let i=at;i<source.length;i++){const c=source[i],next=source[i+1];if(line){if(c==='\n')line=false;continue;}if(block){if(c==='*'&&next==='/'){block=false;i++;}continue;}if(quote){if(escape)escape=false;else if(c==='\\')escape=true;else if(c===quote)quote='';continue;}if(c==='/'&&next==='/'){line=true;i++;continue;}if(c==='/'&&next==='*'){block=true;i++;continue;}if(c==='"'||c==="'"||c==='`'){quote=c;continue;}if(c==='{')depth++;if(c==='}'&&!--depth)return source.slice(start,i+1);}throw Error('extract '+name); }

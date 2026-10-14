@@ -10,13 +10,15 @@
 // Usage: node tools/qa-origin.cjs 9371 &  then  node qa-chat-basics.cjs [url]
 //   url defaults to http://127.0.0.1:9371/wizard-os-home/ ; QA_WEB_DIR=<dir> serves web/ from <dir>
 //   (e.g. QA_WEB_DIR=/home/telos/apps/wizard-os-home for the `daily` baseline). QA_OUT=<dir> for screenshots.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
+const QA_HOST = new URL(QA_ORIGIN).hostname;
 const { chromium } = require('/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9371/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';
 const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/feature-chat-basics';
 const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP ' + QA_HOST + ' 127.0.0.1:18443';
 const REAL_THREAD = process.env.QA_REAL_THREAD || 'wizard_1791466716358_dd032d92f93f'; // James sent a photo (data-URL part); Archimedes replied with helm_attachments images
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;

@@ -6,3 +6,6 @@ web/data.js
 web/summaries.js
 web/ux-version.txt
 web/ux-changes.json
+# Local QA targets (docs/qa-targets.md): the owner's own addresses never enter git
+qa.local.env
+qa.local.json

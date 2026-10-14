@@ -17,6 +17,11 @@ Save image → a second file; long-press a search result → opens with the menu
 sheet and Wizard OS stays open.
 """
 import fcntl, hashlib, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid, urllib.error, urllib.request
+# The Wizard the APK under test was built for (its private Gradle wizardOrigin / first wizardLegacyHosts entry).
+# Set WIZARD_QA_ORIGIN / WIZARD_QA_LEGACY_HOST to match; see docs/qa-targets.md. Neutral examples by default.
+QA_ORIGIN = os.environ.get('WIZARD_QA_ORIGIN', 'https://wizard.example.ts.net').rstrip('/')
+QA_HOST = QA_ORIGIN.split('://', 1)[-1]
+QA_LEGACY_HOST = os.environ.get('WIZARD_QA_LEGACY_HOST', 'old-name.example.com')
 P = pathlib.Path
 BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
 APK = P(sys.argv[1]); WEB = P(sys.argv[2]).resolve(); SEARCH = int(sys.argv[3]); PKG = 'ai.wizards.os.qa'
@@ -273,7 +278,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('cmd connectivity airplane-mode disable')
         val = wait(lambda: 'VALIDATED' in sx('dumpsys connectivity | grep -E "NetworkAgentInfo.*(WIFI|CELLULAR)"'), 40, 2)
         print('network validated:', bool(val), flush=True)
-        resolv = sx('ping -c1 -W2 wizard.tailc0f369.ts.net 2>&1')
+        resolv = sx('ping -c1 -W2 ' + QA_HOST + ' 2>&1')
         check('the real Wizard is unreachable from the emulator (DNS dead)', not re.search(r'\(\d+\.\d+\.\d+\.\d+\)', resolv), resolv.strip()[:120])
         inst = sh(ADB, '-s', S, 'install', '-r', APK).strip().splitlines()[-1]
         ver = re.search(r'versionName=(\S+)', sx('dumpsys package %s | grep versionName' % PKG) or '')

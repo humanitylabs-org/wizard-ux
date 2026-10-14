@@ -4,9 +4,11 @@
 // app stays open.
 // Usage: QA_WEB_DIR=<worktree> node qa-cancel-recover.cjs   (self-contained: every request is routed)
 // Negative control: QA_WEB_DIR=/home/telos/apps/wizard-os-home node qa-cancel-recover.cjs must FAIL.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
+const QA_HOST = new URL(QA_ORIGIN).hostname;
 const { chromium } = require('/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_ = QA_ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/cancel-recover';
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -20,7 +22,7 @@ async function boot(b, { native = false } = {}) {
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone', 'clipboard-read', 'clipboard-write'] });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (u.hostname !== 'wizard.tailc0f369.ts.net') return r.abort();
+    if (u.hostname !== QA_HOST) return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && (q.method() === 'GET' || q.method() === 'HEAD') && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = path.join(WEB, 'web', f);

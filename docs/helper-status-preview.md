@@ -4,7 +4,7 @@ James approved building the preview in `wizard_1791823363261_4e06432460cb` after
 
 ## Open and judge
 
-https://helper-status.staging.wizard001.com/
+https://helper-status.staging.<private-domain>/
 
 Opens directly on **Preview · Stalled helpers**, phone shell. Tap the existing Working row to expand it; **Try Continue · example only** resumes the illustrative request and moves it to Ready after completion. Browser-cookie-isolated examples also cover helper batches still awaited and the main agent finishing its answer. Real thread status is read from the live database; real writes are refused by the preview origin.
 

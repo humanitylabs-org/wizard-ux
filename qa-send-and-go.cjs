@@ -5,9 +5,11 @@
 // a thread, it's supposed to just send the reply and pop me back out to the chat list instead of leaving me
 // staring at my message sending."
 // Usage: QA_WEB_DIR=<repo> node qa-send-and-go.cjs [url]. Real Wizard reads; every write is intercepted.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
+const QA_HOST = new URL(QA_ORIGIN).hostname;
 let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
-const BASE = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
+const BASE = process.argv[2] || QA_ORIGIN + '/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP ' + QA_HOST + ' 127.0.0.1:18443';
 const WD = process.env.QA_WEB_DIR || '';
 const SHOTS = process.env.QA_SHOTS || '';
 const fs = require('fs'), path = require('path');

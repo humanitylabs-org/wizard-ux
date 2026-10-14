@@ -1,7 +1,9 @@
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
+const QA_PREVIEW_DOMAIN = process.env.WIZARD_QA_PREVIEW_DOMAIN || 'staging.example.com'; // preview hosts: <name>.<this>
 const {chromium}=require(process.env.PW_MODULE || '/Volumes/ThalesMedia/wizard-stockint-20261012/qa/node_modules/playwright');
 const fs=require('fs');
 const ROOT=process.env.QA_OUT||process.cwd();
-const ORIGIN=process.env.QA_ORIGIN || 'https://helper-status.staging.wizard001.com';
+const ORIGIN=process.env.QA_ORIGIN || 'https://helper-status.' + QA_PREVIEW_DOMAIN;
 let passed=0; const errors=[];
 const ok=(c,name)=>{if(!c)throw new Error(name);console.log('PASS',name);passed++;};
 (async()=>{

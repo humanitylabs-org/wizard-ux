@@ -31,7 +31,8 @@ import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
 /**
- * Wizard OS: a native home for James's private Wizard OS shell (wizard.tailc0f369.ts.net/wizard-os-home/; the retired private.wizard001.com still opens).
+ * Wizard OS: a native home for the owner's private Wizard OS shell (https://<their Wizard>/wizard-os-home/). The address
+ * comes from device/WizardAddress: the build's private default, or what the owner connected to (ConnectScreen).
  *
  * Rules this activity enforces:
  *  - Back never exits. Every Back is handed to the shell (window.__wosNativeBack), which closes the top
@@ -87,9 +88,8 @@ public class MainActivity extends Activity {
     /** Same established main-frame/origin boundary as wizardAppsPort; hosted app frames cannot request captures. */
     private void installScreenPort(WebView target) {
         if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER)) return;
-        java.util.Set<String> origins = new java.util.HashSet<>();
-        origins.add(ai.wizards.os.device.AppState.primaryOrigin(this));
-        if (BuildConfig.ORIGIN.equals(ai.wizards.os.device.AppState.primaryOrigin(this))) origins.add(ai.wizards.os.device.AppState.LEGACY_ORIGIN);
+        java.util.Set<String> origins = ai.wizards.os.device.WizardAddress.listenerOrigins(ai.wizards.os.device.AppState.primaryOrigin(this));
+        if (origins.isEmpty()) return; // not connected to a Wizard yet
         androidx.webkit.WebViewCompat.addWebMessageListener(target, "wizardScreenPort", origins,
                 (view, message, sourceOrigin, isMainFrame, reply) -> {
                     if (!isMainFrame || web != target || sourceOrigin == null) return;
@@ -137,9 +137,11 @@ public class MainActivity extends Activity {
         setContentView(root);
         buildWebView();
         reach = new ReachScreen(this, root, this::retryReach, this::openTailscale);
+        connect = new ConnectScreen(this, root, this::connected);
         watchNetwork();
-        if (state != null) web.restoreState(state);
+        if (state != null && !state.getBoolean(KEY_RECONNECT, false)) web.restoreState(state);
         if (web.getUrl() == null) go(startUrl(getIntent()));
+        offerConnect(getIntent());
         installBack();
         ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(cmd -> main.post(() -> {
             if (web != null) web.evaluateJavascript("(window.__wosVoiceCmd && window.__wosVoiceCmd(" + Handoff.quote(cmd) + "))", null);
@@ -155,6 +157,7 @@ public class MainActivity extends Activity {
         web.setBackgroundColor(Color.rgb(5, 3, 12));
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         if (reach != null) reach.toFront(); // a rebuilt WebView goes under the connection screen
+        if (connect != null) connect.toFront();
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -171,7 +174,7 @@ public class MainActivity extends Activity {
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         web.addJavascriptInterface(device, "WizardOSDevice");
         if (mizel != null) mizel.detach();
-        mizel = ai.wizards.os.mizel.MizelBridge.install(web, BuildConfig.ORIGIN);
+        mizel = ai.wizards.os.mizel.MizelBridge.install(web, ai.wizards.os.device.WizardAddress.origin());
         if (apps != null) apps.detach();
         apps = ai.wizards.os.apps.AppsBridge.install(this, web);
 
@@ -182,7 +185,7 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
-                // A main-frame hop to the retired private.wizard001.com lands on the same page under this Wizard's own name.
+                // A main-frame hop to an older name of this Wizard lands on the same page under its own name.
                 if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying && !ai.wizards.os.device.AppState.legacyFallback) { go(Origin.toHome(u.toString())); return true; }
                 // Under the safety net the tailnet name is unreachable: its links open the same page on the old name.
                 if (req.isForMainFrame() && Origin.isHome(u) && ai.wizards.os.device.AppState.legacyFallback) { go(Origin.toLegacy(u.toString())); return true; }
@@ -260,7 +263,7 @@ public class MainActivity extends Activity {
                 root.removeView(web);
                 web.destroy();
                 buildWebView();
-                go(BuildConfig.HOME_URL);
+                go(ai.wizards.os.device.WizardAddress.homeUrl());
                 return true;
             }
         });
@@ -304,6 +307,11 @@ public class MainActivity extends Activity {
     }
 
     void handleBack() {
+        if (connect != null && connect.isShowing()) { // Back on "Connect to your Wizard": never an exit
+            if (ConnectPolicy.onBack(ai.wizards.os.device.AppState.configured(this)) == ConnectPolicy.Back.CLOSE) connect.hide();
+            else Toast.makeText(this, ConnectPolicy.STAY, Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (reach != null && reach.isOffline()) { retryReach(); return; } // Back on the connection screen: try again, stay
         web.evaluateJavascript("(window.__wosNativeBack ? window.__wosNativeBack() : 'nojs')", result -> {
             String r = result == null ? "" : result.replace("\"", "");
@@ -338,7 +346,32 @@ public class MainActivity extends Activity {
         return ai.wizards.os.device.AppState.legacyFallback ? Origin.toLegacy(url) : Origin.toHome(url);
     }
 
-    /* ---------------- Carry: move local state off the retired private.wizard001.com (see Carry) ---------------- */
+    /* ---------------- Connect: a phone without a Wizard address asks for one (ConnectScreen) ---------------- */
+
+    private ConnectScreen connect;
+    private boolean reconnecting;
+    private static final String KEY_RECONNECT = "wos.reconnect";
+
+    /** A connect link (wizardos://connect?address=…, or a Wizard link on an unconnected phone): confirm on the connect screen. */
+    private void offerConnect(Intent intent) {
+        if (connect == null) return;
+        String linked = intent == null || intent.getData() == null ? "" : ai.wizards.os.device.WizardAddress.fromLink(intent.getData().toString());
+        boolean configured = ai.wizards.os.device.AppState.configured(this);
+        if (!configured || ConnectPolicy.offer(linked, ai.wizards.os.device.WizardAddress.origin())) connect.show(linked);
+    }
+
+    /** The owner tapped Connect: keep the address and start again on it (bridges are scoped to the origin). */
+    private void connected(String origin) {
+        if (!ai.wizards.os.device.WizardAddress.save(this, origin)) return;
+        ai.wizards.os.device.AppState.legacyFallback = false;
+        connect.hide();
+        android.util.Log.i("WizardOS", "connected to a Wizard");
+        setIntent(new Intent(Intent.ACTION_MAIN));
+        reconnecting = true;
+        recreate();
+    }
+
+    /* ---------------- Carry: move local state off an older name of this Wizard (see Carry) ---------------- */
 
     private volatile boolean carrying;
     private volatile String pageUrl;
@@ -366,6 +399,7 @@ public class MainActivity extends Activity {
             if (carrying) carryNext = inAppUrl(data.toString());
             else go(inAppUrl(data.toString()));
         }
+        offerConnect(intent);
         if (ACTION_ACCESSIBILITY.equals(intent.getAction())) { intent.setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); return; }
         queueHandoff(intent);
         device.onIntent(intent);
@@ -475,6 +509,7 @@ public class MainActivity extends Activity {
     /** Every native page load. onPageStarted only fires once a response commits, so a connection that never answers
      *  (Tailscale off) never reaches it: the connection screen is armed here, before the network. */
     void go(String url) {
+        if (url == null || url.isEmpty()) { if (connect != null) connect.show(null); return; } // no Wizard yet
         navStarted(url);
         web.loadUrl(url);
     }
@@ -625,6 +660,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
+        if (reconnecting) { out.putBoolean(KEY_RECONNECT, true); return; } // a new Wizard starts fresh, not on the old page
         web.saveState(out);
     }
 
@@ -901,6 +937,14 @@ public class MainActivity extends Activity {
     final class Bridge {
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }
+
+        /** The shell hands over who owns this Wizard (settings owner/agent/vocabulary) for native text. */
+        @JavascriptInterface
+        public boolean setProfile(String json) {
+            String u = pageUrl, o = ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this);
+            if (u == null || o.isEmpty() || !u.startsWith(o + "/")) return false;
+            return ai.wizards.os.device.OwnerProfile.save(MainActivity.this, json);
+        }
 
         /* ---- Carry (one time): the old name's page hands its local state over; the new name's shell takes it. ---- */
         @JavascriptInterface

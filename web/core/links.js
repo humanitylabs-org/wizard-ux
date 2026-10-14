@@ -27,10 +27,17 @@
   const NATIVE = !!window.WizardOSNative || /WizardOS-Android\//.test(navigator.userAgent || '');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  // A preview of this shell on a sibling host (desks.wizard001.com) treats links to the canonical private
-  // origin as its own, so a thread's private.wizard001.com/… link opens inside the preview it was tapped in.
-  const CANON = 'private.wizard001.com', SIBLING = location.hostname !== CANON && (/\.wizard001\.com$/.test(location.hostname) || location.hostname === '127.0.0.1');
-  function abs(href, base) { try { const u = new URL(href, base || location.href); if (SIBLING && u.hostname === CANON && u.protocol === 'https:') return new URL(u.pathname + u.search + u.hash, location.origin); return u; } catch (e) { return null; } }
+  // A preview of this shell on a sibling host (a staging name, loopback, or another name under the same parent
+  // domain as this Wizard) treats links to this Wizard's own names (WizConfig.homeHosts: settings network.base_url
+  // and network.aliases) as its own, so a thread's link opens inside the preview it was tapped in.
+  const homeHosts = () => { try { return window.WizConfig?.homeHosts?.() || []; } catch (e) { return []; } };
+  const parentOf = h => h.split('.').slice(1).join('.');
+  function sibling(H) {
+    const h = location.hostname;
+    if (!h || H.includes(h)) return false;
+    return h === '127.0.0.1' || /\.staging\./.test(h) || H.some(x => parentOf(x).includes('.') && parentOf(x) === parentOf(h));
+  }
+  function abs(href, base) { try { const u = new URL(href, base || location.href); const H = homeHosts(); if (u.protocol === 'https:' && H.includes(u.hostname) && sibling(H)) return new URL(u.pathname + u.search + u.hash, location.origin); return u; } catch (e) { return null; } }
   function inApp(u) { return !!u && (u.protocol === 'https:' || u.protocol === 'http:') && u.origin === ORIGIN; }
   function external(u) {
     // Android app: a main-frame navigation to another origin is handed to the system browser natively.

@@ -20,46 +20,54 @@ public final class AppState {
     public static void setFront(boolean on) { front = on; }
 
     /**
-     * Where native HTTP goes. Release: the private Wizard origin. Debug (QA) builds only: files/qa_home.txt may
+     * Where native HTTP goes. Release: this Wizard's address (WizardAddress; "" until the phone is connected).
+     * Debug (QA) builds only: files/qa_home.txt may
      * point at a fake Wizard on the emulator host (http://localhost:PORT via adb reverse, or http://10.0.2.2:PORT),
      * so QA never writes to the real one. The shell page itself is then loaded from there too (homeUrl).
      */
     public static String origin(Context c) {
         String qa = qaOrigin(c);
-        return qa != null ? qa : legacyFallback ? LEGACY_ORIGIN : BuildConfig.ORIGIN;
+        if (qa != null) return qa;
+        String legacy = WizardAddress.legacyOrigin();
+        return legacyFallback && legacy != null ? legacy : WizardAddress.origin();
     }
 
     /** This Wizard's own address (or the QA fake), ignoring any fallback: where carried state must land. */
     public static String primaryOrigin(Context c) {
         String qa = qaOrigin(c);
-        return qa != null ? qa : BuildConfig.ORIGIN;
+        return qa != null ? qa : WizardAddress.origin();
+    }
+
+    /** True once there is somewhere to go: a connected address, or (QA builds) a fake Wizard. */
+    public static boolean configured(Context c) {
+        return qaOrigin(c) != null || WizardAddress.configured();
     }
 
     /** The Wizard OS shell URL: the private origin, or the QA fake (debug builds with files/qa_home.txt only). */
     public static String homeUrl(Context c) {
-        return origin(c) + "/wizard-os-home/";
+        String o = origin(c);
+        return o.isEmpty() ? "" : o + "/wizard-os-home/";
     }
 
-    /** The retired name. The same Wizard still answers on it while the move settles. */
-    public static final String LEGACY_ORIGIN = "https://private.wizard001.com";
-
     /**
-     * Safety net for the move to the tailnet name: set for this process when the tailnet name cannot be reached
-     * (e.g. the phone's Private DNS bypasses MagicDNS) but the old name might be. The shell and the update feed
+     * Safety net for a move to a new name: set for this process when this Wizard's own name cannot be reached
+     * (e.g. the phone's Private DNS bypasses MagicDNS) but an older name (WizardAddress.legacyOrigin) might be.
+     * Only builds that carry an older name use it. The shell and the update feed
      * then use the old name until the app restarts, so the app keeps working and can still receive a fix.
      */
     public static volatile boolean legacyFallback;
 
     /** Native HTTP to {@code origin}, on the old name while the safety net is on (QA fakes are never rewritten). */
     public static String live(String origin) {
-        return legacyFallback && BuildConfig.ORIGIN.equals(origin) ? LEGACY_ORIGIN : origin;
+        String legacy = WizardAddress.legacyOrigin();
+        return legacyFallback && legacy != null && WizardAddress.configured() && WizardAddress.origin().equals(origin) ? legacy : origin;
     }
 
     /** Switch this process to the old name once. False for QA fakes or when it is already in use. */
     public static boolean useLegacy(Context c) {
-        if (qaOrigin(c) != null || legacyFallback) return false;
+        if (qaOrigin(c) != null || legacyFallback || WizardAddress.legacyOrigin() == null) return false;
         legacyFallback = true;
-        android.util.Log.w("WizardOS", "tailnet name unreachable; using " + LEGACY_ORIGIN + " for this run");
+        android.util.Log.w("WizardOS", "own name unreachable; using the older name for this run");
         return true;
     }
 

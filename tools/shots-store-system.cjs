@@ -1,6 +1,7 @@
 // Screenshot pass for design review: phone + desktop, Store and System, entered the way James enters them.
+const QA_PREVIEW_DOMAIN = process.env.WIZARD_QA_PREVIEW_DOMAIN || 'staging.example.com'; // preview hosts: <name>.<this>
 const {chromium}=require(process.env.PW);const fs=require('fs');
-const B='https://store-window.staging.wizard001.com/wizard-os-home/',OUT=process.env.QA_OUT||'shots';fs.mkdirSync(OUT,{recursive:true});
+const B='https://store-window.' + QA_PREVIEW_DOMAIN + '/wizard-os-home/',OUT=process.env.QA_OUT||'shots';fs.mkdirSync(OUT,{recursive:true});
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 (async()=>{const b=await chromium.launch();const errs=[],unsafe=[];
  const ctx=async m=>{const c=await b.newContext(m?{viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true}:{viewport:{width:1440,height:900}});

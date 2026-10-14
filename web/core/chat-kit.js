@@ -8,7 +8,9 @@
   const K = { notify: () => {}, onChange: () => {} };
 
   /* ================= message parsing ================= */
-  const INTERNAL = ['[IMPORTANT: Background process ', '[ASYNC DELEGATION BATCH COMPLETE', '[Wizard follow-through] The delegated results', '[CONTEXT COMPACTION', '[CONTEXT SUMMARY]:', '[PRIOR CONTEXT', '[Your active task list was preserved', '[Your previous agent loop was paused', '[James requested recovery', '[OUT-OF-BAND', '[SYSTEM:'];
+  const INTERNAL = ['[IMPORTANT: Background process ', '[ASYNC DELEGATION BATCH COMPLETE', '[Wizard follow-through] The delegated results', '[CONTEXT COMPACTION', '[CONTEXT SUMMARY]:', '[PRIOR CONTEXT', '[Your active task list was preserved', '[Your previous agent loop was paused', '[OUT-OF-BAND', '[SYSTEM:'];
+  // Recovery notes name whoever asked ("[<owner> requested recovery …"): match any name, never a built-in one.
+  const RECOVERY = /^\[[^\]\n]{1,80} requested recovery/;
   const partsText = c => typeof c === 'string' ? c
     : Array.isArray(c) ? c.map(p => typeof p === 'string' ? p : p && typeof p === 'object' && typeof p.text === 'string' ? p.text : '').filter(Boolean).join('\n')
     : c && typeof c === 'object' ? String(c.text || c.content || '') : '';
@@ -61,11 +63,10 @@
   /* This Wizard's own addresses. Links into it are written as paths ("/cinequeue/") so they open on whatever
    * address this device reached Wizard through (localhost on the Mac, the tailnet name on a phone). Absolute
    * links to this box's other names (the current host, or a retired custom domain listed in the bootstrap's
-   * network.aliases) are folded back to paths, so old messages keep opening in place after a rename. */
-  const LEGACY_HOME_HOSTS = ['private.wizard001.com'];
+   * network.base_url / network.aliases) are folded back to paths, so old messages keep opening in place after a rename. */
   function homeHosts() {
-    const out = new Set([location.hostname, ...LEGACY_HOME_HOSTS]);
-    try { for (const h of (window.WizConfig?.raw?.network?.aliases || [])) if (typeof h === 'string' && h) out.add(h.toLowerCase()); } catch (e) {}
+    const out = new Set([location.hostname]);
+    try { for (const h of (window.WizConfig?.homeHosts?.() || [])) out.add(h); } catch (e) {}
     return out;
   }
   // Absolute https link to this Wizard → '/path?query#hash'; anything else unchanged.
@@ -148,7 +149,7 @@
           if (cur) cur.steps++;
           continue;
         }
-        if (kind || INTERNAL.some(p => raw.trimStart().startsWith(p))) { if (cur) cur.steps++; continue; }
+        if (kind || INTERNAL.some(p => raw.trimStart().startsWith(p)) || RECOVERY.test(raw.trimStart())) { if (cur) cur.steps++; continue; }
         const files = chipFiles(raw), images = imagesOf(m, content);
         let t = helm(cleanText(raw)).text;
         const hasImage = images.length || files.some(f => /^image\//.test(f.mime));
@@ -312,6 +313,8 @@
   const O_DAY = [{ year: 'numeric', month: '2-digit', day: '2-digit' }, 'en-CA'], O_TIME = [{ hour: '2-digit', minute: '2-digit', hour12: false }];
   // Month first with commas (James, 11 Oct): "Thu, Oct 8", "Thu, Oct 8, 2025"; a stamp adds ", 20:48".
   const O_DATE = [{ weekday: 'short', month: 'short', day: 'numeric' }, 'en-US'], O_DATEY = [{ weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }, 'en-US'];
+  // "Asia/Bangkok" -> " Bangkok": the owner's zone (settings timezone, else the device's), never a fixed city.
+  const zoneCity = () => { const z = TZ(); const c = z.includes('/') ? z.split('/').pop().replace(/_/g, ' ') : z; return c ? ' ' + c : ''; };
   const O_FULL = [{ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }];
   // Each formatter is rebuilt only when the zone changes.
   const F = o => { const z = TZ(); if (o.z !== z) { o.f = new Intl.DateTimeFormat(o[1] || 'en-GB', { timeZone: z, ...o[0] }); o.z = z; } return o.f; };
@@ -326,7 +329,7 @@
       if (k === D.format(now - 864e5)) return 'Yesterday';
       return F(k.slice(0, 4) === D.format(now).slice(0, 4) ? O_DATE : O_DATEY).format(ms);
     },
-    full: ms => isFinite(ms) ? `${F(O_FULL).format(ms)} Bangkok` : '',
+    full: ms => isFinite(ms) ? `${F(O_FULL).format(ms)}${zoneCity()}` : '',
     // Message stamp (James, 11 Oct): today's messages show only the time; any other day shows its date
     // too ("Thu, Oct 8, 18:16"; year added outside the current year), so a scrolled-to message is never
     // ambiguous when its day divider is off screen.

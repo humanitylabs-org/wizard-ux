@@ -3,9 +3,9 @@
 The Live Mode feel (approved by James, 9 Oct 2026) as one small, dependency-free JS + CSS kit, so every Wizard surface moves the same way.
 
 **Stable URLs (private, tailnet):**
-- `https://private.wizard001.com/wizard-os-home/motion/wizard-motion.js`
-- `https://private.wizard001.com/wizard-os-home/motion/wizard-motion.css`
-- Live demo of every primitive: `https://private.wizard001.com/wizard-os-home/motion/`
+- `https://<machine>.<tailnet>.ts.net/wizard-os-home/motion/wizard-motion.js`
+- `https://<machine>.<tailnet>.ts.net/wizard-os-home/motion/wizard-motion.css`
+- Live demo of every primitive: `https://<machine>.<tailnet>.ts.net/wizard-os-home/motion/`
 
 **Source:** `/home/telos/apps/wizard-os-home/web/motion/` (git: `/home/telos/apps/wizard-os-home`). Same-origin Wizard PWAs can load it by URL; other surfaces (a native lock screen, WebView) copy the two files and keep the version in sync.
 

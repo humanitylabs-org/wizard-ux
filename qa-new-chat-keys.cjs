@@ -1,7 +1,8 @@
 // Desktop new-chat shortcuts. Run on Thales; all writes intercepted.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
 const fs=require('fs'), path=require('path'), assert=require('assert/strict');
 const {chromium}=require(process.env.PLAYWRIGHT_PATH||'playwright');
-const BASE=process.argv[2]||'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const BASE=process.argv[2]||QA_ORIGIN + '/wizard-os-home/';
 const ROOT=process.env.QA_WEB_DIR||__dirname, OUT=process.env.QA_OUT||path.join(__dirname,'key-evidence');
 fs.mkdirSync(OUT,{recursive:true});let pass=0;const results=[];
 function ok(c,n){assert(c,n);pass++;results.push(n);console.log('PASS',n);}

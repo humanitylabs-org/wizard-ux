@@ -21,7 +21,7 @@ Not present at this commit (checked so the rebuild doesn't hunt for them): home-
 - **A9. Deep link to a thread (`?session=ID`)**. Opens Work with that thread, marks it read, then strips the param from the URL. *deepLink.ts → `readWizardSessionDeepLink`, `clearWizardSessionDeepLink`; App.tsx effect on `deepLinkedSession`.*
 - **A10. Deep link to a root view or section (`?view=inbox|work|files|apps|settings&section=…`)**. Opens that screen with only the named Work section expanded. Overrides resume state. *deepLink.ts → `readWizardRootDeepLink`; App.tsx → `initialRootDestination`, `expandedWorkSections`.*
 - **A11. Deep link to a video (`?video=<32hex>`)**. Opens the in-app video viewer over the originating conversation. *App.tsx → effect reading `video` param; VideoMedia.tsx → `privateMediaUrl`; commit 64c1b08.*
-- **A12. Apps screen**. Cards for Files (in-app), Wizard Store (external link to store.wizard001.com), and "Share to Wizard · Ready" (Android only). *App.tsx → `.apps-workspace`.*
+- **A12. Apps screen**. Cards for Files (in-app), Wizard Store (external link to the Wizard Store site), and "Share to Wizard · Ready" (Android only). *App.tsx → `.apps-workspace`.*
 - **A13. Snackbar / toast**. Transient status line, auto-hides after 4 s, tap to dismiss. Shown beside the mic inside a chat and at the bottom of root views. *controller.ts → `notify`/`showMessage`; App.tsx → `.snackbar`, `.composer-snackbar`.*
 
 ## B. Work list (chat list), sections and thread triage

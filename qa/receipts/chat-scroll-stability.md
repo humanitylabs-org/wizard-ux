@@ -31,7 +31,7 @@ Exact tested SHA-256:
 
 ## Reproduction and safety
 
-All Chrome/mobile execution ran on Thales. Browser origin was `https://wizard.tailc0f369.ts.net/wizard-os-home/`; candidate/baseline app assets were fulfilled from separate mirrors without deployment. The baseline web tree was archived from `dff3b59`. Live main's untracked `web/data.js` and `web/summaries.js` were copied into both mirrors. Every non-GET/HEAD request was fulfilled locally, service workers blocked. The focused suite uses deterministic sessions/messages. Existing suites retain real reads and locally intercepted action/upload fixtures; no sends/actions reached the backend.
+All Chrome/mobile execution ran on Thales. Browser origin was `https://<machine>.<tailnet>.ts.net/wizard-os-home/`; candidate/baseline app assets were fulfilled from separate mirrors without deployment. The baseline web tree was archived from `dff3b59`. Live main's untracked `web/data.js` and `web/summaries.js` were copied into both mirrors. Every non-GET/HEAD request was fulfilled locally, service workers blocked. The focused suite uses deterministic sessions/messages. Existing suites retain real reads and locally intercepted action/upload fixtures; no sends/actions reached the backend.
 
 Remote original suites have compatibility-only copies (`after/remote-qa-*.cjs`): Playwright module path, service-worker block, exact mirrored seed assets, and parity's write fence widened to every non-GET/HEAD request. Their source adaptation script is `prepare-remote.py` at the evidence root. Existing test source files in this candidate are unchanged.
 

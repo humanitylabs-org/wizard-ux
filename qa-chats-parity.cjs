@@ -3,10 +3,12 @@
 // Runs against the live origin with real Wizard data. Every write (runs, sessions, uploads,
 // seen/disposition) is intercepted; the suite fails if any write reaches Wizard.
 // QA_WEB_DIR=<dir> serves app.js/live.js/styles.css from a worktree instead of the live server.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
+const QA_HOST = new URL(QA_ORIGIN).hostname;
 const { chromium } = require('/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
+const URL_ = process.argv[2] || QA_ORIGIN + '/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP ' + QA_HOST + ' 127.0.0.1:18443';
 const WEB = process.env.QA_WEB_DIR || '';
 const OUT = process.env.QA_OUT || '/home/telos/apps/wizard-os-home/qa-live';
 const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';

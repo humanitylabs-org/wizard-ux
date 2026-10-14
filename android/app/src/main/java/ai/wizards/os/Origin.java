@@ -2,27 +2,32 @@ package ai.wizards.os;
 
 import android.net.Uri;
 
+import java.util.List;
 import java.util.Locale;
 
+import ai.wizards.os.device.WizardAddress;
+
 /** The origins Wizard OS loads in-app. Pure string checks so they are unit-testable off-device.
- *  HOST is this Wizard's own address (its tailnet name, from BuildConfig.ORIGIN). LEGACY_HOST is the retired
- *  private.wizard001.com: still accepted so old links and notifications keep working, and moved to HOST. */
+ *  host() is this Wizard's own address (device/WizardAddress: the build's private default or what the owner
+ *  connected to). Legacy hosts are older names of the same Wizard: still accepted so old links and
+ *  notifications keep working, and moved to host(). Nothing matches before the phone is connected. */
 final class Origin {
-    static final String HOST = BuildConfig.ORIGIN.replaceFirst("^https://", "").replaceAll("/+$", "");
-    static final String LEGACY_HOST = "private.wizard001.com";
     static final String SHELL_PATH = "/wizard-os-home/";
     /** Mizel Live (meeting recorder view): the recording notification deep-links here, inside the app. */
     static final String MIZEL_LIVE_PATH = "/mizel-live/";
 
     private Origin() {}
 
+    static String host() { return WizardAddress.host(); }
+
     static boolean isPrivate(Uri u) {
         return u != null && isPrivate(u.getScheme(), u.getHost(), u.getPort());
     }
 
     static boolean isPrivate(String scheme, String host, int port) {
-        return "https".equals(scheme) && host != null && (HOST.equalsIgnoreCase(host) || LEGACY_HOST.equalsIgnoreCase(host))
-                && (port == -1 || port == 443);
+        if (!"https".equals(scheme) || host == null || host.isEmpty() || !(port == -1 || port == 443)) return false;
+        String home = host();
+        return (!home.isEmpty() && home.equalsIgnoreCase(host)) || WizardAddress.isLegacyHost(host);
     }
 
     static boolean isLegacy(Uri u) {
@@ -30,37 +35,43 @@ final class Origin {
     }
 
     static boolean isLegacy(String scheme, String host, int port) {
-        return "https".equals(scheme) && LEGACY_HOST.equalsIgnoreCase(host) && (port == -1 || port == 443);
+        return "https".equals(scheme) && WizardAddress.isLegacyHost(host) && (port == -1 || port == 443);
     }
 
     /** The same page on this Wizard's own name: a legacy-name URL keeps its path, query and fragment. */
     static String toHome(String url) {
-        if (url == null) return null;
-        String lower = url.toLowerCase(Locale.ROOT);
-        String legacy = "https://" + LEGACY_HOST;
-        String rest;
-        if (lower.startsWith(legacy + ":443")) rest = url.substring(legacy.length() + 4);
-        else if (lower.startsWith(legacy)) rest = url.substring(legacy.length());
-        else return url;
-        if (!rest.isEmpty() && "/?#".indexOf(rest.charAt(0)) < 0) return url; // private.wizard001.com.evil.test
-        return "https://" + HOST + (rest.isEmpty() || rest.charAt(0) != '/' ? "/" + rest : rest);
+        if (url == null || host().isEmpty()) return url;
+        for (String legacy : WizardAddress.legacyHosts()) {
+            String rest = restAfter(url, legacy);
+            if (rest != null) return "https://" + host() + rest;
+        }
+        return url;
     }
 
-    /** The same page on the retired name (the fallback when the tailnet name cannot be reached). */
+    /** The same page on the first older name (the fallback when this Wizard's own name cannot be reached). */
     static String toLegacy(String url) {
-        if (url == null) return null;
+        List<String> legacy = WizardAddress.legacyHosts();
+        if (url == null || legacy.isEmpty() || host().isEmpty()) return url;
+        String rest = restAfter(url, host());
+        return rest == null ? url : "https://" + legacy.get(0) + rest;
+    }
+
+    /** The path/query/fragment of an https URL on exactly {@code host} (port 443 or none), "/"-led; else null. */
+    private static String restAfter(String url, String host) {
         String lower = url.toLowerCase(Locale.ROOT);
-        String home = "https://" + HOST.toLowerCase(Locale.ROOT);
+        String base = "https://" + host.toLowerCase(Locale.ROOT);
         String rest;
-        if (lower.startsWith(home + ":443")) rest = url.substring(home.length() + 4);
-        else if (lower.startsWith(home)) rest = url.substring(home.length());
-        else return url;
-        if (!rest.isEmpty() && "/?#".indexOf(rest.charAt(0)) < 0) return url;
-        return "https://" + LEGACY_HOST + (rest.isEmpty() || rest.charAt(0) != '/' ? "/" + rest : rest);
+        if (lower.startsWith(base + ":443")) rest = url.substring(base.length() + 4);
+        else if (lower.startsWith(base)) rest = url.substring(base.length());
+        else return null;
+        if (!rest.isEmpty() && "/?#".indexOf(rest.charAt(0)) < 0) return null; // <host>.evil.test
+        return rest.isEmpty() || rest.charAt(0) != '/' ? "/" + rest : rest;
     }
 
     static boolean isHome(Uri u) {
-        return u != null && "https".equals(u.getScheme()) && HOST.equalsIgnoreCase(u.getHost()) && (u.getPort() == -1 || u.getPort() == 443);
+        String home = host();
+        return u != null && !home.isEmpty() && "https".equals(u.getScheme()) && home.equalsIgnoreCase(u.getHost())
+                && (u.getPort() == -1 || u.getPort() == 443);
     }
 
     static boolean isShell(Uri u) {

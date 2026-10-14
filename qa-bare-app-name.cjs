@@ -2,9 +2,11 @@
 // Held orb: anywhere, on-device, no router call, nothing sent. Tap: off a thread; inside a thread a one-word tap
 // stays a reply. Sentences that merely mention an app ("what's on my calendar today") never open it.
 // Usage: QA_WEB_DIR=<tree> node qa-bare-app-name.cjs. Every Hermes/Wizard write is refused and recorded.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
+const QA_HOST = new URL(QA_ORIGIN).hostname;
 let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
 const fs = require('fs'), path = require('path');
-const ORIGIN = 'https://wizard.tailc0f369.ts.net', URL_ = ORIGIN + '/wizard-os-home/';
+const ORIGIN = QA_ORIGIN, URL_ = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;
@@ -22,7 +24,7 @@ async function boot(b) {
   const json = (r, o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
-    if (u.hostname !== 'wizard.tailc0f369.ts.net') {
+    if (u.hostname !== QA_HOST) {
       // Image hosts the search page may touch directly (favicons): allow, they are read-only.
       return m === 'GET' ? r.continue() : r.abort();
     }

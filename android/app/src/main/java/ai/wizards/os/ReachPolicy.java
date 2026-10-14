@@ -1,10 +1,10 @@
 package ai.wizards.os;
 
 /**
- * The "can't reach your Wizard" screen (James, 12 Oct: Tailscale off on GrapheneOS left a pure black screen).
+ * The "can't reach your Wizard" screen (12 Oct: Tailscale off on GrapheneOS left a pure black screen).
  * Pure rules, unit-tested: when the screen shows, what it says, and when the app tries again on its own.
  *
- * The shell lives only on the tailnet (wizard.tailc0f369.ts.net, and the old name resolves to a tailnet IP), so
+ * The shell lives only on the tailnet (https://<machine>.<tailnet>.ts.net; an older name resolves to a tailnet IP too), so
  * with Tailscale off the old name's connection hangs with nothing on screen. Instead: a normal open paints before
  * CONNECTING_MS and never sees this screen; past that mark an open that cannot work (no network, no VPN) says why
  * at once; anything else says "Connecting…" and, at GIVE_UP_MS, that the Wizard isn't answering. The load keeps

@@ -1,4 +1,5 @@
 // Supplied-logo regression; real rendered shell, intercepted writes, never replace semantic sigils.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const W=process.env.QA_WEB_DIR||__dirname, OUT=process.env.QA_OUT||path.join(__dirname,'qa-brand-out');
@@ -7,7 +8,7 @@ const ok=(v,n)=>{console.log((v?'PASS ':'FAIL ')+n);v?pass++:fail++;};
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
 (async()=>{const b=await chromium.launch({executablePath:process.env.QA_CHROME,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
 for(const shell of ['phone','desktop']){
- const live=process.env.QA_LIVE==='1', origin='https://wizard.tailc0f369.ts.net', base=origin+'/wizard-os-home/';
+ const live=process.env.QA_LIVE==='1', origin=QA_ORIGIN, base=origin+'/wizard-os-home/';
  const c=await b.newContext({viewport:shell==='phone'?{width:412,height:892}:{width:1440,height:960},isMobile:shell==='phone',hasTouch:shell==='phone',userAgent:shell==='phone'?'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/131.0 Mobile Safari/537.36':undefined,serviceWorkers:'block'});
  let writes=0;await c.route('**/*',r=>{const q=r.request(),u=new URL(q.url());if(q.method()!=='GET'){writes++;return r.fulfill({status:403,body:'{}'});}if(live)return r.continue();
  if(u.pathname.startsWith('/wizard-os-home/')){const f=u.pathname.slice(16)||'index.html', p=path.join(W,'web',f);if(!fs.existsSync(p))return r.fulfill({status:200,body:''});const ct=f.endsWith('.html')?'text/html':f.endsWith('.css')?'text/css':f.endsWith('.png')?'image/png':f.endsWith('.ico')?'image/x-icon':f.endsWith('.webmanifest')?'application/manifest+json':'application/javascript';return r.fulfill({status:200,contentType:ct,body:fs.readFileSync(p)});}

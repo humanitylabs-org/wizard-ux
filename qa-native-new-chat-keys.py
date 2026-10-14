@@ -7,7 +7,7 @@ BASE=pathlib.Path('/Volumes/ThalesMedia/Projects/wizard-command-w')
 APP=pathlib.Path('/Volumes/ThalesMedia/Projects/wizard-desktop/new-chat-keys/qa-host/dist/Wizard.app')
 OUT=pathlib.Path('/Volumes/ThalesMedia/Projects/wizard-desktop/new-chat-keys/evidence/native');OUT.mkdir(parents=True,exist_ok=True)
 DOMAIN='org.humanitylabs.wizard'
-URL='https://chat-keys.staging.wizard001.com/wizard-os-home/desktop.html?open=chats'
+URL='https://chat-keys.'+os.environ.get('WIZARD_QA_PREVIEW_DOMAIN','staging.example.com')+'/wizard-os-home/desktop.html?open=chats'
 passed=[]
 def run(*args,check=True):return sp.run(args,check=check,text=True,stdout=sp.PIPE,stderr=sp.PIPE)
 def qa(cmd):return run('/tmp/wizard-qa-post',cmd)

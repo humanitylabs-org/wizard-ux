@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wizard OS address-move QA (runs on Thales): the one-time carry from the retired private.wizard001.com to
+"""Wizard OS address-move QA (runs on Thales): the one-time carry from an older name (the APK's first wizardLegacyHosts entry) to
 the tailnet name, on a fresh API 35 emulator with the exact debug APK. Nothing reaches the real Wizard.
 
 usage: qa_carry.py QA_APK WEB_DIR [OUT_DIR]
@@ -21,6 +21,11 @@ audio), exactly as an older Wizard OS would have left them. Then:
 """
 import base64, fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
 import urllib.request
+# The Wizard the APK under test was built for (its private Gradle wizardOrigin / first wizardLegacyHosts entry).
+# Set WIZARD_QA_ORIGIN / WIZARD_QA_LEGACY_HOST to match; see docs/qa-targets.md. Neutral examples by default.
+QA_ORIGIN = os.environ.get('WIZARD_QA_ORIGIN', 'https://wizard.example.ts.net').rstrip('/')
+QA_HOST = QA_ORIGIN.split('://', 1)[-1]
+QA_LEGACY_HOST = os.environ.get('WIZARD_QA_LEGACY_HOST', 'old-name.example.com')
 P = pathlib.Path
 BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
 APK = P(sys.argv[1]); WEB = P(sys.argv[2]).resolve()
@@ -334,10 +339,10 @@ with (BASE / 'worker.lock').open('a') as lock:
         runas('rm -f files/qa_home.txt files/qa_origin.txt files/qa_carry_from.txt files/carry.json shared_prefs/carry.xml')
         launch(); time.sleep(6)  # tailnet name fails (dead DNS) → old name fails too → offline page
         pg = page(lambda u: True, 20)
-        pg.call('Fetch.enable', patterns=[{'urlPattern': 'https://private.wizard001.com/*'}])
+        pg.call('Fetch.enable', patterns=[{'urlPattern': 'https://' + QA_LEGACY_HOST + '/*'}])
         served = []
         # (0.9.10: the offline page is a native screen now; drive the same home load the old Retry link made.)
-        pg._send({'id': 899999, 'method': 'Page.navigate', 'params': {'url': 'https://wizard.tailc0f369.ts.net/wizard-os-home/'}})
+        pg._send({'id': 899999, 'method': 'Page.navigate', 'params': {'url': QA_ORIGIN + '/wizard-os-home/'}})
         t0 = time.time(); pg.s.settimeout(1.0)
         while time.time() - t0 < 25:
             try: d = pg._recv()
@@ -354,7 +359,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             if p.get('resourceType') == 'Document': time.sleep(2); break
         pg.s.settimeout(30)
         href = pg.ev('location.href'); title = pg.ev('document.title'); pg.close()
-        check('#8 tailnet name unreachable → the shell opens on the old name instead of an error', href.startswith('https://private.wizard001.com/wizard-os-home/') and title == 'legacy-shell', (href, title, served[:3]))
+        check('#8 tailnet name unreachable → the shell opens on the old name instead of an error', href.startswith('https://' + QA_LEGACY_HOST + '/wizard-os-home/') and title == 'legacy-shell', (href, title, served[:3]))
         check('#8 the app stays open', PKG in top(), top()[:80])
         shot('08-safety-net')
 

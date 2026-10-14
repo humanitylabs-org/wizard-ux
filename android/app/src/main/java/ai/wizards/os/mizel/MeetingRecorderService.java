@@ -563,7 +563,7 @@ public class MeetingRecorderService extends Service {
     }
 
     static PendingIntent openMeeting(Context c, String id, int req) {
-        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(MizelConfig.DEFAULT_ORIGIN + LIVE_PATH + (id == null ? "" : Uri.encode(id))))
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(MizelConfig.defaultOrigin() + LIVE_PATH + (id == null ? "" : Uri.encode(id))))
                 .setClass(c, MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         return PendingIntent.getActivity(c, req, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);

@@ -11,8 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 /**
- * One-time carry of the phone's local Wizard OS state from the retired private.wizard001.com name to this
- * Wizard's tailnet name. A WebView keeps localStorage and IndexedDB per origin, so without this the first
+ * One-time carry of the phone's local Wizard OS state from an older name of this Wizard (the build's first
+ * legacy host, see device/WizardAddress) to its own name. Builds without an older name never carry. A WebView keeps localStorage and IndexedDB per origin, so without this the first
  * launch on the new address would start with no drafts, no unsent messages and every thread unread.
  *
  * Flow: the first launch after the update opens source() + PAGE (the same Wizard serves it on both names).
@@ -30,9 +30,9 @@ final class Carry {
 
     private Carry() {}
 
-    /** Where the old state lives: the legacy origin in release builds; debug (QA) builds only via files/qa_carry_from.txt. */
+    /** Where the old state lives: the legacy origin in release builds (null if none); debug (QA) builds only via files/qa_carry_from.txt. */
     static String source(Context c) {
-        if (!BuildConfig.DEBUG) return "https://" + Origin.LEGACY_HOST;
+        if (!BuildConfig.DEBUG) return ai.wizards.os.device.WizardAddress.legacyOrigin();
         File f = new File(c.getFilesDir(), "qa_carry_from.txt");
         if (!f.isFile()) return null;
         try {

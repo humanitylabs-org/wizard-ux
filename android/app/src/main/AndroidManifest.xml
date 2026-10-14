@@ -40,6 +40,7 @@
     </queries>
 
     <application
+        android:name=".WizardApp"
         android:networkSecurityConfig="@xml/wos_network"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -71,11 +72,21 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="wizard.tailc0f369.ts.net" android:pathPrefix="/wizard-os-home/" />
-                <data android:scheme="https" android:host="wizard.tailc0f369.ts.net" android:pathPrefix="/mizel-live/" />
-                <!-- Retired name, still honoured: old links and notifications land on the same page under the tailnet name. -->
-                <data android:scheme="https" android:host="private.wizard001.com" android:pathPrefix="/wizard-os-home/" />
-                <data android:scheme="https" android:host="private.wizard001.com" android:pathPrefix="/mizel-live/" />
+                <!-- Hosts come from the build's private Gradle properties (app/build.gradle); a build without them
+                     uses reserved .invalid names that never match a real link. -->
+                <data android:scheme="https" android:host="${wizardLinkHost}" android:pathPrefix="/wizard-os-home/" />
+                <data android:scheme="https" android:host="${wizardLinkHost}" android:pathPrefix="/mizel-live/" />
+                <!-- Older name, still honoured: old links and notifications land on the same page under the own name. -->
+                <data android:scheme="https" android:host="${wizardLegacyLinkHost}" android:pathPrefix="/wizard-os-home/" />
+                <data android:scheme="https" android:host="${wizardLegacyLinkHost}" android:pathPrefix="/mizel-live/" />
+            </intent-filter>
+            <!-- Connect link (the Setup app's QR code / a shared link): wizardos://connect?address=https://<machine>.<tailnet>.ts.net/
+                 opens "Connect to your Wizard" with the address filled in; the owner confirms with Connect. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="wizardos" android:host="connect" />
             </intent-filter>
         </activity>
 

@@ -99,7 +99,6 @@ final class DictationCleanup {
         cleaned = cleaned.replaceAll("(?i)\\bNo\\s?Vaire\\b", "Novaire");
         cleaned = cleaned.replaceAll("(?i)\\b(co-host\\s+)no\\s+bear\\b", "$1Novaire");
         cleaned = cleaned.replaceAll("(?i)\\bNovaire\\s+Sito\\b", "Novaire");
-        cleaned = cleaned.replaceAll("(?i)\\bJames\\s+(?:the|de)\\s+Fleur\\b", "James DeFleur");
         cleaned = cleaned.replaceAll("(?i)\\bGraphene\\s+OS\\b", "GrapheneOS");
         cleaned = cleaned.replaceAll("(?i)\\bSony\\b(?=(?:['\\u2019]s)\\b)", "Somi");
         cleaned = cleaned.replaceAll("(?i)\\b(?:jay\\s+guan|jaevon)\\s+kim\\b", "Jaegwon Kim");

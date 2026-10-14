@@ -5,12 +5,13 @@
 // or touched / clicked / typed / scrolled within the last minute). His first input when he returns clears it.
 // Fully stubbed: shell from the tree under test, Wizard API faked, nothing leaves the box.
 // Usage: QA_WEB_DIR=<tree> node qa-attended-read.cjs
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
 let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
 const { chromium } = pw;
 const fs = require('fs'), path = require('path');
 const W = process.env.QA_WEB_DIR || __dirname;
 const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
-const ORIGIN = 'https://wizard.tailc0f369.ts.net';
+const ORIGIN = QA_ORIGIN;
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra === '' ? '' : JSON.stringify(extra).slice(0, 400)); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));

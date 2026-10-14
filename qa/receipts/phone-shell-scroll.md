@@ -12,7 +12,7 @@ The Ready-section deep link called `scrollIntoView({block:'start'})`. The `.devi
 
 ## Verification on Thales
 
-Actual daily origin: `https://wizard.tailc0f369.ts.net/wizard-os-home/`.
+Actual daily origin: `https://<machine>.<tailnet>.ts.net/wizard-os-home/`.
 Browser: Google Chrome on Thales; Android-UA phone/touch 412×842; native bridge inset simulated at 24 CSS px. Every write intercepted; native hardware/IME not claimed.
 
 `qa-phone-shell-scroll.cjs`: untouched daily 6 pass / 2 fail. Exact candidate 8/8 across three native-inset repeats. Before dock bottom719/viewport842, shell scroll123, search top−43. After dock bottom842/viewport842, shell scroll0, search top80. Nested scrollIntoView, keyboard-sized resize/restore, open thread/Back and zero page errors covered.

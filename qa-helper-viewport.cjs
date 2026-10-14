@@ -1,4 +1,5 @@
 // Phone viewport regression: staging focus must never scroll hidden shell ancestors.
+const QA_PREVIEW_DOMAIN = process.env.WIZARD_QA_PREVIEW_DOMAIN || 'staging.example.com'; // preview hosts: <name>.<this>
 const {chromium}=require('/Users/thales/helper-status-qa/node_modules/playwright-core');
 const assert=require('node:assert/strict');
 let pass=0;const ok=(v,label)=>{assert.ok(v,label);console.log('PASS',label);pass++};
@@ -6,7 +7,7 @@ let pass=0;const ok=(v,label)=>{assert.ok(v,label);console.log('PASS',label);pas
  const b=await chromium.launch({headless:true,executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
  const c=await b.newContext({viewport:{width:412,height:760},isMobile:true,hasTouch:true,ignoreHTTPSErrors:true});const p=await c.newPage();const errors=[];p.on('pageerror',e=>errors.push(e.message));
  const geometry=()=>p.evaluate(()=>{const rect=sel=>{const e=document.querySelector(sel);const r=e.getBoundingClientRect();return{top:r.top,bottom:r.bottom,left:r.left,right:r.right,scrollTop:e.scrollTop}};return{height:innerHeight,width:innerWidth,device:rect('#device'),win:rect('.app-chats'),head:rect('.app-chats .ch-head'),summary:rect('[data-wk] summary'),composer:rect('.app-chats .ch-compose'),button:document.querySelector('[data-helper-continue]')?rect('[data-helper-continue]'):null}});
- await p.goto('https://helper-status.staging.wizard001.com/',{waitUntil:'domcontentloaded'});await p.waitForSelector('[data-wk] summary');await p.waitForTimeout(2500);
+ await p.goto('https://helper-status.' + QA_PREVIEW_DOMAIN + '/',{waitUntil:'domcontentloaded'});await p.waitForSelector('[data-wk] summary');await p.waitForTimeout(2500);
  let m=await geometry();console.log('GEOMETRY',JSON.stringify(m));
  ok(m.device.scrollTop===0,'after delayed focus timers, hidden device is unscrolled');ok(m.head.top>=0,'thread header stays inside visible browser viewport');ok(m.summary.top>=0&&m.summary.bottom<=m.height,'Working row starts on-screen');
  if(!await p.locator('[data-wk]').evaluate(e=>e.open)) await p.locator('[data-wk] summary').click();

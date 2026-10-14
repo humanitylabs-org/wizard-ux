@@ -1,8 +1,9 @@
 // Real-data check of the staged bound-views preview, as James gets it (router + boot.js + front + real hosted apps).
 // Every write is refused by the preview; this script also aborts non-GETs itself.
+const QA_PREVIEW_DOMAIN = process.env.WIZARD_QA_PREVIEW_DOMAIN || 'staging.example.com'; // preview hosts: <name>.<this>
 let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
 const fs = require('fs'), path = require('path');
-const HOST = 'bound-views.staging.wizard001.com', OUT = '/home/telos/.hermes/cache/scratch/bv-staged';
+const HOST = 'bound-views.' + QA_PREVIEW_DOMAIN, OUT = '/home/telos/.hermes/cache/scratch/bv-staged';
 fs.mkdirSync(OUT, { recursive: true });
 const THREADS = (process.argv[2] || '').split(',').filter(Boolean);
 const sleep = ms => new Promise(r => setTimeout(r, ms));

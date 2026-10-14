@@ -17,10 +17,12 @@ import org.json.JSONObject;
  * tailnet-only Wizard OS endpoint. The phone must be on Tailscale. Nothing else leaves the phone.
  */
 public final class Transcriber {
-    static final String ORIGIN = ai.wizards.os.BuildConfig.ORIGIN;
-    static final String ENDPOINT = ORIGIN + "/wizard-os-home/api/transcribe";
-    static final String PROMPT = "Wizard voice request spoken to Archimedes on a phone lock screen. "
-            + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
+    static final String PATH = "/wizard-os-home/api/transcribe";
+    /** Speech-to-text hint: who the request is for and the names this Wizard knows (device/OwnerProfile). */
+    static String prompt() {
+        return "Wizard voice request spoken to " + ai.wizards.os.device.OwnerProfile.agent() + " on a phone lock screen. "
+                + ai.wizards.os.device.OwnerProfile.names();
+    }
 
     public static final class Result {
         public final String text;
@@ -28,7 +30,7 @@ public final class Transcriber {
         Result(String text, long ms) { this.text = text; this.ms = ms; }
     }
 
-    static Result transcribe(File audio) throws IOException { return transcribe(audio, ai.wizards.os.device.AppState.live(ORIGIN), PROMPT); }
+    static Result transcribe(File audio) throws IOException { return transcribe(audio, ai.wizards.os.device.AppState.live(ai.wizards.os.device.WizardAddress.origin()), prompt()); }
 
     /** origin is the private Wizard origin (a local fake in unit tests). */
     public static Result transcribe(File audio, String origin, String prompt) throws IOException {
@@ -38,7 +40,7 @@ public final class Transcriber {
         if (prompt != null && !prompt.isEmpty()) mp.field("prompt", prompt); // dictation sends none, as Archimedes Anywhere
         byte[] body = mp.finish();
         long t0 = System.nanoTime();
-        HttpURLConnection c = (HttpURLConnection) new URL(origin + "/wizard-os-home/api/transcribe").openConnection();
+        HttpURLConnection c = (HttpURLConnection) new URL(origin + PATH).openConnection();
         try {
             c.setConnectTimeout(8000);
             c.setReadTimeout(90000);

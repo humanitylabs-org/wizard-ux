@@ -24,7 +24,40 @@ PORT = int(os.environ.get("WIZARD_OS_HOME_PORT", "9271"))
 STT_URL = os.environ.get("WIZARD_STT_URL", "http://127.0.0.1:8864/v1/audio/transcriptions")
 LLM_URL = os.environ.get("TINFOIL_PROXY_URL", "http://127.0.0.1:3301/v1/chat/completions")
 ROUTER_MODEL = os.environ.get("WIZARD_OS_ROUTER_MODEL", "deepseek-v4-1-flash")
-ALLOWED_ORIGINS = {"https://wizard.tailc0f369.ts.net", "https://private.wizard001.com", "http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT}
+# Same-origin POSTs only. This Wizard's own https origins come from Wizard OS settings (network.base_url and
+# network.aliases in $WIZARD_SETTINGS_PATH, default ~/.wizard-os/settings.json, re-read when it changes) plus any
+# extra in WIZARD_OS_HOME_ORIGINS (comma-separated). Nothing about a particular box is built in.
+SETTINGS_PATH = Path(os.environ.get("WIZARD_SETTINGS_PATH") or (Path(os.environ.get("WIZARD_OS_HOME") or (Path.home() / ".wizard-os")) / "settings.json"))
+LOCAL_ORIGINS = {"http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT}
+_HOST_RE = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
+_origins_cache: tuple[float, frozenset[str]] = (-1.0, frozenset())
+
+
+def _origin_of(value: object) -> str:
+    h = str(value or "").strip().lower()
+    h = re.sub(r"^https://", "", h).split("/")[0].split("?")[0].split("#")[0]
+    return "https://" + h if _HOST_RE.match(h) else ""
+
+
+def allowed_origins() -> frozenset[str]:
+    global _origins_cache
+    try:
+        mtime = SETTINGS_PATH.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+    if mtime != _origins_cache[0]:
+        found: set[str] = set()
+        try:
+            net = (json.loads(SETTINGS_PATH.read_text()) or {}).get("network") or {}
+            found.add(_origin_of(net.get("base_url")))
+            for alias in net.get("aliases") or []:
+                found.add(_origin_of(alias))
+        except (OSError, ValueError, AttributeError):
+            pass
+        _origins_cache = (mtime, frozenset(o for o in found if o))
+    extra = {_origin_of(o) for o in os.environ.get("WIZARD_OS_HOME_ORIGINS", "").split(",")}
+    return _origins_cache[1] | LOCAL_ORIGINS | {o for o in extra if o}
+
 MAX_AUDIO = 24 * 1024 * 1024
 
 
@@ -64,10 +97,37 @@ If it opens an app AND asks for follow-up work inside it ("open CineQueue and ad
 
 Known Wizard apps: %s.
 Known Android apps: Maps, Camera, Phone, Messages, Spotify, Chrome, Grab, LINE, Telegram, Settings.
-Today is %s (Asia/Bangkok). Resolve "yesterday", weekdays, and "last week" to dates when asked for a day view.
-The user lives in Bangkok. Speech-to-text often mangles local names: map near-misses to the real place
-(e.g. "Iconium"/"icon siam" -> "ICONSIAM", "Suvarnapoom" -> "Suvarnabhumi Airport"). Return the corrected name.
+Today is %s. Resolve "yesterday", weekdays, and "last week" to dates when asked for a day view.%s
 """
+
+
+def _settings() -> dict:
+    try:
+        value = json.loads(SETTINGS_PATH.read_text())
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _router_context(settings: dict) -> tuple[str, str]:
+    """(today with zone, place hint) from Wizard OS settings: clock.timezone, owner.place, voice.vocabulary."""
+    zone = str((settings.get("clock") or {}).get("timezone") or "").strip()
+    try:
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        now = datetime.now(ZoneInfo(zone)) if zone else datetime.now().astimezone()
+    except Exception:  # unknown zone: the server's own clock
+        from datetime import datetime
+        now, zone = datetime.now().astimezone(), ""
+    today = now.strftime("%Y-%m-%d (%A)") + (" (%s)" % zone if zone else "")
+    place = str((settings.get("owner") or {}).get("place") or "").strip()[:80]
+    words = [str(w)[:40] for w in ((settings.get("voice") or {}).get("vocabulary") or []) if isinstance(w, str) and w.strip()][:40]
+    hint = ""
+    if place:
+        hint += "\nThe user lives in %s. Speech-to-text often mangles local names: map near-misses to the real place and return the corrected name." % place
+    if words:
+        hint += "\nNames the user often says: %s." % ", ".join(words)
+    return today, hint
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -109,7 +169,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         origin = self.headers.get("Origin", "")
-        if origin not in ALLOWED_ORIGINS:
+        if origin not in allowed_origins():
             return self._json(403, {"error": "origin"})
         path = self.path.split("?")[0]
         if path == "/api/transcribe":
@@ -169,8 +229,8 @@ class Handler(SimpleHTTPRequestHandler):
         key = _tinfoil_key()
         if not key:
             return self._json(503, {"error": "router unavailable"})
-        today = time.strftime("%Y-%m-%d (%A)", time.gmtime(time.time() + 7 * 3600))
-        system = ROUTER_SYSTEM % (", ".join(apps) or "Wizard", today)
+        today, hint = _router_context(_settings())
+        system = ROUTER_SYSTEM % (", ".join(apps) or "Wizard", today, hint)
         if force:
             system += "\nThe user held the orb for COMMAND mode: prefer a command; use agent only if no command fits."
         view = payload.get("view") if isinstance(payload.get("view"), dict) else None

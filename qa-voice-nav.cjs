@@ -3,8 +3,10 @@
 // recording navigates (only Cancel discards); desk swipes work while recording and from anywhere on
 // the bottom bar; the desk label names the app, not the thread; an attached file rides with the take.
 // Usage: QA_WEB_DIR=<repo> node qa-voice-nav.cjs [url]. Every Hermes/Wizard write is intercepted.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
+const QA_HOST = new URL(QA_ORIGIN).hostname;
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/home/telos/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_ = process.argv[2] || QA_ORIGIN + '/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 const SEND_MS = 1500;
@@ -19,7 +21,7 @@ async function boot(b, opts = {}) {
   let slowSend = null;
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (!/wizard\.tailc0f369\.ts\.net$/.test(u.hostname)) return r.abort();
+    if (u.hostname !== QA_HOST) return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET' && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = require('path').join(W, 'web', f);

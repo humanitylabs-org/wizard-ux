@@ -786,12 +786,13 @@
   // are about updating an app on the phone, not something to look at beside the thread. Wizard OS's own shell paths
   // are excluded too: the shell is already in front. Matching links are skipped; a later real view still binds.
   const BOUND_INSTALL = /^\/(downloads)\/|^\/reports\/(wizard-os|wizard-lock)(\/|$)|^\/wizard-os-home\/(?!(index|desktop)\.html$)./i;
-  // Staging/sibling previews treat the live private hosts as this origin, so real replies bind there too.
-  const BOUND_HOME = ['private.wizard001.com', 'wizard.tailc0f369.ts.net'];
+  // Staging/sibling previews treat this Wizard's own names (settings network.base_url + aliases) as this origin,
+  // so real replies bind there too.
   function boundAbs(href) {
     let u; try { u = new URL(href, location.href); } catch (e) { return null; }
-    const sib = /\.staging\.wizard001\.com$|^127\.0\.0\.1$|^localhost$/.test(location.hostname);
-    if (sib && u.protocol === 'https:' && BOUND_HOME.includes(u.hostname)) u = new URL(u.pathname + u.search + u.hash, location.origin);
+    const sib = /\.staging\.|^127\.0\.0\.1$|^localhost$/.test(location.hostname);
+    const home = (() => { try { return window.WizConfig?.homeHosts?.() || []; } catch (e) { return []; } })();
+    if (sib && u.protocol === 'https:' && home.includes(u.hostname)) u = new URL(u.pathname + u.search + u.hash, location.origin);
     return u;
   }
   // What the latest reply in this painted thread points at: { key, app } or { key, url, title }, else null.

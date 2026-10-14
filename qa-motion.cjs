@@ -1,11 +1,13 @@
 // Wizard Motion Kit demo QA: every primitive works standalone at the stable URL (phone viewport).
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
+const QA_HOST = new URL(QA_ORIGIN).hostname;
 const { chromium } = require('/home/telos/node_modules/playwright');
 (async () => {
-  const b = await chromium.launch({ args: ['--host-resolver-rules=MAP wizard.tailc0f369.ts.net 127.0.0.1:18443'] });
+  const b = await chromium.launch({ args: ['--host-resolver-rules=MAP ' + QA_HOST + ' 127.0.0.1:18443'] });
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e)));
   let pass = 0, fail = 0; const ok = (c, n, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${n}${c ? '' : ' — ' + d}`); };
-  const BASE = 'https://wizard.tailc0f369.ts.net/wizard-os-home/motion/';
+  const BASE = QA_ORIGIN + '/wizard-os-home/motion/';
   await p.goto(BASE, { waitUntil: 'load' });
   for (const f of ['wizard-motion.js', 'wizard-motion.css', 'README.md']) { const s = await p.evaluate(u => fetch(u).then(r => r.status), BASE + f); ok(s === 200, `stable URL serves ${f}`, s); } await p.waitForTimeout(3000);
   ok(await p.evaluate(() => WizardMotion.version === '1.0.0'), 'WizardMotion v1 loads');

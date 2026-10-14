@@ -1,0 +1,5 @@
+# Full-history secret scan (CI): everything in .gitleaks.toml except the current-tree-only private-address rule,
+# which older commits predate (history is not rewritten).
+[extend]
+path = ".gitleaks.toml"
+disabledRules = ["wizard-private-host"]

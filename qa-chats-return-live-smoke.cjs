@@ -1,7 +1,8 @@
 // Post-release real-data shell check. No fixture data or asset overrides; every write refused.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
 const {chromium}=require('playwright-core');
 const fs=require('fs'), path=require('path');
-const URL_=process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_=process.argv[2] || QA_ORIGIN + '/wizard-os-home/';
 const OUT=process.env.QA_OUT || path.join(__dirname,'live-smoke');fs.mkdirSync(OUT,{recursive:true});
 (async()=>{const b=await chromium.launch({executablePath:process.env.QA_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});const checks=[];
 try{for(const kind of ['phone','desktop']){

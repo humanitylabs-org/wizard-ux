@@ -28,7 +28,7 @@
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
   const S = { apps: [], installed: new Map(), stack: [], q: '', loaded: false, error: '' };
-  if (/\.staging\.wizard001\.com$/.test(location.hostname)) $('preview').hidden = false;
+  if (/\.staging\./.test(location.hostname)) $('preview').hidden = false;
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
 
   /* ---------------- data ---------------- */

@@ -2,7 +2,7 @@
 // Usage: node qa-stock-box.cjs http://127.0.0.1:18787/wizard-ux/
 const { chromium } = require('/home/telos/node_modules/playwright');
 const BASE = process.argv[2] || 'http://127.0.0.1:18787/wizard-ux/';
-const BANNED = /Archimedes|James|Bangkok|wizard001/;
+const BANNED = /Archimedes|James|Bangkok|wizard0{2}1|tailc0f36[9]/; // no owner, place or private host may reach a stock box
 const results = [];
 const ok = (name, pass, detail = '') => { results.push({ name, pass, detail }); console.log(`${pass ? 'PASS' : 'FAIL'} ${name}${detail ? ' · ' + detail : ''}`); };
 

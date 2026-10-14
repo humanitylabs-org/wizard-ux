@@ -349,7 +349,7 @@ public final class UsualsRunner {
             if (n != null && n.isEditable()) return; // tapping the search box: the typing step finds it again
             if (UsualsPolicy.isCommit(label)) {
                 // He ordered in Grab himself: that's the end of the route. Save it (named after the food), stay in Grab.
-                note("teach: James tapped “" + label + "” in Grab → saving");
+                note("teach: owner tapped “" + label + "” in Grab → saving");
                 commitLabel = label; // "Place order ฿245": the total, if the checkout screen was never sampled
                 main.post(() -> finishTeach(true));
                 return;
@@ -526,7 +526,7 @@ public final class UsualsRunner {
         if (commit == null) { fail("The order button is gone. Nothing was ordered."); return; }
         AccessibilityNodeInfo c = clickable(commit);
         boolean ok = c.performAction(AccessibilityNodeInfo.ACTION_CLICK) || tapAt(s, c);
-        note("place order (James tapped) → " + (ok ? "pressed" : "refused"));
+        note("place order (owner tapped) → " + (ok ? "pressed" : "refused"));
         if (!ok) { fail("Grab didn't take the order tap. Nothing was ordered."); return; }
         mode = Mode.ORDERING;
         status = "Placing order";

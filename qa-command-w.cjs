@@ -1,8 +1,9 @@
 // Focused regression: Command-W closes Wizard apps and preserves the desktop root.
 // Run on Thales: QA_WEB_DIR=<repo> PLAYWRIGHT_PATH=<module> node qa-command-w.cjs [origin]
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
 const fs = require('fs'), path = require('path'), assert = require('assert/strict');
 const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
-const BASE = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const BASE = process.argv[2] || QA_ORIGIN + '/wizard-os-home/';
 const ROOT = process.env.QA_WEB_DIR || __dirname;
 const OUT = process.env.QA_OUT || path.join(process.cwd(), 'command-w-evidence');
 fs.mkdirSync(OUT, {recursive:true});

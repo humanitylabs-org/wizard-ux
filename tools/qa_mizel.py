@@ -10,7 +10,7 @@ A fake meetings server on the Mac (reached from the emulator as 10.0.2.2) implem
 so no test audio reaches James's real Mizel. The debug build is pointed there by files/qa_origin.txt and given
 short timers by files/qa_mizel.json (both debug-only hooks).
 
-Pages that use window.wizardMizelPort are served on the real origin https://private.wizard001.com by CDP
+Pages that use window.wizardMizelPort are served on the real origin (WIZARD_QA_ORIGIN) by CDP
 Fetch interception (/mizel-qa/*, /mizel-live/*), as is a foreign origin https://example.org (iframe).
 
 Checks
@@ -28,6 +28,11 @@ Checks
 """
 import fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid, base64, struct
 import urllib.request, urllib.parse
+# The Wizard the APK under test was built for (its private Gradle wizardOrigin / first wizardLegacyHosts entry).
+# Set WIZARD_QA_ORIGIN / WIZARD_QA_LEGACY_HOST to match; see docs/qa-targets.md. Neutral examples by default.
+QA_ORIGIN = os.environ.get('WIZARD_QA_ORIGIN', 'https://wizard.example.ts.net').rstrip('/')
+QA_HOST = QA_ORIGIN.split('://', 1)[-1]
+QA_LEGACY_HOST = os.environ.get('WIZARD_QA_LEGACY_HOST', 'old-name.example.com')
 P = pathlib.Path
 BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
 apk = P(sys.argv[1]); PKG = sys.argv[2]
@@ -39,7 +44,7 @@ env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libe
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
 env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5698; S = f'emulator-{PORT}'; DEVTOOLS = 9351; FAKE = 18791
-ORIGIN = 'https://wizard.tailc0f369.ts.net'
+ORIGIN = QA_ORIGIN
 RES = []
 def check(group, n, ok, d: object = ''):
     RES.append({'group': group, 'name': n, 'ok': bool(ok), 'detail': d if isinstance(d, (str, int, float, bool, list, dict, type(None))) else str(d)})
@@ -377,7 +382,7 @@ with (BASE / 'worker.lock').open('a') as lock:
 
         # ------------------------------------------------ (f) origin scoping + iframe reach
         shell_port = pg.ev("typeof window.wizardMizelPort")
-        check('bridge', 'shell main frame (https://private.wizard001.com/wizard-os-home/) has wizardMizelPort', shell_port == 'object', shell_port)
+        check('bridge', 'shell main frame (' + ORIGIN + '/wizard-os-home/) has wizardMizelPort', shell_port == 'object', shell_port)
         if os.environ.get('QA_SHARED_CAPTURE_ONLY') == '1':
             from qa_shared_capture_native import run as run_shared_native
             summary['shared_source_hashes']=shared_hashes
@@ -400,7 +405,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         R0 = pg.ev("JSON.stringify({hasPort: R.hasPort, frames: R.frames})")
         save('bridge-frames.json', R0); R0 = json.loads(R0)
         shot('02-qa-host')
-        check('bridge', 'QA page on https://private.wizard001.com (main frame) has wizardMizelPort', R0['hasPort'] == 'object', R0['hasPort'])
+        check('bridge', 'QA page on ' + ORIGIN + ' (main frame) has wizardMizelPort', R0['hasPort'] == 'object', R0['hasPort'])
         check('bridge', 'same-origin iframe has wizardMizelPort and gets replies', R0['frames'].get('same', {}).get('port') == 'object' and 'same-reply' in R0['frames'], R0['frames'].get('same-reply'))
         fo = R0['frames'].get('foreign', {})
         check('bridge', 'foreign-origin iframe (https://example.org) has NO wizardMizelPort and cannot reach the parent\'s', fo.get('port') == 'undefined' and str(fo.get('parentPort', '')).startswith('blocked'), fo)

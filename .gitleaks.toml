@@ -6,3 +6,13 @@ useDefault = true
 description = "Known non-secrets: RFC 6455 sample WebSocket nonce, localStorage key names, Android test certificate digests"
 regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''', '''^wos\.[a-z0-9-]+\.v[0-9]+$''']
 paths = ['''^android/app/src/test/''']
+
+# The owner's private addresses must never be in this public repo's tree (the owner's rule: no private configuration in
+# source). Addresses come from runtime settings and private build properties instead. The pattern is spelled with
+# quantifiers so this file never contains the names themselves. Current-tree scan only (CI: `gitleaks dir`); the
+# full-history scan uses .gitleaks-history.toml, which disables this rule because history predates it.
+[[rules]]
+id = "wizard-private-host"
+description = "Private Wizard address (owner's custom domain or tailnet name) in source"
+regex = '''(?i)wizard0{2}1\.com|tailc0f36[9]'''
+keywords = ["wizard0", "tailc0f36"]

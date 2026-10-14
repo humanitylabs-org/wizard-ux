@@ -1,6 +1,6 @@
 /* Wizard Motion Kit v1 — the Live Mode feel, shared across Wizard.
  * Dependency-free. Load wizard-motion.css next to it. Exposes window.WizardMotion.
- * Stable URL: https://private.wizard001.com/wizard-os-home/motion/wizard-motion.js
+ * Stable URL: https://<machine>.<tailnet>.ts.net/wizard-os-home/motion/wizard-motion.js
  * API notes: README.md beside this file. Demo: ./index.html
  */
 (function (W) {

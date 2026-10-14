@@ -151,6 +151,7 @@ public final class Updater {
         lastCheck = System.currentTimeMillis();
         String st = state.optString("state");
         if ("downloading".equals(st) || "verifying".equals(st) || "installing".equals(st)) { if (done != null) io.execute(done); return; }
+        if (!AppState.configured(app)) { if (done != null) io.execute(done); return; } // not connected to a Wizard yet
         io.execute(() -> {
             try {
                 String feed = feed(app);

@@ -1,4 +1,5 @@
 // Run on Thales. Read-only live origin; all mutations intercepted locally.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
 const {chromium}=require('/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
 const fs=require('fs'),path=require('path');
 const OUT=process.env.QA_OUT||'/Volumes/ThalesMedia/wizard/phone-shell-scroll', WEB=process.env.QA_WEB_DIR;
@@ -11,7 +12,7 @@ const OUT=process.env.QA_OUT||'/Volumes/ThalesMedia/wizard/phone-shell-scroll', 
  const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));
  const ok=(yes,name,evidence)=>{checks.push({name,pass:!!yes,evidence});console.log(yes?'PASS':'FAIL',name,JSON.stringify(evidence||{}));};
  async function geometry(name){const g=await p.evaluate(()=>{const d=document.querySelector('#device'),r=d.getBoundingClientRect(),k=document.querySelector('#dock').getBoundingClientRect();return {deviceTop:r.top,deviceBottom:r.bottom,dockBottom:k.bottom,viewport:innerHeight,deviceScroll:d.scrollTop,bodyScroll:document.scrollingElement.scrollTop,searchTop:document.querySelector('[data-chsearch]')?.getBoundingClientRect().top};});ok(Math.abs(g.deviceTop)<1&&Math.abs(g.dockBottom-g.viewport)<1&&g.deviceScroll===0&&g.bodyScroll===0,name,g);return g;}
- await p.goto('https://wizard.tailc0f369.ts.net/wizard-os-home/?open=chats');await p.waitForFunction(()=>window.__wos?.live?.ok);await p.waitForTimeout(1400);await geometry('initial shell fills viewport');
+ await p.goto(QA_ORIGIN + '/wizard-os-home/?open=chats');await p.waitForFunction(()=>window.__wos?.live?.ok);await p.waitForTimeout(1400);await geometry('initial shell fills viewport');
  await p.evaluate(()=>WizCore.deeplink.route('/wizard-os-home/?view=chats&section=ready'));await p.waitForTimeout(1000);await geometry('Ready section navigation keeps shell anchored');await p.screenshot({path:OUT+'/ready.png'});
  await p.evaluate(()=>{const sec=document.querySelector('[data-sec="ready"]');sec?.scrollIntoView({block:'start'});});await p.waitForTimeout(300);await geometry('nested scrollIntoView cannot move shell');await p.screenshot({path:OUT+'/nested-scroll.png'});
  await p.evaluate(()=>{const s=document.querySelector('[data-chsearch]');s?.focus();s?.blur();});await p.setViewportSize({width:412,height:510});await p.waitForTimeout(200);await geometry('keyboard-sized viewport fills shell');await p.setViewportSize({width:412,height:842});await p.waitForTimeout(200);await geometry('keyboard dismissal restores dock');

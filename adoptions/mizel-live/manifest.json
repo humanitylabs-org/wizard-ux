@@ -38,7 +38,8 @@
   "deleted": [
     "web/capture-worklet.js"
   ],
-  "patch_sha256": "2f9325f0fbc5d2e96a39f2548ab57fbb31f27dd40a078a9b15b269e0798b6932",
+  "patch_sha256": "eb819b79eb5dec5e9d5e49552f982e5a4929a48dd56cfc11f09aafcf97cdc441",
+  "base_prepare": "Before git apply, after checking exact_base_files: sed -E -i \"s#(window\\.wizardMizelPort on )https://[^ ]+ only#\\\\1this Wizard's origin only#\" web/app.js (one comment line the patch removes; keeps the owner's address out of this public repo). The candidate hashes are unchanged.",
   "staged": "/home/telos/.hermes/cache/scratch/shared-app-services/other-apps/staged/mizel-live",
   "deployed": false,
   "backend_edited": false,

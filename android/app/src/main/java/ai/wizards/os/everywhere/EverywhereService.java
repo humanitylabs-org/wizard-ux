@@ -308,7 +308,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (!canNotify(c) || appInFront || it.dictation()) return;
         Notification note = new Notification.Builder(c, CH_REPLIES)
                 .setSmallIcon(android.R.drawable.stat_notify_chat)
-                .setContentTitle("Archimedes · " + EverywherePolicy.clip(it.text, 50))
+                .setContentTitle(ai.wizards.os.device.OwnerProfile.agent() + " · " + EverywherePolicy.clip(it.text, 50))
                 .setContentText(EverywherePolicy.clip(text, 140))
                 .setStyle(new Notification.BigTextStyle().bigText(EverywherePolicy.clip(text, 600)))
                 .setContentIntent(openApp(c, MainActivity.ACTION_THREAD, 100 + (it.id.hashCode() & 0xffff), it.sessionId))

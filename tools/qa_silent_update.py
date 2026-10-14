@@ -29,6 +29,11 @@ Checks
 """
 import fcntl, hashlib, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
 import urllib.request
+# The Wizard the APK under test was built for (its private Gradle wizardOrigin / first wizardLegacyHosts entry).
+# Set WIZARD_QA_ORIGIN / WIZARD_QA_LEGACY_HOST to match; see docs/qa-targets.md. Neutral examples by default.
+QA_ORIGIN = os.environ.get('WIZARD_QA_ORIGIN', 'https://wizard.example.ts.net').rstrip('/')
+QA_HOST = QA_ORIGIN.split('://', 1)[-1]
+QA_LEGACY_HOST = os.environ.get('WIZARD_QA_LEGACY_HOST', 'old-name.example.com')
 P = pathlib.Path
 BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
 APK = P(sys.argv[1]); NEXT = P(sys.argv[2]); LATER = P(sys.argv[3]); WEB = P(sys.argv[4])
@@ -299,7 +304,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         VC = vcode(); NEXT_VC = 9000 + VC; LATER_VC = 9100 + VC
         VN0 = re.sub(r'-qa$', '', (re.search(r'versionName=(\S+)', sx('dumpsys package %s' % PKG)) or [None, '0-qa'])[1])
         check('install the 0.7.0 QA build over adb (installer of record: %s)' % installer(), out == 'Success' and VC > 0, '%s versionCode=%d' % (out, VC))
-        resolv = sx('ping -c 1 -W 2 wizard.tailc0f369.ts.net 2>&1 | head -2')
+        resolv = sx('ping -c 1 -W 2 ' + QA_HOST + ' 2>&1 | head -2')
         check('the real Wizard is unreachable from the emulator (DNS dead)', 'unknown host' in resolv.lower() or 'bad address' in resolv.lower() or not re.search(r'\d+\.\d+\.\d+\.\d+', resolv), resolv.strip())
         check('fixtures: qanext/qalater share the QA signer, the tampered one does not',
               SIGNERS['next'] == SIGNERS['later'] == SIGNER and SIGNERS['bad'] and SIGNERS['bad'] != SIGNER, SIGNERS)
@@ -479,6 +484,6 @@ with (BASE / 'worker.lock').open('a') as lock:
             except Exception: em.kill()
         srv.shutdown()
         receipt.update(passed=sum(res), total=len(res), apk=str(APK), apk_gets=ST['gets'],
-                       real_wizard_requests=[l for l in ST['log'] if 'wizard001' in l])
+                       real_wizard_requests=[l for l in ST['log'] if QA_HOST in l or QA_LEGACY_HOST in l])
         (job / 'receipt.json').write_text(json.dumps(receipt, indent=1, default=str))
 print('%d/%d passed · %s' % (sum(res), len(res), job))

@@ -323,7 +323,7 @@ index d3b9360..1dbce4e 100644
 -  detach() { if (this.livePcm) { this.livePcm = false; void this.b.pcm?.(this.meetingId, false).catch(() => {}); } for (const f of this.offs) { try { if (typeof f === 'function') f(); } catch { /* ignore */ } } this.offs = []; }
 -}
 -
--// Wizard OS (Android) exposes window.wizardMizelPort on https://private.wizard001.com only (AndroidX
+-// Wizard OS (Android) exposes window.wizardMizelPort on this Wizard's origin only (AndroidX
 -// WebMessageListener). Wrap it as wizardNative.meetings so the recorder above can drive the phone.
 -const NATIVE_ERRORS = {
 -  mic_busy: 'The microphone is busy (Wizard voice or the side button is listening). Finish that first.',

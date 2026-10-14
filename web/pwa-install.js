@@ -1,5 +1,5 @@
 /* Wizard OS: offer installation only when the browser supplies an install prompt (adapted from CineQ's pwa-install.js).
- * Chrome's own menu can say "already installed" for ANY sibling app on private.wizard001.com (it checks the origin,
+ * Chrome's own menu can say "already installed" for ANY sibling app on this Wizard's origin (it checks the origin,
  * not the app). This banner uses the page's real install prompt, which checks this app's own manifest id. */
 (() => {
   'use strict';

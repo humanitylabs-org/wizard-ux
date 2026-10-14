@@ -2,9 +2,11 @@
 // Repro (9 Oct 2026): James had a working thread open, spoke a follow-up, the router answered "agent",
 // and the shell opened a brand-new thread instead of steering. Router answers are stubbed per case.
 // Usage: QA_WEB_DIR=<repo> node qa-thread-voice.cjs [url]. Real Wizard reads; every write is intercepted.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
+const QA_HOST = new URL(QA_ORIGIN).hostname;
 const { chromium } = require('/home/telos/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
+const URL_ = process.argv[2] || QA_ORIGIN + '/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP ' + QA_HOST + ' 127.0.0.1:18443';
 const W = process.env.QA_WEB_DIR || '';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };

@@ -13,6 +13,11 @@ dead; the fake answers on localhost). Always stops the emulator.
 import fcntl, hashlib, http.server, json, os, pathlib, re, subprocess, sys, threading, time, uuid
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from qa_aa_lib import ADB, BASE, BT, Emu, Page, wait  # noqa: E402
+# The Wizard the APK under test was built for (its private Gradle wizardOrigin / first wizardLegacyHosts entry).
+# Set WIZARD_QA_ORIGIN / WIZARD_QA_LEGACY_HOST to match; see docs/qa-targets.md. Neutral examples by default.
+QA_ORIGIN = os.environ.get('WIZARD_QA_ORIGIN', 'https://wizard.example.ts.net').rstrip('/')
+QA_HOST = QA_ORIGIN.split('://', 1)[-1]
+QA_LEGACY_HOST = os.environ.get('WIZARD_QA_LEGACY_HOST', 'old-name.example.com')
 
 P = pathlib.Path
 QA_APK, WEB, AA, OLD, NEW = (P(x) for x in sys.argv[1:6])
@@ -190,7 +195,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         out = em.sh(ADB, '-s', em.S, 'install', '-r', QA_APK).strip().splitlines()[-1]
         check('install the candidate QA build', out == 'Success', out)
         em.sx('svc data disable'); time.sleep(2)
-        resolv = em.sx('ping -c 1 -W 2 wizard.tailc0f369.ts.net 2>&1 | head -2')
+        resolv = em.sx('ping -c 1 -W 2 ' + QA_HOST + ' 2>&1 | head -2')
         check('the real Wizard is unreachable from the emulator', not re.search(r'\(\d+\.\d+\.\d+\.\d+\)', resolv), resolv.strip()[:120])
         em.sh(ADB, '-s', em.S, 'reverse', 'tcp:%d' % FAKE, 'tcp:%d' % FAKE)
         em.runas('mkdir -p files && echo %s > files/qa_home.txt && echo %s > files/qa_origin.txt' % (ORIGIN, ORIGIN))
@@ -373,6 +378,6 @@ with (BASE / 'worker.lock').open('a') as lock:
         em.kill()
         srv.shutdown()
         receipt.update(passed=sum(res), total=len(res), apk=str(QA_APK), apk_sha256=sha(QA_APK), gets=ST['gets'],
-                       real_wizard_requests=[l for l in ST['log'] if 'wizard001' in l])
+                       real_wizard_requests=[l for l in ST['log'] if QA_HOST in l or QA_LEGACY_HOST in l])
         (job / 'receipt.json').write_text(json.dumps(receipt, indent=1, default=str))
 print('%d/%d passed · %s' % (sum(res), len(res), job))

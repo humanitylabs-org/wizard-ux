@@ -1,7 +1,8 @@
 // Focused real-index private peer QA. Every unsafe request is fenced before it can reach Telos.
+const QA_PREVIEW_DOMAIN = process.env.WIZARD_QA_PREVIEW_DOMAIN || 'staging.example.com'; // preview hosts: <name>.<this>
 const {chromium}=require(process.env.PW || '/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const BASE=process.argv[2] || 'https://store-window.staging.wizard001.com/wizard-os-home/';
+const BASE=process.argv[2] || 'https://store-window.' + QA_PREVIEW_DOMAIN + '/wizard-os-home/';
 const OUT=process.env.QA_OUT || 'evidence'; fs.mkdirSync(OUT,{recursive:true});
 let pass=0,fail=0; const cases=[],receipts=[],unsafe=[];
 const ok=(v,label,detail='')=>{cases.push({label,pass:!!v,detail});if(v){pass++;console.log('PASS',label);}else{fail++;console.log('FAIL',label,detail);}};

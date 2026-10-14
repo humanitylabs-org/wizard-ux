@@ -10,8 +10,8 @@ WEB_DIR  the worktree's web/ (served as /wizard-os-home/ by the fake Wizard)
 
 Nothing can reach the real Wizard: the app is pointed (debug-only files/qa_home.txt + qa_origin.txt) at a fake
 Wizard on this Mac, reached from the emulator as http://localhost:PORT through `adb reverse`; the emulator runs
-with a dead DNS server so private.wizard001.com cannot even resolve; and the WebView's resource log is checked
-for any wizard001 request at the end.
+with a dead DNS server so the real Wizard's names cannot even resolve; and the WebView's resource log is checked
+for any request to them at the end.
 
 Checks
   #14 orb take keeps recording with the app in the background and the screen off (file keeps growing, microphone
@@ -26,6 +26,11 @@ Checks
 """
 import fcntl, hashlib, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
 import urllib.request
+# The Wizard the APK under test was built for (its private Gradle wizardOrigin / first wizardLegacyHosts entry).
+# Set WIZARD_QA_ORIGIN / WIZARD_QA_LEGACY_HOST to match; see docs/qa-targets.md. Neutral examples by default.
+QA_ORIGIN = os.environ.get('WIZARD_QA_ORIGIN', 'https://wizard.example.ts.net').rstrip('/')
+QA_HOST = QA_ORIGIN.split('://', 1)[-1]
+QA_LEGACY_HOST = os.environ.get('WIZARD_QA_LEGACY_HOST', 'old-name.example.com')
 P = pathlib.Path
 BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
 APK = P(sys.argv[1]); NEXT = P(sys.argv[2]); WEB = P(sys.argv[3])
@@ -309,7 +314,7 @@ with (BASE / 'worker.lock').open('a') as lock:
     fcntl.flock(lock, fcntl.LOCK_EX)
     try:
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'np', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
-        # Dead DNS: nothing on the emulator can resolve private.wizard001.com (QA must never reach the real Wizard).
+        # Dead DNS: nothing on the emulator can resolve the real Wizard's names (QA must never reach the real Wizard).
         em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'np', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect', '-dns-server', '10.0.2.250'],
                               env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)
         for _ in range(140):
@@ -326,7 +331,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         VN = (re.search(r'versionName=(\S+)', sx('dumpsys package %s' % PKG)) or [None, '0-qa'])[1]
         NEXT_VN = re.sub(r'-qa$', '', VN) + '-qanext'
         check('install the QA build', out == 'Success', out + ' ' + (ver.group(0) if ver else ''))
-        resolv = sx('ping -c 1 -W 2 wizard.tailc0f369.ts.net 2>&1 | head -2')
+        resolv = sx('ping -c 1 -W 2 ' + QA_HOST + ' 2>&1 | head -2')
         check('the real Wizard is unreachable from the emulator (DNS dead)', 'unknown host' in resolv.lower() or 'bad address' in resolv.lower() or not re.search(r'\d+\.\d+\.\d+\.\d+', resolv), resolv.strip())
         sh(ADB, '-s', S, 'reverse', 'tcp:%d' % FAKE, 'tcp:%d' % FAKE)
         # QA hooks (debug build only): fake origin for the page + native HTTP, canned microphone.

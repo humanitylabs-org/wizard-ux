@@ -1,5 +1,6 @@
 // Execute on Thales under /Volumes/ThalesMedia/AndroidBuilds/worker.lock.
 // Local shell + deterministic readers; optional actual I Ching GET-only proxy.
+const QA_ORIGIN = (process.env.WIZARD_QA_ORIGIN || 'https://wizard.example.ts.net').replace(/\/+$/, ''); // the Wizard under test (env; see docs/qa-targets.md)
 const fs=require('fs'), path=require('path'), http=require('http'), os=require('os'), assert=require('assert/strict');
 const {chromium}=require(process.env.PW||'/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
 const ROOT=process.env.QA_WEB_DIR||__dirname, OUT=process.env.QA_OUT||path.join(ROOT,'evidence/reading-position');
@@ -23,7 +24,7 @@ const server=http.createServer(async(req,res)=>{
  if(u.pathname==='/wizard/hermes/api/sessions')return send('{"data":[],"has_more":false}','application/json');
  if(u.pathname.endsWith('/thread-seen'))return send('{"state":{"initializedAt":1,"threads":{}}}','application/json');
  if(u.pathname.startsWith('/wizard/'))return send('{}','application/json');
- if(u.pathname.startsWith('/iching/')&&process.env.QA_REAL){try{const r=await fetch('https://wizard.tailc0f369.ts.net'+req.url);return send(Buffer.from(await r.arrayBuffer()),r.headers.get('content-type')||'text/html',r.status)}catch(e){return send(String(e),'text/plain',502)}}
+ if(u.pathname.startsWith('/iching/')&&process.env.QA_REAL){try{const r=await fetch(QA_ORIGIN+req.url);return send(Buffer.from(await r.arrayBuffer()),r.headers.get('content-type')||'text/html',r.status)}catch(e){return send(String(e),'text/plain',502)}}
  if(u.pathname.startsWith('/wisdom/')||u.pathname.startsWith('/iching/'))return send(reader(req.url));
  if(u.pathname.startsWith('/wizard-os-home/')){const f=u.pathname.slice(16)||'index.html',p=path.resolve(ROOT,'web',f);if(!p.startsWith(path.resolve(ROOT,'web')+path.sep))return send('','text/plain',403);if(['data.js','summaries.js'].includes(f))return send('','application/javascript');if(!fs.existsSync(p))return send('','text/plain',404);return send(fs.readFileSync(p),f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'application/octet-stream');}
  return send('','text/plain',404);
@@ -39,7 +40,7 @@ async function reload(p,url){
  const fr=await waitFrame(p,url);await fr.waitForTimeout(1600);return fr;
 }
 async function close(p,mobile,id){await p.evaluate(({mobile,id})=>{const s=mobile?__wos:__wux;for(const w of Object.values(s.wins))if(w.appId===id)s.closeWin(w.id)},{mobile,id});}
-(async()=>{if(process.env.QA_REAL){const archive=await(await fetch('https://wizard.tailc0f369.ts.net/iching/api/readings')).json();assert.ok(archive.readings?.[0]?.id,'actual archive has a reading');apps.find(a=>a.id==='iching').url='/iching/history/'+encodeURIComponent(archive.readings[0].id);}await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;const b=await chromium.launch({headless:true});let failure=null;
+(async()=>{if(process.env.QA_REAL){const archive=await(await fetch(QA_ORIGIN + '/iching/api/readings')).json();assert.ok(archive.readings?.[0]?.id,'actual archive has a reading');apps.find(a=>a.id==='iching').url='/iching/history/'+encodeURIComponent(archive.readings[0].id);}await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;const b=await chromium.launch({headless:true});let failure=null;
 try{for(const mobile of [true,false]){const tag=mobile?'phone':'desktop';const{p,ctx}=await boot(b,mobile);
  let fr=await open(p,mobile,'wisdom','/wisdom/');await scroll(fr,false,1650);let saved=await pos(fr,false);fr=await reload(p,'/wisdom/');ok(tag+' root refresh restores exact scroll',Math.abs(await pos(fr,false)-saved)<=2,{saved,actual:await pos(fr,false)});
  // Update-notification Reload is the actual button, not a reload fixture.
