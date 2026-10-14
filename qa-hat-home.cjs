@@ -142,11 +142,11 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  check(await m.p.locator('.dhome img.wizard-brand-mark').count()>0,'mobile dock Home uses supplied white hat');
  const mobileId=await m.p.evaluate(()=>{const w=__wos.wins[__wos.desks[__wos.idx].focus];window.__mobileFrame=document.querySelector(`[data-win="${w.id}"] iframe`);return w.id;});
  await m.p.locator('.dhome').first().tap();await nap(400);
- check(await m.p.evaluate(()=>__wos.idx===0&&__wos.wins[Object.keys(__wos.wins).find(k=>__wos.wins[k].appId==='shopping')]!==null),'mobile hat navigates Home and parks app');
+ check(await m.p.evaluate(id=>__wos.idx===0&&!!__wos.wins[id]&&__wos.wins[id].appId==='shopping',mobileId),'mobile hat navigates Home and parks app');
  await m.p.evaluate(()=>__wos.openOverview());await nap(300);
  check(await m.p.locator('.ov-home img.wizard-brand-mark').count()===1,'mobile overview Home uses supplied hat');
  await shot(m.p,'phone-overview-hat');await m.p.locator('.ov-home').tap();await nap(300);
- check(await m.p.evaluate(()=>__wos.idx===0&&!document.querySelector('#overview')?.classList.contains('on')),'overview hat returns Home');
+ check(await m.p.evaluate(()=>__wos.idx===0&&!document.querySelector('#overview')?.classList.contains('open')),'overview hat returns Home and actually closes the overview');
  await m.p.evaluate(id=>__wos.goDesk(__wos.desks.findIndex(d=>d.wins.includes(id)),true),mobileId);await nap(400);
  check(await m.p.evaluate(id=>document.querySelector(`[data-win="${id}"] iframe`)===__mobileFrame,mobileId),'mobile return preserves installed-app iframe');
  check(await m.p.locator('.ddot.sig:not(.dhome) svg').count()>0&&await m.p.locator('#orb').isVisible(),'mobile app sigils and orb retained');
