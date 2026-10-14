@@ -91,7 +91,7 @@ const near = (a, b) => Math.abs(a - b) < 1.1;
  ok(await p.locator('.win.focus .pane-main textarea').inputValue() === 'width resize unsent draft', 'closing neighbours keeps chat draft');
  await p.reload({ waitUntil: 'load' }); await boot(); await wait(); s = await geometry();
  ok(s.windows.length === 1 && near(s.windows[0].w, 1200) && centered(s), 'reload restores capped layout', s);
- await p.evaluate(() => { __wux.goWs(1); __wux.newWin({ app: 'frame', appId: 'link', url: '/qa-width-frame/', title: 'Workspace fixture' }); }); await wait(); s = await geometry();
+ await p.evaluate(() => { __wux.newDesktop(); __wux.newWin({ app: 'frame', appId: 'link', url: '/qa-width-frame/', title: 'Workspace fixture' }); }); await wait(); s = await geometry();
  ok(s.windows.length === 1 && near(s.windows[0].w, 1200) && centered(s), 'lone hosted app gets the same cap', s);
  await p.evaluate(() => __wux.goWs(0)); await wait(); s = await geometry();
  ok(s.windows.length === 1 && near(s.windows[0].w, 1200) && centered(s), 'workspace return preserves centering');
