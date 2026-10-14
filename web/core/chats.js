@@ -755,7 +755,7 @@ window.WizCore.chats = function createChats(H) {
         + rns.splice(0).map(rnHtml).join('')
         + approvalHtml(c, s)
         + pend.map(p => pendingHtml(p, c)).join('')
-        + (pend.some(p => p.state !== 'failed') && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
+        + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
     }
     const acts = isNew ? [] : threadActions(s, turns);
     const box = el.querySelector('.ch-msgs');
