@@ -43,18 +43,9 @@ public final class AppState {
     /** The retired name. The same Wizard still answers on it while the move settles. */
     public static final String LEGACY_ORIGIN = "https://private.wizard001.com";
 
-    /** Deprecated compatibility field; no navigation or HTTP path reads it. */
-    public static volatile boolean legacyFallback;
-
-    /** Native HTTP stays on the configured origin, including when its connection fails. */
+    /** Native HTTP stays on the configured origin, including when its connection fails (no retired-name fallback). */
     public static String live(String origin) {
         return origin;
-    }
-
-    /** Retired API: origin failure now stays on the configured name and uses the Retry screen. */
-    public static boolean useLegacy(Context c) {
-        legacyFallback = false;
-        return false;
     }
 
     static String qaOrigin(Context c) {

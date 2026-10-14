@@ -9,15 +9,17 @@ Two fake Wizards on this Mac stand in for the two names (debug hooks only): OLD 
 is seeded through the app's own WebView with a draft, a thread mark and two unsent messages (one with voice
 audio), exactly as an older Wizard OS would have left them. Then:
 
-  1 first launch opens OLD/wizard-os-home/carry.html, which hands everything over and the app goes to NEW
+  0 a FRESH install never opens the carry page (no request to OLD), records it as done, and an update over
+    that fresh install still never carries
+  1 after a real update (adb install -r over a seeded install) the first launch opens OLD/wizard-os-home/carry.html, which hands everything over and the app goes to NEW
   2 the shell on NEW has the draft and the thread mark, and both unsent messages in its outbox (audio intact)
   3 the carried messages are delivered exactly once (same idempotency key) and nothing is sent twice
   4 Back from the shell does not land on the carry page; the app stays open
   5 a later launch goes straight to NEW (no second carry); the app's copy (files/carry.json) is gone
   6 values already on NEW are never overwritten
   7 if OLD cannot be reached, the app still opens NEW (and retries carry later, at most 3 times)
-  8 safety net: the real tailnet name unreachable (dead DNS) → the app opens the same shell on the old name
-    (served by CDP Fetch interception, as qa_mizel does) instead of an error page
+  8 the real tailnet name unreachable (dead DNS) → the app stays on that name and shows its Retry screen;
+    it never loads anything from the retired private.wizard001.com (CDP Fetch would catch it)
 """
 import base64, fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
 import urllib.request
@@ -248,6 +250,19 @@ with (BASE / 'worker.lock').open('a') as lock:
         for p in (OLD_PORT, NEW_PORT): sh(ADB, '-s', S, 'reverse', 'tcp:%d' % p, 'tcp:%d' % p)
         sx('pm grant %s android.permission.POST_NOTIFICATIONS' % PKG)
 
+        # ---- 0. a fresh install never carries, and an update over it still never carries
+        runas('mkdir -p files && echo %s > files/qa_home.txt && echo %s > files/qa_origin.txt && echo %s > files/qa_carry_from.txt' % (NEW, NEW, OLD))
+        launch(); time.sleep(6)
+        pg = page(lambda u: u.startswith(NEW + '/wizard-os-home/'), 30); href = pg.ev('location.href'); pg.close()
+        check('#0 fresh install opens the shell on the new name directly', href.startswith(NEW + '/wizard-os-home/'), href)
+        check('#0 fresh install sends nothing to the old name', not ST[OLD_PORT]['log'], ST[OLD_PORT]['log'][:5])
+        prefs = runas('cat shared_prefs/carry.xml 2>/dev/null')
+        check('#0 fresh install records the carry as done', 'name="done" value="true"' in prefs, prefs.strip()[:200])
+        time.sleep(3); out = sh(ADB, '-s', S, 'install', '-r', APK).strip().splitlines()[-1]
+        launch(); time.sleep(6)
+        check('#0 an update over the fresh install still never carries', out == 'Success' and not ST[OLD_PORT]['log'], (out, ST[OLD_PORT]['log'][:5]))
+        runas('rm -f files/qa_carry_from.txt shared_prefs/carry.xml')
+
         # ---- seed OLD the way an older build left it: the app's own WebView, on the OLD origin
         runas('mkdir -p files && echo %s > files/qa_home.txt && echo %s > files/qa_origin.txt && rm -f files/qa_carry_from.txt' % (OLD, OLD))
         launch(); time.sleep(4)
@@ -272,7 +287,10 @@ with (BASE / 'worker.lock').open('a') as lock:
         runas('rm -f shared_prefs/carry.xml files/carry.json')
         nOld0, nNew0 = len(ST[OLD_PORT]['runs']), len(ST[NEW_PORT]['runs'])
 
-        # ---- 1. first launch with the move
+        # ---- 1. first launch after a real update over an install that has old-name state
+        out = sh(ADB, '-s', S, 'install', '-r', APK).strip().splitlines()[-1]
+        check('#1 updated in place over the seeded install', out == 'Success', out)
+        runas('rm -f shared_prefs/carry.xml files/carry.json')
         runas('echo %s > files/qa_carry_from.txt' % OLD)
         launch(); time.sleep(2)
         hit = wait(lambda: 'GET /wizard-os-home/carry.html' in ST[OLD_PORT]['log'], 15)
@@ -330,33 +348,34 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('#7 and keeps the carry for a later launch (not marked done)', 'name="done" value="true"' not in prefs and 'tries' in prefs, prefs.strip()[:200])
         shot('07-old-down')
 
-        # ---- 8. safety net: the real build origins, tailnet name unreachable → old name, same page
+        # ---- 8. the real build origins, tailnet name unreachable → stay on it, Retry screen, never the old name
         runas('rm -f files/qa_home.txt files/qa_origin.txt files/qa_carry_from.txt files/carry.json shared_prefs/carry.xml')
-        launch(); time.sleep(6)  # tailnet name fails (dead DNS) → old name fails too → offline page
+        sx('logcat -c')
+        launch(); time.sleep(3)  # tailnet name fails (dead DNS) → native Retry screen on the same name
         pg = page(lambda u: True, 20)
-        pg.call('Fetch.enable', patterns=[{'urlPattern': 'https://private.wizard001.com/*'}])
-        served = []
-        # (0.9.10: the offline page is a native screen now; drive the same home load the old Retry link made.)
-        pg._send({'id': 899999, 'method': 'Page.navigate', 'params': {'url': 'https://wizard.tailc0f369.ts.net/wizard-os-home/'}})
-        t0 = time.time(); pg.s.settimeout(1.0)
-        while time.time() - t0 < 25:
-            try: d = pg._recv()
-            except socket.timeout: continue
-            except Exception: break
-            if d.get('method') != 'Fetch.requestPaused': continue
-            p = d['params']; url = p['request']['url']; served.append(url)
-            if p.get('resourceType') == 'Document':
-                body = b'<!doctype html><meta charset=utf-8><title>legacy-shell</title><body>legacy shell'
-                hdrs = [{'name': 'Content-Type', 'value': 'text/html'}]
-            else:
-                body = b'{}'; hdrs = [{'name': 'Content-Type', 'value': 'application/json'}]
-            pg._send({'id': 900000 + len(served), 'method': 'Fetch.fulfillRequest', 'params': {'requestId': p['requestId'], 'responseCode': 200, 'responseHeaders': hdrs, 'body': base64.b64encode(body).decode()}})
-            if p.get('resourceType') == 'Document': time.sleep(2); break
+        pg.call('Fetch.enable', patterns=[{'urlPattern': '*private.wizard001.com*'}])
+        legacy = []
+        # Drive the same home load Retry makes, twice, and keep listening for any old-name request.
+        for n in range(2):
+            pg._send({'id': 899990 + n, 'method': 'Page.navigate', 'params': {'url': 'https://wizard.tailc0f369.ts.net/wizard-os-home/'}})
+            t0 = time.time(); pg.s.settimeout(1.0)
+            while time.time() - t0 < 12:
+                try: d = pg._recv()
+                except socket.timeout: continue
+                except Exception: break
+                if d.get('method') != 'Fetch.requestPaused': continue
+                p = d['params']; legacy.append(p['request']['url'])
+                pg._send({'id': 900000 + len(legacy), 'method': 'Fetch.failRequest', 'params': {'requestId': p['requestId'], 'errorReason': 'BlockedByClient'}})
         pg.s.settimeout(30)
-        href = pg.ev('location.href'); title = pg.ev('document.title'); pg.close()
-        check('#8 tailnet name unreachable → the shell opens on the old name instead of an error', href.startswith('https://private.wizard001.com/wizard-os-home/') and title == 'legacy-shell', (href, title, served[:3]))
+        href = pg.ev('location.href') or ''; pg.close()
+        log = sx('logcat -d -s WizardOSReach:I WizardOS:W')
+        check('#8 tailnet name unreachable → nothing is requested from the retired name', not legacy, legacy[:3])
+        check('#8 the page stays on this Wizard\'s own name', 'private.wizard001.com' not in href, href)
+        check('#8 the native Retry screen is shown', 'offline' in log and 'private.wizard001.com' not in log, log[-300:])
         check('#8 the app stays open', PKG in top(), top()[:80])
-        shot('08-safety-net')
+        shot('08-retry-screen')
+        sx('input keyevent KEYCODE_BACK'); time.sleep(1.5)
+        check('#8 Back on the Retry screen keeps the app open', PKG in top(), top()[:80])
 
         crashed = sx('logcat -d -b crash')
         check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
