@@ -981,8 +981,10 @@
    * entry and treat Back as Esc; at the root it stays put and says so. */
   // AppServices owns the single history guard when available. Running both guards
   // peeled two layers and appended a second entry on every Back.
+  // Keep the boot sentinel: a direct Home entry must survive Back before the
+  // first pointer gesture arms AppServices. Only one popstate consumer is installed.
+  if (history.state?.wux !== 'guard') { history.replaceState({ wux: 'root' }, ''); history.pushState({ wux: 'guard' }, ''); }
   if (!window.WizAppServices?.guardBack) {
-    if (history.state?.wux !== 'guard') { history.replaceState({ wux: 'root' }, ''); history.pushState({ wux: 'guard' }, ''); }
     addEventListener('popstate', () => {
       const did = escStep(); log('back:' + (did || 'root'));
       history.pushState({ wux: 'guard' }, '');

@@ -41,6 +41,8 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  }
  check(await p.evaluate(()=>__wux.homeOpen&&getComputedStyle(document.querySelector('#desktopHome')).display!=='none'),'exact HTTPS deep link opens Home');
  check(await p.locator('#desktopHome .home-time').isVisible()&&await p.locator('#desktopHome .home-card').count()===2,'Home contains clock, attention and Working');
+ const coldURL=p.url();await back(p);
+ check(p.url()===coldURL&&await p.evaluate(()=>__wux.homeOpen),'fresh direct Home entry survives real Back before any pointer gesture');
  check((await p.locator('#wiz-staging-tag').innerText()).includes('Hat Home'),'visible read-only staging marker');
  check(await p.evaluate(()=>document.querySelector('#logo').getAttribute('aria-current')==='page'&&document.querySelectorAll('.wsp:not([hidden])').length===0),'Home owns active nav; all desktops parked');
  await shot(p,'desktop-home');
