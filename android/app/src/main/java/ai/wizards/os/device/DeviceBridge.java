@@ -49,8 +49,10 @@ public final class DeviceBridge implements RecorderService.Listener {
     public DeviceBridge(Activity activity, WebView web) {
         this.activity = activity;
         this.web = web;
-        RecorderService.setListener(this);
-        Updater.attach(activity, this);
+        if (!(activity instanceof ai.wizards.os.AppSessionActivity)) {
+            RecorderService.setListener(this);
+            Updater.attach(activity, this);
+        }
         new Thread(() -> ShareStore.get(activity).prune(), "wizard-share-prune").start();
     }
 
@@ -88,13 +90,13 @@ public final class DeviceBridge implements RecorderService.Listener {
         }
     };
 
-    public void onStart() { AppState.setFront(true); ReplyWatcher.appFront(activity); }
-    public void onStop() { AppState.setFront(false); ReplyWatcher.kick(activity); Updater.onStop(activity); }
-    public void onResume() { Updater.onResume(activity); }
+    public void onStart() { AppState.setFront(activity,true); ReplyWatcher.appFront(activity); }
+    public void onStop() { AppState.setFront(activity,false); if (!AppState.front()) ReplyWatcher.kick(activity); if (!(activity instanceof ai.wizards.os.AppSessionActivity)) Updater.onStop(activity); }
+    public void onResume() { if (!(activity instanceof ai.wizards.os.AppSessionActivity)) Updater.onResume(activity); }
     public void onDestroy() {
         // A take still running (app swiped away) carries on; its notification's Stop/Send take over from here.
-        RecorderService.setListener(null);
-        Updater.detach(activity);
+        AppState.setFront(activity,false);
+        if (!(activity instanceof ai.wizards.os.AppSessionActivity)) { RecorderService.setListener(null); Updater.detach(activity); }
     }
 
     /* ------------------------------------------------------------------ events to the page */

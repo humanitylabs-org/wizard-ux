@@ -58,8 +58,8 @@ android {
             applicationIdSuffix '.preview'
             versionNameSuffix '-preview'
             resValue 'string', 'app_name', 'Wizard Preview'
-            buildConfigField 'String', 'HOME_URL', '"https://orb-controls.staging.wizard001.com/wizard-os-home/?open=chats"'
-            buildConfigField 'String', 'ORIGIN', '"https://orb-controls.staging.wizard001.com"'
+            buildConfigField 'String', 'HOME_URL', '"https://home-screen-apps.staging.wizard001.com/wizard-os-home/"'
+            buildConfigField 'String', 'ORIGIN', '"https://home-screen-apps.staging.wizard001.com"'
             matchingFallbacks = ['release']
         }
         // QA fixture for the in-app update test only (built with :app:assembleQanext next to assembleDebug):
@@ -97,6 +97,9 @@ android {
 }
 
 androidComponents {
+    onVariants(selector().withBuildType('preview')) { v ->
+        v.outputs.each { it.versionCode.set(1001); it.versionName.set('0.9.12-homescreen.1-preview') }
+    }
     onVariants(selector().withBuildType('qanext')) { v ->
         v.outputs.each { it.versionCode.set(9000 + (it.versionCode.getOrElse(0) ?: 0)) }
     }

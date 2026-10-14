@@ -1,0 +1,12 @@
+/* No workspace paint or exit affordance in a pinned single-app session. */
+html[data-app-session] #device > :not(#singleApp):not(#toast) { display: none !important; }
+html[data-app-session] #device { width:100%; height:100dvh; max-width:none; border:0; border-radius:0; margin:0; transform:none; }
+html[data-app-session] #singleApp { position:absolute; inset:0; display:block; padding:0; margin:0; border:0; border-radius:0; }
+html[data-app-session] #singleApp iframe { position:absolute; inset:var(--single-cut, 0px) 0 0; width:100%; height:calc(100% - var(--single-cut, 0px)); border:0; background:var(--bg,#05030c); }
+.single-unavailable { padding:calc(32px + var(--nat-t,0px)) 24px; color:var(--ink,#f3efff); }
+.home-pin-backdrop { position:fixed; inset:0; z-index:1500; background:rgba(0,0,0,.3); display:flex; align-items:flex-end; justify-content:center; padding:16px 12px calc(16px + env(safe-area-inset-bottom)); }
+.home-pin-sheet { width:min(100%,380px); padding:12px; border:1px solid var(--line-2,rgba(205,190,255,.24)); border-radius:18px; background:var(--glass-2,#1c133a); backdrop-filter:blur(24px); color:var(--ink,#f3efff); box-shadow:0 12px 36px #0007; }
+.home-pin-sheet header { display:flex; align-items:center; gap:10px; padding:4px 8px 12px; font-size:14px; }
+.home-pin-sheet header .sgt { width:32px; height:32px; border-radius:9px; }
+.home-pin-sheet button { width:100%; min-height:48px; border:0; border-radius:10px; text-align:left; padding:12px; background:rgba(255,255,255,.06); color:inherit; font:inherit; font-size:15px; }
+.home-pin-sheet button:disabled { opacity:.65; }

@@ -16,6 +16,7 @@
  */
 (() => {
   'use strict';
+  if (window.WizHomeScreenPolicy?.mode) return; // session owner handles restore; never recover/send workspace voice takes
   const W$ = () => window.__wos;
   const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.version === 'function' ? d : null; };
   const OUTBOX = window.WosOutbox || null;
