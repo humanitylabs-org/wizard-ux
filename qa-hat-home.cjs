@@ -6,7 +6,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_PATH);
 const BASE=process.argv[2],OUT=process.env.QA_OUT;
 if(!BASE||!OUT||!OUT.startsWith('/Volumes/ThalesMedia/')||os.hostname().toLowerCase().indexOf('thales')<0)throw Error('Thales evidence placement required');
 fs.mkdirSync(OUT,{recursive:true});
-const cases=[],errors=[],writes=[],assets={},screenshots=[];
+const cases=[],errors=[],writes=[],assets={},screenshots=[],networkFailures=[];let lastPage;
 const check=(value,name,detail)=>{cases.push({name,pass:!!value,...(detail===undefined?{}:{detail})});console.log(value?'PASS':'FAIL',name,detail===undefined?'':JSON.stringify(detail));};
 const nap=ms=>new Promise(r=>setTimeout(r,ms));
 let browser;
@@ -14,7 +14,9 @@ async function context(kind){
  const c=await browser.newContext({viewport:kind==='phone'?{width:412,height:892}:{width:1440,height:920},isMobile:kind==='phone',hasTouch:kind==='phone',permissions:['microphone'],userAgent:kind==='phone'?'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/141.0.0.0 Mobile Safari/537.36':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/141.0.0.0 Safari/537.36'});
  await c.route('**/*',r=>{const q=r.request();if(!['GET','HEAD'].includes(q.method())){writes.push({method:q.method(),url:q.url()});return r.fulfill({status:403,body:'{}'});}return r.continue();});
  await c.addInitScript(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wux.hotkeys.v1',JSON.stringify({AltRight:true,MetaRight:true}));window.__popReceipts=[];addEventListener('popstate',()=>__popReceipts.push({url:location.href,at:Date.now()}),true);});
- const p=await c.newPage();p.on('pageerror',e=>errors.push(String(e)));
+ const p=await c.newPage();lastPage=p;p.on('pageerror',e=>errors.push(String(e)));
+ p.on('response',r=>{if(r.status()>=400)networkFailures.push({status:r.status(),url:r.url()});});
+ p.on('requestfailed',r=>networkFailures.push({url:r.url(),failure:r.failure()}));
  p.on('response',r=>{let u=new URL(r.url());if(u.pathname.startsWith('/wizard-os-home/')&&/\.(js|css)$/.test(u.pathname)&&r.status()===200)r.body().then(x=>{assets[u.pathname]=crypto.createHash('sha256').update(x).digest('hex');}).catch(()=>{});});
  return {c,p};
 }
@@ -162,7 +164,7 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  await m.c.close();
  check(errors.length===0,'zero unexpected page errors',errors);
  check(!writes.some(w=>/\/v1\/runs|\/api\/sessions$/.test(w.url)),'zero actual or attempted agent admissions',writes);
-})().catch(e=>{errors.push(String(e.stack||e));check(false,'suite completed',String(e));}).finally(async()=>{
+})().catch(async e=>{errors.push(String(e.stack||e));check(false,'suite completed',String(e));if(lastPage&&!lastPage.isClosed()){try{console.log('FAILURE_STATE',JSON.stringify(await lastPage.evaluate(()=>({url:location.href,title:document.title,shell:document.documentElement.dataset.shell,want:window.WIZ_SHELL,ua:navigator.userAgent,touch:navigator.maxTouchPoints,fine:matchMedia('(pointer:fine)').matches,coarse:matchMedia('(pointer:coarse)').matches,desktop:!!window.__wux,phone:!!window.__wos,desktopLive:window.__wux?.live?.ok,phoneLive:window.__wos?.live?.ok,text:document.body.innerText.slice(0,1800)}))));await shot(lastPage,'failure');}catch{}}}).finally(async()=>{
  if(browser)await browser.close();const pass=cases.filter(c=>c.pass).length,fail=cases.length-pass;
- const report={base:BASE,worker:os.hostname(),placement:OUT,baseline:process.env.QA_BASELINE==='1',assetOverrides:false,pass,fail,cases,errors,writes,assets,screenshots};fs.writeFileSync(path.join(OUT,'result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({pass,fail,count:cases.length,worker:report.worker}));process.exitCode=fail?1:0;
+ const report={base:BASE,worker:os.hostname(),placement:OUT,baseline:process.env.QA_BASELINE==='1',assetOverrides:false,pass,fail,cases,errors,writes,assets,screenshots,networkFailures};fs.writeFileSync(path.join(OUT,'result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({pass,fail,count:cases.length,worker:report.worker}));process.exitCode=fail?1:0;
 });
