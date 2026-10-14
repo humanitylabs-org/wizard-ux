@@ -383,13 +383,27 @@ window.WizCore.chats = function createChats(H) {
     try { localStorage.setItem(SEC_OPEN_KEY, JSON.stringify(secOpen)); } catch (e) {}
     const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderChatList(w, el);
   }
-  /* ---- attachments: the same Wizard Files upload + wizard_file_ids contract Wizard uses ---- */
-  const MAX_FILES = 8, MAX_BYTES = 64 * 1024 * 1024;
+  /* ---- attachments: Wizard Files + the wizard_file_ids contract Wizard uses ----
+   * Every attachment goes through the resumable /wizard/v1/uploads API when the box offers it (core/uploads.js):
+   * chunked, any size, resumes after a dropped network or a Wizard restart, progress on the chip. A box without
+   * capabilities.resumable_uploads keeps the old one-shot POST /wizard/files/upload (its own 64 MB limit). */
+  const MAX_FILES = 8, OLD_ROUTE_MAX = 64 * 1024 * 1024;
   const fileKind = f => /^audio\//.test(f.mime || '') || /^wizard-voice-/.test(f.name || '') ? 'voice' : /^image\//.test(f.mime || '') ? 'image' : 'file';
-  const fsize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
+  const fsize = b => b >= 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
   const fileUrl = id => `/wizard/files/${encodeURIComponent(id)}/content`;
-  async function uploadFile(file, { signal } = {}) {
-    if (file.size > MAX_BYTES) throw Object.assign(new Error('That file is larger than the 64 MB upload limit.'), { user: true });
+  async function uploadFile(file, { signal, onProgress } = {}) {
+    if (window.WizUploads?.supported()) {
+      try { return await window.WizUploads.upload(file, { signal, onProgress }); }
+      catch (e) {
+        // A cached bootstrap can outlive the box's support (rolled-back service): only a create that the route
+        // itself refuses (404/405) drops to the old path; everything else is a real answer.
+        if (!(e.status === 404 || e.status === 405) || e.code) throw e;
+      }
+    }
+    return uploadFileOnce(file, { signal });
+  }
+  async function uploadFileOnce(file, { signal } = {}) {
+    if (file.size > OLD_ROUTE_MAX) throw Object.assign(new Error('This Wizard takes files up to 64 MB · update it for bigger files.'), { user: true });
     const r = await fetch('/wizard/files/upload', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
       headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': file.name || 'upload', 'X-Wizard-Mime': file.type || 'application/octet-stream' }, body: file, signal });
     if (!r.ok) throw Object.assign(new Error(r.status === 413 ? 'That file is too large for Wizard Files.' : `Wizard Files is unavailable (${r.status}).`), { status: r.status, user: true });
@@ -398,29 +412,50 @@ window.WizCore.chats = function createChats(H) {
     return { id: String(f.id), name: String(f.filename || file.name), mime: String(f.mime || file.type || ''), bytes: Number(f.bytes) || file.size };
   }
   // A multi-pick stages every file at once (each shows immediately), then they upload side by side.
+  // Progress paints into the chip in place (no tray re-render per tick); removing a chip cancels its upload.
+  const pct = f => f.total ? Math.floor(100 * (f.sent || 0) / f.total) : 0;
+  const upLabel = f => f.upState === 'reconnecting' ? `Reconnecting · ${pct(f)}%` : f.upState === 'finishing' ? 'Finishing…' : f.total > 0 ? `${pct(f)}% · ${fsize(f.total)}` : 'Uploading…';
+  function paintUpload(wid, f) {
+    const el = track.querySelector(`[data-chats="${wid}"] [data-attkey="${CSS.escape(f.key)}"]`); if (!el) return;
+    el.style.setProperty('--up', pct(f) + '%');
+    el.classList.toggle('wait', f.upState === 'reconnecting');
+    const s = el.querySelector('small'); if (s) s.textContent = upLabel(f);
+    const r = el.querySelector('.ch-attpct'); if (r) r.textContent = f.upState === 'reconnecting' ? '…' : pct(f) + '%';
+    el.setAttribute('aria-label', `Uploading ${f.name || 'file'} · ${upLabel(f)}`);
+  }
   async function addFiles(wid, list) {
     const c = ch(wid); c.files = c.files || [];
     const picked = [...list], room = Math.max(0, MAX_FILES - c.files.length);
     if (picked.length > room) toast('!', `Up to ${MAX_FILES} files per message`, 2400);
-    const locals = picked.slice(0, room).map(file => ({ file, key: Math.random().toString(36).slice(2), name: file.name, mime: file.type, bytes: file.size, uploading: true, preview: /^image\//.test(file.type) ? URL.createObjectURL(file) : '' }));
+    const locals = picked.slice(0, room).map(file => ({ file, key: Math.random().toString(36).slice(2), name: file.name, mime: file.type, bytes: file.size, uploading: true, sent: 0, total: file.size, upState: 'uploading', preview: /^image\//.test(file.type) ? URL.createObjectURL(file) : '' }));
     if (!locals.length) return;
     c.files.push(...locals); refreshCompose(wid);
     await Promise.all(locals.map(async local => {
       const { file } = local; delete local.file;
-      try { Object.assign(local, await uploadFile(file), { uploading: false }); if (local.preview) PREVIEW[local.id] = local.preview; }
-      catch (e) { c.files = c.files.filter(x => x !== local); toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
+      const abort = new AbortController(); UPLOAD_ABORT.set(local.key, abort);
+      let painted = 0;
+      const onProgress = (sent, total, state) => {
+        local.sent = sent; local.total = total; local.upState = state;
+        const t = performance.now(); if (t - painted < 120 && state === 'uploading' && sent < total) return;
+        painted = t; paintUpload(wid, local);
+      };
+      try { Object.assign(local, await uploadFile(file, { signal: abort.signal, onProgress }), { uploading: false }); if (local.preview) PREVIEW[local.id] = local.preview; }
+      catch (e) { c.files = c.files.filter(x => x !== local); if (!abort.signal.aborted) toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
+      finally { UPLOAD_ABORT.delete(local.key); }
       refreshCompose(wid);
     }));
     saveDraft(wid);
   }
+  const UPLOAD_ABORT = new Map();
   // Photos and screenshots stage as big thumbnails only; other files keep a name chip.
   function attachTray(c) {
     const files = c.files || [];
     if (!files.length) return '';
     const rm = f => `<button type="button" data-attrm="${esc(f.key)}" aria-label="Remove">×</button>`;
+    const up = f => f.uploading ? ` style="--up:${pct(f)}%"` : '';
     return `<div class="ch-tray">${files.map(f => f.preview && fileKind(f) === 'image'
-      ? `<span class="ch-att ch-attimg${f.uploading ? ' up' : ''}" data-attkey="${esc(f.key)}"><img src="${esc(f.preview)}" alt="${esc(f.name || 'Photo')}">${f.uploading ? '<i class="ch-attspin" aria-label="Uploading"></i>' : ''}${rm(f)}</span>`
-      : `<span class="ch-att${f.uploading ? ' up' : ''}" data-attkey="${esc(f.key)}">${f.preview ? `<img src="${esc(f.preview)}" alt="">` : `<span class="ic">${fileKind(f) === 'voice' ? MIC_SVG : CLIP_SVG}</span>`}<span class="nm">${esc(fileKind(f) === 'voice' ? 'Voice note' : f.name)}<small>${f.uploading ? 'Uploading…' : esc(fsize(f.bytes))}</small></span>${rm(f)}</span>`).join('')}</div>`;
+      ? `<span class="ch-att ch-attimg${f.uploading ? ' up' : ''}" data-attkey="${esc(f.key)}"${up(f)}><img src="${esc(f.preview)}" alt="${esc(f.name || 'Photo')}">${f.uploading ? `<i class="ch-attspin" aria-label="Uploading"></i><b class="ch-attpct">${pct(f)}%</b><i class="ch-attbar"></i>` : ''}${rm(f)}</span>`
+      : `<span class="ch-att${f.uploading ? ' up' : ''}" data-attkey="${esc(f.key)}"${up(f)}>${f.preview ? `<img src="${esc(f.preview)}" alt="">` : `<span class="ic">${fileKind(f) === 'voice' ? MIC_SVG : CLIP_SVG}</span>`}<span class="nm">${esc(fileKind(f) === 'voice' ? 'Voice note' : f.name)}<small>${f.uploading ? esc(upLabel(f)) : esc(fsize(f.bytes))}</small></span>${f.uploading ? '<i class="ch-attbar"></i>' : ''}${rm(f)}</span>`).join('')}</div>`;
   }
   /* Mic until there are typed words (.has-text swaps it for Send); a voice take recording in this thread turns
    * the mic itself into Send (.ch-mic.on). Staged files alone keep the mic: talk, and the voice reply carries them. */
@@ -755,7 +790,7 @@ window.WizCore.chats = function createChats(H) {
         + rns.splice(0).map(rnHtml).join('')
         + approvalHtml(c, s)
         + pend.map(p => pendingHtml(p, c)).join('')
-        + (pend.some(p => p.state !== 'failed') && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
+        + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
     }
     const acts = isNew ? [] : threadActions(s, turns);
     const box = el.querySelector('.ch-msgs');
@@ -766,6 +801,10 @@ window.WizCore.chats = function createChats(H) {
     const oldTa = el.querySelector('textarea');
     const draft = oldTa && el.dataset.draftFor === dkey ? oldTa.value : (c.draftFor === dkey ? c.draft || '' : loadDraft(w));
     const hadFocus = el.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA';
+    // Live status/model paints must not replace a sealed dictation target in this same composer.
+    // Navigation to another thread still destroys it: never transfer a seal to the new draft.
+    const keepTa = oldTa && oldTa === H.dictationField?.() && el.dataset.draftFor === dkey ? oldTa : null;
+    const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd];
     const canStop = working && !!s?.runId && s.status !== 'stopping';
     PW?.ensureModels();
     const chip = PW ? PW.modelChip(w, s) : '';
@@ -777,6 +816,7 @@ window.WizCore.chats = function createChats(H) {
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       <form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(window.WizConfig.agent())}…` : `Message ${esc(window.WizConfig.agent())}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
+    if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
     const nb = el.querySelector('.ch-msgs');
     if (keep) nb.scrollTop = nb.scrollHeight - keep.h + keep.top;
@@ -784,7 +824,7 @@ window.WizCore.chats = function createChats(H) {
     else nb.scrollTop = atBottom ? nb.scrollHeight : (boxTop ?? nb.scrollHeight);
     // Photos load after layout: keep a thread that was at the bottom pinned to the bottom.
     if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
-    if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
     growTa(el.querySelector('textarea'));
     PW?.paint(w.id, el);
     // The shell may bind the view this thread's latest reply links (phone: bound views beside the thread).
@@ -1111,9 +1151,23 @@ window.WizCore.chats = function createChats(H) {
   let pickFor = '';
   picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
   function growTa(ta) { if (!ta) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; }
-  // While a thread is on screen, new replies count as read (same rule as Wizard).
+  // While a thread is on screen AND James is at that screen, new replies count as read (same rule as Wizard).
+  // "At the screen" = the page was opened, brought to the front, touched, clicked, typed in or scrolled within
+  // ATTEND_MS. A window left open on a thread (James, 14 Oct 2026: a Mac tab sat on "Our PRs" and marked its new
+  // reply read while he was on his phone) keeps the reply unread everywhere until he comes back: his first input
+  // there re-runs this check, so the thread he is actually looking at still clears at once.
+  const ATTEND_MS = 60e3;
+  let lastPresence = Date.now();
+  const attended = () => !document.hidden && Date.now() - lastPresence < ATTEND_MS;
+  function presence() {
+    const wasAway = Date.now() - lastPresence >= ATTEND_MS; lastPresence = Date.now();
+    if (wasAway) setTimeout(markVisibleThreadsSeen, 0);
+  }
+  // Real input only: a 'scroll' event also fires when a new reply auto-scrolls the thread, which is not James.
+  for (const t of ['pointerdown', 'keydown', 'wheel', 'touchstart']) addEventListener(t, presence, { capture: true, passive: true });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) lastPresence = Date.now(); }, true);
   function markVisibleThreadsSeen() {
-    if (!LIVE?.ok || document.hidden) return;
+    if (!LIVE?.ok || !attended()) return;
     for (const id of desks[idx].wins) {
       const w = W[id]; if (w?.app !== 'chats' || !w.thread || w.thread === '__new__') continue;
       const s = LIVE.session(w.thread); if (s && LIVE.isNew(s)) LIVE.markSeen(w.thread);
@@ -1163,7 +1217,7 @@ window.WizCore.chats = function createChats(H) {
     if (rg) { if (READY_ORDERS.includes(rg.dataset.rdyorder)) readyOrder = rg.dataset.rdyorder; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
-    const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
+    const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
     const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); threadAct(rw, sid, rsa.dataset.rsact); return true; }
     if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
     if (e.target.closest('[data-rncancel]') && rowSheet) { closeRowSheet(); return true; }
@@ -1189,7 +1243,7 @@ window.WizCore.chats = function createChats(H) {
       if (u && (window.WosChat?.isHomeUrl ? window.WosChat.isHomeUrl(u) : u.origin === location.origin) && !u.pathname.startsWith('/wizard-os-home')) { e.preventDefault(); H.openLink(u.pathname + u.search + u.hash, (al.textContent || '').trim().slice(0, 40) || u.pathname); return true; } }
     const cc = e.target.closest('[data-codecopy]'); if (cc) { const t = cc.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.copyText(t).then(ok => { cc.textContent = ok ? 'Copied' : 'Couldn’t copy'; setTimeout(() => { cc.textContent = 'Copy'; }, 1500); }); return true; }
     const cs = e.target.closest('[data-codeshare]'); if (cs) { const t = cs.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.shareText(t).then(r => r === 'copied' && toast('⧉', 'Copied · sharing isn’t available here', 1800)); return true; }
-    const mc = e.target.closest('[data-mcopy]'); if (mc) { const t = ch(id).texts?.[+mc.dataset.mcopy] ?? ''; KIT.copyText(t).then(ok => toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400)); return true; }
+    const mc = e.target.closest('[data-mcopy]'); if (mc) { const t = ch(id).texts?.[+mc.dataset.mcopy] ?? ''; (KIT.copyRich || KIT.copyText)(t).then(ok => toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400)); return true; }
     const ms = e.target.closest('[data-mshare]'); if (ms) { const t = ch(id).texts?.[+ms.dataset.mshare] ?? ''; KIT.shareText(`From ${window.WizConfig.agent()}:\n\n${t}`).then(r => r === 'copied' ? toast('⧉', 'Copied · sharing isn’t available here', 1800) : r === 'failed' && toast('!', 'Couldn’t share', 1800)); return true; }
     const v = e.target.closest('.vnote[data-vnote]'); if (v) { e.preventDefault(); toggleVoice(v.dataset.vnote); return true; }
     return false;

@@ -277,8 +277,18 @@ const APPROVAL = { request_id: 'qa-req-1', command: 'rm -rf /tmp/qa-scratch', ch
     ok(/Copied/.test(await p.locator('.code [data-codecopy]').first().textContent()), 'code Copy confirms “Copied”');
     const mdMsg = p.locator('.msg.a', { hasText: 'Plan' }).first();
     await mdMsg.locator('[data-mcopy]').tap(); await sleep(300);
-    const clip = await p.evaluate(() => navigator.clipboard.readText());
-    ok(clip.startsWith('# Plan') && clip.includes('| Alpha | 1 |'), 'response Copy copies the full Markdown source', clip.slice(0, 40));
+    // James, 14 Oct 2026: Copy pastes formatted text (email/docs), never raw Markdown.
+    const rich = await p.evaluate(async () => {
+      const items = await navigator.clipboard.read(); const it = items[0];
+      const get = async t => it.types.includes(t) ? (await it.getType(t)).text() : '';
+      return { types: it.types, html: await get('text/html'), text: await get('text/plain') };
+    });
+    ok(/<h1>Plan<\/h1>/.test(rich.html) && /<strong>bold<\/strong>/.test(rich.html) && /<em>italic<\/em>/.test(rich.html), 'response Copy puts formatted HTML on the clipboard (heading, bold, italic)', rich.html.slice(0, 120));
+    ok(/<table>/.test(rich.html) && /<td align="right">1<\/td>/.test(rich.html) && /<ul>/.test(rich.html) && /<blockquote>/.test(rich.html), 'formatted copy keeps tables, lists and quotes', rich.html.slice(0, 200));
+    ok(!/class=|style=|<button|data-codecopy|Copy<\/button>/.test(rich.html), 'formatted copy carries no dark-mode styles, classes or Copy/Share buttons', rich.html.match(/class=|style=|<button/)?.[0]);
+    ok(/<pre><code>echo "hello" &amp;&amp; ls -la<\/code><\/pre>/.test(rich.html), 'formatted copy keeps code blocks as code', rich.html.match(/<pre>.*<\/pre>/s)?.[0]);
+    ok(rich.text.startsWith('Plan') && /• Top item/.test(rich.text) && /1\. Deep numbered/.test(rich.text) && !/^#|\*\*|\| Alpha \|/m.test(rich.text), 'plain-text flavour is readable text with bullets, no Markdown symbols', rich.text.slice(0, 160));
+    ok(/href="https?:\/\//.test(rich.html) || !/<a /.test(rich.html), 'copied links are absolute', rich.html.match(/<a [^>]*>/)?.[0]);
     await mdMsg.locator('[data-mshare]').tap(); await sleep(300);
     const sh = await p.evaluate(() => window.__shares.slice(-1)[0]);
     ok(sh && sh.text.startsWith('From Archimedes:\n\n# Plan'), 'Share response opens the share sheet with the attributed text', sh);

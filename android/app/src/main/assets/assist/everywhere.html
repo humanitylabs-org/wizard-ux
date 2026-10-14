@@ -50,6 +50,12 @@
 <script>window.ORB_R = .64;</script>
 <script src="orb.js"></script>
 <script>
+/* Battery (14 Oct 2026): at rest the floating orb holds a still frame, like the in-app orb.
+   It used to redraw ~12 times a second over every other app whenever the screen was on.
+   Touch, listening, thinking and level changes still wake it to full rate. */
+window.Orb && Orb.setRestingMotion && Orb.setRestingMotion(false);
+</script>
+<script>
 const $ = id => document.getElementById(id);
 const N = window.EverywhereNative || { log(){} };
 const S = { mode: 'idle', ms: 0, t0: 0, paused: false, kb: false };

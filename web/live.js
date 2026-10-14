@@ -155,8 +155,11 @@
     return r;
   }
   /* Every thread Wizard lists (same endpoint, same paging). A full walk runs at boot and
-   * every few minutes; in between only the recent pages are re-read and merged over it,
-   * so the Chats list always holds the whole history, including the archive. */
+   * every few minutes; in between only the first page is re-read and merged over it,
+   * so the Chats list always holds the whole history, including the archive.
+   * Battery (14 Oct 2026): the list is ordered by last activity, so any thread that changes
+   * rises to page 1. The between-walk poll used to re-read ~6 pages (~1 MB) every 15 s;
+   * one page carries the same news. The full walk still catches edits that don't bump activity. */
   async function fetchSessions(full) {
     const out = []; let snapshot = '';
     for (let offset = 0; offset < 5000; ) {
@@ -168,8 +171,7 @@
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
       if (!more || !rows.length) return { sessions: out, complete: true };
-      const oldest = Math.min(...rows.map(r => { const s = normalize(r); return s ? Date.parse(s.activityAt || s.updatedAt) || Infinity : Infinity; }));
-      if (!full && oldest < Date.now() - 2 * WEEK) return { sessions: out, complete: false };
+      if (!full) return { sessions: out, complete: false };
     }
     return { sessions: out, complete: true };
   }

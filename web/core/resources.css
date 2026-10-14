@@ -55,3 +55,29 @@
 .rs-detail-meters .rs-meter small{display:block;color:var(--wz-text-secondary,var(--ink-2));font-size:12px;margin-top:7px}
 .rs-detail-meters .rs-bar{height:5px}
 @media(max-height:800px){.home-top{padding-top:12px}.home-time{font-size:72px}.home-line{font-size:15px;margin-top:8px}.rs-zone{padding-top:10px;padding-bottom:12px}.rs-accounts{row-gap:9px}.rs-meter b{font-size:20px}.home .now-card{min-height:64px;padding-top:14px;padding-bottom:14px}}
+
+/* Devices tab (spec/DEVICES.md): one card per machine, Tailscale-style lights, rest of the tailnet below. */
+.rs-devices{display:flex;flex-direction:column;gap:14px}
+.rs-device{padding:14px 14px 15px;border:1px solid var(--line);border-radius:16px;background:var(--wz-surface-raised,rgba(255,255,255,.025));font-variant-numeric:tabular-nums}
+.rs-device-head{display:flex;align-items:center;gap:10px;margin-bottom:13px}
+.rs-device-name{flex:1;min-width:0;display:flex;flex-direction:column}
+.rs-device-name b{font-size:15px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-device-name small{font-size:11px;color:var(--wz-text-muted,var(--ink-3));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-device-when{font-size:10px;color:var(--wz-text-muted,var(--ink-3));white-space:nowrap}
+.rs-dot{flex-shrink:0;width:9px;height:9px;border-radius:50%;background:var(--ink-3);box-shadow:0 0 0 3px rgba(255,255,255,.04)}
+.rs-st-online>.rs-device-head .rs-dot,.rs-net .rs-st-online .rs-dot{background:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
+.rs-st-stale>.rs-device-head .rs-dot,.rs-st-unreachable>.rs-device-head .rs-dot{background:var(--amber)}
+.rs-st-connecting>.rs-device-head .rs-dot{opacity:.5}
+.rs-device-meters .rs-meter small{display:block;font-size:10px;margin-top:5px;color:var(--wz-text-muted,var(--ink-3));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-device-off{margin:0;font-size:12px;color:var(--wz-text-secondary,var(--ink-2))}
+.rs-st-offline{opacity:.8}
+.rs-disks{display:flex;flex-direction:column;gap:11px;margin-top:15px;padding-top:13px;border-top:1px solid var(--line)}
+.rs-disk small{display:block;font-size:10px;margin-top:4px;color:var(--wz-text-muted,var(--ink-3))}
+.rs-net-h{margin:24px 2px 8px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:750;color:var(--wz-text-secondary,var(--ink-2))}
+.rs-net{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.rs-net li{display:flex;align-items:center;gap:10px;padding:10px 13px;font-size:13px}
+.rs-net li+li{border-top:1px solid var(--line)}
+.rs-net li span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-net li small{font-size:11px;color:var(--wz-text-muted,var(--ink-3));white-space:nowrap}
+.rs-net .rs-st-offline{opacity:.6}
+.rs-net-hint{margin:10px 2px 0}

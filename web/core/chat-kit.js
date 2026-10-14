@@ -208,7 +208,9 @@
       s = s.replace(/!\[([^\]\n]*)\]\(\s*<?([^\s)>]+)>?(?:\s+"[^"]*")?\s*\)/g, (_, alt, url) => put(PRIVATE_MEDIA.test(url) ? linkHtml(url, esc(alt ? `[Image: ${alt}]` : '[Image]')) : `<span class="md-img">${esc(alt ? `[Image: ${alt}]` : '[Image]')}</span>`));
       s = s.replace(/\[((?:[^\[\]\n]|\[[^\]\n]*\])+)\]\(\s*<?([^\s)>]+?(?:\([^\s)]*\)[^\s)>]*)?)>?(?:\s+"[^"]*")?\s*\)/g, (_, text, url) => put(linkHtml(url, inline(text, true))));
       s = s.replace(/<((?:https?:\/\/|mailto:)[^\s>]+)>/g, (_, u) => put(linkHtml(u, esc(u))));
-      s = s.replace(/(^|[\s(“"'])(https?:\/\/[^\s<>"']*[^\s<>"'.,;:!?)\]’”])/g, (_, pre, u) => pre + put(linkHtml(u, esc(u))));
+      // Every bare URL becomes a link, whatever wraps it (**bold**, _italic_, ~~del~~, [brackets], "Link:url").
+      // Emphasis markers and closing punctuation at the end stay outside the link.
+      s = s.replace(/(^|[^A-Za-z0-9/.@=&%+-])(https?:\/\/[^\s<>"'*\u0001\u0002]*[^\s<>"'*_~.,;:!?)\]’”\u0001\u0002])/g, (_, pre, u) => pre + put(linkHtml(u, esc(u))));
       s = s.replace(SESSION_REF, (m, id) => put(`<a href="/wizard/?session=${encodeURIComponent(id)}" class="wsl" data-session="${esc(id)}">${esc(m)}</a>`));
     }
     let h = esc(s)
@@ -367,6 +369,81 @@
     const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', '');
     ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0'; document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
     let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} ta.remove(); return ok;
+  }
+  /* Rich copy of a Markdown message (James, 14 Oct 2026: pasting a drafted email gave raw Markdown).
+   * The clipboard gets two flavours: text/html (headings, bold, lists, tables, links) so email and docs
+   * paste it formatted, and readable text/plain (bullets, no # or **) for apps that only take plain text.
+   * The HTML is rebuilt from the Markdown with every class, style and control stripped, so dark-mode
+   * colours and Copy/Share buttons never reach the pasted email. */
+  const RICH_KEEP = { A: ['href'], OL: ['start'], TD: ['colspan', 'rowspan'], TH: ['colspan', 'rowspan'] };
+  function richParts(src) {
+    const box = document.createElement('div');
+    box.innerHTML = md(String(src ?? ''));
+    box.querySelectorAll('button, .code-h, script, style, img, video, audio, svg, iframe').forEach(e => e.remove());
+    box.querySelectorAll('div.tbl, div.code').forEach(d => d.replaceWith(...d.childNodes));
+    for (const el of box.querySelectorAll('*')) {
+      const keep = RICH_KEEP[el.tagName] || [];
+      const align = el.style?.textAlign;
+      for (const a of [...el.attributes]) if (!keep.includes(a.name)) el.removeAttribute(a.name);
+      if (align && (el.tagName === 'TD' || el.tagName === 'TH')) el.setAttribute('align', align);
+      if (el.tagName === 'A') {
+        try { const u = new URL(el.getAttribute('href') || '', location.href); if (/^https?:$/.test(u.protocol)) el.setAttribute('href', u.href); else el.removeAttribute('href'); }
+        catch (_) { el.removeAttribute('href'); }
+      }
+    }
+    const html = box.innerHTML;
+    // Readable plain text: bullets/numbers on list items, then the browser's own text layout.
+    const plainBox = box.cloneNode(true);
+    for (const li of plainBox.querySelectorAll('li')) {
+      const list = li.parentElement, ordered = list?.tagName === 'OL';
+      const n = ordered ? (+list.getAttribute('start') || 1) + [...list.children].indexOf(li) : 0;
+      const depth = (() => { let d = 0, p = list?.parentElement; while (p && p !== plainBox) { if (p.tagName === 'UL' || p.tagName === 'OL') d++; p = p.parentElement; } return d; })();
+      li.insertBefore(document.createTextNode('  '.repeat(depth) + (ordered ? `${n}. ` : '• ')), li.firstChild);
+      li.style.display = 'block';
+    }
+    for (const l of plainBox.querySelectorAll('ul, ol')) { l.style.listStyle = 'none'; l.style.padding = '0'; l.style.margin = '0'; }
+    plainBox.style.cssText = 'position:fixed;left:-99999px;top:0;width:600px;white-space:normal;opacity:0;pointer-events:none';
+    document.body.appendChild(plainBox);
+    let text = '';
+    try { text = plainBox.innerText; } finally { plainBox.remove(); }
+    text = text.replace(/\n{3,}/g, '\n\n').trim();
+    return { html, text: text || String(src ?? '') };
+  }
+  // One synchronous copy event carries both flavours; works in Android WebView and desktop browsers
+  // (the Async Clipboard API's text/html support varies). Falls back to async write, then plain text.
+  function copyFormats(html, text) {
+    let wrote = false;
+    const on = e => { try { e.clipboardData.setData('text/html', html); e.clipboardData.setData('text/plain', text); e.preventDefault(); wrote = true; } catch (_) {} };
+    const holder = document.createElement('span'); holder.textContent = ' ';
+    holder.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    const prevFocus = document.activeElement, sel = getSelection(), saved = [];
+    for (let k = 0; k < (sel?.rangeCount || 0); k++) saved.push(sel.getRangeAt(k));
+    document.body.appendChild(holder);
+    document.addEventListener('copy', on, true);
+    let ok = false;
+    try { const r = document.createRange(); r.selectNodeContents(holder); sel?.removeAllRanges(); sel?.addRange(r); ok = document.execCommand('copy'); }
+    catch (_) { ok = false; }
+    finally {
+      document.removeEventListener('copy', on, true); holder.remove();
+      try { sel?.removeAllRanges(); for (const r of saved) sel.addRange(r); } catch (_) {}
+      try { prevFocus?.focus?.({ preventScroll: true }); } catch (_) {}
+    }
+    return ok && wrote;
+  }
+  async function copyRich(src) {
+    let parts;
+    try { parts = richParts(src); } catch (_) { return copyText(src); }
+    if (copyFormats(parts.html, parts.text)) return true;
+    try {
+      if (navigator.clipboard?.write && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([parts.html], { type: 'text/html' }),
+          'text/plain': new Blob([parts.text], { type: 'text/plain' }),
+        })]);
+        return true;
+      }
+    } catch (_) { /* plain fallback below */ }
+    return copyText(parts.text);
   }
   const native = () => window.WizardOSNative || null;
   // Native success needs a receipt, not a fire-and-forget invocation. Older Android
@@ -633,5 +710,5 @@
     return action && choices.length ? { requestId: str(it.request_id, it.id) || undefined, action, choices } : null;
   }
 
-  window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, sharePayload, shareText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, sharePayload, shareText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

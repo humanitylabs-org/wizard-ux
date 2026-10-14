@@ -36,7 +36,7 @@
       if(a?.id && !live) {
         const inPageVoice=W.__wos?.V?.native===a.id && !['idle',undefined].includes(W.__wos?.voice);
         const savedVoice=!a.kind && (!!W.WosModels?.voiceRoute?.(a.id) || !!W.__wosVoiceTake?.(a.id) || !!W.__wosReplyTake?.(a.id)); // Positive persisted legacy voice provenance on older ABIs.
-        if(!['auto','command'].includes(a.kind) && !inPageVoice && !savedVoice){unknownNative=true;live=deviceRows.find(r=>!r.nativeId);}
+        if(!['auto','command','dictation'].includes(a.kind) && !inPageVoice && !savedVoice){unknownNative=true;live=deviceRows.find(r=>!r.nativeId);}
       }
     } catch (_) { unknownNative=true; } // Malformed/unknown bridge truth never authorizes voice/reload.
     const recording = !!active || !!live || unknownNative;
@@ -108,7 +108,7 @@
       if (opts[key] != null && (!Number.isFinite(opts[key]) || opts[key] <= 0)) throw fail('invalid_options', key + ' must be positive.');
     }
     if (opts.meta != null && (typeof opts.meta !== 'object' || Array.isArray(opts.meta))) throw fail('invalid_options', 'Capture metadata must be an object.');
-    if (['auto', 'command'].includes(opts.kind)) throw fail('reserved_kind', 'Wizard voice owns this capture kind.');
+    if (['auto', 'command', 'dictation'].includes(opts.kind)) throw fail('reserved_kind', 'Wizard voice owns this capture kind.');
     const meta = JSON.parse(JSON.stringify(opts.meta || {}));
     if (JSON.stringify(meta).length > 16384) throw fail('invalid_options', 'Capture metadata is too large.');
     return meta;
