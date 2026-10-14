@@ -26,7 +26,7 @@
 <body>
   <header id="bar" class="bar">
     <div class="bar-l">
-      <button id="logo" class="logo" title="Search and launch (⌘K)" aria-label="Search and launch"><img class="wizard-brand-mark" src="brand/wizard-mark-white.png" alt="" aria-hidden="true"></button>
+      <button id="logo" class="logo" title="Home" aria-label="Home" aria-current="false"><img class="wizard-brand-mark" src="brand/wizard-mark-white.png" alt="" aria-hidden="true"></button>
       <nav id="wsList" class="ws-list" aria-label="Workspaces"></nav>
     </div>
     <div class="bar-c">
@@ -37,13 +37,14 @@
       </div>
     </div>
     <div class="bar-r">
+      <button id="searchBtn" class="mic" title="Search and launch (⌘K)" aria-label="Search and launch"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button>
       <button id="micBtn" class="mic" title="Talk to Wizard (tap Right ⌘)" aria-label="Talk to Wizard"><svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg></button>
       <button id="status" class="status" title="Inbox (⌥I)" aria-label="Inbox"></button>
       <button id="keysBtn" class="keys-btn" title="Keyboard shortcuts (⌥/)">⌥/</button>
     </div>
   </header>
 
-  <main id="stage" class="stage" aria-live="polite"></main>
+  <main id="stage" class="stage" aria-live="polite"><section id="desktopHome" class="home desktop-home" aria-label="Home" tabindex="-1" hidden></section></main>
 
   <aside id="inbox" class="inbox" aria-label="Inbox" hidden>
     <div class="ib-head"><b>Inbox</b><small id="ibSub"></small><button class="x" data-close="inbox" aria-label="Close inbox">✕</button></div>

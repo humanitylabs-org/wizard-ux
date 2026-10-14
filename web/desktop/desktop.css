@@ -134,6 +134,9 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 /* ---------- empty workspace: home ---------- */
 .home { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; }
 .home-in { width: min(720px, 100%); }
+.desktop-home[hidden] { display: none !important; }
+.desktop-home { overflow-y: auto; align-items: safe center; }
+.logo[aria-current="page"] { background: rgba(205,190,255,.12); }
 .home-time { font-size: 64px; font-weight: 250; letter-spacing: -.02em; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1; }
 .home-date { margin-top: 6px; font-size: 14px; color: var(--ink-3); letter-spacing: .04em; }
 .home-line { margin: 18px 0 22px; font-size: 16px; color: var(--ink-2); }
