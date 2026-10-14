@@ -7,6 +7,10 @@
 // --main=proxy   (Telos staged preview): the main agent's reads go to the real Agent Service on 127.0.0.1:8923 and
 //                every main-agent write is refused (403), like tools/qa-origin.cjs. Only fixture agents take writes.
 //
+// --agents-upstream=http://host:port  (switch to Lane A): every agents request (/wizard/v1/agent*, and thread/run
+//                calls naming a non-main agent with ?agent=) is forwarded, all methods, to that staged Agent Service
+//                instead of the in-memory fixture. Main-agent traffic follows --main as above.
+//
 // Contract implemented (agent=<id> as query or body):
 //   GET/POST /wizard/v1/agents · GET/PATCH /wizard/v1/agents/<id> · POST /wizard/v1/agents/<id>/start|stop
 //   GET /wizard/v1/agent-options
@@ -28,6 +32,7 @@ const PORT = Number(pos[0] || 9640);
 const WEB = path.resolve(pos[1] || path.join(HERE, '..', 'web'));
 const MAIN = flag('main', 'fixture');
 const SEED = flag('seed', 'none');
+const UP = flag('agents-upstream', '') ? new URL(flag('agents-upstream', '')) : null;
 const FALLBACK = '/home/telos/apps/wizard-os-home/web';
 const BACKEND = { host: '127.0.0.1', port: 8923 };
 const TYPES = { '.js': 'application/javascript', '.mjs': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml' };
@@ -282,8 +287,14 @@ async function api(req, res, u) {
   return send(res, 404, { error: 'not in fixture' });
 }
 
+function upstream(req, res) {
+  const headers = { ...req.headers }; delete headers.host; delete headers.origin; delete headers.referer;
+  const p = http.request({ host: UP.hostname, port: UP.port || 80, method: req.method, path: req.url, headers }, r => { res.writeHead(r.statusCode, r.headers); r.pipe(res); });
+  p.on('error', e => send(res, 502, { error: String(e), check: 'preview.agents_upstream' })); req.pipe(p);
+}
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
+  if (UP && (/^\/wizard\/v1\/agent(s|-options)/.test(u.pathname) || (u.pathname.startsWith('/wizard/') && u.searchParams.get('agent') && u.searchParams.get('agent') !== 'hermes'))) return upstream(req, res);
   if (u.pathname.startsWith('/wizard/') || u.pathname.startsWith('/__fixture/')) {
     const fixtureRoute = /^\/wizard\/v1\/agent(s|-options)/.test(u.pathname) || u.pathname.startsWith('/__fixture/');
     if (MAIN === 'proxy' && !fixtureRoute && !u.searchParams.get('agent') && !(req.method !== 'GET' && /\/wizard\/hermes\//.test(u.pathname))) return proxy(req, res);
