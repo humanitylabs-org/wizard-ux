@@ -1,6 +1,15 @@
 # Home-screen apps candidate checkpoint
 
-Outcome so far: native + mobile implementation is a **source candidate**, not a verified signed APK. Parent owns durable staging, independent review, delivery and stable promotion.
+Outcome so far: **signed Preview compiled/tested/linted on recovered Thales; end-to-end acceptance in progress, NOT accepted**. Parent owns durable staging, independent review, delivery and stable promotion.
+
+## Live acceptance recovery
+
+- Exact source `b7be47b99058942bb0b72a8b4abb4bb8c0c9d625`: Thales successful build receipt `/home/telos/.hermes/state/home-screen-apps-20261014-evidence/build-b7be47b/receipt.json`; remote job `/Volumes/ThalesMedia/AndroidBuilds/jobs/20261014T073327Z-6f5d3790`.
+- Native suite **164 tests, 0 failures/errors/skips**; lint **0 errors, 43 warnings**. Real initial `3d68272` build failed lint `ShortcutUsage` in task-label UI-thread lookup; repaired off-thread, with lifecycle-fenced UI label update.
+- Signed Preview APK SHA256 `dffe24d10b1db864cd784099ae52bb006e7d502452c6b96f76d02c474bdc89c9`; package `ai.wizards.os.preview`, code1001/name `0.9.12-homescreen.1-preview`, expected signer verified. Companion `ai.wizards.os.previewqa` is same-source signed debug-inspection variant, not delivery APK.
+- Browser source `f68db75`: candidate+baseline rerun queued on canonical shared lease; corrected real iframe navigation race in QA, no assertion removal. Device script first stopped at exact-HTML gate: parent staging proxy injects `<script src="/__staging/boot.js"></script>` after `<head>`; boot script read and audited, next probe records actual HTML+boot hashes and compares every candidate byte excluding only this known injection.
+- Home-screen QA initially inherited **dead DNS** from update-fixture helper; fixed explicit home-screen-only live DNS (`QA_DNS`, default observed Thales resolver192.168.1.1), existing fixtures remain dead DNS. No physical-phone, production/feed or stage writes.
+- All end-to-end acceptance remains pending. Do not claim pin/task/restore outcomes from build success. Browser/device runs are serialized behind sibling Mac desktop packaging on the shared lease.
 
 - Worktree `/home/telos/worktrees/wos-home-screen-apps-20261014`; base `201b4e6`; branch `feature/home-screen-apps-20261014`.
 - Fable consulted before UX edits: first-party `claude-fable-5-1`, tools empty, success/no permission denials. Transcript `/home/telos/context/sources/projects/wizard-os/claude-transcripts/20261014-home-screen-interaction-response.json`.

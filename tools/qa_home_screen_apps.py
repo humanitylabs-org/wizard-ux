@@ -71,7 +71,7 @@ def get_json(url):
 with (BASE/'worker.lock').open('a') as lease:
     fcntl.flock(lease,fcntl.LOCK_EX)
     out = BASE/'qa'/('home-screen-'+str(int(time.time())))
-    out.mkdir(parents=True);emu=Emu(out,5596,'ai.wizards.os.preview');failure=None
+    out.mkdir(parents=True);emu=Emu(out,5596,'ai.wizards.os.preview',dns=os.environ.get('QA_DNS','192.168.1.1'));failure=None
     emu.env['JAVA_HOME']='/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'
     emu.env['PATH']=emu.env['JAVA_HOME']+'/bin:'+emu.env['PATH']
     def capture(name):
@@ -82,7 +82,17 @@ with (BASE/'worker.lock').open('a') as lease:
         for rel in ('index.html','core/home-screen-policy.js','core/single-app-session.js','core/home-screen-apps.js'):
             with urllib.request.urlopen(origin+'/wizard-os-home/'+rel,timeout=30) as r:served=r.read()
             expected=(source/'web'/rel).read_bytes()
-            check('durable staging exact candidate '+rel,hashlib.sha256(served).digest()==hashlib.sha256(expected).digest(),hashlib.sha256(served).hexdigest())
+            # The parent-owned preview proxy adds this single, audited coaching/tag script.
+            # Compare every shell byte after removing ONLY that exact transport injection;
+            # record the actual delivered bytes and boot script identity as separate evidence.
+            injected=b'<head><script src="/__staging/boot.js"></script>'
+            normalized=served.replace(injected,b'<head>',1) if rel=='index.html' and served.count(injected)==1 else served
+            if normalized!=served:
+                with urllib.request.urlopen(origin+'/__staging/boot.js',timeout=30) as r:boot=r.read()
+                (out/'staging-boot.js').write_bytes(boot)
+                (out/'served-index.html').write_bytes(served)
+                check('parent staging boot transport injection recorded',b"staging: no service worker" in boot,{'served_sha256':hashlib.sha256(served).hexdigest(),'boot_sha256':hashlib.sha256(boot).hexdigest()})
+            check('durable staging candidate bytes '+rel,hashlib.sha256(normalized).digest()==hashlib.sha256(expected).digest(),{'served':hashlib.sha256(served).hexdigest(),'source':hashlib.sha256(expected).hexdigest()})
         registry=get_json(origin+'/wizard/v1/apps')['apps']
         routes={app['id']:urllib.parse.urljoin(origin,app['url']) for app in registry if app['id'] in ('wisdom','wizard-signal')}
         check('real registered frontend routes present',set(routes)=={'wisdom','wizard-signal'},routes)

@@ -16,6 +16,7 @@ const chrome=p=>p.evaluate(()=>[...document.querySelectorAll('#launcher,#dock,#o
 const reader=async f=>f.evaluate(()=>({url:location.href,id:document.querySelector('.wb-reader')?.dataset.read,count:document.querySelector('.wb-count')?.textContent,title:document.querySelector('.wb-top-title')?.textContent,transform:document.querySelector('.wb-track')?.style.transform}));
 const waitFrame=async p=>{await p.waitForFunction(()=>!!document.querySelector('#singleApp > iframe.appframe')?.contentDocument?.body,{},{timeout:20000});const f=await (await p.locator('#singleApp > iframe.appframe').elementHandle()).contentFrame();await f.waitForFunction(()=>!!window.WizardApp&&document.body.innerText.length>80);return f;};
 async function chapter(f,target=3){
+ await f.page().bringToFront();
  // Choose an actual unread chapter from the live API, never a fabricated route or position fixture.
  const entry=await f.evaluate(async()=>{const r=await fetch(new URL('api/wisdom',new URL('.',location.href)));if(!r.ok)throw Error('Wisdom real data unavailable');const d=await r.json();return d.entries?.find(e=>!e.read&&e.body)||d.entries?.find(e=>!e.read);});
  if(!entry)throw Error('No actual unread Wisdom chapter available');
@@ -134,7 +135,7 @@ try{
  await point();await main.waitForTimeout(750);await tile.tap();await main.waitForTimeout(800);check('ordinary app tap still uses a desk, never pin',await main.evaluate(()=>!!__wos.wins&&!__wos.singleApp)&&await main.locator('.home-pin-sheet').count()===0,null,'regression');
  check('ordinary shell new scripts have no runtime errors',errors.length===0,errors,'regression');
  check('real Wisdom/Signal network fetched, not nested shell/test doubles',network.some(x=>/wisdom/.test(x.url)&&x.status===200)&&network.some(x=>/wizard-signal/.test(x.url)&&x.status===200),network);
-}catch(e){failure=String(e);console.error(e);}finally{
+}catch(e){failure=String(e);console.error(e);for(const [i,p] of ctx.pages().entries()){await p.screenshot({path:path.join(out,'failure-'+i+'.png')}).catch(()=>{});fs.writeFileSync(path.join(out,'failure-'+i+'.json'),JSON.stringify(await Promise.all(p.frames().map(f=>f.evaluate(()=>({url:location.href,text:document.body?.innerText?.slice(0,5000),reader:document.querySelector('.wb-reader')?.outerHTML?.slice(0,3000)})).catch(e=>({error:String(e)})))),null,2));}}finally{
  await ctx.close();await browser.close();
  const requiredNegative=['wisdom isolated actual frontend','wizard-signal isolated actual frontend','trusted mobile hold opens one action sheet'];
  const negativeVerified=mode==='baseline'&&requiredNegative.every(name=>checks.some(c=>c.name===name&&!c.pass))&&!failure&&!checks.some(c=>c.gate==='regression'&&!c.pass);
