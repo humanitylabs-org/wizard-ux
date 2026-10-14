@@ -14,7 +14,7 @@ const check=(name,pass,detail,gate='feature')=>{checks.push({name,pass:!!pass,de
 const stamp=async p=>p.evaluate(()=>Object.fromEntries(['wins4','strip','idx4','recent'].map(k=>[k,localStorage.getItem('wos.'+k)])));
 const chrome=p=>p.evaluate(()=>[...document.querySelectorAll('#launcher,#dock,#orb,.statusbar,#track')].filter(e=>{const r=e.getBoundingClientRect();return r.width&&r.height&&getComputedStyle(e).display!=='none'}).map(e=>e.id));
 const reader=async f=>f.evaluate(()=>({url:location.href,id:document.querySelector('.wb-reader')?.dataset.read,count:document.querySelector('.wb-count')?.textContent,title:document.querySelector('.wb-top-title')?.textContent,transform:document.querySelector('.wb-track')?.style.transform}));
-const waitFrame=async p=>{await p.waitForFunction(()=>!!document.querySelector('#singleApp > iframe.appframe')?.contentDocument?.body,{},{timeout:20000});const f=await (await p.locator('#singleApp > iframe.appframe').elementHandle()).contentFrame();await f.waitForFunction(()=>!!window.WizardApp&&document.body.innerText.length>80);return f;};
+const waitFrame=async p=>{await p.waitForFunction(()=>{const w=document.querySelector('#singleApp > iframe.appframe')?.contentWindow;try{return w&&w.location.origin===location.origin&&!!w.WizardApp&&w.document.body?.innerText.length>80;}catch{return false;}},{},{timeout:45000,polling:100});const f=await(await p.locator('#singleApp > iframe.appframe').elementHandle()).contentFrame();return f;};
 async function chapter(f,target=3){
  await f.page().bringToFront();
  // Choose an actual unread chapter from the live API, never a fabricated route or position fixture.
@@ -39,7 +39,7 @@ try{
   }return r.continue();
  });
  ctx.on('page',p=>{p.on('pageerror',e=>errors.push({page:p.url(),message:String(e),stack:String(e.stack)}));p.on('response',r=>{if(new URL(r.url()).origin===origin&&!r.url().includes('/wizard-os-home/'))network.push({url:r.url(),status:r.status()});});});
- await ctx.addInitScript(()=>{if(window===top)localStorage.setItem('wos.coached','true');});
+ await ctx.addInitScript(()=>{try{if(window===top)localStorage.setItem('wos.coached','true');}catch(_){} });
  if(process.env.QA_NATIVE_DOCUMENT_START==='1')await ctx.addInitScript(()=>{try{if(window!==top&&parent.WizHomeScreenPolicy?.mode)parent.WizHomeScreenPolicy.installPresentationStorage(window);}catch(_){} });
  const main=await ctx.newPage();await main.goto(origin+'/wizard-os-home/?shell=phone');await main.waitForFunction(()=>!!window.__wos);await main.evaluate(()=>WizCore.appsLoaded());
  check('ordinary shell boots with original window API',await main.evaluate(()=>!!__wos.wins&&!__wos.singleApp),null,'regression');
