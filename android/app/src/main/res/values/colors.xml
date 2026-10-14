@@ -1,4 +1,5 @@
 <resources>
     <color name="wos_bg">#05030C</color>
     <color name="wos_violet">#A27BFF</color>
+    <color name="wos_brand_bg">#7A6CFF</color>
 </resources>
