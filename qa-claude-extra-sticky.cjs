@@ -1,0 +1,44 @@
+// Claude extra-usage cell survives a failed/rate-limited Claude read (James's 14 Oct report: Home showed three ChatGPT
+// accounts and no Claude extra while Anthropic returned 429). Run on Thales against the live origin; read-only.
+// Usage: node qa-claude-extra-sticky.cjs <home url> [candidate resources.js]   (QA_OUT for screenshots)
+let pw;try{pw=require('playwright');}catch{pw=require('playwright-core');}
+const fs=require('fs');const URL_=process.argv[2],CAND=process.argv[3],OUT=process.env.QA_OUT||process.cwd();
+let pass=0,fail=0;const ok=(v,n,x='')=>{console.log(v?'PASS':'FAIL',n,x);v?pass++:fail++;};
+const UA='Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/141.0.0.0 Mobile Safari/537.36';
+(async()=>{const b=await pw.chromium.launch({executablePath:process.env.QA_CHROME||undefined});
+  const live=await (await fetch(new URL('/wizard/ai-usage',URL_))).json();
+  const claude=live.providers.find(p=>p.id==='claude');
+  const hasCap=!!(claude&&claude.paid&&claude.paid.type==='spend'&&claude.paid.enabled&&claude.paid.limitMinor>0);
+  const mk=mut=>JSON.stringify({...live,providers:live.providers.map(p=>p.id==='claude'?mut(JSON.parse(JSON.stringify(p))):p)});
+  const down=mk(p=>({...p,status:'unavailable',fetchedAt:null,limits:[],paid:null,error:{code:'provider_error',message:"Couldn't reach Claude."}}));
+  const disabled=mk(p=>({...p,paid:{...p.paid,enabled:false}}));
+  let mode='live';
+  const ctx=async()=>{const c=await b.newContext({viewport:{width:412,height:892},hasTouch:true,isMobile:true,serviceWorkers:'block',userAgent:UA});
+    await c.addInitScript(()=>{try{localStorage.setItem('wos.coached','true');}catch{}});
+    await c.route('**/*',r=>{const u=r.request().url(),m=r.request().method();
+      if(!['GET','HEAD'].includes(m))return r.fulfill({status:403,body:'{}'});
+      if(CAND&&/\/core\/resources\.js(\?|$)/.test(u))return r.fulfill({status:200,contentType:'application/javascript',body:fs.readFileSync(CAND,'utf8')});
+      if(/\/wizard\/ai-usage/.test(u)&&mode!=='live')return r.fulfill({status:200,contentType:'application/json',body:mode==='down'?down:disabled});
+      return r.continue();});return c;};
+  const cells=async p=>{await p.waitForFunction(()=>window.WosResources?.state.ai&&document.querySelector('[data-res-account]'),null,{timeout:30000});await p.waitForTimeout(800);
+    return p.$$eval('[data-res-account]',n=>n.map(e=>({id:e.dataset.resAccount,text:e.innerText.replace(/\s+/g,' '),stale:e.classList.contains('rs-stale')})));};
+  ok(hasCap,'Live Claude reports an enabled extra-usage cap',JSON.stringify(claude&&claude.paid));
+  const c=await ctx(),p=await c.newPage(),errs=[];p.on('pageerror',e=>errs.push(String(e)));
+  await p.goto(URL_);let a=await cells(p);console.log('LIVE',JSON.stringify(a));
+  ok(a.some(x=>x.id==='claude:extra'),'Live: Claude extra cell beside Claude');
+  ok(a.length<=4,'Live: at most four AI cells');
+  mode='down';await p.reload();a=await cells(p);console.log('CLAUDE DOWN',JSON.stringify(a));
+  const ex=a.find(x=>x.id==='claude:extra');
+  ok(!!ex,'Claude read fails: extra cell stays on Home');
+  ok(!!ex&&ex.stale&&/Last known reading/.test(ex.text),'Claude read fails: extra cell marked last known reading',ex&&ex.text);
+  ok(!a.some(x=>x.id==='codex-2'),'Claude read fails: freed slot is NOT handed to ChatGPT 2');
+  ok(a.length===4&&a[0].id==='claude'&&a[1].id==='claude:extra','Claude read fails: two Claude cells and two ChatGPT cells',a.map(x=>x.id).join(','));
+  await p.screenshot({path:OUT+'/claude-down-412.png'});
+  mode='disabled';await p.reload();a=await cells(p);console.log('CAP DISABLED',JSON.stringify(a));
+  ok(!a.some(x=>x.id==='claude:extra'),'Good read with cap disabled: extra cell removed (no fabricated money)');
+  mode='down';await p.reload();a=await cells(p);
+  ok(!a.some(x=>x.id==='claude:extra'),'After explicit disable, a later failure does not resurrect the old reading');
+  const f=await ctx(),fp=await f.newPage();await fp.goto(URL_);a=await cells(fp);
+  ok(!a.some(x=>x.id==='claude:extra'),'Fresh device with Claude down: no invented extra cell');
+  ok(errs.length===0,'No page errors',errs.join(' | '));
+  console.log(`RESULT ${pass} pass / ${fail} fail`);await b.close();process.exit(fail?1:0);})().catch(e=>{console.error(e);process.exit(2);});

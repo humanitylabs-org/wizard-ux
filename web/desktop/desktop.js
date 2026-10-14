@@ -347,7 +347,8 @@
     $$('.wsp', stage).forEach(el => { if (!ws.some(d => d.id === el.dataset.desk)) el.remove(); });
     layout(); paintBar(); paintFocus();
   }
-  /* Tiling: 1 window fills; 2 split; 3+ = master on the left, the rest stacked on the right (Hyprland's dwindle, simplified). */
+  /* Tiling: capped windows form a centered group; 2 split; 3+ = master + stack.
+   * Host-window fullscreen keeps this readable width; explicit monocle remains immersive. */
   function layout() {
     const host = wsEl(cur), d = ws[cur];
     // Apply chrome before measuring, including a single app, reload and workspace switches.
@@ -357,14 +358,23 @@
     const n = d.wins.length;
     const rects = {};
     if (!n) return;
-    if (d.mono || n === 1) d.wins.forEach(id => { rects[id] = id === d.focus || n === 1 ? [g, g, W_ - 2 * g, H_ - 2 * g] : null; });
-    else if (n === 2) {
-      const half = (W_ - 3 * g) / 2;
-      rects[d.wins[0]] = [g, g, half, H_ - 2 * g]; rects[d.wins[1]] = [2 * g + half, g, half, H_ - 2 * g];
+    const configuredMax = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--desktop-window-max-width'));
+    const maxWidth = configuredMax > 0 ? configuredMax : 1200;
+    if (d.mono) d.wins.forEach(id => { rects[id] = id === d.focus || n === 1 ? [g, g, W_ - 2 * g, H_ - 2 * g] : null; });
+    else if (n === 1) {
+      const width = Math.min(maxWidth, Math.max(0, W_ - 2 * g));
+      rects[d.wins[0]] = [(W_ - width) / 2, g, width, H_ - 2 * g];
+    } else if (n === 2) {
+      const half = Math.min(maxWidth, Math.max(0, (W_ - 3 * g) / 2));
+      const left = (W_ - 2 * half - g) / 2;
+      rects[d.wins[0]] = [left, g, half, H_ - 2 * g]; rects[d.wins[1]] = [left + g + half, g, half, H_ - 2 * g];
     } else {
-      const mw = Math.round((W_ - 3 * g) * 0.56), sw = W_ - 3 * g - mw, k = n - 1, sh = (H_ - (k + 1) * g) / k;
-      rects[d.wins[0]] = [g, g, mw, H_ - 2 * g];
-      d.wins.slice(1).forEach((id, j) => { rects[id] = [2 * g + mw, g + j * (sh + g), sw, sh]; });
+      const available = Math.max(0, W_ - 3 * g);
+      const naturalMaster = Math.round(available * 0.56);
+      const mw = Math.min(maxWidth, naturalMaster), sw = Math.min(maxWidth, available - naturalMaster);
+      const left = (W_ - mw - sw - g) / 2, k = n - 1, sh = (H_ - (k + 1) * g) / k;
+      rects[d.wins[0]] = [left, g, mw, H_ - 2 * g];
+      d.wins.slice(1).forEach((id, j) => { rects[id] = [left + g + mw, g + j * (sh + g), sw, sh]; });
     }
     for (const id of d.wins) {
       const el = winEl(id); if (!el) continue; const r = rects[id];
