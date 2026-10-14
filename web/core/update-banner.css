@@ -37,7 +37,6 @@
 #dvWeb[data-shell="desktop"] .dv-um.two small::after { content: ' ·'; }
 #dvWeb[data-shell="desktop"] .dv-um.two b { display: block; -webkit-line-clamp: unset; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; min-width: 0; }
 #dvWeb[data-shell="desktop"] .dv-ui { font-size: 12px; }
-#dvWeb[data-shell="desktop"] .dv-ui .wizard-brand-mark { width: 11px; height: 15px; }
 #dvWeb[data-shell="desktop"] .dv-wtop > button { height: 20px; padding: 0 9px; font-size: 11.5px; line-height: 18px; cursor: pointer; }
 #dvWeb[data-shell="desktop"] .dv-wl { position: absolute; top: calc(100% + 8px); right: 0; width: 340px; max-height: 50vh; margin: 0; padding: 2px 12px;
   border: 1px solid var(--line-2); border-radius: 12px; background: rgba(14, 8, 34, .96); box-shadow: 0 14px 34px rgba(0, 0, 0, .5); }
