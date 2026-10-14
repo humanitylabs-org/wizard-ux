@@ -132,11 +132,16 @@ def sheet_open(): return 'ShareActivity' in top()
 
 
 def shade(name):
+    """Screenshot the expanded shade; returns the text of System UI's own nodes only (not the app underneath)."""
     em.sx('cmd statusbar expand-notifications'); time.sleep(1.5)
     em.shot(OUT, name)
-    x = ui()
+    xml = ui()
     em.sx('cmd statusbar collapse'); time.sleep(0.6)
-    return x
+    texts = []
+    for n in re.finditer(r'<node [^>]*?>', xml):
+        if 'package="com.android.systemui"' not in n.group(0): continue
+        texts += re.findall(r' (?:text|content-desc)="([^"]*)"', n.group(0))
+    return ' '.join(texts)
 
 
 def notif_texts():
@@ -264,8 +269,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         em.runas('mkdir -p files && echo %s > files/qa_home.txt && echo %s > files/qa_origin.txt' % (ORIGIN, ORIGIN))
         em.sx('am force-stop %s' % PKG)
         em.sx('input keyevent KEYCODE_HOME')
-        reach = em.sx('curl -s -m 5 %s/wizard/v1/bootstrap | head -c 80' % ORIGIN)
-        check('emulator reaches the fixture over its own network (10.0.2.2)', 'bootstrap' in reach, reach)
+        reach = em.sx("printf 'GET /wizard/v1/bootstrap HTTP/1.0\\r\\n\\r\\n' | toybox nc -w 5 10.0.2.2 %d | tail -c 120" % PORT)
+        check('emulator reaches the fixture over its own network (10.0.2.2, not adb reverse)', 'bootstrap' in reach, reach)
 
         # ======== sheet ========
         big = 'qa-big-%dm.bin' % BIG_MB
@@ -356,8 +361,8 @@ with (BASE / 'worker.lock').open('a') as lock:
             time.sleep(4)
             em.shot(OUT, '22-tap-opens-thread')
             check('tapping the notification opens Wizard OS', tapped and 'MainActivity' in top(), top())
-            lc = em.sx('logcat -d -s WizardShare:V', timeout=60)
-            check('copy left app-private storage after delivery', 'files' not in em.runas('ls files/share-out/*/ 2>/dev/null | grep -c bin || true').strip() or em.runas('ls files/share-out/*/*.bin 2>/dev/null | wc -l').strip() == '0', em.runas('ls -la files/share-out/*/ 2>/dev/null | head'))
+            left = em.runas('ls files/share-out/*/*.bin 2>/dev/null | wc -l').strip()
+            check('the private copy is deleted after delivery', left == '0', em.runas('ls -la files/share-out/*/ 2>/dev/null | head'))
             logcat('big')
             em.sx('input keyevent KEYCODE_HOME')
 
