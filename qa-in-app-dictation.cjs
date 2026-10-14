@@ -289,10 +289,36 @@ async function recoveryCases(browser) {
   ok(await wp.evaluate(id => WosCancelled.list().some(t => t.id === id), wid) && noAgent(web).length === 0, 'successfully retried browser audio survives reload without agent send');
   for (const f of [kind, native, web]) ok(f.errors.length === 0, 'review recovery fixtures have zero page errors', f.errors);
 }
+async function quietCases(browser) {
+  const f = await boot(browser), p = f.p;
+  for (const width of [360, 412]) for (const full of [false, true]) {
+    await p.setViewportSize({width, height: full ? 450 : 892});
+    const frame = await app(f);
+    if (full) await p.evaluate(() => __wos.setFull(__wos.desks[__wos.idx].focus, true));
+    await frame.locator('#a').fill('one OLD three');
+    await select(frame); f.R.delay = 1300; f.writes.length = 0;
+    await tap(p); await sleep(650); await tap(p); await sleep(180);
+    const geometry = await p.evaluate(() => {
+      const label = document.getElementById('dictationStatus'), orb = document.getElementById('orbWrap');
+      const a = label?.getBoundingClientRect(), b = orb.getBoundingClientRect();
+      return {text: label?.textContent, x: a?.x, y: a?.y, right:a?.right, center: a && (a.top+a.bottom)/2, orbLeft:b.left, orbCenter:(b.top+b.bottom)/2,
+        transcriptVisible: getComputedStyle(document.getElementById('transcript')).visibility !== 'hidden', touches:label&&getComputedStyle(label).pointerEvents, state:__wos.V.state};
+    });
+    ok(geometry.text === 'Transcribing…' && geometry.right <= geometry.orbLeft - 4 && Math.abs(geometry.center-geometry.orbCenter)<2 && geometry.x >= 0 && geometry.y >= 0,
+      `quiet dictation ${width}/${full?'corner':'dock'}: small Transcribing label left of orb and inside viewport`, geometry);
+    ok(!geometry.transcriptVisible && geometry.touches === 'none', `quiet dictation ${width}/${full?'corner':'dock'}: no progress card or blocked taps`);
+    if (process.env.QA_SHOTS) await p.screenshot({path:path.join(process.env.QA_SHOTS, `dictation-quiet-${width}-${full?'corner':'dock'}.png`)});
+    await p.waitForFunction(() => __wos.V.state === 'idle'); await sleep(200);
+    ok(await frame.locator('#a').inputValue() === 'one spoken words three' && await p.locator('#dictationStatus').innerText() === '', 'quiet dictation inserts words and removes progress label');
+    ok(await p.locator('#toast').evaluate(el=> !el.classList.contains('on') || !/inserted|paste|ready to edit/i.test(el.textContent)), 'successful dictation has no redundant insertion/paste popup');
+    ok(noAgent(f).length===0, 'quiet dictation keeps insertion-only route');
+  }
+  ok(f.errors.length===0, 'quiet dictation has zero page errors', f.errors);
+}
 (async () => {
   const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   let fatal;
-  try { await cases(browser); await recoveryCases(browser); } catch (e) { fatal = String(e.stack || e); ok(false, 'suite completed', fatal); }
+  try { await cases(browser); await recoveryCases(browser); await quietCases(browser); } catch (e) { fatal = String(e.stack || e); ok(false, 'suite completed', fatal); }
   const result = { fixture: 'synthetic native ABI + STT/models/API; all requests intercepted', web: WEB, passed: checks.filter(x => x.pass).length, failed: checks.filter(x => !x.pass).length, checks, contexts: contexts.map(c => ({ native: c.native, errors: c.errors, served: [...new Set(c.served)], writes: c.writes })) };
   if (process.env.QA_EVIDENCE) fs.writeFileSync(process.env.QA_EVIDENCE, JSON.stringify(result, null, 2));
   await browser.close(); console.log(`${result.passed} passed, ${result.failed} failed`); process.exitCode = fatal ? 2 : result.failed ? 1 : 0;

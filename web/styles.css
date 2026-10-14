@@ -851,6 +851,11 @@ body {
 .orb-wrap[data-mode="type"] #orbFallback, .orb-wrap[data-mode="typing"] #orbFallback { filter: sepia(1) saturate(6) hue-rotate(155deg); }
 .transcript.dictation #txText { user-select: text; -webkit-user-select: text; white-space: pre-wrap; }
 .device.dictation-recording #arcAttach, .device.dictation-recording #arcScreen { display: none; }
+/* Dictation progress lives beside the orb, without another card above the app. */
+.dictation-status { position: absolute; right: calc(100% + 8px); top: 50%; transform: translateY(-50%); color: var(--ink-3); font-size: 11px; font-weight: 500; line-height: 16px; white-space: nowrap; pointer-events: none; }
+.dictation-status:empty { display: none; }
+.device.dictation-recording[data-voice="think"] #dotsL { visibility: hidden; }
+.device.dictation-recording[data-voice="think"] #transcript { visibility: hidden; pointer-events: none; }
 
 /* Chats in full screen: the bottom bar shrinks to just the orb, in the composer row's right corner. */
 .device.orb-corner { --corner-orb: 44px; --corner-r: 12px; --corner-b: 9px; }
