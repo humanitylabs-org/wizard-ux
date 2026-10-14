@@ -59,9 +59,11 @@ function check(ok,name,detail){checks.push({name,pass:!!ok,detail});console.log(
     await store.locator('[data-open="wizard-ai-accounts"]').waitFor({timeout:8000}).catch(()=>{});
     check(await store.locator('[data-open="wizard-ai-accounts"]').count()===1,'Store list changes Get to Open without refresh');
     await store.locator('[data-app="wizard-ai-accounts"]').click();check(await store.locator('#detail [data-open="wizard-ai-accounts"]').count()===1,'Store detail shows ready Open');
-    await p.screenshot({path:path.join(out,'store-ready.png')});
+
     const stable=await store.locator('#detail').evaluate(el=>{window.__qaDetail=el.firstElementChild;return true;});
     await p.waitForTimeout(3400);check(stable&&await store.locator('#detail').evaluate(el=>el.firstElementChild===window.__qaDetail),'Unchanged Store poll preserves detail DOM');
+    // Inspect the naturally settled UI, not a single frame of its existing entrance animation.
+    await p.screenshot({path:path.join(out,'store-ready.png')});
     installed=installed.filter(x=>x.info.id!=='wizard-ai-accounts');await p.evaluate(()=>dispatchEvent(new CustomEvent('wizard:apps-changed')));
     await store.locator('#detail [data-get="wizard-ai-accounts"]').waitFor();await store.locator('#detail [data-get="wizard-ai-accounts"]').click();
     check(await store.locator('#detail [aria-busy="true"]').count()===1,'Store detail immediately acknowledges Get');
