@@ -68,7 +68,7 @@ function ok(value, name, detail) { value ? pass++ : fail++; console.log(value ? 
   ok(full(await state()), 'reload: fullscreen persists');
   await p.evaluate(() => history.back()); await wait();
   ok(!(await state()).mono && p.url() === url && (await state()).wins === 1, 'Back: exits fullscreen with Wizard and app open');
-  await p.keyboard.press('Alt+KeyF'); await wait(); await p.evaluate(() => __wux.goWs(1)); await wait();
+  await p.keyboard.press('Alt+KeyF'); await wait(); await p.evaluate(() => __wux.newDesktop()); await wait();
   ok(!(await state()).barHidden && (await state()).wins === 0, 'workspace: empty workspace restores chrome');
   await p.evaluate(() => __wux.goWs(0)); await wait(); ok(full(await state()), 'workspace: returning restores its fullscreen');
   await p.evaluate(() => dispatchEvent(new CustomEvent('wizard:orb', { detail: { action: 'start' } }))); await p.waitForTimeout(700);
