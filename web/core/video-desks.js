@@ -37,7 +37,7 @@
       if (phone()) {
         const here = s.desks[s.idx]?.id, vi = deskOf(videoId), vid = s.desks[vi]?.id;
         s.goDesk(vi, true);
-        const peer = s.openWin({ app: 'frame', appId: PEER, url, title, videoOwner: videoId, from: { desk: vid, win: videoId, title: 'Video Editor' } }, { stay: true });
+        const peer = s.openWin({ app: 'frame', appId: PEER, servicesAs: APP, url, title, videoOwner: videoId, from: { desk: vid, win: videoId, title: 'Video Editor' } }, { stay: true });
         if (!peer) return; feedbackId = peer.id;
         const chat = s.desks.find(d => d.wins.some(id => s.wins[id]?.app === 'chats'));
         const video = s.desks.find(d => d.wins.includes(videoId)), fb = s.desks.find(d => d.wins.includes(feedbackId));
@@ -47,7 +47,7 @@
         const before = s.ws[s.cur]?.focus;
         // Chats | Video | Feedback as columns: video gets the most room, Feedback the narrowest column.
         if (s.wins[videoId]) s.wins[videoId].share = VIDEO_SHARE;
-        const peer = s.newWin({ app: 'frame', appId: PEER, url, title, videoOwner: videoId, share: SHARE }, { ws: deskOf(videoId) });
+        const peer = s.newWin({ app: 'frame', appId: PEER, servicesAs: APP, url, title, videoOwner: videoId, share: SHARE }, { ws: deskOf(videoId) });
         if (!peer) return; feedbackId = peer.id;
         if (before && s.wins[before]) s.focusWin(before);
       }
