@@ -48,7 +48,7 @@ test('the Android build compiles no address in from source', () => {
 });
 
 // Text the user or the model reads (string literals in shipped code) never names a particular owner.
-const OWNER = /\b(James|DeFleur)\b/;
+const OWNER = /\b(James|DeFleur|Archimedes|Bangkok)\b/; // owner, surname, agent name, place
 // Line-based: skip comment lines, drop trailing comments, then look for a quoted string naming the owner.
 function codeStrings(src) {
   const out = [];
