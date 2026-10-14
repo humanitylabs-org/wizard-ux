@@ -124,8 +124,8 @@ The Day, Week and Month reviews read `web/data.js` and `web/summaries.js`. Both 
 Package `ai.wizards.os`, currently 0.4.0. Builds run on Thales (the Mac mini build host) through `android-build-thales`. They're signed with the Wizard OS key, so every version installs over the previous one. The signing secrets come from the environment (`WOS_STORE_PASSWORD`, `WOS_KEY_PASSWORD`) and are never stored in the repo. The `qa` build type adds the `.qa` suffix, so QA builds install alongside the real app.
 
 **Address.** No Wizard address is compiled in from source. A builder may set a default in their private
-`~/.gradle/gradle.properties` (on Thales: `$GRADLE_USER_HOME/gradle.properties`, which `android-build-thales` points at
-`/Volumes/ThalesMedia/AndroidBuilds/gradle-cache`):
+`~/.gradle/gradle.properties`, or `$GRADLE_USER_HOME/gradle.properties` when the build runner sets `GRADLE_USER_HOME`
+(as `android-build-thales` does):
 
 ```properties
 wizardOrigin=https://<machine>.<tailnet>.ts.net
