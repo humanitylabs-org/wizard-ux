@@ -7,7 +7,7 @@ for (const name of fs.readdirSync(__dirname).filter(x=>/^qa.*\.cjs$/.test(x))) {
   if (name==='qa-relative-links.cjs' || name==='qa-tailnet-defaults.cjs') continue;
   const text=fs.readFileSync(path.join(__dirname,name),'utf8');
   const active=text.split('\n').filter(l=>!/^\s*\/\//.test(l));
-  ok(!active.some(l=>l.includes('https://'+old)),name+': no old-host outbound URL');
+  ok(!active.some(l=>l.includes('https://'+old) || l.includes(old.replaceAll('.', String.raw`\.`))),name+': no old-host outbound URL or host filter');
 }
 for (const name of ['qa_android_apps.py','qa_image_save_device.py','qa_silent_update.py']) {
   const text=fs.readFileSync(path.join(__dirname,'tools',name),'utf8');
