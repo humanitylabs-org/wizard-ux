@@ -244,7 +244,26 @@ def fixture_file_sha(u):
 def deliveries_for(s, share_id): return [d for d in s.get('deliveries', []) if d['share_id'] == share_id]
 
 
-def logcat(name): (JOB / ('logcat-%s.txt' % name)).write_text(em.sx('logcat -d -s WizardShare:V ActivityManager:I JobScheduler:I AndroidRuntime:E', timeout=60))
+def logcat(name): (JOB / ('logcat-%s.txt' % name)).write_text(em.sx('logcat -d -s WizardShare:V WizardHandoff:V ActivityManager:I JobScheduler:I AndroidRuntime:E', timeout=60))
+
+
+def tap_sent_opens_thread(label, fname, thread_id, shot):
+    """Tap this share's “Sent” notification; the app must open THAT share's thread (thread_id from the server), not
+    just the app or the thread that happened to be open. Proven twice: the intent carried the id (logcat) and the
+    WebView shows the thread titled with the shared file's name (System UI nodes excluded)."""
+    em.sx('logcat -c')
+    em.sx('cmd statusbar expand-notifications'); time.sleep(1.5)
+    tapped = em.tap_text(r'Sent · tap to open the chat')
+    opened = wait(lambda: 'open thread %s' % thread_id in em.sx('logcat -d -s WizardHandoff:V'), 20, 1)
+    def title_shown():
+        xml = ui()
+        return any('package="%s"' % PKG in n.group(0) and re.search(r' text="%s"' % re.escape(fname), n.group(0))
+                   for n in re.finditer(r'<node [^>]*?>', xml))
+    shown = wait(title_shown, 25, 1.5)
+    em.shot(OUT, shot)
+    check('%s: tapping “Sent” hands the app the share\'s own thread_id (%s)' % (label, thread_id), tapped and opened,
+          em.sx('logcat -d -s WizardHandoff:V')[-300:])
+    check('%s: the app shows that thread (%s), in front' % (label, fname), shown and 'MainActivity' in top(), top())
 
 
 def send_tap():
@@ -356,11 +375,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             x = shade('21-notification-sent')
             nt = notif_texts(); note('notifications', nt)
             check('notification after delivery: “1 file → Wizard · Sent”', any(t == '1 file → Wizard' and 'Sent' in x_ for t, x_ in nt), nt)
-            em.sx('cmd statusbar expand-notifications'); time.sleep(1.5)
-            tapped = em.tap_text(r'Sent · tap to open the chat')
-            time.sleep(4)
-            em.shot(OUT, '22-tap-opens-thread')
-            check('tapping the notification opens Wizard OS', tapped and 'MainActivity' in top(), top())
+            tap_sent_opens_thread('big', big, sh['thread_id'] if sh else '?', '22-tap-opens-thread')
             left = em.runas('ls files/share-out/*/*.bin 2>/dev/null | wc -l').strip()
             check('the private copy is deleted after delivery', left == '0', em.runas('ls -la files/share-out/*/ 2>/dev/null | head'))
             logcat('big')
@@ -383,6 +398,10 @@ with (BASE / 'worker.lock').open('a') as lock:
             check('after kill -9 + airplane mode, the share completes without reopening the app', sh and sh['status'] == 'delivered', (p0, pid(), sh))
             check('kill: exactly one delivery', sh and len(deliveries_for(s, sh['share_id'])) == 1)
             check('kill: stored bytes match (sha256)', fixture_file_sha(u or {}) == digest)
+            # Warm path: the app is alive with the 2 GB share's thread open; the tap must switch to this share's thread.
+            time.sleep(3)
+            tap_sent_opens_thread('kill (warm app, another thread open)', name, sh['thread_id'] if sh else '?', '23-tap-opens-kill-thread')
+            em.sx('input keyevent KEYCODE_HOME')
             logcat('kill')
 
         # ======== reboot: persisted job resumes after boot ========
@@ -403,6 +422,9 @@ with (BASE / 'worker.lock').open('a') as lock:
             check('reboot: resumed past the pre-reboot offset (not from 0)', u and u['patches'] <= (u['bytes'] // (8 << 20)) + 12, u)
             check('reboot: exactly one delivery', sh and len(deliveries_for(s, sh['share_id'])) == 1)
             check('reboot: stored bytes match (sha256)', fixture_file_sha(u or {}) == digest)
+            # Cold path: the app has not run since boot.
+            time.sleep(3)
+            tap_sent_opens_thread('reboot (cold start)', name, sh['thread_id'] if sh else '?', '24-tap-opens-reboot-thread')
             logcat('reboot')
 
         s = state() or {}

@@ -78,6 +78,18 @@
   }
 
   const transient = s => s === 0 || s === 408 || s === 425 || s === 429 || s >= 500 && s !== 507;
+  /* Plain words for the Agent Service's refusals (server/uploads.mjs); never a bare status for a known code. */
+  const TOO_LARGE = 'That file is too large for this Wizard.';
+  const words = (s, j = {}) => {
+    const e = String(j.error || '');
+    if (s === 507 || e === 'insufficient_storage') return NO_SPACE;
+    if (e === 'file_too_large' || s === 413) return TOO_LARGE;
+    if (e === 'sha256_mismatch' || s === 422) return 'The file changed while uploading · attach it again.';
+    if (s === 404 || s === 410) return 'The upload expired on your Wizard · attach the file again.';
+    if (e === 'client_upload_id_conflict') return 'That upload clashed with an earlier one · attach the file again.';
+    if (s === 400 && j.field === 'bytes') return 'Empty files can’t be attached.';
+    return `Upload failed (${s}).`;
+  };
 
   async function upload(file, { signal, onProgress } = {}) {
     const total = file.size, name = file.name || 'upload', mime = file.type || 'application/octet-stream';
@@ -97,7 +109,7 @@
       const r = await call('POST', base(), { client_upload_id: clientId, filename: name, mime, bytes: total }, signal);
       space(r.status);
       if (r.status >= 200 && r.status < 300 && r.j && r.j.upload_id) { up = r.j; break; }
-      if (!transient(r.status)) throw userErr(r.status === 413 ? 'That file is too large for this Wizard.' : `Wizard Files is unavailable (${r.status}).`, { status: r.status });
+      if (!transient(r.status)) throw userErr(r.status === 404 || r.status === 405 ? `Wizard Files is unavailable (${r.status}).` : words(r.status, r.j), { status: r.status });
       report(0, 'reconnecting');
       await wait();
     }
@@ -138,7 +150,7 @@
         }
         space(r.status);
         if (r.status === 404) throw userErr('The upload expired on your Wizard · attach the file again.', { status: 404, code: 'expired' });
-        if (!transient(r.status)) throw userErr(`Upload failed (${r.status}).`, { status: r.status });
+        if (!transient(r.status)) throw userErr(words(r.status, r.j), { status: r.status, code: r.j.error || 'refused' });
         report(offset, 'reconnecting');
         await wait();
         try { if (await reconcile()) report(offset, 'uploading'); } catch (e) { throw e; }
@@ -150,7 +162,7 @@
       if (r.status === 200 || r.status === 201) { receipt = r.j.file || r.j; if (receipt && receipt.id) break; throw new Error('Wizard Files returned an invalid upload receipt.'); }
       if (r.status === 409) { if (!(await reconcile())) await wait(); continue; } // not all bytes there: send the rest
       space(r.status);
-      if (!transient(r.status)) throw userErr(r.status === 422 ? 'The file changed while uploading · attach it again.' : `Upload failed (${r.status}).`, { status: r.status });
+      if (!transient(r.status)) throw userErr(words(r.status, r.j), { status: r.status, code: r.j.error || 'refused' });
       report(total, 'reconnecting');
       await wait();
     }

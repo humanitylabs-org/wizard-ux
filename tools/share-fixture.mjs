@@ -160,7 +160,9 @@ async function completeUpload(u) {
 }
 
 /* ---------------- shares ---------------- */
-const pubShare = sh => ({ share_id: sh.id, agent: sh.agent, thread_id: sh.thread, status: sh.status, ...(sh.error ? { error: sh.error } : {}) });
+// Same shape as wizard-agent-service publicShare (server/uploads.mjs @ 4f4d74e): agent_label only for a named
+// agent, run_id once the delivery run was admitted, error only when failed.
+const pubShare = sh => ({ share_id: sh.id, agent: sh.agent, ...(sh.agentLabel ? { agent_label: sh.agentLabel } : {}), thread_id: sh.thread, status: sh.status, ...(sh.run ? { run_id: sh.run } : {}), ...(sh.error ? { error: sh.error } : {}) });
 function createShare(b) {
   const key = String(b.client_share_id || '');
   if (!/^[\w.:-]{6,160}$/.test(key)) return [400, { error: 'client_share_id_required' }];
@@ -177,7 +179,7 @@ function createShare(b) {
   if ((MAX && files.some(f => Number(f.bytes) > MAX)) || total > freeBytes() - RESERVE) return [507, { error: 'insufficient_storage' }];
   const id = 'sh_' + hex(12);
   if (!thread) thread = `wizard_${Date.now()}_${hex(6)}`;
-  const sh = { id, client: key, agent: agent.id, thread, newThread: !b.thread, note: String(b.note || '').slice(0, 20000), status: 'uploading', uploads: [], created: now() };
+  const sh = { id, client: key, agent: agent.id, agentLabel: agent.id === 'hermes' ? '' : agent.label, thread, newThread: !b.thread, note: String(b.note || '').slice(0, 20000), status: 'uploading', uploads: [], created: now() };
   S.shares[id] = sh; S.sharesByClient[key] = id;
   for (let i = 0; i < files.length; i++) {
     const [code, u] = createUpload({ ...files[i], client_upload_id: `${key}:${i}` }, id);
@@ -197,7 +199,7 @@ function maybeDeliver(sh) {
   const text = sh.note || `Shared ${files.length} ${files.length === 1 ? 'file' : 'files'}`;
   addMessage(s, 'user', chipsText(text, files));
   S.deliveries.push({ share_id: sh.id, thread_id: sh.thread, agent: sh.agent, files: files.map(f => f.id), at: now() });
-  startRun(s, `Got ${files.length} ${files.length === 1 ? 'file' : 'files'}.`);
+  sh.run = startRun(s, `Got ${files.length} ${files.length === 1 ? 'file' : 'files'}.`);
   sh.status = 'delivered'; save();
   log('share:delivered', sh.id, '→', sh.thread, 'deliveries now', S.deliveries.filter(d => d.share_id === sh.id).length);
 }

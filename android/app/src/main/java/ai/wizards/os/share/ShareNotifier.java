@@ -53,14 +53,35 @@ public final class ShareNotifier {
 
     static int pct(long sent, long total) { return total <= 0 ? 0 : (int) Math.min(100, sent * 100 / total); }
 
-    private static PendingIntent open(Context c, JSONObject it, int req) {
+    /**
+     * The intent a share's notification opens: the thread the Wizard answered with (thread_id from the create /
+     * status response), else just the app. Android shares one PendingIntent between intents that are
+     * filterEquals-equal with the same request code, and FLAG_UPDATE_CURRENT then rewrites the older
+     * notification's extras; so each share's intent carries its own identity and the thread rides in it, and a
+     * tap on an older "Sent" notification still opens that share's own thread.
+     */
+    static Intent openIntent(Context c, JSONObject it) {
         String thread = it == null ? "" : it.optString("thread_id");
         Intent i = new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         if (!thread.isEmpty()) i.setAction(MainActivity.ACTION_THREAD).putExtra(MainActivity.EXTRA_THREAD, thread);
-        return PendingIntent.getActivity(c, req, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        String key = identity(it);
+        if (!key.isEmpty() && Build.VERSION.SDK_INT >= 29) i.setIdentifier(key);
+        return i;
     }
 
-    private static int idOf(JSONObject it) { return 0x5300 + (it.optString("id").hashCode() & 0xff); }
+    /** "share:<local id>:<thread>": unique per share and per thread, so no two shares' taps ever merge. */
+    static String identity(JSONObject it) {
+        if (it == null) return "";
+        String id = it.optString("id"), thread = it.optString("thread_id");
+        return id.isEmpty() ? "" : "share:" + id + (thread.isEmpty() ? "" : ":" + thread);
+    }
+
+    private static PendingIntent open(Context c, JSONObject it, int req) {
+        return PendingIntent.getActivity(c, req, openIntent(c, it), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    /** Notification id per share (the request code too; on API 28 that is the only thing keeping taps apart). */
+    static int idOf(JSONObject it) { return 0x530000 | (it.optString("id").hashCode() & 0xffff); }
 
     /** The ongoing notification (the foreground service's own while it runs). */
     static Notification progress(Context c, JSONObject it, String phase, long sent, long total) {
@@ -106,7 +127,7 @@ public final class ShareNotifier {
         post(c, idOf(it), new Notification.Builder(c, CH_ALERT).setSmallIcon(android.R.drawable.stat_notify_error)
                 .setContentTitle(title(it) + " · not sent").setContentText(reason)
                 .setStyle(new Notification.BigTextStyle().bigText(reason))
-                .setAutoCancel(true).setContentIntent(open(c, null, idOf(it))).build());
+                .setAutoCancel(true).setContentIntent(open(c, null, idOf(it))).build()); // nothing landed: open the app, not a thread
     }
 
     /** No resumable API on this Wizard: the share waits in the app's own picker. */

@@ -27,6 +27,10 @@ public final class ShareClient {
 
     public static final long MAX_CHUNK = 64L * 1024 * 1024, DEFAULT_CHUNK = 8L * 1024 * 1024, MIN_CHUNK = 64 * 1024;
     public static final String NO_SPACE_WIZARD = "Not enough space on your Wizard";
+    public static final String TOO_LARGE = "File too large for this Wizard";
+    public static final String EXPIRED = "The upload expired on your Wizard · share it again";
+    /** The Agent Service takes this many files per share (uploads.mjs SHARE_FILE_LIMIT). */
+    public static final int MAX_FILES = 8;
 
     /** HTTP answer. code 0 never appears: a lost connection is an IOException. */
     public static final class Resp {
@@ -73,7 +77,7 @@ public final class ShareClient {
             }
             return finish(it);
         } catch (Gone e) {
-            reason = "The upload expired on your Wizard · share it again";
+            reason = EXPIRED;
             return Outcome.FAILED;
         } catch (IOException e) {
             reason = "Waiting for your Wizard";
@@ -110,6 +114,7 @@ public final class ShareClient {
                 mine.put(new JSONObject().put("upload_id", u.getString("upload_id")).put("offset", u.optLong("offset", 0)).put("bytes", u.optLong("bytes", src.getJSONObject(i).getLong("bytes"))).put("done", false));
                 if (u.optLong("chunk_bytes", 0) > 0) chunk = u.optLong("chunk_bytes");
             }
+            if (!r.body.optString("agent_label").trim().isEmpty()) it.put("agentLabel", r.body.optString("agent_label").trim());
             it.put("share_id", r.body.getString("share_id")).put("thread_id", r.body.optString("thread_id")).put("server_agent", r.body.optString("agent"))
               .put("uploads", mine).put("chunk", clampChunk(chunk)).put("state", ShareQueue.UPLOADING);
             out.saved(it);
@@ -151,7 +156,7 @@ public final class ShareClient {
                     out.saved(it);
                     continue;
                 }
-                if (r.code == 413 && it.optLong("chunk", DEFAULT_CHUNK) > MIN_CHUNK) { it.put("chunk", Math.max(MIN_CHUNK, it.optLong("chunk", DEFAULT_CHUNK) / 2)); continue; }
+                if (r.code == 413 && !"file_too_large".equals(r.body.optString("error")) && it.optLong("chunk", DEFAULT_CHUNK) > MIN_CHUNK) { it.put("chunk", Math.max(MIN_CHUNK, it.optLong("chunk", DEFAULT_CHUNK) / 2)); continue; }
                 Outcome o = answer(r, "upload");
                 if (o == Outcome.RETRY) reconcile(path, u);
                 return o;
@@ -159,7 +164,7 @@ public final class ShareClient {
             Resp r = http.json("POST", path + "/complete", null);
             if (r.code == 200 || r.code == 201) { u.put("done", true); out.saved(it); return null; }
             if (r.code == 409) { reconcile(path, u); if (u.getLong("offset") >= bytes) { reason = "Your Wizard is still checking the file"; return Outcome.RETRY; } continue; }
-            if (r.code == 422) { reason = "A file changed while it was uploading · share it again"; return Outcome.FAILED; }
+            if (r.code == 422) { reason = plain("sha256_mismatch"); return Outcome.FAILED; }
             return answer(r, "complete");
         }
     }
@@ -178,34 +183,58 @@ public final class ShareClient {
     private Outcome finish(JSONObject it) throws IOException, JSONException {
         Resp r = http.json("GET", "/wizard/v1/shares/" + it.getString("share_id"), null);
         String st = r.body.optString("status");
-        if (r.code == 200 && "failed".equals(st)) { reason = r.body.optString("error", "Your Wizard couldn’t deliver it"); return Outcome.FAILED; }
+        if (r.code == 200 && "failed".equals(st)) { reason = plain(r.body.optString("error")); return Outcome.FAILED; }
         if (r.code == 200 && "uploading".equals(st)) { reason = "Your Wizard is still receiving it"; return Outcome.RETRY; }
         if (r.code >= 500) { reason = "Your Wizard was unavailable (" + r.code + ")"; return Outcome.RETRY; }
         // delivered, delivering (the Wizard owns delivery from here) or an unreadable status after every byte landed.
         if (!r.body.optString("thread_id").isEmpty()) it.put("thread_id", r.body.optString("thread_id"));
+        if (!r.body.optString("agent_label").trim().isEmpty()) it.put("agentLabel", r.body.optString("agent_label").trim());
+        if (!r.body.optString("run_id").isEmpty()) it.put("run_id", r.body.optString("run_id"));
         it.put("state", ShareQueue.DELIVERED).put("server_status", st);
         out.saved(it);
         return Outcome.DELIVERED;
     }
 
-    /** What a non-success answer means for this share. */
+    /** What a non-success answer means for this share (the Agent Service's codes: server/uploads.mjs, service.mjs). */
     private Outcome answer(Resp r, String phase) {
         String err = r.body.optString("error");
         if (r.code == 507) { reason = NO_SPACE_WIZARD; return Outcome.FAILED; }
-        if ("create".equals(phase) && (r.code == 404 || r.code == 405 || r.code == 501)) { reason = "This Wizard takes shares in the app"; return Outcome.HANDOFF; }
-        if (r.code == 404) { reason = "The upload expired on your Wizard · share it again"; return Outcome.FAILED; }
-        if (r.code == 409) {
-            reason = err.contains("stopped") ? "That agent is stopped · start it and share again"
-                    : err.contains("thread") ? "That chat is no longer there · share again"
-                    : err.contains("agent") ? "That agent is no longer there · share again" : "Your Wizard refused it (" + (err.isEmpty() ? "409" : err) + ")";
-            return Outcome.FAILED;
+        if (r.code == 413) { reason = TOO_LARGE; return Outcome.FAILED; }
+        if (r.code == 404 && "thread_not_found".equals(err)) { reason = plain(err); return Outcome.FAILED; }
+        // No v1 shares on this Wizard (an old service, or one whose upload store is off): finish in the app instead.
+        if ("create".equals(phase) && (r.code == 404 || r.code == 405 || r.code == 501 || (r.code == 503 && "service_unavailable".equals(err)))) {
+            reason = "This Wizard takes shares in the app"; return Outcome.HANDOFF;
         }
+        if (r.code == 404) { reason = EXPIRED; return Outcome.FAILED; }
+        if (r.code == 410) { reason = plain(err.isEmpty() ? "upload_failed" : err); return Outcome.FAILED; }
+        if (r.code == 409 || r.code == 422 || (r.code == 400 && "too_many_files".equals(err))) { reason = plain(err); return Outcome.FAILED; }
+        if (r.code == 400 && "bytes".equals(r.body.optString("field"))) { reason = "Empty files can’t be sent"; return Outcome.FAILED; }
         if (r.code == 408 || r.code == 425 || r.code == 429 || r.code >= 500 || r.code == 403 || r.code == 401) {
             reason = r.code == 403 || r.code == 401 ? "Wizard sign-in needed" : "Your Wizard was unavailable (" + r.code + ")";
             return Outcome.RETRY;
         }
         reason = "Your Wizard refused it (" + r.code + (err.isEmpty() ? "" : " " + err) + ")";
         return Outcome.FAILED;
+    }
+
+    /** Plain words for the Agent Service's error codes; never a raw code in a notification. */
+    static String plain(String err) {
+        String e = err == null ? "" : err;
+        switch (e) {
+            case "insufficient_storage": return NO_SPACE_WIZARD;
+            case "file_too_large": return TOO_LARGE;
+            case "sha256_mismatch": return "A file changed while it was uploading · share it again";
+            case "expired": case "upload_failed": case "not_found": return EXPIRED;
+            case "agent_unavailable": return "That agent isn’t available · share again to Wizard";
+            case "thread_not_found": return "That chat is no longer there · share again";
+            case "client_share_id_conflict": case "client_upload_id_conflict": return "This share clashed with an earlier one · share it again";
+            case "too_many_files": return "Wizard takes up to " + MAX_FILES + " files at a time · share fewer";
+            default:
+                if (e.contains("stopped")) return "That agent is stopped · start it and share again";
+                if (e.contains("thread")) return "That chat is no longer there · share again";
+                if (e.contains("agent")) return "That agent isn’t available · share again to Wizard";
+                return "Your Wizard couldn’t deliver it · share it again";
+        }
     }
 
     static long clampChunk(long c) { return Math.max(MIN_CHUNK, Math.min(MAX_CHUNK, c)); }

@@ -7,8 +7,9 @@
 //
 // Checks: progress on the chip while uploading · Send disabled until complete · the send carries the Wizard Files
 // id · killing the fixture mid-upload and restarting it resumes from the server's offset (no restart from 0) and
-// the stored bytes match the source · removing a chip cancels its upload · a box without resumable_uploads uses the
-// old POST /wizard/files/upload · Back from the thread keeps the app open.
+// the stored bytes match the source · removing a chip cancels its upload · a full Wizard (507) says “Not enough space
+// on your Wizard” and attaches nothing · a box without resumable_uploads uses the old POST /wizard/files/upload ·
+// Back from the thread keeps the app open.
 const { chromium } = require(process.env.QA_PLAYWRIGHT || '/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path'), crypto = require('crypto'), http = require('http');
 const { spawn } = require('child_process');
@@ -168,6 +169,26 @@ async function waitRun(text, ms = 15000) {
     await ctx.close();
     await stopFixture('SIGTERM');
   } else console.log('SKIP big-file phase (set QA_BIG)');
+
+  // 3b. A full Wizard (box cap / reserve) refuses with 507: the user sees plain words, nothing is attached or sent.
+  fs.rmSync(path.join(DATA, 'fx'), { recursive: true, force: true });
+  await startFixture(['--max=1048576']);
+  {
+    const { ctx, p, errs, wid } = await boot(b);
+    const toasts = [];
+    await p.exposeFunction('__qaToast', t => toasts.push(t));
+    await p.evaluate(() => new MutationObserver(() => { const t = document.body.innerText; if (/space on your Wizard/.test(t)) window.__qaToast(t.match(/[^\n]*space on your Wizard[^\n]*/)[0]); }).observe(document.body, { subtree: true, childList: true, characterData: true }));
+    await attach(p, wid, small);
+    await p.waitForFunction(id => !document.querySelector(`.win[data-win="${id}"] .ch-att`), wid, { timeout: 20000 }).catch(() => {});
+    await sleep(300);
+    ok(toasts.some(t => /Not enough space on your Wizard/.test(t)), '507 → “Not enough space on your Wizard” shown', toasts);
+    ok(!(await chip(p, wid)), '507 → nothing left attached');
+    const st = await get('/__fixture/state');
+    ok(!st.uploads.length && !st.runs.some(r => (r.file_ids || []).length), '507 → no upload record and nothing sent', { uploads: st.uploads.length });
+    ok(!errs.length, 'no page errors (full Wizard)', errs.join(' | '));
+    await ctx.close();
+  }
+  await stopFixture('SIGTERM');
 
   // 4. A box without resumable uploads keeps the old route.
   fs.rmSync(path.join(DATA, 'fx'), { recursive: true, force: true });
