@@ -22,9 +22,9 @@ async function chapter(f,target=3){
  // Use the real app router after following its real collection/list UI where possible.
  const link=f.locator(`[data-wisdom-route="/read/${entry.id}"]`).first();
  if(await link.count())await link.click();else{await f.evaluate(id=>Wisdom.navigate('/read/'+id),entry.id);}
- await f.locator('.wb-reader').waitFor();await f.waitForFunction(()=>/^1\s*\/\s*\d+$/.test(document.querySelector('.wb-count')?.textContent||''));
- const start=await reader(f),total=Number(start.count.split('/')[1]);if(total<4)throw Error('Actual chapter too short for nonterminal position proof');
- await f.locator('body').click({position:{x:10,y:100}});for(let n=1;n<target;n++)await f.page().keyboard.press('ArrowRight');await f.page().waitForTimeout(500);
+ await f.locator('.wb-reader').waitFor();await f.waitForFunction(()=>/^\d+\s*\/\s*\d+$/.test(document.querySelector('.wb-count')?.textContent||''));
+ const start=await reader(f),total=Number(start.count.split('/')[1]);console.log('READER start',start);if(total<4)throw Error('Actual chapter too short for nonterminal position proof');
+ await f.locator('body').click({position:{x:10,y:100}});const initial=Number(start.count.split('/')[0]);for(let n=initial;n<target;n++)await f.page().keyboard.press('ArrowRight');for(let n=initial;n>target;n--)await f.page().keyboard.press('ArrowLeft');await f.page().waitForTimeout(500);
  const saved=await reader(f);if(Number(saved.count.split('/')[0])!==target)throw Error('Actual reader did not advance to page '+target);return saved;
 }
 (async()=>{const browser=await chromium.launch({headless:true});const ctx=await browser.newContext({viewport:{width:412,height:892},hasTouch:true,isMobile:true,serviceWorkers:'block'});let failure=null;
@@ -50,7 +50,7 @@ try{
  if(!normalWisdom)throw Error('Ordinary Wisdom iframe missing');
  const normalReading=await chapter(normalWisdom,2);
  const normalPlaces=await main.evaluate(()=>Object.fromEntries(Object.keys(localStorage).filter(k=>/^wisdom:.*:pos:/.test(k)).map(k=>[k,localStorage.getItem(k)])));
- await normalWisdom.evaluate(()=>location.reload());await normalWisdom.locator('.wb-count').waitFor();await main.waitForTimeout(700);
+ await Promise.all([normalWisdom.waitForNavigation({waitUntil:'load'}),normalWisdom.evaluate(()=>location.reload())]);await normalWisdom.locator('.wb-count').waitFor();await normalWisdom.waitForFunction(()=>!!document.querySelector('.wb-count')?.textContent);await main.waitForTimeout(700);
  check('ordinary hosted reading refresh retains actual chapter/page',JSON.stringify(normalReading)===JSON.stringify(await reader(normalWisdom)),await reader(normalWisdom),'regression');
  const pages={},frames={};
  for(const id of ['wisdom','wizard-signal']){
@@ -73,7 +73,7 @@ try{
   check('Home-like switching preserves same frame/route/page',JSON.stringify(saved)===JSON.stringify(await reader(f)),await reader(f));
   await p.evaluate(()=>__wosSessionCheckpoint());await p.reload();f=frames.wisdom=await waitFrame(p);await f.locator('.wb-count').waitFor();await p.waitForTimeout(1000);
   check('Wisdom shell recreation restores actual chapter AND reading page',JSON.stringify(saved)===JSON.stringify(await reader(f)),await reader(f));
-  await f.evaluate(()=>location.reload());await f.locator('.wb-count').waitFor();await p.waitForTimeout(1000);
+  await Promise.all([f.waitForNavigation({waitUntil:'load'}),f.evaluate(()=>location.reload())]);await f.locator('.wb-count').waitFor();await f.waitForFunction(()=>!!document.querySelector('.wb-count')?.textContent);await p.waitForTimeout(1000);
   check('Wisdom iframe refresh preserves chapter/page',JSON.stringify(saved)===JSON.stringify(await reader(f)),await reader(f));
   await p.evaluate(()=>__wosSessionCheckpoint());await p.close();const revived=pages.wisdom=await ctx.newPage();await revived.goto(origin+'/wizard-os-home/?app-session=wisdom');f=frames.wisdom=await waitFrame(revived);await f.locator('.wb-count').waitFor();await revived.waitForTimeout(1000);
   check('fresh task document restores route/page from durable storage',JSON.stringify(saved)===JSON.stringify(await reader(f)),await reader(f));
@@ -109,7 +109,7 @@ try{
   const saved=await state();check('Signal real Sources route visible',saved.route==='sources'&&/Sources/.test(saved.title),saved);
   await p.evaluate(()=>__wosSessionCheckpoint());await p.reload();f=frames['wizard-signal']=await waitFrame(p);await p.waitForTimeout(700);
   check('Signal shell recreation reconstructs actual route and content',JSON.stringify(saved)===JSON.stringify(await state()),await state());
-  await f.evaluate(()=>location.reload());await p.waitForTimeout(1500);
+  await Promise.all([f.waitForNavigation({waitUntil:'load'}),f.evaluate(()=>location.reload())]);await p.waitForTimeout(1500);
   check('Signal iframe refresh reconstructs route, not feed at #sources',JSON.stringify(saved)===JSON.stringify(await state()),await state());
   await p.evaluate(()=>__wosNativeBack());await p.waitForTimeout(400);
   check('Signal nested Back changes actual view to feed',await f.evaluate(()=>history.state?.route==='feed'&&document.querySelector('.topbar')?.innerText.includes('Signal')),f.url());
