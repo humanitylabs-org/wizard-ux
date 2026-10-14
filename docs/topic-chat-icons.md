@@ -19,9 +19,9 @@ https://topic-icons.staging.wizard001.com/wizard-os-home/?open=chats
 ## Verification
 
 - Pure-render test failed first on the original dot; implemented source passes 17/17 contracts.
-- Thales `thales.local`, actual HTTPS desktop and Android-UA touch browsers: 33/33 checks, zero page errors, exact four changed asset hashes, real Topics thread open → browser Back → list, reload, readable on-screen entry and narrow-width icon fit.
+- Thales `thales.local`, actual HTTPS desktop and Android-UA touch browsers: 35/35 checks, zero page errors, exact four changed asset hashes, real Topics thread open → browser Back → list, reload, readable on-screen entry and narrow-width icon fit.
 - Evidence: `/home/telos/.hermes/data/releases/topic-icons/evidence/result.json`, desktop and phone screenshots. Remote working evidence: `/Volumes/ThalesMedia/WizardQA/topic-icons-20261014/result`.
-- Independent review identified an unsafe app-registry repaint during rename/touch interaction. The listener now uses the shared `holdList` guard and held-list flushing on both shell hosts, including desktop `::list` rows. Remote red test recreates the lost rename input using the previous listener; fixed candidate preserves rename/actions sheets and actual CDP touch-scrolling nodes, then flushes the new glyph after release. Final current-source reviewer receipt is pending.
+- Independent review identified an unsafe app-registry repaint during rename/touch interaction. The listener now uses the shared `holdList` guard and held-list flushing on both shell hosts, including desktop `::list` rows. Remote red test recreates the lost rename input using the previous listener; fixed candidate preserves rename/actions sheets and actual CDP touch-scrolling nodes, then flushes the new glyph after release. Both independent receipts reviewed pre-fix commit `96e169f` and found the same repaint blocker; parent closed it in `1cb2e28`, backed by the failing old-listener browser regression and 35/35 repaired HTTPS checks, including an intact open thread/composer. No other blocker was reported.
 - No APK/native change; no Hermes core change; daily remains unchanged.
 
 ## Recommended next app mappings (not implemented)
