@@ -13,8 +13,12 @@
   <title>Wizard OS</title>
   <link rel="manifest" href="manifest.webmanifest">
   <script src="pwa-install.js" data-pwa-name="Wizard OS" data-pwa-origin=""></script>
+  <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" href="icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="core/base.css">
+  <link rel="stylesheet" href="core/brand.css">
+  <script src="core/brand.js"></script>
   <link rel="stylesheet" href="motion/wizard-motion.css">
   <link rel="stylesheet" href="core/chats.css">
   <link rel="stylesheet" href="core/sel-menu.css">
@@ -56,7 +60,7 @@
     <!-- Voice layer: transcript + arc controls -->
     <div id="voice" class="voice" aria-hidden="true">
       <div id="transcript" class="transcript">
-        <div class="tx-route"><b id="txRouteIcon">✦</b><span id="txRouteText">Listening…</span><button id="txClose" class="tx-x" type="button" aria-label="Dismiss"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+        <div class="tx-route"><b id="txRouteIcon"><img class="wizard-brand-mark" src="brand/wizard-mark-white.png" alt="" aria-hidden="true"></b><span id="txRouteText">Listening…</span><button id="txClose" class="tx-x" type="button" aria-label="Dismiss"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
         <p id="txText"></p>
         <div id="txChips" class="tx-chips"></div>
       </div>

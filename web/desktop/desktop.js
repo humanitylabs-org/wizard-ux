@@ -528,7 +528,7 @@
   function palRender() {
     const groups = palBuild(palIn.value); palItems = groups.flatMap(g => g.items); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
     let k = 0;
-    palList.innerHTML = groups.map(g => `<div class="pal-grp">${esc(g.grp)}</div>` + g.items.map(it => { const i = k++; return `<button class="pal-it${i === palSel ? ' sel' : ''}" data-i="${i}" role="option">${it.app ? ico('span', 'ic', it.app) : `<span class="ic" style="--g1:${it.g?.[0] || '#3a2a6a'};--g2:${it.g?.[1] || '#241a44'}">${it.icon || '◇'}</span>`}<span class="nm">${esc(it.name)}${it.sub ? `<small>${esc(clip(it.sub, 60))}</small>` : ''}</span>${it.keys ? `<span class="hint"><kbd>${esc(it.keys)}</kbd></span>` : ''}</button>`; }).join('')).join('') || '<div class="pal-empty">Nothing yet.</div>';
+    palList.innerHTML = groups.map(g => `<div class="pal-grp">${esc(g.grp)}</div>` + g.items.map(it => { const i = k++; return `<button class="pal-it${i === palSel ? ' sel' : ''}" data-i="${i}" role="option">${it.app ? ico('span', 'ic', it.app) : `<span class="ic" style="--g1:${it.g?.[0] || '#3a2a6a'};--g2:${it.g?.[1] || '#241a44'}">${it.kind === 'ask' ? window.WizBrand.html : it.icon || '◇'}</span>`}<span class="nm">${esc(it.name)}${it.sub ? `<small>${esc(clip(it.sub, 60))}</small>` : ''}</span>${it.keys ? `<span class="hint"><kbd>${esc(it.keys)}</kbd></span>` : ''}</button>`; }).join('')).join('') || '<div class="pal-empty">Nothing yet.</div>';
     palList.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
   }
   function openPalette(q = '') { pal.hidden = false; palIn.value = q; palSel = 0; palRender(); palIn.focus(); palIn.select(); }
@@ -892,7 +892,7 @@
 
   /* ---------------- toast ---------------- */
   let toastT = 0;
-  function toast(icon, text, ms = 2000) { const t = $('#toast'); t.innerHTML = `<span>${esc(icon)}</span><span>${esc(text)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
+  function toast(icon, text, ms = 2000) { const t = $('#toast'); t.innerHTML = `<span>${window.WizBrand.icon(esc(icon))}</span><span>${esc(text)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
 
   /* ---------------- native bridge (Wizard for Mac drives this by events) ---------------- */
   C.bridge.handle({

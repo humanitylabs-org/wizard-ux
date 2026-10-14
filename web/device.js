@@ -430,7 +430,7 @@
       ? `<button class="dv-wr" role="listitem" data-web-thread="${esc(c.thread)}"><b>${esc(rowName(c))}</b>${c.title && c.what ? `<small>${esc(c.what)}</small>` : ''}<span class="dv-wgo">›</span></button>`
       : `<div class="dv-wr static" role="listitem"><b>${esc(rowName(c))}</b><small>No thread</small></div>`).join('')}</div>` : '';
     el.classList.toggle('open', !!list);
-    el.innerHTML = `<div class="dv-wtop">${changes.length ? '' : '<span class="dv-ui">✦</span>'}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}<button data-web="go">Reload</button></div>${list}`;
+    el.innerHTML = `<div class="dv-wtop">${changes.length ? '' : `<span class="dv-ui">${window.WizBrand.html}</span>`}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}<button data-web="go">Reload</button></div>${list}`;
   }
   function reloadNow(why) { if (webBusy()) { toast('◌', 'Finish recording or save your work first', 2000); return; } saveDrafts(); window.WizAppReadingPosition?.flush(); log('web:reload', why); window.__wosReloading = why; location.reload(); }
 
