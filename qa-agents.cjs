@@ -269,8 +269,9 @@ async function desktop(b, created) {
   await p.goto(BASE + 'desktop.html', { waitUntil: 'load' }); await wait(2500);
   // First run opens Chats on workspace 1; Home (with its app chips) is what an empty workspace shows.
   ok(await p.evaluate(() => __wux.ws[__wux.cur].wins.length > 0 && !document.querySelector('.wsp:not([hidden]) .home')), 'desktop: first run opens Chats on workspace 1 (no Home there)');
-  await p.evaluate(() => __wux.goWs(1)); await wait(500);
-  const chip = p.locator('.wsp:not([hidden]) .home [data-app="agents"]');
+  // Home is its own root view (hat / clock), separate from the desktops (daily: Hat Home, dynamic desktops).
+  await p.evaluate(() => __wux.goHome ? __wux.goHome() : __wux.goWs(1)); await wait(500);
+  const chip = p.locator('#desktopHome:not([hidden]) [data-app="agents"], .wsp:not([hidden]) .home [data-app="agents"]');
   ok(await chip.count() === 1, 'desktop: Home has an Agents chip');
   await chip.first().click();
   const f = await agentsFrame(p); await wait(800);
