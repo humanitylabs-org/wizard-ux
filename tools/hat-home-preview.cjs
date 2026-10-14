@@ -31,6 +31,7 @@ http.createServer((req,res) => {
  if (p === '/wizard-os-home') { res.writeHead(302,{location:'/wizard-os-home/'}); return res.end(); }
  if (p.startsWith('/wizard-os-home/')) {
   const rel = p.slice('/wizard-os-home/'.length) || 'index.html';
+  if (rel === 'ux-version.txt') { res.writeHead(200, {'content-type':'text/plain','cache-control':'no-store'}); return res.end(revision+'\n'); }
   if (rel.split('/').some(s=>s==='..'||s.startsWith('.'))) { res.writeHead(404); return res.end(); }
   // No mutable fallback for candidate JS/CSS. These two generated read-data files
   // are intentionally supplied by the authorized running shell, not source overlays.

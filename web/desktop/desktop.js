@@ -977,12 +977,16 @@
   /* ---------------- browser Back never leaves the app ----------------
    * The desktop has Esc for layers, but a mouse back button or ⌘[ still fires popstate. Keep one guard
    * entry and treat Back as Esc; at the root it stays put and says so. */
-  if (history.state?.wux !== 'guard') { history.replaceState({ wux: 'root' }, ''); history.pushState({ wux: 'guard' }, ''); }
-  addEventListener('popstate', () => {
-    const did = escStep(); log('back:' + (did || 'root'));
-    history.pushState({ wux: 'guard' }, '');
-    if (!did) toast('⌂', 'You’re home · Back never leaves Wizard', 1400);
-  });
+  // AppServices owns the single history guard when available. Running both guards
+  // peeled two layers and appended a second entry on every Back.
+  if (!window.WizAppServices?.guardBack) {
+    if (history.state?.wux !== 'guard') { history.replaceState({ wux: 'root' }, ''); history.pushState({ wux: 'guard' }, ''); }
+    addEventListener('popstate', () => {
+      const did = escStep(); log('back:' + (did || 'root'));
+      history.pushState({ wux: 'guard' }, '');
+      if (!did) toast('⌂', 'You’re home · Back never leaves Wizard', 1400);
+    });
+  }
 
   /* ---------------- live data ---------------- */
   if (LIVE) LIVE.onChange(() => {
@@ -1099,5 +1103,9 @@
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
-  window.WizAppServices?.guardBack(escStep, toast);
+  window.WizAppServices?.guardBack(() => {
+    const did = escStep(); log('back:' + (did || 'root'));
+    if (!did) toast('⌂', 'You’re home · Back never leaves Wizard', 1400);
+    return true;
+  }, toast);
 })();
