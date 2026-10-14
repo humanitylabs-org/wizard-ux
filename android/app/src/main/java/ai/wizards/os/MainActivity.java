@@ -183,9 +183,7 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
                 // A main-frame hop to the retired private.wizard001.com lands on the same page under this Wizard's own name.
-                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying && !ai.wizards.os.device.AppState.legacyFallback) { go(Origin.toHome(u.toString())); return true; }
-                // Under the safety net the tailnet name is unreachable: its links open the same page on the old name.
-                if (req.isForMainFrame() && Origin.isHome(u) && ai.wizards.os.device.AppState.legacyFallback) { go(Origin.toLegacy(u.toString())); return true; }
+                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying) { go(Origin.toHome(u.toString())); return true; }
                 if (carrying && Carry.isPage(MainActivity.this, u.toString())) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
                 if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
                 if (!req.isForMainFrame()) return false; // hosted app frames stay inside their window
@@ -200,11 +198,6 @@ public class MainActivity extends Activity {
                 if (req.isForMainFrame() && carrying) { endCarry("unreachable"); return; } // old name gone: just go home
                 // Safety net: the tailnet name unreachable from this phone → same page on the old name for this run.
                 // (A failing old-name page is not isHome, so this cannot loop; both failing ends on the offline page.)
-                if (req.isForMainFrame() && Origin.isHome(req.getUrl()) && ai.wizards.os.device.AppState.useLegacy(MainActivity.this)) {
-                    mainFailed = true;
-                    go(Origin.toLegacy(req.getUrl().toString()));
-                    return;
-                }
                 if (req.isForMainFrame()) { mainFailed = true; showOffline(String.valueOf(err.getDescription())); }
             }
 

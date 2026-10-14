@@ -26,7 +26,7 @@ public final class AppState {
      */
     public static String origin(Context c) {
         String qa = qaOrigin(c);
-        return qa != null ? qa : legacyFallback ? LEGACY_ORIGIN : BuildConfig.ORIGIN;
+        return qa != null ? qa : BuildConfig.ORIGIN;
     }
 
     /** This Wizard's own address (or the QA fake), ignoring any fallback: where carried state must land. */
@@ -43,24 +43,18 @@ public final class AppState {
     /** The retired name. The same Wizard still answers on it while the move settles. */
     public static final String LEGACY_ORIGIN = "https://private.wizard001.com";
 
-    /**
-     * Safety net for the move to the tailnet name: set for this process when the tailnet name cannot be reached
-     * (e.g. the phone's Private DNS bypasses MagicDNS) but the old name might be. The shell and the update feed
-     * then use the old name until the app restarts, so the app keeps working and can still receive a fix.
-     */
+    /** Deprecated compatibility field; no navigation or HTTP path reads it. */
     public static volatile boolean legacyFallback;
 
-    /** Native HTTP to {@code origin}, on the old name while the safety net is on (QA fakes are never rewritten). */
+    /** Native HTTP stays on the configured origin, including when its connection fails. */
     public static String live(String origin) {
-        return legacyFallback && BuildConfig.ORIGIN.equals(origin) ? LEGACY_ORIGIN : origin;
+        return origin;
     }
 
-    /** Switch this process to the old name once. False for QA fakes or when it is already in use. */
+    /** Retired API: origin failure now stays on the configured name and uses the Retry screen. */
     public static boolean useLegacy(Context c) {
-        if (qaOrigin(c) != null || legacyFallback) return false;
-        legacyFallback = true;
-        android.util.Log.w("WizardOS", "tailnet name unreachable; using " + LEGACY_ORIGIN + " for this run");
-        return true;
+        legacyFallback = false;
+        return false;
     }
 
     static String qaOrigin(Context c) {

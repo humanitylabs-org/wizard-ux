@@ -46,7 +46,21 @@ final class Carry {
     /** Should this launch open the carry page before the shell? */
     static boolean pending(Context c) {
         SharedPreferences p = prefs(c);
-        return source(c) != null && !p.getBoolean("done", false) && p.getInt("tries", 0) < MAX_TRIES;
+        if (p.getBoolean("done", false) || p.getInt("tries", 0) >= MAX_TRIES) return false;
+        if (!BuildConfig.DEBUG) {
+            // A new device has no state at the retired origin. Persist this decision so its next update
+            // does not turn a fresh post-migration install into a legacy-transfer candidate.
+            try {
+                android.content.pm.PackageInfo info = c.getPackageManager().getPackageInfo(c.getPackageName(), 0);
+                if (!LegacyCarryPolicy.upgradedInstall(info.firstInstallTime, info.lastUpdateTime)) {
+                    finished(c);
+                    return false;
+                }
+            } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+                return false;
+            }
+        }
+        return source(c) != null;
     }
 
     static String pageUrl(Context c) { return source(c) + PAGE; }

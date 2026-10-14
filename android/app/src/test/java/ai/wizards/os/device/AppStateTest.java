@@ -18,12 +18,14 @@ public class AppStateTest {
     }
 
     @Test
-    public void safetyNetRewritesOnlyTheReleaseOrigin() {
+    public void legacyFlagCannotRewriteNativeHttp() {
         try {
             AppState.legacyFallback = false;
             assertEquals(ai.wizards.os.BuildConfig.ORIGIN, AppState.live(ai.wizards.os.BuildConfig.ORIGIN));
             AppState.legacyFallback = true;
-            assertEquals("https://private.wizard001.com", AppState.live(ai.wizards.os.BuildConfig.ORIGIN));
+            assertEquals(ai.wizards.os.BuildConfig.ORIGIN, AppState.live(ai.wizards.os.BuildConfig.ORIGIN));
+            assertFalse(AppState.useLegacy(null));
+            assertFalse(AppState.legacyFallback);
             assertEquals("http://localhost:18788", AppState.live("http://localhost:18788")); // QA fakes never move
         } finally {
             AppState.legacyFallback = false;
