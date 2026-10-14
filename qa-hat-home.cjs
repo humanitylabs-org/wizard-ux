@@ -45,6 +45,7 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  }
  check(await p.evaluate(()=>__wux.homeOpen&&getComputedStyle(document.querySelector('#desktopHome')).display!=='none'),'exact HTTPS deep link opens Home');
  check(await p.locator('#desktopHome .home-time').isVisible()&&await p.locator('#desktopHome .home-card').count()===2,'Home contains clock, attention and Working');
+ check(await p.evaluate(()=>{const glyphs=[...document.querySelectorAll('#desktopHome .app-chip .sgi:not(.sgl)')];return glyphs.length>=4&&glyphs.every(e=>getComputedStyle(e).backgroundImage!=='none');}),'Home quick-app sigil silhouettes remain visibly coloured');
  const coldURL=p.url();await back(p);
  check(new URL(p.url()).origin===new URL(coldURL).origin&&new URL(p.url()).pathname===new URL(coldURL).pathname&&await p.evaluate(()=>__wux.homeOpen)&&!p.isClosed(),'fresh direct Home entry survives real Back before any pointer gesture',{before:coldURL,after:p.url()});
  check((await p.locator('#wiz-staging-tag').innerText()).includes('Hat Home'),'visible read-only staging marker');
