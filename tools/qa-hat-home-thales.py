@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Thales-only QA lease, using the established POSIX worker lock.
-Live Darwin probes confirmed POSIX lockf excludes BSD flock even in the same
-process: acquire one family, not both. A child proves exclusion of both APIs.
+"""Thales-only QA lease, using the established Android runner's BSD flock.
+Live Darwin probes confirmed POSIX lockf and BSD flock exclude one another even
+in the same process: acquire one family, not both. A child proves both APIs.
 Never unlink worker.lock (inode identity is the serialization contract).
 """
 import fcntl, json, os, pathlib, socket, subprocess, sys, time
@@ -10,12 +10,12 @@ root = pathlib.Path('/Volumes/ThalesMedia/wizard-branding-20261014/hat-home')
 if 'thales' not in socket.gethostname().lower() or not root.is_dir():
     raise SystemExit('Thales /Volumes/ThalesMedia placement required')
 lock = pathlib.Path('/Volumes/ThalesMedia/AndroidBuilds/worker.lock')
-receipt = {'host': socket.gethostname(), 'pid': os.getpid(), 'lock': str(lock), 'owner_api': 'POSIX fcntl.lockf', 'exclusion_probes': ['BSD flock', 'POSIX lockf'], 'queued_at': datetime.now(timezone.utc).isoformat()}
+receipt = {'host': socket.gethostname(), 'pid': os.getpid(), 'lock': str(lock), 'owner_api': 'BSD fcntl.flock (same as canonical Android worker)', 'exclusion_probes': ['BSD flock', 'POSIX lockf'], 'queued_at': datetime.now(timezone.utc).isoformat()}
 print(json.dumps(receipt), flush=True)
 with lock.open('a') as f:
     # Join the kernel's blocking wait queue instead of repeatedly missing the
     # brief release gaps between already-queued native workers.
-    fcntl.lockf(f, fcntl.LOCK_EX)
+    fcntl.flock(f, fcntl.LOCK_EX)
     receipt['acquired_at'] = datetime.now(timezone.utc).isoformat()
     receipt['inode'] = os.fstat(f.fileno()).st_ino
     # A separate process must fail to acquire either family while this parent owns it.
