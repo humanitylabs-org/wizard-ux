@@ -4,7 +4,7 @@
 // Usage: QA_WEB_DIR=<repo> [QA_SHOTS=dir] node qa-immersive.cjs [url]
 const { chromium } = require('/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
+const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;
@@ -16,7 +16,7 @@ async function boot(b) {
   const ctx = await b.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone'] });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (!/private\.wizard001\.com$/.test(u.hostname)) return r.abort();
+    if (!/wizard\.tailc0f369\.ts\.net$/.test(u.hostname)) return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET' && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html';

@@ -3,8 +3,8 @@
 // and the shell opened a brand-new thread instead of steering. Router answers are stubbed per case.
 // Usage: QA_WEB_DIR=<repo> node qa-thread-voice.cjs [url]. Real Wizard reads; every write is intercepted.
 const { chromium } = require('/home/telos/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://private.wizard001.com/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP private.wizard001.com 127.0.0.1:18443';
+const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
 const W = process.env.QA_WEB_DIR || '';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };

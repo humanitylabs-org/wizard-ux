@@ -113,8 +113,7 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= #11 models ================= */
   function threadModel(s) {
-    const selected = s && M?.selections.get(s.id); if (selected) return selected;
-    return s ? { model: s.model || '', provider: s.provider || '' } : { model: '', provider: '' };
+    return M?.currentRoute(s?.id || '') || { model: '', provider: '' };
   }
   function newModel(c) { return c.newModel || (M?.defaultOption() ? { model: M.defaultOption().value, provider: M.defaultOption().provider, isDefault: true } : null); }
   // The chip in the thread header: the model this thread (or this new chat) runs on. Tap to change it.

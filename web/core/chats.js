@@ -1111,9 +1111,23 @@ window.WizCore.chats = function createChats(H) {
   let pickFor = '';
   picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
   function growTa(ta) { if (!ta) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; }
-  // While a thread is on screen, new replies count as read (same rule as Wizard).
+  // While a thread is on screen AND James is at that screen, new replies count as read (same rule as Wizard).
+  // "At the screen" = the page was opened, brought to the front, touched, clicked, typed in or scrolled within
+  // ATTEND_MS. A window left open on a thread (James, 14 Oct 2026: a Mac tab sat on "Our PRs" and marked its new
+  // reply read while he was on his phone) keeps the reply unread everywhere until he comes back: his first input
+  // there re-runs this check, so the thread he is actually looking at still clears at once.
+  const ATTEND_MS = 60e3;
+  let lastPresence = Date.now();
+  const attended = () => !document.hidden && Date.now() - lastPresence < ATTEND_MS;
+  function presence() {
+    const wasAway = Date.now() - lastPresence >= ATTEND_MS; lastPresence = Date.now();
+    if (wasAway) setTimeout(markVisibleThreadsSeen, 0);
+  }
+  // Real input only: a 'scroll' event also fires when a new reply auto-scrolls the thread, which is not James.
+  for (const t of ['pointerdown', 'keydown', 'wheel', 'touchstart']) addEventListener(t, presence, { capture: true, passive: true });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) lastPresence = Date.now(); }, true);
   function markVisibleThreadsSeen() {
-    if (!LIVE?.ok || document.hidden) return;
+    if (!LIVE?.ok || !attended()) return;
     for (const id of desks[idx].wins) {
       const w = W[id]; if (w?.app !== 'chats' || !w.thread || w.thread === '__new__') continue;
       const s = LIVE.session(w.thread); if (s && LIVE.isNew(s)) LIVE.markSeen(w.thread);
