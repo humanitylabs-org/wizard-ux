@@ -53,6 +53,14 @@ android {
             minifyEnabled false
             if (wosSigningReady) signingConfig signingConfigs.release
         }
+        // Private branding proof: co-installable, no production slot/feed or sibling reservation consumed.
+        brandpreview {
+            initWith release
+            applicationIdSuffix '.brandpreview'
+            versionNameSuffix '-brand.1-preview'
+            resValue 'string', 'app_name', 'Wizard Brand Preview'
+            matchingFallbacks = ['release']
+        }
         preview {
             initWith release
             applicationIdSuffix '.preview'
