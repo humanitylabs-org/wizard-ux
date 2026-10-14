@@ -518,10 +518,19 @@
     const over = t.closest('.win');
     if (over && over.dataset.win !== d.id) { const L = ws[cur].wins, a = L.indexOf(d.id), b = L.indexOf(over.dataset.win); if (a >= 0 && b >= 0) { [L[a], L[b]] = [L[b], L[a]]; save(); layout(); } }
   });
-  addEventListener('resize', () => layout());
-  // WKWebView can deliver resize before its fixed stage has the new bounds.
-  // Observe the measured tiling surface so a second layout follows that change.
-  if (window.ResizeObserver) new ResizeObserver(() => layout()).observe(stage);
+  let resizeSettled;
+  function resizeTiles() {
+    // WK can pause CSS animation timelines while a native window is occluded.
+    // End geometry transitions before applying viewport bounds, so the rendered
+    // boxes match the new inline dimensions even without another animation frame.
+    document.body.classList.add('desktop-resizing');
+    layout();
+    clearTimeout(resizeSettled);
+    resizeSettled = setTimeout(() => document.body.classList.remove('desktop-resizing'), 200);
+  }
+  addEventListener('resize', resizeTiles);
+  // Observe the measured stage after native Auto Layout updates the WK bounds.
+  if (window.ResizeObserver) new ResizeObserver(resizeTiles).observe(stage);
 
   /* ---------------- palette: one box for apps, threads, commands and asking Archimedes ---------------- */
   const pal = $('#palette'), palIn = $('#palInput'), palList = $('#palList');

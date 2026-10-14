@@ -66,6 +66,7 @@ html[data-native-chrome="mac"] .ws-list { min-width: 0; overflow-x: auto; scroll
 .win { position: absolute; display: flex; flex-direction: column; border-radius: var(--radius); overflow: hidden;
   background: rgba(14, 9, 30, .9); border: 1px solid rgba(205, 190, 255, .1); box-shadow: 0 10px 40px rgba(0, 0, 0, .35);
   transition: left 180ms var(--ease), top 180ms var(--ease), width 180ms var(--ease), height 180ms var(--ease), border-color 120ms, opacity 140ms; }
+body.desktop-resizing .win { transition-property: border-color, opacity; }
 .win.focus { border-color: rgba(185, 155, 255, .55); box-shadow: 0 0 0 1px rgba(143, 99, 255, .35), 0 14px 50px rgba(60, 20, 140, .4); }
 .win.gone { opacity: 0; pointer-events: none; }
 .win.drag { opacity: .6; }
