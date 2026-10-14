@@ -223,9 +223,12 @@ SEED_JS = r"""(async () => {
   localStorage.setItem('wos.chats.readyOrder.v1', 'old-value');
   const db = await new Promise((res, rej) => { const r = indexedDB.open('wos-outbox', 1); r.onupgradeneeded = () => r.result.createObjectStore('items', { keyPath: 'id' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
   const bin = atob('%s'); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  // Since 0.9.10 every queued message carries its sealed model route (outbox.js refuses to admit one without it),
+  // so the old-name outbox an updating phone holds has model/provider on each unsent item.
+  const route = { model: 'qa-model', provider: 'qa-provider' };
   const items = [
-    { id: 'wos-carry-text-1', createdAt: Date.now() - 60000, attempts: 3, state: 'failed', kind: 'new', sessionId: 'wizard_1_carrytext00', steerRunId: '', text: 'carried unsent text', instructions: '', files: [], audio: null, audioType: '', wid: '', how: '', source: 'chat', title: 'carried unsent text' },
-    { id: 'wos-carry-voice-1', createdAt: Date.now() - 50000, attempts: 1, state: 'waiting', nextAt: Date.now() + 3600000, kind: 'reply', sessionId: 'qa_thread_a', steerRunId: '', text: '', instructions: '', files: [], audio: new Blob([u8], { type: 'audio/webm' }), audioType: 'audio/webm', wid: '', how: '', source: 'chat', title: '' },
+    { id: 'wos-carry-text-1', createdAt: Date.now() - 60000, attempts: 3, state: 'failed', kind: 'new', sessionId: 'wizard_1_carrytext00', steerRunId: '', text: 'carried unsent text', instructions: '', files: [], audio: null, audioType: '', wid: '', how: '', source: 'chat', title: 'carried unsent text', ...route },
+    { id: 'wos-carry-voice-1', createdAt: Date.now() - 50000, attempts: 1, state: 'waiting', nextAt: Date.now() + 3600000, kind: 'reply', sessionId: 'qa_thread_a', steerRunId: '', text: '', instructions: '', files: [], audio: new Blob([u8], { type: 'audio/webm' }), audioType: 'audio/webm', wid: '', how: '', source: 'chat', title: '', ...route },
     { id: 'wos-carry-sent-1', createdAt: Date.now() - 40000, attempts: 1, state: 'sent', sentAt: Date.now() - 30000, kind: 'reply', sessionId: 'qa_thread_a', text: 'already sent', files: [] },
   ];
   await new Promise((res, rej) => { const t = db.transaction('items', 'readwrite'); for (const it of items) t.objectStore('items').put(it); t.oncomplete = res; t.onerror = () => rej(t.error); });
@@ -322,6 +325,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         keys = [r['key'] for r in runs]
         check('#3 both carried messages reach the new Wizard', 'wos-carry-text-1' in keys and 'wos-carry-voice-1' in keys, keys)
         check('#3 each exactly once (idempotent)', len(keys) == len(set(keys)), keys)
+        check('#3 each keeps its sealed model route', runs and all(r['body'].get('model') == 'qa-model' and r['body'].get('require_model_lock') for r in runs), [r['body'].get('model') for r in runs])
         check('#3 nothing was sent to the old name', len(ST[OLD_PORT]['runs']) == nOld0, len(ST[OLD_PORT]['runs']) - nOld0)
         check('#2 the app dropped its copy after the shell took it', 'carry.json' not in runas('ls files'))
         pg.close()
