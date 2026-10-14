@@ -18,10 +18,10 @@ https://topic-icons.staging.wizard001.com/wizard-os-home/?open=chats
 
 ## Verification
 
-- Pure-render test failed first on the original dot; implemented source passes 12/12 contracts.
-- Thales `thales.local`, actual HTTPS desktop and Android-UA touch browsers: 23/23 checks, zero page errors, exact four changed asset hashes, real Topics thread open → browser Back → list, reload, readable on-screen entry and narrow-width icon fit.
+- Pure-render test failed first on the original dot; implemented source passes 17/17 contracts.
+- Thales `thales.local`, actual HTTPS desktop and Android-UA touch browsers: 33/33 checks, zero page errors, exact four changed asset hashes, real Topics thread open → browser Back → list, reload, readable on-screen entry and narrow-width icon fit.
 - Evidence: `/home/telos/.hermes/data/releases/topic-icons/evidence/result.json`, desktop and phone screenshots. Remote working evidence: `/Volumes/ThalesMedia/WizardQA/topic-icons-20261014/result`.
-- Independent source review: pending at initial recording; review receipt accompanies candidate once returned.
+- Independent review identified an unsafe app-registry repaint during rename/touch interaction. The listener now uses the shared `holdList` guard and held-list flushing on both shell hosts, including desktop `::list` rows. Remote red test recreates the lost rename input using the previous listener; fixed candidate preserves rename/actions sheets and actual CDP touch-scrolling nodes, then flushes the new glyph after release. Final current-source reviewer receipt is pending.
 - No APK/native change; no Hermes core change; daily remains unchanged.
 
 ## Recommended next app mappings (not implemented)

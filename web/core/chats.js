@@ -1268,7 +1268,10 @@ window.WizCore.chats = function createChats(H) {
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
   window.addEventListener('wizard:apps', () => {
-    for (const id of Object.keys(CH)) { const w = W[id]; if (w && !w.thread) renderChats(w); }
+    for (const id of Object.keys(CH)) {
+      const w = H.win(id), el = elOf(id);
+      if (w && !w.thread && el && el.querySelector('.ch-list') && !holdList(id)) renderChatList(w, el);
+    }
   });
   const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer }) : null;
   restoreSealed();

@@ -18,5 +18,12 @@ for(const [status,state,icon] of [['running',null,'working'],['failed',null,'fai
 test('Deferred Topics keeps deferred state',()=>{const r=ctx.row({...topic,deferred:true});assert.match(r,/emo sti deferred/);assert.match(r,/sg-eye/);});
 test('Other app MVP remains untouched',()=>{assert.doesNotMatch(ctx.row({...topic,id:'other',appId:'cinequeue'}),/sg-eye/);});
 test('Title mention never assigns Topics',()=>{assert.doesNotMatch(ctx.row({...topic,id:'other',appId:'',title:'Discuss Wizard Topics'}),/sg-eye/);});
+const liveSource=fs.readFileSync(web+'/live.js','utf8');
+vm.runInContext(liveSource.slice(liveSource.indexOf('  const SEEN_BASE'),liveSource.indexOf('  /* ---- thread-seen'))+'\nthis.normalize=normalize;',ctx);
+test('Exact legacy Topics normalization',()=>{assert.equal(ctx.normalize({id:'wizard_topics'}).appId,'topics');});
+test('Near-match IDs remain unbranded',()=>{assert.equal(ctx.normalize({id:'wizard_topics_extra',title:'Wizard Topics'}).appId,'');});
+test('Explicit routing metadata is normalized',()=>{assert.equal(ctx.normalize({id:'new',wizard_app_id:'topics'}).appId,'topics');});
+test('Explicit other-app routing wins legacy fallback',()=>{assert.equal(ctx.normalize({id:'wizard_topics',wizard_app_id:'cinequeue'}).appId,'cinequeue');});
+test('Nonstring routing metadata is ignored',()=>{assert.equal(ctx.normalize({id:'new',wizard_app_id:{id:'topics'}}).appId,'');});
 test('Missing sigil renderer safely falls back',()=>{ctx.window.WizSigil=null;assert.match(ctx.row(topic),/class="dot"/);});
 console.log(JSON.stringify({passed}));
