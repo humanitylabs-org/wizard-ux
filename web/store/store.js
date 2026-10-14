@@ -27,7 +27,8 @@
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], tags: [], installed: new Map(), stack: [], q: '', loaded: false, error: '', lifecycle: false, working: new Set() };
+  const S = { apps: [], tags: [], installed: new Map(), stack: [], q: '', loaded: false, error: '', lifecycle: false, working: new Map() };
+  const BUSY = new Set(['installing', 'starting', 'stopping', 'updating', 'restarting', 'uninstalling']);
   let removeArmed = '';
   const client = () => window.WizAppLifecycle;
   if (/\.staging\.wizard\.example$/.test(location.hostname)) $('preview').hidden = false;
@@ -74,7 +75,9 @@
     return `<span class="ic ic-${size}" style="--c1:${c1};--c2:${c2}"><b>${letter}</b>${img}</span>`;
   }
   function action(a, cls = '') {
-    if (S.working.has(a.id)) return `<button class="get ${cls}" disabled>Working…</button>`;
+    const status = S.installed.get(a.id)?.status;
+    const progress = S.working.get(a.id) || (BUSY.has(status) ? cap(status) + '…' : '');
+    if (progress) return `<button class="get ${cls}" disabled aria-busy="true" aria-live="polite">${esc(progress)}</button>`;
     if (isInstalled(a) && S.installed.get(a.id)?.status === 'running' && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(a.id)}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
     return `<button class="get ${cls}" data-get="${esc(a.id)}">Get</button>`;
@@ -159,23 +162,61 @@
   function toast(html) { const t = $('toast'); t.innerHTML = html; t.hidden = false; requestAnimationFrame(() => t.classList.add('on')); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { t.hidden = true; }, 250); }, 3600); }
 
   const repaintActions = () => {
+    const y = window.scrollY;
     paint();
     const layer = S.stack[S.stack.length - 1];
     if (layer?.t === 'detail') showDetail(layer.arg);
+    else if (layer?.t === 'list') openKind(layer.arg, true);
+    else if (layer?.t === 'search') search(S.q);
+    window.scrollTo(0, y);
   };
+  let installedRead = null, poll = 0, registryDirty = false;
+  async function refreshInstalled(event) {
+    registryDirty ||= event?.type === 'wizard:apps' || event?.type === 'wizard:apps-changed';
+    if (installedRead) return installedRead;
+    installedRead = (async () => {
+      const rows = await client()?.installed();
+      if (!rows) return;
+      const next = new Map();
+      for (const x of rows) {
+        const id = x.info.id;
+        if (!next.has(id) || x.app?.status === 'running') next.set(id, { status: x.app?.status || 'unknown' });
+      }
+      const changed = next.size !== S.installed.size || [...next].some(([id, x]) => x.status !== S.installed.get(id)?.status);
+      S.installed = next;
+      if (changed || registryDirty) repaintActions();
+      registryDirty = false;
+    })().catch(() => {}).finally(() => { installedRead = null; });
+    return installedRead;
+  }
+  function schedule() {
+    clearTimeout(poll);
+    if (!document.hidden) poll = setTimeout(() => refreshInstalled().finally(schedule), 3000);
+  }
+  // Installation and shell discovery publish independently. Repaint when either catches up,
+  // without navigating away, reloading the Store, or treating an unconfirmed mutation as ready.
+  addEventListener('focus', () => { refreshInstalled(); schedule(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshInstalled(); schedule(); });
+  try {
+    if (framed) for (const event of ['wizard:apps', 'wizard:apps-changed']) parent.addEventListener(event, refreshInstalled);
+  } catch {}
+  addEventListener('pagehide', () => { clearTimeout(poll); try { if (framed) for (const event of ['wizard:apps', 'wizard:apps-changed']) parent.removeEventListener(event, refreshInstalled); } catch {} });
   async function perform(id, action) {
     const a = S.apps.find(x => x.id === id);
     if (!a || S.working.has(id)) return;
     if (!S.lifecycle) { toast('<b>This preview is browse-only.</b><span>Installation is available on the connected test box.</span>'); return; }
     if (action === 'uninstall' && removeArmed !== id) { removeArmed = id; toast(`<b>Remove ${esc(a.name)}?</b><span>Tap Remove again to confirm.</span>`); return; }
     removeArmed = '';
-    S.working.add(id); repaintActions();
+    S.working.set(id, ({install:'Checking…',start:'Starting…',stop:'Stopping…',restart:'Restarting…',update:'Updating…',uninstall:'Removing…'})[action] || 'Working…'); repaintActions();
     try {
-      const outcome = action === 'install' ? await client().install(a) : await client().operate(id, action);
-      if (outcome.pending) toast(`<b>${esc(a.name)} is still changing.</b><span>It keeps going; reopen its details to check.</span>`);
+      const progress = p => {
+        S.working.set(id, p.id !== id ? 'Getting required apps…' : p.action === 'install' ? 'Installing…' : 'Working…');
+        repaintActions();
+      };
+      const outcome = action === 'install' ? await client().install(a, progress) : await client().operate(id, action, {}, progress);
+      if (outcome.pending) toast(`<b>${esc(a.name)} is still changing.</b><span>It keeps going; this page will update when it’s ready.</span>`);
       else toast(`<b>${esc(a.name)} ${action === 'uninstall' ? 'removed' : action === 'stop' ? 'stopped' : 'ready'}.</b>`);
-      const rows = await client().installed().catch(() => null);
-      if (rows) S.installed = new Map(rows.map(x => [x.info.id, { status: x.app?.status || 'unknown' }]));
+      await refreshInstalled();
     } catch (e) {
       const uncertain = !e.status || ['operation_unconfirmed', 'terminal_status_unconfirmed', 'projection_refresh_failed', 'invalid_response'].includes(e.code);
       toast(uncertain ? `<b>Checking ${esc(a.name)} is still pending.</b><span>Tap the same action again to safely check it.</span>`
@@ -210,5 +251,5 @@
   // Broken or missing logos fall back to the gradient letter (inline onerror is blocked by CSP).
   document.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.remove(); }, true);
   window.__store = { state: () => ({ layers: S.stack.map(x => x.t), apps: S.apps.length, installed: [...S.installed.keys()], q: S.q }) };
-  paint(); load();
+  paint(); load(); schedule();
 })();
