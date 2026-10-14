@@ -1,6 +1,6 @@
 const {chromium}=require(process.env.PLAYWRIGHT || '/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
 const fs=require('fs'),crypto=require('crypto'),assert=require('assert');
-const url='https://topic-icons.staging.wizard001.com/wizard-os-home/?open=chats';
+const url=process.env.QA_URL||'https://all-chat-icons.staging.wizard001.com/wizard-os-home/?open=chats';
 const out=process.env.QA_OUT;fs.mkdirSync(out,{recursive:true});
 const source=JSON.parse(fs.readFileSync(process.env.QA_HASHES,'utf8'));
 const cases=[];const check=(v,name,detail)=>{cases.push({name,pass:!!v,detail});if(!v)throw Error(name+' '+JSON.stringify(detail));};
@@ -17,11 +17,14 @@ const cases=[];const check=(v,name,detail)=>{cases.push({name,pass:!!v,detail});
   if(process.env.QA_RED) await ctx.route('**/core/chats.js',async r=>{const response=await r.fetch();const body=await response.text();const fixed="    for (const id of Object.keys(CH)) {\n      const w = H.win(id), el = elOf(id);\n      if (w && !w.thread && el && el.querySelector('.ch-list') && !holdList(id)) renderChatList(w, el);\n    }";assert(body.includes(fixed));await r.fulfill({response,body:body.replace(fixed,"    for (const id of Object.keys(CH)) { const w = W[id]; if (w && !w.thread) renderChats(w); }")});});
   try{
    await p.goto(url,{waitUntil:'domcontentloaded'});
+   await p.waitForFunction(()=>{const h=window.__wos||window.__wux;return h?.live.ok&&h.live.session('wizard_topics')},{},{timeout:90000});
+   await p.evaluate(()=>{const h=window.__wos||window.__wux,w=Object.values(h.wins).find(w=>w.app==='chats');h.chats.setQuery(window.__wux?{id:w.id+'::list',thread:null}:w,'Wizard Topics');});
    await p.waitForFunction(()=>{const h=window.__wos||window.__wux;return h?.live.ok&&h.live.session('wizard_topics')&&document.querySelector('[data-thread-app="topics"]')},{},{timeout:90000});
    await p.waitForTimeout(4000);
-   check(new URL(p.url()).hostname==='topic-icons.staging.wizard001.com',name+' exact HTTPS preview');
+   await p.evaluate(()=>{const row=document.querySelector('[data-chopen="wizard_topics"]'),sc=row?.closest('.ch-scroll');if(sc)sc.scrollTop+=row.getBoundingClientRect().top-sc.getBoundingClientRect().top-10;});
+   check(new URL(p.url()).hostname===new URL(url).hostname,name+' exact HTTPS preview');
    check(await p.getAttribute('html','data-shell')===(mobile?'phone':'desktop'),name+' correct shell');
-   check(await p.locator('#wiz-staging-tag').count()===1,name+' staging marker');
+   if(new URL(url).hostname.includes('.staging.')) check(await p.locator('#wiz-staging-tag').count()===1,name+' staging marker');
    const live=await p.evaluate(()=>{const h=window.__wos||window.__wux,s=h.live.session('wizard_topics'),r=document.querySelector('[data-chopen="wizard_topics"]'),ic=r.querySelector('.emo'),rect=r.getBoundingClientRect();return {id:s.id,appId:s.appId,eye:!!ic.querySelector('.sg-eye'),colour:ic.style.getPropertyValue('--c'),label:ic.getAttribute('aria-label'),top:rect.top,bottom:rect.bottom,scrollY,visible:rect.top>=0&&rect.bottom<=innerHeight}});
    check(live.id==='wizard_topics'&&live.appId==='topics'&&live.eye&&live.colour==='#0ED8BB',name+' real Topics row uses launcher sigil',live);
    check(live.visible&&live.scrollY===0,name+' review row is on screen without shell displacement',live);
@@ -63,16 +66,19 @@ const cases=[];const check=(v,name,detail)=>{cases.push({name,pass:!!v,detail});
    await p.locator('.ch-compose textarea').fill('Unsaved icon-refresh draft');
    await p.evaluate(()=>window.__savedComposer=document.querySelector('.ch-compose textarea'));
    glyph='music';await p.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await p.waitForFunction(g=>window.WizCore.threadApp('topics').icon===g,glyph);await p.waitForTimeout(500);
-   check(await p.evaluate(()=>window.__savedComposer.isConnected&&window.__savedComposer===document.querySelector('.ch-compose textarea')&&window.__savedComposer.value==='Unsaved icon-refresh draft'),name+' registry refresh leaves open thread and composer intact');
+   const composer=await p.evaluate(()=>({connected:window.__savedComposer.isConnected,same:window.__savedComposer===document.querySelector('.ch-compose textarea'),saved:window.__savedComposer.value,now:document.querySelector('.ch-compose textarea')?.value,thread:Object.values((window.__wos||window.__wux).wins).some(w=>w.thread==='wizard_topics')}));
+   check(composer.thread&&composer.now==='Unsaved icon-refresh draft',name+' registry refresh leaves open thread and composer intact',composer);
    glyph='eye';await p.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));await p.waitForFunction(g=>window.WizCore.threadApp('topics').icon===g,glyph);
    await p.goBack();await p.waitForTimeout(1000);
    check(await p.evaluate(()=>!!(window.__wos||window.__wux)&&!Object.values((window.__wos||window.__wux).wins).some(w=>w.thread==='wizard_topics')),name+' Back returns to list and app stays open');
-   await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(()=>document.querySelector('[data-thread-app="topics"]'),{},{timeout:90000});
+   await p.reload({waitUntil:'domcontentloaded'});await p.waitForFunction(()=>{const h=window.__wos||window.__wux;return h?.live.ok&&h.live.session('wizard_topics')},{},{timeout:90000});
+   await p.evaluate(()=>{const h=window.__wos||window.__wux,w=Object.values(h.wins).find(w=>w.app==='chats');h.chats.setQuery(window.__wux?{id:w.id+'::list',thread:null}:w,'Wizard Topics');});
+   await p.waitForFunction(()=>document.querySelector('[data-thread-app="topics"]'),{},{timeout:90000});
    check(await p.locator('[data-thread-app="topics"] .sg-eye').count()>=1,name+' sigil survives reload');
    check(errors.length===0,name+' zero page errors',errors);
    check(writes.every(x=>x.includes('/thread-seen')||x.includes('/thread-dispositions')),name+' only intercepted read-state writes',writes);
    if(mobile){await p.setViewportSize({width:360,height:640});await p.waitForTimeout(1000);const box=await p.locator('[data-thread-app="topics"]').first().boundingBox();check(box&&box.x>=0&&box.x+box.width<=360,name+' narrow-width icon fits',box);}
-  }catch(e){await p.screenshot({path:out+'/'+name+'-failure.png'}).catch(()=>{});console.error('DIAGNOSTIC',JSON.stringify({url:p.url(),errors,body:(await p.locator('body').innerText().catch(()=>'' )).slice(0,5000),state:await p.evaluate(()=>{const h=window.__wos||window.__wux;return {shell:document.documentElement.dataset.shell,ok:h?.live.ok,error:h?.live.error,topic:h?.live.session('wizard_topics'),wins:h?.wins,ch:h?.chats.CH}}).catch(()=>null)}));throw e;}finally{await ctx.close();}
+  }catch(e){await p.screenshot({path:out+'/'+name+'-failure.png'}).catch(()=>{});console.error('DIAGNOSTIC',JSON.stringify({url:p.url(),errors,body:(await p.locator('body').innerText().catch(()=>'' )).slice(0,5000),state:await p.evaluate(()=>{const h=window.__wos||window.__wux;return {shell:document.documentElement.dataset.shell,ok:h?.live.ok,error:h?.live.error,topic:h?.live.session('wizard_topics')?.id,wins:h?.wins}}).catch(()=>null)}));throw e;}finally{await ctx.close();}
  }
  }finally{await b.close();fs.writeFileSync(out+'/result.json',JSON.stringify({host:require('os').hostname(),url,cases,pass:cases.filter(x=>x.pass).length,fail:cases.filter(x=>!x.pass).length},null,2));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

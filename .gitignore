@@ -6,3 +6,6 @@ web/data.js
 web/summaries.js
 web/ux-version.txt
 web/ux-changes.json
+# Private inventory and isolated publisher source snapshots; routing changes ship as scoped patches.
+/qa-chat-apps-fixture.json
+/publishers/
