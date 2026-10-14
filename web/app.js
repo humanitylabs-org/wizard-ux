@@ -365,7 +365,7 @@
   function deskSigil(i) {
     const d = desks[i], S = window.WizSigil;
     if (!S) return '';
-    if (d.home) return `<span class="dsg" style="--c:#C9BEFF">${S.named('home')}</span>`;
+    if (d.home) return `<span class="dsg" style="--c:#C9BEFF"><i class="sgi sg-hat" aria-hidden="true"></i></span>`;
     const f = W[d.focus] || W[d.wins[0]]; if (!f) return '<span class="dsg empty"></span>';
     const a = winApp(f), s = S.of(a.sigil || a), c = a.sgc || s.color, g = a.sgh || S.html(a.sigil || a);
     return `<span class="dsg" style="--c:${c}">${g}${d.wins.length > 1 ? `<b class="dn">${d.wins.length}</b>` : ''}</span>`;
@@ -434,7 +434,7 @@
     const second = wins.find(w => w !== lead), c2 = second ? ovMark(winApp(second)).color : primary.color;
     const name = d.home ? 'Home' : !wins.length ? 'New desk' : deskName(i);
     let body;
-    if (d.home) body = `<span class="ov-symbol" style="--c:${primary.color}">${window.WizSigil.named('home')}</span>`;
+    if (d.home) body = `<span class="ov-symbol" style="--c:${primary.color}"><i class="sgi sg-hat" aria-hidden="true"></i></span>`;
     else if (!wins.length) body = '<span class="ov-empty-symbol" aria-hidden="true">＋</span>';
     else body = wins.map(w => {
       const a = winApp(w), m = ovMark(a), same = wins.filter(x => winApp(x).id === a.id).length > 1;
