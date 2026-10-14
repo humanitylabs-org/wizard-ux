@@ -405,7 +405,7 @@
       const hot = d.wins.some(id => { const w = W[id]; if (w?.app !== 'chats' || !w.thread) return false; const s = LIVE?.session(w.thread); return s && LIVE.isNew(s); });
       const names = d.wins.map(id => winTitle(W[id])).join(', ');
       return `<button class="ws${i === cur ? ' cur' : ''}${d.wins.length ? ' used' : ''}${hot ? ' hot' : ''}" data-ws="${i}" aria-label="Desktop ${i + 1}" title="${esc(names || 'Empty desktop')} (${MOD}${i + 1})">${i + 1}</button>`;
-    }).join('') + `<button class="ws ws-add" data-newdesk aria-label="New desktop" title="New desktop (${CMD}T / ${MOD}T)">+</button>`;
+    }).join('') + `<button class="ws ws-add" data-newdesk aria-label="New desktop" title="New desktop (${CMD}T / ${MOD}T${ws.length < 9 ? ` / ${MOD}${ws.length + 1}` : ''})">+</button>`;
     const st = $('#status');
     if (!LIVE?.ok) st.innerHTML = `<span class="off">${LIVE?.error === 'access' ? 'Sign in to Wizard' : 'Connecting…'}</span>`;
     else st.innerHTML = `${L.needs.length ? `<span title="Needs you"><i class="st needs"></i>${L.needs.length}</span>` : ''}<span title="Unread"><i class="st unread"></i>${L.ready.length}</span>${L.working.length ? `<span title="Working"><i class="st working"></i>${L.working.length}</span>` : ''}`;
@@ -904,7 +904,15 @@
       return;
     }
     // ⌥ (Option/Alt) keys. Use e.code: on a Mac, ⌥ turns e.key into symbols (⌥V = √).
-    if (digit) return hit(() => { const i = +digit[1] - 1; if (shift) { const f = focused(); if (f) moveWin(f.id, i); } else { lastWs = cur; goWs(i); } });
+    // ⌥N past the last desktop is the + slot (James, 14 Oct: "⌥2 should still work with one desktop").
+    // It opens a desktop there; ⌥⇧N moves the focused app into that new desktop. Further digits stay inert.
+    if (digit) return hit(() => {
+      const i = +digit[1] - 1, plus = i === ws.length;
+      if (plus && e.repeat) return;
+      if (shift) { const f = focused(); if (!f) return; if (plus) ws.push(freshDesk()); moveWin(f.id, i); }
+      else if (plus) newDesktop();
+      else { lastWs = cur; goWs(i); }
+    });
     if (code === 'Enter') return hit(() => newChat({ fresh: shift }));
     if (code === 'KeyI') return hit(() => toggleInbox());
     if (code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
