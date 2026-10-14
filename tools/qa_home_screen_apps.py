@@ -3,7 +3,7 @@
 Usage on Thales: QA_SHA=<exact candidate SHA> python3 tools/qa_home_screen_apps.py /Volumes/ThalesMedia/AndroidBuilds/jobs/JOB/receipt.json
 The build must have come from android-build-thales --wait-for-lock. Never runs on VPS/physical phones.
 """
-import fcntl, hashlib, json, os, pathlib, re, socket, sys, time, urllib.request, urllib.parse
+import fcntl, hashlib, json, os, pathlib, re, socket, subprocess, sys, time, urllib.request, urllib.parse
 P = pathlib.Path
 if sys.platform != 'darwin' or 'thales' not in socket.gethostname().lower():
     raise SystemExit('Thales-only emulator QA')
@@ -46,7 +46,8 @@ def bounds(xml, label):
         if text.strip().lower() == label.lower():
             values=re.findall(r'\d+',node.get('bounds',''))
             if len(values)==4:
-                x1,y1,x2,y2=map(int,values);return ((x1+x2)//2,(y1+y2)//2)
+                x1,y1,x2,y2=map(int,values)
+                if x2>x1 and y2>y1:return ((x1+x2)//2,(y1+y2)//2)
     return None
 def tasks(raw):
     # Recents headers uniquely enumerate tasks; inspect their actual base intent component.
@@ -118,8 +119,16 @@ with (BASE/'worker.lock').open('a') as lease:
         pinned=[]
         for label in ('Wisdom','Signal'):
             # Apps is the existing mobile upward swipe from the orb; no synthetic native launch URL.
-            emu.sx('input swipe 540 2160 540 1400 450');time.sleep(1)
-            point=bounds(emu.ui(),label) or (bounds(emu.ui(),'Wizard Signal') if label=='Signal' else None)
+            xml=emu.ui();orb_label=next((s for s in labels(xml) if s.startswith('Wizard orb.')),None)
+            orb=bounds(xml,orb_label) if orb_label else None
+            check('actual orb gesture target is visible',orb is not None,orb)
+            x,y=orb;emu.sx('input swipe %d %d %d %d 450'%(x,y,x,max(400,y-700)));time.sleep(1)
+            point=None
+            for _ in range(6):
+                point=bounds(emu.ui(),label) or (bounds(emu.ui(),'Wizard Signal') if label=='Signal' else None)
+                if point:break
+                # The real menu opens bottom anchored; scroll only the app list, not the orb.
+                emu.sx('input swipe 540 1250 540 1800 300');time.sleep(0.4)
             check(label+' appears in real Apps menu',point is not None)
             x,y=point;emu.sx('input swipe %d %d %d %d 650'%(x,y,x,y));time.sleep(0.5)
             capture(label.lower()+'-pin-action')
