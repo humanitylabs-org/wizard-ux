@@ -39,11 +39,13 @@ def check(name, condition, detail=None):
     checks.append({'name':name,'pass':bool(condition),'detail':detail})
     print(('PASS ' if condition else 'FAIL ') + name, detail or '', flush=True)
     if not condition: raise AssertionError(name)
-def bounds(xml, label):
+def bounds(xml, label, app_row=False):
     import xml.etree.ElementTree as E
     for node in E.fromstring(xml).iter('node'):
         text=node.get('text') or node.get('content-desc') or ''
-        if text.strip().lower() == label.lower():
+        exact=text.strip().lower() == label.lower()
+        named_row=app_row and node.get('class','').endswith('Button') and (exact or (text.startswith(label+' ') and '(test)' not in text))
+        if (not app_row and exact) or named_row:
             values=re.findall(r'-?\d+',node.get('bounds',''))
             if len(values)==4:
                 x1,y1,x2,y2=map(int,values)
@@ -132,10 +134,14 @@ with (BASE/'worker.lock').open('a') as lease:
                     vals=list(map(int,re.findall(r'-?\d+',node.get('bounds',''))))
                     if len(vals)==4 and vals[2]>vals[0] and vals[3]>vals[1]:search=((vals[0]+vals[2])//2,(vals[1]+vals[3])//2);break
             check('actual Apps search is visible',search is not None,search)
-            emu.sx('input tap %d %d'%search);emu.sx('input text '+('wisdom' if label=='Wisdom' else 'signal'));time.sleep(1)
+            emu.sx('input tap %d %d'%search)
+            old=next((n.get('text','') for n in E.fromstring(emu.ui()).iter('node') if n.get('class','').endswith('EditText')),'')
+            emu.sx('input keyevent KEYCODE_MOVE_END')
+            if old:emu.sx('input keyevent '+' '.join(['KEYCODE_DEL']*len(old)))
+            emu.sx('input text '+('wisdom' if label=='Wisdom' else 'signal'));time.sleep(1)
             emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.8)
             capture(label.lower()+'-apps-before-hold')
-            point=bounds(emu.ui(),label) or (bounds(emu.ui(),'Wizard Signal') if label=='Signal' else None)
+            point=bounds(emu.ui(),label,app_row=True) or (bounds(emu.ui(),'Wizard Signal',app_row=True) if label=='Signal' else None)
             check(label+' appears in real Apps menu',point is not None,point)
             x,y=point;emu.sx('input swipe %d %d %d %d 650'%(x,y,x,y));time.sleep(0.5)
             capture(label.lower()+'-pin-action')
@@ -144,6 +150,13 @@ with (BASE/'worker.lock').open('a') as lease:
             check(label+' hold opens action sheet',bool(emu.tap_text(r'^Add to home screen$')))
             time.sleep(1);capture(label.lower()+'-os-confirm')
             check(label+' request opens actual launcher confirmation',not emu.front(),emu.top())
+            emu.sx('input keyevent KEYCODE_BACK');time.sleep(0.8);capture(label.lower()+'-pin-cancelled')
+            check(label+' OS cancellation does not report success',emu.front() and 'Added to home screen' not in ' '.join(labels(emu.ui())))
+            point=bounds(emu.ui(),label,app_row=True) or (bounds(emu.ui(),'Wizard Signal',app_row=True) if label=='Signal' else None)
+            check(label+' returns to same app row after OS cancellation',point is not None,point)
+            x,y=point;emu.sx('input swipe %d %d %d %d 650'%(x,y,x,y));time.sleep(0.5)
+            check(label+' cancelled pin can be intentionally requested again',bool(emu.tap_text(r'^Add to home screen$')))
+            time.sleep(0.7);capture(label.lower()+'-os-confirm-repeat')
             confirmed=emu.tap_text(r'^(Add|Add automatically|Add to home screen)$')
             check(label+' OS confirmation control tapped',bool(confirmed),confirmed)
             time.sleep(1)
@@ -158,7 +171,18 @@ with (BASE/'worker.lock').open('a') as lease:
             check(label+' repeated root Back retains actual app content',app_content(label,emu.ui()) and emu.front())
             emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
             emu.sx('am start -W -n ai.wizards.os.preview/ai.wizards.os.MainActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER');time.sleep(1)
+        # Re-requesting a confirmed icon must stop at native pinned-state readback,
+        # not launch a second OS pin dialog. The last query is Signal.
+        orb_label=next((s for s in labels(emu.ui()) if s.startswith('Wizard orb.')),None)
+        orb=bounds(emu.ui(),orb_label) if orb_label else None;check('confirmed repeat has ordinary orb',orb is not None)
+        x,y=orb;emu.sx('input swipe %d %d %d %d 450'%(x,y,x,max(400,y-700)));time.sleep(0.8)
+        point=bounds(emu.ui(),'Signal',app_row=True) or bounds(emu.ui(),'Wizard Signal',app_row=True)
+        check('confirmed Signal is available for repeat hold',point is not None,point)
+        x,y=point;emu.sx('input swipe %d %d %d %d 650'%(x,y,x,y));time.sleep(0.6);capture('confirmed-repeat-status')
+        check('confirmed repeated hold reports Already on home screen without another OS request','Already on home screen' in ' '.join(labels(emu.ui())) and emu.front())
+        emu.sx('input keyevent KEYCODE_BACK');emu.sx('input keyevent KEYCODE_BACK')
         emu.sx('input keyevent KEYCODE_HOME');time.sleep(1)
+        home_labels=labels(emu.ui());check('stable confirmed icons are not duplicated',home_labels.count('Wisdom')==1 and home_labels.count('Signal')==1,{'Wisdom':home_labels.count('Wisdom'),'Signal':home_labels.count('Signal')})
         original=tasks(emu.sx('dumpsys activity recents'));check('Wisdom and Signal independent Recents tasks',len(original)==2,original)
         recents=emu.sx('dumpsys activity recents');check('Wizard ordinary task remains separate', '.MainActivity' in recents)
         for label in ('Wisdom','Signal','Wisdom'):

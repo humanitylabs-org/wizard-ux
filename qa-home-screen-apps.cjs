@@ -95,7 +95,7 @@ try{
   // Real app overlay, not an Activity-name surrogate.
   // Select the real app root before opening its real request overlay; nested Back
   // was asserted independently above and can legitimately land on a collection.
-  await f.evaluate(()=>Wisdom.navigate('/'));await f.locator('[data-wisdom-request]').first().waitFor();
+  await f.evaluate(()=>Wisdom.navigate('/'));await f.locator('.wb-home-search').waitFor();await f.locator('.wb-home-search').click();await f.locator('[data-wisdom-request]').first().waitFor();
   const request=f.locator('[data-wisdom-request]').first();await request.click();await f.locator('.wb-sheet').waitFor();const route=f.url();await revived.evaluate(()=>__wosNativeBack());await revived.waitForTimeout(300);check('Back closes real Wisdom overlay before app route',await f.locator('.wb-sheet').count()===0&&f.url()===route);
   for(let n=0;n<5;n++)await revived.evaluate(()=>__wosNativeBack());await revived.waitForTimeout(400);
   check('repeated root Back stays on actual Wisdom root',await f.evaluate(()=>Wisdom.atRoot())&&(await chrome(revived)).length===0,f.url());
