@@ -102,20 +102,20 @@ try{
   const appsURL=await revived.evaluate(()=>WizConfig.endpoint('apps'));
   // Removal is a bounded real-registry metadata negative control, never a backend uninstall/write.
   await ctx.route(appsURL,async r=>{const response=await r.fetch(),data=await response.json();data.apps=data.apps.filter(a=>a.id!=='wisdom');await r.fulfill({response,json:data});});
-  await revived.reload({waitUntil:'load'});await revived.locator('.single-unavailable').waitFor();
+  await revived.reload({waitUntil:'load'});await revived.locator('.single-unavailable h2').filter({hasText:'App unavailable'}).waitFor();
   check('removed app is useful unavailable surface, no arbitrary route',await revived.locator('.single-unavailable').innerText().then(x=>x.includes('App unavailable'))&&await revived.locator('#singleApp iframe').count()===0);
   await ctx.unroute(appsURL);await revived.reload({waitUntil:'load'});await waitFrame(revived);check('reinstalled registered app recovers without workspace',await revived.evaluate(()=>__wos.singleApp==='wisdom'&&!__wos.wins));
  }
  if(frames['wizard-signal']){
   const p=pages['wizard-signal'];let f=frames['wizard-signal'];
-  const sourceLink=f.locator('[data-action="nav"][data-id="sources"]').first();await sourceLink.click();await p.waitForTimeout(700);
+  const sourceLink=f.locator('[data-action="nav"][data-id="sources"]').first();await sourceLink.click();await f.waitForFunction(()=>history.state?.route==='sources'&&document.querySelector('.topbar')?.innerText.includes('Sources'),{},{timeout:45000,polling:100});
   const state=async()=>f.evaluate(()=>({url:location.href,route:history.state?.route,tab:history.state?.tab,source:history.state?.source,title:document.querySelector('.topbar')?.innerText}));
   const saved=await state();check('Signal real Sources route visible',saved.route==='sources'&&/Sources/.test(saved.title),saved);
   await p.evaluate(()=>__wosSessionCheckpoint());await p.reload();f=frames['wizard-signal']=await waitFrame(p);await p.waitForTimeout(700);
   check('Signal shell recreation reconstructs actual route and content',JSON.stringify(saved)===JSON.stringify(await state()),await state());
-  await Promise.all([f.waitForNavigation({waitUntil:'load'}),f.evaluate(()=>location.reload())]);await p.waitForTimeout(1500);
+  await Promise.all([f.waitForNavigation({waitUntil:'load'}),f.evaluate(()=>location.reload())]);await f.waitForFunction(()=>history.state?.route==='sources'&&document.querySelector('.topbar')?.innerText.includes('Sources'),{},{timeout:45000,polling:100});
   check('Signal iframe refresh reconstructs route, not feed at #sources',JSON.stringify(saved)===JSON.stringify(await state()),await state());
-  await p.evaluate(()=>__wosNativeBack());await p.waitForTimeout(400);
+  await p.evaluate(()=>__wosNativeBack());await f.waitForFunction(()=>history.state?.route==='feed'&&document.querySelector('.topbar')?.innerText.includes('Signal'),{},{timeout:45000,polling:100});
   check('Signal nested Back changes actual view to feed',await f.evaluate(()=>history.state?.route==='feed'&&document.querySelector('.topbar')?.innerText.includes('Signal')),f.url());
   const route=f.url();for(let n=0;n<4;n++)await p.evaluate(()=>__wosNativeBack());await p.waitForTimeout(300);
   check('Signal repeated root Back keeps real Signal route',f.url()===route&&(await chrome(p)).length===0,{route,actual:f.url()});

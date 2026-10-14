@@ -150,7 +150,8 @@ test('mounted session Back consumes app overlay, safe in-app history and forever
   const ctx=vm.createContext({window,document,localStorage:store,location:{origin:'https://box.example'},URL,addEventListener(){},setInterval(){},setTimeout(){}});
   vm.runInContext(read('core/single-app-session.js'),ctx);await Promise.resolve();frame.contentWindow=w;frame.contentDocument=rootDoc;frame.events.load();
   assert.equal(window.__wosNativeBack(),'app');assert.equal(traversals,0);
-  serviceStep='atRoot';assert.equal(window.__wosNativeBack(),'history');assert.equal(traversals,1);
+  serviceStep='atRoot';assert.equal(window.__wosNativeBack(),'root');assert.equal(window.__wosNativeBack(),'root');assert.equal(traversals,0,'connected app root is authoritative even with older history');
+  serviceStep='notReady';assert.equal(window.__wosNativeBack(),'history');assert.equal(traversals,1,'generic history is only a fallback without a connected client');
   w.navigation.currentEntry.index=0;assert.equal(window.__wosNativeBack(),'root');assert.equal(window.__wosNativeBack(),'root');assert.equal(traversals,1);
   assert.equal(store.getItem('wos.wins4'),null);assert.ok(store.getItem(p.key('https://box.example','wisdom')));assert.ok(flushes>0);
 });

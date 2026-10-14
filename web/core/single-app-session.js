@@ -62,6 +62,10 @@
     if (!frame || !loaded) return 'root';
     const step = window.WizAppServices?.back(frame);
     if (['handled','pending','stay'].includes(step)) { checkpoint(); return 'app'; }
+    // A connected frontend's root decision is authoritative. It may have older
+    // in-app entries or a root hash such as #for-you: never traverse them after
+    // the app explicitly said it is at root. Generic history is only a fallback.
+    if (step === 'atRoot') { checkpoint(); return 'root'; }
     try {
       const w = frame.contentWindow, nav = w.navigation;
       // Only traverse an in-app entry. Never pop the containing document or desktops.
