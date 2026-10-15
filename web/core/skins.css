@@ -21,6 +21,11 @@
   --sk-skin-a: 1;
   --sk-win: rgba(12, 8, 26, .82);
 }
+/* Desktop uses the same scenery/token engine, behind its existing window manager. */
+html[data-shell="desktop"] body { isolation: isolate; }
+html[data-shell="desktop"] .skin-bg { position: fixed; }
+html[data-shell="desktop"]:not([data-skin="nebula"]) body { background: var(--bg); }
+html[data-shell="desktop"]:not([data-skin="nebula"]) :is(.bar, .keys-card, .pal-card, .inbox) { background: var(--glass-2); color: var(--ink); }
 .skin-bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0; }
 
 /* token-driven pieces of the real shell that were hard-coded to the space look */

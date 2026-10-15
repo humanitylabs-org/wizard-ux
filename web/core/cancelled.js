@@ -23,8 +23,8 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const J = s => { try { return JSON.parse(s); } catch (e) { return null; } };
   const fmt = ms => { const s = Math.round((Number(ms) || 0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-  const toast = (i, t, ms) => window.__wos?.toast?.(i, t, ms);
-  const SRC = { everywhere: 'Floating orb', side: 'Side button', app: 'Orb', web: 'Orb' };
+  const toast = (i, t, ms) => (window.__wos || window.__wux)?.toast?.(i, t, ms);
+  const SRC = { everywhere: 'Floating orb', side: 'Side button', app: 'Orb', web: 'Orb', desktop: 'Microphone' };
   let web = [];          // [{id, at, ms, source, mime, bytes, blob}]
   const sessionWeb = new Map(); // Failed durable writes keep an explicit retry owner in this page.
   let busy = new Set(), errs = {}, open = new Set();
@@ -69,9 +69,9 @@
   }
   async function removeWeb(id) { sessionWeb.delete(id); web = web.filter(t => t.id !== id); try { await tx('readwrite', s => s.delete(id)); } catch (e) {} }
 
-  async function keepWeb(blob, ms, retained = false, text = '') {
+  async function keepWeb(blob, ms, retained = false, text = '', source = 'web') {
     if (!(blob instanceof Blob) || blob.size < (retained ? 1200 : 2000) || (!retained && !(ms >= KEEP_FROM_MS))) return false;
-    const t = { retained, id: 'w' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), at: Date.now(), ms: Math.round(ms), source: 'web', mime: blob.type || 'audio/webm', bytes: blob.size, blob };
+    const t = { retained, id: 'w' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), at: Date.now(), ms: Math.round(ms), source, mime: blob.type || 'audio/webm', bytes: blob.size, blob };
     let persisted = true;
     if (text) t.text = text;
     try { await tx('readwrite', s => s.put(t)); } catch (e) { persisted = false; /* memory only for this session */ }
@@ -95,7 +95,7 @@
 
   function nativeList() { const d = DEV(); if (!d) return []; return (J(d.cancelledList()) || []).map(t => ({ ...t, native: true })); }
   function all() {
-    const custody = (window.WosOutbox?.recordings() || []).filter(x => x.state !== 'capturing').map(x => ({ id: x.id, at: x.createdAt, source: 'web', ms: x.ms || 0, mime: x.audio.type, bytes: x.audio.size, custody: true, sessionOnly: !x.durable }));
+    const custody = (window.WosOutbox?.recordings() || []).filter(x => x.state !== 'capturing').map(x => ({ id: x.id, at: x.createdAt, source: 'web', ms: x.ms || 0, mime: x.audio.type, bytes: x.audio.size, custody: true, sessionOnly: !x.durable, conversation: x.kind === 'conversation', text: x.text, error: x.error, state: x.state }));
     const l = nativeList().concat(web.map(({ blob, ...t }) => t), custody);
     l.sort((a, b) => b.at - a.at);
     for (const k of Object.keys(texts)) if (!l.some(t => t.id === k)) delete texts[k];
@@ -152,10 +152,11 @@
 
   const ago = at => { const m = Math.round((Date.now() - at) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
   function row(t) {
-    const b = busy.has(t.id), tx = texts[t.id], err = errs[t.id];
+    const b = busy.has(t.id) || ['transcribing', 'sending'].includes(t.state), tx = texts[t.id] || t.text, err = errs[t.id] || t.error;
     return `<div class="cx-row" data-cxid="${esc(t.id)}">
       <div class="cx-t"><b>${fmt(t.ms)}</b> · ${esc(SRC[t.source] || 'Orb')} · ${esc(ago(t.at))}</div>
-      ${tx && open.has(t.id) ? `<div class="cx-text" data-cxtext>${esc(tx)}</div>` : ''}
+      ${tx && (open.has(t.id) || t.conversation) ? `<div class="cx-text" data-cxtext>${esc(tx)}</div>` : ''}
+      ${t.conversation ? `<div class="cx-t">Manager conversation · original destination retained</div><button data-cx="manager" ${b ? 'disabled' : ''}>Retry original to Manager</button>` : ''}
       ${err ? `<div class="cx-err">${esc(err)}</div>` : ''}
       ${t.sessionOnly ? '<div class="cx-err">Storage unavailable · kept only while this page stays open.</div><button data-cx="save">Retry saving</button>' : ''}
       <div class="ub-a"><button data-cx="copy" ${b ? 'disabled' : ''}>${b ? 'Transcribing…' : tx ? 'Copy again' : 'Transcribe &amp; copy'}</button>${tx ? `<button data-cx="show" class="ghost">${open.has(t.id) ? 'Hide words' : 'Show words'}</button>` : ''}<button data-cx="delete" class="ghost">Delete</button></div></div>`;
@@ -167,7 +168,7 @@
       <p class="st-note">Interrupted and retained recordings stay until deleted. Older cancelled recordings may expire after a week (the newest ${MAX_KEPT}). Transcribe &amp; copy never sends to an agent.</p></div>`;
   }
   function repaint() {
-    const g = document.querySelector('#settingsBody [data-cancelled]');
+    const g = document.querySelector('[data-settings-root] [data-cancelled]');
     if (g) g.outerHTML = html();
   }
   function act(el) {
@@ -175,6 +176,7 @@
     const id = b.closest('[data-cxid]')?.dataset.cxid; if (!id) return true;
     const a = b.dataset.cx;
     if (a === 'copy') transcribe(id);
+    else if (a === 'manager') window.WosOutbox.retryConversation(id).then(repaint);
     else if (a === 'save') retrySave(id);
     else if (a === 'delete') remove(id);
     else if (a === 'show') { open.has(id) ? open.delete(id) : open.add(id); repaint(); }

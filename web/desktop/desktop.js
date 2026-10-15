@@ -278,13 +278,12 @@
   function editUnsent(it) {
     if (it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id)) { toast('!', it.error || 'Waiting for device storage verification · original kept', 3200); return; }
     if (it.body) { toast('!', 'Delivery is uncertain · retry this submission to reconcile before editing', 3000); return; }
-    const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
-    const w = known ? (openThread(it.sessionId), focused()) : newChat();
+    const known = it.kind === 'reply' || LIVE?.session(it.sessionId);
+    let w;
+    if (known) { openThread(it.sessionId); w = focused(); }
+    else { w = newWin({ app: 'chats', thread: null, ...(it.agent ? { agent: it.agent } : {}) }); focusWin(w.id); CHATS.openChat(w.id, '__new__'); syncChatsPane(w.id); }
     if (!w) return;
-    CHATS.setDraft(w.id, it.text || it.typed || '', (it.files || []).filter(f => f !== it.audioFile));
-    if (it.audio || it.body) OUTBOX.transition(it.id, 'held', 'Editing a copy · original recording and uncertain send retained');
-    else OUTBOX.remove(it.id);
-    CHATS.renderChats(w); syncChatsPane(w.id);
+    if (!window.WosSettings.moveDraft({ chats: CHATS, wid: w.id, item: it, outbox: OUTBOX, toast })) return; CHATS.renderChats(w); syncChatsPane(w.id);
   }
 
   /* ---------------- rendering ---------------- */
@@ -868,21 +867,43 @@
     const r = e.target.closest('[data-thread]'); if (r) { closeInbox(); openThread(r.dataset.thread); }
   });
 
-  /* ---------------- settings (⌥, or the palette): connection and the voice provider, read-only ---------------- */
-  const setEl = document.createElement('div');
-  setEl.id = 'dsettings'; setEl.className = 'keys dsettings'; setEl.hidden = true;
+  /* Shared responsive feature surface; this adapter owns only desktop navigation and focus. */
+  const setEl = document.createElement('section');
+  setEl.id = 'dsettings'; setEl.className = 'dsettings'; setEl.hidden = true;
+  setEl.setAttribute('role', 'dialog'); setEl.setAttribute('aria-label', 'Settings'); setEl.setAttribute('aria-modal', 'true');
+  setEl.innerHTML = '<button class="st-close" data-close aria-label="Close settings">✕</button><div id="settingsBody"></div>';
   document.body.appendChild(setEl);
-  function renderSettings() {
-    if (setEl.hidden) return;
-    const st = LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
-    setEl.innerHTML = `<div class="keys-card set-card" role="dialog" aria-label="Settings"><div class="keys-head"><b>Settings</b><small>Wizard on this computer</small><button class="x" data-close aria-label="Close">✕</button></div>
-      <div class="set-body"><div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(st)}</b><small>Desktop · ${esc(location.host)}</small></span></div></div>
-      ${C.voiceStatus?.card() || ''}</div></div>`;
+  let settingsFocus = null, settingsReturn = '';
+  const settingsView = window.WosSettings.mount($('#settingsBody'), {
+    outbox: OUTBOX, live: LIVE, ago, toast, visible: () => !setEl.hidden,
+    helpSub: 'Keyboard shortcuts, desks and Back',
+    openThread: id => { closeSettings(); openThread(id); },
+    editUnsent: it => { closeSettings(); editUnsent(it); },
+    openSub: id => {
+      closeSettings(); settingsReturn = id;
+      if (id === 'files') openFiles();
+      if (id === 'help') toggleKeys(true);
+    },
+  });
+  function renderSettings() { settingsView.render(); }
+  function openSettings(focus) {
+    window.WosResources?.back(); closePalette(); closeInbox(); toggleKeys(false);
+    settingsFocus = document.activeElement; setEl.hidden = false; settingsReturn = '';
+    renderSettings(); settingsView.focus(focus); window.WosScenery?.update();
   }
-  function openSettings() { window.WosResources?.back(); setEl.hidden = false; renderSettings(); setEl.querySelector('[data-close]')?.focus(); }
-  function closeSettings() { setEl.hidden = true; const f = focused(); if (f) focusInside(f.id); }
-  setEl.addEventListener('click', e => { if (e.target === setEl || e.target.closest('[data-close]')) closeSettings(); });
+  function closeSettings() {
+    if (setEl.hidden) return;
+    setEl.hidden = true;
+    if (settingsFocus?.isConnected && settingsFocus.getClientRects().length) settingsFocus.focus({ preventScroll: true });
+    else if (focused()) focusInside(focused().id);
+    window.WosScenery?.update();
+  }
+  function returnToSettings() { if (!settingsReturn) return; const from = settingsReturn; openSettings(); setEl.querySelector(`[data-st="${from}"]`)?.focus({ preventScroll: true }); }
+  setEl.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeSettings(); });
+  setEl.addEventListener('keydown', e => window.WosSettings.trap(e, setEl));
+  $('#settingsBtn').addEventListener('click', () => openSettings());
   C.voiceStatus?.onChange(() => renderSettings());
+  OUTBOX?.onChange(() => renderSettings());
 
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
@@ -905,7 +926,7 @@
    * otherwise starts a new thread. Audio goes through the durable outbox: transcribed there,
    * kept as a voice note, retried if the network drops. */
   const pill = $('#voicePill'), mic = $('#micBtn');
-  let vTarget = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${CMD}⇧N`, vContext = '';
+  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${CMD}⇧N`, vContext = '';
   const VOICE = C.voice({
     onState: st => {
       pill.hidden = st === 'idle'; pill.classList.toggle('think', st === 'think'); mic.classList.toggle('on', st !== 'idle');
@@ -915,7 +936,7 @@
       $('#voiceKey').textContent = vMode === 'dictate' ? 'Right ⌥' : vNewChat ? vNewKey : 'Right ⌘';
       $('#voiceAct').textContent = vMode === 'dictate' ? 'insert' : 'send';
       $('#voiceText').textContent = vMode === 'dictate' ? (st === 'think' ? 'Transcribing…' : 'Dictating')
-        : st === 'think' ? 'Sending…' : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
+        : st === 'think' ? 'Sending…' : vConversation ? 'Listening · ' + vConversation.label : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
       clearInterval(vTimer);
       if (st === 'listen') vTimer = setInterval(() => { const s = Math.floor(VOICE.elapsed() / 1000); $('#voiceTime').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 250);
     },
@@ -937,6 +958,8 @@
       if (action === 'send') return 'none';
       vMode = 'talk'; vNewChat = forceNew; vNewKey = newKey;
       const f = focused(); vTarget = !forceNew && f?.app === 'chats' && (f.thread || f.agent) ? f.id : null;
+      vConversation = !forceNew ? window.WizAppServices?.conversation?.pin(winEl(f?.id)?.querySelector('iframe'), f?.appId)
+        || (f?.appId === 'wizard-manager' ? { appId: 'wizard-manager', token: 'unavailable', label: 'Manager conversation' } : null) : null;
       vReply = vTarget && f.thread ? { wid: f.id, sid: f.thread, steerRunId: CHATS.WORKING_ST.has(LIVE.session(f.thread)?.status) ? LIVE.session(f.thread)?.runId || '' : '' } : null;
       vContext = viewContext(vTarget, forceNew ? 'voice, new chat' : 'voice, aimed at this thread');
       $('#voiceTime').textContent = '0:00';
@@ -944,6 +967,18 @@
       return 'voice';
     }
     if (action === 'start') return 'voice';
+    if (forceNew) { vConversation = null; vTarget = null; vNewChat = true; }
+    if (vConversation) {
+      const conversation = vConversation; // sealed at recording START, never from current focus
+      dictationFinishing = true; // keep the logical voice lock through STT/admission
+      try {
+        const r = await VOICE.finish({ transcribe: false });
+        if (!r?.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
+        const item = await OUTBOX.sendConversation({ conversation, audio: r.blob, captureId: r.captureId, files: [], source: 'orb' });
+        toast(item?.state === 'sent' ? '✦' : '!', item?.state === 'sent' ? 'Sent to ' + conversation.label : item?.error || 'Manager recording kept below', 5000);
+        return item?.state === 'sent' ? 'sent' : 'retained';
+      } finally { dictationFinishing = false; vConversation = null; }
+    }
     const rp = vReply; vReply = null; // the thread a composer-mic take belongs to, fixed before anything else runs
     // The thread in front at the send key, before any await; an agent's Chats list takes it as a new chat with that agent.
     const aimSid = vTarget && (W[vTarget]?.thread || (W[vTarget]?.agent ? '__new__' : ''));
@@ -963,7 +998,7 @@
     if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { captureId: r.captureId, sid: aimSid, seal: sealed, route: modelRoute });
     else {
       const item = await OUTBOX.enqueue({ ...modelRoute, captureId: r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', files: sealed?.files || [], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: '', instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
-      sealed?.done(item);
+      sealed?.done?.(item);
     }
     toast('✦', 'Recording kept · waiting to send', 1400);
     return 'sent';
@@ -1006,7 +1041,7 @@
       <p role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
       <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || (it.text ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
       ${it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
-      <button data-record-retry="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Retry</button>
+      <button data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to Manager' : 'Retry'}</button>
       <button data-record-download="${esc(it.id)}">Download audio</button>
       <button data-record-discard="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Discard</button>
     </article>`).join('');
@@ -1017,7 +1052,8 @@
     const id = b.dataset.recordRetry || b.dataset.recordDownload || b.dataset.recordCopy || b.dataset.recordDiscard;
     const it = O.get(id); if (!it) return;
     if (b.dataset.recordRetry) {
-      if (['dictation', 'capture'].includes(it.kind) || it.state === 'held') await O.transcribeDictation(id); else O.retry(id);
+      if (it.kind === 'conversation') await O.retryConversation(id);
+      else if (['dictation', 'capture'].includes(it.kind) || it.state === 'held') await O.transcribeDictation(id); else O.retry(id);
     } else if (b.dataset.recordDownload) {
       const url = URL.createObjectURL(it.audio), a = document.createElement('a');
       const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /wav/.test(it.audioType) ? 'wav' : 'webm';
@@ -1109,9 +1145,10 @@
     if (window.WizWebUpdate?.back()) return 'update-list'; // the update card's thread list folds first
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
-    if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }
+    if (!keysEl.hidden) { toggleKeys(false); returnToSettings(); return 'keys'; }
     if (window.WosResources?.back()) return 'resources';
     if (closeUsage()) return 'usage';
+    if (settingsReturn === 'files') { const nested = CHATS.closeOverlay(); if (nested) { returnToSettings(); return nested; } settingsReturn = ''; }
     if (setEl && !setEl.hidden) { closeSettings(); return 'settings'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
@@ -1134,6 +1171,7 @@
     const k = e.key, code = e.code, alt = e.altKey && !e.metaKey && !e.ctrlKey, shift = e.shiftKey;
     const digit = /^Digit([1-9])$/.exec(code);
     const hit = fn => { e.preventDefault(); e.stopPropagation(); fn(); };
+    if (code === 'Comma' && !shift && (alt || ((e.metaKey || e.ctrlKey) && !e.altKey))) return hit(() => setEl.hidden ? openSettings() : closeSettings());
     // Home is the first icon (⌥1); app desktops follow left to right (⌥2…9).
     // Handle this before palette/Settings ownership, just like the Home button.
     if (alt && !shift && code === 'Digit1') return hit(() => { if (!e.repeat) goHome(); });
@@ -1325,7 +1363,7 @@
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'system') return openApp(APP.system);
       if (v === 'agents') return openApp(APP.agents);
-      if (v === 'settings' || v === 'usage') return openSettings();
+      if (window.WosSettings.route(v, openSettings)) return;
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); return toast('◇', 'Files isn’t on this Wizard', 1800); }
       if (v === 'day' || v === 'week' || v === 'month') { const a = APP['v-' + v]; if (a?.url) return openApp(a); }
       openApp(APP.wizard);
@@ -1334,15 +1372,17 @@
       if (section) show();
     },
     app(id) {
-      const a = APP[id] || (!id.startsWith('agent:') && findApp(id)); if (a) return openApp(a);
+      const a = APP[id] || (!id.startsWith('agent:') && findApp(id, true)); if (a) return openApp(a);
       // Cold launch: the registered app list may still be loading. The same deep link must work in either shell.
-      Promise.resolve(C.appsLoaded?.()).then(() => { const b = APP[id] || (!id.startsWith('agent:') && findApp(id)); if (b) openApp(b); });
+      Promise.resolve(C.appsLoaded?.()).then(() => { const b = APP[id] || (!id.startsWith('agent:') && findApp(id, true)); if (b) openApp(b); });
     },
     video: item => CHATS.KIT.viewer.open([item]),
     agent: id => openAgentChats(id),
     toast,
   });
   C.deeplink.consume();
+  window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && keysEl.hidden && ib.hidden && usageEl.hidden && !window.WosResources?.state?.panel });
+  new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
   C.status?.attach({ openInbox, inboxOpen: () => !ib.hidden, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 

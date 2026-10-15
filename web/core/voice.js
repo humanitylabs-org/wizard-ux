@@ -5,7 +5,7 @@
  *   v.start()          → begins recording ('listen')
  *   v.finish()         → Promise<{ text, blob, ms }>: stops and transcribes via api/transcribe
  *                        (on failure: { text: '', blob, error }, so the caller can send the recording itself)
- *   v.cancel()         → discards
+ *   v.cancel()         → keeps takes ≥15 s in the shared cancelled-recordings store
  *   v.state            → 'idle' | 'listen' | 'think'
  *   v.elapsed()        → ms recorded so far
  */
@@ -73,7 +73,19 @@
         return true;
       } catch (e) { stop(); set('idle'); throw e; }
     }
-    function cancel() { V.cancelled = true; const id = V.captureId; if (id) window.WosOutbox?.transition(id, 'held', 'Cancelled recording · original kept'); try { V.rec && V.rec.state !== 'inactive' && (V.rec.onstop = null, V.rec.stop()); } catch (e) {} V.rec = null; stop(); set('idle'); }
+    function cancel() {
+      V.cancelled = true; const id = V.captureId; if (id) window.WosOutbox?.transition(id, 'held', 'Cancelled recording · original kept');
+      const rec = V.rec, chunks = V.chunks, ms = performance.now() - V.t0;
+      const keep = () => {
+        if (!chunks.length) return;
+        const blob = new Blob(chunks, { type: rec?.mimeType || 'audio/webm' });
+        if (id) Promise.resolve(window.WosOutbox?.capture(blob, id)).then(() => window.WosOutbox?.transition(id, 'held', 'Cancelled recording · original kept'));
+        if (ms >= 15000) window.WosCancelled?.keepWeb(blob, ms, false, '', 'desktop');
+      };
+      // Capture this take before another recorder can replace V; onstop includes the final chunk.
+      try { if (rec && rec.state !== 'inactive') { rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); }; rec.onstop = keep; rec.stop(); } else keep(); } catch (_) { keep(); }
+      V.rec = null; stop(); set('idle');
+    }
     function finish(o = {}) {
       if (V.state !== 'listen') return Promise.resolve(null);
       const ms = performance.now() - V.t0;
