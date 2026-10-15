@@ -1785,6 +1785,8 @@
     const corner = !!desks[idx]?.full && (w?.app === 'chats' || !!field || dictating);
     device.classList.toggle('orb-corner', corner);
     if (w?.app !== 'chats') trackCornerLift(false);
+    // Field refresh can run after recording starts; keep its destination accessible.
+    if (document.getElementById('generalVoiceTarget')) paintVoiceDestination();
   }
   const DICTATION_KEY = 'wos.dictation-takes.v1';
   const DICTATION_RECOVERY_KEY = 'wos.dictation-recovery.v1';
