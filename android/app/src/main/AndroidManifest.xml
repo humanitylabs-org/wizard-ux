@@ -41,6 +41,7 @@
         <package android:name="com.grabtaxi.passenger" />
     </queries>
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <application
         android:networkSecurityConfig="@xml/wos_network"
         android:allowBackup="false"
@@ -131,8 +132,10 @@
             </intent-filter>
             <meta-data android:name="android.speech" android:resource="@xml/assist_recognition" />
         </service>
-        <service
-            android:name=".everywhere.EverywhereService"
+        <service android:name=".audio.BackgroundAudioService" android:foregroundServiceType="mediaPlayback" android:exported="true">
+                <intent-filter><action android:name="androidx.media3.session.MediaSessionService" /></intent-filter>
+            </service>
+            <service android:name=".everywhere.EverywhereService"
             android:exported="false"
             android:foregroundServiceType="microphone|specialUse"
             android:stopWithTask="false">
