@@ -80,6 +80,13 @@ async function run(mobile) {
     if (await main.count() === 1) { await main.click(); await nap(350); check((await windows(p)).some(w => !w.agent), kind + ' main app opens main chats'); }
     else await closeSearch(p, mobile);
     check(await p.evaluate(() => { const r = WizCore.apps('desktop'); return ['Chats', 'chat', 'wizard', 'threads'].every(q => r.findApp(q)?.id === 'wizard'); }), kind + ' legacy main aliases retained');
+    const mainBefore = (await windows(p)).filter(w => !w.agent).map(w => w.id);
+    await p.evaluate(m => m ? __wos.goDesk(0, true) : __wux.newDesktop(), mobile);
+    await search(p, mobile, 'Hermes Main Agent');
+    if (await hit(p, mobile, 'wizard', 'Hermes Main Agent').count() === 1) {
+      await hit(p, mobile, 'wizard', 'Hermes Main Agent').click(); await nap(200);
+      check(JSON.stringify((await windows(p)).filter(w => !w.agent).map(w => w.id)) === JSON.stringify(mainBefore), kind + ' repeated main app reuses window across desks');
+    } else { check(false, kind + ' repeated main app reuses window across desks'); await closeSearch(p, mobile); }
     await search(p, mobile, 'Agents');
     check(mobile ? await p.locator('#launcherBody [data-app="agents"]').count() === 0 : await p.locator('#palList .nm').filter({ hasText: /^AgentsYour agents:/ }).count() === 0, kind + ' management app excluded from search');
     await closeSearch(p, mobile);
@@ -110,7 +117,14 @@ async function run(mobile) {
     }
     await p.evaluate(() => { WosAgents.list = window.__qaOriginalAgents; WosAgents.emit(); });
     await closeSearch(p, mobile);
-    if (!mobile) {
+    if (mobile) {
+      await p.evaluate(() => __wos.openSheet('launcher')); await nap(250);
+      const grid = p.locator('#launcherBody .lgroup').filter({ has: p.locator('h4', { hasText: 'Wizard apps' }) });
+      check(await grid.locator('[data-app="agent:private"]').count() === 1, 'phone Apps grid includes private once');
+      await p.screenshot({ path: path.join(OUT, 'phone-apps.png') });
+      if (await grid.locator('[data-app="agent:private"]').count() === 1) { await grid.locator('[data-app="agent:private"]').click(); await nap(200); check((await windows(p)).filter(w => w.agent === 'private').length === 1, 'phone Apps tile reuses scoped app'); }
+      await closeSearch(p, mobile);
+    } else {
       await p.evaluate(() => __wux.goHome()); await nap(350);
       const home = p.locator('#desktopHome [data-app="agent:private"]');
       check(await home.count() === 1, 'desktop Home apps includes private');
@@ -118,6 +132,12 @@ async function run(mobile) {
       if (await home.count() === 1) { await home.click(); await nap(200); check((await windows(p)).filter(w => w.agent === 'private').length === 1, 'desktop Home private click reuses same scoped app'); }
     }
     check(reads.some(u => u.includes('agent=private')), kind + ' real private sessions API requested');
+    const invalid = await p.evaluate(() => ['agent:', 'agent:Private', 'agent:../private', 'agent:private:other'].every(id => !WizCore.deeplink.parse('?open=' + encodeURIComponent(id))));
+    check(invalid, kind + ' malformed agent app identifiers rejected');
+    const missingBefore = await windows(p);
+    await p.evaluate(() => WizCore.deeplink.route(location.pathname + '?open=agent:missing-agent'));
+    await nap(500);
+    check(JSON.stringify(await windows(p)) === JSON.stringify(missingBefore), kind + ' missing agent deep link never opens another app');
   } finally { await ctx.unrouteAll({ behavior: 'wait' }); await ctx.close(); }
   // Fresh storage and delayed discovery reproduce ?open startup ordering.
   const cold = await context(mobile, 1800);

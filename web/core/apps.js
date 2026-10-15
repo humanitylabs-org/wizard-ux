@@ -104,9 +104,8 @@
       });
       const main = AG?.list.find(a => a.is_default);
       const agents = (AG?.list || []).filter(a => !a.is_default).map(agentTile);
-      const builtins = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...ALL.slice(chats + 1)];
       // Reserve the agent namespace even after deletion: a stale remote app must never impersonate it.
-      const merged = [...builtins.slice(0, chats + 1 + agents.length), ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
+      const merged = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
       const list = appsFor(shell, merged);
       // Every app wears its sigil (core/sigils.js): sgc = its one colour, sgh = the glyph markup.
       if (window.WizSigil) for (const a of list) if (!a.sgh) { const s = window.WizSigil.of(a.sigil || a); a.sgc = s.color; a.sgh = window.WizSigil.html(a.sigil || a); }
