@@ -261,11 +261,11 @@
     let run; try { run = await r.json(); } catch (_) { throw new HttpError(502, 'Wizard’s send receipt was lost'); }
     const runId = run.run_id || run.id;
     if (!runId) throw new HttpError(502, 'Wizard returned no send receipt');
-    return done(it, { steered: false, runId });
+    return done(it, { steered: false, runId, userMessageId: run.user_message_id || null });
   }
   async function done(it, res) {
     if (it.audio && !it.audioFile?.id) throw new HttpError(502, 'No recording upload receipt · original kept');
-    Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, steered: !!res.steered, steerQueued: !!res.steerQueued, error: '' });
+    Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, userMessageId: res.userMessageId || null, steered: !!res.steered, steerQueued: !!res.steerQueued, error: '' });
     delete it.audio;
     await put(it);
     for (const fn of sentHooks) try { fn(it, res); } catch (e) { console.error(e); }
@@ -308,6 +308,7 @@
   const newSessionId = () => `wizard_${now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
   function make(o) {
     return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
+      meetingEventId: o.meetingEventId || '', parkedDraft: o.parkedDraft || null,
       kind: o.kind === 'reply' ? 'reply' : 'new', sessionId: o.sessionId || newSessionId(), steerRunId: o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
@@ -368,14 +369,15 @@
       const it = make(o); if (prior) { it.id = prior.id; it.createdAt = prior.createdAt; }
       it.state = 'processing'; await put(it); schedule(); return it;
     },
-    capture(blob, id) {
+    capture(blob, id, parts) {
       let it = items.get(id);
       if (!it) { it = make({ audio: blob }); it.id = id; it.kind = 'capture'; it.state = 'capturing'; items.set(id, it); }
-      if (it.kind !== 'capture' || it.state === 'sent') return Promise.resolve(it);
+      if ((it.kind !== 'capture' && !it.parkedDraft) || it.state === 'sent') return Promise.resolve(it);
+      if(it.parkedDraft && parts)it.parkedDraft.parts=parts;
       it.audio = blob;
       // One pending write per capture; the next flush takes the latest chunks, not an unbounded backlog.
       if (!it.captureWrite) {
-        const work = put(it).then(() => { delete it.captureWrite; if (it.audio !== blob && it.kind === 'capture') return api.capture(it.audio, id); return it; });
+        const work = put(it).then(() => { delete it.captureWrite; if (it.audio !== blob && (it.kind === 'capture'||it.parkedDraft)) return api.capture(it.audio, id); return it; });
         Object.defineProperty(it, 'captureWrite', { value: work, writable: true, configurable: true, enumerable: false });
       }
       return it.captureWrite;

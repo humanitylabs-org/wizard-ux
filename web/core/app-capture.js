@@ -50,6 +50,7 @@
       nativeOwnershipReady: ownershipLoaded && !unknownNative && !deviceRows.some(r => !r.nativeId) &&
         !(active?.row.native === 'wizard-device' && !active.row.nativeId), nativeDeviceTakeIds,
       voiceBorrow: active?.borrow ? { ...active.borrow } : null,
+      meetingId: active?.row.kind === 'meeting' ? active.row.meta.meetingId : live?.kind === 'meeting' ? live.meta.meetingId : null,
       error: active?.error?.code || recoveryError?.code || null };
   }
   function changed() { W.dispatchEvent(new CustomEvent('wizard-app-capture-state', { detail: state() })); }
@@ -450,10 +451,20 @@
   }
   async function beginVoiceBorrowImpl(eventId) {
     const s = active;
-    if (!s || s.row.kind !== 'meeting' || s.row.native || !s.row.pcm)
+    if (!s || s.row.kind !== 'meeting' || (s.row.native && s.row.native !== 'wizard-meetings') || !s.row.pcm)
       throw fail('handoff_unavailable', 'This recorder cannot hand off its microphone.');
     if (typeof eventId !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(eventId)) throw fail('invalid_id','Invalid handoff id.');
     if (!['recording','paused'].includes(s.phase) || s.borrow) throw fail('busy','A microphone handoff is already active.');
+    if (s.row.native === 'wizard-meetings') {
+      const d=W.WizardOSDevice;
+      if(typeof d?.recHandoffVersion!=='function' || d.recHandoffVersion()<1 || typeof d.recStartBorrowed!=='function') throw fail('handoff_unavailable','Update Wizard Android to borrow the meeting microphone.');
+      const receipt=JSON.parse(d.recHandoffBegin(eventId,s.row.meta.meetingId)||'null');
+      if(receipt?.status!=='paused' || receipt.open!==true || receipt.id!==eventId || receipt.meetingId!==s.row.meta.meetingId) throw fail('handoff_unavailable','Native microphone release was not confirmed.');
+      receipt.micReleased=true; // ABI v1 begin returns only after capture join, flush and mic release
+      s.borrow=receipt;s.row.meta.handoffs ||= [];s.row.meta.handoffs.push({...receipt,status:'paused'});
+      try { await put(s.row); } catch(e) { d.recHandoffEnd(eventId);s.borrow=null;throw e; }
+      s.phase='handoff';changed();return {...receipt};
+    }
     const wasPaused = s.phase === 'paused', hadSystemAudio = s.hasSystemAudio;
     s.phase = 'handoff';
     s.borrow = { id:eventId, meetingId:s.row.meta.meetingId, pausedByHandoff:!wasPaused, pausedAt:Date.now(), micReleased:false };
@@ -502,6 +513,10 @@
     const b=s.borrow, marker=s.row.meta.handoffs.find(x=>x.id===eventId);
     Object.assign(marker,{status:detail.status==='cancelled'?'cancelled':'captured',voiceTakeId:String(detail.voiceTakeId||''),endedAt:Date.now()});
     await put(s.row); // marker survives even if reacquiring the microphone fails
+    if(s.row.native === 'wizard-meetings') {
+      W.WizardOSDevice.recHandoffEnd(eventId); // stopped voice already returned the native lease
+      s.borrow=null;s.phase=s.nativeState?.paused?'paused':'recording';changed();return {...marker};
+    }
     s.phase='paused'; s.borrow=null;
     if(b.pausedByHandoff && !s.finishPromise) {
       try { await reopenBorrowedEngine(s); s.pausedTotal=(s.pausedTotal||0)+Date.now()-s.pausedAt; s.pausedAt=0; s.phase='recording'; marker.resumeStatus='recording'; }
