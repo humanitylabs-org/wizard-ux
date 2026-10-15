@@ -78,6 +78,10 @@
 .appcard .hero.sgt .big .sgi { width: 64%; height: 64%; }
 /* Desktop shell */
 .wbar .ic.sgt { width: 18px; height: 18px; border-radius: 5px; box-shadow: none; }
+/* Title bars carry bare logos, never launcher tiles or the desktop's purple fallback gradient. */
+.wbar .ic.sgt, .wbar .wic.sgt { background: transparent; border: 0; box-shadow: none; color: var(--c); }
+.wbar .ic.sgt::before, .wbar .ic.sgt::after, .wbar .wic.sgt::before, .wbar .wic.sgt::after { display: none; }
+.agent-titlebar { display: contents; }
 .app-chip i.sgt { width: 22px; height: 22px; border-radius: 7px; box-shadow: none; }
 .pal-it .ic.sgt { box-shadow: none; }
 .pal-it .ic.sgt .sgi { width: 70%; height: 70%; }
