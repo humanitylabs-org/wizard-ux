@@ -31,6 +31,8 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
     private double scale, initial;
     private Rect bounds;
     private Pending pending;
+    private boolean restoring;
+    private final java.util.ArrayList<Runnable> restored = new java.util.ArrayList<>();
     private final Runnable deadline = () -> abort();
 
     ChatScrollCapture(Activity activity, WebView web) {
@@ -77,7 +79,7 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
             done = true; main.removeCallbacks(timeout);
             if (pending == this) pending = null;
             signal.setOnCancelListener(null);
-            restore(null); failure.run();
+            restore(failure);
         }
     }
 
@@ -97,7 +99,7 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
             (int)Math.floor((b.optDouble("y")+b.optDouble("h"))*scale));
     }
     @Override public void onScrollCaptureSearch(CancellationSignal signal, Consumer<Rect> ready) {
-        if (!eligible() || id != null) { ready.accept(new Rect()); return; }
+        if (!eligible() || id != null || restoring) { ready.accept(new Rect()); return; }
         Pending p = new Pending(signal, () -> ready.accept(new Rect()));
         js(script + ";" + call("search", ""), b -> {
             if (!p.live()) return;
@@ -110,7 +112,7 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
         });
     }
     @Override public void onScrollCaptureStart(ScrollCaptureSession session, CancellationSignal signal, Runnable ready) {
-        if (!eligible() || bounds == null) { ready.run(); return; }
+        if (!eligible() || bounds == null || restoring) { ready.run(); return; }
         Pending p = new Pending(signal, ready);
         id = UUID.randomUUID().toString(); final String token = id;
         js(call("start", JSONObject.quote(token)), b -> {
@@ -141,14 +143,15 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
                         js(call("check", JSONObject.quote(token)), now -> {
                             if (!p.live() || !token.equals(id)) return;
                             if (now == null || now.optDouble("top") != b.optDouble("top")) { p.fail(); return; }
-                            copy(session, p, available, delta, complete);
+                            copy(session, p, available, delta, token, b.optDouble("top"), complete);
                         });
                     }));
                 }
             });
         });
     }
-    private void copy(ScrollCaptureSession session, Pending p, Rect available, int delta, Consumer<Rect> complete) {
+    private void copy(ScrollCaptureSession session, Pending p, Rect available, int delta, String token,
+                      double top, Consumer<Rect> complete) {
         if (!eligible()) { p.fail(); return; }
         int[] location = new int[2]; web.getLocationInWindow(location);
         Rect source = new Rect(available);
@@ -156,31 +159,44 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
         Bitmap bitmap = Bitmap.createBitmap(source.width(), source.height(), Bitmap.Config.ARGB_8888);
         try {
             PixelCopy.request(activity.getWindow(), source, bitmap, result -> {
-                try {
-                    if (!p.live()) return;
-                    if (result != PixelCopy.SUCCESS) { p.fail(); return; }
-                    Canvas canvas = session.getSurface().lockHardwareCanvas();
+                if (!p.live() || !token.equals(id) || result != PixelCopy.SUCCESS) {
+                    bitmap.recycle(); p.fail(); return;
+                }
+                // PixelCopy is asynchronous. A route or DOM change during acquisition must
+                // never submit pixels from a different thread to the old OS capture session.
+                js(call("check", JSONObject.quote(token)), now -> {
                     try {
-                        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
-                        canvas.drawBitmap(bitmap, 0, 0, null);
-                    } finally { session.getSurface().unlockCanvasAndPost(canvas); }
-                    p.finish(() -> complete.accept(new Rect(available)));
-                } catch (RuntimeException e) { p.fail(); }
-                finally { bitmap.recycle(); }
+                        if (!p.live() || !token.equals(id)) return;
+                        if (!eligible() || now == null || now.optDouble("top") != top) { p.fail(); return; }
+                        Canvas canvas = session.getSurface().lockHardwareCanvas();
+                        try {
+                            canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+                            canvas.drawBitmap(bitmap, 0, 0, null);
+                        } finally { session.getSurface().unlockCanvasAndPost(canvas); }
+                        p.finish(() -> complete.accept(new Rect(available)));
+                    } catch (RuntimeException e) { p.fail(); }
+                    finally { bitmap.recycle(); }
+                });
             }, main);
         } catch (RuntimeException e) { bitmap.recycle(); p.fail(); }
     }
     private void restore(Runnable ready) {
+        if (ready != null) restored.add(ready);
+        if (restoring) return;
         String old = id; id = null; main.removeCallbacks(deadline);
-        if (old == null) { if (ready != null) ready.run(); return; }
+        if (old == null) { finishRestore(); return; }
+        restoring = true;
         // Token-scoped cleanup cannot affect a newer capture, document or thread.
-        if (ready == null) web.evaluateJavascript(call("end", JSONObject.quote(old)), null);
-        else {
-            final boolean[] sent = {false};
-            Runnable once = () -> { if (!sent[0]) { sent[0] = true; ready.run(); } };
-            main.postDelayed(once, 500);
-            web.evaluateJavascript(call("end", JSONObject.quote(old)), ignored -> once.run());
-        }
+        final boolean[] sent = {false};
+        Runnable once = () -> { if (!sent[0]) { sent[0] = true; finishRestore(); } };
+        main.postDelayed(once, 500);
+        web.evaluateJavascript(call("end", JSONObject.quote(old)), ignored -> once.run());
+    }
+    private void finishRestore() {
+        restoring = false;
+        java.util.ArrayList<Runnable> callbacks = new java.util.ArrayList<>(restored);
+        restored.clear();
+        for (Runnable callback : callbacks) callback.run();
     }
     void abort() { if (pending != null) pending.fail(); restore(null); }
     @Override public void onScrollCaptureEnd(Runnable ready) {

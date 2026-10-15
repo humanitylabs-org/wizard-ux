@@ -21,7 +21,7 @@
     const a = active; if (!a || a.id !== id) return false;
     active = null; clearTimeout(a.timer); a.observer.disconnect();
     // Only touch the exact original element. Never a selector into a new thread.
-    a.e.scrollTop = a.top;
+    if (a.url === location.href && a.owner?.dataset.draftFor === a.thread) a.e.scrollTop = a.top;
     for (const [k,v,p] of a.styles) v ? a.e.style.setProperty(k,v,p) : a.e.style.removeProperty(k);
     delete a.e.dataset.wosScrollCapture;
     document.removeEventListener('scroll', a.scroll, true);
@@ -48,7 +48,7 @@
       if (active) end(active.id);
       const e=selected, b=bounds(e); selected=null; if (!b) return null;
       const owner=e.closest('[data-chats]');
-      const a=active={...b,id,e,owner,thread:owner?.dataset.draftFor,url:location.href,
+      const a=active={...b,id,e,owner,thread:owner?.dataset.draftFor,key:e.matches('.ch-msgs')?owner?.dataset.draftFor:null,url:location.href,
         styles:['scroll-behavior','overflow-anchor','scroll-snap-type'].map(k=>[k,e.style.getPropertyValue(k),e.style.getPropertyPriority(k)])};
       e.style.setProperty('scroll-behavior','auto','important');
       e.style.setProperty('overflow-anchor','none','important');
@@ -56,12 +56,21 @@
       e.dataset.wosScrollCapture=id;
       a.scroll=ev=>{if(ev.target===e) ev.stopImmediatePropagation();};
       document.addEventListener('scroll',a.scroll,true);
-      a.observer=new MutationObserver(()=>valid(id));
-      a.observer.observe(document.body,{childList:true,subtree:true});
+      a.observer=new MutationObserver(records=>{
+        if(records.some(r=>e.contains(r.target))) end(id); else valid(id);
+      });
+      a.observer.observe(document.body,{childList:true,characterData:true,subtree:true});
       a.timer=setTimeout(()=>end(id),30000);
       return b;
     },
     move(id,top) { if(!valid(id))return null; active.e.scrollTop=top; return valid(id); },
+    // Updated shells defer same-thread paints while pixels are being acquired. Navigation
+    // restores synchronously before the renderer reads scrollTop; old shells safely abort.
+    hold(owner,key) {
+      const a=active;if(!a || a.owner!==owner)return false;
+      if(a.key===key && valid(a.id))return true;
+      end(a.id);return false;
+    },
     check:valid, end
   };
   addEventListener('pagehide',()=>{if(active)end(active.id);});
