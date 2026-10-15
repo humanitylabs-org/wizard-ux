@@ -1,6 +1,11 @@
 {
   "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
   "exceptions": {
+    "core/orb-handoff.js": {
+      "shell": "phone",
+      "classification": "open-gap",
+      "reason": "Meeting-loan coordinator is currently wired only to the phone orb; desktop admission remains a separate acceptance gap, not claimed parity."
+    },
     "app.js": {
       "shell": "phone",
       "classification": "adapter",
@@ -194,6 +199,12 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/orb-handoff.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Phone orb meeting-loan coordinator; desktop admission not yet claimed."
     },
     "core/app-client.js": {
       "loadedBy": [],

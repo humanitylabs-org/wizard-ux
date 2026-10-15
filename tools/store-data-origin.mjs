@@ -10,8 +10,8 @@ import { createIndexProxy, readCapped, readWizardApps } from './store-index-view
 import { buildOverview, gatherSources } from './system-overview.mjs';
 import { withPrivateCatalog } from './store-private-catalog.mjs';
 export const PREFIX = '/wizard-os-home/store-data/';
-const APPS = join(homedir(), '.wizard-os/apps.json');
-const ENV = join(homedir(), 'runtipi/.env');
+const APPS = process.env.WIZARD_STORE_APPS_JSON || join(homedir(), '.wizard-os/apps.json');
+const ENV = process.env.WIZARD_STORE_RUNTIPI_ENV || join(homedir(), 'runtipi/.env');
 const SERVICE = 'http://127.0.0.1:8923';
 const LOGO_HOST = /^https:\/\/raw\.githubusercontent\.com\/[\w.-]+\/[\w.-]+\/[0-9a-f]{7,40}\/[\w./-]{1,120}\.(png|jpe?g|webp|gif|svg)$/i;
 // Every emitted value is rebuilt from a validated scalar: an allowed key holding an object never leaks through.

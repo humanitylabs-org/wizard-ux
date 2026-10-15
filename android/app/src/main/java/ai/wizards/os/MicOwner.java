@@ -8,7 +8,7 @@ package ai.wizards.os;
  * sharing the mic. Pure Java so it is unit-testable off-device.
  */
 public final class MicOwner {
-    public static final String MEETING = "meeting", EVERYWHERE = "everywhere", SIDE = "side";
+    public static final String MEETING = "meeting", EVERYWHERE = "everywhere", SIDE = "side", ORB = "orb";
 
     private static String holder;
 

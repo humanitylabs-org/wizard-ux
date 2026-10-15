@@ -49,6 +49,8 @@
         !(active?.row.native === 'wizard-device' && !active.row.nativeId),
       nativeOwnershipReady: ownershipLoaded && !unknownNative && !deviceRows.some(r => !r.nativeId) &&
         !(active?.row.native === 'wizard-device' && !active.row.nativeId), nativeDeviceTakeIds,
+      voiceBorrow: active?.borrow ? { ...active.borrow } : null,
+      meetingId: active?.row.kind === 'meeting' ? active.row.meta.meetingId : live?.kind === 'meeting' ? live.meta.meetingId : null,
       error: active?.error?.code || recoveryError?.code || null };
   }
   function changed() { W.dispatchEvent(new CustomEvent('wizard-app-capture-state', { detail: state() })); }
@@ -225,6 +227,7 @@
     if (s.discard || s.cancelPromise) return Promise.reject(fail('cancelled', 'Capture was cancelled.'));
     if (s.finishPromise) return s.finishPromise;
     s.finishPromise = (async () => {
+      if (s.borrowWork) await s.borrowWork.catch(() => {});
       s.error = null; s.phase = 'stopping'; s.partial = !!(s.partial || partial); changed();
       if (!s.inputStopped) {
         s.final = await s.engine.stop();
@@ -312,7 +315,7 @@
   function session(s) {
     return Object.freeze({ id: s.row.id,
       getInfo: () => ({ phase:s.phase,inputStopped:!!s.inputStopped,error:s.error?.code||null,native: s.row.native || null, backendStopOwned: !!s.engine?.backendStopOwned, livePcm: s.engine?.livePcm !== false,
-        hasSystemAudio: !!s.hasSystemAudio, paused: s.phase === 'paused',
+        hasSystemAudio: !!s.hasSystemAudio, paused: s.phase === 'paused' || s.phase === 'handoff',
         durationMs: s.nativeState?.mediaMs ?? (s.row.pcm && !s.row.native ? s.row.durationMs : (s.pausedAt || Date.now()) - s.row.startedAt - (s.pausedTotal || 0)),
         state: s.nativeState || null, meta: JSON.parse(JSON.stringify(s.row.meta)), capabilities: capabilities({ kind: s.row.kind, pcm: s.row.pcm }) }),
       onPcm: fn => observe(s,'pcm',fn), onChunk: fn => observe(s,'chunk',fn),
@@ -325,13 +328,16 @@
       onLevel(fn) { if (typeof fn !== 'function') throw fail('invalid_callback', 'A level listener is required.'); s.levels.add(fn); return () => s.levels.delete(fn); },
       stop() { return finish(s); },
       async pause() {
+        if(active===s && s.borrow){s.borrow.pausedByHandoff=false;const marker=s.row.meta.handoffs?.find(x=>x.id===s.borrow.id);if(marker)marker.pausedByHandoff=false;await put(s.row);if(s.row.native)await s.engine.pause();emit(s,'state',{paused:true,recording:true});changed();return;}
         if (active !== s || s.phase !== 'recording') return;
         if (!s.engine.pause) throw fail('pause_unavailable', 'This recorder cannot pause.');
         await s.engine.pause(); s.pausedAt = Date.now(); s.phase = 'paused'; emit(s,'state',{paused:true,recording:true}); changed();
       },
       async resume() {
+        if(s.borrow)throw fail('mic_borrowed','Finish the orb recording before resuming the meeting.');
         if (active !== s || s.phase !== 'paused') return;
-        await s.engine.resume(); s.pausedTotal = (s.pausedTotal || 0) + Date.now() - s.pausedAt; s.pausedAt = 0; s.phase = 'recording'; emit(s,'state',{paused:false,recording:true}); changed();
+        if (s.engineDetached) await reopenBorrowedEngine(s); else await s.engine.resume();
+        s.pausedTotal = (s.pausedTotal || 0) + Date.now() - s.pausedAt; s.pausedAt = 0; s.phase = 'recording'; emit(s,'state',{paused:false,recording:true}); changed();
       },
       cancel() {
         if (s.cancelPromise) return s.cancelPromise;
@@ -391,7 +397,7 @@
         };
         return tap;
       };
-      addTap('me', analyser);
+      addTap('me', analyser, s.row.tracks?.me ? s.row.tracks.me.startMs + s.row.tracks.me.bytes / 32 : 0);
       const attachSystem = stream => {
         if (!stream) return;
         stream.getVideoTracks().forEach(t=>{t.stop();stream.removeTrack(t);});
@@ -444,6 +450,94 @@
       const values = new Uint8Array(analyser.fftSize);
       s.meter = setInterval(() => { analyser.getByteTimeDomainData(values); let sum = 0; for (const v of values) sum += ((v - 128) / 128) ** 2; if (s.systemAnalyser) { s.systemAnalyser.getByteTimeDomainData(values); let them = 0; for (const v of values) them += ((v - 128) / 128) ** 2; level(s, { me: s.phase === 'paused' ? 0 : Math.min(1, Math.sqrt(sum / values.length) * 3.2), them: s.phase === 'paused' ? 0 : Math.min(1, Math.sqrt(them / values.length) * 3.2) }); } else level(s, s.phase === 'paused' ? 0 : Math.min(1, Math.sqrt(sum / values.length) * 3.2)); }, 100);
     }
+  }
+  // Host-only microphone loan. Keep the capture row, chunk sequence, observers and
+  // Web Lock; never make another app appear idle while the orb borrows its mic.
+  function beginVoiceBorrow(eventId) {
+    const s=active;
+    if (s?.borrowWork) return Promise.reject(fail('busy','A microphone handoff is already changing.'));
+    const work=beginVoiceBorrowImpl(eventId);
+    if(s) { s.borrowWork=work; work.finally(()=>{if(s.borrowWork===work)s.borrowWork=null;}).catch(()=>{}); }
+    return work;
+  }
+  async function beginVoiceBorrowImpl(eventId) {
+    const s = active;
+    if (!s || s.row.kind !== 'meeting' || (s.row.native && s.row.native !== 'wizard-meetings') || !s.row.pcm)
+      throw fail('handoff_unavailable', 'This recorder cannot hand off its microphone.');
+    if (typeof eventId !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(eventId)) throw fail('invalid_id','Invalid handoff id.');
+    if (!['recording','paused'].includes(s.phase) || s.borrow) throw fail('busy','A microphone handoff is already active.');
+    if (s.row.native === 'wizard-meetings') {
+      const d=W.WizardOSDevice;
+      if(typeof d?.recHandoffVersion!=='function' || d.recHandoffVersion()<1 || typeof d.recStartBorrowed!=='function') throw fail('handoff_unavailable','Update Wizard Android to borrow the meeting microphone.');
+      const receipt=JSON.parse(d.recHandoffBegin(eventId,s.row.meta.meetingId)||'null');
+      if(receipt?.status!=='paused' || receipt.open!==true || receipt.id!==eventId || receipt.meetingId!==s.row.meta.meetingId) throw fail('handoff_unavailable','Native microphone release was not confirmed.');
+      receipt.micReleased=true; // ABI v1 begin returns only after capture join, flush and mic release
+      s.borrow=receipt;s.row.meta.handoffs ||= [];s.row.meta.handoffs.push({...receipt,status:'paused'});
+      try { await put(s.row); } catch(e) { d.recHandoffEnd(eventId);s.borrow=null;throw e; }
+      s.phase='handoff';changed();return {...receipt};
+    }
+    const wasPaused = s.phase === 'paused', hadSystemAudio = s.hasSystemAudio;
+    s.phase = 'handoff';
+    s.borrow = { id:eventId, meetingId:s.row.meta.meetingId, pausedByHandoff:!wasPaused, pausedAt:Date.now(), micReleased:false };
+    changed();
+    try {
+      await s.engine.stop(); // final AudioWorklet acknowledgement, then durable queue drain
+      s.inputStopped = true;
+      clearInterval(s.meter);
+      for (const node of s.nodes || []) { try { node.disconnect(); } catch (_) {} }
+      s.stream?.getTracks().forEach(t=>t.stop()); s.display?.getTracks().forEach(t=>t.stop());
+      await s.ctx?.close(); s.ctx=null; s.stream=null; s.display=null; s.displayPromise=null;
+      s.hasSystemAudio=false; s.systemAnalyser=null; s.engineDetached=true;
+      await s.writes; await drain(s);
+      if (s.error || s.queue.length) throw s.error || fail('storage_failed','Meeting boundary was not saved.');
+      for (const source of Object.keys(s.uploads || {})) uploadChunk(s,source,null,0,true);
+      s.borrow.atMediaMs=(s.opts.offsetMs||0)+(s.row.durationMs||0);
+      s.row.meta.handoffs ||= [];
+      s.row.meta.handoffs.push({ ...s.borrow, status:'paused' });
+      await put(s.row);
+      if (active!==s || s.finishPromise) throw fail('stale_handoff','Meeting was stopped during handoff.');
+      s.pausedAt ||= Date.now(); s.borrow.micReleased=true;
+      emit(s,'state',{recording:true,paused:true,hasSystemAudio:false,handoffId:eventId});
+      if(hadSystemAudio) emit(s,'warn','Computer audio is off after the microphone handoff. Re-enable it explicitly to record it again.');
+      changed();
+      return {...s.borrow};
+    } catch(e) { s.error=e; s.phase='error'; changed(); throw e; }
+  }
+  async function reopenBorrowedEngine(s) {
+    const AC=W.AudioContext||W.webkitAudioContext;
+    s.ctx=new AC(); s.inputStopped=false;
+    // A display picker needs a fresh gesture. Do not silently reopen computer audio.
+    s.opts.systemAudio=false;
+    try { await browserEngine(s); s.engineDetached=false; }
+    catch(e) { s.stream?.getTracks().forEach(t=>t.stop()); await s.ctx?.close(); s.ctx=null; s.inputStopped=true; throw e; }
+  }
+  function endVoiceBorrow(eventId, detail={}) {
+    const s=active;
+    if(s?.borrowWork) return Promise.reject(fail('busy','A microphone handoff is already changing.'));
+    const work=endVoiceBorrowImpl(eventId,detail);
+    if(s) { s.borrowWork=work; work.finally(()=>{if(s.borrowWork===work)s.borrowWork=null;}).catch(()=>{}); }
+    return work;
+  }
+  async function endVoiceBorrowImpl(eventId, detail={}) {
+    const s=active;
+    if (!s || s.borrow?.id!==eventId || !s.borrow.micReleased) throw fail('stale_handoff','This microphone loan is not active.');
+    const b=s.borrow, marker=s.row.meta.handoffs.find(x=>x.id===eventId);
+    Object.assign(marker,{status:detail.status==='cancelled'?'cancelled':'captured',voiceTakeId:String(detail.voiceTakeId||''),endedAt:Date.now()});
+    await put(s.row); // marker survives even if reacquiring the microphone fails
+    if(s.row.native === 'wizard-meetings') {
+      const receipt=JSON.parse(W.WizardOSDevice.recHandoffEnd(eventId)||'null'); // stopped voice already returned the native lease
+      if(receipt?.id!==eventId || receipt.open!==false)throw fail('handoff_unavailable','Native microphone return was not confirmed.');
+      marker.pausedByHandoff=receipt.pausedByHandoff;marker.resumeStatus=receipt.status;await put(s.row);
+      s.borrow=null;s.phase=receipt.status==='recording'?'recording':'paused';changed();return {...marker};
+    }
+    s.phase='paused'; s.borrow=null;
+    if(b.pausedByHandoff && !s.finishPromise) {
+      try { await reopenBorrowedEngine(s); s.pausedTotal=(s.pausedTotal||0)+Date.now()-s.pausedAt; s.pausedAt=0; s.phase='recording'; marker.resumeStatus='recording'; }
+      catch(e) { marker.resumeStatus='failed'; s.error=e; emit(s,'warn','Meeting remains paused: microphone could not resume.'); }
+    } else marker.resumeStatus='paused';
+    await put(s.row);
+    emit(s,'state',{recording:true,paused:s.phase==='paused',hasSystemAudio:false}); changed();
+    return {...marker};
   }
   function deviceAdapter(d) {
     const parse = text => { try { return JSON.parse(text); } catch (_) { return null; } };
@@ -731,6 +825,7 @@
   // Host-only adapter seam. Apps get only the frozen facade via app-services;
   // never expose configureNative through RPC or allow arbitrary bridge eval.
   W.WizAppCapture = Object.freeze({ version: 1, start, pending, ack, prepare, discardPrepared, capabilities, getState: state,
+    beginVoiceBorrow, endVoiceBorrow,
     current(appId) { validate(appId,{}); const r=active?.row.appId===appId ? active.row : [...recoveryLive].map(id=>ownedRows.get(id)).find(r=>r?.appId===appId);
       return r ? {id:r.id,meta:JSON.parse(JSON.stringify(r.meta)),phase:active?.row.id===r.id ? active.phase : 'recoverable'} : null; },
     configureNativeBridge(bridge) {
