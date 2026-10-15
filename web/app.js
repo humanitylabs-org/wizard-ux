@@ -1868,7 +1868,7 @@
     const hadSnap = !!V.snap;
     const saved = window.__wosVoiceRecovery().find(t => t.id === id);
     const recoveredLoan=window.WosOrbHandoff?.takeSnap(id);
-    const snap = recoveredLoan || (saved?.general ? { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(id) } : V.snap || sendSnap());
+    const snap = recoveredLoan ? {...V.snap,...recoveredLoan} : (saved?.general ? { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(id) } : V.snap || sendSnap());
     if (saved?.general) { V.kind = 'general'; V.target = null; V.replyTo = null; }
     try {
       const nativePin = saved?.conversation;

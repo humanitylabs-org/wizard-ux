@@ -70,6 +70,13 @@ test('active native recovery uses immutable meeting pin, not unrelated foregroun
  const h=handoff();h.update('event-a',{status:'paused'});h.bind({id:'event-a'},'native-a',{route,view:producer('thread-a')});
  const c=resumeContext(h);assert(c.nativeResume({id:'native-a',kind:'auto',ms:10}));assert.equal(c.V.snap.view.thread,'thread-a');assert.equal(c.V.snap.view.agent,'private-agent');assert.equal(c.V.meetingLoan.id,'event-a');assert.equal(c.V.snap.meetingEventId,'event-a');
 });
+test('native stop preserves sealed typed draft while reapplying immutable meeting routing',()=>{
+ const h=handoff();h.update('event-a',{status:'paused'});h.bind({id:'event-a'},'native-a',{route,view:producer('thread-a')});
+ const seal={text:'typed draft stays',files:[]},V={kind:'auto',snap:{seal},acc:10};let seen;
+ const c={V,window:null,WosOrbHandoff:h,__wosDictationTake:()=>false,__wosVoiceRecovery:()=>[],nativeTakeAppOwned:()=>false,saveVoiceRoute(){},DEV:()=>({recStop:()=>JSON.stringify({id:'native-a',kind:'auto',ms:10,bytes:700})}),voiceRecovery(){},nativeBlob:()=>new Blob(['audio']),onRecStop(){seen=V.snap;}};c.window=c;
+ vm.createContext(c);vm.runInContext(section(phone,'  function nativeFinish(','  const releasedTakes'),c);c.nativeFinish('native-a',false);
+ assert.equal(seen.seal,seal);assert.equal(seen.meetingEventId,'event-a');assert.equal(seen.view.thread,'thread-a');
+});
 test('active appended segment rehydrates original parts and typed draft',()=>{
  const audio=new Blob(['original']),prior={id:'owner',state:'held',durable:true,audio,parkedDraft:{parts:[audio],typed:'original typed',acc:20,snap:{route,view:producer('thread-a')}}};
  const c=resumeContext(handoff(),prior,{sid:'thread-a',custodyId:'owner'});assert(c.nativeResume({id:'segment-b',ms:30}));assert.equal(c.V.custodyCapture,'owner');assert.equal(c.V.parts[0],audio);assert.equal(c.V.acc,50);assert.equal(c.V.seal.text,'original typed');
