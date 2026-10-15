@@ -109,9 +109,13 @@ async function settled(b,id) { for(let i=0;i<150;i++){const it=b.c.WosOutbox.get
    const it=await b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic wrong provider',steerRunId:'wrong-active'});await settled(b,it.id);
    assert.equal(b.calls.filter(x=>x.url.endsWith('/steer')).length,before);
   });
-  await check('same-model active run permits verified steer',async()=>{
+  await check('same-model active run still uses idempotent admission, never an unreconcilable steer',async()=>{
    b.runtime({model:'glm-5-3',provider:'custom:tinfoil-operator'});
-   const it=await b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic',steerRunId:'glm-active'});assert((await settled(b,it.id)).steered);
+   const before=b.calls.filter(x=>x.url.endsWith('/steer')).length;
+   const it=await b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic',steerRunId:'glm-active'});
+   assert.equal((await settled(b,it.id)).steered,false);
+   assert.equal(b.calls.filter(x=>x.url.endsWith('/steer')).length,before);
+   assert.equal(b.bodies.at(-1).key,it.id);
   });
   await check('outage rejects and retry preserves model, provider, key and body',async()=>{
    b.fail(true);const it=await b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic unavailable'});assert.equal((await settled(b,it.id)).state,'failed');
@@ -121,7 +125,10 @@ async function settled(b,id) { for(let i=0;i<150;i++){const it=b.c.WosOutbox.get
   await check('pending selector save blocks sending instead of choosing old or default route',async()=>{
    let res;const p=new Promise(r=>res=r);b.lockDelay(p);
    const task=b.c.WosModels.setThreadModel('s1',{value:'gpt-6.1-sol',provider:'openai-codex'});
-   await assert.rejects(b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic'}),/saving/);res();await task;b.lockDelay(null);
+   const before=b.bodies.length;
+   const held=await b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic'});
+   assert.equal(held.state,'failed');assert.match(held.error,/saving/);assert.equal(held.text,'synthetic');assert.equal(b.bodies.length,before);
+   res();await task;b.lockDelay(null);
   });
   await check('newer authoritative selection on another device replaces local override',async()=>{
    const s=b.sessions.get('s1');s.model='glm-5-3';s.provider='custom:tinfoil-operator';s.modelLockAt=90;

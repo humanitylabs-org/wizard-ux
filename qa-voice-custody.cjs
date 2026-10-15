@@ -144,14 +144,14 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
     const f=await fixture();f.W.down=false;
     const ids=await f.page.evaluate(async audio=>{
       const blob=new Blob([new Uint8Array(audio)],{type:'audio/webm'});
-      const held=await WosOutbox.stage({kind:'reply',sessionId:'sealed',model:'private-model',provider:'private-provider',audio:blob,typed:'original words',nativeId:'fixture-native'});
+      const held=await WosOutbox.stage({kind:'reply',sessionId:'sealed',agent:'private-agent',model:'private-model',provider:'private-provider',audio:blob,typed:'original words',nativeId:'fixture-native'});
       const sent=await WosOutbox.enqueue({custodyId:held.id,text:''});
       return [held.id,sent.id];
     },audio);
     await f.wait(ids[0],'sent');
     ok(ids[0]===ids[1]&&f.W.runs.size===1,'staged recording reuses one custody/admission identity');
     const body=JSON.parse([...f.W.runs.values()][0].body);
-    ok(body.session_id==='sealed'&&body.model==='private-model'&&body.provider==='private-provider'&&body.input.includes('original words'),'staged delivery preserves sealed route and typed composer');
+    ok(body.session_id==='sealed'&&body.agent==='private-agent'&&body.model==='private-model'&&body.provider==='private-provider'&&body.input.includes('original words'),'staged delivery preserves sealed route and typed composer');
     const native=await f.page.evaluate(async audio=>(await WosOutbox.enqueue({nativeId:'fixture-native',audio:new Blob([new Uint8Array(audio)]),kind:'new'})).id,audio);
     ok(native===ids[0]&&f.W.runs.size===1,'native recovery cannot enqueue a second copy');await f.ctx.close();
   }
@@ -162,7 +162,7 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
     },audio);
     await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());f.W.down=false;await sleep(200);
     ok((await f.row(id))?.state==='held'&&f.W.runs.size===0,'handled local command remains held across reload');
-    await f.page.evaluate(id=>WosOutbox.del(id),id);await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());
+    await f.page.evaluate(id=>WosOutbox.remove(id),id);await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());
     ok((await f.row(id))?.state==='sent'&&f.W.runs.size===0,'explicit discard tombstone prevents replay after reload');await f.ctx.close();
   }
   await browser.close();fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({host:require('os').hostname(),engine:process.env.QA_ENGINE||'chromium',source:crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT,'web/outbox.js'))).digest('hex'),pass,fail,results},null,2));

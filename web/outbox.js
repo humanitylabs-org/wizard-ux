@@ -345,8 +345,13 @@
       try {
         if (routeError) throw routeError;
         if (!M) throw new Error('Model selector unavailable · reload Wizard before sending');
-        const route = await bounded(() => M.resolveRoute(held && it.model ? { model: it.model, provider: it.provider } : snapshot), 15000);
-        if (it.model && (route.model !== it.model || (it.provider && route.provider !== it.provider))) throw new Error('Selected route changed · original message kept');
+        const sealed = held && it.model ? { model: it.model, provider: it.provider, ...(it.agent ? { agent: it.agent } : {}) } : snapshot;
+        const route = await bounded(() => M.resolveRoute(sealed), 15000);
+        // Resolve only reviewed legacy provider aliases. Never substitute a default, and keep a private agent's own route.
+        let expectedProvider = it.provider;
+        if (!it.agent && expectedProvider === 'tinfoil') expectedProvider = 'custom:tinfoil-operator';
+        if (!it.agent && M.providers?.some(p => p.slug === expectedProvider && p.is_user_defined)) expectedProvider = 'custom:' + expectedProvider;
+        if (it.model && (route.model !== it.model || (expectedProvider && route.provider !== expectedProvider) || (it.agent && route.agent !== it.agent))) throw new Error('Selected route changed · original message kept');
         Object.assign(it, route, { state: 'queued' });
         if (it.agent) window.WizLive?.pinAgent?.(it.sessionId, it.agent);
       } catch (e) { it.state = 'failed'; it.error = String(e.message || e); }
