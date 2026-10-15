@@ -103,12 +103,15 @@ async function run(browser,mobile){
  f=p.frames().find(x=>x.url().includes('/wizard-manager/'));await f.waitForFunction(()=>document.querySelector('[data-message-id="26"]'));await delay(1200);
  ok(label+' away arrival remains unread after re-entry',!(await read()).viewed.includes(26)&&(await read()).seen<26);
  ok(label+' reload retains draft and divider',await f.locator('#message').inputValue()==='Retained Manager draft'&&await boundary()===anchor);
- ok(label+' reload restores reading position',Math.abs(await f.locator('#conversation').evaluate(n=>n.scrollTop)-position)<=2,{position,after:await f.locator('#conversation').evaluate(n=>n.scrollTop),awayScroll,afterScroll:await f.evaluate(()=>JSON.parse(localStorage.getItem('wizard-manager:conversation:v1')).scroll)});
+ const restoredScroll=await f.evaluate(()=>JSON.parse(localStorage.getItem('wizard-manager:conversation:v1')).scroll);
+ ok(label+' reload restores reading position',restoredScroll.anchorMessageId===awayScroll.anchorMessageId&&Math.abs(restoredScroll.offset-awayScroll.offset)<=2,{position,after:await f.locator('#conversation').evaluate(n=>n.scrollTop),awayScroll,afterScroll:restoredScroll});
  await delay(700);await p.screenshot({path:path.join(OUT,label+'-catchup.png')});
  await f.locator('.mgr-new-messages').scrollIntoViewIfNeeded();await p.screenshot({path:path.join(OUT,label+'-divider.png')});
  await f.locator('#conversation').evaluate(n=>{n.scrollTop=350;});
  // Orb in child must route to exact canonical thread, never hidden Manager receiver.
  await f.locator('[data-message-id="2"] .mgr-actions a').click();await p.waitForSelector('.hosted-thread .ch-compose textarea');
+ await p.evaluate(async()=>{await WosModels.load();});
+ await p.waitForFunction(id=>{const r=WosModels.snapshot(id);return r?.model&&r?.provider;},sid,{timeout:20000});
  await p.locator('.hosted-thread .ch-compose textarea').fill('Voice companion text');
  await p.evaluate(m=>{window.__qaBefore=[...WosOutbox._items.keys()];return m?__wos.startVoice('auto'):__wux.talk('start');},mobile);await delay(800);
  await p.evaluate(async m=>{if(m)__wos.finishVoice();else await __wux.talk('send');},mobile);
