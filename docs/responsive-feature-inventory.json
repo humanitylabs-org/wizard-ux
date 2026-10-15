@@ -1,0 +1,130 @@
+{
+  "purpose": "Every entrypoint-exclusive asset must be explicit; new common features must be shared by default, not added to these exceptions.",
+  "exceptions": {
+    "app.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone layout, orb/gesture input, shell navigation; shared feature rendering forbidden here."
+    },
+    "desktop/desktop.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop window manager and keyboard/input adapter."
+    },
+    "styles.css": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone shell geometry; common Settings controls extracted."
+    },
+    "desktop/desktop.css": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop shell geometry."
+    },
+    "core/desks.css": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone desk indicators and dock layout."
+    },
+    "core/home-surfaces.css": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone Home geometry; desktop Home retained from PR22."
+    },
+    "orb.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter."
+    },
+    "core/android-relay.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "WizardAndroidRelay required; Android-only transport."
+    },
+    "core/carry-in.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android origin migration custody handoff; not desktop storage migration."
+    },
+    "core/sel-menu.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Requires Android accessibility/overlay capabilities."
+    },
+    "core/sel-menu.css": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android selection overlay controls."
+    },
+    "device.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android update, notification, foreground recorder bridge; web updater already shared."
+    },
+    "usuals.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Grab automation uses Android usuals bridge; never copy non-working purchase controls."
+    },
+    "usuals.css": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android Food bridge UI."
+    },
+    "core/tour.js": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone gestures tutorial; desktop keyboard help is a layout/input-specific guide."
+    },
+    "core/tour.css": {
+      "shell": "phone",
+      "classification": "adapter",
+      "reason": "Phone gesture spotlights; desktop keyboard sheet remains shell-local."
+    },
+    "core/voice.js": {
+      "shell": "desktop",
+      "classification": "adapter",
+      "reason": "Desktop browser recorder input; cancellation now uses the common recording store."
+    },
+    "pwa-install.js": {
+      "shell": "phone",
+      "classification": "open-gap",
+      "reason": "Phone install prompt only; browser installation capability remains absent on desktop."
+    },
+    "data.js": {
+      "shell": "phone",
+      "classification": "open-gap",
+      "reason": "Phone local day/week/month review data. Desktop has no review renderer."
+    },
+    "summaries.js": {
+      "shell": "phone",
+      "classification": "open-gap",
+      "reason": "Phone review views; must be extracted before claiming global parity."
+    },
+    "core/music-voice.js": {
+      "shell": "phone",
+      "classification": "open-gap",
+      "reason": "Phone local music command parsing; desktop sends voice to agent instead."
+    },
+    "core/screen-capture.js": {
+      "shell": "phone",
+      "classification": "open-gap",
+      "reason": "Phone voice screenshot toggle uses this browser-capable module; desktop has no matching voice toggle."
+    },
+    "live-mode.js": {
+      "shell": "phone",
+      "classification": "preview",
+      "reason": "Explicit opt-in experimental simulated Live Mode, not enabled live; no desktop preview yet."
+    },
+    "motion/wizard-motion.js": {
+      "shell": "phone",
+      "classification": "preview",
+      "reason": "Opt-in Live Mode motion primitives."
+    },
+    "motion/wizard-motion.css": {
+      "shell": "phone",
+      "classification": "preview",
+      "reason": "Opt-in Live Mode motion styles."
+    }
+  }
+}

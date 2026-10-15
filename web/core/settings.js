@@ -77,8 +77,8 @@
   register({ id: 'selection', available: android, html: () => window.WosSelMenu?.html() || '', act: (ctx, el) => window.WosSelMenu?.act(el) });
   register({ id: 'wizard', html(ctx) {
     const status = ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
-    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${row('help', '?', 'Gestures & help', ctx.helpSub)}${window.WosFiles ? row('files', '▤', 'Files', 'Everything in Wizard Files · preview, attach to a chat') : ''}</div>`;
-  }, act(ctx, el) { const st = el.closest('[data-st]')?.dataset.st; if (!['files', 'help'].includes(st)) return false; ctx.openSub(st); return true; } });
+    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${window.WosWebUpdate ? row('web-update', '↻', 'Check for updates', 'Updates both layouts · reload only when you choose') : ''}${row('help', '?', 'Gestures & help', ctx.helpSub)}${window.WosFiles ? row('files', '▤', 'Files', 'Everything in Wizard Files · preview, attach to a chat') : ''}</div>`;
+  }, act(ctx, el) { const st = el.closest('[data-st]')?.dataset.st; if (st === 'web-update') { window.WosWebUpdate?.check(); ctx.toast?.('↻', 'Checking for updates', 1400); return true; } if (!['files', 'help'].includes(st)) return false; ctx.openSub(st); return true; } });
   register({ id: 'usage', aliases: ['usage'], html: () => window.WosUsage?.html() || '', act(ctx, el) { if (!el.closest('[data-usage-refresh]')) return false; window.WosUsage?.load(true).then(ctx.paintUsage); ctx.paintUsage(); return true; } });
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
@@ -112,7 +112,8 @@
       const n = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (at + (e.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
       buttons[n].focus(); buttons[n].click();
     };
-    function destroy() { mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); }
+    const unsubscribe = ctx.live?.onChange?.(() => render());
+    function destroy() { if (typeof unsubscribe === 'function') unsubscribe(); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); }
     root.addEventListener('click', click); root.addEventListener('keydown', key); mounts.add(api); render(); return api;
   }
   function route(view, open) {

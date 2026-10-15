@@ -72,7 +72,14 @@
         return true;
       } catch (e) { stop(); set('idle'); throw e; }
     }
-    function cancel() { V.cancelled = true; try { V.rec && V.rec.state !== 'inactive' && (V.rec.onstop = null, V.rec.stop()); } catch (e) {} V.rec = null; stop(); set('idle'); }
+    function cancel() {
+      V.cancelled = true;
+      const rec = V.rec, chunks = V.chunks, ms = performance.now() - V.t0;
+      const keep = () => { if (ms >= 15000 && chunks.length) window.WosCancelled?.keepWeb(new Blob(chunks, { type: rec?.mimeType || 'audio/webm' }), ms); };
+      // Capture this take before another recorder can replace V; onstop includes the final chunk.
+      try { if (rec && rec.state !== 'inactive') { rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); }; rec.onstop = keep; rec.stop(); } else keep(); } catch (_) { keep(); }
+      V.rec = null; stop(); set('idle');
+    }
     function finish(o = {}) {
       if (V.state !== 'listen') return Promise.resolve(null);
       const ms = performance.now() - V.t0;

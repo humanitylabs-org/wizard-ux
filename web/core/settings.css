@@ -45,7 +45,7 @@
 .st-root button:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -2px; }
 .st-root .st-tx small, .st-root .ub-m { overflow-wrap: anywhere; }
 @media (hover: hover) and (pointer: fine) { .st-root .st-row { min-height: 48px; } .st-root .st-row:not(:disabled):not(.static):hover { background: color-mix(in srgb, var(--ink) 6%, transparent); } }
-.dsettings { position: fixed; inset: var(--bar-h, 34px) 0 0 auto; width: 440px; z-index: 40; display: flex; flex-direction: column; background: var(--glass-2); border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgb(0 0 0 / .18); }
+.dsettings { position: fixed; inset: var(--bar-h, 34px) 0 0 auto; width: 440px; z-index: 40; display: flex; flex-direction: column; background: linear-gradient(var(--glass-2), var(--glass-2)), var(--bg); border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgb(0 0 0 / .18); }
 .dsettings[hidden] { display: none; }
 .dsettings .st-root { flex: 1; }
 .dsettings > .st-close { align-self: end; flex: none; width: 44px; height: 44px; color: var(--ink-2); }
