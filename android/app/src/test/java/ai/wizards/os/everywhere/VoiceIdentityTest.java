@@ -11,8 +11,7 @@ public class VoiceIdentityTest {
             String context = EverywhereOutbox.instructions(item);
             assertTrue(context.contains("The user spoke"));
             assertFalse(context.contains("James"));
-            assertFalse(context.contains("his "));
-            assertFalse(context.contains(" he "));
+            assertFalse(java.util.regex.Pattern.compile("\\b(?:his|he)\\b", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(context).find());
         }
         item.shots.put("fixture.png");
         assertTrue(EverywhereOutbox.instructions(item).contains("They attached 1 screenshot"));
