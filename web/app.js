@@ -1117,7 +1117,7 @@
     if (sheet === 'inbox') renderInbox();
     refreshHome(); renderMoons();
     desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g) g.innerHTML = renderEmpty(i); } });
-    for (const id of Object.keys(W)) { const w = W[id]; if (w.app === 'chats' && w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el) renderThread(w, el); } }
+    for (const id of Object.keys(W)) { const w = W[id]; if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el) renderThread(w, el); } }
     // Tell Android how many app messages are stuck, so it can say so in a notification while the app is closed.
     const failed = OUTBOX ? OUTBOX.unsent().filter(x => x.state === 'failed') : [];
     const sig = failed.map(x => x.id).join(',');
@@ -2755,7 +2755,7 @@
     // First-try orb sends were already confirmed by the pill above the orb: no second banner.
     else if (res.steered) toast('✦', 'Sent · steering the live run', 1800);
     LIVE?.emit(); setTimeout(() => LIVE?.refresh(), 3000);
-    for (const id of Object.keys(W)) if (W[id].app === 'chats' && W[id].thread === it.sessionId) setTimeout(() => W[id] && loadThread(W[id], true), 1500);
+    for (const id of Object.keys(W)) if ((W[id].app === 'chats' || CHATS.isHosted(id)) && W[id].thread === it.sessionId) setTimeout(() => W[id] && loadThread(W[id], true), 1500);
   });
 
   /* ---------------- orb gestures ----------------

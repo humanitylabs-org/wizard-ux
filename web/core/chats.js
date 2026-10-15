@@ -987,9 +987,10 @@ window.WizCore.chats = function createChats(H) {
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`;
     if (p.state === 'waiting') return `<span class="pst wait">${esc(p.error || 'Couldn’t reach Wizard')} · retrying</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>`;
     const agent = esc(window.WizConfig.agent());
-    if (p.state === 'sent' && p.steered && p.steerQueued) return `<span class="pst ok">${CHECK_SVG}Added to the queued request</span>`;
-    if (p.state === 'sent' && p.steered) return `<span class="pst ok">${CHECK_SVG}Delivered · ${agent} sees it next step</span>`;
-    if (p.state === 'sent') return '<span class="pst ok">Sent</span>';
+    if (p.state === 'sent') {
+      const label = p.steered ? `${CHECK_SVG}${p.steerQueued ? 'Added to the queued request' : `Delivered · ${agent} sees it next step`}` : 'Sent';
+      return `<span class="pst ok">${label}</span><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
+    }
     return `<span class="pst">${p.steerRunId && !p.attempts ? 'Steering…' : 'Sending…'}</span>`;
   }
   function pendingHtml(p, c) {
@@ -1264,8 +1265,9 @@ window.WizCore.chats = function createChats(H) {
       return true;
     }
     const dismiss = e.target.closest('[data-obdismiss]'); if (dismiss) {
-      Promise.resolve(OUTBOX.dismissEmpty(dismiss.dataset.obdismiss)).then(ok => {
-        H.toast(ok ? '✓' : '!', ok ? 'Bubble dismissed · recording kept in Unsent messages' : 'Could not save dismissal · recording kept', 2400);
+      const sent = OUTBOX.get(dismiss.dataset.obdismiss)?.state === 'sent';
+      Promise.resolve(OUTBOX.dismissBubble(dismiss.dataset.obdismiss)).then(ok => {
+        H.toast(ok ? '✓' : '!', ok ? (sent ? 'Sent bubble dismissed · message stays in this chat' : 'Bubble dismissed · recording kept in Unsent messages') : 'Could not save dismissal · original kept', 2400);
       }); return true;
     }
     const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); H.toast('↻', 'Sending again', 1400); return true; }
