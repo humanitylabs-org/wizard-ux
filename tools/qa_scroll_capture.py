@@ -4,7 +4,7 @@ Usage: qa_scroll_capture.py DEBUG_APK OUT
 API35 SystemUI initiates discovery and capture. Fixture is explicitly synthetic,
 using the same overflow-hidden / nested .ch-msgs and .ch-scroll arrangement.
 """
-import base64, fcntl, hashlib, http.server, json, pathlib, re, sys, threading, time, traceback
+import base64, fcntl, hashlib, http.server, json, pathlib, re, sys, threading, time, traceback, xml.etree.ElementTree as ET
 from qa_aa_lib import Emu, Page, BASE, ADB, wait
 P=pathlib.Path
 APK=P(sys.argv[1]); OUT=P(sys.argv[2]); OUT.mkdir(parents=True,exist_ok=True)
@@ -46,7 +46,17 @@ def capture(name,kind,top):
  xml=em.ui();(OUT/(name+'-editor.xml')).write_text(xml)
  check(name+' long screenshot editor visible','Save' in xml,em.top())
  check(name+' original scroll restored',pg.ev(f"document.querySelector('.{kind}').scrollTop")==before,pg.ev(f"document.querySelector('.{kind}').scrollTop"))
- em.tap_text('^Save$',xml);time.sleep(2)
+ # Android initially selects only the original viewport, even when a long image
+ # was captured. Expand its actual accessibility-labelled crop handles first.
+ for label in ['Top boundary','Bottom boundary']:
+  tree=ET.fromstring(xml)
+  handle=next(x for x in tree.iter('node') if x.get('content-desc','').startswith(label))
+  crop=next(x for x in tree.iter('node') if x.get('resource-id','').endswith('/crop_view'))
+  h=list(map(int,re.findall(r'\d+',handle.get('bounds'))));c=list(map(int,re.findall(r'\d+',crop.get('bounds'))))
+  x=(h[0]+h[2])//2;y=(h[1]+h[3])//2;target=c[1]+2 if label.startswith('Top') else c[3]-2
+  em.sx(f'input swipe {x} {y} {x} {target} 600');time.sleep(.5);xml=em.ui()
+ check(name+' entire captured image selected','Top boundary 0 percent' in xml and 'Bottom boundary 100 percent' in xml)
+ shot(name+'-expanded');em.tap_text('^Save$',xml);time.sleep(2)
  files=em.sx('find /sdcard/Pictures/Screenshots -type f').strip().splitlines()
  if files:
   path=files[-1];em.sh(ADB,'-s',em.S,'pull',path,OUT/(name+'-saved.png'))

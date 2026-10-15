@@ -104,7 +104,10 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
         js(script + ";" + call("search", ""), b -> {
             if (!p.live()) return;
             if (b == null || b.optDouble("vw") <= 0) { p.fail(); return; }
-            scale = web.getWidth()/b.optDouble("vw");
+            // innerWidth is integer-rounded on fractional-density phones. Using
+            // width/innerWidth accumulates missing bands between capture tiles.
+            scale = b.optDouble("dpr", 0);
+            if (scale <= 0 || Math.abs(web.getWidth() / scale - b.optDouble("vw")) > 2) { p.fail(); return; }
             bounds = rect(b);
             Rect visible = new Rect(); web.getLocalVisibleRect(visible);
             if (!visible.contains(bounds)) { p.fail(); return; }

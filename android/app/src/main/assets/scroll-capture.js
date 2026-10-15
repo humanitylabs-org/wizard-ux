@@ -28,7 +28,7 @@
       if (!hit || !e.contains(hit)) return null;
     }
     return {x:r.left + e.clientLeft,y:r.top + e.clientTop,w:e.clientWidth,h:e.clientHeight,
-      vw:innerWidth,top:e.scrollTop,height:e.scrollHeight};
+      vw:innerWidth,dpr:devicePixelRatio,top:e.scrollTop,height:e.scrollHeight};
   }
   function end(id) {
     const a = active; if (!a || a.id !== id) return false;
