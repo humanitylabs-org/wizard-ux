@@ -32,7 +32,7 @@ with (evidence / 'server.log').open('ab') as log:
                 time.sleep(.1)
         else:
             raise RuntimeError('Isolated server did not become healthy')
-        code = subprocess.run(['node', 'qa/recovery.mjs'], cwd=root, env=env, timeout=180).returncode
+        code = subprocess.run(['node', env.get('QA_SCRIPT', 'qa/recovery.mjs')], cwd=root, env=env, timeout=180).returncode
     finally:
         server.terminate()
         server.wait(timeout=10)
