@@ -2747,7 +2747,7 @@
     return { id, mode: '', kind: 'app', name: winTitle(w) };
   }
   // Rides as the run's ephemeral system note: the agent knows the view, the thread stays clean.
-  /* Where James was at the moment he sent (the orb tap that ends a take, a typed send). Transcription and
+  /* Where James was at recording start (or at a typed send). Transcription and
    * routing take seconds; by then he may have opened another thread. Everything downstream (which thread,
    * new or reply, the context note) is decided from this snapshot, never from what is in front later. */
   function sendSnap(id) {
@@ -2758,7 +2758,8 @@
     const screen = view && view.kind !== 'chat thread' && !view.private ? (window.WizScreen?.read(winEl(fid)) || '') : '';
     // A private agent's window is named, never read: its thread titles stay with that agent.
     const nameOf = x => agentWin(W[x]) && agentApp(W[x]).private ? `${agentApp(W[x]).name} chats (private agent)` : winTitle(W[x]);
-    const conversation = window.WizAppServices?.conversation?.pin(winEl(fid)?.querySelector('iframe'), W[fid]?.appId) || null;
+    const conversation = window.WizAppServices?.conversation?.pin(winEl(fid)?.querySelector('iframe'), W[fid]?.appId)
+      || (W[fid]?.appId === 'wizard-manager' ? { appId: 'wizard-manager', token: 'unavailable', label: 'Manager conversation' } : null);
     return { id: fid, desk: idx, view, screen, conversation, others: d.wins.filter(x => x !== fid).map(nameOf) };
   }
   function viewContext(id, how = 'voice', snap = null) {

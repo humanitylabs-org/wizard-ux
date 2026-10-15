@@ -937,7 +937,8 @@
       if (action === 'send') return 'none';
       vMode = 'talk'; vNewChat = forceNew; vNewKey = newKey;
       const f = focused(); vTarget = !forceNew && f?.app === 'chats' && (f.thread || f.agent) ? f.id : null;
-      vConversation = !forceNew ? window.WizAppServices?.conversation?.pin(winEl(f?.id)?.querySelector('iframe'), f?.appId) || null : null;
+      vConversation = !forceNew ? window.WizAppServices?.conversation?.pin(winEl(f?.id)?.querySelector('iframe'), f?.appId)
+        || (f?.appId === 'wizard-manager' ? { appId: 'wizard-manager', token: 'unavailable', label: 'Manager conversation' } : null) : null;
       vReply = vTarget && f.thread ? { wid: f.id, sid: f.thread, steerRunId: CHATS.WORKING_ST.has(LIVE.session(f.thread)?.status) ? LIVE.session(f.thread)?.runId || '' : '' } : null;
       vContext = viewContext(vTarget, forceNew ? 'voice, new chat' : 'voice, aimed at this thread');
       $('#voiceTime').textContent = '0:00';

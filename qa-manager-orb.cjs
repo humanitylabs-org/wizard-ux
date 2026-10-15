@@ -61,7 +61,9 @@ async function retry(f,it){await f.p.evaluate(id=>WosOutbox.retryConversation(id
  try{for(const mobile of [true,false]){
   const label=mobile?'phone':'desktop';const f=await boot(browser,mobile);
   if(baseline){await start(f);await finish(f);await delay(1800);ok(label+' baseline reproduces misroute',posts(f).length===0&&forbidden(f).length>0,f.writes.map(x=>x.path));receipts.push({label,baseline:true,writes:f.writes});await f.ctx.close();continue;}
-  await start(f);
+  await f.p.evaluate(()=>window.__qaBefore=[...WosOutbox._items.keys()]);
+  await f.p.locator(mobile?'#orbWrap':'#micBtn').click();
+  await f.p.waitForFunction(m=>m?__wos.voice==='listen':__wux.voice==='listen',mobile);
   await f.p.evaluate(m=>{const s=m?__wos:__wux;s.openApp(WizCore.apps(m?'mobile':'desktop').APP.chats);},mobile);
   f.R.sttDelay=350;await finish(f);
   let it=await last(f);ok(label+' foreground pinned at start, one Manager turn',it.state==='sent'&&posts(f).length===1&&f.R.messages.filter(m=>m.role==='user').length===1,it);

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 const source=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');
 function fixture({installed=true,ready=true}={}) {
- const calls=[],sourceWindow={location:new URL('https://wizard.example/wizard-manager/'),document:{},postMessage(){}};
+ const calls=[],sourceWindow={location:new URL('https://wizard.example/wizard-manager/'),document:{},addEventListener(){},postMessage(){}};
  const frame={tagName:'IFRAME',src:sourceWindow.location.href,isConnected:true,contentWindow:sourceWindow,hasAttribute:()=>false,addEventListener(){},removeEventListener(){}};
  const window={WizCore:{apps:()=>({APPS:installed?[{id:'wizard-manager',kind:'wizard',url:'/wizard-manager/'}]:[]})},dispatchEvent(){}};
  const ctx={window,location:new URL('https://wizard.example/wizard-os-home/'),URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}};
