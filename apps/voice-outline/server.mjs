@@ -85,7 +85,7 @@ wss.on('connection',ws=>{
     if(streams.size>=3)throw new Error('Waiting for earlier finals; pause before continuing');
     if(db.prepare('SELECT id FROM speech WHERE id=?').get(m.id))throw new Error('Utterance already exists');
     const s={id:m.id,target:m.target,seq:m.seq,text:'',queue:[],queued:0,bytes:0,ended:false};streams.set(s.id,s);active=s.id;save(s,'draft','');
-    s.stream=await provider.openRealtime({delta:t=>{s.text+=t;save(s,'draft',s.text);send({type:'delta',id:s.id,target:s.target,seq:s.seq,text:s.text});},completed:t=>{s.text=t||s.text;save(s,'final',s.text);send({type:'final',id:s.id,target:s.target,seq:s.seq,text:s.text});streams.delete(s.id);clearTimeout(s.timer);},error:e=>fail(s,e)});
+    s.stream=await provider.openRealtime({delta:t=>{s.text+=t;save(s,'draft',s.text);send({type:'delta',id:s.id,target:s.target,seq:s.seq,text:s.text,audioBytes:s.bytes});},completed:t=>{s.text=t||s.text;save(s,'final',s.text);send({type:'final',id:s.id,target:s.target,seq:s.seq,text:s.text});streams.delete(s.id);clearTimeout(s.timer);},error:e=>fail(s,e)});
     if(s.failed||closed){s.stream.close().catch(()=>{});return;}
     for(const b of s.queue)s.stream.append(b);s.queue=[];s.queued=0;send({type:'ready',id:s.id});if(s.ended)s.stream.close().catch(e=>fail(s,e));
    }else if(m.type==='end'){

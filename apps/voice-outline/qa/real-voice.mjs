@@ -4,9 +4,9 @@ import {createHash} from 'node:crypto';
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const base=process.env.OUTLINE_URL||'http://127.0.0.1:18871',out=process.env.EVIDENCE_DIR||'./evidence';mkdirSync(out,{recursive:true});
 const receipt={kind:'real-shared-capture-real-tinfoil',url:base,started:new Date().toISOString(),checks:[],errors:[],events:[]};
-const browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',`--use-file-for-fake-audio-capture=${process.env.QA_SPEECH}`]});
+const browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',`--use-file-for-fake-audio-capture=${process.env.QA_SPEECH}`]});
 const context=await browser.newContext({viewport:{width:393,height:852},deviceScaleFactor:1,permissions:['microphone'],colorScheme:'dark'}),page=await context.newPage();
-page.on('pageerror',e=>receipt.errors.push(e.message));page.on('websocket',ws=>ws.on('framereceived',e=>{try{const m=JSON.parse(e.payload);receipt.events.push({...m,at:Date.now()});}catch{}}));
+page.on('pageerror',e=>receipt.errors.push(e.message));page.on('websocket',ws=>{ws.on('framesent',e=>{if(typeof e.payload!=='string'){receipt.sentBytes=(receipt.sentBytes||0)+e.payload.length;receipt.sentFrames=(receipt.sentFrames||0)+1;}});ws.on('framereceived',e=>{try{const m=JSON.parse(e.payload);receipt.events.push({...m,at:Date.now()});}catch{}});});
 async function check(name,fn){await fn();receipt.checks.push(name);}
 try{
  await page.goto(base);await page.waitForFunction(()=>document.querySelector('#save').textContent==='Saved');
