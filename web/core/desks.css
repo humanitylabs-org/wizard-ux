@@ -32,7 +32,6 @@
 :root { --rv: #ffb84d; --rv-2: #ffcf85; }
 .win.reviewing { border-color: rgba(255, 184, 77, .55); box-shadow: 0 0 0 1px rgba(255, 184, 77, .35), 0 10px 40px rgba(255, 160, 40, .12); }
 .win.reviewing .wbar { background: linear-gradient(90deg, rgba(255, 184, 77, .16), rgba(255, 184, 77, .04)); border-bottom-color: rgba(255, 184, 77, .3); }
-.rv-tag { flex: 0 0 auto; margin-left: -2px; padding: 2px 7px; border-radius: 99px; background: rgba(255, 184, 77, .2); color: var(--rv-2); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .win.reviewing .wbar .wt { flex: 0 1 auto; }
 .win.reviewing .wbar .rv-tag + * { margin-left: auto; }
 /* Pin is an action, the tag is a label: outlined, neutral ink, pin icon. */
