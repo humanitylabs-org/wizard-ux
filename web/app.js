@@ -2001,7 +2001,7 @@
   function dictationRecovery(id, meta) {
     const rows = JSON.parse(localStorage.getItem(DICTATION_RECOVERY_KEY) || '{}');
     if (meta === false) delete rows[id];
-    else if (meta) rows[id] = { ...meta, id, kind: 'dictation', send: false };
+    else if (meta) rows[id] = { ...rows[id], ...meta, id, kind: 'dictation', send: false };
     if (meta !== undefined) localStorage.setItem(DICTATION_RECOVERY_KEY, JSON.stringify(rows));
     return rows;
   }
