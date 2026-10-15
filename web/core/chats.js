@@ -979,7 +979,7 @@ window.WizCore.chats = function createChats(H) {
     const age = s && WORKING_ST.has(s.status) ? 3500 : quiet ? 60000 : 15000;
     const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
-    const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
+    const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId, s.backgroundResult?.id || ''].join('|') : '';
     if (fresh && !force) { if (c.loadedFor === w.thread && hk !== c.hk) { c.hk = hk; const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el); } return; }
     // Every read owns a captured thread AND navigation generation. A -> B -> A is a new read;
     // an old completion must neither publish into it nor release its loading lock.
@@ -1017,7 +1017,7 @@ window.WizCore.chats = function createChats(H) {
       }
       if (await loadApproval(w, LIVE.session(sid))) changed = true;
       if (!current()) return;
-      const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId].join('|') : '';
+      const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId, s2.backgroundResult?.id || ''].join('|') : '';
       if (hk2 !== c.hk) { c.hk = hk2; changed = true; }
       if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && current()) renderLive(w, el); }
     } catch (e) { if (current()) { c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now(); } }
