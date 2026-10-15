@@ -6,9 +6,12 @@
   // native list's sibling overlays they are not part of the scrolled content: they may cover
   // the scroller and are hidden while pixels are acquired so they are never stamped into tiles.
   const DOCK = '.ch-fab,.ch-pill,.ch-latest';
+  const SHELL_DOCK = '#generalVoice.general-voice';
+  const controls = e => [...(e.closest('[data-chats]')?.querySelectorAll(DOCK) || []),
+    ...(e.closest('.device')?.querySelectorAll(SHELL_DOCK) || [])].filter(d=>!d.contains(e));
   const docked = (hit, e) => {
-    const d = hit?.closest?.(DOCK), owner = e.closest('[data-chats]');
-    return !!d && !!owner?.contains(d) && !d.contains(e);
+    const d = hit?.closest?.(DOCK + ',' + SHELL_DOCK);
+    return !!d && controls(e).includes(d);
   };
   function bounds(e) {
     if (!e?.isConnected || document.hidden) return null;
@@ -75,7 +78,7 @@
       e.style.setProperty('scroll-behavior','auto','important');
       e.style.setProperty('overflow-anchor','none','important');
       e.style.setProperty('scroll-snap-type','none','important');
-      a.dock=[...(owner?owner.querySelectorAll(DOCK):[])].filter(d=>!d.contains(e))
+      a.dock=controls(e)
         .map(d=>[d,d.style.getPropertyValue('visibility'),d.style.getPropertyPriority('visibility')]);
       for (const [d] of a.dock) d.style.setProperty('visibility','hidden','important');
       e.dataset.wosScrollCapture=id;

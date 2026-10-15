@@ -49,7 +49,9 @@ function ok(mode, name, value, detail) { const row={mode,name,pass:!!value,detai
   try {
    ok(mode,'synthetic session list in actual Wizard UI',await p.locator('[data-chopen="qa_sc_0"]').count()>0);
    if(enabled){
-    const b=await begin('list');ok(mode,'visible overflowing list discovered',!!b.start,b);
+    const b=await begin('list');
+    if(!b.start)b.diagnostic=await p.evaluate(()=>{const e=qaScroller(),r=e.getBoundingClientRect();return {rect:r.toJSON(),vh:innerHeight,vw:innerWidth,height:e.scrollHeight,client:e.clientHeight,parents:(()=>{let n=e,a=[];while(n){const s=getComputedStyle(n);a.push({cls:n.className,transform:s.transform,scale:s.scale,rotate:s.rotate,perspective:s.perspective,zoom:s.zoom});n=n.parentElement;}return a;})(),hits:[.1,.5,.9].flatMap(x=>[.1,.5,.9].map(y=>{const h=document.elementFromPoint(r.left+r.width*x,r.top+r.height*y);return {x,y,hit:h?.outerHTML.slice(0,200),inside:e.contains(h),dock:h?.closest('.ch-fab,.ch-pill,.ch-latest')?.className};}))};});
+    ok(mode,'visible overflowing list discovered',!!b.start,b);
     await p.evaluate(()=>__wosScrollCapture.move('list',420));await paint();
     ok(mode,'same-list repaint held',await p.evaluate(()=>qaScroller()===qaOld&&!!__wosScrollCapture.check('list')));
     await p.evaluate(()=>__wosScrollCapture.end('list'));await p.waitForTimeout(500); // shell scroll-idle guard is 350ms
@@ -62,6 +64,12 @@ function ok(mode, name, value, detail) { const row={mode,name,pass:!!value,detai
      const ended=__wosScrollCapture.end('dock'),restored=getComputedStyle(f).visibility==='visible'&&!f.style.visibility;
      Object.assign(f.style,{position:'',left:'',top:'',right:'',bottom:''});return {covered,found,started,hidden,ended,restored};});
     ok(mode,'floating new-chat button over list: discovered, hidden while capturing, restored',dock.covered&&dock.found&&dock.started&&dock.hidden&&dock.ended&&dock.restored,dock);
+    const voice=await p.evaluate(()=>{const g=document.querySelector('#generalVoice.general-voice'),old=g.getAttribute('style'),e=qaScroller(),r=e.getBoundingClientRect();
+      g.style.cssText=`position:fixed;left:${r.left+r.width*.5-50}px;top:${r.top+r.height*.5-20}px;width:100px;height:40px;visibility:visible!important;display:block!important;z-index:99999;`;
+      const covered=g.contains(document.elementFromPoint(r.left+r.width*.5,r.top+r.height*.5)),found=!!__wosScrollCapture.search(),started=!!__wosScrollCapture.start('voice-label'),hidden=getComputedStyle(g).visibility==='hidden';
+      const ended=__wosScrollCapture.end('voice-label'),restored=g.style.getPropertyValue('visibility')==='visible'&&g.style.getPropertyPriority('visibility')==='important';
+      old===null?g.removeAttribute('style'):g.setAttribute('style',old);return {covered,found,started,hidden,ended,restored};});
+    ok(mode,'shell voice label excluded from captured tiles and exact visibility restored',Object.values(voice).every(Boolean),voice);
    }
    await open('qa_sc_0');
    ok(mode,'normal scrolling works',await p.evaluate(()=>{let e=qaScroller();e.scrollTop=220;return e.scrollTop===220;}));
