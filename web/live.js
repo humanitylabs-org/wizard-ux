@@ -84,8 +84,6 @@
       critical: (item.wizard_attention_level || item.attention_level) === 'critical',
       waitingOn: item.wizard_waiting_on === 'helper' ? 'helper' : '',
       helperStatus: item.wizard_helper_status && typeof item.wizard_helper_status === 'object' ? item.wizard_helper_status : null,
-      backgroundResult: /^bg_[0-9a-f]{32}$/.test(item.wizard_background_result?.id || '')
-        && item.wizard_background_result?.session_id === id ? { id: item.wizard_background_result.id } : null,
       // What the finished thread asks of James (the agent's hidden status line): needs_you / check / done / fyi.
       attention: attentionOf(item.wizard_attention),
       // Thread titles (Agent Service thread-titles.mjs): every rename with its time, so the thread shows
@@ -156,32 +154,6 @@
     if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
     return r;
   }
-  /* Saved background results (Service /wizard/background-results, #14): read-only discovery merged into Chats;
-   * while the Service reports it is still scanning, re-read briefly (bounded to one minute). */
-  let backgroundPollTimer = null, backgroundPollUntil = 0;
-  function scheduleBackgroundPoll() {
-    if (backgroundPollTimer || document.hidden) return;
-    if (!backgroundPollUntil) backgroundPollUntil = Date.now() + 60000;
-    if (Date.now() > backgroundPollUntil) return;
-    backgroundPollTimer = setTimeout(() => { backgroundPollTimer = null; if (!document.hidden) L.refresh(); }, 1000);
-  }
-  async function withBackgroundResults(out, complete) {
-    try {
-      const p = await (await req('/wizard/background-results')).json();
-      if (p.scanning) scheduleBackgroundPoll();
-      else { if (backgroundPollTimer) clearTimeout(backgroundPollTimer); backgroundPollTimer = null; backgroundPollUntil = 0; }
-      const byId = new Map(out.map(row => [row.id, row]));
-      // A finished result can outlive the normal history window. Add its original thread once; this neither
-      // starts work nor replaces a current reply/gate with a manufactured message.
-      for (const raw of p.sessions || []) {
-        const s = normalize(raw); if (!s || !s.backgroundResult) continue;
-        const current = byId.get(s.id);
-        if (current) { if (WORKING.has(current.status)) continue; current.backgroundResult = s.backgroundResult; current.attention = s.attention; }
-        else { out.push(s); byId.set(s.id, s); }
-      }
-    } catch (e) { /* an older Agent Service lacks this route; normal Chats still works */ }
-    return { sessions: out, complete };
-  }
   /* Every thread Wizard lists (same endpoint, same paging). A full walk runs at boot and
    * every few minutes; in between only the first page is re-read and merged over it,
    * so the Chats list always holds the whole history, including the archive.
@@ -198,10 +170,10 @@
       out.push(...rows.map(normalize).filter(Boolean));
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
-      if (!more || !rows.length) return withBackgroundResults(out, true);
-      if (!full) return withBackgroundResults(out, false);
+      if (!more || !rows.length) return { sessions: out, complete: true };
+      if (!full) return { sessions: out, complete: false };
     }
-    return withBackgroundResults(out, true);
+    return { sessions: out, complete: true };
   }
   const FULL_EVERY = 3 * 60 * 1000;
 
