@@ -403,25 +403,25 @@ window.WizCore.chats = function createChats(H) {
   const fileKind = f => /^audio\//.test(f.mime || '') || /^wizard-voice-/.test(f.name || '') ? 'voice' : /^image\//.test(f.mime || '') ? 'image' : 'file';
   const fsize = b => b >= 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
   const fileUrl = id => `/wizard/files/${encodeURIComponent(id)}/content`;
-  async function uploadFile(file, { signal, onProgress } = {}) {
+  async function uploadFile(file, { signal, onProgress, agent = '' } = {}) {
     if (window.WizUploads?.supported()) {
-      try { return await window.WizUploads.upload(file, { signal, onProgress }); }
+      try { return await window.WizUploads.upload(file, { signal, onProgress, agent }); }
       catch (e) {
         // A cached bootstrap can outlive the box's support (rolled-back service): only a create that the route
         // itself refuses (404/405) drops to the old path; everything else is a real answer.
         if (!(e.status === 404 || e.status === 405) || e.code) throw e;
       }
     }
-    return uploadFileOnce(file, { signal });
+    return uploadFileOnce(file, { signal, agent });
   }
-  async function uploadFileOnce(file, { signal } = {}) {
+  async function uploadFileOnce(file, { signal, agent = '' } = {}) {
     if (file.size > OLD_ROUTE_MAX) throw Object.assign(new Error('This Wizard takes files up to 64 MB · update it for bigger files.'), { user: true });
-    const r = await fetch('/wizard/files/upload', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+    const r = await fetch('/wizard/files/upload?agent=' + encodeURIComponent(agent || 'hermes'), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
       headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': file.name || 'upload', 'X-Wizard-Mime': file.type || 'application/octet-stream' }, body: file, signal });
     if (!r.ok) throw Object.assign(new Error(r.status === 413 ? 'That file is too large for Wizard Files.' : `Wizard Files is unavailable (${r.status}).`), { status: r.status, user: true });
     const f = (await r.json()).file || {};
     if (!f.id) throw new Error('Wizard Files returned an invalid upload receipt.');
-    return { id: String(f.id), name: String(f.filename || file.name), mime: String(f.mime || file.type || ''), bytes: Number(f.bytes) || file.size };
+    return { agent: agent || 'hermes', id: String(f.id), name: String(f.filename || file.name), mime: String(f.mime || file.type || ''), bytes: Number(f.bytes) || file.size };
   }
   // A multi-pick stages every file at once (each shows immediately), then they upload side by side.
   // Progress paints into the chip in place (no tray re-render per tick); removing a chip cancels its upload.
@@ -437,6 +437,7 @@ window.WizCore.chats = function createChats(H) {
   }
   async function addFiles(wid, list) {
     const c = ch(wid); c.files = c.files || [];
+    const w = W[wid], agent = w?.thread && w.thread !== '__new__' ? (LIVE.agentOf?.(w.thread) || '') : winAgent(w);
     const picked = [...list], room = Math.max(0, MAX_FILES - c.files.length);
     if (picked.length > room) toast('!', `Up to ${MAX_FILES} files per message`, 2400);
     const locals = picked.slice(0, room).map(file => ({ file, key: Math.random().toString(36).slice(2), name: file.name, mime: file.type, bytes: file.size, uploading: true, sent: 0, total: file.size, upState: 'uploading', preview: /^image\//.test(file.type) ? URL.createObjectURL(file) : '' }));
@@ -451,7 +452,7 @@ window.WizCore.chats = function createChats(H) {
         const t = performance.now(); if (t - painted < 120 && state === 'uploading' && sent < total) return;
         painted = t; paintUpload(wid, local);
       };
-      try { Object.assign(local, await uploadFile(file, { signal: abort.signal, onProgress }), { uploading: false }); if (local.preview) PREVIEW[local.id] = local.preview; }
+      try { Object.assign(local, await uploadFile(file, { signal: abort.signal, onProgress, agent }), { uploading: false }); if (local.preview) PREVIEW[local.id] = local.preview; }
       catch (e) { c.files = c.files.filter(x => x !== local); if (!abort.signal.aborted) toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
       finally { UPLOAD_ABORT.delete(local.key); }
       refreshCompose(wid);

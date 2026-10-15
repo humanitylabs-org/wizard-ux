@@ -2194,7 +2194,7 @@
     const arm = () => { clearTimeout(deadline); deadline = setTimeout(() => abort.abort(new Error('Upload timed out · try attaching again')), 60000); };
     arm();
     try {
-      const result = await CHATS.uploadFile(file, { signal: abort.signal, onProgress: (sent, total, state) => { if (state !== 'reconnecting') arm(); } });
+      const result = await CHATS.uploadFile(file, { agent: V.snap?.route?.agent || V.snap?.view?.agent || '', signal: abort.signal, onProgress: (sent, total, state) => { if (state !== 'reconnecting') arm(); } });
       if (!sameTake(files) || !files.includes(f)) return;
       Object.assign(f, result, { uploading: false });
     } catch (e) {

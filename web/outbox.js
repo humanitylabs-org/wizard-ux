@@ -167,10 +167,10 @@
   async function uploadAudio(it) {
     const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /aac/.test(it.audioType) ? 'aac' : 'webm';
     const name = `wizard-voice-${new Date(it.createdAt).toISOString().replace(/[:.]/g, '-')}.${ext}`;
-    const r = await call('/wizard/files/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': name, 'X-Wizard-Mime': it.audioType || 'audio/webm' }, body: it.audio });
+    const r = await call('/wizard/files/upload?agent=' + encodeURIComponent(it.agent || 'hermes'), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': name, 'X-Wizard-Mime': it.audioType || 'audio/webm' }, body: it.audio });
     const f = (await r.json()).file || {};
     if (!f.id) throw new HttpError(502, 'Wizard Files returned no id');
-    return { id: String(f.id), name: String(f.filename || name), mime: String(f.mime || it.audioType || ''), bytes: Number(f.bytes) || it.audio.size };
+    return { agent: it.agent || 'hermes', id: String(f.id), name: String(f.filename || name), mime: String(f.mime || it.audioType || ''), bytes: Number(f.bytes) || it.audio.size };
   }
   async function keepAudio(it) {
     if (it.audio && !it.audioFile) {
@@ -192,6 +192,7 @@
       it.text = [typed, text].filter(Boolean).join('\n\n').slice(0, 64000); await put(it);
     }
     await keepAudio(it);
+    if ((it.files || []).some(f => (f.agent || 'hermes') !== (it.agent || 'hermes'))) throw new HttpError(409, 'Attachment belongs to another agent · original kept');
     const fileIds = [...new Set((it.files || []).map(f => f.id).filter(Boolean))];
     if (fileIds.length > 8) throw new HttpError(409, 'Too many attachments including the recording · originals kept');
     const aq = it.agent ? `?agent=${encodeURIComponent(it.agent)}` : '';

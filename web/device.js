@@ -213,14 +213,15 @@
       const status = el.querySelector('.dv-status');
       const note = el.querySelector('.dv-text').value.trim();
       try {
+        const target = b.dataset.shareto;
+        const agent = target === '__new__' ? '' : (w.live?.agentOf?.(target) || '');
         const files = [];
         for (const f of items) {
           status.textContent = `Uploading ${files.length + 1} of ${items.length}…`;
           const blob = readBlob(off => d.shareRead(id, f.n, off), f.mime);
-          files.push(await w.uploadFile(new File([blob], f.name, { type: f.mime })));
+          files.push(await w.uploadFile(new File([blob], f.name, { type: f.mime }), { agent }));
         }
         status.textContent = 'Sending…';
-        const target = b.dataset.shareto;
         w.openWizardThread(target);
         const wid = Object.keys(w.wins).find(k => w.wins[k].app === 'chats' && w.wins[k].thread === target);
         if (!wid) throw new Error('no chat window');

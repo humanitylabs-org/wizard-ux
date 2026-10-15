@@ -91,7 +91,7 @@
     return `Upload failed (${s}).`;
   };
 
-  async function upload(file, { signal, onProgress } = {}) {
+  async function upload(file, { signal, onProgress, agent = '' } = {}) {
     const total = file.size, name = file.name || 'upload', mime = file.type || 'application/octet-stream';
     const report = (sent, state) => { try { onProgress && onProgress(Math.min(sent, total), total, state); } catch (e) {} };
     const clientId = newId();
@@ -106,14 +106,16 @@
     // 1) Create (idempotent on client_upload_id, so a retried POST returns the same upload).
     let up;
     for (;;) {
-      const r = await call('POST', base(), { client_upload_id: clientId, filename: name, mime, bytes: total }, signal);
+      const r = await call('POST', base(), { client_upload_id: clientId, filename: name, mime, bytes: total, agent: agent || 'hermes' }, signal);
       space(r.status);
       if (r.status >= 200 && r.status < 300 && r.j && r.j.upload_id) { up = r.j; break; }
       if (!transient(r.status)) throw userErr(r.status === 404 || r.status === 405 ? `Wizard Files is unavailable (${r.status}).` : words(r.status, r.j), { status: r.status });
       report(0, 'reconnecting');
       await wait();
     }
-    const url = `${base()}/${encodeURIComponent(up.upload_id)}`;
+    const root = `${base()}/${encodeURIComponent(up.upload_id)}`;
+    const aq = `?agent=${encodeURIComponent(agent || 'hermes')}`;
+    const url = root + aq;
     const chunk = Math.max(MIN_CHUNK, Math.min(MAX_CHUNK, Number(up.chunk_bytes) || DEFAULT_CHUNK));
     let offset = Number(up.offset) || 0, status = up.status, receipt = up.file || null;
     let conflicts = 0;
@@ -158,7 +160,7 @@
       // 3) Complete (idempotent): verifies the size and files it in Wizard Files.
       if (receipt && receipt.id) break;
       report(total, 'finishing');
-      const r = await call('POST', `${url}/complete`, null, signal);
+      const r = await call('POST', `${root}/complete${aq}`, null, signal);
       if (r.status === 200 || r.status === 201) { receipt = r.j.file || r.j; if (receipt && receipt.id) break; throw new Error('Wizard Files returned an invalid upload receipt.'); }
       if (r.status === 409) { if (!(await reconcile())) await wait(); continue; } // not all bytes there: send the rest
       space(r.status);
@@ -167,7 +169,7 @@
       await wait();
     }
     report(total, 'finishing');
-    return { id: String(receipt.id), name: String(receipt.filename || name), mime: String(receipt.mime || mime), bytes: Number(receipt.bytes) || total };
+    return { agent: agent || 'hermes', id: String(receipt.id), name: String(receipt.filename || name), mime: String(receipt.mime || mime), bytes: Number(receipt.bytes) || total };
   }
 
   window.WizUploads = { supported, upload, NO_SPACE };
