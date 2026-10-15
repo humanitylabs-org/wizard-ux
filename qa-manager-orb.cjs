@@ -49,10 +49,10 @@ async function openManager(f){const {p,mobile}=f;await p.evaluate(m=>{const shel
  await p.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.contentWindow?.WizardApp?.hosted&&f.src.includes('/wizard-manager/')));
  f.frame=p.frames().find(fr=>fr.url().includes('/wizard-manager/'));
  await f.frame.waitForFunction(()=>document.querySelector('[data-message-id="1"]'));
- await f.frame.locator('h1').click(); // foreground app, no focused textarea (talk rather than dictation)
+ await f.frame.locator('#conversation').click({position:{x:8,y:8}}); // foreground app, no focused textarea (talk rather than dictation)
 }
-const start=f=>f.p.evaluate(m=>m?__wos.startVoice('auto'):__wux.talk('start'),f.mobile);
-const finish=async f=>{await delay(700);await f.p.evaluate(m=>{window.__qaFinish=m?Promise.resolve(__wos.finishVoice()):__wux.talk('send');},f.mobile);await f.p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>['held','sent','waiting','failed'].includes(x.state)&&x.kind!=='capture'),null,{timeout:20000});await delay(200);};
+const start=f=>f.p.evaluate(m=>{window.__qaBefore=[...WosOutbox._items.keys()];return m?__wos.startVoice('auto'):__wux.talk('start');},f.mobile);
+const finish=async f=>{await delay(700);await f.p.evaluate(m=>{window.__qaFinish=m?Promise.resolve(__wos.finishVoice()):__wux.talk('send');},f.mobile);await f.p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>!window.__qaBefore.includes(x.id)&&['held','sent','waiting','failed'].includes(x.state)&&x.kind!=='capture'),null,{timeout:20000});await delay(200);};
 const last=f=>f.p.evaluate(()=>{const x=[...WosOutbox._items.values()].filter(x=>x.kind!=='capture').at(-1);return x&&{id:x.id,state:x.state,kind:x.kind,text:x.text,bytes:x.audio?.size,error:x.error,conversation:x.conversation};});
 const posts=f=>f.writes.filter(x=>x.path==='/wizard-manager/api/messages');
 const forbidden=f=>f.writes.filter(x=>/\/route$|\/api\/sessions$|\/v1\/runs(?:\/.*)?$/.test(x.path));
@@ -67,14 +67,14 @@ async function retry(f,it){await f.p.evaluate(id=>WosOutbox.retryConversation(id
   let it=await last(f);ok(label+' foreground pinned at start, one Manager turn',it.state==='sent'&&posts(f).length===1&&f.R.messages.filter(m=>m.role==='user').length===1,it);
   ok(label+' no router/session/run writes',forbidden(f).length===0,forbidden(f));
   await openManager(f);
-  await f.frame.locator('[data-message-id="1"] button').click();await f.frame.locator('h1').click();await start(f);
+  await f.frame.locator('[data-message-id="1"] button').click();await f.frame.locator('#conversation').click({position:{x:8,y:8}});await start(f);
   await f.frame.locator('[data-message-id="2"] button').click();await finish(f);
   ok(label+' explicit reply target sealed before later edits',JSON.parse(posts(f).at(-1).body).reply_to===1);
   ok(label+' later draft target untouched',await f.frame.locator('#destination').innerText().then(x=>x.includes('Fixture work 2')));
   // Clear draft reply target via existing Back, preserving the mounted app.
   await f.p.evaluate(m=>m?__wosNativeBack():__wux.escStep(),mobile);
   ok(label+' nested Back stays in Manager',await f.frame.locator('h1').count()===1);
-  await f.frame.locator('h1').click();f.R.lostAck=true;await start(f);await finish(f);it=await last(f);
+  await f.frame.locator('#conversation').click({position:{x:8,y:8}});f.R.lostAck=true;await start(f);await finish(f);it=await last(f);
   const n=posts(f).length;ok(label+' lost ack retains audio + transcript',it.state==='held'&&it.bytes>0&&it.text,it);
   const retried=await retry(f,it);ok(label+' uncertain retry reconciles same id without duplicate POST',retried.state==='sent'&&posts(f).length===n&&f.R.messages.filter(m=>m.job_id==='user:'+it.id).length===1,retried);
   f.R.enabled=false;await start(f);await finish(f);it=await last(f);ok(label+' paused recipient retains, no dispatch',it.state==='held'&&it.bytes>0&&posts(f).length===n,it);

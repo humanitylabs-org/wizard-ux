@@ -10,7 +10,7 @@ const pin = {appId:'wizard-manager',token:'sealed',label:'Manager conversation'}
 function desktopFixture(front) {
  const calls=[], el={textContent:''};
  const ctx={dictationFinishing:false,VOICE:{state:'idle',async start(){this.state='listen'},async finish(){this.state='idle';return {blob:new Blob(['audio'])}},cancel(){}},focused:()=>front,winEl:()=>({querySelector:()=>({})}),window:{WizAppServices:{conversation:{pin:(_,id)=>id==='wizard-manager'?pin:null}}},vMode:'talk',vTarget:null,vConversation:null,vReply:null,vNewChat:false,vNewKey:'',vContext:'',CMD:'Cmd',W:{},CHATS:{WORKING_ST:new Set(),modelRoute:()=>({model:'m',provider:'p'}),sendChat:(...x)=>calls.push(['chat',...x]),sendVoiceTo:(...x)=>calls.push(['reply',...x])},LIVE:{session:()=>null},viewContext:()=>'',toast(){},$:()=>el,OUTBOX:{sendConversation:async o=>{calls.push(['manager',o]);return {state:'sent'}},enqueue:async o=>calls.push(['new',o])},Blob};
- ctx.W[front.id]=front;
+ ctx.CHATS.composerBusy=()=>false;ctx.CHATS.takeComposer=()=>({text:'',files:[]});ctx.W[front.id]=front;
  vm.createContext(ctx);vm.runInContext(section(desktop,'  async function talk(action','  // Composer mic:'),ctx);
  return {ctx,calls,focus:f=>{front=f;ctx.W[f.id]=f;}};
 }
