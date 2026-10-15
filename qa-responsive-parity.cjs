@@ -35,6 +35,18 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   const features=await p.locator('[data-settings-feature]').evaluateAll(es=>es.map(e=>e.dataset.settingsFeature));
   ok(['unsent','look','voice','cancelled','wizard','usage'].every(x=>features.includes(x)),kind+' all common settings features',features);
   ok(phone?await p.locator('[data-st=everywhere][disabled]').count()===1:await p.locator('[data-st=everywhere]').count()===0,kind+' honest Android capability gate');
+  for (const level of ['day','week','month']) {
+    await open(p,phone,level);await p.waitForSelector('.review .summary');
+    const data=await p.evaluate(()=>({threads:WIZ_DATA.threads.length,generated:WIZ_DATA.generated,summary:!!document.querySelector('.review .summary'),levels:WosViews.LEVELS}));
+    ok(data.threads>0&&data.summary,kind+' '+level+' uses real generated review data',data);
+  }
+  await shot(p,kind+'-real-reviews');
+  ok(await p.evaluate(()=>WosMusic.available()),kind+' installed Music common command adapter available');
+  const music=await p.evaluate(()=>['pause the music','next track','music search Home Tides'].map(t=>WosMusic.parse(t,false,false)?.op));
+  ok(music.every(Boolean),kind+' real installed Music grammar',music);
+  await open(p,phone,'maps');await p.locator('.map-query').last().locator('input').fill('Bangkok');await p.locator('.map-query').last().locator('[value=dir]').click();
+  ok(await p.locator('a[href*="google.com/maps/dir/"]').count()>0,kind+' local Maps navigation is browser-capable');
+  await shot(p,kind+'-real-maps');
   await p.evaluate(()=>WizCore.deeplink.route('/wizard-os-home/?open=wisdom'));
   await p.waitForFunction(()=>WizAppearance.inspect().some(x=>/wisdom/.test(x.src)&&x.acked),null,{timeout:30000});
   const appFrame=p.frames().find(f=>/\/wisdom\//.test(f.url()));

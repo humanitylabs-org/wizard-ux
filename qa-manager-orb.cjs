@@ -78,7 +78,7 @@ async function gestureChecks(f,label) {
  // Focus changes cannot bring app/private context back into the explicitly general take.
  await openManager(f);f.R.text='Open Movies';await delay(700);
  if(mobile) await p.locator('#orbWrap').dblclick({delay:60}); else await p.locator('#micBtn').click();
- await p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>!__qaBefore.includes(x.id)&&x.kind==='new'&&x.state==='sent'));
+ await p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>!__qaBefore.includes(x.id)&&x.kind==='new'&&x.state==='sent')).catch(async e=>{console.log('GENERAL_DEBUG',JSON.stringify({writes:f.writes,errors:f.errors,state:await p.evaluate(()=>({voice:window.__wos?.voice,desktop:window.__wux?.voice,items:[...WosOutbox._items.values()].map(({audio,...x})=>({...x,bytes:audio?.size})),text:document.body.innerText.slice(-4500)}))}));throw e;});
  await p.waitForFunction(m=>m?__wos.voice==='idle':__wux.voice==='idle',mobile);
  ok(label+' fresh send gesture admits exactly once',await p.evaluate(()=>[...WosOutbox._items.values()].filter(x=>!__qaBefore.includes(x.id)&&x.kind==='new').length===1));
  const item=await p.evaluate(()=>{const it=[...WosOutbox._items.values()].filter(x=>x.kind==='new').at(-1);return it&&{kind:it.kind,text:it.text,instructions:it.instructions,bytes:it.audio?.size,id:it.id};});
@@ -98,12 +98,17 @@ async function gestureChecks(f,label) {
 (async()=>{const browser=await chromium.launch({executablePath:process.env.CHROME,headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
  try{for(const mobile of [true,false]){
   const label=mobile?'phone':'desktop';const f=await boot(browser,mobile);
-  if(process.env.QA_GESTURES==='1'){await gestureChecks(f,label);await f.ctx.close();continue;}
-  if(baseline){await start(f);await finish(f);await delay(1800);ok(label+' baseline reproduces misroute',posts(f).length===0&&forbidden(f).length>0,f.writes.map(x=>x.path));receipts.push({label,baseline:true,writes:f.writes});await f.ctx.close();continue;}
+  if(process.env.QA_GESTURES==='1'){await gestureChecks(f,label);await f.ctx.unrouteAll({behavior:'ignoreErrors'});await f.ctx.close();continue;}
+  if(baseline){await start(f);await finish(f);await delay(1800);ok(label+' baseline reproduces misroute',posts(f).length===0&&forbidden(f).length>0,f.writes.map(x=>x.path));receipts.push({label,baseline:true,writes:f.writes});await f.ctx.unrouteAll({behavior:'ignoreErrors'});await f.ctx.close();continue;}
   await f.p.evaluate(()=>window.__qaBefore=[...WosOutbox._items.keys()]);
   await f.p.locator(mobile?'#orbWrap':'#micBtn').click();
   await f.p.waitForFunction(m=>m?__wos.voice==='listen':__wux.voice==='listen',mobile);
   ok(label+' app destination visibly labelled',await f.p.locator(mobile?'#voiceDestination':'#voiceText').innerText().then(t=>t.includes('Manager')));
+  if(mobile) {
+    await f.frame.locator('#message').focus(); await delay(150);
+    ok('phone focused-field refresh preserves accessible sealed app destination',await f.p.locator('#orbWrap').getAttribute('aria-label').then(t=>t.includes('Manager')));
+    await f.frame.locator('#conversation').click({position:{x:8,y:8}});
+  }
   await f.p.screenshot({path:path.join(OUT,label+'-app-target.png')});
   await f.p.evaluate(m=>{const s=m?__wos:__wux;s.openApp(WizCore.apps(m?'mobile':'desktop').APP.chats);},mobile);
   f.R.sttDelay=350;await finish(f);
@@ -148,7 +153,7 @@ async function gestureChecks(f,label) {
    await f.p.waitForFunction(()=>__wos.voice==='idle');
    ok(label+' focused Manager field dictation inserts only, never sends',await f.frame.locator('#message').inputValue().then(x=>x.includes('QA orb message'))&&posts(f).length===beforeDictation&&forbidden(f).length===0);
   }
-  receipts.push({label,writes:f.writes,errors:f.errors,served:[...new Set(f.served)]});await f.ctx.close();
+  receipts.push({label,writes:f.writes,errors:f.errors,served:[...new Set(f.served)]});await f.ctx.unrouteAll({behavior:'ignoreErrors'});await f.ctx.close();
  }
  }finally{await browser.close();fs.writeFileSync(path.join(OUT,'result.json'),JSON.stringify({baseline,checks,receipts,limitations:['STT, Manager state and every POST are explicit fixtures; no production admission tested','Chrome fake microphone, not physical mic or native Android bridge','Live tailnet registry and shell reads; candidate assets overlaid in browser only']},null,2));}
 })().catch(e=>{console.error(e);process.exitCode=1});
