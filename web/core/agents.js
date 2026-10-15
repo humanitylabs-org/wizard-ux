@@ -144,7 +144,7 @@
     },
     titleContent(id, iconClass, titleClass) {
       const a = A.titleRecord(id);
-      return A.sigil(a, iconClass) + `<span class="${titleClass}" style="color:${A.colour(a)}">${esc(A.title(a))}</span>`;
+      return A.sigil(a, iconClass) + `<span class="${titleClass}" style="color:var(--ink)">${esc(A.title(a))}</span>`;
     },
     titlebar(id = '', iconClass = 'ic', titleClass = 't') {
       return `<span class="agent-titlebar" data-agent-titlebar="${esc(id)}" data-icon-class="${iconClass}" data-title-class="${titleClass}">${A.titleContent(id, iconClass, titleClass)}</span>`;
