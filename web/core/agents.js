@@ -116,12 +116,18 @@
     // A non-default agent: its threads, sends and models never go through the main agent's route.
     isOther(id) { return !!id && id !== A.defaultId(); },
     others() { return A.list.filter(a => !a.is_default); },
-    colour(a) { const h = Number(a?.appearance?.hue); return Number.isFinite(h) ? `hsl(${Math.round(((h % 360) + 360) % 360)} 72% 62%)` : '#b99bff'; },
+    colour(a) {
+      let h = Number(a?.appearance?.hue);
+      if (!Number.isFinite(h)) {
+        // Stable identity for future agents without a chosen hue.
+        h = a?.privacy === 'private' ? 160 : !a || a.is_default ? 265
+          : Array.from(String(a.id || a.label || 'agent')).reduce((n, c) => (n * 31 + c.codePointAt(0)) % 360, 0);
+      }
+      return `hsl(${Math.round(((h % 360) + 360) % 360)} 72% 62%)`;
+    },
     glyph(a) {
-      const g = String(a?.appearance?.glyph || '');
-      if (g === 'lock' || g === 'secret') return 'secret';
-      if (window.WizSigil?.has?.(g)) return g;
-      return a?.is_default ? 'wizard' : '';
+      // Agents share the company hat; privacy changes its cutout, hue identifies the agent.
+      return A.isPrivate(a) ? 'hat-private' : 'hat';
     },
     sigil(a, cls = 'ag-sig') {
       const g = A.glyph(a), c = A.colour(a);

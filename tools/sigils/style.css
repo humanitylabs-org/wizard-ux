@@ -40,6 +40,12 @@
     color-mix(in oklab, var(--c) 80%, #1a0f2e) 100%);
   -webkit-mask: var(--sg) center / contain no-repeat; mask: var(--sg) center / contain no-repeat;
 }
+/* Agent identity uses the supplied silhouette. Private replaces its door with a keyhole.
+ * 62% ink height matches neighbouring sigils, on tiles and bare dock/overview marks. */
+.sgi.sg-hat, .sgi.sg-hat-private { -webkit-mask-size: auto 62%; mask-size: auto 62%; }
+.sg-hat { --sg: url("/wizard-os-home/brand/wizard-mark-white.png"); }
+.sg-hat-private { --sg: url("/wizard-os-home/brand/wizard-mark-private.png"); }
+.desktop-home-icon { display: grid; place-items: center; width: 21px; height: 21px; }
 /* App with no sigil yet: its initial, set in the app's colour. */
 .sgi.sgl {
   -webkit-mask: none; mask: none; background: none;

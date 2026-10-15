@@ -19,7 +19,7 @@ for(const shell of ['phone','desktop']){
  ok(await p.evaluate(()=>!!window.WizBrand?.html),shell+' supplied brand renderer');
  if(await p.evaluate(()=>!!window.WizBrand)){
   ok(await p.evaluate(()=>WizBrand.icon('★')==='★'&&WizBrand.icon('⚡')==='⚡'),shell+' action stars and lightning preserved');
-  ok(await p.evaluate(()=>WizSigil.of({id:'wizard'}).glyph==='chats'&&WizSigil.of({id:'wizard-music'}).glyph==='music'),shell+' Chats and Music semantic sigils preserved');
+  ok(await p.evaluate(()=>WizSigil.of({id:'wizard'}).glyph==='hat'&&WizSigil.of({id:'wizard-music'}).glyph==='music'),shell+' Chats and Music semantic sigils preserved');
   if(shell==='phone'){await p.evaluate(()=>__wos.toast('✦','Brand QA',20000));ok(await p.locator('#toast .wizard-brand-mark').count()===1,'phone brand toast uses hat');ok(await p.locator('#txRouteIcon .wizard-brand-mark').count()===1,'phone initial transcript uses hat');}
  }
  if(shell==='desktop'){

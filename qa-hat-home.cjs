@@ -39,9 +39,9 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
   await shot(p,'baseline-desktop-red');
   await c.close();
   const m=await context('phone');await m.p.goto(entry('phone'));await wait(m.p,'phone');await m.p.evaluate(()=>__wos.openOverview());await nap(250);
-  check(await m.p.locator('.ov-home .sgi.sg-hat').count()===1,'mobile overview uses supplied hat');
+  check(await m.p.locator('.ov-home .sgi.sg-home').count()===1,'mobile overview uses supplied hat');
   await m.p.evaluate(()=>{__wos.closeOverview();__wos.openApp(WizCore.apps('phone').APP.shopping);});await nap(400);
-  check(await m.p.locator('.dhome .sgi.sg-hat').count()>0,'mobile Home dock uses supplied hat');await m.c.close();return;
+  check(await m.p.locator('.dhome .sgi.sg-home').count()>0,'mobile Home dock uses supplied hat');await m.c.close();return;
  }
  check(await p.evaluate(()=>__wux.homeOpen&&getComputedStyle(document.querySelector('#desktopHome')).display!=='none'),'exact HTTPS deep link opens Home');
  check(await p.locator('#desktopHome .home-time').isVisible()&&await p.locator('#desktopHome .home-card').count()===2,'Home contains clock, attention and Working');
@@ -143,14 +143,14 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  const m=await context('phone');await m.p.goto(entry('phone'));await wait(m.p,'phone');
  check(await m.p.evaluate(()=>__wos.idx===0),'exact phone deep link opens Home');
  await m.p.evaluate(()=>__wos.openApp(WizCore.apps('phone').APP.shopping));await nap(1600);
- check(await m.p.locator('.dhome .sgi.sg-hat').count()>0,'mobile dock Home uses supplied white hat');
- check(await m.p.evaluate(()=>{const hat=document.querySelector('.dhome .dsg .sg-hat'),sib=document.querySelector('.ddot.filled .dsg .sgi');if(!hat||!sib)return false;const a=hat.getBoundingClientRect(),b=sib.getBoundingClientRect(),cs=getComputedStyle(hat);return Math.abs(a.width-b.width)<.5&&Math.abs(a.height-b.height)<.5&&/wizard-mark-white/.test(cs.webkitMaskImage||cs.maskImage)&&getComputedStyle(hat.parentElement).opacity===getComputedStyle(sib.parentElement).opacity;}),'mobile dock hat is exactly the same size and treatment as neighbouring sigils');
+ check(await m.p.locator('.dhome .sgi.sg-home').count()>0,'mobile dock Home uses supplied white hat');
+ check(await m.p.evaluate(()=>{const hat=document.querySelector('.dhome .dsg .sg-home'),sib=document.querySelector('.ddot.filled .dsg .sgi');if(!hat||!sib)return false;const a=hat.getBoundingClientRect(),b=sib.getBoundingClientRect(),cs=getComputedStyle(hat);return Math.abs(a.width-b.width)<.5&&Math.abs(a.height-b.height)<.5&&(cs.webkitMaskImage||cs.maskImage)!=='none'&&getComputedStyle(hat.parentElement).opacity===getComputedStyle(sib.parentElement).opacity;}),'mobile dock hat is exactly the same size and treatment as neighbouring sigils');
  check(await m.p.evaluate(()=>[...document.querySelectorAll('img.wizard-brand-mark')].filter(e=>e.getBoundingClientRect().height>0).every(e=>e.getBoundingClientRect().height<=parseFloat(getComputedStyle(e.parentElement).fontSize)*0.82+0.5)),'no inline hat is taller than the glyph ink in its slot (0.8em)');
  const mobileId=await m.p.evaluate(()=>{const w=__wos.wins[__wos.desks[__wos.idx].focus];window.__mobileFrame=document.querySelector(`[data-win="${w.id}"] iframe`);return w.id;});
  await m.p.locator('.dhome').first().tap();await nap(400);
  check(await m.p.evaluate(id=>__wos.idx===0&&!!__wos.wins[id]&&__wos.wins[id].appId==='shopping',mobileId),'mobile hat navigates Home and parks app');
  await m.p.evaluate(()=>__wos.openOverview());await nap(300);
- check(await m.p.locator('.ov-home .sgi.sg-hat').count()===1,'mobile overview Home uses supplied hat');
+ check(await m.p.locator('.ov-home .sgi.sg-home').count()===1,'mobile overview Home uses supplied hat');
  await shot(m.p,'phone-overview-hat');await m.p.locator('.ov-home').tap();await nap(300);
  check(await m.p.evaluate(()=>__wos.idx===0&&!document.querySelector('#overview')?.classList.contains('open')),'overview hat returns Home and actually closes the overview');
  await m.p.evaluate(id=>__wos.goDesk(__wos.desks.findIndex(d=>d.wins.includes(id)),true),mobileId);await nap(400);

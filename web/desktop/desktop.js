@@ -106,7 +106,7 @@
   function appOf(w) {
     if (!w) return null;
     if (agentWin(w)) return agentApp(w);
-    if (w.app === 'chats') return APP.wizard;
+    if (w.app === 'chats') return { ...APP.wizard, sgc: window.WosAgents?.colour(window.WosAgents.get(window.WosAgents.defaultId())) || '#C1AAFF' };
     return APP[w.appId] || { name: w.title || w.url || 'App', icon: '◇', g: ['#444a60', '#22263a'], url: w.url };
   }
   function winTitle(w) {
