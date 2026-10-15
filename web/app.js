@@ -2371,7 +2371,7 @@
       txShow('', '', '', '✦');
       $('#txRouteText').textContent = kind === 'command' ? 'No mic here · tap a command' : 'No mic here · tap a line to simulate';
       const ex = kind === 'command'
-        ? ['Open CineQueue', 'Zoom out', 'Next desk', 'Directions to the airport']
+        ? ['Open Movies', 'Zoom out', 'Next desk', 'Directions to the airport']
         : ['Show me yesterday', 'Directions to Iconsiam', 'Play something chill', 'What did we ship on Wizard this week?'];
       $('#txChips').innerHTML = `<span class="lbl">Try</span>` + ex.map(x => `<button data-sim="${esc(x)}">${esc(x)}</button>`).join('');
       if (V.stopAsked) { cancelVoice(true); }
