@@ -1036,16 +1036,22 @@ window.WizCore.chats = function createChats(H) {
     if (prev && prev !== w.thread && LIVE.session(prev)) { openChat(w.id, prev, { keepTrail: true }); return 'trail'; }
     chatsBack(w); return 'thread';
   }
-  /* After a send from a thread (or New chat): back to the list on the phone. The desktop keeps the thread
-   * pane, since its list is already beside it. Only if the window still shows the thread that was sent from;
-   * a thread James opened meanwhile stays open. Orb sends already show the send pill, so no second toast. */
+  /* Send steps back one level on the phone: linked parent, otherwise the list. Desktop keeps its thread
+   * pane. The pinned send target is independent of this navigation; later callbacks cannot pop the parent.
+   * Return an owned recovery receipt so a failed local save can restore the composer without stealing a
+   * newer navigation (including an A → B → A round trip). */
   const PHONE = () => (document.documentElement.dataset.shell || 'phone') !== 'desktop';
   function leaveAfterSend(wid, sid, isNew, how = '') {
     const w = W[wid]; if (!w || !sid || w.thread !== sid || !(isNew || PHONE())) return false;
-    const c = ch(wid); c.readNav = (c.readNav || 0) + 1; w.thread = null; save(); c.loadedFor = ''; c.draftFor = '';
-    // No toast: the thread is already the top row of Working, its status following the message (Sending… →
-    // Starting… → Working). A "Sent" banner over a row still saying "Sending…" contradicted it.
-    return true;
+    const c = ch(wid), trail = [...(c.trail || [])];
+    if (!isNew && trail.length) threadBack(w);
+    else { c.readNav = (c.readNav || 0) + 1; c.trail = []; w.thread = null; save(); c.loadedFor = ''; c.draftFor = ''; }
+    const destination = w.thread, nav = c.readNav;
+    // No toast: the sending thread's existing Working/send indicator owns progress.
+    return { restore() {
+      if (W[wid] !== w || w.thread !== destination || c.readNav !== nav) return;
+      c.trail = trail; openChat(wid, sid, { keepTrail: true });
+    } };
   }
   /* One send carries the whole composer (legacy Wizard H4, `composeVoiceTurnText`; James, 10 Oct 2026: "when I
    * paste a link in the text box and I send you a voice note … they should both be sent together. The images and
@@ -1135,14 +1141,15 @@ window.WizCore.chats = function createChats(H) {
     if (here) c.follow = true;
     const nm = opts.route || (isNew && PW ? PW.newModel(c) : null); // a model picked for this new chat (#11)
     if (nm) c.newModel = null;
-    // Send and go (James, 10 Oct 2026): on the phone every send steps back to the thread list, a new thread
-    // and a reply alike, so he never waits on the screen to watch it go. Keyed on the pinned thread: a thread
+    // Send and go: on the phone a reply steps back one level; a new thread
+    // returns to the list, without waiting on delivery. Keyed on the pinned thread: a thread
     // James opened since stays open.
     // It happens on the tap itself, BEFORE the outbox save is awaited (James, 10 Oct 2026: "it should immediately
     // send me back to the message list… there's a second or two delay"). Leaving after `await OUTBOX.enqueue`
     // tied the screen to the phone's IndexedDB commit plus every outbox listener's re-render: ~80 ms on a desktop
     // Chrome, 1-2 s in the phone's WebView. The reply's thread is held under Working from the same frame
     // (live.js holdSend, the orb's path) until its outbox item takes over. qa-send-leave-timing.cjs guards this.
+    const instructions = opts.instructions || viewContext(wid, how);
     const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
     const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
@@ -1150,14 +1157,14 @@ window.WizCore.chats = function createChats(H) {
     let it;
     try {
       it = await OUTBOX.enqueue({ captureId: opts.captureId, custodyId: opts.custodyId, sealKey: sealed?.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
-        instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
+        instructions, files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
     } catch (e) {
       // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
       // thread if the window is still on the list he was sent to.
       if (hold) LIVE.releaseSend?.(hold);
       if (nm) c.newModel = nm;
       if (sealed) sealed.putBack(); else if (here && !voice) KIT.drafts.set(dkey, text, tray);
-      if (left && W[wid] && !W[wid].thread) openChat(wid, sid);
+      if (left) left.restore();
       if (audio) throw e; // a recording: its caller keeps its own copy and reports it, as before
       toast('!', 'Couldn’t save that message · your words are back in the thread', 3200);
       return null;
