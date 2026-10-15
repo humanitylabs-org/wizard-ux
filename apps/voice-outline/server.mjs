@@ -44,7 +44,7 @@ const server=http.createServer(async(req,res)=>{
    const row=db.prepare('SELECT hash,bytes FROM audio WHERE take=? AND seq=?').get(take,seq);
    if(!row)return json(res,404,{error:'Chunk not found'});
    if(url.searchParams.has('raw')){res.writeHead(200,{'content-type':'audio/wav','cache-control':'no-store'});return res.end(Buffer.from(row.bytes));}
-   return json(res,200,{take,seq,hash:row.hash,bytes:row.bytes.length});
+   return json(res,200,{take,seq,hash:createHash('sha256').update(row.bytes).digest('hex'),bytes:row.bytes.length});
   }
   if(path==='/mcp' && req.method==='POST'){
    const m=JSON.parse(await body(req));let result;

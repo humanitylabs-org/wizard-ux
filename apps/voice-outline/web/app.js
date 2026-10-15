@@ -14,7 +14,7 @@ function changed(){hold||=(W.update.hold('Outline has unsaved changes'));$('save
 function operation(part,{history=true,renderView=true}={}){const op={...part,id:part.id||uid()},inv=inverse(doc,op);if(!apply(doc,op))return;if(history&&inv){undo.push({forward:part,back:inv});redo=[];}ops.push(op);changed();if(renderView)render();}
 async function save(){
  if(saving)return;saving=true;
- try{while(ops.length){const count=ops.length,snapshot=clone(doc),version=rev;
+ try{if(!ops.length){const remote=await request('./api/document');rev=remote.rev;doc=remote.document;for(const op of ops)apply(doc,op);render();await remember();}while(ops.length){const count=ops.length,snapshot=clone(doc),version=rev;
   let response;
   try{response=await request('./api/document',put({rev:version,document:snapshot}));}
   catch(e){if(e.status===409){doc=e.value.document;rev=e.value.rev;for(const op of ops)apply(doc,op);render();await remember();continue;}throw e;}
