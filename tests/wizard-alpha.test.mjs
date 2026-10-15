@@ -76,3 +76,19 @@ test('bare WAM update passthrough cannot claim pinned lifecycle support',async t
  atomic(join(h,'registry.json'),{apps:[{id:entry.id,repo:entry.repo,commit}]});atomic(join(h,'install-policy.json'),{wam:['wam'],activate:['adapter'],registry:join(h,'registry.json')});
  let calls=0;await assert.rejects(install({source:source.id,id:entry.id,commit,update:true},h,{api:f.api,runner:async()=>{calls++;}}),/pinned_update_adapter_required/);assert.equal(calls,0);
 });
+test('installed WAM aliases retain exact source identity and launcher on explicit update',async t=>{
+ const h=home(t),f=fake();f.s.apps=[entry];await subscribe('example/catalog','feature/test',h,f.api);
+ atomic(join(h,'registry.json'),{apps:[{id:'demo-next',app_id:entry.id,repo:entry.repo,commit}]});atomic(join(h,'install-policy.json'),{wam:['wam'],activate:['adapter'],registry:join(h,'registry.json'),pinned_lifecycle:1});
+ const runner=async argv=>{if(argv[0]==='adapter')atomic(argv[argv.indexOf('--receipt')+1],{id:entry.id,commit,status:'running',open_verified:true,view:'/demo-next/',launcher_id:'demo-next'});return {stdout:''};};
+ await install({source:source.id,id:entry.id,commit,update:true},h,{api:f.api,runner});
+ assert.equal(JSON.parse(readFileSync(join(h,'installed.json')))[entry.id].launcher_id,'demo-next');
+ await assert.rejects(install({source:source.id,id:entry.id,commit},h,{api:f.api,runner}),/already_installed/);
+});
+test('conflicting alias repo or ambiguous installed identity is rejected before lifecycle',async t=>{
+ const h=home(t),f=fake();f.s.apps=[entry];await subscribe('example/catalog','feature/test',h,f.api);
+ atomic(join(h,'install-policy.json'),{wam:['wam'],activate:['adapter'],registry:join(h,'registry.json'),pinned_lifecycle:1});
+ atomic(join(h,'registry.json'),{apps:[{id:'demo-next',app_id:entry.id,repo:'wrong/repo',commit}]});
+ const runner=async()=>assert.fail('must not run');await assert.rejects(install({source:source.id,id:entry.id,commit,update:true},h,{api:f.api,runner}),/installed_repository_conflict/);
+ atomic(join(h,'registry.json'),{apps:[{id:'demo-next',app_id:entry.id,repo:entry.repo,commit},{id:entry.id,repo:entry.repo,commit}]});
+ await assert.rejects(install({source:source.id,id:entry.id,commit,update:true},h,{api:f.api,runner}),/installed_identity_ambiguous/);
+});

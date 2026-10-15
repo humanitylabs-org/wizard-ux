@@ -218,7 +218,9 @@ export async function install({source,id,commit,update=false},home=stateDir(),{r
     // Executables/activation adapter are owner-local, never supplied by the remote catalog or browser.
     if(!Array.isArray(policy.wam) || !Array.isArray(policy.activate) || !policy.activate.length) fail('activation_not_configured');
     if(!policy.registry) fail('installed_registry_required');
-    const registry=readJSON(policy.registry), existing=registry.apps?.find(x=>x.id===id);
+    const registry=readJSON(policy.registry), matches=(registry.apps || []).filter(x=>x.id===id || x.app_id===id);
+    if(matches.length>1) fail('installed_identity_ambiguous');
+    const existing=matches[0];
     if(existing && existing.repo!==a.repo) fail('installed_repository_conflict');
     if(existing && !update) fail('already_installed_explicit_update_required');
     if(!existing && update) fail('not_installed_use_install');
@@ -233,7 +235,7 @@ export async function install({source,id,commit,update=false},home=stateDir(),{r
     const r=readJSON(receiptFile);
     if(r.id!==id || r.commit!==commit || r.status!=='running' || r.open_verified!==true || !/^\/[a-z0-9][a-z0-9-]*\/$/.test(r.view || '')) fail('activation_not_verified');
     const installed=existsSync(join(home,'installed.json'))?readJSON(join(home,'installed.json')):{};
-    installed[id]={source,id,repo:a.repo,commit,version:a.version,view:r.view,verified_at:Date.now()}; atomic(join(home,'installed.json'),installed);
+    installed[id]={source,id,repo:a.repo,commit,version:a.version,view:r.view,launcher_id:ID.test(r.launcher_id || '')?r.launcher_id:(existing?.id || id),verified_at:Date.now()}; atomic(join(home,'installed.json'),installed);
     return {id,source,commit,version:a.version,view:r.view,open_verified:true};
   });
 }
