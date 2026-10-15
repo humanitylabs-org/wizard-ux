@@ -1,0 +1,15 @@
+{
+  "source_repository": "humanitylabs-org/wizard-os",
+  "runtime_commit": "89ff5f69658481cdf0fec6715771f5ff0ab7910e",
+  "qa_commit": "f3f99a886eec5b5a457805a2f8771fc2d72c8444",
+  "deployed": false,
+  "kind": "static review artifact; not WAM-installed app",
+  "target": "wizard-ux/web/style-review/",
+  "files": {
+    "demo.html": "daab7b9cb1cb1e7706ea1540c74e21ece7c8b629187bd897a6effb121af8f326",
+    "tokens.css": "fdb2b9a39a2b2b4893a5f3f3d13db4e685097dcdd55037ebb9d102ffccdedca1",
+    "ui.css": "501dc71ed11147f93949e6cc1b2c22cbaf238d65bc1e3dd3098d566947513c43",
+    "boot.js": "105fead61e4c55d3d2512391f3dac8bb213fad5cee4ef81e14ed3a1177d8ed3b",
+    "appearance-client.js": "475faef273658dcd88ab39b5426003e1b776e7156ed7953eaf6e22acd89e17cc"
+  }
+}
