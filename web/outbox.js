@@ -9,6 +9,9 @@
   const BACKOFF = [2000, 5000, 15000, 30000, 60000, 120000], AUTO_TRIES = BACKOFF.length;
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
+  // Unreconciled fallback rows must not overwrite or replay an inaccessible primary receipt.
+  const quarantine = new Set();
+  const unconfirmed = 'Could not confirm steering · original kept. Not retried: the run may already have received it.';
   let db = null, opening = null, ready = null, recovered = false, pumping = false, timer = 0;
   const now = () => Date.now();
   const emit = () => { for (const fn of listeners) try { fn(api); } catch (e) { console.error(e); } paintNotice(); };
@@ -72,6 +75,7 @@
     return it;
   }
   async function persist(it) {
+    if (quarantine.has(it.id)) return it;
     const copy = { ...it }; delete copy.durable; delete copy.storageError;
     try {
       await open(); await tx('readwrite', s => s.put(copy));
@@ -110,24 +114,35 @@
   function recover(it, durable = true) {
     if (it.kind === 'dictation' && it.state === 'transcribing') it.state = 'held';
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
+    if (it.steerDispatch === 'started' && it.state !== 'sent') { it.state = 'unconfirmed'; it.error = unconfirmed; }
     if (it.state === 'sending') it.state = 'waiting';
     if (it.state === 'processing' || it.state === 'preparing') { it.state = it.intent === 'command' ? 'held' : 'failed'; it.error = 'Interrupted before sending · recording kept. Retry sends to its original destination.'; }
     it.durable = durable;
     const old = items.get(it.id);
-    if (!old || (old.state !== 'sent' && (it.state === 'sent' || (it.updatedAt || it.createdAt) > (old.updatedAt || old.createdAt)))) items.set(it.id, it);
+    if (!old || (old.state !== 'sent' && (it.state === 'sent' || (it.updatedAt || it.createdAt) > (old.updatedAt || old.createdAt) || (it.steerDispatch === 'started' && (it.updatedAt || it.createdAt) === (old.updatedAt || old.createdAt))))) items.set(it.id, it);
   }
   function load() {
     if (ready) return ready;
     ready = (async () => {
-      try { await open(); for (const it of await tx('readonly', s => s.getAll()) || []) recover(it); recovered = true; } catch (_) { db = null; recovered = false; }
+      const recoveredIds = new Set();
       try {
-        for (const it of JSON.parse(localStorage.getItem(LS) || '[]')) recover(decode(it));
-        for (const key of Object.keys(localStorage)) if (key.startsWith(PREFIX)) recover(decode(JSON.parse(localStorage.getItem(key))));
+        await open(); for (const it of await tx('readonly', s => s.getAll()) || []) { recoveredIds.add(it.id); recover(it); }
+        recovered = true;
+      } catch (_) { db = null; recovered = false; }
+      const fallback = x => {
+        recoveredIds.add(x.id);
+        if (!recovered && !items.has(x.id)) quarantine.add(x.id);
+        recover(decode(x));
+      };
+      try {
+        for (const it of JSON.parse(localStorage.getItem(LS) || '[]')) fallback(it);
+        for (const key of Object.keys(localStorage)) if (key.startsWith(PREFIX)) fallback(JSON.parse(localStorage.getItem(key)));
+        if (recovered) quarantine.clear();
         // Migrate the legacy array before removing it, including old missing-audio warnings.
         let migrated = true;
-        for (const x of JSON.parse(localStorage.getItem(LS) || '[]')) { const it = items.get(x.id); if (it && !(await put(it)).durable) migrated = false; }
-        if (migrated) localStorage.removeItem(LS);
-      } catch (_) {}
+        for (const x of JSON.parse(localStorage.getItem(LS) || '[]')) { const it = items.get(x.id); if (it && (quarantine.has(it.id) || !(await put(it)).durable)) migrated = false; }
+        if (migrated) { try { localStorage.removeItem(LS); } catch (_) {} }
+      } catch (_) { recovered = false; for (const id of recoveredIds) quarantine.add(id); }
       const C = window.WosCarry;
       if (C && Array.isArray(C.outbox)) {
         let safe = true;
@@ -196,8 +211,39 @@
     if (fileIds.length > 8) throw new HttpError(409, 'Too many attachments including the recording · originals kept');
     const aq = it.agent ? `?agent=${encodeURIComponent(it.agent)}` : '';
     const input = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
-    // All outbox sends use the idempotent queue. /steer has no reconciliation contract: a lost
-    // successful steer followed by a queued retry can otherwise deliver the same message twice.
+    // Freeze an exact-run steer separately from new-run admission. This endpoint has NO
+    // durable idempotency ledger: persist intent before dispatch and never replay ambiguity.
+    if (it.steerRunId) {
+      if (it.steerDispatch === 'started') { it.state = 'unconfirmed'; it.error = unconfirmed; await put(it); return; }
+      if (!it.steerBody) {
+        it.steerBody = JSON.stringify({ input, model: it.model, provider: it.provider, require_model_lock: true,
+          ...(it.agent ? { agent: it.agent } : {}), ...(fileIds.length ? { wizard_file_ids: fileIds } : {}) });
+        it.steerTarget = it.steerRunId;
+      }
+      const frozen = JSON.parse(it.steerBody);
+      if (it.steerTarget !== it.steerRunId || frozen.model !== it.model || frozen.provider !== it.provider ||
+          (frozen.agent || '') !== (it.agent || '') || frozen.require_model_lock !== true)
+        throw new HttpError(409, 'Stored steer route changed · original kept');
+      // Refuse to mutate without a durable dispatch journal, even if audio was uploaded.
+      it.steerDispatch = 'started'; await put(it);
+      if (!it.durable) { delete it.steerDispatch; throw new HttpError(409, 'Device save failed · steering not dispatched; original kept'); }
+      let receipt;
+      try {
+        const r = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerTarget)}/steer` + aq,
+          { method: 'POST', headers: { ...J, 'Idempotency-Key': it.id }, body: it.steerBody });
+        receipt = await r.json();
+        if (receipt?.accepted !== true || ('run_id' in receipt && receipt.run_id !== it.steerTarget)) throw new Error('Invalid steer receipt');
+      } catch (e) {
+        // Explicit client rejection is retryable against the SAME run. Timeout/server/JSON
+        // failure is ambiguous, not evidence of rejection, and cannot fall back to admission.
+        if (e.status >= 400 && e.status < 500 && e.status !== 408) {
+          it.steerDispatch = 'rejected'; it.state = 'failed'; it.error = reason(e);
+        } else { it.state = 'unconfirmed'; it.error = unconfirmed; }
+        it.attempts = (it.attempts || 0) + 1; it.lastAttemptAt = now();
+        it.nextAt = 0; await put(it); return;
+      }
+      return done(it, { steered: true, steerQueued: receipt.status === 'queued', runId: it.steerTarget });
+    }
     if (it.kind === 'new' && !it.sessionReady) {
       try { await call('/wizard/hermes/api/sessions' + aq, { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id: it.sessionId, model: it.model, provider: it.provider, ...(it.agent ? { agent: it.agent } : {}) }) }); }
       catch (e) { if (e.status !== 409) throw e; }
@@ -219,7 +265,7 @@
   }
   async function done(it, res) {
     if (it.audio && !it.audioFile?.id) throw new HttpError(502, 'No recording upload receipt · original kept');
-    Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, steered: false, error: '' });
+    Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, steered: !!res.steered, steerQueued: !!res.steerQueued, error: '' });
     delete it.audio;
     await put(it);
     for (const fn of sentHooks) try { fn(it, res); } catch (e) { console.error(e); }
@@ -241,7 +287,7 @@
       await load();
       for (const it of items.values()) if (it.storageError || !it.durable) await put(it);
       for (;;) {
-        const due = [...items.values()].filter(it => it.kind !== 'dictation' && ['queued', 'waiting'].includes(it.state) && (it.nextAt || 0) <= now()).sort((a, b) => a.createdAt - b.createdAt)[0];
+        const due = [...items.values()].filter(it => !quarantine.has(it.id) && it.kind !== 'dictation' && ['queued', 'waiting'].includes(it.state) && (it.nextAt || 0) <= now()).sort((a, b) => a.createdAt - b.createdAt)[0];
         if (!due) break;
         await attempt(due);
       }
@@ -251,9 +297,9 @@
   function schedule(ms) {
     clearTimeout(timer);
     if (ms == null) {
-      const next = [...items.values()].filter(it => it.state === 'waiting').map(it => it.nextAt || 0);
+      const next = [...items.values()].filter(it => !quarantine.has(it.id) && it.state === 'waiting').map(it => it.nextAt || 0);
       if (!recovered || [...items.values()].some(it => it.storageError || !it.durable)) next.push(now() + 5000);
-      if ([...items.values()].some(it => it.kind !== 'dictation' && it.state === 'queued')) next.push(now());
+      if ([...items.values()].some(it => !quarantine.has(it.id) && it.kind !== 'dictation' && it.state === 'queued')) next.push(now());
       if (!next.length) return;
       ms = Math.max(0, Math.min(...next) - now());
     }
@@ -263,13 +309,13 @@
   function make(o) {
     return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
       kind: o.kind === 'reply' ? 'reply' : 'new', sessionId: o.sessionId || newSessionId(), steerRunId: o.steerRunId || '',
-      text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: o.files || [],
+      text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
       sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false };
   }
   function notice() {
-    const troubled = [...items.values()].filter(it => it.state !== 'sent' && (it.storageError || !it.durable));
-    if (!troubled.length) return '';
+    const troubled = [...items.values()].filter(it => !quarantine.has(it.id) && it.state !== 'sent' && (it.storageError || !it.durable));
+    if (!troubled.length) return quarantine.size ? 'Saved items waiting for device storage verification · not sending these items.' : '';
     return troubled.some(it => !it.durable)
       ? 'Device save failed · kept in this tab. Retrying storage; keep Wizard open.'
       : 'Device save failed · complete backup kept. Retrying storage.';
@@ -311,13 +357,14 @@
       } catch (e) { it.error = String(e.message || e); }
       it.state = 'held'; await put(it); return it;
     },
-    recordings() { return [...items.values()].filter(it => it.audio && it.state !== 'capturing' && (it.kind === 'dictation' || it.kind === 'capture' || it.storageError || ['empty', 'held', 'failed'].includes(it.state))); },
+    recordings() { return [...items.values()].filter(it => it.audio && it.state !== 'capturing' && (it.kind === 'dictation' || it.kind === 'capture' || it.storageError || ['empty', 'held', 'failed', 'unconfirmed'].includes(it.state))); },
 
     // Stage original audio before the phone's pre-send transcription/router, with its sealed route.
     async stage(o) {
       await load();
       const prior = o.captureId && items.get(o.captureId);
       if (prior?.captureWrite) await prior.captureWrite;
+      const existing = o.nativeId && api.nativeItem(o.nativeId); if (existing) return existing;
       const it = make(o); if (prior) { it.id = prior.id; it.createdAt = prior.createdAt; }
       it.state = 'processing'; await put(it); schedule(); return it;
     },
@@ -336,11 +383,12 @@
     async protect(id) { const it = items.get(id); if (it) await keepAudio(it); return it; },
     // Callers must await this instead of mutating a recovered item only in RAM.
     async transition(id, state, error = '') {
-      const it = items.get(id); if (!it || it.state === 'sent') return it;
+      const it = items.get(id); if (!it || quarantine.has(id) || it.steerDispatch === 'started' || it.state === 'sent') return it;
       if (!['empty', 'held', 'failed'].includes(state)) throw new Error('Invalid custody transition');
       Object.assign(it, { state, error, nextAt: 0 }); await put(it); schedule(); return it;
     },
     get recoveryComplete() { return recovered; },
+    quarantined(id) { return quarantine.has(id); },
     ownsSeal(key) { return [...items.values()].some(it => it.sealKey === key); },
     nativeItem(id) { return [...items.values()].find(it => it.nativeId === id); },
     async enqueue(o) {
@@ -355,7 +403,7 @@
       const held = (o.custodyId && items.get(o.custodyId)) || (o.nativeId && api.nativeItem(o.nativeId));
       const it = held || make({ ...o, agent, ...(snapshot || {}) });
       if (held) {
-        if (held.state === 'sent' || held.body) return held;
+        if (held.state === 'sent' || held.body || held.steerBody || quarantine.has(held.id)) return held;
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
         Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid });
@@ -371,13 +419,13 @@
       } catch (e) { it.state = 'failed'; it.error = String(e.message || e); }
       await put(it); pump(); return it;
     },
-    retry(id) { const it = items.get(id); if (!it || it.kind === 'dictation' || ['sent', 'sending', 'processing', 'preparing', 'missing', 'held'].includes(it.state)) return; Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); put(it).then(pump); },
+    retry(id) { const it = items.get(id); if (!it || quarantine.has(id) || it.steerDispatch === 'started' || it.kind === 'dictation' || ['sent', 'unconfirmed', 'sending', 'processing', 'preparing', 'missing', 'held'].includes(it.state)) return; Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); put(it).then(pump); },
     retryAll() { for (const it of items.values()) if (it.kind !== 'dictation' && it.state === 'waiting') Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); Promise.all([...items.values()].map(put)).then(pump); },
     unsent() { return [...items.values()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
     forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && it.kind !== 'dictation' && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     get(id) { return items.get(id) || null; },
     landed(id) { const it = items.get(id); if (it?.state === 'sent') del(id); },
-    async remove(id) { const it = items.get(id); if (!it || ['sending', 'transcribing', 'processing'].includes(it.state)) return false; await del(id); return !!items.get(id)?.durable; },
+    async remove(id) { const it = items.get(id); if (!it || quarantine.has(id) || ['sending', 'transcribing', 'processing'].includes(it.state)) return false; await del(id); return !!items.get(id)?.durable; },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     onSent(fn) { sentHooks.add(fn); return () => sentHooks.delete(fn); },
     notice, paintNotice, pump, load, bounded, _items: items, AUTO_TRIES, BACKOFF,

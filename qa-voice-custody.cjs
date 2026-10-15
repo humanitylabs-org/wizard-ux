@@ -72,7 +72,13 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
     await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());await sleep(250);
     const row=await f.row(id);
     ok(row?.audio===audio.length,`${fault}: full recording and typed context survive reload`);
-    if(row?.audio){f.W.down=false;await f.retry(id);await f.wait(id,'sent');
+    if(row?.audio){
+      if(fault==='open'){
+        f.W.down=false;await f.retry(id);
+        ok(f.W.runs.size===0&&await f.page.evaluate(id=>WosOutbox.quarantined(id),id),'unavailable primary: recovered fallback is quarantined, not replayed');
+        await f.page.evaluate(async()=>{__fault.open=false;await WosOutbox.load();});
+      }
+      f.W.down=false;await f.retry(id);await f.wait(id,'sent');
       ok(f.W.uploads.every(u=>u.hash===hash&&u.bytes===audio.length),`${fault}: exact original bytes confirmed by upload receipt`);
       const runs=[...f.W.runs.values()];ok(runs.length===1&&JSON.parse(runs[0].body).session_id==='thread-original'&&JSON.parse(runs[0].body).model==='model-original'&&JSON.parse(runs[0].body).provider==='provider-original',`${fault}: same destination/model/provider, one run`);
       ok(!(await f.row(id)).audio,`${fault}: audio released only after server receipts`);

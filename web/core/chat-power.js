@@ -230,12 +230,12 @@ window.WosChatPower = function chatPower(A) {
   const micBtn = wid => { if (!H.recordReply) return ''; const sid = H.win(wid)?.thread, on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
   /* A recording made from a thread's composer: always delivered to that thread (pinned when recording started),
    * through the durable outbox, which transcribes it and keeps the recording as a voice note. */
-  async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null, custodyId = null, captureId = null) {
+  async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null, custodyId = null, captureId = null, capturedRunId = undefined) {
     if (!OUTBOX || !blob || !sid) return null;
     const w = H.win(wid), c = ch(wid);
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
-    const steerRunId = s && A.WORKING_ST.has(s.status) && s.runId ? s.runId : '';
+    const steerRunId = capturedRunId ?? (s && A.WORKING_ST.has(s.status) && s.runId ? s.runId : '');
     const nm = route || (isNew ? (c.newModel || null) : null);
     // The thread's composer rides with the recording as ONE message (legacy H4): the words typed or pasted
     // there (a link, say) go before the transcript, its photos and files with the voice note, and the composer

@@ -275,6 +275,7 @@
     return w;
   }
   function editUnsent(it) {
+    if (it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id)) { toast('!', it.error || 'Waiting for device storage verification · original kept', 3200); return; }
     if (it.body) { toast('!', 'Delivery is uncertain · retry this submission to reconcile before editing', 3000); return; }
     const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
     const w = known ? (openThread(it.sessionId), focused()) : newChat();
@@ -737,7 +738,7 @@
     $('#ibSub').textContent = LIVE?.ok ? `${L.needs.length} need you · ${L.ready.length} unread · ${L.working.length} working` : 'Connecting…';
     const row = (s, k) => `<button class="ib-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="bd"><b>${esc(s.title)}</b><span>${esc(clip(s.preview || '', 140))}</span></span><time>${esc(ago(LIVE.cardAt(s)))}</time>${k === 'ready' ? `<span class="rd" data-read="${esc(s.id)}">Mark read</span>` : ''}</button>`;
     const sec = (k, label, list) => `<div class="ib-sec" data-k="${k}"><h4>${label}${list.length ? ` · ${list.length}` : ''}</h4>${list.length ? list.map(s => row(s, k)).join('') : '<div class="ib-none">None</div>'}</div>`;
-    $('#ibBody').innerHTML = (unsent.length ? `<div class="ib-sec" data-k="unsent"><h4>Not sent yet · ${unsent.length}</h4>${unsent.map(u => `<div class="ib-row"><span class="emo">⏳</span><span class="bd"><b>${esc(clip(u.text || 'Voice note', 60))}</b><span>${esc(u.state === 'failed' ? 'Not sent · ' + (u.error || '') : 'Sending…')}</span></span></div>`).join('')}</div>` : '')
+    $('#ibBody').innerHTML = (unsent.length ? `<div class="ib-sec" data-k="unsent"><h4>Not sent yet · ${unsent.length}</h4>${unsent.map(u => `<div class="ib-row"><span class="emo">⏳</span><span class="bd"><b>${esc(clip(u.text || 'Voice note', 60))}</b><span>${esc(OUTBOX.quarantined(u.id) ? 'Waiting for device storage verification' : u.state === 'unconfirmed' ? u.error : u.state === 'held' ? 'Kept on this device · not queued' : u.state === 'failed' ? 'Not sent · ' + (u.error || '') : 'Sending…')}</span></span></div>`).join('')}</div>` : '')
       + sec('needs', 'Needs you', L.needs) + sec('ready', 'Unread', L.ready) + sec('working', 'Working', L.working);
     const rows = $$('.ib-row[data-thread]', ib); ibSel = Math.min(ibSel, rows.length - 1); rows[ibSel]?.classList.add('sel');
   }
@@ -819,7 +820,7 @@
       if (action === 'send') return 'none';
       vMode = 'talk'; vNewChat = forceNew; vNewKey = newKey;
       const f = focused(); vTarget = !forceNew && f?.app === 'chats' && (f.thread || f.agent) ? f.id : null;
-      vReply = vTarget && f.thread ? { wid: f.id, sid: f.thread } : null;
+      vReply = vTarget && f.thread ? { wid: f.id, sid: f.thread, steerRunId: CHATS.WORKING_ST.has(LIVE.session(f.thread)?.status) ? LIVE.session(f.thread)?.runId || '' : '' } : null;
       vContext = viewContext(vTarget, forceNew ? 'voice, new chat' : 'voice, aimed at this thread');
       $('#voiceTime').textContent = '0:00';
       try { await VOICE.start(); } catch (e) { toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
@@ -841,7 +842,7 @@
     if ((!r || !r.blob) && sealed) sealed.putBack();
     if (!r || !r.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed, modelRoute, null, r.captureId); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
+    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed, modelRoute, null, r.captureId, rp.steerRunId); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
     if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { captureId: r.captureId, sid: aimSid, seal: sealed, route: modelRoute });
     else {
       const item = await OUTBOX.enqueue({ ...modelRoute, captureId: r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', files: sealed?.files || [], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: '', instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
@@ -857,7 +858,7 @@
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (VOICE.state === 'listen') { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
     if (!sid) return 'busy';
-    vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid }; vContext = viewContext(wid, 'voice, aimed at this thread');
+    vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' }; vContext = viewContext(wid, 'voice, aimed at this thread');
     $('#voiceTime').textContent = '0:00';
     try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
     return 'recording';

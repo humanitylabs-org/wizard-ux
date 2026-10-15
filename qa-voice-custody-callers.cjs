@@ -37,7 +37,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    if(p.endsWith('/api/jobs'))return json({jobs:[]});
    if(p.endsWith('/v1/runs'))return json({runs:[]});
    if(p.endsWith('/api/model/options'))return json({model,provider,providers:[{slug:provider,name:'QA provider',authenticated:true,is_current:true,models:[model]}]});
-   if(p.endsWith('/agents'))return json({agents:[{id:'hermes',label:'Wizard',is_default:true,status:'running',model:{model,provider}}]});
+   if(p.endsWith('/agents'))return json({agents:[{id:'hermes',label:'Wizard',is_default:true,status:'running',model:{model,provider}},{id:'research',label:'Research',status:'running',model:{model,provider}}]});
    if(p.includes('/thread-seen'))return json({seen:{}});
    if(p.endsWith('/resources'))return json({resources:[]});
    if(p.endsWith('/files')||p.endsWith('/files/list'))return json({files:[]});
@@ -59,10 +59,12 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   const wid=await p.evaluate(sid=>{const A=window.__wos||window.__wux;const w=A.openWin?A.openWin({app:'chats'}):null;const id=w?.id||Object.keys(A.wins).find(k=>A.wins[k].app==='chats');if(!id)throw Error('No chat window');A.chats.openChat(id,sid);A.focusWin?.(id);return id;},sid);
   await p.waitForSelector(`[data-chats="${wid}"] textarea`);
   const take=async()=>{await p.evaluate(()=>document.activeElement?.blur());await p.evaluate(()=>__wos.startVoice('auto'));await p.waitForFunction(()=>__wos.voice==='listen');await sleep(1100);await p.evaluate(()=>__wos.finishVoice());};
-  const rows=()=>p.evaluate(()=>[...WosOutbox._items.values()].map(x=>({id:x.id,state:x.state,kind:x.kind,text:x.text,typed:x.typed,sealKey:x.sealKey,blob:x.audio?.size,files:x.files,sessionId:x.sessionId,model:x.model,provider:x.provider,durable:x.durable,storageError:x.storageError,nativeId:x.nativeId})));
+  const rows=()=>p.evaluate(()=>[...WosOutbox._items.values()].map(x=>({id:x.id,state:x.state,kind:x.kind,text:x.text,typed:x.typed,sealKey:x.sealKey,blob:x.audio?.size,files:x.files,sessionId:x.sessionId,model:x.model,provider:x.provider,durable:x.durable,steered:x.steered,runId:x.runId,steerRunId:x.steerRunId,storageError:x.storageError,nativeId:x.nativeId})));
   const done=async name=>{ok(!state.errors.length,`${name}: no browser errors`,state.errors);await ctx.close();};
   return {ctx,p,state,wid,take,rows,done};
  }
+ await require('./qa-voice-custody-repairs.cjs')({boot,ok,sleep,sid,model,provider});
+ if(process.env.QA_REPAIR_ONLY==='1'){await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  // Phone voice+composer: crash while preprocessing must not restore a second composer owner.
  {
   const f=await boot();await f.p.locator(`[data-chats="${f.wid}"] textarea`).fill(typed);

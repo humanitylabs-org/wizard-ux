@@ -1107,12 +1107,13 @@
   }
   function unsentRow(it) {
     const when = ago(new Date(it.createdAt).toISOString());
-    const st = it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
+    const blocked = it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id);
+    const st = blocked ? esc(OUTBOX?.quarantined(it.id) ? 'Waiting for device storage verification' : it.error) : it.state === 'held' ? 'Kept on this device · not queued' : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
     const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
     return `<div class="ub-row ${it.state}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}">
       <div class="ub-t">${it.audio || it.audioFile || it.hasAudio ? MIC_SVG : ''}<span>${esc(it.text || 'Voice note · words come when it sends')}</span></div>
       <div class="ub-m">${src} · ${esc(when)} · ${st}</div>
-      <div class="ub-a"><button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>${it.origin === 'app' && it.sessionId && LIVE?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
+      <div class="ub-a">${!blocked && it.state !== 'held' ? `<button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>` : ''}${it.origin === 'app' && it.sessionId && LIVE?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' && !blocked ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
   }
   function renderSettings() {
     readNativeUnsent();
@@ -1125,7 +1126,7 @@
       <h3 class="st-title">Settings</h3>
       <div class="st-group"><h4>Unsent <span>${all.length || ''}</span></h4>
         ${all.length ? all.map(unsentRow).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">Everything you’ve said reached Wizard.</div>'}
-        <p class="st-note">Every message is saved on this phone before it’s sent, and retried until Wizard accepts it.</p></div>
+        <p class="st-note">Originals are kept while delivery is pending. Unconfirmed steering is never automatically retried.</p></div>
       ${lookGroup()}
       <div class="st-group"><h4>Assistant</h4>
         <button class="st-row" data-st="everywhere" ${evNative ? '' : 'disabled'}><span class="st-ic">${window.WizBrand.html}</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
@@ -1193,6 +1194,7 @@
   }
   // Edit puts the words back in a composer (the thread's, or a new chat's) and takes the item out of the queue.
   function editUnsent(it) {
+    if (it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id)) { toast('!', it.error || 'Waiting for device storage verification · original kept', 3200); return; }
     if (it.body) { toast('!', 'Delivery is uncertain · retry this submission to reconcile before editing', 3000); return; }
     closeSheets(true);
     const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
@@ -2043,20 +2045,7 @@
   // through __wosVoiceCmd below; it never starts a second recorder.
   const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : null; };
   function nativeBlob(id, expected) {
-    const dev = DEV(), parts = []; let off = 0;
-    const strict = expected !== undefined; let complete = false, size = 0;
-    if (strict && (!Number.isSafeInteger(expected) || expected < 0)) throw new Error('Native recording size unavailable');
-    for (let k = 0; k < 4000 && off >= 0; k++) {
-      let c = null; try { c = JSON.parse(dev.recRead(id, off)); } catch (e) {}
-      if (!c) { if (strict) throw new Error('Native audio read incomplete'); break; }
-      if (strict && (typeof c.b64 !== 'string' || !Number.isInteger(c.next))) throw new Error('Native audio chunk invalid');
-      const bin = atob(c.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-      size += u.length;
-      if (strict && (size > expected || (c.next !== -1 && (c.next <= off || c.next !== off + u.length)))) throw new Error('Native audio chunk incomplete');
-      parts.push(u); off = c.next; complete = off === -1;
-    }
-    if (strict && (!complete || size !== expected)) throw new Error('Native audio read incomplete');
-    return new Blob(parts, { type: 'audio/aac' });
+    return window.WosDevice.readRecording(id, expected);
   }
   /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
   function nativeTakeAppOwned(id) {
@@ -2067,6 +2056,14 @@
     if (!V.native || nativeTakeAppOwned(V.native)) return false;
     try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id !== V.native) return false; DEV().recPause(on); return true; } catch (_) { return false; }
   }
+  const VOICE_RECOVERY_KEY = 'wos.voice-recovery.v1';
+  function voiceRecovery(id, meta) {
+    const rows = JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}');
+    if (meta === false) delete rows[id];
+    else rows[id] = { ...rows[id], ...meta, id, send: false };
+    localStorage.setItem(VOICE_RECOVERY_KEY, JSON.stringify(rows));
+  }
+  window.__wosVoiceRecovery = () => { try { return Object.values(JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}')); } catch (_) { return []; } };
   function nativeFinish(id, stopped) {
     if (nativeTakeAppOwned(id)) { setVoice('paused'); toast('🎙', 'This recording belongs to another app'); return; }
     // Notification/Everywhere Send enters here directly, bypassing finishVoice. Seal the model before claiming
@@ -2076,7 +2073,7 @@
       // Preserve a reload-visible exact-ID recovery owner BEFORE a destructive native claim.
       try { dictationRecovery(id, { ms: V.acc, state: 'retained' }); }
       catch (_) { pauseNativeTake(true); setVoice(stopped ? 'idle' : 'paused'); toast('!', 'Storage unavailable · dictation remains on the device'); return; }
-      try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (_) {}
+      try { meta = stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosDictationRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id)); } catch (_) {}
       V.native = null; V.kind = 'dictation';
       if (!meta) { setVoice('idle'); txHide(); toast('!', 'Dictation retained · could not read recording'); return; }
       V.acc = Math.max(V.acc, Number(meta.ms) || 0);
@@ -2101,16 +2098,28 @@
       toast('!', 'Recording saved · ' + String(e.message || e), 3200); return;
     }
     const dev = DEV(); let meta = null;
-    try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (e) {}
+    // recStop in shipped shells implicitly claims. Journal a reload-visible owner before
+    // that bridge call; already-stopped takes are read without recClaim.
+    try { voiceRecovery(id, { kind: V.kind, ms: V.acc }); }
+    catch (_) { pauseNativeTake(true); setVoice(stopped ? 'idle' : 'paused'); toast('!', 'Storage unavailable · recording remains on device'); return; }
+    try {
+      meta = stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosVoiceRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id));
+      if (meta?.id === id) voiceRecovery(id, meta);
+    } catch (e) { meta = null; }
     V.native = null;
-    if (!meta) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
+    if (!meta || meta.id !== id) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('!', 'Could not read recording · original kept on device'); return; }
     // A shipped kind-less recActive bridge reveals the original mode only after an explicit stop.
     // Preserve command routing even when its older take had no page-side provenance at recovery.
     if (['auto', 'command', 'dictation'].includes(meta.kind)) V.kind = meta.kind;
     V.acc = Math.max(V.acc, Number(meta.ms) || 0);
-    onRecStop(nativeBlob(id), id);
+    try { return onRecStop(nativeBlob(id, Number(meta.bytes)), id); }
+    catch (e) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('!', String(e.message || 'Recording retained · could not read audio'), 4000); }
   }
-  const recDone = id => { try { id && DEV()?.recDone(id); if (id) { window.WosModels.forgetVoiceRoute(id); dictationTake(id, false); dictationRecovery(id, false); } } catch (e) {} };
+  const releasedTakes = new Set();
+  const recDone = id => {
+    if (!id || releasedTakes.has(id) || !DEV()?.recDone) return;
+    try { DEV().recDone(id); releasedTakes.add(id); window.WosModels.forgetVoiceRoute(id); dictationTake(id, false); dictationRecovery(id, false); voiceRecovery(id, false); } catch (e) {}
+  };
   /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
   // Positive provenance for the shipped kind-less native ABI. Never infer ownership by claiming audio.
   const VOICE_TAKE_KEY = 'wos.voice-take.v1';
@@ -2295,7 +2304,7 @@
       if (id === null) { localStorage.removeItem(REPLY_KEY); return null; }
       if (val) { localStorage.setItem(REPLY_KEY, JSON.stringify({ id, ...val })); return val; }
       const r = JSON.parse(localStorage.getItem(REPLY_KEY) || 'null');
-      return r && r.id === id && r.sid ? { wid: W[r.wid] ? r.wid : '', sid: r.sid } : null;
+      return r && r.id === id && r.sid ? { wid: W[r.wid] ? r.wid : '', sid: r.sid, steerRunId: r.steerRunId || '' } : null;
     } catch (e) { return null; }
   }
   window.__wosReplyTake = id => replyTake(id);
@@ -2311,8 +2320,8 @@
     if (shared?.active || shared?.recording || shared?.hold) { toast('🎙', 'Microphone held by another app', 2000); return 'busy'; }
     try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id) { toast('🎙', 'An existing native recording is still held', 2200); return 'busy'; } } catch (_) { return 'busy'; }
     startVoice('auto');
-    V.replyTo = { wid, sid };
-    if (V.native) replyTake(V.native, { wid, sid });
+    V.replyTo = { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' };
+    if (V.native) replyTake(V.native, V.replyTo);
     CHATS.PW?.paintMic(true, sid);
     // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
     // animates."): the lit mic, the orb and its timer already say a reply is recording.
@@ -2586,7 +2595,7 @@
     stopStream(); V.rec = null; Orb.setLevel(0);
     if (V.cancelled) { recDone(nid); dropHold(); unseal(); return; }
     if (V.kind === 'dictation') { const id = V.custodyCapture; V.custodyCapture = null; if (id) await OUTBOX.transition(id, 'held', 'Dictation recording · original kept'); return transcribeDictation(blobs, nid, id); }
-    if (V.acc < 450 || size < 1200) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); tourEv('nospeech'); return; }
+    if (!nid && (V.acc < 450 || size < 1200)) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); tourEv('nospeech'); return; }
     // A voice reply from a thread's composer goes to that thread, as recorded: no routing, no commands,
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
     const snap = V.snap || sendSnap(); V.snap = null;
@@ -2598,7 +2607,8 @@
     const sv = snap.view, sid = rt?.sid || (aimAt == null ? sv?.thread || '' : '');
     const audio = new Blob(blobs, { type: blob.type || 'audio/webm' });
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
-      sessionId: sid && sid !== '__new__' ? sid : '', audio, typed: snap.seal?.text || '',
+      sessionId: sid && sid !== '__new__' ? sid : '',
+      steerRunId: rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '',
       sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
       files: [...V.files, ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
