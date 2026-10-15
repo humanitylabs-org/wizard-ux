@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {apply,moveOperation,visible,depth,validateDocument,SpeechLedger,inverse} from '../web/model.js';
+const doc=()=>({title:'Ideas',nodes:[{id:'a',parent:null,text:'First',folded:false},{id:'b',parent:null,text:'Second',folded:false},{id:'c',parent:'b',text:'Child',folded:false}],applied:[]});
+const run=(d,o)=>apply(d,{...o,id:o.id||crypto.randomUUID()});
+test('indent and outdent move the entire subtree without a global depth cap',()=>{const d=doc();run(d,moveOperation(d,'b',1));assert.equal(d.nodes[1].parent,'a');assert.equal(depth(d,d.nodes[2]),2);run(d,moveOperation(d,'b',-1));assert.equal(d.nodes[1].parent,null);validateDocument(d);});
+test('fold hides descendants, not sibling text',()=>{const d=doc();run(d,{kind:'fold',target:'b',folded:true});assert.deepEqual(visible(d).map(n=>n.id),['a','b']);});
+test('voice deduplicates by immutable event id, follows moved identity',()=>{const d=doc();run(d,moveOperation(d,'b',1));const o={id:'speech-u1',kind:'voice',target:'b',text:'Spoken'};run(d,o);run(d,o);assert.equal(d.nodes.find(n=>n.id==='b').text,'Second Spoken');});
+test('late voice to deleted bullet is recovered, not lost',()=>{const d=doc();run(d,{kind:'delete',target:'b'});run(d,{kind:'voice',target:'b',text:'Late words'});assert.equal(d.nodes.find(n=>n.id==='b').text,'Late words');});
+test('conflicting offline edits preserve both versions',()=>{const d=doc();run(d,{kind:'text',target:'a',before:'First',text:'Remote'});run(d,{id:'offline',kind:'text',target:'a',before:'First',text:'Local'});assert.deepEqual(d.nodes.slice(0,2).map(n=>n.text),['Remote','Local']);});
+test('typing detaches only pending speech, late events retain detached target',()=>{const l=new SpeechLedger();l.begin('u','a',1);l.event({id:'u',text:'hello',type:'delta'});l.detach('a','b');l.event({id:'u',target:'a',text:'hello world',type:'final'});assert.equal(l.items.u.target,'b');assert.equal(l.items.u.text,'hello world');assert.equal(l.event({id:'u',text:'wrong duplicate',type:'final'}),null);});
+test('voice final is one undo operation; draft is untouched',()=>{const d=doc(),l=new SpeechLedger();l.begin('pending','a',2);const o={kind:'voice',target:'a',text:'Voice'};const inv=inverse(d,o);run(d,o);run(d,inv);assert.equal(d.nodes[0].text,'First');assert.equal(l.items.pending.status,'draft');});
+test('rejects invalid parent, duplicate IDs and oversized document',()=>{const d=doc();d.nodes[0].parent='c';assert.throws(()=>validateDocument(d));});
