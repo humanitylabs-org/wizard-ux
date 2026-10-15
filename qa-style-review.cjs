@@ -55,7 +55,7 @@ const mark = (name, ok, detail) => { if (!ok) throw new Error('FAILED: ' + name 
       if (qa && qa.dir) {
         const f = path.join(qa.dir, path.normalize(u.pathname.slice(qa.prefix.length) || qa.index || 'index.html'));
         if (!f.startsWith(qa.dir) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) return route.fulfill({ status: 404, body: '' });
-        return route.fulfill({ contentType: TYPES[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) });
+        return route.fulfill({ headers: { 'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'" }, contentType: TYPES[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) });
       }
       if (!['GET', 'HEAD'].includes(req.method())) return route.fulfill({ status: 403, body: 'Read-only QA' });
       // Candidate-only host overlay; leave unset for direct, uninjected live verification.
