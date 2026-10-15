@@ -428,3 +428,10 @@ body > .mviewer { position: fixed; z-index: 200; }
 .wk-helper.stalled{border-color:#a87837;}
 .wk-helper button{align-self:flex-start;min-height:44px;border:1px solid #567966;background:#233d31;color:#e1f9e9;padding:8px 14px;border-radius:10px;font:inherit;}
 .wk-helper button:disabled{opacity:.55;}
+/* Resumable upload progress (core/uploads.js): a thin bar along the chip's foot, a % on photo tiles. */
+.ch-att.up { position: relative; overflow: hidden; }
+.ch-att .ch-attbar { position: absolute; left: 0; bottom: 0; height: 3px; width: var(--up, 0%); background: var(--accent, #b9a6ff); border-radius: 0 2px 2px 0; transition: width .2s linear; }
+.ch-att.up.wait .ch-attbar { background: var(--ink-3, #888); animation: ch-attwait 1.2s ease-in-out infinite; }
+@keyframes ch-attwait { 50% { opacity: .35; } }
+.ch-att.ch-attimg .ch-attpct { position: absolute; left: 0; right: 0; top: 50%; margin-top: 14px; text-align: center; font: 600 11px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); }
+.ch-att.up .nm small { font-variant-numeric: tabular-nums; }
