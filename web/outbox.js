@@ -328,7 +328,7 @@
     nativeItem(id) { return [...items.values()].find(it => it.nativeId === id); },
     async enqueue(o) {
       const M = window.WosModels, AG = window.WosAgents;
-      const agent0 = o.kind === 'reply' ? (window.WizLive?.agentOf?.(o.sessionId) || '') : String(o.agent || '');
+      const agent0 = o.kind === 'reply' ? (String(o.agent || '') || window.WizLive?.agentOf?.(o.sessionId) || '') : String(o.agent || '');
       const agent = agent0 && agent0 !== 'hermes' ? agent0 : '';
       let snapshot = o.model ? { model: o.model, provider: o.provider || '' } : null, routeError;
       try { snapshot = M?.snapshot(o.kind === 'reply' ? o.sessionId : '', snapshot, agent) || snapshot; }

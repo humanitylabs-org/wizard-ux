@@ -2596,7 +2596,7 @@
     const audio = new Blob(blobs, { type: blob.type || 'audio/webm' });
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '', audio, typed: snap.seal?.text || '',
-      sealKey: snap.seal?.key, nativeId: nid, intent: kind, agent: sv?.agent || '',
+      sealKey: snap.seal?.key, nativeId: nid, intent: kind, agent: snap.route?.agent || sv?.agent || '',
       files: [...V.files, ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
     snap.custodyId = it.id; snap.audio = audio;

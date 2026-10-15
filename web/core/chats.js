@@ -437,7 +437,7 @@ window.WizCore.chats = function createChats(H) {
   }
   async function addFiles(wid, list) {
     const c = ch(wid); c.files = c.files || [];
-    const w = W[wid], agent = w?.thread && w.thread !== '__new__' ? (LIVE.agentOf?.(w.thread) || '') : winAgent(w);
+    const w = W[wid], agent = w?.thread && w.thread !== '__new__' ? (LIVE.agentOf?.(w.thread) || winAgent(w)) : winAgent(w);
     const picked = [...list], room = Math.max(0, MAX_FILES - c.files.length);
     if (picked.length > room) toast('!', `Up to ${MAX_FILES} files per message`, 2400);
     const locals = picked.slice(0, room).map(file => ({ file, key: Math.random().toString(36).slice(2), name: file.name, mime: file.type, bytes: file.size, uploading: true, sent: 0, total: file.size, upState: 'uploading', preview: /^image\//.test(file.type) ? URL.createObjectURL(file) : '' }));
@@ -1151,7 +1151,7 @@ window.WizCore.chats = function createChats(H) {
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
-    const AGID = isNew ? winAgent(w) : '';
+    const AGID = opts.route?.agent || (isNew ? winAgent(w) : (LIVE.agentOf?.(sid) || winAgent(w)));
     const dkey = isNew ? (AGID ? 'agentnew:' + AGID : 'new') : 'direct:' + sid;
     if (here && !voice) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; }
     if (here) c.follow = true;
