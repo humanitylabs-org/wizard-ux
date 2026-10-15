@@ -57,4 +57,3 @@ Finite coverage: 14 newly shared implementations, 7 already-live PR31 outcomes, 
 ### Parent promotion
 
 PR42 is for `daily`; this lane has not merged or deployed anything. The branch starts at live `cd9c92d`. During this work, daily acquired PR41 native PCM (`e477ac4`) and PR43 canonical app deep links (`4f68e1b`); these unrelated upstream changes must be retained by the parent's merge. They were not reverted or folded into this isolated branch's source proof. Re-run the relevant merged-source acceptance and independently verify served hashes and live phone/desktop paths after protected-branch promotion. No APK/VM rebuild is needed.
-
