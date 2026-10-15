@@ -170,7 +170,12 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
     for _ in range(8):sx('input keyevent KEYCODE_BACK');pg.pump(.15)
     check('integrated','actual shell repeated root Back never exits',pkg in top() and ev('__wos.idx===__wos.HOME'),top())
     before_cancel=len(fixture.runs());mid4=start_meeting();wait("__wos.voice==='idle'")
-    touch();wait('!!__wos.V.native');pg.pump(1.2);ev('__wos.cancelVoice(true)')
+    # Exercise the orb's real accessible keyboard activation for this extra Cancel
+    # case; short-tap timing is already covered above and can jitter under emulator load.
+    ev("document.querySelector('#orbWrap').focus()")
+    pg.call('Input.dispatchKeyEvent',type='keyDown',key='Enter',code='Enter',windowsVirtualKeyCode=13)
+    pg.call('Input.dispatchKeyEvent',type='keyUp',key='Enter',code='Enter',windowsVirtualKeyCode=13)
+    wait('!!__wos.V.native');pg.pump(1.2);ev('__wos.cancelVoice(true)')
     wait("WizAppCapture.getState().phase==='recording'")
     check('integrated','cancelled actual orb resumes same running meeting without send',cap()['meetingId']==mid4 and len(fixture.runs())==before_cancel,cap())
     stop_meeting()
