@@ -2,7 +2,7 @@
 """Upgrade smoke (runs on Thales): install the OLD release, upgrade to the NEW release in place, launch it,
 confirm it is the same app (data kept), it starts, the shell loads, and nothing crashes. Always stops the emulator.
 usage: qa_upgrade.py OLD_APK NEW_APK"""
-import fcntl, os, pathlib, re, subprocess, sys, time, uuid
+import fcntl, hashlib, json, os, pathlib, re, subprocess, sys, time, uuid
 P = pathlib.Path
 BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
 old, new = P(sys.argv[1]), P(sys.argv[2]); PKG = 'ai.wizards.os'
@@ -39,14 +39,27 @@ with (BASE / 'worker.lock').open('a') as lock:
         o1 = sh(ADB, '-s', S, 'install', old).strip().splitlines()[-1]
         check('old release installs', o1 == 'Success', o1)
         sx(f'am start -W -n {PKG}/.MainActivity'); time.sleep(6)
-        sx(f"run-as {PKG} true"); first = sx(f'dumpsys package {PKG} | grep firstInstallTime').strip()
+        sx(f'pm grant {PKG} android.permission.POST_NOTIFICATIONS')
+        old_package = sx(f'dumpsys package {PKG}')
+        first = next((l.strip() for l in old_package.splitlines() if 'firstInstallTime=' in l), '')
+        uid_match = re.search(r'(?:userId|appId)=(\d+)', old_package)
+        if not uid_match: raise RuntimeError('Package dump has no install UID: '+old_package[:2000])
+        old_uid = uid_match.group(1)
         o2 = sh(ADB, '-s', S, 'install', '-r', new).strip().splitlines()[-1]
         ver = re.search(r'versionName=\S+', sx(f'dumpsys package {PKG}')).group(0)
         check('new release installs over the old one (same signer, data kept)', o2 == 'Success' and WANT_VN and ver == 'versionName=' + WANT_VN and sx(f'dumpsys package {PKG} | grep firstInstallTime').strip() == first, (o2, ver))
+        new_package = sx(f'dumpsys package {PKG}')
+        check('same install identity and notification grant survive upgrade',
+              bool(re.search(r'(?:userId|appId)=' + old_uid + r'\b', new_package)) and 'android.permission.POST_NOTIFICATIONS: granted=true' in new_package)
+        check('release remains non-debuggable and includes native audio',
+              'DEBUGGABLE' not in new_package and 'BackgroundAudioService' in new_package)
         sx('logcat -c')
         sx(f'am start -W -n {PKG}/.MainActivity'); time.sleep(8)
         check('new release launches into Wizard OS', PKG in top(), top())
         (job / 'after.png').write_bytes(sh(ADB, '-s', S, 'exec-out', 'screencap', '-p', binary=True))
+        for step in range(3):
+            sx('input keyevent KEYCODE_BACK'); time.sleep(1)
+            check(f'signed upgrade Back step {step+1} retains Wizard', PKG in top(), top())
         sx('input keyevent KEYCODE_HOME'); time.sleep(3)
         crashed = sx('logcat -d -b crash')
         check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
@@ -56,3 +69,5 @@ with (BASE / 'worker.lock').open('a') as lock:
     finally:
         if em: sh(ADB, '-s', S, 'emu', 'kill'); em.wait(40)
 print(f'{sum(res)}/{len(res)} passed · {job}')
+(job / 'receipt.json').write_text(json.dumps({'old_sha256':hashlib.sha256(old.read_bytes()).hexdigest(), 'new_sha256':hashlib.sha256(new.read_bytes()).hexdigest(), 'expected_version':WANT_VN, 'checks':res, 'passed':sum(res), 'total':len(res), 'ok':bool(res) and all(res)},indent=2))
+sys.exit(0 if res and all(res) else 1)
