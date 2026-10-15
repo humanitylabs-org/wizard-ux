@@ -84,7 +84,7 @@ const server=http.createServer(async(req,res)=>{
 const wss=new WebSocketServer({noServer:true,maxPayload:100000});let sockets=0;
 server.on('upgrade',(req,socket,head)=>{if(!trusted(req)||req.url!=='/api/live'||!provider||sockets>=4){socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');return;}wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws));});
 wss.on('connection',ws=>{
- sockets++;const streams=new Map();let active=null,closed=false,total=0;
+ sockets++;const streams=new Map();let active=null,closed=false,total=0,providerTail=Promise.resolve();
  const send=m=>{if(ws.readyState===1)ws.send(JSON.stringify(m));};
  const save=(s,status,text)=>db.prepare('INSERT INTO speech VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET text=excluded.text,status=excluded.status,updated=excluded.updated').run(s.id,s.target,s.seq,text,status,Date.now());
  const fail=(s,e)=>{if(s.failed||s.final)return;s.failed=true;clearTimeout(s.timer);s.stream?.abort();streams.delete(s.id);save(s,'draft',s.text);send({type:'error',id:s.id,reason:String(e.message||e).slice(0,200)});};
@@ -99,6 +99,10 @@ wss.on('connection',ws=>{
     if(db.prepare('SELECT id FROM speech WHERE id=?').get(m.id))throw new Error('Utterance already exists');
     const s={id:m.id,target:m.target,seq:m.seq,text:'',queue:[],queued:0,bytes:0,ended:false};streams.set(s.id,s);active=s.id;save(s,'draft','');
     s.stream=new OutlineRealtime(provider.client,{delta:t=>{if(s.failed||s.final)return;if(s.retrying){s.text='';s.retrying=false;}s.text+=t;save(s,'draft',s.text);send({type:'delta',id:s.id,target:s.target,seq:s.seq,text:s.text,audioBytes:s.bytes});},completed:t=>{if(s.failed||s.final)return;s.final=true;s.text=t||s.text;save(s,'final',s.text);send({type:'final',id:s.id,target:s.target,seq:s.seq,text:s.text});streams.delete(s.id);clearTimeout(s.timer);},reset:()=>{s.retrying=true;},error:e=>fail(s,e)});
+    // Keep recording while the previous thought drains, but serialize native
+    // provider generations. The next stream retains its PCM before open().
+    const previous=providerTail;providerTail=s.stream.result;await previous;
+    if(s.failed||closed){s.stream.abort();return;}
     await s.stream.open();
     if(s.failed||closed){s.stream.abort();return;}
     for(const b of s.queue)s.stream.append(b);s.queue=[];s.queued=0;send({type:'ready',id:s.id});if(s.ended)void s.stream.close();

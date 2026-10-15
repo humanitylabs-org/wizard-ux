@@ -30,7 +30,7 @@ export class OutlineRealtime {
    });
    rt.on('transcription.delta',e=>{if(this.current(gen)){this.deltaAt=Date.now();this.stalledSince=null;this.handlers.delta?.(e.delta||'');}});
    rt.on('transcription.done',e=>{if(this.current(gen)){this.terminal=true;this.dispose();this.handlers.completed?.(e.text||'');this.resolve(true);}});
-   rt.socket?.on('close',()=>{if(this.current(gen))this.failed(gen,new Error('Live connection closed'));});
+   rt.socket?.on('close',(code,reason)=>{if(this.current(gen))this.failed(gen,new Error('Live connection closed ('+code+'): '+String(reason||'').slice(0,160)));});
   }catch(e){this.failed(gen,e);}
  }
  current(gen){return !this.terminal&&gen===this.generation;}
