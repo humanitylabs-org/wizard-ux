@@ -21,6 +21,8 @@
   <link rel="stylesheet" href="core/resources.css">
   <link rel="stylesheet" href="core/polish.css">
   <link rel="stylesheet" href="desktop/desktop.css">
+  <link rel="stylesheet" href="core/views.css">
+  <link rel="stylesheet" href="core/sel-menu.css">
   <link rel="stylesheet" href="core/settings.css">
   <link rel="stylesheet" href="core/update-banner.css">
   <link rel="stylesheet" href="core/links.css">
@@ -39,12 +41,13 @@
       <button id="clock" class="clock" title="Home"></button>
       <div id="voicePill" class="voice-pill" hidden>
         <i class="rec-dot"></i><span id="voiceTime">0:00</span><span class="lvl"><b id="voiceLvl"></b></span>
-        <span id="voiceText">Listening</span><kbd id="voiceKey">Right ⌘</kbd><small id="voiceAct">send</small><button id="voiceCancel" type="button">Cancel</button>
+        <span id="voiceText">Listening</span><kbd id="voiceKey">Right ⌘</kbd><small id="voiceAct">send</small><button id="voiceCancel" type="button">Cancel</button><div class="voice-extras"><button id="voicePause" type="button">Pause</button><button id="voiceSend" type="button">Finish</button><button id="voiceAttach" type="button">Attach</button><button id="voiceScreenshot" type="button">Screenshot</button></div><input id="voiceFileInput" type="file" multiple hidden><div id="voiceFiles"></div>
       </div>
     </div>
     <div class="bar-r">
       <button id="searchBtn" class="mic" title="Search and launch (⌘K) · Open an app (⌘O)" aria-label="Search and launch"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button>
       <button id="micBtn" class="mic" title="Talk to Wizard (tap Right ⌘)" aria-label="Talk to Wizard"><svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg></button>
+      <button id="commandBtn" class="keys-btn" title="Speak a local command" aria-label="Speak a local command">⚡</button><button id="dictateBtn" class="keys-btn" title="Dictate into the focused field" aria-label="Dictate into the focused field">✎</button>
       <button id="status" class="status" title="Inbox (⌥I)" aria-label="Inbox"></button>
       <button id="settingsBtn" class="keys-btn" aria-label="Settings" title="Settings (⌘, / Ctrl+,)">⚙</button>
       <button id="keysBtn" class="keys-btn" title="Keyboard shortcuts (⌥/)">⌥/</button>
@@ -113,6 +116,17 @@
   <script src="core/voice.js"></script>
   <script src="core/bridge.js"></script>
   <script src="core/focused-field.js"></script>
+  <script src="data.js"></script>
+  <script src="summaries.js"></script>
+  <script src="core/music-voice.js"></script>
+  <script src="core/screen-capture.js"></script>
+  <script src="core/sel-menu.js"></script>
+  <script src="pwa-install.js"></script>
+  <script src="core/views.js"></script>
+  <script src="core/commands.js"></script>
+  <script src="core/features.js"></script>
+  <script src="core/capture-tools.js"></script>
+  <script src="core/bound-view.js"></script>
   <script src="desktop/desktop.js"></script>
 </body>
 </html>

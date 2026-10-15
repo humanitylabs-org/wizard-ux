@@ -26,7 +26,7 @@
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const LIVE = window.WizLive;
   const OUTBOX = window.WosOutbox || null;
-  const { APPS, APP, findApp, searchApps, quickSearch, searchUrl } = C.apps('desktop');
+  const { APPS, APP, findApp, appByName, searchApps, quickSearch, searchUrl } = C.apps('desktop');
   const store = C.store('wux.desk.');
   const freshDesk = () => ({ id: 'd' + uid(), wins: [], focus: null, mono: false });
   const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -80,17 +80,73 @@
     visible: () => homeOpen ? [] : ws[cur].wins,
     editUnsent: it => editUnsent(it),
     newChatHint: `Type below and press ${CMD}Enter, or press ${MOD}⇧V for a new voice chat.`,
+    threadShown: (wid, el) => threadShown(wid, el),
+    dictationField: () => vMode === 'dictate' && (VOICE.state !== 'idle' || dictationFinishing) ? dictTarget?.el : null,
     owner: id => String(id).replace(/::list$/, ''),
     // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
-    recordingFor: () => (vReply && VOICE.state === 'listen' ? vReply.sid : ''),
+    recordingFor: () => (vReply && ['listen','paused'].includes(VOICE.state) ? vReply.sid : ''),
     // The thread a recording take will go into (its composer rides along); Send in that composer finishes the take.
-    voiceInto: () => (VOICE.state === 'listen' && vMode === 'talk' ? (vReply?.sid || (vTarget && W[vTarget]?.thread) || '') : ''),
+    voiceInto: () => (['listen','paused'].includes(VOICE.state) && vMode === 'talk' ? (vReply?.sid || (vTarget && W[vTarget]?.thread) || '') : ''),
     finishVoice: () => talk('send'),
     // A private-origin link in a message opens as a window on this workspace; the shell never navigates away.
     openLink: (url, title) => !!newWin({ app: 'frame', appId: 'link', url, title }),
     changed: () => { for (const id of Object.keys(W)) if (W[id].app === 'chats') syncChatsPane(id); },
   });
+
+  function openReview(level, date) {
+    closeSettings();
+    const V = window.WosViews, day = date || V.YESTERDAY;
+    return newWin({ app:'review', title:level[0].toUpperCase()+level.slice(1)+' in review', z: level === 'month' ? {level} : level === 'week' ? {level,week:V.weekOf(day)} : {level:'day',day} });
+  }
+  function openMaps(mode, dest) { closeSettings();return newWin({app:'maps',title:'Maps',mode,dest}); }
+  function mountReview(w, el) {
+    const V = window.WosViews, root = el.querySelector('.review'); if (!root) return;
+    const paint = () => {
+      const chain = V.chain(w.z);
+      root.querySelector('.crumb').innerHTML = chain.map((z,i)=>`<button data-review-parent="${i}">${esc(V.crumbLabel(z))}</button>`).join(' › ');
+      root.querySelector('.zstage').innerHTML = `<div class="zlayer"><div class="desk-scroll">${V.renderLevel(w.z)}</div></div>`;
+      root.querySelectorAll('[data-rail]').forEach(b=>b.classList.toggle('on',b.dataset.rail===w.z.level));
+    };
+    root.onclick = e => {
+      const card = e.target.closest('[data-z]'), parent = e.target.closest('[data-review-parent]'), rail = e.target.closest('[data-rail]'), thread = e.target.closest('[data-wizthread]');
+      if (thread) { openThread(thread.dataset.wizthread); return; }
+      if (card) w.z = JSON.parse(card.dataset.z);
+      else if (parent) w.z = V.chain(w.z)[+parent.dataset.reviewParent];
+      else if (rail) { const next=V.railTarget(w.z,rail.dataset.rail,root);if(!next)return;w.z=next; }
+      else return;
+      save(); paint();
+    }; paint();
+  }
+  function openSearch(query, tab='all') {
+    const a=APP['wizard-search'],url=searchUrl(query,tab);
+    if(!a||!url){toast('⌕','Search app is not installed',1800);return false;}
+    newWin({app:'frame',appId:a.id,url});return true;
+  }
+  function commandSnapshot() { const w=focused(); return {id:w?.id,thread:w?.thread,view:{appId:w?.appId,kind:w?.app==='chats' ? w.thread ? 'chat thread' : 'thread list' : 'app'}}; }
+  const LOCAL_COMMANDS = window.WosCommands.create({CHATS,APP,findApp,appByName,quickSearch,sendSnap:commandSnapshot});
+  function executeCommand(c,text,snap) {
+    return window.WosCommands.execute(c,text,{maps:openMaps,search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,inbox:openInbox,launcher:openPalette,findApp,openApp,
+      layout(c) { const f=snap?.id?W[snap.id]:focused();
+        if(c.action==='desk') { if(c.to==='home') goHome(); else goWs(c.to==='next'?cur+1:c.to==='prev'?cur-1:+c.to-1); return true; }
+        if(c.action==='close_window') { if(!f)return false;closeWin(f.id);return true; }
+        if(c.action==='fullscreen') { if(!f)return false;if(ws[cur].mono!==(c.on!==false))toggleMono();return true; }
+        if(c.action==='move_window') { if(!f)return false;moveWin(f.id,c.to==='prev'?cur-1:cur+1);return true; }
+        if(c.action==='clear_desk') { closeDesktop(cur);return true; }
+        if(c.action==='zoom') { if(f?.app!=='review'){openReview('day');return true;} const V=window.WosViews;if(c.dir==='out'){const z=V.parentOf(f.z);if(z)f.z=z;}else{const card=winEl(f.id)?.querySelector('[data-z]');if(card)f.z=JSON.parse(card.dataset.z);}save();mountReview(f,winEl(f.id));return true; }
+        return false;
+      }});
+  }
+  function localCommand(text, snap=commandSnapshot()) { const c=LOCAL_COMMANDS.parse(text,snap,'command');return c ? executeCommand(c,text,snap) : false; }
+  let boundManager;
+  function threadShown(wid,el) {
+    if (wid.endsWith('::list')) return;
+    boundManager ||= window.WosBoundView.create({ windows:()=>Object.values(W),win:id=>W[id],findApp,APP,linkTitle:u=>u.pathname.split('/').filter(Boolean).pop()||'Page',title:winTitle,
+      visible:id=>!homeOpen&&wsOf(id)===cur, close:id=>closeWin(id,true),
+      open:(obj,origin)=>{const focus=ws[cur].focus;newWin(obj,{ws:wsOf(origin)});if(W[focus])focusWin(focus,{scroll:false});},
+      reload:id=>{save();const f=winEl(id)?.querySelector('iframe');if(f)f.src=f.src;}
+    }); boundManager.shown(wid,el);
+  }
 
   /* ---------------- windows ---------------- */
   // App icons are sigils (core/sigils.js): one silhouette, one bite, one colour per app.
@@ -144,8 +200,10 @@
     if (t !== cur) goWs(t); else render();
     return W[id];
   }
-  function closeWin(id) {
+  function closeWin(id, internal = false) {
     const t = wsOf(id); if (t < 0) return;
+    if (!internal) boundManager?.dismiss(W[id]);
+    if (W[id]?.app === 'chats') threadShown(id,null);
     const d = ws[t], i = d.wins.indexOf(id);
     CHATS.saveDraft(id);
     d.wins.splice(i, 1); delete W[id]; CHATS.forget(id);
@@ -237,6 +295,8 @@
   window.WizOpenAgentChats = openAgentChats;
   function openApp(a, opts = {}) {
     if (!a) return false;
+    if (a.kind === 'view' && ['day','week','month'].includes(a.view)) { openReview(a.view); return true; }
+    if (a.id === 'maps') { openMaps('search',''); return true; }
     if (a.kind === 'view' && a.view === 'inbox') { openInbox(); return true; }
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
@@ -297,12 +357,15 @@
   function winHtml(w) {
     const a = appOf(w);
     return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
-      ${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
+      ${window.WosBoundView.badge(w)}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
       <button data-wact="mono" title="Full screen (${CMD}F / ${MOD}F)" aria-label="Full screen">⤢</button>
       <button data-wact="close" title="Close app (⌘W / ${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
   }
   function bodyHtml(w) {
+    if (w.app === 'review') return window.WosViews.renderReviewShell(w.id);
+    if (w.app === 'maps') return window.WosViews.renderMaps(w);
+    if (w.app === 'feature') return '<div class="shared-feature"></div>';
     if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>↑</kbd><kbd>↓</kbd> move through chats · <kbd>/</kbd> search · <kbd>${MOD}Enter</kbd> new chat · <kbd>${CMD}K</kbd> launch · <kbd>${MOD}⇧V</kbd> new voice chat</div></div></div></div>`;
@@ -365,7 +428,10 @@
       CHATS.renderChatList(listWin(w.id), el.querySelector(`[data-chats="${w.id}::list"]`));
       if (w.thread) CHATS.renderChats(w);
       syncChatsPane(w.id);
-    } else watchFrame(el.querySelector('iframe'), el);
+    } else if (w.app === 'review') mountReview(w,el);
+    else if (w.app === 'maps') window.WosViews.bindMaps(el,w,save);
+    else if (w.app === 'feature') window.WosFeatures.mount(w.featureId,el.querySelector('.shared-feature'),w.featureOptions);
+    else watchFrame(el.querySelector('iframe'), el);
     return el;
   }
   function watchFrame(f, el) {
@@ -381,6 +447,7 @@
       // Clicking inside a same-origin app focuses its window; Esc inside it still reaches the shell.
       try {
         const doc = f.contentDocument; if (!doc || doc.__wuxHooked) return; doc.__wuxHooked = true;
+        fields().bind(doc);
         doc.addEventListener('pointerdown', () => focusWin(el.dataset.win, { scroll: false }), true);
         doc.addEventListener('keydown', e => onKey(e, true), true);
         try { const w0 = W[el.dataset.win]; if (LINKS && window.WizLinks?.guardFrame) window.WizLinks.guardFrame(f.contentWindow, (w0 && ((APP[w0.appId] || {}).url || w0.url)) || f.contentWindow.location.pathname, LINKS); } catch (e) {}
@@ -926,28 +993,50 @@
    * otherwise starts a new thread. Audio goes through the durable outbox: transcribed there,
    * kept as a voice note, retried if the network drops. */
   const pill = $('#voicePill'), mic = $('#micBtn');
-  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${CMD}⇧N`, vContext = '';
+  document.body.appendChild(pill); // Fixed capture controls must not be clipped by the narrow toolbar scroller.
+  new ResizeObserver(() => { document.documentElement.style.setProperty('--voice-h', pill.hidden ? '0px' : Math.ceil(pill.getBoundingClientRect().height + 16) + 'px'); layout(); }).observe(pill);
+  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${CMD}⇧N`, vContext = '', vRoute = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false;
   const VOICE = C.voice({
     onState: st => {
+      window.WosCaptureTools.awake(st !== 'idle');
+      $('#voicePause').textContent = st === 'paused' ? 'Resume' : 'Pause';
+      $('#voicePause').disabled = !['listen','paused'].includes(st);
+      $('#voiceAttach').disabled = $('#voiceScreenshot').disabled = vMode === 'dictate' || commandTake || !['listen','paused'].includes(st);
       pill.hidden = st === 'idle'; pill.classList.toggle('think', st === 'think'); mic.classList.toggle('on', st !== 'idle');
-      CHATS.PW?.paintMic(st === 'listen' && !!vReply, vReply?.sid || '');
+      CHATS.PW?.paintMic(['listen','paused'].includes(st) && !!vReply, vReply?.sid || '');
       $('#clock').hidden = st !== 'idle';
       pill.classList.toggle('dict', vMode === 'dictate');
       pill.classList.toggle('app-voice', vMode === 'talk' && !!vConversation);
-      $('#voiceKey').textContent = vMode === 'dictate' ? 'Right ⌥' : vNewChat ? vNewKey : 'Right ⌘';
-      $('#voiceAct').textContent = vMode === 'dictate' ? 'insert' : 'send';
+      $('#voiceKey').textContent = vMode === 'dictate' ? '✎' : commandTake ? '⚡' : vNewChat ? vNewKey : 'Right ⌘';
+      $('#voiceAct').textContent = vMode === 'dictate' ? 'insert' : commandTake ? 'run locally' : 'send';
       $('#voiceText').textContent = vMode === 'dictate' ? (st === 'think' ? 'Transcribing…' : 'Dictating')
-        : st === 'think' ? 'Sending…' : vConversation ? 'Listening · ' + vConversation.label : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
+        : st === 'think' ? 'Sending…' : commandTake ? 'Local command · nothing sent to agent' : vConversation ? 'Listening · ' + vConversation.label : vFeedback ? 'Feedback · '+clip(vFeedback.title || vFeedback.thread,28) : vTarget ? `Listening · to “${clip(winTitle(W[vTarget]), 28)}”` : 'Listening · new chat';
       clearInterval(vTimer);
       if (st === 'listen') vTimer = setInterval(() => { const s = Math.floor(VOICE.elapsed() / 1000); $('#voiceTime').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 250);
     },
     onLevel: l => { $('#voiceLvl').style.width = Math.round(l * 100) + '%'; },
   });
+  function paintVoiceFiles() {
+    const root=$('#voiceFiles'); if (!root) return;
+    root.innerHTML=(vFiles?.files||[]).map((f,i)=>`<div>${esc(f.name||f.filename)} ${f.uploading?'Uploading…':f.error?'Upload failed':''} ${f.error?`<button data-vretry="${i}">Retry</button>`:''}${!f.uploading?`<button data-vremove="${i}">Remove</button>`:''}</div>`).join('');
+  }
+  async function commandVoice() { if(VOICE.state==='idle') { const r=await talk('start'); if(r==='voice'){commandTake=true;vConversation=null;$('#voiceKey').textContent='⚡';$('#voiceText').textContent='Local command · nothing sent to agent';$('#voiceAct').textContent='run locally';$('#voiceAttach').disabled=$('#voiceScreenshot').disabled=true;}return r; } if(commandTake)return talk('send');return 'busy'; }
+  $('#voicePause').onclick=()=>VOICE.state==='paused'?VOICE.resume():VOICE.pause();
+  $('#voiceSend').onclick=()=>vMode==='dictate'?dictate():talk('send');
+  $('#commandBtn').onclick=()=>commandVoice();
+  $('#dictateBtn').onpointerdown=e=>{fields().refresh();e.preventDefault();};
+  $('#dictateBtn').onclick=()=>dictate();
+  $('#voiceAttach').onclick=()=>$('#voiceFileInput').click();
+  $('#voiceFileInput').onchange=e=>{for(const file of e.target.files)vFiles?.add(file);e.target.value='';};
+  $('#voiceScreenshot').hidden=!window.WosCaptureTools.screenshotAvailable();
+  $('#voiceScreenshot').onclick=()=>vFiles?.screenshot(()=>{pill.style.visibility='hidden';return ()=>pill.style.visibility='';}).catch(e=>toast('!',e.message,2600));
+  $('#voiceFiles').onclick=e=>{const b=e.target.closest('button');if(!b)return;const t=vFiles;if(b.dataset.vretry!=null)t.retry(t.files[+b.dataset.vretry]);if(b.dataset.vremove!=null)t.remove(t.files[+b.dataset.vremove]);};
+
   // A separate chord always starts a new thread, even with an existing thread focused.
   // Never retarget an in-flight reply/dictation or discard it when the new-voice chord is pressed.
   function talkNew(key = `${CMD}⇧N`) {
     if (VOICE.state === 'idle') return talk('start', true, key);
-    if (VOICE.state === 'listen' && vMode === 'talk' && vNewChat) return talk('send');
+    if (['listen','paused'].includes(VOICE.state) && vMode === 'talk' && vNewChat) return talk('send');
     toast('🎙', 'Finish the current recording before starting a new voice chat', 2400);
     return 'busy';
   }
@@ -957,24 +1046,48 @@
   paintGeneralVoice(); window.addEventListener('wizard:config', paintGeneralVoice);
   mic.insertAdjacentElement('afterend', generalVoice);
   generalVoice.addEventListener('click', () => talkNew('Tap to send'));
+  async function loadVoiceModels() {
+    let timer; toast('◷', 'Loading voice model…', 1800);
+    try { await Promise.race([window.WosModels.load(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Models unavailable · recording has not started')), 8000); })]); }
+    finally { clearTimeout(timer); }
+  }
   async function talk(action = 'toggle', forceNew = false, newKey = `${CMD}⇧N`) {
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
-    if (action === 'cancel') { if (VOICE.state !== 'idle') { vReply = null; VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
+    if (action === 'cancel') { commandTake = false; if (VOICE.state !== 'idle') { vFiles?.close();vReply = null; VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
     if (VOICE.state === 'idle') {
       if (action === 'send') return 'none';
-      vMode = 'talk'; vNewChat = forceNew; vNewKey = newKey;
-      const f = focused(); vTarget = !forceNew && f?.app === 'chats' && (f.thread || f.agent) ? f.id : null;
+      commandTake = false; strictReply = false; vMode = 'talk'; vNewChat = forceNew; vNewKey = newKey;
+      const f = focused(); vSnapshot = commandSnapshot();
+      vFeedback = !forceNew && f?.from?.sid ? {thread:f.from.sid,title:f.from.title,url:f.url,context:viewContext(f.id,'feedback on the bound page')} : null;
+      vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile, paintVoiceFiles); paintVoiceFiles();
+      vTarget = !forceNew && f?.app === 'chats' && (f.thread || f.agent) ? f.id : null;
       const capability = window.WizAppServices?.voiceInput, app = APP[f?.appId];
       vConversation = !forceNew ? (capability ? capability.pin(winEl(f?.id)?.querySelector('iframe'), app?.id)
         : app?.receives_voice_input === true ? { appId: app.id, token: 'unavailable', label: app.name } : null) : null;
       vReply = vTarget && f.thread ? { wid: f.id, sid: f.thread, steerRunId: CHATS.WORKING_ST.has(LIVE.session(f.thread)?.status) ? LIVE.session(f.thread)?.runId || '' : '' } : null;
       vContext = forceNew ? 'Explicit general-agent voice request. No foreground app or private thread context shared.' : viewContext(vTarget, 'voice, aimed at this thread');
+      dictationFinishing = true; // model options may not have loaded while an app is foreground
+      try {
+        const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(vTarget, vTarget ? vSnapshot.thread || '__new__' : '');
+        vRoute = vConversation ? null : resolveRoute();
+        if (!vConversation && !vRoute) { await loadVoiceModels(); vRoute = resolveRoute(); }
+        if (!vConversation && !vRoute?.model) throw Error('Model route unavailable · recording has not started');
+      } catch(e) { toast('!',String(e.message || e),2600);return 'busy'; }
+      finally { dictationFinishing = false; }
       $('#voiceTime').textContent = '0:00';
       try { await VOICE.start(); } catch (e) { toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
       return 'voice';
     }
     if (action === 'start') return 'voice';
+    if (vFiles && !vFiles.ready()) { toast('!', 'Finish or remove failed uploads before sending · take kept', 2600); return 'busy'; }
+    if (commandTake) {
+      dictationFinishing = true; const snap = vSnapshot;
+      try { const r=await VOICE.finish({transcribe:false}); if(!r?.blob)return 'none'; const take=await OUTBOX.retainDictation(r.blob,r.captureId); const it=await OUTBOX.transcribeDictation(take.id); if(!it?.text)return 'retained';
+        const ok=localCommand(it.text,snap); if(ok) await OUTBOX.transition(it.id,'held','Local command handled · original recording kept');
+        toast(ok?'⚡':'!',ok?'Command handled on-device':'No local command matched · nothing sent · recording kept',2600);return ok?'local':'retained';
+      } finally { commandTake=false;dictationFinishing=false; }
+    }
     if (forceNew) { vConversation = null; vTarget = null; vNewChat = true; }
     if (vConversation) {
       const conversation = vConversation; // sealed at recording START, never from current focus
@@ -982,42 +1095,66 @@
       try {
         const r = await VOICE.finish({ transcribe: false });
         if (!r?.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
-        const item = await OUTBOX.sendConversation({ conversation, audio: r.blob, captureId: r.captureId, files: [], source: 'orb' });
+        const item = await OUTBOX.sendConversation({ conversation, audio: r.blob, captureId: r.captureId, files: vFiles?.files || [], source: 'orb' });
         toast(item?.state === 'sent' ? '✦' : '!', item?.state === 'sent' ? 'Sent to ' + conversation.label : item?.error || 'Manager recording kept below', 5000);
         return item?.state === 'sent' ? 'sent' : 'retained';
       } finally { dictationFinishing = false; vConversation = null; }
     }
     const rp = vReply; vReply = null; // the thread a composer-mic take belongs to, fixed before anything else runs
     // The thread in front at the send key, before any await; an agent's Chats list takes it as a new chat with that agent.
-    const aimSid = vTarget && (W[vTarget]?.thread || (W[vTarget]?.agent ? '__new__' : ''));
+    const aimSid = vFeedback?.thread || rp?.sid || (vTarget && vSnapshot?.view?.kind === 'chat thread' ? vSnapshot.thread : '') || (vTarget ? '__new__' : '');
     // Text, photos and voice go as ONE message (legacy H4): that thread's composer, taken at the send key.
-    const sealAt = rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
+    const sealAt = vFeedback ? null : rp ? rp : aimSid ? { wid: vTarget, sid: aimSid } : null;
     if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { vReply = rp; toast('…', 'Still uploading · send when it finishes', 2000); return 'busy'; }
     let modelRoute;
-    try { modelRoute = CHATS.modelRoute(sealAt?.wid, sealAt?.sid || ''); }
+    try { modelRoute = vRoute; if (!modelRoute) throw Error('Recording-start model unavailable · take kept'); }
     catch (e) { vReply = rp; toast('!', String(e.message || e), 2400); return 'busy'; }
     const t = sealAt ? CHATS.takeComposer(sealAt.wid, sealAt.sid) : null;
     const sealed = t && (t.text || t.files.length) ? t : false;
+    dictationFinishing = true;
+    try {
     const r = await VOICE.finish({ transcribe: false });
     if ((!r || !r.blob) && sealed) sealed.putBack();
     if (!r || !r.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
+    const extraFiles = (vFiles?.files || []).map(({local,uploading,error,...f})=>f);
+    if (vFeedback) { const staged=await OUTBOX.stage({kind:'reply',sessionId:vFeedback.thread,...vRoute,audio:r.blob,captureId:r.captureId,files:extraFiles}); const item=await window.WosBoundView.feedback(OUTBOX,{...vFeedback,route:vRoute,custodyId:staged.id},'',r.blob,extraFiles); if(!item){await OUTBOX.transition(staged.id,'held','Feedback unavailable · original kept');toast('!','Feedback kept for its original thread',2600);return 'retained';} toast('✦','Feedback kept · waiting to send',1800);return 'sent'; }
+    let stagedId = null, transcript = '';
+    if (!strictReply && !forceNew && !vNewChat && !sealed?.text && !sealed?.files?.length && !extraFiles.length) {
+      // The microphone journal remains until staging owns the final chunk and the frozen destination.
+      {
+        const staged = await OUTBOX.stage({kind:aimSid && aimSid!=='__new__'?'reply':'new',sessionId:aimSid==='__new__'?'':aimSid||'',steerRunId:rp?.steerRunId || '',...vRoute,audio:r.blob,captureId:r.captureId});
+        stagedId=staged.id;
+        if(staged.durable) {
+          try { transcript=String((await window.WizConfig.transcribe(r.blob,{prompt:window.WizConfig.voicePrompt(),signal:AbortSignal.timeout(45000)})).text||'').trim(); } catch(_) {}
+          const cmd=transcript && LOCAL_COMMANDS.parse(transcript,vSnapshot,'auto');
+          if(cmd && executeCommand(cmd,transcript,vSnapshot)) { staged.text=transcript;await OUTBOX.transition(stagedId,'held','Local command handled · original recording kept');toast('⚡','Command handled on-device',1800);return 'local'; }
+        }
+      }
+    }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed, modelRoute, null, r.captureId, rp.steerRunId); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
-    if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { captureId: r.captureId, sid: aimSid, seal: sealed, route: modelRoute });
+    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
+    if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles });
     else {
-      const item = await OUTBOX.enqueue({ ...modelRoute, captureId: r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', files: sealed?.files || [], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: '', instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
+      const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
       sealed?.done?.(item);
     }
     toast('✦', 'Recording kept · waiting to send', 1400);
     return 'sent';
+    } finally { dictationFinishing = false; }
   }
 
   // Composer mic: tap to record a reply to this thread, tap again (or Right ⌘) to send it there. The thread is
   // fixed when recording starts, so switching threads mid-take can't send it somewhere else.
   async function recordReply(wid, sid) {
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
-    if (VOICE.state === 'listen') { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
+    if (['listen','paused'].includes(VOICE.state)) { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
     if (!sid) return 'busy';
+    strictReply = true; vConversation = null; vFeedback = null; commandTake = false; vSnapshot = commandSnapshot();
+    dictationFinishing = true;
+    try { vRoute = CHATS.modelRoute(wid,sid); if(!vRoute){await loadVoiceModels();vRoute=CHATS.modelRoute(wid,sid);} if(!vRoute?.model)throw Error('Model route unavailable · recording has not started'); }
+    catch(e) { toast('!',String(e.message||e),2600);return 'busy'; }
+    finally { dictationFinishing = false; }
+    vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile,paintVoiceFiles); paintVoiceFiles();
     vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' }; vContext = viewContext(wid, 'voice, aimed at this thread');
     $('#voiceTime').textContent = '0:00';
     try { await VOICE.start(); } catch (e) { vReply = null; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
@@ -1026,16 +1163,12 @@
 
   // Dictation (Right ⌥): speech to text where you're typing. In a text field the words go in at the cursor;
   // anywhere else they land on the clipboard. (Wizard for Mac does this in every app, natively.)
-  const editable = el => !!el && (el.isContentEditable || el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && /^(text|search|url|email|)$/i.test(el.type || '')));
-  function insertAt(el, text) {
-    if (!el || !el.isConnected) return false;
-    el.focus({ preventScroll: true });
-    if (el.isContentEditable) return document.execCommand('insertText', false, text);
-    const a = el.selectionStart ?? el.value.length, b = el.selectionEnd ?? a;
-    const pre = a > 0 && !/\s$/.test(el.value.slice(0, a)) ? ' ' : '';
-    el.setRangeText(pre + text, a, b, 'end'); el.dispatchEvent(new Event('input', { bubbles: true }));
-    return true;
-  }
+  let dictTarget = null, dictationFields = null;
+  function fields() { return dictationFields ||= C.focusedField.create({
+    frames: () => $$('iframe',stage).filter(f => !!APP[W[f.closest('[data-win]')?.dataset.win]?.appId]),
+    admit: (c,el) => { const w=c.frame?.closest('[data-win]')||el.closest('[data-win]');return (!w||w.dataset.win===ws[cur].focus)&&!!el.getClientRects().length; },
+    controls: el => !!el?.closest('#voicePill,#micBtn,#dictateBtn')
+  }); }
   // Recovery is a view of the existing outbox, not a second recorder/store/native pipeline.
   const recovery = document.createElement('section');
   recovery.id = 'recordingRecovery'; recovery.className = 'recording-recovery';
@@ -1078,16 +1211,17 @@
   async function dictate(action = 'toggle') {
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (VOICE.state !== 'idle' && vMode === 'talk') return 'busy';
-    if (action === 'cancel') { if (VOICE.state !== 'idle') { VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
+    if (action === 'cancel') { if (VOICE.state !== 'idle') { dictTarget?.release();dictTarget=null;VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
     if (VOICE.state === 'idle') {
+      vFiles?.close(); vFiles = null; paintVoiceFiles();
       vMode = 'dictate'; vNewChat = false; vTarget = null;
-      dTarget = editable(document.activeElement) ? document.activeElement : null;
+      dictTarget = fields().capture();
       $('#voiceTime').textContent = '0:00';
       try { await VOICE.start(); } catch (e) { vMode = 'talk'; toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
       return 'dictating';
     }
     dictationFinishing = true;
-    const target = dTarget; dTarget = null;
+    const target = dictTarget;
     try {
       const r = await VOICE.finish({ transcribe: false });
       if (!r?.blob) { toast('🎙', r?.error || 'Didn’t catch that', 2200); return 'none'; }
@@ -1097,13 +1231,13 @@
       const text = it?.text || '';
       if (!text) { toast('🎙', 'Transcription failed · recording kept below', 2600); return 'retained'; }
       window.__wuxLastDictation = text;
-      if (insertAt(target, text)) { if (it.durable) O.remove(it.id); return 'inserted'; }
+      if (fields().insert(target, text)) { if (it.durable) O.remove(it.id); return 'inserted'; }
       try {
         await navigator.clipboard.writeText(text);
         if (it.durable) O.remove(it.id);
         toast('📋', `Copied: “${clip(text, 60)}” · ⌘V to paste`, 2600); return 'copied';
       } catch (e) { toast('✎', 'Transcript and recording kept below', 2600); return 'retained'; }
-    } finally { vMode = 'talk'; dictationFinishing = false; }
+    } finally { target?.release(); if(dictTarget===target)dictTarget=null;vMode = 'talk'; dictationFinishing = false; }
   }
 
   // Right ⌘ / Right ⌥ as tap keys: press and release alone, quickly (a chord like ⌘C never counts).
@@ -1148,6 +1282,7 @@
   }
   // Esc peels one layer: palette → keys → inbox → voice → thread → (nothing: stays put, never leaves).
   function escStep() {
+    if (window.WosSelMenu?.back()) return 'selection';
     if (!pal.hidden) { closePalette(); return 'palette'; }
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet
     if (window.WizWebUpdate?.back()) return 'update-list'; // the update card's thread list folds first
@@ -1165,6 +1300,8 @@
     if (ws[cur].mono) { toggleMono(); return 'mono'; }
     // Back navigates while recording; only the explicit Cancel control may discard audio.
     const f = focused();
+    if (f?.app === 'review') { const z=window.WosViews.parentOf(f.z);if(z){f.z=z;save();mountReview(f,winEl(f.id));}else closeWin(f.id);return 'review'; }
+    if (['maps','feature'].includes(f?.app)) { closeWin(f.id);return 'view'; }
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
     if (f?.app === 'frame') {
       const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
@@ -1322,7 +1459,6 @@
   function toast(icon, text, ms = 2000) { const t = $('#toast'); t.innerHTML = `<span>${window.WizBrand.icon(esc(icon))}</span><span>${esc(text)}</span>`; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), ms); }
 
   /* ---------------- native bridge (Wizard for Mac drives this by events) ---------------- */
-  let dictationFields = null;
   C.bridge.handle({
     orb: d => talk(d.action || 'toggle'),
     open(path, d) {
@@ -1362,6 +1498,8 @@
   LIVE?.refresh();
   /* Deep links (core/deeplink.js): ?session= opens the thread in a Chats window, ?view= a screen, ?video= the player.
    * Back/Esc then walks thread → list → stays; the page is never left. */
+  window.WosFeatures.install({review:openReview,maps:openMaps,command:localCommand,context:commandSnapshot,openFeature:(id,opts)=>{closeSettings();newWin({app:'feature',featureId:id,featureOptions:opts,title:window.WosFeatures.entries.find(f=>f.id===id)?.title});}});
+  window.WosMusic.install({app:()=>APP['wizard-music'],findWin:()=>findWin(w=>w.app==='frame'&&w.appId==='wizard-music')?.id,openMusic:()=>{openApp(APP['wizard-music']);return findWin(w=>w.appId==='wizard-music')?.id;},frameOf:id=>winEl(id)?.querySelector('iframe'),toast});
   C.deeplink.handle({
     thread: sid => openThread(sid),
     view(v, section) {
@@ -1371,6 +1509,7 @@
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'system') return openApp(APP.system);
       if (v === 'agents') return openApp(APP.agents);
+      if (window.WosFeatures.open(v)) return;
       if (window.WosSettings.route(v, openSettings)) return;
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); return toast('◇', 'Files isn’t on this Wizard', 1800); }
       if (v === 'day' || v === 'week' || v === 'month') { const a = APP['v-' + v]; if (a?.url) return openApp(a); }
@@ -1400,16 +1539,19 @@
     shell: 'desktop', log: (...a) => { window.__wuxLog = (window.__wuxLog || []).concat(a.join(' ')).slice(-80); },
     mount: () => document.querySelector('#bar .bar-r') || document.body, prepend: true,
     openThread: sid => openThread(sid),
-    busy: () => VOICE.state !== 'idle' || Object.values(W).some(win => (CHATS.ch(win.id)?.files || []).some(f => f.uploading)),
+    busy: () => dictationFinishing || VOICE.state !== 'idle' || Object.values(W).some(win => (CHATS.ch(win.id)?.files || []).some(f => f.uploading)),
     beforeReload: () => { for (const el of document.querySelectorAll('[data-compose]')) el.dispatchEvent(new Event('input', { bubbles: true })); },
     toast,
   });
+  fields();
   window.__wux = {
     get links() { return LINKS; },
-    shell: 'desktop', get ws() { return ws; }, get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS,
+    shell: 'desktop', get ws() { return ws; }, get voiceState() { return VOICE.state; },
+ get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS, canSearch: () => !!APP['wizard-search'],
     get homeOpen() { return homeOpen; }, goHome, get palMode() { return pal.hidden ? '' : palMode; },
     goWs, newDesktop, closeDesktop, closeCurrent, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openPicker, openInbox, talk, ask, escStep, viewContext,
-    openFiles, openUsage, recordReply,
+    openFiles, openUsage, recordReply, openSearch, openReview, openMaps, localCommand, commandVoice, dictate, toast,
+    pauseVoice: () => VOICE.state === 'paused' ? VOICE.resume() : VOICE.pause(),
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
