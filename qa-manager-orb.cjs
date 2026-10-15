@@ -14,7 +14,7 @@ async function boot(browser,mobile){
  await ctx.route('**/*',async r=>{
   const q=r.request(),u=new URL(q.url()),method=q.method();
   if(!['GET','HEAD'].includes(method)){
-   writes.push({path:u.pathname,body:q.postData()?.slice(0,16000)});
+   writes.push({path:u.pathname,bytes:q.postDataBuffer()?.length||0,body:/json/.test(q.headers()['content-type']||'')?q.postData()?.slice(0,16000):'[binary capture]'});
    if(/\/transcribe$/.test(u.pathname)){await delay(R.sttDelay);return json(r,R.sttDown?{error:'QA STT outage'}:{text:R.text,ms:5},R.sttDown?503:200);}
    if(u.pathname==='/wizard-manager/api/messages'){
     if(R.down)return r.abort();
@@ -29,6 +29,7 @@ async function boot(browser,mobile){
    return json(r,{accepted:true});
   }
   if(u.pathname==='/wizard-manager/api/state')return json(r,{enabled:R.enabled,messages:R.messages.filter(m=>m.id>Number(u.searchParams.get('after')||0)),jobs:[]});
+  if(u.pathname==='/wizard/v1/apps'&&!baseline) { const res=await r.fetch(); const data=await res.json(); for(const a of data.apps||[])if(a.id==='wizard-manager')a.receives_voice_input=true; return json(r,data); } // fixture declaration, never a live registry mutation
   for(const [prefix,dir] of [['/wizard-os-home/',ROOT],['/wizard-manager/',MANAGER]]){
    if(u.pathname.startsWith(prefix)&&!u.pathname.slice(prefix.length).startsWith('api/')){
     const rel=u.pathname.slice(prefix.length)||'index.html',p=path.resolve(dir,'web',rel);
@@ -57,13 +58,52 @@ const last=f=>f.p.evaluate(()=>{const x=[...WosOutbox._items.values()].filter(x=
 const posts=f=>f.writes.filter(x=>x.path==='/wizard-manager/api/messages');
 const forbidden=f=>f.writes.filter(x=>/\/route$|\/api\/sessions$|\/v1\/runs(?:\/.*)?$/.test(x.path));
 async function retry(f,it){await f.p.evaluate(id=>WosOutbox.retryConversation(id),it.id);return last(f);}
+async function gestureChecks(f,label) {
+ const {p,mobile}=f;
+ await p.evaluate(()=>window.__qaBefore=[...WosOutbox._items.keys()]);
+ await p.evaluate(()=>{window.__qaRecorder={starts:0,stops:0};for(const op of ['start','stop']){const original=MediaRecorder.prototype[op];MediaRecorder.prototype[op]=function(...args){__qaRecorder[op==='start'?'starts':'stops']++;return original.apply(this,args);};}});
+ const before=posts(f).length;
+ if(mobile) {
+   const orb=await p.locator('#orbWrap').boundingBox(); const x=orb.x+orb.width/2,y=orb.y+orb.height/2;
+   await p.mouse.move(x,y);await p.mouse.down();await p.waitForFunction(()=>__wos.voice==='command');
+   await p.waitForFunction(()=>__qaRecorder.starts===1);
+   const b=await p.locator('#generalVoice').boundingBox(); await p.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:5});
+   ok('phone hold target visibly selected',await p.locator('#generalVoice').evaluate(n=>n.classList.contains('selected')));
+   await p.screenshot({path:path.join(OUT,'phone-hold-target.png')});await p.mouse.up();await delay(500);
+   ok('phone release latches, never sends or restarts microphone',await p.evaluate(()=>__wos.voice==='listen'&&__qaRecorder.starts===1&&__qaRecorder.stops===0)&&posts(f).length===before,await p.evaluate(()=>__qaRecorder));
+   ok('phone target label names general agent',await p.locator('#voiceDestination').innerText().then(t=>t.includes('Talking to')&&t.includes('tap to send')));
+   await p.screenshot({path:path.join(OUT,'phone-general-latched.png')});
+ } else { await p.locator('#generalVoice').click();await p.waitForFunction(()=>__wux.voice==='listen'); }
+ // Focus changes cannot bring app/private context back into the explicitly general take.
+ await openManager(f);f.R.text='Open Movies';await delay(700);
+ if(mobile) await p.locator('#orbWrap').dblclick({delay:60}); else await p.locator('#micBtn').click();
+ await p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>!__qaBefore.includes(x.id)&&x.kind==='new'&&x.state==='sent'));
+ await p.waitForFunction(m=>m?__wos.voice==='idle':__wux.voice==='idle',mobile);
+ ok(label+' fresh send gesture admits exactly once',await p.evaluate(()=>[...WosOutbox._items.values()].filter(x=>!__qaBefore.includes(x.id)&&x.kind==='new').length===1));
+ const item=await p.evaluate(()=>{const it=[...WosOutbox._items.values()].filter(x=>x.kind==='new').at(-1);return it&&{kind:it.kind,text:it.text,instructions:it.instructions,bytes:it.audio?.size,id:it.id};});
+ ok(label+' bypass seals one general request, no app POST',!!item&&item.text==='Open Movies'&&f.writes.some(w=>/files\/upload$/.test(w.path)&&w.bytes>0)&&posts(f).length===before,item);
+ ok(label+' general instructions exclude foreground app/private content',!item.instructions?.includes('Manager')&&!item.instructions?.includes('Fixture work'),item.instructions);
+ ok(label+' one recorder for complete take',await p.evaluate(()=>__qaRecorder.starts===1&&__qaRecorder.stops===1));
+ if(mobile) {
+   await p.locator('#generalVoice').click();await p.waitForFunction(()=>__wos.voice==='listen');await delay(250);await p.evaluate(()=>__wosNativeBack());
+   ok('phone Back pauses and retains bypass without exiting',await p.evaluate(()=>__wos.voice==='paused'&&!!document.getElementById('device')));
+   await p.evaluate(()=>__wos.cancelVoice());
+   await openManager(f); f.R.text='Open apps'; const orb=await p.locator('#orbWrap').boundingBox();await p.mouse.move(orb.x+orb.width/2,orb.y+orb.height/2);await p.mouse.down();await p.waitForFunction(()=>__wos.voice==='command');await delay(700);await p.mouse.up();await delay(1500);
+   ok('phone stationary hold stays command, no app delivery',posts(f).length===before&&await p.evaluate(()=>__wos.voice!=='listen'));
+ }
+ ok(label+' no page errors',f.errors.length===0,f.errors);
+ receipts.push({label,gestures:true,writes:f.writes,errors:f.errors});
+}
 (async()=>{const browser=await chromium.launch({executablePath:process.env.CHROME,headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
  try{for(const mobile of [true,false]){
   const label=mobile?'phone':'desktop';const f=await boot(browser,mobile);
+  if(process.env.QA_GESTURES==='1'){await gestureChecks(f,label);await f.ctx.close();continue;}
   if(baseline){await start(f);await finish(f);await delay(1800);ok(label+' baseline reproduces misroute',posts(f).length===0&&forbidden(f).length>0,f.writes.map(x=>x.path));receipts.push({label,baseline:true,writes:f.writes});await f.ctx.close();continue;}
   await f.p.evaluate(()=>window.__qaBefore=[...WosOutbox._items.keys()]);
   await f.p.locator(mobile?'#orbWrap':'#micBtn').click();
   await f.p.waitForFunction(m=>m?__wos.voice==='listen':__wux.voice==='listen',mobile);
+  ok(label+' app destination visibly labelled',await f.p.locator(mobile?'#voiceDestination':'#voiceText').innerText().then(t=>t.includes('Manager')));
+  await f.p.screenshot({path:path.join(OUT,label+'-app-target.png')});
   await f.p.evaluate(m=>{const s=m?__wos:__wux;s.openApp(WizCore.apps(m?'mobile':'desktop').APP.chats);},mobile);
   f.R.sttDelay=350;await finish(f);
   let it=await last(f);ok(label+' foreground pinned at start, one Manager turn',it.state==='sent'&&posts(f).length===1&&f.R.messages.filter(m=>m.role==='user').length===1,it);

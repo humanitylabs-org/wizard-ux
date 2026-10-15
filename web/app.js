@@ -1372,10 +1372,7 @@
     shareCutout();
     frameEdge(f); setTimeout(() => { if (f.isConnected) frameEdge(f); }, 800); // apps that paint their theme after boot
   }
-  // Voice mode a framed app asks for: <meta name="wizard-os-voice" content="capture|auto">.
-  function frameVoiceMode(id) {
-    try { const m = winEl(id)?.querySelector('iframe')?.contentDocument?.querySelector('meta[name="wizard-os-voice"]'); const v = m?.content; return v === 'capture' || v === 'auto' ? v : ''; } catch (e) { return ''; }
-  }
+  // Frame metadata never grants voice delivery. Installed capability + shared receiver own it.
   function frameNav(id) { try { return winEl(id)?.querySelector('iframe')?.contentWindow?.navigation || null; } catch (e) { return null; } }
   function frameHref(id) { try { const l = winEl(id)?.querySelector('iframe')?.contentWindow?.location; return l ? l.pathname + l.search : ''; } catch (e) { return ''; } }
 
@@ -2113,6 +2110,7 @@
     voiceEl.classList.toggle('cmd', V.kind === 'command' && s !== 'idle' && s !== 'listen' && s !== 'paused' && s !== 'command');
     voiceEl.setAttribute('aria-hidden', String(s === 'idle'));
     if (s === 'idle') FIELDS.refresh(); else paintFieldOrb();
+    paintVoiceDestination();
   }
   // The Auto/Agent toggle is gone: the router always decides (commands run, the rest goes to Archimedes).
   V.route = 'auto';
@@ -2286,7 +2284,7 @@
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
-    V.snap = kind === 'dictation' ? null : sendSnap();
+    V.snap = kind === 'dictation' ? null : kind === 'general' ? generalVoiceSnap() : sendSnap();
     if (V.snap && kind === 'command') V.snap.conversation = null;
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
@@ -2298,7 +2296,7 @@
     V.raf = requestAnimationFrame(tick);
     V.native = null;
     const dev = DEV();
-    if (dev) { let id = ''; try { id = dev.recStart(kind) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && V.snap?.conversation) voiceRecovery(id, { kind, conversation: V.snap.conversation }); else if (id && kind !== 'dictation') { const route = CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) { if (id && V.snap?.conversation) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Manager destination could not be saved · nothing sent'); return; } }
+    if (dev) { let id = ''; try { id = dev.recStart(kind === 'general' ? 'auto' : kind) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && V.snap?.conversation) voiceRecovery(id, { kind, conversation: V.snap.conversation }); else if (id && kind !== 'dictation') { const route = CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) { if (id && V.snap?.conversation) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'App destination could not be saved · nothing sent'); return; } }
       if (id && kind === 'dictation' && !dictationTake(id)) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Dictation could not be safely retained'); return; }
       if (id) { V.native = id; voiceTake(id, kind); reportVoice(V.state); if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; } } // '' = no mic permission yet: the page asks below
     try {
@@ -2475,7 +2473,7 @@
     try {
       const pin = sealAt || (V.snap.view?.thread ? { wid: V.snap.view.id, sid: V.snap.view.thread } : null);
       if (!V.snap.conversation) {
-        V.snap.route = CHATS.modelRoute(pin?.wid, pin?.sid || '');
+        V.snap.route = V.snap.general ? (V.snap.route || CHATS.modelRoute()) : CHATS.modelRoute(pin?.wid, pin?.sid || '');
         if (!V.snap.route) { toast('!', 'Choose a model before sending', 2200); return; }
         if (V.native) saveVoiceRoute(V.native, V.snap.route);
       }
@@ -2666,8 +2664,8 @@
    *  - capture: everything said with a tap goes to that view (hold still forces a command);
    *  - auto: the fast router decides whether James is talking to the view or to Archimedes;
    *  - say nothing: the utterance goes to Archimedes, who is told what was on screen.
-   * Chats threads are auto. Framed apps opt in with <meta name="wizard-os-voice" content="capture|auto">
-   * and receive {type:'wizard-os:voice', text} by postMessage. */
+   * Chats threads are auto. Framed apps require the installed receives_voice_input capability
+   * and the shared WizardApp.voiceInput receiver; app-authored meta tags grant nothing. */
   function viewOf(id) {
     const w = W[id]; if (!w) return null;
     if (agentWin(w)) { // an agent's Chats: what is said here goes to that agent, and private titles never leave it
@@ -2677,7 +2675,7 @@
     }
     if (w.app === 'chats' && w.thread) return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, name: w.thread === '__new__' ? 'New chat' : `Chats thread “${winTitle(w)}”` };
     if (w.app === 'frame' && w.from && w.from.sid) return { id, mode: '', kind: 'review', review: true, thread: w.from.sid, threadTitle: w.from.title || '', name: `Review of ${winTitle(w)}`, url: frameHref(id) || w.url };
-    if (w.app === 'frame') { const m = frameVoiceMode(id); return { id, mode: m, kind: 'app', name: winApp(w).name, url: frameHref(id) || winApp(w).url }; }
+    if (w.app === 'frame') return { id, mode: '', kind: 'app', name: winApp(w).name, url: frameHref(id) || winApp(w).url };
     if (w.app === 'chats') return { id, mode: '', kind: 'thread list', name: 'Chats' };
     if (w.app === 'review') return { id, mode: '', kind: 'review', name: winTitle(w), z: w.z };
     if (w.app === 'maps') return { id, mode: '', kind: 'maps', name: winTitle(w) };
@@ -2695,8 +2693,10 @@
     const screen = view && view.kind !== 'chat thread' && !view.private ? (window.WizScreen?.read(winEl(fid)) || '') : '';
     // A private agent's window is named, never read: its thread titles stay with that agent.
     const nameOf = x => agentWin(W[x]) && agentApp(W[x]).private ? `${agentApp(W[x]).name} chats (private agent)` : winTitle(W[x]);
-    const conversation = window.WizAppServices?.conversation?.pin(winEl(fid)?.querySelector('iframe'), W[fid]?.appId)
-      || (W[fid]?.appId === 'wizard-manager' ? { appId: 'wizard-manager', token: 'unavailable', label: 'Manager conversation' } : null);
+    const capability = window.WizAppServices?.voiceInput;
+    const app = APP[W[fid]?.appId];
+    const conversation = capability ? capability.pin(winEl(fid)?.querySelector('iframe'), app?.id)
+      : app?.receives_voice_input === true ? { appId: app.id, token: 'unavailable', label: app.name } : null;
     return { id: fid, desk: idx, view, screen, conversation, others: d.wins.filter(x => x !== fid).map(nameOf) };
   }
   function viewContext(id, how = 'voice', snap = null) {
@@ -2731,9 +2731,7 @@
     const w = W[v.id]; if (!w) return false;
     // The thread that was open when James sent, even if the window shows another one by now.
     if (w.app === 'chats' && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
-    if (w.app === 'frame') {
-      try { const f = winEl(v.id).querySelector('iframe'); f.contentWindow.postMessage({ type: 'wizard-os:voice', text }, location.origin); return true; } catch (e) { return false; }
-    }
+    // No unacknowledged postMessage delivery to arbitrary/self-asserted frames.
     return false;
   }
 
@@ -2823,6 +2821,7 @@
   async function handleText(text, kind, typed, sttMs, target, snap) {
     const sttNote = sttMs ? ` · heard in ${sttMs} ms` : '';
     snap = snap || sendSnap();
+    if (snap.general) return toAgent(text, 'To ' + window.WizConfig.agent(), { snap, files: typed ? [] : takeFiles() });
     if (snap.conversation && kind !== 'command' && target == null) {
       const it = await OUTBOX.sendConversation({ conversation: snap.conversation, text, audio: snap.audio || null, files: typed ? [] : takeFiles(), source: 'orb' });
       setVoice('idle'); txHide();
@@ -3017,6 +3016,35 @@
   /* ---------------- orb gestures ----------------
    * Tap: talk. Hold: command (it opens on the desk beside this one). Swipe: left/right desks, up apps, down inbox. */
   const orbWrap = $('#orbWrap');
+  const voiceDestination = document.createElement('div');
+  voiceDestination.id = 'voiceDestination'; voiceDestination.setAttribute('role', 'status');
+  const generalTarget = document.createElement('button');
+  generalTarget.id = 'generalVoice'; generalTarget.className = 'general-voice';
+  generalTarget.textContent = 'Record for ' + window.WizConfig.agent();
+  generalTarget.setAttribute('aria-label', generalTarget.textContent);
+  device.append(voiceDestination, generalTarget);
+  generalTarget.addEventListener('click', () => {
+    if (V.state === 'idle') startVoice('general');
+    else if (V.snap?.general && ['listen', 'paused'].includes(V.state)) finishVoice();
+  });
+  function generalVoiceSnap() {
+    // An explicit general take contains no private/app screen, composer or thread context.
+    return { id: null, desk: idx, view: null, screen: '', conversation: null, others: [], general: true };
+  }
+  function paintVoiceDestination() {
+    const label = V.snap?.conversation?.label;
+    const active = ['listen', 'command', 'paused'].includes(V.state) && V.kind !== 'dictation';
+    voiceDestination.hidden = !active;
+    voiceDestination.classList.toggle('app-voice', !!label);
+    device.classList.toggle('app-voice-input', active && !!label);
+    voiceDestination.textContent = label ? 'To: ' + label + ' · tap to send'
+      : V.snap?.general ? 'Talking to ' + window.WizConfig.agent() + ' · tap to send'
+      : V.kind === 'command' ? 'Command · release to run · slide up for ' + window.WizConfig.agent() : 'Listening · tap to send';
+    generalTarget.hidden = V.state !== 'idle' && V.state !== 'command';
+    generalTarget.classList.toggle('hold-target', V.state === 'command');
+    generalTarget.textContent = V.state === 'command' ? '↑ ' + window.WizConfig.agent() + ' · release to keep talking' : 'Record for ' + window.WizConfig.agent();
+  }
+  paintVoiceDestination();
   let G = null;
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
@@ -3026,7 +3054,7 @@
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
     G.corner = device.classList.contains('orb-corner');
-    if (V.state === 'idle' && !sheet) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); vib(18); startVoice('command'); } }, 380);
+    if (V.state === 'idle' && !sheet && !FIELDS.refresh()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); vib(18); startVoice('command'); } }, 380);
   });
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
   // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
@@ -3034,10 +3062,14 @@
   orbWrap.addEventListener('pointermove', e => {
     if (!G || e.pointerId !== G.pointerId) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
     // A hold that starts travelling right after it fired was really a swipe (slow frame ate the moves).
-    if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && Math.hypot(G.dx, G.dy) > 34) {
+    if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && Math.hypot(G.dx, G.dy) > 34 && !(G.dy < -20 && Math.abs(G.dx) < 100)) {
       cancelVoice(true); G.mode = 'pending';
     }
     if (G.mode === 'hold') {
+      const box = generalTarget.getBoundingClientRect();
+      G.general = e.clientX >= box.left - 16 && e.clientX <= box.right + 16 && e.clientY >= box.top - 16 && e.clientY <= box.bottom + 16;
+      generalTarget.classList.toggle('selected', G.general);
+      voiceDestination.textContent = G.general ? 'Release: keep talking to ' + window.WizConfig.agent() : 'Release: command · slide onto ' + window.WizConfig.agent();
       // Aim: slide toward the desk this command should land on.
       G.aim = G.corner ? null : aimFor(G.dx);
       orbWrap.dataset.dir = G.aim == null ? '' : (G.aim < idx ? `← Desk ${G.aim + 1}` : `Desk ${G.aim + 1} →`);
@@ -3071,7 +3103,7 @@
   });
   function endGesture(e, cancelled) {
     if (!G || (e?.pointerId != null && e.pointerId !== G.pointerId)) return; const g = G; G = null;
-    clearTimeout(g.hold); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming');
+    clearTimeout(g.hold); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming'); generalTarget.classList.remove('selected');
     const vt = (performance.now() - g.t) || 1;
     if (g.mode === 'pending' && !cancelled) {
       if (sheet) return closeSheets();
@@ -3081,6 +3113,13 @@
     } else if (g.mode === 'hold') {
       // Capture loss is not explicit Cancel. Keep the take paused with controls, never discard it.
       if (cancelled) { V.stopAsked = true; pauseCommandCapture(); return; }
+      if (g.general) {
+        // Synchronous latch before finishVoice: same recorder, no send on this release.
+        V.kind = 'general'; V.snap = generalVoiceSnap(); V.target = null; V.replyTo = null;
+        V.stopAsked = false; V.sendAsked = false;
+        if (V.native) voiceRecovery(V.native, { kind: 'general', conversation: null });
+        setVoice('listen'); txHide(0); return;
+      }
       V.target = g.aim;
       return finishVoice();
     } else if (g.mode === 'h') {
@@ -3130,7 +3169,8 @@
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
-    // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
+    // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
+    if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
