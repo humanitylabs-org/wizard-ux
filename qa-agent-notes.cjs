@@ -97,8 +97,8 @@ function sess(id) {
   }
   // The thread as a list of blocks in reading order.
   const blocks = () => p.evaluate(() => [...document.querySelectorAll('.ch-msgs > *')].map(e => ({
-    k: e.matches('.msg.u.steer') ? 'steer' : e.matches('.msg.u') ? 'you' : e.matches('.msg.a') ? 'reply' : e.matches('[data-agentnote]') ? 'note' : e.matches('[data-later]') ? 'later' : e.matches('details.steps, .work, [data-work]') || e.querySelector?.('summary') ? 'work' : (e.className || e.tagName),
-    t: (e.querySelector('summary')?.innerText || e.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 90),
+    k: e.matches('.msg.u.steer') ? 'steer' : e.matches('.msg.u') ? 'you' : e.matches('.msg.a') ? 'reply' : e.matches('[data-agentnote]') ? 'note' : e.matches('[data-later], [data-run-context]') ? 'later' : e.matches('details.steps, .work, [data-work]') || e.querySelector?.('summary') ? 'work' : (e.className || e.tagName),
+    t: (e.querySelector('[data-later]')?.innerText || e.querySelector('summary')?.innerText || e.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 90),
     open: e.tagName === 'DETAILS' ? e.open : undefined,
   })));
 

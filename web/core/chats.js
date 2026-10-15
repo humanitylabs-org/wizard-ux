@@ -591,11 +591,20 @@ window.WizCore.chats = function createChats(H) {
     const from = n.from ? `From the \u201c${esc(n.from)}\u201d thread` : 'From another agent thread';
     return `<details class="msg agentnote" data-agentnote><summary><span class="an-ic">\u21aa</span><span class="an-from">${from}</span>${timeTag(n.at)}</summary><div class="an-body">${md(n.text)}</div></details>`;
   }
+  function runContextHtml(later) {
+    const ctx = later.context;
+    const text = value => typeof value === 'string' ? value : '';
+    const title = ctx?.kind === 'cross_thread' ? 'Context received from another thread' : 'Context received for this run';
+    const body = ctx
+      ? `<b class="rc-title">${title}</b>${text(ctx.from) ? `<p class="rc-from">From: <strong>${esc(text(ctx.from))}</strong></p>` : ''}<p class="rc-excerpt">${esc(text(ctx.summary))}</p>${text(ctx.requested_action) ? `<p class="rc-action"><strong>Requested action:</strong> ${esc(text(ctx.requested_action))}</p>` : ''}${text(ctx.original) ? `<details class="rc-original" data-run-original="${esc(later.id || String(later.at))}"><summary>Show original message</summary>${ctx.redacted ? '<p class="rc-disclosure">Private context or sensitive values have been omitted.</p>' : ''}${ctx.original_truncated ? '<p class="rc-disclosure">The original message is shortened here.</p>' : ''}<pre>${esc(text(ctx.original))}</pre></details>` : ''}`
+      : '<p class="rc-unavailable">The message that started this run isn’t available in this history.</p>';
+    return `<section class="msg runcontext" data-run-context><div class="laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(later.at)}</div><div class="rc-body">${body}</div></section>`;
+  }
   function turnHtml(c, tn, last, working, helperStatus) {
     let h = '';
     if (tn.u) h += `<div class="msg u"><div class="bub">${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
-    else if (tn.later) h += `<div class="msg laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(tn.later.at)}</div>`;
+    else if (tn.later) h += runContextHtml(tn.later);
     const live = last && working;
     const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
     const wk = PW ? PW.workHtml(c, tn, live, helperStatus) : null; // the work receipt (chat-work.js #17)
@@ -900,11 +909,13 @@ window.WizCore.chats = function createChats(H) {
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
+    const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
     el.innerHTML = `<div class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       <form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
+    for (const detail of el.querySelectorAll('[data-run-original]')) detail.open = openContexts.has(detail.dataset.runOriginal);
     if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
     const nb = el.querySelector('.ch-msgs');
