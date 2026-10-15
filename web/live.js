@@ -68,6 +68,9 @@
       id, runtime: 'direct',
       title: String(item.title || item.name || 'Untitled chat'),
       source: item.source || '',
+      // Explicit app routing; legacy Topics roundup has a stable, exact thread id.
+      // A title/subject mentioning an app is never an app-routing signal.
+      appId: typeof item.wizard_app_id === 'string' ? item.wizard_app_id : id === 'wizard_topics' ? 'topics' : '',
       status,
       archived: !!item.archived, hidden: !!item.hidden,
       messageCount: Number.isSafeInteger(item.message_count) ? item.message_count : undefined,

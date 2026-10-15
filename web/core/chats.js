@@ -143,7 +143,16 @@ window.WizCore.chats = function createChats(H) {
       : def ? lab + esc(clip(attOf(s)?.ask || s.preview || '', 140))
       : at ? lab + esc(clip(at.ask, 140))
       : esc(clip(s.preview || '', 110));
-    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}><span class="emo sti ${kind}" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span>
+    // App identity remains visible as state changes. Action states retain their
+    // established status glyph in a corner badge; outcome text/read state stay independent.
+    const app = window.WizCore.threadApp?.(s.appId);
+    const badge = !['none', 'done', 'fyi'].includes(kind)
+      ? `<span class="emo sti ${kind} ch-app-state" aria-hidden="true">${STI[kind]}</span>` : '';
+    const appIcon = app && window.WizSigil ? window.WizSigil.box('span', 'emo ch-app-icon', app, badge) : '';
+    const icon = appIcon
+      ? appIcon.replace('<span ', `<span data-thread-app="${esc(app.id)}" title="${esc(app.name)} · ${STI_TIP[kind]}" aria-label="${esc(app.name)} · ${STI_TIP[kind]}" `)
+      : `<span class="emo sti ${kind}" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span>`;
+    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}>${icon}
       <span class="bd"><span class="tp"><b>${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button>`;
   }
@@ -1349,6 +1358,12 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
+  window.addEventListener('wizard:apps', () => {
+    for (const id of Object.keys(CH)) {
+      const w = H.win(id), el = elOf(id);
+      if (w && !w.thread && el && el.querySelector('.ch-list') && !holdList(id)) renderChatList(w, el);
+    }
+  });
   const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.

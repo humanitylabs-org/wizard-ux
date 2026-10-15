@@ -198,5 +198,15 @@
     } catch { return false; }
   };
   registry.refresh = loadRemote;
+  // Explicit app provenance resolves against the same registry as the launcher.
+  // Unknown IDs never acquire an invented icon. Food is a native built-in app.
+  window.WizCore.threadApp = id => {
+    if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return null;
+    const remote = REMOTE.find(a => a.id === id);
+    if (remote) return remote.sigil;
+    const builtin = ALL.find(a => a.id === id && !['chats', 'view'].includes(a.kind));
+    if (builtin) return builtin;
+    return id === 'topics' ? { id: 'topics', name: 'Topics' } : null;
+  };
   window.WizCore.apps = registry;
 })();
