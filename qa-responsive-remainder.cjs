@@ -103,14 +103,14 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
  // Failed attachment upload retains original File and take; actual Retry uses those bytes.
  for(const desktop of [false,true]){
   const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';if(!desktop)await p.setViewportSize({width:360,height:800});let attempts=0;
-  await f.ctx.route('**/wizard/files/upload',r=>{attempts++;return r.fulfill({status:attempts===1?503:200,contentType:'application/json',body:JSON.stringify(attempts===1?{error:'Fixture upload unavailable'}:{file:{id:'retried-fixture',filename:'kept.txt',mime:'text/plain',bytes:18}})});});
+  await f.ctx.route('**/wizard/files/upload',r=>{attempts++;return r.fulfill({status:attempts===1?503:200,contentType:'application/json',body:JSON.stringify(attempts===1?{error:'Fixture upload unavailable'}:{file:{id:'retried-fixture',filename:'kept.txt',mime:'text/plain',bytes:r.request().postDataBuffer()?.length||0}})});});
   await p.locator(`[data-chats="${f.wid}"] .ch-mic`).click();await sleep(1100);
   await p.locator(desktop?'#voiceFileInput':'[data-voice-files]').setInputFiles({name:'kept.txt',mimeType:'text/plain',buffer:Buffer.from('Original file bytes')});await sleep(180);
   await p.evaluate(desktop=>desktop?__wux.talk('send'):__wos.finishVoice(),desktop);
   ok(await p.evaluate(desktop=>['listen','paused'].includes((desktop?__wux:__wos).voice),desktop),`${label}: failed upload cannot discard or finish the take`);
   await p.locator(desktop?'[data-vretry]':'#arcAttach').click();await sleep(220);
   await p.evaluate(desktop=>desktop?__wux.talk('send'):__wos.finishVoice(),desktop);await sleep(500);
-  ok(attempts===2&&(await f.rows()).some(x=>x.blob&&x.files?.some(file=>file.id==='retried-fixture')),`${label}: failed upload retry preserves original attachment/audio`);
+  ok(attempts===2&&(await f.rows()).some(x=>x.blob&&x.files?.some(file=>file.id==='retried-fixture')),`${label}: failed upload retry preserves original attachment/audio`,{attempts,rows:await f.rows()});
   await f.done(label+' upload failure');
  }
  // Desktop browser focused-field seals: cursor retained, changed/replaced field never receives late STT.
@@ -128,6 +128,10 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
  {const f=await boot(true);f.state.text='show this week';await f.p.evaluate(()=>__wux.talk('start'));await sleep(1100);const result=await f.p.evaluate(()=>__wux.talk('send'));ok(result==='local'&&!f.state.posts.length,'desktop: normal global talk dispatches local commands instead of agent-send');ok(await f.p.locator('.review').count()>0,'desktop: normal voice opens actual shared review');await f.done('desktop automatic local command');}
  // Current model changes while recording cannot change the sealed route.
  {const f=await boot(true);await f.p.locator(`[data-chats="${f.wid}"] .ch-mic`).click();await sleep(1100);await f.p.evaluate(()=>{WosModels.snapshot=()=>({model:'replacement-model',provider:'replacement-provider'});});await f.p.evaluate(()=>__wux.talk('send'));await sleep(250);ok((await f.rows()).some(x=>x.blob&&x.model===model&&x.provider===provider),'desktop: recorder START pins model/provider against later edits');await f.done('desktop model pin');}
+ // Fine-pointer narrow desktop does not hide browser recording controls behind the toolbar.
+ {const f=await boot(true),p=f.p;await p.setViewportSize({width:360,height:800});await p.evaluate(()=>__wux.talk('start'));await sleep(1100);await p.locator('#voicePause').click();
+  const bounds=await p.locator('#voicePill').boundingBox();ok(bounds.x>=0&&bounds.x+bounds.width<=361,'narrow desktop: capture controls fit 360px');
+  const bar=await p.locator('#voicePill').boundingBox(),stage=await p.locator('#stage').boundingBox();ok(stage.y>=bar.y+bar.height,'narrow desktop: capture does not cover thread header');await p.screenshot({path:path.join(out,'desktop-360-capture.png')});await p.evaluate(()=>__wux.talk('cancel'));await p.evaluate(()=>__wux.goHome());await p.evaluate(()=>history.back());await sleep(100);ok(p.url().includes('wizard-os-home')&&await p.evaluate(()=>!!__wux),'narrow desktop: root Back keeps app');await f.done('narrow desktop');}
  // Explicit spoken command miss retains audio; it does not use /route or /send.
  {const f=await boot(true);f.state.text='utterly unknown command';await f.p.evaluate(()=>__wux.commandVoice());await sleep(1100);await f.p.evaluate(()=>__wux.commandVoice());ok(!f.state.posts.length,'desktop: spoken command miss cannot send a message');ok((await f.rows()).some(x=>x.kind==='dictation'&&x.state==='held'&&x.blob),'desktop: spoken command miss retains transcript/audio');await f.done('desktop spoken command');}
 };
