@@ -2017,9 +2017,11 @@
       catch (_) { V.field?.release(); V.field = null; setVoice('idle'); txHide(); toast('!', 'Dictation retained · could not read audio · reopen recording recovery'); return; }
     }
     const hadSnap = !!V.snap;
-    const snap = V.snap || sendSnap();
+    const saved = window.__wosVoiceRecovery().find(t => t.id === id);
+    const snap = saved?.general ? { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(id) } : V.snap || sendSnap();
+    if (saved?.general) { V.kind = 'general'; V.target = null; V.replyTo = null; }
     try {
-      const nativePin = window.__wosVoiceRecovery().find(t => t.id === id)?.conversation;
+      const nativePin = saved?.conversation;
       if (nativePin && V.target == null && !V.replyTo && V.kind !== 'command') snap.conversation = nativePin; // old token fails closed after shell reload
       else if (!hadSnap) snap.conversation = null; // never infer a recovered native destination from today's focus
       if (!snap.conversation && !snap.route) {
@@ -2048,7 +2050,7 @@
     if (!meta || meta.id !== id) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('!', 'Could not read recording · original kept on device'); return; }
     // A shipped kind-less recActive bridge reveals the original mode only after an explicit stop.
     // Preserve command routing even when its older take had no page-side provenance at recovery.
-    if (['auto', 'command', 'dictation'].includes(meta.kind)) V.kind = meta.kind;
+    if (!snap.general && ['auto', 'command', 'dictation'].includes(meta.kind)) V.kind = meta.kind;
     V.acc = Math.max(V.acc, Number(meta.ms) || 0);
     try { return onRecStop(nativeBlob(id, Number(meta.bytes)), id); }
     catch (e) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('!', String(e.message || 'Recording retained · could not read audio'), 4000); }
@@ -2077,8 +2079,10 @@
     const kind = window.__wosDictationTake(a.id) || a.kind === 'dictation' ? 'dictation' : (a.kind || voiceTake(a.id)?.kind) === 'command' ? 'command' : 'auto';
     V.captureEpoch = (V.captureEpoch || 0) + 1;
     V.field?.release(); V.field = null; // page recreation can never reconstruct a DOM capability
-    const knownReply = kind === 'dictation' ? null : replyTake(a.id);
+    const savedGeneral = window.__wosVoiceRecovery().find(t => t.id === a.id)?.general === true;
+    const knownReply = kind === 'dictation' || savedGeneral ? null : replyTake(a.id);
     Object.assign(V, { native: a.id, kind, target: null, snap: null, seal: null, replyTo: knownReply, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
+    if (savedGeneral) { V.kind = 'general'; V.snap = { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(a.id) }; }
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
     txPill(a.paused ? '⏸' : '✦', kind === 'dictation' ? 'Dictation kept · tap orb to transcribe & copy' : a.paused ? 'Paused · recording kept · tap orb to send' : 'Still recording · tap orb to send', kind === 'dictation' ? 'dictation' : 'agent'); txHide(2600);
@@ -2298,7 +2302,7 @@
     const dev = DEV();
     if (dev) { let id = ''; try { id = dev.recStart(kind === 'general' ? 'auto' : kind) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && V.snap?.conversation) voiceRecovery(id, { kind, conversation: V.snap.conversation }); else if (id && kind !== 'dictation') { const route = CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) { if (id && V.snap?.conversation) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'App destination could not be saved · nothing sent'); return; } }
       if (id && kind === 'dictation' && !dictationTake(id)) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Dictation could not be safely retained'); return; }
-      if (id) { V.native = id; voiceTake(id, kind); reportVoice(V.state); if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; } } // '' = no mic permission yet: the page asks below
+      if (id) { V.native = id; if (V.snap?.general) { try { voiceRecovery(id, { kind: 'general', general: true, conversation: null }); saveVoiceRoute(id, V.snap.route); } catch (_) { V.stopAsked = true; pauseCommandCapture(); toast('!', 'General destination could not be saved · recording kept'); return; } } voiceTake(id, kind === 'general' ? 'auto' : kind); reportVoice(V.state); if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; } } // '' = no mic permission yet: the page asks below
     try {
       if (!(await openRec(captureEpoch))) return;
       if (V.stopAsked && V.sendAsked) finishVoice();
@@ -3029,7 +3033,7 @@
   });
   function generalVoiceSnap() {
     // An explicit general take contains no private/app screen, composer or thread context.
-    return { id: null, desk: idx, view: null, screen: '', conversation: null, others: [], general: true };
+    return { id: null, desk: idx, view: null, screen: '', conversation: null, others: [], general: true, route: CHATS.modelRoute() };
   }
   function paintVoiceDestination() {
     const label = V.snap?.conversation?.label;
@@ -3119,7 +3123,10 @@
         // Synchronous latch before finishVoice: same recorder, no send on this release.
         V.kind = 'general'; V.snap = generalVoiceSnap(); V.target = null; V.replyTo = null;
         V.stopAsked = false; V.sendAsked = false;
-        if (V.native) voiceRecovery(V.native, { kind: 'general', conversation: null });
+        if (V.native) {
+          try { voiceRecovery(V.native, { kind: 'general', general: true, conversation: null }); saveVoiceRoute(V.native, V.snap.route); }
+          catch (_) { V.stopAsked = true; pauseCommandCapture(); toast('!', 'General destination could not be saved · recording kept'); return; }
+        }
         setVoice('listen'); txHide(0); return;
       }
       V.target = g.aim;
