@@ -9,7 +9,7 @@
   const SCOPE = 'wizard-account-local';
   const SEEN_KEY = `${SEEN_BASE}:${SCOPE}`;
   const MAX = 500;
-  const READY_OR_ATTENTION = new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval']);
+  const READY_OR_ATTENTION = new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval', 'unknown']);
   const WORKING = new Set(['submitting', 'queued', 'running', 'stopping']);
   const ALIASES = { started: 'running', accepted: 'queued', pending: 'queued', waiting: 'waiting_for_approval' };
   const WEEK = 7 * 864e5;
@@ -69,6 +69,7 @@
       title: String(item.title || item.name || 'Untitled chat'),
       source: item.source || '',
       status,
+      safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',
       archived: !!item.archived, hidden: !!item.hidden,
       messageCount: Number.isSafeInteger(item.message_count) ? item.message_count : undefined,
       lastUserAt, lastAssistantAt,
@@ -153,7 +154,7 @@
   const J = { 'Content-Type': 'application/json' };
   async function req(path, init = {}) {
     const r = await fetch(path, { cache: 'no-store', credentials: 'same-origin', ...init });
-    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+    if (!r.ok) { let detail; try { detail = (await r.json()).error; } catch {} const e = new Error(detail?.message || 'HTTP ' + r.status); e.status = r.status; e.code = detail?.code; throw e; }
     return r;
   }
   /* Every thread Wizard lists (same endpoint, same paging). A full walk runs at boot and
@@ -196,7 +197,7 @@
   const workDayStart = (now = Date.now()) => window.WizConfig.dayStart(now);
   const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
   const isErr = s => s.status === 'failed' || s.status === 'interrupted';
-  const needsApproval = s => s.status === 'waiting_for_approval';
+  const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
   const inWorking = s => WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s);
   const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
   const cardAt = s => inWorking(s) || isErr(s)
@@ -300,7 +301,7 @@
     if (!s.orig) s.orig = { status: s.status, runId: s.runId, assignedAt: s.assignedAt, requestAt: s.requestAt };
     const at = new Date(p.at).toISOString();
     // Already working (a message into a live run) keeps Wizard's status; anything else is held in Working.
-    if (!WORKING.has(s.orig.status) && s.orig.status !== 'waiting_for_approval') {
+    if (!WORKING.has(s.orig.status) && !['waiting_for_approval', 'unknown'].includes(s.orig.status)) {
       s.status = p.state === 'sent' ? 'running' : 'submitting';
       s.runId = p.runId || ''; // never an older finished run (a quick second reply must not try to steer it)
       s.assignedAt = at; s.requestAt = at;
@@ -377,7 +378,7 @@
       for (const s of this.sessionsFor(agent)) {
         if (s.archived || s.hidden) continue;
         const def = this.deferred[keyOf(s)]?.deferred;
-        if (s.status === 'waiting_for_approval') { needs.push(s); continue; }
+        if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
         const at = Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt);
@@ -512,7 +513,7 @@
           if (opts.fileIds?.length) steer.wizard_file_ids = opts.fileIds.slice(0, 8);
           await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}/steer${aq(id)}`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
           return { steered: true, runId: s.runId };
-        } catch (e) { if (![404, 409, 410].includes(e.status)) throw e; }
+        } catch (e) { if (e.code === 'dispatch_already_attempted' || ![404, 409, 410].includes(e.status)) throw e; }
       }
       const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
@@ -610,12 +611,21 @@
     },
     /* ---- the live run: status, approval, stop (api.ts run/approve/stop) ---- */
     async run(runId) { return (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${rq(runId)}`)).json(); },
-    async approve(runId, choice, requestId) {
+    async runCapabilities(runId) { return (await req(`/wizard/hermes/v1/capabilities${rq(runId)}`)).json(); },
+    async approve(runId, choice, requestId, generation) {
       const body = { choice }; if (requestId) body.request_id = requestId;
+      if (generation !== undefined) body.execution_generation = generation;
       await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/approval${rq(runId)}`, { method: 'POST', headers: J, body: JSON.stringify(body) });
     },
+    async clarify(runId, answer, requestId, generation) {
+      return req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/clarify${rq(runId)}`, { method: 'POST', headers: J, body: JSON.stringify({ request_id: requestId, execution_generation: generation, answer }) });
+    },
+    async resolveUnknown(runId, admissionId, generation) {
+      return req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/resolve-unknown${rq(runId)}`, { method: 'POST', headers: J, body: JSON.stringify({ admission_id: admissionId, execution_generation: generation }) });
+    },
     async stop(runId) {
-      await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, { method: 'POST' });
+      try { await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, { method: 'POST' }); }
+      catch (error) { STOPPING.delete(runId); await this.refresh(); throw error; }
       STOPPING.set(runId, Date.now());
       const s = [this.sessions, ...Object.values(this.agentSessions)].flat().find(x => x.runId === runId); if (s) { applyLocal(s); this.emit(); }
       setTimeout(() => this.refresh(), 2500);
