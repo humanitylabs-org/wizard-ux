@@ -155,8 +155,9 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
                 restored=ev('__wos.V.snap');check('review','active recovery restores exact event and original thread',restored.get('meetingEventId')==ident and restored.get('view',{}).get('thread')=='qa-0',restored)
                 ev('__wos.finishVoice()')
             else:
-                wait('!!document.querySelector("[data-rec-send]")',25)
-                ev('document.querySelector("[data-rec-send]").click()')
+                send_selector='[data-take="'+take+'"] [data-takeact="send"]'
+                wait('!!document.querySelector('+json.dumps(send_selector)+')',25)
+                ev('document.querySelector('+json.dumps(send_selector)+').click()')
             wait("Array.from(WosOutbox._items.values()).some(i=>i.meetingEventId==="+json.dumps(ident)+"&&i.state==='sent')",25)
             item=ev("(()=>{const i=Array.from(WosOutbox._items.values()).find(i=>i.meetingEventId==="+json.dumps(ident)+");return {id:i.id,sessionId:i.sessionId,steerRunId:i.steerRunId,meetingEventId:i.meetingEventId,model:i.model,provider:i.provider}})()")
             check('review',mode+' recovered request sends once to pinned thread with event and no steering',item['sessionId']=='qa-0' and item['meetingEventId']==ident and not item['steerRunId'],item)
