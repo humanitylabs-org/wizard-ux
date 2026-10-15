@@ -35,16 +35,28 @@
   let dbp = null;
   function db() {
     if (!dbp) dbp = new Promise((res, rej) => {
-      if (!window.indexedDB) return rej(new Error('no idb'));
-      const r = indexedDB.open(DB, 1);
-      r.onupgradeneeded = () => r.result.createObjectStore(STORE, { keyPath: 'id' });
-      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
-    });
+      let settled = false, r;
+      const finish = (err, value) => { if (settled) { value?.close(); return; } settled = true; clearTimeout(timer); err ? rej(err) : res(value); };
+      const timer = setTimeout(() => finish(new Error('Recording storage timed out')), 3000);
+      try { r = indexedDB.open(DB, 1); } catch (e) { finish(e); return; }
+      r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE, { keyPath: 'id' }); };
+      r.onsuccess = () => { r.result.onversionchange = () => { r.result.close(); dbp = null; }; finish(null, r.result); };
+      r.onerror = r.onblocked = () => finish(r.error || new Error('Recording storage unavailable'));
+    }).catch(e => { dbp = null; throw e; });
     return dbp;
   }
   async function tx(mode, fn) {
     const d = await db();
-    return new Promise((res, rej) => { const t = d.transaction(STORE, mode); const q = fn(t.objectStore(STORE)); t.oncomplete = () => res(q?.result); t.onerror = () => rej(t.error); });
+    return new Promise((res, rej) => {
+      let t, q;
+      const timer = setTimeout(() => { try { t?.abort(); } catch (_) {} rej(new Error('Recording save timed out')); }, 3000);
+      try {
+        t = d.transaction(STORE, mode);
+        t.oncomplete = () => { clearTimeout(timer); res(q?.result); };
+        t.onerror = t.onabort = () => { clearTimeout(timer); rej(t.error || new Error('Recording save failed')); };
+        q = fn(t.objectStore(STORE));
+      } catch (e) { clearTimeout(timer); rej(e); }
+    });
   }
   async function loadWeb() {
     try { web = (await tx('readonly', s => s.getAll())) || []; } catch (e) { web = web || []; }
@@ -67,16 +79,16 @@
     if (text) { t.text = text; texts[t.id] = text; saveTexts(); open.add(t.id); }
     web.unshift(t); await loadWeb().catch(() => {}); if (!web.find(x => x.id === t.id)) web.unshift(t);
     repaint();
-    return retained ? persisted : true;
+    return persisted;
   }
-  async function retrySave(id) {
+  async function retrySave(id, quiet = false) {
     const t = sessionWeb.get(id); if (!t) return;
     try {
       const saved = { ...t }; delete saved.sessionOnly;
       await tx('readwrite', s => s.put(saved));
       sessionWeb.delete(id); web = web.map(x => x.id === id ? saved : x);
       toast('✎', 'Recording saved on this device', 2000);
-    } catch (_) { toast('!', 'Storage still unavailable · keep this page open', 3000); }
+    } catch (_) { if (!quiet) toast('!', 'Storage still unavailable · keep this page open', 3000); }
     repaint();
   }
 
@@ -165,6 +177,8 @@
     return true;
   }
 
+  addEventListener('beforeunload', e => { if (sessionWeb.size) { e.preventDefault(); e.returnValue = ''; } });
+  setInterval(() => { for (const id of sessionWeb.keys()) retrySave(id, true); }, 5000);
   loadWeb().then(repaint).catch(() => {});
   window.WosCancelled = { KEEP_FROM_MS, keepWeb, retainWeb: (blob, ms, text = '') => keepWeb(blob, ms, true, text), html, act, repaint, list: all, transcribe, retrySave, _texts: texts };
 })();
