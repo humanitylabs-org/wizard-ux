@@ -239,6 +239,7 @@
     if (!a) return false;
     if (a.kind === 'view' && a.view === 'inbox') { openInbox(); return true; }
     if (a.kind === 'chats') {
+      if (a.agent) return openAgentChats(a.agent);
       const ex = !opts.fresh && findWin(mainChats);
       if (ex) { focusWin(ex.id); return true; }
       newWin({ app: 'chats', thread: null }, opts); return true;
@@ -532,7 +533,7 @@
     const pending = OUTBOX?.unsent() || [];
     const working = LIVE?.ok ? LIVE.workGroups().working || [] : [];
     const rows = list => list.slice(0, 6).map(s => `<button class="home-row" data-thread="${esc(s.id)}"><span class="emo">${emoOf(s.id)}</span><span class="nm">${esc(s.title)}</span><time>${esc(ago(LIVE.cardAt(s)))}</time></button>`).join('') || '<div class="home-none">Nothing here.</div>';
-    const quick = ['wizard', 'wizard-signal', 'wisdom', 'shopping', 'mizel', 'files', 'console', 'legacy-wizard', 'agents', 'system', 'app-store'].map(id => APP[id]).filter(Boolean);
+    const quick = ['wizard', ...APPS.filter(a => a.agent).map(a => a.id), 'wizard-signal', 'wisdom', 'shopping', 'mizel', 'files', 'console', 'legacy-wizard', 'system', 'app-store'].map(id => APP[id]).filter(Boolean);
     return `<div class="home-in">
       <nav class="home-tools" aria-label="System and settings"><button data-home-settings>Settings</button></nav>
       <div class="home-time">${window.WizConfig.hm()}</div>
@@ -639,7 +640,7 @@
   }
   function palBuild(q) {
     const n = norm(q), out = [];
-    const apps = (n ? searchApps(q) : APPS.filter(a => a.kind !== 'view' && a.id !== 'agents')).filter(a => a.kind !== 'native').slice(0, n ? 8 : 12)
+    const apps = (n ? searchApps(q) : APPS.filter(a => a.kind !== 'view' && a.id !== 'agents')).filter(a => a.kind !== 'native' && a.id !== 'agents').slice(0, n ? 8 : 12)
       .map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, icon: a.icon, g: a.g, run: o => openApp(a, o) }));
     const sessions = LIVE?.ok ? LIVE.sessions.filter(s => !s.hidden) : [];
     let threads;
@@ -682,6 +683,11 @@
   function openPalette(q = '') { window.WosResources?.back(); pal.hidden = false; palIn.value = q; palSel = 0; palRender(); palIn.focus(); palIn.select(); }
   function closePalette() { pal.hidden = true; const f = focused(); if (f) focusInside(f.id); }
   function palRun(i, o = {}) { const it = palItems[i]; if (!it) return; closePalette(); it.run(o); }
+  window.addEventListener('wizard:apps', () => {
+    if (!pal.hidden) palRender();
+    if (homeOpen) $('#desktopHome').innerHTML = homeHtml(null);
+    const h = wsEl(cur)?.querySelector('.home'); if (h) h.innerHTML = homeHtml(cur);
+  });
   palIn.addEventListener('input', () => { palSel = 0; palRender(); });
   palIn.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) { e.preventDefault(); palSel = (palSel + 1) % Math.max(1, palItems.length); palRender(); }
@@ -1206,9 +1212,9 @@
       if (section) show();
     },
     app(id) {
-      const a = APP[id] || findApp(id); if (a) return openApp(a);
+      const a = APP[id] || (!id.startsWith('agent:') && findApp(id)); if (a) return openApp(a);
       // Cold launch: the registered app list may still be loading. The same deep link must work in either shell.
-      Promise.resolve(C.appsLoaded?.()).then(() => { const b = APP[id] || findApp(id); if (b) openApp(b); });
+      Promise.resolve(C.appsLoaded?.()).then(() => { const b = APP[id] || (!id.startsWith('agent:') && findApp(id)); if (b) openApp(b); });
     },
     video: item => CHATS.KIT.viewer.open([item]),
     agent: id => openAgentChats(id),
