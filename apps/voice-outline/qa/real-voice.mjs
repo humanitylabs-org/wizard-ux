@@ -23,7 +23,7 @@ try{
  const firstTarget=await page.locator('.live-target').getAttribute('data-id');
  await page.locator('#child').click();const secondTarget=await page.locator('.live-target').getAttribute('data-id');if(firstTarget===secondTarget)throw Error('Did not retarget next thought');
  await page.waitForTimeout(9000);
- await check('menu Back keeps app and recording',async()=>{await page.locator('#menu').click();await page.keyboard.press('Escape');if(await page.locator('#sheet').isVisible())throw Error('Sheet stayed');if(!await page.locator('#live').textContent().then(s=>s.includes('Recording')))throw Error('Recording stopped by Back');});
+ await check('menu Back keeps app and recording',async()=>{await page.locator('#menu').click();await page.goBack();await page.waitForTimeout(120);if(await page.locator('#sheet').isVisible())throw Error('Sheet stayed');if(!await page.locator('#live').textContent().then(s=>s.includes('Recording')))throw Error('Recording stopped by Back');});
  await page.locator('#live').click();await page.waitForFunction(()=>document.querySelector('#live').textContent.includes('Go Live'),{},{timeout:65000});
  await page.waitForFunction(()=>document.querySelector('#save').textContent==='Saved');
  const document=await page.request.get(base+'/api/document').then(r=>r.json()),speech=await page.request.get(base+'/api/speech').then(r=>r.json());

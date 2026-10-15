@@ -70,7 +70,7 @@ function upload(take,c){const key=take+':'+c.seq;if(acked.has(key))return;upload
 async function archive(result){uploadError=null;for(const c of result.streamChunks||[])upload(result.id,c);await uploadChain;if(uploadError)throw uploadError;if(!result.streamChunks?.length&&result.blob?.size>44)throw new Error('Capture chunk metadata unavailable; retained');await W.capture.ack(result.id);note('Audio saved and verified.');}
 async function recover(){try{const pending=await W.capture.pending();for(const result of pending)await archive(result);await save();note(pending.length?'Retained audio saved and verified.':'No retained audio waiting.');}catch(e){note('Recovery pending: '+e.message);}}
 async function startLive(){
- if(starting||stopping)return;starting=true;$('live').disabled=true;let prepared;
+ if(starting||stopping)return;starting=true;$('live').disabled=true;$('live').textContent='Starting…';let prepared;
  try{
   if(!W.capture.capabilities({kind:'outline',pcm:true}).pcm)throw new Error('Live PCM is unavailable in this recorder. Use the browser preview; no meeting will be created.');
   prepared=W.capture.prepare({kind:'outline',pcm:true});
@@ -86,10 +86,10 @@ async function startLive(){
   offs.push(session.onPcm(f=>{if(!current||paused)return;if(socket.readyState!==1||socket.bufferedAmount>640000){note('Live network is behind. Paused; audio retained.');pauseLive();return;}socket.send(f.pcm);}),session.onChunk(c=>upload(take,c)),session.onWarn(w=>note(String(w?.message||w))),session.onState(st=>{if(stoppedByCore())stopLive();}));
   liveTimer=setInterval(liveUI,1000);note('Listening to the marked bullet. New bullet or Child starts the next thought.');liveUI();render();
  }catch(e){note(e.message);socket?.close();socket=null;if(session)await stopLive();}
- finally{prepared?.release();starting=false;$('live').disabled=false;}
+ finally{prepared?.release();starting=false;$('live').disabled=false;liveUI();}
 }
 function stoppedByCore(){return session?.getInfo().inputStopped&&!stopping&&!stopObserved;}
-function liveUI(){if(stoppedByCore())void stopLive();$('live').classList.toggle('active',!!session);$('live').textContent=session?'◉ '+(paused?'Paused':'Recording'):'◉ Go Live';$('live-status').textContent=session?`${Math.floor((Date.now()-startedAt)/60000)}:${String(Math.floor((Date.now()-startedAt)/1000)%60).padStart(2,'0')} · Tap to stop`:'Your words, not a rewrite.';}
+function liveUI(){if(stoppedByCore())void stopLive();const ended=session?.getInfo().inputStopped;$('live').classList.toggle('active',!!session&&!ended);$('live').textContent=session?(ended?'Save pending':'◉ '+(paused?'Paused':'Recording')):'◉ Go Live';$('live-status').textContent=session?(ended?'Microphone off · tap to retry save':`${Math.floor((Date.now()-startedAt)/60000)}:${String(Math.floor((Date.now()-startedAt)/1000)%60).padStart(2,'0')} · Tap to stop`):'Your words, not a rewrite.';}
 async function pauseLive(){if(!session||stopping)return;try{if(paused){if(socket?.readyState!==1)throw new Error('Connection closed. Stop & save, then start Live again.');await session.resume();paused=false;begin();}else{await session.pause();paused=true;if(current){socket?.send(JSON.stringify({type:'end',id:current.id}));current=null;}}liveUI();render();}catch(e){note(e.message);}}
 async function stopLive(){
  if(!session||stopping)return;stopping=true;stopObserved=true;$('live').disabled=true;const s=session;

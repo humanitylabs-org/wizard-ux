@@ -81,7 +81,7 @@ wss.on('connection',ws=>{
     if(s.stream)s.stream.append(Buffer.from(raw));else{if(s.queued+raw.length>640000)throw new Error('Provider startup stalled; audio retained');s.queue.push(Buffer.from(raw));s.queued+=raw.length;}return;}
    const m=JSON.parse(raw);
    if(m.type==='begin'){
-    if(!/^[A-Za-z0-9_-]{1,128}$/.test(m.id)||typeof m.target!=='string'||m.target.length>128||!Number.isSafeInteger(m.seq))throw new Error('Invalid utterance identity');
+    if(!/^[A-Za-z0-9_-]{1,128}$/.test(m.id)||typeof m.target!=='string'||! /^[A-Za-z0-9_-]{1,128}$/.test(m.target)||!Number.isSafeInteger(m.seq))throw new Error('Invalid utterance identity');
     if(streams.size>=3)throw new Error('Waiting for earlier finals; pause before continuing');
     if(db.prepare('SELECT id FROM speech WHERE id=?').get(m.id))throw new Error('Utterance already exists');
     const s={id:m.id,target:m.target,seq:m.seq,text:'',queue:[],queued:0,bytes:0,ended:false};streams.set(s.id,s);active=s.id;save(s,'draft','');

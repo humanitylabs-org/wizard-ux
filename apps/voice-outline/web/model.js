@@ -2,7 +2,7 @@ export const uid=()=>crypto.randomUUID();
 export const clone=x=>structuredClone(x);
 export function validateDocument(d){
  if(!d||typeof d.title!=='string'||d.title.length>160||!Array.isArray(d.nodes)||d.nodes.length<1||d.nodes.length>5000||!Array.isArray(d.applied)||d.applied.length>50000)throw new Error('Invalid outline');
- const ids=new Set();for(const n of d.nodes){if(typeof n.id!=='string'||n.id.length>128||ids.has(n.id)||typeof n.text!=='string'||n.text.length>100000||typeof n.folded!=='boolean'||(n.parent!==null&&!ids.has(n.parent)))throw new Error('Invalid bullet tree');ids.add(n.id);}
+ const ids=new Set();for(const n of d.nodes){if(typeof n.id!=='string'||! /^[A-Za-z0-9_-]{1,128}$/.test(n.id)||ids.has(n.id)||typeof n.text!=='string'||n.text.length>100000||typeof n.folded!=='boolean'||(n.parent!==null&&!ids.has(n.parent)))throw new Error('Invalid bullet tree');ids.add(n.id);}
  const ancestors=[];for(const n of d.nodes){while(ancestors.length&&ancestors.at(-1)!==n.parent)ancestors.pop();if(n.parent!==null&&!ancestors.length)throw new Error('Non-contiguous bullet subtree');ancestors.push(n.id);}
  if(d.applied.some(id=>typeof id!=='string'||id.length>160))throw new Error('Invalid operation journal');
 }
