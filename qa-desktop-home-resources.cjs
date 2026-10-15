@@ -1,5 +1,5 @@
 // Desktop/mobile Home parity. Run on Thales; real reads, every external write fenced.
-const {chromium}=require(process.env.PLAYWRIGHT_PATH||'/home/telos/node_modules/playwright');
+const {chromium}=require(process.env.PLAYWRIGHT_PATH||'playwright');
 const fs=require('fs'),path=require('path'),os=require('os');
 if(!os.hostname().toLowerCase().includes('thales')||!process.env.QA_OUT?.startsWith('/Volumes/ThalesMedia/'))throw Error('Run browser QA on ThalesMedia');
 const BASE=process.argv[2],OUT=process.env.QA_OUT;fs.mkdirSync(OUT,{recursive:true});
@@ -33,6 +33,15 @@ async function shot(p,name){await p.screenshot({path:path.join(OUT,name+'.png')}
  await p.click('[data-res-tab="ai"]');await p.locator('.rs-sheet .us-row').first().waitFor();ok(await p.locator('.rs-sheet .us-row').count()>0,'AI accounts tab uses shared usage details');await shot(p,'desktop-ai');
  await p.keyboard.press('Escape');ok(await p.locator('.rs-sheet').count()===0&&await p.evaluate(()=>__wux.homeOpen),'Escape closes Resources and stays Home');
  ok(await p.evaluate(()=>document.activeElement.matches('[data-res-open="server"]')),'Resources returns focus to opener');
+ // Review regressions: a new shell overlay takes ownership from Resources.
+ for (const [name,key,selector,action] of [
+  ['palette','Meta+KeyK','#palette'],['keyboard help','Alt+Slash','#keys'],['Settings','Alt+Comma','#dsettings'],['Inbox','Alt+KeyI','#inbox'],['AI usage',null,'.usage-ov',()=>__wux.openUsage()],
+ ]) {
+  await p.click('#desktopHome [data-res-open="server"]');await p.waitForFunction(()=>WosResources.state.panel);
+  if(key)await p.keyboard.press(key);else await p.evaluate(action);
+  ok(await p.locator('.rs-sheet').count()===0&&await p.locator(selector).isVisible(),`${name} replaces Resources instead of opening beneath it`);
+  await p.keyboard.press('Escape');
+ }
  // Draft + parked app retain identity across Home and its dialogs.
  await p.click('#wsList [data-ws="0"]');await p.evaluate(()=>__wux.newChat());
  const wid=await p.evaluate(()=>__wux.ws[__wux.cur].focus),ta=p.locator(`.win[data-win="${wid}"] textarea`);await ta.fill('QA retained parity draft — never send');
@@ -86,6 +95,12 @@ async function shot(p,name){await p.screenshot({path:path.join(OUT,name+'.png')}
  await shot(p,'desktop-shared-icons');
  await p.reload();await p.waitForFunction(()=>__wux?.live?.ok);ok(await p.evaluate(()=>__wux.homeOpen)&&await p.locator('#logo .sg-home').count()===1,'Home-first icon navigation restores without migrating saved windows');
  await p.keyboard.press('Alt+Digit2');ok(await p.locator('#wsList [data-ws="0"] .dn').innerText()==='3','workspace contents and badges survive reload');
+ // Review regression: empty desktops show Home content without homeOpen=true.
+ await p.evaluate(()=>__wux.newDesktop());
+ await p.click('.wsp:not([hidden]) [data-res-open="server"]');await p.waitForFunction(()=>WosResources.state.panel);
+ await p.keyboard.press('Alt+Enter');
+ ok(await p.locator('.rs-sheet').count()===0&&await p.evaluate(()=>!__wux.homeOpen&&__wux.ws[__wux.cur].wins.length===1),'launching New chat from empty-desktop Resources closes its modal');
+ await p.evaluate(()=>{for(const id of [...__wux.ws[__wux.cur].wins])__wux.closeWin(id);__wux.goWs(0);});
  await ctx.close();
  const mob=await setup(true);const m=mob.p;await m.evaluate(()=>__wos.goDesk(0,true));await m.waitForFunction(()=>WosResources.state.server&&WosResources.state.ai,{timeout:30000});
  ok(await m.evaluate(()=>document.documentElement.dataset.shell==='phone')&&await m.locator('#logo').count()===0,'phone keeps phone shell');

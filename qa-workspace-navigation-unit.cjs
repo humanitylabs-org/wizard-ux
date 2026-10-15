@@ -21,4 +21,5 @@ check(!n.icon({wins:['one'],focus:'one'},wins,app).includes('class="dn"'),'singl
 for(const f of ['index.html','desktop.html'])check(fs.readFileSync(path.join(__dirname,'web',f),'utf8').includes('core/workspace-navigation.js'),'both shells load shared projection');
 check(fs.readFileSync(path.join(__dirname,'web/app.js'),'utf8').includes('window.WizCore.workspaceNav.icon(desks[i], W, winApp)'),'phone delegates workspace icon rendering');
 check(fs.readFileSync(path.join(__dirname,'web/desktop/desktop.js'),'utf8').includes('C.workspaceNav.icon(d, W, appOf)'),'desktop delegates workspace icon rendering');
+check(fs.readFileSync(path.join(__dirname,'web/core/sigils.css'),'utf8').startsWith(fs.readFileSync(path.join(__dirname,'tools/sigils/style.css'),'utf8').trimEnd()+'\n\n'),'generated icon styles retain shared workspace styles after regeneration');
 console.log(`${count} passed, 0 failed`);

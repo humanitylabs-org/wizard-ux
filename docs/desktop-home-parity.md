@@ -18,8 +18,8 @@ James requested mobile components on desktop (including Resources), a Home short
 All browser runs executed on Thales, using installed Google Chrome, under `/Volumes/ThalesMedia/Projects/wizard-ux/desktop-home-parity-20261015`.
 
 - Untouched live daily `f4e5a7e` primary repro: 0 passed, 3 failed (offset house, missing Resources, absent Alt+0).
-- `candidate-icons-r2/results.json`: 50 passed, 0 failed. Real Resources reads; dialog tabs; desktop sizes; focus; Escape/browser Back; composer/window identity; Home keyboard/palette/help; Settings; local-outbox fixture; resource lifecycle churn; phone Resources; no page errors. Also validates shared icon navigation, focused-app updates and badges, Home-first numeric mapping, shifted window movement, next-slot creation, empty-desktop pruning, inert out-of-range digits and reload persistence. All non-GET/HEAD requests fenced.
-- `node qa-workspace-navigation-unit.cjs`: 134 passed, 0 failed. Pure shared-renderer and key-slot projection tests.
+- `candidate-review-r1/results.json`: 56 passed, 0 failed (includes six review regressions). Real Resources reads; dialog tabs; desktop sizes; focus; Escape/browser Back; composer/window identity; Home keyboard/palette/help; Settings; local-outbox fixture; resource lifecycle churn; phone Resources; no page errors. Also validates shared icon navigation, focused-app updates and badges, Home-first numeric mapping, shifted window movement, next-slot creation, empty-desktop pruning, inert out-of-range digits and reload persistence. All non-GET/HEAD requests fenced.
+- `node qa-workspace-navigation-unit.cjs`: 135 passed, 0 failed (includes generator/source stylesheet parity). Pure shared-renderer and key-slot projection tests.
 - `candidate-regression-qa-hat-home/result.json`: 51 passed, 0 failed; `candidate-regression-qa-dynamic-desktops/receipt.json`: 50 passed, zero page errors. Existing tests now use Home-first numeric slots. The staging-marker assertion is opt-in via `QA_EXPECT_STAGING`, since live/candidate origins do not have staging markers.
 - `regression-qa-device-resources/output.log`: 19 passed, 0 failed. Explicit fixture-based device/failure contract tests.
 - `regression-qa-home-resources/output.log`: 50 passed, 0 failed. Existing phone Home resource checks, real AI reads and explicitly labelled fault fixtures; query `?view=home` verifies direct Home entry.
@@ -28,4 +28,4 @@ All browser runs executed on Thales, using installed Google Chrome, under `/Volu
 
 No native app, Android build, Hermes core, backend release, guest archive, or live data mutation is part of this change. Queue the web delta for the next significant Mac guest release; do not rebuild the VM for this patch.
 
-Independent source review and live readback are required before calling the request shipped.
+Independent source review found three issues: shell overlays opened under Resources; empty-desktop app launches left Resources open; shared glyph CSS was missing from generator input. All three are repaired and exercised by regression checks. `tools/sigils/build.py` ran on Thales: regenerated CSS, JS and glyph JSON exactly match the committed files by SHA-256. The reviewed documentation mismatch was already superseded by the Home-first follow-up. Live readback is recorded in the release receipt.

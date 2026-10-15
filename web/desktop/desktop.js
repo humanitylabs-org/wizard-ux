@@ -511,8 +511,8 @@
 
   /* Home is a root view, separate from desktops: every open app and draft stays mounted. */
   function leaveHome() {
-    if (!homeOpen) return;
     window.WosResources?.back();
+    if (!homeOpen) return;
     homeOpen = false; store.set('homeOpen', false); render();
   }
   function goHome() {
@@ -679,7 +679,7 @@
     palList.innerHTML = groups.map(g => `<div class="pal-grp">${esc(g.grp)}</div>` + g.items.map(it => { const i = k++; return `<button class="pal-it${i === palSel ? ' sel' : ''}" data-i="${i}" role="option">${it.app ? ico('span', 'ic', it.app) : `<span class="ic" style="--g1:${it.g?.[0] || '#3a2a6a'};--g2:${it.g?.[1] || '#241a44'}">${it.kind === 'ask' ? window.WizBrand.html : it.icon || '◇'}</span>`}<span class="nm">${esc(it.name)}${it.sub ? `<small>${esc(clip(it.sub, 60))}</small>` : ''}</span>${it.keys ? `<span class="hint"><kbd>${esc(it.keys)}</kbd></span>` : ''}</button>`; }).join('')).join('') || '<div class="pal-empty">Nothing yet.</div>';
     palList.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
   }
-  function openPalette(q = '') { pal.hidden = false; palIn.value = q; palSel = 0; palRender(); palIn.focus(); palIn.select(); }
+  function openPalette(q = '') { window.WosResources?.back(); pal.hidden = false; palIn.value = q; palSel = 0; palRender(); palIn.focus(); palIn.select(); }
   function closePalette() { pal.hidden = true; const f = focused(); if (f) focusInside(f.id); }
   function palRun(i, o = {}) { const it = palItems[i]; if (!it) return; closePalette(); it.run(o); }
   palIn.addEventListener('input', () => { palSel = 0; palRender(); });
@@ -717,7 +717,7 @@
   usageEl.innerHTML = '<div class="keys-card" role="dialog" aria-label="AI usage"><div class="keys-head"><b>AI usage</b><small>Quota left on each subscription, and when it resets.</small><button class="x" data-close="usage" aria-label="Close">✕</button></div><div class="usage-body" data-usage-host></div></div>';
   document.body.appendChild(usageEl);
   const paintUsage = () => { if (!usageEl.hidden) usageEl.querySelector('[data-usage-host]').innerHTML = window.WosUsage.html(); };
-  function openUsage() { usageEl.hidden = false; paintUsage(); window.WosUsage.load(Date.now() - (window.WosUsage.at || 0) > 60e3).then(paintUsage); }
+  function openUsage() { window.WosResources?.back(); usageEl.hidden = false; paintUsage(); window.WosUsage.load(Date.now() - (window.WosUsage.at || 0) > 60e3).then(paintUsage); }
   function closeUsage() { if (usageEl.hidden) return false; usageEl.hidden = true; return true; }
   usageEl.addEventListener('click', e => {
     if (e.target === usageEl || e.target.closest('[data-close]')) return closeUsage();
@@ -738,7 +738,7 @@
       + sec('needs', 'Needs you', L.needs) + sec('ready', 'Unread', L.ready) + sec('working', 'Working', L.working);
     const rows = $$('.ib-row[data-thread]', ib); ibSel = Math.min(ibSel, rows.length - 1); rows[ibSel]?.classList.add('sel');
   }
-  function openInbox() { ib.hidden = false; ibSel = 0; renderInbox(); }
+  function openInbox() { window.WosResources?.back(); ib.hidden = false; ibSel = 0; renderInbox(); }
   function closeInbox() { ib.hidden = true; }
   function toggleInbox() { ib.hidden ? openInbox() : closeInbox(); }
   ib.addEventListener('click', e => {
@@ -758,7 +758,7 @@
       <div class="set-body"><div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(st)}</b><small>Desktop · ${esc(location.host)}</small></span></div></div>
       ${C.voiceStatus?.card() || ''}</div></div>`;
   }
-  function openSettings() { setEl.hidden = false; renderSettings(); setEl.querySelector('[data-close]')?.focus(); }
+  function openSettings() { window.WosResources?.back(); setEl.hidden = false; renderSettings(); setEl.querySelector('[data-close]')?.focus(); }
   function closeSettings() { setEl.hidden = true; const f = focused(); if (f) focusInside(f.id); }
   setEl.addEventListener('click', e => { if (e.target === setEl || e.target.closest('[data-close]')) closeSettings(); });
   C.voiceStatus?.onChange(() => renderSettings());
@@ -776,7 +776,7 @@
   const nativeDesktop = !!window.webkit?.messageHandlers?.wizardNative;
   $('#keys .keys-head small').textContent = nativeDesktop ? 'Wizard owns ⌘N, ⌘T and ⌘W. Desktops open on demand.' : 'Browser owns ⌘N/T/W. Use ⌥Enter (chat), ⌥T (desktop), ⌥W (close), ⌥⇧V (new voice).';
   $('#keysBody').innerHTML = KEYS.map(([h, rows]) => `<h4>${h}</h4>` + rows.map(([k, d]) => `<div class="krow"><span>${esc(d)}</span><span>${k.split(/\s{2,}/).map(x => `<kbd>${esc(x)}</kbd>`).join(' or ')}</span></div>`).join('')).join('');
-  function toggleKeys(on) { keysEl.hidden = on == null ? !keysEl.hidden : !on; }
+  function toggleKeys(on) { keysEl.hidden = on == null ? !keysEl.hidden : !on; if (!keysEl.hidden) window.WosResources?.back(); }
   keysEl.addEventListener('click', e => { if (e.target === keysEl || e.target.closest('[data-close]')) toggleKeys(false); });
 
   /* ---------------- voice: Right ⌘ talk, Right ⌥ dictate (taps), mic button ----------------
