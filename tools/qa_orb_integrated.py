@@ -107,6 +107,12 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
         wait("WizAppCapture.getState().phase==='recording'",25);pg.pump(1.5)
         return cap()['meetingId']
     def stop_meeting():
+        # Reload restores the shell's chat, not Mizel's document route. Bring the
+        # real app forward and use its recording banner before seeking Stop.
+        ev("__wos.closeSheets(true);__wos.openApp({id:'mizel',kind:'wizard',url:'/mizel-live/',name:'Mizel'})")
+        wait("[...document.querySelectorAll('iframe')].some(f=>f.src.includes('/mizel-live/')&&f.contentDocument?.querySelector('#rec-banner'))")
+        mf("document.querySelector('#rec-banner').click()")
+        wait("[...document.querySelectorAll('iframe')].some(f=>f.src.includes('/mizel-live/')&&f.contentDocument?.querySelector('[aria-label=\"Stop recording\"]'))")
         mf("document.querySelector('[aria-label=\"Stop recording\"]').click()")
         # Event readback may race the final marker revision. The app deliberately
         # retains audio and offers Retry save; exercise that real UI, never ack it
