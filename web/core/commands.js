@@ -22,6 +22,15 @@
     return null;
   }
   function localParse(t, snap, kind) {
+    const explicit = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '');
+    if (/^(help|show help|open help|gestures|keyboard shortcuts)$/.test(explicit)) return { action:'open_view', view:'help' };
+    if (/^(settings|open settings|usage|show usage)$/.test(explicit)) return { action:'open_view', view:/usage/.test(explicit)?'usage':'settings' };
+    let destination = explicit.match(/^(?:navigate|directions|drive)(?: to)? (.+)$/);
+    if (destination) return {action:'navigate',destination:destination[1]};
+    destination=explicit.match(/^(?:maps search|search maps for|find on maps) (.+)$/);
+    if(destination)return {action:'maps_search',query:destination[1]};
+    const feature=window.WosFeatures?.entries.find(f=>[f.id,norm(f.title||f.id)].includes(explicit.replace(/^(open|show) /,'')));
+    if(feature)return {action:'open_view',view:feature.id};
     // The music search spell ("music search Home Tides") wins everywhere, even over the Chats list's "search …".
     { const ms = window.WosMusic?.available() && window.WosMusic.parse(t, false, false); if (ms && ms.op === 'search') return { action: 'music', cmd: ms }; }
     { const cv = chatsVoice(t, snap || sendSnap(), kind); if (cv) return cv; }
@@ -53,12 +62,6 @@
     const qs = quickSearch(t);
     if (qs && (qs.strong || kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'quick_search', query: qs.query, tab: qs.tab };
     const s = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '');
-    if (/^(help|show help|open help|gestures|keyboard shortcuts)$/.test(s)) return { action: 'open_view', view: 'help' };
-    if (/^(settings|open settings|usage|show usage)$/.test(s)) return { action: 'open_view', view: /usage/.test(s) ? 'usage' : 'settings' };
-    let destination = s.match(/^(?:navigate|directions|drive)(?: to)? (.+)$/);
-    if (destination) return { action: 'navigate', destination: destination[1] };
-    destination = s.match(/^(?:maps search|search maps for|find on maps) (.+)$/);
-    if (destination) return { action: 'maps_search', query: destination[1] };
     if (/^(zoom|go|dive) (in|deeper|down)\b/.test(s)) return { action: 'zoom', dir: 'in' };
     if (/^(zoom|back|go|pull) (out|up|back)\b|^zoom out\b/.test(s)) {
       const lv = /month/.test(s) ? 'month' : /week/.test(s) ? 'week' : null;
@@ -88,7 +91,7 @@
     return null;
   }
 
- return { parse: localParse, dispatch(text, snap, kind, execute) { const cmd = localParse(text, snap, kind); return cmd ? { matched: true, result: execute(cmd, text, { snap }) } : { matched: false }; } };
+ return {parse:localParse};
  }
  function execute(c, text, H) {
    const a = c.action;

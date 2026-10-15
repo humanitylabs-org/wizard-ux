@@ -95,10 +95,11 @@
   });
 
   function openReview(level, date) {
+    closeSettings();
     const V = window.WosViews, day = date || V.YESTERDAY;
     return newWin({ app:'review', title:level[0].toUpperCase()+level.slice(1)+' in review', z: level === 'month' ? {level} : level === 'week' ? {level,week:V.weekOf(day)} : {level:'day',day} });
   }
-  function openMaps(mode, dest) { return newWin({app:'maps',title:'Maps',mode,dest}); }
+  function openMaps(mode, dest) { closeSettings();return newWin({app:'maps',title:'Maps',mode,dest}); }
   function mountReview(w, el) {
     const V = window.WosViews, root = el.querySelector('.review'); if (!root) return;
     const paint = () => {
@@ -141,7 +142,7 @@
   function threadShown(wid,el) {
     if (wid.endsWith('::list')) return;
     boundManager ||= window.WosBoundView.create({ windows:()=>Object.values(W),win:id=>W[id],findApp,APP,linkTitle:u=>u.pathname.split('/').filter(Boolean).pop()||'Page',title:winTitle,
-      visible:id=>!homeOpen&&wsOf(id)===cur, close:id=>closeWin(id),
+      visible:id=>!homeOpen&&wsOf(id)===cur, close:id=>closeWin(id,true),
       open:(obj,origin)=>{const focus=ws[cur].focus;newWin(obj,{ws:wsOf(origin)});if(W[focus])focusWin(focus,{scroll:false});},
       reload:id=>{save();const f=winEl(id)?.querySelector('iframe');if(f)f.src=f.src;}
     }); boundManager.shown(wid,el);
@@ -199,8 +200,10 @@
     if (t !== cur) goWs(t); else render();
     return W[id];
   }
-  function closeWin(id) {
+  function closeWin(id, internal = false) {
     const t = wsOf(id); if (t < 0) return;
+    if (!internal) boundManager?.dismiss(W[id]);
+    if (W[id]?.app === 'chats') threadShown(id,null);
     const d = ws[t], i = d.wins.indexOf(id);
     CHATS.saveDraft(id);
     d.wins.splice(i, 1); delete W[id]; CHATS.forget(id);
@@ -990,7 +993,7 @@
    * otherwise starts a new thread. Audio goes through the durable outbox: transcribed there,
    * kept as a voice note, retried if the network drops. */
   const pill = $('#voicePill'), mic = $('#micBtn');
-  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${CMD}⇧N`, vContext = '', vRoute = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false;
+  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${CMD}⇧N`, vContext = '', vRoute = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false;
   const VOICE = C.voice({
     onState: st => {
       window.WosCaptureTools.awake(st !== 'idle');
@@ -1040,7 +1043,7 @@
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
     if (VOICE.state === 'idle') {
       if (action === 'send') return 'none';
-      vMode = 'talk'; vNewChat = forceNew; vNewKey = newKey;
+      strictReply = false; vMode = 'talk'; vNewChat = forceNew; vNewKey = newKey;
       const f = focused(); vSnapshot = commandSnapshot();
       vFeedback = !forceNew && f?.from?.sid ? {thread:f.from.sid,url:f.url,context:viewContext(f.id,'feedback on the bound page')} : null;
       vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile, paintVoiceFiles); paintVoiceFiles();
@@ -1091,11 +1094,25 @@
     if (!r || !r.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
     const extraFiles = (vFiles?.files || []).map(({local,uploading,error,...f})=>f);
     if (vFeedback) { const staged=await OUTBOX.stage({kind:'reply',sessionId:vFeedback.thread,...vRoute,audio:r.blob,captureId:r.captureId,files:extraFiles}); await window.WosBoundView.feedback(OUTBOX,{...vFeedback,route:vRoute,custodyId:staged.id},'',r.blob,extraFiles);return 'sent'; }
+    let stagedId = null, transcript = '';
+    if (!strictReply && !forceNew && !vNewChat && !sealed?.text && !sealed?.files?.length && !extraFiles.length) {
+      // The microphone journal remains until staging owns the final chunk and the frozen destination.
+      dictationFinishing = true;
+      try {
+        const staged = await OUTBOX.stage({kind:aimSid && aimSid!=='__new__'?'reply':'new',sessionId:aimSid==='__new__'?'':aimSid||'',...vRoute,audio:r.blob,captureId:r.captureId});
+        stagedId=staged.id;
+        if(staged.durable) {
+          try { transcript=String((await window.WizConfig.transcribe(r.blob,{prompt:window.WizConfig.voicePrompt(),signal:AbortSignal.timeout(45000)})).text||'').trim(); } catch(_) {}
+          const cmd=transcript && LOCAL_COMMANDS.parse(transcript,vSnapshot,'auto');
+          if(cmd && executeCommand(cmd,transcript)) { await OUTBOX.completeLocal(stagedId);toast('⚡','Command handled on-device',1800);return 'local'; }
+        }
+      } finally { dictationFinishing=false; }
+    }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, null, r.captureId, rp.steerRunId); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
-    if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { captureId: r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles });
+    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
+    if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles });
     else {
-      const item = await OUTBOX.enqueue({ ...modelRoute, captureId: r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: '', instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
+      const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
       sealed?.done?.(item);
     }
     toast('✦', 'Recording kept · waiting to send', 1400);
@@ -1108,7 +1125,7 @@
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (['listen','paused'].includes(VOICE.state)) { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
     if (!sid) return 'busy';
-    vConversation = null; vFeedback = null; commandTake = false; vSnapshot = commandSnapshot();
+    strictReply = true; vConversation = null; vFeedback = null; commandTake = false; vSnapshot = commandSnapshot();
     try { vRoute = CHATS.modelRoute(wid,sid); } catch(e) { toast('!',String(e.message||e),2600);return 'busy'; }
     vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile,paintVoiceFiles); paintVoiceFiles();
     vMode = 'talk'; vNewChat = false; vTarget = wid; vReply = { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' }; vContext = viewContext(wid, 'voice, aimed at this thread');
@@ -1500,7 +1517,8 @@
   });
   window.__wux = {
     get links() { return LINKS; },
-    shell: 'desktop', get ws() { return ws; }, get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS,
+    shell: 'desktop', get ws() { return ws; }, get voiceState() { return VOICE.state; },
+ get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS,
     get homeOpen() { return homeOpen; }, goHome, get palMode() { return pal.hidden ? '' : palMode; },
     goWs, newDesktop, closeDesktop, closeCurrent, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openPicker, openInbox, talk, ask, escStep, viewContext,
     openFiles, openUsage, recordReply, openSearch, openReview, openMaps, localCommand, commandVoice, dictate, toast,

@@ -800,7 +800,7 @@
   function threadShown(wid, el) {
     if (boundBusy) return;
     boundManager ||= window.WosBoundView.create({ windows: () => Object.values(W), win: id => W[id], findApp, APP, linkTitle,
-      visible: id => deskOf(id) === idx, title: winTitle, close: id => closeWin(id, true),
+      visible: id => deskOf(id) === idx, from: fromOf, title: winTitle, close: id => closeWin(id, true),
       open: (obj, origin) => { openWin(obj, { stay:true }); boundTip(origin); },
       reload: id => { save(); const f = winEl(id)?.querySelector('iframe'); if (f) f.src = f.src; }, changed: syncPeek });
     boundManager.shown(wid, el);
@@ -3119,8 +3119,8 @@
     if (scroller) scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
   }
   window.WosFeatures.install({
-    review: openReview, maps: openMaps,
-    openFeature: id => openWin({app:'feature',featureId:id,title:window.WosFeatures.entries.find(f=>f.id===id)?.title}),
+    review: (level,date) => { closeSheets(true); return openReview(level,date); }, maps: (mode,dest) => {closeSheets(true);return openMaps(mode,dest);},
+    openFeature: id => {closeSheets(true);return openWin({app:'feature',featureId:id,title:window.WosFeatures.entries.find(f=>f.id===id)?.title});},
     command: text => { const c = localParse(text, sendSnap(), 'command'); return c ? execute(c, text) : false; }
   });
   window.WizCore.deeplink?.handle({

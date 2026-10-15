@@ -230,7 +230,7 @@ window.WosChatPower = function chatPower(A) {
   const micBtn = wid => { if (!H.recordReply) return ''; const sid = H.win(wid)?.thread, on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
   /* A recording made from a thread's composer: always delivered to that thread (pinned when recording started),
    * through the durable outbox, which transcribes it and keeps the recording as a voice note. */
-  async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null, custodyId = null, captureId = null, capturedRunId = undefined) {
+  async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null, custodyId = null, captureId = null, capturedRunId = undefined, transcript = '') {
     if (!OUTBOX || !blob || !sid) return null;
     const w = H.win(wid), c = ch(wid);
     const isNew = sid === '__new__';
@@ -254,7 +254,7 @@ window.WosChatPower = function chatPower(A) {
     if (w) A.renderChats(w);
     let it;
     try {
-      it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', typed: sealed.text, audio: blob,
+      it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: transcript ? [sealed.text, transcript].filter(Boolean).join('\n\n') : '', typed: sealed.text, audio: blob,
         instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
         wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && w?.agent ? { agent: w.agent } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list

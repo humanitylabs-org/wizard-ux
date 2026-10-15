@@ -50,7 +50,7 @@
        if (b && b.bkey === t.key) { if (b.brk !== t.rk && !H.visible(b.id)) { b.brk = t.rk; H.reload(b.id); } return; }
        if (off.get(wid) === sid + '|' + t.key || !H.visible(wid)) return;
        if (b) { if (H.visible(b.id)) return; H.close(b.id); }
-       H.open({ ...t.win, from: Object.freeze({ win: wid, sid, title: H.title(w), agent: w.agent || '' }), bound: wid, bsid: sid, bkey: t.key, brk: t.rk }, wid);
+       H.open({ ...t.win, from: Object.freeze({ ...H.from?.(wid), win: wid, sid, title: H.title(w), agent: w.agent || '' }), bound: wid, bsid: sid, bkey: t.key, brk: t.rk }, wid);
      } finally { busy = false; H.changed?.(); }
    }
    return { shown, dismiss(w) { if (w?.bound) off.set(w.bound, w.bsid + '|' + w.bkey); } };
