@@ -372,7 +372,7 @@ window.WizCore.chats = function createChats(H) {
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
     const fab = `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
-    const html = `<div class="ch-list${AGID ? ' agent' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${agentStrip(AGID, 'list')}${head}<div class="ch-scroll">${sugHtml}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
+    const html = `<div class="ch-list${AGID ? ' agent' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}<div class="ch-scroll">${sugHtml}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -594,8 +594,8 @@ window.WizCore.chats = function createChats(H) {
   };
   const owner = id => (H.owner ? H.owner(id) : id);
   /* ---- Agents MVP: per-agent Chats. A window pinned to a non-default agent (w.agent) lists only that agent's
-   * threads, starts new chats on it, and every view carries a header naming the agent (sigil, colour, label,
-   * lock when private). A thread always shows the agent it is pinned to (server metadata), whatever window. ---- */
+   * threads and starts new chats on it. The shell title bar owns agent identity; the thread keeps its
+   * conversation title and model picker without repeating the agent banner. ---- */
   const AGS = () => window.WosAgents || null;
   function winAgent(w) { const o = (w && W[owner(w.id)]) || w; const id = o?.agent || ''; const A = AGS(); return id && (!A || A.isOther(id)) ? id : ''; }
   function agentRec(id) {
@@ -605,12 +605,6 @@ window.WizCore.chats = function createChats(H) {
   }
   // The agent name used in composer hints and receipts: the open agent's label, else the main agent's name.
   const agentName = id => id ? agentRec(id).label : window.WizConfig.agent();
-  // The strip is always there in an agent's Chats; in the main Chats only once there is more than one agent.
-  function agentStrip(id, where, model) {
-    const A = AGS(); if (!A) return '';
-    if (!id && !A.others().length) return '';
-    return A.badge(agentRec(id), { where, model });
-  }
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
     const s = LIVE.session(sid); if (!s || !ACT[a]) return;
@@ -834,9 +828,8 @@ window.WizCore.chats = function createChats(H) {
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
-    const curM = PW && TAG && !isNew && s ? window.WosModels?.currentRoute(s.id) : null;
     el.innerHTML = `<div class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>${agentStrip(TAG, 'thread', curM?.model ? AGS()?.modelName(agentRec(TAG), curM.model) : '')}
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       <form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
@@ -850,6 +843,10 @@ window.WizCore.chats = function createChats(H) {
     if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
     growTa(el.querySelector('textarea'));
+    // Desktop renders before revealing its thread pane. Measure once it is visible,
+    // retaining a usable first layout even before the user types or a live repaint runs.
+    const field = el.querySelector('textarea');
+    requestAnimationFrame(() => { if (field?.isConnected && field === el.querySelector('textarea')) growTa(field); });
     PW?.paint(w.id, el);
     // The shell may bind the view this thread's latest reply links (phone: bound views beside the thread).
     if (!isNew && turns) H.threadShown?.(w.id, el);
@@ -1176,7 +1173,11 @@ window.WizCore.chats = function createChats(H) {
   document.body.appendChild(picker);
   let pickFor = '';
   picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
-  function growTa(ta) { if (!ta) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; }
+  function growTa(ta) {
+    if (!ta) return;
+    ta.style.height = 'auto';
+    if (ta.getClientRects().length && ta.clientWidth) ta.style.height = Math.min(Math.max(42, ta.scrollHeight + 2), 140) + 'px';
+  }
   // While a thread is on screen AND James is at that screen, new replies count as read (same rule as Wizard).
   // "At the screen" = the page was opened, brought to the front, touched, clicked, typed in or scrolled within
   // ATTEND_MS. A window left open on a thread (James, 14 Oct 2026: a Mac tab sat on "Our PRs" and marked its new

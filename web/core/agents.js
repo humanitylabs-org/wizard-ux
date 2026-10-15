@@ -51,7 +51,7 @@
     list: [], ready: false, available: false, error: '', at: 0, loading: null, options: null, optionsAt: 0,
     bindings: [], bindingsAvailable: false, bindingsFromList: false, bindingsAt: 0, bindingsLoading: null,
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-    emit() { for (const fn of listeners) { try { fn(A); } catch (e) { console.error(e); } } },
+    emit() { A.refreshTitlebars(); for (const fn of listeners) { try { fn(A); } catch (e) { console.error(e); } } },
     load(force) {
       if (A.loading) return A.loading;
       if (!force && A.ready && Date.now() - A.at < 30e3) return Promise.resolve(A.list);
@@ -133,6 +133,28 @@
       const g = A.glyph(a), c = A.colour(a);
       if (window.WizSigil) return window.WizSigil.chip('span', cls, g || initial(a), c);
       return `<span class="${cls} sgt" style="--c:${c}">${esc(initial(a))}</span>`;
+    },
+    title(a) {
+      const label = String(a?.label || 'Hermes').trim();
+      if (/\bagent$/i.test(label)) return label;
+      return `${label} ${a?.is_default ? 'Main Agent' : 'Agent'}`;
+    },
+    titleRecord(id) {
+      return A.get(id || A.defaultId()) || { id: id || 'hermes', label: id || 'Hermes', is_default: !id, appearance: {} };
+    },
+    titleContent(id, iconClass, titleClass) {
+      const a = A.titleRecord(id);
+      return A.sigil(a, iconClass) + `<span class="${titleClass}" style="color:var(--ink)">${esc(A.title(a))}</span>`;
+    },
+    titlebar(id = '', iconClass = 'ic', titleClass = 't') {
+      return `<span class="agent-titlebar" data-agent-titlebar="${esc(id)}" data-icon-class="${iconClass}" data-title-class="${titleClass}">${A.titleContent(id, iconClass, titleClass)}</span>`;
+    },
+    refreshTitlebars() {
+      // Registry updates only repaint the small identity wrapper, preserving drafts and scroll position.
+      document.querySelectorAll('[data-agent-titlebar]').forEach(el => {
+        const html = A.titleContent(el.dataset.agentTitlebar, el.dataset.iconClass, el.dataset.titleClass);
+        if (el.innerHTML !== html) el.innerHTML = html;
+      });
     },
     lock() { return '<svg class="ag-lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7"/></svg>'; },
     isPrivate(a) { return a?.privacy === 'private'; },

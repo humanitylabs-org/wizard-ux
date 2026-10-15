@@ -36,7 +36,7 @@ for(const mobile of [true,false]){
  check(await p.evaluate(()=>WosAgents.colour(WosAgents.get(WosAgents.defaultId()))==='hsl(265 72% 62%)'&&WosAgents.colour(WosAgents.get('private'))==='hsl(160 72% 62%)'),kind+' configured purple main and green private');
  check(await p.evaluate(()=>{const a={id:'future-one'},b={id:'future-two'};return WosAgents.glyph(a)==='hat'&&WosAgents.colour(a)!==WosAgents.colour(b)&&WosAgents.colour(a)===WosAgents.colour(a);}),kind+' future agents keep hat and stable distinct hue');
  await p.evaluate(()=>WizOpenAgentChats('private'));await nap(1200);
- check(await p.locator('.ch-agent.private .sg-hat-private').count()>0,kind+' private Chats badge renders keyhole hat');
+ check(await p.locator('[data-agent-titlebar="private"] .sg-hat-private').count()>0,kind+' private title bar renders keyhole hat');
  if(mobile){
   await p.evaluate(()=>__wos.goDesk(0,true));await nap(250);
   check(await p.locator('#dock .sg-hat-private').count()>0,kind+' private dock uses keyhole hat');

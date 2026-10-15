@@ -224,7 +224,7 @@
     const el = document.createElement('article');
     const rv = !!(w.from && w.from.sid);
     el.className = `win app-${w.app}${w.appId === 'app-store' || w.appId === 'system' || w.appId === 'agents' ? ' store-window' : ''}${agentWin(w) ? ' agent-chats' : ''}${rv ? ' reviewing' : ''}${w.bound ? ' bound' : ''}`; el.dataset.win = w.id;
-    el.innerHTML = `<header class="wbar">${ico('span', 'wic', a)}<span class="wt">${esc(winTitle(w))}</span>${rv ? '<span class="rv-tag">Review</span>' : ''}
+    el.innerHTML = `<header class="wbar">${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'wic', 'wt') : `${ico('span', 'wic', a)}<span class="wt">${esc(winTitle(w))}</span>`}${rv ? '<span class="rv-tag">Review</span>' : ''}
       ${w.from ? '<button class="wb wpin wopen" data-wact="detach" aria-label="Open as an app on its own desk" title="Keep a copy open on its own desk"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span>Open app</span></button>' : ''}
       ${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}<button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
       <button class="wb" data-wact="close" aria-label="Close window"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button></header>
@@ -287,7 +287,7 @@
       el.classList.toggle('focus', id === d.focus && n > 1);
       el.classList.toggle('solo', n === 1);
       el.classList.toggle('full', !!d.full && id === d.focus);
-      const t = $('.wt', el); if (t) t.textContent = winTitle(W[id]); // Chats shows the thread's name (or New chat / Chats)
+      const t = $('.wt', el); if (t && W[id].app !== 'chats') t.textContent = winTitle(W[id]);
     });
     sec.setAttribute('aria-label', deskTitle(i));
     if (i === idx) { syncImmersive(); syncReviewChip(); }
@@ -3275,13 +3275,27 @@
   if (/WizardOS-Android\//.test(navigator.userAgent)) document.documentElement.classList.add('native-app');
   // Assistant handoff (side-key app → Wizard OS). 'listen' opens the orb listening; 'say' shows the words as a
   // draft that James sends with one tap — another app can never make Archimedes act on its own.
+  let threadHandoffGeneration = 0;
   window.__wosHandoff = h => {
     // A side-button handoff means James already knows the gestures: clear the first-run coach so the draft is visible.
     if (window.WosTour?.active) window.WosTour.finish('handoff');
     if (!h || typeof h !== 'object') return false;
     closeSheets(); if (idx !== HOME && h.action !== 'thread') goDesk(HOME);
     if (h.action === 'listen') { if (V.state === 'idle') startVoice('auto'); return true; }
-    if (h.action === 'thread' && h.id) { openWizardThread(String(h.id)); LIVE?.refresh(); return true; }
+    if (h.action === 'thread' && h.id) {
+      const id = String(h.id), generation = ++threadHandoffGeneration;
+      // Android 0.9.15's share notification carries only thread_id. On a cold start or just-shared
+      // thread its owning agent is not cached yet: resolve agent lists BEFORE opening Chats.
+      // Never open a private notification in main while the refresh is still in flight.
+      Promise.resolve(LIVE?.refreshAgents?.()).then(() => {
+        if (generation !== threadHandoffGeneration) return;
+        if (!LIVE?.agentOf?.(id) && Object.values(LIVE?.agentStatus || {}).some(s => !s.ok)) {
+          toast('◉', 'Could not locate that chat · reconnect and tap again'); return;
+        }
+        openWizardThread(id); LIVE?.refresh();
+      }).catch(() => { if (generation === threadHandoffGeneration) toast('◉', 'Could not locate that chat · reconnect and tap again'); });
+      return true;
+    }
     if (h.action === 'usuals') { openUsuals(); return true; }
     if (h.action === 'unsent' || h.action === 'settings') { onUnsentChange(); openSettings(h.action === 'unsent'); return true; }
     if (h.action === 'side-button') { store.set('sideHidden', false); refreshHome(true); if (SIDE && (SIDE.step === 'mic' || SIDE.step === 'assistant')) sideButtonTap(false); else toast('◉', 'Side button is on. Hold it to talk.', 2600); return true; }

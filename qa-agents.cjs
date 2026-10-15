@@ -101,15 +101,15 @@ async function phone(b) {
   await f.locator('[data-chats]').click(); await wait(1800);
   const agWin = await p.evaluate(id => Object.values(__wos.wins).find(w => w.app === 'chats' && w.agent === id)?.id || '', created.id);
   ok(!!agWin, 'phone: Open chats opens a Chats window pinned to the agent');
-  const strip = p.locator(`[data-chats="${agWin}"] .ch-agent.list`);
+  const strip = p.locator(`.win[data-win="${agWin}"] [data-agent-titlebar]`);
   await strip.waitFor({ timeout: 8000 }).catch(() => {});
-  ok(await strip.count() === 1 && /Private/.test(await strip.innerText()) && await strip.locator('.ag-lock').count() === 1, 'phone: agent Chats list has a persistent header (name + lock)');
-  ok(/Tinfoil|GLM/.test(await strip.innerText()), 'phone: header names the model', await strip.innerText().catch(() => ''));
+  ok(await strip.count() === 1 && /Private/.test(await strip.innerText()) && await strip.locator('.sg-hat-private').count() === 1, 'phone: agent Chats list has a persistent header (name + lock)');
+  ok(await p.locator(`[data-chats="${agWin}"] .ch-agent`).count() === 0, 'phone: agent identity is not repeated above search');
   ok(await p.locator(`[data-chats="${agWin}"] .ch-row`).count() === 0, 'phone: a new agent starts with no chats (none from the main agent)');
   await shot(p, 'phone-08-agent-chats-empty');
   // New chat in the agent → model picker shows only allowed models → send.
   await p.locator(`[data-chats="${agWin}"] [data-chfab]`).click(); await wait(600);
-  ok(await p.locator(`[data-chats="${agWin}"] .ch-agent.thread`).count() === 1, 'phone: new chat shows the agent header');
+  ok(await p.locator(`.win[data-win="${agWin}"] [data-agent-titlebar]`).count() === 1, 'phone: new chat shows the agent header');
   ok(/Message Private/.test(await p.locator(`[data-chats="${agWin}"] textarea`).getAttribute('placeholder')), 'phone: composer says Message Private');
   await p.locator(`[data-chats="${agWin}"] [data-chmodel]`).click(); await wait(400);
   const picks = await p.locator('.ch-psheet .mrow').allInnerTexts();
@@ -135,7 +135,7 @@ async function phone(b) {
   // Open it: thread view header + reply.
   await p.evaluate(([w, sid]) => __wos.openChat(w, sid), [agWin, agSessions[0].id]); await wait(2000);
   const th = p.locator(`[data-chats="${agWin}"] .ch-thread`);
-  ok(await th.locator('.ch-agent.thread').count() === 1 && /Private/.test(await th.locator('.ch-agent.thread').innerText()), 'phone: thread view keeps the agent header');
+  ok(await th.locator('.ch-agent').count() === 0 && /Private/.test(await strip.innerText()), 'phone: thread view keeps the agent header');
   ok(/Fixture reply/.test(await th.locator('.ch-msgs').innerText()), 'phone: reply from the agent shows in the thread');
   ok(/GLM 5\.3/.test(await th.locator('[data-chmodel]').innerText()), 'phone: thread model chip says GLM 5.3');
   await shot(p, 'phone-11-agent-thread');
@@ -161,7 +161,7 @@ async function phone(b) {
   // ---- Deep link + main Chats unaffected ----
   await p.evaluate(() => __wos.openApp(__wos.chats && window.WizCore.apps('mobile').APPS.find(a => a.id === 'wizard'))); await wait(1200);
   const mainWin = await p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats' && !w.agent)?.id || '');
-  const mainStrip = await p.locator(`[data-chats="${mainWin}"] .ch-agent`).innerText().catch(() => '');
+  const mainStrip = await p.locator(`.win[data-win="${mainWin}"] [data-agent-titlebar]`).innerText().catch(() => '');
   ok(/Atlas/.test(mainStrip) && !/Private/.test(mainStrip), 'phone: main Chats header names the main agent once several exist', mainStrip);
   ok(!(await p.locator(`[data-chats="${mainWin}"] .ch-list`).innerText()).includes('Recap my private recording'), 'phone: main Chats list has no private thread');
   await shot(p, 'phone-13-main-chats');
@@ -284,13 +284,13 @@ async function desktop(b, created) {
   const aw = await p.evaluate(id => Object.values(__wux.wins).find(w => w.app === 'chats' && w.agent === id)?.id || '', created.id);
   ok(!!aw, 'desktop: Open chats opens a Chats window pinned to the agent', aw);
   const win = p.locator(`.win[data-win="${aw}"]`);
-  const head = win.locator('.dchats .ch-agent').first();
-  ok(await head.count() >= 1 && /Private/.test(await head.innerText()) && await head.locator('.ag-lock').count() === 1, 'desktop: agent Chats has the persistent header with lock');
+  const head = win.locator('[data-agent-titlebar]');
+  ok(await head.count() >= 1 && /Private/.test(await head.innerText()) && await head.locator('.sg-hat-private').count() === 1, 'desktop: agent Chats has the persistent header with lock');
   ok(/Private/.test(await win.locator('.wbar').innerText()), 'desktop: the window names the agent', await win.locator('.wbar').innerText().catch(() => ''));
   const rows = await win.locator('.dchats .pane-list .ch-row').allInnerTexts();
   ok(rows.length >= 1 && rows.some(t => /Recap my private recording/.test(t)) && !rows.some(t => /Groceries/.test(t)), 'desktop: agent list shows only its own thread', JSON.stringify(rows));
   await win.locator('.dchats .pane-list .ch-row').first().click(); await wait(1800);
-  ok(await win.locator('.dchats .ch-agent.thread').count() >= 1, 'desktop: thread pane shows the agent header');
+  ok(await win.locator('.dchats .ch-agent').count() === 0 && await head.count() === 1, 'desktop: thread pane shows the agent header');
   await shot(p, 'desktop-03-agent-thread');
   // Sends its work to on the desktop: the app's window bar and the settings sheet; Esc closes only the sheet.
   await p.evaluate(id => __wux.openApp(window.WizCore.apps('desktop').APPS.find(a => a.id === id)), BIND); await wait(1500);
