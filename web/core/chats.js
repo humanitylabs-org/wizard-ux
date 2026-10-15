@@ -402,7 +402,12 @@ window.WizCore.chats = function createChats(H) {
   const MAX_FILES = 8, OLD_ROUTE_MAX = 64 * 1024 * 1024;
   const fileKind = f => /^audio\//.test(f.mime || '') || /^wizard-voice-/.test(f.name || '') ? 'voice' : /^image\//.test(f.mime || '') ? 'image' : 'file';
   const fsize = b => b >= 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
-  const fileUrl = id => `/wizard/files/${encodeURIComponent(id)}/content`;
+  const FILE_AGENTS = new Map();
+  const fileUrl = (id, agent = '') => {
+    if (agent) FILE_AGENTS.set(id, agent);
+    const selected = agent || FILE_AGENTS.get(id) || '';
+    return `/wizard/files/${encodeURIComponent(id)}/content` + (selected ? `?agent=${encodeURIComponent(selected)}` : '');
+  };
   async function uploadFile(file, { signal, onProgress, agent = '' } = {}) {
     if (window.WizUploads?.supported()) {
       try { return await window.WizUploads.upload(file, { signal, onProgress, agent }); }
@@ -525,7 +530,7 @@ window.WizCore.chats = function createChats(H) {
   }
   // Local thumbnails for files uploaded from this phone, so a just-sent photo shows before Wizard has it.
   const PREVIEW = {};
-  const mediaOfFile = f => ({ id: f.id, agent: f.agent || 'hermes', name: f.name, mime: f.mime || '', bytes: f.bytes || 0, kind: /^image\//.test(f.mime || '') ? 'image' : /^video\//.test(f.mime || '') ? 'video' : /^audio\//.test(f.mime || '') ? 'audio' : 'file', url: f.id ? fileUrl(f.id) : '', thumb: PREVIEW[f.id] || '' });
+  const mediaOfFile = f => ({ id: f.id, agent: f.agent || 'hermes', name: f.name, mime: f.mime || '', bytes: f.bytes || 0, kind: /^image\//.test(f.mime || '') ? 'image' : /^video\//.test(f.mime || '') ? 'video' : /^audio\//.test(f.mime || '') ? 'audio' : 'file', url: f.id ? fileUrl(f.id, f.agent) : '', thumb: PREVIEW[f.id] || '' });
   // Every photo/file in the open thread gets an index into c.media; tapping it opens the in-app viewer.
   function mediaBtn(c, m) {
     const k = c.media.push(m) - 1;
@@ -548,7 +553,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function fileChip(f) {
     const k = fileKind(f);
-    if (k === 'voice' && f.id) { loadDuration(f.id); return `<button type="button" class="vnote" data-vnote="${esc(f.id)}" aria-label="Play voice note"><span class="vp">${PLAY_SVG}<i></i></span><span class="vw"><span class="vt">${MIC_SVG}Voice note</span><span class="vbar"><b></b></span></span><span class="vd">${DUR[f.id] ? mmss(DUR[f.id]) : ''}</span></button>`; }
+    if (k === 'voice' && f.id) { fileUrl(f.id, f.agent); loadDuration(f.id); return `<button type="button" class="vnote" data-vnote="${esc(f.id)}" aria-label="Play voice note"><span class="vp">${PLAY_SVG}<i></i></span><span class="vw"><span class="vt">${MIC_SVG}Voice note</span><span class="vbar"><b></b></span></span><span class="vd">${DUR[f.id] ? mmss(DUR[f.id]) : ''}</span></button>`; }
     if (k === 'voice') return `<span class="fchip">${MIC_SVG} Voice note</span>`;
     return `<span class="fchip">${CLIP_SVG} ${esc(f.name)}</span>`;
   }
@@ -874,7 +879,7 @@ window.WizCore.chats = function createChats(H) {
   function loadDraft(w) {
     const c = ch(w.id), key = draftKey(w), d = KIT.drafts.get(key);
     c.draftFor = key; c.draft = d.text;
-    c.files = d.files.map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') ? (PREVIEW[f.id] || fileUrl(f.id)) : '' }));
+    c.files = d.files.map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') ? (PREVIEW[f.id] || fileUrl(f.id, f.agent)) : '' }));
     return d.text;
   }
   function saveDraft(wid) { const w = W[wid], c = ch(wid); if (!w || !w.thread) return; KIT.drafts.set(draftKey(w), c.draft || '', c.files || []); }
@@ -1354,7 +1359,7 @@ window.WizCore.chats = function createChats(H) {
   // Put words (and already-uploaded files) back into a composer, e.g. editing an unsent message.
   function setDraft(wid, text, files) {
     const w = W[wid], c = ch(wid); if (!w) return;
-    c.draft = text || ''; c.files = (files || []).map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') && f.id ? (PREVIEW[f.id] || fileUrl(f.id)) : '' }));
+    c.draft = text || ''; c.files = (files || []).map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') && f.id ? (PREVIEW[f.id] || fileUrl(f.id, f.agent)) : '' }));
     c.draftFor = draftKey(w); saveDraft(wid);
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }

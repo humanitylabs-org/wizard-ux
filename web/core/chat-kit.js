@@ -20,7 +20,7 @@
         for (const f of JSON.parse(m[1])) {
           const id = SAFE_ID.test(String(f?.id || '')) ? String(f.id) : '';
           if (id && out.some(x => x.id === id)) continue;
-          out.push({ id, name: String(f?.filename || f?.name || 'file'), mime: String(f?.mime || ''), bytes: Number(f?.bytes) || 0 });
+          out.push({ id, agent: /^[a-z][a-z0-9-]{0,30}$/.test(String(f?.agent || '')) ? String(f.agent) : 'hermes', name: String(f?.filename || f?.name || 'file'), mime: String(f?.mime || ''), bytes: Number(f?.bytes) || 0 });
         }
       } catch (e) { /* a malformed marker is hidden, not shown */ }
     }
