@@ -45,13 +45,9 @@ public final class BackgroundAudioService extends MediaSessionService {
     private void syncIntent() {
         if(destroyed || player==null) return;
         transportActive=userWant && player.getMediaItemCount()>0;
-        if(userWant && !AudioRecordingGate.held()) player.play(); else player.pause();
-    }
-    private void recordingChanged(boolean held) {
-        if(Looper.myLooper()==Looper.getMainLooper()) { syncIntent(); return; }
-        CountDownLatch settled=new CountDownLatch(1);
-        main.post(() -> { try { syncIntent(); } finally { settled.countDown(); } });
-        try { settled.await(2,TimeUnit.SECONDS); } catch(InterruptedException e) { Thread.currentThread().interrupt(); }
+        // Microphone ownership is independent of music. Voice capture must not pause or duck it.
+        // Keep Media3's normal system-focus/headset-loss handling and explicit user controls.
+        if(userWant) player.play(); else player.pause();
     }
     private String refillKey = UUID.randomUUID().toString();
     @Override public void onCreate() {
@@ -74,9 +70,9 @@ public final class BackgroundAudioService extends MediaSessionService {
             @Override public void onPlaybackStateChanged(int state) { if (state == Player.STATE_ENDED) { if(station==null) requestPlaying(false); else { advanceAfterRefill = true; maybeRefill(); } } }
             @Override public void onPlayerError(@NonNull PlaybackException e) {
                 error = "This track could not be played. Skipping."; failure=e; final String event = playEvent;
-                Log.i("WizardAudio","error index="+player.getCurrentMediaItemIndex()+" wanted="+userWant+" gate="+AudioRecordingGate.held());
+                Log.i("WizardAudio","error index="+player.getCurrentMediaItemIndex()+" wanted="+userWant);
                 main.postDelayed(() -> { if (!destroyed && event.equals(playEvent) && userWant && failure==e) {
-                    Log.i("WizardAudio","recover error index="+player.getCurrentMediaItemIndex()+" gate="+AudioRecordingGate.held());
+                    Log.i("WizardAudio","recover error index="+player.getCurrentMediaItemIndex());
                     report("skipped"); int next=player.getCurrentMediaItemIndex()+1;
                     if(next<tracks.size()) {
                         try { seekCanonical(next); syncIntent(); } catch(JSONException bad) { error="Could not advance the music queue."; requestPlaying(false); }
@@ -112,13 +108,13 @@ public final class BackgroundAudioService extends MediaSessionService {
                 }
             }).build();
         restoreReports();
-        AudioRecordingGate.observe(this::recordingChanged);
+
         Log.i("WizardAudio", "created session=" + sessionId);
     }
     @Nullable @Override public MediaSession onGetSession(@NonNull MediaSession.ControllerInfo c) { return session; }
     @Override public void onTaskRemoved(@Nullable Intent i) { if (!active()) stopSelf(); }
     @Override public void onDestroy() {
-        AudioRecordingGate.observe(null);
+
         destroyed = true; live = null; main.removeCallbacksAndMessages(null); saveReports();
         if (session != null) session.release(); if (player != null) player.release(); net.shutdownNow(); artwork.shutdownNow(); super.onDestroy();
     }
