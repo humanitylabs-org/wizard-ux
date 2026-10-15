@@ -16,8 +16,16 @@ test('real resumable client binds every create/status/PATCH/complete to captured
       else body={offset}
       return {ok:true,status:opts.method==='PATCH'?204:200,json:async()=>body,headers:{get:k=>headers[k]}}
     } }
+  context.XMLHttpRequest = class {
+    upload = {}; headers = {}; responseText = ''; status = 204;
+    open(method, url) { this.method = method; this.url = url }
+    setRequestHeader(name, value) { this.headers[name] = value }
+    getResponseHeader() { return String(offset) }
+    send(body) { calls.push({url:this.url,opts:{method:this.method,body}});offset=Number(this.headers['Upload-Offset'])+body.size;this.onload() }
+    abort() { this.onabort?.() }
+  }
   vm.runInNewContext(source('core/uploads.js'),context)
-  const file=new Blob(['secret'],{type:'text/plain'}); file.name='private.txt'
+  const file=new Blob(['s'.repeat(300000)],{type:'text/plain'}); file.name='private.txt'
   const result=await context.window.WizUploads.upload(file,{agent:'private-agent'})
   assert.equal(result.agent,'private-agent')
   assert.equal(JSON.parse(calls[0].opts.body).agent,'private-agent')
@@ -43,7 +51,7 @@ test('actual outbox audio upload and send preserve staged agent and reject mixed
     call: async (url, opts) => { calls.push({url, opts}); return { json: async () => ({file: {id:'af_audio', filename:'voice.webm'}}) } },
   }
   vm.runInNewContext(slice('outbox.js','  async function uploadAudio(', '  async function keepAudio('),context)
-  const file=await context.uploadAudio({agent:'private-agent',audio:new Blob(['audio']),audioType:'audio/webm'})
+  const file=await context.uploadAudio({createdAt:0,agent:'private-agent',audio:new Blob(['audio']),audioType:'audio/webm'})
   assert.equal(calls[0].url,'/wizard/files/upload?agent=private-agent');assert.equal(file.agent,'private-agent')
   Object.assign(context,{put:async()=>{},keepAudio:async()=>{},transcribe:async()=>'',J:{},now:()=>0})
   vm.runInNewContext(slice('outbox.js','  async function prepareSend(', '  async function send('),context)
