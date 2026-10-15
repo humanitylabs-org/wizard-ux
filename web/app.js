@@ -3420,8 +3420,8 @@
       // A tapped link inside a window (a Chats thread) remembers where it came from.
       const srcId = srcEl && srcEl.closest ? srcEl.closest('.win')?.dataset.win : '';
       const opts = srcId && W[srcId] ? { from: fromOf(srcId) } : {};
-      const a = APP[id] || (!id.startsWith('agent:') && findApp(id)); if (a) return openApp(a, {}, opts);
-      Promise.resolve(window.WizCore.appsLoaded?.()).then(() => { const b = APP[id] || (!id.startsWith('agent:') && findApp(id)); if (b) openApp(b, {}, opts); });
+      const a = APP[id] || (!id.startsWith('agent:') && findApp(id, true)); if (a) return openApp(a, {}, opts);
+      Promise.resolve(window.WizCore.appsLoaded?.()).then(() => { const b = APP[id] || (!id.startsWith('agent:') && findApp(id, true)); if (b) openApp(b, {}, opts); });
     },
     video: item => { closeSheets(true); return CHATS.KIT.viewer.open([item]); },
     agent: id => openAgentChats(id),
