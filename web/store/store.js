@@ -200,7 +200,7 @@
     if (e.target.closest('[data-back]')) { pop(); return; }
     const g = e.target.closest('[data-get]');
     if (g) { e.stopPropagation(); const base=find(g.dataset.get); if(!base || base.conflict) return; const a=selected(base); lastInstallRequest=installRequest(a); toast(`<b>Ask your agent</b><span>${esc(lastInstallRequest)}</span><button class="get" data-copy-install>Copy request</button>`,15000); return; }
-    if(e.target.closest('[data-copy-install]')) { navigator.clipboard.writeText(lastInstallRequest).then(()=>toast('<b>Request copied</b>')).catch(()=>toast('<b>Select the request in app details to copy it.</b>')); return; }
+    if(e.target.closest('[data-copy-install]')) { if(!navigator.clipboard?.writeText) {toast('<b>Select the request in app details to copy it.</b>');return;} navigator.clipboard.writeText(lastInstallRequest).then(()=>toast('<b>Request copied</b>')).catch(()=>toast('<b>Select the request in app details to copy it.</b>')); return; }
     const o = e.target.closest('[data-open]');
     if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
     const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);

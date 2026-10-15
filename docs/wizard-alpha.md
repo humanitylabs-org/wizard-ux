@@ -39,6 +39,8 @@ node tools/wizard-alpha-setup.mjs --deployment /absolute/deployment.json \
 
 Setup verifies the complete subscribed snapshot and artifact access, installs the helper/skill and coupled Store files, verifies native skill discovery (or registers the requested external skill directory preserving other directories), configures the env file, restarts the declared existing Store, and reads back that Store's exact source revision. Failure rolls changed deployment files/skill settings back. State/pins are kept for diagnosis. It never claims success merely from creating a catalog file.
 
+For non-default WAM layouts, set `WIZARD_STORE_APPS_JSON` and `WIZARD_STORE_RUNTIPI_ENV` in the existing env file to the owner-local registry and Runtipi environment file. Defaults retain the current home-directory layout. JWT material stays in the Store process; these paths are never browser parameters.
+
 Put the returned `prefix/bin` on the agent's PATH (or invoke its absolute `wizard-alpha` command). A new agent session should discover `wizard-alpha` via native `skills_list`/`skill_view`. Verify from the **actual agent execution backend**; a host shell is not proof for a container terminal. Verify a public app and an Alpha app in the Store, and source status. The first opening may show the prior cache while refresh runs; **Refresh** awaits the source fetch. Each subscriber uses its own state directory, auth integration and status; no shared credential/cache volume is required.
 
 For release review, subscribe two isolated configurations to the explicitly named review branch. After approved PR merge, production subscribers use `main`. To change repo/ref, use a new subscriber state directory and rerun setup after rollback; no silent source replacement.

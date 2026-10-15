@@ -156,8 +156,8 @@ export async function publish(entry,home=stateDir(),{api=gh,expected}={}) {
       const r=await api(`repos/${c.repo}/contents/apps/${a.id}.json`,{message:`alpha: ${a.id} ${a.version}`,branch:c.ref,content:Buffer.from(JSON.stringify(a,null,2)+'\n').toString('base64'),...(blob?{sha:blob.sha}:{})});
       const check=await fetchSnapshot({...c,ref:r.commit.sha},api);
       if(JSON.stringify(check.apps.find(x=>x.id===a.id))!==JSON.stringify(a)) fail('publish_readback_mismatch');
-      await refresh(home,{force:true,api});
-      return {revision:check.revision,detail:`/wizard-os-home/store/?app=${a.id}&source=${check.source.id}`,review_branch:c.ref};
+      const local=await refresh(home,{force:true,api}).catch(()=>null);
+      return {revision:check.revision,detail:`/wizard-os-home/store/?app=${a.id}&source=${check.source.id}`,review_branch:c.ref,local_refresh:local && !local.status.stale?'fresh':'pending'};
     } catch(e) { if(e.message!=='github_write_failed' || attempt===2) throw e; }
   }
 }
