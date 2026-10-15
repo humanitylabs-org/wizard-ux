@@ -81,6 +81,19 @@
         "description": "Persisted provider events with id, target, seq, text, and status (draft/final); drafts are not authoritative final text."
       }
     },
+    "/api/audio": {
+      "get": {
+        "summary": "List saved original recording takes",
+        "responses": {"200": {"description": "Object with takes: [{id, bytes, chunks: [{seq, bytes}], createdAt}]. Uploaded audio is not evidence of a recovered transcript."}}
+      }
+    },
+    "/api/audio/{take}/wav": {
+      "parameters": [{"name":"take","in":"path","required":true,"schema":{"type":"string","pattern":"^[A-Za-z0-9_-]{1,128}$"}}],
+      "get": {
+        "summary": "Play or download the combined original PCM WAV",
+        "responses": {"200":{"description":"Original take audio","content":{"audio/wav":{"schema":{"type":"string","format":"binary"}}}},"404":{"description":"Take not found"}}
+      }
+    },
     "/api/audio/{take}/{seq}": {
       "get": {
         "summary": "Immutable audio upload and hash/byte-count readback",
