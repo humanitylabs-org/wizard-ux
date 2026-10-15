@@ -154,7 +154,7 @@
   const J = { 'Content-Type': 'application/json' };
   async function req(path, init = {}) {
     const r = await fetch(path, { cache: 'no-store', credentials: 'same-origin', ...init });
-    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+    if (!r.ok) { let detail; try { detail = (await r.json()).error; } catch {} const e = new Error(detail?.message || 'HTTP ' + r.status); e.status = r.status; e.code = detail?.code; throw e; }
     return r;
   }
   /* Every thread Wizard lists (same endpoint, same paging). A full walk runs at boot and
@@ -301,7 +301,7 @@
     if (!s.orig) s.orig = { status: s.status, runId: s.runId, assignedAt: s.assignedAt, requestAt: s.requestAt };
     const at = new Date(p.at).toISOString();
     // Already working (a message into a live run) keeps Wizard's status; anything else is held in Working.
-    if (!WORKING.has(s.orig.status) && s.orig.status !== 'waiting_for_approval') {
+    if (!WORKING.has(s.orig.status) && !['waiting_for_approval', 'unknown'].includes(s.orig.status)) {
       s.status = p.state === 'sent' ? 'running' : 'submitting';
       s.runId = p.runId || ''; // never an older finished run (a quick second reply must not try to steer it)
       s.assignedAt = at; s.requestAt = at;
@@ -513,7 +513,7 @@
           if (opts.fileIds?.length) steer.wizard_file_ids = opts.fileIds.slice(0, 8);
           await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}/steer${aq(id)}`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
           return { steered: true, runId: s.runId };
-        } catch (e) { if (![404, 409, 410].includes(e.status)) throw e; }
+        } catch (e) { if (e.code === 'dispatch_already_attempted' || ![404, 409, 410].includes(e.status)) throw e; }
       }
       const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);

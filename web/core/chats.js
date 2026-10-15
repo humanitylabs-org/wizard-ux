@@ -702,7 +702,7 @@ window.WizCore.chats = function createChats(H) {
   function approvalHtml(c, s) {
     const ap = c.approval;
     if (!ap || !s || ap.runId !== s.runId) return '';
-    if (ap.resolved) return `<div class="appr done">${esc(KIT.choiceReceipt(ap.resolved))}</div>`;
+    if (ap.resolved) return `<div class="appr done">${esc(ap.kind === 'unknown' ? 'Recovery acknowledged · execution interrupted' : ap.kind === 'clarify' ? 'Answer sent' : KIT.choiceReceipt(ap.resolved))}</div>`;
     const buttons = ap.kind === 'clarify' ? [...ap.choices, { value: '__answer', label: 'Send answer' }] : ap.choices;
     return `<div class="appr" role="group" aria-label="Run control"><b>${ap.kind === 'unknown' ? 'Needs recovery' : ap.kind === 'clarify' ? 'Answer needed' : 'Needs your approval'}</b><pre>${esc(ap.action)}</pre>
       ${ap.kind === 'clarify' ? `<input data-clarify-answer aria-label="Clarification answer" value="${esc(ap.answer || '')}" maxlength="16384">` : ''}
