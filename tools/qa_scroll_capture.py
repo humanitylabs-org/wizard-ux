@@ -4,7 +4,7 @@ Usage: qa_scroll_capture.py DEBUG_APK OUT
 API35 SystemUI initiates discovery and capture. Fixture is explicitly synthetic,
 using the same overflow-hidden / nested .ch-msgs and .ch-scroll arrangement.
 """
-import fcntl, hashlib, http.server, json, pathlib, re, sys, threading, time, traceback
+import base64, fcntl, hashlib, http.server, json, pathlib, re, sys, threading, time, traceback
 from qa_aa_lib import Emu, Page, BASE, ADB, wait
 P=pathlib.Path
 APK=P(sys.argv[1]); OUT=P(sys.argv[2]); OUT.mkdir(parents=True,exist_ok=True)
@@ -14,7 +14,7 @@ HTML='''<!doctype html><meta name="viewport" content="width=device-width,initial
 [data-chats]{height:100%;display:flex;flex-direction:column}.ch-head,.ch-compose{height:64px;flex:none;background:#802040;padding:15px}
 .ch-msgs,.ch-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}.row{height:120px;padding:16px;border-top:3px solid #fff;background:#183747}.row:nth-child(even){background:#28516a}.stripe{height:8px;background:#00ff80}</style>
 <div data-chats="synthetic" data-draft-for="direct:fixture-a"><div class="ch-head">HEADER — appears outside capture</div><div class="ch-msgs"></div><div class="ch-compose">COMPOSER — outside capture</div></div>
-<script>function seed(kind='ch-msgs',n=40){document.querySelector('.ch-msgs,.ch-scroll').className=kind;document.querySelector('.'+kind).innerHTML=Array.from({length:n},(_,i)=>`<div class="row"><b>ROW ${String(i).padStart(2,'0')}</b><p>Native composited text • band ${i}</p></div>`).join('');}seed();window.__wosNativeBack=()=>true;</script>'''
+<script>function seed(kind='ch-msgs',n=40){document.querySelector('.ch-msgs,.ch-scroll').className=kind;document.querySelector('.'+kind).innerHTML=Array.from({length:n},(_,i)=>`<div class="row" style="background:rgb(${30+i*4},60,90)"><b>ROW ${String(i).padStart(2,'0')}</b><p>Native composited text • band ${i}</p></div>`).join('');}seed();window.__wosNativeBack=()=>true;</script>'''
 class H(http.server.BaseHTTPRequestHandler):
  def log_message(self,*a):pass
  def do_GET(self):
@@ -31,6 +31,8 @@ def dismiss():
  em.sx('input keyevent KEYCODE_BACK');time.sleep(.5)
  em.sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity');time.sleep(.5)
 def capture(name,kind,top):
+ assert pg is not None
+ em.sx('rm -f /sdcard/Pictures/Screenshots/*')
  pg.ev(f"seed({json.dumps(kind)});document.querySelector('.{kind}').scrollTop={top}");time.sleep(.8)
  before=pg.ev(f"document.querySelector('.{kind}').scrollTop")
  em.sx('input keyevent KEYCODE_SYSRQ');time.sleep(.8)
@@ -49,6 +51,14 @@ def capture(name,kind,top):
  if files:
   path=files[-1];em.sh(ADB,'-s',em.S,'pull',path,OUT/(name+'-saved.png'))
   check(name+' saved OS image', (OUT/(name+'-saved.png')).exists(),path)
+  encoded=base64.b64encode((OUT/(name+'-saved.png')).read_bytes()).decode()
+  pixels=pg.ev("""(async()=>{const im=new Image();im.src='data:image/png;base64,"""+encoded+"""';await im.decode();const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const ctx=c.getContext('2d');ctx.drawImage(im,0,0);const a=ctx.getImageData(Math.floor(c.width*.95),0,1,c.height).data;let rows=[],last=-1;for(let y=0;y<c.height;y++){const k=y*4;if(a[k+1]===60&&a[k+2]===90&&a[k]>=30&&(a[k]-30)%4===0){const row=(a[k]-30)/4;if(row!==last){rows.push({row,y});last=row;}}}return {width:c.width,height:c.height,rows,viewport:innerHeight*devicePixelRatio};})()""")
+  check(name+' saved image spans multiple viewports',pixels['height']>pixels['viewport']*1.5,pixels)
+  ids=[x['row'] for x in pixels['rows']]
+  check(name+' actual pixels encode consecutive nonduplicated rows',len(ids)>=8 and all(b==a+1 for a,b in zip(ids,ids[1:])),ids)
+  steps=[b['y']-a['y'] for a,b in zip(pixels['rows'][1:],pixels['rows'][2:])]
+  check(name+' no missing pixel bands at tile joins',bool(steps) and max(steps)-min(steps)<=2,steps)
+  (OUT/(name+'-pixels.json')).write_text(json.dumps(pixels,indent=2))
  dismiss()
 with (BASE/'worker.lock').open('a') as lock:
  fcntl.flock(lock,fcntl.LOCK_EX)
