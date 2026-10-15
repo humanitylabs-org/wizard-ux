@@ -148,10 +148,10 @@
     const l = all();
     return `<div class="st-group" data-cancelled><h4>Cancelled recordings <span>${l.length || ''}</span></h4>
       ${l.length ? l.map(row).join('') : '<div class="st-empty">Nothing here. Cancel a recording after 15 seconds or more and it waits here, ready to transcribe.</div>'}
-      <p class="st-note">Tapped the X by accident? Recordings over 15 seconds are kept on this phone for a week (the newest ${MAX_KEPT}). Transcribe &amp; copy puts the words on your clipboard.</p></div>`;
+      <p class="st-note">Tapped the X by accident? Recordings over 15 seconds are kept on this device for a week (the newest ${MAX_KEPT}). Transcribe &amp; copy puts the words on your clipboard.</p></div>`;
   }
   function repaint() {
-    const g = document.querySelector('#settingsBody [data-cancelled]');
+    const g = document.querySelector('[data-settings-root] [data-cancelled]');
     if (g) g.outerHTML = html();
   }
   function act(el) {

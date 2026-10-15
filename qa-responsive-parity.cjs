@@ -1,0 +1,71 @@
+// Run only on Thales. Live GET APIs + source overlay; never forward mutations or beacons.
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
+const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), crypto = require('node:crypto');
+if (!os.hostname().toLowerCase().includes('thales') || !process.env.QA_OUT?.startsWith('/Volumes/ThalesMedia/') || !process.env.QA_CHROME) throw Error('Thales/external-volume QA only');
+const BASE = process.argv[2], OUT = process.env.QA_OUT, SOURCE = process.env.QA_SOURCE, baseline = process.env.QA_BASELINE === '1';
+fs.mkdirSync(OUT,{recursive:true});
+const checks=[], errors=[], writes=[], reads=[], hashes={}; let browser;
+const nap=ms=>new Promise(r=>setTimeout(r,ms));
+function ok(pass,name,detail) { checks.push({pass:!!pass,name,detail}); console.log(pass?'PASS':'FAIL',name,detail===undefined?'':JSON.stringify(detail)); }
+async function shot(p,name) { await nap(150); await p.screenshot({path:path.join(OUT,name+'.png')}); }
+async function boot(phone) {
+ const ctx=await browser.newContext({serviceWorkers:'block',viewport:phone?{width:390,height:844}:{width:1440,height:900},hasTouch:phone,isMobile:phone,userAgent:phone?'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/141.0.0.0 Mobile Safari/537.36':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/141.0.0.0 Safari/537.36'});
+ await ctx.route('**/*',async route=>{
+  const q=route.request(),url=new URL(q.url());
+  if(!['GET','HEAD'].includes(q.method())) { writes.push({method:q.method(),url:q.url()}); return route.fulfill({status:403,body:'{}'}); }
+  if(SOURCE && url.pathname.startsWith('/wizard-os-home/')) { const rel=url.pathname.slice('/wizard-os-home/'.length)||'index.html',f=path.resolve(SOURCE,'web',rel); if(f.startsWith(path.resolve(SOURCE,'web')+path.sep) && fs.existsSync(f) && fs.statSync(f).isFile()) { const body=fs.readFileSync(f);hashes[rel]=crypto.createHash('sha256').update(body).digest('hex'); const ext=path.extname(f),type={'.html':'text/html','.js':'application/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.woff2':'font/woff2','.svg':'image/svg+xml'}[ext]||'application/octet-stream'; return route.fulfill({body,contentType:type}); } }
+  if(/\/wizard\//.test(url.pathname)) reads.push(q.url()); return route.continue();
+ });
+ await ctx.addInitScript(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.done','1'); navigator.sendBeacon=(url)=>{(window.__qaBeacons ||= []).push(String(url));return false;};});
+ const p=await ctx.newPage();p.on('pageerror',e=>errors.push(String(e)));
+ await p.goto(BASE+'?view=skin');await p.waitForFunction(m=>m?window.__wos?.live?.ok:window.__wux?.live?.ok,phone,{timeout:60000});await nap(500);
+ return {p,ctx};
+}
+async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.route('/wizard-os-home/?view='+v),view);await nap(120); }
+(async()=>{
+ browser=await chromium.launch({executablePath:process.env.QA_CHROME});
+ for(const phone of [false,true]) {
+  const kind=phone?'phone':'desktop',{p,ctx}=await boot(phone),selector=phone?'#settings.open':'#dsettings:not([hidden])';
+  if(baseline) { ok(phone?await p.locator('[data-skinpick]').count()===5:await p.locator('[data-skinpick]').count()===0,kind+' live baseline selector',await p.locator('[data-skinpick]').count());await shot(p,kind+'-baseline');await ctx.close();continue; }
+  ok(await p.locator(selector).isVisible(),kind+' skin deep link opens Settings');
+  ok(await p.locator('[data-skinpick]').count()===5,kind+' same five approved skins');
+  ok(await p.evaluate(()=>!!WosSettings && !!WosSkin),kind+' shared modules mounted');
+  const features=await p.locator('[data-settings-feature]').evaluateAll(es=>es.map(e=>e.dataset.settingsFeature));
+  ok(['unsent','look','voice','cancelled','wizard','usage'].every(x=>features.includes(x)),kind+' all common settings features',features);
+  ok(phone?await p.locator('[data-st=everywhere][disabled]').count()===1:await p.locator('[data-st=everywhere]').count()===0,kind+' honest Android capability gate');
+  for(const skin of ['nebula','grove','tide','ember','signal']) {
+   await p.click('[data-skinpick='+skin+']');await nap(200);
+   const state=await p.evaluate(()=>({skin:document.documentElement.dataset.skin,saved:localStorage.getItem('wos.skin'),bg:getComputedStyle(document.body).getPropertyValue('--bg').trim(),canvases:WosSkin._bg.cv.length,scenery:WosScenery.state()}));
+   ok(state.skin===skin && state.saved===skin && state.canvases===2,kind+' '+skin+' applies and persists',state);await shot(p,kind+'-'+skin);
+  }
+  await p.reload();await p.waitForFunction(m=>m?window.__wos:window.__wux,phone);await open(p,phone);
+  ok(await p.evaluate(()=>WosSkin.current==='signal'),kind+' reload retains selected skin');
+  await p.locator('[data-skinpick=signal]').focus();await p.keyboard.press('ArrowLeft');
+  ok(await p.evaluate(()=>WosSkin.current==='ember'),kind+' shared keyboard skin navigation');
+  // Register exactly once. No shell edits/whitelists. The same render/action runs in either layout.
+  await p.evaluate(()=>WosSettings.register({id:'qa-single-registration',aliases:['qa-feature'],html:()=>'<button data-qa-feature>One registration</button>',act:(ctx,el)=>{if(!el.closest('[data-qa-feature]'))return false;window.__qaFeatureWorked=(window.__qaFeatureWorked||0)+1;return true;}}));
+  await open(p,phone,'qa-feature');await p.click('[data-qa-feature]');
+  ok(await p.evaluate(()=>__qaFeatureWorked===1),kind+' synthetic feature added once is reachable and works');
+  // Focus survives polling re-render and remains in the settings dialog.
+  await p.locator('[data-skinpick=ember]').focus();await p.evaluate(()=>WosOutbox.retryAll = WosOutbox.retryAll); // no mutation/send
+  await p.keyboard.press('Tab');ok(await p.evaluate(()=>!!document.activeElement.closest('[data-settings-root]')),kind+' keyboard focus stays in Settings');
+  await p.keyboard.press('Escape');await nap(250);ok(!await p.locator(selector).isVisible(),kind+' Escape closes Settings');
+  await open(p,phone,'settings');await p.click('[data-st=help]');await nap(300);await p.evaluate(()=>history.back());await nap(350);
+  ok(await p.locator(selector).isVisible(),kind+' nested Help Back returns to Settings');
+  await p.evaluate(()=>history.back());await nap(250);ok(!p.isClosed() && p.url().includes('/wizard-os-home/'),kind+' Settings Back retains app');
+  await open(p,phone,'settings');await p.click('[data-st=files]');await nap(650);await p.evaluate(()=>history.back());await nap(350);
+  ok(await p.locator(selector).isVisible(),kind+' nested Files Back returns to Settings');
+  await p.keyboard.press('Escape');
+  // Actual live private-agent rows, without messages or API writes.
+  await p.evaluate(()=>WosAgents.load());await p.evaluate(()=>WizOpenAgentChats('private'));await nap(600);
+  ok(await p.locator('[data-agent-titlebar=private]').count()>0,kind+' private Chats scope still reachable');
+  await open(p,phone);await p.setViewportSize({width:360,height:800});await shot(p,kind+'-360');
+  ok(await p.locator('[data-skinpick]').evaluateAll(es=>es.every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1;})),kind+' 360px skin controls do not overflow');
+  await p.setViewportSize({width:1000,height:800});await shot(p,kind+'-resized');
+  ok(await p.locator('[data-skinpick]').count()===5,kind+' resize keeps shared controls');
+  await ctx.close();
+ }
+ ok(errors.length===0,'no page errors',errors);
+ ok(reads.some(u=>u.includes('/api/sessions')),'real session API exercised');
+ ok(!writes.some(w=>/\/v1\/runs|\/api\/sessions$/.test(w.url)),'no conversation/run creation attempted',writes);
+})().catch(e=>ok(false,'suite completed',String(e.stack||e))).finally(async()=>{await browser?.close();const result={worker:os.hostname(),base:BASE,source:SOURCE||'live',baseline,checks,errors,writes,readCount:reads.length,hashes,pass:checks.filter(x=>x.pass).length,fail:checks.filter(x=>!x.pass).length};fs.writeFileSync(path.join(OUT,'result.json'),JSON.stringify(result,null,2));console.log('RESULT',result.pass,result.fail);process.exitCode=result.fail?1:0;});

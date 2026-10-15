@@ -1,0 +1,52 @@
+/* Shared approved phone Settings controls, responsive container authored by Claude Opus.
+ * Feature selectors belong here, never in a shell-only stylesheet. */
+.st-title { margin: 2px 4px 10px; font-size: 22px; font-weight: 650; }
+.st-group { margin: 0 0 16px; }
+.st-group h4 { display: flex; gap: 8px; align-items: baseline; margin: 0 4px 8px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.st-group h4 span { color: var(--amber); }
+.st-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); text-align: left; color: var(--ink); }
+.st-row[disabled] { opacity: .5; }
+.st-row.static { cursor: default; }
+.st-ic { flex: 0 0 34px; height: 34px; border-radius: 12px; display: grid; place-items: center; background: rgba(143, 99, 255, .18); color: var(--violet-2); font-size: 16px; }
+.st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.st-tx b { font-size: 15px; font-weight: 600; }
+.st-tx small { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+.st-go { color: var(--ink-3); font-size: 22px; }
+.sw { flex: 0 0 44px; height: 26px; border-radius: 99px; background: rgba(205, 190, 255, .16); position: relative; transition: background 200ms; }
+.sw i { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 220ms var(--ease); }
+.sw.on { background: var(--violet); }
+.sw.on i { transform: translateX(18px); }
+.st-empty { padding: 14px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); color: var(--ink-2); font-size: 14px; }
+.st-note { margin: 8px 4px 0; font-size: 12px; color: var(--ink-3); }
+.st-wide { width: 100%; padding: 12px; border-radius: 16px; background: rgba(143, 99, 255, .22); color: var(--ink); font-weight: 650; }
+.ub-row { padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); }
+.ub-row.failed { border-color: rgba(255, 190, 85, .4); }
+.ub-t { display: flex; gap: 8px; align-items: flex-start; font-size: 14.5px; line-height: 1.35; }
+.ub-t svg { flex: 0 0 16px; width: 16px; height: 16px; margin-top: 2px; fill: none; stroke: var(--violet-2); stroke-width: 1.8; }
+.ub-t span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ub-m { margin-top: 5px; font-size: 12px; color: var(--ink-3); }
+.ub-m .fail { color: var(--amber); font-weight: 700; }
+.ub-a { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.ub-a button { padding: 8px 14px; border-radius: 99px; background: rgba(143, 99, 255, .24); color: var(--ink); font-size: 13px; font-weight: 650; }
+.ub-a button.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
+
+.cx-row { padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); }
+.cx-t { font-size: 14px; color: var(--ink-2); }
+.cx-t b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
+.cx-text { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(0, 0, 0, .22); font-size: 14px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; max-height: 40vh; overflow: auto; user-select: text; -webkit-user-select: text; }
+.cx-err { margin-top: 6px; font-size: 12.5px; color: #ffbe55; }
+.cx-row .ub-a button[disabled] { opacity: .6; }
+
+
+.st-root { container: settings / inline-size; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 0 calc(24px + env(safe-area-inset-bottom)); }
+.st-inner { max-inline-size: 560px; margin-inline: auto; padding-inline: 16px; }
+.st-root button { cursor: pointer; }
+.st-root button:disabled { cursor: default; }
+.st-root button:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -2px; }
+.st-root .st-tx small, .st-root .ub-m { overflow-wrap: anywhere; }
+@media (hover: hover) and (pointer: fine) { .st-root .st-row { min-height: 48px; } .st-root .st-row:not(:disabled):not(.static):hover { background: color-mix(in srgb, var(--ink) 6%, transparent); } }
+.dsettings { position: fixed; inset: var(--bar-h, 34px) 0 0 auto; width: 440px; z-index: 40; display: flex; flex-direction: column; background: var(--glass-2); border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgb(0 0 0 / .18); }
+.dsettings[hidden] { display: none; }
+.dsettings .st-root { flex: 1; }
+.dsettings > .st-close { align-self: end; flex: none; width: 44px; height: 44px; color: var(--ink-2); }
+@media (max-width: 899px) { .dsettings { inset: 0; width: 100%; } }

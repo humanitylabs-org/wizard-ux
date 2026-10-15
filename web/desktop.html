@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <script src="core/shell.js"></script>
+  <script src="core/scenery.js"></script>
+  <script src="core/skins.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#05030c">
@@ -19,11 +21,13 @@
   <link rel="stylesheet" href="core/resources.css">
   <link rel="stylesheet" href="core/polish.css">
   <link rel="stylesheet" href="desktop/desktop.css">
+  <link rel="stylesheet" href="core/settings.css">
   <link rel="stylesheet" href="core/update-banner.css">
   <link rel="stylesheet" href="core/links.css">
   <link rel="stylesheet" href="core/appearance-host.css">
   <link rel="stylesheet" href="core/sigils.css">
   <link rel="stylesheet" href="core/app-route.css">
+  <link rel="stylesheet" href="core/skins.css">
 </head>
 <body>
   <header id="bar" class="bar">
@@ -42,6 +46,7 @@
       <button id="searchBtn" class="mic" title="Search and launch (⌘K) · Open an app (⌘O)" aria-label="Search and launch"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button>
       <button id="micBtn" class="mic" title="Talk to Wizard (tap Right ⌘)" aria-label="Talk to Wizard"><svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg></button>
       <button id="status" class="status" title="Inbox (⌥I)" aria-label="Inbox"></button>
+      <button id="settingsBtn" class="keys-btn" aria-label="Settings" title="Settings (⌘, / Ctrl+,)">⚙</button>
       <button id="keysBtn" class="keys-btn" title="Keyboard shortcuts (⌥/)">⌥/</button>
     </div>
   </header>
@@ -102,6 +107,8 @@
   <script src="core/deeplink.js"></script>
   <script src="core/video-desks.js"></script>
   <script src="core/voice-status.js"></script>
+  <script src="core/settings.js"></script>
+  <script src="core/cancelled.js"></script>
   <script src="core/screen-text.js"></script>
   <script src="core/links.js"></script>
   <script src="core/voice.js"></script>
