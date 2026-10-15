@@ -65,7 +65,7 @@ with (BASE/'worker.lock').open('a') as lock:
  try:
   em.boot();check('install exact APK', 'Success' in em.sh(ADB,'-s',em.S,'install',APK))
   em.sh(ADB,'-s',em.S,'reverse',f'tcp:{PORT}',f'tcp:{PORT}')
-  em.runas(f'mkdir -p files && echo {ORIGIN}/wizard-os-home/ > files/qa_home.txt && echo {ORIGIN} > files/qa_origin.txt')
+  em.runas(f'mkdir -p files && echo {ORIGIN} > files/qa_home.txt && echo {ORIGIN} > files/qa_origin.txt')
   em.sx('settings put secure user_setup_complete 1');em.sx('logcat -c')
   em.sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity');time.sleep(3)
   pg=Page(em,9424)
