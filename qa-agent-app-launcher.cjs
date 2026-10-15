@@ -130,6 +130,7 @@ async function run(mobile) {
       await p.evaluate(() => __wux.goHome()); await nap(350);
       const home = p.locator('#desktopHome [data-app="agent:private"]');
       check(await home.count() === 1, 'desktop Home apps includes private');
+      check(await p.locator('#desktopHome [data-app="agents"]').count() === 0, 'desktop Home excludes agent management');
       await nap(2500);
       await p.screenshot({ path: path.join(OUT, 'desktop-home.png') });
       if (await home.count() === 1) { await home.click(); await nap(200); check((await windows(p)).filter(w => w.agent === 'private').length === 1, 'desktop Home private click reuses same scoped app'); }
