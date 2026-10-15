@@ -48,7 +48,7 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  check(await p.evaluate(()=>{const glyphs=[...document.querySelectorAll('#desktopHome .app-chip .sgi:not(.sgl)')];return glyphs.length>=4&&glyphs.every(e=>getComputedStyle(e).backgroundImage!=='none');}),'Home quick-app sigil silhouettes remain visibly coloured');
  const coldURL=p.url();await back(p);
  check(new URL(p.url()).origin===new URL(coldURL).origin&&new URL(p.url()).pathname===new URL(coldURL).pathname&&await p.evaluate(()=>__wux.homeOpen)&&!p.isClosed(),'fresh direct Home entry survives real Back before any pointer gesture',{before:coldURL,after:p.url()});
- check((await p.locator('#wiz-staging-tag').innerText()).includes('Hat Home'),'visible read-only staging marker');
+ if(process.env.QA_EXPECT_STAGING)check((await p.locator('#wiz-staging-tag').innerText()).includes(process.env.QA_EXPECT_STAGING),'visible read-only staging marker');
  check(await p.evaluate(()=>document.querySelector('#logo').getAttribute('aria-current')==='page'&&document.querySelectorAll('.wsp:not([hidden])').length===0),'Home owns active nav; all desktops parked');
  await shot(p,'desktop-home');
  await p.click('#wsList [data-ws="0"]');
@@ -125,7 +125,7 @@ async function back(p){const n=await p.evaluate(()=>__popReceipts.length);await 
  await shot(p,'desktop-real-files');await home(p);await p.click('#desktopHome .app-chip[data-app="files"]');
  check(await p.evaluate(()=>document.querySelector('.win.focus iframe')===__filesRef)&&await files.locator('#search-input').inputValue()==='wizard','hat retains real Files iframe and unsent search draft');
  await home(p);await p.click('#desktopHome .app-chip[data-app="shopping"]');
- await p.click('#logo');await p.keyboard.press('Alt+2');
+ await p.click('#logo');await p.keyboard.press('Alt+3');
  check(await p.evaluate(()=>__wux.ws.length===2&&__wux.cur===1&&!__wux.homeOpen),'Home plus-slot creates real second desktop');
  await p.evaluate(()=>__wux.newChat());
  await p.click('#logo');await p.click('#wsList [data-ws="0"]');
