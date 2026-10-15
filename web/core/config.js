@@ -41,6 +41,12 @@
     get raw() { return B; },
     get live() { return live; },
     agent() { return (B.settings?.agent?.name || 'Wizard').trim() || 'Wizard'; },
+    // Match the configured spoken name literally, with a boundary (never a name prefix).
+    stripAddress(text) {
+      const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const names = [...new Set([C.agent(), 'Wizard'])].sort((a, b) => b.length - a.length);
+      return String(text || '').trim().replace(new RegExp('^(?:(?:hey|ok|okay)\\s+)?(?:' + names.map(escape).join('|') + ')(?:[,.!]?\\s+|[,.!]?$)', 'i'), '');
+    },
     owner() { return (B.settings?.owner?.name || '').trim(); },
     place() { return (B.settings?.owner?.place || '').trim(); },
     vocabulary() { return Array.isArray(B.settings?.voice?.vocabulary) ? B.settings.voice.vocabulary : []; },

@@ -536,6 +536,15 @@ body {
   background: rgba(8, 5, 18, .94); border-top: 1px solid rgba(205, 190, 255, .10); }
 .dock::before { display: none; }
 .orb-wrap { width: var(--orb); height: var(--orb); flex: 0 0 var(--orb); margin-top: 6px; }
+/* Voice labels touch the orb's top edge inside its dock, never float over chat.
+ * Status is non-interactive; the general target appears only during a hold. */
+#device > :is(#voiceDestination, #generalVoice) { position: absolute; z-index: 150; bottom: calc(var(--safe-b) + var(--dock-h) - 18px); left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); min-height: 0; height: 18px; padding: 0 6px; border: 1px solid var(--line-2); border-radius: 9px; background: var(--bg); color: var(--ink); font-size: 10px; line-height: 16px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+#device :is(#voiceDestination, #generalVoice)[hidden] { display: none !important; }
+#device > #generalVoice.hold-target { border-color: var(--violet); }
+#device > #generalVoice.selected { background: var(--violet); color: white; }
+#device > #voiceDestination.app-voice { border-color: #f2ad52; color: #f2ad52; }
+#device.orb-corner > :is(#voiceDestination, #generalVoice) { left: auto; right: var(--corner-r); bottom: calc(var(--safe-b) + var(--corner-b) + var(--corner-orb) - 18px); transform: none; }
+#device.immersive:not(.orb-corner) > :is(#voiceDestination, #generalVoice), #device.capturing-screen > :is(#voiceDestination, #generalVoice) { visibility: hidden; }
 .orb { inset: -18%; width: 136%; height: 136%; }
 .orb-halo { inset: -14%; filter: blur(9px); opacity: calc(.16 + var(--energy, .2) * .4); }
 .orb-ring { inset: -4px; }

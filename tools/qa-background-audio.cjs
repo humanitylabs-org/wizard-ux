@@ -27,6 +27,22 @@ let browser;
  await frame().locator('.music-row-main').first().click();
  for(let i=0;i<30;i++){const s=await snap();if(s.playing)break;await wait(500);}
  const a=await snap();check('real streamed song decoder plays',a.playing&&a.positionMs>0,a);
+ async function checkVoiceCoexistence(){
+ // Existing recorder API + canned mic fixture: no routing/input device changes in this test.
+ await audio('play');await audio('seek',{positionMs:1000});await wait(400);const beforeRecording=await snap();
+ const rid=await page.evaluate(()=>WizardOSDevice.recStart('voice'));await wait(2200);
+ const recording=await snap(),activeTake=await page.evaluate(()=>JSON.parse(WizardOSDevice.recActive()));
+ check('native voice capture leaves music playing at the same volume and session',!!rid&&activeTake?.id===rid&&activeTake.ms>1000&&recording.playing&&recording.wantPlaying&&recording.sessionId===beforeRecording.sessionId&&recording.volume===beforeRecording.volume&&((recording.index-beforeRecording.index)*beforeRecording.durationMs+recording.positionMs)>beforeRecording.positionMs,{before:beforeRecording,after:recording,take:activeTake});
+ await audio('pause');const captured=await page.evaluate(id=>JSON.parse(WizardOSDevice.recStop(id)),rid);await wait(500);
+ check('concurrent voice recording retains nonempty audio',captured?.bytes>600,captured);
+ await page.evaluate(id=>WizardOSDevice.recCancel(id),rid);
+ const explicit=await snap();check('explicit pause during recording survives recorder completion',!explicit.playing&&!explicit.wantPlaying,explicit);
+ const pausedRid=await page.evaluate(()=>WizardOSDevice.recStart('voice'));await wait(400);
+ check('starting capture leaves explicitly paused music paused',!(await snap()).playing&&!(await snap()).wantPlaying);
+ await audio('play');await wait(700);check('music can start while microphone capture stays active',(await snap()).playing&&!!await page.evaluate(()=>JSON.parse(WizardOSDevice.recActive())));
+ await page.evaluate(id=>WizardOSDevice.recCancel(id),pausedRid);await wait(400);check('finishing capture leaves playing music playing',(await snap()).playing);
+ }
+ if(process.env.WOS_QA_COEXISTENCE_ONLY==='1'){await checkVoiceCoexistence();check('no unexpected candidate JS errors',errors.length===0,errors);fs.writeFileSync(path.join(out,'results.json'),JSON.stringify(rows,null,2));await browser.close();process.exit(rows.some(r=>!r.ok)?1:0);}
  await wait(1800); const before=await snap();await page.reload();await wait(1300);await frame().locator('.music-row-main').first().waitFor();const after=await snap();
  check('full UX reload leaves service/session and advancing clock unchanged',after.sessionId===before.sessionId&&after.generation===before.generation&&after.playing&&((after.index-before.index)*before.durationMs+after.positionMs)>before.positionMs,{before,after});
  await frame().evaluate(()=>location.reload());await wait(1000);await frame().locator('.music-row-main').first().waitFor();const reload=await snap();
@@ -53,12 +69,7 @@ let browser;
  await audio('removeUpcoming',{ids:[upcoming.id]});const removed=await snap();check('queue prune never removes current song',removed.queue[removed.index].id===queued.queue[queued.index].id&&!removed.queue.slice(removed.index+1).some(t=>t.id===upcoming.id));
  await audio('jump',{index:Math.max(0,removed.index-1)});check('Played replay uses canonical history', (await snap()).index===Math.max(0,removed.index-1));
  await audio('removeCurrent');const down=await snap();check('thumbs-down transport instantly removes/skips current',!down.queue.some(t=>t.id===removed.queue[Math.max(0,removed.index-1)].id));
- // Existing recorder API + canned mic fixture: no routing/input device changes in this test.
- const rid=await page.evaluate(()=>WizardOSDevice.recStart('voice'));await wait(250);
- const recording=await snap();check('native recording synchronously suspends music while preserving play intention',!!rid&&!recording.playing&&recording.wantPlaying,recording);
- await audio('pause');await page.evaluate(id=>WizardOSDevice.recCancel(id),rid);await wait(500);
- const explicit=await snap();check('explicit pause during recording survives recorder completion',!explicit.playing&&!explicit.wantPlaying,explicit);
- await audio('play');await wait(400);check('play resumes after recorder releases gate',(await snap()).wantPlaying);
+ await checkVoiceCoexistence();
  // Lost continuation retries preserve request identity; recovered empty queue resumes without JS refill.
  const fixture=await server('/qa/stats');const station={id:'a'.repeat(16),title:'Recovery QA',more:'http://10.0.2.2:'+http+'/wizard-music/api/station/'+('a'.repeat(16))+'/more'};
  const post=async(p,b)=>fetch('http://127.0.0.1:'+http+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
@@ -107,7 +118,8 @@ let browser;
   const missing=fixture.tracks[13];const gate=await page.evaluate(()=>WizardOSDevice.recStart('voice'));await post('/qa/fail-stream',{id:missing.id});
   await audio('load',{queue:[missing,local].map(t=>({...t,stream:'http://10.0.2.2:'+http+t.stream,art:t.art?'http://10.0.2.2:'+http+t.art:''})),index:0,station:null});
   for(let i=0;i<100;i++){await wait(200);const s=await snap();if(s.queue[s.index]?.id===local.id)break;}
-  const skipped=await snap();check('unavailable track skips during recording without resuming audio',!!gate&&skipped.queue[skipped.index].id===local.id&&!skipped.playing&&skipped.wantPlaying,skipped);
+  for(let i=0;i<30&&!(await snap()).playing;i++)await wait(200);
+  const skipped=await snap();check('unavailable track skips during recording and music continues',!!gate&&skipped.queue[skipped.index].id===local.id&&skipped.playing&&skipped.wantPlaying,skipped);
   await page.evaluate(id=>WizardOSDevice.recCancel(id),gate);await post('/qa/fail-stream',{id:null});
   await audio('load',{queue:[{...local,stream:'http://10.0.2.2:'+http+local.stream}],index:0,station:null});for(let i=0;i<30;i++){await wait(200);if((await snap()).playing)break;}const lib=await snap();check('native player decodes the actual library MP3 with its stable ID',lib.playing&&lib.queue[lib.index].id===local.id&&lib.queue[lib.index].source==='library',lib);await audio('seek',{positionMs:11000});await wait(1800);const ended=await snap();check('finite queue completion clears play intention',!ended.wantPlaying&&!ended.playing,ended);}
  check('no unexpected candidate JS errors',errors.length===0,errors);await page.screenshot({path:path.join(out,'music-native.png')});

@@ -1,0 +1,11 @@
+# Appearance v1 review import
+
+This is a static in-shell review artifact, not a WAM-installed app. `web/style-review/` originates from the five-file import from `humanitylabs-org/wizard-os` PR36 at `89ff5f69658481cdf0fec6715771f5ff0ab7910e`. After direct live QA exposed the production `script-src 'self'` policy blocking the original inline handlers, only that inline script was extracted verbatim into `demo.js` and referenced from `demo.html`; palettes, markup/layout, client, tokens, UI CSS and boot behavior are unchanged. The accompanying JSON preserves the original prepared import manifest and SHA256s; its `deployed` field records preparation state, not current runtime status. Do not independently redesign these shared assets.
+
+`qa-style-review.cjs` derives from the shared acceptance at `f3f99a886eec5b5a457805a2f8771fc2d72c8444`. Supply `STYLE_ROOT` pointing to that checkout's `style/` (token oracle), `PLAYWRIGHT_PATH`, `QA_URL`, `QA_SHOTS`, and `QA_APPS=appearance-v1-review`. Run with `QA_DEVICE='Pixel 7'` and `QA_DEVICE='Desktop Chrome'`. By default no registry/assets/client are replaced. `QA_INJECT` and `QA_CANDIDATE_HOST` are only pre-promotion overlays; leave both unset for direct live evidence. Production mutations are blocked.
+
+The host repair recognizes the desktop shell's actual `body.desktop-fullscreen .win.full`, preserving the existing phone selector. The already-installed mutation observer delivers presentation changes without reloading the app. No palette, desktop geometry, trust boundary or client protocol change.
+
+Focused Thales candidate verification: 91 checks / zero issues on each profile, five skins in window and immersive modes; retained document, draft, sheet and Back behavior. The unchanged host's earlier acceptance had five desktop presentation mismatches. Unit suite: 119 passed, zero failed. Live verification is required after promotion and launcher registration.
+
+Rollback is a PR reverting this narrow import/host repair commit on the newest daily, plus removal of only the matching `appearance-v1-review` owner link. Never reset daily to the old base, replace launcher.json from an old snapshot, modify Files preview, or restart the Agent Service for this static update.

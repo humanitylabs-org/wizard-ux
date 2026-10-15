@@ -987,9 +987,10 @@ window.WizCore.chats = function createChats(H) {
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`;
     if (p.state === 'waiting') return `<span class="pst wait">${esc(p.error || 'Couldn’t reach Wizard')} · retrying</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>`;
     const agent = esc(window.WizConfig.agent());
-    if (p.state === 'sent' && p.steered && p.steerQueued) return `<span class="pst ok">${CHECK_SVG}Added to the queued request</span>`;
-    if (p.state === 'sent' && p.steered) return `<span class="pst ok">${CHECK_SVG}Delivered · ${agent} sees it next step</span>`;
-    if (p.state === 'sent') return '<span class="pst ok">Sent</span>';
+    if (p.state === 'sent') {
+      const label = p.steered ? `${CHECK_SVG}${p.steerQueued ? 'Added to the queued request' : `Delivered · ${agent} sees it next step`}` : 'Sent';
+      return `<span class="pst ok">${label}</span><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
+    }
     return `<span class="pst">${p.steerRunId && !p.attempts ? 'Steering…' : 'Sending…'}</span>`;
   }
   function pendingHtml(p, c) {
@@ -1264,8 +1265,9 @@ window.WizCore.chats = function createChats(H) {
       return true;
     }
     const dismiss = e.target.closest('[data-obdismiss]'); if (dismiss) {
-      Promise.resolve(OUTBOX.dismissEmpty(dismiss.dataset.obdismiss)).then(ok => {
-        H.toast(ok ? '✓' : '!', ok ? 'Bubble dismissed · recording kept in Unsent messages' : 'Could not save dismissal · recording kept', 2400);
+      const sent = OUTBOX.get(dismiss.dataset.obdismiss)?.state === 'sent';
+      Promise.resolve(OUTBOX.dismissBubble(dismiss.dataset.obdismiss)).then(ok => {
+        H.toast(ok ? '✓' : '!', ok ? (sent ? 'Sent bubble dismissed · message stays in this chat' : 'Bubble dismissed · recording kept in Unsent messages') : 'Could not save dismissal · original kept', 2400);
       }); return true;
     }
     const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); H.toast('↻', 'Sending again', 1400); return true; }
@@ -1331,16 +1333,16 @@ window.WizCore.chats = function createChats(H) {
     const qs = e.target.closest('[data-quoteshare]');
     if (qs) {
       const text = qs.closest('blockquote[data-quote-source]')?.dataset.quoteSource || '';
-      KIT.shareText(text).then(r => {
+      (qs.closest('.msg.u') ? KIT.shareText(text) : KIT.shareAssistantText(text)).then(r => {
         if (r === 'copied') toast('⧉', 'Copied · sharing isn’t available here', 1800);
         else if (r === 'unsupported' || r === 'failed') toast('!', 'Couldn’t share', 1800);
       }).catch(() => toast('!', 'Couldn’t share', 1800));
       return true;
     }
     const cc = e.target.closest('[data-codecopy]'); if (cc) { const t = cc.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.copyText(t).then(ok => { cc.textContent = ok ? 'Copied' : 'Couldn’t copy'; setTimeout(() => { cc.textContent = 'Copy'; }, 1500); }); return true; }
-    const cs = e.target.closest('[data-codeshare]'); if (cs) { const t = cs.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.shareText(t).then(r => r === 'copied' && toast('⧉', 'Copied · sharing isn’t available here', 1800)); return true; }
+    const cs = e.target.closest('[data-codeshare]'); if (cs) { const t = cs.closest('.code')?.querySelector('pre')?.textContent || ''; (cs.closest('.msg.u') ? KIT.shareText(t) : KIT.shareAssistantText(t)).then(r => r === 'copied' && toast('⧉', 'Copied · sharing isn’t available here', 1800)); return true; }
     const mc = e.target.closest('[data-mcopy]'); if (mc) { const t = ch(id).texts?.[+mc.dataset.mcopy] ?? ''; (KIT.copyRich || KIT.copyText)(t).then(ok => toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400)); return true; }
-    const ms = e.target.closest('[data-mshare]'); if (ms) { const t = ch(id).texts?.[+ms.dataset.mshare] ?? ''; KIT.shareText(`From ${window.WizConfig.agent()}:\n\n${t}`).then(r => r === 'copied' ? toast('⧉', 'Copied · sharing isn’t available here', 1800) : r === 'failed' && toast('!', 'Couldn’t share', 1800)); return true; }
+    const ms = e.target.closest('[data-mshare]'); if (ms) { const t = ch(id).texts?.[+ms.dataset.mshare] ?? ''; KIT.shareAssistantText(t).then(r => r === 'copied' ? toast('⧉', 'Copied · sharing isn’t available here', 1800) : r === 'failed' && toast('!', 'Couldn’t share', 1800)); return true; }
     const v = e.target.closest('.vnote[data-vnote]'); if (v) { e.preventDefault(); toggleVoice(v.dataset.vnote); return true; }
     return false;
   }
