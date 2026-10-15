@@ -8,7 +8,7 @@ fs.mkdirSync(evidence,{recursive:true});process.env.QA_WEB_DIR=root;
 let boot,app,select,tap,contexts;
 const server=require('node:http').createServer((req,res)=>{const file=path.join(root,'web',decodeURIComponent(req.url.split('?')[0]).replace(/^\/wizard-os-home\//,''));if(!file.startsWith(root+'/web/')||!fs.existsSync(file)){res.writeHead(404);return res.end();}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':'text/html');res.end(fs.readFileSync(file));});
 const checks=[];let browser;
-async function test(name,fn){await fn();checks.push({name,passed:true});console.log('PASS',name);fs.writeFileSync(path.join(evidence,'progress.json'),JSON.stringify(checks,null,2));}
+async function test(name,fn){await fn();checks.push({name,passed:true});console.log('PASS',name);fs.writeFileSync(path.join(evidence,'progress.json'),JSON.stringify(checks,null,2));const p=contexts?.[0]?.p;if(p&&!p.isClosed())fs.appendFileSync(path.join(evidence,'voice-states.jsonl'),JSON.stringify({name,state:await p.evaluate(()=>({voice:__wos.voice,kind:__wos.V.kind,reply:__wos.V.replyTo,seal:__wos.V.seal?.text,custody:__wos.V.custodyCapture,parts:__wos.V.parts.length}))})+'\n');}
 async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];navigator.mediaDevices.getUserMedia=async()=>{const ctx=new AudioContext(),o=ctx.createOscillator(),d=ctx.createMediaStreamDestination();o.frequency.value=tone;o.connect(d);o.start();await ctx.resume();graphs.push({ctx,o,stream:d.stream});return d.stream;};});}
 (async()=>{
  const {OrbEvents}=await import(process.env.MIZEL_ADOPTION+'/orb-events.mjs');
@@ -98,8 +98,11 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
  });
  await test('held command during parked reply executes locally and restores paused original',async()=>{
    f.R.words='open settings';const before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;
+   // Focused text fields deliberately suppress hold-for-command; leave the field first.
+   await p.frames().find(x=>x.url().includes('/qa-iching/')).locator('#away').click();
    const touch=await f.context.newCDPSession(p),b=await p.locator('#orbWrap').boundingBox();
    await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:b.x+b.width/2,y:b.y+b.height/2,id:9}]});await p.waitForTimeout(1000);
+   await p.waitForFunction(()=>__wos.V.kind==='command'&&__wos.voice==='command');
    await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
    await p.waitForFunction(()=>__wos.voice==='paused'&&__wos.V.replyTo?.sid==='qa-0',null,{timeout:7000});
    assert.equal(f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,before);
@@ -110,7 +113,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
    await p.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['qa-iching']));await p.waitForTimeout(350);const fieldFrame=p.frames().find(x=>x.url().includes('/qa-iching/'));await select(fieldFrame);
    const original=await p.evaluate(()=>({id:__wos.V.custodyCapture,text:__wos.V.seal.text,reply:__wos.V.replyTo,route:__wos.V.snap.route})),before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;
    await tap(p);await p.waitForTimeout(500);await p.evaluate(()=>__wos.cancelVoice(true));assert.equal(await p.evaluate(()=>__wos.voice),'paused');
-   await select(fieldFrame);f.R.fail=true;await tap(p);await p.waitForTimeout(550);await tap(p);await p.waitForFunction(()=>__wos.voice==='paused');f.R.fail=false;
+   await select(fieldFrame);f.R.down=true;await tap(p);await p.waitForTimeout(550);await tap(p);await p.waitForFunction(()=>__wos.voice==='paused');f.R.down=false;
    const after=await p.evaluate(()=>({id:__wos.V.custodyCapture,text:__wos.V.seal.text,reply:__wos.V.replyTo,route:__wos.V.snap.route}));assert.deepEqual(after,original);assert.equal(f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,before);
  });
  await test('denied borrowed microphone restores original paused draft and target',async()=>{
