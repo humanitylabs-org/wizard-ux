@@ -49,6 +49,7 @@
         !(active?.row.native === 'wizard-device' && !active.row.nativeId),
       nativeOwnershipReady: ownershipLoaded && !unknownNative && !deviceRows.some(r => !r.nativeId) &&
         !(active?.row.native === 'wizard-device' && !active.row.nativeId), nativeDeviceTakeIds,
+      voiceBorrow: active?.borrow ? { ...active.borrow } : null,
       error: active?.error?.code || recoveryError?.code || null };
   }
   function changed() { W.dispatchEvent(new CustomEvent('wizard-app-capture-state', { detail: state() })); }
@@ -329,7 +330,8 @@
       },
       async resume() {
         if (active !== s || s.phase !== 'paused') return;
-        await s.engine.resume(); s.pausedTotal = (s.pausedTotal || 0) + Date.now() - s.pausedAt; s.pausedAt = 0; s.phase = 'recording'; emit(s,'state',{paused:false,recording:true}); changed();
+        if (s.engineDetached) await reopenBorrowedEngine(s); else await s.engine.resume();
+        s.pausedTotal = (s.pausedTotal || 0) + Date.now() - s.pausedAt; s.pausedAt = 0; s.phase = 'recording'; emit(s,'state',{paused:false,recording:true}); changed();
       },
       cancel() {
         if (s.cancelPromise) return s.cancelPromise;
@@ -382,7 +384,7 @@
         };
         return tap;
       };
-      addTap('me', analyser);
+      addTap('me', analyser, s.row.tracks?.me ? s.row.tracks.me.startMs + s.row.tracks.me.bytes / 32 : 0);
       const attachSystem = stream => {
         if (!stream) return;
         stream.getVideoTracks().forEach(t=>{t.stop();stream.removeTrack(t);});
@@ -435,6 +437,61 @@
       const values = new Uint8Array(analyser.fftSize);
       s.meter = setInterval(() => { analyser.getByteTimeDomainData(values); let sum = 0; for (const v of values) sum += ((v - 128) / 128) ** 2; if (s.systemAnalyser) { s.systemAnalyser.getByteTimeDomainData(values); let them = 0; for (const v of values) them += ((v - 128) / 128) ** 2; level(s, { me: s.phase === 'paused' ? 0 : Math.min(1, Math.sqrt(sum / values.length) * 3.2), them: s.phase === 'paused' ? 0 : Math.min(1, Math.sqrt(them / values.length) * 3.2) }); } else level(s, s.phase === 'paused' ? 0 : Math.min(1, Math.sqrt(sum / values.length) * 3.2)); }, 100);
     }
+  }
+  // Host-only microphone loan. Keep the capture row, chunk sequence, observers and
+  // Web Lock; never make another app appear idle while the orb borrows its mic.
+  async function beginVoiceBorrow(eventId) {
+    const s = active;
+    if (!s || s.row.kind !== 'meeting' || s.row.native || !s.row.pcm)
+      throw fail('handoff_unavailable', 'This recorder cannot hand off its microphone.');
+    if (typeof eventId !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(eventId)) throw fail('invalid_id','Invalid handoff id.');
+    if (!['recording','paused'].includes(s.phase) || s.borrow) throw fail('busy','A microphone handoff is already active.');
+    const wasPaused = s.phase === 'paused';
+    s.phase = 'handoff';
+    s.borrow = { id:eventId, meetingId:s.row.meta.meetingId, pausedByHandoff:!wasPaused, pausedAt:Date.now(), micReleased:false };
+    changed();
+    try {
+      await s.engine.stop(); // final AudioWorklet acknowledgement, then durable queue drain
+      s.inputStopped = true;
+      clearInterval(s.meter);
+      for (const node of s.nodes || []) { try { node.disconnect(); } catch (_) {} }
+      s.stream?.getTracks().forEach(t=>t.stop()); s.display?.getTracks().forEach(t=>t.stop());
+      await s.ctx?.close(); s.ctx=null; s.stream=null; s.display=null; s.displayPromise=null;
+      s.hasSystemAudio=false; s.systemAnalyser=null; s.engineDetached=true;
+      await s.writes; await drain(s);
+      if (s.error || s.queue.length) throw s.error || fail('storage_failed','Meeting boundary was not saved.');
+      for (const source of Object.keys(s.uploads || {})) uploadChunk(s,source,null,0,true);
+      s.borrow.atMediaMs=(s.opts.offsetMs||0)+(s.row.durationMs||0);
+      s.row.meta.handoffs ||= [];
+      s.row.meta.handoffs.push({ ...s.borrow, status:'paused' });
+      await put(s.row);
+      s.pausedAt ||= Date.now(); s.borrow.micReleased=true;
+      emit(s,'state',{recording:true,paused:true,hasSystemAudio:false,handoffId:eventId}); changed();
+      return {...s.borrow};
+    } catch(e) { s.error=e; s.phase='error'; changed(); throw e; }
+  }
+  async function reopenBorrowedEngine(s) {
+    const AC=W.AudioContext||W.webkitAudioContext;
+    s.ctx=new AC(); s.inputStopped=false;
+    // A display picker needs a fresh gesture. Do not silently reopen computer audio.
+    s.opts.systemAudio=false;
+    try { await browserEngine(s); s.engineDetached=false; }
+    catch(e) { s.stream?.getTracks().forEach(t=>t.stop()); await s.ctx?.close(); s.ctx=null; s.inputStopped=true; throw e; }
+  }
+  async function endVoiceBorrow(eventId, detail={}) {
+    const s=active;
+    if (!s || s.borrow?.id!==eventId || !s.borrow.micReleased) throw fail('stale_handoff','This microphone loan is not active.');
+    const b=s.borrow, marker=s.row.meta.handoffs.find(x=>x.id===eventId);
+    Object.assign(marker,{status:detail.status==='cancelled'?'cancelled':'captured',voiceTakeId:String(detail.voiceTakeId||''),endedAt:Date.now()});
+    await put(s.row); // marker survives even if reacquiring the microphone fails
+    s.phase='paused'; s.borrow=null;
+    if(b.pausedByHandoff) {
+      try { await reopenBorrowedEngine(s); s.pausedTotal=(s.pausedTotal||0)+Date.now()-s.pausedAt; s.pausedAt=0; s.phase='recording'; marker.resumeStatus='recording'; }
+      catch(e) { marker.resumeStatus='failed'; s.error=e; emit(s,'warn','Meeting remains paused: microphone could not resume.'); }
+    } else marker.resumeStatus='paused';
+    await put(s.row);
+    emit(s,'state',{recording:true,paused:s.phase==='paused',hasSystemAudio:false}); changed();
+    return {...marker};
   }
   function deviceAdapter(d) {
     const parse = text => { try { return JSON.parse(text); } catch (_) { return null; } };
@@ -715,6 +772,7 @@
   // Host-only adapter seam. Apps get only the frozen facade via app-services;
   // never expose configureNative through RPC or allow arbitrary bridge eval.
   W.WizAppCapture = Object.freeze({ version: 1, start, pending, ack, prepare, discardPrepared, capabilities, getState: state,
+    beginVoiceBorrow, endVoiceBorrow,
     current(appId) { validate(appId,{}); const r=active?.row.appId===appId ? active.row : [...recoveryLive].map(id=>ownedRows.get(id)).find(r=>r?.appId===appId);
       return r ? {id:r.id,meta:JSON.parse(JSON.stringify(r.meta)),phase:active?.row.id===r.id ? active.phase : 'recoverable'} : null; },
     configureNativeBridge(bridge) {
