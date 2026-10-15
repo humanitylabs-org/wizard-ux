@@ -258,6 +258,17 @@ public final class EverywhereOutbox {
 
     public synchronized Item item(String id) { return items.get(id); }
 
+    /** Derived from the durable outbox, so a service restart/keyboard change cannot drop the lock. */
+    public synchronized String floatingProcessingMode() {
+        long now = System.currentTimeMillis();
+        for (Item it : items.values()) {
+            String mode = EverywherePolicy.processingMode(it.source, it.state, it.text,
+                    "waiting".equals(it.state) && it.nextAt > now);
+            if (!mode.isEmpty()) return mode;
+        }
+        return "";
+    }
+
     public void retry(String id) {
         synchronized (this) {
             for (Item it : items.values()) {
@@ -389,17 +400,25 @@ public final class EverywhereOutbox {
         }
         // Dictation stops here: the words go into the text field, nothing goes to Wizard.
         if (it.dictation()) {
-            synchronized (this) {
-                it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
-                if (audio != null) //noinspection ResultOfMethodCallIgnored
-                    audio.delete();
-                it.audioPath = "";
-                items.remove(it.id);
-                save();
-            }
-            Log.i(TAG, "dictated " + it.id + " chars=" + it.text.length() + " attempts=" + it.attempts);
             final String words = it.text;
-            main.post(() -> { changed(); for (Listener l : snapshot()) l.onDictated(it, words); });
+            // Keep the item pending through main-thread insertion/clipboard recovery. Removing it on the
+            // I/O thread allowed a queued tap to start a second take before the first words were inserted.
+            main.post(() -> {
+                try {
+                    for (Listener l : snapshot()) l.onDictated(it, words);
+                } finally {
+                    synchronized (EverywhereOutbox.this) {
+                        it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
+                        if (audio != null) //noinspection ResultOfMethodCallIgnored
+                            audio.delete();
+                        it.audioPath = "";
+                        items.remove(it.id);
+                        save();
+                    }
+                    changed();
+                }
+                Log.i(TAG, "dictated " + it.id + " chars=" + words.length() + " attempts=" + it.attempts);
+            });
             return;
         }
         // 2. The recording rides along as a voice note.
