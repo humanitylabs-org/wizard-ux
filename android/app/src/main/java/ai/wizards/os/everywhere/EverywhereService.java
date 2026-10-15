@@ -1008,10 +1008,11 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private boolean processing() { return outbox != null && !outbox.floatingProcessingMode().isEmpty(); }
 
     private void tap() {
-        if (processing()) { toast("Still processing your recording…"); return; }
+        // Existing takes always retain Send. The pending-work lock controls admission of a NEW take.
         buzz(12);
         if (carrying()) { remote("send"); return; }
         if (listening) { finish(); return; }
+        if (processing()) { toast("Still processing your recording…"); return; }
         if (nativeTake()) {
             // One take, one microphone: an in-app recording is still going (the app's window is gone, so the orb
             // can't drive it). Open Wizard OS, which picks that take back up, instead of starting a second one.

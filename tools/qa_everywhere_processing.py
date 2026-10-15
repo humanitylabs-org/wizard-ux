@@ -133,6 +133,22 @@ with (BASE/'worker.lock').open('a') as lock:
         # Still draggable while logically locked.
         sx(f'input swipe {x} {y} {x-80} {y-70} 600');time.sleep(.3)
         must('busy orb remains draggable',bubble()!=b,(b,bubble()))
+        # Carry is an existing take, not admission: exercise the actual MainActivity bridge and
+        # real native remote-send dispatch while the previous outbox transcription is still held.
+        # Recording state is an explicit fixture here; this test never sends a second real message.
+        sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity');time.sleep(2)
+        app=Page(fetch=True)
+        app.ev('window.__carryCommands=[];window.__wosVoiceCmd=c=>{__carryCommands.push(c);WizardOSNative.appVoice("idle",0)};WizardOSNative.appVoice("listen",1500)')
+        time.sleep(.5);sx('input keyevent KEYCODE_HOME');time.sleep(2)
+        must('pending transcription can display a carried recording',orb_state()['mode']=='listen',orb_state())
+        tap_orb();time.sleep(1)
+        must('carried recording Send bypasses new-take lock',app.ev('__carryCommands.includes("send")'))
+        must('after carried Send previous work still owns busy state',orb_state()['busy'],orb_state())
+        app.close()
+        # Return to the same text field before allowing the held dictation to finish.
+        sx(f'am start -W -n com.android.chrome/com.google.android.apps.chrome.Main');time.sleep(1)
+        for typ in ('touchStart','touchEnd'): ed.call('Input.dispatchTouchEvent',type=typ,touchPoints=[{'x':150,'y':140}] if typ=='touchStart' else [])
+        time.sleep(.5)
         RESPONSE.put((200,{'text':'The delayed words arrived once.'}))
         text=wait_contains('delayed words arrived once');must('words inserted once into original external field',text.lower().count('delayed words arrived once')==1,text)
         settle_ready();time.sleep(3);a=orb.ev('__draws');time.sleep(2);must('completion returns to still ready state',orb_state()['mode']=='type' and not orb_state()['busy'] and orb.ev('__draws')==a,orb_state())
