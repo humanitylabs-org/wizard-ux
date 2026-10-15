@@ -5,7 +5,7 @@
  *   v.start()          → begins recording ('listen')
  *   v.finish()         → Promise<{ text, blob, ms }>: stops and transcribes via api/transcribe
  *                        (on failure: { text: '', blob, error }, so the caller can send the recording itself)
- *   v.cancel()         → discards
+ *   v.cancel()         → keeps takes ≥15 s in the shared cancelled-recordings store
  *   v.state            → 'idle' | 'listen' | 'think'
  *   v.elapsed()        → ms recorded so far
  */

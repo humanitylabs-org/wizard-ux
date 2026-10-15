@@ -281,10 +281,7 @@
     if (known) { openThread(it.sessionId); w = focused(); }
     else { w = newWin({ app: 'chats', thread: null, ...(it.agent ? { agent: it.agent } : {}) }); focusWin(w.id); CHATS.openChat(w.id, '__new__'); syncChatsPane(w.id); }
     if (!w) return;
-    const draft = CHATS.ch(w.id);
-    if (draft.draft || draft.files?.length) { toast('!', 'Existing draft kept · finish it before editing this unsent message', 2600); return; }
-    CHATS.setDraft(w.id, it.text || it.typed || '', it.files || []);
-    OUTBOX.remove(it.id); CHATS.renderChats(w); syncChatsPane(w.id);
+    if (!window.WosSettings.moveDraft({ chats: CHATS, wid: w.id, item: it, outbox: OUTBOX, toast })) return; CHATS.renderChats(w); syncChatsPane(w.id);
   }
 
   /* ---------------- rendering ---------------- */

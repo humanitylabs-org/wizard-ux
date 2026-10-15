@@ -99,9 +99,15 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   ok(await p.locator('[data-skinpick]').evaluateAll(es=>es.every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1;})),kind+' 360px skin controls do not overflow');
   await p.setViewportSize({width:1000,height:800});await shot(p,kind+'-resized');
   ok(await p.locator('[data-skinpick]').count()===5,kind+' resize keeps shared controls');
+  await p.keyboard.press('Escape');
+  await p.evaluate(m=>m?__wos.goDesk(0,true):__wux.goHome(),phone);await nap(200);
+  const beforeRoot=await p.evaluate(()=>Object.keys((window.__wos||window.__wux).wins).sort());
+  await p.evaluate(()=>history.back());await nap(350);
+  ok(!p.isClosed()&&p.url().startsWith(BASE)&&await p.evaluate(m=>m?__wos.idx===0:__wux.homeOpen,phone),kind+' single root Back retains Wizard Home');
+  ok(JSON.stringify(beforeRoot)===JSON.stringify(await p.evaluate(()=>Object.keys((window.__wos||window.__wux).wins).sort())),kind+' root Back retains hosted windows');
   await ctx.close();
  }
  ok(errors.length===0,'no page errors',errors);
  ok(reads.some(u=>u.includes('/api/sessions')),'real session API exercised');
  ok(!writes.some(w=>/\/v1\/runs|\/api\/sessions$/.test(w.url)),'no conversation/run creation attempted',writes);
-})().catch(e=>ok(false,'suite completed',String(e.stack||e))).finally(async()=>{await browser?.close();const result={worker:os.hostname(),base:BASE,source:SOURCE||'live',baseline,checks,errors,writes,readCount:reads.length,hashes,pass:checks.filter(x=>x.pass).length,fail:checks.filter(x=>!x.pass).length};fs.writeFileSync(path.join(OUT,'result.json'),JSON.stringify(result,null,2));console.log('RESULT',result.pass,result.fail);process.exitCode=result.fail?1:0;});
+})().catch(e=>ok(false,'suite completed',String(e.stack||e))).finally(async()=>{await browser?.close();const result={worker:os.hostname(),commit:process.env.QA_COMMIT||null,node:process.version,chrome:browser?.version(),base:BASE,source:SOURCE||'live',baseline,checks,errors,writes,readCount:reads.length,hashes,pass:checks.filter(x=>x.pass).length,fail:checks.filter(x=>!x.pass).length};fs.writeFileSync(path.join(OUT,'result.json'),JSON.stringify(result,null,2));console.log('RESULT',result.pass,result.fail);process.exitCode=result.fail?1:0;});

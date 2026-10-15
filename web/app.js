@@ -1093,18 +1093,7 @@
   let NATIVE_UNSENT = [];
   function readNativeUnsent() { try { NATIVE_UNSENT = NATIVE() && window.WizardOSNative.unsent ? JSON.parse(window.WizardOSNative.unsent()) : []; } catch (e) { NATIVE_UNSENT = []; } }
   // From the app (outbox) and from the Everywhere button (native), oldest first.
-  function unsentAll() {
-    const web = OUTBOX ? OUTBOX.unsent().map(it => ({ ...it, origin: 'app' })) : [];
-    const nat = (NATIVE_UNSENT || []).map(it => ({ ...it, origin: 'everywhere' }));
-    return [...web, ...nat].sort((a, b) => a.createdAt - b.createdAt);
-  }
-  function unsentCard() {
-    const all = unsentAll(); if (!all.length) return '';
-    const failed = all.filter(x => x.state === 'failed').length;
-    const k = failed ? `${failed} not sent` : `${all.length} waiting to send`;
-    const v = esc(clip(all[0].text || 'Voice note', 70));
-    return `<button class="now-card unsent-card ${failed ? 'fail' : ''}" style="--c:${failed ? 'var(--amber)' : 'var(--violet-2)'}" data-act="unsent"><span class="pip ${failed ? '' : 'pulse'}"></span><span class="meta"><span class="k">${k}</span><span class="v">${v}</span></span><span class="side-go">${failed ? 'Retry' : 'View'}</span></button>`;
-  }
+  function unsentAll() { return window.WosSettings.unsentAll(settingsContext()); }
   function unsentRow(it) { return window.WosSettings.unsentRow(it, settingsContext()); }
   let settingsView = null;
   const settingsContext = () => ({ outbox: OUTBOX, live: LIVE, ago, toast,
@@ -1148,10 +1137,7 @@
       const w = openWin({ app: 'chats', thread: null, ...(agent ? { agent } : {}) }); if (!w) return;
       wid = w.id; focusWin(wid); openChat(wid, '__new__');
     }
-    const draft = CHATS.ch(wid);
-    if (draft.draft || draft.files?.length) { toast('!', 'Existing draft kept · finish it before editing this unsent message', 2600); return; }
-    CHATS.setDraft(wid, it.text || it.typed || '', it.files || []);
-    OUTBOX.remove(it.id); renderChats(W[wid]);
+    if (!window.WosSettings.moveDraft({ chats: CHATS, wid: wid, item: it, outbox: OUTBOX, toast })) return; renderChats(W[wid]);
     setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); ta?.focus(); }, 50);
   }
   let lastUnsentSig = '';

@@ -96,3 +96,14 @@ test('desktop Cancel retains a long take including its final chunk, never a shor
   assert.equal(saved.length, 1); assert.equal(await saved[0].blob.text(), 'earlierfinal'); assert.equal(saved[0].source, 'desktop');
   now += 1000; v.cancel(); stops.shift()(); assert.equal(saved.length, 1); assert.equal(stopped, 2);
 });
+
+test('unsent Edit consumes only after the shared draft store verifies text and attachments', () => {
+  const { sandbox } = harness(); const removed = [], notices = []; let saved;
+  const state = { draft: '', files: [], draftFor: 'agentnew:private' };
+  const chats = { ch: () => state, setDraft: (_wid, text, files) => { saved = { text, files }; } };
+  sandbox.WosChat = { drafts: { get: () => saved } };
+  const opts = { chats, wid: 'fixture', item: { id: 'fixture', text: 'retained words', files: [{ id: 'f1' }] }, outbox: { remove: id => removed.push(id) }, toast: (...a) => notices.push(a) };
+  assert.equal(sandbox.WosSettings.moveDraft(opts), true); assert.deepEqual(removed, ['fixture']);
+  sandbox.WosChat.drafts.get = () => ({ text: '', files: [] });
+  assert.equal(sandbox.WosSettings.moveDraft(opts), false); assert.deepEqual(removed, ['fixture']); assert.equal(notices.length, 1);
+});

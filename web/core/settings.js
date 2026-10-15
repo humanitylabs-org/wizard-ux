@@ -80,6 +80,18 @@
     return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${window.WizWebUpdate ? row('web-update', '↻', 'Check for updates', 'Updates both layouts · reload only when you choose') : ''}${row('help', '?', 'Gestures & help', ctx.helpSub)}${window.WosFiles ? row('files', '▤', 'Files', 'Everything in Wizard Files · preview, attach to a chat') : ''}</div>`;
   }, act(ctx, el) { const st = el.closest('[data-st]')?.dataset.st; if (st === 'web-update') { window.WizWebUpdate?.check(); ctx.toast?.('↻', 'Checking for updates', 1400); return true; } if (!['files', 'help'].includes(st)) return false; ctx.openSub(st); return true; } });
   register({ id: 'usage', aliases: ['usage'], html: () => window.WosUsage?.html() || '', act(ctx, el) { if (!el.closest('[data-usage-refresh]')) return false; window.WosUsage?.load(true).then(ctx.paintUsage); ctx.paintUsage(); return true; } });
+  // A shell chooses the composer; common code owns preservation before consuming an unsent record.
+  function moveDraft({ chats, wid, item, outbox, toast }) {
+    const draft = chats.ch(wid);
+    if (draft.draft || draft.files?.length) { toast('!', 'Existing draft kept · finish it before editing this unsent message', 2600); return false; }
+    const text = item.text || item.typed || '', files = item.files || [];
+    chats.setDraft(wid, text, files);
+    const saved = window.WosChat?.drafts.get(chats.ch(wid).draftFor);
+    if (!saved || saved.text !== text || files.length !== saved.files.length || files.some((f, i) => f.id !== saved.files[i]?.id)) {
+      toast('!', 'Draft could not be saved · original unsent message kept', 2600); return false;
+    }
+    outbox.remove(item.id); return true;
+  }
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
     const ctx = { ...adapter, root }, api = { render, focus, destroy, dispatch, context: ctx };
@@ -129,5 +141,5 @@
     const at = controls.indexOf(document.activeElement);
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
-  window.WosSettings = { register, mount, route, trap, unsentAll, unsentRow, unsentAction, get features() { return [...features.values()].map(({ id, aliases }) => ({ id, aliases: aliases || [] })); } };
+  window.WosSettings = { register, mount, route, trap, moveDraft, unsentAll, unsentRow, unsentAction, get features() { return [...features.values()].map(({ id, aliases }) => ({ id, aliases: aliases || [] })); } };
 })();
