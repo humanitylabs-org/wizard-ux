@@ -58,7 +58,7 @@
       if (V.state !== 'idle') return false;
       const shared = window.WizAppCapture?.getState?.();
       if (shared?.active || shared?.recording || shared?.hold) throw Object.assign(new Error('Microphone held by ' + (shared.appId || 'another app')), { code: 'busy', appId: shared.appId });
-      V.chunks = []; V.t0 = performance.now(); V.cancelled = false; set('listen');
+      V.chunks = []; V.captureId = 'capture-' + crypto.randomUUID(); V.t0 = performance.now(); V.cancelled = false; set('listen');
       try {
         if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('This browser has no microphone access here.');
         V.stream = await openMic();
@@ -67,12 +67,13 @@
         const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
         const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
         V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
-        V.rec.ondataavailable = e => { if (e.data && e.data.size) V.chunks.push(e.data); };
+        const captureId = V.captureId, chunks = V.chunks;
+        V.rec.ondataavailable = e => { if (e.data && e.data.size) { chunks.push(e.data); window.WosOutbox?.capture(new Blob(chunks, { type: V.rec?.mimeType || 'audio/webm' }), captureId); } };
         V.rec.start(250); V.raf = requestAnimationFrame(tick);
         return true;
       } catch (e) { stop(); set('idle'); throw e; }
     }
-    function cancel() { V.cancelled = true; try { V.rec && V.rec.state !== 'inactive' && (V.rec.onstop = null, V.rec.stop()); } catch (e) {} V.rec = null; stop(); set('idle'); }
+    function cancel() { V.cancelled = true; const id = V.captureId; if (id) window.WosOutbox?.transition(id, 'held', 'Cancelled recording · original kept'); try { V.rec && V.rec.state !== 'inactive' && (V.rec.onstop = null, V.rec.stop()); } catch (e) {} V.rec = null; stop(); set('idle'); }
     function finish(o = {}) {
       if (V.state !== 'listen') return Promise.resolve(null);
       const ms = performance.now() - V.t0;
@@ -83,7 +84,7 @@
           V.rec = null; stop();
           if (ms < 450 || blob.size < 1200) { set('idle'); return resolve({ text: '', blob: null, ms, error: 'Didn’t catch that' }); }
           // The durable outbox transcribes and keeps the recording itself: hand it the audio as is.
-          if (o.transcribe === false) { set('idle'); return resolve({ text: '', blob, ms }); }
+          if (o.transcribe === false) { set('idle'); return resolve({ text: '', blob, ms, captureId: V.captureId }); }
           try {
             const j = await window.WizConfig.transcribe(blob, { prompt: opts.prompt || window.WizConfig.voicePrompt() });
             set('idle'); resolve({ text: String(j.text || '').trim(), blob, ms, sttMs: j.ms });

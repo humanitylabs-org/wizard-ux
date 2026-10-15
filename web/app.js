@@ -1107,12 +1107,13 @@
   }
   function unsentRow(it) {
     const when = ago(new Date(it.createdAt).toISOString());
-    const st = it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
+    const blocked = it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id);
+    const st = blocked ? esc(OUTBOX?.quarantined(it.id) ? 'Waiting for device storage verification' : it.error) : it.state === 'held' ? 'Kept on this device · not queued' : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
     const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
     return `<div class="ub-row ${it.state}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}">
       <div class="ub-t">${it.audio || it.audioFile || it.hasAudio ? MIC_SVG : ''}<span>${esc(it.text || 'Voice note · words come when it sends')}</span></div>
       <div class="ub-m">${src} · ${esc(when)} · ${st}</div>
-      <div class="ub-a"><button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>${it.origin === 'app' && it.sessionId && LIVE?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
+      <div class="ub-a">${!blocked && it.state !== 'held' ? `<button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>` : ''}${it.origin === 'app' && it.sessionId && LIVE?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' && !blocked ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
   }
   function renderSettings() {
     readNativeUnsent();
@@ -1125,7 +1126,7 @@
       <h3 class="st-title">Settings</h3>
       <div class="st-group"><h4>Unsent <span>${all.length || ''}</span></h4>
         ${all.length ? all.map(unsentRow).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">Everything you’ve said reached Wizard.</div>'}
-        <p class="st-note">Every message is saved on this phone before it’s sent, and retried until Wizard accepts it.</p></div>
+        <p class="st-note">Originals are kept while delivery is pending. Unconfirmed steering is never automatically retried.</p></div>
       ${lookGroup()}
       <div class="st-group"><h4>Assistant</h4>
         <button class="st-row" data-st="everywhere" ${evNative ? '' : 'disabled'}><span class="st-ic">${window.WizBrand.html}</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
@@ -1187,19 +1188,22 @@
     }
     const it = OUTBOX.get(id); if (!it) return;
     if (a === 'retry') { OUTBOX.retry(id); toast('↻', 'Sending again', 1400); }
-    if (a === 'delete') { OUTBOX.remove(id); toast('✕', 'Deleted', 1400); }
+    if (a === 'delete') OUTBOX.remove(id).then(ok => toast(ok ? '✕' : '!', ok ? 'Deleted' : 'Could not save deletion · keep Wizard open', 2400));
     if (a === 'open') { closeSheets(true); openWizardThread(it.sessionId); }
     if (a === 'edit') editUnsent(it);
   }
   // Edit puts the words back in a composer (the thread's, or a new chat's) and takes the item out of the queue.
   function editUnsent(it) {
+    if (it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id)) { toast('!', it.error || 'Waiting for device storage verification · original kept', 3200); return; }
+    if (it.body) { toast('!', 'Delivery is uncertain · retry this submission to reconcile before editing', 3000); return; }
     closeSheets(true);
     const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
     let wid = chatsWinAny();
     if (!wid) { const w = openWin({ app: 'chats', thread: null }); if (!w) return; wid = w.id; }
     focusWin(wid); openChat(wid, known ? it.sessionId : '__new__');
     CHATS.setDraft(wid, it.text || it.typed || '', (it.files || []).filter(f => f !== it.audioFile));
-    OUTBOX.remove(it.id);
+    if (it.audio || it.body) OUTBOX.transition(it.id, 'held', 'Editing a copy · original recording and uncertain send retained');
+    else OUTBOX.remove(it.id);
     renderChats(W[wid]);
     setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 50);
   }
@@ -1998,7 +2002,7 @@
   function dictationRecovery(id, meta) {
     const rows = JSON.parse(localStorage.getItem(DICTATION_RECOVERY_KEY) || '{}');
     if (meta === false) delete rows[id];
-    else if (meta) rows[id] = { ...meta, id, kind: 'dictation', send: false };
+    else if (meta) rows[id] = { ...rows[id], ...meta, id, kind: 'dictation', send: false };
     if (meta !== undefined) localStorage.setItem(DICTATION_RECOVERY_KEY, JSON.stringify(rows));
     return rows;
   }
@@ -2042,20 +2046,7 @@
   // through __wosVoiceCmd below; it never starts a second recorder.
   const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : null; };
   function nativeBlob(id, expected) {
-    const dev = DEV(), parts = []; let off = 0;
-    const strict = expected !== undefined; let complete = false, size = 0;
-    if (strict && (!Number.isSafeInteger(expected) || expected < 0)) throw new Error('Native recording size unavailable');
-    for (let k = 0; k < 4000 && off >= 0; k++) {
-      let c = null; try { c = JSON.parse(dev.recRead(id, off)); } catch (e) {}
-      if (!c) { if (strict) throw new Error('Native audio read incomplete'); break; }
-      if (strict && (typeof c.b64 !== 'string' || !Number.isInteger(c.next))) throw new Error('Native audio chunk invalid');
-      const bin = atob(c.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-      size += u.length;
-      if (strict && (size > expected || (c.next !== -1 && (c.next <= off || c.next !== off + u.length)))) throw new Error('Native audio chunk incomplete');
-      parts.push(u); off = c.next; complete = off === -1;
-    }
-    if (strict && (!complete || size !== expected)) throw new Error('Native audio read incomplete');
-    return new Blob(parts, { type: 'audio/aac' });
+    return window.WosDevice.readRecording(id, expected);
   }
   /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
   function nativeTakeAppOwned(id) {
@@ -2066,6 +2057,14 @@
     if (!V.native || nativeTakeAppOwned(V.native)) return false;
     try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id !== V.native) return false; DEV().recPause(on); return true; } catch (_) { return false; }
   }
+  const VOICE_RECOVERY_KEY = 'wos.voice-recovery.v1';
+  function voiceRecovery(id, meta) {
+    const rows = JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}');
+    if (meta === false) delete rows[id];
+    else rows[id] = { ...rows[id], ...meta, id, send: false };
+    localStorage.setItem(VOICE_RECOVERY_KEY, JSON.stringify(rows));
+  }
+  window.__wosVoiceRecovery = () => { try { return Object.values(JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}')); } catch (_) { return []; } };
   function nativeFinish(id, stopped) {
     if (nativeTakeAppOwned(id)) { setVoice('paused'); toast('🎙', 'This recording belongs to another app'); return; }
     // Notification/Everywhere Send enters here directly, bypassing finishVoice. Seal the model before claiming
@@ -2075,7 +2074,7 @@
       // Preserve a reload-visible exact-ID recovery owner BEFORE a destructive native claim.
       try { dictationRecovery(id, { ms: V.acc, state: 'retained' }); }
       catch (_) { pauseNativeTake(true); setVoice(stopped ? 'idle' : 'paused'); toast('!', 'Storage unavailable · dictation remains on the device'); return; }
-      try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (_) {}
+      try { meta = stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosDictationRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id)); } catch (_) {}
       V.native = null; V.kind = 'dictation';
       if (!meta) { setVoice('idle'); txHide(); toast('!', 'Dictation retained · could not read recording'); return; }
       V.acc = Math.max(V.acc, Number(meta.ms) || 0);
@@ -2100,16 +2099,28 @@
       toast('!', 'Recording saved · ' + String(e.message || e), 3200); return;
     }
     const dev = DEV(); let meta = null;
-    try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (e) {}
+    // recStop in shipped shells implicitly claims. Journal a reload-visible owner before
+    // that bridge call; already-stopped takes are read without recClaim.
+    try { voiceRecovery(id, { kind: V.kind, ms: V.acc }); }
+    catch (_) { pauseNativeTake(true); setVoice(stopped ? 'idle' : 'paused'); toast('!', 'Storage unavailable · recording remains on device'); return; }
+    try {
+      meta = stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosVoiceRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id));
+      if (meta?.id === id) voiceRecovery(id, meta);
+    } catch (e) { meta = null; }
     V.native = null;
-    if (!meta) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
+    if (!meta || meta.id !== id) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('!', 'Could not read recording · original kept on device'); return; }
     // A shipped kind-less recActive bridge reveals the original mode only after an explicit stop.
     // Preserve command routing even when its older take had no page-side provenance at recovery.
     if (['auto', 'command', 'dictation'].includes(meta.kind)) V.kind = meta.kind;
     V.acc = Math.max(V.acc, Number(meta.ms) || 0);
-    onRecStop(nativeBlob(id), id);
+    try { return onRecStop(nativeBlob(id, Number(meta.bytes)), id); }
+    catch (e) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('!', String(e.message || 'Recording retained · could not read audio'), 4000); }
   }
-  const recDone = id => { try { id && DEV()?.recDone(id); if (id) { window.WosModels.forgetVoiceRoute(id); dictationTake(id, false); dictationRecovery(id, false); } } catch (e) {} };
+  const releasedTakes = new Set();
+  const recDone = id => {
+    if (!id || releasedTakes.has(id) || !DEV()?.recDone) return;
+    try { DEV().recDone(id); releasedTakes.add(id); window.WosModels.forgetVoiceRoute(id); dictationTake(id, false); dictationRecovery(id, false); voiceRecovery(id, false); } catch (e) {}
+  };
   /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
   // Positive provenance for the shipped kind-less native ABI. Never infer ownership by claiming audio.
   const VOICE_TAKE_KEY = 'wos.voice-take.v1';
@@ -2294,7 +2305,7 @@
       if (id === null) { localStorage.removeItem(REPLY_KEY); return null; }
       if (val) { localStorage.setItem(REPLY_KEY, JSON.stringify({ id, ...val })); return val; }
       const r = JSON.parse(localStorage.getItem(REPLY_KEY) || 'null');
-      return r && r.id === id && r.sid ? { wid: W[r.wid] ? r.wid : '', sid: r.sid } : null;
+      return r && r.id === id && r.sid ? { wid: W[r.wid] ? r.wid : '', sid: r.sid, steerRunId: r.steerRunId || '' } : null;
     } catch (e) { return null; }
   }
   window.__wosReplyTake = id => replyTake(id);
@@ -2310,8 +2321,8 @@
     if (shared?.active || shared?.recording || shared?.hold) { toast('🎙', 'Microphone held by another app', 2000); return 'busy'; }
     try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id) { toast('🎙', 'An existing native recording is still held', 2200); return 'busy'; } } catch (_) { return 'busy'; }
     startVoice('auto');
-    V.replyTo = { wid, sid };
-    if (V.native) replyTake(V.native, { wid, sid });
+    V.replyTo = { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' };
+    if (V.native) replyTake(V.native, V.replyTo);
     CHATS.PW?.paintMic(true, sid);
     // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
     // animates."): the lit mic, the orb and its timer already say a reply is recording.
@@ -2331,7 +2342,7 @@
     // the exact route is still sealed at Send, and unavailable routes remain fail-closed.
     window.WosModels?.load().catch(() => {});
     clearTimeout(txHideT);
-    Object.assign(V, { kind, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, custodyCapture: null, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
@@ -2379,7 +2390,8 @@
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
     const rec = V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
     V.mime = rec.mimeType || mime || 'audio/webm';
-    rec.ondataavailable = e => { if (epoch === V.captureEpoch && !V.cancelled && e.data && e.data.size) V.chunks.push(e.data); };
+    const captureId = V.custodyCapture || (V.custodyCapture = 'capture-' + crypto.randomUUID());
+    rec.ondataavailable = e => { if (epoch === V.captureEpoch && !V.cancelled && e.data && e.data.size) { V.chunks.push(e.data); OUTBOX.capture(new Blob([...V.parts, ...V.chunks], { type: rec.mimeType || V.mime || 'audio/webm' }), captureId); } };
     rec.onstop = () => { if (epoch !== V.captureEpoch || V.cancelled) return; return V.state === 'think' ? onRecStop() : onRecInterrupted(rec); };
     // A track ended by the system stops the recorder too; onstop handles it.
     V.stream.getAudioTracks().forEach(tr => tr.addEventListener('ended', () => { try { rec.state !== 'inactive' && rec.stop(); } catch (e) {} }));
@@ -2463,7 +2475,7 @@
     txHide(0); // keep copy available; Settings retains the same transcript across reloads
     clearTimeout(txHideT); voiceEl.classList.add('tx');
   }
-  async function transcribeDictation(blobs, nid) {
+  async function transcribeDictation(blobs, nid, captureId = null) {
     const epoch = V.captureEpoch, target = V.field, ms = V.acc;
     const op = V.dictationOp = { blobs, ms, nid, epoch, abort: new AbortController() };
     const live = () => V.captureEpoch === epoch && !V.cancelled && V.dictationOp === op;
@@ -2491,7 +2503,7 @@
       if (!inserted) {
         // Never re-resolve a lost field or use the agent outbox as an audio recovery mechanism.
         const kept = await window.WosCancelled.retainWeb(new Blob(blobs, { type: blobs[0]?.type }), ms, text);
-        if (kept) recDone(nid);
+        if (kept) { recDone(nid); if (captureId) await OUTBOX.remove(captureId); }
         if (!live()) return;
         setVoice('idle'); showDictationCopy(text, kept, !!nid);
       } else { recDone(nid); setVoice('idle'); txHide(); }
@@ -2499,7 +2511,7 @@
       if (!live()) return;
       target?.release(); V.field = null;
       const kept = await window.WosCancelled.retainWeb(new Blob(blobs, { type: blobs[0]?.type }), ms);
-      if (kept) recDone(nid); // otherwise native audio remains on disk
+      if (kept) { recDone(nid); if (captureId) await OUTBOX.remove(captureId); } // otherwise native audio remains on disk
       if (!live()) return;
       setVoice('idle'); txHide();
       toast('!', kept ? 'Dictation retained in Settings → Cancelled recordings · transcribe & copy' : nid ? 'Dictation kept on device · reopen recording recovery to retry' : 'Storage unavailable · kept only while this page stays open · retry saving in Settings', 6000);
@@ -2552,7 +2564,9 @@
     const nativeKeeps = !!V.native && typeof DEV()?.cancelledList === 'function';
     if (V.native) { try { if (!nativeTakeAppOwned(V.native)) DEV().recCancel(V.native); } catch (e) {} V.native = null; }
     const rec = V.rec, mime = V.mime || rec?.mimeType || 'audio/webm';
-    const keepWeb = parts => { const b = new Blob(parts, { type: mime }); window.WosCancelled?.keepWeb(b, heldMs).then(k => k && window.WosCancelled.repaint()); };
+    const captureId = V.custodyCapture; V.custodyCapture = null;
+    if (captureId && !long) OUTBOX.remove(captureId);
+    const keepWeb = parts => { const b = new Blob(parts, { type: mime }); if (captureId) { OUTBOX.capture(b, captureId).then(async () => { const item = await OUTBOX.transition(captureId, 'held', 'Cancelled recording · original kept'); toast('✕', item.durable ? 'Cancelled · saved in Recordings' : 'Device save failed · recording kept in this tab. Keep Wizard open.', 4000); }); return; } window.WosCancelled?.keepWeb(b, heldMs).then(k => { window.WosCancelled.repaint(); toast(k ? '✕' : '!', k ? 'Cancelled · saved in Settings → Cancelled recordings' : 'Device save failed · recording kept in this tab. Keep Wizard open.', 4000); }); };
     if (long && rec && window.WosCancelled) {
       // Stop the web recorder and keep what it heard (the last chunk arrives with the stop).
       const parts = V.parts.slice(), chunks = V.chunks;
@@ -2569,7 +2583,7 @@
     stopStream(); V.rec = null; V.sim = false; cancelAnimationFrame(V.raf); Orb.setLevel(0);
     setVoice('idle'); txHide(quiet ? 0 : 0);
     const kept = long && (nativeKeeps || !!rec || !!V.parts.length);
-    if (!quiet || kept) { toast('✕', kept ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Discarded', kept ? 3200 : 2200); vib(12); }
+    if (!quiet || kept) { toast('✕', kept ? (nativeKeeps ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Cancelled · keeping recording…') : 'Discarded', kept ? 3200 : 2200); vib(12); }
   }
   async function onRecStop(nblob, nid) {
     // A native take (Android RecorderService) arrives as one blob + its id; a web take is the parts + current chunks.
@@ -2581,55 +2595,82 @@
     const size = blobs.reduce((n, b) => n + b.size, 0);
     stopStream(); V.rec = null; Orb.setLevel(0);
     if (V.cancelled) { recDone(nid); dropHold(); unseal(); return; }
-    if (V.kind === 'dictation') return transcribeDictation(blobs, nid);
-    if (V.acc < 450 || size < 1200) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); tourEv('nospeech'); return; }
+    if (V.kind === 'dictation') { const id = V.custodyCapture; V.custodyCapture = null; if (id) await OUTBOX.transition(id, 'held', 'Dictation recording · original kept'); return transcribeDictation(blobs, nid, id); }
+    if (!nid && (V.acc < 450 || size < 1200)) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); tourEv('nospeech'); return; }
     // A voice reply from a thread's composer goes to that thread, as recorded: no routing, no commands,
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
     const snap = V.snap || sendSnap(); V.snap = null;
     snap.seal = V.seal || null; V.seal = null; // the composer read at the send tap (finishVoice)
     const kind = V.kind, aimAt = V.target;
+    // One immutable owner before STT/router awaits, including native handoffs. The native
+    // copy is released only after the web copy is durable or a server receipt exists.
+    const rt = V.replyTo;
+    const sv = snap.view, sid = rt?.sid || (aimAt == null ? sv?.thread || '' : '');
+    const audio = new Blob(blobs, { type: blob.type || 'audio/webm' });
+    const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
+      sessionId: sid && sid !== '__new__' ? sid : '',
+      steerRunId: rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '',
+      sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
+      files: [...V.files, ...(snap.seal?.files || [])].filter(f => f?.id),
+      instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
+    V.custodyCapture = null;
+    snap.custodyId = it.id; snap.audio = audio;
+    snap.seal?.done(it);
     // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.
     const hold = V.hold; V.hold = null;
     const unhold = () => { if (hold) setTimeout(() => LIVE.releaseSend?.(hold), 1500); };
-    if (V.replyTo) {
-      const rt = V.replyTo, files = takeFiles(); V.replyTo = null; replyTake(null);
-      setVoice('idle'); txPill('✦', 'Voice reply · saved to this thread', 'agent'); txHide(1800);
-      Promise.all(blobs.map((part, i) => Promise.resolve(CHATS.sendVoiceTo(rt.wid, rt.sid, part, i === 0 ? files : [], i === 0 ? snap.seal || false : false, snap.route)).catch(() => {}))).finally(() => recDone(nid));
+    const releaseNative = () => { const held = OUTBOX.get(snap.custodyId); if (held?.durable || held?.state === 'sent') recDone(nid); };
+    if (rt) {
+      const files = takeFiles(); V.replyTo = null;
+      setVoice('idle'); txPill('✦', 'Voice reply · waiting to send', 'agent'); txHide(1800);
+      try { await CHATS.sendVoiceTo(rt.wid, rt.sid, audio, files, snap.seal || false, snap.route, snap.custodyId); }
+      catch (e) { await OUTBOX.transition(snap.custodyId, 'failed', String(e.message || e)); }
+      finally { releaseNative(); unhold(); }
       return;
     }
     try {
+      // Protect bytes before STT. Failed upload is retryable; it must not delete the staged take.
+      await OUTBOX.protect(snap.custodyId);
       const words = []; const j = { ms: 0 };
       const prompt = window.WizConfig.voicePrompt(APPS.map(a => a.name).slice(0, 40));
       // No network: straight to the outbox (it transcribes and sends when Wizard is back), no waiting on a dead line.
       if (navigator.onLine === false) throw new Error('offline');
       for (const part of blobs) {   // more than one part only after the mic was interrupted mid-take
         // A flaky line can hang a request for a long time: past this bound the take goes to the outbox instead.
-        const limit = 12000 + Math.round(part.size / 20);
-        const jj = await Promise.race([window.WizConfig.transcribe(part, { prompt, language: 'en' }),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('transcription timed out')), limit))]);
+        const jj = await OUTBOX.bounded(signal => window.WizConfig.transcribe(part, { prompt, language: 'en', signal }));
         words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
       }
       const text = words.filter(Boolean).join(' ').trim();
-      if (!text) { recDone(nid); unhold(); unseal(snap.seal); setVoice('idle'); txHide(); toast('◌', snap.seal ? 'No speech detected · your text is back in the thread' : 'No speech detected'); tourEv('nospeech'); return; }
-      // The words are what gets sent from here; the native take is deleted once they are handled (or in the outbox).
-      Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).finally(() => { recDone(nid); unhold(); });
+      if (!text) {
+        await OUTBOX.transition(snap.custodyId, 'empty', 'No speech detected · original recording and composer kept together');
+        releaseNative(); unhold(); setVoice('idle'); txHide();
+        toast('◌', 'No speech detected · recording and text kept in Unsent'); tourEv('nospeech'); return;
+      }
+      const outcome = await handleText(text, kind, false, j.ms, aimAt, snap);
+      if (OUTBOX.get(snap.custodyId)?.state === 'processing') {
+        await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'local'
+          ? 'Handled on this device · original recording kept; not queued to the agent'
+          : 'No delivery receipt · original recording kept; nothing sent');
+      }
+      releaseNative(); unhold();
     } catch (err) {
       // A held command that can't be heard is dropped with a note, never queued for the agent as a message.
-      if (kind === 'command') { recDone(nid); unhold(); unseal(snap.seal); setVoice('idle'); txPill('⚡', 'Command not heard · nothing sent', 'command', String(err?.message || err)); txHide(2400); return; }
+      if (kind === 'command') { await OUTBOX.transition(snap.custodyId, 'held', 'Command not heard · recording kept; nothing sent'); releaseNative(); unhold(); setVoice('idle'); txPill('⚡', 'Command not heard · nothing sent', 'command', String(err?.message || err)); txHide(2400); return; }
       // Never lose a recording: it goes to the outbox, which transcribes and sends it when Wizard is back.
       setVoice('idle');
-      const aim = V.target, sv = snap.view;
+      const aim = aimAt, sv = snap.view;
       const files = takeFiles();
-      const queued = (blobs.length ? blobs : [blob]).map((part, i) => {
+      const queued = (snap.custodyId ? [snap.audio] : blobs.length ? blobs : [blob]).map((part, i) => {
         const fl = i === 0 ? files : [];   // attached files ride with the first part only
-        if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route);
-        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
+        if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route, snap.custodyId);
+        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { custodyId: snap.custodyId, sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
         const sl = i === 0 ? snap.seal : null; // the window is gone: the taken composer still rides with it
-        return toAgent('', 'Saved · sends when Wizard is reachable', { audio: part, desk: aim, source: 'orb', files: [...fl, ...(sl ? sl.files : [])].slice(0, 8), typed: sl?.text || '', snap })
-          .then(() => sl?.done(), e => { sl?.putBack(); throw e; });
+        return toAgent('', 'Waiting to send · recording kept', { audio: part, desk: aim, source: 'orb', files: [...fl, ...(sl ? sl.files : [])].slice(0, 8), typed: sl?.text || '', snap })
+          .then(item => sl?.done(item));
       });
-      Promise.all(queued.map(q => Promise.resolve(q).catch(() => {}))).then(() => { recDone(nid); unhold(); });
-      txPill('↻', 'Saved · sends when Wizard is back', 'agent', 'Couldn’t reach Wizard · recording saved, will send'); txHide(2600);
+      await Promise.all(queued.map(q => Promise.resolve(q).catch(e => OUTBOX.transition(snap.custodyId, 'failed', String(e.message || e)))));
+      releaseNative(); unhold();
+      txPill('↻', 'Waiting to send · recording kept', 'agent', 'Couldn’t reach Wizard · retrying'); txHide(2600);
     }
   }
   // The tap that starts recording must not also press an arc button: the arc fans out
@@ -2724,17 +2765,16 @@
       (s => s ? `Visible on screen: ${s}` : '')(window.WizScreen?.read(winEl(v.id)) || ''),
       'Treat the message as feedback on that page; "this", "here" and "it" mean that page.'].filter(Boolean).join(' ');
   }
-  function sendReview(v, text, audio, files = [], route = null) {
+  function sendReview(v, text, audio, files = [], route = null, custodyId = null) {
     const wid = reviewSink(v); if (!wid) return false;
     window.__ovLog = (window.__ovLog || []).concat('review-send:' + v.thread).slice(-30);
-    sendChat(wid, text, 'voice, aimed at the page under review', audio, { sid: v.thread, route, files, instructions: reviewContext(v), away: true });
-    return true;
+    return sendChat(wid, text, 'voice, aimed at the page under review', audio, { custodyId, sid: v.thread, route, files, instructions: reviewContext(v), away: true });
   }
   function deliverToView(v, text, snap) {
-    if (v.review) return sendReview(v, text, null, [], snap?.route);
+    if (v.review) return sendReview(v, text, snap?.audio || null, [], snap?.route, snap?.custodyId);
     const w = W[v.id]; if (!w) return false;
     // The thread that was open when James sent, even if the window shows another one by now.
-    if (w.app === 'chats' && (v.thread || w.thread)) { sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); return true; }
+    if (w.app === 'chats' && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
     if (w.app === 'frame') {
       try { const f = winEl(v.id).querySelector('iframe'); f.contentWindow.postMessage({ type: 'wizard-os:voice', text }, location.origin); return true; } catch (e) { return false; }
     }
@@ -2839,7 +2879,7 @@
       if (kind === 'command' && !typed) { const lc = localParse(text, snap, kind); if (lc) { showRouted('command', `Command · on-device${sttNote}`); return finishCmd(lc, text, opts); } return holdNoMatch(text, opts); }
       const files = typed ? [] : takeFiles(), seal = typed ? null : snap.seal || null;
       setVoice('idle'); txPill('✦', `To ${v.agentLabel}${v.thread && v.thread !== '__new__' ? ' · this thread' : ' · new chat'}${sttNote}`, 'agent'); txHide(1400);
-      return sendChat(v.id, text, `voice, in ${v.agentLabel}’s chats`, null, { sid: v.thread || '__new__', route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, `voice, in ${v.agentLabel}’s chats`, snap) });
+      return sendChat(v.id, text, `voice, in ${v.agentLabel}’s chats`, snap.audio || null, { custodyId: snap.custodyId, sid: v.thread || '__new__', route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, `voice, in ${v.agentLabel}’s chats`, snap) });
     }
     // Attached files mean "look at this": skip command routing and send words + files together. So do words,
     // photos or files waiting in the thread's composer (snap.seal): one message, never a command.
@@ -2848,10 +2888,10 @@
     if (files.length || seal) {
       const nf = files.length + (seal ? seal.files.length : 0);
       const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : ''].filter(Boolean).join(' + ');
-      if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback sent with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, null, files, snap.route); }
-      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Sent with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+      if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback waiting to send with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, snap.audio || null, files, snap.route, snap.custodyId); }
+      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Waiting to send with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', snap.audio || null, { custodyId: snap.custodyId, sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
       const all = [...files, ...(seal ? seal.files : [])].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
-      return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all }).then(() => seal?.done(), e => { seal?.putBack(); throw e; });
+      return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all }).then(item => { seal?.done(item); return item; });
     }
     const t0 = performance.now();
     const loc = localParse(text, snap, kind);
@@ -2861,7 +2901,7 @@
       return finishCmd(loc, text, opts);
     }
     // A capturing view takes a tap utterance as-is.
-    if (kind !== 'command' && v?.mode === 'capture' && target == null) return toView(v, text, `To ${v.name}${sttNote}`);
+    if (kind !== 'command' && v?.mode === 'capture' && target == null) return toView(v, text, `To ${v.name}${sttNote}`, snap);
     // An open thread owns what James says: unless it is a phone command (or aimed at another desk), it goes
     // into that thread (steering the live run), never a new thread. New threads start from the list or New chat.
     const intoThread = kind !== 'command' && target == null && (v?.kind === 'chat thread' || v?.review);
@@ -2884,7 +2924,7 @@
       if (c.route === 'command') {
         showRouted('command', `Command · DeepSeek Flash · ${j.ms} ms${sttNote}`);
         const ran = finishCmd(c, text, opts);
-        if (c.then_agent) setTimeout(() => toAgent(String(c.then_agent), `Opened ${c.app || 'app'} · follow-up to ${window.WizConfig.agent()}`, opts), 1500);
+        if (c.then_agent) { await new Promise(resolve => setTimeout(resolve, 1500)); return toAgent(String(c.then_agent), `Opened ${c.app || 'app'} · follow-up to ${window.WizConfig.agent()}`, opts); }
         return ran;
       }
       return toAgentOrThread(`To ${window.WizConfig.agent()} · routed in ${j.ms} ms${sttNote}`);
@@ -2909,7 +2949,7 @@
   }
   function showRouted(kind, label) {
     if (isPill()) {
-      const short = kind === 'agent' ? (/^Saved/.test(label) ? 'Saved · sends when Wizard is back' : `Sent to ${window.WizConfig.agent()}`)
+      const short = kind === 'agent' ? 'Waiting to send'
         : kind === 'view' ? 'Sent ' + label.split(' · ')[0].replace(/^To /, 'to ')
         : ($('#txText').textContent || 'Done');
       return txPill(kind === 'command' ? '⚡' : kind === 'view' ? '◧' : '✦', short, kind, label);
@@ -2923,14 +2963,16 @@
     if (!ok) { $('#txRouteText').textContent += ' · no match'; }
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
     txHide(ok ? (isPill() ? 1200 : 1300) : 3200);
+    return { outcome: ok ? 'local' : 'unhandled' };
   }
-  function toView(v, text, label, snap) {
+  async function toView(v, text, label, snap) {
     showRouted('view', label); setVoice('done'); vib([8, 40, 8]);
-    const ok = deliverToView(v, text, snap);
+    const ok = await deliverToView(v, text, snap);
     if (!ok) return toAgent(text, `${v.name} didn’t take it · sent to ${window.WizConfig.agent()}`, { snap });
     if (!v.thread || W[v.id]?.thread === v.thread) focusWin(v.id); // never pull James back from where he went since
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
     txHide(isPill() ? 1200 : 1500);
+    return ok === true ? { outcome: 'local' } : ok;
   }
   function execute(c, text, opts = {}) {
     const a = String(c.action || '').toLowerCase();
@@ -2993,8 +3035,9 @@
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice', opts.snap);
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    await OUTBOX.enqueue({ kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
+    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [] });
     renderMoons(); refreshHome(); renderDots();
+    return item;
   }
   OUTBOX?.onSent((it, res) => {
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {

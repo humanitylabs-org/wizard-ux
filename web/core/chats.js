@@ -243,7 +243,11 @@ window.WizCore.chats = function createChats(H) {
     const name = it => { const s = it.kind === 'reply' && it.sessionId ? LIVE.session(it.sessionId) : null; return s?.title || (it.kind === 'new' ? 'New chat' : 'thread'); };
     const open = one && one.kind === 'reply' && one.sessionId ? ` data-chopen="${esc(one.sessionId)}"` : '';
     let cls = '', label, btns = '';
-    if (failed.length) {
+    if (items.some(it => it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id))) {
+      cls = ' fail'; label = 'Could not confirm · originals kept';
+    } else if (items.every(it => it.state === 'held')) {
+      label = 'Kept on this device · not queued';
+    } else if (failed.length) {
       cls = ' fail';
       label = one ? `Not sent · ${esc(clip(name(one), 34))}` : `${failed.length} not sent`;
       btns = one ? `<button type="button" class="pbtn" data-obretry="${esc(one.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(one.id)}">Edit</button>`
@@ -255,7 +259,7 @@ window.WizCore.chats = function createChats(H) {
     } else {
       label = one ? `Sending · ${esc(clip(name(one), 34))}` : `Sending ${items.length} messages`;
     }
-    const spin = failed.length ? '' : '<i class="dots"><b></b><b></b><b></b></i>';
+    const spin = failed.length || items.some(it => ['unconfirmed', 'held'].includes(it.state) || OUTBOX?.quarantined(it.id)) ? '' : '<i class="dots"><b></b><b></b><b></b></i>';
     return `<div class="ch-pill${cls}" data-sendpill="${items.length}" role="status"><span class="pl"${open}>${spin}<span>${label}</span></span>${btns}</div>`;
   }
   // Rotate one storage write: the live new-chat slot → a saved slot, the chosen saved slot → the live one.
@@ -345,7 +349,7 @@ window.WizCore.chats = function createChats(H) {
     const outNew = OUTBOX ? OUTBOX.unsent().filter(it => (it.agent || '') === AGID && (it.kind === 'new' || it.kind === 'reply') && !(it.state === 'failed' && (it.audio || it.audioFile)) && (!n || norm(it.text).includes(n))) : [];
     // A message still leaving the phone already shows as its thread's "Sending…" row in Working; the pill is only
     // for trouble (offline / not sent) or a thread that isn't in the list.
-    const pill = sendPill(outNew.filter(it => it.state === 'failed' || it.state === 'waiting' || !LIVE.session(it.sessionId)), w);
+    const pill = sendPill(outNew.filter(it => ['failed', 'waiting', 'unconfirmed'].includes(it.state) || OUTBOX?.quarantined(it.id) || !LIVE.session(it.sessionId)), w);
     if (false) {}
     else if (!LST.ok) body = draftSec + `<div class="ch-empty">${LST.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : AGID ? (LST.error ? `Can’t reach ${esc(agentName(AGID))} · open Agents to check it is running` : `Connecting to ${esc(agentName(AGID))}…`) : 'Connecting to Wizard…'}</div>`;
     else if (AGID && !all.length && !n && !filtered) body = `<div class="ch-empty"><b>No chats with ${esc(agentName(AGID))} yet</b><br>Tap + to start one. ${agentRec(AGID).privacy === 'private' ? 'They stay with this agent: the main agent can’t search or read them.' : 'They stay in this agent’s chats.'}</div>`;
@@ -939,6 +943,9 @@ window.WizCore.chats = function createChats(H) {
     return OUTBOX.forThread(w.thread === '__new__' ? '' : w.thread, w.thread === '__new__' ? w.id : '');
   }
   function pendingState(p) {
+    if (OUTBOX?.quarantined(p.id)) return '<span class="pst wait">Waiting for device storage verification · not sending</span>';
+    if (p.state === 'unconfirmed') return `<span class="pst fail">${esc(p.error)}</span>`;
+    if (p.state === 'held') return '<span class="pst">Kept on this device · not queued</span>';
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`;
     if (p.state === 'waiting') return `<span class="pst wait">${esc(p.error || 'Couldn’t reach Wizard')} · retrying</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>`;
     const agent = esc(window.WizConfig.agent());
@@ -993,19 +1000,7 @@ window.WizCore.chats = function createChats(H) {
           || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
         let gone = false;
         for (const p of sent) if (landed(p)) { OUTBOX.landed(p.id); gone = true; }
-        // The run settled and the steer never reached the transcript: Hermes ended the turn before reading
-        // it and returned it as pending_steer for the client to replay. Two settled polls, then replay it
-        // as an ordinary message so it is never silently dropped.
-        const sNow = LIVE.session(w.thread), settled = !!sNow && !WORKING_ST.has(sNow.status) && sNow.status !== 'waiting_for_approval';
-        for (const p of sent) {
-          if (!p.steered || p.steerQueued || landed(p)) continue;
-          if (!settled) { p.settledPolls = 0; continue; }
-          p.settledPolls = (p.settledPolls || 0) + 1; gone = true;
-          if (p.settledPolls < 2 || p.replayed) continue;
-          p.replayed = true; OUTBOX.landed(p.id);
-          OUTBOX.enqueue({ kind: 'reply', sessionId: p.sessionId, text: p.text, files: (p.files || []).filter(f => f !== p.audioFile), wid: p.wid, source: p.source });
-          H.toast('↻', `${window.WizConfig.agent()} finished before reading your steer · sent it as a new message`, 2600);
-        }
+        // Transcript absence is not a rejection receipt. Never replay accepted steering.
         if (gone) changed = true;
       }
       if (await loadApproval(w, LIVE.session(sid))) changed = true;
@@ -1089,19 +1084,22 @@ window.WizCore.chats = function createChats(H) {
       refreshCompose(wid);
     }
     KIT.drafts.set(dkey, '', rest);
-    const skey = SEALED + sid + ':' + Date.now().toString(36);
+    const skey = SEALED + sid + ':' + crypto.randomUUID().replaceAll('-', '');
     KIT.drafts.set(skey, text, files);
     let open = true;
-    return { text, files,
-      done() { if (open) { open = false; KIT.drafts.clear(skey); } },
+    return { text, files, key: skey,
+      done(it) { if (it && !it.durable) return; if (open) { open = false; KIT.drafts.clear(skey); } },
       putBack() { if (!open) return; open = false; KIT.drafts.clear(skey); restoreInto(wid, sid, text, files); } };
   }
   // At start: words taken by a voice send that never reached the outbox (the page died mid-send) go back.
+  const startupSeals = new Set(Object.keys(KIT.drafts.all()).filter(k => k.startsWith(SEALED)));
   function restoreSealed() {
+    if (!OUTBOX?.recoveryComplete) return;
     for (const k of Object.keys(KIT.drafts.all())) {
-      if (!k.startsWith(SEALED)) continue;
+      if (!startupSeals.has(k)) continue;
+      startupSeals.delete(k);
       const d = KIT.drafts.get(k), sid = k.slice(SEALED.length).replace(/:[a-z0-9]+$/, '');
-      KIT.drafts.clear(k); if (sid) restoreInto('', sid, d.text, d.files);
+      KIT.drafts.clear(k); if (sid && !OUTBOX.ownsSeal(k)) restoreInto('', sid, d.text, d.files);
     }
   }
   // Typed words first, then what was said (legacy order: the pasted link is the context the voice talks about).
@@ -1151,7 +1149,7 @@ window.WizCore.chats = function createChats(H) {
     // Saved on the phone; the outbox delivers it (and retries) from here.
     let it;
     try {
-      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
+      it = await OUTBOX.enqueue({ captureId: opts.captureId, custodyId: opts.custodyId, sealKey: sealed?.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
         instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
     } catch (e) {
       // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
@@ -1164,7 +1162,7 @@ window.WizCore.chats = function createChats(H) {
       toast('!', 'Couldn’t save that message · your words are back in the thread', 3200);
       return null;
     }
-    sealed?.done();
+    sealed?.done(it);
     if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     return it;
   }
@@ -1344,6 +1342,8 @@ window.WizCore.chats = function createChats(H) {
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
   OUTBOX?.onChange(() => {
+    restoreSealed();
+    for (const it of OUTBOX._items.values()) if (it.durable && it.sealKey) KIT.drafts.clear(it.sealKey);
     const sig = OUTBOX.unsent().filter(it => it.kind === 'new' || it.kind === 'reply').map(it => it.id + ':' + it.state + ':' + (it.error || '')).join(',');
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }

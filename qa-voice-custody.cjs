@@ -1,0 +1,198 @@
+// Fault injection for the shipped outbox in a real browser; never contacts Wizard.
+// Thales only. Each case owns an isolated browser context and fixture upload/run ledger.
+const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const fs = require('fs'), path = require('path'), crypto = require('crypto');
+const ROOT = process.env.QA_WEB_DIR || __dirname;
+const OUT = process.env.QA_OUT || path.join(ROOT, 'qa-live', 'voice-custody');
+const origin = 'http://127.0.0.1:9736';
+let pass=0, fail=0, browser; const results=[];
+const ok=(condition,name,detail='')=>{results.push({name,passed:!!condition,detail}); console.log(condition?'PASS':'FAIL',name,detail); condition?pass++:fail++;};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha256').update(Buffer.from(audio)).digest('hex');
+(async()=>{
+  fs.mkdirSync(OUT,{recursive:true});
+  const engine=process.env.QA_ENGINE==='webkit'?webkit:chromium;
+  browser=await engine.launch({...(process.env.QA_ENGINE==='webkit'?{}:{executablePath:process.env.CHROMIUM}),headless:true});
+  async function fixture(fault='none') {
+    const ctx=await browser.newContext({viewport:{width:412,height:892},hasTouch:true});
+    const W={down:true, sttDown:false, events:[],uploads:[],runs:new Map(),calls:[],drop:false,badReceipt:false,empty:false};
+    await ctx.addInitScript(({fault})=>{
+      window.__fault={idb:fault==='put'||fault==='all',open:fault==='open',ls:fault==='all',route:false,remove:false};
+      const put=IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put=function(...args){if(window.__fault.idb)throw new DOMException('Injected quota','QuotaExceededError');return put.apply(this,args);};
+      const open=indexedDB.open.bind(indexedDB);
+      indexedDB.open=(...args)=>{if(window.__fault.open)throw new DOMException('Injected unavailable','SecurityError');return open(...args);};
+      const set=Storage.prototype.setItem;
+      Storage.prototype.setItem=function(...args){if(window.__fault.ls)throw new DOMException('Injected quota','QuotaExceededError');return set.apply(this,args);};
+      const remove=Storage.prototype.removeItem; Storage.prototype.removeItem=function(...args){if(window.__fault.remove)throw new DOMException('Injected removal failure','SecurityError');return remove.apply(this,args);};
+      window.WosModels={snapshot:(sid,route)=>route||{model:'fixture-model',provider:'fixture-provider'},resolveRoute:async s=>{if(window.__fault.route)await new Promise(()=>{});return s;},matchesRuntime:()=>true};
+      window.WizConfig={voicePrompt:()=>'',transcribe:async blob=>{const r=await fetch('/stt',{method:'POST',body:blob});if(!r.ok)throw new Error('STT down');return r.json();}};
+    },{fault});
+    await ctx.route('**/*',async route=>{
+      const q=route.request(),u=new URL(q.url());
+      if(u.origin!==origin)throw new Error('QA egress rejected: '+u.origin);
+      if(u.pathname==='/')return route.fulfill({contentType:'text/html',body:'<!doctype html><html><head><link rel="stylesheet" href="/chats.css"></head><body style="background:#141124;color:white"><form class="ch-compose"><textarea aria-label="Message"></textarea></form><div id="voice"></div><script src="/outbox.js"></script></body></html>'});
+      if(u.pathname==='/outbox.js')return route.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(ROOT,'web/outbox.js'))});
+      if(u.pathname==='/chats.css')return route.fulfill({contentType:'text/css',body:fs.readFileSync(path.join(ROOT,'web/core/chats.css'))});
+      if(u.pathname==='/stt'){W.events.push('stt');return W.sttDown?route.abort('connectionrefused'):route.fulfill({json:{text:W.empty?'':'Original recorded words'}});}
+      if(q.method()==='POST'){
+        if(W.down)return route.abort('connectionrefused');
+        if(u.pathname==='/wizard/files/upload'){
+          W.events.push('upload');const bytes=q.postDataBuffer(); W.uploads.push({bytes:bytes.length,hash:crypto.createHash('sha256').update(bytes).digest('hex')});
+          return route.fulfill({status:201,json:{file:{id:'voice-'+W.uploads.length,bytes:bytes.length,mime:'audio/webm'}}});
+        }
+        if(u.pathname==='/wizard/hermes/api/sessions')return route.fulfill({status:201,json:{}});
+        if(u.pathname==='/wizard/hermes/v1/runs'){
+          const key=q.headers()['idempotency-key'],body=q.postData();W.calls.push({key,body});
+          if(W.runs.has(key)&&W.runs.get(key).body!==body)return route.fulfill({status:409,json:{error:'idempotency key conflict'}});
+          if(!W.runs.has(key))W.runs.set(key,{body,runId:'run-'+W.runs.size});
+          if(W.drop){W.drop=false;return route.abort('connectionreset');}
+          if(W.badReceipt){W.badReceipt=false;return route.fulfill({status:202,body:'{broken',contentType:'application/json'});}
+          return route.fulfill({status:202,json:{run_id:W.runs.get(key).runId,status:'queued'}});
+        }
+        throw new Error('Unexpected write '+u.pathname);
+      }
+      return route.fulfill({status:404,body:''});
+    });
+    const page=await ctx.newPage();await page.goto(origin);await page.evaluate(()=>WosOutbox.load());
+    const add=(extras={})=>page.evaluate(async({audio,extras})=>{
+      const blob=new Blob([new Uint8Array(audio)],{type:'audio/webm'});
+      const it=await WosOutbox.enqueue({kind:'reply',sessionId:'thread-original',model:'model-original',provider:'provider-original',audio:blob,text:'',typed:'Typed context',source:'chat',...extras});return it.id;
+    },{audio,extras});
+    const row=id=>page.evaluate(id=>{const x=WosOutbox.get(id);return x&&{id:x.id,state:x.state,durable:x.durable,audio:x.audio?.size,audioFile:x.audioFile,files:x.files,body:x.body,model:x.model,provider:x.provider,sessionId:x.sessionId,storageError:x.storageError,attempts:x.attempts,error:x.error};},id);
+    const retry=async id=>{await page.evaluate(id=>WosOutbox.retry(id),id);await sleep(300);};
+    const wait=async(id,state)=>{await page.waitForFunction(({id,state})=>WosOutbox.get(id)?.state===state,{id,state},{timeout:10000});};
+    return{ctx,page,W,add,row,retry,wait};
+  }
+  for(const fault of ['put','open']){
+    const f=await fixture(fault),id=await f.add();await sleep(350);
+    ok((await f.row(id)).audio===audio.length,`${fault}: original Blob retained after failed device save`);
+    ok(!!await f.page.locator('.ch-compose [data-custody-notice]').count(),`${fault}: calm persistent composer warning`);
+    await f.page.screenshot({path:path.join(OUT,fault+'-warning.png')});
+    await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());await sleep(250);
+    const row=await f.row(id);
+    ok(row?.audio===audio.length,`${fault}: full recording and typed context survive reload`);
+    if(row?.audio){
+      if(fault==='open'){
+        f.W.down=false;await f.retry(id);
+        ok(f.W.runs.size===0&&await f.page.evaluate(id=>WosOutbox.quarantined(id),id),'unavailable primary: recovered fallback is quarantined, not replayed');
+        await f.page.evaluate(async()=>{__fault.open=false;await WosOutbox.load();});
+      }
+      f.W.down=false;await f.retry(id);await f.wait(id,'sent');
+      ok(f.W.uploads.every(u=>u.hash===hash&&u.bytes===audio.length),`${fault}: exact original bytes confirmed by upload receipt`);
+      const runs=[...f.W.runs.values()];ok(runs.length===1&&JSON.parse(runs[0].body).session_id==='thread-original'&&JSON.parse(runs[0].body).model==='model-original'&&JSON.parse(runs[0].body).provider==='provider-original',`${fault}: same destination/model/provider, one run`);
+      ok(!(await f.row(id)).audio,`${fault}: audio released only after server receipts`);
+    } else ok(false,`${fault}: delivery after reload unavailable`);
+    await f.ctx.close();
+  }
+  {
+    const f=await fixture('all'),id=await f.add();await sleep(300);
+    const r=await f.row(id);ok(r.audio===audio.length&&!r.durable,'both stores fail: retains full RAM Blob and explicitly non-durable');
+    ok(/keep wizard open/i.test(await f.page.locator('.ch-compose').textContent()),'both stores fail: persistent keep-open notice');
+    const guarded=await f.page.evaluate(()=>{const e=new Event('beforeunload',{cancelable:true});dispatchEvent(e);return e.defaultPrevented;});
+    ok(guarded,'both stores fail: navigation/reload warning');
+    for(let k=0;k<8;k++){await f.page.evaluate(()=>{for(const it of WosOutbox._items.values())if(it.state==='waiting')it.nextAt=0;WosOutbox.pump();});await sleep(100);}
+    const after=await f.row(id);ok(after.state==='waiting'&&after.attempts>=6&&after.audio===audio.length,'both stores fail: retry budget never abandons RAM audio');
+    f.W.down=false;f.W.sttDown=true;f.W.events=[];await f.retry(id);
+    ok(f.W.events[0]==='upload'&&f.W.uploads[0]?.hash===hash,'both stores fail: upload-first protects original bytes before STT');
+    ok((await f.row(id)).audio===audio.length,'STT failure after upload: keeps original Blob until admission');
+    await f.page.evaluate(()=>{window.__fault.idb=false;window.__fault.ls=false;WosOutbox.pump();});await sleep(200);
+    ok((await f.row(id)).durable&&!await f.page.locator('[data-custody-notice]').count(),'storage returns: full item becomes durable and notice clears');
+    await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());await sleep(250);
+    ok((await f.row(id))?.audio===audio.length,'storage returns: original audio survives restart');
+    f.W.sttDown=false;await f.retry(id);await f.wait(id,'sent');ok(f.W.runs.size===1,'storage returns: one admitted run');await f.ctx.close();
+  }
+  for(const fault of ['none','put']){
+    const f=await fixture(fault);f.W.down=false;f.W.drop=true;
+    const id=await f.add();await sleep(400);const frozen=await f.row(id);
+    ok(frozen.state==='waiting'&&frozen.audio===audio.length&&!!frozen.body,`${fault}: lost accepted response keeps Blob and exact frozen body`);
+    await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());await sleep(250);
+    await f.retry(id);await f.wait(id,'sent');
+    ok(f.W.runs.size===1&&f.W.calls.length>=2&&f.W.calls.every(c=>c.key===id&&c.body===frozen.body),`${fault}: lost response + kill/reload reconciles to exactly one run`);
+    ok(f.W.uploads.length===1,`${fault}: persisted upload receipt reused after restart`);await f.ctx.close();
+  }
+  {
+    const f=await fixture();f.W.down=false;f.W.badReceipt=true;const id=await f.add();await sleep(350);
+    ok((await f.row(id)).state==='waiting'&&(await f.row(id)).audio===audio.length,'malformed sent response is uncertain, never counted sent');
+    await f.retry(id);await f.wait(id,'sent');ok(f.W.runs.size===1,'malformed response reconciles without duplicate');await f.ctx.close();
+  }
+  {
+    const f=await fixture(); const id=await f.add();await sleep(200);
+    await f.page.close(); const p=await f.ctx.newPage();f.page=p;await p.goto(origin);await p.evaluate(()=>WosOutbox.load());await sleep(150);
+    ok(await p.evaluate(id=>WosOutbox.get(id)?.audio?.size===8192,id),'kill tab mid-upload: original persisted audio recovered');
+    f.W.down=false;await p.evaluate(id=>WosOutbox.retry(id),id);await p.waitForFunction(id=>WosOutbox.get(id)?.state==='sent',id);
+    ok(f.W.runs.size===1,'kill tab mid-upload: exactly one run after recovery');await f.ctx.close();
+  }
+  {
+    const f=await fixture();const id=await f.page.evaluate(async audio=>{const it=await WosOutbox.stage({kind:'reply',sessionId:'pinned-thread',model:'pinned-model',provider:'pinned-provider',audio:new Blob([new Uint8Array(audio)],{type:'audio/webm'})});return it.id;},audio).catch(()=>null);
+    ok(!!id,'pre-transcription stage owns audio before a network wait');
+    if(id){await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());
+      ok((await f.row(id))?.state==='failed'&&(await f.row(id))?.audio===audio.length,'restart during pre-send STT: visible retained recording, original destination');
+      f.W.down=false;await f.retry(id);await f.wait(id,'sent');const body=JSON.parse([...f.W.runs.values()][0].body);
+      ok(body.session_id==='pinned-thread'&&body.model==='pinned-model'&&body.provider==='pinned-provider','pre-send recovery keeps sealed route');}
+    await f.ctx.close();
+  }
+  {
+    const f=await fixture();f.W.down=false;f.W.empty=true;
+    const id=await f.add({typed:''});await sleep(400);
+    await f.page.evaluate(id=>{const it=WosOutbox.get(id);it.createdAt=Date.now()-120000;WosOutbox.pump();},id);await sleep(200);
+    ok((await f.row(id))?.audio===audio.length,'empty transcript: original recording remains recoverable, never expiry-deleted');
+    ok(f.W.runs.size===0,'empty transcript: no empty agent run');await f.ctx.close();
+  }
+  // Regression: a failed fallback deletion must not erase the durable tombstone.
+  {
+    const f=await fixture('put'),id=await f.add();await sleep(300);
+    await f.page.evaluate(async id=>{window.__fault.idb=false;window.__fault.remove=true;await WosOutbox.remove(id);},id);
+    await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());f.W.down=false;
+    await f.page.evaluate(()=>{dispatchEvent(new Event('online'));WosOutbox.pump();});await sleep(350);
+    ok(f.W.runs.size===0&&!await f.page.evaluate(id=>WosOutbox.unsent().some(x=>x.id===id),id),'dismissed fallback cannot resurrect after restart');await f.ctx.close();
+  }
+  // Regression: startup storage failure is retryable even with no visible RAM items.
+  {
+    const f=await fixture(),id=await f.page.evaluate(async()=>{const x=await WosOutbox.stage({text:'old hidden',model:'m',provider:'p'});return x.id;});
+    await f.ctx.addInitScript(()=>{window.__fault.open=true;});
+    await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());
+    ok(!await f.row(id),'startup failure fixture hides old IDB row');
+    await f.page.evaluate(async()=>{window.__fault.open=false;await WosOutbox.pump();});
+    ok(!!await f.row(id),'storage returns: discovers old submissions without reloading again');await f.ctx.close();
+  }
+  // Regression: terminal no-speech/local handling states persist, never online-autosend.
+  for (const state of ['empty','held','failed']) {
+    const f=await fixture(),id=await f.page.evaluate(async state=>{const x=await WosOutbox.stage({text:'must not automatically send',model:'m',provider:'p'});await WosOutbox.transition(x.id,state,'retained intentionally');return x.id;},state);
+    await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());f.W.down=false;
+    await f.page.evaluate(()=>dispatchEvent(new Event('online')));await sleep(200);
+    ok((await f.row(id)).state===state&&f.W.runs.size===0,`${state}: persisted state survives reload + online without sending`);await f.ctx.close();
+  }
+  // A transcriber that never settles (even ignoring abort) cannot hold the serial queue forever.
+  {
+    const f=await fixture();f.W.down=false;
+    await f.page.evaluate(()=>{window.WizConfig.transcribe=()=>new Promise(()=>{});const st=setTimeout;window.setTimeout=(fn,ms,...args)=>st(fn,ms===45000?80:ms,...args);});
+    const id=await f.add();const other=await f.add({text:'independent typed message',audio:null});
+    await f.wait(other,'sent');
+    ok((await f.row(id)).state==='waiting'&&f.W.runs.size===1,'STT deadline frees queue for the next message');
+    ok(f.W.uploads[0]?.hash===hash,'hung STT: original bytes uploaded first');await f.ctx.close();
+  }
+  // Agent-private routing is part of the frozen submission, including a staged phone handoff.
+  {
+    const f=await fixture();f.W.down=false;
+    const id=await f.page.evaluate(async()=>{
+      WosModels.snapshot=(sid,route,agent)=>({...route,agent});
+      WosModels.resolveRoute=async route=>{if(route.agent!=='private-fixture')throw Error('private route lost');return route;};
+      window.WosAgents={isOther:id=>id==='private-fixture'};
+      const x=await WosOutbox.stage({agent:'private-fixture',model:'private-model',provider:'private-provider',text:'private words'});
+      await WosOutbox.enqueue({custodyId:x.id,text:'private words'});return x.id;
+    });await f.wait(id,'sent');
+    const body=JSON.parse(f.W.calls.find(x=>x.key===id)?.body||'{}');
+    ok(body?.agent==='private-fixture'&&body.model==='private-model'&&body.provider==='private-provider','staged private agent keeps its original route');await f.ctx.close();
+  }
+  // Never silently truncate an image to make room for the original audio attachment.
+  {
+    const f=await fixture();f.W.down=false;
+    const files=Array.from({length:8},(_,i)=>({id:'image-'+i,name:'image.png',mime:'image/png',bytes:1}));
+    const id=await f.add({files});await f.wait(id,'failed');
+    const row=await f.row(id);
+    ok(f.W.runs.size===0&&row.files.length===9&&row.audio===audio.length,'attachment overflow keeps all eight images plus original audio, sends nothing');await f.ctx.close();
+  }
+  await browser.close();fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({host:require('os').hostname(),engine:process.env.QA_ENGINE||'chromium',source:crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT,'web/outbox.js'))).digest('hex'),pass,fail,results},null,2));
+  console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;
+})().catch(async e=>{console.error(e);await browser?.close();fs.mkdirSync(OUT,{recursive:true});fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({error:String(e),pass,fail,results},null,2));process.exitCode=2;});
