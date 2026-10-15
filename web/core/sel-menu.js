@@ -2,7 +2,7 @@
  *
  * Long-press words in a chat and Wizard OS shows its own small menu above them instead of Android's
  * Copy / Share / Select all toolbar. The items are chosen in Settings → Text selection menu:
- *   Copy · Share (Android's share sheet, "From Archimedes:" over the words when they are his) · Quote (into this
+ *   Copy · Share (Android's share sheet, "From the configured wizard:" over the words when they are his) · Quote (into this
  *   thread's reply box) · Search (Wizard Search) · Select all (the whole message).
  *
  * Shared in-page browser selection actions; native Android suppression is an optional adapter.
@@ -139,10 +139,9 @@
   async function run(id) {
     const c = cur || current(); if (!c) return hide(true);
     const KIT = window.WosChat || host()?.chat;
-    const agent = window.WizConfig?.agent?.() || 'Archimedes';
     if (id === 'copy') { const ok = await KIT.copyText(c.text); clear(); toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400); return; }
     if (id === 'share') {
-      const r = await KIT.shareText(c.mine ? c.text : `From ${agent}:\n\n${c.text}`); clear();
+      const r = await (c.mine ? KIT.shareText(c.text) : KIT.shareAssistantText(c.text)); clear();
       if (r === 'copied') toast('⧉', 'Copied · sharing isn’t available here', 1800); else if (r === 'failed') toast('!', 'Couldn’t share', 1800);
       return;
     }

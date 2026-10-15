@@ -54,13 +54,22 @@
     net = n; log('net:' + n);
     render();
   }
+  // Browser connectivity is a hint: Android/VPN networks can report offline while
+  // Wizard is reachable. Only a NEW successful read may overrule an offline event;
+  // cached sessions and local optimistic updates are not connectivity evidence.
+  let offlineReadAt = 0;
   function fromLive() {
     const L = LIVE(); if (!L) return;
+    if (L.ok && !L.error && L.at > offlineReadAt) return setNet('online');
     if (navigator.onLine === false) return setNet('offline');
     if (L.error === 'offline') { if (net !== 'offline' || navigator.onLine) setNet('reconnecting'); return; }
-    if (L.ok && !L.error && (net === 'offline' || net === 'reconnecting')) setNet('online');
   }
-  addEventListener('offline', () => setNet('offline'));
+  addEventListener('offline', () => {
+    const L = LIVE(); offlineReadAt = L?.at || 0;
+    setNet('offline');
+    // Verify against Wizard itself, even if the browser never emits 'online'.
+    L?.refresh();
+  });
   addEventListener('online', () => { setNet('reconnecting'); const L = LIVE(); if (L) L.refresh(); else setNet('online'); });
 
   /* ---------- critical issues (legacy attention.ts) ---------- */

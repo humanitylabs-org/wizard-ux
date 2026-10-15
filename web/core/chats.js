@@ -255,7 +255,7 @@ window.WizCore.chats = function createChats(H) {
   // "a little popover, pillbox sort of thing to let me know a message is sending… I don't need all my threads
   // shifted down"). It never takes layout space. Tap opens the reply's thread; Retry/Edit appear only when stuck.
   function sendPill(items, w) {
-    items = items.filter(it => !(it.state === 'empty' && it.threadHidden));
+    items = items.filter(it => !(['empty', 'held'].includes(it.state) && it.threadHidden));
     const c = ch(w.id), ids = items.map(it => it.id).join(',');
     // The moment the last message leaves the phone, flash "Sent" for a beat, then the pill goes (per window).
     if (c.pillIds && !ids && LIVE.ok && c.pillIds.split(',').every(id => OUTBOX?.get(id)?.state === 'sent')) {
@@ -280,6 +280,7 @@ window.WizCore.chats = function createChats(H) {
       btns = one ? `<button type="button" class="pbtn ghost" data-obdismiss="${esc(one.id)}">Dismiss</button>` : '';
     } else if (items.every(it => it.state === 'held')) {
       label = 'Kept on this device · not queued';
+      btns = one ? `<button type="button" class="pbtn ghost" data-obdismiss="${esc(one.id)}">Dismiss</button>` : '';
     } else if (failed.length) {
       cls = ' fail';
       label = one ? `Not sent · ${esc(clip(name(one), 34))}` : `${failed.length} not sent`;
@@ -590,11 +591,20 @@ window.WizCore.chats = function createChats(H) {
     const from = n.from ? `From the \u201c${esc(n.from)}\u201d thread` : 'From another agent thread';
     return `<details class="msg agentnote" data-agentnote><summary><span class="an-ic">\u21aa</span><span class="an-from">${from}</span>${timeTag(n.at)}</summary><div class="an-body">${md(n.text)}</div></details>`;
   }
+  function runContextHtml(later) {
+    const ctx = later.context;
+    const text = value => typeof value === 'string' ? value : '';
+    const title = ctx?.kind === 'cross_thread' ? 'Context received from another thread' : 'Context received for this run';
+    const body = ctx
+      ? `<b class="rc-title">${title}</b>${text(ctx.from) ? `<p class="rc-from">From: <strong>${esc(text(ctx.from))}</strong></p>` : ''}<p class="rc-excerpt">${esc(text(ctx.summary))}</p>${text(ctx.requested_action) ? `<p class="rc-action"><strong>Requested action:</strong> ${esc(text(ctx.requested_action))}</p>` : ''}${text(ctx.original) ? `<details class="rc-original" data-run-original="${esc(later.id || String(later.at))}"><summary>Show original message</summary>${ctx.redacted ? '<p class="rc-disclosure">Private context or sensitive values have been omitted.</p>' : ''}${ctx.original_truncated ? '<p class="rc-disclosure">The original message is shortened here.</p>' : ''}<pre>${esc(text(ctx.original))}</pre></details>` : ''}`
+      : '<p class="rc-unavailable">The message that started this run isn’t available in this history.</p>';
+    return `<section class="msg runcontext" data-run-context><div class="laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(later.at)}</div><div class="rc-body">${body}</div></section>`;
+  }
   function turnHtml(c, tn, last, working, helperStatus) {
     let h = '';
     if (tn.u) h += `<div class="msg u"><div class="bub">${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
-    else if (tn.later) h += `<div class="msg laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(tn.later.at)}</div>`;
+    else if (tn.later) h += runContextHtml(tn.later);
     const live = last && working;
     const steersHtml = (tn.steers || []).map(st => st.note ? noteHtml(st) : `<div class="msg u steer" data-steer><div class="bub">${userMedia(c, st.files || [], [])}${md(st.text)}</div><div class="mmeta"><span class="srcpt">${CHECK_SVG}Read by ${esc(window.WizConfig.agent())}</span>${timeTag(st.at)}</div></div>`).join('');
     const wk = PW ? PW.workHtml(c, tn, live, helperStatus) : null; // the work receipt (chat-work.js #17)
@@ -868,11 +878,13 @@ window.WizCore.chats = function createChats(H) {
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
+    const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
     el.innerHTML = `<div class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       <form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
+    for (const detail of el.querySelectorAll('[data-run-original]')) detail.open = openContexts.has(detail.dataset.runOriginal);
     if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
     const nb = el.querySelector('.ch-msgs');
@@ -982,18 +994,19 @@ window.WizCore.chats = function createChats(H) {
     if (OUTBOX?.quarantined(p.id)) return '<span class="pst wait">Waiting for device storage verification · not sending</span>';
     if (p.state === 'unconfirmed') return `<span class="pst fail">${esc(p.error)}</span>`;
     if (p.state === 'empty') return `<span class="pst fail">No speech detected · recording kept</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry transcription</button><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
-    if (p.state === 'held') return '<span class="pst">Kept on this device · not queued</span>';
+    if (p.state === 'held') return `<span class="pst">Kept on this device · not queued</span><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`;
     if (p.state === 'waiting') return `<span class="pst wait">${esc(p.error || 'Couldn’t reach Wizard')} · retrying</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>`;
     const agent = esc(window.WizConfig.agent());
-    if (p.state === 'sent' && p.steered && p.steerQueued) return `<span class="pst ok">${CHECK_SVG}Added to the queued request</span>`;
-    if (p.state === 'sent' && p.steered) return `<span class="pst ok">${CHECK_SVG}Delivered · ${agent} sees it next step</span>`;
-    if (p.state === 'sent') return '<span class="pst ok">Sent</span>';
+    if (p.state === 'sent') {
+      const label = p.steered ? `${CHECK_SVG}${p.steerQueued ? 'Added to the queued request' : `Delivered · ${agent} sees it next step`}` : 'Sent';
+      return `<span class="pst ok">${label}</span><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
+    }
     return `<span class="pst">${p.steerRunId && !p.attempts ? 'Steering…' : 'Sending…'}</span>`;
   }
   function pendingHtml(p, c) {
     const files = (p.files || []).filter(f => f !== p.audioFile);
-    const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text || p.state === 'empty' ? '' : ' · words come when it sends'}</span></div>` : '';
+    const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text || ['empty', 'held'].includes(p.state) ? '' : ' · words come when it sends'}</span></div>` : '';
     const words = p.text || p.typed || ''; // a voice note not yet transcribed shows the typed words riding with it
     return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}" data-ob="${esc(p.id)}"><div class="bub">${voice}${userMedia(c || { media: [] }, files, [])}${words ? md(words) : ''}</div><div class="pmeta">${pendingState(p)}</div></div>`;
   }
@@ -1263,8 +1276,9 @@ window.WizCore.chats = function createChats(H) {
       return true;
     }
     const dismiss = e.target.closest('[data-obdismiss]'); if (dismiss) {
-      Promise.resolve(OUTBOX.dismissEmpty(dismiss.dataset.obdismiss)).then(ok => {
-        H.toast(ok ? '✓' : '!', ok ? 'Bubble dismissed · recording kept in Unsent messages' : 'Could not save dismissal · recording kept', 2400);
+      const sent = OUTBOX.get(dismiss.dataset.obdismiss)?.state === 'sent';
+      Promise.resolve(OUTBOX.dismissBubble(dismiss.dataset.obdismiss)).then(ok => {
+        H.toast(ok ? '✓' : '!', ok ? (sent ? 'Sent bubble dismissed · message stays in this chat' : 'Bubble dismissed · recording kept in Unsent messages') : 'Could not save dismissal · original kept', 2400);
       }); return true;
     }
     const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); H.toast('↻', 'Sending again', 1400); return true; }
@@ -1330,16 +1344,16 @@ window.WizCore.chats = function createChats(H) {
     const qs = e.target.closest('[data-quoteshare]');
     if (qs) {
       const text = qs.closest('blockquote[data-quote-source]')?.dataset.quoteSource || '';
-      KIT.shareText(text).then(r => {
+      (qs.closest('.msg.u') ? KIT.shareText(text) : KIT.shareAssistantText(text)).then(r => {
         if (r === 'copied') toast('⧉', 'Copied · sharing isn’t available here', 1800);
         else if (r === 'unsupported' || r === 'failed') toast('!', 'Couldn’t share', 1800);
       }).catch(() => toast('!', 'Couldn’t share', 1800));
       return true;
     }
     const cc = e.target.closest('[data-codecopy]'); if (cc) { const t = cc.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.copyText(t).then(ok => { cc.textContent = ok ? 'Copied' : 'Couldn’t copy'; setTimeout(() => { cc.textContent = 'Copy'; }, 1500); }); return true; }
-    const cs = e.target.closest('[data-codeshare]'); if (cs) { const t = cs.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.shareText(t).then(r => r === 'copied' && toast('⧉', 'Copied · sharing isn’t available here', 1800)); return true; }
+    const cs = e.target.closest('[data-codeshare]'); if (cs) { const t = cs.closest('.code')?.querySelector('pre')?.textContent || ''; (cs.closest('.msg.u') ? KIT.shareText(t) : KIT.shareAssistantText(t)).then(r => r === 'copied' && toast('⧉', 'Copied · sharing isn’t available here', 1800)); return true; }
     const mc = e.target.closest('[data-mcopy]'); if (mc) { const t = ch(id).texts?.[+mc.dataset.mcopy] ?? ''; (KIT.copyRich || KIT.copyText)(t).then(ok => toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400)); return true; }
-    const ms = e.target.closest('[data-mshare]'); if (ms) { const t = ch(id).texts?.[+ms.dataset.mshare] ?? ''; KIT.shareText(`From ${window.WizConfig.agent()}:\n\n${t}`).then(r => r === 'copied' ? toast('⧉', 'Copied · sharing isn’t available here', 1800) : r === 'failed' && toast('!', 'Couldn’t share', 1800)); return true; }
+    const ms = e.target.closest('[data-mshare]'); if (ms) { const t = ch(id).texts?.[+ms.dataset.mshare] ?? ''; KIT.shareAssistantText(t).then(r => r === 'copied' ? toast('⧉', 'Copied · sharing isn’t available here', 1800) : r === 'failed' && toast('!', 'Couldn’t share', 1800)); return true; }
     const v = e.target.closest('.vnote[data-vnote]'); if (v) { e.preventDefault(); toggleVoice(v.dataset.vnote); return true; }
     return false;
   }

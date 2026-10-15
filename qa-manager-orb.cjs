@@ -86,7 +86,8 @@ async function gestureChecks(f,label) {
  ok(label+' general instructions exclude foreground app/private content',!item.instructions?.includes('Manager')&&!item.instructions?.includes('Fixture work'),item.instructions);
  ok(label+' one recorder for complete take',await p.evaluate(()=>__qaRecorder.starts===1&&__qaRecorder.stops===1));
  if(mobile) {
-   await p.locator('#generalVoice').click();await p.waitForFunction(()=>__wos.voice==='listen');await delay(250);await p.evaluate(()=>__wosNativeBack());
+   const again=await p.locator('#orbWrap').boundingBox();await p.mouse.move(again.x+again.width/2,again.y+again.height/2);await p.mouse.down();await p.waitForFunction(()=>__wos.voice==='command');
+   const target=await p.locator('#generalVoice').boundingBox();await p.mouse.move(target.x+target.width/2,target.y+2,{steps:5});await p.mouse.up();await p.waitForFunction(()=>__wos.voice==='listen');await delay(250);await p.evaluate(()=>__wosNativeBack());
    ok('phone Back pauses and retains bypass without exiting',await p.evaluate(()=>__wos.voice==='paused'&&!!document.getElementById('device')));
    await p.evaluate(()=>__wos.cancelVoice());
    await openManager(f); f.R.text='Open apps'; const orb=await p.locator('#orbWrap').boundingBox();await p.mouse.move(orb.x+orb.width/2,orb.y+orb.height/2);await p.mouse.down();await p.waitForFunction(()=>__wos.voice==='command');await delay(700);await p.mouse.up();await delay(1500);

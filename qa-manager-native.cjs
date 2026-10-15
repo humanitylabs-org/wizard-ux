@@ -15,7 +15,7 @@ async function run(browser,mobile){
  const sessions=inventory.data||inventory.sessions||[];
  const selected=sessions.find(s=>s.id&&!['running','queued','waiting_for_approval'].includes(s.status)&&s.message_count>2)||sessions.find(s=>s.id);
  assert(selected,'real canonical ID required'); const sid=selected.id;
- const R={messages:Array.from({length:24},(_,i)=>({id:i+1,role:'assistant',kind:'ready',source_id:sid,title:'QA fixture work '+(i+1),text:'Synthetic catch-up summary. '.repeat(8),created:1700000000+i})),text:'Synthetic QA voice reply'};
+ const R={canonical:[{id:900001,role:'user',content:'Prior fixture question'},{id:900002,role:'assistant',content:'Prior fixture answer'}],audioSeq:0,messages:Array.from({length:24},(_,i)=>({id:i+1,role:'assistant',kind:'ready',source_id:sid,title:'QA fixture work '+(i+1),text:'Synthetic catch-up summary. '.repeat(8),created:1700000000+i})),text:'Synthetic QA voice reply'};
  const json=(r,x,status=200)=>r.fulfill({status,contentType:'application/json',body:JSON.stringify(x)});
  await ctx.route('**/*',async r=>{
   const q=r.request(),u=new URL(q.url());
@@ -23,14 +23,15 @@ async function run(browser,mobile){
    writes.push({path:u.pathname,body:u.pathname==='/wizard/thread-seen'?{intercepted:true}:/json/.test(q.headers()['content-type']||'')?q.postDataJSON():{binary:true,bytes:q.postDataBuffer()?.length||0}});
    if(/\/transcribe$/.test(u.pathname))return json(r,{text:R.text,ms:1});
    if(/\/(?:files|v1)\/uploads$/.test(u.pathname))return json(r,{error:'Synthetic QA uses bounded upload route'},404);
-   if(/\/files\/upload$/.test(u.pathname)){const attachment=q.headers()['x-wizard-filename']==='qa-native.txt';return json(r,{file:attachment?{id:'qa-attachment',filename:'qa-native.txt',mime:'text/plain',bytes:18}:{id:'qa-audio',filename:'qa.webm',mime:'audio/webm',bytes:4096}});}
+   if(/\/files\/upload$/.test(u.pathname)){const attachment=q.headers()['x-wizard-filename']==='qa-native.txt';return json(r,{file:attachment?{id:'qa-attachment',filename:'qa-native.txt',mime:'text/plain',bytes:18}:{id:process.env.QA_SENT_ONLY==='1'?'qa-audio-'+(++R.audioSeq):'qa-audio',filename:'qa.webm',mime:'audio/webm',bytes:4096}});}
    if(/\/v1\/runs$/.test(u.pathname))return json(r,{run_id:'qa-run',status:'queued'},202);
    if(/\/route$/.test(u.pathname))return json(r,{cmd:{route:'agent'},ms:1});
    return json(r,{accepted:true});
   }
+  if(process.env.QA_SENT_ONLY==='1'&&u.pathname===`/wizard/hermes/api/sessions/${sid}/messages`)return json(r,{data:R.canonical,has_more:false});
   if(u.pathname==='/wizard/thread-seen')return json(r,{state:{initializedAt:Date.now(),threads:{}}});
   if(u.pathname==='/wizard-manager/api/state')return json(r,{enabled:true,messages:R.messages.filter(m=>m.id>Number(u.searchParams.get('after')||0)),jobs:[]});
-  for(const [prefix,dir]of[['/wizard-os-home/',ROOT],['/wizard-manager/',MANAGER]])if(u.pathname.startsWith(prefix)&&!u.pathname.slice(prefix.length).startsWith('api/')){
+  for(const [prefix,dir]of[['/wizard-os-home/',ROOT],['/wizard-manager/',MANAGER]])if(dir&&u.pathname.startsWith(prefix)&&!u.pathname.slice(prefix.length).startsWith('api/')){
    const rel=u.pathname.slice(prefix.length)||'index.html',p=path.resolve(dir,'web',rel);
    if(p.startsWith(path.resolve(dir,'web')+path.sep)&&fs.existsSync(p)&&fs.statSync(p).isFile()){served.push(rel);return r.fulfill({status:200,contentType:({'.html':'text/html','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png'})[path.extname(p)]||'application/octet-stream',body:fs.readFileSync(p)});}
   }
@@ -62,6 +63,7 @@ async function run(browser,mobile){
  ok(label+' shared canonical history and standard composer',await p.locator('.hosted-thread [data-chmic]').count()===1&&await p.locator('.hosted-thread .msg').count()>0);
  await delay(1000);ok(label+' covered Manager does not advance read receipts',JSON.stringify(await read())===JSON.stringify(before),{before,after:await read()});
  await p.screenshot({path:path.join(OUT,label+'-native-thread.png')});
+ if(process.env.QA_SENT_ONLY==='1'){await require('./qa-sent-voice.cjs')({p,ctx,mobile,label,sid,wid,R,writes,errors,ok,delay,out:OUT});receipts.push({label,sid,writes,errors,served:[...new Set(served)]});await ctx.close();return;}
  await p.locator('.hosted-thread [data-chattach]').click();
  await p.locator('[data-chfile]').setInputFiles({name:'qa-native.txt',mimeType:'text/plain',buffer:Buffer.from('Synthetic fixture')});
  await p.waitForFunction(()=>document.querySelector('.hosted-thread .ch-compose')?.innerText.includes('qa-native.txt')&&!document.querySelector('.hosted-thread .uploading')).catch(async e=>{console.log('ATTACH FAILURE',JSON.stringify({writes,composer:await p.locator('.hosted-thread .ch-compose').innerText(),files:await p.evaluate(wid=>window.__wux?.chats.ch(wid)?.files,wid)}));throw e;});
