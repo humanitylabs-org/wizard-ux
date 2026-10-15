@@ -84,7 +84,7 @@
   }
   const firstLoad = loadRemote();
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
-  window.WizCore.appsLoaded = () => firstLoad;
+  window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load()]);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
 
   function registry(shell) {
@@ -92,7 +92,21 @@
     const APPS = [], APP = {};
     const rebuild = () => {
       const chats = ALL.findIndex(a => a.kind === 'chats');
-      const merged = [...ALL.slice(0, chats + 1), ...REMOTE.filter(r => !ALL.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
+      const AG = window.WosAgents;
+      // Agent chat views are apps; the Agents management app remains separate. Rebuild fresh
+      // records so rename/delete/privacy changes cannot leave cached names or sigils behind.
+      const agentTile = a => ({
+        id: a.is_default ? 'wizard' : `agent:${a.id}`, kind: 'chats',
+        ...(a.is_default ? {} : { agent: a.id }), name: AG.title(a),
+        icon: AG.glyph(a), g: [AG.colour(a), AG.colour(a)],
+        desc: a.is_default ? 'Chats · Your threads with your main Wizard agent' : `Chats with ${AG.title(a)}`,
+        sgc: AG.colour(a), sgh: window.WizSigil?.html({ icon: AG.glyph(a) }),
+      });
+      const main = AG?.list.find(a => a.is_default);
+      const agents = (AG?.list || []).filter(a => !a.is_default).map(agentTile);
+      const builtins = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...ALL.slice(chats + 1)];
+      // Reserve the agent namespace even after deletion: a stale remote app must never impersonate it.
+      const merged = [...builtins.slice(0, chats + 1 + agents.length), ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
       const list = appsFor(shell, merged);
       // Every app wears its sigil (core/sigils.js): sgc = its one colour, sgh = the glyph markup.
       if (window.WizSigil) for (const a of list) if (!a.sgh) { const s = window.WizSigil.of(a.sigil || a); a.sgc = s.color; a.sgh = window.WizSigil.html(a.sigil || a); }
@@ -102,6 +116,7 @@
       window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
     };
     rebuild(); listeners.add(rebuild);
+    window.WosAgents?.onChange(rebuild);
   function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
       if (!q) return null;

@@ -993,7 +993,7 @@
     }
     if (a.id === 'usuals') { openUsuals(opts); return true; }
     if (a.id === 'maps') { openMaps(extra.query ? 'search' : 'home', extra.query || '', opts); return true; }
-    if (a.kind === 'chats') { placeApp(mainChats, { app: 'chats', thread: null }, opts); return true; }
+    if (a.kind === 'chats') { if (a.agent) return openAgentChats(a.agent); placeApp(mainChats, { app: 'chats', thread: null }, opts); return true; }
     if (a.kind === 'wizard' && a.url && opts.from) {
       // Opened from a link in a thread (James, 12 Oct 2026): Back closes it and lands on that thread again,
       // exactly like any other link. A copy already opened from a link is reused; a normal desk of the app is left alone.
@@ -1819,7 +1819,7 @@
     }
     const n = norm(q);
     // Android apps stay voice-only ("open Maps" still routes); they never clutter the launcher.
-    const hits = APPS.filter(a => a.kind !== 'native').map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
+    const hits = APPS.filter(a => a.kind !== 'native' && a.id !== 'agents').map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
     const th = (LIVE.ok ? LIVE.sessions.filter(x => !x.hidden && norm(x.title).includes(n)) : []).slice(0, 5);
     // Bottom-anchored like the rest of the sheet: the best app match sits right above the search bar, so it stays
     // in sight when the keyboard shrinks the sheet (James, 11 Oct: "searched wisdom and it didn't pop up").
@@ -1837,6 +1837,7 @@
         <span class="acts"><button data-dw="full" data-id="${id}">${full ? 'Tile' : 'Full'}</button>${idx > 0 ? `<button data-dw="left" data-id="${id}" aria-label="Move to desk ${idx}">←</button>` : ''}${idx < desks.length - 1 ? `<button data-dw="right" data-id="${id}" aria-label="Move to desk ${idx + 2}">→</button>` : ''}<button data-dw="close" data-id="${id}" aria-label="Close">✕</button></span></div>`; }).join('');
     return `<div class="deskbar"><div class="dh"><b>${esc(deskName(idx))}</b><span>${d.wins.length} window${d.wins.length === 1 ? '' : 's'}</span></div>${rows}</div>`;
   }
+  window.addEventListener('wizard:apps', () => { if (sheet === 'launcher') renderLauncher($('#search').value, true); });
   $('#search').addEventListener('input', e => renderLauncher(e.target.value));
   $('#searchForm').addEventListener('submit', e => {
     e.preventDefault(); const q = $('#search').value.trim(); if (!q) return;
