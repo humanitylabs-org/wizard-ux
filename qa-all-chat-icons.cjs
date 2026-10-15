@@ -1,6 +1,7 @@
-const {chromium}=require('/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const fs=require('fs'),crypto=require('crypto');
-const base=process.env.QA_URL||'https://all-chat-icons.staging.wizard001.com/wizard-os-home/?open=chats';
+const base=process.env.QA_URL;
+if(!base)throw Error('QA_URL must name an explicitly authorized fixture; no live default');
 const out=process.env.QA_OUT,fixture=JSON.parse(fs.readFileSync(process.env.QA_APPS,'utf8')),hashes=JSON.parse(fs.readFileSync(process.env.QA_HASHES,'utf8'));
 const apps=fixture.apps.filter(a=>a.url&&a.id!=='wizard');apps.push({id:'usuals',name:'Food'});
 const ids=[...new Set(apps.map(a=>a.id))];if(ids.length!==apps.length)throw Error('duplicate app fixture');
