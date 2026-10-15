@@ -154,7 +154,8 @@ async function settled(b,id) { for(let i=0;i<150;i++){const it=b.c.WosOutbox.get
   });
   await check('old already-frozen unpinned request stays unsent',async()=>{
    const it={id:'legacy',kind:'reply',sessionId:'private',state:'queued',createdAt:Date.now(),attempts:0,text:'synthetic old',model:'glm-5-3',provider:'custom:tinfoil-operator',body:JSON.stringify({session_id:'private',input:'synthetic old'})};
-   b.c.WosOutbox._items.set(it.id,it);await b.c.WosOutbox.pump();assert.equal(it.state,'failed');assert.match(it.error,/model lock/);
+   const before=b.bodies.length;b.c.WosOutbox._items.set(it.id,it);b.c.WosOutbox.pump();await settled(b,it.id);
+   assert.equal(it.state,'failed');assert.match(it.error,/Stored route/);assert.equal(b.bodies.length,before);
   });
  } finally {b.close()}
  console.log(`${pass} model-route contracts passed`);

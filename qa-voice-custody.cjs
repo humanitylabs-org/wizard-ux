@@ -97,7 +97,8 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
     f.W.down=false;f.W.sttDown=true;f.W.events=[];await f.retry(id);
     ok(f.W.events[0]==='upload'&&f.W.uploads[0]?.hash===hash,'both stores fail: upload-first protects original bytes before STT');
     ok((await f.row(id)).audio===audio.length,'STT failure after upload: keeps original Blob until admission');
-    await f.page.evaluate(()=>{window.__fault.idb=false;window.__fault.ls=false;WosOutbox.pump();});await sleep(200);
+    await f.page.evaluate(()=>{window.__fault.idb=false;window.__fault.ls=false;WosOutbox.pump();});
+    await f.page.waitForFunction(id=>WosOutbox.get(id)?.durable&&!document.querySelector('[data-custody-notice]'),id,{timeout:5000});
     ok((await f.row(id)).durable&&!await f.page.locator('[data-custody-notice]').count(),'storage returns: full item becomes durable and notice clears');
     await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());await sleep(250);
     ok((await f.row(id))?.audio===audio.length,'storage returns: original audio survives restart');
