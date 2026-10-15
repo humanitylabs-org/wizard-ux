@@ -16,8 +16,9 @@ async function main() {
   for(const k of ['tools_dir','store_dir','env_file','prefix','hermes_home']) if(!isAbsolute(d[k] || '')) throw Error('absolute_deployment_paths_required');
   if(!['systemd-env','container-env','process-env'].includes(d.context) || !Array.isArray(d.restart) || !d.restart.length || !Array.isArray(d.hermes) || !d.hermes.length) throw Error('unsupported_deployment');
   const env={...process.env,HERMES_HOME:d.hermes_home};
-  const skillDir=join(d.prefix,'skills');
-  const oldDirs=jsonOut((await run([...d.hermes,'config','get','skills.external_dirs','--json'],{env})).stdout);
+  const external=d.skill_mode==='external';
+  const skillDir=external?join(d.prefix,'skills'):join(d.hermes_home,'skills');
+  const oldDirs=external?jsonOut((await run([...d.hermes,'config','get','skills.external_dirs','--json'],{env})).stdout):[skillDir];
   if(!Array.isArray(oldDirs)) throw Error('external_skill_dirs_not_array');
   return locked(home,'setup',async()=>{
     const receiptPath=join(home,'setup-receipt.json');
@@ -47,8 +48,13 @@ async function main() {
       const before=existsSync(d.env_file)?readFileSync(d.env_file,'utf8'):'';
       save(d.env_file,before.split('\n').filter(l=>!/^WIZARD_ALPHA_HOME=/.test(l)).join('\n').trimEnd()+`\nWIZARD_ALPHA_HOME=${JSON.stringify(home)}\n`);
       if(!oldDirs.includes(skillDir)) await run([...d.hermes,'config','set','skills.external_dirs',JSON.stringify([...oldDirs,skillDir])],{env});
-      const readback=jsonOut((await run([...d.hermes,'config','get','skills.external_dirs','--json'],{env})).stdout);
-      if(!readback.includes(skillDir)) throw Error('skill_registration_failed');
+      if(external) {
+        const readback=jsonOut((await run([...d.hermes,'config','get','skills.external_dirs','--json'],{env})).stdout);
+        if(!readback.includes(skillDir)) throw Error('skill_registration_failed');
+      } else {
+        const list=await run([...d.hermes,'skills','list'],{env});
+        if(!list.stdout.includes('wizard-alpha')) throw Error('native_skill_discovery_failed');
+      }
       await run(d.restart);
       const u=new URL(d.probe_url); if(u.protocol!=='https:' && !(u.protocol==='http:' && ['127.0.0.1','localhost','[::1]'].includes(u.hostname))) throw Error('private_probe_origin_required');
       const headers=d.probe_headers_file?readJSON(d.probe_headers_file):{};
