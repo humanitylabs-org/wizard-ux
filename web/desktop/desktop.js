@@ -993,6 +993,7 @@
    * otherwise starts a new thread. Audio goes through the durable outbox: transcribed there,
    * kept as a voice note, retried if the network drops. */
   const pill = $('#voicePill'), mic = $('#micBtn');
+  document.body.appendChild(pill); // Fixed capture controls must not be clipped by the narrow toolbar scroller.
   new ResizeObserver(() => document.documentElement.style.setProperty('--voice-h', pill.hidden ? '0px' : Math.ceil(pill.getBoundingClientRect().height + 16) + 'px')).observe(pill);
   let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${CMD}⇧N`, vContext = '', vRoute = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false;
   const VOICE = C.voice({

@@ -252,7 +252,7 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .voice-pill.dict { background: rgba(110, 231, 255, .1); border-color: rgba(110, 231, 255, .35); }
 .voice-pill.dict .rec-dot { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
 
-.voice-pill{flex-wrap:wrap;height:auto;max-width:min(700px,calc(100vw - 24px));padding:8px}.voice-pill #voiceFiles{flex-basis:100%}.bar-c:has(.voice-pill:not([hidden])){position:fixed;top:calc(var(--bar-h) + 8px);left:12px;right:12px;z-index:100;pointer-events:none}.bar-c .voice-pill{pointer-events:auto;background:var(--panel,#171424);border:1px solid var(--line)}.win .desk-scroll{height:100%;overflow:auto;padding:12px}.win .review{padding:10px}.win .review .pinch-hint{display:none}
+.voice-pill{flex-wrap:wrap;height:auto;max-width:min(700px,calc(100vw - 24px));padding:8px}.voice-pill #voiceFiles{flex-basis:100%}#voicePill{position:fixed;top:calc(var(--bar-h) + 8px);left:12px;right:12px;z-index:100;pointer-events:auto;background:var(--panel,#171424);border:1px solid var(--line);-webkit-app-region:no-drag}.win .desk-scroll{height:100%;overflow:auto;padding:12px}.win .review{padding:10px}.win .review .pinch-hint{display:none}
 
 @media(max-width:700px){#bar{display:flex;gap:8px;overflow-x:auto}.bar-l,.bar-r{flex:0 0 auto}.bar-r{margin-left:auto}.bar-c #clock{display:none}.voice-pill{max-width:calc(100vw - 24px);box-sizing:border-box}.voice-pill #voiceText{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 
