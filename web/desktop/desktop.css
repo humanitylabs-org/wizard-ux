@@ -258,3 +258,5 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 
 /* Reserve room for the approved recording controls instead of covering the thread header. */
 .stage{top:calc(var(--bar-h) + var(--voice-h,0px))}.voice-pill{border-radius:18px}.voice-pill .voice-extras{gap:8px}.voice-pill .voice-extras button,.voice-pill #voiceCancel{min-height:40px;padding:8px 12px;border-radius:99px;border:1px solid var(--line-2);background:rgba(205,190,255,.08)}.voice-pill .voice-extras button:disabled{opacity:.45}.voice-pill #voiceCancel{color:var(--pink)}
+
+.desktop-fullscreen #voicePill{top:8px;left:12px;right:12px;transform:none}.desktop-fullscreen .stage{top:var(--voice-h,0px)}
