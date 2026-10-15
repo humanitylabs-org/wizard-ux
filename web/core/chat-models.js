@@ -143,7 +143,23 @@
     },
     // One resolved choice for the chip and every send path. Telegram sessions can have a model
     // but no provider. Complete known metadata before native Send validates/persists the route.
-    currentRoute(sid, choice) {
+    /* Agents MVP: a thread of a non-default agent (or a new chat in that agent's Chats) routes only to that agent's
+     * allowed models on its own provider, and the route names the agent. The server enforces the same list. */
+    agentFor(sid, agent) {
+      const AG = window.WosAgents; if (!AG) return null;
+      const id = agent || (sid && window.WizLive?.agentOf?.(sid)) || '';
+      return id && AG.isOther(id) ? AG.get(id) || { id, missing: true } : null;
+    },
+    agentRoute(a, sid, choice) {
+      if (!a || a.missing) return null;
+      const s = sid && window.WizLive?.session(sid);
+      const AG = window.WosAgents;
+      const want = choice?.model || choice?.value || M.selections.get(sid || '')?.model || s?.model || '';
+      return AG.route(a, want);
+    },
+    currentRoute(sid, choice, agent) {
+      const ag = M.agentFor(sid, agent);
+      if (ag) return M.agentRoute(ag, sid, choice);
       const s = sid && window.WizLive?.session(sid);
       const route = choice?.model ? choice : sid && M.selections.get(sid) || (s?.model ? { model: s.model, provider: s.provider } : M.defaultOption());
       if (!route) return null;
@@ -159,9 +175,11 @@
       }
       return { model, provider };
     },
-    snapshot(sid, choice) {
+    snapshot(sid, choice, agent) {
       if (sid && M.pending.has(sid)) throw new Error('Model change is still saving · send after it finishes');
-      return M.currentRoute(sid, choice);
+      const ag = M.agentFor(sid, agent);
+      if (ag?.missing) throw new Error('Agent unavailable · open Agents and check it is running');
+      return M.currentRoute(sid, choice, agent);
     },
     keepVoiceRoute(id, route) {
       const all = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}');
@@ -192,6 +210,13 @@
       }
     },
     async resolveRoute(snapshot) {
+      // An agent's route is the agent's own provider and model, never the main agent's catalogue.
+      if (snapshot?.agent) {
+        const AG = window.WosAgents, a = AG?.get(snapshot.agent);
+        if (!a) throw new Error('Agent unavailable · open Agents and check it is running');
+        if (!AG.allows(a, snapshot.model)) throw new Error(`${a.label} can’t use that model · pick one of its models`);
+        return { model: snapshot.model, provider: a.model.provider, agent: a.id };
+      }
       if (!M.ready || !snapshot?.provider) await M.load();
       const route = snapshot || M.snapshot('');
       if (!route?.model) throw new Error('Model unavailable · choose a model before sending');
@@ -209,30 +234,36 @@
     setThreadModel(sid, o) {
       if (M.pending.has(sid)) return Promise.reject(new Error('A model change is already saving'));
       const task = (async () => {
-        const route = await M.resolveRoute({ model: o.value, provider: o.provider });
+        const ag = M.agentFor(sid);
+        const route = await M.resolveRoute(ag ? { model: o.value, provider: o.provider, agent: ag.id } : { model: o.value, provider: o.provider });
         const body = { ...route, require_model_lock: true };
-        const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(sid)}/model`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(sid)}/model${ag ? `?agent=${encodeURIComponent(ag.id)}` : ''}`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (!r.ok) throw Object.assign(new Error(`Model not changed (${r.status})`), { status: r.status });
         const ack = await r.json();
-        if (ack.runtime?.model_lock !== 'accepted' || ack.runtime?.model !== route.model || ack.runtime?.provider !== route.provider)
+        // An agent's own Hermes names its provider its own way (e.g. custom); the model is what must match.
+        if (ack.runtime?.model_lock !== 'accepted' || ack.runtime?.model !== route.model || (!ag && ack.runtime?.provider !== route.provider))
           throw new Error('Wizard did not confirm the selected model');
-        M.selections.set(sid, { ...route, version: Number(ack.runtime.selection_version) || 0 });
-        return route;
+        M.selections.set(sid, { model: route.model, provider: route.provider, version: Number(ack.runtime.selection_version) || 0 });
+        return { model: route.model, provider: route.provider };
       })();
       M.pending.set(sid, task);
       return task.finally(() => M.pending.delete(sid));
     },
     /* The picker. mode: 'new' | 'thread' | 'retry'; cur = { model, provider }; all = show the full catalogue. */
-    sheetHtml({ mode, cur, all, title }) {
-      const list = all ? M.options : M.visible(cur?.model || '', cur?.provider || '');
+    sheetHtml({ mode, cur, all, title, agent }) {
+      // An agent's chats: only that agent's allowed models. No "More models": the rest are not this agent's.
+      const own = agent && !agent.missing ? window.WosAgents.modelOptions(agent) : null;
+      const list = own || (all ? M.options : M.visible(cur?.model || '', cur?.provider || ''));
       const isCur = o => cur && o.value === cur.model && (!cur.provider || o.provider === cur.provider);
       const head = mode === 'retry' ? 'Retry with another model' : mode === 'new' ? 'Model for this new chat' : 'Model for this thread';
-      const note = mode === 'retry' ? 'Sends your last request again on the model you pick.' : mode === 'new' ? 'New chats start on your Wizard’s default.' : 'Replies in this thread use this model from now on.';
-      const rows = !M.ready && !list.length ? `<p class="ch-sheet-n">${M.error ? esc(M.error) : 'Loading models…'}</p>`
+      const note = own ? `${agent.label} can only use ${own.length === 1 ? 'this model' : 'these models'}.${agent.privacy === 'private' ? ' Private: no other provider, no fallback.' : ''}`
+        : mode === 'retry' ? 'Sends your last request again on the model you pick.' : mode === 'new' ? 'New chats start on your Wizard’s default.' : 'Replies in this thread use this model from now on.';
+      const rows = own ? list.map((o, i) => `<button type="button" class="mrow${isCur(o) ? ' on' : ''}" data-mpick="${i}" aria-pressed="${isCur(o)}"><span class="mn"><b>${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Agent default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`).join('')
+        : !M.ready && !list.length ? `<p class="ch-sheet-n">${M.error ? esc(M.error) : 'Loading models…'}</p>`
         : list.map((o, i) => `<button type="button" class="mrow${isCur(o) ? ' on' : ''}" data-mpick="${i}" aria-pressed="${isCur(o)}"><span class="mn"><b>${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · ') || o.value)}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`).join('');
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
         <div class="msheet-list">${rows}</div>
-        ${M.ready && !all && M.options.length > list.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}
+        ${!own && M.ready && !all && M.options.length > list.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
     },
     /* A failed thread: what happened, on which model, and the ways out (Retry · Choose another model · Dismiss). */

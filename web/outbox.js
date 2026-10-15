@@ -155,7 +155,7 @@
       if (it.body) throw new HttpError(409, 'Older message has no confirmed model · choose a model and resend');
       const M = window.WosModels;
       if (!M) throw new HttpError(409, 'Model selector unavailable · reload Wizard');
-      Object.assign(it, await M.resolveRoute(M.snapshot(it.kind === 'reply' ? it.sessionId : '', it.model ? { model: it.model, provider: it.provider } : null)));
+      Object.assign(it, await M.resolveRoute(M.snapshot(it.kind === 'reply' ? it.sessionId : '', it.model ? { model: it.model, provider: it.provider } : null, it.agent || '')));
       await checkpoint(it);
     }
     // A durable body from an earlier client cannot be silently admitted with no lock.
@@ -164,6 +164,9 @@
       if (frozen.model !== it.model || frozen.provider !== it.provider || frozen.require_model_lock !== true)
         throw new HttpError(409, 'Older message has no model lock · choose a model and resend');
     }
+    // Agents MVP: a message for a non-default agent names it on every thread/run call (agent=<id>); the server
+    // pins the agent at thread creation and refuses a model outside that agent's allowed list.
+    const aq = it.agent ? `?agent=${encodeURIComponent(it.agent)}` : '';
     // 1. Words: a voice item that never got its transcript gets one now.
     // Words typed or pasted with it (it.typed: a link, say) go first, then what was said: one message (legacy
     // composeVoiceTurnText). A recording with no speech still sends when it carries typed words.
@@ -180,11 +183,11 @@
     //    becomes a queued run (with one) instead of risking a doubled steer.
     if (it.kind === 'reply' && it.steerRunId && !it.attempts) {
       try {
-        const run = await (await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}`)).json();
+        const run = await (await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}${aq}`)).json();
         if (!window.WosModels.matchesRuntime(run.runtime, it))
           throw new HttpError(409, 'Active run uses another model · queueing on the selected model');
         const steer = { input, model: it.model, provider: it.provider, require_model_lock: true }; if (fileIds.length) steer.wizard_file_ids = fileIds;
-        const sr = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}/steer`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
+        const sr = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}/steer${aq}`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
         const ack = await sr.json().catch(() => ({}));
         return done(it, { steered: true, runId: it.steerRunId, steerQueued: ack?.status === 'queued' });
       } catch (e) { if (![404, 409, 410].includes(e.status)) throw e; }
@@ -192,8 +195,9 @@
     // 4. New chat: the session id was fixed at enqueue time; 409 means an earlier try created it.
     if (it.kind === 'new' && !it.sessionReady) {
       const sb = { source: 'wizard-mobile', id: it.sessionId };
+      if (it.agent) sb.agent = it.agent;
       if (it.model) { sb.model = it.model; if (it.provider) sb.provider = it.provider; } // the picker's route for a new chat
-      try { await call('/wizard/hermes/api/sessions', { method: 'POST', headers: J, body: JSON.stringify(sb) }); }
+      try { await call('/wizard/hermes/api/sessions' + aq, { method: 'POST', headers: J, body: JSON.stringify(sb) }); }
       catch (e) { if (e.status !== 409) throw e; }
       it.sessionReady = true; await checkpoint(it);
     }
@@ -204,9 +208,10 @@
       if (fileIds.length) body.wizard_file_ids = fileIds;
       if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model and resend');
       Object.assign(body, { model: it.model, provider: it.provider, require_model_lock: true });
+      if (it.agent) body.agent = it.agent;
       it.body = JSON.stringify(body); await checkpoint(it);
     }
-    const r = await call('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': it.id }, body: it.body });
+    const r = await call('/wizard/hermes/v1/runs' + aq, { method: 'POST', headers: { ...J, 'Idempotency-Key': it.id }, body: it.body });
     const run = await r.json().catch(() => ({}));
     return done(it, { steered: false, runId: run.run_id || run.id || '' });
   }
@@ -276,7 +281,12 @@
     /* kind 'new' (new thread) or 'reply' (existing thread). Inspect durable/storageError on return. */
     async enqueue(o) {
       const M = window.WosModels;
-      const snapshot = M?.snapshot(o.kind === 'reply' ? o.sessionId : '', o.model ? { model: o.model, provider: o.provider } : null);
+      // The agent: a reply goes to the agent its thread is pinned to; a new chat to the agent whose Chats it was
+      // written in. '' = the main agent (unchanged behaviour).
+      const AG = window.WosAgents;
+      const agent0 = o.kind === 'reply' ? (window.WizLive?.agentOf?.(o.sessionId) || '') : String(o.agent || '');
+      const agent = agent0 && AG && AG.isOther(agent0) ? agent0 : '';
+      const snapshot = M?.snapshot(o.kind === 'reply' ? o.sessionId : '', o.model ? { model: o.model, provider: o.provider } : null, agent);
       if (!M) throw new Error('Model selector unavailable · reload Wizard before sending');
       const route = await M.resolveRoute(snapshot);
       await load();
@@ -289,6 +299,7 @@
       };
       // A route chosen in the model picker (sealed with the message, like legacy's admit()).
       Object.assign(it, route);
+      if (agent) { it.agent = agent; window.WizLive?.pinAgent?.(it.sessionId, agent); } else delete it.agent;
       await put(it); pump();
       return it;
     },
