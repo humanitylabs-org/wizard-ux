@@ -132,10 +132,13 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
  {
   const f=await boot(false,true);
   await f.p.evaluate(({model,provider})=>{
-   window.__acks=[];window.__nativeAudio='data:audio/webm;base64,'+btoa('native original '.repeat(300));
-   window.WizardOSDevice={version:()=>1,recStart:()=>'',recActive:()=>null,recPending:()=>JSON.stringify([{id:'native-custody',kind:'auto',send:true}]),recClaim:()=>JSON.stringify({id:'native-custody'}),recRead:()=>JSON.stringify({b64:btoa('native original '.repeat(300)),next:-1}),recDone:id=>__acks.push(id)};
+   window.__acks=[];window.__claims=[];window.__nativeReadFault=true;window.__nativeAudio='data:audio/webm;base64,'+btoa('native original '.repeat(300));
+   window.WizardOSDevice={version:()=>1,recStart:()=>'',recActive:()=>null,recPending:()=>JSON.stringify([{id:'native-custody',kind:'auto',send:true,bytes:4800}]),recClaim:()=>{__claims.push('native-custody');return JSON.stringify({id:'native-custody'});},recRead:()=>__nativeReadFault?null:JSON.stringify({b64:btoa('native original '.repeat(300)),next:-1}),recDone:id=>__acks.push(id)};
    WosModels.voiceRoute=()=>({model,provider});WosDevice.event('rec',{type:'send',id:'native-custody'});
   },{model,provider});
+  await sleep(150);
+  ok(await f.p.evaluate(()=>!__acks.length&&!__claims.length&&!WosOutbox.nativeItem('native-custody')),'native read error: no partial handoff, deletion or hidden claim');
+  await f.p.evaluate(()=>{__nativeReadFault=false;WosDevice.event('rec',{type:'send',id:'native-custody'});});
   await f.p.waitForFunction(()=>{const it=WosOutbox.nativeItem('native-custody');return it?.state==='waiting'&&it.durable===false;});
   ok(!(await f.p.evaluate(()=>__acks.length)),'native web caller: no recDone after RAM-only enqueue');
   const row=(await f.rows()).find(x=>x.nativeId);ok(row?.id==='wos-native-native-custody'&&row.blob>0,'native web caller: deterministic ID and original bytes retained',row);

@@ -57,11 +57,13 @@
   function readBlob(read, type) {
     const parts = []; let off = 0;
     for (let k = 0; k < 4000 && off >= 0; k++) {
-      const c = J(read(off)); if (!c) break;
+      const c = J(read(off)); if (!c || typeof c.b64 !== 'string' || !Number.isInteger(c.next) || (c.next !== -1 && c.next <= off)) throw new Error('Incomplete native recording read · original kept on device');
       const bin = atob(c.b64), u = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      if (!u.length) throw new Error('Empty native recording chunk · original kept on device');
       parts.push(u); off = c.next;
     }
+    if (off !== -1) throw new Error('Native recording read did not finish · original kept on device');
     return new Blob(parts, { type: type || 'application/octet-stream' });
   }
 
@@ -151,9 +153,11 @@
       return;
     }
     handledTakes.add(t.id);
-    if (!J(d.recClaim(t.id))) { handledTakes.delete(t.id); return; }
+    try {
+    // Keep the native pending owner discoverable until durable handoff. recRead does not
+    // require recClaim; claiming now hides it from recPending after a WebView reload.
     const blob = readBlob(off => d.recRead(t.id, off), 'audio/aac');
-    if (blob.size < 600) { d.recDone(t.id); return; }
+    if (blob.size < 600 || (Number(t.bytes) > 0 && blob.size !== Number(t.bytes))) throw new Error('Incomplete native recording · original kept on device');
     // A voice reply started from a thread's composer mic stays that thread's, even when it ended outside the page.
     const pin = window.__wosReplyTake?.(t.id);
     const route = window.WosModels.voiceRoute(t.id);
@@ -163,6 +167,7 @@
     log('rec:sent', t.id, it.id, how);
     toast('✦', it.durable ? 'Recording kept · waiting to send' : 'Device save failed · original kept by Android', 2400);
     try { w.openWizardThread(it.sessionId); } catch (e) {}
+    } catch (e) { handledTakes.delete(t.id); toast('!', String(e.message || 'Recording kept on device · retry from recording recovery'), 4000); }
   }
   const releasedNative = new Set();
   function releaseNativeCustody() {
