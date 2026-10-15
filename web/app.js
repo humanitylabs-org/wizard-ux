@@ -1364,7 +1364,8 @@
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
-      const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.appId];
+      // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
+      const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
       if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
@@ -1989,6 +1990,7 @@
     const dictating = V.kind === 'dictation' && V.state !== 'idle';
     device.classList.toggle('field-dictation', !!field || dictating);
     device.classList.toggle('dictation-recording', dictating);
+    $('#dictationStatus').textContent = dictating && V.state === 'think' ? 'Transcribing…' : '';
     if (V.state === 'idle') Orb.setMode(field ? 'type' : 'idle');
     else if (dictating && V.state === 'listen') Orb.setMode('typing');
     $('#orbWrap').setAttribute('aria-label', dictating ? 'Stop dictation and insert text' : field ? 'Dictate into focused text field' : 'Talk to Wizard');
@@ -2193,9 +2195,12 @@
   }
   async function uploadVoiceFile(file, files, f) {
     const abort = f.abort || (f.abort = new AbortController());
-    const deadline = setTimeout(() => abort.abort(new Error('Upload timed out · try attaching again')), 20000);
+    // An idle deadline, not a total one: a big file over the resumable route keeps it alive while bytes move.
+    let deadline = 0;
+    const arm = () => { clearTimeout(deadline); deadline = setTimeout(() => abort.abort(new Error('Upload timed out · try attaching again')), 60000); };
+    arm();
     try {
-      const result = await CHATS.uploadFile(file, { signal: abort.signal });
+      const result = await CHATS.uploadFile(file, { signal: abort.signal, onProgress: (sent, total, state) => { if (state !== 'reconnecting') arm(); } });
       if (!sameTake(files) || !files.includes(f)) return;
       Object.assign(f, result, { uploading: false });
     } catch (e) {
@@ -2442,7 +2447,7 @@
     // Stop is solely an insertion boundary: no model route, composer seal, navigation or outbox.
     if (!V.native && !V.rec && !V.parts.length) { V.stopAsked = true; return; }
     if (V.state !== 'paused') V.acc += performance.now() - V.t0;
-    setVoice('think'); txPill('✎', 'Transcribing into your text field…', 'dictation');
+    setVoice('think'); txHide();
     if (V.native) return nativeFinish(V.native, false);
     if (!V.rec) return onRecStop();
     try { if (V.rec.state !== 'inactive') V.rec.stop(); else onRecStop(); } catch (_) { onRecStop(); }
@@ -2451,14 +2456,14 @@
     if (V.state !== 'idle' || nativeTakeAppOwned(t.id)) return false;
     if (t.kind !== 'dictation' && !window.__wosDictationTake(t.id)) return false;
     nativeResume({ ...t, kind: 'dictation', paused: true });
-    setVoice('think'); txPill('✎', 'Transcribing retained dictation…', 'dictation');
+    setVoice('think'); txHide();
     nativeFinish(t.id, true); return true;
   }
   function showDictationCopy(text, durable = true, native = false) {
     txShow(text, durable || native ? 'Dictation saved · field changed · nothing sent' : 'Storage unavailable · copy these words before closing', 'dictation', '✎');
     $('#txChips').innerHTML = '<button data-dictation-copy>Copy text</button>';
     $('#txChips [data-dictation-copy]').addEventListener('click', async () => {
-      try { if (DEV()?.clip) DEV().clip(text); else await window.WosChat.copyText(text); toast('⧉', 'Copied · paste into your field'); }
+      try { if (DEV()?.clip) DEV().clip(text); else await window.WosChat.copyText(text); }
       catch (_) { toast('!', 'Select and copy the saved text'); }
     });
     txHide(0); // keep copy available; Settings retains the same transcript across reloads
@@ -2495,7 +2500,7 @@
         if (kept) recDone(nid);
         if (!live()) return;
         setVoice('idle'); showDictationCopy(text, kept, !!nid);
-      } else { recDone(nid); setVoice('idle'); txHide(); toast('✎', 'Text inserted · ready to edit', 1400); }
+      } else { recDone(nid); setVoice('idle'); txHide(); }
     } catch (error) {
       if (!live()) return;
       target?.release(); V.field = null;

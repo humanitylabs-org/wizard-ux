@@ -339,6 +339,10 @@ with (BASE / 'worker.lock').open('a') as lock:
         taps = 0
         sx('logcat -c')
         bring_front(); connect()
+        # The first-run coach (WosTour, daily since 0.9.x) covers the shell on a fresh install and swallows the banner
+        # tap; James finishes or skips it once. Finish it the way a handoff does, so B tests the update path itself.
+        pg.ev("(window.WosTour && window.WosTour.active ? (window.WosTour.finish('qa'), 'finished') : 'none')")
+        time.sleep(1)
         b = wait(lambda: (lambda x: x if x.startswith('ready') else '')(banner()), 20)
         check('B: in front, one "Update ready · tap to restart" banner', 'Update ready · tap to restart' in (b or ''), b)
         shot('B1-update-ready-banner')
