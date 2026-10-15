@@ -87,7 +87,7 @@ test('desktop Cancel retains a long take including its final chunk, never a shor
     start() { this.state = 'recording'; }
     stop() { this.state = 'inactive'; stops.push(() => { this.ondataavailable?.({ data: new Blob(['final']) }); this.onstop?.(); }); }
   }
-  const sandbox = { Blob, performance: { now: () => now }, navigator: { userAgent: 'Desktop', mediaDevices: { enumerateDevices: async () => [], getUserMedia: async () => ({ getTracks: () => [{ stop: () => stopped++ }] }) } }, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, MediaRecorder: Recorder,
+  const sandbox = { Blob, crypto: globalThis.crypto, performance: { now: () => now }, navigator: { userAgent: 'Desktop', mediaDevices: { enumerateDevices: async () => [], getUserMedia: async () => ({ getTracks: () => [{ stop: () => stopped++ }] }) } }, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, MediaRecorder: Recorder,
     AudioContext: class { createMediaStreamSource() { return { connect() {} }; } createAnalyser() { return {}; } close() {} },
     WosCancelled: { keepWeb: (blob, ms, _retained, _text, source) => saved.push({ blob, ms, source }) } };
   sandbox.window = sandbox; vm.runInNewContext(read('web/core/voice.js'), sandbox);

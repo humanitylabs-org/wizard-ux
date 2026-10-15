@@ -230,12 +230,12 @@ window.WosChatPower = function chatPower(A) {
   const micBtn = wid => { if (!H.recordReply) return ''; const sid = H.win(wid)?.thread, on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
   /* A recording made from a thread's composer: always delivered to that thread (pinned when recording started),
    * through the durable outbox, which transcribes it and keeps the recording as a voice note. */
-  async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null) {
+  async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null, custodyId = null, captureId = null, capturedRunId = undefined) {
     if (!OUTBOX || !blob || !sid) return null;
     const w = H.win(wid), c = ch(wid);
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
-    const steerRunId = s && A.WORKING_ST.has(s.status) && s.runId ? s.runId : '';
+    const steerRunId = capturedRunId ?? (s && A.WORKING_ST.has(s.status) && s.runId ? s.runId : '');
     const nm = route || (isNew ? (c.newModel || null) : null);
     // The thread's composer rides with the recording as ONE message (legacy H4): the words typed or pasted
     // there (a link, say) go before the transcript, its photos and files with the voice note, and the composer
@@ -246,24 +246,25 @@ window.WosChatPower = function chatPower(A) {
     const wasHere = !!w && w.thread === sid;
     if (isNew) c.newModel = null;
     c.follow = true;
-    // Send and go: a voice reply from the composer mic steps back to the list like a typed send (chats.js), on
+    const instructions = H.viewContext(wid, 'a voice reply recorded in this thread');
+    // Send and go: a voice reply steps back one level like a typed send (chats.js), on
     // the tap, not after the recording has been written to the phone's storage (a blob commit can take seconds).
-    const left = !!w && !!A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
+    const left = w && A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
     const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
     if (w) A.renderChats(w);
     let it;
     try {
-      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', typed: sealed.text, audio: blob,
-        instructions: H.viewContext(wid, 'a voice reply recorded in this thread'), files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
+      it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', typed: sealed.text, audio: blob,
+        instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
         wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && w?.agent ? { agent: w.agent } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
       if (isNew && nm) c.newModel = nm;
       sealed.putBack();
-      if (left && w && !w.thread) A.openChat(wid, sid);
+      if (left) left.restore();
       throw e;
     }
-    sealed.done();
+    sealed.done(it);
     return it;
   }
   function paintMic(on, sid) {
@@ -357,7 +358,7 @@ window.WosChatPower = function chatPower(A) {
     const ad = t.closest('[data-attdismiss]'); if (ad) { E.dismissAttention(ad.dataset.attdismiss).then(ok => toast(ok ? '✓' : '!', ok ? 'Dismissed' : 'Couldn’t dismiss · try again', ok ? 1400 : 2400)); return true; }
     const od = t.closest('[data-obdismiss]'); if (od) {
       const oid = od.dataset.obdismiss;
-      if (confirmDel.id === oid && Date.now() - confirmDel.at < 4000) { confirmDel = { id: '', at: 0 }; OUTBOX.remove(oid); toast('✕', 'Recording deleted', 1400); }
+      if (confirmDel.id === oid && Date.now() - confirmDel.at < 4000) { confirmDel = { id: '', at: 0 }; OUTBOX.remove(oid).then(ok => toast(ok ? '✕' : '!', ok ? 'Recording deleted' : 'Deletion not saved · keep Wizard open', 2400)); }
       else { confirmDel = { id: oid, at: Date.now() }; rerenderLists(); setTimeout(() => { if (confirmDel.id === oid) { confirmDel = { id: '', at: 0 }; rerenderLists(); } }, 4100); }
       return true;
     }

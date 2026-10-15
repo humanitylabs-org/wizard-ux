@@ -318,15 +318,15 @@
     const before = [...PEND].map(([k, p]) => k + p.key + p.state).join();
     const latest = new Map();
     for (const it of OB._items.values()) {
-      if ((it.kind !== 'reply' && it.kind !== 'new') || !it.sessionId) continue;
+      if ((it.kind !== 'reply' && it.kind !== 'new') || !it.sessionId || it.compact) continue;
+      const tap = TAPS.get(it.sessionId); if (tap && it.createdAt >= tap.at) TAPS.delete(it.sessionId);
+      // Custody without delivery intent must neither own Sending nor hide an older real send.
+      if (OB.quarantined?.(it.id) || ['failed', 'empty', 'held', 'unconfirmed'].includes(it.state) || (it.state === 'sent' && it.steered)) continue;
       const cur = latest.get(it.sessionId); if (!cur || it.createdAt > cur.createdAt) latest.set(it.sessionId, it);
     }
-    for (const [sid, p] of PEND) if (!latest.has(sid) && p.state !== 'sent') PEND.delete(sid); // deleted / taken back to edit
+    for (const [sid, p] of PEND) if (!latest.has(sid)) PEND.delete(sid); // deleted / taken back to edit
     for (const [sid, it] of latest) {
-      const tap = TAPS.get(sid); if (tap && it.createdAt >= tap.at) TAPS.delete(sid); // the message itself takes over
       const known = PEND.get(sid);
-      const drop = it.state === 'failed' || it.state === 'empty' || (it.state === 'sent' && it.steered);
-      if (drop) { PEND.delete(sid); continue; }
       if (RELEASED.has(it.id) || (it.state === 'sent' && !known && Date.now() - (it.sentAt || 0) > PEND_MAX)) { if (known?.key === it.id) PEND.delete(sid); continue; } // already settled
       const text = String(it.text || it.typed || '').replace(/\s+/g, ' ').trim() || (it.audio || it.audioFile ? '🎙 Voice note' : (it.files || []).length ? '📎 Attachment' : '');
       if (it.agent && otherAgent(it.agent)) AGENT_OF.set(sid, it.agent);

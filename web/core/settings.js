@@ -20,9 +20,10 @@
   }
   function unsentRow(it, ctx) {
     const when = ctx.ago?.(new Date(it.createdAt).toISOString()) || '';
-    const st = it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
+    const blocked = it.state === 'unconfirmed' || ctx.outbox?.quarantined?.(it.id);
+    const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error) : it.state === 'held' ? 'Kept on this device · not queued' : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
     const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
-    return `<div class="ub-row ${esc(it.state)}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}"><div class="ub-t"><span>${esc(it.text || 'Voice note · words come when it sends')}</span></div><div class="ub-m">${src} · ${esc(when)} · ${st}</div><div class="ub-a"><button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>${it.origin === 'app' && it.sessionId && ctx.live?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
+    return `<div class="ub-row ${esc(it.state)}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}"><div class="ub-t"><span>${esc(it.text || 'Voice note · words come when it sends')}</span></div><div class="ub-m">${src} · ${esc(when)} · ${st}</div><div class="ub-a">${!blocked && it.state !== 'held' ? `<button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>` : ''}${it.origin === 'app' && it.sessionId && ctx.live?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' && !blocked ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
   }
   function unsentAction(ctx, id, origin, action) {
     if (origin === 'everywhere') {
@@ -31,18 +32,18 @@
       setTimeout(() => ctx.changed?.(), 300); return;
     }
     const it = ctx.outbox?.get(id); if (!it) return;
-    if (action === 'retry') { ctx.outbox.retry(id); ctx.toast?.('↻', 'Sending again', 1400); }
-    if (action === 'delete') { ctx.outbox.remove(id); ctx.toast?.('✕', 'Deleted', 1400); }
+    if (action === 'retry') { if (it.state === 'held' || it.state === 'unconfirmed' || ctx.outbox.quarantined?.(id)) return; ctx.outbox.retry(id); ctx.toast?.('↻', 'Sending again', 1400); }
+    if (action === 'delete') Promise.resolve(ctx.outbox.remove(id)).then(ok => ctx.toast?.(ok === false ? '!' : '✕', ok === false ? 'Could not save deletion · keep Wizard open' : 'Deleted', 2400));
     if (action === 'open') ctx.openThread(it.sessionId);
     // Moving an audio-bearing/in-flight record to a text composer would lose custody. Never do it.
     if (action === 'edit') {
-      if (it.audio || it.audioFile || it.hasAudio || it.state === 'sending') return ctx.toast?.('!', 'Recording or sending message kept · retry it, or open its thread', 2400);
+      if (it.audio || it.audioFile || it.hasAudio || it.body || it.state === 'sending' || it.state === 'unconfirmed' || ctx.outbox.quarantined?.(id)) return ctx.toast?.('!', 'Recording or sending message kept · retry it, or open its thread', 2400);
       ctx.editUnsent(it);
     }
   }
   register({ id: 'unsent', aliases: ['unsent'], html(ctx) {
     const all = unsentAll(ctx);
-    return `<div class="st-group"><h4>Unsent <span>${all.length || ''}</span></h4>${all.length ? all.map(it => unsentRow(it, ctx)).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">Everything you’ve said reached Wizard.</div>'}<p class="st-note">Every message is saved on this device before it’s sent, and retried until Wizard accepts it.</p></div>`;
+    return `<div class="st-group"><h4>Unsent <span>${all.length || ''}</span></h4>${all.length ? all.map(it => unsentRow(it, ctx)).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">Everything you’ve said reached Wizard.</div>'}<p class="st-note">Originals are kept while delivery is pending. Unconfirmed steering is never automatically retried.</p></div>`;
   }, act(ctx, el) {
     const b = el.closest('[data-ub]');
     if (b) { const r = b.closest('[data-ubid]'); unsentAction(ctx, r.dataset.ubid, r.dataset.uborigin, b.dataset.ub); return true; }
@@ -82,6 +83,15 @@
   register({ id: 'usage', aliases: ['usage'], html: () => window.WosUsage?.html() || '', act(ctx, el) { if (!el.closest('[data-usage-refresh]')) return false; window.WosUsage?.load(true).then(ctx.paintUsage); ctx.paintUsage(); return true; } });
   // A shell chooses the composer; common code owns preservation before consuming an unsent record.
   function moveDraft({ chats, wid, item, outbox, toast }) {
+    if (item.audio || item.audioFile || item.hasAudio || item.body || item.state === 'unconfirmed' || item.state === 'sending' || outbox.quarantined?.(item.id)) {
+      toast('!', 'Original kept · retry it or open its thread', 2400); return false;
+    }
+    if (item.model) {
+      let selected; try { selected = window.WosModels?.snapshot(item.kind === 'reply' ? item.sessionId : '', null, item.agent || ''); } catch (_) {}
+      if (!selected || selected.model !== item.model || (item.provider && selected.provider !== item.provider)) {
+        toast('!', 'Original model route kept · select that model before editing', 2600); return false;
+      }
+    }
     const draft = chats.ch(wid);
     if (draft.draft || draft.files?.length) { toast('!', 'Existing draft kept · finish it before editing this unsent message', 2600); return false; }
     const text = item.text || item.typed || '', files = item.files || [];
