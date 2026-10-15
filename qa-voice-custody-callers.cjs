@@ -123,6 +123,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   await f.p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>x.kind==='capture'&&x.state==='held'&&x.audio));
   ok((await f.rows()).some(x=>x.blob&&!x.durable),'phone cancelled >=15s: RAM bytes retained after failed save');
   ok(await f.p.locator('.ch-custody-notice').count()>0,'phone cancelled >=15s: visible persistent device save warning');
+  ok(await f.p.locator('.ch-custody-notice').evaluateAll(xs=>xs.length===1&&xs[0].getBoundingClientRect().top>500),'phone warning: one readable notice near composer, not over header');
   await f.p.screenshot({path:path.join(out,'phone-save-failed.png')});
   await f.p.evaluate(async()=>{__fault.all=false;await WosOutbox.pump();});await f.p.reload();await f.p.waitForFunction(()=>window.WosOutbox?.recoveryComplete);
   ok((await f.rows()).some(x=>x.kind==='capture'&&x.blob&&x.state==='held'),'phone cancelled: persists when storage returns');await f.done('cancelled full storage');
@@ -135,10 +136,11 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    window.WizardOSDevice={version:()=>1,recStart:()=>'',recActive:()=>null,recPending:()=>JSON.stringify([{id:'native-custody',kind:'auto',send:true}]),recClaim:()=>JSON.stringify({id:'native-custody'}),recRead:()=>JSON.stringify({b64:btoa('native original '.repeat(300)),next:-1}),recDone:id=>__acks.push(id)};
    WosModels.voiceRoute=()=>({model,provider});WosDevice.event('rec',{type:'send',id:'native-custody'});
   },{model,provider});
-  await f.p.waitForFunction(()=>WosOutbox.nativeItem('native-custody'));
+  await f.p.waitForFunction(()=>{const it=WosOutbox.nativeItem('native-custody');return it?.state==='waiting'&&it.durable===false;});
   ok(!(await f.p.evaluate(()=>__acks.length)),'native web caller: no recDone after RAM-only enqueue');
   const row=(await f.rows()).find(x=>x.nativeId);ok(row?.id==='wos-native-native-custody'&&row.blob>0,'native web caller: deterministic ID and original bytes retained',row);
   await f.p.evaluate(async()=>{__fault.all=false;await WosOutbox.pump();});
+  await f.p.waitForFunction(()=>WosOutbox.nativeItem('native-custody')?.durable&&__acks.includes('native-custody'));
   ok(await f.p.evaluate(()=>__acks.includes('native-custody')),'native web caller: releases device copy only after durable handoff');
   // Native Back dispatcher still consumes nested and root Back.
   await f.p.evaluate(()=>{__wos.openChat(Object.keys(__wos.wins).find(k=>__wos.wins[k].app==='chats'),'custody-original');window.__wosNativeBack();});

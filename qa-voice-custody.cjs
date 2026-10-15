@@ -5,14 +5,14 @@ const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const ROOT = process.env.QA_WEB_DIR || __dirname;
 const OUT = process.env.QA_OUT || path.join(ROOT, 'qa-live', 'voice-custody');
 const origin = 'http://127.0.0.1:9736';
-let pass=0, fail=0; const results=[];
+let pass=0, fail=0, browser; const results=[];
 const ok=(condition,name,detail='')=>{results.push({name,passed:!!condition,detail}); console.log(condition?'PASS':'FAIL',name,detail); condition?pass++:fail++;};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha256').update(Buffer.from(audio)).digest('hex');
 (async()=>{
   fs.mkdirSync(OUT,{recursive:true});
   const engine=process.env.QA_ENGINE==='webkit'?webkit:chromium;
-  const browser=await engine.launch({...(process.env.QA_ENGINE==='webkit'?{}:{executablePath:process.env.CHROMIUM}),headless:true});
+  browser=await engine.launch({...(process.env.QA_ENGINE==='webkit'?{}:{executablePath:process.env.CHROMIUM}),headless:true});
   async function fixture(fault='none') {
     const ctx=await browser.newContext({viewport:{width:412,height:892},hasTouch:true});
     const W={down:true, sttDown:false, events:[],uploads:[],runs:new Map(),calls:[],drop:false,badReceipt:false,empty:false};
@@ -59,7 +59,7 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
       const blob=new Blob([new Uint8Array(audio)],{type:'audio/webm'});
       const it=await WosOutbox.enqueue({kind:'reply',sessionId:'thread-original',model:'model-original',provider:'provider-original',audio:blob,text:'',typed:'Typed context',source:'chat',...extras});return it.id;
     },{audio,extras});
-    const row=id=>page.evaluate(id=>{const x=WosOutbox.get(id);return x&&{id:x.id,state:x.state,durable:x.durable,audio:x.audio?.size,audioFile:x.audioFile,body:x.body,model:x.model,provider:x.provider,sessionId:x.sessionId,storageError:x.storageError,attempts:x.attempts,error:x.error};},id);
+    const row=id=>page.evaluate(id=>{const x=WosOutbox.get(id);return x&&{id:x.id,state:x.state,durable:x.durable,audio:x.audio?.size,audioFile:x.audioFile,files:x.files,body:x.body,model:x.model,provider:x.provider,sessionId:x.sessionId,storageError:x.storageError,attempts:x.attempts,error:x.error};},id);
     const retry=async id=>{await page.evaluate(id=>WosOutbox.retry(id),id);await sleep(300);};
     const wait=async(id,state)=>{await page.waitForFunction(({id,state})=>WosOutbox.get(id)?.state===state,{id,state},{timeout:10000});};
     return{ctx,page,W,add,row,retry,wait};
@@ -82,7 +82,7 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
   {
     const f=await fixture('all'),id=await f.add();await sleep(300);
     const r=await f.row(id);ok(r.audio===audio.length&&!r.durable,'both stores fail: retains full RAM Blob and explicitly non-durable');
-    ok(/Keep Wizard open/.test(await f.page.locator('.ch-compose').textContent()),'both stores fail: persistent keep-open notice');
+    ok(/keep wizard open/i.test(await f.page.locator('.ch-compose').textContent()),'both stores fail: persistent keep-open notice');
     const guarded=await f.page.evaluate(()=>{const e=new Event('beforeunload',{cancelable:true});dispatchEvent(e);return e.defaultPrevented;});
     ok(guarded,'both stores fail: navigation/reload warning');
     for(let k=0;k<8;k++){await f.page.evaluate(()=>{for(const it of WosOutbox._items.values())if(it.state==='waiting')it.nextAt=0;WosOutbox.pump();});await sleep(100);}
@@ -166,6 +166,27 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
     ok((await f.row(id)).state==='waiting'&&f.W.runs.size===1,'STT deadline frees queue for the next message');
     ok(f.W.uploads[0]?.hash===hash,'hung STT: original bytes uploaded first');await f.ctx.close();
   }
+  // Agent-private routing is part of the frozen submission, including a staged phone handoff.
+  {
+    const f=await fixture();f.W.down=false;
+    const id=await f.page.evaluate(async()=>{
+      WosModels.snapshot=(sid,route,agent)=>({...route,agent});
+      WosModels.resolveRoute=async route=>{if(route.agent!=='private-fixture')throw Error('private route lost');return route;};
+      window.WosAgents={isOther:id=>id==='private-fixture'};
+      const x=await WosOutbox.stage({agent:'private-fixture',model:'private-model',provider:'private-provider',text:'private words'});
+      await WosOutbox.enqueue({custodyId:x.id,text:'private words'});return x.id;
+    });await f.wait(id,'sent');
+    const body=JSON.parse(f.W.calls.find(x=>x.key===id)?.body||'{}');
+    ok(body?.agent==='private-fixture'&&body.model==='private-model'&&body.provider==='private-provider','staged private agent keeps its original route');await f.ctx.close();
+  }
+  // Never silently truncate an image to make room for the original audio attachment.
+  {
+    const f=await fixture();f.W.down=false;
+    const files=Array.from({length:8},(_,i)=>({id:'image-'+i,name:'image.png',mime:'image/png',bytes:1}));
+    const id=await f.add({files});await f.wait(id,'failed');
+    const row=await f.row(id);
+    ok(f.W.runs.size===0&&row.files.length===9&&row.audio===audio.length,'attachment overflow keeps all eight images plus original audio, sends nothing');await f.ctx.close();
+  }
   await browser.close();fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({host:require('os').hostname(),engine:process.env.QA_ENGINE||'chromium',source:crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT,'web/outbox.js'))).digest('hex'),pass,fail,results},null,2));
   console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;
-})().catch(e=>{console.error(e);process.exitCode=2;});
+})().catch(async e=>{console.error(e);await browser?.close();fs.mkdirSync(OUT,{recursive:true});fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({error:String(e),pass,fail,results},null,2));process.exitCode=2;});

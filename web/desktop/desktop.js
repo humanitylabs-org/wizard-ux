@@ -275,6 +275,7 @@
     return w;
   }
   function editUnsent(it) {
+    if (it.body) { toast('!', 'Delivery is uncertain · retry this submission to reconcile before editing', 3000); return; }
     const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
     const w = known ? (openThread(it.sessionId), focused()) : newChat();
     if (!w) return;

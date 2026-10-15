@@ -271,16 +271,17 @@
     const troubled = [...items.values()].filter(it => it.state !== 'sent' && (it.storageError || !it.durable));
     if (!troubled.length) return '';
     return troubled.some(it => !it.durable)
-      ? 'Device save failed · kept in this tab. Retrying. Keep Wizard open until sent.'
-      : 'Device save failed · a backup copy is kept. Retrying the upload.';
+      ? 'Device save failed · kept in this tab. Retrying storage; keep Wizard open.'
+      : 'Device save failed · complete backup kept. Retrying storage.';
   }
   function paintNotice() {
     if (!document.body) return;
     const text = notice();
-    const hosts = [...document.querySelectorAll('.ch-compose')];
+    const hosts = [...document.querySelectorAll('.ch-compose')].filter(el => el.getClientRects().length && getComputedStyle(el).display !== 'none');
     // Send-and-go may already have left the composer. Keep the same calm notice beside the voice dock.
     const dock = document.querySelector('#voice') || document.querySelector('.dbar') || document.querySelector('#voicePill')?.parentElement;
-    if (dock) hosts.push(dock);
+    if (dock && !hosts.length) hosts.push(dock);
+    for (const el of document.querySelectorAll('[data-custody-notice]')) if (!hosts.includes(el.parentElement)) el.remove();
     for (const host of hosts) {
       let el = host.querySelector('[data-custody-notice]');
       if (!text) { el?.remove(); continue; }
@@ -363,7 +364,7 @@
       try {
         if (routeError) throw routeError;
         if (!M) throw new Error('Model selector unavailable · reload Wizard before sending');
-        const route = await bounded(() => M.resolveRoute(held && it.model ? { model: it.model, provider: it.provider } : snapshot), 15000);
+        const route = await bounded(() => M.resolveRoute(held && it.model ? { model: it.model, provider: it.provider, ...(it.agent ? { agent: it.agent } : {}) } : snapshot), 15000);
         if (it.model && (route.model !== it.model || (it.provider && route.provider !== it.provider))) throw new Error('Selected route changed · original message kept');
         Object.assign(it, route, { state: 'queued' });
         if (it.agent) window.WizLive?.pinAgent?.(it.sessionId, it.agent);
