@@ -30,7 +30,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (!st.frame.isConnected || !registered(st)) { st.detach(); continue; }
@@ -235,7 +235,72 @@
       else history.back();
     });
   }
+  // Only a trusted installed catalog capability admits app voice input.
+  // No endpoint supplied by apps; no postMessage/global RPC. A token binds the live
+  // document AND receiver at recording start. Reload/navigation requires recovery,
+  // never a replacement recipient or a fallback to Chats.
+  const conversationPins = new Map();
+  const voiceApp = appId => apps().find(a => a.id === appId && a.kind === 'wizard' && a.url && a.receives_voice_input === true);
+  const receiverOf = st => st?.client?.voiceInput || st?.client?.conversation;
+  function voiceAuthorized(st, appId) {
+    const app = voiceApp(appId); if (!app || !st) return false;
+    try {
+      const url = new URL(app.url, location.href);
+      return url.origin === ORIGIN && url.href === st.url.href && valid(st, st.doc);
+    } catch (_) { return false; }
+  }
+  function freezeTarget(value) {
+    let nodes = 0, chars = 0;
+    function copy(v, depth) {
+      if (++nodes > 256 || depth > 8) throw fault('Voice target too complex');
+      if (v === null || typeof v === 'boolean') return v;
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+      if (typeof v === 'string') { chars += v.length; if (chars > 8192) throw fault('Voice target too large'); return v; }
+      if (!v || typeof v !== 'object' || Object.prototype.toString.call(v) !== (Array.isArray(v) ? '[object Array]' : '[object Object]')) throw fault('Voice target must be JSON');
+      const out = Array.isArray(v) ? [] : {};
+      for (const key of Object.keys(v)) {
+        if (['__proto__', 'constructor', 'prototype'].includes(key)) throw fault('Invalid voice target key');
+        chars += key.length; if (chars > 8192) throw fault('Voice target too large');
+        out[key] = copy(v[key], depth + 1);
+      }
+      return Object.freeze(out);
+    }
+    if (!value || Array.isArray(value) || typeof value.label !== 'string' || !value.label.trim() || value.label.length > 160) throw fault('Voice target needs a label');
+    return copy(value, 0);
+  }
+  function pinConversation(frame, appId) {
+    const app = voiceApp(appId); if (!app) return null;
+    const st = frames.get(frame), token = 'conversation-' + crypto.randomUUID();
+    const pin = { appId, token, label: String(app.name || appId).slice(0, 160), target: null };
+    try {
+      if (!voiceAuthorized(st, appId) || !st.doc || st.appId !== appId) throw fault('App frame unavailable');
+      const receiver = receiverOf(st);
+      if (typeof receiver?.snapshot !== 'function' || typeof receiver?.receive !== 'function') throw fault('Voice receiver unavailable');
+      const target = receiver.snapshot();
+      if (target === null) return null; // deliberate inactive view, unlike absent/broken receiver
+      pin.target = freezeTarget(target);
+      pin.label = pin.target.label;
+      conversationPins.set(token, { st, doc: st.doc, receiver, target: pin.target });
+    } catch (_) { /* Keep a sealed unavailable destination, not a null/fallback route. */ }
+    return Object.freeze(pin);
+  }
+  async function deliverConversation(pin, message) {
+    const held = conversationPins.get(pin?.token);
+    const authorize = () => {
+      if (!held || pin.appId !== held.st.appId || !voiceAuthorized(held.st, pin.appId) || !valid(held.st, held.doc) || receiverOf(held.st) !== held.receiver)
+        throw fault('App view closed, reloaded or unavailable · recording kept; copy transcript from Recordings');
+    };
+    authorize();
+    if (!message || !/^[A-Za-z0-9_-]{8,100}$/.test(message.request_id || '') || typeof message.text !== 'string' || !message.text.trim() || message.text.length > 12000 || message.files?.length)
+      throw fault('App voice input accepts text only, up to 12000 characters · original kept');
+    const receipt = await held.receiver.receive(Object.freeze({ request_id: message.request_id, text: message.text, target: held.target }), authorize);
+    // Receipt is evidence of durable admission even if focus changed during POST.
+    if (receipt?.accepted !== true || receipt.request_id !== message.request_id) throw fault('App receipt uncertain · original kept');
+    return { accepted: true, request_id: message.request_id };
+  }
   window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack,
+    voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
+    conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     update: Object.freeze({ busy, announce, available: () => available }),
     inspect: () => { reconcile(); return [...frames.values()].map(st => ({ appId: st.appId, path: st.url.pathname, ready: !!st.doc, holds: [...st.holds.values()], suspect: !!st.suspect })); },
   });

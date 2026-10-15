@@ -1,7 +1,7 @@
 // Fully synthetic desktop/outbox browser acceptance. No real service requests or credentials.
 // QA_PLAYWRIGHT=/path/to/playwright-core QA_CHROME=/path/to/chrome node qa-recording-retention.cjs [webDir] [outDir]
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || '/Users/thales/qa/os-apps/node_modules/playwright-core');
+const { chromium } = require(process.env.QA_PLAYWRIGHT || 'playwright');
 const ROOT = path.resolve(process.argv[2] || 'web'), OUT = path.resolve(process.argv[3] || 'recording-evidence');
 fs.mkdirSync(OUT, { recursive: true });
 const results = [], writes = [], errors = [];
@@ -14,6 +14,8 @@ async function boot(storage = '', minimal = false) {
   const s = { ready: false, fail: true, audio: [], writes: [], bootstrap: 0 };
   await c.addInitScript(mode => {
     localStorage.setItem('wos.coached', 'true');
+    // These cases exhaust BOTH stores. Complete localStorage backup is tested separately.
+    const set = Storage.prototype.setItem; Storage.prototype.setItem = function(k, v) { if (mode && !window.__allowStorage && k.startsWith('wos.outbox.fallback')) throw new DOMException('Full backup', 'QuotaExceededError'); return set.call(this, k, v); };
     if (mode === 'blocked' || mode === 'timeout') Object.defineProperty(window, 'indexedDB', { value: { open() { const r = {}; if (mode === 'blocked') setTimeout(() => r.onblocked?.(), 0); return r; } } });
     if (mode === 'denied') Object.defineProperty(window, 'indexedDB', { value: { open() { throw new DOMException('Denied', 'SecurityError'); } } });
     if (mode === 'quota' || mode === 'abort') {
@@ -37,9 +39,9 @@ async function boot(storage = '', minimal = false) {
     if (p === '/wizard/thread-seen') return json({}); // shell bookkeeping, fenced too
     if (!['GET', 'HEAD'].includes(req.method())) {
       s.writes.push(p); writes.push(p);
-      if (s.accept && p === '/wizard/files/upload') return json({ file: { id: 'qa-audio', filename: 'qa.webm' } }, 201);
+      if (p === '/wizard/files/upload') return json({ file: { id: 'qa-audio', filename: 'qa.webm', mime: req.headers()['x-wizard-mime'], bytes: req.postDataBuffer().length } }, 201);
       if (s.accept && p === '/wizard/hermes/api/sessions') return json({ id: 'qa-session' }, 201);
-      if (s.accept && p === '/wizard/hermes/v1/runs') return json({ run_id: 'qa-run' }, 202);
+      if (s.accept && p === '/wizard/hermes/v1/runs') return json({ run_id: 'qa-run', status: 'queued' }, 202);
       return json({ error: 'Synthetic write fence' }, 409);
     }
     if (p === '/minimal') return route.fulfill({ contentType: 'text/html', body: '<script src="/wizard-os-home/core/config.js"></script><script>window.WosModels={snapshot:()=>({model:"qa-model",provider:"qa-provider"}),resolveRoute:async x=>x}</script><script src="/wizard-os-home/outbox.js"></script>' });
@@ -79,7 +81,7 @@ async function take(p) {
   await p.waitForTimeout(1500); await paletteDictate(p); await p.waitForTimeout(1500);
 }
 (async () => {
-  b = await chromium.launch({ executablePath: process.env.QA_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
+  b = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
   {
     const { c, p, s } = await boot();
     check('initially unavailable hides mic', await p.locator('#micBtn').isHidden());
@@ -110,7 +112,7 @@ async function take(p) {
   }
   for (const mode of ['blocked', 'denied', 'quota', 'abort', 'timeout']) {
     const { c, p, s } = await boot(mode);
-    await ready(p, s); await take(p); await p.waitForTimeout(1300);
+    await ready(p, s); await take(p); await p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>x.kind==='dictation'&&x.state==='held'&&x.storageError&&x.error));
     const status = await p.evaluate(() => [...WosOutbox._items.values()].map(it => ({ id: it.id, kind: it.kind, bytes: it.audio?.size, durable: it.durable, storageError: it.storageError })));
     check(`${mode}: failed storage retains live audio`, status.some(x => x.kind === 'dictation' && x.bytes > 0 && x.durable === false && x.storageError), JSON.stringify(status));
     if (status.length) {
@@ -139,8 +141,8 @@ async function take(p) {
     const { c, p, s } = await boot('quota', true); await ready(p, s);
     await p.evaluate(() => WosOutbox.enqueue({ audio: new Blob(['synthetic same audio bytes'], { type: 'audio/webm' }), model: 'qa-model', provider: 'qa-provider' }));
     await p.waitForTimeout(200);
-    check('chat audio persistence failure blocks transcription/upload/admission', s.audio.length === 0 && s.writes.length === 0);
-    check('chat audio persistence failure is visible and retains sole audio', await p.evaluate(() => WosOutbox.unsent().some(it => it.audio?.size && it.storageError && it.state === 'failed')));
+    check('chat audio persistence failure protects bytes by upload before admission', s.writes.includes('/wizard/files/upload') && !s.writes.includes('/wizard/hermes/v1/runs'));
+    check('chat audio persistence failure is visible and retains sole audio', await p.evaluate(() => WosOutbox.unsent().some(it => it.audio?.size && it.storageError && ['waiting','failed'].includes(it.state))));
     await c.close();
   }
   // The native adapter owns Parakeet preparation. Exercise only its JS capability/transcriber seam.

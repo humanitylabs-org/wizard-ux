@@ -7,6 +7,19 @@
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
   let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
   const requests = new Map();
+  let conversation = null;
+  const voiceInput = Object.freeze({ register(handler) {
+    if (typeof handler?.snapshot !== 'function' || typeof handler?.receive !== 'function') throw new TypeError('Voice input needs snapshot and receive');
+    if (conversation) throw new Error('Voice input already registered');
+    conversation = Object.freeze({ snapshot: handler.snapshot, receive: handler.receive });
+    const registered = conversation;
+    return () => { if (conversation === registered) conversation = null; };
+  } });
+  const conversationClient = Object.freeze({
+    get voiceInput() { return conversation; },
+    get conversation() { return conversation; },
+    back, alive: () => true,
+  });
   const framed = parent !== window;
   const detached = () => !service;
   const localHolds = new Map();
@@ -34,7 +47,7 @@
   }
   function ready(meta = {}) {
     if (framed) {
-      try { service = parent.WizAppServices?.connect(window, { back, alive: () => true }) || null; } catch (_) { service = null; }
+      try { service = parent.WizAppServices?.connect(window, conversationClient) || null; } catch (_) { service = null; }
       if (service) { try { rootWatcher?.destroy(); } catch (_) {} rootWatcher = null; }
       parent.postMessage({ type: 'wizard:appearance:ready', version: VERSION, app: String(meta.name || '').slice(0, 96) }, ORIGIN);
     }
@@ -188,6 +201,7 @@
   }
   const sharedResult = promise => promise.then(value => ['shared', 'copied', 'cancelled', 'unsupported'].includes(value) ? value : 'unsupported', () => 'unsupported');
   window.WizardApp = Object.freeze({ version: VERSION, get hosted() { return !!service || transportReady; }, ready,
+    voiceInput, conversation: voiceInput, // backwards-compatible name, identical receiver/authority
     back: Object.freeze({ register, push, useHistory }),
     theme: Object.freeze({ get: () => currentTheme || window.WizardTheme?.current || null, onChange: fn => listen(themes, fn, currentTheme || window.WizardTheme?.current) }),
     share: Object.freeze({ text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts) }),

@@ -1,4 +1,8 @@
 /* Wizard UX core: Chats (list, thread, composer, attachments, voice notes, unsent bubbles). Shared by every shell. */
+.ch-custody-notice { display:block; flex-basis:100%; padding:8px 12px; color:var(--muted, #c4b8d2); font-size:12px; line-height:1.4; }
+.ch-compose > .ch-custody-notice { margin-bottom:12px; }
+.voice > .ch-custody-notice { position:absolute; bottom:calc(var(--safe-b, 0px) + var(--dock-h, 64px) + 18px); left:16px; right:16px; background:var(--bg, #160f24); border:1px solid var(--line, #433453); border-radius:12px; }
+.dbar > .ch-custody-notice { position:absolute; bottom:calc(100% + 8px); left:12px; max-width:440px; background:var(--bg, #160f24); border-radius:12px; }
 /* ---------- Chats: native Wizard client ---------- */
 .chats { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .ch-list, .ch-thread { position: absolute; inset: 0; display: flex; flex-direction: column; }
@@ -64,7 +68,7 @@
 .dots b:nth-child(2) { animation-delay: .15s; } .dots b:nth-child(3) { animation-delay: .3s; }
 .ch-compose { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 10px; border-top: 1px solid var(--line); }
 .ch-row2 { display: flex; align-items: flex-end; gap: 8px; }
-.ch-compose textarea { flex: 1; min-width: 0; max-height: 140px; resize: none; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--line-2); outline: 0; background: rgba(205, 190, 255, .06); color: var(--ink); font: inherit; font-size: 15px; line-height: 1.35; }
+.ch-compose textarea { flex: 1; min-width: 0; min-height: 42px; max-height: 140px; resize: none; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--line-2); outline: 0; background: rgba(205, 190, 255, .06); color: var(--ink); font: inherit; font-size: 15px; line-height: 1.35; }
 .ch-compose textarea:focus { border-color: rgba(185, 155, 255, .6); }
 .ch-compose button { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(140deg, #7a4dff, #c04dff); }
 .ch-compose button svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -168,6 +172,10 @@ a.fchip { color: inherit; text-decoration: none; }
 .bub em { font-style: italic; } .bub del { opacity: .7; }
 .bub blockquote { margin: 6px 0 8px; padding: 2px 0 2px 12px; border-left: 3px solid rgba(185, 155, 255, .45); color: var(--ink-2); }
 .bub blockquote p { margin-bottom: 4px; }
+.bub .quote-actions { display: flex; align-items: center; gap: 4px; margin-top: 6px; padding-top: 2px; }
+.bub .quote-actions button { min-height: 36px; padding: 6px 10px; border-radius: 8px; color: var(--ink-3); font-size: 12px; font-weight: 600; }
+.bub .quote-actions button:hover, .bub .quote-actions button:focus-visible { color: var(--ink); background: var(--line); }
+.bub .quote-actions button:active { background: rgba(205, 190, 255, .12); }
 .bub ul ul, .bub ol ol, .bub ul ol, .bub ol ul { margin: 2px 0 2px; }
 .bub li.task { list-style: none; margin-left: -18px; display: flex; gap: 8px; align-items: baseline; }
 .bub .tick { flex: 0 0 auto; width: 13px; height: 13px; border-radius: 4px; border: 1.5px solid var(--ink-3); transform: translateY(2px); }
@@ -446,7 +454,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-agent .ag-priv { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px 0 7px; border-radius: 12px; font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
   color: color-mix(in oklab, var(--ag) 60%, var(--ink)); background: color-mix(in oklab, var(--ag) 18%, transparent); border: 1px solid color-mix(in oklab, var(--ag) 45%, transparent); }
 .ag-lock { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.ch-list.agent, .ch-thread.agent { box-shadow: inset 3px 0 0 var(--agc, transparent); }
+.ch-list.agent, .ch-thread.agent { box-shadow: none; }
 .ch-model.agent { color: color-mix(in oklab, var(--agc, var(--violet-2)) 70%, var(--ink)); background: color-mix(in oklab, var(--agc, #8f63ff) 16%, transparent); }
 
 /* Resumable upload progress (core/uploads.js): a thin bar along the chip's foot, a % on photo tiles. */

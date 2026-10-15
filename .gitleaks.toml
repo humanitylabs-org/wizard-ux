@@ -6,3 +6,9 @@ useDefault = true
 description = "Known non-secrets: RFC 6455 sample WebSocket nonce, localStorage key names, Android test certificate digests"
 regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''', '''^wos\.[a-z0-9-]+\.v[0-9]+$''']
 paths = ['''^android/app/src/test/''']
+
+[[allowlists]]
+description = "Verified SHA-256 of qa-new-chat-keys.cjs in the source-proof receipt, not a credential"
+condition = "AND"
+paths = ['''^docs/responsive-remainder-verification\.json$''']
+regexes = ['''^8d99ea690e4fa3980386ebe898d221af5e3737c6e79eab09d5caa82f71214b84$''']

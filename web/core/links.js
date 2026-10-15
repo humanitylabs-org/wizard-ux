@@ -238,7 +238,16 @@
     if (!doc || doc.__wizLinkGuard) return; doc.__wizLinkGuard = true;
     const home = String(base || '').split(/[?#]/)[0].replace(/[^/]*$/, '') || '/';
     const leaves = (u, tgt) => u.origin !== ORIGIN || /^_(blank|top|parent)$/i.test(tgt || '') || (home !== '/' && !u.pathname.startsWith(home));
-    const go = u => { if (u.origin !== ORIGIN) return external(u); let fe = null; try { fe = win.frameElement; } catch (e) {} if (sheet.route && sheet.route(u.href, fe)) return; sheet.open(u.href); };
+    const go = u => {
+      if (u.origin !== ORIGIN) return external(u);
+      let fe = null; try { fe = win.frameElement; } catch (e) {}
+      // Hosted apps use the same canonical thread/app navigation as chat links.
+      // Otherwise a Manager result opens a second Wizard inside the link viewer.
+      const DL = window.WizCore && window.WizCore.deeplink;
+      if (DL && DL.route(u.href, fe)) return;
+      if (sheet.route && sheet.route(u.href, fe)) return;
+      sheet.open(u.href);
+    };
     doc.addEventListener('click', e => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = e.target.closest && e.target.closest('a[href]'); if (!a) return;

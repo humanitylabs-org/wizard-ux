@@ -226,9 +226,10 @@ window.WizCore.chats = function createChats(H) {
   // "a little popover, pillbox sort of thing to let me know a message is sending… I don't need all my threads
   // shifted down"). It never takes layout space. Tap opens the reply's thread; Retry/Edit appear only when stuck.
   function sendPill(items, w) {
+    items = items.filter(it => !(it.state === 'empty' && it.threadHidden));
     const c = ch(w.id), ids = items.map(it => it.id).join(',');
     // The moment the last message leaves the phone, flash "Sent" for a beat, then the pill goes (per window).
-    if (c.pillIds && !ids && LIVE.ok) {
+    if (c.pillIds && !ids && LIVE.ok && c.pillIds.split(',').every(id => OUTBOX?.get(id)?.state === 'sent')) {
       c.sentUntil = Date.now() + 1500; clearTimeout(c.sentTimer);
       c.sentTimer = setTimeout(() => { const w2 = H.win(w.id), e2 = elOf(w.id); if (w2 && !w2.thread && e2 && e2.querySelector('.ch-list') && !holdList(w.id)) renderChatList(w2, e2); }, 1600);
     }
@@ -238,12 +239,19 @@ window.WizCore.chats = function createChats(H) {
       return left > 0 ? `<div class="ch-pill sent" style="animation-delay:${left - 1500}ms" role="status">${CHECK_SVG}<span>Sent</span></div>` : '';
     }
     c.sentUntil = 0;
-    const failed = items.filter(it => it.state === 'failed'), waiting = items.filter(it => it.state === 'waiting');
+    const failed = items.filter(it => ['failed', 'empty'].includes(it.state)), waiting = items.filter(it => it.state === 'waiting');
     const one = items.length === 1 ? items[0] : null;
     const name = it => { const s = it.kind === 'reply' && it.sessionId ? LIVE.session(it.sessionId) : null; return s?.title || (it.kind === 'new' ? 'New chat' : 'thread'); };
     const open = one && one.kind === 'reply' && one.sessionId ? ` data-chopen="${esc(one.sessionId)}"` : '';
     let cls = '', label, btns = '';
-    if (failed.length) {
+    if (items.some(it => it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id))) {
+      cls = ' fail'; label = 'Could not confirm · originals kept';
+    } else if (items.every(it => it.state === 'empty')) {
+      cls = ' fail'; label = 'No speech detected · recordings kept';
+      btns = one ? `<button type="button" class="pbtn ghost" data-obdismiss="${esc(one.id)}">Dismiss</button>` : '';
+    } else if (items.every(it => it.state === 'held')) {
+      label = 'Kept on this device · not queued';
+    } else if (failed.length) {
       cls = ' fail';
       label = one ? `Not sent · ${esc(clip(name(one), 34))}` : `${failed.length} not sent`;
       btns = one ? `<button type="button" class="pbtn" data-obretry="${esc(one.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(one.id)}">Edit</button>`
@@ -255,7 +263,7 @@ window.WizCore.chats = function createChats(H) {
     } else {
       label = one ? `Sending · ${esc(clip(name(one), 34))}` : `Sending ${items.length} messages`;
     }
-    const spin = failed.length ? '' : '<i class="dots"><b></b><b></b><b></b></i>';
+    const spin = failed.length || items.some(it => ['unconfirmed', 'held', 'empty'].includes(it.state) || OUTBOX?.quarantined(it.id)) ? '' : '<i class="dots"><b></b><b></b><b></b></i>';
     return `<div class="ch-pill${cls}" data-sendpill="${items.length}" role="status"><span class="pl"${open}>${spin}<span>${label}</span></span>${btns}</div>`;
   }
   // Rotate one storage write: the live new-chat slot → a saved slot, the chosen saved slot → the live one.
@@ -308,6 +316,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function renderChatList(w, el) {
     if (!el) return;
+    if (window.__wosScrollCapture?.hold(el, null)) { ch(w.id).heldList = true; return; }
     ch(w.id).heldList = false;
     H.threadShown?.(w.id, null); // the list is showing: nothing is bound to this window
     const c = ch(w.id), n = norm(c.q);
@@ -345,7 +354,7 @@ window.WizCore.chats = function createChats(H) {
     const outNew = OUTBOX ? OUTBOX.unsent().filter(it => (it.agent || '') === AGID && (it.kind === 'new' || it.kind === 'reply') && !(it.state === 'failed' && (it.audio || it.audioFile)) && (!n || norm(it.text).includes(n))) : [];
     // A message still leaving the phone already shows as its thread's "Sending…" row in Working; the pill is only
     // for trouble (offline / not sent) or a thread that isn't in the list.
-    const pill = sendPill(outNew.filter(it => it.state === 'failed' || it.state === 'waiting' || !LIVE.session(it.sessionId)), w);
+    const pill = sendPill(outNew.filter(it => ['failed', 'waiting', 'unconfirmed'].includes(it.state) || OUTBOX?.quarantined(it.id) || !LIVE.session(it.sessionId)), w);
     if (false) {}
     else if (!LST.ok) body = draftSec + `<div class="ch-empty">${LST.error === 'access' ? 'Wizard needs you to sign in. Open /wizard/ once, then come back.' : AGID ? (LST.error ? `Can’t reach ${esc(agentName(AGID))} · open Agents to check it is running` : `Connecting to ${esc(agentName(AGID))}…`) : 'Connecting to Wizard…'}</div>`;
     else if (AGID && !all.length && !n && !filtered) body = `<div class="ch-empty"><b>No chats with ${esc(agentName(AGID))} yet</b><br>Tap + to start one. ${agentRec(AGID).privacy === 'private' ? 'They stay with this agent: the main agent can’t search or read them.' : 'They stay in this agent’s chats.'}</div>`;
@@ -372,7 +381,7 @@ window.WizCore.chats = function createChats(H) {
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
     const fab = `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
-    const html = `<div class="ch-list${AGID ? ' agent' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${agentStrip(AGID, 'list')}${head}<div class="ch-scroll">${sugHtml}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
+    const html = `<div class="ch-list${AGID ? ' agent' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}<div class="ch-scroll">${sugHtml}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -594,8 +603,8 @@ window.WizCore.chats = function createChats(H) {
   };
   const owner = id => (H.owner ? H.owner(id) : id);
   /* ---- Agents MVP: per-agent Chats. A window pinned to a non-default agent (w.agent) lists only that agent's
-   * threads, starts new chats on it, and every view carries a header naming the agent (sigil, colour, label,
-   * lock when private). A thread always shows the agent it is pinned to (server metadata), whatever window. ---- */
+   * threads and starts new chats on it. The shell title bar owns agent identity; the thread keeps its
+   * conversation title and model picker without repeating the agent banner. ---- */
   const AGS = () => window.WosAgents || null;
   function winAgent(w) { const o = (w && W[owner(w.id)]) || w; const id = o?.agent || ''; const A = AGS(); return id && (!A || A.isOther(id)) ? id : ''; }
   function agentRec(id) {
@@ -605,12 +614,6 @@ window.WizCore.chats = function createChats(H) {
   }
   // The agent name used in composer hints and receipts: the open agent's label, else the main agent's name.
   const agentName = id => id ? agentRec(id).label : window.WizConfig.agent();
-  // The strip is always there in an agent's Chats; in the main Chats only once there is more than one agent.
-  function agentStrip(id, where, model) {
-    const A = AGS(); if (!A) return '';
-    if (!id && !A.others().length) return '';
-    return A.badge(agentRec(id), { where, model });
-  }
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
     const s = LIVE.session(sid); if (!s || !ACT[a]) return;
@@ -773,6 +776,7 @@ window.WizCore.chats = function createChats(H) {
     }
   }
   let selT = 0;
+  document.addEventListener('wos-scroll-capture-end', () => queueMicrotask(flushHeld));
   document.addEventListener('selectionchange', () => {
     const s = window.getSelection?.(), on = !!s && !s.isCollapsed;
     if (!on) SEL.since = 0; else if (!SEL.since) SEL.since = Date.now();
@@ -781,6 +785,7 @@ window.WizCore.chats = function createChats(H) {
   setInterval(flushHeld, 10000); // bounded recovery for lost touch/selection-end or an external sheet close
   const PAGE = 60;
   function renderThread(w, el, keep) {
+    if (window.__wosScrollCapture?.hold(el, draftKey(w))) { ch(w.id).held = true; return; }
     ch(w.id).held = false; // explicit actions/navigation may repaint immediately
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
     // The thread's own agent (pinned at creation); a new chat belongs to the window's agent.
@@ -834,9 +839,8 @@ window.WizCore.chats = function createChats(H) {
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
-    const curM = PW && TAG && !isNew && s ? window.WosModels?.currentRoute(s.id) : null;
     el.innerHTML = `<div class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>${agentStrip(TAG, 'thread', curM?.model ? AGS()?.modelName(agentRec(TAG), curM.model) : '')}
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       <form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
@@ -850,6 +854,10 @@ window.WizCore.chats = function createChats(H) {
     if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
     growTa(el.querySelector('textarea'));
+    // Desktop renders before revealing its thread pane. Measure once it is visible,
+    // retaining a usable first layout even before the user types or a live repaint runs.
+    const field = el.querySelector('textarea');
+    requestAnimationFrame(() => { if (field?.isConnected && field === el.querySelector('textarea')) growTa(field); });
     PW?.paint(w.id, el);
     // The shell may bind the view this thread's latest reply links (phone: bound views beside the thread).
     if (!isNew && turns) H.threadShown?.(w.id, el);
@@ -942,6 +950,10 @@ window.WizCore.chats = function createChats(H) {
     return OUTBOX.forThread(w.thread === '__new__' ? '' : w.thread, w.thread === '__new__' ? w.id : '');
   }
   function pendingState(p) {
+    if (OUTBOX?.quarantined(p.id)) return '<span class="pst wait">Waiting for device storage verification · not sending</span>';
+    if (p.state === 'unconfirmed') return `<span class="pst fail">${esc(p.error)}</span>`;
+    if (p.state === 'empty') return `<span class="pst fail">No speech detected · recording kept</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry transcription</button><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
+    if (p.state === 'held') return '<span class="pst">Kept on this device · not queued</span>';
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`;
     if (p.state === 'waiting') return `<span class="pst wait">${esc(p.error || 'Couldn’t reach Wizard')} · retrying</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>`;
     const agent = esc(window.WizConfig.agent());
@@ -952,7 +964,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function pendingHtml(p, c) {
     const files = (p.files || []).filter(f => f !== p.audioFile);
-    const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text ? '' : ' · words come when it sends'}</span></div>` : '';
+    const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text || p.state === 'empty' ? '' : ' · words come when it sends'}</span></div>` : '';
     const words = p.text || p.typed || ''; // a voice note not yet transcribed shows the typed words riding with it
     return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}" data-ob="${esc(p.id)}"><div class="bub">${voice}${userMedia(c || { media: [] }, files, [])}${words ? md(words) : ''}</div><div class="pmeta">${pendingState(p)}</div></div>`;
   }
@@ -996,19 +1008,7 @@ window.WizCore.chats = function createChats(H) {
           || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
         let gone = false;
         for (const p of sent) if (landed(p)) { OUTBOX.landed(p.id); gone = true; }
-        // The run settled and the steer never reached the transcript: Hermes ended the turn before reading
-        // it and returned it as pending_steer for the client to replay. Two settled polls, then replay it
-        // as an ordinary message so it is never silently dropped.
-        const sNow = LIVE.session(w.thread), settled = !!sNow && !WORKING_ST.has(sNow.status) && sNow.status !== 'waiting_for_approval';
-        for (const p of sent) {
-          if (!p.steered || p.steerQueued || landed(p)) continue;
-          if (!settled) { p.settledPolls = 0; continue; }
-          p.settledPolls = (p.settledPolls || 0) + 1; gone = true;
-          if (p.settledPolls < 2 || p.replayed) continue;
-          p.replayed = true; OUTBOX.landed(p.id);
-          OUTBOX.enqueue({ kind: 'reply', sessionId: p.sessionId, text: p.text, files: (p.files || []).filter(f => f !== p.audioFile), wid: p.wid, source: p.source });
-          H.toast('↻', `${window.WizConfig.agent()} finished before reading your steer · sent it as a new message`, 2600);
-        }
+        // Transcript absence is not a rejection receipt. Never replay accepted steering.
         if (gone) changed = true;
       }
       if (await loadApproval(w, LIVE.session(sid))) changed = true;
@@ -1044,16 +1044,22 @@ window.WizCore.chats = function createChats(H) {
     if (prev && prev !== w.thread && LIVE.session(prev)) { openChat(w.id, prev, { keepTrail: true }); return 'trail'; }
     chatsBack(w); return 'thread';
   }
-  /* After a send from a thread (or New chat): back to the list on the phone. The desktop keeps the thread
-   * pane, since its list is already beside it. Only if the window still shows the thread that was sent from;
-   * a thread James opened meanwhile stays open. Orb sends already show the send pill, so no second toast. */
+  /* Send steps back one level on the phone: linked parent, otherwise the list. Desktop keeps its thread
+   * pane. The pinned send target is independent of this navigation; later callbacks cannot pop the parent.
+   * Return an owned recovery receipt so a failed local save can restore the composer without stealing a
+   * newer navigation (including an A → B → A round trip). */
   const PHONE = () => (document.documentElement.dataset.shell || 'phone') !== 'desktop';
   function leaveAfterSend(wid, sid, isNew, how = '') {
     const w = W[wid]; if (!w || !sid || w.thread !== sid || !(isNew || PHONE())) return false;
-    const c = ch(wid); c.readNav = (c.readNav || 0) + 1; w.thread = null; save(); c.loadedFor = ''; c.draftFor = '';
-    // No toast: the thread is already the top row of Working, its status following the message (Sending… →
-    // Starting… → Working). A "Sent" banner over a row still saying "Sending…" contradicted it.
-    return true;
+    const c = ch(wid), trail = [...(c.trail || [])];
+    if (!isNew && trail.length) threadBack(w);
+    else { c.readNav = (c.readNav || 0) + 1; c.trail = []; w.thread = null; save(); c.loadedFor = ''; c.draftFor = ''; }
+    const destination = w.thread, nav = c.readNav;
+    // No toast: the sending thread's existing Working/send indicator owns progress.
+    return { restore() {
+      if (W[wid] !== w || w.thread !== destination || c.readNav !== nav) return;
+      c.trail = trail; openChat(wid, sid, { keepTrail: true });
+    } };
   }
   /* One send carries the whole composer (legacy Wizard H4, `composeVoiceTurnText`; James, 10 Oct 2026: "when I
    * paste a link in the text box and I send you a voice note … they should both be sent together. The images and
@@ -1092,19 +1098,22 @@ window.WizCore.chats = function createChats(H) {
       refreshCompose(wid);
     }
     KIT.drafts.set(dkey, '', rest);
-    const skey = SEALED + sid + ':' + Date.now().toString(36);
+    const skey = SEALED + sid + ':' + crypto.randomUUID().replaceAll('-', '');
     KIT.drafts.set(skey, text, files);
     let open = true;
-    return { text, files,
-      done() { if (open) { open = false; KIT.drafts.clear(skey); } },
+    return { text, files, key: skey,
+      done(it) { if (it && !it.durable) return; if (open) { open = false; KIT.drafts.clear(skey); } },
       putBack() { if (!open) return; open = false; KIT.drafts.clear(skey); restoreInto(wid, sid, text, files); } };
   }
   // At start: words taken by a voice send that never reached the outbox (the page died mid-send) go back.
+  const startupSeals = new Set(Object.keys(KIT.drafts.all()).filter(k => k.startsWith(SEALED)));
   function restoreSealed() {
+    if (!OUTBOX?.recoveryComplete) return;
     for (const k of Object.keys(KIT.drafts.all())) {
-      if (!k.startsWith(SEALED)) continue;
+      if (!startupSeals.has(k)) continue;
+      startupSeals.delete(k);
       const d = KIT.drafts.get(k), sid = k.slice(SEALED.length).replace(/:[a-z0-9]+$/, '');
-      KIT.drafts.clear(k); if (sid) restoreInto('', sid, d.text, d.files);
+      KIT.drafts.clear(k); if (sid && !OUTBOX.ownsSeal(k)) restoreInto('', sid, d.text, d.files);
     }
   }
   // Typed words first, then what was said (legacy order: the pasted link is the context the voice talks about).
@@ -1134,40 +1143,41 @@ window.WizCore.chats = function createChats(H) {
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
-    const AGID = isNew ? winAgent(w) : '';
+    const AGID = isNew ? (opts.route?.agent || winAgent(w)) : '';
     const dkey = isNew ? (AGID ? 'agentnew:' + AGID : 'new') : 'direct:' + sid;
     if (here && !voice) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; }
     if (here) c.follow = true;
     const nm = opts.route || (isNew && PW ? PW.newModel(c) : null); // a model picked for this new chat (#11)
     if (nm) c.newModel = null;
-    // Send and go (James, 10 Oct 2026): on the phone every send steps back to the thread list, a new thread
-    // and a reply alike, so he never waits on the screen to watch it go. Keyed on the pinned thread: a thread
+    // Send and go: on the phone a reply steps back one level; a new thread
+    // returns to the list, without waiting on delivery. Keyed on the pinned thread: a thread
     // James opened since stays open.
     // It happens on the tap itself, BEFORE the outbox save is awaited (James, 10 Oct 2026: "it should immediately
     // send me back to the message list… there's a second or two delay"). Leaving after `await OUTBOX.enqueue`
     // tied the screen to the phone's IndexedDB commit plus every outbox listener's re-render: ~80 ms on a desktop
     // Chrome, 1-2 s in the phone's WebView. The reply's thread is held under Working from the same frame
     // (live.js holdSend, the orb's path) until its outbox item takes over. qa-send-leave-timing.cjs guards this.
+    const instructions = opts.instructions || viewContext(wid, how);
     const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
     const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     // Saved on the phone; the outbox delivers it (and retries) from here.
     let it;
     try {
-      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
-        instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
+      it = await OUTBOX.enqueue({ captureId: opts.captureId, custodyId: opts.custodyId, sealKey: sealed?.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
+        instructions, files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
     } catch (e) {
       // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
       // thread if the window is still on the list he was sent to.
       if (hold) LIVE.releaseSend?.(hold);
       if (nm) c.newModel = nm;
       if (sealed) sealed.putBack(); else if (here && !voice) KIT.drafts.set(dkey, text, tray);
-      if (left && W[wid] && !W[wid].thread) openChat(wid, sid);
+      if (left) left.restore();
       if (audio) throw e; // a recording: its caller keeps its own copy and reports it, as before
       toast('!', 'Couldn’t save that message · your words are back in the thread', 3200);
       return null;
     }
-    sealed?.done();
+    sealed?.done(it);
     if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     return it;
   }
@@ -1176,7 +1186,11 @@ window.WizCore.chats = function createChats(H) {
   document.body.appendChild(picker);
   let pickFor = '';
   picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
-  function growTa(ta) { if (!ta) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; }
+  function growTa(ta) {
+    if (!ta) return;
+    ta.style.height = 'auto';
+    if (ta.getClientRects().length && ta.clientWidth) ta.style.height = Math.min(Math.max(42, ta.scrollHeight + 2), 140) + 'px';
+  }
   // While a thread is on screen AND James is at that screen, new replies count as read (same rule as Wizard).
   // "At the screen" = the page was opened, brought to the front, touched, clicked, typed in or scrolled within
   // ATTEND_MS. A window left open on a thread (James, 14 Oct 2026: a Mac tab sat on "Our PRs" and marked its new
@@ -1212,6 +1226,11 @@ window.WizCore.chats = function createChats(H) {
         .then(async r=>{ if(!r.ok) throw new Error(r.status===409 ? 'Already active or no longer resumable' : 'Could not resume'); await LIVE.refresh(); toast('↻','Continuing the same request',1800); })
         .catch(err=>{ hc.disabled=false; hc.textContent=hc.dataset.preview ? 'Try Continue · example only' : 'Continue'; toast('!',''+err.message,2600); });
       return true;
+    }
+    const dismiss = e.target.closest('[data-obdismiss]'); if (dismiss) {
+      Promise.resolve(OUTBOX.dismissEmpty(dismiss.dataset.obdismiss)).then(ok => {
+        H.toast(ok ? '✓' : '!', ok ? 'Bubble dismissed · recording kept in Unsent messages' : 'Could not save dismissal · recording kept', 2400);
+      }); return true;
     }
     const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); H.toast('↻', 'Sending again', 1400); return true; }
     if (e.target.closest('[data-obretryall]')) { OUTBOX.retryAll(); H.toast('↻', 'Sending again', 1400); return true; }
@@ -1267,6 +1286,21 @@ window.WizCore.chats = function createChats(H) {
     if (al && window.WizCore.deeplink?.route(al.getAttribute('href'), al)) { e.preventDefault(); return true; }
     if (al && H.openLink) { let u = null; try { u = new URL(al.getAttribute('href'), location.href); } catch (err) {}
       if (u && (window.WosChat?.isHomeUrl ? window.WosChat.isHomeUrl(u) : u.origin === location.origin) && !u.pathname.startsWith('/wizard-os-home')) { e.preventDefault(); H.openLink(u.pathname + u.search + u.hash, (al.textContent || '').trim().slice(0, 40) || u.pathname); return true; } }
+    const qc = e.target.closest('[data-quotecopy]');
+    if (qc) {
+      const text = qc.closest('blockquote[data-quote-source]')?.dataset.quoteSource || '';
+      (KIT.copyRich || KIT.copyText)(text).then(ok => { qc.textContent = ok ? 'Copied' : 'Couldn’t copy'; setTimeout(() => { qc.textContent = 'Copy'; }, 1500); });
+      return true;
+    }
+    const qs = e.target.closest('[data-quoteshare]');
+    if (qs) {
+      const text = qs.closest('blockquote[data-quote-source]')?.dataset.quoteSource || '';
+      KIT.shareText(text).then(r => {
+        if (r === 'copied') toast('⧉', 'Copied · sharing isn’t available here', 1800);
+        else if (r === 'unsupported' || r === 'failed') toast('!', 'Couldn’t share', 1800);
+      }).catch(() => toast('!', 'Couldn’t share', 1800));
+      return true;
+    }
     const cc = e.target.closest('[data-codecopy]'); if (cc) { const t = cc.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.copyText(t).then(ok => { cc.textContent = ok ? 'Copied' : 'Couldn’t copy'; setTimeout(() => { cc.textContent = 'Copy'; }, 1500); }); return true; }
     const cs = e.target.closest('[data-codeshare]'); if (cs) { const t = cs.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.shareText(t).then(r => r === 'copied' && toast('⧉', 'Copied · sharing isn’t available here', 1800)); return true; }
     const mc = e.target.closest('[data-mcopy]'); if (mc) { const t = ch(id).texts?.[+mc.dataset.mcopy] ?? ''; (KIT.copyRich || KIT.copyText)(t).then(ok => toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400)); return true; }
@@ -1343,6 +1377,8 @@ window.WizCore.chats = function createChats(H) {
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
   OUTBOX?.onChange(() => {
+    restoreSealed();
+    for (const it of OUTBOX._items.values()) if (it.durable && it.sealKey) KIT.drafts.clear(it.sealKey);
     const sig = OUTBOX.unsent().filter(it => it.kind === 'new' || it.kind === 'reply').map(it => it.id + ':' + it.state + ':' + (it.error || '')).join(',');
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }

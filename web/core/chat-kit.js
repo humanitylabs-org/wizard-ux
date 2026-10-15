@@ -188,12 +188,20 @@
   // A path on this Wizard ("/cinequeue/"), never a protocol-relative "//host" or a "/\\host" trick.
   const HOME_PATH = /^\/(?![\/\\])[^\s]*$/;
   const SESSION_REF = /@session:default\/([A-Za-z0-9_](?:[A-Za-z0-9._:-]{0,178}[A-Za-z0-9_])?)/g;
-  const SESSION_HREF = /^\/wizard\/\?session=([A-Za-z0-9._:%-]{1,240})$/;
+  const SESSION_ID = /^(?!\.{1,2}$)[A-Za-z0-9._:-]{1,180}$/; // Same contract as core/deeplink.js.
+  const THREAD_PATHS = new Set(['/', '/wizard/', '/wizard-os-home/']);
+  const sessionHtml = (id, inner) => `<a href="/wizard-os-home/?session=${encodeURIComponent(id)}" class="wsl" data-session="${esc(id)}">${inner}</a>`;
   const PRIVATE_MEDIA = /^(\/wizard\/(?:files\/[A-Za-z0-9._:-]+\/content|attachments\/[0-9a-f]{32}))$/;
   function linkHtml(href, inner) {
-    href = homePath(href);
-    const sm = href.match(SESSION_HREF);
-    if (sm) { let id = ''; try { id = decodeURIComponent(sm[1]); } catch (e) {} if (/^[A-Za-z0-9._:-]{1,200}$/.test(id)) return `<a href="/wizard/?session=${encodeURIComponent(id)}" class="wsl" data-session="${esc(id)}">${inner}</a>`; }
+    // Check the original origin before homePath's historical hostname aliases can rewrite it.
+    let u; try { u = new URL(href, location.href); } catch (e) {}
+    const threadPath = u && THREAD_PATHS.has(u.pathname) && u.searchParams.has('session');
+    if (threadPath && u.origin === location.origin) {
+      const id = u.searchParams.get('session');
+      return SESSION_ID.test(id) ? sessionHtml(id, inner) : `<span class="badlink">${inner}</span>`;
+    }
+    // An external thread-shaped URL remains external, including //other-origin/?session=… .
+    href = threadPath ? u.href : homePath(href);
     const pm = href.match(PRIVATE_MEDIA);
     if (pm) return `<a href="${esc(pm[1])}" data-mlink="${esc(pm[1])}">${inner}</a>`;
     if (SAFE_HREF.test(href) || HOME_PATH.test(href)) return `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
@@ -211,7 +219,7 @@
       // Every bare URL becomes a link, whatever wraps it (**bold**, _italic_, ~~del~~, [brackets], "Link:url").
       // Emphasis markers and closing punctuation at the end stay outside the link.
       s = s.replace(/(^|[^A-Za-z0-9/.@=&%+-])(https?:\/\/[^\s<>"'*\u0001\u0002]*[^\s<>"'*_~.,;:!?)\]’”\u0001\u0002])/g, (_, pre, u) => pre + put(linkHtml(u, esc(u))));
-      s = s.replace(SESSION_REF, (m, id) => put(`<a href="/wizard/?session=${encodeURIComponent(id)}" class="wsl" data-session="${esc(id)}">${esc(m)}</a>`));
+      s = s.replace(SESSION_REF, (m, id) => put(sessionHtml(id, esc(m))));
     }
     let h = esc(s)
       .replace(/\*\*\*(?=\S)([\s\S]*?\S)\*\*\*/g, '<strong><em>$1</em></strong>')
@@ -288,7 +296,7 @@
       if (QUOTE.test(l)) {
         const body = [];
         while (i < lines.length && lines[i].trim() && ((m = lines[i].match(QUOTE)) || !startsBlock(lines, i))) { body.push(m ? m[1] : lines[i]); m = null; i++; }
-        out += `<blockquote>${blocks(body, depth + 1)}</blockquote>`; continue;
+        out += `<blockquote data-quote-source="${esc(body.join("\n"))}">${blocks(body, depth + 1)}<div class="quote-actions" role="group" aria-label="Quote actions"><button type="button" data-quotecopy aria-label="Copy quote">Copy</button><button type="button" data-quoteshare aria-label="Share quote">Share</button></div></blockquote>`; continue;
       }
       if (isTable(lines, i)) {
         const head = cells(lines[i]), al = cells(lines[i + 1]).map(c => /^:-+:$/.test(c) ? 'center' : /-:$/.test(c) ? 'right' : /^:/.test(c) ? 'left' : '');
@@ -379,7 +387,7 @@
   function richParts(src) {
     const box = document.createElement('div');
     box.innerHTML = md(String(src ?? ''));
-    box.querySelectorAll('button, .code-h, script, style, img, video, audio, svg, iframe').forEach(e => e.remove());
+    box.querySelectorAll('button, .code-h, .quote-actions, script, style, img, video, audio, svg, iframe').forEach(e => e.remove());
     box.querySelectorAll('div.tbl, div.code').forEach(d => d.replaceWith(...d.childNodes));
     for (const el of box.querySelectorAll('*')) {
       const keep = RICH_KEEP[el.tagName] || [];

@@ -20,6 +20,20 @@ Browser song capture uses MediaRecorder with supported codec selection. Browser 
 
 Native song/voice capture reuses `WizardOSDevice`'s existing foreground recorder, recRead/recClaim recovery and recDone after ack. Native meeting capture reuses `wizardNative.meetings`, a host-supplied bridge, or the existing `wizardMizelPort` with bounded command waits. Never overwrite a port's existing listener: attach its wrapper. Native meeting bridge owns its original 5s uploads, meeting status and final_seq; `onNativeState` preserves those flows. Result has `partial:true`, `meta.native.backendOwned:true`, and only a **backup PCM tee**, not replacement full-quality audio. Do not re-upload this backup over native task audio; verify the original task backend before ack. Native bridge without PCM still exposes interrupted metadata rather than silently switching to browser/AAC. Late ambiguous stop errors reconcile native status before retrying. Existing device recorder without meeting bridge refuses simplified AAC meeting fallback.
 
+## Explicit non-meeting PCM in Android WebView
+
+`{kind:'outline', pcm:true}` selects the existing shared browser PCM engine when the DeviceBridge recorder is AAC-only. Ordinary device capture stays AAC; meetings keep their native bridge and backend ownership. Persisted native rows always use native recovery/resume/ack, even if a caller now requests PCM. No meeting is created for non-meeting capture.
+
+Capabilities report browser PCM only when getUserMedia, AudioContext/AudioWorklet, AudioWorkletNode and the shared worklet script URL exist; permission is still required at start. The shared Web Lock, IndexedDB custody and shell hold remain authoritative. Browser admission rechecks native voice (including paused/unknown ownership), recovered meetings and ambiguous native reservations after acquiring the shared lock. App frames continue to use `WizardApp.capture`, never their own recorder.
+
+Run the focused suite on the authorized browser worker, with Playwright/Chromium and temporary data configured there:
+
+```sh
+CAPTURE_EVIDENCE=/path/to/isolated/evidence SOURCE_SHA=$(git rev-parse HEAD) node qa-app-capture/outline-pcm.cjs
+```
+
+This uses real Chromium AudioWorklet, WAV encoding, IndexedDB, Web Locks and the hosted facade with fake microphone input and explicit native bridge fixtures. It checks PCM capability/streaming, native busy admission, native AAC recovery/ack, native meeting routing, denial, frame/shell reload, byte-identical pending readback and owner-only ack. Also run the existing `qa-app-capture/run.cjs` and `npm test`. This is not Android hardware or background-service acceptance: WebView PCM remains shell-bound and may suspend or lose an unflushed tail on OS process destruction, unlike native foreground recording.
+
 ## Durability and limits
 
 Web Locks arbitrate one recorder across same-origin module contexts; no unsafe fallback when locks are missing. IDB persists individual pieces no larger than1MiB and an atomic row/chunk sequence. Storage-persistence request is advisory; IDB commits are mandatory. Default total threshold512MiB (caller can reduce maxBytes); reaching it automatically stops partially. Failures retain queued chunks and the owner/hold for explicit stop retry. Results persist until ack or explicit cancel. Startup recovery tolerates unavailable native bridges per-row; it does not block unrelated browser app takes. Native bridge must return before its row can be acknowledged. The host must also check shared capture state before starting the pre-existing shell orb recorder; this module cannot retrofit that caller in its owned scope.

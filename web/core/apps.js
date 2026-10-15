@@ -6,7 +6,8 @@
   const ALL = [
     { id: 'app-store', kind: 'wizard', name: 'App Store', icon: '+', g: ['#8f63ff', '#ff5ccf'], url: '/wizard-os-home/store/index.html', desc: 'Get apps · Browse the Wizard App Index' },
     // Agents: a system app of its own, reached from Home and System; never in Apps or the Store.
-    { id: 'agents', kind: 'wizard', name: 'Agents', icon: 'secret', g: ['#4ff0b0', '#3fe0ff'], url: '/wizard-os-home/agents/index.html', desc: 'Your agents: harness, model provider, permissions and their own chats', system: true, sigil: { id: 'agents', name: 'Agents', icon: 'wizard', colors: ['#4FF0B0'] } },
+    // Its sigil is the house `agents` mark (two layered hats), never a single hat that could pass for one agent.
+    { id: 'agents', kind: 'wizard', name: 'Agents', icon: 'secret', g: ['#4ff0b0', '#3fe0ff'], url: '/wizard-os-home/agents/index.html', desc: 'Your agents: harness, model provider, permissions and their own chats', system: true, sigil: { id: 'agents', name: 'Agents' } },
     { id: 'system', kind: 'wizard', name: 'System', icon: '◈', g: ['#3fe0ff', '#8f63ff'], url: '/wizard-os-home/system/index.html', desc: 'Your agents, agent apps, connections and routines' },
     // Wizard OS views
     { id: 'v-day', kind: 'view', name: 'Day in review', icon: '☀', g: ['#ff8a5c', '#ff5ccf'], view: 'day', desc: 'What we did yesterday, by project, person and call' },
@@ -61,10 +62,11 @@
   });
   const PALETTE = [['#6b46ff', '#c04dff'], ['#3fe0ff', '#3f6bff'], ['#ff5ccf', '#5c3bff'], ['#4ff0b0', '#2f8cff'], ['#ffbe55', '#ff6b86'], ['#ff8a5c', '#ff5ccf']];
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
-  const toTile = a => ({
+  const toTile = (a, trusted = false) => ({
     id: String(a.id), kind: 'wizard', name: String(a.name || a.id), icon: a.icon || String(a.name || a.id).trim().charAt(0).toUpperCase(),
     g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id), url: a.url || '', desc: a.desc || '',
     ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '',
+    receives_voice_input: trusted === true && a.receives_voice_input === true,
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
@@ -78,13 +80,13 @@
       if (!r.ok) return;
       const list = ((await r.json()).apps || []).filter(a => a && a.id && a.url && a.id !== 'wizard');
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); } catch (e) {}
-      REMOTE = list.map(toTile);
+      REMOTE = list.map(a => toTile(a, true));
       listeners.forEach(fn => fn());
     } catch (e) {}
   }
   const firstLoad = loadRemote();
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
-  window.WizCore.appsLoaded = () => firstLoad;
+  window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load()]);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
 
   function registry(shell) {
@@ -92,7 +94,20 @@
     const APPS = [], APP = {};
     const rebuild = () => {
       const chats = ALL.findIndex(a => a.kind === 'chats');
-      const merged = [...ALL.slice(0, chats + 1), ...REMOTE.filter(r => !ALL.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
+      const AG = window.WosAgents;
+      // Agent chat views are apps; the Agents management app remains separate. Rebuild fresh
+      // records so rename/delete/privacy changes cannot leave cached names or sigils behind.
+      const agentTile = a => ({
+        id: a.is_default ? 'wizard' : `agent:${a.id}`, kind: 'chats',
+        ...(a.is_default ? {} : { agent: a.id }), name: AG.title(a),
+        icon: AG.glyph(a), g: [AG.colour(a), AG.colour(a)],
+        desc: a.is_default ? 'Chats · Your threads with your main Wizard agent' : `Chats with ${AG.title(a)}`,
+        sgc: AG.colour(a), sgh: window.WizSigil?.html({ icon: AG.glyph(a) }),
+      });
+      const main = AG?.list.find(a => a.is_default);
+      const agents = (AG?.list || []).filter(a => !a.is_default).map(agentTile);
+      // Reserve the agent namespace even after deletion: a stale remote app must never impersonate it.
+      const merged = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
       const list = appsFor(shell, merged);
       // Every app wears its sigil (core/sigils.js): sgc = its one colour, sgh = the glyph markup.
       if (window.WizSigil) for (const a of list) if (!a.sgh) { const s = window.WizSigil.of(a.sigil || a); a.sgc = s.color; a.sgh = window.WizSigil.html(a.sigil || a); }
@@ -102,6 +117,7 @@
       window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
     };
     rebuild(); listeners.add(rebuild);
+    window.WosAgents?.onChange(rebuild);
   function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
       if (!q) return null;

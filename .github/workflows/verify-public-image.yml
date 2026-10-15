@@ -1,0 +1,39 @@
+name: Verify published image
+on:
+  pull_request:
+    branches: [daily]
+    paths: [scripts/ci/**, .github/workflows/verify-public-image.yml]
+  workflow_dispatch:
+    inputs:
+      image_sha:
+        description: Full source commit recorded on the existing image
+        required: true
+        type: string
+      digest:
+        description: Exact sha256 index digest from the publisher
+        required: true
+        type: string
+      release_tag:
+        description: Optional existing version tag to verify, never changed
+        default: ''
+        type: string
+permissions:
+  contents: read
+jobs:
+  anonymous-pull:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify existing immutable image without rebuilding or logging in
+        env:
+          # Write-once public fixtures exercise real pulls in PR CI (no build).
+          IMAGE_SHA: ${{ inputs.image_sha || '8c777bbafac8b802ba347c17a2ea616d5e36e59d' }}
+          DIGEST: ${{ inputs.digest || 'sha256:6ad909a8c1bc290c493fee66dae3ff1e12a2c8eedcd784b7173e6b22320f1627' }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: >-
+          python3 scripts/ci/ghcr_image.py verify
+          --image ghcr.io/humanitylabs-org/wizard-ux --sha "$IMAGE_SHA"
+          --digest "$DIGEST" --release "$RELEASE_TAG"

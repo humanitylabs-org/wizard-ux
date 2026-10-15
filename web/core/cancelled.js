@@ -23,8 +23,8 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const J = s => { try { return JSON.parse(s); } catch (e) { return null; } };
   const fmt = ms => { const s = Math.round((Number(ms) || 0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-  const toast = (i, t, ms) => window.__wos?.toast?.(i, t, ms);
-  const SRC = { everywhere: 'Floating orb', side: 'Side button', app: 'Orb', web: 'Orb' };
+  const toast = (i, t, ms) => (window.__wos || window.__wux)?.toast?.(i, t, ms);
+  const SRC = { everywhere: 'Floating orb', side: 'Side button', app: 'Orb', web: 'Orb', desktop: 'Microphone' };
   let web = [];          // [{id, at, ms, source, mime, bytes, blob}]
   const sessionWeb = new Map(); // Failed durable writes keep an explicit retry owner in this page.
   let busy = new Set(), errs = {}, open = new Set();
@@ -35,16 +35,28 @@
   let dbp = null;
   function db() {
     if (!dbp) dbp = new Promise((res, rej) => {
-      if (!window.indexedDB) return rej(new Error('no idb'));
-      const r = indexedDB.open(DB, 1);
-      r.onupgradeneeded = () => r.result.createObjectStore(STORE, { keyPath: 'id' });
-      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
-    });
+      let settled = false, r;
+      const finish = (err, value) => { if (settled) { value?.close(); return; } settled = true; clearTimeout(timer); err ? rej(err) : res(value); };
+      const timer = setTimeout(() => finish(new Error('Recording storage timed out')), 3000);
+      try { r = indexedDB.open(DB, 1); } catch (e) { finish(e); return; }
+      r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains(STORE)) r.result.createObjectStore(STORE, { keyPath: 'id' }); };
+      r.onsuccess = () => { r.result.onversionchange = () => { r.result.close(); dbp = null; }; finish(null, r.result); };
+      r.onerror = r.onblocked = () => finish(r.error || new Error('Recording storage unavailable'));
+    }).catch(e => { dbp = null; throw e; });
     return dbp;
   }
   async function tx(mode, fn) {
     const d = await db();
-    return new Promise((res, rej) => { const t = d.transaction(STORE, mode); const q = fn(t.objectStore(STORE)); t.oncomplete = () => res(q?.result); t.onerror = () => rej(t.error); });
+    return new Promise((res, rej) => {
+      let t, q;
+      const timer = setTimeout(() => { try { t?.abort(); } catch (_) {} rej(new Error('Recording save timed out')); }, 3000);
+      try {
+        t = d.transaction(STORE, mode);
+        t.oncomplete = () => { clearTimeout(timer); res(q?.result); };
+        t.onerror = t.onabort = () => { clearTimeout(timer); rej(t.error || new Error('Recording save failed')); };
+        q = fn(t.objectStore(STORE));
+      } catch (e) { clearTimeout(timer); rej(e); }
+    });
   }
   async function loadWeb() {
     try { web = (await tx('readonly', s => s.getAll())) || []; } catch (e) { web = web || []; }
@@ -52,14 +64,14 @@
     web.sort((a, b) => b.at - a.at);
     for (const t of web) if (t.text && !texts[t.id]) texts[t.id] = t.text;
     const now = Date.now();
-    for (const [i, t] of [...web.entries()]) if (i >= MAX_KEPT || now - t.at > MAX_AGE_MS) await removeWeb(t.id);
+    for (const [i, t] of [...web.entries()]) if (!t.retained && !t.sessionOnly && (i >= MAX_KEPT || now - t.at > MAX_AGE_MS)) await removeWeb(t.id);
     return web;
   }
   async function removeWeb(id) { sessionWeb.delete(id); web = web.filter(t => t.id !== id); try { await tx('readwrite', s => s.delete(id)); } catch (e) {} }
 
-  async function keepWeb(blob, ms, retained = false, text = '') {
+  async function keepWeb(blob, ms, retained = false, text = '', source = 'web') {
     if (!(blob instanceof Blob) || blob.size < (retained ? 1200 : 2000) || (!retained && !(ms >= KEEP_FROM_MS))) return false;
-    const t = { id: 'w' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), at: Date.now(), ms: Math.round(ms), source: 'web', mime: blob.type || 'audio/webm', bytes: blob.size, blob };
+    const t = { retained, id: 'w' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), at: Date.now(), ms: Math.round(ms), source, mime: blob.type || 'audio/webm', bytes: blob.size, blob };
     let persisted = true;
     if (text) t.text = text;
     try { await tx('readwrite', s => s.put(t)); } catch (e) { persisted = false; /* memory only for this session */ }
@@ -67,22 +79,24 @@
     if (text) { t.text = text; texts[t.id] = text; saveTexts(); open.add(t.id); }
     web.unshift(t); await loadWeb().catch(() => {}); if (!web.find(x => x.id === t.id)) web.unshift(t);
     repaint();
-    return retained ? persisted : true;
+    return persisted;
   }
-  async function retrySave(id) {
+  async function retrySave(id, quiet = false) {
+    if (window.WosOutbox?.get(id)) { await window.WosOutbox.pump(); repaint(); return; }
     const t = sessionWeb.get(id); if (!t) return;
     try {
       const saved = { ...t }; delete saved.sessionOnly;
       await tx('readwrite', s => s.put(saved));
       sessionWeb.delete(id); web = web.map(x => x.id === id ? saved : x);
       toast('✎', 'Recording saved on this device', 2000);
-    } catch (_) { toast('!', 'Storage still unavailable · keep this page open', 3000); }
+    } catch (_) { if (!quiet) toast('!', 'Storage still unavailable · keep this page open', 3000); }
     repaint();
   }
 
   function nativeList() { const d = DEV(); if (!d) return []; return (J(d.cancelledList()) || []).map(t => ({ ...t, native: true })); }
   function all() {
-    const l = nativeList().concat(web.map(({ blob, ...t }) => t));
+    const custody = (window.WosOutbox?.recordings() || []).filter(x => x.state !== 'capturing').map(x => ({ id: x.id, at: x.createdAt, source: 'web', ms: x.ms || 0, mime: x.audio.type, bytes: x.audio.size, custody: true, sessionOnly: !x.durable, conversation: x.kind === 'conversation', text: x.text, error: x.error, state: x.state }));
+    const l = nativeList().concat(web.map(({ blob, ...t }) => t), custody);
     l.sort((a, b) => b.at - a.at);
     for (const k of Object.keys(texts)) if (!l.some(t => t.id === k)) delete texts[k];
     return l;
@@ -99,6 +113,7 @@
     return new Blob(parts, { type: type || 'audio/mp4' });
   }
   function blobOf(t) {
+    if (t.custody) return window.WosOutbox.get(t.id)?.audio;
     if (t.native) return readNative(t.id, t.mime);
     const w = web.find(x => x.id === t.id); return w ? w.blob : null;
   }
@@ -116,7 +131,7 @@
     try {
       const blob = blobOf(t); if (!blob || blob.size < 1000) throw new Error('The recording is empty');
       const prompt = window.WizConfig.voicePrompt?.() || '';
-      const j = await window.WizConfig.transcribe(blob, { prompt, language: 'en' });
+      const j = t.custody ? await window.WosOutbox.transcribeDictation(id) : await window.WosOutbox.bounded(signal => window.WizConfig.transcribe(blob, { prompt, language: 'en', signal }));
       const text = String(j.text || '').trim();
       if (!text) throw new Error('No speech found in it');
       texts[id] = text; saveTexts(); open.add(id);
@@ -129,29 +144,31 @@
   }
   async function remove(id) {
     const t = all().find(x => x.id === id); if (!t) return;
-    if (t.native) { try { DEV().cancelledDelete(id); } catch (e) {} } else await removeWeb(id);
+    if (t.custody) { const removed = await window.WosOutbox.remove(id); if (!removed) { toast('!', 'Deletion not saved · keep Wizard open', 2400); return; } }
+    else if (t.native) { try { DEV().cancelledDelete(id); } catch (e) {} } else await removeWeb(id);
     delete texts[id]; saveTexts(); open.delete(id);
     toast('✕', 'Deleted', 1200); repaint();
   }
 
   const ago = at => { const m = Math.round((Date.now() - at) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
   function row(t) {
-    const b = busy.has(t.id), tx = texts[t.id], err = errs[t.id];
+    const b = busy.has(t.id) || ['transcribing', 'sending'].includes(t.state), tx = texts[t.id] || t.text, err = errs[t.id] || t.error;
     return `<div class="cx-row" data-cxid="${esc(t.id)}">
       <div class="cx-t"><b>${fmt(t.ms)}</b> · ${esc(SRC[t.source] || 'Orb')} · ${esc(ago(t.at))}</div>
-      ${tx && open.has(t.id) ? `<div class="cx-text" data-cxtext>${esc(tx)}</div>` : ''}
+      ${tx && (open.has(t.id) || t.conversation) ? `<div class="cx-text" data-cxtext>${esc(tx)}</div>` : ''}
+      ${t.conversation ? `<div class="cx-t">App voice input · original destination retained</div><button data-cx="manager" ${b ? 'disabled' : ''}>Retry original to app</button>` : ''}
       ${err ? `<div class="cx-err">${esc(err)}</div>` : ''}
       ${t.sessionOnly ? '<div class="cx-err">Storage unavailable · kept only while this page stays open.</div><button data-cx="save">Retry saving</button>' : ''}
       <div class="ub-a"><button data-cx="copy" ${b ? 'disabled' : ''}>${b ? 'Transcribing…' : tx ? 'Copy again' : 'Transcribe &amp; copy'}</button>${tx ? `<button data-cx="show" class="ghost">${open.has(t.id) ? 'Hide words' : 'Show words'}</button>` : ''}<button data-cx="delete" class="ghost">Delete</button></div></div>`;
   }
   function html() {
     const l = all();
-    return `<div class="st-group" data-cancelled><h4>Cancelled recordings <span>${l.length || ''}</span></h4>
+    return `<div class="st-group" data-cancelled><h4>Recovered &amp; cancelled recordings <span>${l.length || ''}</span></h4>
       ${l.length ? l.map(row).join('') : '<div class="st-empty">Nothing here. Cancel a recording after 15 seconds or more and it waits here, ready to transcribe.</div>'}
-      <p class="st-note">Tapped the X by accident? Recordings over 15 seconds are kept on this phone for a week (the newest ${MAX_KEPT}). Transcribe &amp; copy puts the words on your clipboard.</p></div>`;
+      <p class="st-note">Interrupted and retained recordings stay until deleted. Older cancelled recordings may expire after a week (the newest ${MAX_KEPT}). Transcribe &amp; copy never sends to an agent.</p></div>`;
   }
   function repaint() {
-    const g = document.querySelector('#settingsBody [data-cancelled]');
+    const g = document.querySelector('[data-settings-root] [data-cancelled]');
     if (g) g.outerHTML = html();
   }
   function act(el) {
@@ -159,12 +176,16 @@
     const id = b.closest('[data-cxid]')?.dataset.cxid; if (!id) return true;
     const a = b.dataset.cx;
     if (a === 'copy') transcribe(id);
+    else if (a === 'manager') window.WosOutbox.retryConversation(id).then(repaint);
     else if (a === 'save') retrySave(id);
     else if (a === 'delete') remove(id);
     else if (a === 'show') { open.has(id) ? open.delete(id) : open.add(id); repaint(); }
     return true;
   }
 
+  addEventListener('beforeunload', e => { if (sessionWeb.size) { e.preventDefault(); e.returnValue = ''; } });
+  setInterval(() => { for (const id of sessionWeb.keys()) retrySave(id, true); }, 5000);
+  window.WosOutbox?.onChange(repaint);
   loadWeb().then(repaint).catch(() => {});
   window.WosCancelled = { KEEP_FROM_MS, keepWeb, retainWeb: (blob, ms, text = '') => keepWeb(blob, ms, true, text), html, act, repaint, list: all, transcribe, retrySave, _texts: texts };
 })();

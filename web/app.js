@@ -180,7 +180,7 @@
   }
   function winApp(w) {
     if (agentWin(w)) return agentApp(w);
-    if (w.app === 'chats') return CHATS_APP;
+    if (w.app === 'chats') return { ...CHATS_APP, sgc: window.WosAgents?.colour(window.WosAgents.get(window.WosAgents.defaultId())) || '#C1AAFF' };
     if (w.app === 'review') return APP[w.z?.level === 'month' ? 'v-month' : w.z?.level === 'week' ? 'v-week' : 'v-day'] || { name: 'Review', icon: '◐', g: ['#444a60', '#22263a'] };
     if (w.app === 'maps') return APP.maps;
     if (w.app === 'usuals') return APP.usuals || { name: 'Food', icon: '🍜', g: ['#00b14f', '#0a5c32'] };
@@ -212,6 +212,7 @@
   function winBody(w) {
     switch (w.app) {
       case 'chats': return `<div class="chats" data-chats="${w.id}"></div>`;
+      case 'feature': return '<div class="shared-feature"></div>';
       case 'review': return renderReviewShell(w.id);
       case 'frame': return renderFrame(w);
       case 'maps': return renderMaps(w);
@@ -224,7 +225,7 @@
     const el = document.createElement('article');
     const rv = !!(w.from && w.from.sid);
     el.className = `win app-${w.app}${w.appId === 'app-store' || w.appId === 'system' || w.appId === 'agents' ? ' store-window' : ''}${agentWin(w) ? ' agent-chats' : ''}${rv ? ' reviewing' : ''}${w.bound ? ' bound' : ''}`; el.dataset.win = w.id;
-    el.innerHTML = `<header class="wbar">${ico('span', 'wic', a)}<span class="wt">${esc(winTitle(w))}</span>${rv ? '<span class="rv-tag">Review</span>' : ''}
+    el.innerHTML = `<header class="wbar">${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'wic', 'wt') : `${ico('span', 'wic', a)}<span class="wt">${esc(winTitle(w))}</span>`}${window.WosBoundView.badge(w)}
       ${w.from ? '<button class="wb wpin wopen" data-wact="detach" aria-label="Open as an app on its own desk" title="Keep a copy open on its own desk"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span>Open app</span></button>' : ''}
       ${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}<button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
       <button class="wb" data-wact="close" aria-label="Close window"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button></header>
@@ -232,6 +233,8 @@
     return el;
   }
   function mountWin(w, el) {
+    if (w.app === 'feature') window.WosFeatures.mount(w.featureId, el.querySelector('.shared-feature'),w.featureOptions);
+    if (w.app === 'maps') window.WosViews.bindMaps(el, w, save);
     if (w.app === 'review') mountReview(w.id, null);
     if (w.app === 'chats') renderChats(w);
     if (w.app === 'usuals') window.WosUsuals?.mount(el.querySelector('[data-usuals]'));
@@ -287,7 +290,7 @@
       el.classList.toggle('focus', id === d.focus && n > 1);
       el.classList.toggle('solo', n === 1);
       el.classList.toggle('full', !!d.full && id === d.focus);
-      const t = $('.wt', el); if (t) t.textContent = winTitle(W[id]); // Chats shows the thread's name (or New chat / Chats)
+      const t = $('.wt', el); if (t && W[id].app !== 'chats') t.textContent = winTitle(W[id]);
     });
     sec.setAttribute('aria-label', deskTitle(i));
     if (i === idx) { syncImmersive(); syncReviewChip(); }
@@ -372,14 +375,7 @@
   // Desk sigils (James, 12 Oct 2026): each neighbour shows the glyph of the app it holds, bare (no tile), in
   // that app's colour; Home is a house; an empty desk is a faint ring; a desk with several windows carries a
   // small count. The current desk is the orb. Each is a thumb-sized button, so one tap jumps there.
-  function deskSigil(i) {
-    const d = desks[i], S = window.WizSigil;
-    if (!S) return '';
-    if (d.home) return `<span class="dsg" style="--c:#C9BEFF"><i class="sgi sg-hat" aria-hidden="true"></i></span>`;
-    const f = W[d.focus] || W[d.wins[0]]; if (!f) return '<span class="dsg empty"></span>';
-    const a = winApp(f), s = S.of(a.sigil || a), c = a.sgc || s.color, g = a.sgh || S.html(a.sigil || a);
-    return `<span class="dsg" style="--c:${c}">${g}${d.wins.length > 1 ? `<b class="dn">${d.wins.length}</b>` : ''}</span>`;
-  }
+  const deskSigil = i => window.WizCore.workspaceNav.icon(desks[i], W, winApp);
   function renderDots() {
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
     const L = []; for (let i = Math.max(0, idx - 3); i < idx; i++) L.push(i);
@@ -444,7 +440,7 @@
     const second = wins.find(w => w !== lead), c2 = second ? ovMark(winApp(second)).color : primary.color;
     const name = d.home ? 'Home' : !wins.length ? 'New desk' : deskName(i);
     let body;
-    if (d.home) body = `<span class="ov-symbol" style="--c:${primary.color}"><i class="sgi sg-hat" aria-hidden="true"></i></span>`;
+    if (d.home) body = `<span class="ov-symbol" style="--c:${primary.color}"><i class="sgi sg-home" aria-hidden="true"></i></span>`;
     else if (!wins.length) body = '<span class="ov-empty-symbol" aria-hidden="true">＋</span>';
     else body = wins.map(w => {
       const a = winApp(w), m = ovMark(a), same = wins.filter(x => winApp(x).id === a.id).length > 1;
@@ -543,10 +539,13 @@
       const dr = el.getBoundingClientRect();
       OV.ghost.style.transform = `translate(${x - OV.ox - dr.left}px, ${y - OV.oy - dr.top}px) scale(1.04)`;
       OV.ghost.style.visibility = 'hidden'; const over = cardAt(x, y); OV.ghost.style.visibility = '';
-      if (over && over !== OV.card && !over.classList.contains('ov-home')) {
+      if (over && over !== OV.card) {
         const grid = el.querySelector('.ov-grid'), cards = [...grid.querySelectorAll('.ov-card[data-ov]')];
         const a = cards.indexOf(OV.card), b = cards.indexOf(over);
-        grid.insertBefore(OV.card, a < b ? over.nextSibling : over); vib(6);
+        // Home stays first, but its drop zone means "first app", before Chats or any other tab.
+        // Rejecting Home as a target made the left edge feel like a pinned Chats slot.
+        const before = over.classList.contains('ov-home') || a < b ? over.nextSibling : over;
+        if (before !== OV.card) { grid.insertBefore(OV.card, before); vib(6); }
       }
       // Near the top or bottom edge: scroll so far desks can be reached while dragging.
       if (y < dr.top + 70) el.scrollTop -= 12; else if (y > dr.bottom - 70) el.scrollTop += 12;
@@ -640,7 +639,7 @@
     const w = W[id], d = desks[i], name = winTitle(w);
     if (quiet) { d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id]; if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null; if (!d.wins.length) d.full = false; renderDesk(i); pruneDesks(); return; }
     // ✕ on a bound view: it stays closed for this reply (opening the thread again, or a new reply, binds again).
-    if (w.bound) boundOff[w.bound] = w.bsid + '|' + w.bkey;
+    if (w.bound) { boundOff[w.bound] = w.bsid + '|' + w.bkey; boundManager?.dismiss(w); }
     const back = w.from && i === idx && desks.some(x => x.id === w.from.desk) ? w.from : null;
     d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id];
     if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null;
@@ -793,66 +792,18 @@
    * thread) closes the bound view; opening the thread again, or a new reply with a new link, binds again.
    * Binding = the first in-app link in the latest reply (an agent-declared view can replace this later). */
   var boundOff = {}, boundBusy = false;
-  const BOUND_NOT = /^\/wizard\/(files|attachments|hermes|v1|api)\b|\.(png|jpe?g|gif|webp|avif|bmp|svg|pdf|apk|zip|mp4|mov|webm|mp3|m4a|wav|ogg)$/i;
-  // Install and update pages are not views (James, 12 Oct: a Wizard OS release reply docked its download page). They
-  // are about updating an app on the phone, not something to look at beside the thread. Wizard OS's own shell paths
-  // are excluded too: the shell is already in front. Matching links are skipped; a later real view still binds.
-  const BOUND_INSTALL = /^\/(downloads)\/|^\/reports\/(wizard-os|wizard-lock)(\/|$)|^\/wizard-os-home\/(?!(index|desktop)\.html$)./i;
-  // Staging/sibling previews treat the live private hosts as this origin, so real replies bind there too.
-  const BOUND_HOME = ['private.wizard001.com', 'wizard.tailc0f369.ts.net'];
-  function boundAbs(href) {
-    let u; try { u = new URL(href, location.href); } catch (e) { return null; }
-    const sib = /\.staging\.wizard001\.com$|^127\.0\.0\.1$|^localhost$/.test(location.hostname);
-    if (sib && u.protocol === 'https:' && BOUND_HOME.includes(u.hostname)) u = new URL(u.pathname + u.search + u.hash, location.origin);
-    return u;
-  }
-  // What the latest reply in this painted thread points at: { key, app } or { key, url, title }, else null.
-  function boundTarget(el) {
-    const all = el.querySelectorAll('.ch-msgs .msg.a'), last = all[all.length - 1]; if (!last) return null;
-    const rk = all.length + ':' + last.textContent.length; // which reply this is (a new reply reloads the same view)
-    for (const a of last.querySelectorAll('.bub a[href]')) {
-      if (a.hasAttribute('data-session') || a.hasAttribute('data-mlink') || a.closest('[data-mi]')) continue;
-      const u = boundAbs(a.getAttribute('href')); if (!u || !/^https?:$/.test(u.protocol) || u.origin !== location.origin) continue;
-      if (BOUND_NOT.test(u.pathname) || BOUND_INSTALL.test(u.pathname)) continue;
-      const DL = window.WizCore.deeplink;
-      if (DL && DL.isOwn(u)) {
-        const d = DL.parse(u.href), app = d && d.open && !d.video ? (findApp(d.open) || APP[d.open]) : null;
-        if (app && app.kind === 'wizard' && app.url) return { key: 'app:' + app.id, win: { app: 'frame', appId: app.id }, rk };
-        if (app && app.id === 'usuals') return { key: 'app:usuals', win: { app: 'usuals' }, rk };
-        continue; // ?session= / ?view= links are this shell's own screens, not a view to review
-      }
-      const rel = u.pathname + u.search + u.hash;
-      return { key: 'url:' + rel, win: { app: 'frame', appId: 'link', url: rel, title: linkTitle(u) }, rk };
-    }
-    return null;
-  }
+  const boundTarget = el => window.WosBoundView.target(el, { findApp, APP, linkTitle });
   const boundOf = wid => Object.values(W).find(x => x.bound === wid && deskOf(x.id) >= 0) || null;
   function unbind(wid) { const b = boundOf(wid); if (b) closeWin(b.id, true); }
   // Called by Chats whenever a window paints a loaded thread (el) or its list (null).
+  let boundManager;
   function threadShown(wid, el) {
-    if (boundBusy) return; const w = W[wid]; if (!w || w.app !== 'chats') return;
-    boundBusy = true;
-    try {
-      const b = boundOf(wid), sid = el && w.thread && w.thread !== '__new__' ? w.thread : '';
-      if (!sid) { if (b) closeWin(b.id, true); delete boundOff[wid]; return; }
-      if (b && b.bsid !== sid) { closeWin(b.id, true); delete boundOff[wid]; }
-      const cur = boundOf(wid);
-      if (cur && el.querySelector('.ch-msgs details.steps.live')) return; // a reply is being written: keep the view until it lands
-      const t = boundTarget(el);
-      if (!t) { if (cur) closeWin(cur.id, true); return; }
-      if (cur && cur.bkey === t.key) {
-        // Same view, newer reply (the change after James's feedback): reload it, unless he is looking at it.
-        if (cur.brk !== t.rk && deskOf(cur.id) !== idx) { cur.brk = t.rk; save(); const f = winEl(cur.id)?.querySelector('iframe'); if (f) { try { f.contentWindow.location.reload(); } catch (e) { f.src = f.src; } } }
-        return;
-      }
-      if (boundOff[wid] === sid + '|' + t.key) return;
-      const at = deskOf(wid);
-      if (at !== idx) return; // binds when James is on the thread (goDesk re-checks)
-      if (cur) { if (deskOf(cur.id) === idx) return; closeWin(cur.id, true); } // never swap a view he is looking at
-      const from = fromOf(wid), base = { from, bound: wid, bsid: sid, bkey: t.key, brk: t.rk };
-      openWin({ ...t.win, ...base }, { stay: true });
-      boundTip(wid);
-    } finally { boundBusy = false; syncPeek(); }
+    if (boundBusy) return;
+    boundManager ||= window.WosBoundView.create({ windows: () => Object.values(W), win: id => W[id], findApp, APP, linkTitle,
+      visible: id => deskOf(id) === idx, from: fromOf, title: winTitle, close: id => closeWin(id, true),
+      open: (obj, origin) => { openWin(obj, { stay:true }); boundTip(origin); },
+      reload: id => { save(); const f = winEl(id)?.querySelector('iframe'); if (f) f.src = f.src; }, changed: syncPeek });
+    boundManager.shown(wid, el);
   }
   // Re-check every open thread (after a desk change) and drop bound views whose thread went away.
   function syncBound() {
@@ -1000,7 +951,7 @@
     }
     if (a.id === 'usuals') { openUsuals(opts); return true; }
     if (a.id === 'maps') { openMaps(extra.query ? 'search' : 'home', extra.query || '', opts); return true; }
-    if (a.kind === 'chats') { placeApp(mainChats, { app: 'chats', thread: null }, opts); return true; }
+    if (a.kind === 'chats') { if (a.agent) return openAgentChats(a.agent); placeApp(mainChats, { app: 'chats', thread: null }, opts); return true; }
     if (a.kind === 'wizard' && a.url && opts.from) {
       // Opened from a link in a thread (James, 12 Oct 2026): Back closes it and lands on that thread again,
       // exactly like any other link. A copy already opened from a link is reused; a normal desk of the app is left alone.
@@ -1100,76 +1051,34 @@
   let NATIVE_UNSENT = [];
   function readNativeUnsent() { try { NATIVE_UNSENT = NATIVE() && window.WizardOSNative.unsent ? JSON.parse(window.WizardOSNative.unsent()) : []; } catch (e) { NATIVE_UNSENT = []; } }
   // From the app (outbox) and from the Everywhere button (native), oldest first.
-  function unsentAll() {
-    const web = OUTBOX ? OUTBOX.unsent().map(it => ({ ...it, origin: 'app' })) : [];
-    const nat = (NATIVE_UNSENT || []).map(it => ({ ...it, origin: 'everywhere' }));
-    return [...web, ...nat].sort((a, b) => a.createdAt - b.createdAt);
-  }
+  function unsentAll() { return window.WosSettings.unsentAll(settingsContext()); }
   function unsentCard() {
     const all = unsentAll(); if (!all.length) return '';
-    const failed = all.filter(x => x.state === 'failed').length;
+    const failed = all.filter(x => ['failed', 'empty'].includes(x.state)).length;
     const k = failed ? `${failed} not sent` : `${all.length} waiting to send`;
     const v = esc(clip(all[0].text || 'Voice note', 70));
     return `<button class="now-card unsent-card ${failed ? 'fail' : ''}" style="--c:${failed ? 'var(--amber)' : 'var(--violet-2)'}" data-act="unsent"><span class="pip ${failed ? '' : 'pulse'}"></span><span class="meta"><span class="k">${k}</span><span class="v">${v}</span></span><span class="side-go">${failed ? 'Retry' : 'View'}</span></button>`;
   }
-  function unsentRow(it) {
-    const when = ago(new Date(it.createdAt).toISOString());
-    const st = it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
-    const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
-    return `<div class="ub-row ${it.state}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}">
-      <div class="ub-t">${it.audio || it.audioFile || it.hasAudio ? MIC_SVG : ''}<span>${esc(it.text || 'Voice note · words come when it sends')}</span></div>
-      <div class="ub-m">${src} · ${esc(when)} · ${st}</div>
-      <div class="ub-a"><button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>${it.origin === 'app' && it.sessionId && LIVE?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
-  }
+  function unsentRow(it) { return window.WosSettings.unsentRow(it, settingsContext()); }
+  let settingsView = null;
+  const settingsContext = () => ({ outbox: OUTBOX, live: LIVE, ago, toast,
+    haptic: vib, visible: () => sheet === 'settings',
+    helpSub: 'How the orb, desks and Back work · practice again',
+    sideReady: () => SIDE?.step === 'press' || SIDE?.step === 'ready',
+    changed: onUnsentChange,
+    openThread: id => { closeSheets(true); openWizardThread(id); },
+    editUnsent,
+    openSub: id => {
+      if (id === 'files') { settingsReturn = id; openFilesScreen(); }
+      if (id === 'help') { settingsReturn = id; closeSheets(true); window.WosTour?.openHelp(); }
+      if (id === 'side') { closeSheets(true); sideButtonTap(true); }
+    },
+  });
+  let settingsReturn = '', settingsFocus = null;
   function renderSettings() {
-    readNativeUnsent();
-    const all = unsentAll(), native = NATIVE(), evNative = native && typeof window.WizardOSNative.setEverywhere === 'function';
-    let ev = null; try { ev = evNative ? JSON.parse(window.WizardOSNative.everywhere()) : null; } catch (e) {}
-    const evOn = !!ev?.enabled;
-    const evSub = !native ? 'Works in the Wizard OS Android app' : !evNative ? 'Update the Wizard OS app (0.5.0) to turn this on' : evOn ? (ev.overlay ? (ev.hold ? 'On · tap to talk · hold for Select text, Translate and Hide' : 'On · floats over other apps, hides while Wizard OS is open') : 'Needs “Display over other apps”') : 'A floating Wizard button over your other apps. Tap to talk, drag to move.';
-    const side = !native ? 'Works in the Wizard OS Android app' : !SIDE ? '' : SIDE.step === 'press' || SIDE.step === 'ready' ? 'On · hold the side button to talk' : 'Hold the side button to talk, even when locked';
-    $('#settingsBody').innerHTML = `
-      <h3 class="st-title">Settings</h3>
-      <div class="st-group"><h4>Unsent <span>${all.length || ''}</span></h4>
-        ${all.length ? all.map(unsentRow).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">Everything you’ve said reached Wizard.</div>'}
-        <p class="st-note">Every message is saved on this phone before it’s sent, and retried until Wizard accepts it.</p></div>
-      ${lookGroup()}
-      <div class="st-group"><h4>Assistant</h4>
-        <button class="st-row" data-st="everywhere" ${evNative ? '' : 'disabled'}><span class="st-ic">${window.WizBrand.html}</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
-        ${evNative && evOn && typeof window.WizardOSNative.voiceTypingSettings === 'function' ? `<button class="st-row" data-st="typing"><span class="st-ic">⌨</span><span class="st-tx" id="stTyping"><b>Voice typing &amp; screenshots</b><small>${esc(ev?.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Off · tap to set up: the orb types into any app and attaches screenshots')}</small></span>${ev?.keyboard ? '<span class="sw on"><i></i></span>' : '<span class="st-go">›</span>'}</button>` : ''}
-        <button class="st-row" data-st="side" ${native ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(side)}</small></span><span class="st-go">›</span></button>
-      </div>
-      ${window.WizCore.voiceStatus?.card() || ''}
-      ${window.WosCancelled ? window.WosCancelled.html() : ''}
-      ${window.WosSelMenu ? window.WosSelMenu.html() : ''}
-      <div class="st-group"><h4>Wizard</h4>
-        <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · ${esc(location.host)}</small></span></div>
-        ${window.WosDevice?.settingsHtml?.() || ''}
-        <button class="st-row" data-st="help"><span class="st-ic">?</span><span class="st-tx"><b>Gestures &amp; help</b><small>How the orb, desks and Back work · practice again</small></span><span class="st-go">›</span></button>
-        ${window.WosFiles ? `<button class="st-row" data-st="files"><span class="st-ic">▤</span><span class="st-tx"><b>Files</b><small>Everything in Wizard Files · preview, attach to a chat</small></span><span class="st-go">›</span></button>` : ''}
-      </div>
-      ${window.WosUsage ? window.WosUsage.html() : ''}`;
-    // AI usage (#24): read when Settings opens, painted in place when it lands.
-    if (window.WosUsage && !window.WosUsage.loading && (!window.WosUsage.snap || Date.now() - window.WosUsage.at > 60e3)) window.WosUsage.load().then(paintUsage);
+    if (!settingsView) settingsView = window.WosSettings.mount($('#settingsBody'), settingsContext());
+    else settingsView.render();
   }
-  /* Settings → Look (James, 12 Oct 2026): the skin picker. Tap applies at once (WosSkin.set) and is kept on this
-   * device (localStorage wos.skin; box-level theme.json sync is a later step). Hosted apps re-dress through the
-   * appearance host, which watches html[data-skin]/style. */
-  function lookGroup() {
-    const S = window.WosSkin; if (!S) return '';
-    const cur = S.current, nm = (S.list.find(k => k.id === cur) || {}).name || '';
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4>
-      <div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(nm)} · tap to wear</small></span></div>
-        <div class="sk-sw" role="group" aria-label="Skin">${S.list.map(k => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`).join('')}</div></div></div>`;
-  }
-  function pickSkin(id) {
-    const S = window.WosSkin; if (!S) return;
-    const now = S.set(id), nm = (S.list.find(k => k.id === now) || {}).name || '';
-    $$('#settingsBody [data-skinpick]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.skinpick === now)));
-    const n = $('#settingsBody [data-skinname]'); if (n) n.textContent = `${nm} · tap to wear`;
-    vib(8);
-  }
-  function paintUsage() { const g = $('#settingsBody [data-usage]'); if (g && sheet === 'settings') g.outerHTML = window.WosUsage.html(); }
   function openFilesScreen() {
     closeSheets(true);
     let wid = chatsWinAny();
@@ -1177,38 +1086,26 @@
     focusWin(wid); renderChats(W[wid]);
     setTimeout(() => CHATS.PW?.openFiles(wid), 30);
   }
-  function openSettings(focusUnsent) {
+  function openSettings(focus) {
     openSheet('settings');
-    if (focusUnsent === 'look') { // scroll the sheet body only (scrollIntoView would also move the fixed shell)
-      const body = $('#settingsBody'), g = $('#settingsBody [data-stgroup="look"]');
-      if (body && g) body.scrollTop += g.getBoundingClientRect().top - body.getBoundingClientRect().top - 8;
-      return;
-    }
-    if (focusUnsent) { const g = $('#settingsBody .st-group'); g && g.scrollIntoView({ block: 'start' }); }
+    settingsView?.focus(focus === true ? 'unsent' : focus);
   }
-  function unsentAction(id, origin, a) {
-    if (origin === 'everywhere') {
-      if (a === 'retry' && window.WizardOSNative?.retryUnsent) window.WizardOSNative.retryUnsent(id);
-      if (a === 'delete' && window.WizardOSNative?.deleteUnsent) window.WizardOSNative.deleteUnsent(id);
-      setTimeout(onUnsentChange, 300); return;
-    }
-    const it = OUTBOX.get(id); if (!it) return;
-    if (a === 'retry') { OUTBOX.retry(id); toast('↻', 'Sending again', 1400); }
-    if (a === 'delete') { OUTBOX.remove(id); toast('✕', 'Deleted', 1400); }
-    if (a === 'open') { closeSheets(true); openWizardThread(it.sessionId); }
-    if (a === 'edit') editUnsent(it);
-  }
+  function unsentAction(id, origin, action) { return window.WosSettings.unsentAction(settingsContext(), id, origin, action); }
   // Edit puts the words back in a composer (the thread's, or a new chat's) and takes the item out of the queue.
   function editUnsent(it) {
+    if (it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id)) { toast('!', it.error || 'Waiting for device storage verification · original kept', 3200); return; }
+    if (it.body) { toast('!', 'Delivery is uncertain · retry this submission to reconcile before editing', 3000); return; }
     closeSheets(true);
-    const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
-    let wid = chatsWinAny();
-    if (!wid) { const w = openWin({ app: 'chats', thread: null }); if (!w) return; wid = w.id; }
-    focusWin(wid); openChat(wid, known ? it.sessionId : '__new__');
-    CHATS.setDraft(wid, it.text || it.typed || '', (it.files || []).filter(f => f !== it.audioFile));
-    OUTBOX.remove(it.id);
-    renderChats(W[wid]);
-    setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 50);
+    const known = it.kind === 'reply' || LIVE?.session(it.sessionId);
+    let wid;
+    if (known) { openWizardThread(it.sessionId); wid = desks[idx].focus; }
+    else {
+      const agent = it.agent || '';
+      const w = openWin({ app: 'chats', thread: null, ...(agent ? { agent } : {}) }); if (!w) return;
+      wid = w.id; focusWin(wid); openChat(wid, '__new__');
+    }
+    if (!window.WosSettings.moveDraft({ chats: CHATS, wid: wid, item: it, outbox: OUTBOX, toast })) return; renderChats(W[wid]);
+    setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); ta?.focus(); }, 50);
   }
   let lastUnsentSig = '';
   function onUnsentChange() {
@@ -1283,23 +1180,7 @@
       <div class="body"><h3>${esc(a.name)}${w.query ? ` · “${esc(w.query)}”` : ''}</h3><p>${esc(a.desc || '')}${native ? '. Opens the real Android app.' : ''}</p>
       <a class="cta" href="${esc(href)}" target="${native ? '_self' : '_blank'}" rel="noopener">Open ${esc(a.name)}</a></div></div></div>`;
   }
-  function renderMaps(w) {
-    const q = w.dest || '';
-    const link = w.mode === 'dir' ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}&travelmode=driving`
-      : q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : 'https://www.google.com/maps';
-    const roads = Array.from({ length: 9 }, (_, i) => `<path d="M${-20 + i * 55} -10 L${40 + i * 48} 360" stroke="rgba(120,140,200,.16)" stroke-width="${i % 3 ? 2 : 6}"/>`).join('') +
-      Array.from({ length: 8 }, (_, i) => `<path d="M-10 ${20 + i * 46} L420 ${-10 + i * 52}" stroke="rgba(120,140,200,.13)" stroke-width="${i % 3 ? 2 : 5}"/>`).join('');
-    return `<div class="desk-scroll">
-      <div class="map"><svg viewBox="0 0 360 330" preserveAspectRatio="xMidYMid slice">
-        <path d="M-10 250 C 80 230, 120 300, 210 270 S 330 250, 380 300 L380 340 L-10 340Z" fill="rgba(63,120,255,.13)"/>
-        ${roads}
-        ${w.mode === 'dir' ? '<path class="route" d="M70 260 C 110 210, 120 190, 170 170 S 250 120, 282 82" fill="none" stroke="#3fe0ff" stroke-width="5" stroke-linecap="round" stroke-dasharray="7 9"><animate attributeName="stroke-dashoffset" from="64" to="0" dur="1.4s" repeatCount="indefinite"/></path>' : ''}
-      </svg>
-      ${w.mode === 'dir' ? '<span class="me" style="left:62px;top:252px"></span>' : ''}<span class="pin" style="left:${w.mode === 'dir' ? 274 : 170}px;top:${w.mode === 'dir' ? 64 : 140}px"></span>
-      <div class="eta"><b>${w.mode === 'dir' ? 'Route ready' : q ? 'Found' : 'Maps'}</b><span>${w.mode === 'dir' ? 'Live ETA comes from Google Maps' : 'Preview'}</span></div></div>
-      <div class="map-dest"><h3>${esc(q || 'Google Maps')}</h3><p>${w.mode === 'dir' ? 'Driving directions' : 'Search results'} · opens the real Maps app on Android</p></div>
-      <a class="cta" href="${esc(link)}" rel="noopener">${w.mode === 'dir' ? 'Start navigation in Maps' : 'Open in Maps'}</a></div>`;
-  }
+  function renderMaps(w) { return window.WosViews.renderMaps(w); }
   function renderFrame(w) {
     const a = APP[w.appId] || winApp(w);
     return renderFrameCore(w, a);
@@ -1430,10 +1311,7 @@
     shareCutout();
     frameEdge(f); setTimeout(() => { if (f.isConnected) frameEdge(f); }, 800); // apps that paint their theme after boot
   }
-  // Voice mode a framed app asks for: <meta name="wizard-os-voice" content="capture|auto">.
-  function frameVoiceMode(id) {
-    try { const m = winEl(id)?.querySelector('iframe')?.contentDocument?.querySelector('meta[name="wizard-os-voice"]'); const v = m?.content; return v === 'capture' || v === 'auto' ? v : ''; } catch (e) { return ''; }
-  }
+  // Frame metadata never grants voice delivery. Installed capability + shared receiver own it.
   function frameNav(id) { try { return winEl(id)?.querySelector('iframe')?.contentWindow?.navigation || null; } catch (e) { return null; } }
   function frameHref(id) { try { const l = winEl(id)?.querySelector('iframe')?.contentWindow?.location; return l ? l.pathname + l.search : ''; } catch (e) { return ''; } }
 
@@ -1456,91 +1334,7 @@
   }
 
   /* ---------------- review (semantic zoom) ---------------- */
-  const LEVELS = ['month', 'week', 'day', 'group', 'thread'];
-  const LNAME = { month: 'Month', week: 'Week', day: 'Day', group: 'Focus', thread: 'Thread' };
-  function renderReviewShell(i) {
-    return `<div class="review" data-review="${i}">
-      <div class="zoom-rail">${LEVELS.map(l => `<button class="lvl" data-rail="${l}">${LNAME[l]}</button>`).join('')}</div>
-      <div class="crumb"></div>
-      <div class="zstage"></div>
-      <div class="pinch-hint ${store.get('pinched', 0) > 1 ? 'gone' : ''}">🤏 Pinch to zoom · tap to dive</div>
-    </div>`;
-  }
-  function groupThreads(z) {
-    const ts = byDay[z.day] || [];
-    if (z.type === 'project') return ts.filter(t => t.p === z.key);
-    if (z.type === 'person') return ts.filter(t => (t.people || []).includes(z.key));
-    if (z.type === 'calls') return ts.filter(t => t.call);
-    return ts;
-  }
-  function zs(o) { return esc(JSON.stringify(o)); }
-  function renderLevel(z) {
-    if (z.level === 'month') {
-      const ts = threadsIn(allDays), active = allDays.filter(d => byDay[d]).length;
-      return `<div class="summary"><div class="eyebrow"><span class="spark"></span>Month in review</div><h3>${fmtRange(allDays[0], allDays[allDays.length - 1])}</h3><p>${esc(S.month || '')}</p>
-        <div class="stats"><span><b>${ts.length}</b>threads</span><span><b>${msgCount(ts).toLocaleString()}</b>messages</span><span><b>${active}</b>active days</span></div>${bars(ts)}</div>
-        <div class="sec-title"><span>Weeks</span><span>pinch in</span></div><div class="zgrid">
-        ${weeks.slice().reverse().map(w => { const wd = Array.from({ length: 7 }, (_, k) => addDays(w, k)).filter(d => d <= TODAY); const wt = threadsIn(wd);
-          return `<button class="zcard ${wd.includes(TODAY) ? 'today' : ''}" data-z="${zs({ level: 'week', week: w })}"><div class="dow">Week of ${fmtDay(w).slice(4)}</div><div class="row"><span class="t">${fmtRange(w, wd[wd.length - 1])}</span><span class="c">${wt.length} threads</span></div><div class="s">${esc(S.weeks[w] || '')}</div>${bars(wt)}</button>`; }).join('')}
-        </div>
-        <div class="sec-title"><span>Projects this month</span></div><div class="chips">${projMix(ts).map(([p, v]) => `<span class="chip"><i class="pdot" style="color:${PCOL[p]};background:${PCOL[p]}"></i>${esc(D.projects[p])} · ${v.toLocaleString()}</span>`).join('')}</div>`;
-    }
-    if (z.level === 'week') {
-      const wd = Array.from({ length: 7 }, (_, k) => addDays(z.week, k)); const shown = wd.filter(d => d <= TODAY); const ts = threadsIn(shown);
-      return `<div class="summary"><div class="eyebrow"><span class="spark"></span>Week in review</div><h3>${fmtRange(z.week, wd[6])}</h3><p>${esc(S.weeks[z.week] || '')}</p>
-        <div class="stats"><span><b>${ts.length}</b>threads</span><span><b>${msgCount(ts).toLocaleString()}</b>messages</span><span><b>${projMix(ts).length}</b>projects</span></div>${bars(ts)}</div>
-        <div class="sec-title"><span>Days</span><span>pinch in</span></div><div class="zgrid">
-        ${shown.slice().reverse().map(d => { const t = byDay[d] || [];
-          return `<button class="zcard ${d === TODAY ? 'today' : ''} ${t.length ? '' : 'empty'}" data-z="${zs({ level: 'day', day: d })}"><div class="row"><span class="t">${fmtDay(d)}</span><span class="c">${t.length} threads</span></div><div class="s">${esc(S.days[d] || (t.length ? t.slice(0, 3).map(x => x.title).join(' · ') : 'Quiet day'))}</div>${t.length ? bars(t) : ''}</button>`; }).join('')}
-        </div>`;
-    }
-    if (z.level === 'day') {
-      const ts = byDay[z.day] || [], mix = projMix(ts);
-      const people = {}; ts.forEach(t => (t.people || []).forEach(p => people[p] = (people[p] || 0) + 1));
-      const calls = ts.filter(t => t.call);
-      return `<div class="summary"><div class="eyebrow"><span class="spark"></span>${z.day === YESTERDAY ? 'Yesterday' : z.day === TODAY ? 'Today' : 'Day in review'}</div><h3>${fmtDayLong(z.day)}</h3><p>${esc(S.days[z.day] || (ts.length ? `${ts.length} threads.` : 'A quiet day. Nothing ran.'))}</p>
-        <div class="stats"><span><b>${ts.length}</b>threads</span><span><b>${msgCount(ts).toLocaleString()}</b>messages</span><span><b>${mix.length}</b>projects</span></div>${ts.length ? bars(ts) : ''}</div>
-        ${mix.length ? `<div class="sec-title"><span>Projects</span><span>pinch in</span></div><div class="zgrid two">${mix.map(([p]) => { const g = ts.filter(t => t.p === p);
-          return `<button class="zcard" data-z="${zs({ level: 'group', day: z.day, type: 'project', key: p })}"><div class="row"><span class="t"><i class="pdot" style="color:${PCOL[p]};background:${PCOL[p]}"></i>${esc(D.projects[p])}</span></div><div class="big">${g.length}</div><div class="s">${esc(clip(g.map(x => x.title).join(' · '), 80))}</div></button>`; }).join('')}</div>` : ''}
-        ${Object.keys(people).length ? `<div class="sec-title"><span>People</span></div><div class="zgrid">${Object.entries(people).map(([p, n]) =>
-          `<button class="zcard" data-z="${zs({ level: 'group', day: z.day, type: 'person', key: p })}"><div class="row"><span class="t"><span class="ticon">◍</span> ${esc(p)}</span><span class="c">${n} thread${n > 1 ? 's' : ''}</span></div></button>`).join('')}</div>` : ''}
-        ${calls.length ? `<div class="sec-title"><span>Calls &amp; meetings</span></div><div class="zgrid">${calls.map(t =>
-          `<button class="zcard" data-z="${zs({ level: 'thread', day: z.day, id: t.id })}"><div class="row"><span class="t"><span class="ticon">☏</span> ${esc(t.title)}</span><span class="when">${esc(t.t)}</span></div></button>`).join('')}</div>` : ''}`;
-    }
-    if (z.level === 'group') {
-      const ts = groupThreads(z).slice().sort((a, b) => a.t.localeCompare(b.t));
-      const name = z.type === 'project' ? D.projects[z.key] : z.type === 'person' ? z.key : 'Calls';
-      const top = ts.slice().sort((a, b) => b.n - a.n)[0];
-      return `<div class="summary"><div class="eyebrow"><span class="spark" style="background:${PCOL[z.key] || 'var(--pink)'}"></span>${esc(fmtDay(z.day))} · ${z.type}</div><h3>${esc(name)}</h3>
-        <p>${ts.length} thread${ts.length === 1 ? '' : 's'}, ${msgCount(ts)} messages.${top ? ` Most of the work went into “${esc(top.title)}”.` : ''}</p>
-        <div class="stats"><span><b>${ts.length}</b>threads</span><span><b>${msgCount(ts)}</b>messages</span><span><b>${ts[0]?.t || '—'}</b>first</span></div></div>
-        <div class="sec-title"><span>Threads</span><span>pinch in</span></div><div class="zgrid">${ts.map(t =>
-          `<button class="zcard" data-z="${zs({ level: 'thread', day: z.day, id: t.id, from: { type: z.type, key: z.key } })}"><div class="row"><span class="when">${esc(t.t)}</span><span class="t">${esc(t.title)}</span><span class="c">${t.n}</span></div>${t.a ? `<div class="s">${esc(clip(t.a, 150))}</div>` : ''}</button>`).join('')}</div>`;
-    }
-    if (z.level === 'thread') {
-      const t = byId[z.id] || {};
-      return `<div class="summary"><div class="eyebrow"><span class="spark" style="background:${PCOL[t.p]}"></span>${esc(fmtDay(z.day))} · ${esc(t.t)} · ${esc(t.src)}</div><h3>${esc(t.title)}</h3>
-        <div class="chips"><span class="chip"><i class="pdot" style="color:${PCOL[t.p]};background:${PCOL[t.p]}"></i>${esc(D.projects[t.p])}</span><span class="chip">${t.n} messages</span>${(t.people || []).map(p => `<span class="chip">${esc(p)}</span>`).join('')}</div></div>
-        ${t.u ? `<div class="bubble u"><span class="who">You</span>${esc(t.u)}</div>` : ''}${t.a ? `<div class="bubble a"><span class="who">${window.WizConfig.agent()}</span>${esc(t.a)}</div>` : ''}
-        <button class="cta" data-wizthread="${esc(z.id)}">Open the full thread in Wizard</button>`;
-    }
-    return '';
-  }
-  function parentOf(z) {
-    if (z.level === 'thread') return z.from ? { level: 'group', day: z.day, type: z.from.type, key: z.from.key } : { level: 'day', day: z.day };
-    if (z.level === 'group') return { level: 'day', day: z.day };
-    if (z.level === 'day') return { level: 'week', week: weekOf(z.day) };
-    if (z.level === 'week') return { level: 'month' };
-    return null;
-  }
-  function chain(z) { const c = []; let x = z; while (x) { c.unshift(x); x = parentOf(x); } return c; }
-  function crumbLabel(z) {
-    if (z.level === 'month') return 'Month';
-    if (z.level === 'week') return 'Wk ' + fmtDay(z.week).slice(4);
-    if (z.level === 'day') return fmtDay(z.day).slice(0, 6).trim();
-    if (z.level === 'group') return z.type === 'project' ? D.projects[z.key] : z.type === 'person' ? z.key : 'Calls';
-    return 'Thread';
-  }
+  const { LEVELS, LNAME, renderReviewShell, renderLevel, parentOf, chain, crumbLabel } = window.WosViews;
   function mountReview(id, dir, origin) {
     const we = winEl(id), w = W[id]; const root = we?.querySelector('.review'); if (!root || !w) return;
     const z = w.z || { level: 'day', day: YESTERDAY };
@@ -1666,7 +1460,7 @@
     if (w.app === 'review') {
       const zc = e.target.closest('[data-z]'); if (zc) return zoomIn(id, zc);
       const rail = e.target.closest('[data-rail]');
-      if (rail) { const want = LEVELS.indexOf(rail.dataset.rail); const chn = $('.review', we)._chain; if (want < chn.length - 1) setZ(id, chn[want], 'out'); else if (want > chn.length - 1) zoomIn(id); return; }
+      if (rail) { const next=window.WosViews.railTarget(w.z,rail.dataset.rail,$('.review',we));if(next)setZ(id,next,LEVELS.indexOf(next.level)<LEVELS.indexOf(w.z.level)?'out':'in');return; }
       const cr = e.target.closest('[data-crumb]');
       if (cr) { const chn = $('.review', we)._chain; const k = +cr.dataset.crumb; if (k < chn.length - 1) setZ(id, chn[k], 'out'); return; }
       const wt = e.target.closest('[data-wizthread]'); if (wt) return openWizardThread(wt.dataset.wizthread);
@@ -1773,7 +1567,7 @@
     sheet = which; device.classList.add('sheet-open'); tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
     if (which === 'launcher') { renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
-    else if (which === 'settings') { renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; }
+    else if (which === 'settings') { settingsFocus = document.activeElement; renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; settingsView?.focus(); }
     else { renderInbox(); inboxEl.classList.add('open'); }
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
     window.WosScenery?.update(); // scenery hook: a sheet over Home freezes the background
@@ -1785,24 +1579,16 @@
     launcher.classList.remove('open'); inboxEl.classList.remove('open'); settingsEl.classList.remove('open');
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
     $('#search').blur();
+    if (was === 'settings' && settingsFocus?.isConnected) settingsFocus.focus({ preventScroll: true });
     window.WosResources?.sync();
     window.WosScenery?.update(); // scenery hook: sheet closed, Home may animate again
   }
+  settingsEl.setAttribute('role', 'dialog'); settingsEl.setAttribute('aria-modal', 'true');
+  settingsEl.addEventListener('keydown', e => window.WosSettings.trap(e, settingsEl));
   $('#scrim').addEventListener('click', () => closeSheets());
   settingsEl.addEventListener('click', e => {
     if (e.target.closest('[data-stclose]')) return closeSheets();
-    { const sk = e.target.closest('[data-skinpick]'); if (sk) return pickSkin(sk.dataset.skinpick); }
-    if (window.WosCancelled?.act(e.target)) return;
-    if (window.WosSelMenu?.act(e.target)) return;
-    const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
-    if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); return setTimeout(onUnsentChange, 300); }
-    const st = e.target.closest('[data-st]')?.dataset.st;
-    if (st === 'typing' && NATIVE() && window.WizardOSNative.voiceTypingSettings) { window.WizardOSNative.voiceTypingSettings(); return; }
-    if (st === 'everywhere' && NATIVE() && typeof window.WizardOSNative.setEverywhere === 'function') { let on = false; try { on = JSON.parse(window.WizardOSNative.everywhere()).enabled; } catch (x) {} window.WizardOSNative.setEverywhere(!on); setTimeout(renderSettings, 250); vib(8); }
-    if (st === 'side') { closeSheets(true); sideButtonTap(true); }
-    if (st === 'files') return openFilesScreen();
-    if (st === 'help') { closeSheets(true); return window.WosTour?.openHelp(); }
-    if (e.target.closest('[data-usage-refresh]')) { window.WosUsage?.load(true).then(paintUsage); paintUsage(); }
+
   });
 
   function appTile(a) { return `<button class="lapp" data-app="${a.id}" style="--i:${tileN++}">${ico('span', 'ic', a, a.kind === 'native' ? '<span class="badge">APK</span>' : '')}<span class="nm">${esc(a.name)}</span></button>`; }
@@ -1826,7 +1612,7 @@
     }
     const n = norm(q);
     // Android apps stay voice-only ("open Maps" still routes); they never clutter the launcher.
-    const hits = APPS.filter(a => a.kind !== 'native').map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
+    const hits = APPS.filter(a => a.kind !== 'native' && a.id !== 'agents').map(a => { const nm = norm(a.name), ds = norm(a.desc); const s = nm.startsWith(n) ? 3 : nm.includes(n) ? 2 : ds.includes(n) ? 1 : 0; return [s, a]; }).filter(x => x[0]).sort((a, b) => b[0] - a[0]).map(x => x[1]);
     const th = (LIVE.ok ? LIVE.sessions.filter(x => !x.hidden && norm(x.title).includes(n)) : []).slice(0, 5);
     // Bottom-anchored like the rest of the sheet: the best app match sits right above the search bar, so it stays
     // in sight when the keyboard shrinks the sheet (James, 11 Oct: "searched wisdom and it didn't pop up").
@@ -1844,6 +1630,7 @@
         <span class="acts"><button data-dw="full" data-id="${id}">${full ? 'Tile' : 'Full'}</button>${idx > 0 ? `<button data-dw="left" data-id="${id}" aria-label="Move to desk ${idx}">←</button>` : ''}${idx < desks.length - 1 ? `<button data-dw="right" data-id="${id}" aria-label="Move to desk ${idx + 2}">→</button>` : ''}<button data-dw="close" data-id="${id}" aria-label="Close">✕</button></span></div>`; }).join('');
     return `<div class="deskbar"><div class="dh"><b>${esc(deskName(idx))}</b><span>${d.wins.length} window${d.wins.length === 1 ? '' : 's'}</span></div>${rows}</div>`;
   }
+  window.addEventListener('wizard:apps', () => { if (sheet === 'launcher') renderLauncher($('#search').value, true); });
   $('#search').addEventListener('input', e => renderLauncher(e.target.value));
   $('#searchForm').addEventListener('submit', e => {
     e.preventDefault(); const q = $('#search').value.trim(); if (!q) return;
@@ -1998,13 +1785,15 @@
     const corner = !!desks[idx]?.full && (w?.app === 'chats' || !!field || dictating);
     device.classList.toggle('orb-corner', corner);
     if (w?.app !== 'chats') trackCornerLift(false);
+    // Field refresh can run after recording starts; keep its destination accessible.
+    if (document.getElementById('generalVoice')) paintVoiceDestination();
   }
   const DICTATION_KEY = 'wos.dictation-takes.v1';
   const DICTATION_RECOVERY_KEY = 'wos.dictation-recovery.v1';
   function dictationRecovery(id, meta) {
     const rows = JSON.parse(localStorage.getItem(DICTATION_RECOVERY_KEY) || '{}');
     if (meta === false) delete rows[id];
-    else if (meta) rows[id] = { ...meta, id, kind: 'dictation', send: false };
+    else if (meta) rows[id] = { ...rows[id], ...meta, id, kind: 'dictation', send: false };
     if (meta !== undefined) localStorage.setItem(DICTATION_RECOVERY_KEY, JSON.stringify(rows));
     return rows;
   }
@@ -2022,25 +1811,8 @@
 
   // Keep the screen on while the orb records or transcribes: a screen lock mid-dictation pauses the WebView and loses the take.
   // Native shell (0.5.1+) sets FLAG_KEEP_SCREEN_ON; browsers and PWAs use the Screen Wake Lock API.
-  const AWAKE = { want: false, lock: null };
-  function keepAwake(on) {
-    on = !!on;
-    if (AWAKE.want === on) return;
-    AWAKE.want = on;
-    try { if (window.WizardOSNative && typeof window.WizardOSNative.keepAwake === 'function') { window.WizardOSNative.keepAwake(on); return; } } catch (e) {}
-    if (on) requestWakeLock();
-    else { const l = AWAKE.lock; AWAKE.lock = null; try { l && l.release(); } catch (e) {} }
-  }
-  async function requestWakeLock() {
-    if (!AWAKE.want || AWAKE.lock || document.hidden || !navigator.wakeLock) return;
-    try {
-      const l = await navigator.wakeLock.request('screen');
-      if (!AWAKE.want) { l.release(); return; }
-      AWAKE.lock = l; l.addEventListener('release', () => { if (AWAKE.lock === l) AWAKE.lock = null; });
-    } catch (e) {}
-  }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) requestWakeLock(); });
-  window.__wosAwake = () => AWAKE.want; // QA probe
+  const keepAwake = on => window.WosCaptureTools.awake(on);
+  window.__wosAwake = () => window.WosCaptureTools.awakeWanted;
   // Native shell (0.7.0, native parity): the orb records in Android's foreground-service recorder
   // (WizardOSDevice), so a take keeps going with the screen off or the app in the background, and
   // survives an app kill on disk. Browsers/PWAs and older shells keep the in-page MediaRecorder.
@@ -2048,20 +1820,7 @@
   // through __wosVoiceCmd below; it never starts a second recorder.
   const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.recStart === 'function' ? d : null; };
   function nativeBlob(id, expected) {
-    const dev = DEV(), parts = []; let off = 0;
-    const strict = expected !== undefined; let complete = false, size = 0;
-    if (strict && (!Number.isSafeInteger(expected) || expected < 0)) throw new Error('Native recording size unavailable');
-    for (let k = 0; k < 4000 && off >= 0; k++) {
-      let c = null; try { c = JSON.parse(dev.recRead(id, off)); } catch (e) {}
-      if (!c) { if (strict) throw new Error('Native audio read incomplete'); break; }
-      if (strict && (typeof c.b64 !== 'string' || !Number.isInteger(c.next))) throw new Error('Native audio chunk invalid');
-      const bin = atob(c.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-      size += u.length;
-      if (strict && (size > expected || (c.next !== -1 && (c.next <= off || c.next !== off + u.length)))) throw new Error('Native audio chunk incomplete');
-      parts.push(u); off = c.next; complete = off === -1;
-    }
-    if (strict && (!complete || size !== expected)) throw new Error('Native audio read incomplete');
-    return new Blob(parts, { type: 'audio/aac' });
+    return window.WosDevice.readRecording(id, expected);
   }
   /* Stop (or claim an already-stopped) native take and hand its audio to the normal pipeline. */
   function nativeTakeAppOwned(id) {
@@ -2072,6 +1831,14 @@
     if (!V.native || nativeTakeAppOwned(V.native)) return false;
     try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id !== V.native) return false; DEV().recPause(on); return true; } catch (_) { return false; }
   }
+  const VOICE_RECOVERY_KEY = 'wos.voice-recovery.v1';
+  function voiceRecovery(id, meta) {
+    const rows = JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}');
+    if (meta === false) delete rows[id];
+    else rows[id] = { ...rows[id], ...meta, id, send: false };
+    localStorage.setItem(VOICE_RECOVERY_KEY, JSON.stringify(rows));
+  }
+  window.__wosVoiceRecovery = () => { try { return Object.values(JSON.parse(localStorage.getItem(VOICE_RECOVERY_KEY) || '{}')); } catch (_) { return []; } };
   function nativeFinish(id, stopped) {
     if (nativeTakeAppOwned(id)) { setVoice('paused'); toast('🎙', 'This recording belongs to another app'); return; }
     // Notification/Everywhere Send enters here directly, bypassing finishVoice. Seal the model before claiming
@@ -2081,7 +1848,7 @@
       // Preserve a reload-visible exact-ID recovery owner BEFORE a destructive native claim.
       try { dictationRecovery(id, { ms: V.acc, state: 'retained' }); }
       catch (_) { pauseNativeTake(true); setVoice(stopped ? 'idle' : 'paused'); toast('!', 'Storage unavailable · dictation remains on the device'); return; }
-      try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (_) {}
+      try { meta = stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosDictationRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id)); } catch (_) {}
       V.native = null; V.kind = 'dictation';
       if (!meta) { setVoice('idle'); txHide(); toast('!', 'Dictation retained · could not read recording'); return; }
       V.acc = Math.max(V.acc, Number(meta.ms) || 0);
@@ -2090,14 +1857,19 @@
       catch (_) { V.field?.release(); V.field = null; setVoice('idle'); txHide(); toast('!', 'Dictation retained · could not read audio · reopen recording recovery'); return; }
     }
     const hadSnap = !!V.snap;
-    const snap = V.snap || sendSnap();
+    const saved = window.__wosVoiceRecovery().find(t => t.id === id);
+    const snap = saved?.general ? { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(id) } : V.snap || sendSnap();
+    if (saved?.general) { V.kind = 'general'; V.target = null; V.replyTo = null; }
     try {
-      if (!snap.route) {
+      const nativePin = saved?.conversation;
+      if (nativePin && V.target == null && !V.replyTo && V.kind !== 'command') snap.conversation = nativePin; // old token fails closed after shell reload
+      else if (!hadSnap) snap.conversation = null; // never infer a recovered native destination from today's focus
+      if (!snap.conversation && !snap.route) {
         const pin = V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null);
         snap.route = (!hadSnap && window.WosModels.voiceRoute(id)) || CHATS.modelRoute(pin?.wid, pin?.sid || '');
       }
-      if (!snap.route?.model || !snap.route?.provider) throw new Error('Choose a model before sending');
-      saveVoiceRoute(id, snap.route); V.snap = snap;
+      if (!snap.conversation && (!snap.route?.model || !snap.route?.provider)) throw new Error('Choose a model before sending');
+      if (!snap.conversation) saveVoiceRoute(id, snap.route); V.snap = snap;
     } catch (e) {
       // The native file remains on disk; no claim, transcription or inference happens on an uncertain route.
       dropHold(); unseal();
@@ -2106,16 +1878,28 @@
       toast('!', 'Recording saved · ' + String(e.message || e), 3200); return;
     }
     const dev = DEV(); let meta = null;
-    try { meta = JSON.parse(stopped ? dev.recClaim(id) : dev.recStop(id)); } catch (e) {}
+    // recStop in shipped shells implicitly claims. Journal a reload-visible owner before
+    // that bridge call; already-stopped takes are read without recClaim.
+    try { voiceRecovery(id, { kind: V.kind, ms: V.acc }); }
+    catch (_) { pauseNativeTake(true); setVoice(stopped ? 'idle' : 'paused'); toast('!', 'Storage unavailable · recording remains on device'); return; }
+    try {
+      meta = stopped ? (JSON.parse(dev.recPending() || '[]').find(t => t.id === id) || window.__wosVoiceRecovery().find(t => t.id === id)) : JSON.parse(dev.recStop(id));
+      if (meta?.id === id) voiceRecovery(id, meta);
+    } catch (e) { meta = null; }
     V.native = null;
-    if (!meta) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('◌', 'That recording was lost'); return; }
+    if (!meta || meta.id !== id) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('!', 'Could not read recording · original kept on device'); return; }
     // A shipped kind-less recActive bridge reveals the original mode only after an explicit stop.
     // Preserve command routing even when its older take had no page-side provenance at recovery.
-    if (['auto', 'command', 'dictation'].includes(meta.kind)) V.kind = meta.kind;
+    if (!snap.general && ['auto', 'command', 'dictation'].includes(meta.kind)) V.kind = meta.kind;
     V.acc = Math.max(V.acc, Number(meta.ms) || 0);
-    onRecStop(nativeBlob(id), id);
+    try { return onRecStop(nativeBlob(id, Number(meta.bytes)), id); }
+    catch (e) { dropHold(); unseal(); setVoice('idle'); txHide(); toast('!', String(e.message || 'Recording retained · could not read audio'), 4000); }
   }
-  const recDone = id => { try { id && DEV()?.recDone(id); if (id) { window.WosModels.forgetVoiceRoute(id); dictationTake(id, false); dictationRecovery(id, false); } } catch (e) {} };
+  const releasedTakes = new Set();
+  const recDone = id => {
+    if (!id || releasedTakes.has(id) || !DEV()?.recDone) return;
+    try { DEV().recDone(id); releasedTakes.add(id); window.WosModels.forgetVoiceRoute(id); dictationTake(id, false); dictationRecovery(id, false); voiceRecovery(id, false); } catch (e) {}
+  };
   /* The page was reloaded or recreated while the native take kept going: pick the orb back up. */
   // Positive provenance for the shipped kind-less native ABI. Never infer ownership by claiming audio.
   const VOICE_TAKE_KEY = 'wos.voice-take.v1';
@@ -2135,8 +1919,10 @@
     const kind = window.__wosDictationTake(a.id) || a.kind === 'dictation' ? 'dictation' : (a.kind || voiceTake(a.id)?.kind) === 'command' ? 'command' : 'auto';
     V.captureEpoch = (V.captureEpoch || 0) + 1;
     V.field?.release(); V.field = null; // page recreation can never reconstruct a DOM capability
-    const knownReply = kind === 'dictation' ? null : replyTake(a.id);
+    const savedGeneral = window.__wosVoiceRecovery().find(t => t.id === a.id)?.general === true;
+    const knownReply = kind === 'dictation' || savedGeneral ? null : replyTake(a.id);
     Object.assign(V, { native: a.id, kind, target: null, snap: null, seal: null, replyTo: knownReply, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
+    if (savedGeneral) { V.kind = 'general'; V.snap = { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(a.id) }; }
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
     txPill(a.paused ? '⏸' : '✦', kind === 'dictation' ? 'Dictation kept · tap orb to transcribe & copy' : a.paused ? 'Paused · recording kept · tap orb to send' : 'Still recording · tap orb to send', kind === 'dictation' ? 'dictation' : 'agent'); txHide(2600);
@@ -2168,13 +1954,14 @@
     voiceEl.classList.toggle('cmd', V.kind === 'command' && s !== 'idle' && s !== 'listen' && s !== 'paused' && s !== 'command');
     voiceEl.setAttribute('aria-hidden', String(s === 'idle'));
     if (s === 'idle') FIELDS.refresh(); else paintFieldOrb();
+    paintVoiceDestination();
   }
   // The Auto/Agent toggle is gone: the router always decides (commands run, the rest goes to Archimedes).
   V.route = 'auto';
   // Third arc button: attach a photo or file to this take. It rides along with what you say.
   V.files = [];
   const voicePicker = Object.assign(document.createElement('input'), { type: 'file', multiple: true, hidden: true });
-  document.body.appendChild(voicePicker);
+  voicePicker.dataset.voiceFiles='';document.body.appendChild(voicePicker);
   function renderVoiceFiles() {
     const n = V.files.length, b = $('#arcAttach');
     b.disabled = V.kind === 'dictation'; $('#arcScreen').disabled = V.kind === 'dictation';
@@ -2194,20 +1981,8 @@
     if (V.screenOp) { const op = V.screenOp; op.abort.abort(); releaseScreenOperation(op); }
   }
   async function uploadVoiceFile(file, files, f) {
-    const abort = f.abort || (f.abort = new AbortController());
-    // An idle deadline, not a total one: a big file over the resumable route keeps it alive while bytes move.
-    let deadline = 0;
-    const arm = () => { clearTimeout(deadline); deadline = setTimeout(() => abort.abort(new Error('Upload timed out · try attaching again')), 60000); };
-    arm();
-    try {
-      const result = await CHATS.uploadFile(file, { signal: abort.signal, onProgress: (sent, total, state) => { if (state !== 'reconnecting') arm(); } });
-      if (!sameTake(files) || !files.includes(f)) return;
-      Object.assign(f, result, { uploading: false });
-    } catch (e) {
-      const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
-      if (sameTake(files)) toast('!', e.user || abort.signal.reason?.message ? (abort.signal.reason?.message || e.message) : 'Upload failed · not attached', 3200);
-    } finally { clearTimeout(deadline); delete f.abort; }
-    if (sameTake(files)) renderVoiceFiles();
+    await window.WosCaptureTools.uploadRow(CHATS.uploadFile, file, f, { active: () => sameTake(files) && files.includes(f), changed: renderVoiceFiles });
+    if (sameTake(files) && f.error) toast('!', f.error + ' · original file kept; tap Attach to retry', 3200);
   }
   voicePicker.addEventListener('change', async () => {
     const list = [...voicePicker.files], files = V.files; voicePicker.value = '';
@@ -2300,7 +2075,7 @@
       if (id === null) { localStorage.removeItem(REPLY_KEY); return null; }
       if (val) { localStorage.setItem(REPLY_KEY, JSON.stringify({ id, ...val })); return val; }
       const r = JSON.parse(localStorage.getItem(REPLY_KEY) || 'null');
-      return r && r.id === id && r.sid ? { wid: W[r.wid] ? r.wid : '', sid: r.sid } : null;
+      return r && r.id === id && r.sid ? { wid: W[r.wid] ? r.wid : '', sid: r.sid, steerRunId: r.steerRunId || '' } : null;
     } catch (e) { return null; }
   }
   window.__wosReplyTake = id => replyTake(id);
@@ -2316,8 +2091,8 @@
     if (shared?.active || shared?.recording || shared?.hold) { toast('🎙', 'Microphone held by another app', 2000); return 'busy'; }
     try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id) { toast('🎙', 'An existing native recording is still held', 2200); return 'busy'; } } catch (_) { return 'busy'; }
     startVoice('auto');
-    V.replyTo = { wid, sid };
-    if (V.native) replyTake(V.native, { wid, sid });
+    V.replyTo = { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' };
+    if (V.native) replyTake(V.native, V.replyTo);
     CHATS.PW?.paintMic(true, sid);
     // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
     // animates."): the lit mic, the orb and its timer already say a reply is recording.
@@ -2337,11 +2112,13 @@
     // the exact route is still sealed at Send, and unavailable routes remain fail-closed.
     window.WosModels?.load().catch(() => {});
     clearTimeout(txHideT);
-    Object.assign(V, { kind, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, custodyCapture: null, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
-    V.snap = kind === 'dictation' ? null : sendSnap();
+    V.snap = kind === 'dictation' ? null : kind === 'general' ? generalVoiceSnap() : sendSnap();
+    paintVoiceDestination(); // Recording state is set before its destination snapshot exists.
+    if (V.snap && kind === 'command') V.snap.conversation = null;
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
     // No status card while recording: the orb, timer and arc already say it. Hold-for-command keeps
@@ -2352,9 +2129,9 @@
     V.raf = requestAnimationFrame(tick);
     V.native = null;
     const dev = DEV();
-    if (dev) { let id = ''; try { id = dev.recStart(kind) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && kind !== 'dictation') { const route = CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) {}
+    if (dev) { let id = ''; try { id = dev.recStart(kind === 'general' ? 'auto' : kind) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && V.snap?.conversation) voiceRecovery(id, { kind, conversation: V.snap.conversation }); else if (id && kind !== 'dictation') { const route = CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) { if (id && V.snap?.conversation) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'App destination could not be saved · nothing sent'); return; } }
       if (id && kind === 'dictation' && !dictationTake(id)) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Dictation could not be safely retained'); return; }
-      if (id) { V.native = id; voiceTake(id, kind); reportVoice(V.state); if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; } } // '' = no mic permission yet: the page asks below
+      if (id) { V.native = id; if (V.snap?.general) { try { voiceRecovery(id, { kind: 'general', general: true, conversation: null }); saveVoiceRoute(id, V.snap.route); } catch (_) { V.stopAsked = true; pauseCommandCapture(); toast('!', 'General destination could not be saved · recording kept'); return; } } voiceTake(id, kind === 'general' ? 'auto' : kind); reportVoice(V.state); if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; } } // '' = no mic permission yet: the page asks below
     try {
       if (!(await openRec(captureEpoch))) return;
       if (V.stopAsked && V.sendAsked) finishVoice();
@@ -2366,7 +2143,7 @@
       txShow('', '', '', '✦');
       $('#txRouteText').textContent = kind === 'command' ? 'No mic here · tap a command' : 'No mic here · tap a line to simulate';
       const ex = kind === 'command'
-        ? ['Open CineQueue', 'Zoom out', 'Next desk', 'Directions to the airport']
+        ? ['Open Movies', 'Zoom out', 'Next desk', 'Directions to the airport']
         : ['Show me yesterday', 'Directions to Iconsiam', 'Play something chill', 'What did we ship on Wizard this week?'];
       $('#txChips').innerHTML = `<span class="lbl">Try</span>` + ex.map(x => `<button data-sim="${esc(x)}">${esc(x)}</button>`).join('');
       if (V.stopAsked) { cancelVoice(true); }
@@ -2385,7 +2162,8 @@
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
     const rec = V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
     V.mime = rec.mimeType || mime || 'audio/webm';
-    rec.ondataavailable = e => { if (epoch === V.captureEpoch && !V.cancelled && e.data && e.data.size) V.chunks.push(e.data); };
+    const captureId = V.custodyCapture || (V.custodyCapture = 'capture-' + crypto.randomUUID());
+    rec.ondataavailable = e => { if (epoch === V.captureEpoch && !V.cancelled && e.data && e.data.size) { V.chunks.push(e.data); OUTBOX.capture(new Blob([...V.parts, ...V.chunks], { type: rec.mimeType || V.mime || 'audio/webm' }), captureId); } };
     rec.onstop = () => { if (epoch !== V.captureEpoch || V.cancelled) return; return V.state === 'think' ? onRecStop() : onRecInterrupted(rec); };
     // A track ended by the system stops the recorder too; onstop handles it.
     V.stream.getAudioTracks().forEach(tr => tr.addEventListener('ended', () => { try { rec.state !== 'inactive' && rec.stop(); } catch (e) {} }));
@@ -2469,7 +2247,7 @@
     txHide(0); // keep copy available; Settings retains the same transcript across reloads
     clearTimeout(txHideT); voiceEl.classList.add('tx');
   }
-  async function transcribeDictation(blobs, nid) {
+  async function transcribeDictation(blobs, nid, captureId = null) {
     const epoch = V.captureEpoch, target = V.field, ms = V.acc;
     const op = V.dictationOp = { blobs, ms, nid, epoch, abort: new AbortController() };
     const live = () => V.captureEpoch === epoch && !V.cancelled && V.dictationOp === op;
@@ -2497,7 +2275,7 @@
       if (!inserted) {
         // Never re-resolve a lost field or use the agent outbox as an audio recovery mechanism.
         const kept = await window.WosCancelled.retainWeb(new Blob(blobs, { type: blobs[0]?.type }), ms, text);
-        if (kept) recDone(nid);
+        if (kept) { recDone(nid); if (captureId) await OUTBOX.remove(captureId); }
         if (!live()) return;
         setVoice('idle'); showDictationCopy(text, kept, !!nid);
       } else { recDone(nid); setVoice('idle'); txHide(); }
@@ -2505,7 +2283,7 @@
       if (!live()) return;
       target?.release(); V.field = null;
       const kept = await window.WosCancelled.retainWeb(new Blob(blobs, { type: blobs[0]?.type }), ms);
-      if (kept) recDone(nid); // otherwise native audio remains on disk
+      if (kept) { recDone(nid); if (captureId) await OUTBOX.remove(captureId); } // otherwise native audio remains on disk
       if (!live()) return;
       setVoice('idle'); txHide();
       toast('!', kept ? 'Dictation retained in Settings → Cancelled recordings · transcribe & copy' : nid ? 'Dictation kept on device · reopen recording recovery to retry' : 'Storage unavailable · kept only while this page stays open · retry saving in Settings', 6000);
@@ -2517,7 +2295,9 @@
     if (V.kind === 'dictation') return finishDictation();
     if (V.kind === 'command') { V.stopAsked = true; pauseCommandCapture(); }
     V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
+    if (V.target != null || V.replyTo || V.kind === 'command') V.snap.conversation = null; // only explicit gestures override
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
+    if (V.files.some(f => f.error)) { toast('!', 'Attachment not uploaded · tap Attach to retry the original file', 2600); return; }
     if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
     // Text, photos and voice go as ONE message (legacy H4; James, 10 Oct 2026: "when I paste a link in the text
     // box and I send you a voice note … they should both be sent together"). The composer of the thread this take
@@ -2526,9 +2306,11 @@
     if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
     try {
       const pin = sealAt || (V.snap.view?.thread ? { wid: V.snap.view.id, sid: V.snap.view.thread } : null);
-      V.snap.route = CHATS.modelRoute(pin?.wid, pin?.sid || '');
-      if (!V.snap.route) { toast('!', 'Choose a model before sending', 2200); return; }
-      if (V.native) saveVoiceRoute(V.native, V.snap.route);
+      if (!V.snap.conversation) {
+        V.snap.route = V.snap.general ? (V.snap.route || CHATS.modelRoute()) : CHATS.modelRoute(pin?.wid, pin?.sid || '');
+        if (!V.snap.route) { toast('!', 'Choose a model before sending', 2200); return; }
+        if (V.native) saveVoiceRoute(V.native, V.snap.route);
+      }
     } catch (e) { toast('!', String(e.message || e), 2200); return; }
     if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length ? t : null; }
     leaveOnSend(V.snap);
@@ -2558,7 +2340,9 @@
     const nativeKeeps = !!V.native && typeof DEV()?.cancelledList === 'function';
     if (V.native) { try { if (!nativeTakeAppOwned(V.native)) DEV().recCancel(V.native); } catch (e) {} V.native = null; }
     const rec = V.rec, mime = V.mime || rec?.mimeType || 'audio/webm';
-    const keepWeb = parts => { const b = new Blob(parts, { type: mime }); window.WosCancelled?.keepWeb(b, heldMs).then(k => k && window.WosCancelled.repaint()); };
+    const captureId = V.custodyCapture; V.custodyCapture = null;
+    if (captureId && !long) OUTBOX.remove(captureId);
+    const keepWeb = parts => { const b = new Blob(parts, { type: mime }); if (captureId) { OUTBOX.capture(b, captureId).then(async () => { const item = await OUTBOX.transition(captureId, 'held', 'Cancelled recording · original kept'); toast('✕', item.durable ? 'Cancelled · saved in Recordings' : 'Device save failed · recording kept in this tab. Keep Wizard open.', 4000); }); return; } window.WosCancelled?.keepWeb(b, heldMs).then(k => { window.WosCancelled.repaint(); toast(k ? '✕' : '!', k ? 'Cancelled · saved in Settings → Cancelled recordings' : 'Device save failed · recording kept in this tab. Keep Wizard open.', 4000); }); };
     if (long && rec && window.WosCancelled) {
       // Stop the web recorder and keep what it heard (the last chunk arrives with the stop).
       const parts = V.parts.slice(), chunks = V.chunks;
@@ -2575,7 +2359,7 @@
     stopStream(); V.rec = null; V.sim = false; cancelAnimationFrame(V.raf); Orb.setLevel(0);
     setVoice('idle'); txHide(quiet ? 0 : 0);
     const kept = long && (nativeKeeps || !!rec || !!V.parts.length);
-    if (!quiet || kept) { toast('✕', kept ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Discarded', kept ? 3200 : 2200); vib(12); }
+    if (!quiet || kept) { toast('✕', kept ? (nativeKeeps ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Cancelled · keeping recording…') : 'Discarded', kept ? 3200 : 2200); vib(12); }
   }
   async function onRecStop(nblob, nid) {
     // A native take (Android RecorderService) arrives as one blob + its id; a web take is the parts + current chunks.
@@ -2587,55 +2371,92 @@
     const size = blobs.reduce((n, b) => n + b.size, 0);
     stopStream(); V.rec = null; Orb.setLevel(0);
     if (V.cancelled) { recDone(nid); dropHold(); unseal(); return; }
-    if (V.kind === 'dictation') return transcribeDictation(blobs, nid);
-    if (V.acc < 450 || size < 1200) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); tourEv('nospeech'); return; }
+    if (V.kind === 'dictation') { const id = V.custodyCapture; V.custodyCapture = null; if (id) await OUTBOX.transition(id, 'held', 'Dictation recording · original kept'); return transcribeDictation(blobs, nid, id); }
+    if (!nid && (V.acc < 450 || size < 1200)) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); tourEv('nospeech'); return; }
     // A voice reply from a thread's composer goes to that thread, as recorded: no routing, no commands,
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
     const snap = V.snap || sendSnap(); V.snap = null;
     snap.seal = V.seal || null; V.seal = null; // the composer read at the send tap (finishVoice)
     const kind = V.kind, aimAt = V.target;
+    // One immutable owner before STT/router awaits, including native handoffs. The native
+    // copy is released only after the web copy is durable or a server receipt exists.
+    const rt = V.replyTo;
+    const sv = snap.view, sid = rt?.sid || (aimAt == null ? sv?.thread || '' : '');
+    const audio = new Blob(blobs, { type: blob.type || 'audio/webm' });
+    if (snap.conversation && kind !== 'command' && !rt && aimAt == null) {
+      const captureId = V.custodyCapture; V.custodyCapture = null;
+      const files = takeFiles();
+      try {
+        const item = await OUTBOX.sendConversation({ conversation: snap.conversation, audio, captureId, nativeId: nid, files, source: 'orb' });
+        if (item?.durable || item?.state === 'sent') recDone(nid);
+        toast(item?.state === 'sent' ? '✦' : '!', item?.state === 'sent' ? 'Sent to ' + snap.conversation.label : item?.error || 'Manager recording kept in Recordings', 5000);
+      } finally { dropHold(); setVoice('idle'); txHide(); }
+      return;
+    }
+    const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
+      sessionId: sid && sid !== '__new__' ? sid : '',
+      steerRunId: rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '',
+      sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
+      files: [...V.files, ...(snap.seal?.files || [])].filter(f => f?.id),
+      instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
+    V.custodyCapture = null;
+    snap.custodyId = it.id; snap.audio = audio;
+    snap.seal?.done(it);
     // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.
     const hold = V.hold; V.hold = null;
     const unhold = () => { if (hold) setTimeout(() => LIVE.releaseSend?.(hold), 1500); };
-    if (V.replyTo) {
-      const rt = V.replyTo, files = takeFiles(); V.replyTo = null; replyTake(null);
-      setVoice('idle'); txPill('✦', 'Voice reply · saved to this thread', 'agent'); txHide(1800);
-      Promise.all(blobs.map((part, i) => Promise.resolve(CHATS.sendVoiceTo(rt.wid, rt.sid, part, i === 0 ? files : [], i === 0 ? snap.seal || false : false, snap.route)).catch(() => {}))).finally(() => recDone(nid));
+    const releaseNative = () => { const held = OUTBOX.get(snap.custodyId); if (held?.durable || held?.state === 'sent') recDone(nid); };
+    if (rt) {
+      const files = takeFiles(); V.replyTo = null;
+      setVoice('idle'); txPill('✦', 'Voice reply · waiting to send', 'agent'); txHide(1800);
+      try { await CHATS.sendVoiceTo(rt.wid, rt.sid, audio, files, snap.seal || false, snap.route, snap.custodyId); }
+      catch (e) { await OUTBOX.transition(snap.custodyId, 'failed', String(e.message || e)); }
+      finally { releaseNative(); unhold(); }
       return;
     }
     try {
+      // Protect bytes before STT. Failed upload is retryable; it must not delete the staged take.
+      await OUTBOX.protect(snap.custodyId);
       const words = []; const j = { ms: 0 };
       const prompt = window.WizConfig.voicePrompt(APPS.map(a => a.name).slice(0, 40));
       // No network: straight to the outbox (it transcribes and sends when Wizard is back), no waiting on a dead line.
       if (navigator.onLine === false) throw new Error('offline');
       for (const part of blobs) {   // more than one part only after the mic was interrupted mid-take
         // A flaky line can hang a request for a long time: past this bound the take goes to the outbox instead.
-        const limit = 12000 + Math.round(part.size / 20);
-        const jj = await Promise.race([window.WizConfig.transcribe(part, { prompt, language: 'en' }),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('transcription timed out')), limit))]);
+        const jj = await OUTBOX.bounded(signal => window.WizConfig.transcribe(part, { prompt, language: 'en', signal }));
         words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
       }
       const text = words.filter(Boolean).join(' ').trim();
-      if (!text) { recDone(nid); unhold(); unseal(snap.seal); setVoice('idle'); txHide(); toast('◌', snap.seal ? 'No speech detected · your text is back in the thread' : 'No speech detected'); tourEv('nospeech'); return; }
-      // The words are what gets sent from here; the native take is deleted once they are handled (or in the outbox).
-      Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).finally(() => { recDone(nid); unhold(); });
+      if (!text) {
+        await OUTBOX.transition(snap.custodyId, 'empty', 'No speech detected · original recording and composer kept together');
+        releaseNative(); unhold(); setVoice('idle'); txHide();
+        toast('◌', 'No speech detected · recording and text kept in Unsent'); tourEv('nospeech'); return;
+      }
+      const outcome = await handleText(text, kind, false, j.ms, aimAt, snap);
+      if (OUTBOX.get(snap.custodyId)?.state === 'processing') {
+        await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'local'
+          ? 'Handled on this device · original recording kept; not queued to the agent'
+          : 'No delivery receipt · original recording kept; nothing sent');
+      }
+      releaseNative(); unhold();
     } catch (err) {
       // A held command that can't be heard is dropped with a note, never queued for the agent as a message.
-      if (kind === 'command') { recDone(nid); unhold(); unseal(snap.seal); setVoice('idle'); txPill('⚡', 'Command not heard · nothing sent', 'command', String(err?.message || err)); txHide(2400); return; }
+      if (kind === 'command') { await OUTBOX.transition(snap.custodyId, 'held', 'Command not heard · recording kept; nothing sent'); releaseNative(); unhold(); setVoice('idle'); txPill('⚡', 'Command not heard · nothing sent', 'command', String(err?.message || err)); txHide(2400); return; }
       // Never lose a recording: it goes to the outbox, which transcribes and sends it when Wizard is back.
       setVoice('idle');
-      const aim = V.target, sv = snap.view;
+      const aim = aimAt, sv = snap.view;
       const files = takeFiles();
-      const queued = (blobs.length ? blobs : [blob]).map((part, i) => {
+      const queued = (snap.custodyId ? [snap.audio] : blobs.length ? blobs : [blob]).map((part, i) => {
         const fl = i === 0 ? files : [];   // attached files ride with the first part only
-        if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route);
-        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
+        if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route, snap.custodyId);
+        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { custodyId: snap.custodyId, sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
         const sl = i === 0 ? snap.seal : null; // the window is gone: the taken composer still rides with it
-        return toAgent('', 'Saved · sends when Wizard is reachable', { audio: part, desk: aim, source: 'orb', files: [...fl, ...(sl ? sl.files : [])].slice(0, 8), typed: sl?.text || '', snap })
-          .then(() => sl?.done(), e => { sl?.putBack(); throw e; });
+        return toAgent('', 'Waiting to send · recording kept', { audio: part, desk: aim, source: 'orb', files: [...fl, ...(sl ? sl.files : [])].slice(0, 8), typed: sl?.text || '', snap })
+          .then(item => sl?.done(item));
       });
-      Promise.all(queued.map(q => Promise.resolve(q).catch(() => {}))).then(() => { recDone(nid); unhold(); });
-      txPill('↻', 'Saved · sends when Wizard is back', 'agent', 'Couldn’t reach Wizard · recording saved, will send'); txHide(2600);
+      await Promise.all(queued.map(q => Promise.resolve(q).catch(e => OUTBOX.transition(snap.custodyId, 'failed', String(e.message || e)))));
+      releaseNative(); unhold();
+      txPill('↻', 'Waiting to send · recording kept', 'agent', 'Couldn’t reach Wizard · retrying'); txHide(2600);
     }
   }
   // The tap that starts recording must not also press an arc button: the arc fans out
@@ -2643,17 +2464,18 @@
   $('#voice').addEventListener('click', e => { if (e.target.closest('.arc') && performance.now() - (V.onAt || 0) < 450) { e.stopPropagation(); e.preventDefault(); } }, true);
   $('#arcCancel').addEventListener('click', () => cancelVoice());
   $('#arcPause').addEventListener('click', () => {
-    if (V.state === 'listen' || V.state === 'command') { V.stopAsked = true; V.sendAsked = false; V.acc += performance.now() - V.t0; try { V.rec && V.rec.pause(); } catch (e) {} if (V.native) pauseNativeTake(true); setVoice('paused'); vib(6); }
+    if (V.state === 'listen' || V.state === 'command') { V.stopAsked = true; V.sendAsked = false; V.acc += performance.now() - V.t0; try { window.WosCaptureTools.setPaused(V.rec,true); } catch (e) {} if (V.native) pauseNativeTake(true); setVoice('paused'); vib(6); }
     else if (V.state === 'paused' && !V.native && !V.rec && V.parts.length) {
       V.stopAsked = false; V.sendAsked = false;   // after a mic interruption: carry on with a fresh part
       V.t0 = performance.now(); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6);
       openRec().catch(() => { V.acc += performance.now() - V.t0; setVoice('paused'); toast('⏸', 'The mic is busy · tap the orb to send what you have'); });
     }
-    else if (V.state === 'paused') { V.stopAsked = false; V.sendAsked = false; V.t0 = performance.now(); try { V.rec && V.rec.resume(); } catch (e) {} if (V.native) pauseNativeTake(false); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
+    else if (V.state === 'paused') { V.stopAsked = false; V.sendAsked = false; V.t0 = performance.now(); try { window.WosCaptureTools.setPaused(V.rec,false); } catch (e) {} if (V.native) pauseNativeTake(false); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
   });
   // The file picker is a separate screen on Android: pause the take while it is open, resume on return.
   $('#arcAttach').addEventListener('click', () => {
     if (V.state !== 'listen' && V.state !== 'paused') return;
+    const failed=V.files.filter(f=>f.error&&f.local);if(failed.length){for(const f of failed)uploadVoiceFile(f.local,V.files,f);return;}
     if (V.state === 'listen') { $('#arcPause').click(); V.pickPaused = true; }
     voicePicker.click();
   });
@@ -2677,8 +2499,8 @@
    *  - capture: everything said with a tap goes to that view (hold still forces a command);
    *  - auto: the fast router decides whether James is talking to the view or to Archimedes;
    *  - say nothing: the utterance goes to Archimedes, who is told what was on screen.
-   * Chats threads are auto. Framed apps opt in with <meta name="wizard-os-voice" content="capture|auto">
-   * and receive {type:'wizard-os:voice', text} by postMessage. */
+   * Chats threads are auto. Framed apps require the installed receives_voice_input capability
+   * and the shared WizardApp.voiceInput receiver; app-authored meta tags grant nothing. */
   function viewOf(id) {
     const w = W[id]; if (!w) return null;
     if (agentWin(w)) { // an agent's Chats: what is said here goes to that agent, and private titles never leave it
@@ -2688,25 +2510,29 @@
     }
     if (w.app === 'chats' && w.thread) return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, name: w.thread === '__new__' ? 'New chat' : `Chats thread “${winTitle(w)}”` };
     if (w.app === 'frame' && w.from && w.from.sid) return { id, mode: '', kind: 'review', review: true, thread: w.from.sid, threadTitle: w.from.title || '', name: `Review of ${winTitle(w)}`, url: frameHref(id) || w.url };
-    if (w.app === 'frame') { const m = frameVoiceMode(id); return { id, mode: m, kind: 'app', name: winApp(w).name, url: frameHref(id) || winApp(w).url }; }
+    if (w.app === 'frame') return { id, mode: '', kind: 'app', name: winApp(w).name, url: frameHref(id) || winApp(w).url };
     if (w.app === 'chats') return { id, mode: '', kind: 'thread list', name: 'Chats' };
     if (w.app === 'review') return { id, mode: '', kind: 'review', name: winTitle(w), z: w.z };
     if (w.app === 'maps') return { id, mode: '', kind: 'maps', name: winTitle(w) };
     return { id, mode: '', kind: 'app', name: winTitle(w) };
   }
   // Rides as the run's ephemeral system note: the agent knows the view, the thread stays clean.
-  /* Where James was at the moment he sent (the orb tap that ends a take, a typed send). Transcription and
+  /* Where James was at recording start (or at a typed send). Transcription and
    * routing take seconds; by then he may have opened another thread. Everything downstream (which thread,
    * new or reply, the context note) is decided from this snapshot, never from what is in front later. */
   function sendSnap(id) {
     const d = desks[idx], fid = id || d.focus;
-    const view = viewOf(fid);
+    const view = viewOf(fid); if (view) view.appId = W[fid]?.appId;
     // The words on screen at that moment, so "this step" or "that button" resolves. A chat thread's text is
     // already the conversation, so it is not repeated.
     const screen = view && view.kind !== 'chat thread' && !view.private ? (window.WizScreen?.read(winEl(fid)) || '') : '';
     // A private agent's window is named, never read: its thread titles stay with that agent.
     const nameOf = x => agentWin(W[x]) && agentApp(W[x]).private ? `${agentApp(W[x]).name} chats (private agent)` : winTitle(W[x]);
-    return { id: fid, desk: idx, view, screen, others: d.wins.filter(x => x !== fid).map(nameOf) };
+    const capability = window.WizAppServices?.voiceInput;
+    const app = APP[W[fid]?.appId];
+    const conversation = capability ? capability.pin(winEl(fid)?.querySelector('iframe'), app?.id)
+      : app?.receives_voice_input === true ? { appId: app.id, token: 'unavailable', label: app.name } : null;
+    return { id: fid, desk: idx, view, screen, conversation, others: d.wins.filter(x => x !== fid).map(nameOf) };
   }
   function viewContext(id, how = 'voice', snap = null) {
     const S = snap || sendSnap(id), v = S.view, others = S.others;
@@ -2730,20 +2556,23 @@
       (s => s ? `Visible on screen: ${s}` : '')(window.WizScreen?.read(winEl(v.id)) || ''),
       'Treat the message as feedback on that page; "this", "here" and "it" mean that page.'].filter(Boolean).join(' ');
   }
-  function sendReview(v, text, audio, files = [], route = null) {
-    const wid = reviewSink(v); if (!wid) return false;
+  async function sendReview(v, text, audio, files = [], route = null, custodyId = null) {
+    try { route ||= window.WosModels.snapshot(v.thread); }
+    catch (e) {
+      const it = custodyId ? OUTBOX.get(custodyId) : await OUTBOX.stage({ kind: 'reply', sessionId: v.thread, text, audio, files });
+      if (it) await OUTBOX.transition(it.id, 'held', 'Feedback route unavailable · original kept');
+      setVoice('idle'); toast('!', 'Feedback kept for its original thread · model route unavailable', 3200);
+      return it || { outcome: 'retained' };
+    }
     window.__ovLog = (window.__ovLog || []).concat('review-send:' + v.thread).slice(-30);
-    sendChat(wid, text, 'voice, aimed at the page under review', audio, { sid: v.thread, route, files, instructions: reviewContext(v), away: true });
-    return true;
+    return window.WosBoundView.feedback(OUTBOX, { thread: v.thread, url: v.url, route, custodyId, context: reviewContext(v) }, text, audio, files);
   }
   function deliverToView(v, text, snap) {
-    if (v.review) return sendReview(v, text, null, [], snap?.route);
+    if (v.review) return sendReview(v, text, snap?.audio || null, [], snap?.route, snap?.custodyId);
     const w = W[v.id]; if (!w) return false;
     // The thread that was open when James sent, even if the window shows another one by now.
-    if (w.app === 'chats' && (v.thread || w.thread)) { sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); return true; }
-    if (w.app === 'frame') {
-      try { const f = winEl(v.id).querySelector('iframe'); f.contentWindow.postMessage({ type: 'wizard-os:voice', text }, location.origin); return true; } catch (e) { return false; }
-    }
+    if (w.app === 'chats' && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+    // No unacknowledged postMessage delivery to arbitrary/self-asserted frames.
     return false;
   }
 
@@ -2753,86 +2582,18 @@
    *   filter [by] X | only X | show [me] [only] X [only] → chip X (status or subject), else search X
    *   search [for] X | find X                          → search text
    * A held orb with any other words on the list keeps doing what it always did (open apps, etc.). */
-  function chatsVoice(t, snap, kind) {
-    const v = snap?.view; if (!v || v.kind !== 'thread list') return null;
-    const s = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '').trim();
-    if (/^(clear|remove|reset|turn off|drop) (the |all )?(filters?|chips?)$|^(show )?(all|every) (chats|threads)$|^show everything$|^no filters?$/.test(s)) return { action: 'chats_filter', clear: true };
-    let m = s.match(/^(?:filter|filtered) (?:by |to |for |on )?(.+)$/) || s.match(/^only (?:show )?(.+)$/) || s.match(/^show (?:me )?(?:only |just )?(?:the |my )?(.+?)(?: only| chats| threads)?$/);
-    if (m) {
-      const want = m[1].replace(/ (chats|threads|messages|ones)$/, '').trim();
-      const f = CHATS.matchFilters(want, 1)[0];
-      if (f) return { action: 'chats_filter', f };
-      if (/^(?:filter|filtered)/.test(s)) return { action: 'chats_search', q: want };
-      return null; // "show me …" with no filter match is not ours
-    }
-    // A tap keeps "find me a …" for the agent; only "search …" searches the list. A held orb takes both.
-    m = s.match(kind === 'command' ? /^(?:search|find|look for)(?: (?:my |the )?(?:chats|threads|messages))?(?: for)? (.+)$/ : /^search(?: (?:my |the )?(?:chats|threads|messages))?(?: for)? (.+)$/);
-    if (m) return { action: 'chats_search', q: m[1] };
-    return null;
-  }
-  function localParse(t, snap, kind) {
-    // The music search spell ("music search Home Tides") wins everywhere, even over the Chats list's "search …".
-    { const ms = window.WosMusic?.available() && window.WosMusic.parse(t, false, false); if (ms && ms.op === 'search') return { action: 'music', cmd: ms }; }
-    { const cv = chatsVoice(t, snap || sendSnap(), kind); if (cv) return cv; }
-    // Food spells (James, 12 Oct): "order food" / "order grab" / "order lunch" open Grab for a new order; "order kra pao"
-    // or "order my usual kra pao" runs a saved one; "food" on its own opens the Food app. All on the phone, nothing to Wizard.
-    const us = window.WosUsuals?.match(t); if (us) return { action: 'usual', id: us };
-    if (window.WosUsuals?.available()) {
-      const fs = window.WosUsuals.spell(t);
-      if (fs === 'new') return { action: 'usual', id: '+new' };
-      if (fs === 'open' && (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'open_app', app: (APP.usuals || {}).name || 'Food' };
-    }
-    // A bare app name opens that app, no "open" needed (James, 12 Oct: "If I say the name of an app, it should just
-    // open that app"). Held: anywhere, even over Wizard Music or a thread. Tapped: off a thread, so a one-word reply
-    // inside a thread stays a reply. Exact names and aliases only (appByName), never a fuzzy guess.
-    if (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread') { const an = appByName(t); if (an) return { action: 'open_app', app: an.name }; }
-    // Music (play …, pause, next, louder, I like this): on-device, straight to Wizard Music. A held orb takes any
-    // music phrase; a tap only the unmistakable ones ("play …", "pause the music"), so chat words stay chat.
-    // In front of Wizard Music a held orb is always for the player ("Guy Barato Trap" = play it).
-    if (window.WosMusic?.available()) {
-      const front = W[(snap || sendSnap()).id]?.appId === 'wizard-music';
-      const inMusic = kind === 'command' && front;
-      const mc = window.WosMusic.parse(t, inMusic, front);
-      const v0 = (snap || sendSnap()).view;
-      const tapOk = mc && (mc.strong || (mc.op === 'play' && v0?.kind !== 'chat thread' && norm(t).split(' ').length <= 8));
-      if (mc && (kind === 'command' || tapOk)) return { action: 'music', cmd: mc };
-    }
-    // The quick-search spell ("image search …", "search …") opens the search sheet on-device, even over a thread.
-    // A held orb is always a command, so there even the plain "search for …" form is the search app's.
-    const qs = quickSearch(t);
-    if (qs && (qs.strong || kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'quick_search', query: qs.query, tab: qs.tab };
-    const s = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '');
-    if (/^(zoom|go|dive) (in|deeper|down)\b/.test(s)) return { action: 'zoom', dir: 'in' };
-    if (/^(zoom|back|go|pull) (out|up|back)\b|^zoom out\b/.test(s)) {
-      const lv = /month/.test(s) ? 'month' : /week/.test(s) ? 'week' : null;
-      return lv ? { action: 'open_view', view: lv } : { action: 'zoom', dir: 'out' };
-    }
-    if (/^(next|right) desk|^desk (right|next)/.test(s)) return { action: 'desk', to: 'next' };
-    if (/^(previous|prev|left|last) desk|^desk (left|back)/.test(s)) return { action: 'desk', to: 'prev' };
-    if (/^(go )?home( screen| desk)?$/.test(s)) return { action: 'desk', to: 'home' };
-    if (/^(clear|close) (this |the )?desk$/.test(s)) return { action: 'clear_desk' };
-    if (/^(close|quit|kill) (this |the )?(window|app)$/.test(s)) return { action: 'close_window' };
-    if (/^(go |make (it|this) )?full ?screen$|^(maximi[sz]e|expand)( (it|this))?$/.test(s)) return { action: 'fullscreen', on: true };
-    if (/^(exit full ?screen|tile( it| this)?|un ?maximi[sz]e|shrink( it| this)?)$/.test(s)) return { action: 'fullscreen', on: false };
-    let m = s.match(/^move (?:this|it|the window)(?: window| app)? (?:to )?(?:the )?(left|right|next|previous|prev)(?: desk)?$/);
-    if (m) return { action: 'move_window', to: /left|prev/.test(m[1]) ? 'prev' : 'next' };
-    if (/^(show |open )?(my )?(inbox|notifications)$/.test(s)) return { action: 'open_view', view: 'inbox' };
-    if (/^((change|switch|pick|choose|open|show) )?(the |my |a )?(skins?|themes?)$|^change (the |my )?look$/.test(s)) return { action: 'open_view', view: 'skin' };
-    if (/^(show |open )?(my )?(apps|app list|launcher|all apps)$/.test(s)) return { action: 'open_view', view: 'apps' };
-    m = s.match(/^(?:open|launch|show|start|go to|switch to)\s+(?:me\s+)?(.+)$/);
-    if (m) {
-      const q = m[1];
-      if (/^(yesterday|yesterdays review|yesterday s review)$/.test(q)) return { action: 'open_view', view: 'day', date: YESTERDAY };
-      if (/^today$/.test(q)) return { action: 'open_view', view: 'day', date: TODAY };
-      if (/^(the |this )?week( in review)?$/.test(q)) return { action: 'open_view', view: 'week' };
-      if (/^(the |this )?month( in review)?$/.test(q)) return { action: 'open_view', view: 'month' };
-      const a = findApp(q); if (a) return { action: 'open_app', app: a.name };
-    }
-    return null;
-  }
+  const LOCAL_COMMANDS = window.WosCommands.create({ CHATS, APP, appByName, findApp, quickSearch, sendSnap });
+  const localParse = (text, snap, kind) => LOCAL_COMMANDS.parse(text, snap, kind);
   async function handleText(text, kind, typed, sttMs, target, snap) {
     const sttNote = sttMs ? ` · heard in ${sttMs} ms` : '';
     snap = snap || sendSnap();
+    if (snap.general) return toAgent(text, 'To ' + window.WizConfig.agent(), { snap, files: typed ? [] : takeFiles() });
+    if (snap.conversation && kind !== 'command' && target == null) {
+      const it = await OUTBOX.sendConversation({ conversation: snap.conversation, text, audio: snap.audio || null, files: typed ? [] : takeFiles(), source: 'orb' });
+      setVoice('idle'); txHide();
+      toast(it.state === 'sent' ? '✦' : '!', it.state === 'sent' ? 'Sent to ' + snap.conversation.label : it.error, 5000);
+      return it;
+    }
     // A bare "help" opens the gestures sheet. Held: always. Tapped: unless a thread is open (there it's a reply).
     if (window.WosTour?.isHelp(text) && (kind === 'command' || snap.view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
     const opts = target == null ? { snap } : { desk: target, snap };
@@ -2845,7 +2606,7 @@
       if (kind === 'command' && !typed) { const lc = localParse(text, snap, kind); if (lc) { showRouted('command', `Command · on-device${sttNote}`); return finishCmd(lc, text, opts); } return holdNoMatch(text, opts); }
       const files = typed ? [] : takeFiles(), seal = typed ? null : snap.seal || null;
       setVoice('idle'); txPill('✦', `To ${v.agentLabel}${v.thread && v.thread !== '__new__' ? ' · this thread' : ' · new chat'}${sttNote}`, 'agent'); txHide(1400);
-      return sendChat(v.id, text, `voice, in ${v.agentLabel}’s chats`, null, { sid: v.thread || '__new__', route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, `voice, in ${v.agentLabel}’s chats`, snap) });
+      return sendChat(v.id, text, `voice, in ${v.agentLabel}’s chats`, snap.audio || null, { custodyId: snap.custodyId, sid: v.thread || '__new__', route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, `voice, in ${v.agentLabel}’s chats`, snap) });
     }
     // Attached files mean "look at this": skip command routing and send words + files together. So do words,
     // photos or files waiting in the thread's composer (snap.seal): one message, never a command.
@@ -2854,10 +2615,10 @@
     if (files.length || seal) {
       const nf = files.length + (seal ? seal.files.length : 0);
       const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : ''].filter(Boolean).join(' + ');
-      if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback sent with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, null, files, snap.route); }
-      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Sent with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+      if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback waiting to send with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, snap.audio || null, files, snap.route, snap.custodyId); }
+      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Waiting to send with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', snap.audio || null, { custodyId: snap.custodyId, sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
       const all = [...files, ...(seal ? seal.files : [])].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
-      return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all }).then(() => seal?.done(), e => { seal?.putBack(); throw e; });
+      return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all }).then(item => { seal?.done(item); return item; });
     }
     const t0 = performance.now();
     const loc = localParse(text, snap, kind);
@@ -2866,8 +2627,9 @@
       showRouted('command', `Command · on-device · ${ms} ms${sttNote}`);
       return finishCmd(loc, text, opts);
     }
+    if (kind === 'command' && !typed) return holdNoMatch(text, opts);
     // A capturing view takes a tap utterance as-is.
-    if (kind !== 'command' && v?.mode === 'capture' && target == null) return toView(v, text, `To ${v.name}${sttNote}`);
+    if (kind !== 'command' && v?.mode === 'capture' && target == null) return toView(v, text, `To ${v.name}${sttNote}`, snap);
     // An open thread owns what James says: unless it is a phone command (or aimed at another desk), it goes
     // into that thread (steering the live run), never a new thread. New threads start from the list or New chat.
     const intoThread = kind !== 'command' && target == null && (v?.kind === 'chat thread' || v?.review);
@@ -2890,7 +2652,7 @@
       if (c.route === 'command') {
         showRouted('command', `Command · DeepSeek Flash · ${j.ms} ms${sttNote}`);
         const ran = finishCmd(c, text, opts);
-        if (c.then_agent) setTimeout(() => toAgent(String(c.then_agent), `Opened ${c.app || 'app'} · follow-up to ${window.WizConfig.agent()}`, opts), 1500);
+        if (c.then_agent) { await new Promise(resolve => setTimeout(resolve, 1500)); return toAgent(String(c.then_agent), `Opened ${c.app || 'app'} · follow-up to ${window.WizConfig.agent()}`, opts); }
         return ran;
       }
       return toAgentOrThread(`To ${window.WizConfig.agent()} · routed in ${j.ms} ms${sttNote}`);
@@ -2915,7 +2677,7 @@
   }
   function showRouted(kind, label) {
     if (isPill()) {
-      const short = kind === 'agent' ? (/^Saved/.test(label) ? 'Saved · sends when Wizard is back' : `Sent to ${window.WizConfig.agent()}`)
+      const short = kind === 'agent' ? 'Waiting to send'
         : kind === 'view' ? 'Sent ' + label.split(' · ')[0].replace(/^To /, 'to ')
         : ($('#txText').textContent || 'Done');
       return txPill(kind === 'command' ? '⚡' : kind === 'view' ? '◧' : '✦', short, kind, label);
@@ -2929,28 +2691,23 @@
     if (!ok) { $('#txRouteText').textContent += ' · no match'; }
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
     txHide(ok ? (isPill() ? 1200 : 1300) : 3200);
+    return { outcome: ok ? 'local' : 'unhandled' };
   }
-  function toView(v, text, label, snap) {
+  async function toView(v, text, label, snap) {
     showRouted('view', label); setVoice('done'); vib([8, 40, 8]);
-    const ok = deliverToView(v, text, snap);
+    const ok = await deliverToView(v, text, snap);
     if (!ok) return toAgent(text, `${v.name} didn’t take it · sent to ${window.WizConfig.agent()}`, { snap });
     if (!v.thread || W[v.id]?.thread === v.thread) focusWin(v.id); // never pull James back from where he went since
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
     txHide(isPill() ? 1200 : 1500);
+    return ok === true ? { outcome: 'local' } : ok;
   }
   function execute(c, text, opts = {}) {
-    const a = String(c.action || '').toLowerCase();
-    const arg = c.app || c.target || c.destination || c.query || c.view || '';
-    const f = desks[idx].focus;
-    if (/direction|navigat|route/.test(a)) { openMaps('dir', c.destination || c.target || c.query || text, opts); return true; }
-    if (/maps_search|map/.test(a)) { openMaps('search', c.query || c.target || text, opts); return true; }
-    if (a === 'music') return window.WosMusic.run(c.cmd);
-    if (/music|play/.test(a)) {
-      // The router's play_music: Wizard Music when installed (it fixes misheard names), else Spotify search.
-      const q = c.query || c.target || '';
-      if (window.WosMusic?.available()) return window.WosMusic.run({ op: 'play', said: q ? `play ${q}` : text });
-      closeSheets(); openApp(APP.spotify || { id: 'spotify', name: 'Spotify' }, { query: q }, opts); return true;
-    }
+    return window.WosCommands.execute(c, text, {
+      maps: (mode, dest) => openMaps(mode, dest, opts), search: openSearch, settings: openSettings,
+      focused: () => W[opts.snap?.id || desks[idx].focus], chats: CHATS, inbox: () => openSheet('inbox'), launcher: q => openSheet('launcher', q),
+      findApp, openApp: app => openApp(app, {}, opts), layout: c => {
+        const a = c.action, f = opts.snap?.id || desks[idx].focus;
     if (a === 'zoom') {
       let id = W[f]?.app === 'review' ? f : desks[idx].wins.find(x => W[x].app === 'review');
       if (!id) { openReview('day', null, opts); return true; }
@@ -2965,29 +2722,9 @@
     if (a === 'close_window') { if (!f) return false; closeWin(f); return true; }
     if (a === 'fullscreen') { if (!f) return false; setFull(f, c.on !== false); return true; }
     if (a === 'move_window') { if (!f) return false; const to = c.to === 'prev' || c.to === 'left' ? idx - 1 : c.to === 'next' || c.to === 'right' ? idx + 1 : +c.to - 1; return moveWin(f, to); }
-    if (a === 'quick_search') return openSearch(c.query, c.tab);
-    if (a === 'chats_filter' || a === 'chats_search') {
-      const w = W[f]?.app === 'chats' ? W[f] : null; if (!w) return false;
-      closeSheets(true); const cc = CHATS.ch(w.id); cc.fromCard = false; cc.coach = false;
-      if (c.clear) { CHATS.clearAll(w); toast('⌯', 'All chats', 1400); return true; }
-      if (c.f) { CHATS.addFilter(w, c.f); cc.lastChip = c.f.kind; toast('⌯', `Filter: ${c.f.label}`, 1600); return true; }
-      CHATS.setQuery(w, c.q); toast('⌕', `Searching “${clip(c.q, 40)}”`, 1600); return true;
-    }
-    if (a === 'usual') return window.WosUsuals?.run(c.id) ?? false;
-    if (a === 'search') { const q = c.query || text; if (searchUrl(q) && !findApp(q)) return openSearch(q, 'all'); openSheet('launcher', q); return true; }
-    if (a === 'open_view' || a === 'view' || a === 'show') {
-      const v = String(c.view || arg).toLowerCase();
-      if (/inbox|notif/.test(v)) { openSheet('inbox'); return true; }
-      if (/skin|theme/.test(v)) { openSettings('look'); return true; }
-      if (/apps|launcher/.test(v)) { openSheet('launcher'); return true; }
-      closeSheets(); openReview(/month/.test(v) ? 'month' : /week/.test(v) ? 'week' : 'day', c.date, opts); return true;
-    }
-    if (/open|launch|app/.test(a)) {
-      const app = findApp(arg); closeSheets();
-      if (app) { openApp(app, {}, opts); return true; }
-      openSheet('launcher', arg); return false;
-    }
-    openSheet('launcher', text); return false;
+        return false;
+      }
+    });
   }
   /* A new request to Archimedes. It is delegated in the background: James stays exactly where he is
    * (no Chats window opens, no desk switch, no thread takes focus). The new thread shows up in Chats,
@@ -2999,8 +2736,9 @@
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice', opts.snap);
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    await OUTBOX.enqueue({ kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
+    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [] });
     renderMoons(); refreshHome(); renderDots();
+    return item;
   }
   OUTBOX?.onSent((it, res) => {
     if (it.kind === 'new' && LIVE && !LIVE.session(it.sessionId)) {
@@ -3018,6 +2756,38 @@
   /* ---------------- orb gestures ----------------
    * Tap: talk. Hold: command (it opens on the desk beside this one). Swipe: left/right desks, up apps, down inbox. */
   const orbWrap = $('#orbWrap');
+  const voiceDestination = document.createElement('div');
+  voiceDestination.id = 'voiceDestination'; voiceDestination.setAttribute('role', 'status');
+  const generalTarget = document.createElement('button');
+  generalTarget.id = 'generalVoice'; generalTarget.className = 'general-voice';
+  generalTarget.textContent = 'Record for ' + window.WizConfig.agent();
+  generalTarget.setAttribute('aria-label', generalTarget.textContent);
+  device.append(voiceDestination, generalTarget);
+  generalTarget.addEventListener('click', () => {
+    if (V.state === 'idle') startVoice('general');
+    else if (V.snap?.general && ['listen', 'paused'].includes(V.state)) finishVoice();
+  });
+  function generalVoiceSnap() {
+    // An explicit general take contains no private/app screen, composer or thread context.
+    return { id: null, desk: idx, view: null, screen: '', conversation: null, others: [], general: true, route: CHATS.modelRoute() };
+  }
+  function paintVoiceDestination() {
+    const label = V.snap?.conversation?.label;
+    const active = ['listen', 'command', 'paused'].includes(V.state) && V.kind !== 'dictation';
+    voiceDestination.hidden = !active;
+    voiceDestination.classList.toggle('app-voice', !!label);
+    device.classList.toggle('app-voice-input', active && !!label);
+    voiceDestination.textContent = label ? 'To: ' + label + ' · tap to send'
+      : V.snap?.general ? 'Talking to ' + window.WizConfig.agent() + ' · tap to send'
+      : V.kind === 'command' ? 'Command · release to run · slide up for ' + window.WizConfig.agent() : 'Listening · tap to send';
+    if (active) $('#orbWrap').setAttribute('aria-label', voiceDestination.textContent);
+    generalTarget.hidden = V.state !== 'idle' && V.state !== 'command';
+    generalTarget.classList.toggle('hold-target', V.state === 'command');
+    generalTarget.textContent = V.state === 'command' ? '↑ ' + window.WizConfig.agent() + ' · release to keep talking' : 'Record for ' + window.WizConfig.agent();
+    generalTarget.setAttribute('aria-label', generalTarget.textContent);
+  }
+  paintVoiceDestination();
+  window.addEventListener('wizard:config', paintVoiceDestination);
   let G = null;
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
@@ -3027,7 +2797,7 @@
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
     G.corner = device.classList.contains('orb-corner');
-    if (V.state === 'idle' && !sheet) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); vib(18); startVoice('command'); } }, 380);
+    if (V.state === 'idle' && !sheet && !FIELDS.refresh()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); vib(18); startVoice('command'); } }, 380);
   });
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
   // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
@@ -3035,10 +2805,14 @@
   orbWrap.addEventListener('pointermove', e => {
     if (!G || e.pointerId !== G.pointerId) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
     // A hold that starts travelling right after it fired was really a swipe (slow frame ate the moves).
-    if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && Math.hypot(G.dx, G.dy) > 34) {
+    if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && Math.hypot(G.dx, G.dy) > 34 && !(G.dy < -20 && Math.abs(G.dx) < 100)) {
       cancelVoice(true); G.mode = 'pending';
     }
     if (G.mode === 'hold') {
+      const box = generalTarget.getBoundingClientRect();
+      G.general = e.clientX >= box.left - 16 && e.clientX <= box.right + 16 && e.clientY >= box.top - 16 && e.clientY <= box.bottom + 16;
+      generalTarget.classList.toggle('selected', G.general);
+      voiceDestination.textContent = G.general ? 'Release: keep talking to ' + window.WizConfig.agent() : 'Release: command · slide onto ' + window.WizConfig.agent();
       // Aim: slide toward the desk this command should land on.
       G.aim = G.corner ? null : aimFor(G.dx);
       orbWrap.dataset.dir = G.aim == null ? '' : (G.aim < idx ? `← Desk ${G.aim + 1}` : `Desk ${G.aim + 1} →`);
@@ -3072,7 +2846,7 @@
   });
   function endGesture(e, cancelled) {
     if (!G || (e?.pointerId != null && e.pointerId !== G.pointerId)) return; const g = G; G = null;
-    clearTimeout(g.hold); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming');
+    clearTimeout(g.hold); Orb.press(false); orbWrap.classList.remove('dragging'); orbWrap.dataset.dir = ''; device.classList.remove('aiming'); generalTarget.classList.remove('selected');
     const vt = (performance.now() - g.t) || 1;
     if (g.mode === 'pending' && !cancelled) {
       if (sheet) return closeSheets();
@@ -3082,6 +2856,16 @@
     } else if (g.mode === 'hold') {
       // Capture loss is not explicit Cancel. Keep the take paused with controls, never discard it.
       if (cancelled) { V.stopAsked = true; pauseCommandCapture(); return; }
+      if (g.general) {
+        // Synchronous latch before finishVoice: same recorder, no send on this release.
+        V.kind = 'general'; V.snap = generalVoiceSnap(); V.target = null; V.replyTo = null;
+        V.stopAsked = false; V.sendAsked = false;
+        if (V.native) {
+          try { voiceRecovery(V.native, { kind: 'general', general: true, conversation: null }); saveVoiceRoute(V.native, V.snap.route); }
+          catch (_) { V.stopAsked = true; pauseCommandCapture(); toast('!', 'General destination could not be saved · recording kept'); return; }
+        }
+        setVoice('listen'); txHide(0); return;
+      }
       V.target = g.aim;
       return finishVoice();
     } else if (g.mode === 'h') {
@@ -3128,15 +2912,16 @@
     return result || 'notReady';
   }
   function backStep(skipHosted) {
-    { const t = window.WosTour?.back(); if (t) return t; } // the first-run tour and the Help sheet sit above everything
+    { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
-    // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
+    // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
+    if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
     if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
-    const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
+    const ov = CHATS.closeOverlay(); if (ov) { if (settingsReturn === 'files') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="files"]')?.focus(); } return ov; } // media viewer, then the thread actions sheet
     const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
     if (window.WosResources?.back()) return 'resources';
     { const fw = W[desks[idx]?.focus]; if (fw?.app === 'usuals') { const u = window.WosUsuals?.back?.(); if (u) return u; } }
@@ -3282,13 +3067,27 @@
   if (/WizardOS-Android\//.test(navigator.userAgent)) document.documentElement.classList.add('native-app');
   // Assistant handoff (side-key app → Wizard OS). 'listen' opens the orb listening; 'say' shows the words as a
   // draft that James sends with one tap — another app can never make Archimedes act on its own.
+  let threadHandoffGeneration = 0;
   window.__wosHandoff = h => {
     // A side-button handoff means James already knows the gestures: clear the first-run coach so the draft is visible.
     if (window.WosTour?.active) window.WosTour.finish('handoff');
     if (!h || typeof h !== 'object') return false;
     closeSheets(); if (idx !== HOME && h.action !== 'thread') goDesk(HOME);
     if (h.action === 'listen') { if (V.state === 'idle') startVoice('auto'); return true; }
-    if (h.action === 'thread' && h.id) { openWizardThread(String(h.id)); LIVE?.refresh(); return true; }
+    if (h.action === 'thread' && h.id) {
+      const id = String(h.id), generation = ++threadHandoffGeneration;
+      // Android 0.9.15's share notification carries only thread_id. On a cold start or just-shared
+      // thread its owning agent is not cached yet: resolve agent lists BEFORE opening Chats.
+      // Never open a private notification in main while the refresh is still in flight.
+      Promise.resolve(LIVE?.refreshAgents?.()).then(() => {
+        if (generation !== threadHandoffGeneration) return;
+        if (!LIVE?.agentOf?.(id) && Object.values(LIVE?.agentStatus || {}).some(s => !s.ok)) {
+          toast('◉', 'Could not locate that chat · reconnect and tap again'); return;
+        }
+        openWizardThread(id); LIVE?.refresh();
+      }).catch(() => { if (generation === threadHandoffGeneration) toast('◉', 'Could not locate that chat · reconnect and tap again'); });
+      return true;
+    }
     if (h.action === 'usuals') { openUsuals(); return true; }
     if (h.action === 'unsent' || h.action === 'settings') { onUnsentChange(); openSettings(h.action === 'unsent'); return true; }
     if (h.action === 'side-button') { store.set('sideHidden', false); refreshHome(true); if (SIDE && (SIDE.step === 'mic' || SIDE.step === 'assistant')) sideButtonTap(false); else toast('◉', 'Side button is on. Hold it to talk.', 2600); return true; }
@@ -3359,7 +3158,7 @@
     get back() { return { watchers: watchers.size, guardOn, exitArmed: Date.now() < exitUntil, log: window.__backLog || [] }; },
     openSearch,
     startVoice, finishVoice, cancelVoice, recoverDictation, outbox: OUTBOX, openSettings, unsentAll, renderSettings,
-    chats: CHATS, chat: CHATS.KIT, get viewer() { return CHATS.KIT.viewer.state; }, threadAct: CHATS.threadAct, openRowSheet: CHATS.openRowSheet,
+    canSearch: () => !!APP['wizard-search'], chats: CHATS, chat: CHATS.KIT, get viewer() { return CHATS.KIT.viewer.state; }, threadAct: CHATS.threadAct, openRowSheet: CHATS.openRowSheet,
     // web/device.js (share, recovery, update banner, hot reload) works through these.
     chatState: ch, addFiles: CHATS.addFiles, uploadFile: CHATS.uploadFile, renderChats, refreshCompose, toAgent, toast, txShow, txHide, setVoice, nativeFinish, nativeResume, recDone, get V() { return V; },
     reset() { Object.keys(localStorage).filter(k => k.startsWith('wos.')).forEach(k => localStorage.removeItem(k)); location.reload(); },
@@ -3379,6 +3178,12 @@
     const scroller = target?.closest('.ch-scroll');
     if (scroller) scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
   }
+  window.WosFeatures.install({
+    review: (level,date) => { closeSheets(true); return openReview(level,date); }, maps: (mode,dest) => {closeSheets(true);return openMaps(mode,dest);},
+    context: () => {const id=desks[idx].focus,v=viewOf(id);return {id,view:{kind:v?.kind,appId:W[id]?.appId}};},
+    openFeature: (id,opts) => {closeSheets(true);return openWin({app:'feature',featureId:id,featureOptions:opts,title:window.WosFeatures.entries.find(f=>f.id===id)?.title});},
+    command: (text,snap=sendSnap()) => { const c = localParse(text, snap, 'command'); return c ? execute(c, text,{snap}) : false; }
+  });
   window.WizCore.deeplink?.handle({
     // ?session= takes exactly the path the Android app's ACTION_THREAD intent takes.
     thread: id => window.__wosHandoff({ action: 'thread', id }),
@@ -3393,8 +3198,8 @@
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'system') return openApp(APP.system);
       if (v === 'agents') return openApp(APP.agents);
-      if (v === 'settings' || v === 'usage') return openSettings();
-      if (v === 'skin') return openSettings('look');
+      if (window.WosFeatures.open(v)) return;
+      if (window.WosSettings.route(v, openSettings)) return;
       if (v === 'day' || v === 'week' || v === 'month') return openReview(v);
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); toast('◇', 'Files isn’t on this Wizard', 1800); return; }
       // work / chats: the Chats window, at the asked-for section.
@@ -3408,8 +3213,8 @@
       // A tapped link inside a window (a Chats thread) remembers where it came from.
       const srcId = srcEl && srcEl.closest ? srcEl.closest('.win')?.dataset.win : '';
       const opts = srcId && W[srcId] ? { from: fromOf(srcId) } : {};
-      const a = APP[id] || findApp(id); if (a) return openApp(a, {}, opts);
-      Promise.resolve(window.WizCore.appsLoaded?.()).then(() => { const b = APP[id] || findApp(id); if (b) openApp(b, {}, opts); });
+      const a = APP[id] || (!id.startsWith('agent:') && findApp(id, true)); if (a) return openApp(a, {}, opts);
+      Promise.resolve(window.WizCore.appsLoaded?.()).then(() => { const b = APP[id] || (!id.startsWith('agent:') && findApp(id, true)); if (b) openApp(b, {}, opts); });
     },
     video: item => { closeSheets(true); return CHATS.KIT.viewer.open([item]); },
     agent: id => openAgentChats(id),

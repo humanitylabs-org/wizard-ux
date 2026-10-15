@@ -1,0 +1,1635 @@
+{
+  "schema_version": 1,
+  "audit_revision": "3d53b9177d5df752edc07d40d555fee105db53c9",
+  "delivered_settings_revision": "cd9c92d04c7ec6134cc75365626a024f52612954",
+  "verification_scope": "Finite audit delta, not a repeated historical audit. Browser evidence and platform exclusions: responsive-remainder-parity.md.",
+  "features": [
+    {
+      "id": "settings.skin",
+      "capability": "Skin selection and persisted hosted-app appearance",
+      "scope": "browser-common",
+      "status": "shared-delivered-pr31",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/settings.js"
+      ],
+      "acceptance": "Both widths list same five IDs; change each, reload, reopen hosted app; tokens/selection persist without changing geometry.",
+      "note": "Already live at cd9c92d; retained, not reimplemented. Settings/custody regression included."
+    },
+    {
+      "id": "settings.unsent",
+      "capability": "Unified unsent list, Retry/Edit/Delete/Open/Retry all",
+      "scope": "browser-common",
+      "status": "shared-delivered-pr31",
+      "baseline_status": "partial",
+      "sources": [
+        "web/core/settings.js"
+      ],
+      "acceptance": "Seed new/reply text/audio/files failures; global Settings and Inbox expose safe actions; retry all exactly once; edit preserves files/audio/route.",
+      "note": "Already live at cd9c92d; retained, not reimplemented. Settings/custody regression included."
+    },
+    {
+      "id": "voice.cancel-recovery",
+      "capability": "Recover long explicitly cancelled recording, transcribe/copy/delete",
+      "scope": "browser-common",
+      "status": "shared-delivered-pr31",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/settings.js"
+      ],
+      "acceptance": "Cancel >=15-second take; reload; Transcribe & copy/Copy again/Show words/Delete work; newest 10 retained for a week; short cancel discarded; storage failure explicitly session-only; no accidental send.",
+      "note": "Already live at cd9c92d; retained, not reimplemented. Settings/custody regression included."
+    },
+    {
+      "id": "voice.pause",
+      "capability": "Pause/resume recording",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/capture-tools.js",
+        "web/core/voice.js"
+      ],
+      "acceptance": "Record/pause/resume/send; paused time excluded; controls usable keyboard/mouse/touch; thread/attachments remain sealed.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "voice.screenshot",
+      "capability": "Explicit screenshot attachment while recording",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/screen-capture.js",
+        "web/core/capture-tools.js"
+      ],
+      "acceptance": "Click capture in both supported shells; cancel chooser/upload then retry; streams released; chrome restored; screenshot accompanies one intended turn.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "voice.global-attachments",
+      "capability": "Attach files/photos to global voice take",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "partial",
+      "sources": [
+        "web/core/capture-tools.js",
+        "web/core/chats.js"
+      ],
+      "acceptance": "From Home record + attach + type, send once; navigate during upload; no orphaned files, dropped audio or wrong thread.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "voice.local-commands",
+      "capability": "Explicit local voice command mode and no-match recovery",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/commands.js"
+      ],
+      "acceptance": "Same transcript+context yields same action from either shell; command misses offer choices without sending; normal thread reply remains reply.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "voice.music",
+      "capability": "Local music commands, aliases and focused-player delivery",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/music-voice.js",
+        "web/core/commands.js"
+      ],
+      "acceptance": "Play/pause/next/volume/like/search; bare Music opens Wizard Music not Spotify; held/explicit commands execute locally not new chat.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "voice.chat-filter",
+      "capability": "Voice chat-list filter/search/clear",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/commands.js",
+        "web/core/features.js"
+      ],
+      "acceptance": "Say unread/working/topic/search/clear while list active on either layout; ordinary text reply is not intercepted.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "views.bound",
+      "capability": "Thread-bound view auto-open and persistent relationship",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/bound-view.js"
+      ],
+      "acceptance": "Open thread with bound view; related app opens/focuses predictably; shared border/label; switching threads never steals another binding.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "views.review-feedback",
+      "capability": "Voice feedback on linked/bound view routes to originating thread",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/bound-view.js"
+      ],
+      "acceptance": "Open a thread link, focus app, record feedback: exactly one reply to source thread with page context, not a new chat.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "selection.custom",
+      "capability": "Configurable movable Copy/Share/Quote/Search/Select-all menu",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "platform-gated",
+      "sources": [
+        "web/core/sel-menu.js"
+      ],
+      "acceptance": "Preserve browser editable menus; equivalent selected-text actions on desktop; share attribution only agent text; quote enters correct thread.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "help.onboarding",
+      "capability": "Guided onboarding, skin choice, Help/practice",
+      "scope": "browser-common",
+      "status": "shared-delivered-pr31",
+      "baseline_status": "partial",
+      "sources": [
+        "web/core/settings.js"
+      ],
+      "acceptance": "Help discoverable from Settings/palette; desktop-specific instruction copy; Skip/Back work; no fabricated tutorial sends.",
+      "note": "Already live at cd9c92d; retained, not reimplemented. Settings/custody regression included."
+    },
+    {
+      "id": "settings.files-usage",
+      "capability": "Files and AI usage discoverability",
+      "scope": "browser-common",
+      "status": "shared-delivered-pr31",
+      "baseline_status": "partial",
+      "sources": [
+        "web/core/settings.js"
+      ],
+      "acceptance": "Both Settings surfaces expose Files and AI usage; Files attaches to exact current thread/new chat; usage refresh/failures equivalent.",
+      "note": "Already live at cd9c92d; retained, not reimplemented. Settings/custody regression included."
+    },
+    {
+      "id": "routing.deep-links",
+      "capability": "Settings section/usage/files deep links",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "partial",
+      "sources": [
+        "web/core/features.js",
+        "web/core/deeplink.js"
+      ],
+      "acceptance": "Exercise every VIEWS enum in both handlers; ?view=skin exposes Look, usage shows quotas, help/tour do not silently open Chats; session/video/open/agent precedence preserved.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "voice.wake-lock",
+      "capability": "Screen awake during browser recording",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/capture-tools.js"
+      ],
+      "acceptance": "On supported browser start acquires lock; pause/cancel/finish releases as defined; permission failure nonfatal; hidden/visible reacquisition.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "voice.focused-dictation",
+      "capability": "Focused-field dictation and stale-target-safe insertion",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "partial",
+      "sources": [
+        "web/core/focused-field.js",
+        "web/desktop/desktop.js"
+      ],
+      "acceptance": "Manual Dictate in shell and registered iframe: preserve start cursor/selection; edit/navigate/destroy target while STT pending \u2192 keep copyable transcript, never submit or corrupt new field. Right Option stays unbound in PWA.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "recovery.edit-custody",
+      "capability": "Edit unsent keeps original audio/model/agent/target until safe transfer",
+      "scope": "browser-common",
+      "status": "shared-delivered-pr31",
+      "baseline_status": "shared-risk",
+      "sources": [
+        "web/core/settings.js"
+      ],
+      "acceptance": "Failed audio-only/private-agent/model-selected item Edit must not erase audio or alter intended agent/model; failed draft persistence keeps original outbox intact.",
+      "note": "Already live at cd9c92d; retained, not reimplemented. Settings/custody regression included."
+    },
+    {
+      "id": "settings.provider",
+      "capability": "Read-only transcription provider status",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/voice-status.js:1-49",
+        "web/app.js:1135",
+        "web/desktop/desktop.js:876,881"
+      ],
+      "acceptance": "Ready/down/loading/attested show consistently; new Settings rerenders must not erase current selection or interrupt text actions.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "appearance.background-gating",
+      "capability": "Skins scenic background with hidden/idle/reduced-motion gating",
+      "scope": "browser-common",
+      "status": "shared-delivered-pr31",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/settings.js"
+      ],
+      "acceptance": "Home motion only; app/settings/hidden/idle/reduced-motion freeze timers and frames; skin changes repaint once.",
+      "note": "Already live at cd9c92d; retained, not reimplemented. Settings/custody regression included."
+    },
+    {
+      "id": "notifications.replies",
+      "capability": "Reply and failed-send system notifications; clear after read",
+      "scope": "common-outcome-platform-adapter",
+      "status": "capability-adapter",
+      "baseline_status": "platform-adaptation-gap",
+      "sources": [
+        "web/device.js:1-15,229-253",
+        "web/app.js:1214-1217",
+        "web/desktop.html:75-110"
+      ],
+      "acceptance": "On supported host send once, background, notify completed reply once; notification opens same thread; reading elsewhere clears only older notifications; permission denied gracefully. No real sends in read-only QA.",
+      "note": "Existing requested background notification/reply watcher is an Android service. Desktop/browser push requires a separate subscription/service-worker transport; it is not implemented or advertised by this automatic web port. In-app unread/ready indicators remain shared."
+    },
+    {
+      "id": "install.pwa",
+      "capability": "Install prompt and service-worker setup",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "partial",
+      "sources": [
+        "web/pwa-install.js"
+      ],
+      "acceptance": "Fresh browser profile on each shell exposes appropriate install support; existing SW/cache cannot conceal missing registration.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    },
+    {
+      "id": "routing.origin-carry",
+      "capability": "Origin migration carry-in for drafts/read state/voice outbox",
+      "scope": "migration-conditional",
+      "status": "migration-conditional",
+      "baseline_status": "platform-gated",
+      "sources": [
+        "web/index.html:5",
+        "web/core/carry-in.js",
+        "web/desktop.html",
+        "BRANCHES.md:119"
+      ],
+      "acceptance": "If desktop migration is supported, carry payload before shell redirect, maintain audio and draft IDs, consume once; otherwise state unsupported explicitly.",
+      "note": "Android origin migration/carry-in is conditional on the native app migration bridge. Desktop did not move origins; no fake migration control was added."
+    },
+    {
+      "id": "chat.sections",
+      "capability": "Work sections, paging and workday grouping",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/live.js",
+        "web/core/chats.js:309-360"
+      ],
+      "acceptance": "Load all pages; same section counts/day boundaries; deferred at Ready bottom; empty sections and expansion survive refresh.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.sort",
+      "capability": "Ready Newest/Priority/By subject and remembered subject order",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chats.js",
+        "web/live.js",
+        "BRANCHES.md:108,144"
+      ],
+      "acceptance": "Approvals first; pure Newest recency versus Priority; sort before page cut; subject order persists.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.filters",
+      "capability": "Manual unread/working/status/subject filters and Home attention routing",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chats.js:75,309-360",
+        "web/app.js:1223-1250",
+        "web/desktop/desktop.js"
+      ],
+      "acceptance": "Unread/Working Home card opens same filtered projection; clear filter and Back restore list correctly.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.read",
+      "capability": "Unread detection, mark read and cross-device seen synchronization",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/live.js",
+        "web/core/chats.js"
+      ],
+      "acceptance": "Opening marks seen before fetch/navigation; preview-only changes do not become new; newer completed activity does; synchronize second tab.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.timestamps",
+      "capability": "Card/message times, day dividers, thread titles and icons",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-kit.js",
+        "web/core/chats.js",
+        "web/desktop/desktop.js:112-118,314-321"
+      ],
+      "acceptance": "Last reply time drives completed ordering; titles update without jumping scroll; timezone comes from config.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.search",
+      "capability": "Message-body search with highlighted snippets and bounded older-thread reads",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-search.js",
+        "web/core/chats.js"
+      ],
+      "acceptance": "Body-only match discoverable in Chats; cancel stale searches; Search older expands bounded scan; no stale results on cleared query.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.drafts",
+      "capability": "Per-thread drafts, saved new-chat drafts and composer persistence",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-kit.js",
+        "web/core/chats.js:213-280,854-863"
+      ],
+      "acceptance": "Two threads and new draft survive reload with files; no draft leakage across thread/agent; discard explicit.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.rename-triage",
+      "capability": "Rename, Done, Defer, Restore, row actions and thread trail",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chats.js:623-658,1022-1054",
+        "BRANCHES.md:86,102,109"
+      ],
+      "acceptance": "Done/Defer/Back return origin thread/list and saved list position; Restore works; cancelled row action preserves content.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.render",
+      "capability": "Human/assistant/system content and hidden runtime chatter",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-kit.js:113-178",
+        "web/core/chats.js"
+      ],
+      "acceptance": "Control markers/memory wrappers never appear as human messages; orphan assistant notes stay separate and labelled.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.markdown",
+      "capability": "Markdown headings/tables/lists/quotes/code and session references",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-kit.js:193-365"
+      ],
+      "acceptance": "Render fixture corpus without unsafe HTML/URLs; @session supported profile opens proper thread; code text unaltered.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.copy-share",
+      "capability": "Copy response/code and attributed text/file sharing",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-kit.js:366-537",
+        "web/core/chats.js"
+      ],
+      "acceptance": "Code/response Copy and Share carry exactly intended text; From agent attribution correct; cancel chooser not error; preserve file payload.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.attachments",
+      "capability": "Sent/received image, audio, video, Markdown and arbitrary file rendering",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-kit.js:16-113",
+        "web/core/chats.js:484-595"
+      ],
+      "acceptance": "Image-only turns render and keep turn alignment; private image loading/retry; audio lazily plays; filenames/links remain correct.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "media.viewer",
+      "capability": "In-app image gallery, zoom/pan, video and Markdown viewer; share/download",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-kit.js:539-692",
+        "web/desktop/desktop.js:1107-1114"
+      ],
+      "acceptance": "Arrow/swipe gallery; pinch/pan/double-click reset; video retry; Markdown display; Back closes viewer only and restores focus/draft.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.approvals",
+      "capability": "Approval choices, busy/expired/error state and resolved receipt",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chats.js:671-749",
+        "web/core/chat-kit.js:694-712"
+      ],
+      "acceptance": "Choose once under delayed response; repeated click blocked; 404/409/expiry reflected; navigation fences stale results; no live approvals in QA.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.stop-steer",
+      "capability": "Stop active run, steer with files, completed-run follow-up handling",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chats.js",
+        "web/outbox.js"
+      ],
+      "acceptance": "Stop only intended run; steer while active; run ends mid-send \u2192 one follow-up and truthful receipt, no silent loss.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.receipts",
+      "capability": "Work status, durations, plans, tool steps, waiting questions, helper status",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-work.js",
+        "web/core/chat-power.js:108-115",
+        "BRANCHES.md:26"
+      ],
+      "acceptance": "Expand plans/steps; live elapsed then terminal duration; waiting question; helper count/stalled state; no unrelated run attribution.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.models",
+      "capability": "Per-thread/new-chat model picker and failed-model recovery",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-models.js",
+        "web/core/chat-power.js:115-201"
+      ],
+      "acceptance": "New default and existing thread selection preserved; failure does not silently change model; network error retry; locked threads respected.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.errors",
+      "capability": "Failed thread and failed voice Errors rows Retry/Dismiss",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-errors.js",
+        "web/core/chat-power.js:175-224"
+      ],
+      "acceptance": "Failure cards retry exact target/idempotency key; dismiss clears only requested error; off-screen update does not repaint wrong thread.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.history",
+      "capability": "Load earlier, live streaming/poll and cached thread refresh",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chats.js",
+        "web/live.js"
+      ],
+      "acceptance": "Long thread loads prior turns without losing current scroll; delayed response after navigation ignored; background polling respects visibility.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "chat.reading",
+      "capability": "Tail follow, Latest, reading anchors, list return and touch stability",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-power.js:54-107",
+        "web/core/chats.js",
+        "web/core/app-reading-position.js"
+      ],
+      "acceptance": "Working opens loaded tail then respects user; completed within retention restores; older opens latest; list row position survives Done/Back and live churn.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "composer.text",
+      "capability": "Auto-growing input, shortcut/IME safety, live value at send",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chats.js:817-863"
+      ],
+      "acceptance": "Cmd/Ctrl+Enter exactly once; Enter newline; IME composition never submits; last dictation words included; no send while uploading.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "composer.files",
+      "capability": "File/photo multipick, paste image, attachment tray/remove, uploading guard",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/uploads.js",
+        "web/core/chats.js",
+        "web/core/chat-power.js:305-323"
+      ],
+      "acceptance": "Paste/multipick stages all; progress/removal/failure retry; navigate while upload pending does not retarget; one turn owns all attachments.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "composer.files-existing",
+      "capability": "Wizard Files browse/detail/refresh/attach existing",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/files.js",
+        "web/core/chat-power.js:305-323",
+        "web/desktop/desktop.js:824-830"
+      ],
+      "acceptance": "List/details errors/refresh; preview stays in app; attach goes current chat or new chat, never hidden sibling.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "delivery.outbox",
+      "capability": "Durable/idempotent offline outbox, reconciliation and processing feedback",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/outbox.js",
+        "web/core/chats.js"
+      ],
+      "acceptance": "Offline \u2192 saved/pending \u2192 reconnect accept once; reload/audio blob survives; persistence failure not labelled saved; explicit failures discoverable.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "delivery.seal",
+      "capability": "Atomic text+voice+photos/model/runtime/agent/target sealing",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chats.js:1060-1195",
+        "web/core/chat-power.js:233-268",
+        "web/desktop/desktop.js:943-964"
+      ],
+      "acceptance": "Type+attach+voice; switch thread/model during async completion; exactly one immutable intended destination and route; no-speech restores seal.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "delivery.background",
+      "capability": "New-thread background delegation and instant reply return/Working",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chats.js",
+        "web/desktop/desktop.js:817-821,1257-1262",
+        "web/live.js"
+      ],
+      "acceptance": "Send returns immediately without stealing workspace; optimistic Working holds through stale lists; failed admission releases safely.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "voice.reply",
+      "capability": "Composer mic pinned to thread; explicit new voice chat",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/chat-power.js:230-268",
+        "web/desktop/desktop.js:920-979"
+      ],
+      "acceptance": "Start in X navigate Y then send; reply X; explicit new voice always new; overlapping recordings blocked, target not mutated.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "voice.transcribe",
+      "capability": "Speech-to-text, attached audio and failed-recording retention",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/voice.js",
+        "web/core/config.js",
+        "web/outbox.js",
+        "web/desktop/desktop.js:993-1059"
+      ],
+      "acceptance": "STT failure leaves retryable audio; audio upload and transcript match same take; download retained recording usable; clipboard failure retains transcript.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "voice.mic-routing",
+      "capability": "Built-in mic preference without dimming Bluetooth music",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/voice.js:14-39",
+        "BRANCHES.md"
+      ],
+      "acceptance": "Enumerated Bluetooth+built-in chooses built-in; wired preference unchanged; permission denied truthful; real-device audio check required.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "home.resources",
+      "capability": "CPU/RAM/disks/devices and AI-account quotas with refresh lifecycle",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/resources.js",
+        "web/core/usage.js",
+        "docs/desktop-home-parity.md"
+      ],
+      "acceptance": "Home counts/meters both; Devices/AI tabs; offline/disk warnings; leave Home aborts/pauses reads; dialog Back/focus.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "updates.web",
+      "capability": "Attributed update banner/list, guarded reload and draft recovery",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/web-update.js:89-152",
+        "web/desktop/desktop.js:1346-1355",
+        "web/device.js:290-327"
+      ],
+      "acceptance": "Update in both layouts names source thread; Reload blocked during voice/upload/hosted capture; preserved thread/draft/reading position; stale settings unaffected.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "apps.registry",
+      "capability": "Installed app catalog, app selector, search aliases and launcher",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/apps.js",
+        "web/core/sigils.js",
+        "web/desktop/desktop.js:635-694"
+      ],
+      "acceptance": "Registered app appears both; exact aliases; new desktop opens selector focused search; icons consistent; unavailable capabilities explained.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "apps.host-services",
+      "capability": "Hosted capture, appearance, read-position, Back, update and app routes",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/app-services.js",
+        "web/core/app-capture.js",
+        "web/core/appearance-host.js",
+        "web/core/app-reading-position.js",
+        "web/core/app-route.js"
+      ],
+      "acceptance": "Only registered same-origin frame may request service; source checked; destroy/reload releases owned resources; iframe Back preserved; appearance live updates.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "agents.multiple",
+      "capability": "Multi-agent/private-agent window identity, lists, drafts and routing",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/agents.js",
+        "web/core/chats.js:596-607",
+        "web/desktop/desktop.js:98-130"
+      ],
+      "acceptance": "Private agent list not default list; new/reply/model route stay agent-scoped; shell context never leaks private chat titles.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "views.video-feedback",
+      "capability": "Video Editor bound Video/Feedback views",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/video-desks.js:1-79"
+      ],
+      "acceptance": "Clip opens one feedback peer with correct draft/time; focus note; close owner removes peer; reject forged frame messages.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "links.browser",
+      "capability": "Links in sheet/pane, keep/open app, external fallback and safe origin handling",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/links.js",
+        "web/desktop/desktop.js:1306-1312"
+      ],
+      "acceptance": "Click internal/external; top document stays; failed frame gets honest external fallback; Back peels one level.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "navigation.back",
+      "capability": "Back/Escape top-overlay-first, thread/list/home, never single-Back exit",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/desktop/desktop.js:1102-1129,1365-1369",
+        "web/app.js:3120-3185",
+        "web/core/app-services.js"
+      ],
+      "acceptance": "Nested viewer/settings/iframe then repeated Back; still in app at root; recording continues; native predictive back cancellation does not discard.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "navigation.workspaces",
+      "capability": "On-demand workspaces, shared sigils, focus, move/close and reload",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/workspace-navigation.js",
+        "web/core/sigils.css",
+        "web/desktop/desktop.js",
+        "docs/desktop-home-parity.md"
+      ],
+      "acceptance": "Home remains empty; create/pick/move/prune; state reload; icon/count follows focused app; no nine fixed desks resurrected.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "navigation.fullscreen",
+      "capability": "Fullscreen/tiled layout and browser/native shortcuts",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/desktop/desktop.js:1102-1124",
+        "web/desktop/desktop.css",
+        "web/styles.css"
+      ],
+      "acceptance": "Enter fullscreen preserve draft; Back returns tiles; normal window width cap responsive; browser reserved shortcuts not falsely advertised as captured.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "status.connectivity",
+      "capability": "Offline/reconnecting/back-online and fatal/critical attention overlays",
+      "scope": "browser-common",
+      "status": "inherited-shared",
+      "baseline_status": "shared-present",
+      "sources": [
+        "web/core/status.js",
+        "web/core/polish.css",
+        "web/desktop/desktop.js:1343"
+      ],
+      "acceptance": "Network transitions honest; critical excludes current thread; fatal Reload retains drafts; Esc/Back closes top card before navigation.",
+      "note": "Unchanged common capability from the finite source audit; not a claim of a fresh exhaustive browser test."
+    },
+    {
+      "id": "native.everywhere",
+      "capability": "Android floating Everywhere orb and hide/drag controls",
+      "scope": "physical-or-os-capability",
+      "status": "capability-adapter",
+      "baseline_status": "platform-only",
+      "sources": [
+        "web/app.js:1130-1133"
+      ],
+      "acceptance": "No enabled control without real bridge; supported host invokes existing adapter; unsupported browser explains or omits. Native behavior unchanged.",
+      "note": "Requires Android overlay/service; desktop browser cannot draw over arbitrary apps."
+    },
+    {
+      "id": "native.side-key",
+      "capability": "Side-button/locked-screen assistant and auto-send",
+      "scope": "physical-or-os-capability",
+      "status": "capability-adapter",
+      "baseline_status": "platform-only",
+      "sources": [
+        "web/app.js:1123,1133"
+      ],
+      "acceptance": "No enabled control without real bridge; supported host invokes existing adapter; unsupported browser explains or omits. Native behavior unchanged.",
+      "note": "Physical Android assistant key/lockscreen integration; do not clone controls into desktop browser."
+    },
+    {
+      "id": "native.screen-accessibility",
+      "capability": "System text selection/translation/screenshot and external-app voice typing",
+      "scope": "physical-or-os-capability",
+      "status": "capability-adapter",
+      "baseline_status": "platform-only",
+      "sources": [
+        "web/app.js:1132"
+      ],
+      "acceptance": "No enabled control without real bridge; supported host invokes existing adapter; unsupported browser explains or omits. Native behavior unchanged.",
+      "note": "Android accessibility and screenshot permissions; browser selected-text actions and explicit capture are separate common features."
+    },
+    {
+      "id": "native.background-recorder",
+      "capability": "Foreground background recorder and kill/restart custody",
+      "scope": "physical-or-os-capability",
+      "status": "capability-adapter",
+      "baseline_status": "platform-only",
+      "sources": [
+        "web/device.js:68-90"
+      ],
+      "acceptance": "No enabled control without real bridge; supported host invokes existing adapter; unsupported browser explains or omits. Native behavior unchanged.",
+      "note": "Android RecorderService custody; desktop browser cannot guarantee capture after process death, but finished-take durable outbox must survive."
+    },
+    {
+      "id": "native.share-target",
+      "capability": "Receive OS Share intents/upload notifications/device pairing",
+      "scope": "physical-or-os-capability",
+      "status": "capability-adapter",
+      "baseline_status": "platform-only",
+      "sources": [
+        "web/device.js:1-15"
+      ],
+      "acceptance": "No enabled control without real bridge; supported host invokes existing adapter; unsupported browser explains or omits. Native behavior unchanged.",
+      "note": "Android ShareActivity/intent adapter. Existing browser file uploads remain common; desktop OS share extension is outside this repo."
+    },
+    {
+      "id": "native.apk-update",
+      "capability": "APK signed download/verify/install/restart/permission settings",
+      "scope": "physical-or-os-capability",
+      "status": "capability-adapter",
+      "baseline_status": "platform-only",
+      "sources": [
+        "web/device.js:255-287,357-385"
+      ],
+      "acceptance": "No enabled control without real bridge; supported host invokes existing adapter; unsupported browser explains or omits. Native behavior unchanged.",
+      "note": "Android update mechanism; Mac updater/guest version verification belongs native release, not fake APK parity."
+    },
+    {
+      "id": "native.food",
+      "capability": "Food/Usuals saved Grab replay, teach/edit/rename and checkout approval",
+      "scope": "physical-or-os-capability",
+      "status": "capability-adapter",
+      "baseline_status": "platform-only",
+      "sources": [
+        "web/usuals.js:1-9,30-65"
+      ],
+      "acceptance": "No enabled control without real bridge; supported host invokes existing adapter; unsupported browser explains or omits. Native behavior unchanged.",
+      "note": "Runs native Grab UI automation; stops at checkout for user. Desktop does not get a silent remote-buy button."
+    },
+    {
+      "id": "native.mac-keys",
+      "capability": "Mac global Caps Lock/Right Command/Right Option integration",
+      "scope": "physical-or-os-capability",
+      "status": "capability-adapter",
+      "baseline_status": "platform-only",
+      "sources": [
+        "web/desktop/desktop.js:1062-1082,1265-1303"
+      ],
+      "acceptance": "No enabled control without real bridge; supported host invokes existing adapter; unsupported browser explains or omits. Native behavior unchanged.",
+      "note": "Mac bridge capability; browser key path intentionally different; Right Option PWA paused by request."
+    },
+    {
+      "id": "preview.live-mode",
+      "capability": "Ambient Live Mode ideas/moons/signing preview",
+      "scope": "not-production-scope",
+      "status": "excluded-preview",
+      "baseline_status": "excluded-preview",
+      "sources": [
+        "web/live-mode.js:1-35"
+      ],
+      "acceptance": "Remain off by default in both; do not treat demo as real notification/recording implementation.",
+      "note": "Opt-in simulated Live Mode is not production functionality. No fake feed promoted."
+    },
+    {
+      "id": "architecture.bootstrap",
+      "capability": "One common feature registry/bootstrap, no silent shell omission",
+      "scope": "browser-common",
+      "status": "shared-implemented",
+      "baseline_status": "missing",
+      "sources": [
+        "web/core/features.js",
+        "tests/responsive-remainder.test.mjs"
+      ],
+      "acceptance": "Every browser-common registry ID resolves both layouts automatically; CI compares loaded feature registration, command/deep-link coverage and settings actions. Fail build on missing ID, not merely missing import.",
+      "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
+    }
+  ],
+  "counts": {
+    "shared-delivered-pr31": 7,
+    "shared-implemented": 14,
+    "inherited-shared": 41,
+    "capability-adapter": 9,
+    "migration-conditional": 1,
+    "excluded-preview": 1
+  },
+  "legacy_crosswalk": [
+    {
+      "legacy_id": "A1",
+      "feature_id": "architecture.bootstrap"
+    },
+    {
+      "legacy_id": "A2",
+      "feature_id": "chat.filters"
+    },
+    {
+      "legacy_id": "A3",
+      "feature_id": "voice.reply"
+    },
+    {
+      "legacy_id": "A4",
+      "feature_id": "navigation.back"
+    },
+    {
+      "legacy_id": "A5",
+      "feature_id": "navigation.back"
+    },
+    {
+      "legacy_id": "A6",
+      "feature_id": "navigation.back"
+    },
+    {
+      "legacy_id": "A7",
+      "feature_id": "chat.drafts"
+    },
+    {
+      "legacy_id": "A8",
+      "feature_id": "chat.history"
+    },
+    {
+      "legacy_id": "A9",
+      "feature_id": "routing.deep-links"
+    },
+    {
+      "legacy_id": "A10",
+      "feature_id": "routing.deep-links"
+    },
+    {
+      "legacy_id": "A11",
+      "feature_id": "media.viewer"
+    },
+    {
+      "legacy_id": "A12",
+      "feature_id": "apps.registry"
+    },
+    {
+      "legacy_id": "A13",
+      "feature_id": "status.connectivity"
+    },
+    {
+      "legacy_id": "B1",
+      "feature_id": "chat.sections"
+    },
+    {
+      "legacy_id": "B2",
+      "feature_id": "chat.sections"
+    },
+    {
+      "legacy_id": "B3",
+      "feature_id": "chat.sections"
+    },
+    {
+      "legacy_id": "B4",
+      "feature_id": "chat.sort"
+    },
+    {
+      "legacy_id": "B5",
+      "feature_id": "chat.read"
+    },
+    {
+      "legacy_id": "B6",
+      "feature_id": "chat.timestamps"
+    },
+    {
+      "legacy_id": "B7",
+      "feature_id": "chat.read"
+    },
+    {
+      "legacy_id": "B8",
+      "feature_id": "chat.read"
+    },
+    {
+      "legacy_id": "B9",
+      "feature_id": "chat.read"
+    },
+    {
+      "legacy_id": "B10",
+      "feature_id": "chat.timestamps"
+    },
+    {
+      "legacy_id": "B11",
+      "feature_id": "chat.timestamps"
+    },
+    {
+      "legacy_id": "B12",
+      "feature_id": "chat.search"
+    },
+    {
+      "legacy_id": "B13",
+      "feature_id": "chat.drafts"
+    },
+    {
+      "legacy_id": "B14",
+      "feature_id": "chat.errors"
+    },
+    {
+      "legacy_id": "B15",
+      "feature_id": "chat.errors"
+    },
+    {
+      "legacy_id": "B16",
+      "feature_id": "delivery.background"
+    },
+    {
+      "legacy_id": "B17",
+      "feature_id": "chat.sections"
+    },
+    {
+      "legacy_id": "B18",
+      "feature_id": "status.connectivity"
+    },
+    {
+      "legacy_id": "B19",
+      "feature_id": "chat.history"
+    },
+    {
+      "legacy_id": "B20",
+      "feature_id": "chat.sections"
+    },
+    {
+      "legacy_id": "B21",
+      "feature_id": "chat.rename-triage"
+    },
+    {
+      "legacy_id": "B22",
+      "feature_id": "chat.rename-triage"
+    },
+    {
+      "legacy_id": "B23",
+      "feature_id": "chat.rename-triage"
+    },
+    {
+      "legacy_id": "B24",
+      "feature_id": "chat.rename-triage"
+    },
+    {
+      "legacy_id": "B25",
+      "feature_id": "chat.rename-triage"
+    },
+    {
+      "legacy_id": "C1",
+      "feature_id": "chat.filters"
+    },
+    {
+      "legacy_id": "C2",
+      "feature_id": "chat.filters"
+    },
+    {
+      "legacy_id": "C3",
+      "feature_id": "chat.filters"
+    },
+    {
+      "legacy_id": "C4",
+      "feature_id": "status.connectivity"
+    },
+    {
+      "legacy_id": "D1",
+      "feature_id": "chat.timestamps"
+    },
+    {
+      "legacy_id": "D2",
+      "feature_id": "chat.render"
+    },
+    {
+      "legacy_id": "D3",
+      "feature_id": "chat.markdown"
+    },
+    {
+      "legacy_id": "D4",
+      "feature_id": "chat.markdown"
+    },
+    {
+      "legacy_id": "D5",
+      "feature_id": "chat.markdown"
+    },
+    {
+      "legacy_id": "D6",
+      "feature_id": "chat.copy-share"
+    },
+    {
+      "legacy_id": "D7",
+      "feature_id": "chat.attachments"
+    },
+    {
+      "legacy_id": "D8",
+      "feature_id": "chat.attachments"
+    },
+    {
+      "legacy_id": "D9",
+      "feature_id": "chat.attachments"
+    },
+    {
+      "legacy_id": "D10",
+      "feature_id": "chat.attachments"
+    },
+    {
+      "legacy_id": "D11",
+      "feature_id": "chat.attachments"
+    },
+    {
+      "legacy_id": "D12",
+      "feature_id": "chat.attachments"
+    },
+    {
+      "legacy_id": "D13",
+      "feature_id": "media.viewer"
+    },
+    {
+      "legacy_id": "D14",
+      "feature_id": "chat.timestamps"
+    },
+    {
+      "legacy_id": "D15",
+      "feature_id": "chat.timestamps"
+    },
+    {
+      "legacy_id": "D16",
+      "feature_id": "chat.history"
+    },
+    {
+      "legacy_id": "D17",
+      "feature_id": "chat.copy-share"
+    },
+    {
+      "legacy_id": "D18",
+      "feature_id": "delivery.outbox"
+    },
+    {
+      "legacy_id": "D19",
+      "feature_id": "chat.history"
+    },
+    {
+      "legacy_id": "D20",
+      "feature_id": "chat.render"
+    },
+    {
+      "legacy_id": "E1",
+      "feature_id": "chat.receipts"
+    },
+    {
+      "legacy_id": "E2",
+      "feature_id": "chat.receipts"
+    },
+    {
+      "legacy_id": "E3",
+      "feature_id": "chat.receipts"
+    },
+    {
+      "legacy_id": "E4",
+      "feature_id": "chat.receipts"
+    },
+    {
+      "legacy_id": "E5",
+      "feature_id": "chat.receipts"
+    },
+    {
+      "legacy_id": "E6",
+      "feature_id": "chat.receipts"
+    },
+    {
+      "legacy_id": "E7",
+      "feature_id": "chat.approvals"
+    },
+    {
+      "legacy_id": "E8",
+      "feature_id": "chat.approvals"
+    },
+    {
+      "legacy_id": "E9",
+      "feature_id": "chat.stop-steer"
+    },
+    {
+      "legacy_id": "E10",
+      "feature_id": "chat.stop-steer"
+    },
+    {
+      "legacy_id": "E11",
+      "feature_id": "chat.stop-steer"
+    },
+    {
+      "legacy_id": "E12",
+      "feature_id": "delivery.background"
+    },
+    {
+      "legacy_id": "E13",
+      "feature_id": "chat.models"
+    },
+    {
+      "legacy_id": "E14",
+      "feature_id": "chat.errors"
+    },
+    {
+      "legacy_id": "E15",
+      "feature_id": "agents.multiple"
+    },
+    {
+      "legacy_id": "F1",
+      "feature_id": "chat.reading"
+    },
+    {
+      "legacy_id": "F2",
+      "feature_id": "chat.reading"
+    },
+    {
+      "legacy_id": "F3",
+      "feature_id": "chat.reading"
+    },
+    {
+      "legacy_id": "F4",
+      "feature_id": "chat.reading"
+    },
+    {
+      "legacy_id": "F5",
+      "feature_id": "chat.reading"
+    },
+    {
+      "legacy_id": "F6",
+      "feature_id": "chat.reading"
+    },
+    {
+      "legacy_id": "F7",
+      "feature_id": "delivery.background"
+    },
+    {
+      "legacy_id": "G1",
+      "feature_id": "composer.text"
+    },
+    {
+      "legacy_id": "G2",
+      "feature_id": "chat.drafts"
+    },
+    {
+      "legacy_id": "G3",
+      "feature_id": "chat.drafts"
+    },
+    {
+      "legacy_id": "G4",
+      "feature_id": "composer.text"
+    },
+    {
+      "legacy_id": "G5",
+      "feature_id": "composer.text"
+    },
+    {
+      "legacy_id": "G6",
+      "feature_id": "composer.text"
+    },
+    {
+      "legacy_id": "G7",
+      "feature_id": "composer.files"
+    },
+    {
+      "legacy_id": "G8",
+      "feature_id": "composer.files"
+    },
+    {
+      "legacy_id": "G9",
+      "feature_id": "composer.files"
+    },
+    {
+      "legacy_id": "G10",
+      "feature_id": "composer.files"
+    },
+    {
+      "legacy_id": "G11",
+      "feature_id": "composer.files"
+    },
+    {
+      "legacy_id": "G12",
+      "feature_id": "composer.files"
+    },
+    {
+      "legacy_id": "G13",
+      "feature_id": "composer.files-existing"
+    },
+    {
+      "legacy_id": "G14",
+      "feature_id": "chat.models"
+    },
+    {
+      "legacy_id": "G15",
+      "feature_id": "chat.models"
+    },
+    {
+      "legacy_id": "G16",
+      "feature_id": "chat.models"
+    },
+    {
+      "legacy_id": "G17",
+      "feature_id": "chat.models"
+    },
+    {
+      "legacy_id": "G18",
+      "feature_id": "delivery.outbox"
+    },
+    {
+      "legacy_id": "G19",
+      "feature_id": "delivery.seal"
+    },
+    {
+      "legacy_id": "H1",
+      "feature_id": "voice.reply"
+    },
+    {
+      "legacy_id": "H2",
+      "feature_id": "voice.pause"
+    },
+    {
+      "legacy_id": "H3",
+      "feature_id": "voice.cancel-recovery"
+    },
+    {
+      "legacy_id": "H4",
+      "feature_id": "delivery.seal"
+    },
+    {
+      "legacy_id": "H5",
+      "feature_id": "voice.reply"
+    },
+    {
+      "legacy_id": "H6",
+      "feature_id": "voice.transcribe"
+    },
+    {
+      "legacy_id": "H7",
+      "feature_id": "delivery.background"
+    },
+    {
+      "legacy_id": "H8",
+      "feature_id": "voice.reply"
+    },
+    {
+      "legacy_id": "H9",
+      "feature_id": "voice.wake-lock"
+    },
+    {
+      "legacy_id": "H10",
+      "feature_id": "native.background-recorder"
+    },
+    {
+      "legacy_id": "H11",
+      "feature_id": "voice.mic-routing"
+    },
+    {
+      "legacy_id": "H12",
+      "feature_id": "native.background-recorder"
+    },
+    {
+      "legacy_id": "H13",
+      "feature_id": "native.background-recorder"
+    },
+    {
+      "legacy_id": "H14",
+      "feature_id": "delivery.outbox"
+    },
+    {
+      "legacy_id": "H15",
+      "feature_id": "chat.errors"
+    },
+    {
+      "legacy_id": "H16",
+      "feature_id": "chat.errors"
+    },
+    {
+      "legacy_id": "H17",
+      "feature_id": "chat.errors"
+    },
+    {
+      "legacy_id": "H18",
+      "feature_id": "native.background-recorder"
+    },
+    {
+      "legacy_id": "H19",
+      "feature_id": "voice.transcribe"
+    },
+    {
+      "legacy_id": "H20",
+      "feature_id": "chat.models"
+    },
+    {
+      "legacy_id": "H21",
+      "feature_id": "delivery.outbox"
+    },
+    {
+      "legacy_id": "H22",
+      "feature_id": "settings.provider"
+    },
+    {
+      "legacy_id": "I1",
+      "feature_id": "media.viewer"
+    },
+    {
+      "legacy_id": "I2",
+      "feature_id": "media.viewer"
+    },
+    {
+      "legacy_id": "I3",
+      "feature_id": "media.viewer"
+    },
+    {
+      "legacy_id": "I4",
+      "feature_id": "media.viewer"
+    },
+    {
+      "legacy_id": "I5",
+      "feature_id": "media.viewer"
+    },
+    {
+      "legacy_id": "I6",
+      "feature_id": "chat.copy-share"
+    },
+    {
+      "legacy_id": "I7",
+      "feature_id": "chat.copy-share"
+    },
+    {
+      "legacy_id": "I8",
+      "feature_id": "chat.copy-share"
+    },
+    {
+      "legacy_id": "J1",
+      "feature_id": "composer.files-existing"
+    },
+    {
+      "legacy_id": "J2",
+      "feature_id": "composer.files-existing"
+    },
+    {
+      "legacy_id": "K1",
+      "feature_id": "settings.files-usage"
+    },
+    {
+      "legacy_id": "K2",
+      "feature_id": "settings.files-usage"
+    },
+    {
+      "legacy_id": "K3",
+      "feature_id": "settings.provider"
+    },
+    {
+      "legacy_id": "K4",
+      "feature_id": "native.share-target"
+    },
+    {
+      "legacy_id": "K5",
+      "feature_id": "native.apk-update"
+    },
+    {
+      "legacy_id": "K6",
+      "feature_id": "status.connectivity"
+    },
+    {
+      "legacy_id": "L1",
+      "feature_id": "native.apk-update"
+    },
+    {
+      "legacy_id": "L2",
+      "feature_id": "native.apk-update"
+    },
+    {
+      "legacy_id": "L3",
+      "feature_id": "updates.web"
+    },
+    {
+      "legacy_id": "M1",
+      "feature_id": "native.background-recorder"
+    },
+    {
+      "legacy_id": "M2",
+      "feature_id": "native.share-target"
+    },
+    {
+      "legacy_id": "M3",
+      "feature_id": "native.share-target"
+    },
+    {
+      "legacy_id": "M4",
+      "feature_id": "native.share-target"
+    },
+    {
+      "legacy_id": "M5",
+      "feature_id": "native.share-target"
+    },
+    {
+      "legacy_id": "M6",
+      "feature_id": "native.background-recorder"
+    },
+    {
+      "legacy_id": "M7",
+      "feature_id": "composer.files"
+    },
+    {
+      "legacy_id": "M8",
+      "feature_id": "links.browser"
+    },
+    {
+      "legacy_id": "M9",
+      "feature_id": "status.connectivity"
+    },
+    {
+      "legacy_id": "M10",
+      "feature_id": "navigation.back"
+    },
+    {
+      "legacy_id": "N1",
+      "feature_id": "navigation.fullscreen"
+    },
+    {
+      "legacy_id": "N2",
+      "feature_id": "navigation.fullscreen"
+    },
+    {
+      "legacy_id": "N3",
+      "feature_id": "delivery.seal"
+    },
+    {
+      "legacy_id": "O1",
+      "feature_id": "status.connectivity"
+    },
+    {
+      "legacy_id": "O2",
+      "feature_id": "status.connectivity"
+    },
+    {
+      "legacy_id": "O3",
+      "feature_id": "delivery.outbox"
+    },
+    {
+      "legacy_id": "O4",
+      "feature_id": "composer.files-existing"
+    },
+    {
+      "legacy_id": "O5",
+      "feature_id": "navigation.back"
+    },
+    {
+      "legacy_id": "O6",
+      "feature_id": "navigation.back"
+    }
+  ],
+  "supplemental_web_views": [
+    {
+      "id": "reviews.day-week-month",
+      "status": "shared-implemented",
+      "source": "web/core/views.js",
+      "evidence": "live-read final receipt: actual generated data in both shells; common rail/card navigation"
+    },
+    {
+      "id": "maps.local",
+      "status": "shared-implemented",
+      "source": "web/core/views.js",
+      "evidence": "same search/directions form and Google Maps URLs; decorative illustration explicitly not a live GPS map"
+    }
+  ]
+}

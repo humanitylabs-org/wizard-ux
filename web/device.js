@@ -54,16 +54,22 @@
   }
 
   /* ---------------- chunked native reads → Blob ---------------- */
-  function readBlob(read, type) {
-    const parts = []; let off = 0;
+  function readBlob(read, type, expected) {
+    const parts = []; let off = 0, size = 0;
+    if (expected !== undefined && (!Number.isSafeInteger(expected) || expected <= 0)) throw new Error('Native recording size unavailable · original kept on device');
     for (let k = 0; k < 4000 && off >= 0; k++) {
-      const c = J(read(off)); if (!c) break;
+      const c = J(read(off));
+      if (!c || typeof c.b64 !== 'string' || !Number.isInteger(c.next)) throw new Error('Incomplete native recording read · original kept on device');
       const bin = atob(c.b64), u = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      size += u.length;
+      if (!u.length || (c.next !== -1 && c.next !== off + u.length) || (expected !== undefined && size > expected)) throw new Error('Invalid native recording chunk · original kept on device');
       parts.push(u); off = c.next;
     }
+    if (off !== -1 || (expected !== undefined && size !== expected)) throw new Error('Incomplete native recording · original kept on device');
     return new Blob(parts, { type: type || 'application/octet-stream' });
   }
+  const readRecording = (id, expected) => readBlob(off => DEV().recRead(id, off), 'audio/aac', Number(expected));
 
   /* ================= #14 background recording: resume, notification Stop/Send, recovery ================= */
   const handledTakes = new Set();
@@ -116,7 +122,7 @@
   function offerPending(why) {
     const d = DEV(); if (!d || sheet || W$()?.voice !== 'idle') return;
     const native = J(d.recPending()) || [];
-    const retained = window.__wosDictationRecovery?.() || [];
+    const retained = [...(window.__wosDictationRecovery?.() || []), ...(window.__wosVoiceRecovery?.() || [])];
     const merged = new Map(native.map(t => [t.id, t]));
     for (const t of retained) if (!merged.has(t.id)) merged.set(t.id, t);
     const list = [...merged.values()].filter(t => voiceKind(t) && !handledTakes.has(t.id));
@@ -151,20 +157,35 @@
       return;
     }
     handledTakes.add(t.id);
-    if (!J(d.recClaim(t.id))) return;
-    const blob = readBlob(off => d.recRead(t.id, off), 'audio/aac');
-    if (blob.size < 600) { d.recDone(t.id); return; }
+    try {
+    // Keep the native pending owner discoverable until durable handoff. recRead does not
+    // require recClaim; claiming now hides it from recPending after a WebView reload.
+    const blob = readRecording(t.id, t.bytes);
+    if (blob.size < 600 || (Number(t.bytes) > 0 && blob.size !== Number(t.bytes))) throw new Error('Incomplete native recording · original kept on device');
     // A voice reply started from a thread's composer mic stays that thread's, even when it ended outside the page.
-    const pin = window.__wosReplyTake?.(t.id); if (pin) window.__wosReplyTake(null);
+    const pin = window.__wosReplyTake?.(t.id);
     const route = window.WosModels.voiceRoute(t.id);
-    const it = await OUTBOX.enqueue({ ...(route || {}), kind: pin ? 'reply' : 'new', sessionId: pin ? pin.sid : '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
+    const it = await OUTBOX.enqueue({ nativeId: t.id, ...(route || {}), kind: pin ? 'reply' : 'new', sessionId: pin ? pin.sid : '', steerRunId: pin?.steerRunId || '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
       instructions: (window.WizConfig.owner() ? window.WizConfig.owner() + ' recorded' : 'The owner recorded') + ' this with the Wizard OS orb on their Android phone' + (pin ? ' as a voice reply in this thread' : '') + (how === 'recovered' ? '; the recording was interrupted and recovered' : '') + '. The original recording is attached as a voice note.' });
-    d.recDone(t.id);
-    try { window.WosModels.forgetVoiceRoute(t.id); } catch (e) {}
+    releaseNativeCustody();
     log('rec:sent', t.id, it.id, how);
-    toast('✦', how === 'recovered' ? `Recording sent to ${window.WizConfig.agent()}` : 'Sending your recording', 2000);
+    toast('✦', it.durable ? 'Recording kept · waiting to send' : 'Device save failed · original kept by Android', 2400);
     try { w.openWizardThread(it.sessionId); } catch (e) {}
+    } catch (e) { handledTakes.delete(t.id); toast('!', String(e.message || 'Recording kept on device · retry from recording recovery'), 4000); }
   }
+  const releasedNative = new Set();
+  function releaseNativeCustody() {
+    const d = DEV(); if (!d) return;
+    for (const it of OUTBOX?._items.values() || []) {
+      if (OUTBOX.quarantined(it.id) || !it.nativeId || releasedNative.has(it.nativeId) || (!it.durable && it.state !== 'sent')) continue;
+      try {
+        if (!W$()) continue;
+        W$().recDone(it.nativeId); releasedNative.add(it.nativeId);
+        const pin = window.__wosReplyTake?.(it.nativeId); if (pin) window.__wosReplyTake(null);
+      } catch (_) {} // native still owns its copy if the bridge is unavailable
+    }
+  }
+  OUTBOX?.onChange(releaseNativeCustody);
   function onRec(ev) {
     const w = W$(); if (!w) return;
     log('rec:' + ev.type, ev.id);
@@ -364,6 +385,7 @@
         <div class="st-row static"><span class="st-ic">✉</span><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
         <button class="st-row" data-dvupd><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
     },
+    readRecording,
     recoverRecorder: () => syncRecorder('control'),
     saveDrafts, checkWeb, sweepReadNotes, mediaPlaying, _state: () => { const w = WEB()?._state() || {}; return { sheet: sheet?.kind || null, upd, webPending: !!w.pending, print0: !!w.print0, changes: w.changes || [], listOpen: !!w.listOpen }; },
   };
