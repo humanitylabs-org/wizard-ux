@@ -536,10 +536,13 @@
       const dr = el.getBoundingClientRect();
       OV.ghost.style.transform = `translate(${x - OV.ox - dr.left}px, ${y - OV.oy - dr.top}px) scale(1.04)`;
       OV.ghost.style.visibility = 'hidden'; const over = cardAt(x, y); OV.ghost.style.visibility = '';
-      if (over && over !== OV.card && !over.classList.contains('ov-home')) {
+      if (over && over !== OV.card) {
         const grid = el.querySelector('.ov-grid'), cards = [...grid.querySelectorAll('.ov-card[data-ov]')];
         const a = cards.indexOf(OV.card), b = cards.indexOf(over);
-        grid.insertBefore(OV.card, a < b ? over.nextSibling : over); vib(6);
+        // Home stays first, but its drop zone means "first app", before Chats or any other tab.
+        // Rejecting Home as a target made the left edge feel like a pinned Chats slot.
+        const before = over.classList.contains('ov-home') || a < b ? over.nextSibling : over;
+        if (before !== OV.card) { grid.insertBefore(OV.card, before); vib(6); }
       }
       // Near the top or bottom edge: scroll so far desks can be reached while dragging.
       if (y < dr.top + 70) el.scrollTop -= 12; else if (y > dr.bottom - 70) el.scrollTop += 12;
