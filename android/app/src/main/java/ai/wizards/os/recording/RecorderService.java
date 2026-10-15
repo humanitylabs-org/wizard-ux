@@ -207,6 +207,9 @@ public class RecorderService extends Service {
                     finishTake("cancelled", "app");
                     RecordingStore st = RecordingStore.get(this);
                     JSONObject m = st.read(take); // a long take cancelled by accident is kept for Settings → Cancelled recordings
+                    // A meeting-linked loan keeps its original even when short/cancelled.
+                    // Normal recovery/explicit acknowledgement owns eventual deletion.
+                    if (m != null && m.has("meetingHandoffId")) break;
                     CancelledTakes.keep(this, st.audio(take), m == null ? 0 : m.optLong("ms"), "app", RecordingStore.MIME);
                     st.delete(take);
                 }

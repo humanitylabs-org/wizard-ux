@@ -108,6 +108,7 @@ public class MeetingRecorderService extends Service {
             if (s == null || b == null || !b.eventId.equals(eventId)) return "null";
             if (ai.wizards.os.recording.RecorderService.active() != null || MicOwner.holder() != null) return "null";
             if (b.open()) {
+                b.outcome = outcome;
                 if (!s.saveBorrow(b, outcome)) return "null";
                 b.close(eventId);
                 // Notification Stop and pre-existing manual Pause always win.
@@ -123,7 +124,7 @@ public class MeetingRecorderService extends Service {
         org.json.JSONObject o = new org.json.JSONObject();
         try { o.put("id", b.eventId).put("meetingId", b.meetingId).put("voiceTakeId", b.take())
             .put("atMediaMs", b.atMediaMs).put("pausedAt", b.pausedAt).put("pausedByHandoff", b.resumeAfter)
-            .put("status", status).put("open", b.open()); } catch (org.json.JSONException ignored) { }
+            .put("status", status).put("outcome", b.outcome).put("open", b.open()); } catch (org.json.JSONException ignored) { }
         return o;
     }
     private boolean saveBorrow(MeetingBorrow b, String status) {
@@ -463,6 +464,7 @@ public class MeetingRecorderService extends Service {
         private final Live l;
         private AudioRecord rec;
         private volatile boolean running = true;
+        private volatile boolean custodyFailed;
         private RandomAccessFile out;
         private int seq;
         private long chunkSamples;
@@ -562,10 +564,11 @@ public class MeetingRecorderService extends Service {
                     }
                 }
             } catch (IOException e) {
+                custodyFailed = true;
                 Log.e(TAG, "chunk write failed", e);
             } finally {
                 pcm.flush();
-                try { if (out != null) closeChunk(); } catch (IOException e) { Log.e(TAG, "last chunk failed", e); }
+                try { if (out != null) closeChunk(); } catch (IOException e) { custodyFailed = true; Log.e(TAG, "last chunk failed", e); }
                 if (rec != null) {
                     try { rec.stop(); } catch (IllegalStateException ignored) { }
                     rec.release();
@@ -616,7 +619,7 @@ public class MeetingRecorderService extends Service {
                 if (rec != null) try { rec.stop(); } catch (IllegalStateException ignored) { }
                 try { join(2000); } catch (InterruptedException ignored) { }
             }
-            return !isAlive();
+            return !isAlive() && !custodyFailed;
         }
     }
 

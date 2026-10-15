@@ -9,6 +9,7 @@ public final class MeetingBorrow {
     public final long atMediaMs, pausedAt;
     private String takeId;
     private boolean closed;
+    public String outcome = "pending";
 
     public MeetingBorrow(String eventId, String meetingId, boolean wasPaused, long atMediaMs, long pausedAt) {
         this.eventId = eventId; this.meetingId = meetingId; this.resumeAfter = !wasPaused;

@@ -226,6 +226,7 @@
     if (s.discard || s.cancelPromise) return Promise.reject(fail('cancelled', 'Capture was cancelled.'));
     if (s.finishPromise) return s.finishPromise;
     s.finishPromise = (async () => {
+      if (s.borrowWork) await s.borrowWork.catch(() => {});
       s.error = null; s.phase = 'stopping'; s.partial = !!(s.partial || partial); changed();
       if (!s.inputStopped) {
         s.final = await s.engine.stop();
@@ -440,7 +441,14 @@
   }
   // Host-only microphone loan. Keep the capture row, chunk sequence, observers and
   // Web Lock; never make another app appear idle while the orb borrows its mic.
-  async function beginVoiceBorrow(eventId) {
+  function beginVoiceBorrow(eventId) {
+    const s=active;
+    if (s?.borrowWork) return Promise.reject(fail('busy','A microphone handoff is already changing.'));
+    const work=beginVoiceBorrowImpl(eventId);
+    if(s) { s.borrowWork=work; work.finally(()=>{if(s.borrowWork===work)s.borrowWork=null;}).catch(()=>{}); }
+    return work;
+  }
+  async function beginVoiceBorrowImpl(eventId) {
     const s = active;
     if (!s || s.row.kind !== 'meeting' || s.row.native || !s.row.pcm)
       throw fail('handoff_unavailable', 'This recorder cannot hand off its microphone.');
@@ -465,6 +473,7 @@
       s.row.meta.handoffs ||= [];
       s.row.meta.handoffs.push({ ...s.borrow, status:'paused' });
       await put(s.row);
+      if (active!==s || s.finishPromise) throw fail('stale_handoff','Meeting was stopped during handoff.');
       s.pausedAt ||= Date.now(); s.borrow.micReleased=true;
       emit(s,'state',{recording:true,paused:true,hasSystemAudio:false,handoffId:eventId}); changed();
       return {...s.borrow};
@@ -478,14 +487,21 @@
     try { await browserEngine(s); s.engineDetached=false; }
     catch(e) { s.stream?.getTracks().forEach(t=>t.stop()); await s.ctx?.close(); s.ctx=null; s.inputStopped=true; throw e; }
   }
-  async function endVoiceBorrow(eventId, detail={}) {
+  function endVoiceBorrow(eventId, detail={}) {
+    const s=active;
+    if(s?.borrowWork) return Promise.reject(fail('busy','A microphone handoff is already changing.'));
+    const work=endVoiceBorrowImpl(eventId,detail);
+    if(s) { s.borrowWork=work; work.finally(()=>{if(s.borrowWork===work)s.borrowWork=null;}).catch(()=>{}); }
+    return work;
+  }
+  async function endVoiceBorrowImpl(eventId, detail={}) {
     const s=active;
     if (!s || s.borrow?.id!==eventId || !s.borrow.micReleased) throw fail('stale_handoff','This microphone loan is not active.');
     const b=s.borrow, marker=s.row.meta.handoffs.find(x=>x.id===eventId);
     Object.assign(marker,{status:detail.status==='cancelled'?'cancelled':'captured',voiceTakeId:String(detail.voiceTakeId||''),endedAt:Date.now()});
     await put(s.row); // marker survives even if reacquiring the microphone fails
     s.phase='paused'; s.borrow=null;
-    if(b.pausedByHandoff) {
+    if(b.pausedByHandoff && !s.finishPromise) {
       try { await reopenBorrowedEngine(s); s.pausedTotal=(s.pausedTotal||0)+Date.now()-s.pausedAt; s.pausedAt=0; s.phase='recording'; marker.resumeStatus='recording'; }
       catch(e) { marker.resumeStatus='failed'; s.error=e; emit(s,'warn','Meeting remains paused: microphone could not resume.'); }
     } else marker.resumeStatus='paused';

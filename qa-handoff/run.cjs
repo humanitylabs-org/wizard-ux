@@ -17,7 +17,7 @@ async function test(name,fn){await fn();results.push({name,passed:true});console
  const context=await browser.newContext(), p=await context.newPage(); const errors=[];p.on('pageerror',e=>errors.push(e.message));
  await p.goto(url); await p.waitForFunction(()=>window.WizAppCapture && window.WosOutbox?.recoveryComplete);
  async function setup(){await p.evaluate(()=>{
-   window.tone=440;window.streams=[];window.graphs=[];window.chunks=[];
+   window.session=null;window.tone=440;window.streams=[];window.graphs=[];window.chunks=[];
    navigator.mediaDevices.getUserMedia=async()=>{const ctx=new AudioContext(),osc=ctx.createOscillator(),dest=ctx.createMediaStreamDestination();osc.frequency.value=tone;osc.connect(dest);osc.start();await ctx.resume();streams.push(dest.stream);graphs.push({ctx,osc});return dest.stream;};
    document.querySelector('#go').onclick=async()=>{window.session=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:1000,meta:{meetingId:'synthetic-meeting'},onChunk:c=>chunks.push(c)});};
  });await p.click('#go');await p.waitForFunction(()=>window.session);}
@@ -53,6 +53,21 @@ async function test(name,fn){await fn();results.push({name,passed:true});console
    await setup();await p.waitForTimeout(300);await p.evaluate(()=>WizAppCapture.beginVoiceBorrow('handoff-stop-test'));
    await p.evaluate(async()=>{const r=await session.stop();await WizAppCapture.ack('mizel',r.id);});
    assert.equal(await p.evaluate(async()=>{try{await WizAppCapture.endVoiceBorrow('handoff-stop-test');}catch(e){return e.code;}}),'stale_handoff');assert.equal(await p.evaluate(()=>WizAppCapture.getState().active),false);
+ });
+ await test('stop-racing-pause-grants-no-late-lease',async()=>{
+   await setup();await p.waitForTimeout(300);
+   const race=await p.evaluate(async()=>{const a=WizAppCapture.beginVoiceBorrow('handoff-race-start').then(()=> 'granted',e=>e.code);const stopped=await session.stop();return {result:await a,bytes:stopped.blob.size,active:WizAppCapture.getState().active};});
+   assert.equal(race.result,'stale_handoff');assert.ok(race.bytes>44);assert.equal(race.active,false);
+ });
+ await test('duplicate-return-does-not-open-two-microphones',async()=>{
+   await setup();await p.waitForTimeout(300);await p.evaluate(()=>WizAppCapture.beginVoiceBorrow('handoff-double-end'));
+   const race=await p.evaluate(async()=>{const a=WizAppCapture.endVoiceBorrow('handoff-double-end');const b=WizAppCapture.endVoiceBorrow('handoff-double-end').then(()=> 'accepted',e=>e.code);await a;return {second:await b,live:streams.flatMap(s=>s.getTracks()).filter(t=>t.readyState==='live').length};});
+   assert.equal(race.second,'busy');assert.equal(race.live,1);await p.evaluate(()=>session.stop());
+ });
+ await test('storage-failure-grants-no-lease-and-preserves-A',async()=>{
+   await setup();await p.waitForTimeout(300);
+   const result=await p.evaluate(async()=>{const original=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(value,...args){if(this.name==='sessions'&&value.meta?.handoffs?.length){IDBObjectStore.prototype.put=original;throw new DOMException('fixture','QuotaExceededError');}return original.call(this,value,...args);};let failure;try{await WizAppCapture.beginVoiceBorrow('handoff-storage-fail');}catch(e){failure=e.name;}finally{IDBObjectStore.prototype.put=original;}const state=WizAppCapture.getState();const r=await session.stop();return {failure,released:state.voiceBorrow?.micReleased,bytes:r.blob.size};});
+   assert.equal(result.failure,'QuotaExceededError');assert.equal(result.released,false);assert.ok(result.bytes>44);
  });
  await test('resume-permission-denial-keeps-meeting-paused-and-audio',async()=>{
    await setup();await p.waitForTimeout(300);await p.evaluate(()=>WizAppCapture.beginVoiceBorrow('handoff-denied-test'));
