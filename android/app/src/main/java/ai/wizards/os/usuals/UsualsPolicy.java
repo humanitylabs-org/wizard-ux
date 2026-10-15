@@ -468,9 +468,11 @@ public final class UsualsPolicy {
      * "Order food", "order grab", "order lunch", "get me some food from Grab", "order something new": open Grab to browse
      * (and save the route) instead of running a usual. "I want something else" on its own is ordinary talk, not food.
      */
-    public static boolean isBrowse(String said) {
-        String s = norm(said).replace('\u2019', '\'').replaceAll("[.!?,]+", " ").replaceAll("\\s+", " ").trim();
-        s = WAKE.matcher(s).replaceFirst("").trim();
+    public static boolean isBrowse(String said) { return isBrowse(said, ai.wizards.os.device.WizardIdentity.FALLBACK); }
+
+    public static boolean isBrowse(String said, String wizardName) {
+        String s = wake(wizardName).matcher(norm(said).replace('\u2019', '\'')).replaceFirst("")
+                .replaceAll("[.!?,]+", " ").replaceAll("\\s+", " ").trim();
         s = s.replaceAll(" (please|now|for me)$", "").trim();
         return NEW_SPELL.matcher(s).matches();
     }
@@ -491,7 +493,10 @@ public final class UsualsPolicy {
 
     /* ------------------------------------------------------------------ voice */
 
-    private static final Pattern WAKE = Pattern.compile("^(hey |ok |okay )?(wizard|archimedes)[, ]*");
+    private static Pattern wake(String wizardName) {
+        String name = norm(ai.wizards.os.device.WizardIdentity.normalize(wizardName)).replace('\u2019', '\'');
+        return Pattern.compile("^(hey |ok |okay )?(?:" + Pattern.quote(name) + "|wizard)(?=[, .!?]|$)[, .!?]*");
+    }
     private static final Pattern VERB = Pattern.compile(
             "^(please )?(can you |could you )?(re-?order|order( me)?|get( me)?|grab( me)?|i want|i'd like|i would like)\\s+(.*)$");
 
@@ -500,8 +505,12 @@ public final class UsualsPolicy {
      * ordinary talk never starts a run. "order my usual" alone picks the only usual there is.
      */
     public static int matchVoice(List<String> names, String said) {
+        return matchVoice(names, said, ai.wizards.os.device.WizardIdentity.FALLBACK);
+    }
+
+    public static int matchVoice(List<String> names, String said, String wizardName) {
         String s = norm(said).replaceAll("[.!?]+$", "");
-        s = WAKE.matcher(s).replaceFirst("").trim();
+        s = wake(wizardName).matcher(s).replaceFirst("").trim();
         Matcher m = VERB.matcher(s);
         if (!m.matches()) return -1;
         String rest = m.group(7).trim()

@@ -16,13 +16,14 @@ public final class UsualsVoice {
      */
     public static String match(Context c, String said) {
         List<UsualsStore.Usual> l = UsualsStore.all(c);
+        String wizardName = ai.wizards.os.device.WizardIdentity.name(c);
         // A saved order he named "Lunch" wins over the "order lunch" spell; otherwise the spell opens Grab.
-        if (UsualsPolicy.isBrowse(said)) {
+        if (UsualsPolicy.isBrowse(said, wizardName)) {
             int n = UsualsPolicy.namedExactly(UsualsStore.names(l), said);
             return n >= 0 ? l.get(n).id : UsualsRunner.NEW;
         }
         if (l.isEmpty()) return null;
-        int i = UsualsPolicy.matchVoice(UsualsStore.names(l), said);
+        int i = UsualsPolicy.matchVoice(UsualsStore.names(l), said, wizardName);
         return i >= 0 ? l.get(i).id : null;
     }
 
