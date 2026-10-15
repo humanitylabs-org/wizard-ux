@@ -2391,13 +2391,25 @@
     const snap = V.snap || sendSnap(); V.snap = null;
     snap.seal = V.seal || null; V.seal = null; // the composer read at the send tap (finishVoice)
     const kind = V.kind, aimAt = V.target;
+    // Own original browser audio before transcription/routing can wait on the network. Native
+    // Android continues to own its internal take until its existing handoff completes.
+    if (!isNative && kind !== 'command' && !V.replyTo) {
+      const sv = snap.view, sid = aimAt == null ? sv?.thread || '' : '';
+      const audio = new Blob(blobs, { type: blob.type || 'audio/webm' });
+      const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
+        sessionId: sid && sid !== '__new__' ? sid : '', audio, typed: snap.seal?.text || '',
+        files: [...V.files, ...(snap.seal?.files || [])].filter(f => f?.id),
+        instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: sv?.id || '' });
+      snap.custodyId = it.id; snap.audio = audio;
+    }
     // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.
     const hold = V.hold; V.hold = null;
     const unhold = () => { if (hold) setTimeout(() => LIVE.releaseSend?.(hold), 1500); };
     if (V.replyTo) {
       const rt = V.replyTo, files = takeFiles(); V.replyTo = null; replyTake(null);
-      setVoice('idle'); txPill('✦', 'Voice reply · saved to this thread', 'agent'); txHide(1800);
-      Promise.all(blobs.map((part, i) => Promise.resolve(CHATS.sendVoiceTo(rt.wid, rt.sid, part, i === 0 ? files : [], i === 0 ? snap.seal || false : false, snap.route)).catch(() => {}))).finally(() => recDone(nid));
+      setVoice('idle'); txPill('✦', 'Voice reply · waiting to send', 'agent'); txHide(1800);
+      const replyBlobs = isNative ? blobs : [new Blob(blobs, { type: blob.type || 'audio/webm' })];
+      Promise.all(replyBlobs.map((part, i) => Promise.resolve(CHATS.sendVoiceTo(rt.wid, rt.sid, part, i === 0 ? files : [], i === 0 ? snap.seal || false : false, snap.route)).catch(() => {}))).finally(() => recDone(nid));
       return;
     }
     try {
@@ -2413,9 +2425,14 @@
         words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
       }
       const text = words.filter(Boolean).join(' ').trim();
-      if (!text) { recDone(nid); unhold(); unseal(snap.seal); setVoice('idle'); txHide(); toast('◌', snap.seal ? 'No speech detected · your text is back in the thread' : 'No speech detected'); tourEv('nospeech'); return; }
+      if (!text) { if (snap.custodyId) { const it = OUTBOX.get(snap.custodyId); it.state = 'empty'; it.error = 'No speech detected · recording kept'; OUTBOX.pump(); } recDone(nid); unhold(); unseal(snap.seal); setVoice('idle'); txHide(); toast('◌', snap.seal ? 'No speech detected · your text is back in the thread' : 'No speech detected'); tourEv('nospeech'); return; }
       // The words are what gets sent from here; the native take is deleted once they are handled (or in the outbox).
-      Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).finally(() => { recDone(nid); unhold(); });
+      Promise.resolve(handleText(text, kind, false, j.ms, aimAt, snap)).then(() => {
+        // A local command/capturing app handled it. A message has already promoted this same
+        // custody item to queued/sending; it must never create a second submission.
+        if (snap.custodyId && OUTBOX.get(snap.custodyId)?.state === 'processing') OUTBOX.remove(snap.custodyId);
+      }).catch(e => { if (snap.custodyId) { const it = OUTBOX.get(snap.custodyId); if (it) { it.state = 'failed'; it.error = String(e.message || e); OUTBOX.pump(); } } })
+        .finally(() => { recDone(nid); unhold(); });
     } catch (err) {
       // A held command that can't be heard is dropped with a note, never queued for the agent as a message.
       if (kind === 'command') { recDone(nid); unhold(); unseal(snap.seal); setVoice('idle'); txPill('⚡', 'Command not heard · nothing sent', 'command', String(err?.message || err)); txHide(2400); return; }
@@ -2423,16 +2440,16 @@
       setVoice('idle');
       const aim = V.target, sv = snap.view;
       const files = takeFiles();
-      const queued = (blobs.length ? blobs : [blob]).map((part, i) => {
+      const queued = (snap.custodyId ? [snap.audio] : blobs.length ? blobs : [blob]).map((part, i) => {
         const fl = i === 0 ? files : [];   // attached files ride with the first part only
-        if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route);
-        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
+        if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route, snap.custodyId);
+        if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { custodyId: snap.custodyId, sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
         const sl = i === 0 ? snap.seal : null; // the window is gone: the taken composer still rides with it
-        return toAgent('', 'Saved · sends when Wizard is reachable', { audio: part, desk: aim, source: 'orb', files: [...fl, ...(sl ? sl.files : [])].slice(0, 8), typed: sl?.text || '', snap })
+        return toAgent('', 'Waiting to send · recording kept', { audio: part, desk: aim, source: 'orb', files: [...fl, ...(sl ? sl.files : [])].slice(0, 8), typed: sl?.text || '', snap })
           .then(() => sl?.done(), e => { sl?.putBack(); throw e; });
       });
       Promise.all(queued.map(q => Promise.resolve(q).catch(() => {}))).then(() => { recDone(nid); unhold(); });
-      txPill('↻', 'Saved · sends when Wizard is back', 'agent', 'Couldn’t reach Wizard · recording saved, will send'); txHide(2600);
+      txPill('↻', 'Waiting to send · recording kept', 'agent', 'Couldn’t reach Wizard · retrying'); txHide(2600);
     }
   }
   // The tap that starts recording must not also press an arc button: the arc fans out
@@ -2520,17 +2537,16 @@
       (s => s ? `Visible on screen: ${s}` : '')(window.WizScreen?.read(winEl(v.id)) || ''),
       'Treat the message as feedback on that page; "this", "here" and "it" mean that page.'].filter(Boolean).join(' ');
   }
-  function sendReview(v, text, audio, files = [], route = null) {
+  function sendReview(v, text, audio, files = [], route = null, custodyId = null) {
     const wid = reviewSink(v); if (!wid) return false;
     window.__ovLog = (window.__ovLog || []).concat('review-send:' + v.thread).slice(-30);
-    sendChat(wid, text, 'voice, aimed at the page under review', audio, { sid: v.thread, route, files, instructions: reviewContext(v), away: true });
-    return true;
+    return sendChat(wid, text, 'voice, aimed at the page under review', audio, { custodyId, sid: v.thread, route, files, instructions: reviewContext(v), away: true });
   }
   function deliverToView(v, text, snap) {
-    if (v.review) return sendReview(v, text, null, [], snap?.route);
+    if (v.review) return sendReview(v, text, snap?.audio || null, [], snap?.route, snap?.custodyId);
     const w = W[v.id]; if (!w) return false;
     // The thread that was open when James sent, even if the window shows another one by now.
-    if (w.app === 'chats' && (v.thread || w.thread)) { sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); return true; }
+    if (w.app === 'chats' && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
     if (w.app === 'frame') {
       try { const f = winEl(v.id).querySelector('iframe'); f.contentWindow.postMessage({ type: 'wizard-os:voice', text }, location.origin); return true; } catch (e) { return false; }
     }
@@ -2635,8 +2651,8 @@
     if (files.length || seal) {
       const nf = files.length + (seal ? seal.files.length : 0);
       const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : ''].filter(Boolean).join(' + ');
-      if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback sent with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, null, files, snap.route); }
-      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Sent with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', null, { sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+      if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback waiting to send with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, snap.audio || null, files, snap.route, snap.custodyId); }
+      if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Waiting to send with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', snap.audio || null, { custodyId: snap.custodyId, sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
       const all = [...files, ...(seal ? seal.files : [])].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
       return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all }).then(() => seal?.done(), e => { seal?.putBack(); throw e; });
     }
@@ -2711,9 +2727,9 @@
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
     txHide(ok ? (isPill() ? 1200 : 1300) : 3200);
   }
-  function toView(v, text, label, snap) {
+  async function toView(v, text, label, snap) {
     showRouted('view', label); setVoice('done'); vib([8, 40, 8]);
-    const ok = deliverToView(v, text, snap);
+    const ok = await deliverToView(v, text, snap);
     if (!ok) return toAgent(text, `${v.name} didn’t take it · sent to ${window.WizConfig.agent()}`, { snap });
     if (!v.thread || W[v.id]?.thread === v.thread) focusWin(v.id); // never pull James back from where he went since
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
@@ -2780,7 +2796,7 @@
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice', opts.snap);
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    await OUTBOX.enqueue({ kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || null, source: opts.source || 'orb', files: opts.files || [] });
+    await OUTBOX.enqueue({ custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [] });
     renderMoons(); refreshHome(); renderDots();
   }
   OUTBOX?.onSent((it, res) => {

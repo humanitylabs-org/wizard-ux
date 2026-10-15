@@ -428,3 +428,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 .wk-helper.stalled{border-color:#a87837;}
 .wk-helper button{align-self:flex-start;min-height:44px;border:1px solid #567966;background:#233d31;color:#e1f9e9;padding:8px 14px;border-radius:10px;font:inherit;}
 .wk-helper button:disabled{opacity:.55;}
+/* Submission custody uses the composer's existing quiet secondary-text treatment. */
+.ch-custody-notice { display:block; padding:6px 10px; color:var(--ink-3, #baabc9); font-size:12px; line-height:1.4; }
+#voice > .ch-custody-notice { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); width:min(340px, 88vw); text-align:center; background:var(--bg, #181423); border-radius:10px; pointer-events:none; }
+.dbar > .ch-custody-notice { max-width:380px; }
