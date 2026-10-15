@@ -63,6 +63,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   const done=async name=>{ok(!state.errors.length,`${name}: no browser errors`,state.errors);await ctx.close();};
   return {ctx,p,state,wid,take,rows,done};
  }
+ if(process.env.QA_EMPTY_ONLY==='1'){await require('./qa-empty-voice.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  await require('./qa-voice-custody-repairs.cjs')({boot,ok,sleep,sid,model,provider});
  if(process.env.QA_REPAIR_ONLY==='1'){await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  // Phone voice+composer: crash while preprocessing must not restore a second composer owner.
