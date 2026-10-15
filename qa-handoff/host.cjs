@@ -36,6 +36,25 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
    await p.evaluate(async()=>{window.meetingResult=await meeting.stop();});
    await p.waitForFunction(()=>__wos.voice==='idle');
  });
+ await test('foreground Manager meeting request stages before return and bypasses conversation dispatch',async()=>{
+   await p.waitForFunction(()=>__wos.voice==='idle');
+   await p.evaluate(()=>__wos.openApp(window.__qaApp));await p.waitForTimeout(300);
+   await p.evaluate(async()=>{const w=Object.values(__wos.wins).find(w=>w.app==='frame');w.appId='wizard-manager';window.meeting=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:500,meta:{meetingId:'manager-meeting',title:'PRIVATE MANAGER NOTES'}});window.managerOrder=[];const stage=WosOutbox.stage,send=WosOutbox.sendConversation,end=WosOrbHandoff.end;WosOutbox.stage=async function(o){const r=await stage.call(this,o);managerOrder.push(['stage',r.durable]);return r;};WosOutbox.sendConversation=async()=>{throw Error('Manager conversation must not receive meeting loan');};WosOrbHandoff.end=async(...a)=>{managerOrder.push(['return']);return end(...a);};window.restoreManagerProbe=()=>{WosOutbox.stage=stage;WosOutbox.sendConversation=send;WosOrbHandoff.end=end;w.appId='qa-iching';};});
+   const before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;f.R.delay=1300;
+   await p.evaluate(()=>__wos.startVoice('auto'));await p.waitForTimeout(450);
+   assert.equal(await p.evaluate(()=>__wos.V.snap.conversation),null);assert.equal(await p.evaluate(()=>__wos.V.snap.view),null);
+   await p.evaluate(()=>__wos.finishVoice());await p.waitForFunction(()=>WizAppCapture.getState().phase==='recording');
+   const order=await p.evaluate(()=>managerOrder);assert.deepEqual(order.slice(0,2),[['stage',true],['return']]);
+   await p.waitForFunction(()=>Array.from(WosOutbox._items.values()).some(i=>i.meetingEventId&&i.state==='sent'&&WosOrbHandoff.read()[i.meetingEventId]?.meetingId==='manager-meeting'));
+   const writes=f.writes.filter(w=>/\/v1\/runs$/.test(w.path));assert.equal(writes.length,before+1);assert(!writes.at(-1).body.includes('PRIVATE'));assert(!writes.at(-1).body.includes('Manager'));
+   await p.evaluate(async()=>{restoreManagerProbe();await meeting.stop();});f.R.delay=0;
+ });
+ await test('real IDB parked stage crash and later-segment tombstone dedupe',async()=>{
+   const first=await p.evaluate(async()=>{const audio=new Blob(['synthetic first']);const it=await WosOutbox.stage({nativeId:'review-segment-a',audio,kind:'reply',sessionId:'qa-0',model:'qa-model',provider:'qa-provider',parkedDraft:{parts:[audio],typed:'typed kept'}});return {id:it.id,state:it.state,durable:it.durable};});assert(first.durable);assert.equal(first.state,'held');
+   await p.reload();await p.waitForFunction(()=>WosOutbox?.recoveryComplete);await tones(p);
+   const result=await p.evaluate(async id=>{const first=WosOutbox.nativeItem('review-segment-a');const duplicate=await WosOutbox.stage({nativeId:'review-segment-a',audio:new Blob(['do not duplicate'])});const appended=await WosOutbox.stage({captureId:id,nativeId:'review-segment-b',audio:new Blob([first.audio,'later']),typed:'typed kept',kind:'reply',sessionId:'qa-0'});await WosOutbox.transition(id,'held');await WosOutbox.remove(id);return {duplicate:duplicate.id,appended:appended.id,typed:appended.typed};},first.id);assert.equal(result.duplicate,first.id);assert.equal(result.appended,first.id);assert.equal(result.typed,'typed kept');
+   await p.reload();await p.waitForFunction(()=>WosOutbox?.recoveryComplete);await tones(p);assert.deepEqual(await p.evaluate(()=>['review-segment-a','review-segment-b'].map(id=>({id:WosOutbox.nativeItem(id)?.id,state:WosOutbox.nativeItem(id)?.state}))),[{id:first.id,state:'sent'},{id:first.id,state:'sent'}]);
+ });
  await test('cancel restores same meeting and leaves cancelled durable original without send',async()=>{
    f.R.delay=0;const before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;
    await p.evaluate(async()=>{window.meeting=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:500,meta:{meetingId:'synthetic-cancel'}});});await p.waitForTimeout(450);
@@ -109,7 +128,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
    const native=await boot(browser,true),n=native.p;const {installMeetingMock}=require('../qa-app-capture/native-mocks.cjs');await n.evaluate(installMeetingMock);
    await n.evaluate(async()=>{await WosModels.load();window.nmeeting=await WizAppCapture.start('mizel',{kind:'meeting',meta:{meetingId:'native-synthetic-host'}});});
    assert.equal(await n.evaluate(()=>__wos.startVoice('auto')),'busy');assert.equal(await n.evaluate(()=>__wos.voice),'idle');assert.equal(await n.evaluate(()=>WizAppCapture.getState().phase),'recording');
-   await n.evaluate(()=>{window.borrowCalls=[];const old=WizardOSDevice.recStart;WizardOSDevice.recStart=()=>{throw Error('ordinary start must not be used');};WizardOSDevice.recHandoffVersion=()=>1;WizardOSDevice.recHandoffBegin=(id,meetingId)=>{borrowCalls.push('begin');emitMeetingState({paused:true});return JSON.stringify({id,meetingId,status:'paused',open:true,atMediaMs:1000,pausedAt:Date.now(),pausedByHandoff:true});};WizardOSDevice.recStartBorrowed=(kind,id)=>{borrowCalls.push('borrowed');return old(kind);};WizardOSDevice.recHandoffEnd=id=>{borrowCalls.push('end');emitMeetingState({paused:false});return JSON.stringify({id,status:'resumed',open:false});};});
+   await n.evaluate(()=>{window.borrowCalls=[];const old=WizardOSDevice.recStart;WizardOSDevice.recStart=()=>{throw Error('ordinary start must not be used');};WizardOSDevice.recHandoffVersion=()=>1;WizardOSDevice.recHandoffBegin=(id,meetingId)=>{borrowCalls.push('begin');emitMeetingState({paused:true});return JSON.stringify({id,meetingId,status:'paused',open:true,atMediaMs:1000,pausedAt:Date.now(),pausedByHandoff:true});};WizardOSDevice.recStartBorrowed=(kind,id)=>{borrowCalls.push('borrowed');return old(kind);};WizardOSDevice.recHandoffEnd=id=>{borrowCalls.push('end');emitMeetingState({paused:false});return JSON.stringify({id,status:'recording',open:false,pausedByHandoff:true});};});
    await n.evaluate(()=>__wos.startVoice('auto'));const binding=await n.evaluate(()=>({take:__wos.V.native,snap:WosOrbHandoff.takeSnap(__wos.V.native)}));assert.ok(binding.take);assert.ok(binding.snap.meetingEventId);await n.evaluate(()=>__wos.cancelVoice(true));
    assert.deepEqual(await n.evaluate(()=>borrowCalls),['begin','borrowed','end']);assert.equal(await n.evaluate(()=>WizAppCapture.getState().phase),'recording');assert.equal(native.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,0);assert.deepEqual(native.errors,[]);
    await n.reload();await n.waitForFunction(()=>window.WosOrbHandoff&&window.__wos);assert.deepEqual(await n.evaluate(take=>WosOrbHandoff.takeSnap(take),binding.take),binding.snap);await native.context.close();
