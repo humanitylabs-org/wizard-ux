@@ -119,7 +119,11 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
     ev('WosOrbHandoff.sync()');pg.pump(.5)
     event=fixture.events.get(ident);check('integrated','one run and exact marker thread take correlation',len(fixture.runs())==before+1 and event and event.get('voiceTakeId')==take and event.get('meetingId')==mid and event.get('threadId') and event.get('runId'),event)
     check('integrated','no automatic private meeting context in run',all(x not in fixture.runs()[-1]['body'] for x in ['PRIVATE','Screen:','NOTES']))
-    shot('integrated-meeting-resumed');stop_meeting();wait("__wos.voice==='idle'");fixture.delay=0
+    shot('integrated-meeting-resumed')
+    touch();wait('!!__wos.V.native');pg.pump(1.2);ev('__wos.cancelVoice(true)')
+    wait("WizAppCapture.getState().phase==='recording'")
+    check('integrated','cancelled actual orb resumes same running meeting without send',cap()['meetingId']==mid and len(fixture.runs())==before+1,cap())
+    stop_meeting();wait("__wos.voice==='idle'");fixture.delay=0
     # Actual notification actions, not a bridge stand-in.
     mid2=start_meeting();pause=tap_note_action('Recording|Mizel','Pause','integrated-notification-pause');pg.pump(.4)
     check('integrated','notification Pause tap pauses actual meeting',bool(pause) and cap()['phase']=='paused',cap())
@@ -131,7 +135,7 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
     check('integrated','actual adopted Stop during loan wins over cancellation resume',not cap().get('recording'),cap())
     if cap().get('recording'): stop_meeting()
     before=len(fixture.runs());check('integrated','cancelled loans create no extra sends',before==1,fixture.runs())
-    check('integrated','cancelled originals are held durably without native send recovery',ev("[...WosOutbox._items.values()].filter(i=>i.id.startsWith('cancelled-')&&i.state==='held'&&i.durable&&i.audio?.size>600).length===2 && JSON.parse(WizardOSDevice.recPending()||'[]').length===0 && __wosVoiceRecovery().length===0"))
+    check('integrated','cancelled originals are held durably without native send recovery',ev("[...WosOutbox._items.values()].filter(i=>i.id.startsWith('cancelled-')&&i.state==='held'&&i.durable&&i.audio?.size>600).length===3 && JSON.parse(WizardOSDevice.recPending()||'[]').length===0 && __wosVoiceRecovery().length===0"))
     # Reply -> paused -> actual adopted UI notes dictation -> held local command -> resume native -> send.
     ev("__wos.openWizardThread('qa-0')");pg.pump(1);wait("__wos.wins[__wos.desks[__wos.idx].focus]?.thread==='qa-0'")
     touch('[data-chmic]');wait('!!__wos.V.native');first=ev('__wos.V.native');pg.pump(1.5);touch('#arcPause');wait("__wos.voice==='paused'")
