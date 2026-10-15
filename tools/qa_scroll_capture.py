@@ -41,7 +41,10 @@ def capture(name,kind,top):
  xml=em.ui();(OUT/(name+'-chip.xml')).write_text(xml)
  found=em.tap_text('^Capture more$',xml)
  check(name+' OS offers Capture more',bool(found),xml[-500:])
- if not found:return
+ if not found:
+  diagnostic=pg.ev("JSON.stringify({capture:window.__wosScrollCapture?.search(),vw:innerWidth,dpr:devicePixelRatio,scale:visualViewport.scale,styles:[...document.querySelectorAll('html,body,[data-chats],.ch-msgs,.ch-scroll')].map(e=>{const s=getComputedStyle(e);return {tag:e.tagName,cls:e.className,zoom:s.zoom,scale:s.scale,rotate:s.rotate,perspective:s.perspective,transform:s.transform};})})")
+  print('DISCOVERY_DIAGNOSTIC '+str(diagnostic),flush=True)
+  dismiss();return
  time.sleep(7);shot(name+'-editor')
  xml=em.ui();(OUT/(name+'-editor.xml')).write_text(xml)
  check(name+' long screenshot editor visible','Save' in xml,em.top())

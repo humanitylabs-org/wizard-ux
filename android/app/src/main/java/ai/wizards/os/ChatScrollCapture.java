@@ -94,9 +94,12 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
         return "window.__wosScrollCapture&&window.__wosScrollCapture." + method + "(" + args + ")";
     }
     private Rect rect(JSONObject b) {
-        return new Rect((int)Math.ceil(b.optDouble("x")*scale), (int)Math.ceil(b.optDouble("y")*scale),
-            (int)Math.floor((b.optDouble("x")+b.optDouble("w"))*scale),
-            (int)Math.floor((b.optDouble("y")+b.optDouble("h"))*scale));
+        // clientWidth/clientHeight round to CSS integers. Clip that subpixel edge
+        // rounding to the physical viewport without changing the scroll scale.
+        return new Rect(Math.max(0, (int)Math.ceil(b.optDouble("x")*scale)),
+            Math.max(0, (int)Math.ceil(b.optDouble("y")*scale)),
+            Math.min(web.getWidth(), (int)Math.floor((b.optDouble("x")+b.optDouble("w"))*scale)),
+            Math.min(web.getHeight(), (int)Math.floor((b.optDouble("y")+b.optDouble("h"))*scale)));
     }
     @Override public void onScrollCaptureSearch(CancellationSignal signal, Consumer<Rect> ready) {
         if (!eligible() || id != null || restoring) { ready.accept(new Rect()); return; }
