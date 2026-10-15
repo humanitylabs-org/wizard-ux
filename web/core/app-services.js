@@ -37,11 +37,11 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
-  function attach(frame, { appId, path } = {}) {
+  function attach(frame, { appId, path, openThread, isVisible } = {}) {
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
-    const st = { frame, appId, url, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
+    const st = { frame, appId, url, openThread, isVisible, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); };
@@ -104,6 +104,13 @@
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); return { version: VERSION, hosted: true, appId: st.appId }; },
+      view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
+      nav: Object.freeze({ openThread(id) {
+        check();
+        // This bounded workflow is admitted only for the installed Manager's current document.
+        if (!managerAuthorized(st) || st.isVisible?.() !== true || typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw fault('Thread navigation unavailable');
+        return st.openThread?.(id) === true;
+      } }),
       share: Object.freeze({ text(data) {
         check();
         if (data?.url && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(String(data.url))) {
@@ -298,7 +305,21 @@
     if (receipt?.accepted !== true || receipt.request_id !== message.request_id) throw fault('App receipt uncertain · original kept');
     return { accepted: true, request_id: message.request_id };
   }
-  window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack,
+  function managerAuthorized(st) {
+    if (!st || st.appId !== 'wizard-manager' || !valid(st, st.doc) || typeof st.openThread !== 'function') return false;
+    const app = apps().find(a => a.id === st.appId && a.kind === 'wizard' && a.url);
+    try { return !!app && new URL(app.url, location.href).href === st.url.href; } catch (_) { return false; }
+  }
+  function ownsThreadLink(source, anchor) {
+    const st = from(source);
+    if (!managerAuthorized(st)) return false;
+    try {
+      const u = new URL(anchor.href);
+      return u.origin === ORIGIN && u.pathname === '/wizard-os-home/' &&
+        !!anchor.dataset.wizardNativeThread && u.searchParams.get('session') === anchor.dataset.wizardNativeThread;
+    } catch (_) { return false; }
+  }
+  window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack, ownsThreadLink,
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     update: Object.freeze({ busy, announce, available: () => available }),

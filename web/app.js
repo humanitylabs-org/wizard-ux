@@ -53,6 +53,8 @@
   /* ---------------- apps ---------------- */
   // The registry lives in core/apps.js (shared with the desktop shell); the phone gets its own list.
   const { APPS, APP, findApp, appByName, quickSearch, searchUrl } = window.WizCore.apps('mobile');
+  const audioFrames = new WeakSet();
+  window.WizBackgroundAudio?.init(() => APP, f => { const id=f.closest('.win')?.dataset.win; return audioFrames.has(f) && W[id]?.appId === 'wizard-music' && deskOf(id) >= 0; });
   const norm = window.WizCore.norm;
 
   /* ---------------- state ---------------- */
@@ -637,6 +639,7 @@
   function closeWin(id, quiet) {
     const i = deskOf(id); if (i < 0) return;
     const w = W[id], d = desks[i], name = winTitle(w);
+    CHATS.closeHosted(id);
     if (quiet) { d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id]; if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null; if (!d.wins.length) d.full = false; renderDesk(i); pruneDesks(); return; }
     // ✕ on a bound view: it stays closed for this reply (opening the thread again, or a new reply, binds again).
     if (w.bound) { boundOff[w.bound] = w.bsid + '|' + w.bkey; boundManager?.dismiss(w); }
@@ -1114,7 +1117,7 @@
     if (sheet === 'inbox') renderInbox();
     refreshHome(); renderMoons();
     desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g) g.innerHTML = renderEmpty(i); } });
-    for (const id of Object.keys(W)) { const w = W[id]; if (w.app === 'chats' && w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el) renderThread(w, el); } }
+    for (const id of Object.keys(W)) { const w = W[id]; if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el) renderThread(w, el); } }
     // Tell Android how many app messages are stuck, so it can say so in a notification while the app is closed.
     const failed = OUTBOX ? OUTBOX.unsent().filter(x => x.state === 'failed') : [];
     const sig = failed.map(x => x.id).join(',');
@@ -1245,9 +1248,11 @@
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
+      const audioId=f.closest('.win')?.dataset.win;
+      if(W[audioId]?.appId === 'wizard-music') audioFrames.add(f);
       // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
-      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url });
+      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: sid => CHATS.openHosted(w.id, f, sid), isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
@@ -1465,7 +1470,7 @@
       if (cr) { const chn = $('.review', we)._chain; const k = +cr.dataset.crumb; if (k < chn.length - 1) setZ(id, chn[k], 'out'); return; }
       const wt = e.target.closest('[data-wizthread]'); if (wt) return openWizardThread(wt.dataset.wizthread);
     }
-    if (w.app === 'chats' && CHATS.click(e, id)) return;
+    if ((w.app === 'chats' || CHATS.isHosted(id)) && CHATS.click(e, id)) return;
   });
   track.addEventListener('dblclick', e => {
     const bar = e.target.closest('.wbar'); if (!bar || e.target.closest('[data-wact]')) return;
@@ -1736,7 +1741,7 @@
     renderMoons(); refreshHome(); markVisibleThreadsSeen(); refreshRecStrips();
     if (sheet === 'inbox') renderInbox(); if (sheet === 'launcher') renderLauncher($('#search').value, true);
     for (const id of Object.keys(W)) {
-      const w = W[id]; if (w.app !== 'chats') continue;
+      const w = W[id]; if (w.app !== 'chats' && !CHATS.isHosted(id)) continue;
       const el = track.querySelector(`[data-chats="${id}"]`); if (!el) continue;
       if (!w.thread) { if (!el.contains(document.activeElement) && !CHATS.holdList(id)) renderChatList(w, el); }
       else loadThread(w);
@@ -1746,7 +1751,7 @@
   // Open threads poll a little faster than the session list while Archimedes works.
   setInterval(() => {
     if (document.hidden) return;
-    for (const id of desks[idx].wins) { const w = W[id]; if (w?.app === 'chats' && w.thread && w.thread !== '__new__') loadThread(w); }
+    for (const id of desks[idx].wins) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread && w.thread !== '__new__') loadThread(w); }
   }, 4000);
 
   /* ---------------- toast ---------------- */
@@ -2508,7 +2513,7 @@
       return { id, mode: 'auto', kind: w.thread ? 'chat thread' : 'agent chats', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
         name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats` };
     }
-    if (w.app === 'chats' && w.thread) return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, name: w.thread === '__new__' ? 'New chat' : `Chats thread “${winTitle(w)}”` };
+    if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, name: w.thread === '__new__' ? 'New chat' : `Chats thread “${winTitle(w)}”` };
     if (w.app === 'frame' && w.from && w.from.sid) return { id, mode: '', kind: 'review', review: true, thread: w.from.sid, threadTitle: w.from.title || '', name: `Review of ${winTitle(w)}`, url: frameHref(id) || w.url };
     if (w.app === 'frame') return { id, mode: '', kind: 'app', name: winApp(w).name, url: frameHref(id) || winApp(w).url };
     if (w.app === 'chats') return { id, mode: '', kind: 'thread list', name: 'Chats' };
@@ -2530,7 +2535,7 @@
     const nameOf = x => agentWin(W[x]) && agentApp(W[x]).private ? `${agentApp(W[x]).name} chats (private agent)` : winTitle(W[x]);
     const capability = window.WizAppServices?.voiceInput;
     const app = APP[W[fid]?.appId];
-    const conversation = capability ? capability.pin(winEl(fid)?.querySelector('iframe'), app?.id)
+    const conversation = CHATS.isHosted(fid) ? null : capability ? capability.pin(winEl(fid)?.querySelector('iframe'), app?.id)
       : app?.receives_voice_input === true ? { appId: app.id, token: 'unavailable', label: app.name } : null;
     return { id: fid, desk: idx, view, screen, conversation, others: d.wins.filter(x => x !== fid).map(nameOf) };
   }
@@ -2571,7 +2576,7 @@
     if (v.review) return sendReview(v, text, snap?.audio || null, [], snap?.route, snap?.custodyId);
     const w = W[v.id]; if (!w) return false;
     // The thread that was open when James sent, even if the window shows another one by now.
-    if (w.app === 'chats' && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+    if ((w.app === 'chats' || v.kind === 'chat thread') && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
     // No unacknowledged postMessage delivery to arbitrary/self-asserted frames.
     return false;
   }
@@ -2750,7 +2755,7 @@
     // First-try orb sends were already confirmed by the pill above the orb: no second banner.
     else if (res.steered) toast('✦', 'Sent · steering the live run', 1800);
     LIVE?.emit(); setTimeout(() => LIVE?.refresh(), 3000);
-    for (const id of Object.keys(W)) if (W[id].app === 'chats' && W[id].thread === it.sessionId) setTimeout(() => W[id] && loadThread(W[id], true), 1500);
+    for (const id of Object.keys(W)) if ((W[id].app === 'chats' || CHATS.isHosted(id)) && W[id].thread === it.sessionId) setTimeout(() => W[id] && loadThread(W[id], true), 1500);
   });
 
   /* ---------------- orb gestures ----------------
@@ -2762,6 +2767,8 @@
   generalTarget.id = 'generalVoice'; generalTarget.className = 'general-voice';
   generalTarget.textContent = 'Record for ' + window.WizConfig.agent();
   generalTarget.setAttribute('aria-label', generalTarget.textContent);
+  /* Labels align with the dock's top edge; keep them outside its stacking
+   * context so recording controls cannot obscure the destination text. */
   device.append(voiceDestination, generalTarget);
   generalTarget.addEventListener('click', () => {
     if (V.state === 'idle') startVoice('general');
@@ -2774,14 +2781,14 @@
   function paintVoiceDestination() {
     const label = V.snap?.conversation?.label;
     const active = ['listen', 'command', 'paused'].includes(V.state) && V.kind !== 'dictation';
-    voiceDestination.hidden = !active;
+    voiceDestination.hidden = !active || V.state === 'command';
     voiceDestination.classList.toggle('app-voice', !!label);
     device.classList.toggle('app-voice-input', active && !!label);
     voiceDestination.textContent = label ? 'To: ' + label + ' · tap to send'
       : V.snap?.general ? 'Talking to ' + window.WizConfig.agent() + ' · tap to send'
       : V.kind === 'command' ? 'Command · release to run · slide up for ' + window.WizConfig.agent() : 'Listening · tap to send';
     if (active) $('#orbWrap').setAttribute('aria-label', voiceDestination.textContent);
-    generalTarget.hidden = V.state !== 'idle' && V.state !== 'command';
+    generalTarget.hidden = V.state !== 'command';
     generalTarget.classList.toggle('hold-target', V.state === 'command');
     generalTarget.textContent = V.state === 'command' ? '↑ ' + window.WizConfig.agent() + ' · release to keep talking' : 'Record for ' + window.WizConfig.agent();
     generalTarget.setAttribute('aria-label', generalTarget.textContent);
@@ -2810,7 +2817,9 @@
     }
     if (G.mode === 'hold') {
       const box = generalTarget.getBoundingClientRect();
-      G.general = e.clientX >= box.left - 16 && e.clientX <= box.right + 16 && e.clientY >= box.top - 16 && e.clientY <= box.bottom + 16;
+      // The compact target touches the orb: require deliberate upward travel,
+      // so ordinary hold/release (including finger jitter) remains a command.
+      G.general = G.dy < -16 && e.clientX >= box.left - 16 && e.clientX <= box.right + 16 && e.clientY >= box.top - 16 && e.clientY <= box.bottom + 16;
       generalTarget.classList.toggle('selected', G.general);
       voiceDestination.textContent = G.general ? 'Release: keep talking to ' + window.WizConfig.agent() : 'Release: command · slide onto ' + window.WizConfig.agent();
       // Aim: slide toward the desk this command should land on.
@@ -2930,6 +2939,7 @@
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet) { closeSheets(); return 'sheet'; }
     const d = desks[idx], f = W[d.focus];
+    if (f && CHATS.isHosted(f.id)) return CHATS.threadBack(f);
     if (f) {
       if (f.app === 'chats' && f.thread) return CHATS.threadBack(f);
       if (f.app === 'chats' && (CHATS.hasFilter(f) || CHATS.ch(f.id).q)) {

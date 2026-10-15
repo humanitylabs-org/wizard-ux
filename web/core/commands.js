@@ -6,7 +6,7 @@
  const { TODAY, YESTERDAY } = window.WosViews;
   function chatsVoice(t, snap, kind) {
     const v = snap?.view; if (!v || v.kind !== 'thread list') return null;
-    const s = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '').trim();
+    const s = norm(window.WizConfig.stripAddress(t)).replace(/ please$/, '').trim();
     if (/^(clear|remove|reset|turn off|drop) (the |all )?(filters?|chips?)$|^(show )?(all|every) (chats|threads)$|^show everything$|^no filters?$/.test(s)) return { action: 'chats_filter', clear: true };
     let m = s.match(/^(?:filter|filtered) (?:by |to |for |on )?(.+)$/) || s.match(/^only (?:show )?(.+)$/) || s.match(/^show (?:me )?(?:only |just )?(?:the |my )?(.+?)(?: only| chats| threads)?$/);
     if (m) {
@@ -22,7 +22,7 @@
     return null;
   }
   function localParse(t, snap, kind) {
-    const explicit = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '');
+    const explicit = norm(window.WizConfig.stripAddress(t)).replace(/ please$/, '');
     if (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread') {
     if (/^(help|show help|open help|gestures|keyboard shortcuts)$/.test(explicit)) return { action:'open_view', view:'help' };
     if (/^(settings|open settings|usage|show usage)$/.test(explicit)) return { action:'open_view', view:/usage/.test(explicit)?'usage':'settings' };
@@ -63,7 +63,7 @@
     // A held orb is always a command, so there even the plain "search for …" form is the search app's.
     const qs = quickSearch(t);
     if (qs && (qs.strong || kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'quick_search', query: qs.query, tab: qs.tab };
-    const s = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '');
+    const s = norm(window.WizConfig.stripAddress(t)).replace(/ please$/, '');
     if (/^(zoom|go|dive) (in|deeper|down)\b/.test(s)) return { action: 'zoom', dir: 'in' };
     if (/^(zoom|back|go|pull) (out|up|back)\b|^zoom out\b/.test(s)) {
       const lv = /month/.test(s) ? 'month' : /week/.test(s) ? 'week' : null;

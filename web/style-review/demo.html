@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en" data-app="style-demo"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wizard shared components</title><script src="boot.js"></script>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="ui.css">
+<script defer src="appearance-client.js"></script>
+<style>.wz-scroll{padding:16px}.wz-card{margin-bottom:16px}.actions{display:flex;gap:8px;flex-wrap:wrap}h2{font-size:16px}p{color:var(--ink-2)}.wz-bar{justify-content:space-between}.wz-app{max-width:600px}select{background:var(--fill);border:1px solid var(--line-2);border-radius:var(--r-tile);padding:8px}html[data-wz-hosted] #skin{display:none}</style>
+</head><body><div class="wz-app">
+<header class="wz-bar"><b>Shared components</b><select id="skin" aria-label="Standalone skin"><option value="nebula">Nebula</option><option value="grove">Grove</option><option value="tide">Tide</option><option value="ember">Ember</option><option value="signal">Signal</option></select></header>
+<main class="wz-scroll"><section class="wz-sec"><h2 class="wz-sec-h">Made of the same glass <span class="wz-chip">Appearance v1</span></h2>
+<div class="wz-card"><h2>One visual language</h2><p>This card, chip and bar use the active skin. The app keeps its own layout.</p><div class="actions"><button class="wz-button" id="open">Open sheet</button><button class="wz-button secondary" disabled>Disabled</button></div></div>
+<ul class="wz-list"><li><button class="wz-row" id="row"><span class="wz-tile" aria-hidden="true">✓</span><span class="wz-main"><b>A shared list row</b><small>Ink, hairlines, accent and shape come from style/.</small></span></button></li></ul>
+<div class="wz-empty"><strong>Your next app starts here</strong><p>Empty states remain quiet. Your content gets the attention.</p></div></section></main>
+<form class="wz-compose"><input class="wz-input" placeholder="An unsent idea" aria-label="Idea"><button type="button" class="wz-send" aria-label="Preview action">+</button></form>
+</div><dialog class="wz-sheet" id="sheet"><h2>A shared sheet</h2><p>Back closes this sheet first.</p><button class="wz-button" id="close">Close</button></dialog>
+<script src="demo.js"></script></body></html>

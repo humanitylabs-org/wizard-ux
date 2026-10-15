@@ -12,3 +12,9 @@ description = "Verified SHA-256 of qa-new-chat-keys.cjs in the source-proof rece
 condition = "AND"
 paths = ['''^docs/responsive-remainder-verification\.json$''']
 regexes = ['''^8d99ea690e4fa3980386ebe898d221af5e3737c6e79eab09d5caa82f71214b84$''']
+
+[[allowlists]]
+description = "Verified SHA-256 of shared style tokens.css, not a credential"
+condition = "AND"
+paths = ['''^docs/provenance/appearance-review\.json$''']
+regexes = ['''^fdb2b9a39a2b2b4893a5f3f3d13db4e685097dcdd55037ebb9d102ffccdedca1$''']
