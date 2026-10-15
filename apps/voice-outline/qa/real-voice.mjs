@@ -20,6 +20,7 @@ try{
  await page.waitForFunction(()=>document.querySelector('#live').textContent.includes('Recording'),{},{timeout:20000});
  await check('live words arrive before Stop',async()=>{await page.waitForFunction(()=>Array.from(document.querySelectorAll('.draft')).some(e=>e.textContent.length>20),{},{timeout:60000});});
  await page.screenshot({path:out+'/phone-live.png',fullPage:true});
+ await page.waitForTimeout(5000); // Exercise a sustained thought, not only the provider's first token.
  const firstTarget=await page.locator('.live-target').getAttribute('data-id');
  await page.locator('#child').click();const secondTarget=await page.locator('.live-target').getAttribute('data-id');if(firstTarget===secondTarget)throw Error('Did not retarget next thought');
  await page.waitForTimeout(9000);

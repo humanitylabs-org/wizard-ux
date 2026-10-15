@@ -26,6 +26,8 @@ Run fixtures against disposable isolated data. For final real voice proof restar
 
 An old Playwright driver can leave `audioWorklet.addModule()` pending even with a running AudioContext and successful getUserMedia. Updating the isolated QA driver resolved this without changing shared capture or weakening browser security. Microphone denial QA must omit the fake-UI permission override in its separate denied browser.
 
+The existing provider has also intermittently timed out finalization during real short-thought boundary tests: live partials were visible, the original audio was saved, and the affected speech remained explicitly unconfirmed rather than being invented or overwritten. Passing and failing real-provider receipts must both be retained; a successful retry is not a claim that this upstream latency/finalization issue is fixed. Sustained-thought acceptance deliberately waits beyond the first provider token before opening the next thought.
+
 The existing provider's pinned dependency audit reported high-severity advisories in `undici` and `brace-expansion`. This candidate does not patch the shared/attested provider or claim that upstream dependency issue is repaired. App-owned `ws` dependency audit was clean. The private parent review should assess the pinned provider before wider exposure.
 
 ## Boundary of delivery
