@@ -13,6 +13,17 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
   fs.mkdirSync(OUT,{recursive:true});
   const engine=process.env.QA_ENGINE==='webkit'?webkit:chromium;
   const browser=await engine.launch({...(process.env.QA_ENGINE==='webkit'?{}:{executablePath:process.env.CHROMIUM}),headless:true});
+  // WebKit does not expose Blob POST bodies to route.request().postDataBuffer().
+  // Receive real bytes over loopback instead of substituting the expected fixture bytes.
+  let active;
+  const server=require('http').createServer(async(req,res)=>{
+    if(req.url!=='/wizard/files/upload'||req.method!=='POST'||!active){res.writeHead(404);return res.end();}
+    const chunks=[];for await(const chunk of req)chunks.push(chunk);const bytes=Buffer.concat(chunks);
+    active.events.push('upload');active.uploads.push({bytes:bytes.length,hash:crypto.createHash('sha256').update(bytes).digest('hex')});
+    res.writeHead(201,{'Content-Type':'application/json'});res.end(JSON.stringify({file:{id:'voice-'+active.uploads.length,bytes:bytes.length,mime:'audio/webm'}}));
+  });
+  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(9736,'127.0.0.1',resolve);});
+  try {
   async function fixture(fault='none') {
     const ctx=await browser.newContext({viewport:{width:412,height:892},hasTouch:true});
     const W={down:true, sttDown:false, events:[],uploads:[],runs:new Map(),calls:[],drop:false,badReceipt:false,empty:false};
@@ -36,10 +47,7 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
       if(u.pathname==='/stt'){W.events.push('stt');return W.sttDown?route.abort('connectionrefused'):route.fulfill({json:{text:W.empty?'':'Original recorded words'}});}
       if(q.method()==='POST'){
         if(W.down)return route.abort('connectionrefused');
-        if(u.pathname==='/wizard/files/upload'){
-          W.events.push('upload');const bytes=q.postDataBuffer(); W.uploads.push({bytes:bytes.length,hash:crypto.createHash('sha256').update(bytes).digest('hex')});
-          return route.fulfill({status:201,json:{file:{id:'voice-'+W.uploads.length,bytes:bytes.length,mime:'audio/webm'}}});
-        }
+        if(u.pathname==='/wizard/files/upload'){active=W;return route.continue();}
         if(u.pathname==='/wizard/hermes/api/sessions')return route.fulfill({status:201,json:{}});
         if(u.pathname==='/wizard/hermes/v1/runs'){
           const key=q.headers()['idempotency-key'],body=q.postData();W.calls.push({key,body});
@@ -132,6 +140,32 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
     ok((await f.row(id))?.audio===audio.length,'empty transcript: original recording remains recoverable, never expiry-deleted');
     ok(f.W.runs.size===0,'empty transcript: no empty agent run');await f.ctx.close();
   }
+  {
+    const f=await fixture();f.W.down=false;
+    const ids=await f.page.evaluate(async audio=>{
+      const blob=new Blob([new Uint8Array(audio)],{type:'audio/webm'});
+      const held=await WosOutbox.stage({kind:'reply',sessionId:'sealed',model:'private-model',provider:'private-provider',audio:blob,typed:'original words',nativeId:'fixture-native'});
+      const sent=await WosOutbox.enqueue({custodyId:held.id,text:''});
+      return [held.id,sent.id];
+    },audio);
+    await f.wait(ids[0],'sent');
+    ok(ids[0]===ids[1]&&f.W.runs.size===1,'staged recording reuses one custody/admission identity');
+    const body=JSON.parse([...f.W.runs.values()][0].body);
+    ok(body.session_id==='sealed'&&body.model==='private-model'&&body.provider==='private-provider'&&body.input.includes('original words'),'staged delivery preserves sealed route and typed composer');
+    const native=await f.page.evaluate(async audio=>(await WosOutbox.enqueue({nativeId:'fixture-native',audio:new Blob([new Uint8Array(audio)]),kind:'new'})).id,audio);
+    ok(native===ids[0]&&f.W.runs.size===1,'native recovery cannot enqueue a second copy');await f.ctx.close();
+  }
+  {
+    const f=await fixture();const id=await f.page.evaluate(async audio=>{
+      const it=await WosOutbox.stage({kind:'new',intent:'command',audio:new Blob([new Uint8Array(audio)])});
+      await WosOutbox.transition(it.id,'held','Handled locally');return it.id;
+    },audio);
+    await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());f.W.down=false;await sleep(200);
+    ok((await f.row(id))?.state==='held'&&f.W.runs.size===0,'handled local command remains held across reload');
+    await f.page.evaluate(id=>WosOutbox.del(id),id);await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());
+    ok((await f.row(id))?.state==='sent'&&f.W.runs.size===0,'explicit discard tombstone prevents replay after reload');await f.ctx.close();
+  }
   await browser.close();fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({host:require('os').hostname(),engine:process.env.QA_ENGINE||'chromium',source:crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT,'web/outbox.js'))).digest('hex'),pass,fail,results},null,2));
   console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;
+  } finally { await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve)); }
 })().catch(e=>{console.error(e);process.exitCode=2;});

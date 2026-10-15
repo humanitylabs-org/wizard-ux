@@ -7,7 +7,7 @@ const apps=[{id:'fixture-letter',name:'Fixture Letter',icon:'',url:'/fixture-app
 function check(c,name,detail){results.push({name,passed:!!c,detail});assert(c,name+': '+JSON.stringify(detail));}
 (async()=>{const engine=process.env.QA_ENGINE==='webkit'?webkit:chromium;const browser=await engine.launch({headless:true,...(process.env.QA_ENGINE==='webkit'?{}:{executablePath:process.env.CHROMIUM})});
 try {for(const mobile of [false,true]){
- const ctx=await browser.newContext({viewport:mobile?{width:412,height:892}:{width:1440,height:960},hasTouch:mobile,isMobile:mobile});
+ const ctx=await browser.newContext({serviceWorkers:'block',viewport:mobile?{width:412,height:892}:{width:1440,height:960},hasTouch:mobile,isMobile:mobile});
  const errors=[],writes=[],foreign=[];
  await ctx.addInitScript(apps=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wux.apps.v1',JSON.stringify(apps));},apps);
  await ctx.route('**/*',r=>{const q=r.request(),u=new URL(q.url()),json=(o,s=200)=>r.fulfill({status:s,json:o});

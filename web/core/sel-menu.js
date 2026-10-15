@@ -138,7 +138,7 @@
   async function run(id) {
     const c = cur || current(); if (!c) return hide(true);
     const KIT = window.WosChat || window.__wos?.chat;
-    const agent = window.WizConfig?.agent?.() || 'Archimedes';
+    const agent = window.WizConfig?.agent?.() || 'Wizard';
     if (id === 'copy') { const ok = await KIT.copyText(c.text); clear(); toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400); return; }
     if (id === 'share') {
       const r = await KIT.shareText(c.mine ? c.text : `From ${agent}:\n\n${c.text}`); clear();

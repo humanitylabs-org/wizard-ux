@@ -16,7 +16,7 @@ function boot() {
  ]), store = new Map(), calls = [], bodies = [];
  let delayLock = null, badAck = false, admissionFail = false, runRuntime = {model:'claude-opus-5-5',provider:'anthropic'};
  const timers = [];
- const context = { console, URL, Blob, crypto: require('crypto').webcrypto, Date, Map, Set, Promise,
+ const context = { console, URL, Blob, AbortController, AbortSignal, crypto: require('crypto').webcrypto, Date, Map, Set, Promise,
   document:{documentElement:{dataset:{}},addEventListener(){}},
   addEventListener(){}, localStorage:{getItem:()=>null,setItem(){}},
   indexedDB:{open(){throw Error('fixture uses text fallback')}},
@@ -34,7 +34,7 @@ function boot() {
    if(/\/v1\/runs\/[^/]+$/.test(url)&&method==='GET')return response(200,{runtime:runRuntime,status:'running'});
    if(url.endsWith('/steer'))return response(200,{status:'accepted'});
    if(url.endsWith('/api/sessions'))return response(201,{session:{id:payload.id}});
-   if(url.endsWith('/files/upload'))return response(201,{file:{id:'synthetic-audio',filename:'voice.webm'}});
+   if(url.endsWith('/files/upload'))return response(201,{file:{id:'synthetic-audio',filename:'voice.webm',bytes:init.body.size,mime:init.body.type}});
    if(url.endsWith('/v1/runs')){
     bodies.push({body:init.body,key:init.headers['Idempotency-Key']});
     if(admissionFail)return response(400,{error:'selected provider unavailable'});

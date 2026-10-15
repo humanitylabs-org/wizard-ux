@@ -9,6 +9,8 @@
  *   WizConfig.timeZone()       settings timezone, else the device's own zone
  *   WizConfig.dayStart(t)      start (ms) of the owner's day containing t (settings day_starts_at)
  *   WizConfig.dayParts(t)      {y, m, d, dow} of t in the owner's zone
+ *   WizConfig.baseUrl()        settings network.base_url ("https://<machine>.<tailnet>.ts.net"), or ''
+ *   WizConfig.homeHosts()      this Wizard's own host names: base_url's host, then network.aliases
  *   WizConfig.endpoint(name)   'transcribe' | 'route' | 'apps' | 'upload' URL, or '' when absent
  *   WizConfig.has(capability)  voice, router, files, approvals, steer, joined_delegation, markdown
  *   WizConfig.ready            promise for the first live answer (resolves even if it fails)
@@ -44,6 +46,16 @@
     owner() { return (B.settings?.owner?.name || '').trim(); },
     place() { return (B.settings?.owner?.place || '').trim(); },
     vocabulary() { return Array.isArray(B.settings?.voice?.vocabulary) ? B.settings.voice.vocabulary : []; },
+    baseUrl() { const u = String(B.settings?.network?.base_url || '').trim().replace(/\/+$/, ''); return /^https:\/\/[^/\s?#]+$/i.test(u) ? u : ''; },
+    /* This Wizard's own names (lower case): links to any of them are links into this Wizard. Nothing is built in. */
+    homeHosts() {
+      const out = [];
+      const add = h => { h = String(h || '').trim().toLowerCase().replace(/^https:\/\//, '').replace(/[/?#].*$/, ''); if (/^[a-z0-9.-]+\.[a-z0-9-]+$/.test(h) && !out.includes(h)) out.push(h); };
+      add(C.baseUrl());
+      const aliases = B.settings?.network?.aliases || B.network?.aliases;
+      if (Array.isArray(aliases)) aliases.forEach(add);
+      return out;
+    },
     timeZone() { const z = B.settings?.clock?.timezone; return zoneOk(z) ? z : deviceZone(); },
     /* Wall-clock parts of instant t in the owner's zone. */
     dayParts(t = Date.now()) {
@@ -114,7 +126,16 @@
     }
     return B;
   }
-  C.ready = load();
+  /* The Android app's native text (voice requests sent from outside the app, reply notifications) names the owner
+   * and agent the same way: hand it the profile whenever the answer is live. */
+  function shareProfile() {
+    try {
+      const N = window.WizardOSNative; if (!N || typeof N.setProfile !== 'function' || !live) return;
+      N.setProfile(JSON.stringify({ owner: C.owner(), agent: B.settings?.agent?.name ? C.agent() : '', vocabulary: C.vocabulary() }));
+    } catch (e) {}
+  }
+  C.ready = load().then(b => { shareProfile(); return b; });
+  window.addEventListener('wizard:config', shareProfile);
   // Settings can change while the app is open (the owner renames the agent): refresh on focus.
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
   // Clock text in the owner's zone (settings timezone, else the device's own).

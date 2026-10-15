@@ -328,7 +328,7 @@
       if (k === D.format(now - 864e5)) return 'Yesterday';
       return F(k.slice(0, 4) === D.format(now).slice(0, 4) ? O_DATE : O_DATEY).format(ms);
     },
-    full: ms => isFinite(ms) ? `${F(O_FULL).format(ms)} Bangkok` : '',
+    full: ms => isFinite(ms) ? `${F(O_FULL).format(ms)} ${TZ().split('/').pop().replace(/_/g, ' ')}` : '',
     // Message stamp (James, 11 Oct): today's messages show only the time; any other day shows its date
     // too ("Thu, Oct 8, 18:16"; year added outside the current year), so a scrolled-to message is never
     // ambiguous when its day divider is off screen.
