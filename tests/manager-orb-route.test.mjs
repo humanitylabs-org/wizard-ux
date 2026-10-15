@@ -40,6 +40,18 @@ test('desktop pre-STT stage keeps the recording-start working run and busy lock'
  release();await sending;assert.equal(f.ctx.dictationFinishing,false);assert.equal(f.calls[0][0],'reply');
 });
 
+
+test('cold app launch loads the model before recording and keeps general routing frozen',async()=>{
+ const f=desktopFixture({id:'mgr',app:'frame',appId:'wizard-manager'});let ready=false,release;
+ f.ctx.CHATS.modelRoute=()=>ready?{model:'general',provider:'p'}:null;
+ f.ctx.window.WosModels={load:async()=>{await new Promise(r=>release=r);ready=true;}};
+ const starting=f.ctx.talk('start',true);await new Promise(r=>setImmediate(r));
+ assert.equal(f.ctx.VOICE.state,'idle');assert.equal(await f.ctx.talk('start'),'busy');
+ f.focus({id:'private',app:'chats',thread:'private-thread',agent:'private'});release();await starting;
+ assert.equal(f.ctx.vRoute.model,'general');assert.equal(f.ctx.vTarget,null);await f.ctx.talk('send');
+ assert.equal(f.calls[0][0],'new');assert.equal(f.calls[0][1].model,'general');assert.equal(f.calls[0][1].sessionId,'');
+});
+
 test('phone Manager bypass precedes local commands, files and router',async()=>{const calls=[];const ctx={OUTBOX:{sendConversation:async o=>{calls.push(o);return {state:'sent'}}},takeFiles:()=>[{id:'attachment'}],setVoice(){},txHide(){},toast(){}};vm.createContext(ctx);vm.runInContext(section(phone,'  async function handleText(','  /* Hold-command'),ctx);await ctx.handleText('help','auto',false,0,null,{conversation:pin});assert.equal(calls.length,1);assert.equal(calls[0].text,'help');assert.equal(calls[0].files[0].id,'attachment');});
 test('phone start pins destination before asynchronous recording',()=>{const s=section(phone,'  async function startVoice(','  function tick(');assert(s.indexOf('V.snap =')<s.indexOf('await openRec'));assert(s.includes("kind === 'command') V.snap.conversation = null"));});
 test('phone Manager audio branches before generic staging/STT fallback',()=>{const s=section(phone,'  async function onRecStop(','  /* ---------------- view-aware');assert(s.indexOf('OUTBOX.sendConversation')<s.indexOf('OUTBOX.stage'));assert(s.includes("kind !== 'command' && !rt && aimAt == null"));});
