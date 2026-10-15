@@ -58,7 +58,7 @@
       if (V.state !== 'idle') return false;
       const shared = window.WizAppCapture?.getState?.();
       if (shared?.active || shared?.recording || shared?.hold) throw Object.assign(new Error('Microphone held by ' + (shared.appId || 'another app')), { code: 'busy', appId: shared.appId });
-      V.chunks = []; V.captureId = 'capture-' + crypto.randomUUID(); V.t0 = performance.now(); V.cancelled = false; set('listen');
+      V.pausedMs = 0; V.pauseAt = 0; V.chunks = []; V.captureId = 'capture-' + crypto.randomUUID(); V.t0 = performance.now(); V.cancelled = false; set('listen');
       try {
         if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('This browser has no microphone access here.');
         V.stream = await openMic();
@@ -87,8 +87,8 @@
       V.rec = null; stop(); set('idle');
     }
     function finish(o = {}) {
-      if (V.state !== 'listen') return Promise.resolve(null);
-      const ms = performance.now() - V.t0;
+      if (!['listen', 'paused'].includes(V.state)) return Promise.resolve(null);
+      const ms = performance.now() - V.t0 - (V.pausedMs || 0) - (V.pauseAt ? performance.now() - V.pauseAt : 0);
       set('think');
       return new Promise(resolve => {
         const done = async () => {
@@ -106,7 +106,9 @@
         V.rec.onstop = done; try { V.rec.stop(); } catch (e) { done(); }
       });
     }
-    return { start, finish, cancel, get state() { return V.state; }, elapsed: () => (V.state === 'listen' ? performance.now() - V.t0 : 0) };
+    function pause() { if (V.state !== 'listen' || V.rec?.state !== 'recording') return false; V.rec.pause(); V.pauseAt = performance.now(); set('paused'); return true; }
+    function resume() { if (V.state !== 'paused' || V.rec?.state !== 'paused') return false; V.rec.resume(); V.pausedMs += performance.now() - V.pauseAt; V.pauseAt = 0; set('listen'); V.raf = requestAnimationFrame(tick); return true; }
+    return { start, finish, cancel, pause, resume, get state() { return V.state; }, elapsed: () => (['listen','paused'].includes(V.state) ? (V.pauseAt || performance.now()) - V.t0 - (V.pausedMs || 0) : 0) };
   }
   window.WizCore = window.WizCore || {};
   window.WizCore.voice = voice;

@@ -22,16 +22,17 @@
   const KEY = 'wos.selmenu';
   const ITEMS = [
     { id: 'copy', label: 'Copy', icon: '<path d="M9 9h10v11H9zM5 15V4h10"/>', note: 'Puts the words on the clipboard' },
-    { id: 'share', label: 'Share', icon: '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/>', note: 'Android share sheet · Telegram, Messages…' },
+    { id: 'share', label: 'Share', icon: '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/>', note: 'Device share sheet when supported; otherwise Copy' },
     { id: 'quote', label: 'Quote', icon: '<path d="M5 18h14M5 6h4M5 12h8M15 6l4 6-4 6"/>', note: 'Into this thread’s reply box, as a quote' },
     { id: 'search', label: 'Search', icon: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/>', note: 'Wizard Search, with an AI overview' },
     { id: 'all', label: 'Select all', icon: '<path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M8 9h8M8 12h8M8 15h5"/>', note: 'The whole message' },
   ];
   const DEFAULT = ['copy', 'share', 'quote', 'search', 'all'];
   const N = () => window.WizardOSNative || null;
-  const own = () => { const n = N(); return !!n && typeof n.selection === 'function' || !!window.__wosSelMenuForce; };
+  const own = () => { const n = N(); return typeof window.getSelection === 'function'; };
   const tell = s => { try { const n = N(); if (n && typeof n.selection === 'function') n.selection(s); } catch (e) {} };
-  const toast = (i, t, ms) => window.__wos?.toast?.(i, t, ms);
+  const host = () => window.__wos || window.__wux;
+  const toast = (i, t, ms) => host()?.toast?.(i, t, ms);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const svg = p => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
   const EDIT = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
@@ -106,7 +107,7 @@
     if (!own()) return hide();
     const c = current(); if (!c) return hide(true);
     tell(3); cur = c;
-    const ids = enabled().filter(id => id !== 'quote' || c.wid).filter(id => id !== 'search' || window.__wos?.openSearch);
+    const ids = enabled().filter(id => id !== 'quote' || c.wid).filter(id => id !== 'search' || host()?.openSearch);
     if (!ids.length) return hide();
     const m = mount();
     m.innerHTML = `<span class="sm-grip" data-smgrip aria-label="Drag to move" title="Drag to move">${svg('<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>')}</span>`
@@ -137,7 +138,7 @@
 
   async function run(id) {
     const c = cur || current(); if (!c) return hide(true);
-    const KIT = window.WosChat || window.__wos?.chat;
+    const KIT = window.WosChat || host()?.chat;
     const agent = window.WizConfig?.agent?.() || 'Archimedes';
     if (id === 'copy') { const ok = await KIT.copyText(c.text); clear(); toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400); return; }
     if (id === 'share') {
@@ -147,10 +148,10 @@
     }
     if (id === 'quote') {
       const q = c.text.split('\n').map(l => '> ' + l).join('\n') + '\n\n';
-      clear(); if (!window.__wos?.chats?.insertText(c.wid, q)) toast('!', 'Open the thread to quote', 1600);
+      clear(); if (!host()?.chats?.insertText(c.wid, q)) toast('!', 'Open the thread to quote', 1600);
       return;
     }
-    if (id === 'search') { const q = c.text.replace(/\s+/g, ' ').slice(0, 200); clear(); window.__wos.openSearch(q, 'all'); return; }
+    if (id === 'search') { const q = c.text.replace(/\s+/g, ' ').slice(0, 200); clear(); host().openSearch(q, 'all'); return; }
     if (id === 'all') {
       const b = c.block.closest('.bub') || c.block; const r = document.createRange(); r.selectNodeContents(b);
       const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); settle(0); return;
@@ -187,7 +188,7 @@
   /* ---- Settings ---- */
   function html() {
     const on = enabled(), n = N();
-    const sub = own() ? 'Long-press words in a chat · choose what the menu offers' : n ? 'Update the Wizard OS app (0.9.7) to use it' : 'Works in the Wizard OS Android app';
+    const sub = own() ? 'Select words in a chat · choose what the menu offers' : n ? 'Update the Wizard OS app (0.9.7) to use it' : 'Works in the Wizard OS Android app';
     return `<div class="st-group" data-selmenu><h4>Text selection menu</h4><p class="st-note">${esc(sub)}</p>
       ${ITEMS.map(it => `<button class="st-row" data-smset="${it.id}"><span class="st-ic">${svg(it.icon)}</span><span class="st-tx"><b>${esc(it.label)}</b><small>${esc(it.note)}</small></span><span class="sw ${on.includes(it.id) ? 'on' : ''}"><i></i></span></button>`).join('')}</div>`;
   }

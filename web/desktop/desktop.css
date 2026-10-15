@@ -251,3 +251,5 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 
 .voice-pill.dict { background: rgba(110, 231, 255, .1); border-color: rgba(110, 231, 255, .35); }
 .voice-pill.dict .rec-dot { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+
+.voice-pill{flex-wrap:wrap;height:auto;max-width:min(700px,calc(100vw - 24px));padding:8px}.voice-pill #voiceFiles{flex-basis:100%}.bar-c:has(.voice-pill:not([hidden])){position:fixed;top:54px;left:12px;right:12px;z-index:100;pointer-events:none}.bar-c .voice-pill{pointer-events:auto;background:var(--panel,#171424);border:1px solid var(--line)}.win .desk-scroll{height:100%;overflow:auto;padding:12px}.win .review{padding:10px}.win .review .pinch-hint{display:none}
