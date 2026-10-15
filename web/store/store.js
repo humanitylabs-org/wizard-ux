@@ -30,7 +30,7 @@
   const S = { apps: [], installed: new Map(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map() };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id);
-  const selected = a => ({...a, ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, installed_source:a.installed_source, installed_commit:a.installed_commit, update_available:a.update_available});
+  const selected = a => ({...a, ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, installed_source:a.installed_source, installed_commit:a.installed_commit, installed_app_id:a.installed_app_id, update_available:a.update_available});
   const badge = a => a.conflict ? '<span class="alpha-badge conflict">Source conflict</span>' : a.alpha_badge ? `<span class="alpha-badge">${esc(a.alpha_badge)}</span>` : '';
   if (/\.staging\.wizard001\.com$/.test(location.hostname)) $('preview').hidden = false;
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
@@ -47,7 +47,7 @@
       type: ['view', 'service', 'agent', 'external'].includes(a.type) ? a.type : 'service', category: txt(a.category, 24), logo: typeof a.logo === 'string' && /^https:\/\//.test(a.logo),
       url: txt(a.url, 250), repo: txt(a.repo, 201), source: ID.test(a.source || '') ? a.source : 'standard', source_name: txt(a.source_name,60), channel: a.channel === 'alpha' ? 'alpha' : 'standard', commit: /^[a-f0-9]{40}$/.test(a.commit || '') ? a.commit : '', release_notes: txt(a.release_notes,2000),
       releases: Array.isArray(a.releases) ? a.releases.slice(0,16).map(r => clean({...r,releases:null})).filter(Boolean) : [],
-      alpha_badge: ['Alpha','Alpha available'].includes(a.alpha_badge) ? a.alpha_badge : '', conflict: a.conflict === true, installed_source: txt(a.installed_source,64), installed_commit: txt(a.installed_commit,40), update_available: a.update_available === true,
+      alpha_badge: ['Alpha','Alpha available'].includes(a.alpha_badge) ? a.alpha_badge : '', conflict: a.conflict === true, installed_source: txt(a.installed_source,64), installed_commit: txt(a.installed_commit,40), installed_app_id: txt(a.installed_app_id,64), update_available: a.update_available === true,
       private: a.private === true, tags: words(a.tags), provides: words(a.provides), uses: ids(a.uses), architectures: words(a.architectures),
       installs: Number.isSafeInteger(a.installs) && a.installs > 0 ? a.installs : 0, checked_at: Number.isFinite(a.checked_at) ? a.checked_at : 0 };
   }
@@ -88,7 +88,8 @@
   }
   const isInstalled = a => S.installed.has(a.id);
   // The shell knows which apps have a view it can open; only those get "Open".
-  const canOpen = a => { try { return framed && typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(a.id); } catch (_) { return false; } };
+  const openId = a => a.source===a.installed_source && a.commit===a.installed_commit && ID.test(a.installed_app_id || '') ? a.installed_app_id : a.id;
+  const canOpen = a => { try { return framed && typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(openId(a)); } catch (_) { return false; } };
 
   /* ---------------- pieces ---------------- */
   function icon(a, size = 'm') {
@@ -101,7 +102,7 @@
     if(a.conflict) return '<span class="get have">Resolve conflict</span>';
     const changed = a.commit && ((a.installed_commit && (a.commit!==a.installed_commit || a.source!==a.installed_source)) || (a.channel==='alpha' && isInstalled(a) && !a.installed_commit));
     if(changed || a.update_available) return `<button class="get ${cls}" data-get="${esc(key(a))}">Update</button>`;
-    if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(a.id)}">Open</button>`;
+    if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
     return `<button class="get ${cls}" data-get="${esc(key(a))}">Get</button>`;
   }
