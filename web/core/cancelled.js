@@ -64,14 +64,14 @@
     web.sort((a, b) => b.at - a.at);
     for (const t of web) if (t.text && !texts[t.id]) texts[t.id] = t.text;
     const now = Date.now();
-    for (const [i, t] of [...web.entries()]) if (i >= MAX_KEPT || now - t.at > MAX_AGE_MS) await removeWeb(t.id);
+    for (const [i, t] of [...web.entries()]) if (!t.retained && !t.sessionOnly && (i >= MAX_KEPT || now - t.at > MAX_AGE_MS)) await removeWeb(t.id);
     return web;
   }
   async function removeWeb(id) { sessionWeb.delete(id); web = web.filter(t => t.id !== id); try { await tx('readwrite', s => s.delete(id)); } catch (e) {} }
 
   async function keepWeb(blob, ms, retained = false, text = '') {
     if (!(blob instanceof Blob) || blob.size < (retained ? 1200 : 2000) || (!retained && !(ms >= KEEP_FROM_MS))) return false;
-    const t = { id: 'w' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), at: Date.now(), ms: Math.round(ms), source: 'web', mime: blob.type || 'audio/webm', bytes: blob.size, blob };
+    const t = { retained, id: 'w' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), at: Date.now(), ms: Math.round(ms), source: 'web', mime: blob.type || 'audio/webm', bytes: blob.size, blob };
     let persisted = true;
     if (text) t.text = text;
     try { await tx('readwrite', s => s.put(t)); } catch (e) { persisted = false; /* memory only for this session */ }
@@ -82,6 +82,7 @@
     return persisted;
   }
   async function retrySave(id, quiet = false) {
+    if (window.WosOutbox?.get(id)) { await window.WosOutbox.pump(); repaint(); return; }
     const t = sessionWeb.get(id); if (!t) return;
     try {
       const saved = { ...t }; delete saved.sessionOnly;
@@ -94,7 +95,8 @@
 
   function nativeList() { const d = DEV(); if (!d) return []; return (J(d.cancelledList()) || []).map(t => ({ ...t, native: true })); }
   function all() {
-    const l = nativeList().concat(web.map(({ blob, ...t }) => t));
+    const custody = (window.WosOutbox?.recordings() || []).filter(x => x.state !== 'capturing').map(x => ({ id: x.id, at: x.createdAt, source: 'web', ms: x.ms || 0, mime: x.audio.type, bytes: x.audio.size, custody: true, sessionOnly: !x.durable }));
+    const l = nativeList().concat(web.map(({ blob, ...t }) => t), custody);
     l.sort((a, b) => b.at - a.at);
     for (const k of Object.keys(texts)) if (!l.some(t => t.id === k)) delete texts[k];
     return l;
@@ -111,6 +113,7 @@
     return new Blob(parts, { type: type || 'audio/mp4' });
   }
   function blobOf(t) {
+    if (t.custody) return window.WosOutbox.get(t.id)?.audio;
     if (t.native) return readNative(t.id, t.mime);
     const w = web.find(x => x.id === t.id); return w ? w.blob : null;
   }
@@ -128,7 +131,7 @@
     try {
       const blob = blobOf(t); if (!blob || blob.size < 1000) throw new Error('The recording is empty');
       const prompt = window.WizConfig.voicePrompt?.() || '';
-      const j = await window.WizConfig.transcribe(blob, { prompt, language: 'en' });
+      const j = t.custody ? await window.WosOutbox.transcribeDictation(id) : await window.WosOutbox.bounded(signal => window.WizConfig.transcribe(blob, { prompt, language: 'en', signal }));
       const text = String(j.text || '').trim();
       if (!text) throw new Error('No speech found in it');
       texts[id] = text; saveTexts(); open.add(id);
@@ -141,7 +144,8 @@
   }
   async function remove(id) {
     const t = all().find(x => x.id === id); if (!t) return;
-    if (t.native) { try { DEV().cancelledDelete(id); } catch (e) {} } else await removeWeb(id);
+    if (t.custody) { const removed = await window.WosOutbox.remove(id); if (!removed) { toast('!', 'Deletion not saved · keep Wizard open', 2400); return; } }
+    else if (t.native) { try { DEV().cancelledDelete(id); } catch (e) {} } else await removeWeb(id);
     delete texts[id]; saveTexts(); open.delete(id);
     toast('✕', 'Deleted', 1200); repaint();
   }
@@ -158,9 +162,9 @@
   }
   function html() {
     const l = all();
-    return `<div class="st-group" data-cancelled><h4>Cancelled recordings <span>${l.length || ''}</span></h4>
+    return `<div class="st-group" data-cancelled><h4>Recovered &amp; cancelled recordings <span>${l.length || ''}</span></h4>
       ${l.length ? l.map(row).join('') : '<div class="st-empty">Nothing here. Cancel a recording after 15 seconds or more and it waits here, ready to transcribe.</div>'}
-      <p class="st-note">Tapped the X by accident? Recordings over 15 seconds are kept on this phone for a week (the newest ${MAX_KEPT}). Transcribe &amp; copy puts the words on your clipboard.</p></div>`;
+      <p class="st-note">Interrupted and retained recordings stay until deleted. Older cancelled recordings may expire after a week (the newest ${MAX_KEPT}). Transcribe &amp; copy never sends to an agent.</p></div>`;
   }
   function repaint() {
     const g = document.querySelector('#settingsBody [data-cancelled]');
@@ -179,6 +183,7 @@
 
   addEventListener('beforeunload', e => { if (sessionWeb.size) { e.preventDefault(); e.returnValue = ''; } });
   setInterval(() => { for (const id of sessionWeb.keys()) retrySave(id, true); }, 5000);
+  window.WosOutbox?.onChange(repaint);
   loadWeb().then(repaint).catch(() => {});
   window.WosCancelled = { KEEP_FROM_MS, keepWeb, retainWeb: (blob, ms, text = '') => keepWeb(blob, ms, true, text), html, act, repaint, list: all, transcribe, retrySave, _texts: texts };
 })();

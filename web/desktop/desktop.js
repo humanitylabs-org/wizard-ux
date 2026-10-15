@@ -279,7 +279,9 @@
     const w = known ? (openThread(it.sessionId), focused()) : newChat();
     if (!w) return;
     CHATS.setDraft(w.id, it.text || it.typed || '', (it.files || []).filter(f => f !== it.audioFile));
-    OUTBOX.remove(it.id); CHATS.renderChats(w); syncChatsPane(w.id);
+    if (it.audio || it.body) OUTBOX.transition(it.id, 'held', 'Editing a copy · original recording and uncertain send retained');
+    else OUTBOX.remove(it.id);
+    CHATS.renderChats(w); syncChatsPane(w.id);
   }
 
   /* ---------------- rendering ---------------- */
@@ -838,10 +840,10 @@
     if ((!r || !r.blob) && sealed) sealed.putBack();
     if (!r || !r.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed, modelRoute); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
-    if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { sid: aimSid, seal: sealed, route: modelRoute });
+    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed, modelRoute, null, r.captureId); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
+    if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { captureId: r.captureId, sid: aimSid, seal: sealed, route: modelRoute });
     else {
-      const item = await OUTBOX.enqueue({ ...modelRoute, sealKey: sealed?.key, typed: sealed?.text || '', files: sealed?.files || [], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: '', instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
+      const item = await OUTBOX.enqueue({ ...modelRoute, captureId: r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', files: sealed?.files || [], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: '', instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
       sealed?.done(item);
     }
     toast('✦', 'Recording kept · waiting to send', 1400);
@@ -882,7 +884,7 @@
     recovery.hidden = !takes.length;
     recovery.innerHTML = takes.map(it => `<article>
       <strong>${it.kind === 'dictation' ? 'Dictation' : 'Voice recording'} kept</strong>
-      <p role="status">${esc(it.storageError || (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
+      <p role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
       <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || (it.text ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
       ${it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
       <button data-record-retry="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Retry</button>
@@ -896,7 +898,7 @@
     const id = b.dataset.recordRetry || b.dataset.recordDownload || b.dataset.recordCopy || b.dataset.recordDiscard;
     const it = O.get(id); if (!it) return;
     if (b.dataset.recordRetry) {
-      if (it.kind === 'dictation') await O.transcribeDictation(id); else O.retry(id);
+      if (['dictation', 'capture'].includes(it.kind) || it.state === 'held') await O.transcribeDictation(id); else O.retry(id);
     } else if (b.dataset.recordDownload) {
       const url = URL.createObjectURL(it.audio), a = document.createElement('a');
       const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /wav/.test(it.audioType) ? 'wav' : 'webm';
@@ -927,7 +929,7 @@
       const r = await VOICE.finish({ transcribe: false });
       if (!r?.blob) { toast('🎙', r?.error || 'Didn’t catch that', 2200); return 'none'; }
       const O = window.WosOutbox;
-      const take = await O.retainDictation(r.blob);
+      const take = await O.retainDictation(r.blob, r.captureId);
       const it = await O.transcribeDictation(take.id);
       const text = it?.text || '';
       if (!text) { toast('🎙', 'Transcription failed · recording kept below', 2600); return 'retained'; }

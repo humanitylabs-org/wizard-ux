@@ -109,6 +109,7 @@
   }
   function recover(it, durable = true) {
     if (it.kind === 'dictation' && it.state === 'transcribing') it.state = 'held';
+    if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
     if (it.state === 'sending') it.state = 'waiting';
     if (it.state === 'processing' || it.state === 'preparing') { it.state = it.intent === 'command' ? 'held' : 'failed'; it.error = 'Interrupted before sending · recording kept. Retry sends to its original destination.'; }
     it.durable = durable;
@@ -289,15 +290,16 @@
   }
   const api = {
     // Dictation shares this store and transcriber, but NEVER enters message delivery.
-    async retainDictation(audio) {
+    async retainDictation(audio, captureId = null) {
       await load();
-      const it = { id: 'wos-' + crypto.randomUUID(), kind: 'dictation', state: 'held', createdAt: now(), audio, audioType: audio.type || 'audio/webm', text: '', error: '' };
+      const it = captureId ? await api.stage({ audio, captureId }) : make({ audio });
+      Object.assign(it, { kind: 'dictation', state: 'held', text: '', error: '' });
       await put(it); return it;
     },
     async transcribeDictation(id) {
       await load();
       const it = items.get(id);
-      if (!it || it.kind !== 'dictation' || it.state === 'transcribing') return null;
+      if (!it || !it.audio || ['sent', 'sending', 'processing', 'capturing', 'transcribing'].includes(it.state)) return null;
       it.state = 'transcribing'; it.error = ''; emit();
       // Even when storage is unavailable, the live Blob remains downloadable.
       if (!db) { try { db = await open(); } catch (e) {} }
@@ -308,11 +310,27 @@
       } catch (e) { it.error = String(e.message || e); }
       it.state = 'held'; await put(it); return it;
     },
-    recordings() { return [...items.values()].filter(it => it.audio && (it.kind === 'dictation' || it.storageError || it.state === 'empty')); },
+    recordings() { return [...items.values()].filter(it => it.audio && it.state !== 'capturing' && (it.kind === 'dictation' || it.kind === 'capture' || it.storageError || ['empty', 'held', 'failed'].includes(it.state))); },
 
     // Stage original audio before the phone's pre-send transcription/router, with its sealed route.
     async stage(o) {
-      await load(); const it = make(o); it.state = 'processing'; await put(it); schedule(); return it;
+      await load();
+      const prior = o.captureId && items.get(o.captureId);
+      if (prior?.captureWrite) await prior.captureWrite;
+      const it = make(o); if (prior) { it.id = prior.id; it.createdAt = prior.createdAt; }
+      it.state = 'processing'; await put(it); schedule(); return it;
+    },
+    capture(blob, id) {
+      let it = items.get(id);
+      if (!it) { it = make({ audio: blob }); it.id = id; it.kind = 'capture'; it.state = 'capturing'; items.set(id, it); }
+      if (it.kind !== 'capture' || it.state === 'sent') return Promise.resolve(it);
+      it.audio = blob;
+      // One pending write per capture; the next flush takes the latest chunks, not an unbounded backlog.
+      if (!it.captureWrite) {
+        const work = put(it).then(() => { delete it.captureWrite; if (it.audio !== blob && it.kind === 'capture') return api.capture(it.audio, id); return it; });
+        Object.defineProperty(it, 'captureWrite', { value: work, writable: true, configurable: true, enumerable: false });
+      }
+      return it.captureWrite;
     },
     async protect(id) { const it = items.get(id); if (it) await keepAudio(it); return it; },
     // Callers must await this instead of mutating a recovered item only in RAM.
@@ -325,11 +343,12 @@
     ownsSeal(key) { return [...items.values()].some(it => it.sealKey === key); },
     nativeItem(id) { return [...items.values()].find(it => it.nativeId === id); },
     async enqueue(o) {
+      if (o.captureId) { const staged = await api.stage(o); o = { ...o, custodyId: staged.id }; }
       const M = window.WosModels, AG = window.WosAgents;
       const agent0 = o.kind === 'reply' ? (window.WizLive?.agentOf?.(o.sessionId) || '') : String(o.agent || '');
       const agent = agent0 && AG?.isOther(agent0) ? agent0 : '';
       let snapshot = o.model ? { model: o.model, provider: o.provider || '' } : null, routeError;
-      try { snapshot = M?.snapshot(o.kind === 'reply' ? o.sessionId : '', snapshot, agent) || snapshot; }
+      try { if (!snapshot && o.nativeId) throw new Error('Saved recording model route unavailable · original kept'); snapshot = M?.snapshot(o.kind === 'reply' ? o.sessionId : '', snapshot, agent) || snapshot; }
       catch (e) { routeError = e; }
       await load();
       const held = (o.custodyId && items.get(o.custodyId)) || (o.nativeId && api.nativeItem(o.nativeId));
@@ -353,7 +372,7 @@
     },
     retry(id) { const it = items.get(id); if (!it || it.kind === 'dictation' || ['sent', 'sending', 'processing', 'preparing', 'missing', 'held'].includes(it.state)) return; Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); put(it).then(pump); },
     retryAll() { for (const it of items.values()) if (it.kind !== 'dictation' && it.state === 'waiting') Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); Promise.all([...items.values()].map(put)).then(pump); },
-    unsent() { return [...items.values()].filter(it => it.kind !== 'dictation' && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
+    unsent() { return [...items.values()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
     forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && it.kind !== 'dictation' && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     get(id) { return items.get(id) || null; },
     landed(id) { const it = items.get(id); if (it?.state === 'sent') del(id); },

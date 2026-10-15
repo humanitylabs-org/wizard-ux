@@ -1154,7 +1154,7 @@ window.WizCore.chats = function createChats(H) {
     // Saved on the phone; the outbox delivers it (and retries) from here.
     let it;
     try {
-      it = await OUTBOX.enqueue({ custodyId: opts.custodyId, sealKey: sealed?.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
+      it = await OUTBOX.enqueue({ captureId: opts.captureId, custodyId: opts.custodyId, sealKey: sealed?.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
         instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
     } catch (e) {
       // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the

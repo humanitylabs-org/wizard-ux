@@ -1187,19 +1187,21 @@
     }
     const it = OUTBOX.get(id); if (!it) return;
     if (a === 'retry') { OUTBOX.retry(id); toast('↻', 'Sending again', 1400); }
-    if (a === 'delete') { OUTBOX.remove(id); toast('✕', 'Deleted', 1400); }
+    if (a === 'delete') OUTBOX.remove(id).then(ok => toast(ok ? '✕' : '!', ok ? 'Deleted' : 'Could not save deletion · keep Wizard open', 2400));
     if (a === 'open') { closeSheets(true); openWizardThread(it.sessionId); }
     if (a === 'edit') editUnsent(it);
   }
   // Edit puts the words back in a composer (the thread's, or a new chat's) and takes the item out of the queue.
   function editUnsent(it) {
+    if (it.body) { toast('!', 'Delivery is uncertain · retry this submission to reconcile before editing', 3000); return; }
     closeSheets(true);
     const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
     let wid = chatsWinAny();
     if (!wid) { const w = openWin({ app: 'chats', thread: null }); if (!w) return; wid = w.id; }
     focusWin(wid); openChat(wid, known ? it.sessionId : '__new__');
     CHATS.setDraft(wid, it.text || it.typed || '', (it.files || []).filter(f => f !== it.audioFile));
-    OUTBOX.remove(it.id);
+    if (it.audio || it.body) OUTBOX.transition(it.id, 'held', 'Editing a copy · original recording and uncertain send retained');
+    else OUTBOX.remove(it.id);
     renderChats(W[wid]);
     setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 50);
   }
@@ -2330,7 +2332,7 @@
     // the exact route is still sealed at Send, and unavailable routes remain fail-closed.
     window.WosModels?.load().catch(() => {});
     clearTimeout(txHideT);
-    Object.assign(V, { kind, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, custodyCapture: null, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
@@ -2378,7 +2380,8 @@
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => MediaRecorder.isTypeSupported(m)) || '';
     const rec = V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
     V.mime = rec.mimeType || mime || 'audio/webm';
-    rec.ondataavailable = e => { if (epoch === V.captureEpoch && !V.cancelled && e.data && e.data.size) V.chunks.push(e.data); };
+    const captureId = V.custodyCapture || (V.custodyCapture = 'capture-' + crypto.randomUUID());
+    rec.ondataavailable = e => { if (epoch === V.captureEpoch && !V.cancelled && e.data && e.data.size) { V.chunks.push(e.data); OUTBOX.capture(new Blob([...V.parts, ...V.chunks], { type: rec.mimeType || V.mime || 'audio/webm' }), captureId); } };
     rec.onstop = () => { if (epoch !== V.captureEpoch || V.cancelled) return; return V.state === 'think' ? onRecStop() : onRecInterrupted(rec); };
     // A track ended by the system stops the recorder too; onstop handles it.
     V.stream.getAudioTracks().forEach(tr => tr.addEventListener('ended', () => { try { rec.state !== 'inactive' && rec.stop(); } catch (e) {} }));
@@ -2462,7 +2465,7 @@
     txHide(0); // keep copy available; Settings retains the same transcript across reloads
     clearTimeout(txHideT); voiceEl.classList.add('tx');
   }
-  async function transcribeDictation(blobs, nid) {
+  async function transcribeDictation(blobs, nid, captureId = null) {
     const epoch = V.captureEpoch, target = V.field, ms = V.acc;
     const op = V.dictationOp = { blobs, ms, nid, epoch, abort: new AbortController() };
     const live = () => V.captureEpoch === epoch && !V.cancelled && V.dictationOp === op;
@@ -2490,7 +2493,7 @@
       if (!inserted) {
         // Never re-resolve a lost field or use the agent outbox as an audio recovery mechanism.
         const kept = await window.WosCancelled.retainWeb(new Blob(blobs, { type: blobs[0]?.type }), ms, text);
-        if (kept) recDone(nid);
+        if (kept) { recDone(nid); if (captureId) await OUTBOX.remove(captureId); }
         if (!live()) return;
         setVoice('idle'); showDictationCopy(text, kept, !!nid);
       } else { recDone(nid); setVoice('idle'); txHide(); }
@@ -2498,7 +2501,7 @@
       if (!live()) return;
       target?.release(); V.field = null;
       const kept = await window.WosCancelled.retainWeb(new Blob(blobs, { type: blobs[0]?.type }), ms);
-      if (kept) recDone(nid); // otherwise native audio remains on disk
+      if (kept) { recDone(nid); if (captureId) await OUTBOX.remove(captureId); } // otherwise native audio remains on disk
       if (!live()) return;
       setVoice('idle'); txHide();
       toast('!', kept ? 'Dictation retained in Settings → Cancelled recordings · transcribe & copy' : nid ? 'Dictation kept on device · reopen recording recovery to retry' : 'Storage unavailable · kept only while this page stays open · retry saving in Settings', 6000);
@@ -2551,7 +2554,9 @@
     const nativeKeeps = !!V.native && typeof DEV()?.cancelledList === 'function';
     if (V.native) { try { if (!nativeTakeAppOwned(V.native)) DEV().recCancel(V.native); } catch (e) {} V.native = null; }
     const rec = V.rec, mime = V.mime || rec?.mimeType || 'audio/webm';
-    const keepWeb = parts => { const b = new Blob(parts, { type: mime }); window.WosCancelled?.keepWeb(b, heldMs).then(k => { window.WosCancelled.repaint(); toast(k ? '✕' : '!', k ? 'Cancelled · saved in Settings → Cancelled recordings' : 'Device save failed · recording kept in this tab. Keep Wizard open.', 4000); }); };
+    const captureId = V.custodyCapture; V.custodyCapture = null;
+    if (captureId && !long) OUTBOX.remove(captureId);
+    const keepWeb = parts => { const b = new Blob(parts, { type: mime }); if (captureId) { OUTBOX.capture(b, captureId).then(async () => { const item = await OUTBOX.transition(captureId, 'held', 'Cancelled recording · original kept'); toast('✕', item.durable ? 'Cancelled · saved in Recordings' : 'Device save failed · recording kept in this tab. Keep Wizard open.', 4000); }); return; } window.WosCancelled?.keepWeb(b, heldMs).then(k => { window.WosCancelled.repaint(); toast(k ? '✕' : '!', k ? 'Cancelled · saved in Settings → Cancelled recordings' : 'Device save failed · recording kept in this tab. Keep Wizard open.', 4000); }); };
     if (long && rec && window.WosCancelled) {
       // Stop the web recorder and keep what it heard (the last chunk arrives with the stop).
       const parts = V.parts.slice(), chunks = V.chunks;
@@ -2580,7 +2585,7 @@
     const size = blobs.reduce((n, b) => n + b.size, 0);
     stopStream(); V.rec = null; Orb.setLevel(0);
     if (V.cancelled) { recDone(nid); dropHold(); unseal(); return; }
-    if (V.kind === 'dictation') return transcribeDictation(blobs, nid);
+    if (V.kind === 'dictation') { const id = V.custodyCapture; V.custodyCapture = null; if (id) await OUTBOX.transition(id, 'held', 'Dictation recording · original kept'); return transcribeDictation(blobs, nid, id); }
     if (V.acc < 450 || size < 1200) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); tourEv('nospeech'); return; }
     // A voice reply from a thread's composer goes to that thread, as recorded: no routing, no commands,
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
@@ -2594,9 +2599,10 @@
     const audio = new Blob(blobs, { type: blob.type || 'audio/webm' });
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '', audio, typed: snap.seal?.text || '',
-      sealKey: snap.seal?.key, nativeId: nid, intent: kind, agent: sv?.agent || '',
+      sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
       files: [...V.files, ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
+    V.custodyCapture = null;
     snap.custodyId = it.id; snap.audio = audio;
     snap.seal?.done(it);
     // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.

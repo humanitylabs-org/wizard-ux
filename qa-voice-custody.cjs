@@ -17,13 +17,14 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
     const ctx=await browser.newContext({viewport:{width:412,height:892},hasTouch:true});
     const W={down:true, sttDown:false, events:[],uploads:[],runs:new Map(),calls:[],drop:false,badReceipt:false,empty:false};
     await ctx.addInitScript(({fault})=>{
-      window.__fault={idb:fault==='put'||fault==='all',open:fault==='open',ls:fault==='all',route:false};
+      window.__fault={idb:fault==='put'||fault==='all',open:fault==='open',ls:fault==='all',route:false,remove:false};
       const put=IDBObjectStore.prototype.put;
       IDBObjectStore.prototype.put=function(...args){if(window.__fault.idb)throw new DOMException('Injected quota','QuotaExceededError');return put.apply(this,args);};
       const open=indexedDB.open.bind(indexedDB);
       indexedDB.open=(...args)=>{if(window.__fault.open)throw new DOMException('Injected unavailable','SecurityError');return open(...args);};
       const set=Storage.prototype.setItem;
       Storage.prototype.setItem=function(...args){if(window.__fault.ls)throw new DOMException('Injected quota','QuotaExceededError');return set.apply(this,args);};
+      const remove=Storage.prototype.removeItem; Storage.prototype.removeItem=function(...args){if(window.__fault.remove)throw new DOMException('Injected removal failure','SecurityError');return remove.apply(this,args);};
       window.WosModels={snapshot:(sid,route)=>route||{model:'fixture-model',provider:'fixture-provider'},resolveRoute:async s=>{if(window.__fault.route)await new Promise(()=>{});return s;},matchesRuntime:()=>true};
       window.WizConfig={voicePrompt:()=>'',transcribe:async blob=>{const r=await fetch('/stt',{method:'POST',body:blob});if(!r.ok)throw new Error('STT down');return r.json();}};
     },{fault});
@@ -131,6 +132,39 @@ const audio=Array.from({length:8192},(_,i)=>i%251), hash=crypto.createHash('sha2
     await f.page.evaluate(id=>{const it=WosOutbox.get(id);it.createdAt=Date.now()-120000;WosOutbox.pump();},id);await sleep(200);
     ok((await f.row(id))?.audio===audio.length,'empty transcript: original recording remains recoverable, never expiry-deleted');
     ok(f.W.runs.size===0,'empty transcript: no empty agent run');await f.ctx.close();
+  }
+  // Regression: a failed fallback deletion must not erase the durable tombstone.
+  {
+    const f=await fixture('put'),id=await f.add();await sleep(300);
+    await f.page.evaluate(async id=>{window.__fault.idb=false;window.__fault.remove=true;await WosOutbox.remove(id);},id);
+    await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());f.W.down=false;
+    await f.page.evaluate(()=>{dispatchEvent(new Event('online'));WosOutbox.pump();});await sleep(350);
+    ok(f.W.runs.size===0&&!await f.page.evaluate(id=>WosOutbox.unsent().some(x=>x.id===id),id),'dismissed fallback cannot resurrect after restart');await f.ctx.close();
+  }
+  // Regression: startup storage failure is retryable even with no visible RAM items.
+  {
+    const f=await fixture(),id=await f.page.evaluate(async()=>{const x=await WosOutbox.stage({text:'old hidden',model:'m',provider:'p'});return x.id;});
+    await f.ctx.addInitScript(()=>{window.__fault.open=true;});
+    await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());
+    ok(!await f.row(id),'startup failure fixture hides old IDB row');
+    await f.page.evaluate(async()=>{window.__fault.open=false;await WosOutbox.pump();});
+    ok(!!await f.row(id),'storage returns: discovers old submissions without reloading again');await f.ctx.close();
+  }
+  // Regression: terminal no-speech/local handling states persist, never online-autosend.
+  for (const state of ['empty','held','failed']) {
+    const f=await fixture(),id=await f.page.evaluate(async state=>{const x=await WosOutbox.stage({text:'must not automatically send',model:'m',provider:'p'});await WosOutbox.transition(x.id,state,'retained intentionally');return x.id;},state);
+    await f.page.reload();await f.page.evaluate(()=>WosOutbox.load());f.W.down=false;
+    await f.page.evaluate(()=>dispatchEvent(new Event('online')));await sleep(200);
+    ok((await f.row(id)).state===state&&f.W.runs.size===0,`${state}: persisted state survives reload + online without sending`);await f.ctx.close();
+  }
+  // A transcriber that never settles (even ignoring abort) cannot hold the serial queue forever.
+  {
+    const f=await fixture();f.W.down=false;
+    await f.page.evaluate(()=>{window.WizConfig.transcribe=()=>new Promise(()=>{});const st=setTimeout;window.setTimeout=(fn,ms,...args)=>st(fn,ms===45000?80:ms,...args);});
+    const id=await f.add();const other=await f.add({text:'independent typed message',audio:null});
+    await f.wait(other,'sent');
+    ok((await f.row(id)).state==='waiting'&&f.W.runs.size===1,'STT deadline frees queue for the next message');
+    ok(f.W.uploads[0]?.hash===hash,'hung STT: original bytes uploaded first');await f.ctx.close();
   }
   await browser.close();fs.writeFileSync(path.join(OUT,'receipt.json'),JSON.stringify({host:require('os').hostname(),engine:process.env.QA_ENGINE||'chromium',source:crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT,'web/outbox.js'))).digest('hex'),pass,fail,results},null,2));
   console.log(`${pass} passed, ${fail} failed`);process.exitCode=fail?1:0;
