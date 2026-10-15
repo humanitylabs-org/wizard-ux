@@ -30,7 +30,7 @@
     const sid = (q.get('session') || '').trim(); if (SESSION_ID.test(sid)) out.session = sid;
     const view = (q.get('view') || '').trim(); if (!out.session && VIEWS.has(view)) { out.view = view; const s = q.get('section') || ''; if (SECTIONS.has(s)) out.section = s === 'deferred' ? 'ready' : s; } // Deferred lives at the bottom of Ready
     const vid = (q.get('video') || '').trim().toLowerCase(); if (VIDEO_ID.test(vid)) out.video = vid;
-    const open = (q.get('open') || '').trim(); if (!out.session && !out.view && /^[a-z0-9-]{1,40}$/i.test(open)) out.open = open;
+    const open = (q.get('open') || '').trim(); if (!out.session && !out.view && (/^[a-z0-9-]{1,40}$/i.test(open) || /^agent:[a-z0-9][a-z0-9-]{0,40}$/.test(open))) out.open = open;
     // ?agent=<id>: that agent's own Chats (Agents MVP).
     const agent = (q.get('agent') || '').trim(); if (!out.session && !out.view && !out.open && /^[a-z0-9][a-z0-9-]{0,40}$/.test(agent)) out.agent = agent;
     return Object.keys(out).length ? out : null;

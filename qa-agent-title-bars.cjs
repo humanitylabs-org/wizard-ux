@@ -41,7 +41,8 @@ for(const mobile of [true,false]){
  check(await p.locator('.ch-agent').count()===0,kind+' no repeated agent strip');
  const paint=await privateBar.locator('.sgt').first().evaluate(e=>({bg:getComputedStyle(e).backgroundImage,fill:getComputedStyle(e).backgroundColor,border:getComputedStyle(e).borderTopWidth,after:getComputedStyle(e,'::after').display}));
  check(paint.bg==='none'&&paint.fill==='rgba(0, 0, 0, 0)'&&paint.border==='0px'&&paint.after==='none',kind+' bare title logo with no tile background',paint);
- check(await privateBar.locator('.t,.wt').evaluate(e=>getComputedStyle(e).color===getComputedStyle(e.closest('.wbar').querySelector('.sgt')).color),kind+' private title matches logo colour');
+ check(await privateBar.locator('.t,.wt').evaluate(e=>e.style.color==='var(--ink)'&&getComputedStyle(e).color!==getComputedStyle(e.closest('.wbar').querySelector('.sgt')).color),kind+' private title uses neutral text colour');
+ check(await p.locator('.ch-list.agent').evaluateAll(es=>es.length>0&&es.every(e=>getComputedStyle(e).boxShadow==='none')),kind+' private list has no vertical stripe');
  if(mobile){
   await p.evaluate(()=>__wos.goDesk(0,true));await nap(250);
   check(await p.locator('#dock .sg-hat-private').count()>0,kind+' private dock uses keyhole hat');
@@ -69,7 +70,7 @@ for(const mobile of [true,false]){
  const mainBar=p.locator('.wbar').filter({has:p.locator('.wic .sg-hat,.ic .sg-hat')}).first();
  check(await mainBar.locator('.t,.wt').textContent()==='Hermes Main Agent',kind+' main agent title');
  check(await p.locator('.ch-row').count()>0,kind+' real thread rows render');
- check(await mainBar.locator('.t,.wt').evaluate(e=>getComputedStyle(e).color===getComputedStyle(e.closest('.wbar').querySelector('.sgt')).color),kind+' main title matches logo colour');
+ check(await mainBar.locator('.t,.wt').evaluate(e=>e.style.color==='var(--ink)'&&getComputedStyle(e).color!==getComputedStyle(e.closest('.wbar').querySelector('.sgt')).color),kind+' main title uses neutral text colour');
  const sid=await p.evaluate(m=>(m?__wos:__wux).live.sessions.find(s=>!s.archived)?.id,mobile);
  if(sid){
   await p.evaluate(({m,id})=>m?__wos.openWizardThread(id):__wux.openThread(id),{m:mobile,id:sid});await nap(700);
@@ -86,11 +87,12 @@ for(const mobile of [true,false]){
   const result={title:title?.textContent,colour:title?.style.color,draft:!ta||ta.isConnected&&ta.value==='Unsent local draft'};
   Object.assign(a,old);WosAgents.emit();return result;
  });
- check(refresh.title==='Test Custom Main Agent'&&refresh.colour==='rgb(228, 158, 88)',kind+' registry rename and colour update title',refresh);
+ check(refresh.title==='Test Custom Main Agent'&&refresh.colour==='var(--ink)',kind+' registry rename preserves neutral title',refresh);
  check(refresh.draft,kind+' registry refresh preserves composer');
  check(await p.evaluate(()=>WosAgents.title({label:'Custom Agent'})==='Custom Agent'&&WosAgents.title({label:'Research'})==='Research Agent'),kind+' other agents use their own name without duplicate suffix');
  await p.evaluate(()=>WizOpenAgentChats('private',{thread:'__new__'}));await nap(300);
  check(await privateBar.locator('.t,.wt').textContent()==='Private Agent'&&await p.locator('.ch-agent').count()===0,kind+' new private chat keeps single agent title');
+ check(await p.locator('.ch-thread.agent').evaluateAll(es=>es.length>0&&es.every(e=>getComputedStyle(e).boxShadow==='none')),kind+' private thread has no vertical stripe');
  const mask=await p.evaluate(async()=>{const r=await fetch('/wizard-os-home/brand/wizard-mark-private.png');return {status:r.status,bytes:(await r.arrayBuffer()).byteLength};});
  check(mask.status===200&&mask.bytes>500,kind+' private asset served',mask);
  await p.screenshot({path:path.join(OUT,kind+'.png')});

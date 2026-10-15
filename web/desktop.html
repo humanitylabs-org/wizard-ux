@@ -39,7 +39,7 @@
       </div>
     </div>
     <div class="bar-r">
-      <button id="searchBtn" class="mic" title="Search and launch (⌘K)" aria-label="Search and launch"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button>
+      <button id="searchBtn" class="mic" title="Search and launch (⌘K) · Open an app (⌘O)" aria-label="Search and launch"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button>
       <button id="micBtn" class="mic" title="Talk to Wizard (tap Right ⌘)" aria-label="Talk to Wizard"><svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg></button>
       <button id="status" class="status" title="Inbox (⌥I)" aria-label="Inbox"></button>
       <button id="keysBtn" class="keys-btn" title="Keyboard shortcuts (⌥/)">⌥/</button>
@@ -54,11 +54,12 @@
   </aside>
 
   <div id="palette" class="palette" hidden>
-    <div class="pal-card" role="dialog" aria-label="Search and launch">
+    <div class="pal-card" role="dialog" aria-modal="true" aria-label="Search and launch">
       <label class="pal-in"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input id="palInput" placeholder="Open an app, find a thread, or ask Wizard…" data-agent-placeholder spellcheck="false" autocomplete="off"></label>
+        <input id="palInput" placeholder="Open an app, find a thread, or ask Wizard…" data-agent-placeholder spellcheck="false" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="palList" aria-autocomplete="list" aria-label="Search apps, threads and commands"></label>
       <div id="palList" class="pal-list" role="listbox"></div>
-      <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>⇧↵</kbd> new window</span><span><kbd>⌘↵</kbd> ask <b data-agent-name>Wizard</b></span><span><kbd>Esc</kbd> close</span></div>
+      <div class="pal-foot" data-for="all"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>⇧↵</kbd> new window</span><span><kbd>⌘↵</kbd> ask <b data-agent-name>Wizard</b></span><span><kbd>Esc</kbd> close</span></div>
+      <div class="pal-foot" data-for="apps"><span><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>⇧↵</kbd> new window</span><span><kbd>⌘K</kbd> search everything</span><span><kbd>Esc</kbd> close</span></div>
     </div>
   </div>
 

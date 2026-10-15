@@ -97,6 +97,8 @@ async function shot(p,name){await p.screenshot({path:path.join(OUT,name+'.png')}
  await p.keyboard.press('Alt+Digit2');ok(await p.locator('#wsList [data-ws="0"] .dn').innerText()==='3','workspace contents and badges survive reload');
  // Review regression: empty desktops show Home content without homeOpen=true.
  await p.evaluate(()=>__wux.newDesktop());
+ ok(await p.locator('#palette').isVisible(),'new empty desktop opens app selector before Resources');
+ await p.keyboard.press('Escape'); // Dismiss the newly requested picker before testing the underlying Resources surface.
  await p.click('.wsp:not([hidden]) [data-res-open="server"]');await p.waitForFunction(()=>WosResources.state.panel);
  await p.keyboard.press('Alt+Enter');
  ok(await p.locator('.rs-sheet').count()===0&&await p.evaluate(()=>!__wux.homeOpen&&__wux.ws[__wux.cur].wins.length===1),'launching New chat from empty-desktop Resources closes its modal');
