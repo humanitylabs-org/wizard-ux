@@ -2571,17 +2571,19 @@
       const loan=V.meetingLoan;V.meetingLoan=null;
       if(V.native){
         const id=V.native;
-        try{DEV().recCancel(id);}catch{}
+        // recCancel is asynchronous on Android. Seal/close synchronously under a
+        // durable recovery owner, then mark this explicitly cancelled (never queued).
+        // Otherwise focus recovery can mistake the still-closing file for a Send.
+        let meta;
+        try { voiceRecovery(id,{kind:V.kind,ms:V.acc});meta=JSON.parse(DEV().recStop(id)||'null'); }
+        catch { setVoice('paused');V.meetingLoan=loan;toast('!','Could not close recording · original retained');return; }
+        if(!meta?.id){setVoice('paused');V.meetingLoan=loan;return;}
         V.native=null;
         await window.WosOrbHandoff.end(loan,{status:'cancelled',voiceTakeId:id});
-        // Borrowed native Cancel retains its original as a stopped take. Move those exact
-        // bytes to held custody before releasing it, rather than re-offering it as notification Send.
         try {
-          const meta=JSON.parse(DEV().recPending()||'[]').find(t=>t.id===id);
-          if(meta){const item=await OUTBOX.capture(nativeBlob(id,meta.bytes),'cancelled-'+id);
-            await OUTBOX.transition(item.id,'held','Cancelled meeting interruption · original kept');
-            if(item.durable)recDone(id);
-          }
+          const item=await OUTBOX.capture(nativeBlob(id,meta.bytes),'cancelled-'+id);
+          await OUTBOX.transition(item.id,'held','Cancelled meeting interruption · original kept');
+          if(item.durable)recDone(id);
         }catch{toast('!','Cancelled original kept on device · recovery available');}
       }
       else {

@@ -300,16 +300,29 @@ def tap_note_action(title, action, shot_name):
     """Real tap on a notification action button: open the shade, expand our notification if its actions are
     folded, tap the action closest below the title."""
     sx('cmd statusbar expand-notifications'); time.sleep(2)
-    for attempt in range(3):
-        ns = nodes(ui())
+    for attempt in range(6):
+        xml = ui(); save(shot_name+'-'+str(attempt)+'.xml',xml)
+        ns = nodes(xml)
         t = next((b for l, b in ns if re.search(title, l)), None)
         if not t: time.sleep(1); continue
         acts = [b for l, b in ns if re.fullmatch(action, l, re.I) and b[1] >= t[1]]
         if acts:
             b = min(acts, key=lambda b: b[1] - t[1]); shot(shot_name)
             sx(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}'); time.sleep(1.5); sx('cmd statusbar collapse'); return action
-        # folded: drag the notification down to expand it
-        sx(f'input swipe {(t[0] + t[2]) // 2} {t[1]} {(t[0] + t[2]) // 2} {t[1] + 400} 300'); time.sleep(1.5)
+        # Android groups the orb and meeting under one app. Expand the nearest
+        # actual disclosure button, not a drag that expands the other recorder.
+        import xml.etree.ElementTree as ET
+        buttons=[]
+        for n in ET.fromstring(xml).iter('node'):
+            if n.get('resource-id','').endswith('/expand_button') and n.get('clickable')=='true':
+                b=list(map(int,re.findall(r'\d+',n.get('bounds',''))))
+                if len(b)==4:buttons.append(b)
+        if buttons:
+            b=min(buttons,key=lambda b:abs((b[1]+b[3])/2-(t[1]+t[3])/2))
+            save(shot_name+'-tap-'+str(attempt)+'.json',{'title':t,'button':b})
+            sx(f'input tap {b[2]-30} {(b[1]+b[3])//2}'); time.sleep(1.2)
+        else:
+            sx(f'input swipe {(t[0] + t[2]) // 2} {t[1]} {(t[0] + t[2]) // 2} {t[1] + 400} 300'); time.sleep(1.5)
     shot(shot_name + '-notfound'); sx('cmd statusbar collapse')
     return None
 

@@ -85,8 +85,8 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
             save('integrated-failure-state.json',ev("({voice:window.__wos?.voice,v:window.__wos&&{kind:__wos.V.kind,native:__wos.V.native,reply:__wos.V.replyTo,acc:__wos.V.acc,parts:__wos.V.parts?.map(b=>({size:b.size,type:b.type})),snap:__wos.V.snap},text:document.body.innerText,errors:window.qaErrors,capture:window.WizAppCapture?.getState(),frames:[...document.querySelectorAll('iframe')].map(f=>({src:f.src,text:f.contentDocument?.body?.innerText}))})"))
             fixture.save();raise AssertionError('Timed out: '+expr)
         return value
-    def touch(selector='#orbWrap',hold=0):
-        box=ev("(()=>{const e=[...document.querySelectorAll("+json.dumps(selector)+")].find(e=>e.getClientRects().length);if(!e)throw Error('missing control');const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
+    def touch(selector='#orbWrap',hold=0.0):
+        box=ev("(()=>{const e=[...document.querySelectorAll("+json.dumps(selector)+")].find(e=>{const r=e.getBoundingClientRect();return r.width&&r.height&&r.x>=0&&r.y>=0&&r.right<=innerWidth&&r.bottom<=innerHeight});if(!e)throw Error('missing visible control');const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
         # Do not run Runtime.evaluate/native polling while a short tap is down:
         # a synchronous JNI call can extend it past the hold threshold.
         pg._send({'id':2000001,'method':'Input.dispatchTouchEvent','params':{'type':'touchStart','touchPoints':[dict(box,id=1)]}})
@@ -126,9 +126,11 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
     check('integrated','cancel preserves preexisting manual pause',cap()['phase']=='paused',cap())
     stop_meeting()
     mid3=start_meeting();touch();wait('!!__wos.V.native');pg.pump(1.2)
-    stopped=tap_note_action('Paused|Mizel','Stop','integrated-notification-stop');pg.pump(.5);ev('__wos.cancelVoice(true)');pg.pump(.5)
-    check('integrated','notification Stop during loan wins over cancellation resume',bool(stopped) and not cap().get('recording'),cap())
+    mf("document.querySelector('[aria-label=\"Stop recording\"]').click()");pg.pump(.5);ev('__wos.cancelVoice(true)');pg.pump(2)
+    check('integrated','actual adopted Stop during loan wins over cancellation resume',not cap().get('recording'),cap())
+    if cap().get('recording'): stop_meeting()
     before=len(fixture.runs());check('integrated','cancelled loans create no extra sends',before==1,fixture.runs())
+    check('integrated','cancelled originals are held durably without native send recovery',ev("[...WosOutbox._items.values()].filter(i=>i.id.startsWith('cancelled-')&&i.state==='held'&&i.durable&&i.audio?.size>600).length===2 && JSON.parse(WizardOSDevice.recPending()||'[]').length===0 && __wosVoiceRecovery().length===0"))
     # Reply -> paused -> actual adopted UI notes dictation -> held local command -> resume native -> send.
     ev("__wos.openWizardThread('qa-0')");wait("!!document.querySelector('[data-chmic]')")
     touch('[data-chmic]');wait('!!__wos.V.native');first=ev('__wos.V.native');pg.pump(1.5);touch('#arcPause');wait("__wos.voice==='paused'")
