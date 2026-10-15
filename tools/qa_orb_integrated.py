@@ -107,7 +107,14 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
         return cap()['meetingId']
     def stop_meeting():
         mf("document.querySelector('[aria-label=\"Stop recording\"]').click()")
-        wait("(async()=>!WizAppCapture.getState().recording&&(await WizAppCapture.pending('mizel')).length===0)()",25)
+        # Event readback may race the final marker revision. The app deliberately
+        # retains audio and offers Retry save; exercise that real UI, never ack it
+        # from the harness or bypass the domain-readback gate.
+        done="(async()=>!WizAppCapture.getState().recording&&(await WizAppCapture.pending('mizel')).length===0)()"
+        for _ in range(3):
+            if pg.pump(8,lambda:ev(done),.2):break
+            mf("[...document.querySelectorAll('button')].find(e=>e.textContent.trim()==='Try again')?.click()")
+        wait(done,10)
         pg.pump(1)
     check('integrated','actual shell and native bridge loaded',ev("!!__wos&&WizardOSDevice.recHandoffVersion()===1&&!!WizAppCapture"))
     ev('WosModels.load()')
