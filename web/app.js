@@ -3275,13 +3275,27 @@
   if (/WizardOS-Android\//.test(navigator.userAgent)) document.documentElement.classList.add('native-app');
   // Assistant handoff (side-key app → Wizard OS). 'listen' opens the orb listening; 'say' shows the words as a
   // draft that James sends with one tap — another app can never make Archimedes act on its own.
+  let threadHandoffGeneration = 0;
   window.__wosHandoff = h => {
     // A side-button handoff means James already knows the gestures: clear the first-run coach so the draft is visible.
     if (window.WosTour?.active) window.WosTour.finish('handoff');
     if (!h || typeof h !== 'object') return false;
     closeSheets(); if (idx !== HOME && h.action !== 'thread') goDesk(HOME);
     if (h.action === 'listen') { if (V.state === 'idle') startVoice('auto'); return true; }
-    if (h.action === 'thread' && h.id) { openWizardThread(String(h.id)); LIVE?.refresh(); return true; }
+    if (h.action === 'thread' && h.id) {
+      const id = String(h.id), generation = ++threadHandoffGeneration;
+      // Android 0.9.15's share notification carries only thread_id. On a cold start or just-shared
+      // thread its owning agent is not cached yet: resolve agent lists BEFORE opening Chats.
+      // Never open a private notification in main while the refresh is still in flight.
+      Promise.resolve(LIVE?.refreshAgents?.()).then(() => {
+        if (generation !== threadHandoffGeneration) return;
+        if (!LIVE?.agentOf?.(id) && Object.values(LIVE?.agentStatus || {}).some(s => !s.ok)) {
+          toast('◉', 'Could not locate that chat · reconnect and tap again'); return;
+        }
+        openWizardThread(id); LIVE?.refresh();
+      }).catch(() => { if (generation === threadHandoffGeneration) toast('◉', 'Could not locate that chat · reconnect and tap again'); });
+      return true;
+    }
     if (h.action === 'usuals') { openUsuals(); return true; }
     if (h.action === 'unsent' || h.action === 'settings') { onUnsentChange(); openSettings(h.action === 'unsent'); return true; }
     if (h.action === 'side-button') { store.set('sideHidden', false); refreshHome(true); if (SIDE && (SIDE.step === 'mic' || SIDE.step === 'assistant')) sideButtonTap(false); else toast('◉', 'Side button is on. Hold it to talk.', 2600); return true; }
