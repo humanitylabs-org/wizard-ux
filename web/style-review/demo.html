@@ -13,11 +13,4 @@
 <div class="wz-empty"><strong>Your next app starts here</strong><p>Empty states remain quiet. Your content gets the attention.</p></div></section></main>
 <form class="wz-compose"><input class="wz-input" placeholder="An unsent idea" aria-label="Idea"><button type="button" class="wz-send" aria-label="Preview action">+</button></form>
 </div><dialog class="wz-sheet" id="sheet"><h2>A shared sheet</h2><p>Back closes this sheet first.</p><button class="wz-button" id="close">Close</button></dialog>
-<script>
-const sheet=document.getElementById('sheet');
-document.getElementById('open').onclick=()=>sheet.showModal();
-document.getElementById('close').onclick=()=>sheet.close();
-document.getElementById('skin').onchange=e=>document.documentElement.dataset.skin=e.target.value;
-document.querySelector('form').onsubmit=e=>e.preventDefault();
-window.__wizardCloseOverlay=()=>{if(sheet.open){sheet.close();return true;}return false;};
-</script></body></html>
+<script src="demo.js"></script></body></html>
