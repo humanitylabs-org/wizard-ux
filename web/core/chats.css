@@ -172,6 +172,10 @@ a.fchip { color: inherit; text-decoration: none; }
 .bub em { font-style: italic; } .bub del { opacity: .7; }
 .bub blockquote { margin: 6px 0 8px; padding: 2px 0 2px 12px; border-left: 3px solid rgba(185, 155, 255, .45); color: var(--ink-2); }
 .bub blockquote p { margin-bottom: 4px; }
+.bub .quote-actions { display: flex; align-items: center; gap: 4px; margin-top: 6px; padding-top: 2px; }
+.bub .quote-actions button { min-height: 36px; padding: 6px 10px; border-radius: 8px; color: var(--ink-3); font-size: 12px; font-weight: 600; }
+.bub .quote-actions button:hover, .bub .quote-actions button:focus-visible { color: var(--ink); background: var(--line); }
+.bub .quote-actions button:active { background: rgba(205, 190, 255, .12); }
 .bub ul ul, .bub ol ol, .bub ul ol, .bub ol ul { margin: 2px 0 2px; }
 .bub li.task { list-style: none; margin-left: -18px; display: flex; gap: 8px; align-items: baseline; }
 .bub .tick { flex: 0 0 auto; width: 13px; height: 13px; border-radius: 4px; border: 1.5px solid var(--ink-3); transform: translateY(2px); }
