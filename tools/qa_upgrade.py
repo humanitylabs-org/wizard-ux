@@ -42,13 +42,15 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx(f'pm grant {PKG} android.permission.POST_NOTIFICATIONS')
         old_package = sx(f'dumpsys package {PKG}')
         first = next((l.strip() for l in old_package.splitlines() if 'firstInstallTime=' in l), '')
-        old_uid = re.search(r'userId=(\d+)', old_package).group(1)
+        uid_match = re.search(r'(?:userId|appId)=(\d+)', old_package)
+        if not uid_match: raise RuntimeError('Package dump has no install UID: '+old_package[:2000])
+        old_uid = uid_match.group(1)
         o2 = sh(ADB, '-s', S, 'install', '-r', new).strip().splitlines()[-1]
         ver = re.search(r'versionName=\S+', sx(f'dumpsys package {PKG}')).group(0)
         check('new release installs over the old one (same signer, data kept)', o2 == 'Success' and WANT_VN and ver == 'versionName=' + WANT_VN and sx(f'dumpsys package {PKG} | grep firstInstallTime').strip() == first, (o2, ver))
         new_package = sx(f'dumpsys package {PKG}')
         check('same install identity and notification grant survive upgrade',
-              bool(re.search(r'userId=' + old_uid + r'\b', new_package)) and 'android.permission.POST_NOTIFICATIONS: granted=true' in new_package)
+              bool(re.search(r'(?:userId|appId)=' + old_uid + r'\b', new_package)) and 'android.permission.POST_NOTIFICATIONS: granted=true' in new_package)
         check('release remains non-debuggable and includes native audio',
               'DEBUGGABLE' not in new_package and 'BackgroundAudioService' in new_package)
         sx('logcat -c')
