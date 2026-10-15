@@ -2143,7 +2143,7 @@
     V.captureEpoch = (V.captureEpoch || 0) + 1;
     V.field?.release(); V.field = null; // page recreation can never reconstruct a DOM capability
     const knownReply = kind === 'dictation' ? null : replyTake(a.id);
-    Object.assign(V, { native: a.id, kind, target: null, snap: null, seal: null, replyTo: knownReply, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
+    Object.assign(V, { native: a.id, kind, target: null, snap: window.WosOrbHandoff?.takeSnap(a.id)||null, seal: null, replyTo: knownReply, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
     txPill(a.paused ? '⏸' : '✦', kind === 'dictation' ? 'Dictation kept · tap orb to transcribe & copy' : a.paused ? 'Paused · recording kept · tap orb to send' : 'Still recording · tap orb to send', kind === 'dictation' ? 'dictation' : 'agent'); txHide(2600);
@@ -2422,7 +2422,7 @@
     const dev = DEV();
     if (dev) { let id = ''; try { id = (meetingLoan?.native ? dev.recStartBorrowed(kind,meetingLoan.id) : dev.recStart(kind)) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && kind !== 'dictation') { const route = V.snap?.route || CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) {}
       if (id && kind === 'dictation' && !dictationTake(id)) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Dictation could not be safely retained'); return; }
-      if (id) { V.native = id; voiceTake(id, kind); reportVoice(V.state); if(V.admitSend){V.admitSend=false;finishVoice();}else if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; }
+      if (id) { V.native = id;try{window.WosOrbHandoff?.bind(meetingLoan,id,V.snap);}catch(e){await cancelVoice(true);toast('!','Could not save microphone link · original retained');return;} voiceTake(id, kind); reportVoice(V.state); if(V.admitSend){V.admitSend=false;finishVoice();}else if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; }
       if(meetingLoan?.native){await cancelVoice(true);toast('!', 'Native handoff refused · meeting restored');return;}
     } // A refused native loan NEVER falls through to browser capture.
     try {
@@ -2458,6 +2458,7 @@
     const rec = V.rec = new MediaRecorder(V.stream, mime ? { mimeType: mime } : undefined);
     V.mime = rec.mimeType || mime || 'audio/webm';
     const captureId = V.custodyCapture || (V.custodyCapture = 'capture-' + crypto.randomUUID());
+    window.WosOrbHandoff?.bind(V.meetingLoan,captureId,V.snap);
     rec.ondataavailable = e => { if (epoch === V.captureEpoch && !V.cancelled && e.data && e.data.size) { V.chunks.push(e.data); const parts=[...V.parts,new Blob(V.chunks,{type:rec.mimeType||V.mime})];OUTBOX.capture(new Blob(parts, { type: rec.mimeType || V.mime || 'audio/webm' }), captureId,parts); } };
     rec.onstop = () => { if (epoch !== V.captureEpoch || V.cancelled) return; return V.state === 'think' ? onRecStop() : onRecInterrupted(rec); };
     // A track ended by the system stops the recorder too; onstop handles it.
@@ -2621,6 +2622,7 @@
   async function cancelVoice(quiet) {
     if(parking){toast('⏸','Saving paused reply · original retained');return;}
     if(V.admitting){V.admitCancelled=true;return;}
+    if(V.native&&!V.meetingLoan){const linked=window.WosOrbHandoff?.forTake(V.native);if(linked)window.WosOrbHandoff.update(linked.id,{status:'cancelled',endedAt:Date.now()});}
     if(V.meetingLoan){
       const loan=V.meetingLoan;V.meetingLoan=null;
       if(V.native){const id=V.native;try{DEV().recCancel(id);}catch{}V.native=null;await window.WosOrbHandoff.end(loan,{status:'cancelled',voiceTakeId:id});}
@@ -2697,7 +2699,7 @@
     if (!nid && !V.meetingLoan && (V.acc < 450 || size < 1200)) { recDone(nid); dropHold(); unseal(); V.replyTo = null; replyTake(null); setVoice('idle'); txHide(); toast('◌', V.kind === 'command' ? 'Hold, speak, release' : 'Didn’t catch that'); tourEv('nospeech'); restoreReply();return; }
     // A voice reply from a thread's composer goes to that thread, as recorded: no routing, no commands,
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
-    const snap = V.snap || sendSnap(); V.snap = null;
+    const snap = V.snap || window.WosOrbHandoff?.takeSnap(nid) || sendSnap(); V.snap = null;
     snap.seal = V.seal || null; V.seal = null; // the composer read at the send tap (finishVoice)
     const kind = V.kind, aimAt = V.target;
     // One immutable owner before STT/router awaits, including native handoffs. The native

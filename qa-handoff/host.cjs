@@ -23,6 +23,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
    await p.waitForTimeout(750);await p.evaluate(()=>{tone=880;});f.R.delay=2200;
    await p.evaluate(()=>__wos.startVoice('auto'));await p.waitForTimeout(750);
    assert.equal(await p.evaluate(()=>WizAppCapture.getState().phase),'handoff');
+   assert.equal(await p.evaluate(()=>WosOrbHandoff.forTake(__wos.V.custodyCapture)?.id===__wos.V.meetingLoan.id),true);
    await p.evaluate(()=>{tone=660;__wos.finishVoice();});
    await p.waitForFunction(()=>WizAppCapture.getState().phase==='recording',{},{timeout:1700});
    assert.equal(f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,0);
@@ -109,8 +110,9 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
    await n.evaluate(async()=>{await WosModels.load();window.nmeeting=await WizAppCapture.start('mizel',{kind:'meeting',meta:{meetingId:'native-synthetic-host'}});});
    assert.equal(await n.evaluate(()=>__wos.startVoice('auto')),'busy');assert.equal(await n.evaluate(()=>__wos.voice),'idle');assert.equal(await n.evaluate(()=>WizAppCapture.getState().phase),'recording');
    await n.evaluate(()=>{window.borrowCalls=[];const old=WizardOSDevice.recStart;WizardOSDevice.recStart=()=>{throw Error('ordinary start must not be used');};WizardOSDevice.recHandoffVersion=()=>1;WizardOSDevice.recHandoffBegin=(id,meetingId)=>{borrowCalls.push('begin');emitMeetingState({paused:true});return JSON.stringify({id,meetingId,status:'paused',open:true,atMediaMs:1000,pausedAt:Date.now(),pausedByHandoff:true});};WizardOSDevice.recStartBorrowed=(kind,id)=>{borrowCalls.push('borrowed');return old(kind);};WizardOSDevice.recHandoffEnd=id=>{borrowCalls.push('end');emitMeetingState({paused:false});return JSON.stringify({id,status:'resumed',open:false});};});
-   await n.evaluate(()=>__wos.startVoice('auto'));assert.ok(await n.evaluate(()=>__wos.V.native));await n.evaluate(()=>__wos.cancelVoice(true));
-   assert.deepEqual(await n.evaluate(()=>borrowCalls),['begin','borrowed','end']);assert.equal(await n.evaluate(()=>WizAppCapture.getState().phase),'recording');assert.equal(native.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,0);assert.deepEqual(native.errors,[]);await native.context.close();
+   await n.evaluate(()=>__wos.startVoice('auto'));const binding=await n.evaluate(()=>({take:__wos.V.native,snap:WosOrbHandoff.takeSnap(__wos.V.native)}));assert.ok(binding.take);assert.ok(binding.snap.meetingEventId);await n.evaluate(()=>__wos.cancelVoice(true));
+   assert.deepEqual(await n.evaluate(()=>borrowCalls),['begin','borrowed','end']);assert.equal(await n.evaluate(()=>WizAppCapture.getState().phase),'recording');assert.equal(native.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,0);assert.deepEqual(native.errors,[]);
+   await n.reload();await n.waitForFunction(()=>window.WosOrbHandoff&&window.__wos);assert.deepEqual(await n.evaluate(take=>WosOrbHandoff.takeSnap(take),binding.take),binding.snap);await native.context.close();
  });
  await test('native parked reply closes to durable custody and explicit Resume reopens native recorder (mock)',async()=>{
    const native=await boot(browser,true),n=native.p;await n.evaluate(async()=>{await WosModels.load();__wos.openWizardThread('qa-0');});await n.locator('[data-chmic]').first().click();await n.waitForTimeout(600);await n.locator('#arcPause').click();

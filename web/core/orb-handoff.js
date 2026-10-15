@@ -47,7 +47,10 @@
       status:it.state==='sent'?'sent':['failed','unconfirmed'].includes(it.state)?it.state:it.state==='held'?'local':'queued',
       ...(it.state==='sent'?{threadId:it.sessionId,runId:it.runId,...(it.userMessageId?{userMessageId:it.userMessageId}:{})}:{})});
   }
-  window.WosOrbHandoff={begin,end,update,sync,read,track};
+  function bind(loan,takeId,snap){if(!loan)return;update(loan.id,{voiceTakeId:takeId,routing:{route:snap?.route||null,target:snap?.view?.kind==='chats'?{id:snap.view.id,thread:snap.view.thread,agent:snap.view.agent||''}:null}});}
+  function forTake(takeId){return takeId?Object.values(read()).find(row=>row.voiceTakeId===takeId)||null:null;}
+  function takeSnap(takeId){const row=forTake(takeId);if(!row)return null;return {meetingEventId:row.id,route:row.routing?.route||null,view:row.routing?.target?{...row.routing.target,kind:'chats'}:null,others:[],screen:''};}
+  window.WosOrbHandoff={begin,end,update,sync,read,track,bind,forTake,takeSnap};
   const ob=window.WosOutbox;
   ob?.onChange(()=>{for(const it of ob._items.values())try{track(it);}catch(e){console.error('Meeting link retained in outbox',e);}});
   ob?.onSent(track);
