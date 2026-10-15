@@ -108,7 +108,7 @@
       nav: Object.freeze({ openThread(id) {
         check();
         // This bounded workflow is admitted only for the installed Manager's current document.
-        if (st.appId !== 'wizard-manager' || st.isVisible?.() !== true || typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw fault('Thread navigation unavailable');
+        if (!managerAuthorized(st) || st.isVisible?.() !== true || typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw fault('Thread navigation unavailable');
         return st.openThread?.(id) === true;
       } }),
       share: Object.freeze({ text(data) {
@@ -305,7 +305,21 @@
     if (receipt?.accepted !== true || receipt.request_id !== message.request_id) throw fault('App receipt uncertain · original kept');
     return { accepted: true, request_id: message.request_id };
   }
-  window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack,
+  function managerAuthorized(st) {
+    if (!st || st.appId !== 'wizard-manager' || !valid(st, st.doc) || typeof st.openThread !== 'function') return false;
+    const app = apps().find(a => a.id === st.appId && a.kind === 'wizard' && a.url);
+    try { return !!app && new URL(app.url, location.href).href === st.url.href; } catch (_) { return false; }
+  }
+  function ownsThreadLink(source, anchor) {
+    const st = from(source);
+    if (!managerAuthorized(st)) return false;
+    try {
+      const u = new URL(anchor.href);
+      return u.origin === ORIGIN && u.pathname === '/wizard-os-home/' &&
+        !!anchor.dataset.wizardNativeThread && u.searchParams.get('session') === anchor.dataset.wizardNativeThread;
+    } catch (_) { return false; }
+  }
+  window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack, ownsThreadLink,
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     update: Object.freeze({ busy, announce, available: () => available }),

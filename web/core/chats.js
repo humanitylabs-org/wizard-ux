@@ -36,7 +36,7 @@ window.WizCore.chats = function createChats(H) {
   const save = () => H.save();
   const toast = (...a) => H.toast(...a);
   const viewContext = (id, how) => H.viewContext(id, how);
-  const winTitle = w => H.title(w);
+  const winTitle = w => isHosted(w.id) ? LIVE?.session(w.thread)?.title || 'Thread' : H.title(w);
   const deskOf = id => id;
   const applyLayout = id => H.layout(id);
   const idx = 0, desks = [{ get wins() { return H.visible(); } }];
@@ -53,7 +53,8 @@ window.WizCore.chats = function createChats(H) {
     const layer = document.createElement('div'); layer.className = 'chats hosted-thread'; layer.dataset.chats = wid;
     layer.style.cssText = 'position:absolute;inset:0;z-index:5;background:var(--wz-base,var(--base,#15151d));display:flex;flex-direction:column;min-height:0';
     const container = frame.parentElement;
-    const oldPosition = container.style.position; container.style.position = 'relative';
+    const oldPosition = container.style.position;
+    if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
     const previous = Object.getOwnPropertyDescriptor(w, 'thread');
     Object.defineProperty(w, 'thread', { value: null, writable: true, configurable: true, enumerable: false });
     const entry = { frame, layer, container, oldPosition, previous, w };
