@@ -1006,6 +1006,7 @@
       CHATS.PW?.paintMic(['listen','paused'].includes(st) && !!vReply, vReply?.sid || '');
       $('#clock').hidden = st !== 'idle';
       pill.classList.toggle('dict', vMode === 'dictate');
+      pill.classList.toggle('app-voice', vMode === 'talk' && !!vConversation);
       $('#voiceKey').textContent = vMode === 'dictate' ? '✎' : commandTake ? '⚡' : vNewChat ? vNewKey : 'Right ⌘';
       $('#voiceAct').textContent = vMode === 'dictate' ? 'insert' : commandTake ? 'run locally' : 'send';
       $('#voiceText').textContent = vMode === 'dictate' ? (st === 'think' ? 'Transcribing…' : 'Dictating')
@@ -1039,6 +1040,12 @@
     toast('🎙', 'Finish the current recording before starting a new voice chat', 2400);
     return 'busy';
   }
+  const generalVoice = document.createElement('button');
+  generalVoice.id = 'generalVoice'; generalVoice.className = 'general-voice';
+  const paintGeneralVoice = () => { generalVoice.textContent = 'Record for ' + window.WizConfig.agent(); generalVoice.setAttribute('aria-label', generalVoice.textContent); };
+  paintGeneralVoice(); window.addEventListener('wizard:config', paintGeneralVoice);
+  mic.insertAdjacentElement('afterend', generalVoice);
+  generalVoice.addEventListener('click', () => talkNew('Tap to send'));
   async function talk(action = 'toggle', forceNew = false, newKey = `${CMD}⇧N`) {
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (action === 'cancel') { if (VOICE.state !== 'idle') { vFiles?.close();vReply = null; VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
@@ -1050,11 +1057,12 @@
       vFeedback = !forceNew && f?.from?.sid ? {thread:f.from.sid,title:f.from.title,url:f.url,context:viewContext(f.id,'feedback on the bound page')} : null;
       vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile, paintVoiceFiles); paintVoiceFiles();
       vTarget = !forceNew && f?.app === 'chats' && (f.thread || f.agent) ? f.id : null;
-      vConversation = !forceNew ? window.WizAppServices?.conversation?.pin(winEl(f?.id)?.querySelector('iframe'), f?.appId)
-        || (f?.appId === 'wizard-manager' ? { appId: 'wizard-manager', token: 'unavailable', label: 'Manager conversation' } : null) : null;
+      const capability = window.WizAppServices?.voiceInput, app = APP[f?.appId];
+      vConversation = !forceNew ? (capability ? capability.pin(winEl(f?.id)?.querySelector('iframe'), app?.id)
+        : app?.receives_voice_input === true ? { appId: app.id, token: 'unavailable', label: app.name } : null) : null;
       try { vRoute = vConversation ? null : vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(vTarget, vTarget ? f.thread || '__new__' : ''); } catch(e) { toast('!',String(e.message || e),2600);return 'busy'; }
       vReply = vTarget && f.thread ? { wid: f.id, sid: f.thread, steerRunId: CHATS.WORKING_ST.has(LIVE.session(f.thread)?.status) ? LIVE.session(f.thread)?.runId || '' : '' } : null;
-      vContext = viewContext(vTarget, forceNew ? 'voice, new chat' : 'voice, aimed at this thread');
+      vContext = forceNew ? 'Explicit general-agent voice request. No foreground app or private thread context shared.' : viewContext(vTarget, 'voice, aimed at this thread');
       $('#voiceTime').textContent = '0:00';
       try { await VOICE.start(); } catch (e) { toast('🎙', 'Microphone unavailable: ' + (e.message || e), 3200); return 'none'; }
       return 'voice';
@@ -1157,7 +1165,7 @@
       <p role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
       <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || (it.text ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
       ${it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
-      <button data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to Manager' : 'Retry'}</button>
+      <button data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to app' : 'Retry'}</button>
       <button data-record-download="${esc(it.id)}">Download audio</button>
       <button data-record-discard="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Discard</button>
     </article>`).join('');
@@ -1493,9 +1501,9 @@
       if (section) show();
     },
     app(id) {
-      const a = APP[id] || (!id.startsWith('agent:') && findApp(id)); if (a) return openApp(a);
+      const a = APP[id] || (!id.startsWith('agent:') && findApp(id, true)); if (a) return openApp(a);
       // Cold launch: the registered app list may still be loading. The same deep link must work in either shell.
-      Promise.resolve(C.appsLoaded?.()).then(() => { const b = APP[id] || (!id.startsWith('agent:') && findApp(id)); if (b) openApp(b); });
+      Promise.resolve(C.appsLoaded?.()).then(() => { const b = APP[id] || (!id.startsWith('agent:') && findApp(id, true)); if (b) openApp(b); });
     },
     video: item => CHATS.KIT.viewer.open([item]),
     agent: id => openAgentChats(id),

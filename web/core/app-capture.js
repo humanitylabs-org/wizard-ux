@@ -21,7 +21,7 @@
   const WORKLET_URL = W.document?.currentScript?.src || Array.from(W.document?.scripts || []).find(s => /\/app-capture\.js(?:[?#]|$)/.test(s.src))?.src;
   const DB_NAME = 'wizard-app-capture-v1', LOCK = DB_NAME + ':microphone';
   const MAX_CHUNK = 1024 * 1024, DEFAULT_LIMIT = 512 * 1024 * 1024;
-  let dbPromise, active = null, configuredNative = null, attachedMeetingBridge = null, recoveryError = null;
+  let dbPromise, active = null, configuredNative = null, attachedMeetingBridge = null, recoveryError = null, unknownMeetingActive = false;
   const fail = (code, message, extra) => Object.assign(new Error(message), { code }, extra);
   const safeCall = (fn, ...args) => { try { fn?.(...args); } catch (_) { /* observer cannot break capture */ } };
   let ownershipLoaded = false;
@@ -39,7 +39,7 @@
         if(!['auto','command','dictation'].includes(a.kind) && !inPageVoice && !savedVoice){unknownNative=true;live=deviceRows.find(r=>!r.nativeId);}
       }
     } catch (_) { unknownNative=true; } // Malformed/unknown bridge truth never authorizes voice/reload.
-    const recording = !!active || !!live || unknownNative;
+    const recording = !!active || !!live || unknownNative || unknownMeetingActive;
     return { version: 1, active: !!active, recording,
       appId: active?.row.appId || live?.appId || null, id: active?.row.id || live?.id || null,
       phase: active?.phase || (live ? 'recoverable' : 'idle'), native: !!active?.row.native || !!live,
@@ -253,7 +253,9 @@
   function capabilities(opts = {}) {
     const a = adapter(opts);
     const b = attachedMeetingBridge || W.wizardNative?.meetings;
-    return { native: a?.name || null, pcm: !a || a.name === 'wizard-meetings', pause: true,
+    const AC = W.AudioContext || W.webkitAudioContext;
+    const browserPCM = !!(navigator.mediaDevices?.getUserMedia && AC && 'audioWorklet' in AC.prototype && W.AudioWorkletNode && WORKLET_URL);
+    return { native: a?.name || null, pcm: a ? a.name === 'wizard-meetings' : browserPCM, pause: true,
       systemAudioStart: a ? !!b && (b.systemAudio === true || typeof b.onState !== 'function') : !!navigator.mediaDevices?.getDisplayMedia,
       systemAudio: a ? !!b?.setSystemAudio : !!navigator.mediaDevices?.getDisplayMedia };
   }
@@ -312,7 +314,7 @@
       getInfo: () => ({ phase:s.phase,inputStopped:!!s.inputStopped,error:s.error?.code||null,native: s.row.native || null, backendStopOwned: !!s.engine?.backendStopOwned, livePcm: s.engine?.livePcm !== false,
         hasSystemAudio: !!s.hasSystemAudio, paused: s.phase === 'paused',
         durationMs: s.nativeState?.mediaMs ?? (s.row.pcm && !s.row.native ? s.row.durationMs : (s.pausedAt || Date.now()) - s.row.startedAt - (s.pausedTotal || 0)),
-        state: s.nativeState || null, meta: JSON.parse(JSON.stringify(s.row.meta)), capabilities: capabilities({ kind: s.row.kind }) }),
+        state: s.nativeState || null, meta: JSON.parse(JSON.stringify(s.row.meta)), capabilities: capabilities({ kind: s.row.kind, pcm: s.row.pcm }) }),
       onPcm: fn => observe(s,'pcm',fn), onChunk: fn => observe(s,'chunk',fn),
       onState: fn => observe(s,'state',fn), onWarn: fn => observe(s,'warn',fn),
       chunks: async () => { const all = await streamChunks(s.row);
@@ -349,6 +351,13 @@
   // PCM algorithm above retains Mizel mono16k box-filter downsampling and
   // 250 ms live PCM rather than compressed STT input.
   async function browserEngine(s) {
+    // The browser path does not pass through native.start's admission guard.
+    // Recheck under the shared lock, after recovery, including direct (unprepared) starts.
+    let nativeActive;
+    try { nativeActive = JSON.parse(W.WizardOSDevice?.recActive?.() || 'null'); }
+    catch (_) { throw fail('busy', 'Native recorder ownership is unknown.'); }
+    const nativeOwner = [...ownedRows.values()].find(r => recoveryLive.has(r.id) || (r.native && !r.nativeId && r.status === 'recoverable'));
+    if (nativeActive?.id || nativeOwner || unknownMeetingActive) throw fail('busy', 'An existing native recorder is held.', { appId: nativeOwner?.appId || 'native-recording' });
     if (!navigator.mediaDevices?.getUserMedia) throw fail('unsupported', 'Microphone capture is unavailable.');
     s.stream = await navigator.mediaDevices.getUserMedia({ audio: s.opts.audio ?? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     s.stream.getAudioTracks().forEach(t => t.addEventListener('ended', () => { if (s.phase === 'starting') s.interrupted = true; else if (!s.inputStopped && !s.discard && active === s) void finish(s, true).catch(() => {}); }));
@@ -356,7 +365,7 @@
     s.nodes = []; if (analyser) { analyser.fftSize = 512; source.connect(analyser); s.nodes.push(source, analyser); }
     const isPCM = s.opts.pcm === true || s.opts.systemAudio === true || s.opts.kind === 'meeting' || s.opts.mime === 'audio/wav';
     if (isPCM) {
-      if (!ctx?.audioWorklet) throw fail('pcm_unavailable', 'This browser cannot provide meeting PCM capture.');
+      if (!ctx?.audioWorklet || !W.AudioWorkletNode) throw fail('pcm_unavailable', 'This browser cannot provide PCM capture.');
       s.row.pcm = true; s.row.mime = 'audio/wav';
       if (!WORKLET_URL) throw fail('pcm_module_url_missing', 'Load the shared capture resource through its external script URL.');
       await ctx.audioWorklet.addModule(WORKLET_URL);
@@ -572,6 +581,10 @@
     if (d && typeof d.recStart === 'function') {
       // Do not silently flatten a meeting's 16k PCM/two-track contract into AAC.
       if (opts.kind === 'meeting' && !row) throw fail('native_meeting_adapter_required', 'Attach the existing native meeting/PCM bridge before capture.');
+      // DeviceBridge is AAC-only. Explicit non-meeting PCM uses the SAME shared
+      // browser engine/lock/custody, never a fabricated meeting or an app recorder.
+      // Persisted native rows must still recover/resume/ack through their bridge.
+      if (!row && opts.kind !== 'meeting' && opts.pcm === true) return null;
       return deviceAdapter(d);
     }
     if (row?.native) throw fail('native_unavailable', 'The native capture bridge must be restored to recover this take.');
@@ -582,6 +595,9 @@
     const meeting = attachedMeetingBridge || W.wizardNative?.meetings || (W.wizardMizelPort ? nativeMeetingPort() : null);
     if (meeting?.status) {
       const st = await meeting.status();
+      // A live status without an ID still owns the mic; never invent an ID to recover it.
+      const unknown = !!(st?.recording && !st.meetingId);
+      if (unknown !== unknownMeetingActive) { unknownMeetingActive = unknown; changed(); }
       if (st?.recording && st.meetingId && !all.some(r=>r.native==='wizard-meetings' && r.nativeId===st.meetingId)) {
         const row={id:crypto.randomUUID(),appId:'mizel',kind:'meeting',native:'wizard-meetings',nativeId:st.meetingId,
           status:'recoverable',partial:true,startedAt:Date.now()-(st.mediaMs||0),durationMs:st.mediaMs||0,seq:0,bytes:0,pcm:true,mime:'audio/wav',meta:{meetingId:st.meetingId}};

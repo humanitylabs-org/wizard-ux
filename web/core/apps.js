@@ -62,10 +62,11 @@
   });
   const PALETTE = [['#6b46ff', '#c04dff'], ['#3fe0ff', '#3f6bff'], ['#ff5ccf', '#5c3bff'], ['#4ff0b0', '#2f8cff'], ['#ffbe55', '#ff6b86'], ['#ff8a5c', '#ff5ccf']];
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
-  const toTile = a => ({
+  const toTile = (a, trusted = false) => ({
     id: String(a.id), kind: 'wizard', name: String(a.name || a.id), icon: a.icon || String(a.name || a.id).trim().charAt(0).toUpperCase(),
     g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id), url: a.url || '', desc: a.desc || '',
     ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '',
+    receives_voice_input: trusted === true && a.receives_voice_input === true,
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
@@ -79,7 +80,7 @@
       if (!r.ok) return;
       const list = ((await r.json()).apps || []).filter(a => a && a.id && a.url && a.id !== 'wizard');
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); } catch (e) {}
-      REMOTE = list.map(toTile);
+      REMOTE = list.map(a => toTile(a, true));
       listeners.forEach(fn => fn());
     } catch (e) {}
   }

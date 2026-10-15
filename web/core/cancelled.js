@@ -156,7 +156,7 @@
     return `<div class="cx-row" data-cxid="${esc(t.id)}">
       <div class="cx-t"><b>${fmt(t.ms)}</b> · ${esc(SRC[t.source] || 'Orb')} · ${esc(ago(t.at))}</div>
       ${tx && (open.has(t.id) || t.conversation) ? `<div class="cx-text" data-cxtext>${esc(tx)}</div>` : ''}
-      ${t.conversation ? `<div class="cx-t">Manager conversation · original destination retained</div><button data-cx="manager" ${b ? 'disabled' : ''}>Retry original to Manager</button>` : ''}
+      ${t.conversation ? `<div class="cx-t">App voice input · original destination retained</div><button data-cx="manager" ${b ? 'disabled' : ''}>Retry original to app</button>` : ''}
       ${err ? `<div class="cx-err">${esc(err)}</div>` : ''}
       ${t.sessionOnly ? '<div class="cx-err">Storage unavailable · kept only while this page stays open.</div><button data-cx="save">Retry saving</button>' : ''}
       <div class="ub-a"><button data-cx="copy" ${b ? 'disabled' : ''}>${b ? 'Transcribing…' : tx ? 'Copy again' : 'Transcribe &amp; copy'}</button>${tx ? `<button data-cx="show" class="ghost">${open.has(t.id) ? 'Hide words' : 'Show words'}</button>` : ''}<button data-cx="delete" class="ghost">Delete</button></div></div>`;
