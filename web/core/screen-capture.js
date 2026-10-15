@@ -40,7 +40,7 @@
           try { port.postMessage(id); } catch (e) { close(id); reject(e); }
         });
       }
-      if (!navigator.mediaDevices?.getDisplayMedia) throw new Error('Screenshot needs the updated Wizard Android app');
+      if (!navigator.mediaDevices?.getDisplayMedia) throw new Error('This browser cannot capture a screen · use Attach or a supported screen-capture bridge');
       // User activation stays intact. A cancelled chooser may return later; close its stream then.
       const choice = navigator.mediaDevices.getDisplayMedia({ video: true, audio: false, preferCurrentTab: true });
       let abortListener;

@@ -1,4 +1,12 @@
 /* Wizard UX core: tokens, resets and shared motion. Every shell loads this first. */
+/* Voice destinations use a third semantic colour AND text, never colour alone. */
+.general-voice { border: 1px solid var(--line-2); border-radius: 18px; padding: 8px 12px; font-size: 12px; background: var(--bg); color: var(--ink); min-height: 36px; }
+#device > .general-voice { position: fixed; z-index: 150; bottom: calc(112px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); white-space: nowrap; }
+#device > .general-voice.hold-target { bottom: calc(158px + env(safe-area-inset-bottom)); border-color: var(--violet); min-height: 48px; }
+#device > .general-voice.selected { background: var(--violet); color: white; outline: 3px solid var(--ink); }
+#voiceDestination { position: fixed; z-index: 149; bottom: calc(216px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); width: max-content; text-align: center; border-radius: 14px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--line-2); color: var(--ink); font-size: 13px; pointer-events: none; }
+#voiceDestination.app-voice, #voicePill.app-voice { border-color: #f2ad52; color: #f2ad52; }
+.app-voice-input #orbWrap { outline: 2px solid #f2ad52; outline-offset: 4px; border-radius: 50%; }
 :root {
   --bg: #05030c;
   --ink: #f3efff;

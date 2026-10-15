@@ -296,7 +296,7 @@
       if (QUOTE.test(l)) {
         const body = [];
         while (i < lines.length && lines[i].trim() && ((m = lines[i].match(QUOTE)) || !startsBlock(lines, i))) { body.push(m ? m[1] : lines[i]); m = null; i++; }
-        out += `<blockquote>${blocks(body, depth + 1)}</blockquote>`; continue;
+        out += `<blockquote data-quote-source="${esc(body.join("\n"))}">${blocks(body, depth + 1)}<div class="quote-actions" role="group" aria-label="Quote actions"><button type="button" data-quotecopy aria-label="Copy quote">Copy</button><button type="button" data-quoteshare aria-label="Share quote">Share</button></div></blockquote>`; continue;
       }
       if (isTable(lines, i)) {
         const head = cells(lines[i]), al = cells(lines[i + 1]).map(c => /^:-+:$/.test(c) ? 'center' : /-:$/.test(c) ? 'right' : /^:/.test(c) ? 'left' : '');
@@ -387,7 +387,7 @@
   function richParts(src) {
     const box = document.createElement('div');
     box.innerHTML = md(String(src ?? ''));
-    box.querySelectorAll('button, .code-h, script, style, img, video, audio, svg, iframe').forEach(e => e.remove());
+    box.querySelectorAll('button, .code-h, .quote-actions, script, style, img, video, audio, svg, iframe').forEach(e => e.remove());
     box.querySelectorAll('div.tbl, div.code').forEach(d => d.replaceWith(...d.childNodes));
     for (const el of box.querySelectorAll('*')) {
       const keep = RICH_KEEP[el.tagName] || [];
@@ -485,6 +485,11 @@
     return (await copyText([payload.text, payload.url].filter(Boolean).join('\n'))) ? 'copied' : 'unsupported';
   }
   function shareText(text, title) { return sharePayload({ text, title }); }
+  // Resolve identity at the tap, so renamed wizards never keep a stale attribution.
+  function shareAssistantText(text, title) {
+    const name = String(window.WizConfig?.agent?.() || '').trim() || 'Wizard';
+    return shareText(`From ${name}:\n\n${text}`, title);
+  }
   async function fetchBlob(url) {
     if (url.startsWith('data:')) { const r = await fetch(url); return r.blob(); }
     const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
@@ -718,5 +723,5 @@
     return action && choices.length ? { requestId: str(it.request_id, it.id) || undefined, action, choices } : null;
   }
 
-  window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, sharePayload, shareText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, sharePayload, shareText, shareAssistantText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

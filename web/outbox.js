@@ -116,7 +116,7 @@
     emit();
   }
   function recover(it, durable = true) {
-    if (it.kind === 'conversation' && it.state !== 'sent') { it.state = 'held'; it.error = 'Manager recording kept · retry original or copy transcript; never sent to Chats'; }
+    if (it.kind === 'conversation' && it.state !== 'sent') { it.state = 'held'; it.error = 'App voice input recording kept · retry original or copy transcript; never sent to Chats'; }
     if (it.kind === 'dictation' && it.state === 'transcribing') it.state = 'held';
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
     if (it.steerDispatch === 'started' && it.state !== 'sent') { it.state = 'unconfirmed'; it.error = unconfirmed; }
@@ -198,7 +198,7 @@
     }
   }
   async function deliver(it) {
-    if (it.kind === 'conversation') throw new HttpError(409, 'Manager messages use explicit conversation delivery only');
+    if (it.kind === 'conversation') throw new HttpError(409, 'App voice input messages use explicit conversation delivery only');
     if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model before retrying');
     if (it.body) {
       const frozen = JSON.parse(it.body);
@@ -347,7 +347,7 @@
       await load();
       const existing = (o.captureId && items.get(o.captureId)) || (o.nativeId && api.nativeItem(o.nativeId));
       const it = existing?.kind === 'conversation' ? existing : await api.stage({ ...o, kind: 'conversation' });
-      await api.transition(it.id, 'held', 'Sending to ' + (o.conversation?.label || 'Manager'));
+      await api.transition(it.id, 'held', 'Sending to ' + (o.conversation?.label || 'App voice input'));
       return api.retryConversation(it.id);
     },
     retryConversation(id) {
@@ -357,16 +357,16 @@
         if (!it || it.kind !== 'conversation' || quarantine.has(id) || it.state === 'sent') return it;
         it.state = 'transcribing'; it.error = ''; await put(it);
         try {
-          if (it.files?.length) throw new Error('Manager does not support attachments · audio and files kept; nothing sent');
+          if (it.files?.length) throw new Error('App voice input does not support attachments · audio and files kept; nothing sent');
           if (!it.text && it.audio) { it.text = String(await transcribe(it) || '').trim(); await put(it); }
-          if (!it.text) throw new Error('No speech detected · Manager recording kept');
+          if (!it.text) throw new Error('No speech detected · App voice input recording kept');
           // A durable journal owns bytes, text, destination and the SAME request identity
           // before the app may mutate anything. No audio upload to an ordinary Chat.
-          if (!it.durable || it.storageError) throw new Error('Device save failed · Manager message not dispatched; keep this tab open');
-          if (!window.WizAppServices?.conversation) throw new Error('Manager conversation unavailable');
+          if (!it.durable || it.storageError) throw new Error('Device save failed · App voice input message not dispatched; keep this tab open');
+          if (!window.WizAppServices?.conversation) throw new Error('App voice input conversation unavailable');
           it.state = 'sending'; await put(it);
           const receipt = await bounded(() => window.WizAppServices.conversation.deliver(it.conversation, { request_id: it.id, text: it.text, files: it.files }));
-          if (receipt?.accepted !== true || receipt.request_id !== it.id) throw new Error('Manager receipt uncertain');
+          if (receipt?.accepted !== true || receipt.request_id !== it.id) throw new Error('App voice input receipt uncertain');
           it.state = 'sent'; it.sentAt = now(); it.error = ''; await put(it);
           // Keep original bytes until the normal durable terminal-marker cleanup.
         } catch (e) { it.state = 'held'; it.error = String(e.message || e) + ' · retry original in Recordings'; await put(it); }
@@ -463,10 +463,17 @@
       } catch (e) { it.state = 'failed'; it.error = String(e.message || e); }
       await put(it); pump(); return it;
     },
-    retry(id) { const it = items.get(id); if (!it || quarantine.has(id) || it.steerDispatch === 'started' || it.kind === 'dictation' || ['sent', 'unconfirmed', 'sending', 'processing', 'preparing', 'missing', 'held'].includes(it.state)) return; Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); put(it).then(pump); },
+    retry(id) { const it = items.get(id); if (!it || quarantine.has(id) || it.steerDispatch === 'started' || it.kind === 'dictation' || ['sent', 'unconfirmed', 'sending', 'processing', 'preparing', 'missing', 'held'].includes(it.state)) return; Object.assign(it, { state: 'waiting', threadHidden: false, nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); put(it).then(pump); },
     retryAll() { for (const it of items.values()) if (it.kind !== 'dictation' && it.state === 'waiting') Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); Promise.all([...items.values()].map(put)).then(pump); },
     unsent() { return [...items.values()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
-    forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
+    forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && !(['empty', 'held'].includes(it.state) && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
+    async dismissEmpty(id) {
+      // Compatibility name: dismiss retained no-speech AND interrupted/local-only notes.
+      const it = items.get(id); if (!it || !['empty', 'held'].includes(it.state) || quarantine.has(id) || conversationWork.has(id)) return false;
+      it.threadHidden = true; await put(it);
+      if (!it.durable) { delete it.threadHidden; emit(); return false; }
+      return true; // Presentation only: original audio and upload receipt remain recoverable.
+    },
     get(id) { return items.get(id) || null; },
     landed(id) { const it = items.get(id); if (it?.state === 'sent') del(id); },
     async remove(id) { const it = items.get(id); if (!it || quarantine.has(id) || ['sending', 'transcribing', 'processing'].includes(it.state)) return false; await del(id); return !!items.get(id)?.durable; },

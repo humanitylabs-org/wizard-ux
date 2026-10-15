@@ -37,11 +37,11 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
-  function attach(frame, { appId, path } = {}) {
+  function attach(frame, { appId, path, openThread, isVisible } = {}) {
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
-    const st = { frame, appId, url, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
+    const st = { frame, appId, url, openThread, isVisible, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); };
@@ -104,6 +104,13 @@
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); return { version: VERSION, hosted: true, appId: st.appId }; },
+      view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
+      nav: Object.freeze({ openThread(id) {
+        check();
+        // This bounded workflow is admitted only for the installed Manager's current document.
+        if (!managerAuthorized(st) || st.isVisible?.() !== true || typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw fault('Thread navigation unavailable');
+        return st.openThread?.(id) === true;
+      } }),
       share: Object.freeze({ text(data) {
         check();
         if (data?.url && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(String(data.url))) {
@@ -235,21 +242,51 @@
       else history.back();
     });
   }
-  // Narrow v1 admission: only an installed Manager may receive orb conversation text.
+  // Only a trusted installed catalog capability admits app voice input.
   // No endpoint supplied by apps; no postMessage/global RPC. A token binds the live
   // document AND receiver at recording start. Reload/navigation requires recovery,
   // never a replacement recipient or a fallback to Chats.
   const conversationPins = new Map();
-  function pinConversation(frame, appId) {
-    if (appId !== 'wizard-manager') return null;
-    const st = frames.get(frame), token = 'conversation-' + crypto.randomUUID();
-    const pin = { appId, token, label: 'Manager conversation', target: null };
+  const voiceApp = appId => apps().find(a => a.id === appId && a.kind === 'wizard' && a.url && a.receives_voice_input === true);
+  const receiverOf = st => st?.client?.voiceInput || st?.client?.conversation;
+  function voiceAuthorized(st, appId) {
+    const app = voiceApp(appId); if (!app || !st) return false;
     try {
-      if (!valid(st, st?.doc) || !st.doc || st.appId !== appId) throw fault('Manager frame unavailable');
-      const receiver = st.client?.conversation, target = receiver?.snapshot();
-      if (!target || (target.replyTo !== null && (!Number.isSafeInteger(target.replyTo) || target.replyTo <= 0))) throw fault('Manager conversation not ready');
-      pin.target = Object.freeze({ replyTo: target.replyTo });
-      pin.label = String(target.label || pin.label).slice(0, 160);
+      const url = new URL(app.url, location.href);
+      return url.origin === ORIGIN && url.href === st.url.href && valid(st, st.doc);
+    } catch (_) { return false; }
+  }
+  function freezeTarget(value) {
+    let nodes = 0, chars = 0;
+    function copy(v, depth) {
+      if (++nodes > 256 || depth > 8) throw fault('Voice target too complex');
+      if (v === null || typeof v === 'boolean') return v;
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+      if (typeof v === 'string') { chars += v.length; if (chars > 8192) throw fault('Voice target too large'); return v; }
+      if (!v || typeof v !== 'object' || Object.prototype.toString.call(v) !== (Array.isArray(v) ? '[object Array]' : '[object Object]')) throw fault('Voice target must be JSON');
+      const out = Array.isArray(v) ? [] : {};
+      for (const key of Object.keys(v)) {
+        if (['__proto__', 'constructor', 'prototype'].includes(key)) throw fault('Invalid voice target key');
+        chars += key.length; if (chars > 8192) throw fault('Voice target too large');
+        out[key] = copy(v[key], depth + 1);
+      }
+      return Object.freeze(out);
+    }
+    if (!value || Array.isArray(value) || typeof value.label !== 'string' || !value.label.trim() || value.label.length > 160) throw fault('Voice target needs a label');
+    return copy(value, 0);
+  }
+  function pinConversation(frame, appId) {
+    const app = voiceApp(appId); if (!app) return null;
+    const st = frames.get(frame), token = 'conversation-' + crypto.randomUUID();
+    const pin = { appId, token, label: String(app.name || appId).slice(0, 160), target: null };
+    try {
+      if (!voiceAuthorized(st, appId) || !st.doc || st.appId !== appId) throw fault('App frame unavailable');
+      const receiver = receiverOf(st);
+      if (typeof receiver?.snapshot !== 'function' || typeof receiver?.receive !== 'function') throw fault('Voice receiver unavailable');
+      const target = receiver.snapshot();
+      if (target === null) return null; // deliberate inactive view, unlike absent/broken receiver
+      pin.target = freezeTarget(target);
+      pin.label = pin.target.label;
       conversationPins.set(token, { st, doc: st.doc, receiver, target: pin.target });
     } catch (_) { /* Keep a sealed unavailable destination, not a null/fallback route. */ }
     return Object.freeze(pin);
@@ -257,18 +294,33 @@
   async function deliverConversation(pin, message) {
     const held = conversationPins.get(pin?.token);
     const authorize = () => {
-      if (!held || pin.appId !== held.st.appId || !valid(held.st, held.doc) || held.st.client?.conversation !== held.receiver)
-        throw fault('Manager view closed, reloaded or unavailable · recording kept; copy transcript from Recordings');
+      if (!held || pin.appId !== held.st.appId || !voiceAuthorized(held.st, pin.appId) || !valid(held.st, held.doc) || receiverOf(held.st) !== held.receiver)
+        throw fault('App view closed, reloaded or unavailable · recording kept; copy transcript from Recordings');
     };
     authorize();
     if (!message || !/^[A-Za-z0-9_-]{8,100}$/.test(message.request_id || '') || typeof message.text !== 'string' || !message.text.trim() || message.text.length > 12000 || message.files?.length)
-      throw fault('Manager accepts text only, up to 12000 characters · original kept');
+      throw fault('App voice input accepts text only, up to 12000 characters · original kept');
     const receipt = await held.receiver.receive(Object.freeze({ request_id: message.request_id, text: message.text, target: held.target }), authorize);
     // Receipt is evidence of durable admission even if focus changed during POST.
-    if (receipt?.accepted !== true || receipt.request_id !== message.request_id) throw fault('Manager receipt uncertain · original kept');
+    if (receipt?.accepted !== true || receipt.request_id !== message.request_id) throw fault('App receipt uncertain · original kept');
     return { accepted: true, request_id: message.request_id };
   }
-  window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack,
+  function managerAuthorized(st) {
+    if (!st || st.appId !== 'wizard-manager' || !valid(st, st.doc) || typeof st.openThread !== 'function') return false;
+    const app = apps().find(a => a.id === st.appId && a.kind === 'wizard' && a.url);
+    try { return !!app && new URL(app.url, location.href).href === st.url.href; } catch (_) { return false; }
+  }
+  function ownsThreadLink(source, anchor) {
+    const st = from(source);
+    if (!managerAuthorized(st)) return false;
+    try {
+      const u = new URL(anchor.href);
+      return u.origin === ORIGIN && u.pathname === '/wizard-os-home/' &&
+        !!anchor.dataset.wizardNativeThread && u.searchParams.get('session') === anchor.dataset.wizardNativeThread;
+    } catch (_) { return false; }
+  }
+  window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack, ownsThreadLink,
+    voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     update: Object.freeze({ busy, announce, available: () => available }),
     inspect: () => { reconcile(); return [...frames.values()].map(st => ({ appId: st.appId, path: st.url.pathname, ready: !!st.doc, holds: [...st.holds.values()], suspect: !!st.suspect })); },

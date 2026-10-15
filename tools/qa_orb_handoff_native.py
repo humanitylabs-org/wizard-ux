@@ -62,6 +62,18 @@ def run(pg, sx, top, check, save, origin, pkg, state, lock):
     pg.pump(1.5); stop_voice(v2); pg.pump(.5)
     check('handoff', 'manual pause is preserved', before['pausedByHandoff'] is False and status().get('paused'))
     cmd('resume'); pg.pump(.5); cmd('stop'); pg.pump(2)
+    # A new explicit Pause while the loan owns the microphone overrides auto-resume durably.
+    mid_user, ident_user = 'qa_orb_pause_during', 'handoff-native-user-pause'
+    cmd('start', mid_user); pg.pump(1)
+    user_loan=loan(mid_user,ident_user); user_take=begin_voice(ident_user); assert user_take
+    pg.pump(1); cmd('pause')
+    saved_pause=json.loads(ev('JSON.parse(WizardOSDevice.recHandoffEvents())')[ident_user])
+    check('handoff','explicit Pause during native loan is a durable override', saved_pause.get('userPaused') is True and saved_pause.get('pausedByHandoff') is False, saved_pause)
+    stop_voice(user_take); pg.pump(.5)
+    check('handoff','loan completion honors user Pause without resuming', status().get('paused') is True and len(read_voice(user_take))>600)
+    returned=ev('JSON.parse(WizardOSDevice.recHandoffEnd('+json.dumps(ident_user)+'))')
+    check('handoff','repeat native return reads authoritative paused receipt', returned.get('open') is False and returned.get('status')=='paused' and returned.get('userPaused') is True, returned)
+    cmd('stop'); pg.pump(2)
     # Cancel returns microphone without deleting the linked original.
     mid3, ident3 = 'qa_orb_cancel', 'handoff-native-cancel'
     cmd('start', mid3); pg.pump(1); loan(mid3, ident3); v3=begin_voice(ident3); assert v3

@@ -53,7 +53,7 @@ test('meeting take queues new run; non-meeting parked steering remains intact',a
  const b=await ob.stage({steerRunId:'original-run',sessionId:'thread-a'});assert.equal(b.steerRunId,'original-run');
 });
 function resumeContext(h,prior=null,pin=null) {
- const V={state:'idle'},c={V,window:{WosOrbHandoff:h,WosModels:{load:async()=>{}},__wosDictationTake:()=>false},voiceTake:()=>null,replyTake:()=>pin,OUTBOX:{get:()=>prior},performance,renderVoiceFiles(){},setVoice:s=>V.state=s,txPill(){},txHide(){},requestAnimationFrame:()=>1,tick(){}};
+ const V={state:'idle'},c={V,window:{WosOrbHandoff:h,WosModels:{load:async()=>{}},__wosDictationTake:()=>false,__wosVoiceRecovery:()=>[]},voiceTake:()=>null,replyTake:()=>pin,OUTBOX:{get:()=>prior},performance,renderVoiceFiles(){},setVoice:s=>V.state=s,txPill(){},txHide(){},requestAnimationFrame:()=>1,tick(){}};
  vm.createContext(c);vm.runInContext(section(phone,'  function nativeResume(','  // Tell the native shell'),c);return c;
 }
 test('active native recovery uses immutable meeting pin, not unrelated foreground',()=>{
@@ -81,6 +81,6 @@ test('native recovery does not enqueue parked owner or sent tombstone',async()=>
 test('meeting Manager admission clears conversation and implicit context before recording',()=>{
  const s=section(phone,'    V.snap = initialSnap;','    setVoice(kind');
  const V={},initialSnap={conversation:{appId:'wizard-manager'},view:{kind:'app',name:'Manager'},screen:'PRIVATE',others:['PRIVATE']};
- vm.runInNewContext(s,{V,initialSnap,meetingLoan:{id:'event-a'},kind:'auto'});
+ vm.runInNewContext(s,{V,initialSnap,meetingLoan:{id:'event-a'},kind:'auto',paintVoiceDestination(){}});
  assert.equal(V.snap.conversation,null);assert.equal(V.snap.view,null);assert.equal(V.snap.meetingEventId,'event-a');assert.equal(V.snap.screen,'');assert.equal(V.snap.others.length,0);
 });

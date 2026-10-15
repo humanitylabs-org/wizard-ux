@@ -120,10 +120,11 @@ public class RecorderService extends Service {
             return "";
         }
         activeId = id; stopWanted = null; paused = false; pausedMs = 0; level = 0; source = "";
+        ai.wizards.os.audio.AudioRecordingGate.set("recorder", true);
         startedAt = SystemClock.elapsedRealtime();
         Intent i = new Intent(c, RecorderService.class).setAction(ACTION_START).putExtra(EXTRA_ID, id);
         try { c.startForegroundService(i); }
-        catch (RuntimeException e) { Log.w(TAG, "start: " + e); activeId = null;
+        catch (RuntimeException e) { Log.w(TAG, "start: " + e); activeId = null; ai.wizards.os.audio.AudioRecordingGate.set("recorder", false);
             ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);
             if (borrowed) new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
             RecordingStore.get(c).delete(id); return ""; }
@@ -328,6 +329,7 @@ public class RecorderService extends Service {
             } catch (IOException e) { Log.w(TAG, "handoff custody not confirmed", e); }
             if (durable) ai.wizards.os.mizel.MeetingRecorderService.endBorrow(event, state);
         }
+        ai.wizards.os.audio.AudioRecordingGate.set("recorder", false);
         Log.i(TAG, "take " + id + " " + state + " via=" + via);
         if (id != null && listener != null && "stopped".equals(state)) {
             // The app takes it from here (transcribe, outbox). Stay in the foreground until it says it has the take

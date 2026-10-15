@@ -4,7 +4,7 @@
 
 One `WosSettings` registry now owns Settings rendering, skin selection, settings actions and settings deep-link dispatch for phone and desktop. A feature registered once appears in both mounts; a feature alias is accepted by the common deep-link parser without editing either shell. The normal `npm test` command and PR CI enforce this contract.
 
-This is **not a declaration that every historical phone feature now has a desktop implementation**. The source inventory below deliberately records unresolved cross-platform features instead of treating them as native exceptions. Keep the umbrella request open until those gates are resolved and the final integrated build is verified live.
+Remaining browser-capable parity is now extracted into common commands, views, capture services and bound-view provenance in PR42. See `responsive-remainder-parity.md` for the final verification boundary and `responsive-capability-coverage.json` for all 73 audit records and the complete 163-row crosswalk. Native adapters and the simulated Live Mode preview remain explicit exclusions.
 
 ### Settings coverage
 
@@ -28,17 +28,11 @@ Settings controls retain the approved phone design. Claude CLI was explicitly ru
 
 `responsive-feature-inventory.json` contains all entrypoint assets (56 shared, 25 exclusive) and all 46 core JavaScript modules. Exclusive entries distinguish layout/input adapters, native bridges, opt-in previews and **open gaps**. Tests fail when the inventory or import contract drifts. Runtime-generated `data.js` and `summaries.js` are not missing committed code and are intentionally fetched from the deployment during browser QA.
 
-The source audit also inspected the local renderers and `openApp`/deep-link dispatch inside both shell adapters. Remaining non-Settings gaps include:
+The earlier checkpoint identified review, Maps, local voice commands, screenshot/pause/attachment controls, focused-field dictation, browser wake lock, selected-text actions, general bound feedback and install-prompt gaps. PR42 closes these through shared modules and a lightweight action/view registry, not a mobile embed or a replacement shell. Both entrypoints load every common module; existing module and new synthetic action/view tests guard future registrations.
 
-- Day/week/month review rendering is still inside phone `app.js`; desktop view dispatch does not implement it. Generated review data alone is not a shared feature.
-- Local music voice-command parsing (`core/music-voice.js`) is installed by the phone only. Desktop voice goes through its existing agent-send path.
-- Phone voice has richer capture controls (pause/continue, screen capture and context/command gestures). The browser-capable `core/screen-capture.js` exists but the desktop recorder has no equivalent screenshot toggle. Do not call these hardware-only exceptions.
-- Phone Maps has a local renderer/search/navigation flow in `app.js`; desktop falls back to the registry URL/href rather than sharing that view.
-- The custom PWA install prompt is phone-only. Desktop browser installation is not equivalent to a verified shared in-app install control.
-- Live Mode is an explicitly enabled, simulated preview, not a completed live feature. It remains phone-only; do not promote its mock feed as production parity.
-- Orb/desk gesture geometry, keyboard/window management and their help content are intentional input adapters. Android Everywhere, side button, selection overlay, Food/Grab automation, notification and background recording require real native capabilities and cannot be represented as working desktop web controls.
+Android Everywhere, hardware side-button/accessibility, background recording/notifications, Share intents, APK updates and Grab automation still require their real native adapters. Browser installation is shown only when a browser emits its install capability; screenshot support is browser/bridge-dependent. Browser push is not represented by a fake enabled control. Live Mode remains explicitly simulated and opt-in.
 
-A future Settings registration is automatic on both layouts. Arbitrary new feature code pasted into one shell is not magically portable; the entrypoint guard, shared-by-default development rule and runtime parity tests are the prevention mechanism. Resolve the open gaps by extracting real shared components/commands, not by relabeling them as exceptions or adding dead desktop links.
+The following receipts document the earlier Settings-only slice, not the final combined source. Current receipts are in `responsive-remainder-parity.md`.
 
 ## Verification receipts
 

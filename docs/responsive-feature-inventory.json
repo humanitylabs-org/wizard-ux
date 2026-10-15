@@ -41,20 +41,15 @@
       "classification": "native",
       "reason": "WizardAndroidRelay required; Android-only transport."
     },
+    "core/background-audio.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Origin-scoped Android Media3 transport through wizardAudioPort; hosted Music retains shared browser playback without this native port."
+    },
     "core/carry-in.js": {
       "shell": "phone",
       "classification": "native",
       "reason": "Android origin migration custody handoff; not desktop storage migration."
-    },
-    "core/sel-menu.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Requires Android accessibility/overlay capabilities."
-    },
-    "core/sel-menu.css": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android selection overlay controls."
     },
     "device.js": {
       "shell": "phone",
@@ -86,31 +81,6 @@
       "classification": "adapter",
       "reason": "Desktop browser recorder input; cancellation now uses the common recording store."
     },
-    "pwa-install.js": {
-      "shell": "phone",
-      "classification": "open-gap",
-      "reason": "Phone install prompt only; browser installation capability remains absent on desktop."
-    },
-    "data.js": {
-      "shell": "phone",
-      "classification": "open-gap",
-      "reason": "Owner-generated runtime review/brief data (not committed). Phone consumes it; desktop review views remain an open gap."
-    },
-    "summaries.js": {
-      "shell": "phone",
-      "classification": "open-gap",
-      "reason": "Owner-generated runtime review summary data (not committed). Phone review renderer remains in app.js."
-    },
-    "core/music-voice.js": {
-      "shell": "phone",
-      "classification": "open-gap",
-      "reason": "Phone local music command parsing; desktop sends voice to agent instead."
-    },
-    "core/screen-capture.js": {
-      "shell": "phone",
-      "classification": "open-gap",
-      "reason": "Phone voice screenshot toggle uses this browser-capable module; desktop has no matching voice toggle."
-    },
     "live-mode.js": {
       "shell": "phone",
       "classification": "preview",
@@ -139,10 +109,12 @@
     "core/appearance-host.js",
     "core/apps.js",
     "core/base.css",
+    "core/bound-view.js",
     "core/brand.css",
     "core/brand.js",
     "core/bridge.js",
     "core/cancelled.js",
+    "core/capture-tools.js",
     "core/chat-errors.js",
     "core/chat-kit.js",
     "core/chat-models.js",
@@ -152,18 +124,24 @@
     "core/chat-work.js",
     "core/chats.css",
     "core/chats.js",
+    "core/commands.js",
     "core/config.js",
     "core/core.js",
     "core/deeplink.js",
+    "core/features.js",
     "core/files.js",
     "core/focused-field.js",
     "core/links.css",
     "core/links.js",
+    "core/music-voice.js",
     "core/polish.css",
     "core/resources.css",
     "core/resources.js",
     "core/scenery.js",
+    "core/screen-capture.js",
     "core/screen-text.js",
+    "core/sel-menu.css",
+    "core/sel-menu.js",
     "core/settings.css",
     "core/settings.js",
     "core/shell.js",
@@ -176,14 +154,19 @@
     "core/uploads.js",
     "core/usage.js",
     "core/video-desks.js",
+    "core/views.css",
+    "core/views.js",
     "core/voice-status.js",
     "core/web-update.js",
     "core/workspace-navigation.js",
+    "data.js",
     "favicon.ico",
     "icon-192.png",
     "live.js",
     "manifest.webmanifest",
-    "outbox.js"
+    "outbox.js",
+    "pwa-install.js",
+    "summaries.js"
   ],
   "coreModules": {
     "core/agents.js": {
@@ -198,6 +181,12 @@
         "phone"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/background-audio.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Android-only background playback transport; no separate common Music renderer."
     },
     "core/app-capture.js": {
       "loadedBy": [
@@ -369,7 +358,8 @@
     },
     "core/music-voice.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
       "note": "Direct entrypoint import"
     },
@@ -389,7 +379,8 @@
     },
     "core/screen-capture.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
       "note": "Direct entrypoint import"
     },
@@ -402,7 +393,8 @@
     },
     "core/sel-menu.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
       "note": "Direct entrypoint import"
     },
@@ -489,6 +481,41 @@
       "note": "Direct entrypoint import"
     },
     "core/workspace-navigation.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/bound-view.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/capture-tools.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/commands.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/features.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/views.js": {
       "loadedBy": [
         "phone",
         "desktop"
