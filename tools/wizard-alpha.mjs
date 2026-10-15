@@ -44,6 +44,7 @@ export function validateEntry(a) {
 }
 export function validateSnapshot(doc) {
   if (!keys(doc,['source','revision','apps']) || !keys(doc.source,['schema','id','name','channel']) || doc.source.schema!==1 || !ID.test(doc.source.id || '') || !text(doc.source.name,60) || doc.source.channel!=='alpha' || !SHA.test(doc.revision || '') || !Array.isArray(doc.apps) || doc.apps.length>200) fail('invalid_source');
+  if(['standard','owner-private'].includes(doc.source.id)) fail('reserved_source_identity');
   const seen=new Set(); for (const a of doc.apps) { validateEntry(a); if(seen.has(a.id)) fail('duplicate_app'); seen.add(a.id); }
   return doc;
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Install the coupled adapter/helper/skill into an explicitly named existing deployment.
-import {readFileSync,writeFileSync,existsSync,mkdirSync,copyFileSync,chmodSync,rmSync} from 'node:fs';
+import {readFileSync,writeFileSync,existsSync,mkdirSync,copyFileSync,chmodSync,rmSync,renameSync} from 'node:fs';
 import {resolve,join,dirname,isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
@@ -27,7 +27,7 @@ async function main() {
       for(const file of r.files) if(existsSync(file.target) && digest(file.target)!==file.hash) throw Error('deployment_changed_since_setup');
       for(const file of r.files) { if(file.backup) copyFileSync(file.backup,file.target); else rmSync(file.target,{force:true}); }
       if(r.added_skill_dir) await run([...d.hermes,'config','set','skills.external_dirs',JSON.stringify(oldDirs.filter(x=>x!==skillDir))],{env});
-      await run(d.restart); console.log(JSON.stringify({rolled_back:true,installed_apps_and_data_retained:true})); return;
+      await run(d.restart); renameSync(receiptPath,join(home,`setup-rollback-${Date.now()}.json`)); console.log(JSON.stringify({rolled_back:true,installed_apps_and_data_retained:true})); return;
     }
     if(existsSync(receiptPath)) throw Error('setup_already_managed_rollback_before_replacing');
     const subscription=await subscribe(f.repo,f.ref || 'main',home);

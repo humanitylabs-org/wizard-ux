@@ -187,19 +187,20 @@
   }
   function openApp(id) { push('detail', id); showDetail(id); }
 
-  let toastT = 0;
+  let toastT = 0, lastInstallRequest = '';
   function installRequest(a) {
     const verb=isInstalled(a) || a.installed_commit ? 'Update' : 'Install';
     if(a.channel==='alpha') return `${verb} ${a.name} from ${a.source_name}: source ${a.source}, app ${a.id}, commit ${a.commit}, version ${a.version}. Use wizard-alpha install --source ${a.source} --app ${a.id} --commit ${a.commit}${verb==='Update'?' --update':''}. Verify the authenticated view opens before reporting success.`;
     if(a.private) return `${verb} ${a.name} using owner-private source, repository ${a.repo}, exact commit ${a.commit}, version ${a.version}. Do not substitute the Alpha release.`;
     return `${verb} ${a.name} from Standard, repository ${a.repo}, version ${a.version}${a.commit?`, commit ${a.commit}`:''}. Do not substitute an Alpha release.`;
   }
-  function toast(html) { const t = $('toast'); t.innerHTML = html; t.hidden = false; requestAnimationFrame(() => t.classList.add('on')); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { t.hidden = true; }, 250); }, 3600); }
+  function toast(html, duration=3600) { const t = $('toast'); t.innerHTML = html; t.hidden = false; requestAnimationFrame(() => t.classList.add('on')); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { if(!t.classList.contains('on')) t.hidden = true; }, 250); }, duration); }
 
   document.addEventListener('click', e => {
     if (e.target.closest('[data-back]')) { pop(); return; }
     const g = e.target.closest('[data-get]');
-    if (g) { e.stopPropagation(); const base=find(g.dataset.get); if(!base || base.conflict) return; const a=selected(base); toast(`<b>Ask your agent</b><span>${esc(installRequest(a))}</span>`); return; }
+    if (g) { e.stopPropagation(); const base=find(g.dataset.get); if(!base || base.conflict) return; const a=selected(base); lastInstallRequest=installRequest(a); toast(`<b>Ask your agent</b><span>${esc(lastInstallRequest)}</span><button class="get" data-copy-install>Copy request</button>`,15000); return; }
+    if(e.target.closest('[data-copy-install]')) { navigator.clipboard.writeText(lastInstallRequest).then(()=>toast('<b>Request copied</b>')).catch(()=>toast('<b>Select the request in app details to copy it.</b>')); return; }
     const o = e.target.closest('[data-open]');
     if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
     const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);
