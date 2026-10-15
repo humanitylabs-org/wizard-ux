@@ -71,6 +71,17 @@ let browser;
  await audio('load',{queue:[{...fixture.tracks[0],stream:'http://10.0.2.2:'+http+fixture.tracks[0].stream,art:'http://10.0.2.2:'+http+fixture.tracks[0].art}],index:0,station});
  const fenceBefore=await snap();await audio('removeUpcoming',{ids:[fixture.tracks[12].id]});await wait(3500);const fenceAfter=await snap();await post('/qa/more-delay',{seconds:0});
  check('queue policy mutation fences out stale in-flight continuation',fenceAfter.generation>fenceBefore.generation&&!fenceAfter.queue.slice(fenceAfter.index+1).some(t=>t.id===fixture.tracks[12].id),fenceAfter);
+ // Actual UI callback, not a direct engine/bridge invocation: successful drop:[]
+ // must fence the response already captured under the pre-like policy.
+ await post('/qa/reset',{});await post('/qa/more-delay',{seconds:3});await post('/qa/stale-next',{});
+ await audio('load',{queue:[{...fixture.tracks[0],stream:'http://10.0.2.2:'+http+fixture.tracks[0].stream,art:'http://10.0.2.2:'+http+fixture.tracks[0].art}],index:0,station});
+ for(let i=0;i<30;i++){if((await server('/qa/stats')).stale_started)break;await wait(100);}
+ const tasteBefore=await snap(),staleStarted=(await server('/qa/stats')).stale_started;
+ await frame().locator('.music-mini-open').click();await frame().locator('.music-like').click();
+ for(let i=0;i<30;i++){if((await snap()).generation>tasteBefore.generation)break;await wait(100);}
+ await wait(3500);const tasteAfter=await snap(),tasteEvents=(await server('/qa/stats')).events;
+ check('actual successful empty-drop like callback rejects delayed native stale continuation',staleStarted&&tasteAfter.generation>tasteBefore.generation&&!tasteAfter.queue.some(t=>t.id==='yt:stale000001')&&tasteEvents.some(e=>e.action==='like'),{before:tasteBefore.generation,after:tasteAfter.generation,staleStarted,queue:tasteAfter.queue.map(t=>t.id)});
+ await post('/qa/more-delay',{seconds:0});await frame().getByRole('button',{name:'Close player',exact:true}).click();
  // Correlated frame/session adversaries: native main-frame port alone is never a hosted-app permission.
  const stale=await audio('pause',{sessionId:'obsolete'});check('stale session commands refused',!stale.ok);
  const forged=await audio('load',{queue:[{...down.queue[down.index],stream:'https://evil.test/music.mp3'}],index:0,station:null});check('foreign media URL rejected before network',!forged.ok);

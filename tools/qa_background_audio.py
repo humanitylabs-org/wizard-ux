@@ -75,13 +75,20 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
                 if p=='/wizard-music/api/home':return self.body(200,{'sources':[],'vibes':[],'liked':[],'recent':state['tracks'][:3],'library':state['tracks'][:3]})
                 if p=='/wizard-music/api/search':return self.body(200,{'tracks':state['tracks'][:3]})
                 if p.startswith('/wizard-music/api/station/'):
-                    if state.get('delay_more'):time.sleep(state['delay_more'])
                     with LOCK:
                         if state['down']:return self.body(503,{'error':'offline'})
                         key=q.get('requestId',[''])[0]
                         if key not in state['batches']:
-                            a=state['next'];batch=state['tracks'][a:a+6];state['next']+=len(batch);state['refills']+=1;state['batches'][key]=batch
-                        return self.body(200,{'tracks':state['batches'][key]})
+                            a=state['next'];batch=state['tracks'][a:a+6];state['next']+=len(batch);state['refills']+=1
+                            if state.pop('stale_next',False):
+                                batch=[dict(state['tracks'][1],id='yt:stale000001')]
+                                state['stale_started']=True
+                            state['batches'][key]=batch
+                        batch=state['batches'][key]
+                        delay=state.get('delay_more',0)
+                    # Capture the old policy response before delaying its arrival.
+                    if delay:time.sleep(delay)
+                    return self.body(200,{'tracks':batch})
                 if p=='/wizard/v1/apps':return self.body(200,registry)
                 if p=='/wizard/v1/bootstrap':return self.body(200,bootstrap)
                 if p=='/reports/wizard-os/latest.json':return self.body(200,{'app':'ai.wizards.os','versionCode':0,'version':'0','bytes':1,'sha256':'0'*64,'url':'no.apk','signer':'0'*64})
@@ -104,6 +111,7 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
                     t=next((t for t in state['tracks'] if t['id']==data.get('id')),state['tracks'][0]);return self.body(200,{'ok':True,'track':t,'drop':[],'learned':None})
                 if p=='/qa/offline':state['down']=bool(data.get('down'));return self.body(200,{'ok':True})
                 if p=='/qa/reset':state['next']=int(data.get('next',3));state['batches']={};return self.body(200,{'ok':True})
+                if p=='/qa/stale-next':state['stale_next']=True;state['stale_started']=False;return self.body(200,{'ok':True})
                 if p=='/qa/more-delay':state['delay_more']=float(data.get('seconds',0));return self.body(200,{'ok':True})
                 if p=='/qa/fail-stream':state['fail_stream']=data.get('id');return self.body(200,{'ok':True})
                 return self.body(403,{'error':'isolated_qa'})
