@@ -39,11 +39,11 @@
     if(!loan)return;
     update(loan.id,{...detail,endedAt:Date.now()});
     // Stop wins: stale_handoff means the meeting is no longer running, not permission to restart it.
-    try{return await window.WizAppCapture.endVoiceBorrow(loan.id,detail);}catch(e){if(e.code!=='stale_handoff')throw e;}
+    try{const receipt=await window.WizAppCapture.endVoiceBorrow(loan.id,detail);if(receipt?.endedAt)update(loan.id,{endedAt:receipt.endedAt,pausedByHandoff:receipt.pausedByHandoff});return receipt;}catch(e){if(e.code!=='stale_handoff')throw e;}
   }
   function track(it) {
     if(!it.meetingEventId)return;
-    update(it.meetingEventId,{voiceTakeId:it.nativeId||it.id,deliveryKey:it.id,question:it.text||'',
+    update(it.meetingEventId,{voiceTakeId:it.nativeId||it.id,deliveryKey:it.id,question:it.text||'',agent:it.agent||'',steered:!!it.steered,...(it.audioFile?.id?{audioFileId:it.audioFile.id}:{}),
       status:it.state==='sent'?'sent':['failed','unconfirmed'].includes(it.state)?it.state:it.state==='held'?'local':'queued',
       ...(it.state==='sent'?{threadId:it.sessionId,runId:it.runId,...(it.userMessageId?{userMessageId:it.userMessageId}:{})}:{})});
   }

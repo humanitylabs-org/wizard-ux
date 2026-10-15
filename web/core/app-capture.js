@@ -313,7 +313,7 @@
   function session(s) {
     return Object.freeze({ id: s.row.id,
       getInfo: () => ({ phase:s.phase,inputStopped:!!s.inputStopped,error:s.error?.code||null,native: s.row.native || null, backendStopOwned: !!s.engine?.backendStopOwned, livePcm: s.engine?.livePcm !== false,
-        hasSystemAudio: !!s.hasSystemAudio, paused: s.phase === 'paused',
+        hasSystemAudio: !!s.hasSystemAudio, paused: s.phase === 'paused' || s.phase === 'handoff',
         durationMs: s.nativeState?.mediaMs ?? (s.row.pcm && !s.row.native ? s.row.durationMs : (s.pausedAt || Date.now()) - s.row.startedAt - (s.pausedTotal || 0)),
         state: s.nativeState || null, meta: JSON.parse(JSON.stringify(s.row.meta)), capabilities: capabilities({ kind: s.row.kind }) }),
       onPcm: fn => observe(s,'pcm',fn), onChunk: fn => observe(s,'chunk',fn),
@@ -326,11 +326,13 @@
       onLevel(fn) { if (typeof fn !== 'function') throw fail('invalid_callback', 'A level listener is required.'); s.levels.add(fn); return () => s.levels.delete(fn); },
       stop() { return finish(s); },
       async pause() {
+        if(active===s && s.borrow){s.borrow.pausedByHandoff=false;const marker=s.row.meta.handoffs?.find(x=>x.id===s.borrow.id);if(marker)marker.pausedByHandoff=false;await put(s.row);if(s.row.native)await s.engine.pause();emit(s,'state',{paused:true,recording:true});changed();return;}
         if (active !== s || s.phase !== 'recording') return;
         if (!s.engine.pause) throw fail('pause_unavailable', 'This recorder cannot pause.');
         await s.engine.pause(); s.pausedAt = Date.now(); s.phase = 'paused'; emit(s,'state',{paused:true,recording:true}); changed();
       },
       async resume() {
+        if(s.borrow)throw fail('mic_borrowed','Finish the orb recording before resuming the meeting.');
         if (active !== s || s.phase !== 'paused') return;
         if (s.engineDetached) await reopenBorrowedEngine(s); else await s.engine.resume();
         s.pausedTotal = (s.pausedTotal || 0) + Date.now() - s.pausedAt; s.pausedAt = 0; s.phase = 'recording'; emit(s,'state',{paused:false,recording:true}); changed();

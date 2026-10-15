@@ -13,7 +13,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
 (async()=>{
  const {OrbEvents}=await import(process.env.MIZEL_ADOPTION+'/orb-events.mjs');
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const fixture=fs.readFileSync(path.join(root,'qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replaceAll('https://private.wizard001.com','http://127.0.0.1:'+server.address().port);
+ const fixture=fs.readFileSync(path.join(root,'qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replace('?.slice(0, 500)','').replaceAll('https://private.wizard001.com','http://127.0.0.1:'+server.address().port);
  ({boot,app,select,tap,contexts}=new Function('require','__dirname','process',fixture+'\nreturn {boot,app,select,tap,contexts};')((name)=>name==='playwright-core'?{chromium}:require(name),root,process));
  browser=await chromium.launch({executablePath:process.env.CHROMIUM,headless:true,args:['--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  let f=await boot(browser,false),p=f.p;await tones(p);const store=new OrbEvents(path.join(evidence,'events.json'));
@@ -51,18 +51,18 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
  });
  await test('park reply, dictate in other app, restore exact target/model/text/audio paused',async()=>{
    await p.evaluate(()=>__wos.openWizardThread('qa-0'));await p.locator('[data-chmic]').first().waitFor();
-   const input=p.locator('[data-chat-input]').first();if(await input.count())await input.fill('original typed draft');
-   await p.locator('[data-chmic]').first().click();await p.waitForTimeout(700);await p.locator('#arcPause').click();
+   const input=p.locator('.ch-compose textarea').first();await p.evaluate(()=>{tone=440;});
+   await p.locator('[data-chmic]').first().click();await p.waitForTimeout(700);await p.locator('#arcPause').click();await input.fill('original typed draft');
    const original=await p.evaluate(()=>({reply:__wos.V.replyTo,route:__wos.V.snap.route}));assert.equal(original.reply.sid,'qa-0');
    // Open another app without cancelling the parked reply (unlike the old fixture helper).
    await p.evaluate(()=>__wos.openApp(window.__qaApp));await p.waitForTimeout(400);
    const frame=p.frames().find(x=>x.url().includes('/qa-iching/'));await select(frame);
    const before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;
-   await tap(p);await p.waitForFunction(()=>__wos.V.kind==='dictation');await p.waitForTimeout(700);await tap(p);
+   await p.evaluate(()=>{tone=880;});await tap(p);await p.waitForFunction(()=>__wos.V.kind==='dictation');await p.waitForTimeout(700);await tap(p);
    await p.waitForFunction(()=>__wos.voice==='paused'&&__wos.V.replyTo?.sid==='qa-0');
    assert.equal(await frame.locator('#a').inputValue(),'one spoken words three');
    const restored=await p.evaluate(()=>({reply:__wos.V.replyTo,route:__wos.V.snap.route,bytes:__wos.V.parts.reduce((n,b)=>n+b.size,0),held:WosOutbox.get(__wos.V.custodyCapture)?.durable}));
-   assert.deepEqual(restored.reply,original.reply);assert.deepEqual(restored.route,original.route);assert.ok(restored.bytes>0);assert.equal(restored.held,true);assert.equal(f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,before);
+   assert.deepEqual(restored.reply,original.reply);assert.deepEqual(restored.route,original.route);assert.ok(restored.bytes>0);assert.equal(restored.held,true);assert.equal(await p.evaluate(()=>__wos.V.seal.text),'original typed draft');assert.equal(f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,before);
  });
  await test('held command during parked reply executes locally and restores paused original',async()=>{
    f.R.words='open settings';const before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;
@@ -73,12 +73,52 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
    assert.equal(f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,before);
    await p.evaluate(()=>__wos.closeSheets(true));
  });
+ await test('cancelled and failed borrowed dictation keep exact paused original without sends',async()=>{
+   const frame=p.frames().find(x=>x.url().includes('/qa-iching/'));
+   await p.evaluate(()=>__wos.openApp(window.__qaApp));await p.waitForTimeout(350);const fieldFrame=p.frames().find(x=>x.url().includes('/qa-iching/'));await select(fieldFrame);
+   const original=await p.evaluate(()=>({id:__wos.V.custodyCapture,text:__wos.V.seal.text,reply:__wos.V.replyTo,route:__wos.V.snap.route})),before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;
+   await tap(p);await p.waitForTimeout(500);await p.evaluate(()=>__wos.cancelVoice(true));assert.equal(await p.evaluate(()=>__wos.voice),'paused');
+   await select(fieldFrame);f.R.fail=true;await tap(p);await p.waitForTimeout(550);await tap(p);await p.waitForFunction(()=>__wos.voice==='paused');f.R.fail=false;
+   const after=await p.evaluate(()=>({id:__wos.V.custodyCapture,text:__wos.V.seal.text,reply:__wos.V.replyTo,route:__wos.V.snap.route}));assert.deepEqual(after,original);assert.equal(f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,before);
+ });
+ await test('denied borrowed microphone restores original paused draft and target',async()=>{
+   const fieldFrame=p.frames().find(x=>x.url().includes('/qa-iching/'));await select(fieldFrame);
+   await p.evaluate(()=>{window.goodGum=navigator.mediaDevices.getUserMedia;navigator.mediaDevices.getUserMedia=async()=>{throw new DOMException('denied','NotAllowedError');};});
+   await tap(p);await p.waitForFunction(()=>__wos.voice==='paused'&&!__wos.voiceBorrowing&&document.querySelector('#toast').textContent.includes('Microphone unavailable'));assert.equal(await p.evaluate(()=>__wos.V.seal.text),'original typed draft');
+   await p.evaluate(()=>{navigator.mediaDevices.getUserMedia=goodGum;});
+ });
  await test('reload offers explicit parked reply recovery without opening microphone',async()=>{
    const id=await p.evaluate(()=>__wos.V.custodyCapture);await p.reload();await p.waitForFunction(()=>WosOutbox?.recoveryComplete&&window.__wos);
    assert.equal(await p.evaluate(id=>__wos.recoverParkedReply(id),id),true);
    assert.equal(await p.evaluate(()=>__wos.voice),'paused');assert.equal(await p.evaluate(()=>__wos.V.replyTo.sid),'qa-0');assert.equal(await p.evaluate(()=>__wos.V.stream),null);
  });
- await p.screenshot({path:path.join(evidence,'host.png')});
+ await p.waitForTimeout(600);assert.equal(await p.locator('#arcPause').isVisible(),true);await p.screenshot({path:path.join(evidence,'host.png')});
+ await test('explicit resume appends original audio and sends original target/model/text once; B excluded',async()=>{
+   await tones(p);await p.evaluate(()=>{tone=660;});const original=await p.evaluate(()=>({id:__wos.V.custodyCapture,route:__wos.V.snap.route}));const before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;
+   let audio;await f.context.route('**/wizard/files/upload',async r=>{audio=r.request().postDataBuffer();return r.fulfill({json:{file:{id:'resumed-audio',filename:'resumed.wav',mime:'audio/wav',bytes:audio.length}}});});
+   await p.locator('#arcPause').click();await p.waitForFunction(()=>__wos.voice==='listen');await p.waitForTimeout(800);f.R.words='Original resumed reply';await p.evaluate(()=>__wos.finishVoice());
+   await p.waitForFunction(id=>WosOutbox.get(id)?.state==='sent',original.id,{timeout:15000});
+   const writes=f.writes.filter(w=>/\/v1\/runs$/.test(w.path));assert.equal(writes.length,before+1);const body=JSON.parse(writes.at(-1).body);assert.equal(body.session_id,'qa-0');assert.equal(body.model,original.route.model);assert.equal(body.provider,original.route.provider);assert.match(body.input,/original typed draft/);assert.match(body.input,/Original resumed reply/);
+   assert.equal(audio.toString('ascii',0,4),'RIFF');const rate=audio.readUInt32LE(24),n=(audio.length-44)/2;const energy=hz=>{let max=0;for(let at=0;at+1600<n;at+=1600){let re=0,im=0;for(let i=0;i<1600;i++){const x=audio.readInt16LE(44+2*(at+i))/32768;re+=x*Math.cos(2*Math.PI*hz*i/rate);im+=x*Math.sin(2*Math.PI*hz*i/rate);}max=Math.max(max,(re*re+im*im)/(1600*1600));}return max;};const spectrum={a:energy(440),b:energy(880),c:energy(660)};assert.ok(spectrum.a>.001);assert.ok(spectrum.c>.001);assert.ok(spectrum.b<.0001);fs.writeFileSync(path.join(evidence,'parked-spectrum.json'),JSON.stringify(spectrum));
+ });
  assert.deepEqual(f.errors,[]);
+ await test('native old ABI refuses in actual shell; v1 exact receipt admits only borrowed recorder (mock)',async()=>{
+   const native=await boot(browser,true),n=native.p;const {installMeetingMock}=require('../qa-app-capture/native-mocks.cjs');await n.evaluate(installMeetingMock);
+   await n.evaluate(async()=>{await WosModels.load();window.nmeeting=await WizAppCapture.start('mizel',{kind:'meeting',meta:{meetingId:'native-synthetic-host'}});});
+   assert.equal(await n.evaluate(()=>__wos.startVoice('auto')),'busy');assert.equal(await n.evaluate(()=>__wos.voice),'idle');assert.equal(await n.evaluate(()=>WizAppCapture.getState().phase),'recording');
+   await n.evaluate(()=>{window.borrowCalls=[];const old=WizardOSDevice.recStart;WizardOSDevice.recStart=()=>{throw Error('ordinary start must not be used');};WizardOSDevice.recHandoffVersion=()=>1;WizardOSDevice.recHandoffBegin=(id,meetingId)=>{borrowCalls.push('begin');emitMeetingState({paused:true});return JSON.stringify({id,meetingId,status:'paused',open:true,atMediaMs:1000,pausedAt:Date.now(),pausedByHandoff:true});};WizardOSDevice.recStartBorrowed=(kind,id)=>{borrowCalls.push('borrowed');return old(kind);};WizardOSDevice.recHandoffEnd=id=>{borrowCalls.push('end');emitMeetingState({paused:false});return JSON.stringify({id,status:'resumed',open:false});};});
+   await n.evaluate(()=>__wos.startVoice('auto'));assert.ok(await n.evaluate(()=>__wos.V.native));await n.evaluate(()=>__wos.cancelVoice(true));
+   assert.deepEqual(await n.evaluate(()=>borrowCalls),['begin','borrowed','end']);assert.equal(await n.evaluate(()=>WizAppCapture.getState().phase),'recording');assert.equal(native.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,0);assert.deepEqual(native.errors,[]);await native.context.close();
+ });
+ await test('native parked reply closes to durable custody and explicit Resume reopens native recorder (mock)',async()=>{
+   const native=await boot(browser,true),n=native.p;await n.evaluate(async()=>{await WosModels.load();__wos.openWizardThread('qa-0');});await n.locator('[data-chmic]').first().click();await n.waitForTimeout(600);await n.locator('#arcPause').click();
+   const original=await n.evaluate(()=>__wos.V.native);await n.evaluate(()=>__wos.openApp(window.__qaApp));await n.waitForTimeout(400);const nf=n.frames().find(x=>x.url().includes('/qa-iching/'));await select(nf);await tap(n);await n.waitForFunction(()=>__wos.V.kind==='dictation'&&!!__wos.V.native);await n.evaluate(()=>__wos.cancelVoice(true));
+   assert.equal(await n.evaluate(()=>__wos.voice),'paused');assert.equal(await n.evaluate(()=>__wos.V.resumeNative),true);assert.equal(await n.evaluate(()=>WosOutbox.get(__wos.V.custodyCapture).durable),true);
+   await n.waitForTimeout(500);await n.locator('#arcPause').click();await n.waitForFunction(()=>__wos.voice==='listen'&&!!__wos.V.native);assert.notEqual(await n.evaluate(()=>__wos.V.native),original);assert.equal(await n.evaluate(()=>__wos.V.replyTo.sid),'qa-0');assert.deepEqual(native.errors,[]);await native.context.close();
+ });
+ await test('manual pause during actual loan wins and resume is refused until voice closes',async()=>{
+   await p.waitForFunction(()=>__wos.voice==='idle');await tones(p);await p.evaluate(async()=>{window.meeting=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:500,meta:{meetingId:'manual-during-loan'}});});await p.waitForTimeout(300);await p.evaluate(()=>__wos.startVoice('auto'));await p.waitForTimeout(300);await p.evaluate(()=>meeting.pause());
+   assert.equal(await p.evaluate(async()=>{try{await meeting.resume();}catch(e){return e.code;}}),'mic_borrowed');await p.evaluate(()=>__wos.cancelVoice(true));assert.equal(await p.evaluate(()=>WizAppCapture.getState().phase),'paused');await p.evaluate(()=>meeting.stop());
+ });
  fs.writeFileSync(path.join(evidence,'receipt.json'),JSON.stringify({sourceSHA:process.env.SOURCE_SHA,checks,pageErrors:f.errors,synthetic:true,nativeEvidence:false},null,2));
 })().catch(e=>{console.error(e);fs.writeFileSync(path.join(evidence,'failure.json'),JSON.stringify({error:e.stack,checks},null,2));process.exitCode=1;}).finally(async()=>{await browser?.close();server.close();});

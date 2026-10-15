@@ -63,6 +63,7 @@
   }
   function decode(x) {
     const it = { ...x }; delete it.audio64;
+    if(x.parkedDraft?.parts64){it.parkedDraft={...x.parkedDraft,parts:x.parkedDraft.parts64.map(part=>decode({audio64:part.data,audioType:part.type}).audio)};delete it.parkedDraft.parts64;}
     if (x.audio64) {
       const bin = atob(x.audio64), bytes = new Uint8Array(bin.length);
       for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
@@ -86,6 +87,7 @@
       try {
         const { audio, ...x } = copy;
         if (audio) x.audio64 = await encode(audio);
+        if(copy.parkedDraft?.parts){x.parkedDraft={...copy.parkedDraft,parts:undefined,parts64:await Promise.all(copy.parkedDraft.parts.map(async part=>({type:part.type,data:await encode(part)})))};}
         localStorage.setItem(PREFIX + it.id, JSON.stringify(x));
         it.durable = true;
       } catch (_) { /* Keep the entire item and Blob in RAM; the notice stays until custody is durable. */ }
@@ -180,7 +182,7 @@
     catch (e) { throw new HttpError(e.status || 0, e.message); }
   }
   async function uploadAudio(it) {
-    const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /aac/.test(it.audioType) ? 'aac' : 'webm';
+    const ext = /wav/.test(it.audioType) ? 'wav' : /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /aac/.test(it.audioType) ? 'aac' : 'webm';
     const name = `wizard-voice-${new Date(it.createdAt).toISOString().replace(/[:.]/g, '-')}.${ext}`;
     const r = await call('/wizard/files/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': name, 'X-Wizard-Mime': it.audioType || 'audio/webm' }, body: it.audio });
     const f = (await r.json()).file || {};
