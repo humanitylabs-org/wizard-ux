@@ -17,11 +17,14 @@ class Fixture:
     def __init__(self, root, adoption, job):
         self.root, self.adoption, self.job = map(pathlib.Path, (root, adoption, job))
         self.writes, self.assets, self.events, self.meetings = [], {}, {}, {}
+        self.documents = []
         self.words, self.delay, self.serial = 'synthetic explicit question', 0, 0
         self.threads = [dict(id='qa-'+str(i), title='Synthetic thread '+str(i), model='qa-model', provider='qa-provider', status='completed', source='api_server', message_count=2, last_active=time.time()) for i in range(3)]
 
     def serve(self, pg, d):
         r=d['params']['request']; rid=d['params']['requestId']; u=urllib.parse.urlparse(r['url']); p=u.path; method=r['method']
+        if d['params'].get('resourceType') == 'Document':
+            self.documents.append({'url':r['url'],'method':method,'frameId':d['params'].get('frameId')})
         self.serial+=1; serial=self.serial
         def reply(obj, mime='application/json', status=200, delay=0):
             body = obj if isinstance(obj, bytes) else (obj.encode() if isinstance(obj, str) else json.dumps(obj).encode())
@@ -75,7 +78,7 @@ class Fixture:
 
     def runs(self):return [w for w in self.writes if w['path'].endswith('/v1/runs')]
     def save(self):
-        (self.job/'integrated-network.json').write_text(json.dumps({'writes':self.writes,'assets':self.assets,'events':self.events},indent=2))
+        (self.job/'integrated-network.json').write_text(json.dumps({'writes':self.writes,'assets':self.assets,'events':self.events,'documents':self.documents},indent=2))
 
 
 def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot):
@@ -83,7 +86,7 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
     def wait(expr,secs=15):
         value=pg.pump(secs,lambda:ev(expr),.2)
         if not value:
-            save('integrated-failure-state.json',ev("({voice:window.__wos?.voice,v:window.__wos&&{kind:__wos.V.kind,native:__wos.V.native,reply:__wos.V.replyTo,acc:__wos.V.acc,parts:__wos.V.parts?.map(b=>({size:b.size,type:b.type})),snap:__wos.V.snap},text:document.body.innerText,errors:window.qaErrors,capture:window.WizAppCapture?.getState(),frames:[...document.querySelectorAll('iframe')].map(f=>({src:f.src,text:f.contentDocument?.body?.innerText}))})"))
+            save('integrated-failure-state.json',ev("({url:location.href,voice:window.__wos?.voice,v:window.__wos&&{kind:__wos.V.kind,native:__wos.V.native,reply:__wos.V.replyTo,acc:__wos.V.acc,parts:__wos.V.parts?.map(b=>({size:b.size,type:b.type})),snap:__wos.V.snap},text:document.body.innerText,errors:window.qaErrors,capture:window.WizAppCapture?.getState(),frames:[...document.querySelectorAll('iframe')].map(f=>({src:f.src,text:f.contentDocument?.body?.innerText}))})"))
             fixture.save();raise AssertionError('Timed out: '+expr)
         return value
     def touch(selector='#orbWrap',hold=0.0):
@@ -95,6 +98,8 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
         else:
             pg._send({'id':2000001,'method':'Input.dispatchTouchEvent','params':{'type':'touchStart','touchPoints':[dict(box,id=1)]}})
             pg.pump(hold,every=.02)
+            wait("__wos.voice==='command'&&!!__wos.V.native",10)
+            check('integrated','held command actually begins before release',True,ev('({voice:__wos.voice,kind:__wos.V.kind,native:__wos.V.native})'))
             pg._send({'id':2000002,'method':'Input.dispatchTouchEvent','params':{'type':'touchEnd','touchPoints':[]}})
         pg.pump(.3,every=.05)
     def native():return ev("JSON.parse(WizardOSDevice.recActive()||'null')")
@@ -188,6 +193,8 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
     pg.pump(.4);fixture.words='borrowed dictation words';touch();wait("__wos.V.kind==='dictation'&&!!__wos.V.native");borrowed=ev('__wos.V.native');pg.pump(1.5);touch();wait("__wos.voice==='paused'&&__wos.V.replyTo?.sid==='qa-0'")
     check('integrated','native dictation inserts only adopted UI field and restores paused reply',mf('qaField.value')=='one borrowed dictation words three' and len(fixture.runs())==before,{'field':mf('qaField.value'),'native':native()})
     original_id=ev('__wos.V.custodyCapture');check('integrated','original target route typed draft durable after native close',ev("WosOutbox.get(__wos.V.custodyCapture).durable&&__wos.V.seal.text==='original typed draft'&&__wos.V.resumeNative") and ev('({reply:__wos.V.replyTo,route:__wos.V.snap.route})')==original)
+    # Focused-field mode deliberately suppresses hold-command admission.
+    mf('qaField.blur()');ev("document.activeElement?.blur();document.querySelector('#orbWrap').focus()");pg.pump(.4)
     fixture.words='open settings';touch(hold=1.1);wait("__wos.voice==='paused'&&__wos.V.replyTo?.sid==='qa-0'")
     check('integrated','held command consumes release without sending original',len(fixture.runs())==before and native() is None)
     ev('__wos.closeSheets(true)');pg.pump(.5);shot('integrated-reply-paused')
