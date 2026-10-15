@@ -1,0 +1,20 @@
+services:
+  voice-outline:
+    build:
+      context: ..
+      dockerfile: app/Dockerfile
+    ports:
+      - "127.0.0.1:${APP_PORT:-8799}:8799"
+    environment:
+      OUTLINE_DATA: /data
+      WIZARD_CORE_DIR: /shared/core
+      TINFOIL_PROVIDER_MODULE: /shared/provider/src/provider.js
+      TINFOIL_API_KEY: ${TINFOIL_API_KEY:?Existing Tinfoil key required}
+      WIZARD_TRUSTED_HOSTS: ${WIZARD_TRUSTED_HOSTS:-localhost,127.0.0.1}
+      WIZARD_TRUSTED_ORIGINS: ${WIZARD_TRUSTED_ORIGINS:-}
+    volumes:
+      - outline-data:/data
+      - ${WIZARD_CORE_DIR:?Shared core directory required}:/shared/core:ro
+      - ${TINFOIL_PROVIDER_DIR:?Existing provider package with dependencies required}:/shared/provider:ro
+volumes:
+  outline-data:

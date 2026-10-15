@@ -1,0 +1,96 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Outline API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Service health and real provider configuration",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        }
+      }
+    },
+    "/api/document": {
+      "get": {
+        "summary": "Read or revision-check replace the owner outline",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        }
+      },
+      "put": {
+        "summary": "Read or revision-check replace the owner outline",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        }
+      }
+    },
+    "/api/speech": {
+      "get": {
+        "summary": "Recover durable verbatim speech events",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        }
+      }
+    },
+    "/api/audio/{take}/{seq}": {
+      "get": {
+        "summary": "Immutable audio upload and hash/byte-count readback",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        }
+      },
+      "put": {
+        "summary": "Immutable audio upload and hash/byte-count readback",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        }
+      }
+    },
+    "/mcp": {
+      "post": {
+        "summary": "Streamable HTTP MCP tools",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        }
+      }
+    }
+  }
+}
