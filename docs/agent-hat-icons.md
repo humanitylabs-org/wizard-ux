@@ -7,3 +7,5 @@ The shared sigil registry maps Chats to the supplied hat; agents use hat/hat-pri
 Thales browser evidence: `/Volumes/ThalesMedia/wizard-qa/agent-hat-icons-20261015/`. Same real HTTPS origin and read-only live APIs, candidate source overrides isolated to static assets. `qa-agent-hat-icons.cjs`: baseline 12 pass / 20 fail; candidate 32 pass / 0 fail. Covers UA-selected phone/desktop, actual asset masks and configured hues, private dock/badges/window/overview, Home, Messenger, future hue fallback, 360px containment, nested Back, real main chat rows and zero agent admissions/page errors. Expected read-state PUT is blocked. Inspected actual phone overview screenshot. Final no-source-override live result is recorded in the release receipt.
 
 Web-only correction. No APK/native or VM rebuild. Next significant guest rebuild must take the current UX.
+
+Design update (15 Oct): the private keyhole is enlarged and the Agents app has its own two-hat mark; see `docs/desktop-app-selector.md`.

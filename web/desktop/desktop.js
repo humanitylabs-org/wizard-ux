@@ -393,7 +393,7 @@
       for (const id of d.wins) { const ex = stage.querySelector(`.win[data-win="${id}"]`); if (!ex) mountWin(W[id], host); else if (ex.parentNode !== host) host.appendChild(ex); }
       host.hidden = homeOpen || i !== cur;
       let home = host.querySelector('.home');
-      if (!d.wins.length) { if (!home) { home = document.createElement('div'); home.className = 'home'; host.appendChild(home); } home.innerHTML = homeHtml(i); }
+      if (!d.wins.length) { if (!home) { home = document.createElement('div'); home.className = 'home'; home.tabIndex = -1; home.setAttribute('role', 'region'); host.appendChild(home); } home.setAttribute('aria-label', `Empty desktop ${C.workspaceNav.slot(i)}`); home.innerHTML = homeHtml(i); }
       else if (home) home.remove();
     }
     $$('.wsp', stage).forEach(el => { if (!ws.some(d => d.id === el.dataset.desk)) el.remove(); });
@@ -401,6 +401,9 @@
     home.hidden = !homeOpen;
     if (homeOpen) home.innerHTML = homeHtml(null);
     layout(); paintBar(); paintFocus();
+    // The selector a new desktop opened belongs to that empty desktop: once an app lands there, or the
+    // desktop is left or closed, it steps aside and focus goes where the shell now points.
+    if (!pal.hidden && palDesk && (homeOpen || ws[cur].id !== palDesk || ws[cur].wins.length)) { closePalette({ restore: false }); restFocus(); }
     queueMicrotask(() => window.WosResources?.sync());
   }
   /* Tiling: capped windows form a centered group; 2 split; 3+ = master + stack.
@@ -468,8 +471,12 @@
     CHATS.markVisibleThreadsSeen();
   }
 
+  // A new desktop opens with the app selector over it: an empty desktop is a place to open something.
+  // An empty current desktop is reused rather than stacked, so repeated ⌘T / + never leaves blanks behind.
   function newDesktop() {
-    ws.push(freshDesk()); goWs(ws.length - 1); return ws[cur];
+    if (ws[cur].wins.length) { ws.push(freshDesk()); goWs(ws.length - 1); } else if (homeOpen) leaveHome();
+    openPicker({ desk: ws[cur].id });
+    return ws[cur];
   }
   function closeDesktop() {
     if (homeOpen || ws[cur].wins.length || ws.length === 1) return false;
@@ -542,7 +549,7 @@
       ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
       <h3 class="home-resources-title">Resources</h3>${window.WosResources?.home() || ''}
       <div class="home-apps">${quick.map(a => `<button class="app-chip" data-app="${a.id}">${ico('i', '', a)}${esc(a.name)}</button>`).join('')}</div>
-      <div class="home-keys"><span><kbd>${MOD}1</kbd> Home</span><span><kbd>${CMD}K</kbd> search and launch</span><span><kbd>${MOD}Enter</kbd> new chat</span><span><kbd>${MOD}⇧V</kbd> new voice chat</span><span><kbd>${CMD}T</kbd> / <kbd>${MOD}T</kbd> new desktop</span><span><kbd>${MOD}/</kbd> all keys</span></div>
+      <div class="home-keys"><span><kbd>${MOD}1</kbd> Home</span><span><kbd>${CMD}O</kbd> open an app</span><span><kbd>${CMD}K</kbd> search and launch</span><span><kbd>${MOD}Enter</kbd> new chat</span><span><kbd>${MOD}⇧V</kbd> new voice chat</span><span><kbd>${CMD}T</kbd> / <kbd>${MOD}T</kbd> new desktop</span><span><kbd>${MOD}/</kbd> all keys</span></div>
     </div>`;
   }
   stage.addEventListener('click', e => {
@@ -603,19 +610,31 @@
   });
   addEventListener('resize', () => layout());
 
-  /* ---------------- palette: one box for apps, threads, commands and asking Archimedes ---------------- */
-  const pal = $('#palette'), palIn = $('#palInput'), palList = $('#palList');
+  /* ---------------- palette: one box for apps, threads, commands and asking Archimedes ----------------
+   * Two modes of the same box. 'all' (⌘K): apps, threads, commands, Search and Ask, as a list.
+   * 'apps' (⌘O, and every new desktop): the app selector, the apps alone as square tiles like the
+   * phone's launcher, search focused; ←↑↓→ move through the grid, ↵ opens, ⌘K widens to 'all'.
+   * Opening remembers what had focus; Esc, Back or a click outside puts it back. Nothing is written. */
+  const pal = $('#palette'), palCard = $('.pal-card', pal), palIn = $('#palInput'), palList = $('#palList');
+  let palItems = [], palSel = 0, palMode = 'all', palDesk = null, palPrev = null;
   // The agent's name comes from Wizard OS settings; keep static labels in step with it.
+  function palPaint() {
+    const apps = palMode === 'apps';
+    pal.dataset.mode = palMode;
+    palCard.setAttribute('aria-label', apps ? 'Open an app' : 'Search and launch');
+    palList.setAttribute('aria-label', apps ? 'Apps' : 'Results');
+    palIn.placeholder = apps ? 'Search apps' : `Open an app, find a thread, or ask ${window.WizConfig.agent()}…`;
+    palIn.setAttribute('aria-label', apps ? 'Search apps' : `Search apps, threads and commands, or ask ${window.WizConfig.agent()}`);
+  }
   const nameLabels = () => {
-    const n = window.WizConfig.agent();
-    palIn.placeholder = `Open an app, find a thread, or ask ${n}…`;
-    document.querySelectorAll('[data-agent-name]').forEach(el => { el.textContent = n; });
+    palPaint();
+    document.querySelectorAll('[data-agent-name]').forEach(el => { el.textContent = window.WizConfig.agent(); });
   };
   nameLabels(); window.addEventListener('wizard:config', nameLabels);
-  let palItems = [], palSel = 0;
   function commands() {
     return [
       { kind: 'cmd', name: 'Home', icon: '⌂', keys: `${MOD}1`, run: () => goHome() },
+      { kind: 'cmd', name: 'Open an app', icon: '▦', keys: `${CMD}O`, run: () => openPicker() },
       ...(window.WosResources ? [{ kind: 'cmd', name: 'Resources', icon: '◔', run: () => { goHome(); $('#desktopHome [data-res-open="server"]')?.click(); } }] : []),
       { kind: 'cmd', name: 'Get apps', icon: '+', run: () => openApp(APP['app-store']) },
       { kind: 'cmd', name: 'Your system', icon: '◈', run: () => openApp(APP.system) },
@@ -673,19 +692,94 @@
     return out;
   }
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
-  function palRender() {
-    const groups = palBuild(palIn.value); palItems = groups.flatMap(g => g.items); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
-    let k = 0;
-    palList.innerHTML = groups.map(g => `<div class="pal-grp">${esc(g.grp)}</div>` + g.items.map(it => { const i = k++; return `<button class="pal-it${i === palSel ? ' sel' : ''}" data-i="${i}" role="option">${it.app ? ico('span', 'ic', it.app) : `<span class="ic" style="--g1:${it.g?.[0] || '#3a2a6a'};--g2:${it.g?.[1] || '#241a44'}">${it.kind === 'ask' ? window.WizBrand.html : it.icon || '◇'}</span>`}<span class="nm">${esc(it.name)}${it.sub ? `<small>${esc(clip(it.sub, 60))}</small>` : ''}</span>${it.keys ? `<span class="hint"><kbd>${esc(it.keys)}</kbd></span>` : ''}</button>`; }).join('')).join('') || '<div class="pal-empty">Nothing yet.</div>';
+  // The app selector's apps: Chats first, installed apps in registry order, Inbox, then the system apps.
+  // A query ranks them like ⌘K's Apps group does.
+  const SYS_APPS = ['agents', 'system', 'app-store'];
+  const pickRank = a => a.kind === 'chats' ? 0 : SYS_APPS.includes(a.id) ? 3 : a.kind === 'view' ? 2 : 1;
+  function pickBuild(q) {
+    const list = norm(q) ? searchApps(q) : APPS.slice().sort((a, b) => pickRank(a) - pickRank(b) || SYS_APPS.indexOf(a.id) - SYS_APPS.indexOf(b.id));
+    return list.filter(a => a.kind !== 'native').map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, run: o => openApp(a, o) }));
+  }
+  function pickRender() {
+    palItems = pickBuild(palIn.value); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
+    palList.innerHTML = palItems.map((it, i) => `<button type="button" class="pal-app${i === palSel ? ' sel' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="${i === palSel}" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ico('span', 'ic', it.app)}<span class="nm">${esc(it.name)}</span></button>`).join('')
+      || `<div class="pal-empty">No app called “${esc(clip(palIn.value.trim(), 40))}”.<br><kbd>↵</kbd> searches threads and commands too</div>`;
+    palMark(palSel);
+  }
+  // Move the selection without rebuilding the list, so a hovered or arrowed tile never flickers.
+  function palMark(i) {
+    palSel = i;
+    for (const b of palList.querySelectorAll('[data-i]')) { const on = +b.dataset.i === i; b.classList.toggle('sel', on); b.setAttribute('aria-selected', on); }
+    if (palItems.length) palIn.setAttribute('aria-activedescendant', `pal-o${i}`); else palIn.removeAttribute('aria-activedescendant');
     palList.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
   }
-  function openPalette(q = '') { window.WosResources?.back(); pal.hidden = false; palIn.value = q; palSel = 0; palRender(); palIn.focus(); palIn.select(); }
-  function closePalette() { pal.hidden = true; const f = focused(); if (f) focusInside(f.id); }
-  function palRun(i, o = {}) { const it = palItems[i]; if (!it) return; closePalette(); it.run(o); }
+  // Grid arrows are spatial: ←/→ step one tile, ↑/↓ one row; ↓ from a row above a short last row lands on its last tile.
+  function pickMove(key) {
+    const n = palItems.length; if (!n) return;
+    const tiles = palList.querySelectorAll('[data-i]'), top = tiles[0].offsetTop;
+    let cols = 0; while (cols < tiles.length && tiles[cols].offsetTop === top) cols++;
+    const i = palSel, row = Math.floor(i / cols), last = Math.floor((n - 1) / cols);
+    const j = key === 'ArrowRight' ? Math.min(n - 1, i + 1) : key === 'ArrowLeft' ? Math.max(0, i - 1)
+      : key === 'ArrowDown' ? (row < last ? Math.min(n - 1, i + cols) : i) : (row > 0 ? i - cols : i);
+    palMark(j);
+  }
+  function palRender() {
+    if (palMode === 'apps') return pickRender();
+    const groups = palBuild(palIn.value); palItems = groups.flatMap(g => g.items); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
+    let k = 0;
+    palList.innerHTML = groups.map((g, gi) => `<div role="group" aria-labelledby="pal-g${gi}"><div class="pal-grp" id="pal-g${gi}">${esc(g.grp)}</div>` + g.items.map(it => { const i = k++; return `<button type="button" class="pal-it${i === palSel ? ' sel' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="${i === palSel}">${it.app ? ico('span', 'ic', it.app) : `<span class="ic" style="--g1:${it.g?.[0] || '#3a2a6a'};--g2:${it.g?.[1] || '#241a44'}">${it.kind === 'ask' ? window.WizBrand.html : it.icon || '◇'}</span>`}<span class="nm">${esc(it.name)}${it.sub ? `<small>${esc(clip(it.sub, 60))}</small>` : ''}</span>${it.keys ? `<span class="hint"><kbd>${esc(it.keys)}</kbd></span>` : ''}</button>`; }).join('') + '</div>').join('') || '<div class="pal-empty">Nothing yet.</div>';
+    palMark(palSel);
+  }
+  // mode 'all' is ⌘K; 'apps' is the app selector. o.desk ties a selector to the empty desktop it opened on.
+  function openPalette(q = '', mode = 'all', o = {}) {
+    window.WosResources?.back(); // after Resources hands focus back to its opener, so that is what Esc restores
+    const a = document.activeElement;
+    if (pal.hidden) palPrev = a && a !== document.body && !pal.contains(a) ? a : null;
+    palDesk = o.desk || null; palMode = mode; palPaint();
+    pal.hidden = false; palIn.value = q; palSel = 0; palRender(); palIn.focus(); palIn.select();
+  }
+  const openPicker = (o = {}) => openPalette('', 'apps', o);
+  // ⌘K and ⌘O switch an open box between its modes, keeping the query; the same key again closes it.
+  function palToggle(mode) {
+    if (pal.hidden) return openPalette('', mode);
+    if (palMode === mode) return closePalette();
+    palMode = mode; palPaint(); palSel = 0; palRender(); palIn.focus();
+  }
+  function closePalette({ restore = true } = {}) {
+    if (pal.hidden) return;
+    pal.hidden = true; palDesk = null;
+    const prev = palPrev; palPrev = null;
+    if (!restore) return;
+    if (prev?.isConnected && prev.getClientRects().length) prev.focus({ preventScroll: true }); else restFocus();
+  }
+  // Where focus rests with no layer open: the focused app, else Home, else this empty desktop's surface.
+  function restFocus() {
+    const f = focused(); if (f) return focusInside(f.id);
+    (homeOpen ? $('#desktopHome') : wsEl(cur)?.querySelector(':scope > .home'))?.focus({ preventScroll: true });
+  }
+  function palRun(i, o = {}) {
+    const it = palItems[i]; if (!it) return;
+    // An app takes focus where it opens; anything else returns focus first, then runs (it may open its own layer).
+    if (it.kind === 'app') { closePalette({ restore: false }); it.run(o); restFocus(); return; }
+    closePalette(); it.run(o);
+  }
   palIn.addEventListener('input', () => { palSel = 0; palRender(); });
   palIn.addEventListener('keydown', e => {
-    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) { e.preventDefault(); palSel = (palSel + 1) % Math.max(1, palItems.length); palRender(); }
-    else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) { e.preventDefault(); palSel = (palSel - 1 + palItems.length) % Math.max(1, palItems.length); palRender(); }
+    const n = Math.max(1, palItems.length);
+    if (palMode === 'apps') {
+      if (e.altKey) return; // window-manager chords belong to the shell
+      if (/^Arrow(Up|Down|Left|Right)$/.test(e.key) && !e.shiftKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); return pickMove(e.key); }
+      if (e.ctrlKey && (e.key === 'n' || e.key === 'p')) { e.preventDefault(); return palMark((palSel + (e.key === 'n' ? 1 : -1) + n) % n); }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        // No app by that name: widen to ⌘K with the same words (threads, commands, Search, Ask).
+        if (!palItems.length) { if (palIn.value.trim()) palToggle('all'); return; }
+        return palRun(palSel, { fresh: e.shiftKey });
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) { e.preventDefault(); palMark((palSel + 1) % n); }
+    else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) { e.preventDefault(); palMark((palSel - 1 + n) % n); }
     else if (e.key === 'Enter') {
       e.preventDefault();
       if ((e.metaKey || e.ctrlKey) && palIn.value.trim()) { const q = palIn.value; closePalette(); return ask(q); }
@@ -693,6 +787,23 @@
     }
   });
   palList.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) palRun(+b.dataset.i, { fresh: e.shiftKey }); });
+  /* Keyboard containment (the card is aria-modal). The search box is the box's one tab stop: options are
+   * tabindex=-1 and followed by aria-activedescendant, so Tab and ⇧Tab keep focus on the search box and never
+   * reach the page behind. An option focused by a click or script stays a native button (↵/Space activate it),
+   * takes the selection, and hands arrows and Tab back to the search box. ⌘K, ⌘O, ⌥ chords and Esc are handled
+   * before this, on the shell's capture listener (onKey). */
+  pal.addEventListener('keydown', e => {
+    if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault(); palIn.focus({ preventScroll: true });
+  });
+  palList.addEventListener('focusin', e => { const b = e.target.closest('[data-i]'); if (b && +b.dataset.i !== palSel) palMark(+b.dataset.i); });
+  palList.addEventListener('keydown', e => {
+    if (!/^Arrow(Up|Down|Left|Right)$/.test(e.key) || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || !e.target.closest('[data-i]')) return;
+    e.preventDefault(); palIn.focus({ preventScroll: true });
+    if (palMode === 'apps') pickMove(e.key);
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') palMark((palSel + (e.key === 'ArrowDown' ? 1 : -1) + Math.max(1, palItems.length)) % Math.max(1, palItems.length));
+  });
+  palList.addEventListener('pointermove', e => { const b = palMode === 'apps' && e.target.closest('[data-i]'); if (b && +b.dataset.i !== palSel) palMark(+b.dataset.i); });
   pal.addEventListener('pointerdown', e => { if (e.target === pal) closePalette(); });
 
   /* Ask Archimedes from anywhere: a new thread, through the durable outbox, delegated in the background.
@@ -765,8 +876,8 @@
 
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
-    ['Launch', [[`${MOD}1`, 'Home'], [`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${CMD}N  or  ${MOD}Enter`, 'New chat'], [`${CMD}⇧N  or  ${MOD}⇧V`, 'New voice chat (press again to send)'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send; Cancel discards)`], ['Right ⌥ (paused)', 'Wizard PWA dictation is paused; your system voice tool keeps this key']]],
-    ['Desktops', [[`${CMD}T  or  ${MOD}T`, 'New desktop'], [`${CMD}⇧[  ${CMD}⇧]  or  Ctrl+Tab`, 'Previous / next desktop'], [`${CMD}W  or  ${MOD}W`, 'Close focused app; press again on empty desktop to close it']]],
+    ['Launch', [[`${MOD}1`, 'Home'], [`${CMD}O`, 'Open an app (the app selector)'], [`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${CMD}N  or  ${MOD}Enter`, 'New chat'], [`${CMD}⇧N  or  ${MOD}⇧V`, 'New voice chat (press again to send)'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send; Cancel discards)`], ['Right ⌥ (paused)', 'Wizard PWA dictation is paused; your system voice tool keeps this key']]],
+    ['Desktops', [[`${CMD}T  or  ${MOD}T`, 'New desktop, with the app selector open'], [`${CMD}⇧[  ${CMD}⇧]  or  Ctrl+Tab`, 'Previous / next desktop'], [`${CMD}W  or  ${MOD}W`, 'Close focused app; press again on empty desktop to close it']]],
     ['Desktop shortcuts', [[`${MOD}1`, 'Home'], [`${MOD}2 … ${MOD}9`, 'Go to the matching app icon; next slot adds a desktop'], [`⇧${MOD}2 … 9`, 'Send window to the matching desktop (Home stays empty)'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
     ['Windows', [[`${CMD}← ↑ → ↓`, 'Focus app in this desktop'], [`${MOD}H J K L`, 'Focus app (browser alternative)'], [`⇧${MOD}← →`, 'Swap window'], [`${CMD}F  or  ${MOD}F`, 'Full screen'], [`⌘W / ${MOD}W`, 'Close app']]],
     ['Chats', [[`${MOD}↑  ${MOD}↓`, 'Previous / next selected chat'], [`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list'], ['↑ ↓  or  j k', 'Previous / next chat (in the list)'], [`⇧${MOD}J  ⇧${MOD}K`, 'Next / previous chat (anywhere)'], ['/', 'Search chats and messages'], [`${MOD},`, 'Settings']]],
@@ -1038,14 +1149,22 @@
       closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage();
       if (shift) talkNew(alt ? `${MOD}⇧V` : `${CMD}⇧N`); else newChat({ fresh: true });
     });
-    // ⌘K / Ctrl+K, ⌥Space: palette, from anywhere (even while typing).
-    if ((e.metaKey || e.ctrlKey) && !e.altKey && (k === 'k' || k === 'K')) return hit(() => (pal.hidden ? openPalette() : closePalette()));
-    if (alt && code === 'Space') return hit(() => (pal.hidden ? openPalette() : closePalette()));
+    // ⌘K / Ctrl+K, ⌥Space: palette, from anywhere (even while typing). From the app selector it widens to everything.
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && (k === 'k' || k === 'K')) return hit(() => palToggle('all'));
+    if (alt && code === 'Space') return hit(() => palToggle('all'));
+    // ⌘O / Ctrl+O: the app selector, from anywhere; the browser's Open File never shows.
+    if ((e.metaKey || e.ctrlKey) && !(e.metaKey && e.ctrlKey) && !e.altKey && !shift && code === 'KeyO') return hit(() => { if (!e.repeat) palToggle('apps'); });
     // Link pane: ⌘Enter keeps it as a window, ⌘⇧Enter opens it in the browser.
     if (LINKS && LINKS.isOpen() && (e.metaKey || e.ctrlKey) && k === 'Enter') return hit(() => LINKS.el.querySelector(shift ? '[data-ls="out"]' : '[data-ls="keep"]')?.click());
     if (k === 'Escape' && LINKS && LINKS.isOpen() && fromFrame) { const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } return; }
     if (k === 'Escape') { const did = escStep(); if (did || fromFrame) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
-    if (!pal.hidden) return; // the palette owns the keyboard while open
+    if (!pal.hidden) {
+      // ⌘K's palette owns the keyboard while open. The app selector lets the window manager's ⌥ chords
+      // through (⌥Enter, ⌥2…9, ⌥[ ], ⌥W…), stepping aside first, so a fresh desktop never traps them.
+      if (palMode !== 'apps' || !alt || !/^(Digit[2-9]|Enter|Key[IWFHJKL]|Slash|Comma|Bracket(Left|Right)|Tab)$/.test(code)) return;
+      closePalette({ restore: false });
+      queueMicrotask(() => { const a = document.activeElement; if (!a || a === document.body || !a.getClientRects().length) restFocus(); });
+    }
     if (setEl && !setEl.hidden && !(e.altKey && code === 'Comma')) return; // so does Settings (⌥, closes it)
     // Chats: ↑/↓ or j/k walk the thread list (from the list, the search box or an empty thread pane), / focuses search.
     {
@@ -1193,7 +1312,7 @@
     view(v, section) {
       if (v === 'home') return goHome();
       if (v === 'inbox') return openInbox();
-      if (v === 'apps') return openPalette();
+      if (v === 'apps') return openPicker();
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'system') return openApp(APP.system);
       if (v === 'agents') return openApp(APP.agents);
@@ -1231,8 +1350,8 @@
   window.__wux = {
     get links() { return LINKS; },
     shell: 'desktop', get ws() { return ws; }, get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS,
-    get homeOpen() { return homeOpen; }, goHome,
-    goWs, newDesktop, closeDesktop, closeCurrent, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openInbox, talk, ask, escStep, viewContext,
+    get homeOpen() { return homeOpen; }, goHome, get palMode() { return pal.hidden ? '' : palMode; },
+    goWs, newDesktop, closeDesktop, closeCurrent, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openPicker, openInbox, talk, ask, escStep, viewContext,
     openFiles, openUsage, recordReply,
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
