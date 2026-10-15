@@ -37,7 +37,7 @@ public final class AppState {
 
     /** The Wizard OS shell URL: the private origin, or the QA fake (debug builds with files/qa_home.txt only). */
     public static String homeUrl(Context c) {
-        return origin(c) + "/wizard-os-home/";
+        return origin(c) + "/wizard-os-home/" + (BuildConfig.APPLICATION_ID.endsWith(".musicpreview") ? "?open=wizard-music" : "");
     }
 
     /** The retired name. The same Wizard still answers on it while the move settles. */

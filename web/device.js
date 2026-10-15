@@ -349,6 +349,7 @@
   }
   // An app window playing sound (Wizard Music, Meditate…): a reload would cut it off, so never do that behind your back.
   function mediaPlaying() {
+    if (window.WizBackgroundAudio?.lastState?.wantPlaying) return true;
     return [...document.querySelectorAll('iframe')].some(f => {
       try {
         const w = f.contentWindow, d = f.contentDocument; if (!w || !d) return false;

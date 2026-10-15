@@ -15,8 +15,8 @@ android {
         applicationId 'ai.wizards.os'
         minSdk 28
         targetSdk 35
-        versionCode 41
-        versionName '0.9.17'
+        versionCode 42
+        versionName '0.9.18'
         buildConfigField 'String', 'HOME_URL', '"https://wizard.tailc0f369.ts.net/wizard-os-home/"'
         buildConfigField 'String', 'ORIGIN', '"https://wizard.tailc0f369.ts.net"'
         // The one certificate (SHA-256) an in-app update must be signed with: the Wizard OS release key.
@@ -52,6 +52,16 @@ android {
         release {
             minifyEnabled false
             if (wosSigningReady) signingConfig signingConfigs.release
+        }
+        audiopreview {
+            initWith release
+            applicationIdSuffix '.musicpreview'
+            versionNameSuffix '-music-preview'
+            debuggable true
+            matchingFallbacks = ['release']
+            buildConfigField 'String', 'ORIGIN', '"https://music-background.staging.wizard001.com"'
+            buildConfigField 'String', 'HOME_URL', '"https://music-background.staging.wizard001.com/wizard-os-home/?open=wizard-music"'
+            resValue 'string', 'app_name', 'Wizard Audio Preview'
         }
         preview {
             initWith release
@@ -108,6 +118,8 @@ androidComponents {
 dependencies {
     // window.wizardMizelPort: WebViewCompat.addWebMessageListener (origin-scoped page ⇄ native port).
     implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.media3:media3-exoplayer:1.7.1'
+    implementation 'androidx.media3:media3-session:1.7.1'
     testImplementation 'junit:junit:4.13.2'
     // org.json is an Android stub on the JVM; the real one lets the Mizel journal/protocol tests run off-device.
     testImplementation 'org.json:json:20240303'

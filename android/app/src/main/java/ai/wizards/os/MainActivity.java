@@ -80,6 +80,7 @@ public class MainActivity extends Activity {
     /** Native-parity features (background recorder, share, reply notifications, in-app update): device/DeviceBridge. */
     private ai.wizards.os.device.DeviceBridge device;
     private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
+    private ai.wizards.os.audio.BackgroundAudioBridge audio;
     private ai.wizards.os.apps.AppsBridge apps; // window.wizardAppsPort: the shell only (Android Apps relay)
 
     private String screenCaptureId;
@@ -174,6 +175,8 @@ public class MainActivity extends Activity {
         mizel = ai.wizards.os.mizel.MizelBridge.install(web, BuildConfig.ORIGIN);
         if (apps != null) apps.detach();
         apps = ai.wizards.os.apps.AppsBridge.install(this, web);
+        if (audio != null) audio.detach();
+        audio = ai.wizards.os.audio.BackgroundAudioBridge.install(this, web);
 
         // A WebView cannot save files. Anything it is asked to download (an APK, a PDF, an export) goes to
         // Android's download manager, so the file lands in Downloads with a notification you can tap to open or install.
@@ -880,6 +883,7 @@ public class MainActivity extends Activity {
         if (ai.wizards.os.everywhere.EverywhereService.appIsRecording()) ai.wizards.os.everywhere.EverywhereService.appVoiceState(this, "idle", 0);
         if (mizel != null) { mizel.detach(); mizel = null; }
         if (apps != null) { apps.detach(); apps = null; }
+        if (audio != null) { audio.detach(); audio = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
     }

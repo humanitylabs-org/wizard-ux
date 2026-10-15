@@ -202,7 +202,7 @@ public final class Updater {
         boolean bad = r.sha256.equals(prefs(app).getString("rejected", ""));
         if (bad && !tapped && !ok) { set("error", "message", prefs(app).getString("rejectedWhy", "Update refused")); return; }
         boolean silent = silentPossible(app);
-        UpdatePolicy.Step step = UpdatePolicy.next(newer, ok, unmetered(app), AppState.front(), recording(app),
+        UpdatePolicy.Step step = UpdatePolicy.next(newer, ok, unmetered(app), AppState.front(), recording(app) || ai.wizards.os.audio.BackgroundAudioService.active(),
                 silent, tapped);
         Log.i(TAG, "step " + step + " (verified=" + ok + " front=" + AppState.front() + " silent=" + silent + " tapped=" + tapped + ")");
         switch (step) {
