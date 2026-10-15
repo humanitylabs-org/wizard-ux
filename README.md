@@ -130,8 +130,17 @@ Package `ai.wizards.os`, currently 0.4.0. Builds run on Thales (the Mac mini bui
 ```bash
 node qa-os.cjs            # shell: Back, desks, windows, voice routing
 node qa-chats-parity.cjs  # Chats against the live Wizard Agent Service (writes intercepted)
+node qa-new-chat-first-paint.cjs "$QA_ORIGIN/wizard-os-home/" # empty composer, resize/reload, phone Back
 node qa-live.cjs; node qa-livemode.cjs; node qa-motion.cjs; node qa-recordings.cjs
 node qa-android-*.cjs     # on Thales, against the emulator
 ```
 
 The current pass counts per suite are in [BRANCHES.md](BRANCHES.md).
+
+Composer layout changes must run `qa-new-chat-first-paint.cjs` before and after deployment.
+It checks the actual New chat action synchronously before the first animation frame, then
+before and after typing, at four desktop sizes, in browser/native-like modes, plus phone smoke checks.
+Set `QA_PLAYWRIGHT` and `QA_CHROME` for the worker's installed tools; `QA_WEB=<candidate>/web`
+overlays candidate assets for the before/after comparison. Omit `QA_WEB` for final live acceptance.
+`QA_OUT` contains screenshots and a JSON receipt with served source hashes. All writes are intercepted;
+unrelated embedded apps are explicitly omitted. Native-like checks inject bridge presence only.
