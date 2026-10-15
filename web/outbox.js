@@ -9,6 +9,7 @@
   const BACKOFF = [2000, 5000, 15000, 30000, 60000, 120000], AUTO_TRIES = BACKOFF.length;
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
+  const conversationWork = new Map();
   // Unreconciled fallback rows must not overwrite or replay an inaccessible primary receipt.
   const quarantine = new Set();
   const unconfirmed = 'Could not confirm steering · original kept. Not retried: the run may already have received it.';
@@ -112,6 +113,7 @@
     emit();
   }
   function recover(it, durable = true) {
+    if (it.kind === 'conversation' && it.state !== 'sent') { it.state = 'held'; it.error = 'Manager recording kept · retry original or copy transcript; never sent to Chats'; }
     if (it.kind === 'dictation' && it.state === 'transcribing') it.state = 'held';
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
     if (it.steerDispatch === 'started' && it.state !== 'sent') { it.state = 'unconfirmed'; it.error = unconfirmed; }
@@ -193,6 +195,7 @@
     }
   }
   async function deliver(it) {
+    if (it.kind === 'conversation') throw new HttpError(409, 'Manager messages use explicit conversation delivery only');
     if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model before retrying');
     if (it.body) {
       const frozen = JSON.parse(it.body);
@@ -308,7 +311,7 @@
   const newSessionId = () => `wizard_${now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
   function make(o) {
     return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
-      kind: o.kind === 'reply' ? 'reply' : 'new', sessionId: o.sessionId || newSessionId(), steerRunId: o.steerRunId || '',
+      kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
       sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false };
@@ -336,6 +339,37 @@
     }
   }
   const api = {
+    async sendConversation(o) {
+      await load();
+      const existing = (o.captureId && items.get(o.captureId)) || (o.nativeId && api.nativeItem(o.nativeId));
+      const it = existing?.kind === 'conversation' ? existing : await api.stage({ ...o, kind: 'conversation' });
+      await api.transition(it.id, 'held', 'Sending to ' + (o.conversation?.label || 'Manager'));
+      return api.retryConversation(it.id);
+    },
+    retryConversation(id) {
+      if (conversationWork.has(id)) return conversationWork.get(id);
+      const work = (async () => {
+        await load(); const it = items.get(id);
+        if (!it || it.kind !== 'conversation' || quarantine.has(id) || it.state === 'sent') return it;
+        it.state = 'transcribing'; it.error = ''; await put(it);
+        try {
+          if (it.files?.length) throw new Error('Manager does not support attachments · audio and files kept; nothing sent');
+          if (!it.text && it.audio) { it.text = String(await transcribe(it) || '').trim(); await put(it); }
+          if (!it.text) throw new Error('No speech detected · Manager recording kept');
+          // A durable journal owns bytes, text, destination and the SAME request identity
+          // before the app may mutate anything. No audio upload to an ordinary Chat.
+          if (!it.durable || it.storageError) throw new Error('Device save failed · Manager message not dispatched; keep this tab open');
+          if (!window.WizAppServices?.conversation) throw new Error('Manager conversation unavailable');
+          it.state = 'sending'; await put(it);
+          const receipt = await bounded(() => window.WizAppServices.conversation.deliver(it.conversation, { request_id: it.id, text: it.text, files: it.files }));
+          if (receipt?.accepted !== true || receipt.request_id !== it.id) throw new Error('Manager receipt uncertain');
+          it.state = 'sent'; it.sentAt = now(); it.error = ''; await put(it);
+          // Keep original bytes until the normal durable terminal-marker cleanup.
+        } catch (e) { it.state = 'held'; it.error = String(e.message || e) + ' · retry original in Recordings'; await put(it); }
+        return it;
+      })().finally(() => conversationWork.delete(id));
+      conversationWork.set(id, work); return work;
+    },
     // Dictation shares this store and transcriber, but NEVER enters message delivery.
     async retainDictation(audio, captureId = null) {
       await load();
@@ -346,6 +380,7 @@
     async transcribeDictation(id) {
       await load();
       const it = items.get(id);
+      if (it?.kind === 'conversation' && it.text) return it; // copy/transcribe NEVER dispatches
       if (!it || !it.audio || ['sent', 'sending', 'processing', 'capturing', 'transcribing'].includes(it.state)) return null;
       it.state = 'transcribing'; it.error = ''; emit();
       // Even when storage is unavailable, the live Blob remains downloadable.
@@ -392,6 +427,7 @@
     ownsSeal(key) { return [...items.values()].some(it => it.sealKey === key); },
     nativeItem(id) { return [...items.values()].find(it => it.nativeId === id); },
     async enqueue(o) {
+      if (o.conversation || o.kind === 'conversation') return api.sendConversation(o);
       if (o.captureId) { const staged = await api.stage(o); o = { ...o, custodyId: staged.id }; }
       const M = window.WosModels, AG = window.WosAgents;
       const agent0 = o.kind === 'reply' ? (window.WizLive?.agentOf?.(o.sessionId) || '') : String(o.agent || '');
@@ -422,7 +458,7 @@
     retry(id) { const it = items.get(id); if (!it || quarantine.has(id) || it.steerDispatch === 'started' || it.kind === 'dictation' || ['sent', 'unconfirmed', 'sending', 'processing', 'preparing', 'missing', 'held'].includes(it.state)) return; Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); put(it).then(pump); },
     retryAll() { for (const it of items.values()) if (it.kind !== 'dictation' && it.state === 'waiting') Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); Promise.all([...items.values()].map(put)).then(pump); },
     unsent() { return [...items.values()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
-    forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && it.kind !== 'dictation' && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
+    forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     get(id) { return items.get(id) || null; },
     landed(id) { const it = items.get(id); if (it?.state === 'sent') del(id); },
     async remove(id) { const it = items.get(id); if (!it || quarantine.has(id) || ['sending', 'transcribing', 'processing'].includes(it.state)) return false; await del(id); return !!items.get(id)?.durable; },
