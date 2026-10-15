@@ -181,7 +181,7 @@ public class ShareActivity extends Activity {
     private String agentLabel() {
         if (agent != null && !agent.optString("label").isEmpty()) return agent.optString("label");
         String n = cfg.optString("agentName").trim();
-        return n.isEmpty() ? "Wizard" : n;
+        return ai.wizards.os.device.WizardIdentity.normalize(n);
     }
 
     /** Re-read what the Wizard offers (in the background; the sheet is already usable from the cache). */
@@ -192,6 +192,7 @@ public class ShareActivity extends Activity {
             try {
                 JSONObject b = getJson(origin, "/wizard/v1/bootstrap");
                 if (b == null) return; // offline: keep the cache
+                ai.wizards.os.device.WizardIdentity.acceptBootstrap(this, origin, b);
                 next.put("resumable", b.optJSONObject("capabilities") != null && b.optJSONObject("capabilities").optBoolean("resumable_uploads"));
                 JSONObject st = b.optJSONObject("settings");
                 next.put("agentName", st != null && st.optJSONObject("agent") != null ? st.optJSONObject("agent").optString("name") : "");

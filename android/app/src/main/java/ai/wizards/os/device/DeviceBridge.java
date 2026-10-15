@@ -91,7 +91,7 @@ public final class DeviceBridge implements RecorderService.Listener {
 
     public void onStart() { AppState.setFront(true); ReplyWatcher.appFront(activity); }
     public void onStop() { AppState.setFront(false); ReplyWatcher.kick(activity); Updater.onStop(activity); }
-    public void onResume() { Updater.onResume(activity); }
+    public void onResume() { Updater.onResume(activity); WizardIdentity.refresh(activity); }
     public void onDestroy() {
         // A take still running (app swiped away) carries on; its notification's Stop/Send take over from here.
         RecorderService.setListener(null);
