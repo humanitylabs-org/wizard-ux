@@ -454,7 +454,7 @@
       throw fail('handoff_unavailable', 'This recorder cannot hand off its microphone.');
     if (typeof eventId !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(eventId)) throw fail('invalid_id','Invalid handoff id.');
     if (!['recording','paused'].includes(s.phase) || s.borrow) throw fail('busy','A microphone handoff is already active.');
-    const wasPaused = s.phase === 'paused';
+    const wasPaused = s.phase === 'paused', hadSystemAudio = s.hasSystemAudio;
     s.phase = 'handoff';
     s.borrow = { id:eventId, meetingId:s.row.meta.meetingId, pausedByHandoff:!wasPaused, pausedAt:Date.now(), micReleased:false };
     changed();
@@ -475,7 +475,9 @@
       await put(s.row);
       if (active!==s || s.finishPromise) throw fail('stale_handoff','Meeting was stopped during handoff.');
       s.pausedAt ||= Date.now(); s.borrow.micReleased=true;
-      emit(s,'state',{recording:true,paused:true,hasSystemAudio:false,handoffId:eventId}); changed();
+      emit(s,'state',{recording:true,paused:true,hasSystemAudio:false,handoffId:eventId});
+      if(hadSystemAudio) emit(s,'warn','Computer audio is off after the microphone handoff. Re-enable it explicitly to record it again.');
+      changed();
       return {...s.borrow};
     } catch(e) { s.error=e; s.phase='error'; changed(); throw e; }
   }

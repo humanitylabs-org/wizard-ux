@@ -16,11 +16,12 @@ async function test(name,fn){await fn();results.push({name,passed:true});console
  browser=await chromium.launch({executablePath:process.env.CHROMIUM,headless:true,args:['--autoplay-policy=no-user-gesture-required']});
  const context=await browser.newContext(), p=await context.newPage(); const errors=[];p.on('pageerror',e=>errors.push(e.message));
  await p.goto(url); await p.waitForFunction(()=>window.WizAppCapture && window.WosOutbox?.recoveryComplete);
- async function setup(){await p.evaluate(()=>{
-   window.session=null;window.tone=440;window.streams=[];window.graphs=[];window.chunks=[];
+ async function setup(system=false){await p.evaluate(system=>{
+   window.session=null;window.tone=440;window.streams=[];window.graphs=[];window.chunks=[];window.warnings=[];
    navigator.mediaDevices.getUserMedia=async()=>{const ctx=new AudioContext(),osc=ctx.createOscillator(),dest=ctx.createMediaStreamDestination();osc.frequency.value=tone;osc.connect(dest);osc.start();await ctx.resume();streams.push(dest.stream);graphs.push({ctx,osc});return dest.stream;};
-   document.querySelector('#go').onclick=async()=>{window.session=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:1000,meta:{meetingId:'synthetic-meeting'},onChunk:c=>chunks.push(c)});};
- });await p.click('#go');await p.waitForFunction(()=>window.session);}
+   navigator.mediaDevices.getDisplayMedia=()=>navigator.mediaDevices.getUserMedia({audio:true});
+   document.querySelector('#go').onclick=async()=>{window.session=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:1000,systemAudio:system,meta:{meetingId:'synthetic-meeting'},onWarn:w=>warnings.push(w),onChunk:c=>chunks.push(c)});};
+ },system);await p.click('#go');await p.waitForFunction(()=>window.session);}
  await test('A-meeting-B-voice-C-same-meeting-durable-separate-audio',async()=>{
    await setup();await p.waitForTimeout(900);
    const before=await p.evaluate(async()=>{window.loan=await WizAppCapture.beginVoiceBorrow('handoff-synthetic-1');return {loan,live:streams.flatMap(s=>s.getTracks()).filter(t=>t.readyState==='live').length,state:WizAppCapture.getState()};});
@@ -53,6 +54,17 @@ async function test(name,fn){await fn();results.push({name,passed:true});console
    await setup();await p.waitForTimeout(300);await p.evaluate(()=>WizAppCapture.beginVoiceBorrow('handoff-stop-test'));
    await p.evaluate(async()=>{const r=await session.stop();await WizAppCapture.ack('mizel',r.id);});
    assert.equal(await p.evaluate(async()=>{try{await WizAppCapture.endVoiceBorrow('handoff-stop-test');}catch(e){return e.code;}}),'stale_handoff');assert.equal(await p.evaluate(()=>WizAppCapture.getState().active),false);
+ });
+ await test('all-meeting-tracks-release-and-computer-audio-needs-opt-in',async()=>{
+   await setup(true);await p.waitForTimeout(400);
+   assert.equal(await p.evaluate(()=>streams.flatMap(s=>s.getTracks()).filter(t=>t.readyState==='live').length),2);
+   await p.evaluate(()=>WizAppCapture.beginVoiceBorrow('handoff-two-tracks'));
+   assert.equal(await p.evaluate(()=>streams.flatMap(s=>s.getTracks()).filter(t=>t.readyState==='live').length),0);
+   await p.evaluate(()=>WizAppCapture.endVoiceBorrow('handoff-two-tracks',{voiceTakeId:'retained-B'}));
+   assert.equal(await p.evaluate(()=>streams.flatMap(s=>s.getTracks()).filter(t=>t.readyState==='live').length),1);
+   assert.ok(await p.evaluate(()=>warnings.some(w=>w.includes('Computer audio is off'))));
+   await p.waitForTimeout(300);const tracks=await p.evaluate(async()=>{const r=await session.stop();return r.meta.captureTracks.map(t=>({source:t.source,bytes:t.blob.size}));});
+   assert.ok(tracks.some(t=>t.source==='them'&&t.bytes>44));
  });
  await test('stop-racing-pause-grants-no-late-lease',async()=>{
    await setup();await p.waitForTimeout(300);
