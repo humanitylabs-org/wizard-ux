@@ -121,6 +121,8 @@ async function run(mobile) {
       await p.evaluate(() => __wos.openSheet('launcher')); await nap(250);
       const grid = p.locator('#launcherBody .lgroup').filter({ has: p.locator('h4', { hasText: 'Wizard apps' }) });
       check(await grid.locator('[data-app="agent:private"]').count() === 1, 'phone Apps grid includes private once');
+      if (await grid.locator('[data-app="agent:private"]').count()) await grid.locator('[data-app="agent:private"]').scrollIntoViewIfNeeded();
+      await nap(2500); // Let tile entrance animations and the intentional stale-agent refusal toast settle.
       await p.screenshot({ path: path.join(OUT, 'phone-apps.png') });
       if (await grid.locator('[data-app="agent:private"]').count() === 1) { await grid.locator('[data-app="agent:private"]').click(); await nap(200); check((await windows(p)).filter(w => w.agent === 'private').length === 1, 'phone Apps tile reuses scoped app'); }
       await closeSearch(p, mobile);
@@ -128,6 +130,7 @@ async function run(mobile) {
       await p.evaluate(() => __wux.goHome()); await nap(350);
       const home = p.locator('#desktopHome [data-app="agent:private"]');
       check(await home.count() === 1, 'desktop Home apps includes private');
+      await nap(2500);
       await p.screenshot({ path: path.join(OUT, 'desktop-home.png') });
       if (await home.count() === 1) { await home.click(); await nap(200); check((await windows(p)).filter(w => w.agent === 'private').length === 1, 'desktop Home private click reuses same scoped app'); }
     }
