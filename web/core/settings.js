@@ -21,9 +21,9 @@
   function unsentRow(it, ctx) {
     const when = ctx.ago?.(new Date(it.createdAt).toISOString()) || '';
     const blocked = it.state === 'unconfirmed' || ctx.outbox?.quarantined?.(it.id);
-    const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error) : it.state === 'held' ? 'Kept on this device · not queued' : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
+    const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error) : it.state === 'empty' ? 'No speech detected · recording kept' : it.state === 'held' ? 'Kept on this device · not queued' : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
     const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
-    return `<div class="ub-row ${esc(it.state)}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}"><div class="ub-t"><span>${esc(it.text || 'Voice note · words come when it sends')}</span></div><div class="ub-m">${src} · ${esc(when)} · ${st}</div><div class="ub-a">${!blocked && it.state !== 'held' ? `<button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>` : ''}${it.origin === 'app' && it.sessionId && ctx.live?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' && !blocked ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
+    return `<div class="ub-row ${esc(it.state)}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}"><div class="ub-t"><span>${esc(it.text || (it.state === 'empty' ? 'Voice recording' : 'Voice note · words come when it sends'))}</span></div><div class="ub-m">${src} · ${esc(when)} · ${st}</div><div class="ub-a">${!blocked && it.state !== 'held' ? `<button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>` : ''}${it.origin === 'app' && it.sessionId && ctx.live?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' && !blocked ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
   }
   function unsentAction(ctx, id, origin, action) {
     if (origin === 'everywhere') {
@@ -75,7 +75,7 @@
   } });
   register({ id: 'voice', html: () => window.WizCore.voiceStatus?.card() || '' });
   register({ id: 'cancelled', html: () => window.WosCancelled?.html() || '', act: (ctx, el) => window.WosCancelled?.act(el) });
-  register({ id: 'selection', available: android, html: () => window.WosSelMenu?.html() || '', act: (ctx, el) => window.WosSelMenu?.act(el) });
+  register({ id: 'selection', html: () => window.WosSelMenu?.html() || '', act: (ctx, el) => window.WosSelMenu?.act(el) });
   register({ id: 'wizard', html(ctx) {
     const status = ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
     return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${window.WizWebUpdate ? row('web-update', '↻', 'Check for updates', 'Updates both layouts · reload only when you choose') : ''}${row('help', '?', 'Gestures & help', ctx.helpSub)}${window.WosFiles ? row('files', '▤', 'Files', 'Everything in Wizard Files · preview, attach to a chat') : ''}</div>`;
@@ -151,5 +151,5 @@
     const at = controls.indexOf(document.activeElement);
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
-  window.WosSettings = { register, mount, route, trap, moveDraft, unsentAll, unsentRow, unsentAction, get features() { return [...features.values()].map(({ id, aliases }) => ({ id, aliases: aliases || [] })); } };
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, trap, moveDraft, unsentAll, unsentRow, unsentAction, get features() { return [...features.values()].map(({ id, aliases }) => ({ id, aliases: aliases || [] })); } };
 })();

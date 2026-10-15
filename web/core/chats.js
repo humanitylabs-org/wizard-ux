@@ -226,9 +226,10 @@ window.WizCore.chats = function createChats(H) {
   // "a little popover, pillbox sort of thing to let me know a message is sending… I don't need all my threads
   // shifted down"). It never takes layout space. Tap opens the reply's thread; Retry/Edit appear only when stuck.
   function sendPill(items, w) {
+    items = items.filter(it => !(it.state === 'empty' && it.threadHidden));
     const c = ch(w.id), ids = items.map(it => it.id).join(',');
     // The moment the last message leaves the phone, flash "Sent" for a beat, then the pill goes (per window).
-    if (c.pillIds && !ids && LIVE.ok) {
+    if (c.pillIds && !ids && LIVE.ok && c.pillIds.split(',').every(id => OUTBOX?.get(id)?.state === 'sent')) {
       c.sentUntil = Date.now() + 1500; clearTimeout(c.sentTimer);
       c.sentTimer = setTimeout(() => { const w2 = H.win(w.id), e2 = elOf(w.id); if (w2 && !w2.thread && e2 && e2.querySelector('.ch-list') && !holdList(w.id)) renderChatList(w2, e2); }, 1600);
     }
@@ -238,13 +239,16 @@ window.WizCore.chats = function createChats(H) {
       return left > 0 ? `<div class="ch-pill sent" style="animation-delay:${left - 1500}ms" role="status">${CHECK_SVG}<span>Sent</span></div>` : '';
     }
     c.sentUntil = 0;
-    const failed = items.filter(it => it.state === 'failed'), waiting = items.filter(it => it.state === 'waiting');
+    const failed = items.filter(it => ['failed', 'empty'].includes(it.state)), waiting = items.filter(it => it.state === 'waiting');
     const one = items.length === 1 ? items[0] : null;
     const name = it => { const s = it.kind === 'reply' && it.sessionId ? LIVE.session(it.sessionId) : null; return s?.title || (it.kind === 'new' ? 'New chat' : 'thread'); };
     const open = one && one.kind === 'reply' && one.sessionId ? ` data-chopen="${esc(one.sessionId)}"` : '';
     let cls = '', label, btns = '';
     if (items.some(it => it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id))) {
       cls = ' fail'; label = 'Could not confirm · originals kept';
+    } else if (items.every(it => it.state === 'empty')) {
+      cls = ' fail'; label = 'No speech detected · recordings kept';
+      btns = one ? `<button type="button" class="pbtn ghost" data-obdismiss="${esc(one.id)}">Dismiss</button>` : '';
     } else if (items.every(it => it.state === 'held')) {
       label = 'Kept on this device · not queued';
     } else if (failed.length) {
@@ -259,7 +263,7 @@ window.WizCore.chats = function createChats(H) {
     } else {
       label = one ? `Sending · ${esc(clip(name(one), 34))}` : `Sending ${items.length} messages`;
     }
-    const spin = failed.length || items.some(it => ['unconfirmed', 'held'].includes(it.state) || OUTBOX?.quarantined(it.id)) ? '' : '<i class="dots"><b></b><b></b><b></b></i>';
+    const spin = failed.length || items.some(it => ['unconfirmed', 'held', 'empty'].includes(it.state) || OUTBOX?.quarantined(it.id)) ? '' : '<i class="dots"><b></b><b></b><b></b></i>';
     return `<div class="ch-pill${cls}" data-sendpill="${items.length}" role="status"><span class="pl"${open}>${spin}<span>${label}</span></span>${btns}</div>`;
   }
   // Rotate one storage write: the live new-chat slot → a saved slot, the chosen saved slot → the live one.
@@ -948,6 +952,7 @@ window.WizCore.chats = function createChats(H) {
   function pendingState(p) {
     if (OUTBOX?.quarantined(p.id)) return '<span class="pst wait">Waiting for device storage verification · not sending</span>';
     if (p.state === 'unconfirmed') return `<span class="pst fail">${esc(p.error)}</span>`;
+    if (p.state === 'empty') return `<span class="pst fail">No speech detected · recording kept</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry transcription</button><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
     if (p.state === 'held') return '<span class="pst">Kept on this device · not queued</span>';
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`;
     if (p.state === 'waiting') return `<span class="pst wait">${esc(p.error || 'Couldn’t reach Wizard')} · retrying</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>`;
@@ -959,7 +964,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function pendingHtml(p, c) {
     const files = (p.files || []).filter(f => f !== p.audioFile);
-    const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text ? '' : ' · words come when it sends'}</span></div>` : '';
+    const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text || p.state === 'empty' ? '' : ' · words come when it sends'}</span></div>` : '';
     const words = p.text || p.typed || ''; // a voice note not yet transcribed shows the typed words riding with it
     return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}" data-ob="${esc(p.id)}"><div class="bub">${voice}${userMedia(c || { media: [] }, files, [])}${words ? md(words) : ''}</div><div class="pmeta">${pendingState(p)}</div></div>`;
   }
@@ -1138,7 +1143,7 @@ window.WizCore.chats = function createChats(H) {
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
-    const AGID = isNew ? winAgent(w) : '';
+    const AGID = isNew ? (opts.route?.agent || winAgent(w)) : '';
     const dkey = isNew ? (AGID ? 'agentnew:' + AGID : 'new') : 'direct:' + sid;
     if (here && !voice) { KIT.drafts.clear(dkey); c.draft = ''; c.files = []; }
     if (here) c.follow = true;
@@ -1222,6 +1227,11 @@ window.WizCore.chats = function createChats(H) {
         .catch(err=>{ hc.disabled=false; hc.textContent=hc.dataset.preview ? 'Try Continue · example only' : 'Continue'; toast('!',''+err.message,2600); });
       return true;
     }
+    const dismiss = e.target.closest('[data-obdismiss]'); if (dismiss) {
+      Promise.resolve(OUTBOX.dismissEmpty(dismiss.dataset.obdismiss)).then(ok => {
+        H.toast(ok ? '✓' : '!', ok ? 'Bubble dismissed · recording kept in Unsent messages' : 'Could not save dismissal · recording kept', 2400);
+      }); return true;
+    }
     const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); H.toast('↻', 'Sending again', 1400); return true; }
     if (e.target.closest('[data-obretryall]')) { OUTBOX.retryAll(); H.toast('↻', 'Sending again', 1400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
@@ -1276,6 +1286,21 @@ window.WizCore.chats = function createChats(H) {
     if (al && window.WizCore.deeplink?.route(al.getAttribute('href'), al)) { e.preventDefault(); return true; }
     if (al && H.openLink) { let u = null; try { u = new URL(al.getAttribute('href'), location.href); } catch (err) {}
       if (u && (window.WosChat?.isHomeUrl ? window.WosChat.isHomeUrl(u) : u.origin === location.origin) && !u.pathname.startsWith('/wizard-os-home')) { e.preventDefault(); H.openLink(u.pathname + u.search + u.hash, (al.textContent || '').trim().slice(0, 40) || u.pathname); return true; } }
+    const qc = e.target.closest('[data-quotecopy]');
+    if (qc) {
+      const text = qc.closest('blockquote[data-quote-source]')?.dataset.quoteSource || '';
+      (KIT.copyRich || KIT.copyText)(text).then(ok => { qc.textContent = ok ? 'Copied' : 'Couldn’t copy'; setTimeout(() => { qc.textContent = 'Copy'; }, 1500); });
+      return true;
+    }
+    const qs = e.target.closest('[data-quoteshare]');
+    if (qs) {
+      const text = qs.closest('blockquote[data-quote-source]')?.dataset.quoteSource || '';
+      KIT.shareText(text).then(r => {
+        if (r === 'copied') toast('⧉', 'Copied · sharing isn’t available here', 1800);
+        else if (r === 'unsupported' || r === 'failed') toast('!', 'Couldn’t share', 1800);
+      }).catch(() => toast('!', 'Couldn’t share', 1800));
+      return true;
+    }
     const cc = e.target.closest('[data-codecopy]'); if (cc) { const t = cc.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.copyText(t).then(ok => { cc.textContent = ok ? 'Copied' : 'Couldn’t copy'; setTimeout(() => { cc.textContent = 'Copy'; }, 1500); }); return true; }
     const cs = e.target.closest('[data-codeshare]'); if (cs) { const t = cs.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.shareText(t).then(r => r === 'copied' && toast('⧉', 'Copied · sharing isn’t available here', 1800)); return true; }
     const mc = e.target.closest('[data-mcopy]'); if (mc) { const t = ch(id).texts?.[+mc.dataset.mcopy] ?? ''; (KIT.copyRich || KIT.copyText)(t).then(ok => toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400)); return true; }
