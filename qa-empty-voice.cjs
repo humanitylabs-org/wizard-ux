@@ -15,7 +15,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   ok(await f.p.evaluate(id=>!WosOutbox.get(id).threadHidden,id2),`${label}: second thread unchanged`);
   const after=await f.p.evaluate(async id=>{const r=WosOutbox.get(id);return {bytes:Array.from(new Uint8Array(await r.audio.arrayBuffer())),file:r.audioFile,model:r.model,provider:r.provider};},id);
   ok(JSON.stringify(before)===JSON.stringify(after),`${label}: dismissal preserves exact audio and route`);
-  const settings=await f.p.evaluate(()=>WosSettings.features.find(x=>x.id==='unsent').html({outbox:WosOutbox,live:WizLive}));
+  const settings=await f.p.evaluate(()=>WosSettings.unsentAll({outbox:WosOutbox}).map(it=>WosSettings.unsentRow(it,{outbox:WosOutbox,live:WizLive})).join(''));
   ok(settings.includes('No speech detected')&&!settings.includes('retrying')&&!settings.includes('Sending…'),`${label}: saved notes recovery is honest`,settings);
   await f.p.reload();await f.p.waitForFunction(()=>WosOutbox?.recoveryComplete&&(window.__wos||window.__wux)?.chats);
   const persisted=await f.p.evaluate(id=>{const r=WosOutbox.get(id);return {hidden:r.threadHidden,bytes:r.audio?.size,state:r.state,listed:WosOutbox.unsent().some(x=>x.id===id),thread:WosOutbox.forThread(r.sessionId).some(x=>x.id===id)};},id);
