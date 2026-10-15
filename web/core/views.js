@@ -139,5 +139,6 @@
   }
 
   function bindMaps(root, w, changed) { const form = root.querySelector('.map-query'); if (!form) return; form.onsubmit = e => { e.preventDefault(); w.dest = form.elements.destination.value.trim(); w.mode = e.submitter?.value || 'search'; const body = root.querySelector('.wbody') || root; body.innerHTML = renderMaps(w); bindMaps(root, w, changed); changed?.(); }; }
-  window.WosViews = { bindMaps, TODAY, YESTERDAY, weekOf, LEVELS, LNAME, renderReviewShell, renderLevel, parentOf, chain, crumbLabel, renderMaps };
+  function railTarget(z, level, root) { const levels=chain(z),want=LEVELS.indexOf(level);if(want<levels.length-1)return levels[want];if(want>levels.length-1){const card=root.querySelector('[data-z]');if(card)return JSON.parse(card.dataset.z);}return null; }
+  window.WosViews = { bindMaps, railTarget, TODAY, YESTERDAY, weekOf, LEVELS, LNAME, renderReviewShell, renderLevel, parentOf, chain, crumbLabel, renderMaps };
 })();

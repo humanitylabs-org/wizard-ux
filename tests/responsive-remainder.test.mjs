@@ -52,3 +52,10 @@ test('both adapters mount common nonsettings views, command grammar and capture 
  for(const p of ['index.html','desktop.html'])for(const asset of ['views.js','views.css','commands.js','features.js','bound-view.js','capture-tools.js','music-voice.js','screen-capture.js','sel-menu.js'])assert(read(p).includes('core/'+asset),p+': '+asset);
  for(const p of ['app.js','desktop/desktop.js']){const s=read(p);assert(s.includes('WosFeatures.install('));assert(s.includes('WosCommands.create('));assert(s.includes('WosCommands.execute('));assert(s.includes('WosBoundView.create('));assert(s.includes('WosCaptureTools.'));assert(!s.includes('function localParse('));assert(!s.includes('function renderLevel('));}
 });
+
+test('finite audit has all 73 capabilities and complete 163-row crosswalk, without unclosed browser gaps',()=>{
+ const d=JSON.parse(fs.readFileSync(new URL('../docs/responsive-capability-coverage.json',import.meta.url),'utf8'));
+ assert.equal(d.features.length,73);const ids=new Set(d.features.map(f=>f.id));assert.equal(ids.size,73);assert.equal(d.legacy_crosswalk.length,163);for(const row of d.legacy_crosswalk)assert(ids.has(row.feature_id));
+ for(const f of d.features.filter(f=>f.scope==='browser-common'))assert(['shared-implemented','shared-delivered-pr31','inherited-shared'].includes(f.status),f.id);
+ const counts={};for(const f of d.features)counts[f.status]=(counts[f.status]||0)+1;assert.deepEqual(counts,d.counts);
+});

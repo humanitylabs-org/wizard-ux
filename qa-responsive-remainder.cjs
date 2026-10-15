@@ -3,7 +3,7 @@
 const path=require('path');
 module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
  for(const desktop of [false,true]){
-  const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';
+  const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';if(!desktop)await p.setViewportSize({width:360,height:800});
   if(!desktop)await p.setViewportSize({width:360,height:800});
   // Registered once: Settings discovery, deeplink and actual shared mount/actions in each shell.
   await p.evaluate(()=>{
@@ -48,14 +48,43 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   ok(bound.sessionId===sid&&bound.model===model&&bound.agent==='private-fixture'&&bound.files[0].id==='photo',`${label}: shared bound feedback preserves original thread, private route and files`);
   await f.done(label+' views and actions');
  }
+ // Supported install capability is conditional, and activation is a real button click (prompt itself fixture).
+ for(const desktop of [false,true]){
+  const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';if(!desktop)await p.setViewportSize({width:360,height:800});
+  ok(await p.locator('#wizard-pwa-install').count()===0,`${label}: no install offer without browser capability`);
+  await p.evaluate(()=>{window.__prompts=0;const e=new Event('beforeinstallprompt',{cancelable:true});e.prompt=async()=>{__prompts++;};e.userChoice=Promise.resolve({outcome:'accepted'});window.dispatchEvent(e);});
+  await p.locator('#wizard-pwa-install').locator('button.action').click();
+  ok(await p.evaluate(()=>__prompts===1&&!document.getElementById('wizard-pwa-install')),`${label}: supported install prompt runs only on activation`);
+  // Shared command drawer operates on the origin list, not its own new window.
+  await p.evaluate(({desktop,wid})=>{const H=desktop?__wux:__wos;H.chats.chatsBack(H.wins[wid]);H.focusWin(wid);WosFeatures.open('command');},{desktop,wid:f.wid});
+  await p.locator('.shared-command input').fill('search custody');await p.locator('.shared-command input').press('Enter');
+  ok(await p.evaluate(({desktop,wid})=>(desktop?__wux:__wos).chats.ch(wid).q==='custody',{desktop,wid:f.wid}),`${label}: common search command targets originating chat list`);
+  await f.done(label+' install and local search');
+ }
+ // Auto-bound page and actual recording caller must keep the original thread through navigation.
+ for(const desktop of [false,true]){
+  const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';if(!desktop)await p.setViewportSize({width:360,height:800});
+  await f.ctx.route('**/api/sessions/**',r=>r.request().method()==='GET'?r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({session:{id:sid,title:'Bound original',status:'completed',model,provider},messages:[{role:'user',content:'Review this'},{role:'assistant',content:'[View the report](/qa-bound-report/)'}]})}):r.fallback());
+  await f.ctx.route('**/qa-bound-report/',r=>r.fulfill({status:200,contentType:'text/html',body:'<h1>Bound report fixture</h1><p>Feedback remains attached to its original thread.</p>'}));
+  await p.reload();await p.waitForFunction(desktop=>Object.values((desktop?__wux:__wos).wins).some(w=>w.bound),desktop);
+  const b=await p.evaluate(desktop=>Object.values((desktop?__wux:__wos).wins).find(w=>w.bound),desktop);
+  ok(b.from.sid===sid&&b.url==='/qa-bound-report/',`${label}: latest thread reply creates real bound iframe`,b);
+  await p.evaluate(({desktop,id})=>(desktop?__wux:__wos).focusWin(id),{desktop,id:b.id});
+  await p.evaluate(desktop=>desktop?__wux.talk('start'):__wos.startVoice('auto'),desktop);await sleep(1100);
+  await p.evaluate(()=>WosFeatures.open('maps'));await p.evaluate(desktop=>desktop?__wux.talk('send'):__wos.finishVoice(),desktop);await sleep(600);
+  const row=(await f.rows()).find(x=>x.blob&&x.kind==='reply');
+  ok(row?.sessionId===sid&&row.model===model,`${label}: actual bound feedback after focus change replies to original thread`,row);
+  await f.done(label+' bound caller');
+ }
  // Actual recorder controls, common screenshot adapter and actual upload route on BOTH shells.
  for(const desktop of [false,true]){
-  const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';
+  const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';if(!desktop)await p.setViewportSize({width:360,height:800});
   await f.ctx.route('**/wizard/files/upload',async route=>{const req=route.request();await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({file:{id:'screenshot-fixture',filename:req.headers()['x-wizard-filename'],mime:'image/png',bytes:req.postDataBuffer()?.length||0}})});});
   await p.evaluate(()=>{window.__capturePending=null;window.wizardScreenPort={postMessage(id){if(id.startsWith('cancel:'))return;window.__capturePending=id;}};});
   await p.locator(`[data-chats="${f.wid}"] .ch-mic`).click();
   await sleep(1100);await p.locator(desktop?'#voicePause':'#arcPause').click();
   ok(await p.evaluate(desktop=>desktop?__wux.voiceState==='paused':__wos.voice==='paused',desktop),`${label}: pause actual capture`);
+  await p.screenshot({path:path.join(out,label+'-paused-controls.png')});
   ok(await p.evaluate(()=>WosCaptureTools.awakeWanted),`${label}: capture requests shared screen-awake state`);
   await p.locator(desktop?'#voicePause':'#arcPause').click();
   ok(await p.evaluate(desktop=>desktop?__wux.voiceState==='listen':__wos.voice==='listen',desktop),`${label}: resume actual capture`);
@@ -71,6 +100,19 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   ok(await p.evaluate(()=>!WosCaptureTools.awakeWanted),`${label}: wake request released after finish`);
   await f.done(label+' capture controls');
  }
+ // Failed attachment upload retains original File and take; actual Retry uses those bytes.
+ for(const desktop of [false,true]){
+  const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';if(!desktop)await p.setViewportSize({width:360,height:800});let attempts=0;
+  await f.ctx.route('**/wizard/files/upload',r=>{attempts++;return r.fulfill({status:attempts===1?503:200,contentType:'application/json',body:JSON.stringify(attempts===1?{error:'Fixture upload unavailable'}:{file:{id:'retried-fixture',filename:'kept.txt',mime:'text/plain',bytes:18}})});});
+  await p.locator(`[data-chats="${f.wid}"] .ch-mic`).click();await sleep(1100);
+  await p.locator(desktop?'#voiceFileInput':'[data-voice-files]').setInputFiles({name:'kept.txt',mimeType:'text/plain',buffer:Buffer.from('Original file bytes')});await sleep(180);
+  await p.evaluate(desktop=>desktop?__wux.talk('send'):__wos.finishVoice(),desktop);
+  ok(await p.evaluate(desktop=>['listen','paused'].includes((desktop?__wux:__wos).voice),desktop),`${label}: failed upload cannot discard or finish the take`);
+  await p.locator(desktop?'[data-vretry]':'#arcAttach').click();await sleep(220);
+  await p.evaluate(desktop=>desktop?__wux.talk('send'):__wos.finishVoice(),desktop);await sleep(500);
+  ok(attempts===2&&(await f.rows()).some(x=>x.blob&&x.files?.some(file=>file.id==='retried-fixture')),`${label}: failed upload retry preserves original attachment/audio`);
+  await f.done(label+' upload failure');
+ }
  // Desktop browser focused-field seals: cursor retained, changed/replaced field never receives late STT.
  for(const stale of [false,true]){
   const f=await boot(true),p=f.p;f.state.sttDelay=300;
@@ -82,6 +124,10 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   ok(stale?val==='Changed while recording':val==='before spoken original words',`desktop: ${stale?'stale focused field preserved':'dictation replaces captured cursor range'}`,val);
   ok(!f.state.posts.length,`desktop: ${stale?'stale':'cursor'} dictation cannot send to agent`);await f.done('desktop focused dictation');
  }
+ // Normal desktop global talk recognizes an unambiguous local command; no backend message.
+ {const f=await boot(true);f.state.text='show this week';await f.p.evaluate(()=>__wux.talk('start'));await sleep(1100);const result=await f.p.evaluate(()=>__wux.talk('send'));ok(result==='local'&&!f.state.posts.length,'desktop: normal global talk dispatches local commands instead of agent-send');ok(await f.p.locator('.review').count()>0,'desktop: normal voice opens actual shared review');await f.done('desktop automatic local command');}
+ // Current model changes while recording cannot change the sealed route.
+ {const f=await boot(true);await f.p.locator(`[data-chats="${f.wid}"] .ch-mic`).click();await sleep(1100);await f.p.evaluate(()=>{WosModels.snapshot=()=>({model:'replacement-model',provider:'replacement-provider'});});await f.p.evaluate(()=>__wux.talk('send'));await sleep(250);ok((await f.rows()).some(x=>x.blob&&x.model===model&&x.provider===provider),'desktop: recorder START pins model/provider against later edits');await f.done('desktop model pin');}
  // Explicit spoken command miss retains audio; it does not use /route or /send.
  {const f=await boot(true);f.state.text='utterly unknown command';await f.p.evaluate(()=>__wux.commandVoice());await sleep(1100);await f.p.evaluate(()=>__wux.commandVoice());ok(!f.state.posts.length,'desktop: spoken command miss cannot send a message');ok((await f.rows()).some(x=>x.kind==='dictation'&&x.state==='held'&&x.blob),'desktop: spoken command miss retains transcript/audio');await f.done('desktop spoken command');}
 };

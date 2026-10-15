@@ -75,7 +75,7 @@
     }
     function cancel() {
       V.cancelled = true; const id = V.captureId; if (id) window.WosOutbox?.transition(id, 'held', 'Cancelled recording · original kept');
-      const rec = V.rec, chunks = V.chunks, ms = performance.now() - V.t0;
+      const rec = V.rec, chunks = V.chunks, ms = (V.pauseAt || performance.now()) - V.t0 - (V.pausedMs || 0);
       const keep = () => {
         if (!chunks.length) return;
         const blob = new Blob(chunks, { type: rec?.mimeType || 'audio/webm' });
@@ -106,8 +106,8 @@
         V.rec.onstop = done; try { V.rec.stop(); } catch (e) { done(); }
       });
     }
-    function pause() { if (V.state !== 'listen' || V.rec?.state !== 'recording') return false; V.rec.pause(); V.pauseAt = performance.now(); set('paused'); return true; }
-    function resume() { if (V.state !== 'paused' || V.rec?.state !== 'paused') return false; V.rec.resume(); V.pausedMs += performance.now() - V.pauseAt; V.pauseAt = 0; set('listen'); V.raf = requestAnimationFrame(tick); return true; }
+    function pause() { if (V.state !== 'listen' || V.rec?.state !== 'recording') return false; if (!window.WosCaptureTools.setPaused(V.rec,true)) return false; V.pauseAt = performance.now(); set('paused'); return true; }
+    function resume() { if (V.state !== 'paused' || V.rec?.state !== 'paused') return false; if (!window.WosCaptureTools.setPaused(V.rec,false)) return false; V.pausedMs += performance.now() - V.pauseAt; V.pauseAt = 0; set('listen'); V.raf = requestAnimationFrame(tick); return true; }
     return { start, finish, cancel, pause, resume, get state() { return V.state; }, elapsed: () => (['listen','paused'].includes(V.state) ? (V.pauseAt || performance.now()) - V.t0 - (V.pausedMs || 0) : 0) };
   }
   window.WizCore = window.WizCore || {};

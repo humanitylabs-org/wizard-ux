@@ -84,3 +84,5 @@
 
 
 .shared-command,.shared-feature{padding:16px;max-width:800px;margin:auto;overflow:auto}.shared-command label{display:grid;gap:12px}.shared-command input{width:100%;box-sizing:border-box;padding:12px;color:inherit;background:var(--panel);border:1px solid var(--line)}.shared-command button,.map-query button{min-height:44px;padding:8px 16px}.map-query{display:flex;flex-wrap:wrap;gap:8px;padding:12px}.map-query input{flex:1;min-width:120px;padding:12px}.desktop .review .pinch-hint{display:none}.voice-extras{display:flex;flex-wrap:wrap;gap:6px}.voice-extras button{min-height:36px}#voiceFiles{max-width:300px;max-height:140px;overflow:auto;font-size:12px}
+
+.rv-tag { flex: 0 0 auto; margin-left: -2px; padding: 2px 7px; border-radius: 99px; background: rgba(255, 184, 77, .2); color: var(--rv-2,#ffc879); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }

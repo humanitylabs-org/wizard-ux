@@ -18,7 +18,7 @@
     const cancel = () => controller.abort(signal?.reason); signal?.addEventListener('abort', cancel, {once:true});
     if (signal?.aborted) cancel();
     let deadline; const arm = () => { clearTimeout(deadline); deadline=setTimeout(()=>controller.abort(new Error('Upload timed out · retry the original file')),60000); };
-    arm(); row.uploading=true; row.local=file;
+    arm(); row.uploading=true; row.local=file;changed();
     try { const result=await upload(file,{signal:controller.signal,onProgress:(_sent,_total,state)=>{if(state!=='reconnecting')arm();}}); if(!active())return;Object.assign(row,result,{uploading:false});delete row.local;delete row.error; }
     catch(e) { if(active())Object.assign(row,{uploading:false,error:String(controller.signal.reason?.message||e.message||e)}); }
     finally { clearTimeout(deadline); signal?.removeEventListener('abort',cancel);delete row.abort;if(active())changed(); }
@@ -39,5 +39,6 @@
       remove(r) { if (r.uploading) return;const i=files.indexOf(r);if(i>=0)files.splice(i,1);changed(files); },
       close() { closed=true;abort.abort(); },get closed(){return closed;} };
   }
-  window.WosCaptureTools = { awake, take, uploadRow, get awakeWanted() { return AWAKE.want; }, screenshotAvailable: () => !!(window.wizardScreenPort?.postMessage || navigator.mediaDevices?.getDisplayMedia) };
+  function setPaused(rec, on) { const from=on?'recording':'paused';if(rec?.state!==from)return false;try { on?rec.pause():rec.resume();return true; }catch(_){return false;} }
+  window.WosCaptureTools = { awake, take, uploadRow, setPaused, get awakeWanted() { return AWAKE.want; }, screenshotAvailable: () => !!(window.wizardScreenPort?.postMessage || navigator.mediaDevices?.getDisplayMedia) };
 })();

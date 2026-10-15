@@ -5,9 +5,9 @@
  *   Copy · Share (Android's share sheet, "From Archimedes:" over the words when they are his) · Quote (into this
  *   thread's reply box) · Search (Wizard Search) · Select all (the whole message).
  *
- * Android app 0.9.7+ only (WizardOSNative.selection): the page tells the native view when a selection is its own and
- * the stock toolbar stays quiet for it (SelectionWebView). Text fields and hosted apps keep Android's menu (Paste).
- * Browsers and older apps keep their own toolbar and never see this menu.
+ * Shared in-page browser selection actions; native Android suppression is an optional adapter.
+ * The browser may still provide its own system selection toolbar. Editable fields and hosted apps
+ * keep their own Paste/selection behavior. External-app text requires native accessibility.
  *
  *   WosSelMenu.back()      → 'selection' when Back closed the menu (and cleared the selection), else ''
  *   WosSelMenu.html()      → the Settings group;  WosSelMenu.act(el) → handles a tap inside it
@@ -107,7 +107,7 @@
     if (!own()) return hide();
     const c = current(); if (!c) return hide(true);
     tell(3); cur = c;
-    const ids = enabled().filter(id => id !== 'quote' || c.wid).filter(id => id !== 'search' || host()?.openSearch);
+    const ids = enabled().filter(id => id !== 'quote' || c.wid).filter(id => id !== 'search' || (host()?.openSearch && host()?.canSearch?.()));
     if (!ids.length) return hide();
     const m = mount();
     m.innerHTML = `<span class="sm-grip" data-smgrip aria-label="Drag to move" title="Drag to move">${svg('<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>')}</span>`

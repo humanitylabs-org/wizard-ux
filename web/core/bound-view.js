@@ -59,5 +59,5 @@
    if (!take?.thread || take.thread === '__new__' || !take.route) return false;
    return outbox.enqueue({ kind: 'reply', sessionId: take.thread, text, audio, files, ...take.route, custodyId: take.custodyId, source: 'view-feedback', instructions: take.context || `Feedback on ${take.url || 'the bound page'}.` });
  }
- window.WosBoundView = { target, create, feedback };
+ window.WosBoundView = { target, create, feedback, badge: w => w.from?.sid ? `<span class="rv-tag" title="Feedback goes to ${window.WizCore.esc(w.from.title || w.from.sid)}">Review</span>` : '' };
 })();
