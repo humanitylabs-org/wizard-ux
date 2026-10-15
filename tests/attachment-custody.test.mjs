@@ -38,7 +38,10 @@ test('actual paperclip addFiles captures agent before asynchronous upload and dr
 
 test('actual outbox audio upload and send preserve staged agent and reject mixed-agent attachments', async () => {
   const calls=[]
-  const context={HttpError:class extends Error {constructor(status,message){super(message);this.status=status}},call:async(url,opts)=>{calls.push({url,opts});return {json:async()=>({file:{id:'af_audio',filename:'voice.webm'}})} }
+  const context = {
+    HttpError: class extends Error { constructor(status, message) { super(message); this.status = status } },
+    call: async (url, opts) => { calls.push({url, opts}); return { json: async () => ({file: {id:'af_audio', filename:'voice.webm'}}) } },
+  }
   vm.runInNewContext(slice('outbox.js','  async function uploadAudio(', '  async function keepAudio('),context)
   const file=await context.uploadAudio({agent:'private-agent',audio:new Blob(['audio']),audioType:'audio/webm'})
   assert.equal(calls[0].url,'/wizard/files/upload?agent=private-agent');assert.equal(file.agent,'private-agent')
