@@ -112,7 +112,7 @@ async function run(browser,mobile){
  await p.locator('.hosted-thread .ch-compose textarea').fill('Voice companion text');
  await p.evaluate(m=>{window.__qaBefore=[...WosOutbox._items.keys()];return m?__wos.startVoice('auto'):__wux.talk('start');},mobile);await delay(800);
  await p.evaluate(async m=>{if(m)__wos.finishVoice();else await __wux.talk('send');},mobile);
- await p.waitForFunction(()=>[...WosOutbox._items.values()].some(i=>!__qaBefore.includes(i.id)&&i.kind==='reply'),null,{timeout:20000});
+ await p.waitForFunction(()=>[...WosOutbox._items.values()].some(i=>!__qaBefore.includes(i.id)&&i.kind==='reply'),null,{timeout:20000}).catch(async e=>{console.log('VOICE DEBUG',JSON.stringify({errors,writes,ui:await p.locator('body').innerText(),state:await p.evaluate(()=>({outbox:[...WosOutbox._items.values()].map(x=>({id:x.id,kind:x.kind,state:x.state,error:x.error,sessionId:x.sessionId})),wins:(window.__wos||window.__wux).wins}))}));throw e;});
  await p.waitForFunction(()=>!document.querySelector('.hosted-thread'));
  const voice=await p.evaluate(()=>{const x=[...WosOutbox._items.values()].find(i=>!__qaBefore.includes(i.id)&&i.kind==='reply');return {sessionId:x.sessionId,typed:x.typed,text:x.text,bytes:x.audio?.size,conversation:x.conversation};});
  ok(label+' orb targets child not Manager and returns',voice.sessionId===sid&&!voice.conversation&&voice.bytes>0,voice);
