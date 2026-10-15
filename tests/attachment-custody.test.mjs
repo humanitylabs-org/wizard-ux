@@ -53,10 +53,12 @@ test('actual outbox audio upload and send preserve staged agent and reject mixed
   vm.runInNewContext(slice('outbox.js','  async function uploadAudio(', '  async function keepAudio('),context)
   const file=await context.uploadAudio({createdAt:0,agent:'private-agent',audio:new Blob(['audio']),audioType:'audio/webm'})
   assert.equal(calls[0].url,'/wizard/files/upload?agent=private-agent');assert.equal(file.agent,'private-agent')
-  Object.assign(context,{put:async()=>{},keepAudio:async()=>{},transcribe:async()=>'',J:{},now:()=>0})
-  vm.runInNewContext(slice('outbox.js','  async function prepareSend(', '  async function send('),context)
-  const item={agent:'private-agent',text:'read attachment',files:[file]}
-  await context.prepareSend(item)
+  Object.assign(context,{put:async()=>{},keepAudio:async()=>{},transcribe:async()=>'',J:{},now:()=>0,sentHooks:[]})
+  context.call=async(url,opts)=>{calls.push({url,opts});return {json:async()=>({run_id:'run_fixture'})}}
+  vm.runInNewContext(slice('outbox.js','  async function deliver(', '  async function attempt('),context)
+  const item={id:'outbox-fixture',sessionId:'private-thread',model:'fixture-model',provider:'tinfoil',agent:'private-agent',text:'read attachment',files:[file]}
+  await context.deliver(item)
   assert.deepEqual(JSON.parse(item.body).wizard_file_ids,['af_audio'])
-  await assert.rejects(context.prepareSend({agent:'hermes',text:'wrong target',files:[file]}),/another agent/)
+  assert.equal(calls.at(-1).url,'/wizard/hermes/v1/runs?agent=private-agent')
+  await assert.rejects(context.deliver({...item,body:undefined,agent:'hermes',text:'wrong target',files:[file]}),/another agent/)
 })
