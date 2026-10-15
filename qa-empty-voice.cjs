@@ -20,7 +20,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   await f.p.reload();await f.p.waitForFunction(()=>WosOutbox?.recoveryComplete&&(window.__wos||window.__wux)?.chats);
   const persisted=await f.p.evaluate(id=>{const r=WosOutbox.get(id);return {hidden:r.threadHidden,bytes:r.audio?.size,state:r.state,listed:WosOutbox.unsent().some(x=>x.id===id),thread:WosOutbox.forThread(r.sessionId).some(x=>x.id===id)};},id);
   ok(persisted.hidden&&persisted.bytes>0&&persisted.state==='empty'&&persisted.listed&&!persisted.thread,`${label}: reload retains audio but not dismissed bubble`,persisted);
-  await f.p.evaluate(({wid,id2})=>{const a=window.__wos||window.__wux;const w=Object.keys(a.wins).find(k=>a.wins[k].app==='chats')||wid;a.chats.openChat(w,'empty-second-thread');}, {wid:f.wid,id2});await sleep(250);
+  await f.p.evaluate(()=>WizCore.deeplink.route('/wizard-os-home/?session=empty-second-thread'));await sleep(250);
   const second=await f.p.locator(`[data-ob="${id2}"]`).innerText();ok(second.includes('No speech detected')&&!second.includes('Sending'),`${label}: second thread independently corrected`,second);
   f.state.text='Recovered dictated feedback';await f.p.locator(`[data-obretry="${id2}"]`).click();await f.p.waitForFunction(id=>WosOutbox.get(id)?.state==='sent',id2);
   ok(f.state.posts.length===1&&f.state.posts[0].session_id==='empty-second-thread',`${label}: explicit retry sends once to original thread`,f.state.posts);
