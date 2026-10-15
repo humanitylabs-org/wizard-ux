@@ -91,10 +91,11 @@
     return `Upload failed (${s}).`;
   };
 
-  async function upload(file, { signal, onProgress, agent = '' } = {}) {
+  async function upload(file, { signal, onProgress, agent = '', clientUploadId = '' } = {}) {
     const total = file.size, name = file.name || 'upload', mime = file.type || 'application/octet-stream';
     const report = (sent, state) => { try { onProgress && onProgress(Math.min(sent, total), total, state); } catch (e) {} };
-    const clientId = newId();
+    const clientId = clientUploadId || newId();
+    const requireCustody = receipt => { if (agent && agent !== 'hermes' && receipt.agent !== agent) throw userErr('This Wizard cannot confirm private attachment custody · update it before attaching.', { code: 'agent_custody_unconfirmed' }); };
     let fails = 0, lastMove = Date.now();
     const wait = async () => {
       if (Date.now() - lastMove > GIVE_UP_MS) throw userErr('Couldn’t reach your Wizard · the upload stopped. Try attaching again.');
@@ -108,7 +109,7 @@
     for (;;) {
       const r = await call('POST', base(), { client_upload_id: clientId, filename: name, mime, bytes: total, agent: agent || 'hermes' }, signal);
       space(r.status);
-      if (r.status >= 200 && r.status < 300 && r.j && r.j.upload_id) { up = r.j; break; }
+      if (r.status >= 200 && r.status < 300 && r.j && r.j.upload_id) { requireCustody(r.j); up = r.j; break; }
       if (!transient(r.status)) throw userErr(r.status === 404 || r.status === 405 ? `Wizard Files is unavailable (${r.status}).` : words(r.status, r.j), { status: r.status });
       report(0, 'reconnecting');
       await wait();
@@ -125,7 +126,7 @@
     const reconcile = async () => {
       const r = await call('GET', url, null, signal);
       if (r.status === 200 && Number.isFinite(Number(r.j.offset))) {
-        offset = Number(r.j.offset); status = r.j.status; if (r.j.file) receipt = r.j.file;
+        requireCustody(r.j); offset = Number(r.j.offset); status = r.j.status; if (r.j.file) receipt = r.j.file;
         return true;
       }
       if (r.status === 404) throw userErr('The upload expired on your Wizard · attach the file again.', { status: 404, code: 'expired' });

@@ -409,12 +409,13 @@ window.WizCore.chats = function createChats(H) {
     return `/wizard/files/${encodeURIComponent(id)}/content` + (selected ? `?agent=${encodeURIComponent(selected)}` : '');
   };
   async function uploadFile(file, { signal, onProgress, agent = '' } = {}) {
-    if (window.WizUploads?.supported()) {
+    if (agent && agent !== 'hermes' && !window.WizUploads) throw new Error('Private attachments require the current Wizard upload client.');
+    if (window.WizUploads?.supported() || (agent && agent !== 'hermes')) {
       try { return await window.WizUploads.upload(file, { signal, onProgress, agent }); }
       catch (e) {
         // A cached bootstrap can outlive the box's support (rolled-back service): only a create that the route
         // itself refuses (404/405) drops to the old path; everything else is a real answer.
-        if (!(e.status === 404 || e.status === 405) || e.code) throw e;
+        if ((agent && agent !== 'hermes') || !(e.status === 404 || e.status === 405) || e.code) throw e;
       }
     }
     return uploadFileOnce(file, { signal, agent });

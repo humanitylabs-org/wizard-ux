@@ -167,6 +167,11 @@
   async function uploadAudio(it) {
     const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /aac/.test(it.audioType) ? 'aac' : 'webm';
     const name = `wizard-voice-${new Date(it.createdAt).toISOString().replace(/[:.]/g, '-')}.${ext}`;
+    if (it.agent && it.agent !== 'hermes') {
+      if (!window.WizUploads) throw new HttpError(409, 'Private audio custody needs the current Wizard upload client');
+      return window.WizUploads.upload(new File([it.audio], name, { type: it.audioType || 'audio/webm' }),
+        { agent: it.agent, clientUploadId: 'audio-' + it.id });
+    }
     const r = await call('/wizard/files/upload?agent=' + encodeURIComponent(it.agent || 'hermes'), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': name, 'X-Wizard-Mime': it.audioType || 'audio/webm' }, body: it.audio });
     const f = (await r.json()).file || {};
     if (!f.id) throw new HttpError(502, 'Wizard Files returned no id');

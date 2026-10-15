@@ -18,10 +18,10 @@ test('real resumable client binds every create/status/PATCH/complete to captured
   const calls=[]; let offset=0
   const context={ window:{ WizLive:{bootstrap:{capabilities:{resumable_uploads:{available:true,api_base:'/wizard/v1/uploads',chunk_bytes:3}}}}}, navigator:{onLine:true}, crypto:globalThis.crypto, AbortController, setTimeout, clearTimeout, addEventListener(){}, removeEventListener(){}, DOMException,
     fetch:async (url,opts={}) => { calls.push({url,opts}); let body={}; const headers={}
-      if (url==='/wizard/v1/uploads') body={upload_id:'upl_fixture',offset:0,chunk_bytes:3}
+      if (url==='/wizard/v1/uploads') body={upload_id:'upl_fixture',agent:'private-agent',offset:0,chunk_bytes:3}
       else if (url.includes('/complete')) body={file:{id:'af_fixture',filename:'private.txt',mime:'text/plain',bytes:6}}
       else if(opts.method==='PATCH') { offset+=opts.body.size; headers['Upload-Offset']=String(offset) }
-      else body={offset}
+      else body={offset,agent:'private-agent'}
       return {ok:true,status:opts.method==='PATCH'?204:200,json:async()=>body,headers:{get:k=>headers[k]}}
     } }
   context.XMLHttpRequest = class {
@@ -41,6 +41,22 @@ test('real resumable client binds every create/status/PATCH/complete to captured
   assert.equal(calls.filter(c=>c.opts.method==='PATCH').length,2)
 })
 
+test('private bytes never fall back to an older backend that cannot attest custody', async () => {
+  let bytes = 0
+  const context = {window:{},crypto:globalThis.crypto,setTimeout,clearTimeout,
+    fetch:async()=>({status:201,json:async()=>({upload_id:'legacy-main-upload',offset:0})}),
+    XMLHttpRequest:class {constructor(){bytes++;throw new Error('must not send bytes')}}}
+  vm.runInNewContext(source('core/uploads.js'),context)
+  await assert.rejects(context.window.WizUploads.upload(new Blob(['private']),{agent:'private-agent'}),/cannot confirm private attachment custody/)
+  assert.equal(bytes,0)
+  let fallback = false
+  context.window.WizUploads={supported:()=>false,upload:async()=>{throw Object.assign(new Error('old backend'),{status:404})}}
+  context.uploadFileOnce=()=>{fallback=true}
+  vm.runInNewContext(slice('core/chats.js','  async function uploadFile(', '  async function uploadFileOnce('),context)
+  await assert.rejects(context.uploadFile(new Blob(['private']),{agent:'private-agent'}),/old backend/)
+  assert.equal(fallback,false)
+})
+
 test('actual paperclip addFiles captures agent before asynchronous upload and draft restoration', async () => {
   const state={files:[]}, W={w:{id:'w',thread:'__new__',agent:'private-agent'}}
   let resume, seen
@@ -55,12 +71,13 @@ test('actual paperclip addFiles captures agent before asynchronous upload and dr
 test('actual outbox audio upload and send preserve staged agent and reject mixed-agent attachments', async () => {
   const calls=[]
   const context = {
+    File, window:{WizUploads:{upload:async(file,options)=>{calls.push({file,options});return {id:'af_audio',agent:options.agent,name:file.name}}}},
     HttpError: class extends Error { constructor(status, message) { super(message); this.status = status } },
     call: async (url, opts) => { calls.push({url, opts}); return { json: async () => ({file: {id:'af_audio', filename:'voice.webm'}}) } },
   }
   vm.runInNewContext(slice('outbox.js','  async function uploadAudio(', '  async function keepAudio('),context)
-  const file=await context.uploadAudio({createdAt:0,agent:'private-agent',audio:new Blob(['audio']),audioType:'audio/webm'})
-  assert.equal(calls[0].url,'/wizard/files/upload?agent=private-agent');assert.equal(file.agent,'private-agent')
+  const file=await context.uploadAudio({id:'stable-outbox-id',createdAt:0,agent:'private-agent',audio:new Blob(['audio']),audioType:'audio/webm'})
+  assert.equal(calls[0].options.agent,'private-agent');assert.equal(calls[0].options.clientUploadId,'audio-stable-outbox-id');assert.equal(file.agent,'private-agent')
   Object.assign(context,{put:async()=>{},keepAudio:async()=>{},transcribe:async()=>'',J:{},now:()=>0,sentHooks:[]})
   context.call=async(url,opts)=>{calls.push({url,opts});return {json:async()=>({run_id:'run_fixture'})}}
   vm.runInNewContext(slice('outbox.js','  async function deliver(', '  async function attempt('),context)
