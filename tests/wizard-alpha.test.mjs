@@ -71,3 +71,8 @@ test('healthy process without real activation receipt is never reported as Open'
  const calls=[];const runner=async(argv,opts)=>{calls.push(argv);const d=JSON.parse(readFileSync(opts.env.WAM_PRIVATE_CATALOG));assert.equal(d.apps[0].commit,commit);return {stdout:'healthy'};};
  await assert.rejects(install({source:source.id,id:entry.id,commit},h,{runner,api:f.api}));assert.equal(calls.length,2);assert.equal(existsSync(join(h,'installed.json')),false);assert.deepEqual(calls[0],['wam','install',entry.id]);
 });
+test('bare WAM update passthrough cannot claim pinned lifecycle support',async t=>{
+ const h=home(t),f=fake();f.s.apps=[entry];await subscribe('example/catalog','feature/test',h,f.api);
+ atomic(join(h,'registry.json'),{apps:[{id:entry.id,repo:entry.repo,commit}]});atomic(join(h,'install-policy.json'),{wam:['wam'],activate:['adapter'],registry:join(h,'registry.json')});
+ let calls=0;await assert.rejects(install({source:source.id,id:entry.id,commit,update:true},h,{api:f.api,runner:async()=>{calls++;}}),/pinned_update_adapter_required/);assert.equal(calls,0);
+});

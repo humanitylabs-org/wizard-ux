@@ -177,6 +177,7 @@ export async function install({source,id,commit,update=false},home=stateDir(),{r
     if(existing && existing.repo!==a.repo) fail('installed_repository_conflict');
     if(existing && !update) fail('already_installed_explicit_update_required');
     if(!existing && update) fail('not_installed_use_install');
+    if(update && policy.pinned_lifecycle!==1) fail('pinned_update_adapter_required');
     const dir=join(home,'installs',`${source}-${id}-${commit}`); mkdirSync(dir,{recursive:true,mode:0o700});
     const catalog=join(dir,'catalog.json'); atomic(catalog,{schema:1,scope:'private-test',apps:[a]});
     const env={...process.env,WAM_PRIVATE_CATALOG:catalog};

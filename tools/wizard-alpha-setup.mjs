@@ -40,7 +40,7 @@ async function main() {
     };
     try {
       // Companion modules are copied together; existing unrelated web/core files stay untouched.
-      for(const name of ['store-data-origin.mjs','store-index-views.mjs','store-private-catalog.mjs','system-overview.mjs','wizard-alpha.mjs','wizard-alpha-activate.py']) save(join(d.tools_dir,name),readFileSync(join(root,'tools',name)),0o644);
+      for(const name of ['store-data-origin.mjs','store-index-views.mjs','store-private-catalog.mjs','system-overview.mjs','wizard-alpha.mjs','wizard-alpha-activate.py','wizard-alpha-wam.py']) save(join(d.tools_dir,name),readFileSync(join(root,'tools',name)),0o644);
       for(const name of ['index.html','store.js','store.css']) save(join(d.store_dir,name),readFileSync(join(root,'web/store',name)),0o644);
       save(join(skillDir,'wizard-alpha/SKILL.md'),readFileSync(join(root,'skills/wizard-alpha/SKILL.md')),0o644);
       save(join(skillDir,'wizard-alpha/README.md'),readFileSync(join(root,'docs/wizard-alpha.md')),0o644);

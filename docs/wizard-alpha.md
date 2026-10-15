@@ -63,11 +63,14 @@ Create an owner-local `install-policy.json` in the subscriber state directory:
 
 ```json
 {
-  "wam": ["wam"],
+  "wam": ["/path/to/wam/python", "/srv/wizard/store-tools/wizard-alpha-wam.py"],
+  "pinned_lifecycle": 1,
   "registry": "/srv/wizard/os-home/apps.json",
   "activate": ["/path/to/wam/python", "/srv/wizard/store-tools/wizard-alpha-activate.py"]
 }
 ```
+
+Use the supplied lifecycle bridge (or an owner-reviewed equivalent), not bare `wam app update`: that command is a Runtipi CLI passthrough and does not stage the selected private pin. The bridge delegates install to WAM, and for update uses WAM's authenticated private resolver/archive verifier followed by its existing authenticated Runtipi update lifecycle with backup enabled. No WAM source changes are needed. `pinned_lifecycle: 1` is the owner's explicit declaration that the configured wrapper uses this contract; update refuses without it.
 
 Set `WIZARD_ALPHA_ACTIVATION` in the agent/WAM execution environment to an owner-local policy:
 
