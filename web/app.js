@@ -1786,7 +1786,7 @@
     device.classList.toggle('orb-corner', corner);
     if (w?.app !== 'chats') trackCornerLift(false);
     // Field refresh can run after recording starts; keep its destination accessible.
-    if (document.getElementById('generalVoiceTarget')) paintVoiceDestination();
+    if (document.getElementById('generalVoice')) paintVoiceDestination();
   }
   const DICTATION_KEY = 'wos.dictation-takes.v1';
   const DICTATION_RECOVERY_KEY = 'wos.dictation-recovery.v1';
@@ -2117,6 +2117,7 @@
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
     V.snap = kind === 'dictation' ? null : kind === 'general' ? generalVoiceSnap() : sendSnap();
+    paintVoiceDestination(); // Recording state is set before its destination snapshot exists.
     if (V.snap && kind === 'command') V.snap.conversation = null;
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
@@ -2779,6 +2780,7 @@
     voiceDestination.textContent = label ? 'To: ' + label + ' · tap to send'
       : V.snap?.general ? 'Talking to ' + window.WizConfig.agent() + ' · tap to send'
       : V.kind === 'command' ? 'Command · release to run · slide up for ' + window.WizConfig.agent() : 'Listening · tap to send';
+    if (active) $('#orbWrap').setAttribute('aria-label', voiceDestination.textContent);
     generalTarget.hidden = V.state !== 'idle' && V.state !== 'command';
     generalTarget.classList.toggle('hold-target', V.state === 'command');
     generalTarget.textContent = V.state === 'command' ? '↑ ' + window.WizConfig.agent() + ' · release to keep talking' : 'Record for ' + window.WizConfig.agent();
