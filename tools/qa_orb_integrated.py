@@ -140,9 +140,13 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
             if mode=='stopped':
                 # Interrupt after real native closure and the existing exact-ID recovery journal,
                 # before web outbox admission. No native bytes are deleted or fabricated.
-                ev("(()=>{const id=__wos.V.native,m=JSON.parse(WizardOSDevice.recStop(id));localStorage.setItem('wos.voice-recovery.v1',JSON.stringify({[id]:{...m,send:false}}));location.reload()})()")
-            else:ev('location.reload()')
-            wait('!!window.__wos&&WosOutbox.recoveryComplete',25)
+                ev("(()=>{const id=__wos.V.native,m=JSON.parse(WizardOSDevice.recStop(id));localStorage.setItem('wos.voice-recovery.v1',JSON.stringify({[id]:{...m,send:false}}));})()")
+            # Startup runs before CDP attaches: absent emulator Tailnet DNS can
+            # set native legacyFallback. Reload through CDP at the intercepted
+            # origin (a fresh document, same durable storage), not a legacy hop.
+            ev('window.qaPreviousDoc=true')
+            pg.call('Page.navigate',url=origin+'/wizard-os-home/')
+            wait('!window.qaPreviousDoc&&!!window.__wos&&WosOutbox.recoveryComplete',25)
             if mode=='active':
                 wait('__wos.V.native==='+json.dumps(take),25)
                 restored=ev('__wos.V.snap');check('review','active recovery restores exact event and original thread',restored.get('meetingEventId')==ident and restored.get('view',{}).get('thread')=='qa-0',restored)
