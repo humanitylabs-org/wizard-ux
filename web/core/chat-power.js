@@ -357,7 +357,7 @@ window.WosChatPower = function chatPower(A) {
     const ad = t.closest('[data-attdismiss]'); if (ad) { E.dismissAttention(ad.dataset.attdismiss).then(ok => toast(ok ? '✓' : '!', ok ? 'Dismissed' : 'Couldn’t dismiss · try again', ok ? 1400 : 2400)); return true; }
     const od = t.closest('[data-obdismiss]'); if (od) {
       const oid = od.dataset.obdismiss;
-      if (confirmDel.id === oid && Date.now() - confirmDel.at < 4000) { confirmDel = { id: '', at: 0 }; OUTBOX.remove(oid); toast('✕', 'Recording deleted', 1400); }
+      if (confirmDel.id === oid && Date.now() - confirmDel.at < 4000) { confirmDel = { id: '', at: 0 }; OUTBOX.remove(oid).then(ok => toast(ok ? '✕' : '!', ok ? 'Recording deleted' : 'Deletion not saved · keep Wizard open', 2400)); }
       else { confirmDel = { id: oid, at: Date.now() }; rerenderLists(); setTimeout(() => { if (confirmDel.id === oid) { confirmDel = { id: '', at: 0 }; rerenderLists(); } }, 4100); }
       return true;
     }
