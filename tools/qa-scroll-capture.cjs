@@ -52,8 +52,16 @@ function ok(mode, name, value, detail) { const row={mode,name,pass:!!value,detai
     const b=await begin('list');ok(mode,'visible overflowing list discovered',!!b.start,b);
     await p.evaluate(()=>__wosScrollCapture.move('list',420));await paint();
     ok(mode,'same-list repaint held',await p.evaluate(()=>qaScroller()===qaOld&&!!__wosScrollCapture.check('list')));
-    await p.evaluate(()=>__wosScrollCapture.end('list'));await p.waitForTimeout(100);
+    await p.evaluate(()=>__wosScrollCapture.end('list'));await p.waitForTimeout(500); // shell scroll-idle guard is 350ms
     ok(mode,'list hold flushed and reading position restored',await p.evaluate(()=>qaScroller()!==qaOld&&Math.abs(qaScroller().scrollTop-qaSaved)<2));
+    // Real phone layout puts the new-chat button over a sampled corner of the list.
+    const dock=await p.evaluate(()=>{const {el}=qaOwner(),f=el.querySelector('.ch-fab'),e=qaScroller(),r=e.getBoundingClientRect();
+     Object.assign(f.style,{position:'fixed',left:(r.left+r.width*.9-27)+'px',top:(r.top+r.height*.9-27)+'px',right:'auto',bottom:'auto'});
+     const covered=!e.contains(document.elementFromPoint(r.left+r.width*.9,r.top+r.height*.9));
+     const found=!!__wosScrollCapture.search(),started=!!__wosScrollCapture.start('dock'),hidden=getComputedStyle(f).visibility==='hidden';
+     const ended=__wosScrollCapture.end('dock'),restored=getComputedStyle(f).visibility==='visible'&&!f.style.visibility;
+     Object.assign(f.style,{position:'',left:'',top:'',right:'',bottom:''});return {covered,found,started,hidden,ended,restored};});
+    ok(mode,'floating new-chat button over list: discovered, hidden while capturing, restored',dock.covered&&dock.found&&dock.started&&dock.hidden&&dock.ended&&dock.restored,dock);
    }
    await open('qa_sc_0');
    ok(mode,'normal scrolling works',await p.evaluate(()=>{let e=qaScroller();e.scrollTop=220;return e.scrollTop===220;}));
@@ -61,7 +69,7 @@ function ok(mode, name, value, detail) { const row={mode,name,pass:!!value,detai
     let b=await begin('thread');ok(mode,'visible thread discovered',!!b.start,b);
     await p.evaluate(()=>{__wosScrollCapture.move('thread',600);const c=__wos.chats.ch(qaOwner().w.id);window.qaTurns=c.turns;window.qaShape=JSON.stringify(c.turns[0]);});
     await paint();ok(mode,'same-thread repaint held during acquisition',await p.evaluate(()=>qaScroller()===qaOld&&!!__wosScrollCapture.check('thread')));
-    await p.evaluate(()=>__wosScrollCapture.end('thread'));await p.waitForTimeout(100);
+    await p.evaluate(()=>__wosScrollCapture.end('thread'));await p.waitForTimeout(500);
     ok(mode,'thread hold flushed and reading position restored',await p.evaluate(()=>qaScroller()!==qaOld&&Math.abs(qaScroller().scrollTop-qaSaved)<2));
     // Stream payload uses real shell turn cache and renderer, not a surrogate DOM.
     await begin('stream');
