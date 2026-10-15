@@ -38,7 +38,10 @@ OUT = job / 'shots'; OUT.mkdir(exist_ok=True)
 env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
 env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
-ADB = str(SDK / 'platform-tools/adb'); PORT = 5698; S = f'emulator-{PORT}'; DEVTOOLS = 9351; FAKE = 18791
+ADB = str(SDK / 'platform-tools/adb'); PORT = 5698; S = f'emulator-{PORT}'; DEVTOOLS = 9351
+# The fake server binds before the worker lease; use an OS-assigned port so
+# queued suites and unrelated tunnels cannot collide or receive our audio.
+FAKE = 0
 ORIGIN = 'https://wizard.tailc0f369.ts.net'
 RES = []
 def check(group, n, ok, d: object = ''):
@@ -136,6 +139,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
             ST['status'][mid] = 'processing'
             return self._json(200, {'id': mid, 'status': 'processing'})
 srv = http.server.ThreadingHTTPServer(('127.0.0.1', FAKE), Fake)
+FAKE = srv.server_address[1]
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 
 def verify_meeting(group, mid, reason, expect_min_chunks=1):
