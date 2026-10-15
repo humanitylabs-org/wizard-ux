@@ -33,7 +33,7 @@ import ai.wizards.os.device.Http;
 /**
  * Reply-ready notifications for any chat James started or answered from Wizard OS (gap #21).
  * The page reports each accepted send (session + run). This polls the run until it settles and, if Wizard OS is
- * not on screen, posts "Archimedes replied" with the start of the answer; a tap opens that thread in the app.
+ * not on screen, posts the configured wizard name with the start of the answer; a tap opens that thread in the app.
  * Polls in-process every few seconds while the app lives, with a JobScheduler job as the backstop after a kill.
  */
 public final class ReplyWatcher {
@@ -180,11 +180,11 @@ public final class ReplyWatcher {
             String title = w.optString("t");
             if ("waiting_for_approval".equals(st) && !w.optBoolean("asked")) {
                 mark(c, s, r);
-                if (!AppState.front()) post(c, s, title.isEmpty() ? "Waiting on you" : title, "Archimedes needs your approval to continue");
+                if (!AppState.front()) post(c, s, title.isEmpty() ? "Waiting on you" : title, ai.wizards.os.device.WizardIdentity.approvalText(ai.wizards.os.device.WizardIdentity.name(c)));
             } else if (ReplyPolicy.settled(st)) {
                 drop(c, s, r);
                 String text = "completed".equals(st) ? ReplyPolicy.excerpt(run.optString("output", "")) : ReplyPolicy.ended(st);
-                if (!AppState.front()) post(c, s, title.isEmpty() ? "Archimedes replied" : title, text.isEmpty() ? "Reply ready" : text);
+                if (!AppState.front()) post(c, s, title.isEmpty() ? ai.wizards.os.device.WizardIdentity.replyTitle(ai.wizards.os.device.WizardIdentity.name(c)) : title, text.isEmpty() ? "Reply ready" : text);
                 Log.i(TAG, "settled " + s + " " + st + " front=" + AppState.front());
             }
         }
@@ -220,9 +220,10 @@ public final class ReplyWatcher {
 
     static void channel(Context c) {
         NotificationManager nm = c.getSystemService(NotificationManager.class);
-        if (nm.getNotificationChannel(CH) != null) return;
-        NotificationChannel ch = new NotificationChannel(CH, "Chat replies", NotificationManager.IMPORTANCE_DEFAULT);
-        ch.setDescription("When Archimedes answers a chat you sent from Wizard OS");
+        NotificationChannel ch = nm.getNotificationChannel(CH);
+        if (ch == null) ch = new NotificationChannel(CH, "Chat replies", NotificationManager.IMPORTANCE_DEFAULT);
+        // Update existing installs too; preserve the channel id and user-selected notification settings.
+        ch.setDescription(ai.wizards.os.device.WizardIdentity.channelDescription(ai.wizards.os.device.WizardIdentity.name(c)));
         nm.createNotificationChannel(ch);
     }
 

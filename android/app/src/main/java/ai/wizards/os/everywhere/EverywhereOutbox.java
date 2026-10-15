@@ -41,8 +41,7 @@ import ai.wizards.os.assist.Transcriber;
 public final class EverywhereOutbox {
     static final String TAG = "WizardEverywhere";
     public static final String DEFAULT_ORIGIN = ai.wizards.os.BuildConfig.ORIGIN;
-    static final String PROMPT = "Wizard voice request spoken to Archimedes from the floating Wizard button on a phone. "
-            + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
+
     /** Dictation goes to STT bare, like Archimedes Anywhere: a context prompt can leak into typed text. */
     static final String DICTATION_PROMPT = "";
     /** Where a recording came from: the floating orb, the side button (lock screen / corner), or keyboard dictation. */
@@ -53,10 +52,10 @@ public final class EverywhereOutbox {
         String where = SRC_SIDE.equals(it.source)
                 ? (it.locked
                     ? "Spoken into the Wizard OS side-button assistant while the Android phone was LOCKED, so the speaker was not verified by an unlock. "
-                    : "James spoke this by holding his Android phone's side button (Wizard OS assistant, phone unlocked). ")
-                : "James spoke this to the Wizard Everywhere floating orb on his Android phone, outside the Wizard OS app (he may be in another app). ";
+                    : "The user spoke this by holding their Android phone's side button (Wizard OS assistant, phone unlocked). ")
+                : "The user spoke this to the Wizard Everywhere floating orb on their Android phone, outside the Wizard OS app (they may be in another app). ";
         return where + "The original recording is attached as a voice note."
-                + (shots > 0 ? " He attached " + shots + " screenshot" + (shots == 1 ? "" : "s") + " of what was on his screen while talking." : "");
+                + (shots > 0 ? " They attached " + shots + " screenshot" + (shots == 1 ? "" : "s") + " of what was on their screen while talking." : "");
     }
 
     /** Debug (QA) builds only: files/qa_origin.txt points the outbox at a fake Wizard on the emulator host. */
@@ -137,6 +136,7 @@ public final class EverywhereOutbox {
         if (instance == null) {
             instance = new EverywhereOutbox(c.getApplicationContext(), qaOrigin(c));
             instance.app = c.getApplicationContext();
+            ai.wizards.os.device.WizardIdentity.refresh(instance.app);
         }
         return instance;
     }
@@ -365,7 +365,7 @@ public final class EverywhereOutbox {
         if (it.text.isEmpty()) {
             if (audio == null || !audio.isFile()) throw new HttpError(410, "The recording is gone");
             Transcriber.Result t;
-            try { t = Transcriber.transcribe(audio, ai.wizards.os.device.AppState.live(origin), it.dictation() ? DICTATION_PROMPT : PROMPT); }
+            try { t = Transcriber.transcribe(audio, ai.wizards.os.device.AppState.live(origin), it.dictation() ? DICTATION_PROMPT : ai.wizards.os.device.WizardIdentity.voicePrompt(ai.wizards.os.device.WizardIdentity.name(app))); }
             catch (IOException e) { throw asHttp(e); }
             if (t.text.isEmpty()) {
                 synchronized (this) { it.state = "empty"; it.error = "No speech in that recording"; items.remove(it.id); save(); }
