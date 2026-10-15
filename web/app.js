@@ -2085,12 +2085,15 @@
     const hadSnap = !!V.snap;
     const snap = V.snap || sendSnap();
     try {
-      if (!snap.route) {
+      const nativePin = window.__wosVoiceRecovery().find(t => t.id === id)?.conversation;
+      if (nativePin) snap.conversation = nativePin; // old token fails closed after shell reload
+      else if (!hadSnap) snap.conversation = null; // never infer a recovered native destination from today's focus
+      if (!snap.conversation && !snap.route) {
         const pin = V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null);
         snap.route = (!hadSnap && window.WosModels.voiceRoute(id)) || CHATS.modelRoute(pin?.wid, pin?.sid || '');
       }
-      if (!snap.route?.model || !snap.route?.provider) throw new Error('Choose a model before sending');
-      saveVoiceRoute(id, snap.route); V.snap = snap;
+      if (!snap.conversation && (!snap.route?.model || !snap.route?.provider)) throw new Error('Choose a model before sending');
+      if (!snap.conversation) saveVoiceRoute(id, snap.route); V.snap = snap;
     } catch (e) {
       // The native file remains on disk; no claim, transcription or inference happens on an uncertain route.
       dropHold(); unseal();
@@ -2347,6 +2350,7 @@
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
     V.snap = kind === 'dictation' ? null : sendSnap();
+    if (V.snap && kind === 'command') V.snap.conversation = null;
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
     // No status card while recording: the orb, timer and arc already say it. Hold-for-command keeps
@@ -2357,7 +2361,7 @@
     V.raf = requestAnimationFrame(tick);
     V.native = null;
     const dev = DEV();
-    if (dev) { let id = ''; try { id = dev.recStart(kind) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && kind !== 'dictation') { const route = CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) {}
+    if (dev) { let id = ''; try { id = dev.recStart(kind) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && V.snap?.conversation) voiceRecovery(id, { kind, conversation: V.snap.conversation }); else if (id && kind !== 'dictation') { const route = CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) { if (id && V.snap?.conversation) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Manager destination could not be saved · nothing sent'); return; } }
       if (id && kind === 'dictation' && !dictationTake(id)) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Dictation could not be safely retained'); return; }
       if (id) { V.native = id; voiceTake(id, kind); reportVoice(V.state); if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; } } // '' = no mic permission yet: the page asks below
     try {
@@ -2532,9 +2536,11 @@
     if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
     try {
       const pin = sealAt || (V.snap.view?.thread ? { wid: V.snap.view.id, sid: V.snap.view.thread } : null);
-      V.snap.route = CHATS.modelRoute(pin?.wid, pin?.sid || '');
-      if (!V.snap.route) { toast('!', 'Choose a model before sending', 2200); return; }
-      if (V.native) saveVoiceRoute(V.native, V.snap.route);
+      if (!V.snap.conversation) {
+        V.snap.route = CHATS.modelRoute(pin?.wid, pin?.sid || '');
+        if (!V.snap.route) { toast('!', 'Choose a model before sending', 2200); return; }
+        if (V.native) saveVoiceRoute(V.native, V.snap.route);
+      }
     } catch (e) { toast('!', String(e.message || e), 2200); return; }
     if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length ? t : null; }
     leaveOnSend(V.snap);
@@ -2607,6 +2613,16 @@
     const rt = V.replyTo;
     const sv = snap.view, sid = rt?.sid || (aimAt == null ? sv?.thread || '' : '');
     const audio = new Blob(blobs, { type: blob.type || 'audio/webm' });
+    if (snap.conversation && kind !== 'command' && !rt && aimAt == null) {
+      const captureId = V.custodyCapture; V.custodyCapture = null;
+      const files = takeFiles();
+      try {
+        const item = await OUTBOX.sendConversation({ conversation: snap.conversation, audio, captureId, nativeId: nid, files, source: 'orb' });
+        if (item?.durable || item?.state === 'sent') recDone(nid);
+        toast(item?.state === 'sent' ? '✦' : '!', item?.state === 'sent' ? 'Sent to ' + snap.conversation.label : item?.error || 'Manager recording kept in Recordings', 5000);
+      } finally { dropHold(); setVoice('idle'); txHide(); }
+      return;
+    }
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '',
       steerRunId: rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '',
@@ -2741,7 +2757,8 @@
     const screen = view && view.kind !== 'chat thread' && !view.private ? (window.WizScreen?.read(winEl(fid)) || '') : '';
     // A private agent's window is named, never read: its thread titles stay with that agent.
     const nameOf = x => agentWin(W[x]) && agentApp(W[x]).private ? `${agentApp(W[x]).name} chats (private agent)` : winTitle(W[x]);
-    return { id: fid, desk: idx, view, screen, others: d.wins.filter(x => x !== fid).map(nameOf) };
+    const conversation = window.WizAppServices?.conversation?.pin(winEl(fid)?.querySelector('iframe'), W[fid]?.appId) || null;
+    return { id: fid, desk: idx, view, screen, conversation, others: d.wins.filter(x => x !== fid).map(nameOf) };
   }
   function viewContext(id, how = 'voice', snap = null) {
     const S = snap || sendSnap(id), v = S.view, others = S.others;
@@ -2867,6 +2884,12 @@
   async function handleText(text, kind, typed, sttMs, target, snap) {
     const sttNote = sttMs ? ` · heard in ${sttMs} ms` : '';
     snap = snap || sendSnap();
+    if (snap.conversation && kind !== 'command' && target == null) {
+      const it = await OUTBOX.sendConversation({ conversation: snap.conversation, text, audio: snap.audio || null, files: typed ? [] : takeFiles(), source: 'orb' });
+      setVoice('idle'); txHide();
+      toast(it.state === 'sent' ? '✦' : '!', it.state === 'sent' ? 'Sent to ' + snap.conversation.label : it.error, 5000);
+      return it;
+    }
     // A bare "help" opens the gestures sheet. Held: always. Tapped: unless a thread is open (there it's a reply).
     if (window.WosTour?.isHelp(text) && (kind === 'command' || snap.view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
     const opts = target == null ? { snap } : { desk: target, snap };

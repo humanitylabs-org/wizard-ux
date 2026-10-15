@@ -235,7 +235,38 @@
       else history.back();
     });
   }
+  // Narrow v1 admission: only an installed Manager may receive orb conversation text.
+  // No endpoint supplied by apps; no postMessage/global RPC. A token binds the live
+  // document AND receiver at recording start. Reload/navigation requires recovery,
+  // never a replacement recipient or a fallback to Chats.
+  const conversationPins = new Map();
+  function pinConversation(frame, appId) {
+    if (appId !== 'wizard-manager') return null;
+    const st = frames.get(frame), token = 'conversation-' + crypto.randomUUID();
+    const pin = { appId, token, label: 'Manager conversation', target: null };
+    try {
+      if (!valid(st, st?.doc) || !st.doc || st.appId !== appId) throw fault('Manager frame unavailable');
+      const receiver = st.client?.conversation, target = receiver?.snapshot();
+      if (!target || (target.replyTo !== null && (!Number.isSafeInteger(target.replyTo) || target.replyTo <= 0))) throw fault('Manager conversation not ready');
+      pin.target = Object.freeze({ replyTo: target.replyTo });
+      pin.label = String(target.label || pin.label).slice(0, 160);
+      conversationPins.set(token, { st, doc: st.doc, receiver, target: pin.target });
+    } catch (_) { /* Keep a sealed unavailable destination, not a null/fallback route. */ }
+    return Object.freeze(pin);
+  }
+  async function deliverConversation(pin, message) {
+    const held = conversationPins.get(pin?.token);
+    if (!held || pin.appId !== held.st.appId || !valid(held.st, held.doc) || held.st.client?.conversation !== held.receiver)
+      throw fault('Manager view closed, reloaded or unavailable · recording kept; copy transcript from Recordings');
+    if (!message || !/^[A-Za-z0-9_-]{8,100}$/.test(message.request_id || '') || typeof message.text !== 'string' || !message.text.trim() || message.text.length > 12000 || message.files?.length)
+      throw fault('Manager accepts text only, up to 12000 characters · original kept');
+    const receipt = await held.receiver.receive(Object.freeze({ request_id: message.request_id, text: message.text, target: held.target }));
+    // Receipt is evidence of durable admission even if focus changed during POST.
+    if (receipt?.accepted !== true || receipt.request_id !== message.request_id) throw fault('Manager receipt uncertain · original kept');
+    return { accepted: true, request_id: message.request_id };
+  }
   window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack,
+    conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     update: Object.freeze({ busy, announce, available: () => available }),
     inspect: () => { reconcile(); return [...frames.values()].map(st => ({ appId: st.appId, path: st.url.pathname, ready: !!st.doc, holds: [...st.holds.values()], suspect: !!st.suspect })); },
   });
