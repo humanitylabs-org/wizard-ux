@@ -110,7 +110,7 @@
     // Keep sealKey/nativeId too, so their independent owners cannot restore a duplicate.
     if (it.durable) {
       const marker = { id, state: 'sent', sentAt: it.sentAt, updatedAt: it.updatedAt,
-        createdAt: it.createdAt, sealKey: it.sealKey, nativeId: it.nativeId, compact: true };
+        createdAt: it.createdAt, sealKey: it.sealKey, nativeId: it.nativeId, nativeIds: it.nativeIds, meetingEventId: it.meetingEventId, compact: true };
       items.set(id, marker); await put(marker);
     }
     emit();
@@ -314,8 +314,8 @@
   const newSessionId = () => `wizard_${now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
   function make(o) {
     return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
-      meetingEventId: o.meetingEventId || '', parkedDraft: o.parkedDraft || null,
-      kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.steerRunId || '',
+      meetingEventId: o.meetingEventId || '', parkedDraft: o.parkedDraft || null, nativeIds: [...new Set([...(o.nativeIds || []), o.nativeId].filter(Boolean))],
+      kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
       sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false };
@@ -403,9 +403,12 @@
       await load();
       const prior = o.captureId && items.get(o.captureId);
       if (prior?.captureWrite) await prior.captureWrite;
-      const existing = o.nativeId && api.nativeItem(o.nativeId); if (existing) return existing;
-      const it = make(o); if (prior) { it.id = prior.id; it.createdAt = prior.createdAt; }
-      it.state = 'processing'; await put(it); schedule(); return it;
+      const existing = o.nativeId && api.nativeItem(o.nativeId);
+      if (existing && existing !== prior) return existing;
+      if (prior && (quarantine.has(prior.id) || prior.state === 'sent' || prior.body || prior.steerBody)) return prior;
+      const it = make(o); if (prior) { it.id = prior.id; it.createdAt = prior.createdAt; it.nativeId ||= prior.nativeId; it.nativeIds = [...new Set([...(prior.nativeIds || []), prior.nativeId, ...it.nativeIds].filter(Boolean))]; }
+      // Parking is held at its first durable boundary, even before transition.
+      it.state = it.parkedDraft ? 'held' : 'processing'; await put(it); schedule(); return it;
     },
     capture(blob, id, parts) {
       let it = items.get(id);
@@ -430,12 +433,12 @@
     get recoveryComplete() { return recovered; },
     quarantined(id) { return quarantine.has(id); },
     ownsSeal(key) { return [...items.values()].some(it => it.sealKey === key); },
-    nativeItem(id) { return [...items.values()].find(it => it.nativeId === id); },
+    nativeItem(id) { return [...items.values()].find(it => it.nativeId === id || it.nativeIds?.includes(id)); },
     async enqueue(o) {
       if (o.conversation || o.kind === 'conversation') return api.sendConversation(o);
       if (o.captureId) { const staged = await api.stage(o); o = { ...o, custodyId: staged.id }; }
       const M = window.WosModels, AG = window.WosAgents;
-      const agent0 = o.kind === 'reply' ? (window.WizLive?.agentOf?.(o.sessionId) || '') : String(o.agent || '');
+      const agent0 = o.kind === 'reply' ? (o.agent || window.WizLive?.agentOf?.(o.sessionId) || '') : String(o.agent || '');
       const agent = agent0 && AG?.isOther(agent0) ? agent0 : '';
       let snapshot = o.model ? { model: o.model, provider: o.provider || '' } : null, routeError;
       try { if (!snapshot && o.nativeId) throw new Error('Saved recording model route unavailable · original kept'); snapshot = M?.snapshot(o.kind === 'reply' ? o.sessionId : '', snapshot, agent) || snapshot; }

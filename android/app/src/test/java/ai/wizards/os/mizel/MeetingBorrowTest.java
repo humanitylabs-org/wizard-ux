@@ -4,6 +4,15 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class MeetingBorrowTest {
+    @Test public void userPauseDuringLoanOverridesAutomaticResume() {
+        MeetingBorrow b = new MeetingBorrow("event-123", "meeting-1", false, 1200, 100);
+        assertTrue(b.shouldResume());
+        b.userPause();
+        assertTrue(b.userPaused());
+        assertFalse(b.shouldResume());
+        assertTrue(b.close("event-123"));
+        assertFalse(b.shouldResume());
+    }
     @Test public void requiresExactIdentityAndReleasedMic() {
         MeetingBorrow b = new MeetingBorrow("event-123", "meeting-1", false, 1200, 100);
         assertFalse(b.permits("other", "meeting-1", true, true));

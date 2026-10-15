@@ -9,6 +9,7 @@ public final class MeetingBorrow {
     public final long atMediaMs, pausedAt;
     private String takeId;
     private boolean closed;
+    private boolean userPaused;
     public String outcome = "pending";
 
     public MeetingBorrow(String eventId, String meetingId, boolean wasPaused, long atMediaMs, long pausedAt) {
@@ -28,4 +29,7 @@ public final class MeetingBorrow {
         closed = true; return true;
     }
     public synchronized boolean open() { return !closed; }
+    public synchronized void userPause() { userPaused = true; }
+    public synchronized boolean userPaused() { return userPaused; }
+    public synchronized boolean shouldResume() { return resumeAfter && !userPaused; }
 }

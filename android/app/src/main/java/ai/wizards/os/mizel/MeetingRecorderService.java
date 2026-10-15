@@ -82,7 +82,7 @@ public class MeetingRecorderService extends Service {
             if (borrow != null && borrow.open()) return borrow.eventId.equals(eventId) ? s.borrowJson(borrow, "paused").toString() : "null";
             if (ai.wizards.os.recording.RecorderService.active() != null) return "null";
             boolean wasPaused = l.paused;
-            s.pause(0);
+            s.pause(0, false); // internal loan pause is not a user override
             if (!l.paused || s.capture != null || MicOwner.holder() != null) return "null";
             MeetingBorrow b = new MeetingBorrow(eventId, meetingId, wasPaused, l.mediaMs(), System.currentTimeMillis());
             if (!s.saveBorrow(b, "paused")) {
@@ -110,13 +110,13 @@ public class MeetingRecorderService extends Service {
         return onMain(() -> {
             MeetingRecorderService s = instance; MeetingBorrow b = borrow; Live l = live;
             if (s == null || b == null || !b.eventId.equals(eventId)) return "null";
-            if (ai.wizards.os.recording.RecorderService.active() != null || MicOwner.holder() != null) return "null";
+            if (b.open() && (ai.wizards.os.recording.RecorderService.active() != null || MicOwner.holder() != null)) return "null";
             if (b.open()) {
                 b.outcome = outcome;
                 if (!s.saveBorrow(b, outcome)) return "null";
                 b.close(eventId);
                 // Notification Stop and pre-existing manual Pause always win.
-                if (b.resumeAfter && l != null && l.meetingId.equals(b.meetingId) && l.paused && !l.stopping) s.resume(0);
+                if (b.shouldResume() && l != null && l.meetingId.equals(b.meetingId) && l.paused && !l.stopping) s.resume(0);
             }
             String status = live != null && live.meetingId.equals(b.meetingId) ? (live.paused ? "paused" : "recording") : "stopped";
             s.saveBorrow(b, status);
@@ -127,7 +127,7 @@ public class MeetingRecorderService extends Service {
     private org.json.JSONObject borrowJson(MeetingBorrow b, String status) {
         org.json.JSONObject o = new org.json.JSONObject();
         try { o.put("id", b.eventId).put("meetingId", b.meetingId).put("voiceTakeId", b.take())
-            .put("atMediaMs", b.atMediaMs).put("pausedAt", b.pausedAt).put("pausedByHandoff", b.resumeAfter)
+            .put("atMediaMs", b.atMediaMs).put("pausedAt", b.pausedAt).put("pausedByHandoff", b.shouldResume()).put("userPaused", b.userPaused())
             .put("status", status).put("outcome", b.outcome).put("open", b.open()); } catch (org.json.JSONException ignored) { }
         return o;
     }
@@ -326,8 +326,15 @@ public class MeetingRecorderService extends Service {
     }
 
     private void pause(int req) {
+        pause(req, true);
+    }
+    private void pause(int req, boolean user) {
         Live l = live;
         if (l == null) { MizelHub.done(req, MizelProtocol.E_NOT_RECORDING); return; }
+        if (user && borrow != null && borrow.open() && borrow.meetingId.equals(l.meetingId)) {
+            borrow.userPause(); // fail closed in memory even if persistence fails
+            if (!saveBorrow(borrow, "paused")) { MizelHub.done(req, MizelProtocol.E_MIC_BUSY); return; }
+        }
         if (l.paused) { MizelHub.done(req, null); return; }
         if (!stopCapture()) { MizelHub.done(req, MizelProtocol.E_MIC_BUSY); return; }
         long now = System.currentTimeMillis();

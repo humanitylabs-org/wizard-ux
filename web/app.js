@@ -2083,7 +2083,11 @@
     V.captureEpoch = (V.captureEpoch || 0) + 1;
     V.field?.release(); V.field = null; // page recreation can never reconstruct a DOM capability
     const knownReply = kind === 'dictation' ? null : replyTake(a.id);
+    const prior = knownReply?.custodyId ? OUTBOX.get(knownReply.custodyId) : null, draft = prior?.parkedDraft;
+    if (knownReply?.custodyId && (!draft || prior.state !== 'held' || !prior.durable)) return false;
     Object.assign(V, { native: a.id, kind, target: null, snap: window.WosOrbHandoff?.takeSnap(a.id)||null, seal: null, replyTo: knownReply, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
+    V.parts=[];V.custodyCapture=null;V.nativeSegmentBase=0;V.meetingLoan=window.WosOrbHandoff?.forTake(a.id)||null;
+    if(draft)Object.assign(V,{parts:draft.parts||[prior.audio],custodyCapture:prior.id,snap:draft.snap,files:draft.files||[],nativeSegmentBase:draft.acc||0,acc:(draft.acc||0)+(Number(a.ms)||0),resumeNative:true,seal:{text:draft.typed||'',files:draft.sealFiles||[],done:()=>{},putBack:()=>{}}});
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
     txPill(a.paused ? '⏸' : '✦', kind === 'dictation' ? 'Dictation kept · tap orb to transcribe & copy' : a.paused ? 'Paused · recording kept · tap orb to send' : 'Still recording · tap orb to send', kind === 'dictation' ? 'dictation' : 'agent'); txHide(2600);
@@ -2248,7 +2252,7 @@
       if (id === null) { localStorage.removeItem(REPLY_KEY); return null; }
       if (val) { localStorage.setItem(REPLY_KEY, JSON.stringify({ id, ...val })); return val; }
       const r = JSON.parse(localStorage.getItem(REPLY_KEY) || 'null');
-      return r && r.id === id && r.sid ? { wid: W[r.wid] ? r.wid : '', sid: r.sid, steerRunId: r.steerRunId || '' } : null;
+      return r && r.id === id && r.sid ? { wid: W[r.wid] ? r.wid : '', sid: r.sid, steerRunId: r.steerRunId || '', custodyId:r.custodyId||'' } : null;
     } catch (e) { return null; }
   }
   window.__wosReplyTake = id => replyTake(id);
@@ -2271,7 +2275,7 @@
       if(V.chunks.length)V.parts.push(new Blob(V.chunks,{type:V.mime}));V.chunks=[];stopStream();V.rec=null;
       if(!V.seal){const seal=CHATS.takeComposer(V.replyTo.wid,V.replyTo.sid);V.seal=seal.text||seal.files.length?seal:null;}
       const draft={replyTo:{...V.replyTo},snap:structuredClone(V.snap),acc:V.acc,files:V.files.map(f=>({...f})),typed:V.seal?.text||'',sealFiles:V.seal?.files||[],parts:V.parts.slice(),kind:V.kind,resumeNative:!!V.resumeNative};
-      const it=await OUTBOX.stage({captureId:V.custodyCapture,audio:new Blob(V.parts,{type:V.parts[0]?.type}),kind:'reply',sessionId:V.replyTo.sid,...V.snap.route,parkedDraft:draft});
+      const it=await OUTBOX.stage({captureId:V.custodyCapture,nativeId:parkedNativeId,audio:new Blob(V.parts,{type:V.parts[0]?.type}),kind:'reply',sessionId:V.replyTo.sid,...V.snap.route,parkedDraft:draft});
       await OUTBOX.transition(it.id,'held','Reply paused · return to resume or send');
       if(!it.durable)throw Error('Device save failed · reply retained here; microphone not borrowed');
       if(parkedNativeId)recDone(parkedNativeId); // exact original bytes now have durable parked custody
@@ -2349,7 +2353,7 @@
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
     V.snap = initialSnap;V.meetingLoan=meetingLoan;
-    if(meetingLoan && V.snap) {V.snap.meetingEventId=meetingLoan.id;V.snap.screen='';V.snap.others=[];if(V.snap.view?.kind==='app')V.snap.view=null;}
+    if(meetingLoan && V.snap) {V.snap.meetingEventId=meetingLoan.id;V.snap.conversation=null;V.snap.screen='';V.snap.others=[];if(V.snap.view?.kind==='app')V.snap.view=null;}
     if (V.snap && kind === 'command') V.snap.conversation = null;
     setVoice(kind === 'command' ? 'command' : 'listen');
     shock();
@@ -2681,7 +2685,7 @@
     }
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '',
-      steerRunId: rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '',
+      steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '',
       meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
       files: [...V.files, ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
@@ -2758,7 +2762,7 @@
       if(V.resumeNative && DEV()){
         const id=DEV().recStart(V.kind)||'';
         if(!id){toast('!','Could not resume · original reply remains paused');return;}
-        V.nativeSegmentBase=V.acc;V.native=id;voiceTake(id,V.kind);replyTake(id,V.replyTo);if(V.snap?.route)saveVoiceRoute(id,V.snap.route);
+        V.nativeSegmentBase=V.acc;V.native=id;voiceTake(id,V.kind);replyTake(id,{...V.replyTo,custodyId:V.custodyCapture});if(V.snap?.route)saveVoiceRoute(id,V.snap.route);
         V.stopAsked=false;V.sendAsked=false;V.t0=performance.now();setVoice('listen');V.raf=requestAnimationFrame(tick);vib(6);return;
       }
       V.stopAsked = false; V.sendAsked = false;   // after a mic interruption: carry on with a fresh part

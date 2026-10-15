@@ -525,8 +525,10 @@
     Object.assign(marker,{status:detail.status==='cancelled'?'cancelled':'captured',voiceTakeId:String(detail.voiceTakeId||''),endedAt:Date.now()});
     await put(s.row); // marker survives even if reacquiring the microphone fails
     if(s.row.native === 'wizard-meetings') {
-      W.WizardOSDevice.recHandoffEnd(eventId); // stopped voice already returned the native lease
-      s.borrow=null;s.phase=s.nativeState?.paused?'paused':'recording';changed();return {...marker};
+      const receipt=JSON.parse(W.WizardOSDevice.recHandoffEnd(eventId)||'null'); // stopped voice already returned the native lease
+      if(receipt?.id!==eventId || receipt.open!==false)throw fail('handoff_unavailable','Native microphone return was not confirmed.');
+      marker.pausedByHandoff=receipt.pausedByHandoff;marker.resumeStatus=receipt.status;await put(s.row);
+      s.borrow=null;s.phase=receipt.status==='recording'?'recording':'paused';changed();return {...marker};
     }
     s.phase='paused'; s.borrow=null;
     if(b.pausedByHandoff && !s.finishPromise) {
