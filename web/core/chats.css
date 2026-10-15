@@ -1,4 +1,5 @@
 /* Wizard UX core: Chats (list, thread, composer, attachments, voice notes, unsent bubbles). Shared by every shell. */
+.ch-custody-notice { display:block; padding:8px 12px; color:var(--muted, #c4b8d2); font-size:12px; line-height:1.4; }
 /* ---------- Chats: native Wizard client ---------- */
 .chats { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .ch-list, .ch-thread { position: absolute; inset: 0; display: flex; flex-direction: column; }

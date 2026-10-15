@@ -825,14 +825,13 @@
     if ((!r || !r.blob) && sealed) sealed.putBack();
     if (!r || !r.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed, modelRoute); toast('✦', 'Voice reply · sent to this thread', 1400); return 'sent'; }
+    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, [], sealed, modelRoute); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
     if (w && aimSid) CHATS.sendChat(w.id, '', 'voice, aimed at this thread', r.blob, { sid: aimSid, seal: sealed, route: modelRoute });
     else {
-      if (sealed) sealed.putBack();
-      if (aimSid && aimSid !== '__new__') OUTBOX.enqueue({ ...modelRoute, kind: 'reply', sessionId: aimSid, audio: r.blob, text: '', instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
-      else ask('', 'voice', r.blob, modelRoute);
+      const item = await OUTBOX.enqueue({ ...modelRoute, sealKey: sealed?.key, typed: sealed?.text || '', files: sealed?.files || [], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: '', instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
+      sealed?.done(item);
     }
-    toast('✦', `Sent to ${w && agentWin(w) ? agentApp(w).name : window.WizConfig.agent()}`, 1400);
+    toast('✦', 'Recording kept · waiting to send', 1400);
     return 'sent';
   }
 

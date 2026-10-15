@@ -151,20 +151,32 @@
       return;
     }
     handledTakes.add(t.id);
-    if (!J(d.recClaim(t.id))) return;
+    if (!J(d.recClaim(t.id))) { handledTakes.delete(t.id); return; }
     const blob = readBlob(off => d.recRead(t.id, off), 'audio/aac');
     if (blob.size < 600) { d.recDone(t.id); return; }
     // A voice reply started from a thread's composer mic stays that thread's, even when it ended outside the page.
-    const pin = window.__wosReplyTake?.(t.id); if (pin) window.__wosReplyTake(null);
+    const pin = window.__wosReplyTake?.(t.id);
     const route = window.WosModels.voiceRoute(t.id);
-    const it = await OUTBOX.enqueue({ ...(route || {}), kind: pin ? 'reply' : 'new', sessionId: pin ? pin.sid : '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
+    const it = await OUTBOX.enqueue({ nativeId: t.id, ...(route || {}), kind: pin ? 'reply' : 'new', sessionId: pin ? pin.sid : '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
       instructions: (window.WizConfig.owner() ? window.WizConfig.owner() + ' recorded' : 'The owner recorded') + ' this with the Wizard OS orb on their Android phone' + (pin ? ' as a voice reply in this thread' : '') + (how === 'recovered' ? '; the recording was interrupted and recovered' : '') + '. The original recording is attached as a voice note.' });
-    d.recDone(t.id);
-    try { window.WosModels.forgetVoiceRoute(t.id); } catch (e) {}
+    releaseNativeCustody();
     log('rec:sent', t.id, it.id, how);
-    toast('✦', how === 'recovered' ? `Recording sent to ${window.WizConfig.agent()}` : 'Sending your recording', 2000);
+    toast('✦', it.durable ? 'Recording kept · waiting to send' : 'Device save failed · original kept by Android', 2400);
     try { w.openWizardThread(it.sessionId); } catch (e) {}
   }
+  const releasedNative = new Set();
+  function releaseNativeCustody() {
+    const d = DEV(); if (!d) return;
+    for (const it of OUTBOX?._items.values() || []) {
+      if (!it.nativeId || releasedNative.has(it.nativeId) || (!it.durable && it.state !== 'sent')) continue;
+      try {
+        if (!W$()) continue;
+        W$().recDone(it.nativeId); releasedNative.add(it.nativeId);
+        const pin = window.__wosReplyTake?.(it.nativeId); if (pin) window.__wosReplyTake(null);
+      } catch (_) {} // native still owns its copy if the bridge is unavailable
+    }
+  }
+  OUTBOX?.onChange(releaseNativeCustody);
   function onRec(ev) {
     const w = W$(); if (!w) return;
     log('rec:' + ev.type, ev.id);
