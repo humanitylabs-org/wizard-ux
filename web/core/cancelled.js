@@ -95,7 +95,7 @@
 
   function nativeList() { const d = DEV(); if (!d) return []; return (J(d.cancelledList()) || []).map(t => ({ ...t, native: true })); }
   function all() {
-    const custody = (window.WosOutbox?.recordings() || []).filter(x => x.state !== 'capturing').map(x => ({ id: x.id, at: x.createdAt, source: 'web', ms: x.ms || 0, mime: x.audio.type, bytes: x.audio.size, custody: true, sessionOnly: !x.durable }));
+    const custody = (window.WosOutbox?.recordings() || []).filter(x => x.state !== 'capturing').map(x => ({ id: x.id, at: x.createdAt, source: 'web', ms: x.ms || 0, mime: x.audio.type, bytes: x.audio.size, custody: true, sessionOnly: !x.durable, conversation: x.kind === 'conversation', text: x.text, error: x.error, state: x.state }));
     const l = nativeList().concat(web.map(({ blob, ...t }) => t), custody);
     l.sort((a, b) => b.at - a.at);
     for (const k of Object.keys(texts)) if (!l.some(t => t.id === k)) delete texts[k];
@@ -152,10 +152,11 @@
 
   const ago = at => { const m = Math.round((Date.now() - at) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
   function row(t) {
-    const b = busy.has(t.id), tx = texts[t.id], err = errs[t.id];
+    const b = busy.has(t.id) || ['transcribing', 'sending'].includes(t.state), tx = texts[t.id] || t.text, err = errs[t.id] || t.error;
     return `<div class="cx-row" data-cxid="${esc(t.id)}">
       <div class="cx-t"><b>${fmt(t.ms)}</b> · ${esc(SRC[t.source] || 'Orb')} · ${esc(ago(t.at))}</div>
-      ${tx && open.has(t.id) ? `<div class="cx-text" data-cxtext>${esc(tx)}</div>` : ''}
+      ${tx && (open.has(t.id) || t.conversation) ? `<div class="cx-text" data-cxtext>${esc(tx)}</div>` : ''}
+      ${t.conversation ? `<div class="cx-t">Manager conversation · original destination retained</div><button data-cx="manager" ${b ? 'disabled' : ''}>Retry original to Manager</button>` : ''}
       ${err ? `<div class="cx-err">${esc(err)}</div>` : ''}
       ${t.sessionOnly ? '<div class="cx-err">Storage unavailable · kept only while this page stays open.</div><button data-cx="save">Retry saving</button>' : ''}
       <div class="ub-a"><button data-cx="copy" ${b ? 'disabled' : ''}>${b ? 'Transcribing…' : tx ? 'Copy again' : 'Transcribe &amp; copy'}</button>${tx ? `<button data-cx="show" class="ghost">${open.has(t.id) ? 'Hide words' : 'Show words'}</button>` : ''}<button data-cx="delete" class="ghost">Delete</button></div></div>`;
@@ -175,6 +176,7 @@
     const id = b.closest('[data-cxid]')?.dataset.cxid; if (!id) return true;
     const a = b.dataset.cx;
     if (a === 'copy') transcribe(id);
+    else if (a === 'manager') window.WosOutbox.retryConversation(id).then(repaint);
     else if (a === 'save') retrySave(id);
     else if (a === 'delete') remove(id);
     else if (a === 'show') { open.has(id) ? open.delete(id) : open.add(id); repaint(); }

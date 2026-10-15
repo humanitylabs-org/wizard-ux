@@ -10,7 +10,7 @@
   let conversation = null;
   const conversationClient = Object.freeze({
     snapshot: () => conversation?.snapshot(),
-    receive: payload => { if (!conversation) throw new Error('App conversation unavailable'); return conversation.receive(payload); },
+    receive: (payload, authorize) => { if (!conversation) throw new Error('App conversation unavailable'); return conversation.receive(payload, authorize); },
   });
   const framed = parent !== window;
   const detached = () => !service;

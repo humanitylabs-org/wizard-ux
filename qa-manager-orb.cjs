@@ -52,7 +52,7 @@ async function openManager(f){const {p,mobile}=f;await p.evaluate(m=>{const shel
  await f.frame.locator('#conversation').click({position:{x:8,y:8}}); // foreground app, no focused textarea (talk rather than dictation)
 }
 const start=f=>f.p.evaluate(m=>{window.__qaBefore=[...WosOutbox._items.keys()];return m?__wos.startVoice('auto'):__wux.talk('start');},f.mobile);
-const finish=async f=>{await delay(700);await f.p.evaluate(m=>{window.__qaFinish=m?Promise.resolve(__wos.finishVoice()):__wux.talk('send');},f.mobile);await f.p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>!window.__qaBefore.includes(x.id)&&['held','sent','waiting','failed'].includes(x.state)&&x.kind!=='capture'),null,{timeout:20000});await delay(200);};
+const finish=async f=>{await delay(700);await f.p.evaluate(async m=>{if(m)__wos.finishVoice();else await __wux.talk('send');},f.mobile);await f.p.waitForFunction(()=> (!window.__wos || __wos.voice==='idle') && [...WosOutbox._items.values()].some(x=>!window.__qaBefore.includes(x.id)&&['held','sent','waiting','failed'].includes(x.state)&&x.kind!=='capture'),null,{timeout:20000}).catch(async e=>{console.log('DEBUG',JSON.stringify({writes:f.writes,errors:f.errors,state:await f.p.evaluate(()=>({voice:window.__wos?.voice,desktop:window.__wux?.voice,items:[...WosOutbox._items.values()].map(({audio,...x})=>({...x,bytes:audio?.size})),text:document.body.innerText.slice(-6000)}))}));throw e;});await delay(200);};
 const last=f=>f.p.evaluate(()=>{const x=[...WosOutbox._items.values()].filter(x=>x.kind!=='capture').at(-1);return x&&{id:x.id,state:x.state,kind:x.kind,text:x.text,bytes:x.audio?.size,error:x.error,conversation:x.conversation};});
 const posts=f=>f.writes.filter(x=>x.path==='/wizard-manager/api/messages');
 const forbidden=f=>f.writes.filter(x=>/\/route$|\/api\/sessions$|\/v1\/runs(?:\/.*)?$/.test(x.path));
@@ -76,9 +76,17 @@ async function retry(f,it){await f.p.evaluate(id=>WosOutbox.retryConversation(id
   ok(label+' nested Back stays in Manager',await f.frame.locator('h1').count()===1);
   await f.frame.locator('#conversation').click({position:{x:8,y:8}});f.R.lostAck=true;await start(f);await finish(f);it=await last(f);
   const n=posts(f).length;ok(label+' lost ack retains audio + transcript',it.state==='held'&&it.bytes>0&&it.text,it);
+  await f.p.evaluate(id=>WosOutbox.transcribeDictation(id),it.id);
+  ok(label+' transcribe/copy is never a hidden retry-send',posts(f).length===n&&(await last(f)).state==='held');
   const retried=await retry(f,it);ok(label+' uncertain retry reconciles same id without duplicate POST',retried.state==='sent'&&posts(f).length===n&&f.R.messages.filter(m=>m.job_id==='user:'+it.id).length===1,retried);
   f.R.enabled=false;await start(f);await finish(f);it=await last(f);ok(label+' paused recipient retains, no dispatch',it.state==='held'&&it.bytes>0&&posts(f).length===n,it);
-  f.R.enabled=true;await retry(f,it);ok(label+' retry original after enabling succeeds',(await last(f)).state==='sent');
+  f.R.enabled=true;
+  if(mobile) { await f.p.evaluate(()=>__wos.openSheet('settings')); await f.p.locator(`[data-cxid="${it.id}"] [data-cx="manager"]`).click(); }
+  else await f.p.locator(`[data-record-retry="${it.id}"]`).click();
+  await f.p.waitForFunction(id=>WosOutbox.get(id)?.state==='sent',it.id);
+  ok(label+' visible retry-to-Manager control sends original after enabling',(await last(f)).state==='sent');
+  if(mobile) await f.p.evaluate(()=>__wos.closeSheets(true));
+  await openManager(f);
   f.R.sttDown=true;await start(f);await finish(f);it=await last(f);ok(label+' STT outage retains original, never Chats',it.state==='held'&&it.bytes>0&&forbidden(f).length===0,it);f.R.sttDown=false;await retry(f,it);
   f.R.down=true;await start(f);await finish(f);it=await last(f);const failedId=it.id;ok(label+' network outage retains transcript + audio',it.state==='held'&&it.bytes>0&&it.text,it);f.R.down=false;await retry(f,it);
   ok(label+' network retry uses original request identity',JSON.parse(posts(f).at(-1).body).request_id===failedId);
@@ -91,6 +99,12 @@ async function retry(f,it){await f.p.evaluate(id=>WosOutbox.retryConversation(id
   ok(label+' shell reload preserves custody and never automatically sends',recovery.state==='held'&&recovery.kind==='conversation'&&recovery.bytes>0&&posts(f).length===before,recovery);
   ok(label+' no ordinary Chat routing throughout candidate tests',forbidden(f).length===0,forbidden(f));
   await openManager(f);await f.p.screenshot({path:path.join(OUT,label+'.png')});
+  if(mobile) {
+   const beforeDictation=posts(f).length;await f.frame.locator('#message').fill('Draft: ');await f.frame.locator('#message').focus();
+   await f.p.evaluate(()=>__wos.startVoice('dictation'));await delay(750);await f.p.evaluate(()=>__wos.finishVoice());
+   await f.p.waitForFunction(()=>__wos.voice==='idle');
+   ok(label+' focused Manager field dictation inserts only, never sends',await f.frame.locator('#message').inputValue().then(x=>x.includes('QA orb message'))&&posts(f).length===beforeDictation&&forbidden(f).length===0);
+  }
   receipts.push({label,writes:f.writes,errors:f.errors,served:[...new Set(f.served)]});await f.ctx.close();
  }
  }finally{await browser.close();fs.writeFileSync(path.join(OUT,'result.json'),JSON.stringify({baseline,checks,receipts,limitations:['STT, Manager state and every POST are explicit fixtures; no production admission tested','Chrome fake microphone, not physical mic or native Android bridge','Live tailnet registry and shell reads; candidate assets overlaid in browser only']},null,2));}

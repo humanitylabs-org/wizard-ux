@@ -945,16 +945,16 @@
       return 'voice';
     }
     if (action === 'start') return 'voice';
+    if (forceNew) { vConversation = null; vTarget = null; vNewChat = true; }
     if (vConversation) {
       const conversation = vConversation; // sealed at recording START, never from current focus
       dictationFinishing = true; // keep the logical voice lock through STT/admission
       try {
-      const r = await VOICE.finish({ transcribe: false });
-      if (!r?.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
-      const item = await OUTBOX.sendConversation({ conversation, audio: r.blob, captureId: r.captureId, files: [], source: 'orb' });
-      vConversation = null;
-      toast(item?.state === 'sent' ? '✦' : '!', item?.state === 'sent' ? 'Sent to ' + conversation.label : item?.error || 'Manager recording kept below', 5000);
-      return item?.state === 'sent' ? 'sent' : 'retained';
+        const r = await VOICE.finish({ transcribe: false });
+        if (!r?.blob) { toast('🎙', r?.error || 'Didn’t catch that', 1600); return 'none'; }
+        const item = await OUTBOX.sendConversation({ conversation, audio: r.blob, captureId: r.captureId, files: [], source: 'orb' });
+        toast(item?.state === 'sent' ? '✦' : '!', item?.state === 'sent' ? 'Sent to ' + conversation.label : item?.error || 'Manager recording kept below', 5000);
+        return item?.state === 'sent' ? 'sent' : 'retained';
       } finally { dictationFinishing = false; vConversation = null; }
     }
     const rp = vReply; vReply = null; // the thread a composer-mic take belongs to, fixed before anything else runs
@@ -1019,7 +1019,7 @@
       <p role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
       <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || (it.text ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
       ${it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
-      <button data-record-retry="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Retry</button>
+      <button data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to Manager' : 'Retry'}</button>
       <button data-record-download="${esc(it.id)}">Download audio</button>
       <button data-record-discard="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Discard</button>
     </article>`).join('');
@@ -1030,7 +1030,8 @@
     const id = b.dataset.recordRetry || b.dataset.recordDownload || b.dataset.recordCopy || b.dataset.recordDiscard;
     const it = O.get(id); if (!it) return;
     if (b.dataset.recordRetry) {
-      if (['dictation', 'capture'].includes(it.kind) || it.state === 'held') await O.transcribeDictation(id); else O.retry(id);
+      if (it.kind === 'conversation') await O.retryConversation(id);
+      else if (['dictation', 'capture'].includes(it.kind) || it.state === 'held') await O.transcribeDictation(id); else O.retry(id);
     } else if (b.dataset.recordDownload) {
       const url = URL.createObjectURL(it.audio), a = document.createElement('a');
       const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /wav/.test(it.audioType) ? 'wav' : 'webm';

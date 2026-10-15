@@ -340,7 +340,9 @@
   }
   const api = {
     async sendConversation(o) {
-      const it = await api.stage({ ...o, kind: 'conversation' });
+      await load();
+      const existing = (o.captureId && items.get(o.captureId)) || (o.nativeId && api.nativeItem(o.nativeId));
+      const it = existing?.kind === 'conversation' ? existing : await api.stage({ ...o, kind: 'conversation' });
       await api.transition(it.id, 'held', 'Sending to ' + (o.conversation?.label || 'Manager'));
       return api.retryConversation(it.id);
     },
@@ -356,7 +358,7 @@
           if (!it.text) throw new Error('No speech detected · Manager recording kept');
           // A durable journal owns bytes, text, destination and the SAME request identity
           // before the app may mutate anything. No audio upload to an ordinary Chat.
-          if (!it.durable) throw new Error('Device save failed · Manager message not dispatched; keep this tab open');
+          if (!it.durable || it.storageError) throw new Error('Device save failed · Manager message not dispatched; keep this tab open');
           if (!window.WizAppServices?.conversation) throw new Error('Manager conversation unavailable');
           it.state = 'sending'; await put(it);
           const receipt = await bounded(() => window.WizAppServices.conversation.deliver(it.conversation, { request_id: it.id, text: it.text, files: it.files }));
@@ -378,7 +380,7 @@
     async transcribeDictation(id) {
       await load();
       const it = items.get(id);
-      if (it?.kind === 'conversation') return api.retryConversation(id);
+      if (it?.kind === 'conversation' && it.text) return it; // copy/transcribe NEVER dispatches
       if (!it || !it.audio || ['sent', 'sending', 'processing', 'capturing', 'transcribing'].includes(it.state)) return null;
       it.state = 'transcribing'; it.error = ''; emit();
       // Even when storage is unavailable, the live Blob remains downloadable.
@@ -456,7 +458,7 @@
     retry(id) { const it = items.get(id); if (!it || quarantine.has(id) || it.steerDispatch === 'started' || it.kind === 'dictation' || ['sent', 'unconfirmed', 'sending', 'processing', 'preparing', 'missing', 'held'].includes(it.state)) return; Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); put(it).then(pump); },
     retryAll() { for (const it of items.values()) if (it.kind !== 'dictation' && it.state === 'waiting') Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); Promise.all([...items.values()].map(put)).then(pump); },
     unsent() { return [...items.values()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
-    forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && it.kind !== 'dictation' && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
+    forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     get(id) { return items.get(id) || null; },
     landed(id) { const it = items.get(id); if (it?.state === 'sent') del(id); },
     async remove(id) { const it = items.get(id); if (!it || quarantine.has(id) || ['sending', 'transcribing', 'processing'].includes(it.state)) return false; await del(id); return !!items.get(id)?.durable; },

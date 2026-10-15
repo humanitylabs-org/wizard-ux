@@ -30,7 +30,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (!st.frame.isConnected || !registered(st)) { st.detach(); continue; }
@@ -256,11 +256,14 @@
   }
   async function deliverConversation(pin, message) {
     const held = conversationPins.get(pin?.token);
-    if (!held || pin.appId !== held.st.appId || !valid(held.st, held.doc) || held.st.client?.conversation !== held.receiver)
-      throw fault('Manager view closed, reloaded or unavailable · recording kept; copy transcript from Recordings');
+    const authorize = () => {
+      if (!held || pin.appId !== held.st.appId || !valid(held.st, held.doc) || held.st.client?.conversation !== held.receiver)
+        throw fault('Manager view closed, reloaded or unavailable · recording kept; copy transcript from Recordings');
+    };
+    authorize();
     if (!message || !/^[A-Za-z0-9_-]{8,100}$/.test(message.request_id || '') || typeof message.text !== 'string' || !message.text.trim() || message.text.length > 12000 || message.files?.length)
       throw fault('Manager accepts text only, up to 12000 characters · original kept');
-    const receipt = await held.receiver.receive(Object.freeze({ request_id: message.request_id, text: message.text, target: held.target }));
+    const receipt = await held.receiver.receive(Object.freeze({ request_id: message.request_id, text: message.text, target: held.target }), authorize);
     // Receipt is evidence of durable admission even if focus changed during POST.
     if (receipt?.accepted !== true || receipt.request_id !== message.request_id) throw fault('Manager receipt uncertain · original kept');
     return { accepted: true, request_id: message.request_id };
