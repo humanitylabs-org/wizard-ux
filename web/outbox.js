@@ -329,7 +329,7 @@
     async enqueue(o) {
       const M = window.WosModels, AG = window.WosAgents;
       const agent0 = o.kind === 'reply' ? (window.WizLive?.agentOf?.(o.sessionId) || '') : String(o.agent || '');
-      const agent = agent0 && AG?.isOther(agent0) ? agent0 : '';
+      const agent = agent0 && agent0 !== 'hermes' ? agent0 : '';
       let snapshot = o.model ? { model: o.model, provider: o.provider || '' } : null, routeError;
       try { snapshot = M?.snapshot(o.kind === 'reply' ? o.sessionId : '', snapshot, agent) || snapshot; }
       catch (e) { routeError = e; }
@@ -352,7 +352,7 @@
         let expectedProvider = it.provider;
         if (!it.agent && expectedProvider === 'tinfoil') expectedProvider = 'custom:tinfoil-operator';
         if (!it.agent && M.providers?.some(p => p.slug === expectedProvider && p.is_user_defined)) expectedProvider = 'custom:' + expectedProvider;
-        if (it.model && (route.model !== it.model || (expectedProvider && route.provider !== expectedProvider) || (it.agent && route.agent !== it.agent))) throw new Error('Selected route changed · original message kept');
+        if (it.model && (route.model !== it.model || (expectedProvider && route.provider !== expectedProvider) || ((route.agent || '') !== (it.agent || '')))) throw new Error('Selected route changed · original message kept');
         Object.assign(it, route, { state: 'queued' });
         if (it.agent) window.WizLive?.pinAgent?.(it.sessionId, it.agent);
       } catch (e) { it.state = 'failed'; it.error = String(e.message || e); }

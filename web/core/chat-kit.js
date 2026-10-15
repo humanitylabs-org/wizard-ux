@@ -351,7 +351,7 @@
     set(k, text, files) {
       if (!k) return;
       const all = this.all();
-      const fs = (files || []).filter(f => f && f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })).slice(0, 8);
+      const fs = (files || []).filter(f => f && f.id && !f.uploading).map(f => ({ id: f.id, agent: f.agent || 'hermes', name: f.name, mime: f.mime, bytes: f.bytes })).slice(0, 8);
       text = String(text || '');
       if (!text.trim() && !fs.length) delete all[k];
       else all[k] = { text: text.slice(0, 64000), files: fs, at: Date.now() };

@@ -525,7 +525,7 @@ window.WizCore.chats = function createChats(H) {
   }
   // Local thumbnails for files uploaded from this phone, so a just-sent photo shows before Wizard has it.
   const PREVIEW = {};
-  const mediaOfFile = f => ({ id: f.id, name: f.name, mime: f.mime || '', bytes: f.bytes || 0, kind: /^image\//.test(f.mime || '') ? 'image' : /^video\//.test(f.mime || '') ? 'video' : /^audio\//.test(f.mime || '') ? 'audio' : 'file', url: f.id ? fileUrl(f.id) : '', thumb: PREVIEW[f.id] || '' });
+  const mediaOfFile = f => ({ id: f.id, agent: f.agent || 'hermes', name: f.name, mime: f.mime || '', bytes: f.bytes || 0, kind: /^image\//.test(f.mime || '') ? 'image' : /^video\//.test(f.mime || '') ? 'video' : /^audio\//.test(f.mime || '') ? 'audio' : 'file', url: f.id ? fileUrl(f.id) : '', thumb: PREVIEW[f.id] || '' });
   // Every photo/file in the open thread gets an index into c.media; tapping it opens the in-app viewer.
   function mediaBtn(c, m) {
     const k = c.media.push(m) - 1;
@@ -1078,7 +1078,7 @@ window.WizCore.chats = function createChats(H) {
    * (restoreSealed, at start). done(): the outbox has it. putBack(): the take was dropped or could not be saved. */
   const composerKey = sid => sid === '__new__' ? 'new' : 'direct:' + sid;
   const SEALED = 'sealed:';
-  const fileRef = f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes });
+  const fileRef = f => ({ id: f.id, agent: f.agent || 'hermes', name: f.name, mime: f.mime, bytes: f.bytes });
   // What a thread's composer holds right now (the window's textarea while it shows that thread, else the draft).
   function peekComposer(wid, sid) {
     const w = W[wid], here = !!w && !!sid && w.thread === sid, c = w ? ch(wid) : null;
@@ -1172,7 +1172,7 @@ window.WizCore.chats = function createChats(H) {
     let it;
     try {
       it = await OUTBOX.enqueue({ custodyId: opts.custodyId, sealKey: sealed?.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
-        instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
+        instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, agent: f.agent || 'hermes', name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
     } catch (e) {
       // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
       // thread if the window is still on the list he was sent to.

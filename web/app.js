@@ -2240,7 +2240,7 @@
     } finally { releaseScreenOperation(op); }
   });
   // Files that finished uploading, in the shape the outbox sends as wizard_file_ids.
-  const takeFiles = () => V.files.filter(f => f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes }));
+  const takeFiles = () => V.files.filter(f => f.id && !f.uploading).map(f => ({ id: f.id, agent: f.agent || 'hermes', name: f.name, mime: f.mime, bytes: f.bytes }));
   function txShow(text, label, cls, icon) {
     tx.className = 'transcript ' + (cls || '');
     window.WizBrand.paint($('#txRouteIcon'), icon || '✦');

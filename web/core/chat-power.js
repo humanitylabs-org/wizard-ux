@@ -260,7 +260,7 @@ window.WosChatPower = function chatPower(A) {
     let it;
     try {
       it = await OUTBOX.enqueue({ custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', typed: sealed.text, audio: blob,
-        instructions: H.viewContext(wid, 'a voice reply recorded in this thread'), files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
+        instructions: H.viewContext(wid, 'a voice reply recorded in this thread'), files: all.map(f => ({ id: f.id, agent: f.agent || 'hermes', name: f.name, mime: f.mime, bytes: f.bytes })),
         wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && w?.agent ? { agent: w.agent } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
@@ -321,7 +321,7 @@ window.WosChatPower = function chatPower(A) {
     const had = c.files.findIndex(x => x.id === f.id);
     if (had >= 0) { c.files.splice(had, 1); toast('✕', 'Removed from this message', 1200); }
     else if (c.files.length >= 8) { toast('!', 'Up to 8 files per message', 2400); return; }
-    else { c.files.push({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes, key: Math.random().toString(36).slice(2), preview: f.kind === 'image' ? F.media(f).url : '' }); toast('📎', `Attached · ${f.kind === 'voice' ? 'Voice note' : clip(f.name, 32)}`, 1400); }
+    else { c.files.push({ id: f.id, agent: f.agent || 'hermes', name: f.name, mime: f.mime, bytes: f.bytes, key: Math.random().toString(36).slice(2), preview: f.kind === 'image' ? F.media(f).url : '' }); toast('📎', `Attached · ${f.kind === 'voice' ? 'Voice note' : clip(f.name, 32)}`, 1400); }
     A.saveDraft(sh.wid); A.refreshCompose(sh.wid);
     paint(sh.pane, A.elOf(sh.pane));
   }
