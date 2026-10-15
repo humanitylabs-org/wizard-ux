@@ -78,7 +78,7 @@ async function gestureChecks(f,label) {
  // Focus changes cannot bring app/private context back into the explicitly general take.
  await openManager(f);f.R.text='Open Movies';await delay(700);
  if(mobile) await p.locator('#orbWrap').dblclick({delay:60}); else await p.locator('#micBtn').click();
- await p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>!__qaBefore.includes(x.id)&&x.kind==='new'&&x.state==='sent'));
+ await p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>!__qaBefore.includes(x.id)&&x.kind==='new'&&x.state==='sent')).catch(async e=>{console.log('GENERAL_DEBUG',JSON.stringify({writes:f.writes,errors:f.errors,state:await p.evaluate(()=>({voice:window.__wos?.voice,desktop:window.__wux?.voice,items:[...WosOutbox._items.values()].map(({audio,...x})=>({...x,bytes:audio?.size})),text:document.body.innerText.slice(-4500)}))}));throw e;});
  await p.waitForFunction(m=>m?__wos.voice==='idle':__wux.voice==='idle',mobile);
  ok(label+' fresh send gesture admits exactly once',await p.evaluate(()=>[...WosOutbox._items.values()].filter(x=>!__qaBefore.includes(x.id)&&x.kind==='new').length===1));
  const item=await p.evaluate(()=>{const it=[...WosOutbox._items.values()].filter(x=>x.kind==='new').at(-1);return it&&{kind:it.kind,text:it.text,instructions:it.instructions,bytes:it.audio?.size,id:it.id};});
