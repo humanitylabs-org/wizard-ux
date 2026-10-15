@@ -37,7 +37,7 @@ node tools/wizard-alpha-setup.mjs --deployment /absolute/deployment.json \
   --home /absolute/subscriber-state --repo OWNER/wizard-alpha --ref main
 ```
 
-Setup verifies the complete subscribed snapshot and artifact access, installs the helper/skill and coupled Store files, verifies native skill discovery (or registers the requested external skill directory preserving other directories), configures the env file, restarts the declared existing Store, and reads back that Store's exact source revision. Failure rolls changed deployment files/skill settings back. State/pins are kept for diagnosis. It never claims success merely from creating a catalog file.
+Setup first checks Python 3 with fcntl is available, then verifies the complete subscribed snapshot and artifact access, installs the helper/skill and coupled Store files, verifies native skill discovery (or registers the requested external skill directory preserving other directories), configures the env file, restarts the declared existing Store, and reads back that Store's exact source revision. Failure rolls changed deployment files/skill settings back. State/pins are kept for diagnosis. It never claims success merely from creating a catalog file.
 
 For non-default WAM layouts, set `WIZARD_STORE_APPS_JSON` and `WIZARD_STORE_RUNTIPI_ENV` in the existing env file to the owner-local registry and Runtipi environment file. Defaults retain the current home-directory layout. JWT material stays in the Store process; these paths are never browser parameters.
 
@@ -55,7 +55,7 @@ wizard-alpha publish --catalog /private/checked-release-manifest.json \
   --expected absent --notes "What changed in this release"
 ```
 
-For replacing an entry, `--expected` is its current full source SHA. Run this on the normal main-subscribed home: the helper automatically creates a deterministic review branch and private publisher state, publishes the exact entry, opens/reuses its pull request and reads back the PR head. The normal Store subscription stays on main. Retries reuse the same branch and PR; different apps use separate proposals. A changed same-app entry is rejected, not overwritten. The result explicitly says `merge_required: true` and `visible: false` until the approved PR lands. The agent handles branch/state/PR mechanics; the human supplies only release intent and any required merge authorization. After an authorized merge, refresh both subscribers and verify their exact source revision. Publication never silently merges a default branch.
+For replacing an entry, `--expected` is its current full source SHA. Run this on the normal main-subscribed home: the helper automatically creates a deterministic review branch and private publisher state, publishes the exact entry, opens/reuses its pull request and reads back the PR head. The normal Store subscription stays on main. Retries against an unchanged subscribed head reuse the same branch and PR; different apps use separate proposals. If the base advances during a retry, inspect any earlier open proposal for this app before merging the new one. A changed same-app entry is rejected, not overwritten. The result explicitly says `merge_required: true` and `visible: false` until the approved PR lands. The agent handles branch/state/PR mechanics; the human supplies only release intent and any required merge authorization. After an authorized merge, refresh both subscribers and verify their exact source revision. Publication never silently merges a default branch.
 
 ## Install and activation
 

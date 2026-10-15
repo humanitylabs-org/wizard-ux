@@ -18,6 +18,7 @@ export function preserveCompanions(toolsDir,save) {
 async function main() {
   const f={}; for(let i=2;i<process.argv.length;i+=2) f[process.argv[i].replace(/^--/,'')]=process.argv[i+1];
   if(!f.deployment || !f.home) throw Error('deployment_and_home_required');
+  try {await run(['python3','-c','import fcntl']);} catch {throw Error('python_lock_runtime_required');}
   const home=resolve(f.home),d=readJSON(f.deployment);
   for(const k of ['tools_dir','store_dir','env_file','prefix','hermes_home']) if(!isAbsolute(d[k] || '')) throw Error('absolute_deployment_paths_required');
   if(!['systemd-env','container-env','process-env'].includes(d.context) || !Array.isArray(d.restart) || !d.restart.length || !Array.isArray(d.hermes) || !d.hermes.length) throw Error('unsupported_deployment');
