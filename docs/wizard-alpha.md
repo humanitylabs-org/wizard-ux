@@ -4,7 +4,7 @@ One private Git catalog, the existing Store, and an agent-mediated exact-release
 
 ## Supported execution contexts
 
-- Existing Linux/macOS Node 22+ Store origin process, authenticated by the existing Wizard gateway. Existing systemd service with an EnvironmentFile, Docker/Compose container with a mounted env file and persistent state, or an owner-managed local process launcher that reads that env file.
+- Existing Linux/macOS Node 22+ and Python 3 Store origin process, authenticated by the existing Wizard gateway. Existing systemd service with an EnvironmentFile, Docker/Compose container with a mounted env file and persistent state, or an owner-managed local process launcher that reads that env file.
 - Existing Hermes CLI and native skills directory discovery. Setup defaults to installing into the explicit HERMES_HOME's `skills/wizard-alpha` and verifies `hermes skills list`. With `skill_mode: "external"`, it instead uses native `config get ... --json`/`config set` for `skills.external_dirs`; that option requires a current CLI which preserves list types. Older CLIs lacking get/list-typed set use native-directory mode, not ad-hoc core/config patches. No core modification or profile cloning.
 - Existing GitHub CLI authentication **for this subscriber**, with read access to both the private catalog and every referenced app/release. Publisher also needs write access to a review branch. Never copy a token into this repository or a deployment descriptor. A pending invitation is not access.
 - Installation additionally requires the existing WAM Python/CLI runtime, real Runtipi/Docker, and an **already authenticated Caddy site** with an owner-approved import directory. The supplied Caddy activator runs in the same filesystem/command environment as WAM. Tailscale-only activation is not implemented here: use the separately verified WAM lifecycle or explicitly declare that gate blocked. Do not invent recipient infrastructure.
@@ -55,7 +55,7 @@ wizard-alpha publish --catalog /private/checked-release-manifest.json \
   --expected absent --notes "What changed in this release"
 ```
 
-For replacing an entry, `--expected` is its current full source SHA. Subscribe the publisher to a review branch; main/master/daily publication is rejected. Create the branch from main using the existing Git workflow, then open a PR. Different app writes use file-level CAS and are retried on nonconflicting races. A changed same-app entry is rejected, not overwritten. Repeating the identical release is idempotent. The helper reads back the exact resulting immutable remote commit and returns a Store detail link. Review notes and manifest changes before merge. Do not auto-merge protected/default branches.
+For replacing an entry, `--expected` is its current full source SHA. Run this on the normal main-subscribed home: the helper automatically creates a deterministic review branch and private publisher state, publishes the exact entry, opens/reuses its pull request and reads back the PR head. The normal Store subscription stays on main. Retries reuse the same branch and PR; different apps use separate proposals. A changed same-app entry is rejected, not overwritten. The result explicitly says `merge_required: true` and `visible: false` until the approved PR lands. The agent handles branch/state/PR mechanics; the human supplies only release intent and any required merge authorization. After an authorized merge, refresh both subscribers and verify their exact source revision. Publication never silently merges a default branch.
 
 ## Install and activation
 
@@ -96,6 +96,10 @@ wizard-alpha install --source wizard-alpha --app APP_ID --commit NEW_FULL_SOURCE
 
 Missing setup, architecture, release permission, installed repository conflict, stale selection or failed activation stops with a bounded error. Failed activation does **not** write the installed-source receipt. A running container alone is not usable Open. After a real install, open via the existing launcher/gateway and verify content. Before update, save app data, then compare after update and reopen. Don't fabricate a new version/commit that uses an unrelated release artifact merely to satisfy an update test.
 
+## Interrupted operations
+
+Refresh/setup/install use kernel advisory locks held by a Python 3 guard until the parent finishes or its pipe closes. Locks have no TTL and do not steal a long-running live operation; kernel ownership is released after a crash, even if the lock file remains. Keep the advisory lock inode in place. Pre-release legacy `.lock` directories have no ownership metadata: confirm the old process is stopped before removing those directories during migration. Never remove an active lock to force progress.
+
 ## Rollback
 
 ```sh
@@ -107,4 +111,4 @@ Rollback refuses if managed files changed since setup; otherwise it restores bac
 
 ## Verification scope
 
-`node --test tests/store-private-catalog.test.mjs tests/wizard-alpha.test.mjs tests/store-data.test.mjs` covers merge/privacy/paging/cache and helper failure/selection boundaries. Run sustained tests and browser/install QA on the designated build worker. Fixture tests are not real GitHub publication, recipient access, private gateway Open or Runtipi data-retention proof. Release evidence must identify those gates separately and name exact UX/WAM/catalog revisions.
+`node --test tests/store-private-catalog.test.mjs tests/wizard-alpha.test.mjs tests/wizard-alpha-release-fixes.test.mjs tests/store-data.test.mjs` covers merge/privacy/paging/cache and helper failure/selection boundaries. Run sustained tests and browser/install QA on the designated build worker. Fixture tests are not real GitHub publication, recipient access, private gateway Open or Runtipi data-retention proof. Release evidence must identify those gates separately and name exact UX/WAM/catalog revisions.

@@ -2,13 +2,19 @@
 // Install the coupled adapter/helper/skill into an explicitly named existing deployment.
 import {readFileSync,writeFileSync,existsSync,mkdirSync,copyFileSync,chmodSync,rmSync,renameSync} from 'node:fs';
 import {resolve,join,dirname,isAbsolute} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {subscribe,refresh,run,readJSON,atomic,locked} from './wizard-alpha.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const digest=p=>createHash('sha256').update(readFileSync(p)).digest('hex');
 const quote=s=>`'${s.replaceAll("'", "'\\''")}'`;
 const jsonOut=s=>JSON.parse(s.slice(s.indexOf('[')));
+export function preserveCompanions(toolsDir,save) {
+  for(const name of ['store-index-views.mjs','system-overview.mjs']) {
+    const target=join(toolsDir,name);
+    if(!existsSync(target)) save(target,readFileSync(join(root,'tools',name)),0o644);
+  }
+}
 async function main() {
   const f={}; for(let i=2;i<process.argv.length;i+=2) f[process.argv[i].replace(/^--/,'')]=process.argv[i+1];
   if(!f.deployment || !f.home) throw Error('deployment_and_home_required');
@@ -39,8 +45,10 @@ async function main() {
       files.push({target,backup,hash:digest(target)});
     };
     try {
-      // Companion modules are copied together; existing unrelated web/core files stay untouched.
-      for(const name of ['store-data-origin.mjs','store-index-views.mjs','store-private-catalog.mjs','system-overview.mjs','wizard-alpha.mjs','wizard-alpha-activate.py','wizard-alpha-wam.py']) save(join(d.tools_dir,name),readFileSync(join(root,'tools',name)),0o644);
+      // Only Alpha-owned changes replace existing files. Existing unchanged
+      // companions may be newer than this bundle; preserve them byte-for-byte.
+      preserveCompanions(d.tools_dir,save);
+      for(const name of ['store-data-origin.mjs','store-private-catalog.mjs','wizard-alpha.mjs','wizard-alpha-activate.py','wizard-alpha-wam.py']) save(join(d.tools_dir,name),readFileSync(join(root,'tools',name)),0o644);
       for(const name of ['index.html','store.js','store.css']) save(join(d.store_dir,name),readFileSync(join(root,'web/store',name)),0o644);
       save(join(skillDir,'wizard-alpha/SKILL.md'),readFileSync(join(root,'skills/wizard-alpha/SKILL.md')),0o644);
       save(join(skillDir,'wizard-alpha/README.md'),readFileSync(join(root,'docs/wizard-alpha.md')),0o644);
@@ -76,4 +84,4 @@ async function main() {
     }
   });
 }
-main().catch(e=>{console.error(JSON.stringify({error:/^[a-z_]+$/.test(e.message)?e.message:'setup_failed'}));process.exitCode=1;});
+if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) main().catch(e=>{console.error(JSON.stringify({error:/^[a-z_]+$/.test(e.message)?e.message:'setup_failed'}));process.exitCode=1;});

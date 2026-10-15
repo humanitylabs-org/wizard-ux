@@ -4,9 +4,9 @@ import {readFileSync, writeFileSync, mkdirSync, renameSync, rmSync, existsSync, 
 import {join, dirname, resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {fileURLToPath, pathToFileURL} from 'node:url';
-import {execFile} from 'node:child_process';
+import {execFile, spawn} from 'node:child_process';
 import {promisify} from 'node:util';
-import {randomUUID} from 'node:crypto';
+import {randomUUID, createHash} from 'node:crypto';
 const exec = promisify(execFile);
 export const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const SHA = /^[a-f0-9]{40}$/;
@@ -24,9 +24,25 @@ export function atomic(p, value) {
   finally { rmSync(tmp, {force:true}); }
 }
 export async function locked(home, name, fn) {
-  mkdirSync(home,{recursive:true,mode:0o700}); const p=join(home,name+'.lock');
-  try { mkdirSync(p); } catch { fail('operation_busy'); }
-  try { return await fn(); } finally { rmSync(p,{recursive:true,force:true}); }
+  mkdirSync(home,{recursive:true,mode:0o700});
+  // OS-held locks have no TTL: a long live operation keeps ownership, a dead
+  // owner releases it. Never unlink the inode, which would split exclusion.
+  // Old directory locks have no owner identity; require an idle migration.
+  if(existsSync(join(home,name+'.lock'))) fail('legacy_lock_requires_idle_cleanup');
+  const script = `import fcntl, os, sys\nos.umask(0o077)\nf = open(sys.argv[1], 'a')\ntry:\n fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)\nexcept BlockingIOError:\n sys.exit(73)\nprint('locked', flush=True)\nsys.stdin.buffer.read()\n`;
+  const guard=spawn('python3',['-u','-c',script,join(home,name+'.advisory.lock')],{stdio:['pipe','pipe','ignore']});
+  const closed=new Promise(resolve=>guard.once('close',resolve));
+  guard.stdin.on('error',()=>{});
+  try {
+    await new Promise((ok,no)=>{
+      let ready=false, output='';
+      const timer=setTimeout(()=>{guard.kill();no(Error('lock_helper_unavailable'));},10000);
+      guard.once('error',()=>{clearTimeout(timer);no(Error('lock_helper_unavailable'));});
+      guard.once('close',code=>{clearTimeout(timer);if(!ready) no(Error(code===73?'operation_busy':'lock_helper_unavailable'));});
+      guard.stdout.on('data',chunk=>{output+=chunk.toString();if(!ready && output.includes('locked\n')){ready=true;clearTimeout(timer);ok();}});
+    });
+    return await fn();
+  } finally { guard.stdin.end(); await closed; }
 }
 export function validateEntry(a) {
   if (!keys(a,['id','name','summary','repo','commit','version','tag','architectures','images','gateway','release_url','release_notes'])) fail('invalid_entry_fields');
@@ -52,10 +68,10 @@ export async function run(argv, options={}) {
   if (!Array.isArray(argv) || !argv.length || argv.some(x=>typeof x!=='string' || x.includes('\0'))) fail('invalid_local_command');
   return exec(argv[0],argv.slice(1),{timeout:120000,maxBuffer:MAX,...options});
 }
-export async function gh(endpoint, body, env=process.env) {
+export async function gh(endpoint, body, env=process.env, method='PUT') {
   // Never echo gh stderr: it may include private repository names or auth diagnostics.
   try {
-    const argv=['gh','api',endpoint]; if(body) argv.push('--method','PUT','--input','-');
+    const argv=['gh','api',endpoint]; if(body) argv.push('--method',method,'--input','-');
     if (!body) return JSON.parse((await run(argv,{env})).stdout);
     return await new Promise((ok,no)=>{
       const p=execFile(argv[0],argv.slice(1),{env,timeout:120000,maxBuffer:MAX},(e,out)=>{ if(e) no(Error('github_write_failed')); else {try{ok(JSON.parse(out));}catch{no(Error('github_invalid_response'));}} });
@@ -148,7 +164,7 @@ export async function publish(entry,home=stateDir(),{api=gh,expected}={}) {
   const base=JSON.stringify(prior || null);
   for(let attempt=0;attempt<3;attempt++) {
     const current=await fetchSnapshot(c,api), previous=current.apps.find(x=>x.id===a.id);
-    if(JSON.stringify(previous)===JSON.stringify(a)) return {revision:current.revision,unchanged:true,detail:`/wizard-os-home/store/?app=${a.id}&source=${current.source.id}`};
+    if(JSON.stringify(previous)===JSON.stringify(a)) return {revision:current.revision,unchanged:true,detail:`/wizard-os-home/store/index.html?app=${a.id}&source=${current.source.id}`};
     if(JSON.stringify(previous || null)!==base) fail('publish_conflict');
     let blob;
     if(previous) blob=await api(`repos/${c.repo}/contents/apps/${a.id}.json?ref=${current.revision}`);
@@ -157,9 +173,38 @@ export async function publish(entry,home=stateDir(),{api=gh,expected}={}) {
       const check=await fetchSnapshot({...c,ref:r.commit.sha},api);
       if(JSON.stringify(check.apps.find(x=>x.id===a.id))!==JSON.stringify(a)) fail('publish_readback_mismatch');
       const local=await refresh(home,{force:true,api}).catch(()=>null);
-      return {revision:check.revision,detail:`/wizard-os-home/store/?app=${a.id}&source=${check.source.id}`,review_branch:c.ref,local_refresh:local && !local.status.stale?'fresh':'pending'};
+      return {revision:check.revision,detail:`/wizard-os-home/store/index.html?app=${a.id}&source=${check.source.id}`,review_branch:c.ref,local_refresh:local && !local.status.stale?'fresh':'pending'};
     } catch(e) { if(e.message!=='github_write_failed' || attempt===2) throw e; }
   }
+}
+export async function proposeRelease(entry,home=stateDir(),{api=gh,expected}={}) {
+  return locked(home,'publish',async()=>{
+    const c=config(home), a=await verifyRelease(validateEntry(entry),api);
+    const initial=await fetchSnapshot(c,api), prior=initial.apps.find(x=>x.id===a.id);
+    if(prior && prior.repo!==a.repo) fail('app_repository_conflict');
+    if(expected!==undefined && (prior?.commit || 'absent')!==expected) fail('publish_conflict');
+    if(JSON.stringify(prior)===JSON.stringify(a)) return {unchanged:true,revision:initial.revision,visible:true};
+    const identity=createHash('sha256').update(JSON.stringify([c.repo,c.ref,initial.revision,a])).digest('hex').slice(0,20);
+    const branch=`alpha/${a.id}-${identity}`, head=`${c.repo.split('/')[0]}:${branch}`;
+    const refPath=`repos/${c.repo}/git/ref/heads/${branch}`;
+    let ref; try {ref=await api(refPath);} catch {
+      try {await api(`repos/${c.repo}/git/refs`,{ref:`refs/heads/${branch}`,sha:initial.revision},process.env,'POST');}
+      catch { /* A concurrent retry may already have created this same branch. */ }
+      ref=await api(refPath);
+    }
+    if(!SHA.test(ref.object?.sha || '')) fail('review_branch_not_verified');
+    const reviewHome=join(home,'publish',identity);
+    await subscribe(c.repo,branch,reviewHome,api);
+    const current=cached(reviewHome).snapshot.apps.find(x=>x.id===a.id);
+    if(JSON.stringify(current || null)!==JSON.stringify(prior || null) && JSON.stringify(current)!==JSON.stringify(a)) fail('review_branch_conflict');
+    const result=await publish(a,reviewHome,{api});
+    const pulls=await api(`repos/${c.repo}/pulls?state=open&head=${encodeURIComponent(head)}&base=${encodeURIComponent(c.ref)}`);
+    let pr=pulls.find(p=>p.head?.ref===branch && p.base?.ref===c.ref);
+    if(!pr) pr=await api(`repos/${c.repo}/pulls`,{title:`Alpha: ${a.name} ${a.version}`,head:branch,base:c.ref,body:`Prepared by Wizard Alpha. App: ${a.id}. Exact source: ${a.commit}. Catalog entry validated against its release. Merge approval is separate; this operation does not change the subscribed branch.`},process.env,'POST');
+    const verified=await api(`repos/${c.repo}/pulls/${pr.number}`);
+    if(verified.head?.sha!==result.revision || verified.head?.ref!==branch || verified.base?.ref!==c.ref || verified.state!=='open') fail('pull_request_not_verified');
+    return {...result,review_branch:branch,pull_request:verified.html_url,pull_number:verified.number,visible:false,merge_required:true};
+  });
 }
 export async function install({source,id,commit,update=false},home=stateDir(),{runner=run,api=gh}={}) {
   if(!ID.test(source || '') || !ID.test(id || '') || !SHA.test(commit || '')) fail('invalid_selection');
@@ -202,7 +247,7 @@ async function main() {
   else if(cmd==='publish') {
     const manifest=readJSON(f.catalog); if(manifest.schema!==1 || manifest.scope!=='private-test') fail('checked_private_catalog_required');
     const a=manifest.apps?.find(a=>a.id===f.app); if(!a || (f.repo && f.repo!==a.repo) || (f.commit && f.commit!==a.commit)) fail('release_not_in_manifest');
-    result=await publish({...a,...(f.notes?{release_notes:f.notes}:{})},home,{expected:f.expected});
+    result=await proposeRelease({...a,...(f.notes?{release_notes:f.notes}:{})},home,{expected:f.expected});
   } else if(cmd==='install') result=await install({source:f.source,id:f.app,commit:f.commit,update:!!f.update},home);
   else if(cmd==='status') {const c=cached(home); result={source:c?.snapshot?.source,status:c?.status,apps:c?.snapshot?.apps.map(a=>({id:a.id,commit:a.commit,version:a.version})) || []};}
   else fail('usage_subscribe_refresh_publish_install_status');
