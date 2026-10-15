@@ -139,7 +139,7 @@ async function close(p) { if (await visible(p)) await p.keyboard.press('Escape')
   // Both shells use the same identity; real private Chats never receive a message.
   for (const [kind, page] of [['desktop', p]]) {
     await page.evaluate(() => WizOpenAgentChats('private')); await nap(300);
-    ok(await page.locator('.ch-agent.private .sg-hat-private').count() > 0, kind + ' private identity in Chats');
+    ok(await page.locator('[data-agent-titlebar="private"] .sg-hat-private').count() > 0, kind + ' private identity in Chats');
     const sizes = await page.evaluate(() => {
       const get = s => { const e=document.querySelector(s),r=e?.getBoundingClientRect(),c=e&&getComputedStyle(e); return { h:r?.height,w:r?.width,mask:c?.maskSize }; };
       return { main:get('.wbar .ic .sg-hat'),private:get('.wbar .ic .sg-hat-private'),workspace:get('#wsList .sg-hat-private') };
@@ -162,7 +162,7 @@ async function close(p) { if (await visible(p)) await p.keyboard.press('Escape')
   const mobile = await boot(true), m = mobile.p;
   ok(await m.evaluate(() => WizSigil.of({id:'agents'}).glyph === 'agents'), 'mobile registry uses distinct layered Agents mark');
   await m.evaluate(() => WizOpenAgentChats('private')); await nap(500);
-  ok(await m.locator('.ch-agent.private .sg-hat-private').count() > 0, 'phone private Chats uses enlarged keyhole mask');
+  ok(await m.locator('[data-agent-titlebar="private"] .sg-hat-private').count() > 0, 'phone private Chats uses enlarged keyhole mask');
   await m.evaluate(() => __wos.goDesk(0,true)); await nap(500);
   ok(await m.locator('#dock .sg-hat-private').count() > 0, 'phone dock shares private identity');
   await m.evaluate(() => __wos.openApp(WizCore.apps('phone').APP.agents)); await nap(600);
