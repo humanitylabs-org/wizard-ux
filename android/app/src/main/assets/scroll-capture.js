@@ -5,6 +5,19 @@
   function bounds(e) {
     if (!e?.isConnected || document.hidden) return null;
     const r = e.getBoundingClientRect(), s = getComputedStyle(e);
+    // PixelCopy uses window coordinates; scrollTop/client sizes are CSS layout units.
+    // Translation is safe. Scaling, rotation, skew, perspective and browser zoom are not.
+    if (window.visualViewport && Math.abs(visualViewport.scale - 1) > .001) return null;
+    for (let node = e; node; node = node.parentElement) {
+      const st = getComputedStyle(node);
+      if ((st.zoom && Number(st.zoom) !== 1) || (st.scale && st.scale !== 'none') ||
+          (st.rotate && st.rotate !== 'none') || st.perspective !== 'none') return null;
+      if (st.transform !== 'none') {
+        const m = new DOMMatrixReadOnly(st.transform);
+        if (!m.is2D || Math.abs(m.a - 1) > .001 || Math.abs(m.d - 1) > .001 ||
+            Math.abs(m.b) > .001 || Math.abs(m.c) > .001) return null;
+      }
+    }
     if (r.width < 80 || r.height < 80 || r.left < 0 || r.top < 0 ||
         r.right > innerWidth + 1 || r.bottom > innerHeight + 1 ||
         s.visibility !== 'visible' || s.display === 'none' ||
