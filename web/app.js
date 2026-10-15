@@ -2553,7 +2553,14 @@
       (s => s ? `Visible on screen: ${s}` : '')(window.WizScreen?.read(winEl(v.id)) || ''),
       'Treat the message as feedback on that page; "this", "here" and "it" mean that page.'].filter(Boolean).join(' ');
   }
-  function sendReview(v, text, audio, files = [], route = null, custodyId = null) {
+  async function sendReview(v, text, audio, files = [], route = null, custodyId = null) {
+    try { route ||= window.WosModels.snapshot(v.thread); }
+    catch (e) {
+      const it = custodyId ? OUTBOX.get(custodyId) : await OUTBOX.stage({ kind: 'reply', sessionId: v.thread, text, audio, files });
+      if (it) await OUTBOX.transition(it.id, 'held', 'Feedback route unavailable · original kept');
+      setVoice('idle'); toast('!', 'Feedback kept for its original thread · model route unavailable', 3200);
+      return it || { outcome: 'retained' };
+    }
     window.__ovLog = (window.__ovLog || []).concat('review-send:' + v.thread).slice(-30);
     return window.WosBoundView.feedback(OUTBOX, { thread: v.thread, url: v.url, route, custodyId, context: reviewContext(v) }, text, audio, files);
   }

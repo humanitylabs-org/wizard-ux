@@ -8,7 +8,7 @@ function grammar(){
  const app={id:'wizard-music',name:'Music'},box={console,Map,Set,URL,location:{href:'https://fixture.invalid/',origin:'https://fixture.invalid',hostname:'fixture.invalid'}};box.window=box;
  box.WizCore={norm};box.WosViews={TODAY:'2026-10-15',YESTERDAY:'2026-10-14'};
  box.WosMusic={available:()=>true,parse:s=>s==='pause the music'?{op:'pause',strong:true}:s==='next track'?{op:'next',strong:true}:null,run:c=>{events.push(['music',c.op]);return true;}};
- box.WosFeatures={entries:[{id:'maps',title:'Maps'},{id:'future',title:'Future view'}],open:(id,o)=>{events.push(['view',id,o]);return ['maps','future'].includes(id);}};
+ box.WosFeatures={entries:[{id:'maps',title:'Maps'},{id:'week',title:'Week in review'},{id:'future',title:'Future view'}],open:(id,o)=>{events.push(['view',id,o]);return ['maps','future'].includes(id);}};
  box.WosSettings={route:(id,open)=>{if(!['help','skin','settings'].includes(id))return false;open(id);return true;}};
  vm.runInNewContext(read('core/commands.js'),box);
  const CHATS={matchFilters:s=>s==='ready'?[{field:'status',value:'ready'}]:[],addFilter:(_w,f)=>events.push(['filter',f]),clearAll:()=>events.push(['clear']),setQuery:(_w,q)=>events.push(['query',q])};
@@ -51,6 +51,26 @@ test('feedback rejects a missing route rather than targeting current focus',asyn
 test('both adapters mount common nonsettings views, command grammar and capture tools',()=>{
  for(const p of ['index.html','desktop.html'])for(const asset of ['views.js','views.css','commands.js','features.js','bound-view.js','capture-tools.js','music-voice.js','screen-capture.js','sel-menu.js'])assert(read(p).includes('core/'+asset),p+': '+asset);
  for(const p of ['app.js','desktop/desktop.js']){const s=read(p);assert(s.includes('WosFeatures.install('));assert(s.includes('WosCommands.create('));assert(s.includes('WosCommands.execute('));assert(s.includes('WosBoundView.create('));assert(s.includes('WosCaptureTools.'));assert(!s.includes('function localParse('));assert(!s.includes('function renderLevel('));}
+});
+
+
+test('ordinary thread words remain replies while explicit commands still work',()=>{
+ const {parser}=grammar();
+ for(const text of ['help','week','settings','maps','directions to Bangkok']){
+  const snap={view:{kind:'chat thread'}};
+  assert.equal(parser.parse(text,snap,'auto'),null,text);
+  assert(parser.parse(text,snap,'command'),text);
+ }
+});
+test('phone non-recorded review feedback resolves only its original thread, or stays held',async()=>{
+ const source=read('app.js');const start=source.indexOf('  async function sendReview('),end=source.indexOf('  function deliverToView',start);
+ const calls=[],ctx={window:{WosModels:{snapshot:sid=>({model:'private-model',provider:'p',agent:'private',sid})},WosBoundView:{feedback:async(o,t,text)=>{calls.push(t);return {state:'queued'};}}},OUTBOX:{stage:async o=>{calls.push(o);return {id:'kept'};},transition:async(...x)=>calls.push(x)},reviewContext:()=>'',setVoice(){},toast(){}};
+ vm.runInNewContext(source.slice(start,end),ctx);
+ await ctx.sendReview({thread:'private-original'},'Looks good',null);
+ assert.equal(calls[0].thread,'private-original');assert.equal(calls[0].route.agent,'private');
+ calls.length=0;ctx.window.WosModels.snapshot=()=>{throw Error('route down')};
+ const result=await ctx.sendReview({thread:'private-original'},'Keep original',null);
+ assert.equal(result.id,'kept');assert.equal(calls[0].sessionId,'private-original');assert.equal(calls[0].kind,'reply');assert.equal(calls[1][1],'held');
 });
 
 test('finite audit has all 73 capabilities and complete 163-row crosswalk, without unclosed browser gaps',()=>{

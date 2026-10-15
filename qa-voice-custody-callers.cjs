@@ -79,12 +79,12 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   await f.done('phone seal');
  }
  // Actual routing paths: no staged audio deletion, including text-only and delayed then_agent.
- for(const route of ['text-only','local','capture','then_agent']){
+ for(const route of ['text-only','local','untrusted-frame','then_agent']){
   const f=await boot();
   await f.p.evaluate(()=>__wos.goDesk(0));
   if(route==='text-only')await f.p.evaluate(()=>{window.WosResources={...window.WosResources,forward:()=>false};});
   if(route==='local')f.state.cmd={route:'command',action:'home'};
-  if(route==='capture'){
+  if(route==='untrusted-frame'){
    await f.p.evaluate(()=>__wos.openWin({app:'frame',url:'/fixture-capture',name:'Capture fixture'}));
    await sleep(300);
   }
@@ -92,8 +92,9 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   await f.take();await f.p.waitForFunction(()=>WosOutbox.unsent().some(x=>!['processing','preparing'].includes(x.state)),null,{timeout:12000});
   const row=(await f.rows()).find(x=>x.kind!=='capture'&&x.state!=='sent');
   ok(row?.blob>0,`phone ${route}: original retained without receipt`,row);
-  if(route==='local'||route==='capture')ok(row?.state==='held'&&f.state.posts.length===0,`phone ${route}: explicit local outcome never queues an agent run`,row);
+  if(route==='local')ok(row?.state==='held'&&f.state.posts.length===0,`phone ${route}: explicit local outcome never queues an agent run`,row);
   else ok(['waiting','queued','sending'].includes(row?.state),`phone ${route}: same staged owner passed to outbox`,row);
+  if(route==='untrusted-frame')ok(row?.kind==='new'&&row?.blob>0, 'self-asserted frame metadata cannot consume voice; original remains in general-route custody',row);
   await f.done('phone '+route);
  }
  // Phone empty transcription with sealed context must be persisted and never autosend on online/reload.

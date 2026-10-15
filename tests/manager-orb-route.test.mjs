@@ -20,6 +20,26 @@ test('desktop explicit new gesture bypasses foreground Manager',async()=>{const 
 test('missing shared host capability retains Manager intent rather than Chats',async()=>{const f=desktopFixture({id:'mgr',app:'frame',appId:'wizard-manager'});f.ctx.window.WizAppServices={};await f.ctx.talk('start');await f.ctx.talk('send');assert.equal(f.calls[0][0],'manager');assert.equal(f.calls[0][1].conversation.token,'unavailable');});
 test('desktop existing thread keeps reply route',async()=>{const f=desktopFixture({id:'ch',app:'chats',thread:'original'});await f.ctx.talk('start');f.focus({id:'mgr',app:'frame',appId:'wizard-manager'});await f.ctx.talk('send');assert.equal(f.calls[0][0],'reply');assert.equal(f.calls[0][2],'original');});
 test('desktop private agent list still creates chat for its agent',async()=>{const f=desktopFixture({id:'ch',app:'chats',agent:'private'});await f.ctx.talk('start');await f.ctx.talk('send');assert.equal(f.calls[0][0],'chat');assert.equal(f.calls[0].at(-1).sid,'__new__');});
+
+test('cancelled command mode cannot consume the next thread or general take', async()=>{
+ for(const forceNew of [false,true]){
+  const f=desktopFixture({id:'ch',app:'chats',thread:'original'});
+  f.ctx.VOICE.cancel=()=>{f.ctx.VOICE.state='idle';};
+  f.ctx.window.WosCaptureTools.take=()=>({files:[],ready:()=>true,close(){}});
+  await f.ctx.talk('start');f.ctx.commandTake=true;await f.ctx.talk('cancel');
+  assert.equal(f.ctx.commandTake,false);await f.ctx.talk('start',forceNew);await f.ctx.talk('send');
+  assert.equal(f.calls[0][0],forceNew?'new':'reply');
+ }
+});
+test('desktop pre-STT stage keeps the recording-start working run and busy lock',async()=>{
+ const f=desktopFixture({id:'ch',app:'chats',thread:'original'});let stage,release;
+ f.ctx.CHATS.WORKING_ST=new Set(['working']);f.ctx.LIVE.session=()=>({status:'working',runId:'original-run'});
+ f.ctx.OUTBOX.stage=async o=>{stage=o;await new Promise(r=>{release=r});return {id:'staged',durable:true};};
+ await f.ctx.talk('start');const sending=f.ctx.talk('send');await new Promise(r=>setImmediate(r));
+ assert.equal(stage.steerRunId,'original-run');assert.equal(await f.ctx.talk('start',true),'busy');
+ release();await sending;assert.equal(f.ctx.dictationFinishing,false);assert.equal(f.calls[0][0],'reply');
+});
+
 test('phone Manager bypass precedes local commands, files and router',async()=>{const calls=[];const ctx={OUTBOX:{sendConversation:async o=>{calls.push(o);return {state:'sent'}}},takeFiles:()=>[{id:'attachment'}],setVoice(){},txHide(){},toast(){}};vm.createContext(ctx);vm.runInContext(section(phone,'  async function handleText(','  /* Hold-command'),ctx);await ctx.handleText('help','auto',false,0,null,{conversation:pin});assert.equal(calls.length,1);assert.equal(calls[0].text,'help');assert.equal(calls[0].files[0].id,'attachment');});
 test('phone start pins destination before asynchronous recording',()=>{const s=section(phone,'  async function startVoice(','  function tick(');assert(s.indexOf('V.snap =')<s.indexOf('await openRec'));assert(s.includes("kind === 'command') V.snap.conversation = null"));});
 test('phone Manager audio branches before generic staging/STT fallback',()=>{const s=section(phone,'  async function onRecStop(','  /* ---------------- view-aware');assert(s.indexOf('OUTBOX.sendConversation')<s.indexOf('OUTBOX.stage'));assert(s.includes("kind !== 'command' && !rt && aimAt == null"));});

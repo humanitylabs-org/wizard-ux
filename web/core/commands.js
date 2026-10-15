@@ -23,6 +23,7 @@
   }
   function localParse(t, snap, kind) {
     const explicit = norm(t).replace(/^(hey |ok |okay )?(wizard|archimedes)[, ]*/, '').replace(/ please$/, '');
+    if (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread') {
     if (/^(help|show help|open help|gestures|keyboard shortcuts)$/.test(explicit)) return { action:'open_view', view:'help' };
     if (/^(settings|open settings|usage|show usage)$/.test(explicit)) return { action:'open_view', view:/usage/.test(explicit)?'usage':'settings' };
     let destination = explicit.match(/^(?:navigate|directions|drive)(?: to)? (.+)$/);
@@ -31,6 +32,7 @@
     if(destination)return {action:'maps_search',query:destination[1]};
     const feature=window.WosFeatures?.entries.find(f=>[f.id,norm(f.title||f.id)].includes(explicit.replace(/^(open|show) /,'')));
     if(feature)return {action:'open_view',view:feature.id};
+    }
     // The music search spell ("music search Home Tides") wins everywhere, even over the Chats list's "search …".
     { const ms = window.WosMusic?.available() && window.WosMusic.parse(t, false, false); if (ms && ms.op === 'search') return { action: 'music', cmd: ms }; }
     { const cv = chatsVoice(t, snap || sendSnap(), kind); if (cv) return cv; }
