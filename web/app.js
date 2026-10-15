@@ -2767,6 +2767,8 @@
   generalTarget.id = 'generalVoice'; generalTarget.className = 'general-voice';
   generalTarget.textContent = 'Record for ' + window.WizConfig.agent();
   generalTarget.setAttribute('aria-label', generalTarget.textContent);
+  /* Labels align with the dock's top edge; keep them outside its stacking
+   * context so recording controls cannot obscure the destination text. */
   device.append(voiceDestination, generalTarget);
   generalTarget.addEventListener('click', () => {
     if (V.state === 'idle') startVoice('general');
@@ -2779,14 +2781,14 @@
   function paintVoiceDestination() {
     const label = V.snap?.conversation?.label;
     const active = ['listen', 'command', 'paused'].includes(V.state) && V.kind !== 'dictation';
-    voiceDestination.hidden = !active;
+    voiceDestination.hidden = !active || V.state === 'command';
     voiceDestination.classList.toggle('app-voice', !!label);
     device.classList.toggle('app-voice-input', active && !!label);
     voiceDestination.textContent = label ? 'To: ' + label + ' · tap to send'
       : V.snap?.general ? 'Talking to ' + window.WizConfig.agent() + ' · tap to send'
       : V.kind === 'command' ? 'Command · release to run · slide up for ' + window.WizConfig.agent() : 'Listening · tap to send';
     if (active) $('#orbWrap').setAttribute('aria-label', voiceDestination.textContent);
-    generalTarget.hidden = V.state !== 'idle' && V.state !== 'command';
+    generalTarget.hidden = V.state !== 'command';
     generalTarget.classList.toggle('hold-target', V.state === 'command');
     generalTarget.textContent = V.state === 'command' ? '↑ ' + window.WizConfig.agent() + ' · release to keep talking' : 'Record for ' + window.WizConfig.agent();
     generalTarget.setAttribute('aria-label', generalTarget.textContent);
@@ -2815,7 +2817,9 @@
     }
     if (G.mode === 'hold') {
       const box = generalTarget.getBoundingClientRect();
-      G.general = e.clientX >= box.left - 16 && e.clientX <= box.right + 16 && e.clientY >= box.top - 16 && e.clientY <= box.bottom + 16;
+      // The compact target touches the orb: require deliberate upward travel,
+      // so ordinary hold/release (including finger jitter) remains a command.
+      G.general = G.dy < -16 && e.clientX >= box.left - 16 && e.clientX <= box.right + 16 && e.clientY >= box.top - 16 && e.clientY <= box.bottom + 16;
       generalTarget.classList.toggle('selected', G.general);
       voiceDestination.textContent = G.general ? 'Release: keep talking to ' + window.WizConfig.agent() : 'Release: command · slide onto ' + window.WizConfig.agent();
       // Aim: slide toward the desk this command should land on.
