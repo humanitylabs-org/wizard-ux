@@ -746,7 +746,12 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         int failed = 0;
         for (EverywhereOutbox.Item it : outbox.unsent()) if ("failed".equals(it.state)) failed++;
         boolean carry = carrying();
-        String mode = carry ? appVoice : listening ? (paused ? "paused" : dictating ? "typing" : "listen") : keyboardOpen ? "type" : "idle";
+        String pending = outbox.floatingProcessingMode();
+        String mode = carry ? appVoice : listening ? (paused ? "paused" : dictating ? "typing" : "listen")
+                : !pending.isEmpty() ? pending : keyboardOpen ? "type" : "idle";
+        if (web != null) web.setContentDescription(!pending.isEmpty() ?
+                ("retry".equals(pending) ? "Waiting to retry…" : "transcribe".equals(pending) ? "Transcribing…" : "Processing…")
+                : keyboardOpen ? "Start dictation" : "Wizard Everywhere");
         long ms = carry ? appVoiceElapsed : 0;
         String st = "{mode:'" + mode + "',kb:" + (!carry && (keyboardOpen || dictating)) + ",expanded:" + expanded + ",failed:" + failed
                 + ",shots:" + shots.size() + ",carry:" + carry + ",ms:" + ms + "}";
@@ -766,7 +771,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         float downX, downY; int startCx, startCy; boolean mine, moved, held;
         final int slop = ViewConfiguration.get(EverywhereService.this).getScaledTouchSlop();
         final Runnable hold = () -> {
-            if (!mine || moved || listening || carrying()) return;
+            if (!mine || moved || listening || carrying() || processing()) return;
             held = true;
             buzz(18);
             showMenu();
@@ -783,7 +788,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                     // A touch on the orb while the menu is up just closes it (the outside-touch may have closed it a moment ago).
                     if (menuShown || SystemClock.uptimeMillis() - menuClosedAt < 350) { hideMenu(); held = true; return true; }
                     main.removeCallbacks(hold);
-                    if (!listening && !carrying()) main.postDelayed(hold, LONG_PRESS_MS);
+                    if (!listening && !carrying() && !processing()) main.postDelayed(hold, LONG_PRESS_MS);
                     return true;
                 }
                 case MotionEvent.ACTION_MOVE: {
@@ -1000,7 +1005,10 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         @JavascriptInterface public void log(String s) { Log.i(TAG, "page: " + s); }
     }
 
+    private boolean processing() { return outbox != null && !outbox.floatingProcessingMode().isEmpty(); }
+
     private void tap() {
+        if (processing()) { toast("Still processing your recording…"); return; }
         buzz(12);
         if (carrying()) { remote("send"); return; }
         if (listening) { finish(); return; }
@@ -1029,6 +1037,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     /* ------------------------------------------------------------------ recording */
 
     private void start(boolean dictate) {
+        if (listening || processing()) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "Open Wizard OS once and allow the microphone", Toast.LENGTH_LONG).show();
             try { openApp(this, MainActivity.ACTION_SETTINGS, 4).send(); } catch (PendingIntent.CanceledException ignored) { }
@@ -1262,9 +1271,12 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     @Override
     public void onOutboxChanged() {
-        pushState();
-        MainActivity.notifyUnsentChanged();
-        clearFailed(this, outbox);
+        // Empty/audio readiness notifications can originate on the outbox I/O executor.
+        main.post(() -> {
+            pushState();
+            MainActivity.notifyUnsentChanged();
+            clearFailed(this, outbox);
+        });
     }
 
     @Override
