@@ -86,8 +86,11 @@ let browser;
  // Correlated frame/session adversaries: native main-frame port alone is never a hosted-app permission.
  const stale=await audio('pause',{sessionId:'obsolete'});check('stale session commands refused',!stale.ok);
  const forged=await audio('load',{queue:[{...down.queue[down.index],stream:'https://evil.test/music.mp3'}],index:0,station:null});check('foreign media URL rejected before network',!forged.ok);
- await page.evaluate(()=>{const f=document.createElement('iframe');f.className='appframe';f.src='/wizard-music/';f.id='audio-evil';document.body.appendChild(f);});await wait(400);
- const foreign=page.frames().find(f=>f !== frame() && f.url().endsWith('/wizard-music/'));if(foreign){check('unregistered Music-path same-origin frame lacks capability',!await foreign.evaluate(()=>parent.WizBackgroundAudio.canAttach(window)));}
+ await page.evaluate(()=>{const f=document.createElement('iframe');f.className='appframe';f.src='/wizard-music/';f.id='audio-evil';document.body.appendChild(f);});
+ const foreign=await (await page.locator('#audio-evil').elementHandle()).contentFrame();
+ if(!foreign)throw new Error('Unregistered-frame negative control did not attach');
+ await foreign.waitForURL(/\/wizard-music\/$/,{timeout:15000});
+ check('unregistered Music-path same-origin frame lacks capability',!await foreign.evaluate(()=>parent.WizBackgroundAudio.canAttach(window)));
  await page.evaluate(()=>document.querySelector('#audio-evil')?.remove());
  const hold=await snap();await page.evaluate(()=>{const id=Object.values(__wos.wins).find(w=>w.appId==='wizard-music')?.id;__wos.closeWin(id,true);});await wait(1500);
  const service=await sx('dumpsys activity services '+PKG);check('closing Music UI leaves foreground audio service alive',service.result.includes('BackgroundAudioService'));

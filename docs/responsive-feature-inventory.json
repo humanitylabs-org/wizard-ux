@@ -41,6 +41,11 @@
       "classification": "native",
       "reason": "WizardAndroidRelay required; Android-only transport."
     },
+    "core/background-audio.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Origin-scoped Android Media3 transport through wizardAudioPort; hosted Music retains shared browser playback without this native port."
+    },
     "core/carry-in.js": {
       "shell": "phone",
       "classification": "native",
@@ -176,6 +181,12 @@
         "phone"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/background-audio.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Android-only background playback transport; no separate common Music renderer."
     },
     "core/app-capture.js": {
       "loadedBy": [
