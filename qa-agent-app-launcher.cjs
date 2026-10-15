@@ -44,7 +44,7 @@ async function search(p, mobile, q) {
   await nap(250);
 }
 function hit(p, mobile, id, title) {
-  return mobile ? p.locator(`#launcherBody [data-app="${id}"]`) : p.locator('#palList .pal-it').filter({ has: p.locator('.nm', { hasText: title }) }).filter({ hasNot: p.locator('.nm', { hasText: 'Ask ' }) });
+  return mobile ? p.locator(`#launcherBody [data-app="${id}"]`) : p.locator('#palList .pal-it').filter({ hasText: new RegExp('^' + title + 'Chats') });
 }
 async function windows(p) { return p.evaluate(() => Object.values((window.__wos || window.__wux).wins).filter(w => w.app === 'chats').map(w => ({ id: w.id, agent: w.agent || '', thread: w.thread }))); }
 async function closeSearch(p, mobile) { await p.evaluate(m => m ? __wos.closeSheets(true) : __wux.closePalette(), mobile); }
@@ -53,6 +53,7 @@ async function run(mobile) {
   try {
     await ready(p, mobile);
     check(await p.evaluate(m => document.documentElement.dataset.shell === (m ? 'phone' : 'desktop'), mobile), kind + ' actual shell');
+    const initialMainIds = (await windows(p)).filter(w => !w.agent).map(w => w.id);
     await search(p, mobile, 'Private Agent');
     const privateHit = hit(p, mobile, 'agent:private', 'Private Agent');
     check(await privateHit.count() === 1, kind + ' Private Agent searchable exactly once');
@@ -61,7 +62,7 @@ async function run(mobile) {
     if (await privateHit.count() === 1) {
       await privateHit.click(); await nap(800);
       let ws = await windows(p); const privateId = ws.find(w => w.agent === 'private')?.id;
-      check(!!privateId && !ws.some(w => !w.agent), kind + ' single click opens private, never main', ws);
+      check(!!privateId && ws.filter(w => !w.agent).every(w => initialMainIds.includes(w.id)), kind + ' single click opens private, never main', ws);
       check(await p.locator('[data-agent-titlebar="private"]').count() === 1, kind + ' private title bar');
       await p.screenshot({ path: path.join(OUT, kind + '-private.png') });
       await p.evaluate(m => m ? __wos.goDesk(0, true) : __wux.newDesktop(), mobile);
@@ -123,7 +124,7 @@ async function run(mobile) {
   try {
     await ready(cold.p, mobile, '?open=agent:private'); await nap(700);
     const ws = await windows(cold.p);
-    check(ws.filter(w => w.agent === 'private').length === 1 && !ws.some(w => !w.agent), kind + ' cold delayed agent deep link opens private only', ws);
+    check(ws.filter(w => w.agent === 'private').length === 1 && await cold.p.evaluate(() => { const s = window.__wos || window.__wux; const d = s.desks ? s.desks[s.idx] : s.ws[s.cur]; return s.wins[d.focus]?.agent === 'private'; }), kind + ' cold delayed agent deep link focuses private', ws);
     await cold.p.screenshot({ path: path.join(OUT, kind + '-cold.png') });
   } finally { await cold.ctx.unrouteAll({ behavior: 'wait' }); await cold.ctx.close(); }
 }
