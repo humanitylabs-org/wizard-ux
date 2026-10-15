@@ -119,7 +119,11 @@ async function load(){
   if(local){({doc,rev,ops,selected,seq}=local);ledger=new SpeechLedger(local.drafts||{});for(const s of Object.values(ledger.items))if(s.status==='draft')s.status='unconfirmed';}
   try{const remote=await request('./api/document');remoteRead=true;rev=remote.rev;doc=remote.document;for(const op of ops)apply(doc,op);const speech=await request('./api/speech');for(const s of speech.utterances){if(!doc.applied.includes('speech-'+s.id)){ledger.event({...s,type:s.status==='final'?'final':'delta'});if(s.status!=='final')ledger.items[s.id].status='unconfirmed';}}}catch(e){note('Offline recovery. Changes stay on this device until the server returns.');}
   if(!doc.nodes.some(n=>n.id===selected))selected=doc.nodes[0].id;settle();render();await remember();if(ops.length)await save();else $('save').textContent=remoteRead?'Saved':'On this device only';
-  const pending=await W.capture.pending();if(pending.length)note('Wizard retains audio from an interrupted take. Open menu → Recover.');
+  const existing=W.capture.current();
+  if(existing&&existing.phase!=='starting'){
+   session=await W.capture.start({kind:'outline',pcm:true,resumeId:existing.id});startedAt=Date.now()-(session.getInfo().durationMs||0);paused=!!session.getInfo().paused;stopObserved=false;
+   liveTimer=setInterval(liveUI,1000);liveUI();note('Wizard is still recording audio from before this view reopened. Live words disconnected; tap Recording to stop and save the original take.');
+  }else{const pending=await W.capture.pending();if(pending.length)note('Wizard retains audio from an interrupted take. Open menu → Recover.');}
  }catch(e){note('Could not load recovery: '+e.message);render();}
 }
 load();
