@@ -17,6 +17,7 @@ registry=json.load(urllib.request.urlopen('https://music-background.staging.wiza
 bootstrap=json.load(urllib.request.urlopen('https://music-background.staging.wizard001.com/wizard/v1/bootstrap',timeout=20))
 state={'tracks':[], 'events':[], 'bytes':0,'gets':[], 'refills':0,'batches':{},'next':3,'down':False}
 LOCK=threading.Lock(); em=None;server=None
+stale_release=threading.Event();stale_release.set()
 with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
     fcntl.flock(worker,fcntl.LOCK_EX)
     try:
@@ -86,7 +87,10 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
                             state['batches'][key]=batch
                         batch=state['batches'][key]
                         delay=state.get('delay_more',0)
-                    # Capture the old policy response before delaying its arrival.
+                    # Hold the captured stale response until the UI callback has completed.
+                    if any(t.get('id')=='yt:stale000001' for t in batch):
+                        stale_release.wait(25)
+                        state['stale_delivered']=True
                     if delay:time.sleep(delay)
                     return self.body(200,{'tracks':batch})
                 if p=='/wizard/v1/apps':return self.body(200,registry)
@@ -111,7 +115,8 @@ with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
                     t=next((t for t in state['tracks'] if t['id']==data.get('id')),state['tracks'][0]);return self.body(200,{'ok':True,'track':t,'drop':[],'learned':None})
                 if p=='/qa/offline':state['down']=bool(data.get('down'));return self.body(200,{'ok':True})
                 if p=='/qa/reset':state['next']=int(data.get('next',3));state['batches']={};return self.body(200,{'ok':True})
-                if p=='/qa/stale-next':state['stale_next']=True;state['stale_started']=False;return self.body(200,{'ok':True})
+                if p=='/qa/stale-next':state['stale_next']=True;state['stale_started']=False;state['stale_delivered']=False;stale_release.clear();return self.body(200,{'ok':True})
+                if p=='/qa/release-stale':stale_release.set();return self.body(200,{'ok':True})
                 if p=='/qa/more-delay':state['delay_more']=float(data.get('seconds',0));return self.body(200,{'ok':True})
                 if p=='/qa/fail-stream':state['fail_stream']=data.get('id');return self.body(200,{'ok':True})
                 return self.body(403,{'error':'isolated_qa'})

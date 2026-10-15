@@ -73,14 +73,15 @@ let browser;
  check('queue policy mutation fences out stale in-flight continuation',fenceAfter.generation>fenceBefore.generation&&!fenceAfter.queue.slice(fenceAfter.index+1).some(t=>t.id===fixture.tracks[12].id),fenceAfter);
  // Actual UI callback, not a direct engine/bridge invocation: successful drop:[]
  // must fence the response already captured under the pre-like policy.
- await post('/qa/reset',{});await post('/qa/more-delay',{seconds:3});await post('/qa/stale-next',{});
+ await post('/qa/reset',{});await post('/qa/more-delay',{seconds:0});await post('/qa/stale-next',{});
  await audio('load',{queue:[{...fixture.tracks[0],stream:'http://10.0.2.2:'+http+fixture.tracks[0].stream,art:'http://10.0.2.2:'+http+fixture.tracks[0].art}],index:0,station});
  for(let i=0;i<30;i++){if((await server('/qa/stats')).stale_started)break;await wait(100);}
  const tasteBefore=await snap(),staleStarted=(await server('/qa/stats')).stale_started;
  await frame().locator('.music-mini-open').click();await frame().locator('.music-like').click();
  for(let i=0;i<30;i++){if((await snap()).generation>tasteBefore.generation)break;await wait(100);}
- await wait(3500);const tasteAfter=await snap(),tasteEvents=(await server('/qa/stats')).events;
- check('actual successful empty-drop like callback rejects delayed native stale continuation',staleStarted&&tasteAfter.generation>tasteBefore.generation&&!tasteAfter.queue.some(t=>t.id==='yt:stale000001')&&tasteEvents.some(e=>e.action==='like'),{before:tasteBefore.generation,after:tasteAfter.generation,staleStarted,queue:tasteAfter.queue.map(t=>t.id)});
+ const heldUntilFeedback=!(await server('/qa/stats')).stale_delivered;
+ await post('/qa/release-stale',{});await wait(2000);const tasteAfter=await snap(),tasteEvents=(await server('/qa/stats')).events;
+ check('actual successful empty-drop like callback rejects delayed native stale continuation',heldUntilFeedback&&staleStarted&&tasteAfter.generation>tasteBefore.generation&&!tasteAfter.queue.some(t=>t.id==='yt:stale000001')&&tasteEvents.some(e=>e.action==='like'),{before:tasteBefore.generation,after:tasteAfter.generation,staleStarted,heldUntilFeedback,queue:tasteAfter.queue.map(t=>t.id)});
  await post('/qa/more-delay',{seconds:0});await frame().getByRole('button',{name:'Close player',exact:true}).click();
  // Correlated frame/session adversaries: native main-frame port alone is never a hosted-app permission.
  const stale=await audio('pause',{sessionId:'obsolete'});check('stale session commands refused',!stale.ok);
@@ -90,7 +91,10 @@ let browser;
  await page.evaluate(()=>document.querySelector('#audio-evil')?.remove());
  const hold=await snap();await page.evaluate(()=>{const id=Object.values(__wos.wins).find(w=>w.appId==='wizard-music')?.id;__wos.closeWin(id,true);});await wait(1500);
  const service=await sx('dumpsys activity services '+PKG);check('closing Music UI leaves foreground audio service alive',service.result.includes('BackgroundAudioService'));
- await page.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['wizard-music']));await wait(900);await frame().locator('.music-row-main').first().waitFor();const reattached=await snap();check('recreated Music UI sees live native session',reattached.sessionId===hold.sessionId&&reattached.wantPlaying,reattached);
+ await page.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['wizard-music']));
+ for(let i=0;i<80&&!frame();i++)await wait(250);
+ if(!frame())throw new Error('Music frame did not reopen');
+ await frame().locator('.music-row-main').first().waitFor();const reattached=await snap();check('recreated Music UI sees live native session',reattached.sessionId===hold.sessionId&&reattached.wantPlaying,reattached);
  // Nested Now Playing Back is an actual Android key, and must retain Wizard.
  await frame().locator('.music-mini-open').click();await wait(300);await sx('input keyevent KEYCODE_BACK');await wait(600);const top=await sx('dumpsys activity activities');check('Android nested Back retains Wizard Activity',top.result.includes(PKG+'/ai.wizards.os.MainActivity'));
  const last=await server('/qa/stats');const events=last.events.filter(e=>e.action==='played');const keys=events.map(e=>e.eventId);check('native only reports playback; no UI duplicates',keys.length>0&&keys.every(Boolean)&&new Set(keys).size===keys.length,events);
