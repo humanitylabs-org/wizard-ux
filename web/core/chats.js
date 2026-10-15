@@ -255,7 +255,7 @@ window.WizCore.chats = function createChats(H) {
   // "a little popover, pillbox sort of thing to let me know a message is sending… I don't need all my threads
   // shifted down"). It never takes layout space. Tap opens the reply's thread; Retry/Edit appear only when stuck.
   function sendPill(items, w) {
-    items = items.filter(it => !(it.state === 'empty' && it.threadHidden));
+    items = items.filter(it => !(['empty', 'held'].includes(it.state) && it.threadHidden));
     const c = ch(w.id), ids = items.map(it => it.id).join(',');
     // The moment the last message leaves the phone, flash "Sent" for a beat, then the pill goes (per window).
     if (c.pillIds && !ids && LIVE.ok && c.pillIds.split(',').every(id => OUTBOX?.get(id)?.state === 'sent')) {
@@ -280,6 +280,7 @@ window.WizCore.chats = function createChats(H) {
       btns = one ? `<button type="button" class="pbtn ghost" data-obdismiss="${esc(one.id)}">Dismiss</button>` : '';
     } else if (items.every(it => it.state === 'held')) {
       label = 'Kept on this device · not queued';
+      btns = one ? `<button type="button" class="pbtn ghost" data-obdismiss="${esc(one.id)}">Dismiss</button>` : '';
     } else if (failed.length) {
       cls = ' fail';
       label = one ? `Not sent · ${esc(clip(name(one), 34))}` : `${failed.length} not sent`;
@@ -982,7 +983,7 @@ window.WizCore.chats = function createChats(H) {
     if (OUTBOX?.quarantined(p.id)) return '<span class="pst wait">Waiting for device storage verification · not sending</span>';
     if (p.state === 'unconfirmed') return `<span class="pst fail">${esc(p.error)}</span>`;
     if (p.state === 'empty') return `<span class="pst fail">No speech detected · recording kept</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry transcription</button><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
-    if (p.state === 'held') return '<span class="pst">Kept on this device · not queued</span>';
+    if (p.state === 'held') return `<span class="pst">Kept on this device · not queued</span><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
     if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`;
     if (p.state === 'waiting') return `<span class="pst wait">${esc(p.error || 'Couldn’t reach Wizard')} · retrying</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>`;
     const agent = esc(window.WizConfig.agent());
@@ -993,7 +994,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function pendingHtml(p, c) {
     const files = (p.files || []).filter(f => f !== p.audioFile);
-    const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text || p.state === 'empty' ? '' : ' · words come when it sends'}</span></div>` : '';
+    const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text || ['empty', 'held'].includes(p.state) ? '' : ' · words come when it sends'}</span></div>` : '';
     const words = p.text || p.typed || ''; // a voice note not yet transcribed shows the typed words riding with it
     return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}" data-ob="${esc(p.id)}"><div class="bub">${voice}${userMedia(c || { media: [] }, files, [])}${words ? md(words) : ''}</div><div class="pmeta">${pendingState(p)}</div></div>`;
   }
