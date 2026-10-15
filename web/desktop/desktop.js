@@ -372,7 +372,7 @@
     if (!f) return;
     // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url });
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: sid => CHATS.openHosted(w.id, f, sid), isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && !CHATS.isHosted(w.id) });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
@@ -964,9 +964,9 @@
     if (VOICE.state === 'idle') {
       if (action === 'send') return 'none';
       vMode = 'talk'; vNewChat = forceNew; vNewKey = newKey;
-      const f = focused(); vTarget = !forceNew && f?.app === 'chats' && (f.thread || f.agent) ? f.id : null;
+      const f = focused(); vTarget = !forceNew && (f?.app === 'chats' || CHATS.isHosted(f?.id)) && (f.thread || f.agent) ? f.id : null;
       const capability = window.WizAppServices?.voiceInput, app = APP[f?.appId];
-      vConversation = !forceNew ? (capability ? capability.pin(winEl(f?.id)?.querySelector('iframe'), app?.id)
+      vConversation = !forceNew && !CHATS.isHosted(f?.id) ? (capability ? capability.pin(winEl(f?.id)?.querySelector('iframe'), app?.id)
         : app?.receives_voice_input === true ? { appId: app.id, token: 'unavailable', label: app.name } : null) : null;
       vReply = vTarget && f.thread ? { wid: f.id, sid: f.thread, steerRunId: CHATS.WORKING_ST.has(LIVE.session(f.thread)?.status) ? LIVE.session(f.thread)?.runId || '' : '' } : null;
       vContext = forceNew ? 'Explicit general-agent voice request. No foreground app or private thread context shared.' : viewContext(vTarget, 'voice, aimed at this thread');
@@ -1162,6 +1162,7 @@
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
     if (homeOpen) return '';
+    if (focused() && CHATS.isHosted(focused().id)) return CHATS.threadBack(focused());
     if (ws[cur].mono) { toggleMono(); return 'mono'; }
     // Back navigates while recording; only the explicit Cancel control may discard audio.
     const f = focused();
@@ -1292,7 +1293,7 @@
   if (LIVE) LIVE.onChange(() => {
     paintBar(); renderInbox(); CHATS.markVisibleThreadsSeen();
     for (const id of Object.keys(W)) {
-      const w = W[id]; if (w.app !== 'chats') continue;
+      const w = W[id]; if (w.app !== 'chats' && !CHATS.isHosted(id)) continue;
       const el = winEl(id); if (!el) continue;
       const lp = el.querySelector(`[data-chats="${id}::list"]`);
       if (lp && !lp.contains(document.activeElement) && !CHATS.holdList(id + '::list')) CHATS.renderChatList(listWin(id), lp);
@@ -1314,7 +1315,7 @@
     for (const id of Object.keys(W)) if (W[id].app === 'chats' && W[id].thread === it.sessionId) setTimeout(() => W[id] && CHATS.loadThread(W[id], true), 1500);
   });
   // Open threads poll a little faster while Archimedes works.
-  setInterval(() => { if (document.hidden) return; for (const id of ws[cur].wins) { const w = W[id]; if (w?.app === 'chats' && w.thread && w.thread !== '__new__') CHATS.loadThread(w); } }, 4000);
+  setInterval(() => { if (document.hidden) return; for (const id of ws[cur].wins) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread && w.thread !== '__new__') CHATS.loadThread(w); } }, 4000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { LIVE?.refresh(); CHATS.markVisibleThreadsSeen(); } });
 
   /* ---------------- toast ---------------- */

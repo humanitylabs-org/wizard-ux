@@ -37,11 +37,11 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
-  function attach(frame, { appId, path } = {}) {
+  function attach(frame, { appId, path, openThread, isVisible } = {}) {
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
-    const st = { frame, appId, url, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
+    const st = { frame, appId, url, openThread, isVisible, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); };
@@ -104,6 +104,13 @@
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); return { version: VERSION, hosted: true, appId: st.appId }; },
+      view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
+      nav: Object.freeze({ openThread(id) {
+        check();
+        // This bounded workflow is admitted only for the installed Manager's current document.
+        if (st.appId !== 'wizard-manager' || st.isVisible?.() !== true || typeof id !== 'string' || !id || id.length > 512 || /[\s\x00-\x1f]/.test(id) || id === '__new__') throw fault('Thread navigation unavailable');
+        return st.openThread?.(id) === true;
+      } }),
       share: Object.freeze({ text(data) {
         check();
         if (data?.url && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(String(data.url))) {

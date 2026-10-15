@@ -1308,7 +1308,7 @@
       if (f._watched) return; f._watched = true;
       // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
-      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url });
+      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: sid => CHATS.openHosted(w.id, f, sid), isVisible: () => desks[idx].wins.includes(w.id) && !CHATS.isHosted(w.id) });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
@@ -1610,7 +1610,7 @@
       if (cr) { const chn = $('.review', we)._chain; const k = +cr.dataset.crumb; if (k < chn.length - 1) setZ(id, chn[k], 'out'); return; }
       const wt = e.target.closest('[data-wizthread]'); if (wt) return openWizardThread(wt.dataset.wizthread);
     }
-    if (w.app === 'chats' && CHATS.click(e, id)) return;
+    if ((w.app === 'chats' || CHATS.isHosted(id)) && CHATS.click(e, id)) return;
   });
   track.addEventListener('dblclick', e => {
     const bar = e.target.closest('.wbar'); if (!bar || e.target.closest('[data-wact]')) return;
@@ -1881,7 +1881,7 @@
     renderMoons(); refreshHome(); markVisibleThreadsSeen(); refreshRecStrips();
     if (sheet === 'inbox') renderInbox(); if (sheet === 'launcher') renderLauncher($('#search').value, true);
     for (const id of Object.keys(W)) {
-      const w = W[id]; if (w.app !== 'chats') continue;
+      const w = W[id]; if (w.app !== 'chats' && !CHATS.isHosted(id)) continue;
       const el = track.querySelector(`[data-chats="${id}"]`); if (!el) continue;
       if (!w.thread) { if (!el.contains(document.activeElement) && !CHATS.holdList(id)) renderChatList(w, el); }
       else loadThread(w);
@@ -1891,7 +1891,7 @@
   // Open threads poll a little faster than the session list while Archimedes works.
   setInterval(() => {
     if (document.hidden) return;
-    for (const id of desks[idx].wins) { const w = W[id]; if (w?.app === 'chats' && w.thread && w.thread !== '__new__') loadThread(w); }
+    for (const id of desks[idx].wins) { const w = W[id]; if ((w?.app === 'chats' || CHATS.isHosted(id)) && w.thread && w.thread !== '__new__') loadThread(w); }
   }, 4000);
 
   /* ---------------- toast ---------------- */
@@ -2677,7 +2677,7 @@
       return { id, mode: 'auto', kind: w.thread ? 'chat thread' : 'agent chats', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
         name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats` };
     }
-    if (w.app === 'chats' && w.thread) return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, name: w.thread === '__new__' ? 'New chat' : `Chats thread “${winTitle(w)}”` };
+    if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, name: w.thread === '__new__' ? 'New chat' : `Chats thread “${winTitle(w)}”` };
     if (w.app === 'frame' && w.from && w.from.sid) return { id, mode: '', kind: 'review', review: true, thread: w.from.sid, threadTitle: w.from.title || '', name: `Review of ${winTitle(w)}`, url: frameHref(id) || w.url };
     if (w.app === 'frame') return { id, mode: '', kind: 'app', name: winApp(w).name, url: frameHref(id) || winApp(w).url };
     if (w.app === 'chats') return { id, mode: '', kind: 'thread list', name: 'Chats' };
@@ -2699,7 +2699,7 @@
     const nameOf = x => agentWin(W[x]) && agentApp(W[x]).private ? `${agentApp(W[x]).name} chats (private agent)` : winTitle(W[x]);
     const capability = window.WizAppServices?.voiceInput;
     const app = APP[W[fid]?.appId];
-    const conversation = capability ? capability.pin(winEl(fid)?.querySelector('iframe'), app?.id)
+    const conversation = CHATS.isHosted(fid) ? null : capability ? capability.pin(winEl(fid)?.querySelector('iframe'), app?.id)
       : app?.receives_voice_input === true ? { appId: app.id, token: 'unavailable', label: app.name } : null;
     return { id: fid, desk: idx, view, screen, conversation, others: d.wins.filter(x => x !== fid).map(nameOf) };
   }
@@ -2734,7 +2734,7 @@
     if (v.review) return sendReview(v, text, snap?.audio || null, [], snap?.route, snap?.custodyId);
     const w = W[v.id]; if (!w) return false;
     // The thread that was open when James sent, even if the window shows another one by now.
-    if (w.app === 'chats' && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
+    if ((w.app === 'chats' || v.kind === 'chat thread') && (v.thread || w.thread)) { return sendChat(v.id, text, 'voice, aimed at this thread', snap?.audio || null, { custodyId: snap?.custodyId, sid: v.thread || w.thread, route: snap?.route, seal: snap?.seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
     // No unacknowledged postMessage delivery to arbitrary/self-asserted frames.
     return false;
   }
@@ -3193,6 +3193,7 @@
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet) { closeSheets(); return 'sheet'; }
     const d = desks[idx], f = W[d.focus];
+    if (f && CHATS.isHosted(f.id)) return CHATS.threadBack(f);
     if (f) {
       if (f.app === 'chats' && f.thread) return CHATS.threadBack(f);
       if (f.app === 'chats' && (CHATS.hasFilter(f) || CHATS.ch(f.id).q)) {

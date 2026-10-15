@@ -43,6 +43,34 @@ window.WizCore.chats = function createChats(H) {
   const vib = ms => { if (H.vib) return H.vib(ms); try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
   /* ---- end shims ---- */
 
+  // A hosted thread borrows the exact standard chat UI without replacing its app iframe.
+  // Entries and thread fields are ephemeral: shell persistence must still restore the app.
+  const hosted = new Map();
+  function openHosted(wid, frame, sid) {
+    const w = W[wid];
+    if (!w || w.appId !== 'wizard-manager' || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
+    if (hosted.has(wid)) closeHosted(wid);
+    const layer = document.createElement('div'); layer.className = 'chats hosted-thread'; layer.dataset.chats = wid;
+    layer.style.cssText = 'position:absolute;inset:0;z-index:5;background:var(--wz-base,var(--base,#15151d));display:flex;flex-direction:column;min-height:0';
+    const container = frame.parentElement;
+    const oldPosition = container.style.position; container.style.position = 'relative';
+    const previous = Object.getOwnPropertyDescriptor(w, 'thread');
+    Object.defineProperty(w, 'thread', { value: null, writable: true, configurable: true, enumerable: false });
+    const entry = { frame, layer, container, oldPosition, previous, w };
+    hosted.set(wid, entry);
+    frame.inert = true; frame.style.visibility = 'hidden'; container.append(layer);
+    openChat(wid, sid); return true;
+  }
+  function closeHosted(wid) {
+    const entry = hosted.get(wid); if (!entry) return false;
+    saveDraft(wid); const c = ch(wid); c.readNav = (c.readNav || 0) + 1;
+    c.trail = []; c.loadedFor = ''; c.draftFor = '';
+    hosted.delete(wid); entry.layer.remove(); entry.frame.inert = false; entry.frame.style.visibility = '';
+    entry.container.style.position = entry.oldPosition;
+    if (entry.previous) Object.defineProperty(entry.w, 'thread', entry.previous); else delete entry.w.thread;
+    return true;
+  }
+  const isHosted = wid => hosted.has(wid);
   const CH = {}; // per window: { q, turns, loadedFor, loading, pending, err, at, show, files }
   const ch = id => (CH[id] = CH[id] || { q: '', turns: null, loadedFor: '', pending: [], at: 0 });
   // Parsing, Markdown, Bangkok time, drafts, copy/share and the media viewer live in chat-kit.js.
@@ -1029,7 +1057,7 @@ window.WizCore.chats = function createChats(H) {
     if (sid !== '__new__') LIVE.markSeen(sid);
     renderChats(w); applyLayout(deskOf(wid));
   }
-  function chatsBack(w) { if (w.thread) saveDraft(w.id); const c = ch(w.id); c.readNav = (c.readNav || 0) + 1; c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
+  function chatsBack(w) { if (closeHosted(w.id)) return; if (w.thread) saveDraft(w.id); const c = ch(w.id); c.readNav = (c.readNav || 0) + 1; c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
   /* One step back from a thread: to the thread it was opened from (trail), else to the list. */
   function threadBack(w) {
     const c = ch(w.id), prev = (c.trail || []).pop();
@@ -1042,7 +1070,13 @@ window.WizCore.chats = function createChats(H) {
    * newer navigation (including an A → B → A round trip). */
   const PHONE = () => (document.documentElement.dataset.shell || 'phone') !== 'desktop';
   function leaveAfterSend(wid, sid, isNew, how = '') {
-    const w = W[wid]; if (!w || !sid || w.thread !== sid || !(isNew || PHONE())) return false;
+    const w = W[wid];
+    if (w && sid && w.thread === sid && hosted.has(wid)) {
+      const entry = hosted.get(wid); closeHosted(wid);
+      const nav = ch(wid).readNav;
+      return { restore() { if (W[wid] === w && ch(wid).readNav === nav && !hosted.has(wid) && entry.frame.isConnected) openHosted(wid, entry.frame, sid); } };
+    }
+    if (!w || !sid || w.thread !== sid || !(isNew || PHONE())) return false;
     const c = ch(wid), trail = [...(c.trail || [])];
     if (!isNew && trail.length) threadBack(w);
     else { c.readNav = (c.readNav || 0) + 1; c.trail = []; w.thread = null; save(); c.loadedFor = ''; c.draftFor = ''; }
@@ -1201,7 +1235,7 @@ window.WizCore.chats = function createChats(H) {
   function markVisibleThreadsSeen() {
     if (!LIVE?.ok || !attended()) return;
     for (const id of desks[idx].wins) {
-      const w = W[id]; if (w?.app !== 'chats' || !w.thread || w.thread === '__new__') continue;
+      const w = W[id]; if ((w?.app !== 'chats' && !isHosted(id)) || !w.thread || w.thread === '__new__') continue;
       const s = LIVE.session(w.thread); if (s && LIVE.isNew(s)) LIVE.markSeen(w.thread);
     }
   }
@@ -1325,7 +1359,7 @@ window.WizCore.chats = function createChats(H) {
     ta.setSelectionRange(a + text.length, a + text.length); ch(id).draft = ta.value; saveDraft(id); growTa(ta); syncSend(ta.form, ch(id));
     return true;
   }
-  const forget = id => { clearReading(id); delete CH[id]; };
+  const forget = id => { closeHosted(id); clearReading(id); delete CH[id]; };
   function justPressed() { return Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
   const holdList = id => {
@@ -1355,7 +1389,7 @@ window.WizCore.chats = function createChats(H) {
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
-  return { CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? winAgent(W[wid]) : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? winAgent(W[wid]) : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
     KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
 };
