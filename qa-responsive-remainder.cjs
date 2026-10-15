@@ -79,7 +79,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
  // Actual recorder controls, common screenshot adapter and actual upload route on BOTH shells.
  for(const desktop of [false,true]){
   const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';if(!desktop)await p.setViewportSize({width:360,height:800});
-  await f.ctx.route('**/wizard/files/upload',async route=>{const req=route.request();await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({file:{id:'screenshot-fixture',filename:req.headers()['x-wizard-filename'],mime:'image/png',bytes:req.postDataBuffer()?.length||0}})});});
+  await f.ctx.route('**/wizard/files/upload',async route=>{const req=route.request();if(req.headers()['x-wizard-mime']!=='image/png')return route.fallback();await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({file:{id:'screenshot-fixture',filename:req.headers()['x-wizard-filename'],mime:'image/png',bytes:req.postDataBuffer()?.length||0}})});});
   await p.evaluate(()=>{window.__capturePending=null;window.wizardScreenPort={postMessage(id){if(id.startsWith('cancel:'))return;window.__capturePending=id;}};});
   await p.locator(`[data-chats="${f.wid}"] .ch-mic`).click();
   await sleep(1100);await p.locator(desktop?'#voicePause':'#arcPause').click();
@@ -103,7 +103,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
  // Failed attachment upload retains original File and take; actual Retry uses those bytes.
  for(const desktop of [false,true]){
   const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';if(!desktop)await p.setViewportSize({width:360,height:800});let attempts=0;
-  await f.ctx.route('**/wizard/files/upload',r=>{attempts++;return r.fulfill({status:attempts===1?503:200,contentType:'application/json',body:JSON.stringify(attempts===1?{error:'Fixture upload unavailable'}:{file:{id:'retried-fixture',filename:'kept.txt',mime:'text/plain',bytes:r.request().postDataBuffer()?.length||0}})});});
+  await f.ctx.route('**/wizard/files/upload',r=>{if(r.request().headers()['x-wizard-mime']!=='text/plain')return r.fallback();attempts++;return r.fulfill({status:attempts===1?503:200,contentType:'application/json',body:JSON.stringify(attempts===1?{error:'Fixture upload unavailable'}:{file:{id:'retried-fixture',filename:'kept.txt',mime:'text/plain',bytes:r.request().postDataBuffer()?.length||0}})});});
   await p.locator(`[data-chats="${f.wid}"] .ch-mic`).click();await sleep(1100);
   await p.locator(desktop?'#voiceFileInput':'[data-voice-files]').setInputFiles({name:'kept.txt',mimeType:'text/plain',buffer:Buffer.from('Original file bytes')});await sleep(180);
   await p.evaluate(desktop=>desktop?__wux.talk('send'):__wos.finishVoice(),desktop);
@@ -114,15 +114,15 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   await f.done(label+' upload failure');
  }
  // Desktop browser focused-field seals: cursor retained, changed/replaced field never receives late STT.
- for(const stale of [false,true]){
-  const f=await boot(true),p=f.p;f.state.sttDelay=300;
+ for(const desktop of [false,true])for(const stale of [false,true]){
+  const f=await boot(desktop),p=f.p,label=desktop?'desktop':'phone';if(!desktop)await p.setViewportSize({width:360,height:800});f.state.sttDelay=300;
   await p.evaluate(()=>{const el=document.createElement('textarea');el.id='dictation-target';el.value='before AFTER';el.style.cssText='position:fixed;top:200px;left:20px;z-index:1000';document.body.append(el);el.focus();el.setSelectionRange(7,12);});
-  await p.locator('#dictateBtn').click();await sleep(1100);
+  await p.locator(desktop?'#dictateBtn':'#orbWrap').click();await sleep(1100);
   if(stale)await p.locator('#dictation-target').fill('Changed while recording');
-  await p.evaluate(()=>__wux.dictate());await sleep(100);
+  await p.evaluate(desktop=>desktop?__wux.dictate():__wos.finishVoice(),desktop);await p.waitForFunction(desktop=>(desktop?__wux:__wos).voice==='idle',desktop);await sleep(100);
   const val=await p.locator('#dictation-target').inputValue();
-  ok(stale?val==='Changed while recording':val==='before spoken original words',`desktop: ${stale?'stale focused field preserved':'dictation replaces captured cursor range'}`,val);
-  ok(!f.state.posts.length,`desktop: ${stale?'stale':'cursor'} dictation cannot send to agent`);await f.done('desktop focused dictation');
+  ok(stale?val==='Changed while recording':val==='before spoken original words',`${label}: ${stale?'stale focused field preserved':'dictation replaces captured cursor range'}`,val);
+  ok(!f.state.posts.length,`${label}: ${stale?'stale':'cursor'} dictation cannot send to agent`);await f.done(label+' focused dictation');
  }
  // Normal desktop global talk recognizes an unambiguous local command; no backend message.
  {const f=await boot(true);f.state.text='show this week';await f.p.evaluate(()=>__wux.talk('start'));await sleep(1100);const result=await f.p.evaluate(()=>__wux.talk('send'));ok(result==='local'&&!f.state.posts.length,'desktop: normal global talk dispatches local commands instead of agent-send');ok(await f.p.locator('.review').count()>0,'desktop: normal voice opens actual shared review');await f.done('desktop automatic local command');}
