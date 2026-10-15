@@ -91,10 +91,13 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
         return value
     def touch(selector='#orbWrap',hold=0.0):
         box=ev("(()=>{const e=[...document.querySelectorAll("+json.dumps(selector)+")].find(e=>{const r=e.getBoundingClientRect();return r.width&&r.height&&r.x>=0&&r.y>=0&&r.right<=innerWidth&&r.bottom<=innerHeight});if(!e)throw Error('missing visible control');const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
-        # Let the compositor own short-tap timing; two raw socket writes can be
-        # separated by JNI stalls/TCP delayed ACKs and accidentally become a hold.
+        # Submit both touch boundaries without round-trip or compositor waits.
+        # A synthesized gesture may defer release behind synchronous JNI work.
         if not hold:
-            pg.call('Input.synthesizeTapGesture',x=box['x'],y=box['y'],duration=60,tapCount=1,gestureSourceType='touch')
+            import socket
+            pg.s.setsockopt(socket.IPPROTO_TCP,socket.TCP_NODELAY,1)
+            pg._send({'id':2000011,'method':'Input.dispatchTouchEvent','params':{'type':'touchStart','touchPoints':[dict(box,id=1)],'timestamp':time.time()}})
+            pg._send({'id':2000012,'method':'Input.dispatchTouchEvent','params':{'type':'touchEnd','touchPoints':[],'timestamp':time.time()+.06}})
         else:
             pg._send({'id':2000001,'method':'Input.dispatchTouchEvent','params':{'type':'touchStart','touchPoints':[dict(box,id=1)]}})
             pg.pump(hold,every=.02)
