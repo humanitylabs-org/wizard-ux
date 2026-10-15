@@ -217,6 +217,8 @@ class Page:
         buf = b''
         while b'\r\n\r\n' not in buf: buf += self.s.recv(4096)
         self.buf = buf.split(b'\r\n\r\n', 1)[1]
+        if os.environ.get('QA_INTEGRATED_ONLY') == '1':
+            self.call('Fetch.enable', patterns=[{'urlPattern':'*'}]); return
         self.call('Fetch.enable', patterns=[{'urlPattern': '*/mizel-qa/*'}, {'urlPattern': '*/mizel-live/*'}, {'urlPattern': 'https://example.org/*'},
                                             {'urlPattern': '*/meetings/api/*'}, {'urlPattern': '*/hermes/*'}, {'urlPattern': '*/v1/*'}, {'urlPattern': '*/wizard/*'}])
     def _send(self, obj):
@@ -240,6 +242,7 @@ class Page:
             msg += payload
             if b1 & 0x80: return json.loads(msg.decode())
     def _paused(self, d):
+        if os.environ.get('QA_INTEGRATED_ONLY') == '1': return integrated_fixture.serve(self,d)
         r = d['params']['request']; url = r['url']; rid = d['params']['requestId']
         pu = urllib.parse.urlparse(url)
         key = 'example.org' + pu.path if pu.hostname == 'example.org' else pu.path
@@ -334,6 +337,10 @@ if os.environ.get('QA_SHARED_CAPTURE_ONLY') == '1':
     extra_pages, shared_hashes = shared_pages(P(__file__).resolve().parent.parent)
     PAGES.update(extra_pages)
 
+if os.environ.get('QA_INTEGRATED_ONLY') == '1':
+    from qa_orb_integrated import Fixture
+    integrated_fixture=Fixture(P(__file__).resolve().parent.parent,os.environ['QA_ADOPTION'],job)
+
 em = None; pg = None; summary = {'job': str(job), 'apk': str(apk), 'long_secs': LONG}
 print('job', job, flush=True)
 with (BASE / 'worker.lock').open('a') as lock:
@@ -363,7 +370,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         summary.update(version=ver, uid=uid, api=sx('getprop ro.build.version.sdk').strip())
         sx(f'run-as {PKG} mkdir -p files')
         sx(f"run-as {PKG} sh -c 'echo http://10.0.2.2:{FAKE} > files/qa_origin.txt'")
-        qa_cfg = {'pauseTimeoutMs': 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 2 if os.environ.get('QA_PCM_ONLY') == '1' or os.environ.get('QA_HANDOFF_ONLY') == '1' else 1, 'staticNotification': 1}
+        qa_cfg = {'pauseTimeoutMs': 120000 if os.environ.get('QA_INTEGRATED_ONLY') == '1' else 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 2 if os.environ.get('QA_PCM_ONLY') == '1' or os.environ.get('QA_HANDOFF_ONLY') == '1' or os.environ.get('QA_INTEGRATED_ONLY') == '1' else 1, 'staticNotification': 1}
         (job / 'qa_mizel.json').write_text(json.dumps(qa_cfg))
         sh(ADB, '-s', S, 'push', job / 'qa_mizel.json', '/data/local/tmp/qa_mizel.json')
         sx(f'run-as {PKG} cp /data/local/tmp/qa_mizel.json files/qa_mizel.json')
@@ -377,6 +384,10 @@ with (BASE / 'worker.lock').open('a') as lock:
             # intercepted trusted-origin fixture, not from chrome-error://.
             pg.call('Page.navigate', url=ORIGIN + '/mizel-qa/host.html')
             assert pg.pump(25, lambda: pg.ev("typeof mz==='function' && typeof wizardMizelPort==='object'"), .5)
+        if os.environ.get('QA_INTEGRATED_ONLY') == '1':
+            pg.call('Page.addScriptToEvaluateOnNewDocument',source="window.qaErrors=[];addEventListener('error',e=>qaErrors.push(e.message));addEventListener('unhandledrejection',e=>qaErrors.push(String(e.reason)));localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wos.voiceTipSeen','true');")
+            pg.call('Page.navigate',url=ORIGIN+'/wizard-os-home/')
+            assert pg.pump(30,lambda:pg.ev('!!window.__wos?.live?.ok'),.3)
         pg.ev("try {localStorage.setItem('wos.tour.v1','true'); window.WosTour?.finish('qa');}catch(e){}")
         pg.ev("new Promise(r => { const t0=Date.now(); const t = () => (window.__wos || Date.now()-t0>20000) ? r() : setTimeout(t, 200); t(); })")
         pg.ev("(() => { const c = document.querySelector('#coach'); if (c && !c.hidden) document.querySelector('#coachGo').click(); return true; })()")
@@ -387,6 +398,13 @@ with (BASE / 'worker.lock').open('a') as lock:
         # ------------------------------------------------ (f) origin scoping + iframe reach
         shell_port = pg.ev("typeof window.wizardMizelPort")
         check('bridge', 'trusted-origin main-frame fixture has wizardMizelPort' if os.environ.get('QA_HANDOFF_ONLY') == '1' else 'shell main frame has wizardMizelPort', shell_port == 'object', shell_port)
+        if os.environ.get('QA_INTEGRATED_ONLY') == '1':
+            from qa_orb_integrated import run as run_integrated
+            run_integrated(pg,sx,top,check,save,ORIGIN,PKG,ST,LOCK,integrated_fixture,tap_note_action,shot)
+            check('integrated','no native crash','ai.wizards.os' not in sx('logcat -b crash -d'))
+            summary.update(results=RES,passed=sum(r['ok'] for r in RES),failed=sum(not r['ok'] for r in RES))
+            save('summary.json',summary)
+            raise SystemExit(1 if summary['failed'] else 0)
         if os.environ.get('QA_HANDOFF_ONLY') == '1':
             from qa_orb_handoff_native import run as run_handoff
             run_handoff(pg,sx,top,check,save,ORIGIN,PKG,ST,LOCK)
@@ -708,6 +726,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         with LOCK:
             save('server.json', {'events': ST['events'], 'stops': ST['stops'], 'dups': ST['dups'], 'gets': ST['gets'],
                                  'chunks': {m: {str(k): {kk: vv for kk, vv in v.items()} for k, v in c.items()} for m, c in ST['chunks'].items()}})
+        if os.environ.get('QA_INTEGRATED_ONLY') == '1': integrated_fixture.save()
         if pg: pg.close()
         if em and os.environ.get('QA_KEEP_EMU') != '1':
             subprocess.run([ADB, '-s', S, 'emu', 'kill'], env=env, capture_output=True)
