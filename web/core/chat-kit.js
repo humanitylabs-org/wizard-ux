@@ -715,12 +715,14 @@
   function normalizeApproval(value) {
     const it = value && typeof value === 'object' ? value : {};
     const str = (...v) => v.find(x => typeof x === 'string' && x.trim()) || '';
-    const action = str(it.command, it.redacted_action, it.action, it.description);
+    const canonical = typeof it.prompt_id === 'string';
+    if (canonical && (!it.prompt_id || !Number.isSafeInteger(it.execution_generation))) return null;
+    const action = str(it.question, it.command, it.redacted_action, it.action, it.description);
     const choices = (Array.isArray(it.choices) ? it.choices : []).map(c => {
       if (typeof c === 'string') return { value: c, label: friendlyChoice(c) };
       const v = str(c?.value, c?.choice, c?.id); return v ? { value: v, label: str(c?.label, c?.name) || friendlyChoice(v) } : null;
     }).filter(Boolean);
-    return action && choices.length ? { requestId: str(it.request_id, it.id) || undefined, action, choices } : null;
+    return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices } : null;
   }
 
   window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, sharePayload, shareText, shareAssistantText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };

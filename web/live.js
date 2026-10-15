@@ -9,7 +9,7 @@
   const SCOPE = 'wizard-account-local';
   const SEEN_KEY = `${SEEN_BASE}:${SCOPE}`;
   const MAX = 500;
-  const READY_OR_ATTENTION = new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval']);
+  const READY_OR_ATTENTION = new Set(['completed', 'failed', 'interrupted', 'waiting_for_approval', 'unknown']);
   const WORKING = new Set(['submitting', 'queued', 'running', 'stopping']);
   const ALIASES = { started: 'running', accepted: 'queued', pending: 'queued', waiting: 'waiting_for_approval' };
   const WEEK = 7 * 864e5;
@@ -69,6 +69,7 @@
       title: String(item.title || item.name || 'Untitled chat'),
       source: item.source || '',
       status,
+      safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',
       archived: !!item.archived, hidden: !!item.hidden,
       messageCount: Number.isSafeInteger(item.message_count) ? item.message_count : undefined,
       lastUserAt, lastAssistantAt,
@@ -196,7 +197,7 @@
   const workDayStart = (now = Date.now()) => window.WizConfig.dayStart(now);
   const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
   const isErr = s => s.status === 'failed' || s.status === 'interrupted';
-  const needsApproval = s => s.status === 'waiting_for_approval';
+  const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
   const inWorking = s => WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s);
   const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
   const cardAt = s => inWorking(s) || isErr(s)
@@ -377,7 +378,7 @@
       for (const s of this.sessionsFor(agent)) {
         if (s.archived || s.hidden) continue;
         const def = this.deferred[keyOf(s)]?.deferred;
-        if (s.status === 'waiting_for_approval') { needs.push(s); continue; }
+        if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
         const at = Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt);
@@ -610,12 +611,21 @@
     },
     /* ---- the live run: status, approval, stop (api.ts run/approve/stop) ---- */
     async run(runId) { return (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${rq(runId)}`)).json(); },
-    async approve(runId, choice, requestId) {
+    async runCapabilities(runId) { return (await req(`/wizard/hermes/v1/capabilities${rq(runId)}`)).json(); },
+    async approve(runId, choice, requestId, generation) {
       const body = { choice }; if (requestId) body.request_id = requestId;
+      if (generation !== undefined) body.execution_generation = generation;
       await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/approval${rq(runId)}`, { method: 'POST', headers: J, body: JSON.stringify(body) });
     },
+    async clarify(runId, answer, requestId, generation) {
+      return req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/clarify${rq(runId)}`, { method: 'POST', headers: J, body: JSON.stringify({ request_id: requestId, execution_generation: generation, answer }) });
+    },
+    async resolveUnknown(runId, admissionId, generation) {
+      return req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/resolve-unknown${rq(runId)}`, { method: 'POST', headers: J, body: JSON.stringify({ admission_id: admissionId, execution_generation: generation }) });
+    },
     async stop(runId) {
-      await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, { method: 'POST' });
+      try { await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, { method: 'POST' }); }
+      catch (error) { STOPPING.delete(runId); await this.refresh(); throw error; }
       STOPPING.set(runId, Date.now());
       const s = [this.sessions, ...Object.values(this.agentSessions)].flat().find(x => x.runId === runId); if (s) { applyLocal(s); this.emit(); }
       setTimeout(() => this.refresh(), 2500);

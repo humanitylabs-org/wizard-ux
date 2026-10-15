@@ -88,7 +88,7 @@ window.WizCore.chats = function createChats(H) {
    * pre-fill one chip. Sections stay; empty ones hide. ✕ on a chip, or Back, takes it off. */
   const STATUS = {
     unread: { label: 'Unread', syn: ['new', 'unseen', 'unread messages', 'unread chats', 'unread threads'], empty: 'All caught up. Nothing unread.', ids: ag => { const g = LIVE.groups(ag || ''); return new Set(g.needs.concat(g.ready).map(x => x.id)); } },
-    needs: { label: 'Needs you', syn: ['needs me', 'need me', 'waiting on me', 'waiting', 'approval', 'approvals', 'approval needed', 'blocked'], empty: 'Nothing is waiting on you.', test: s => s.status === 'waiting_for_approval' || (!deferredOf(s) && attOf(s)?.state === 'needs_you') },
+    needs: { label: 'Needs you', syn: ['needs me', 'need me', 'waiting on me', 'waiting', 'approval', 'approvals', 'approval needed', 'blocked'], empty: 'Nothing is waiting on you.', test: s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you') },
     check: { label: 'Check', syn: ['qa', 'q a', 'test', 'to test', 'review', 'to review', 'your call', 'judge'], empty: 'Nothing to check right now.', test: s => !deferredOf(s) && attOf(s)?.state === 'check' },
     working: { label: 'Working', syn: ['running', 'in progress', 'busy', 'active'], empty: 'Nothing is working right now.', ids: ag => new Set((LIVE.workGroups(ag ? LIVE.sessionsFor(ag) : undefined).working || []).map(x => x.id)) },
     yesterday: { label: 'Yesterday', syn: ['from yesterday'], empty: 'Nothing from yesterday.', ids: ag => new Set((LIVE.workGroups(ag ? LIVE.sessionsFor(ag) : undefined).yesterday || []).map(x => x.id)) },
@@ -157,16 +157,16 @@ window.WizCore.chats = function createChats(H) {
   const STI_LAB = { needs: 'Needs you', check: 'Your call', done: 'Done', fyi: 'FYI', deferred: 'Deferred', approval: 'Needs approval', failed: 'Error' };
   const STI_TIP = { deferred: 'Deferred', needs: 'Needs you', check: 'Your call: see if it is what you meant', done: 'Done', fyi: 'FYI', approval: 'Approval needed', failed: 'Stopped with an error', working: 'Working', offline: 'Offline · will retry', none: 'No status' };
   function chatRow(s, snip) {
-    const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = s.status === 'waiting_for_approval' || s.status === 'failed' || s.status === 'interrupted';
+    const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = ['waiting_for_approval', 'unknown'].includes(s.status) || s.status === 'failed' || s.status === 'interrupted';
     // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Your call, then its one line.
     const def = deferredOf(s) && !working && !needs;
     const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi');
     // The row icon says what the thread wants from James (replaced the per-thread ✦ star, 10 Oct 2026).
     // Emphasis is read state only (bold = unread, like an inbox); the status never changes weight or fades a row.
-    const kind = working ? (s.pend === 'waiting' ? 'offline' : 'working') : s.status === 'failed' || s.status === 'interrupted' ? 'failed' : s.status === 'waiting_for_approval' ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
+    const kind = working ? (s.pend === 'waiting' ? 'offline' : 'working') : s.status === 'failed' || s.status === 'interrupted' ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
     // The icon's meaning in words, in the icon's colour, at the preview's own weight (James, 10 Oct 2026:
     // "most people won't know what those icons mean … same color as the icon … don't make it any brighter or bolder").
-    const lab = STI_LAB[kind] ? `<em class="att ${kind}">${STI_LAB[kind]}:</em> ` : '';
+    const lab = s.status === 'unknown' ? '<em class="att approval">Needs recovery:</em> ' : STI_LAB[kind] ? `<em class="att ${kind}">${STI_LAB[kind]}:</em> ` : '';
     const pv = working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
       : needs ? lab + esc(clip(s.preview || '', 110))
       : def ? lab + esc(clip(attOf(s)?.ask || s.preview || '', 140))
@@ -187,7 +187,7 @@ window.WizCore.chats = function createChats(H) {
     } catch (e) {}
     return 'newest';
   })();
-  const waitsOn = s => s.status === 'waiting_for_approval' || (!deferredOf(s) && ['needs_you', 'check'].includes(attOf(s)?.state));
+  const waitsOn = s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && ['needs_you', 'check'].includes(attOf(s)?.state));
   // Newest keeps groupWork's recency order; Priority and By subject put what waits on James first.
   const readyOrdered = list => readyOrder === 'newest' ? list : LIVE.readyByPriority(list);
   function readyBody(list, rowFn) {
@@ -400,7 +400,7 @@ window.WizCore.chats = function createChats(H) {
       // While searching, every section with a hit opens so nothing is buried.
       const open = n || filtered ? true : secOpen[k];
       const newN = k === 'ready' ? list.filter(s => LIVE.isNew(s) && !waitsOn(s)).length : 0;
-      const waitN = k === 'ready' || k === 'yesterday' || k === 'pastWeek' ? list.filter(s => s.status === 'waiting_for_approval' || (!deferredOf(s) && attOf(s)?.state === 'needs_you')).length : 0;
+      const waitN = k === 'ready' || k === 'yesterday' || k === 'pastWeek' ? list.filter(s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you')).length : 0;
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
         ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
@@ -618,7 +618,7 @@ window.WizCore.chats = function createChats(H) {
    * They sit bottom-right under the final response, Done rightmost. */
   function threadActions(s, turns) {
     if (!s || LIVE.busy(s.id)) return [];
-    if (WORKING_ST.has(s.status) || s.status === 'waiting_for_approval') return [];
+    if (WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status)) return [];
     const inArchive = s.archived || LIVE.workGroups([s]).archive.length > 0;
     if (s.deferred && !s.archived) return ['restore', 'done'];
     if (inArchive) return ['restore'];
@@ -667,7 +667,7 @@ window.WizCore.chats = function createChats(H) {
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
-      ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || s.status === 'waiting_for_approval' ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
+      ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
     rowSheet = { wid, sid }; vib(10);
   }
   /* Rename (long-press a thread, or tap the title inside it). James's name locks the thread: the agent keeps it. */
@@ -698,37 +698,67 @@ window.WizCore.chats = function createChats(H) {
     if (!rowSheet) return false;
     H.root().querySelectorAll('.ch-sheet').forEach(n => n.remove()); rowSheet = null; return true;
   }
-  /* Approval: the live run's request, with Wizard's own choices (api.ts approve). */
+  /* Controls are bound to the displayed identity, never to whichever prompt arrives next. */
   function approvalHtml(c, s) {
     const ap = c.approval;
     if (!ap || !s || ap.runId !== s.runId) return '';
     if (ap.resolved) return `<div class="appr done">${esc(KIT.choiceReceipt(ap.resolved))}</div>`;
-    return `<div class="appr" role="group" aria-label="Approval required"><b>Needs your approval</b><pre>${esc(ap.action)}</pre>
-      <div class="appr-b${ap.choices.length > 2 ? ' many' : ''}">${ap.choices.map(ch => `<button type="button" data-approve="${esc(ch.value)}" class="${/^(deny|reject)$/.test(ch.value) ? 'no' : ''}" ${ap.pending ? 'disabled' : ''}>${ap.pending === ch.value ? 'Sending…' : esc(ch.label)}</button>`).join('')}</div>
-      ${ap.error ? `<small class="err">${esc(ap.error)}</small>` : '<small>Options come from your Wizard’s safety settings.</small>'}</div>`;
+    const buttons = ap.kind === 'clarify' ? [...ap.choices, { value: '__answer', label: 'Send answer' }] : ap.choices;
+    return `<div class="appr" role="group" aria-label="Run control"><b>${ap.kind === 'unknown' ? 'Needs recovery' : ap.kind === 'clarify' ? 'Answer needed' : 'Needs your approval'}</b><pre>${esc(ap.action)}</pre>
+      ${ap.kind === 'clarify' ? `<input data-clarify-answer aria-label="Clarification answer" value="${esc(ap.answer || '')}" maxlength="16384">` : ''}
+      <div class="appr-b${buttons.length > 2 ? ' many' : ''}">${buttons.map(ch => `<button type="button" data-approve="${esc(ch.value)}" data-control-key="${esc(ap.key)}" class="${/^(deny|reject)$/.test(ch.value) ? 'no' : ''}" ${ap.pending ? 'disabled' : ''}>${ap.pending === ch.value ? 'Sending…' : esc(ch.label)}</button>`).join('')}</div>
+      ${ap.error ? `<small class="err">${esc(ap.error)}</small>` : '<small>Only the displayed request will be answered.</small>'}</div>`;
   }
   async function loadApproval(w, s) {
-    const c = ch(w.id);
-    const sid = w.thread, nav = c.readNav;
+    const c = ch(w.id), sid = w.thread, nav = c.readNav;
     const current = () => W[w.id] === w && w.thread === sid && c.readNav === nav;
-    if (!s || s.status !== 'waiting_for_approval' || !s.runId) { if (c.approval && !c.approval.resolved) c.approval = null; return false; }
-    if (c.approval && c.approval.runId === s.runId && (c.approval.pending || c.approval.resolved || Date.now() - c.approval.at < 3000)) return false;
+    if (!s || !['waiting_for_approval', 'unknown', 'running'].includes(s.status) || !s.runId) { if (c.approval && !c.approval.resolved) c.approval = null; return false; }
+    if (c.approval?.runId === s.runId && Date.now() - c.approval.at < 3000) return false;
     try {
       const run = await LIVE.run(s.runId);
       if (!current()) return false;
-      const ap = KIT.normalizeApproval(run.approval);
       const prev = c.approval;
-      c.approval = ap ? { ...ap, runId: s.runId, at: Date.now() } : (run.status === 'waiting_for_approval' ? null : prev?.resolved ? prev : null);
-      return JSON.stringify(prev && { a: prev.action, c: prev.choices, r: prev.resolved }) !== JSON.stringify(c.approval && { a: c.approval.action, c: c.approval.choices, r: c.approval.resolved });
-    } catch (e) { return false; }
+      let ap;
+      if (run.status === 'unknown') {
+        const caps = await LIVE.runCapabilities(s.runId).catch(() => ({}));
+        if (!current()) return false;
+        ap = { kind: 'unknown', requestId: run.admission_id, generation: run.execution_generation,
+          action: 'Hermes restarted before this execution could be confirmed. Some work may already have happened. Acknowledge the uncertain outcome to release queued replies without repeating this turn.',
+          choices: caps.features?.run_unknown_resolution === true && typeof run.admission_id === 'string' && Number.isSafeInteger(run.execution_generation) ? [{ value: 'resolve', label: 'Acknowledge interrupted execution' }] : [] };
+      } else ap = Array.isArray(run.pending_controls) ? run.pending_controls.map(KIT.normalizeApproval).find(Boolean) : KIT.normalizeApproval(run.approval);
+      if (ap) {
+        ap.key = JSON.stringify([s.runId, ap.kind, ap.requestId, ap.generation]);
+        if (prev?.key === ap.key) Object.assign(ap, { pending: prev.pending, error: prev.error, answer: prev.answer });
+      }
+      c.approval = ap ? { ...ap, runId: s.runId, at: Date.now() } : null;
+      return JSON.stringify(prev && { k: prev.key, a: prev.action, c: prev.choices, r: prev.resolved }) !== JSON.stringify(c.approval && { k: c.approval.key, a: c.approval.action, c: c.approval.choices, r: c.approval.resolved });
+    } catch { return false; }
   }
-  async function chooseApproval(wid, choice) {
-    const w = W[wid], c = ch(wid), ap = c.approval; if (!w || !ap || ap.pending || ap.resolved || !ap.choices.some(x => x.value === choice)) return;
+  async function chooseApproval(wid, choice, key, answer) {
+    const w = W[wid], c = ch(wid), ap = c.approval;
+    if (!w || !ap || ap.pending || ap.resolved || ap.key !== key || !(ap.choices.some(x => x.value === choice) || ap.kind === 'clarify' && choice === '__answer')) return;
+    const sid = w.thread, nav = c.readNav;
+    const owns = () => W[wid] === w && w.thread === sid && c.readNav === nav && c.approval?.key === key;
+    if (ap.kind === 'clarify') { ap.answer = choice === '__answer' ? answer : choice; if (!ap.answer?.trim()) return; }
+    if (ap.kind === 'unknown' && !window.confirm('Mark this lost execution interrupted and release queued replies? It will not be replayed.')) return;
     ap.pending = choice; ap.error = ''; renderThreadNow(w);
-    try { await LIVE.approve(ap.runId, choice, ap.requestId); ap.resolved = choice; }
-    catch (e) { if (e.status === 404 || e.status === 409) { ap.resolved = 'closed'; toast('·', 'This approval is no longer waiting', 2200); } else ap.error = 'Couldn’t send your decision. Check the connection and try again.'; }
-    ap.pending = '';
-    renderThreadNow(w); if (ap.resolved) LIVE.refresh();
+    try {
+      if (ap.kind === 'unknown') await LIVE.resolveUnknown(ap.runId, ap.requestId, ap.generation);
+      else if (ap.kind === 'clarify') await LIVE.clarify(ap.runId, ap.answer, ap.requestId, ap.generation);
+      else await LIVE.approve(ap.runId, choice, ap.requestId, ap.generation);
+      if (owns()) c.approval.resolved = ap.kind === 'approval' ? choice : 'closed';
+    } catch (e) {
+      if (owns()) {
+        if ([404, 409, 410].includes(e.status)) {
+          c.approval = null;
+          await loadApproval(w, LIVE.session(sid));
+          if (W[wid] === w && w.thread === sid && c.readNav === nav) toast('·', 'This control changed. Check the current prompt before responding.', 3000);
+        } else c.approval.error = 'Couldn’t send. Check the connection and try again.';
+      }
+    }
+    if (owns()) c.approval.pending = '';
+    if (W[wid] === w && w.thread === sid && c.readNav === nav) renderThreadNow(w);
+    LIVE.refresh();
   }
   function renderThreadNow(w) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && w.thread) renderThread(w, el); }
   /* Selecting text (James, 12 Oct): a working thread re-renders on every new step, which replaced the bubble under
@@ -821,7 +851,7 @@ window.WizCore.chats = function createChats(H) {
     // The thread's own agent (pinned at creation); a new chat belongs to the window's agent.
     const TAG = isNew ? winAgent(w) : (LIVE.agentOf ? LIVE.agentOf(w.thread) : '');
     const working = !!s && WORKING_ST.has(s.status);
-    const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : s?.status === 'stopping' ? 'Stopping…' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${agentName(TAG)}` : `${agentName(TAG)} is working`)) : s?.status === 'waiting_for_approval' ? 'Waiting for your approval' : s?.deferred && !s.archived ? 'Deferred' : s?.archived ? 'Archived' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
+    const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : s?.status === 'unknown' ? 'Needs recovery · needs your acknowledgement' : s?.status === 'stopping' ? 'Stopping…' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${agentName(TAG)}` : `${agentName(TAG)} is working`)) : s?.status === 'waiting_for_approval' ? 'Waiting for your response' : s?.deferred && !s.archived ? 'Deferred' : s?.archived ? 'Archived' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
     const turns = c.loadedFor === w.thread ? c.turns || [] : null;
     c.media = []; c.texts = [];
     let msgs;
@@ -846,6 +876,7 @@ window.WizCore.chats = function createChats(H) {
           return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus);
         }).join('')
         + rns.splice(0).map(rnHtml).join('')
+        + (s?.safeError ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : '')
         + approvalHtml(c, s)
         + pend.map(p => pendingHtml(p, c)).join('')
         + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
@@ -1310,7 +1341,7 @@ window.WizCore.chats = function createChats(H) {
     if (rowSheet && e.target.closest('.ch-sheet') && !e.target.closest('.ch-sheet-b')) { if (!justPressed()) closeRowSheet(); return true; }
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
-    const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve); return true; }
+    const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
     if (e.target.closest('[data-chearlier]')) { const c = ch(id), el = elOf(id), box = el.querySelector('.ch-msgs'); c.show = (c.show || PAGE) + PAGE; renderThread(w, el, { h: box.scrollHeight, top: box.scrollTop }); return true; }
     const mi = e.target.closest('[data-mi]'); if (mi) { e.preventDefault(); openMedia(id, +mi.dataset.mi); return true; }
     const ml = e.target.closest('a[data-mlink]'); if (ml) { e.preventDefault(); const u = ml.dataset.mlink; KIT.viewer.open([{ url: u, name: ml.textContent.trim() || 'File', kind: 'file', mime: '' }]); return true; }
@@ -1375,6 +1406,7 @@ window.WizCore.chats = function createChats(H) {
         const id = idOf(e.target); ch(id).q = e.target.value; ch(id).coach = false; const el = elOf(id);
         if (el?.querySelector('.ch-scroll')) { renderChatList(H.win(id), el); const inp = el.querySelector('[data-chsearch]'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
       }
+      if (e.target.matches('[data-clarify-answer]')) { const c = ch(idOf(e.target)); if (c.approval?.kind === 'clarify') c.approval.answer = e.target.value; }
       if (e.target.matches('.ch-compose textarea')) { growTa(e.target); const id = idOf(e.target); ch(id).draft = e.target.value; saveDraft(id); syncSend(e.target.form, ch(id)); }
     });
     root.addEventListener('keydown', e => {
