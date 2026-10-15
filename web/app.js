@@ -1099,7 +1099,7 @@
   function unsentAll() { return window.WosSettings.unsentAll(settingsContext()); }
   function unsentCard() {
     const all = unsentAll(); if (!all.length) return '';
-    const failed = all.filter(x => x.state === 'failed').length;
+    const failed = all.filter(x => ['failed', 'empty'].includes(x.state)).length;
     const k = failed ? `${failed} not sent` : `${all.length} waiting to send`;
     const v = esc(clip(all[0].text || 'Voice note', 70));
     return `<button class="now-card unsent-card ${failed ? 'fail' : ''}" style="--c:${failed ? 'var(--amber)' : 'var(--violet-2)'}" data-act="unsent"><span class="pip ${failed ? '' : 'pulse'}"></span><span class="meta"><span class="k">${k}</span><span class="v">${v}</span></span><span class="side-go">${failed ? 'Retry' : 'View'}</span></button>`;
