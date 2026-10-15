@@ -9,10 +9,10 @@ function section(s, a, b) { return s.slice(s.indexOf(a), s.indexOf(b, s.indexOf(
 const pin = {appId:'wizard-manager',token:'sealed',label:'Manager conversation'};
 function desktopFixture(front) {
  const calls=[], el={textContent:''};
- const ctx={APP:{'wizard-manager':{id:'wizard-manager',name:'Manager',receives_voice_input:true}},dictationFinishing:false,VOICE:{state:'idle',async start(){this.state='listen'},async finish(){this.state='idle';return {blob:new Blob(['audio'])}},cancel(){}},focused:()=>front,winEl:()=>({querySelector:()=>({})}),window:{WizAppServices:{voiceInput:{pin:(_,id)=>id==='wizard-manager'?pin:null}}},vMode:'talk',vTarget:null,vConversation:null,vReply:null,vNewChat:false,vNewKey:'',vContext:'',CMD:'Cmd',W:{},CHATS:{WORKING_ST:new Set(),modelRoute:()=>({model:'m',provider:'p'}),sendChat:(...x)=>calls.push(['chat',...x]),sendVoiceTo:(...x)=>calls.push(['reply',...x])},LIVE:{session:()=>null},viewContext:()=>'',toast(){},$:()=>el,OUTBOX:{sendConversation:async o=>{calls.push(['manager',o]);return {state:'sent'}},enqueue:async o=>calls.push(['new',o])},Blob};
+ const ctx={APP:{'wizard-manager':{id:'wizard-manager',name:'Manager',receives_voice_input:true}},dictationFinishing:false,VOICE:{state:'idle',async start(){this.state='listen'},async finish(){this.state='idle';return {blob:new Blob(['audio'])}},cancel(){}},focused:()=>front,winEl:()=>({querySelector:()=>({})}),window:{WizAppServices:{voiceInput:{pin:(_,id)=>id==='wizard-manager'?pin:null}}},vMode:'talk',vTarget:null,vConversation:null,vReply:null,vNewChat:false,vNewKey:'',vContext:'',CMD:'Cmd',W:{},CHATS:{WORKING_ST:new Set(),modelRoute:()=>({model:'m',provider:'p'}),sendChat:(...x)=>calls.push(['chat',...x]),sendVoiceTo:(...x)=>calls.push(['reply',...x])},LIVE:{session:()=>null},viewContext:()=>'',toast(){},$:()=>el,OUTBOX:{sendConversation:async o=>{calls.push(['manager',o]);return {state:'sent'}},enqueue:async o=>calls.push(['new',o])},Blob,setTimeout,clearTimeout,Promise};
  ctx.commandSnapshot=()=>({id:front.id,thread:front.thread,view:{kind:front.thread?'chat thread':'thread list',appId:front.appId}});ctx.vSnapshot=null;ctx.vRoute=null;ctx.vFeedback=null;ctx.vFiles=null;ctx.commandTake=false;ctx.strictReply=false;ctx.AbortSignal=AbortSignal;ctx.LOCAL_COMMANDS={parse:()=>null};ctx.window.WizConfig={transcribe:async()=>({text:'ordinary voice reply'}),voicePrompt:()=>''};ctx.OUTBOX.stage=async()=>({id:'staged',durable:true});ctx.paintVoiceFiles=()=>{};ctx.window.WosCaptureTools={take:()=>({files:[],ready:()=>true})};
  ctx.CHATS.composerBusy=()=>false;ctx.CHATS.takeComposer=()=>({text:'',files:[]});ctx.W[front.id]=front;
- vm.createContext(ctx);vm.runInContext(section(desktop,'  async function talk(action','  // Composer mic:'),ctx);
+ vm.createContext(ctx);vm.runInContext(section(desktop,'  async function loadVoiceModels(','  // Composer mic:'),ctx);
  return {ctx,calls,focus:f=>{front=f;ctx.W[f.id]=f;}};
 }
 test('desktop Manager pin survives focus change before finish',async()=>{const f=desktopFixture({id:'mgr',app:'frame',appId:'wizard-manager'});await f.ctx.talk('start');f.focus({id:'ch',app:'chats',thread:'other'});await f.ctx.talk('send');assert.equal(f.calls.length,1);assert.equal(f.calls[0][0],'manager');assert.equal(f.calls[0][1].conversation.token,'sealed');});
@@ -50,6 +50,15 @@ test('cold app launch loads the model before recording and keeps general routing
  f.focus({id:'private',app:'chats',thread:'private-thread',agent:'private'});release();await starting;
  assert.equal(f.ctx.vRoute.model,'general');assert.equal(f.ctx.vTarget,null);await f.ctx.talk('send');
  assert.equal(f.calls[0][0],'new');assert.equal(f.calls[0][1].model,'general');assert.equal(f.calls[0][1].sessionId,'');
+});
+
+
+test('cold model request timeout releases the voice lock without opening or sending',async()=>{
+ const f=desktopFixture({id:'mgr',app:'frame',appId:'wizard-manager'});let deadline;
+ f.ctx.CHATS.modelRoute=()=>null;f.ctx.window.WosModels={load:()=>new Promise(()=>{})};
+ f.ctx.setTimeout=(fn,ms)=>{assert.equal(ms,8000);deadline=fn;return 1;};f.ctx.clearTimeout=()=>{};
+ const starting=f.ctx.talk('start',true);await new Promise(r=>setImmediate(r));deadline();
+ assert.equal(await starting,'busy');assert.equal(f.ctx.dictationFinishing,false);assert.equal(f.ctx.VOICE.state,'idle');assert.equal(f.calls.length,0);
 });
 
 test('phone Manager bypass precedes local commands, files and router',async()=>{const calls=[];const ctx={OUTBOX:{sendConversation:async o=>{calls.push(o);return {state:'sent'}}},takeFiles:()=>[{id:'attachment'}],setVoice(){},txHide(){},toast(){}};vm.createContext(ctx);vm.runInContext(section(phone,'  async function handleText(','  /* Hold-command'),ctx);await ctx.handleText('help','auto',false,0,null,{conversation:pin});assert.equal(calls.length,1);assert.equal(calls[0].text,'help');assert.equal(calls[0].files[0].id,'attachment');});

@@ -1046,6 +1046,11 @@
   paintGeneralVoice(); window.addEventListener('wizard:config', paintGeneralVoice);
   mic.insertAdjacentElement('afterend', generalVoice);
   generalVoice.addEventListener('click', () => talkNew('Tap to send'));
+  async function loadVoiceModels() {
+    let timer; toast('◷', 'Loading voice model…', 1800);
+    try { await Promise.race([window.WosModels.load(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Models unavailable · recording has not started')), 8000); })]); }
+    finally { clearTimeout(timer); }
+  }
   async function talk(action = 'toggle', forceNew = false, newKey = `${CMD}⇧N`) {
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (action === 'cancel') { commandTake = false; if (VOICE.state !== 'idle') { vFiles?.close();vReply = null; VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
@@ -1066,7 +1071,7 @@
       try {
         const resolveRoute = () => vFeedback ? window.WosModels.snapshot(vFeedback.thread) : CHATS.modelRoute(vTarget, vTarget ? vSnapshot.thread || '__new__' : '');
         vRoute = vConversation ? null : resolveRoute();
-        if (!vConversation && !vRoute) { await window.WosModels.load(); vRoute = resolveRoute(); }
+        if (!vConversation && !vRoute) { await loadVoiceModels(); vRoute = resolveRoute(); }
         if (!vConversation && !vRoute?.model) throw Error('Model route unavailable · recording has not started');
       } catch(e) { toast('!',String(e.message || e),2600);return 'busy'; }
       finally { dictationFinishing = false; }
@@ -1146,7 +1151,7 @@
     if (!sid) return 'busy';
     strictReply = true; vConversation = null; vFeedback = null; commandTake = false; vSnapshot = commandSnapshot();
     dictationFinishing = true;
-    try { vRoute = CHATS.modelRoute(wid,sid); if(!vRoute){await window.WosModels.load();vRoute=CHATS.modelRoute(wid,sid);} if(!vRoute?.model)throw Error('Model route unavailable · recording has not started'); }
+    try { vRoute = CHATS.modelRoute(wid,sid); if(!vRoute){await loadVoiceModels();vRoute=CHATS.modelRoute(wid,sid);} if(!vRoute?.model)throw Error('Model route unavailable · recording has not started'); }
     catch(e) { toast('!',String(e.message||e),2600);return 'busy'; }
     finally { dictationFinishing = false; }
     vFiles?.close(); vFiles = window.WosCaptureTools.take(CHATS.uploadFile,paintVoiceFiles); paintVoiceFiles();
