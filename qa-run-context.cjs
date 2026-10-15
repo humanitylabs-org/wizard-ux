@@ -63,7 +63,7 @@ const session = id => ({id,title:'Run context · '+id,source:'wizard-mobile',sta
   await detail.locator('summary').click();
   await card.scrollIntoViewIfNeeded();
   await p.screenshot({path:path.join(out,desktop?'desktop.png':'phone.png')});
-  const parsed=await p.evaluate(rows=>WizChatKit.parseRows([...rows.slice(0,3),rows[2],rows[3]]),rows);
+  const parsed=await p.evaluate(rows=>WosChat.parseRows([...rows.slice(0,3),rows[2],rows[3]]),rows);
   ok(parsed.length===2&&!parsed[1].u&&parsed[1].later.context.from==='Mizel.ai · Orb handoff',`${desktop}: duplicate context ignored and turns separated`);
   await open('qa_legacy');
   ok((await p.locator('.ch-msgs').innerText()).includes('isn’t available in this history'),`${desktop}: honest missing-context fallback`);
