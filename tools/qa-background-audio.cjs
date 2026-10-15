@@ -30,7 +30,7 @@ let browser;
  await wait(1800); const before=await snap();await page.reload();await wait(1300);await frame().locator('.music-row-main').first().waitFor();const after=await snap();
  check('full UX reload leaves service/session and advancing clock unchanged',after.sessionId===before.sessionId&&after.generation===before.generation&&after.playing&&((after.index-before.index)*before.durationMs+after.positionMs)>before.positionMs,{before,after});
  await frame().evaluate(()=>location.reload());await wait(1000);await frame().locator('.music-row-main').first().waitFor();const reload=await snap();
- check('Music view reload reconnects with one native player and same session',reload.sessionId===after.sessionId&&reload.positionMs>after.positionMs&&await frame().evaluate(()=>document.querySelectorAll('audio').length===0),reload);
+ check('Music view reload reconnects with one native player and same session',reload.sessionId===after.sessionId&&reload.generation===after.generation&&reload.playing&&((reload.index-after.index)*after.durationMs+reload.positionMs)>after.positionMs&&await frame().evaluate(()=>document.querySelectorAll('audio').length===0),{before:after,after:reload});
  const streams=await server('/qa/stats');check('authenticated fetch uses cookies; seek-capable media bytes arrived',streams.bytes>10000&&streams.gets.some(g=>g.cookie),{bytes:streams.bytes,requests:streams.gets});
  const start=await snap(), stats0=await server('/qa/stats');await sx('input keyevent KEYCODE_HOME');await sx('input keyevent KEYCODE_SLEEP');await wait(55000);
  const stats1=await server('/qa/stats');const ms=await sx('dumpsys media_session');fs.writeFileSync(path.join(out,'screen-off-media.txt'),ms.result);
