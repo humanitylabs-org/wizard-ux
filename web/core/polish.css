@@ -67,10 +67,4 @@ html[data-shell="desktop"] .wx-banners { top: 3px; left: 25%; right: 25%; z-inde
 .vx-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); margin: 0 6px; }
 .vx-dot.ready { background: var(--green); box-shadow: 0 0 10px rgba(79, 240, 176, .6); }
 .vx-dot.down { background: var(--amber); }
-/* The desktop shell has no phone settings sheet styles: a compact copy of them. */
-html[data-shell="desktop"] .st-group { margin: 10px 0 6px; }
-html[data-shell="desktop"] .st-group h4 { margin: 8px 4px 6px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
-html[data-shell="desktop"] .st-row { display: flex; align-items: center; gap: 12px; padding: 10px 10px; border-radius: 12px; background: rgba(205, 190, 255, .04); border: 1px solid var(--line); }
-html[data-shell="desktop"] .st-ic { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; background: rgba(205, 190, 255, .08); }
-html[data-shell="desktop"] .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-html[data-shell="desktop"] .st-tx small { color: var(--ink-3); font-size: 12.5px; }
+/* Settings controls live in core/settings.css for both layouts. */

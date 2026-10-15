@@ -46,7 +46,7 @@
     return true;
   }
   function back() {
-    if (listOpen && webPending) { listOpen = false; renderWeb(); return 'device-weblist'; }
+    if (WEB()?.back()) return 'device-weblist';
     if (!sheet) return null;
     const k = sheet.kind, fn = sheet.onBack;
     closeSheet(); try { fn && fn(); } catch (e) {}
@@ -54,23 +54,63 @@
   }
 
   /* ---------------- chunked native reads → Blob ---------------- */
-  function readBlob(read, type) {
-    const parts = []; let off = 0;
+  function readBlob(read, type, expected) {
+    const parts = []; let off = 0, size = 0;
+    if (expected !== undefined && (!Number.isSafeInteger(expected) || expected <= 0)) throw new Error('Native recording size unavailable · original kept on device');
     for (let k = 0; k < 4000 && off >= 0; k++) {
-      const c = J(read(off)); if (!c) break;
+      const c = J(read(off));
+      if (!c || typeof c.b64 !== 'string' || !Number.isInteger(c.next)) throw new Error('Incomplete native recording read · original kept on device');
       const bin = atob(c.b64), u = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      size += u.length;
+      if (!u.length || (c.next !== -1 && c.next !== off + u.length) || (expected !== undefined && size > expected)) throw new Error('Invalid native recording chunk · original kept on device');
       parts.push(u); off = c.next;
     }
+    if (off !== -1 || (expected !== undefined && size !== expected)) throw new Error('Incomplete native recording · original kept on device');
     return new Blob(parts, { type: type || 'application/octet-stream' });
   }
+  const readRecording = (id, expected) => readBlob(off => DEV().recRead(id, off), 'audio/aac', Number(expected));
 
   /* ================= #14 background recording: resume, notification Stop/Send, recovery ================= */
   const handledTakes = new Set();
+  const isDictation = take => take?.kind === 'dictation' || !!window.__wosDictationTake?.(take?.id);
+  const voiceKind = take => {
+    if (!take || (!['auto', 'command'].includes(take.kind) && !isDictation(take))) return false;
+    try { const ids = window.WizAppCapture?.getState?.()?.nativeDeviceTakeIds; return !Array.isArray(ids) || !ids.includes(take.id); }
+    catch (_) { return false; }
+  };
+  function nativeOwner(id) {
+    const capture = window.WizAppCapture;
+    if (!capture) return 'voice'; // legacy-only shell
+    try {
+      const state = capture.getState?.();
+      if (Array.isArray(state?.nativeDeviceTakeIds) && state.nativeDeviceTakeIds.includes(id)) return 'app';
+      if (state?.nativeOwnershipReady !== true || !Array.isArray(state.nativeDeviceTakeIds) || state.active || state.recording) return 'unknown';
+      return 'voice';
+    } catch (_) { return 'unknown'; }
+  }
+  function offerRecorderControls(a) {
+    const state = window.WizAppCapture?.getState?.();
+    if (sheet || a.kind || state?.nativeRegistryReady !== true || state.active || state.appId || state.nativeDeviceTakeIds.includes(a.id)) return;
+    const id = a.id;
+    const el = openSheet('recorder-controls', `<div class="dv-head"><span class="dv-ic">🎙</span><div><b>Wizard microphone still held</b><small>Older recorder · destination unknown · ${fmtMs(a.ms)}</small></div></div>
+      <p class="dv-note">The recording survived reopening. Show its timer, Pause and Cancel controls. Nothing will be sent or discarded automatically.</p>
+      <button class="dv-btn primary" data-rec-controls>Show recording controls</button>`);
+    el.querySelector('[data-rec-controls]').addEventListener('click', () => {
+      // Exact-id and shared ownership fencing at activation, not just when the card painted.
+      const current = J(DEV()?.recActive?.()), shared = window.WizAppCapture?.getState?.();
+      if (current?.id !== id || current.kind || shared?.nativeRegistryReady !== true || shared.active || shared.appId || shared.nativeDeviceTakeIds.includes(id)) { closeSheet(); return; }
+      closeSheet(); W$()?.nativeResume(current);
+    });
+  }
   function syncRecorder(why) {
     const d = DEV(), w = W$(); if (!d || !w || typeof d.recActive !== 'function') return;
     const a = J(d.recActive());
-    if (a && a.id && w.voice === 'idle') { if (w.nativeResume(a)) log('rec:resume', a.id, why); }
+    if (a && a.id && w.voice === 'idle') {
+      const owner = nativeOwner(a.id);
+      if (owner === 'voice') { if (w.nativeResume(a)) log('rec:resume', a.id, why); }
+      else { log('rec:owner', a.id, owner); if (owner === 'unknown') offerRecorderControls(a); } // retain unknown/app takes; never adopt them into Chats
+    }
     if (w.V.native && (!a || a.id !== w.V.native)) {
       // The take ended outside the page (notification Stop/Send, or the recorder failed) while we were away.
       const id = w.V.native; w.V.native = null; w.setVoice('idle'); w.txHide();
@@ -80,48 +120,72 @@
     offerPending(why);
   }
   function offerPending(why) {
-    const d = DEV(); if (!d || sheet) return;
-    const list = (J(d.recPending()) || []).filter(t => !handledTakes.has(t.id));
+    const d = DEV(); if (!d || sheet || W$()?.voice !== 'idle') return;
+    const native = J(d.recPending()) || [];
+    const retained = [...(window.__wosDictationRecovery?.() || []), ...(window.__wosVoiceRecovery?.() || [])];
+    const merged = new Map(native.map(t => [t.id, t]));
+    for (const t of retained) if (!merged.has(t.id)) merged.set(t.id, t);
+    const list = [...merged.values()].filter(t => voiceKind(t) && !handledTakes.has(t.id));
     if (!list.length) return;
     // Send was already pressed in the notification: the owner said send, so send.
-    const go = list.filter(t => t.send);
+    const go = list.filter(t => t.send && !isDictation(t));
     for (const t of go) sendTake(t, 'notification');
-    const ask = list.filter(t => !t.send);
+    const ask = list.filter(t => !t.send || isDictation(t));
     if (!ask.length) return;
     log('rec:offer', ask.map(t => t.id + ':' + t.state).join(','), why);
     const el = openSheet('recording', `
       <div class="dv-head"><span class="dv-ic">◉</span><div><b>${ask.length > 1 ? `${ask.length} recordings saved` : 'Recording saved'}</b><small>${ask[0].state === 'interrupted' ? 'Wizard OS closed while you were recording. Nothing was lost.' : 'You stopped it from the notification.'}</small></div></div>
       ${ask.map(t => `<div class="dv-take" data-take="${esc(t.id)}"><span class="dv-tk">${fmtMs(t.ms)} · ${esc(fsize(t.bytes || 0))}</span>
-        <button class="dv-btn" data-takeact="delete">Delete</button><button class="dv-btn primary" data-takeact="send">Send</button></div>`).join('')}
-      <p class="dv-note">Send transcribes it and sends it to ${window.WizConfig.agent()} as a new chat, with the recording attached.</p>`);
+        <button class="dv-btn" data-takeact="delete">Delete</button><button class="dv-btn primary" data-takeact="send">${isDictation(t) ? 'Transcribe &amp; copy' : 'Send'}</button></div>`).join('')}
+      <p class="dv-note">Dictation is transcribed for copying only; it is never sent. Send on other recordings sends a new chat to ${window.WizConfig.agent()}.</p>`);
     el.addEventListener('click', e => {
       if (e.target.closest('[data-dvclose]')) return back();
       const b = e.target.closest('[data-takeact]'); if (!b) return;
       const row = b.closest('[data-take]'), t = ask.find(x => x.id === row.dataset.take); if (!t) return;
       row.remove();
-      if (b.dataset.takeact === 'send') sendTake(t, 'recovered'); else { handledTakes.add(t.id); try { d.recClaim(t.id); d.recDone(t.id); } catch (x) {} toast('✕', 'Recording deleted', 1400); }
+      if (b.dataset.takeact === 'send') sendTake(t, 'recovered'); else { handledTakes.add(t.id); try { d.recClaim(t.id); W$().recDone(t.id); } catch (x) {} toast('✕', 'Recording deleted', 1400); }
       if (!el.querySelector('[data-take]')) closeSheet();
     });
   }
   /* A take that ended outside the page goes straight to the durable outbox (which transcribes and sends it),
    * then the native copy is deleted. Saved before anything goes over the network, so it can't be lost. */
   async function sendTake(t, how) {
-    const d = DEV(), w = W$(); if (!d || !w || handledTakes.has(t.id)) return;
+    const d = DEV(), w = W$(); if (!d || !w || !voiceKind(t) || handledTakes.has(t.id)) return;
+    if (isDictation(t)) {
+      if (nativeOwner(t.id) !== 'voice') return;
+      w.recoverDictation(t); // failures remain retryable through their exact-ID recovery marker
+      return;
+    }
     handledTakes.add(t.id);
-    if (!J(d.recClaim(t.id))) return;
-    const blob = readBlob(off => d.recRead(t.id, off), 'audio/aac');
-    if (blob.size < 600) { d.recDone(t.id); return; }
+    try {
+    // Keep the native pending owner discoverable until durable handoff. recRead does not
+    // require recClaim; claiming now hides it from recPending after a WebView reload.
+    const blob = readRecording(t.id, t.bytes);
+    if (blob.size < 600 || (Number(t.bytes) > 0 && blob.size !== Number(t.bytes))) throw new Error('Incomplete native recording · original kept on device');
     // A voice reply started from a thread's composer mic stays that thread's, even when it ended outside the page.
-    const pin = window.__wosReplyTake?.(t.id); if (pin) window.__wosReplyTake(null);
+    const pin = window.__wosReplyTake?.(t.id);
     const route = window.WosModels.voiceRoute(t.id);
-    const it = await OUTBOX.enqueue({ ...(route || {}), kind: pin ? 'reply' : 'new', sessionId: pin ? pin.sid : '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
+    const it = await OUTBOX.enqueue({ nativeId: t.id, ...(route || {}), kind: pin ? 'reply' : 'new', sessionId: pin ? pin.sid : '', steerRunId: pin?.steerRunId || '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
       instructions: (window.WizConfig.owner() ? window.WizConfig.owner() + ' recorded' : 'The owner recorded') + ' this with the Wizard OS orb on their Android phone' + (pin ? ' as a voice reply in this thread' : '') + (how === 'recovered' ? '; the recording was interrupted and recovered' : '') + '. The original recording is attached as a voice note.' });
-    d.recDone(t.id);
-    try { window.WosModels.forgetVoiceRoute(t.id); } catch (e) {}
+    releaseNativeCustody();
     log('rec:sent', t.id, it.id, how);
-    toast('✦', how === 'recovered' ? `Recording sent to ${window.WizConfig.agent()}` : 'Sending your recording', 2000);
+    toast('✦', it.durable ? 'Recording kept · waiting to send' : 'Device save failed · original kept by Android', 2400);
     try { w.openWizardThread(it.sessionId); } catch (e) {}
+    } catch (e) { handledTakes.delete(t.id); toast('!', String(e.message || 'Recording kept on device · retry from recording recovery'), 4000); }
   }
+  const releasedNative = new Set();
+  function releaseNativeCustody() {
+    const d = DEV(); if (!d) return;
+    for (const it of OUTBOX?._items.values() || []) {
+      if (OUTBOX.quarantined(it.id) || !it.nativeId || releasedNative.has(it.nativeId) || (!it.durable && it.state !== 'sent')) continue;
+      try {
+        if (!W$()) continue;
+        W$().recDone(it.nativeId); releasedNative.add(it.nativeId);
+        const pin = window.__wosReplyTake?.(it.nativeId); if (pin) window.__wosReplyTake(null);
+      } catch (_) {} // native still owns its copy if the bridge is unavailable
+    }
+  }
+  OUTBOX?.onChange(releaseNativeCustody);
   function onRec(ev) {
     const w = W$(); if (!w) return;
     log('rec:' + ev.type, ev.id);
@@ -239,91 +303,20 @@
     }
     const [msg, btn] = t(u);
     el.hidden = false; el.dataset.state = u.state;
-    el.innerHTML = `<span class="dv-ui">↻</span><span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${btn ? `<button data-upd="go">${esc(btn)}</button>` : ''}${u.state === 'available' || u.state === 'ready' ? '<button class="later" data-upd="later" aria-label="Later">×</button>' : ''}`;
+    el.innerHTML = `<span class="dv-ui">↻</span><span class="dv-um">${esc(msg)}</span>${btn ? `<button data-upd="go">${esc(btn)}</button>` : ''}${u.state === 'available' || u.state === 'ready' ? '<button class="later" data-upd="later" aria-label="Later">×</button>' : ''}`;
   }
   function onUpdate(u) { upd = u; log('update:' + u.state, u.version || '', u.message || ''); renderUpdate(); if (W$()?.sheet === 'settings') W$().renderSettings(); }
 
-  /* ================= #22 web hot-reload that keeps drafts ================= */
-  // What changed is read from ux-version.txt: the git tree id of web/, rewritten by the repo's commit/merge/
-  // checkout hooks (tools/write-ux-version.sh), so any committed web change flips it. The Agent Service sends no
-  // ETag/Last-Modified, which left the old header fingerprint comparing sizes only: a same-length edit, or a
-  // file missing from a hand-kept list (chat-kit.js), never raised the prompt (James, 11 Oct). Without the
-  // version file, fall back to headers over every script and stylesheet the page actually loaded.
-  const VERSION = 'ux-version.txt';
-  const assets = () => {
-    const base = new URL('.', location.href).href, out = new Set(['index.html']);
-    document.querySelectorAll('script[src], link[rel="stylesheet"][href]').forEach(el => {
-      const u = new URL(el.getAttribute('src') || el.getAttribute('href'), location.href);
-      if (u.origin === location.origin && u.href.startsWith(base) && !/(^|\/)(data|summaries)\.js$/.test(u.pathname)) out.add(u.pathname.slice(new URL(base).pathname.length));
-    });
-    return [...out];
-  };
+  /* ================= #22 web hot-reload that keeps drafts =================
+   * Detection, thread attribution, the banner and the guarded reload live in core/web-update.js, shared with
+   * the desktop shell. This file supplies the phone host: mount, open thread, busy, save drafts first. */
   const DRAFTS = 'wos.drafts.v1';
-  let print0 = '', webPending = false, lastCheck = 0;
-  async function fingerprint() {
-    try {
-      const r = await fetch(VERSION, { cache: 'no-store', credentials: 'same-origin' });
-      const v = r.ok ? (await r.text()).trim() : '';
-      if (/^[0-9a-f]{7,64}$/i.test(v)) return 'v:' + v;
-    } catch (e) { return ''; }
-    const parts = await Promise.all(assets().map(async a => {
-      try {
-        // GET (some proxies mishandle HEAD); only the headers are read, the body is dropped unread.
-        const r = await fetch(a, { cache: 'no-store', credentials: 'same-origin' });
-        try { r.body?.cancel(); } catch (e) {}
-        if (!r.ok) return a + ':' + r.status;
-        const lm = r.headers.get('last-modified') || '', et = r.headers.get('etag') || '', len = r.headers.get('content-length') || '';
-        return a + ':' + (et || lm + '/' + len);
-      } catch (e) { return null; }
-    }));
-    return parts.includes(null) ? '' : parts.join('|');
-  }
-  // Keeps checking while the banner is up, so a second deploy adds its thread to the banner too.
-  let printNow = '';
-  async function checkWeb(force) {
-    if ((!force && Date.now() - lastCheck < 60e3) || !navigator.onLine) return;
-    lastCheck = Date.now();
-    const p = await fingerprint(); if (!p) return;
-    if (!print0) { print0 = printNow = p; return; }
-    if (p === print0 || p === printNow) return;
-    printNow = p;
-    if (!webPending) { webPending = true; log('web:changed'); }
-    await loadChanges(); applyWeb();
-  }
-  /* Which threads made the update: web/ux-changes.json (tools/write-ux-changes.py) lists every web/ change
-   * newest first with the thread that committed it. Take the ones since the version this page loaded. */
-  let changes = [], listOpen = false;
-  const loadedAt = Date.now();
-  async function loadChanges() {
-    if (!print0.startsWith('v:')) { changes = []; return; }
-    try {
-      const r = await fetch('ux-changes.json', { cache: 'no-store', credentials: 'same-origin' });
-      const d = r.ok ? await r.json() : null; const ups = Array.isArray(d?.updates) ? d.updates : [];
-      const mine = print0.slice(2); let since = [];
-      const k = ups.findIndex(u => u.before === mine);
-      if (k >= 0) since = ups.slice(0, k + 1);
-      else since = ups.filter(u => u.at * 1000 > loadedAt - 60e3).slice(0, 8) || [];
-      if (!since.length && ups[0]) since = [ups[0]];
-      // One row per thread, newest first; changes no thread claims keep their own row.
-      const out = [], seen = new Map();
-      for (const u of since) for (const c of u.changes || []) {
-        const key = c.thread || 'c:' + c.sha;
-        if (seen.has(key)) continue;
-        const row = { thread: c.thread || null, title: c.title || '', what: c.what || '' }; seen.set(key, row); out.push(row);
-      }
-      changes = out.slice(0, 8);
-    } catch (e) { changes = []; }
-  }
-  // "Wizard OS · Bound views" → "Bound views": the banner already says what app updated.
-  const shortTitle = t => { const s = String(t || '').trim(); const i = s.indexOf(' · '); return (i > 0 && i < 24 ? s.slice(i + 3) : s) || ''; };
-  const rowName = c => shortTitle(c.title) || c.what || 'A change';
-  function goThread(id) {
-    listOpen = false; renderWeb();
-    const w = W$(); if (!w || !id) return;
-    log('web:thread'); w.openWizardThread?.(id);
-  }
+  const WEB = () => window.WizWebUpdate;
+  const checkWeb = force => WEB()?.check(force);
   // Safe to reload: not recording, nothing uploading, no sheet or share in progress.
   function webBusy() {
+    if (window.WizAppServices?.update.busy()) return true;
+    try { if (J(DEV()?.recActive?.())?.id) return true; } catch (_) { return true; }
     const w = W$(); if (!w) return true;
     if (w.voice !== 'idle' || sheet) return true;
     return Object.keys(w.wins).some(k => (w.chatState(k).files || []).some(f => f.uploading));
@@ -365,41 +358,6 @@
       } catch (e) { return false; }
     });
   }
-  function applyWeb() {
-    if (!webPending) return;
-    // The owner is away: swap it in quietly, unless music is playing (then the banner waits for your tap).
-    if (document.hidden && !webBusy()) { if (!mediaPlaying()) { reloadNow('hidden'); return; } log('web:hold', 'media'); }
-    renderWeb();
-  }
-  /* The banner says which thread the update came from and links there, so you can see what a reload brings
-   * (James, 12 Oct): "Update ready / Bound views  [Thread] [Reload]". Several threads: "[Threads ▾]" opens a
-   * short list under it; Back closes the list. Nothing known (no change list): "Wizard OS was updated". */
-  function renderWeb() {
-    if (!webPending) return;
-    let el = $('#dvWeb');
-    if (!el) {
-      el = document.createElement('div'); el.id = 'dvWeb'; el.className = 'dv-update web'; el.setAttribute('role', 'status');
-      ($('#device') || document.body).appendChild(el);
-      el.addEventListener('click', e => {
-        if (e.target.closest('[data-web="go"]')) { if (webBusy()) toast('◌', 'Finish recording first', 1600); else reloadNow('tap'); return; }
-        const t = e.target.closest('[data-web-thread]'); if (t) { goThread(t.dataset.webThread); return; }
-        if (e.target.closest('[data-web="list"]')) { listOpen = !listOpen; log('web:list', listOpen ? 'open' : 'close'); renderWeb(); }
-      });
-    }
-    const linked = changes.filter(c => c.thread), names = changes.map(rowName);
-    // Two lines so the thread name gets the width: "Update ready" small, the thread it came from bold.
-    const msg = !changes.length ? 'Wizard OS was updated'
-      : `<small>Update ready</small><b>${esc(names[0])}</b>`;
-    const sec = !linked.length ? '' : changes.length === 1
-      ? `<button class="later dv-wt" data-web-thread="${esc(linked[0].thread)}" aria-label="Open the thread: ${esc(names[0])}">Thread</button>`
-      : `<button class="later dv-wt" data-web="list" aria-expanded="${listOpen}" aria-label="Show the ${changes.length} threads in this update">Threads${listOpen ? ' ▴' : ' ▾'}</button>`;
-    const list = listOpen && changes.length > 1 ? `<div class="dv-wl" role="list">${changes.map(c => c.thread
-      ? `<button class="dv-wr" role="listitem" data-web-thread="${esc(c.thread)}"><b>${esc(rowName(c))}</b>${c.title && c.what ? `<small>${esc(c.what)}</small>` : ''}<span class="dv-wgo">›</span></button>`
-      : `<div class="dv-wr static" role="listitem"><b>${esc(rowName(c))}</b><small>No thread</small></div>`).join('')}</div>` : '';
-    el.classList.toggle('open', !!list);
-    el.innerHTML = `<div class="dv-wtop">${changes.length ? '' : '<span class="dv-ui">✦</span>'}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}<button data-web="go">Reload</button></div>${list}`;
-  }
-  function reloadNow(why) { saveDrafts(); log('web:reload', why); window.__wosReloading = why; location.reload(); }
 
   /* ================= wiring ================= */
   const api = window.WosDevice = {
@@ -428,7 +386,9 @@
         <div class="st-row static"><span class="st-ic">✉</span><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
         <button class="st-row" data-dvupd><span class="st-ic">↻</span><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
     },
-    saveDrafts, checkWeb, sweepReadNotes, mediaPlaying, _state: () => ({ sheet: sheet?.kind || null, upd, webPending, print0: !!print0, changes, listOpen }),
+    readRecording,
+    recoverRecorder: () => syncRecorder('control'),
+    saveDrafts, checkWeb, sweepReadNotes, mediaPlaying, _state: () => { const w = WEB()?._state() || {}; return { sheet: sheet?.kind || null, upd, webPending: !!w.pending, print0: !!w.print0, changes: w.changes || [], listOpen: !!w.listOpen }; },
   };
   document.addEventListener('click', e => {
     if (!e.target.closest('[data-dvupd]')) return;
@@ -447,14 +407,21 @@
       upd = J(d.updateState()); renderUpdate();
       setTimeout(() => { try { d.updateCheck(); } catch (e) {} }, 2500);
     }
-    setTimeout(() => checkWeb(true), 1500);
-    setInterval(() => { if (!document.hidden) checkWeb(false); }, 60e3); // one tiny text file a minute
+    WEB()?.init({
+      shell: 'phone', log,
+      mount: () => $('#device') || document.body,
+      openThread: id => W$()?.openWizardThread?.(id),
+      busy: webBusy,
+      beforeReload: saveDrafts,
+      toast,
+    });
   }
-  addEventListener('wos-native-resume', () => { if (api.ready) { syncRecorder('resume'); checkWeb(false); sweepReadNotes('resume'); } });
+  addEventListener('wos-native-resume', () => { if (api.ready) { syncRecorder('resume'); sweepReadNotes('resume'); } });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { saveDrafts(); if (webPending) applyWeb(); }
-    else if (api.ready) { checkWeb(false); syncRecorder('visible'); }
+    if (document.hidden) saveDrafts();
+    else if (api.ready) syncRecorder('visible');
   });
   addEventListener('pagehide', saveDrafts);
+  addEventListener('wizard-app-capture-state', () => { if (api.ready) syncRecorder('app-capture'); });
   boot();
 })();

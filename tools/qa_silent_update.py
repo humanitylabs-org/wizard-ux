@@ -299,7 +299,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         VC = vcode(); NEXT_VC = 9000 + VC; LATER_VC = 9100 + VC
         VN0 = re.sub(r'-qa$', '', (re.search(r'versionName=(\S+)', sx('dumpsys package %s' % PKG)) or [None, '0-qa'])[1])
         check('install the 0.7.0 QA build over adb (installer of record: %s)' % installer(), out == 'Success' and VC > 0, '%s versionCode=%d' % (out, VC))
-        resolv = sx('ping -c 1 -W 2 private.wizard001.com 2>&1 | head -2')
+        resolv = sx('ping -c 1 -W 2 wizard.tailc0f369.ts.net 2>&1 | head -2')
         check('the real Wizard is unreachable from the emulator (DNS dead)', 'unknown host' in resolv.lower() or 'bad address' in resolv.lower() or not re.search(r'\d+\.\d+\.\d+\.\d+', resolv), resolv.strip())
         check('fixtures: qanext/qalater share the QA signer, the tampered one does not',
               SIGNERS['next'] == SIGNERS['later'] == SIGNER and SIGNERS['bad'] and SIGNERS['bad'] != SIGNER, SIGNERS)
@@ -339,6 +339,10 @@ with (BASE / 'worker.lock').open('a') as lock:
         taps = 0
         sx('logcat -c')
         bring_front(); connect()
+        # The first-run coach (WosTour, daily since 0.9.x) covers the shell on a fresh install and swallows the banner
+        # tap; James finishes or skips it once. Finish it the way a handoff does, so B tests the update path itself.
+        pg.ev("(window.WosTour && window.WosTour.active ? (window.WosTour.finish('qa'), 'finished') : 'none')")
+        time.sleep(1)
         b = wait(lambda: (lambda x: x if x.startswith('ready') else '')(banner()), 20)
         check('B: in front, one "Update ready · tap to restart" banner', 'Update ready · tap to restart' in (b or ''), b)
         shot('B1-update-ready-banner')

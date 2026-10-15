@@ -94,6 +94,9 @@ public class RecorderService extends Service {
     /** Starts a take and returns its id; "" when the mic is not allowed. A running take is returned as-is. */
     public static synchronized String start(Context c, String kind) {
         if (!micAllowed(c)) return "";
+        // A meeting retains logical custody while paused too. Reject before allocating a voice take.
+        if (ai.wizards.os.mizel.MeetingRecorderService.live() != null ||
+                ai.wizards.os.MicOwner.MEETING.equals(ai.wizards.os.MicOwner.holder())) return "";
         if (activeId != null) return activeId;
         String id = RecordingStore.get(c).create(kind);
         activeId = id; stopWanted = null; paused = false; pausedMs = 0; level = 0; source = "";

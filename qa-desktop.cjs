@@ -118,16 +118,16 @@ async function ctxFor(b, kind) {
   await p.keyboard.press('Alt+ArrowLeft'); await sleep(150);
   ok(await p.evaluate(() => document.querySelector('.win.focus .wbar .t').textContent) !== 'CineQueue', '⌥←: focus moves to the left window');
   await p.keyboard.press('Alt+ArrowRight'); await sleep(150);
-  await p.keyboard.press('Alt+Shift+Digit3'); await sleep(300);
+  await p.keyboard.press('Alt+Shift+Digit4'); await sleep(300);
   let st = await p.evaluate(() => ({ cur: __wux.cur, w0: __wux.ws[0].wins.length, w2: __wux.ws[2].wins.length }));
-  ok(st.w0 === 1 && st.w2 === 1 && st.cur === 0, '⇧⌥3: sends the window to workspace 3', JSON.stringify(st));
-  await p.keyboard.press('Alt+Digit3'); await sleep(300);
-  ok(await p.evaluate(() => __wux.cur) === 2, '⌥3: goes to workspace 3');
+  ok(st.w0 === 1 && st.w2 === 1 && st.cur === 0, '⇧⌥4: sends the window to workspace 3', JSON.stringify(st));
+  await p.keyboard.press('Alt+Digit4'); await sleep(300);
+  ok(await p.evaluate(() => __wux.cur) === 2, '⌥4: goes to workspace 3');
   ok(await p.evaluate(() => document.querySelector('.ws.cur')?.textContent) === '3', 'top bar: workspace 3 is lit');
   await p.keyboard.press('Alt+KeyW'); await sleep(300);
   ok(await p.evaluate(() => __wux.ws[2].wins.length === 0 && !!document.querySelector('.wsp:not([hidden]) .home')), '⌥W: closes the window; the empty workspace shows home');
   await p.screenshot({ path: OUT + '/5-home.png' });
-  await p.keyboard.press('Alt+Digit1'); await sleep(300);
+  await p.keyboard.press('Alt+Digit2'); await sleep(300);
 
   // Three windows: master + stack.
   await p.evaluate(() => { const A = window.WizCore.apps('desktop').APP; __wux.openApp(A.wisdom || A.reader); __wux.openApp(A.files); });

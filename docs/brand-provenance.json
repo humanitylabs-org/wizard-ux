@@ -1,0 +1,13 @@
+{
+  "designerFolder": "https://drive.google.com/drive/folders/1NstTcGF7tIrH3Mgb-sHrmaHNRaewoBcr",
+  "source": "AW-icon-sq-purple-white.jpg; AW-icon-white.png; AW-logo-select-hat.png",
+  "policy": "Only supplied designer rasters: transparent padding crop, proportionate downscale and platform padding. No redraw. Semantic app sigils/action stars remain unchanged.",
+  "web": {
+    "web/brand/wizard-mark-purple.png": "39d00522f07c5e6e07c5caaebbde7921741dbe2a244269c7e214c3990f83caa0",
+    "web/brand/wizard-mark-white.png": "05e6cfe39615fa5ca4a04131c94ac9691939cfb428f389565e9ed052e3aac09a",
+    "web/icon-192.png": "39c7ed1aab9faa33d85d709877fd5fe7e2829adaa3daf8900804682d33d82da6",
+    "web/icon-512.png": "ada1e97aacfa79c3938e58249e1ea84753256b179c4ace5f1bc6e2796595048d",
+    "web/apple-touch-icon.png": "4ac193293c859d291d0a22f43360fdcc096bcc04c648c6f2f55ffdd86515f141",
+    "web/favicon.ico": "731ca1251adb7a436d7687b414cdddc2c67aad97b696a05c6ddf371800557bc4"
+  }
+}

@@ -1,0 +1,9 @@
+.git
+node_modules
+android
+mac
+qa*
+.env*
+**/auth.json
+**/data.js
+**/summaries.js

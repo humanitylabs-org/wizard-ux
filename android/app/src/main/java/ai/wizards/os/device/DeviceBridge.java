@@ -134,7 +134,9 @@ public final class DeviceBridge implements RecorderService.Listener {
         String id = RecorderService.active();
         if (id == null) return "null";
         try {
-            return new JSONObject().put("id", id).put("ms", RecorderService.elapsedMs()).put("paused", RecorderService.isPaused())
+            JSONObject metadata = RecordingStore.get(activity).read(id); // Read only: never claim/delete to discover ownership.
+            return new JSONObject().put("id", id).put("kind", metadata == null ? JSONObject.NULL : metadata.opt("kind"))
+                    .put("ms", RecorderService.elapsedMs()).put("paused", RecorderService.isPaused())
                     .put("source", RecorderService.source()).toString();
         } catch (JSONException e) { return "null"; }
     }

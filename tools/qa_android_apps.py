@@ -190,7 +190,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         out = em.sh(ADB, '-s', em.S, 'install', '-r', QA_APK).strip().splitlines()[-1]
         check('install the candidate QA build', out == 'Success', out)
         em.sx('svc data disable'); time.sleep(2)
-        resolv = em.sx('ping -c 1 -W 2 private.wizard001.com 2>&1 | head -2')
+        resolv = em.sx('ping -c 1 -W 2 wizard.tailc0f369.ts.net 2>&1 | head -2')
         check('the real Wizard is unreachable from the emulator', not re.search(r'\(\d+\.\d+\.\d+\.\d+\)', resolv), resolv.strip()[:120])
         em.sh(ADB, '-s', em.S, 'reverse', 'tcp:%d' % FAKE, 'tcp:%d' % FAKE)
         em.runas('mkdir -p files && echo %s > files/qa_home.txt && echo %s > files/qa_origin.txt' % (ORIGIN, ORIGIN))

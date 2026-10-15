@@ -56,7 +56,7 @@ HOUSE = {
     'files':         ('files',    232, None),
     'wizard-search': ('search',   256, None),
     'projects':      ('projects', 276, None),
-    'wizard':        ('chats',    296, None),
+    'wizard':        ('hat',      296, None),
     'social':        ('social',   322, None),
     'wizard-music':  ('music',    344, None),
     'iching':        ('iching',   75,  0.06),
@@ -69,7 +69,15 @@ HOUSE = {
     'usuals':        ('usuals',   42,  None),
     'side-button':   ('side',     300, 0.07),
     'maps':          ('pin',      114, None),
+    # Agents (the app): two layered hats drawn from brand masks in style.css; its tile glass is a quiet periwinkle,
+    # neither the main agent's purple nor the private agent's green, so both hats read on it.
+    'agents':        ('agents',   270, 0.10),
 }
+# Brand-mask sigils: drawn from web/brand/*.png in style.css, not from glyphs.py.
+#   hat          supplied company hat (Chats, main agent)
+#   hat-private  tools/sigils/private_hat.py: the hat with a keyhole for its door
+#   agents       tools/sigils/agent_hats.py: two layered hats, private green behind main purple
+MASKS = ('hat', 'hat-private', 'agents')
 # Apps with no sigil yet get their initial on a hue picked from their id.
 FALLBACK_HUES = [20, 66, 112, 158, 196, 230, 268, 300, 334]
 
@@ -88,7 +96,7 @@ def main():
 
     house = {k: [g, tone(h, c)] for k, (g, h, c) in HOUSE.items()}
     for k, (g, _, _) in HOUSE.items():
-        assert g in lib, (k, g)
+        assert g in lib or g in MASKS, (k, g)
     js = open(os.path.join(HERE, 'sigils.template.js')).read()
     js = js.replace('/*NAMES*/', json.dumps(sorted(lib.keys())))
     js = js.replace('/*HOUSE*/', json.dumps(house, separators=(',', ':')))

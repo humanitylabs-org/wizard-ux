@@ -6,7 +6,7 @@
 // Usage: QA_WEB_DIR=<wizard-ux worktree> QA_APP_DIR=<android-apps repo> [QA_SHOTS=dir] node qa-android-apps.cjs
 const { chromium } = require('/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = 'https://private.wizard001.com/wizard-os-home/?open=android-apps';
+const URL_ = 'https://wizard.tailc0f369.ts.net/wizard-os-home/?open=android-apps';
 const W = process.env.QA_WEB_DIR || __dirname;
 const A = process.env.QA_APP_DIR || '/home/telos/apps/android-apps';
 const SHOTS = process.env.QA_SHOTS || '';
@@ -42,7 +42,7 @@ async function boot(b, { bridge = true } = {}) {
   const writes = [];
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (!/private\.wizard001\.com$/.test(u.hostname)) return r.abort();
+    if (!/wizard\.tailc0f369\.ts\.net$/.test(u.hostname)) return r.abort();
     let m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET') {
       const f = m[1] || 'index.html';

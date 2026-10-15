@@ -189,7 +189,7 @@
   function wake() { const S = window.WosScenery; if (S) { S.still(); S.update(); } }
 
   function mount() {
-    const device = document.getElementById('device'); if (!device || BGL.cv.length) return;
+    const device = document.getElementById('device') || (document.documentElement.dataset.shell === 'desktop' ? document.body : null); if (!device || BGL.cv.length) return;
     const ref = device.querySelector('.lean') || device.firstChild;
     ['skinA', 'skinB'].forEach(id => { const c = document.createElement('canvas'); c.id = id; c.className = 'skin-bg'; c.setAttribute('aria-hidden', 'true'); device.insertBefore(c, ref); BGL.cv.push(c); BGL.cx.push(c.getContext('2d')); });
     size(); addEventListener('resize', () => { size(); wake(); });

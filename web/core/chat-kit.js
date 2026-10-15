@@ -188,12 +188,20 @@
   // A path on this Wizard ("/cinequeue/"), never a protocol-relative "//host" or a "/\\host" trick.
   const HOME_PATH = /^\/(?![\/\\])[^\s]*$/;
   const SESSION_REF = /@session:default\/([A-Za-z0-9_](?:[A-Za-z0-9._:-]{0,178}[A-Za-z0-9_])?)/g;
-  const SESSION_HREF = /^\/wizard\/\?session=([A-Za-z0-9._:%-]{1,240})$/;
+  const SESSION_ID = /^(?!\.{1,2}$)[A-Za-z0-9._:-]{1,180}$/; // Same contract as core/deeplink.js.
+  const THREAD_PATHS = new Set(['/', '/wizard/', '/wizard-os-home/']);
+  const sessionHtml = (id, inner) => `<a href="/wizard-os-home/?session=${encodeURIComponent(id)}" class="wsl" data-session="${esc(id)}">${inner}</a>`;
   const PRIVATE_MEDIA = /^(\/wizard\/(?:files\/[A-Za-z0-9._:-]+\/content|attachments\/[0-9a-f]{32}))$/;
   function linkHtml(href, inner) {
-    href = homePath(href);
-    const sm = href.match(SESSION_HREF);
-    if (sm) { let id = ''; try { id = decodeURIComponent(sm[1]); } catch (e) {} if (/^[A-Za-z0-9._:-]{1,200}$/.test(id)) return `<a href="/wizard/?session=${encodeURIComponent(id)}" class="wsl" data-session="${esc(id)}">${inner}</a>`; }
+    // Check the original origin before homePath's historical hostname aliases can rewrite it.
+    let u; try { u = new URL(href, location.href); } catch (e) {}
+    const threadPath = u && THREAD_PATHS.has(u.pathname) && u.searchParams.has('session');
+    if (threadPath && u.origin === location.origin) {
+      const id = u.searchParams.get('session');
+      return SESSION_ID.test(id) ? sessionHtml(id, inner) : `<span class="badlink">${inner}</span>`;
+    }
+    // An external thread-shaped URL remains external, including //other-origin/?session=… .
+    href = threadPath ? u.href : homePath(href);
     const pm = href.match(PRIVATE_MEDIA);
     if (pm) return `<a href="${esc(pm[1])}" data-mlink="${esc(pm[1])}">${inner}</a>`;
     if (SAFE_HREF.test(href) || HOME_PATH.test(href)) return `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
@@ -208,8 +216,10 @@
       s = s.replace(/!\[([^\]\n]*)\]\(\s*<?([^\s)>]+)>?(?:\s+"[^"]*")?\s*\)/g, (_, alt, url) => put(PRIVATE_MEDIA.test(url) ? linkHtml(url, esc(alt ? `[Image: ${alt}]` : '[Image]')) : `<span class="md-img">${esc(alt ? `[Image: ${alt}]` : '[Image]')}</span>`));
       s = s.replace(/\[((?:[^\[\]\n]|\[[^\]\n]*\])+)\]\(\s*<?([^\s)>]+?(?:\([^\s)]*\)[^\s)>]*)?)>?(?:\s+"[^"]*")?\s*\)/g, (_, text, url) => put(linkHtml(url, inline(text, true))));
       s = s.replace(/<((?:https?:\/\/|mailto:)[^\s>]+)>/g, (_, u) => put(linkHtml(u, esc(u))));
-      s = s.replace(/(^|[\s(“"'])(https?:\/\/[^\s<>"']*[^\s<>"'.,;:!?)\]’”])/g, (_, pre, u) => pre + put(linkHtml(u, esc(u))));
-      s = s.replace(SESSION_REF, (m, id) => put(`<a href="/wizard/?session=${encodeURIComponent(id)}" class="wsl" data-session="${esc(id)}">${esc(m)}</a>`));
+      // Every bare URL becomes a link, whatever wraps it (**bold**, _italic_, ~~del~~, [brackets], "Link:url").
+      // Emphasis markers and closing punctuation at the end stay outside the link.
+      s = s.replace(/(^|[^A-Za-z0-9/.@=&%+-])(https?:\/\/[^\s<>"'*\u0001\u0002]*[^\s<>"'*_~.,;:!?)\]’”\u0001\u0002])/g, (_, pre, u) => pre + put(linkHtml(u, esc(u))));
+      s = s.replace(SESSION_REF, (m, id) => put(sessionHtml(id, esc(m))));
     }
     let h = esc(s)
       .replace(/\*\*\*(?=\S)([\s\S]*?\S)\*\*\*/g, '<strong><em>$1</em></strong>')
@@ -368,14 +378,113 @@
     ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0'; document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
     let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} ta.remove(); return ok;
   }
-  const native = () => window.WizardOSNative || null;
-  // Share sheet where the platform has one; otherwise copy. Returns 'shared' | 'copied' | 'cancelled' | 'failed'.
-  async function shareText(text, title) {
-    const n = native();
-    if (n && typeof n.shareText === 'function') { try { n.shareText(String(text), String(title || '')); return 'shared'; } catch (e) {} }
-    if (navigator.share) { try { await navigator.share({ text: String(text), ...(title ? { title } : {}) }); return 'shared'; } catch (e) { if (e?.name === 'AbortError') return 'cancelled'; } }
-    return (await copyText(text)) ? 'copied' : 'failed';
+  /* Rich copy of a Markdown message (James, 14 Oct 2026: pasting a drafted email gave raw Markdown).
+   * The clipboard gets two flavours: text/html (headings, bold, lists, tables, links) so email and docs
+   * paste it formatted, and readable text/plain (bullets, no # or **) for apps that only take plain text.
+   * The HTML is rebuilt from the Markdown with every class, style and control stripped, so dark-mode
+   * colours and Copy/Share buttons never reach the pasted email. */
+  const RICH_KEEP = { A: ['href'], OL: ['start'], TD: ['colspan', 'rowspan'], TH: ['colspan', 'rowspan'] };
+  function richParts(src) {
+    const box = document.createElement('div');
+    box.innerHTML = md(String(src ?? ''));
+    box.querySelectorAll('button, .code-h, script, style, img, video, audio, svg, iframe').forEach(e => e.remove());
+    box.querySelectorAll('div.tbl, div.code').forEach(d => d.replaceWith(...d.childNodes));
+    for (const el of box.querySelectorAll('*')) {
+      const keep = RICH_KEEP[el.tagName] || [];
+      const align = el.style?.textAlign;
+      for (const a of [...el.attributes]) if (!keep.includes(a.name)) el.removeAttribute(a.name);
+      if (align && (el.tagName === 'TD' || el.tagName === 'TH')) el.setAttribute('align', align);
+      if (el.tagName === 'A') {
+        try { const u = new URL(el.getAttribute('href') || '', location.href); if (/^https?:$/.test(u.protocol)) el.setAttribute('href', u.href); else el.removeAttribute('href'); }
+        catch (_) { el.removeAttribute('href'); }
+      }
+    }
+    const html = box.innerHTML;
+    // Readable plain text: bullets/numbers on list items, then the browser's own text layout.
+    const plainBox = box.cloneNode(true);
+    for (const li of plainBox.querySelectorAll('li')) {
+      const list = li.parentElement, ordered = list?.tagName === 'OL';
+      const n = ordered ? (+list.getAttribute('start') || 1) + [...list.children].indexOf(li) : 0;
+      const depth = (() => { let d = 0, p = list?.parentElement; while (p && p !== plainBox) { if (p.tagName === 'UL' || p.tagName === 'OL') d++; p = p.parentElement; } return d; })();
+      li.insertBefore(document.createTextNode('  '.repeat(depth) + (ordered ? `${n}. ` : '• ')), li.firstChild);
+      li.style.display = 'block';
+    }
+    for (const l of plainBox.querySelectorAll('ul, ol')) { l.style.listStyle = 'none'; l.style.padding = '0'; l.style.margin = '0'; }
+    plainBox.style.cssText = 'position:fixed;left:-99999px;top:0;width:600px;white-space:normal;opacity:0;pointer-events:none';
+    document.body.appendChild(plainBox);
+    let text = '';
+    try { text = plainBox.innerText; } finally { plainBox.remove(); }
+    text = text.replace(/\n{3,}/g, '\n\n').trim();
+    return { html, text: text || String(src ?? '') };
   }
+  // One synchronous copy event carries both flavours; works in Android WebView and desktop browsers
+  // (the Async Clipboard API's text/html support varies). Falls back to async write, then plain text.
+  function copyFormats(html, text) {
+    let wrote = false;
+    const on = e => { try { e.clipboardData.setData('text/html', html); e.clipboardData.setData('text/plain', text); e.preventDefault(); wrote = true; } catch (_) {} };
+    const holder = document.createElement('span'); holder.textContent = ' ';
+    holder.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    const prevFocus = document.activeElement, sel = getSelection(), saved = [];
+    for (let k = 0; k < (sel?.rangeCount || 0); k++) saved.push(sel.getRangeAt(k));
+    document.body.appendChild(holder);
+    document.addEventListener('copy', on, true);
+    let ok = false;
+    try { const r = document.createRange(); r.selectNodeContents(holder); sel?.removeAllRanges(); sel?.addRange(r); ok = document.execCommand('copy'); }
+    catch (_) { ok = false; }
+    finally {
+      document.removeEventListener('copy', on, true); holder.remove();
+      try { sel?.removeAllRanges(); for (const r of saved) sel.addRange(r); } catch (_) {}
+      try { prevFocus?.focus?.({ preventScroll: true }); } catch (_) {}
+    }
+    return ok && wrote;
+  }
+  async function copyRich(src) {
+    let parts;
+    try { parts = richParts(src); } catch (_) { return copyText(src); }
+    if (copyFormats(parts.html, parts.text)) return true;
+    try {
+      if (navigator.clipboard?.write && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([parts.html], { type: 'text/html' }),
+          'text/plain': new Blob([parts.text], { type: 'text/plain' }),
+        })]);
+        return true;
+      }
+    } catch (_) { /* plain fallback below */ }
+    return copyText(parts.text);
+  }
+  const native = () => window.WizardOSNative || null;
+  // Native success needs a receipt, not a fire-and-forget invocation. Older Android
+  // bridges still launch the sheet, but cannot attest selection/cancellation (unsupported).
+  const shareOutcome = value => {
+    if (typeof value === 'string') { try { value = JSON.parse(value); } catch (_) {} }
+    const status = typeof value === 'object' && value ? value.status || value.outcome : value;
+    return ['shared', 'copied', 'cancelled', 'unsupported'].includes(status) ? status : 'unsupported';
+  };
+  async function nativeShare(invoke) {
+    let timer;
+    try {
+      const result = invoke(); // immediate, while transient user activation is live
+      return shareOutcome(await Promise.race([Promise.resolve(result), new Promise(resolve => { timer = setTimeout(() => resolve('unsupported'), 15000); })]));
+    } catch (e) { return e?.name === 'AbortError' ? 'cancelled' : 'unsupported'; }
+    finally { clearTimeout(timer); }
+  }
+  async function sharePayload(data = {}) {
+    if (!data || typeof data !== 'object') return 'unsupported';
+    const payload = {};
+    for (const k of ['text', 'title', 'url']) if (data[k] != null && String(data[k])) payload[k] = String(data[k]);
+    if ((!payload.text && !payload.url) || (payload.text || '').length > 90000 || (payload.title || '').length > 1024 || (payload.url || '').length > 8192) return 'unsupported';
+    if (payload.url) { try { const parsed = new URL(payload.url, location.href); if (!/^https?:$/.test(parsed.protocol)) return 'unsupported'; if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(payload.url)) payload.url = parsed.href; } catch (_) { return 'unsupported'; } }
+    const n = native();
+    if (n && typeof n.shareText === 'function') {
+      // ACTION_SEND has one EXTRA_TEXT field: don't silently lose a URL or turn it into a title.
+      const text = [payload.text, payload.url].filter(Boolean).join('\n');
+      return nativeShare(() => n.shareText(text, payload.title || ''));
+    }
+    if (navigator.share) { try { await navigator.share(payload); return 'shared'; } catch (e) { if (e?.name === 'AbortError') return 'cancelled'; return 'unsupported'; } }
+    return (await copyText([payload.text, payload.url].filter(Boolean).join('\n'))) ? 'copied' : 'unsupported';
+  }
+  function shareText(text, title) { return sharePayload({ text, title }); }
   async function fetchBlob(url) {
     if (url.startsWith('data:')) { const r = await fetch(url); return r.blob(); }
     const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
@@ -391,12 +500,21 @@
     if (extFor(type) && !/\.[a-z0-9]{2,5}$/i.test(name)) name += extFor(type); // a search title has no extension
     return new File([blob], name, { type });
   }
-  async function shareFile(item) {
-    const file = await asFile(item), n = native();
-    if (n && typeof n.shareFile === 'function') { n.shareFile(await b64(file), file.name, file.type); return 'shared'; }
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: file.name }); return 'shared'; } catch (e) { if (e?.name === 'AbortError') return 'cancelled'; }
+  async function shareFile(item, { title } = {}) {
+    let file;
+    const isBlob = value => value && ['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(value));
+    try { file = isBlob(item) ? item : await asFile(item); } catch (_) { return 'unsupported'; }
+    if (!isBlob(file) || file.size > 32 * 1024 * 1024) return 'unsupported';
+    const n = native(), name = file.name || 'wizard-file';
+    if (n && typeof n.shareFile === 'function') {
+      let bytes; try { bytes = await b64(file); } catch (_) { return 'unsupported'; }
+      return nativeShare(() => n.shareFile(bytes, name, file.type));
     }
+    try {
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: title || name }); return 'shared';
+      }
+    } catch (e) { if (e?.name === 'AbortError') return 'cancelled'; }
     return 'unsupported';
   }
   // The Android app (0.8.4+) hands any download its WebView sees to Android's download manager: the file lands in
@@ -512,7 +630,19 @@
     return true;
   }
   const save = it => saveFile(it).then(r => r === 'downloading' ? null : K.notify(r === 'unsupported' ? '!' : '⤓', r === 'saved' ? 'Saved' : r === 'shared' ? 'Choose where to save' : r === 'cancelled' ? 'Not saved' : 'Saving isn’t available here')).catch(() => K.notify('!', 'Couldn’t save this file'));
-  const share = it => shareFile(it).then(r => r === 'unsupported' ? shareText(location.origin + it.url, it.name).then(x => K.notify(x === 'copied' ? '⧉' : '↗', x === 'copied' ? 'Link copied' : 'Shared')) : r === 'shared' && K.notify('↗', 'Shared')).catch(() => K.notify('!', 'Couldn’t share this file'));
+  const share = async it => {
+    try {
+      let result = await shareFile(it);
+      // An old native bridge may already have opened the file chooser without an
+      // outcome receipt. Never open a second text chooser or claim Shared then.
+      if (result === 'unsupported' && typeof native()?.shareFile !== 'function') {
+        result = await sharePayload({ url: new URL(it.url, location.href).href, title: it.name });
+      }
+      if (result === 'shared') K.notify('↗', 'Shared');
+      else if (result === 'copied') K.notify('⧉', 'Link copied');
+      else if (result === 'unsupported') K.notify('!', 'Sharing unavailable or not confirmed');
+    } catch (_) { K.notify('!', 'Couldn’t share this file'); }
+  };
   function reset() { V.s = 1; V.x = 0; V.y = 0; paint(); }
   function paint() {
     const img = V.el?.querySelector('.mv-stage img'); if (!img) return;
@@ -588,5 +718,5 @@
     return action && choices.length ? { requestId: str(it.request_id, it.id) || undefined, action, choices } : null;
   }
 
-  window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, shareText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, sharePayload, shareText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

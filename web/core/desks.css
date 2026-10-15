@@ -24,13 +24,7 @@
 .ddot.sig.dhome, .ddot.sig.dhome.pop { transform: none; }
 .ddot.sig.filled, .ddot.sig.review.filled { background: none; }
 .ddot.sig:active { background: rgba(205, 190, 255, .10); transform: scale(.9); }
-.dsg { --c: #C9BEFF; position: relative; width: 21px; height: 21px; display: grid; place-items: center; opacity: .78; transition: opacity 160ms; }
 .ddot.sig:active .dsg { opacity: 1; }
-.dsg .sgi { width: 100%; height: 100%; filter: drop-shadow(0 0 5px color-mix(in oklab, var(--c) 45%, transparent)); }
-.dsg .sgi.sgl { font-size: 15px; }
-.dsg.empty { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid rgba(205, 190, 255, .4); opacity: 1; }
-.dsg .dn { position: absolute; right: -7px; bottom: -5px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px;
-  font: 700 9px/13px system-ui, sans-serif; text-align: center; color: #0c0814; background: var(--c); }
 /* a review desk (link opened from a thread) keeps its amber cue: a short underline */
 .ddot.sig.review::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 12px; height: 2px; margin-left: -6px; border-radius: 2px; background: rgba(255, 184, 77, .85); }
 

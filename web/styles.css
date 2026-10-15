@@ -737,36 +737,6 @@ body {
 .settings-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 14px 14px; scrollbar-width: none; touch-action: pan-y; overscroll-behavior: contain; }
 .settings-body::-webkit-scrollbar { display: none; }
 .st-close { position: absolute; top: 10px; right: 12px; width: 34px; height: 34px; border-radius: 50%; background: rgba(205, 190, 255, .08); color: var(--ink-2); font-size: 15px; }
-.st-title { margin: 2px 4px 10px; font-size: 22px; font-weight: 650; }
-.st-group { margin: 0 0 16px; }
-.st-group h4 { display: flex; gap: 8px; align-items: baseline; margin: 0 4px 8px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
-.st-group h4 span { color: var(--amber); }
-.st-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); text-align: left; color: var(--ink); }
-.st-row[disabled] { opacity: .5; }
-.st-row.static { cursor: default; }
-.st-ic { flex: 0 0 34px; height: 34px; border-radius: 12px; display: grid; place-items: center; background: rgba(143, 99, 255, .18); color: var(--violet-2); font-size: 16px; }
-.st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.st-tx b { font-size: 15px; font-weight: 600; }
-.st-tx small { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
-.st-go { color: var(--ink-3); font-size: 22px; }
-.sw { flex: 0 0 44px; height: 26px; border-radius: 99px; background: rgba(205, 190, 255, .16); position: relative; transition: background 200ms; }
-.sw i { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 220ms var(--ease); }
-.sw.on { background: var(--violet); }
-.sw.on i { transform: translateX(18px); }
-.st-empty { padding: 14px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); color: var(--ink-2); font-size: 14px; }
-.st-note { margin: 8px 4px 0; font-size: 12px; color: var(--ink-3); }
-.st-wide { width: 100%; padding: 12px; border-radius: 16px; background: rgba(143, 99, 255, .22); color: var(--ink); font-weight: 650; }
-.ub-row { padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); }
-.ub-row.failed { border-color: rgba(255, 190, 85, .4); }
-.ub-t { display: flex; gap: 8px; align-items: flex-start; font-size: 14.5px; line-height: 1.35; }
-.ub-t svg { flex: 0 0 16px; width: 16px; height: 16px; margin-top: 2px; fill: none; stroke: var(--violet-2); stroke-width: 1.8; }
-.ub-t span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.ub-m { margin-top: 5px; font-size: 12px; color: var(--ink-3); }
-.ub-m .fail { color: var(--amber); font-weight: 700; }
-.ub-a { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-.ub-a button { padding: 8px 14px; border-radius: 99px; background: rgba(143, 99, 255, .24); color: var(--ink); font-size: 13px; font-weight: 650; }
-.ub-a button.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
-
 /* Sent pill: after the orb sends, the transcript card collapses to one short line above the orb
    and fades (~1.2 s). Same quiet confirmation as the floating orb; the sent words stay in the thread. */
 .voice .transcript.brief {
@@ -825,30 +795,7 @@ body {
 .dv-take { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 12px; margin-bottom: 8px; border-radius: 16px; background: var(--glass); border: 1px solid var(--line); }
 .dv-tk { flex: 1; font-size: 14px; font-variant-numeric: tabular-nums; }
 .dv-note { margin: 6px 4px 0; font-size: 12px; color: var(--ink-3); }
-.dv-update { position: absolute; left: 10px; right: 10px; top: calc(40px + var(--safe-t)); z-index: 60; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-radius: 18px;
-  background: rgba(14, 8, 34, .92); border: 1px solid var(--line-2); box-shadow: 0 10px 30px rgba(0, 0, 0, .45); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); font-size: 13.5px; }
-.dv-update[hidden] { display: none; }
-.dv-ui { color: var(--violet-2); font-size: 15px; }
-.dv-um { flex: 1; min-width: 0; font-weight: 600; }
-.dv-update button { padding: 7px 14px; border-radius: 99px; background: var(--violet); color: #fff; font-weight: 700; font-size: 13px; }
-.dv-update button.later { padding: 7px 9px; background: transparent; color: var(--ink-3); }
-/* Web update banner: which thread it came from (James, 12 Oct). Top row: message · Thread · Reload; the list of
- * threads drops below when one update carries several. */
-.dv-update.web { flex-direction: column; align-items: stretch; gap: 0; padding-left: 14px; }
-.dv-wtop { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.dv-update.web .dv-um { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dv-update.web .dv-um.two { display: flex; flex-direction: column; line-height: 1.25; white-space: normal; }
-.dv-um.two small { font-size: 11.5px; font-weight: 500; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dv-um.two b { white-space: normal; font-weight: 650; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; } /* a long thread name wraps once rather than being cut */
-.dv-update button.dv-wt { flex: none; padding: 5px 9px; border: 1px solid var(--line-2); color: var(--ink-2); font-weight: 600; font-size: 12px; }
-.dv-update.web .dv-wtop > button[data-web="go"] { flex: none; padding: 7px 12px; }
-.dv-wl { display: flex; flex-direction: column; margin-top: 8px; max-height: 46vh; overflow-y: auto; border-top: 1px solid var(--line); }
-.dv-update .dv-wr { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; text-align: left; padding: 9px 4px; border-radius: 0; background: transparent; color: var(--ink); font-weight: 400; border-bottom: 1px solid var(--line); }
-.dv-wr:last-child { border-bottom: 0; }
-.dv-wr b { grid-column: 1; font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dv-wr small { grid-column: 1; color: var(--ink-3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dv-wr .dv-wgo { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--ink-3); font-size: 16px; }
-.dv-wr.static { opacity: .7; }
+/* .dv-update banners (APK update, web update): core/update-banner.css, shared with the desktop shell. */
 /* ================= Immersive full screen (James, 9 Oct) =================
  * A full-screen window owns the whole display: no window title bar, no bottom bar, no desk label.
  * Out: pinch in, swipe up from the bottom edge, or Back. In Chats the orb stays, small, bottom-right,
@@ -869,6 +816,16 @@ body {
 .device.immersive:not(.orb-corner) .arc, .device.immersive:not(.orb-corner) .timer { visibility: hidden; }
 .device.immersive .voice .transcript.brief { bottom: calc(var(--safe-b) + 74px); }
 .device.immersive .transcript { bottom: calc(var(--safe-b) + 150px); }
+
+/* Text entry temporarily reveals the same corner orb; reading immersion remains unchanged. */
+.orb-wrap[data-mode="type"] #orbFallback, .orb-wrap[data-mode="typing"] #orbFallback { filter: sepia(1) saturate(6) hue-rotate(155deg); }
+.transcript.dictation #txText { user-select: text; -webkit-user-select: text; white-space: pre-wrap; }
+.device.dictation-recording #arcAttach, .device.dictation-recording #arcScreen { display: none; }
+/* Dictation progress lives beside the orb, without another card above the app. */
+.dictation-status { position: absolute; right: calc(100% + 8px); top: 50%; transform: translateY(-50%); color: var(--ink-3); font-size: 11px; font-weight: 500; line-height: 16px; white-space: nowrap; pointer-events: none; }
+.dictation-status:empty { display: none; }
+.device.dictation-recording[data-voice="think"] #dotsL { visibility: hidden; }
+.device.dictation-recording[data-voice="think"] #transcript { visibility: hidden; pointer-events: none; }
 
 /* Chats in full screen: the bottom bar shrinks to just the orb, in the composer row's right corner. */
 .device.orb-corner { --corner-orb: 44px; --corner-r: 12px; --corner-b: 9px; }
@@ -915,13 +872,6 @@ body {
 .imm-edge.pull i { width: 110px; margin-left: -55px; }
 .device.orb-corner .imm-edge i { left: calc(50% + 29px); }
 /* Settings → Cancelled recordings (core/cancelled.js) */
-.cx-row { padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); }
-.cx-t { font-size: 14px; color: var(--ink-2); }
-.cx-t b { color: var(--ink); font-weight: 650; font-variant-numeric: tabular-nums; }
-.cx-text { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(0, 0, 0, .22); font-size: 14px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; max-height: 40vh; overflow: auto; user-select: text; -webkit-user-select: text; }
-.cx-err { margin-top: 6px; font-size: 12.5px; color: #ffbe55; }
-.cx-row .ub-a button[disabled] { opacity: .6; }
-
 /* Home utility shortcuts stay quiet beside Settings, away from attention cards. */
 .home .home-top { padding-top: 40px; } /* reserve the 44px shortcut row, including long dates on narrow phones */
 .home-tools { position: absolute; z-index: 5; top: calc(var(--sb) + var(--safe-t) + 8px); right: 12px; display: flex; align-items: center; gap: 6px; }

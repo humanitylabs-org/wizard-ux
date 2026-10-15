@@ -113,16 +113,24 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= #11 models ================= */
   function threadModel(s) {
-    const selected = s && M?.selections.get(s.id); if (selected) return selected;
-    return s ? { model: s.model || '', provider: s.provider || '' } : { model: '', provider: '' };
+    return M?.currentRoute(s?.id || '') || { model: '', provider: '' };
   }
-  function newModel(c) { return c.newModel || (M?.defaultOption() ? { model: M.defaultOption().value, provider: M.defaultOption().provider, isDefault: true } : null); }
+  // Agents MVP: the agent a window or thread belongs to (null = the main agent).
+  const agentOfWin = (w, s) => { const AG = window.WosAgents; const id = (s && LIVE.agentOf?.(s.id)) || (w && w.agent) || ''; return AG && id && AG.isOther(id) ? AG.get(id) || { id, label: id, missing: true } : null; };
+  function newModel(c, w) {
+    if (c.newModel) return c.newModel;
+    const ag = agentOfWin(w || H.win(Object.keys(A.CH).find(k => A.CH[k] === c) || ''), null);
+    if (ag) { const r = ag.missing ? null : window.WosAgents.route(ag); return r ? { ...r, isDefault: true } : null; }
+    return M?.defaultOption() ? { model: M.defaultOption().value, provider: M.defaultOption().provider, isDefault: true } : null;
+  }
   // The chip in the thread header: the model this thread (or this new chat) runs on. Tap to change it.
   function modelChip(w, s) {
     if (!M) return '';
-    const cur = w.thread === '__new__' ? newModel(ch(w.id)) : s ? threadModel(s) : null;
-    const label = cur?.model ? M.short(cur.model, cur.provider) : M.ready ? 'Default model' : 'Model';
-    return `<button type="button" class="ch-model" data-chmodel aria-label="Model: ${esc(cur?.model ? M.name(cur.model, cur.provider) : 'default')}. Change model" title="${esc(cur?.model || '')}">${esc(label)}<i aria-hidden="true">▾</i></button>`;
+    const ag = agentOfWin(w, s);
+    const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
+    const full = cur?.model ? (ag ? window.WosAgents.modelName(ag, cur.model) : M.name(cur.model, cur.provider)) : 'default';
+    const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
+    return `<button type="button" class="ch-model${ag ? ' agent' : ''}" data-chmodel aria-label="Model: ${esc(full)}. Change model" title="${esc(cur?.model || '')}">${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
   let modelsAsked = false;
   function ensureModels() {
@@ -133,7 +141,7 @@ window.WosChatPower = function chatPower(A) {
   async function pickModel(o) {
     const sh = sheet; if (!sh || sh.type !== 'model') return;
     const c = ch(sh.wid), w = H.win(sh.wid); closeSheet();
-    if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider }; toast('◇', `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
+    if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     const cur = threadModel(s);
     const same = cur.model === o.value && (!o.provider || cur.provider === o.provider);
@@ -222,12 +230,12 @@ window.WosChatPower = function chatPower(A) {
   const micBtn = wid => { if (!H.recordReply) return ''; const sid = H.win(wid)?.thread, on = !!sid && H.recordingFor?.() === sid; return `<button type="button" class="ch-mic${on ? ' on' : ''}" data-chmic aria-pressed="${on}" aria-label="${on ? 'Send this voice reply' : 'Record a voice reply to this thread'}" title="${on ? 'Send voice reply' : 'Voice reply to this thread'}">${A.MIC_SVG.replace('<svg ', '<svg class="mc" ')}${SEND_SVG}</button>`; };
   /* A recording made from a thread's composer: always delivered to that thread (pinned when recording started),
    * through the durable outbox, which transcribes it and keeps the recording as a voice note. */
-  async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null) {
+  async function sendVoiceTo(wid, sid, blob, files = [], seal = true, route = null, custodyId = null, captureId = null, capturedRunId = undefined) {
     if (!OUTBOX || !blob || !sid) return null;
     const w = H.win(wid), c = ch(wid);
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
-    const steerRunId = s && A.WORKING_ST.has(s.status) && s.runId ? s.runId : '';
+    const steerRunId = capturedRunId ?? (s && A.WORKING_ST.has(s.status) && s.runId ? s.runId : '');
     const nm = route || (isNew ? (c.newModel || null) : null);
     // The thread's composer rides with the recording as ONE message (legacy H4): the words typed or pasted
     // there (a link, say) go before the transcript, its photos and files with the voice note, and the composer
@@ -238,24 +246,25 @@ window.WosChatPower = function chatPower(A) {
     const wasHere = !!w && w.thread === sid;
     if (isNew) c.newModel = null;
     c.follow = true;
-    // Send and go: a voice reply from the composer mic steps back to the list like a typed send (chats.js), on
+    const instructions = H.viewContext(wid, 'a voice reply recorded in this thread');
+    // Send and go: a voice reply steps back one level like a typed send (chats.js), on
     // the tap, not after the recording has been written to the phone's storage (a blob commit can take seconds).
-    const left = !!w && !!A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
+    const left = w && A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
     const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
     if (w) A.renderChats(w);
     let it;
     try {
-      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', typed: sealed.text, audio: blob,
-        instructions: H.viewContext(wid, 'a voice reply recorded in this thread'), files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
-        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
+      it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', typed: sealed.text, audio: blob,
+        instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
+        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && w?.agent ? { agent: w.agent } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
       if (isNew && nm) c.newModel = nm;
       sealed.putBack();
-      if (left && w && !w.thread) A.openChat(wid, sid);
+      if (left) left.restore();
       throw e;
     }
-    sealed.done();
+    sealed.done(it);
     return it;
   }
   function paintMic(on, sid) {
@@ -274,7 +283,7 @@ window.WosChatPower = function chatPower(A) {
     el.querySelectorAll('.ch-psheet').forEach(n => n.remove());
     let html = '';
     if (sheet.type === 'model') {
-      const r = M.sheetHtml({ mode: sheet.mode, cur: sheet.cur, all: sheet.all, title: '' });
+      const r = M.sheetHtml({ mode: sheet.mode, cur: sheet.cur, all: sheet.all, title: '', agent: sheet.agent || null });
       sheet.list = r.list; html = r.html;
     } else if (sheet.type === 'files') {
       const tw = H.win(sheet.wid), c = ch(sheet.wid);
@@ -290,8 +299,8 @@ window.WosChatPower = function chatPower(A) {
     if (!M) return;
     const wid = A.owner(pane), w = H.win(wid); if (!w || !w.thread) return;
     const s = w.thread === '__new__' ? null : LIVE.session(w.thread);
-    const cur = mode === 'new' ? newModel(ch(wid)) : threadModel(s);
-    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false });
+    const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(s);
+    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent: agentOfWin(w, s) });
     if (!M.ready) M.load().then(() => { if (sheet?.type === 'model') paint(sheet.pane, A.elOf(sheet.pane)); });
   }
   function openFiles(pane) {
@@ -349,7 +358,7 @@ window.WosChatPower = function chatPower(A) {
     const ad = t.closest('[data-attdismiss]'); if (ad) { E.dismissAttention(ad.dataset.attdismiss).then(ok => toast(ok ? '✓' : '!', ok ? 'Dismissed' : 'Couldn’t dismiss · try again', ok ? 1400 : 2400)); return true; }
     const od = t.closest('[data-obdismiss]'); if (od) {
       const oid = od.dataset.obdismiss;
-      if (confirmDel.id === oid && Date.now() - confirmDel.at < 4000) { confirmDel = { id: '', at: 0 }; OUTBOX.remove(oid); toast('✕', 'Recording deleted', 1400); }
+      if (confirmDel.id === oid && Date.now() - confirmDel.at < 4000) { confirmDel = { id: '', at: 0 }; OUTBOX.remove(oid).then(ok => toast(ok ? '✕' : '!', ok ? 'Recording deleted' : 'Deletion not saved · keep Wizard open', 2400)); }
       else { confirmDel = { id: oid, at: Date.now() }; rerenderLists(); setTimeout(() => { if (confirmDel.id === oid) { confirmDel = { id: '', at: 0 }; rerenderLists(); } }, 4100); }
       return true;
     }

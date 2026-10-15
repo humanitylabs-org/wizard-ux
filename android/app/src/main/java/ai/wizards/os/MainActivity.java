@@ -388,6 +388,7 @@ public class MainActivity extends Activity {
                     ? "{\"action\":\"thread\",\"id\":" + Handoff.quote(intent.getStringExtra(EXTRA_THREAD)) + "}"
                 : Handoff.json(act, intent.getStringExtra(Intent.EXTRA_TEXT));
         if (json == null) return;
+        if (ACTION_THREAD.equals(act)) android.util.Log.i("WizardHandoff", "open thread " + intent.getStringExtra(EXTRA_THREAD)); // QA: notification → thread
         intent.setAction(Intent.ACTION_MAIN); // a handoff runs once, not again on rotation/restore
         pendingHandoff = json;
         handoffTries = 0;
@@ -703,6 +704,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         web.onResume();
+        ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
         resumed = true;
         if (reach != null && reach.isOffline()) main.postDelayed(this::retryReach, 300); // back from Tailscale: try now
         if (mizel != null) mizel.setPcmForeground(true);

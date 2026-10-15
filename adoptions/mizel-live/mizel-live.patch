@@ -1,0 +1,806 @@
+diff --git a/web/app.js b/web/app.js
+index d3b9360..1dbce4e 100644
+--- a/web/app.js
++++ b/web/app.js
+@@ -401,7 +401,7 @@ function renderSuggestions() {
+ // Chrome's gesture rules are satisfied even though the meeting is created over the network first.
+ let pendingAutostart = null; // { id, warm }
+ async function startFromEvent(ev) {
+-  const warm = prewarmCapture();
++  let warm;try{warm=prewarmCapture();}catch(e){toast(errMsg(e),{error:true});return;}
+   try {
+     const m = await API.create({ calendar_event_id: ev.id, title: ev.title, transcribe: 'window' });
+     pendingAutostart = { id: m.id, warm };
+@@ -412,7 +412,7 @@ let creating = false;
+ async function newMeeting() {
+   if (creating) return;
+   if (state.rec && state.rec.phase !== 'error') { navigate(state.rec.meetingId); toast('Already recording. Stop this one first.'); return; }
+-  const warm = prewarmCapture();
++  let warm;try{warm=prewarmCapture();}catch(e){toast(errMsg(e),{error:true});return;}
+   creating = true; els.btnNew.disabled = true; els.btnNewMobile.disabled = true;
+   try {
+     const m = await API.create({ transcribe: 'window' });
+@@ -579,7 +579,7 @@ function renderStatus(m) {
+   const r = state.rec?.meetingId === m.id ? state.rec : null;
+   if (r?.phase === 'error') {
+     kids.push(h('div', { class: 'w-notice is-danger' }, h('span', { class: 'msg', text: r.error || 'Recording failed to start.' }),
+-      h('button', { class: 'w-btn w-btn-sm w-btn-primary', type: 'button', text: 'Try again', onclick: () => beginRecording({}) }),
++      h('button', { class: 'w-btn w-btn-sm w-btn-primary', type: 'button', text: 'Try again', onclick: () => state.rec?.engine?.result ? stopRecording() : beginRecording({}) }),
+       h('button', { class: 'w-btn w-btn-sm', type: 'button', text: 'End meeting', onclick: () => finishWithoutAudio(m) })));
+   } else if (m.status === 'recording' && !r && justStoppedHere(m)) {
+     kids.push(h('div', { class: 'w-notice is-accent' }, h('span', { class: 'w-spinner' }), h('span', { class: 'msg', text: 'Saving the last of the recording…' })));
+@@ -678,6 +678,7 @@ function renderEnhanced(m) {
+ // Notes autosave: debounce 800 ms, PUT with base_rev, 409 → keep both copies visible.
+ function autogrow() { const t = els.notepad; if (t.hidden) return; t.style.height = 'auto'; t.style.height = `${t.scrollHeight}px`; }
+ function renderSaved() {
++  syncNotesUpdateHold();
+   const el = els.saved; if (!el) return;
+   if (state.current && state.docMode === 'notes') renderReviewNotes(state.current);
+   const m = state.current; const n = state.notes;
+@@ -979,33 +980,11 @@ async function pollDetail() {
+ }
+ 
+ // ───────────────────────── 8. Capture ─────────────────────────
+-const SAMPLE_RATE = 16000;
+-function wavBlob(int16) {
+-  const buf = new ArrayBuffer(44 + int16.length * 2); const v = new DataView(buf);
+-  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+-  str(0, 'RIFF'); v.setUint32(4, 36 + int16.length * 2, true); str(8, 'WAVE');
+-  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+-  v.setUint32(24, SAMPLE_RATE, true); v.setUint32(28, SAMPLE_RATE * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+-  str(36, 'data'); v.setUint32(40, int16.length * 2, true);
+-  new Int16Array(buf, 44).set(int16);
+-  return new Blob([buf], { type: 'audio/wav' });
+-}
+-const supportsSystemAudio = () => !!navigator.mediaDevices?.getDisplayMedia && !/Android|iPhone|iPad/i.test(navigator.userAgent);
+-const requestDisplayAudio = () => navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+-// Called synchronously inside a click: creates the AudioContext (Safari/WKWebView) and, if the user
+-// opted in, asks for computer audio (Chrome needs a fresh gesture for getDisplayMedia).
+-function prewarmCapture() {
+-  if (window.wizardNative?.meetings) return {};
+-  const warm = {};
+-  try { warm.ctx = new AudioContext(); warm.ctx.resume?.(); } catch { /* no WebAudio */ }
+-  if (prefs.systemAudio && supportsSystemAudio()) warm.display = requestDisplayAudio().catch((e) => { warm.displayError = e; return null; });
+-  return warm;
+-}
+-function discardWarm(w) {
+-  if (!w) return;
+-  w.ctx?.close?.().catch(() => {});
+-  w.display?.then((s) => s?.getTracks().forEach((t) => t.stop()));
+-}
++// Platform capture is exclusively WizardApp; this app owns domain uploads and finalization.
++const captureCaps = () => { try { return WizardApp.capture.capabilities({ kind: 'meeting' }); } catch { return {}; } };
++const supportsSystemAudio = () => !!captureCaps().systemAudio;
++function prewarmCapture() { return WizardApp.capture.prepare({ kind: 'meeting', pcm: true, systemAudio: prefs.systemAudio && !!captureCaps().systemAudioStart }); }
++function discardWarm(w) { w?.release?.(); }
+ 
+ // In-memory upload queue with exponential backoff; one request in flight at a time.
+ class Uploader {
+@@ -1018,7 +997,8 @@ class Uploader {
+     while (this.q.length && !this.abandoned) {
+       const it = this.q[0];
+       try {
+-        await API.chunk(this.meetingId, it.source, it.seq, it.startMs, it.blob);
++        const receipt = await API.chunk(this.meetingId, it.source, it.seq, it.startMs, it.blob);
++        if (receipt?.stored !== true) throw new Error('The meeting backend did not confirm durable chunk storage.');
+         this.q.shift(); this.failures = 0; this.lastError = null; this.onChange();
+       } catch (e) {
+         this.failures++; this.lastError = e; this.onChange();
+@@ -1032,227 +1012,79 @@ class Uploader {
+   abandon() { this.abandoned = true; this.wake(); }
+ }
+ 
+-class BrowserRecorder {
+-  constructor(meetingId, cbs, { warm = null, seqBase = {}, offsetMs = 0 } = {}) {
+-    this.meetingId = meetingId; this.cbs = cbs; this.warm = warm || {}; this.ctx = this.warm.ctx || null; this.seqBase = seqBase; this.offsetMs = offsetMs;
+-    this.tracks = new Map(); this.startedAt = 0; this.pausedAt = 0; this.pausedTotal = 0; this.raf = 0; this.stopped = false; this.sink = null;
+-    this.uploader = new Uploader(meetingId, () => cbs.onQueue(this.uploader));
+-  }
+-  get elapsedMs() { if (!this.startedAt) return this.offsetMs; return this.offsetMs + (this.pausedAt || performance.now()) - this.startedAt - this.pausedTotal; }
+-  get hasSystemAudio() { return this.tracks.has('them'); }
+-  async start({ systemAudio }) {
+-    if (!navigator.mediaDevices?.getUserMedia) throw new Error('This browser cannot record audio.');
+-    if (!this.ctx || this.ctx.state === 'closed') this.ctx = new AudioContext();
+-    if (!this.ctx.audioWorklet) throw new Error('AudioWorklet is not available in this browser.');
+-    let displayP = this.warm.display || null;
+-    if (!displayP && systemAudio && supportsSystemAudio()) displayP = requestDisplayAudio().catch((e) => { this.warm.displayError = e; return null; });
+-    await this.ctx.audioWorklet.addModule('capture-worklet.js');
+-    this.sink = this.ctx.createGain(); this.sink.gain.value = 0; this.sink.connect(this.ctx.destination);
+-    const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+-    if (this.ctx.state !== 'running') await this.ctx.resume();
+-    this.startedAt = performance.now();
+-    this.addSource('me', mic, this.offsetMs);
+-    if (displayP) {
+-      const disp = await displayP;
+-      try { if (!disp) throw this.warm.displayError || new Error('cancelled'); this.attachDisplay(disp); }
+-      catch (e) { this.cbs.onWarn(`Computer audio not captured: ${e?.message || e?.name || e}.`); }
+-    }
+-    this.meter();
+-  }
+-  addSource(name, stream, baseMs) {
+-    const src = this.ctx.createMediaStreamSource(stream);
+-    const analyser = this.ctx.createAnalyser(); analyser.fftSize = 512;
+-    const node = new AudioWorkletNode(this.ctx, 'pcm16-downsampler', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { targetRate: SAMPLE_RATE, chunkSeconds: 5 } });
+-    src.connect(analyser); analyser.connect(node); node.connect(this.sink);
+-    const t = { name, stream, src, analyser, node, seq: this.seqBase[name] || 0, samples: 0, baseMs, data: new Uint8Array(analyser.fftSize), flushResolve: null };
+-    if (name === 'me' && this.cbs.onLive) {
+-      // Live mode: a second 250 ms tap of the same 16 kHz mic stream feeds live words.
+-      t.liveNode = new AudioWorkletNode(this.ctx, 'pcm16-downsampler', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { targetRate: SAMPLE_RATE, chunkSeconds: 0.25 } });
+-      analyser.connect(t.liveNode); t.liveNode.connect(this.sink);
+-      t.liveNode.port.onmessage = (e) => { if (e.data?.type === 'chunk' && e.data.samples?.length && !this.pausedAt) this.cbs.onLive(e.data.samples); };
+-    }
+-    node.port.onmessage = (e) => this.onChunk(t, e.data);
+-    stream.getAudioTracks()[0]?.addEventListener('ended', () => { if (this.stopped) return; if (name === 'them') this.removeSystemAudio(); else this.cbs.onWarn('Microphone was disconnected. Stop and resume to continue.'); });
+-    this.tracks.set(name, t);
+-  }
+-  onChunk(t, msg) {
+-    if (msg?.type !== 'chunk') return;
+-    const samples = msg.samples;
+-    if (samples?.length) {
+-      const startMs = Math.round(t.baseMs + t.samples / (SAMPLE_RATE / 1000));
+-      t.samples += samples.length;
+-      this.uploader.enqueue({ source: t.name, seq: t.seq++, startMs, blob: wavBlob(samples) });
+-    }
+-    if (msg.final && t.flushResolve) { t.flushResolve(); t.flushResolve = null; }
+-  }
+-  attachDisplay(disp) {
+-    disp.getVideoTracks().forEach((v) => { v.stop(); disp.removeTrack(v); });
+-    if (!disp.getAudioTracks().length) { disp.getTracks().forEach((x) => x.stop()); throw new Error('no audio was shared (tick “Share audio” in the picker)'); }
+-    this.addSource('them', disp, this.elapsedMs);
+-    this.cbs.onState();
+-  }
+-  async addSystemAudio() { if (this.tracks.has('them')) return; this.attachDisplay(await requestDisplayAudio()); }
+-  async removeSystemAudio() {
+-    const t = this.tracks.get('them'); if (!t) return;
+-    await this.flush(t); this.teardown(t); this.tracks.delete('them'); this.noteFinal(t); this.cbs.onState();
+-  }
+-  // The last chunk seq per track; sent with Stop so the server waits for every chunk before finishing.
+-  noteFinal(t) { this.finalSeq = this.finalSeq || {}; if (t.seq > 0) this.finalSeq[t.name] = t.seq - 1; }
+-  // Per-channel levels so the recorder can show Me and Them separately.
+-  meter() {
+-    const tick = () => {
+-      const levels = { me: 0, them: 0 };
+-      for (const t of this.tracks.values()) {
+-        t.analyser.getByteTimeDomainData(t.data);
+-        let sum = 0; for (let i = 0; i < t.data.length; i++) { const x = (t.data[i] - 128) / 128; sum += x * x; }
+-        levels[t.name] = this.pausedAt ? 0 : Math.min(1, Math.sqrt(sum / t.data.length) * 3.2);
+-      }
+-      this.cbs.onLevel(levels);
+-      this.raf = requestAnimationFrame(tick);
+-    };
+-    this.raf = requestAnimationFrame(tick);
+-  }
+-  async pause() { if (this.pausedAt) return; this.pausedAt = performance.now(); await this.ctx.suspend(); }
+-  async resume() { if (!this.pausedAt) return; this.pausedTotal += performance.now() - this.pausedAt; this.pausedAt = 0; await this.ctx.resume(); }
+-  flush(t) { return new Promise((res) => { t.flushResolve = res; t.node.port.postMessage({ type: 'flush' }); setTimeout(res, 1500); }); }
+-  teardown(t) {
+-    try { if (t.liveNode) { t.liveNode.port.onmessage = null; t.liveNode.disconnect(); } } catch { /* already gone */ }
+-    try { t.node.port.onmessage = null; t.src.disconnect(); t.analyser.disconnect(); t.node.disconnect(); } catch { /* already gone */ }
+-    t.stream.getTracks().forEach((x) => x.stop());
++class SharedMeeting {
++  constructor(meetingId, cbs, { warm = null, seqBase = {}, offsetMs = 0, captureId = null } = {}) {
++    Object.assign(this, { meetingId, cbs, warm, seqBase, offsetMs, captureId });
++    this.offs=[];this.finalSeq={};this.sent=new Set();this.info={};this.st=null;this.result=null;
++    this.uploader=new Uploader(meetingId,()=>cbs.onQueue());
+   }
+-  async stop() {
+-    this.stopped = true; cancelAnimationFrame(this.raf);
+-    if (this.ctx.state === 'suspended') await this.ctx.resume().catch(() => {});
+-    await Promise.all([...this.tracks.values()].map((t) => this.flush(t)));
+-    for (const t of this.tracks.values()) { this.teardown(t); this.noteFinal(t); }
+-    this.tracks.clear();
+-    await this.ctx.close().catch(() => {});
+-    this.cbs.onLevel({ me: 0, them: 0 });
++  get native() { return !!this.info.native; }
++  get wos() { return !!this.info.backendStopOwned; }
++  get livePcm() { return this.info.livePcm !== false; }
++  get elapsedMs() { return this.session ? this.session.getInfo().durationMs || 0 : this.result?.durationMs || 0; }
++  get hasSystemAudio() { return this.session ? this.session.getInfo().hasSystemAudio : false; }
++  get systemAudioAvailable() { return !!this.info.capabilities?.systemAudio; }
++  acceptChunk(item) {
++    this.finalSeq[item.source]=Math.max(this.finalSeq[item.source] ?? -1,item.seq);
++    const key=item.source+':'+item.seq;if(this.sent.has(key))return;this.sent.add(key);this.uploader.enqueue(item);
+   }
+-  async abort() {
+-    this.stopped = true; cancelAnimationFrame(this.raf);
+-    for (const t of this.tracks.values()) this.teardown(t);
+-    this.tracks.clear(); discardWarm({ display: this.warm.display });
+-    await this.ctx?.close?.().catch(() => {});
+-    this.uploader.abandon();
+-  }
+-}
+-
+-// Native shell bridge (Wizard Mac app / Android): same chunk contract, capture and upload handled natively.
+-// Levels may arrive as a number (mixed) or {me, them}. See window.mizel below for the reverse direction.
+-class NativeRecorder {
+-  // Two native shells speak this contract:
+-  //  · Wizard OS (Android): window.wizardMizelPort, wrapped below as wizardNative.meetings with onState().
+-  //    The phone owns the mic, writes 5 s chunks to its own storage first, uploads them and sends Stop
+-  //    (with final_seq) itself, so it keeps recording with the screen off and survives network loss.
+-  //  · Wizard for Mac: start/stop/pause/resume + onLevel; the page keeps time.
+-  constructor(bridge, meetingId, cbs) {
+-    this.b = bridge; this.meetingId = meetingId; this.cbs = cbs; this.systemAudio = false; this.offs = [];
+-    this.startedAt = 0; this.pausedAt = 0; this.pausedTotal = 0; this.st = null; this.stAt = 0;
+-    this.wos = typeof bridge.onState === 'function';
+-    const self = this;
+-    this.uploader = { get pending() { return self.st?.pendingChunks || 0; }, lastError: null, abandoned: false, drain: async () => {}, wake() {}, abandon() {} };
+-  }
+-  get native() { return true; }
+-  get elapsedMs() {
+-    if (this.wos) { const s = this.st; if (!s) return 0; return (s.mediaMs || 0) + (s.paused ? 0 : Math.min(1500, performance.now() - this.stAt)); }
+-    return this.startedAt ? (this.pausedAt || performance.now()) - this.startedAt - this.pausedTotal : 0;
+-  }
+-  get hasSystemAudio() { return this.systemAudio; }
+-  get paused() { return !!this.st?.paused; }
+-  listen() {
+-    this.detach();
+-    this.offs.push(this.b.onLevel?.((lvl) => this.cbs.onLevel(lvl)));
+-    if (this.wos) { this.offs.push(this.b.onState((s) => this.setState(s))); this.offs.push(this.b.onPcm?.(f => { if (this.livePcm && f.meetingId === this.meetingId) this.cbs.onLive?.(f.pcm, f.startMs); })); }
+-  }
+-  setState(s) {
+-    if (!s) return; this.st = s; this.stAt = performance.now();
+-    if (this.wos && s.livePcm && s.recording && !this.livePcm && this.b.pcm) {
+-      this.livePcm = true;
+-      this.b.pcm(this.meetingId, true).catch(() => { this.livePcm = false; if (live.on && live.meetingId === this.meetingId) live.start(this.meetingId, live.title, { follow: true }); });
+-    }
+-    this.cbs.onNative?.(s, this);
+-  }
+-  attach(s) { this.listen(); this.setState(s); }
+   async start({ systemAudio }) {
+-    this.listen();
+-    if (!this.wos) {
+-      this.systemAudio = !!systemAudio;
+-      await this.b.start({ meetingId: this.meetingId, includeSystemAudio: !!systemAudio });
+-      this.startedAt = performance.now(); return;
+-    }
+-    let s;
+-    try { s = await this.b.start({ meetingId: this.meetingId }); }
+-    catch (e) {
+-      if (e?.code !== 'mic_permission' || !navigator.mediaDevices?.getUserMedia) throw e;
+-      // Android asks for the microphone through the normal web prompt; then the phone recorder can start.
+-      const probe = await navigator.mediaDevices.getUserMedia({ audio: true }); probe.getTracks().forEach((t) => t.stop());
+-      s = await this.b.start({ meetingId: this.meetingId });
+-    }
+-    this.setState(s);
++    this.session=await WizardApp.capture.start({ kind:'meeting',pcm:true,mime:'audio/wav',chunkMs:5000,
++      systemAudio:!!systemAudio && !!captureCaps().systemAudioStart, preparedId:this.warm?.id,
++      resumeId:this.captureId || undefined,seqBase:this.seqBase,offsetMs:this.offsetMs,meta:{meetingId:this.meetingId} });
++    this.captureId=this.session.id;this.info=this.session.getInfo();this.st=this.info.state;
++    sessionStorage.setItem('mizel.sharedCapture',JSON.stringify({id:this.captureId,meetingId:this.meetingId}));
++    this.offs.push(this.session.onLevel(lvl=>this.cbs.onLevel(lvl)),
++      this.session.onPcm(f=>this.cbs.onLive?.(f.pcm,f.startMs)),
++      this.session.onChunk(c=>this.acceptChunk(c)),
++      this.session.onWarn(msg=>this.cbs.onWarn(msg)),
++      this.session.onState(st=>{ this.st=st;this.info=this.session.getInfo();this.cbs.onNative?.(st,this); }));
++    for(const item of await this.session.chunks())this.acceptChunk(item);
+   }
+-  async pause() {
+-    if (!this.b.pause) return;
+-    if (this.wos) { this.setState(await this.b.pause()); return; }
+-    this.pausedAt = performance.now(); await this.b.pause();
++  async pause() { await this.session.pause(); }
++  async resume() { await this.session.resume(); }
++  async addSystemAudio() { await this.session.setSystemAudio(true);this.info=this.session.getInfo();this.cbs.onState(); }
++  async removeSystemAudio() { await this.session.setSystemAudio(false);this.info=this.session.getInfo();this.cbs.onState(); }
++  async stop() { if(!this.result)this.result=await this.session.stop();for(const item of this.result.streamChunks||[])this.acceptChunk(item);return this.result; }
++  async abort() { discardWarm(this.warm); if(this.session && !this.result)await this.session.cancel();this.detach(); }
++  detach() { for(const off of this.offs.splice(0))off(); }
++  async acknowledge() {
++    // Native uploads and Stop may still be finishing after microphone Stop resolves. Read the own
++    // domain record until durable completion; never expire recording/save holds or restart a take.
++    for(;;){try{await verifyCaptureReadback(this.meetingId,this.result,this.finalSeq);break;}catch(e){
++      if(e.code!=='native_upload_pending')throw e;this.cbs.onQueue();await new Promise(resolve=>setTimeout(resolve,1500));
++    }}
++    await WizardApp.capture.ack(this.captureId);this.detach();
++    try {const hint=JSON.parse(sessionStorage.getItem('mizel.sharedCapture')||'null');if(hint?.id===this.captureId)sessionStorage.removeItem('mizel.sharedCapture');}catch{} }
++}
++// Decode backend WAV only to compare its durable samples; capture/encoding stays in shared core.
++function pcmData(buffer) {
++  const v=new DataView(buffer);if(v.byteLength<44||v.getUint32(0)!==0x52494646||v.getUint32(8)!==0x57415645)throw new Error('Backend audio is not a WAV.');
++  let format=false;
++  for(let at=12;at+8<=v.byteLength;) {
++    const n=v.getUint32(at+4,true),id=v.getUint32(at);if(at+8+n>v.byteLength)throw new Error('Backend WAV is truncated.');
++    if(id===0x666d7420)format=v.getUint16(at+8,true)===1&&v.getUint16(at+10,true)===1&&v.getUint32(at+12,true)===16000&&v.getUint16(at+22,true)===16;
++    if(id===0x64617461){if(!format||n%2)throw new Error('Backend PCM format changed.');return new Int16Array(buffer.slice(at+8,at+8+n));}at+=8+n+(n%2);
++  }throw new Error('Backend WAV has no PCM data.');
++}
++async function verifyCaptureReadback(meetingId, take, finalSeq) {
++  if(!take)throw new Error('No durable shared capture Result.');
++  const saved=await API.meeting(meetingId);
++  if(saved.id!==meetingId)throw new Error('Backend returned a different meeting; audio retained.');
++  if(saved.status==='recording')throw Object.assign(new Error('Backend stop has not been durably read back; audio retained.'),{code:take.meta?.native?.backendOwned?'native_upload_pending':'backend_stop_unconfirmed'});
++  for(const [source,last] of Object.entries(finalSeq))if(Number((saved.audio?.tracks||[]).find(t=>t.source===source)?.chunks||0) < last+1)throw new Error('Backend is missing promised audio; shared capture retained.');
++  if(take.meta?.native?.backendOwned) {
++    if((saved.duration_ms||0)+1<(take.durationMs||0))throw Object.assign(new Error('Native audio is still uploading; shared capture retained.'),{code:'native_upload_pending'});return;
+   }
+-  async resume() {
+-    if (!this.b.resume) return;
+-    if (this.wos) { this.setState(await this.b.resume()); return; }
+-    this.pausedTotal += performance.now() - this.pausedAt; this.pausedAt = 0; await this.b.resume();
+-  }
+-  async stop() { const s = await this.b.stop(); if (this.wos) this.setState(s); this.cbs.onLevel({ me: 0, them: 0 }); this.detach(); }
+-  async abort() { try { await this.b.stop(); } catch { /* ignore */ } this.detach(); }
+-  detach() { if (this.livePcm) { this.livePcm = false; void this.b.pcm?.(this.meetingId, false).catch(() => {}); } for (const f of this.offs) { try { if (typeof f === 'function') f(); } catch { /* ignore */ } } this.offs = []; }
+-}
+-
+-// Wizard OS (Android) exposes window.wizardMizelPort on https://private.wizard001.com only (AndroidX
+-// WebMessageListener). Wrap it as wizardNative.meetings so the recorder above can drive the phone.
+-const NATIVE_ERRORS = {
+-  mic_busy: 'The microphone is busy (Wizard voice or the side button is listening). Finish that first.',
+-  mic_permission: 'Wizard needs microphone access to record.',
+-  busy_other_meeting: 'The phone is already recording another meeting.',
+-  not_recording: 'The phone is not recording.',
+-  wrong_meeting: 'The phone is recording a different meeting.',
+-  start_failed: 'The phone recorder did not start. Try again.',
+-};
+-function installWizardOsPort() {
+-  const port = window.wizardMizelPort;
+-  if (!port || window.wizardNative?.meetings) return null;
+-  let n = 0; let last = null;
+-  const waiting = new Map(); const levelCbs = new Set(); const stateCbs = new Set(); const pcmCbs = new Set();
+-  port.onmessage = (e) => {
+-    let m; try { m = JSON.parse(e.data); } catch { return; }
+-    if (!m) return;
+-    if (m.id != null && waiting.has(m.id)) {
+-      const w = waiting.get(m.id); waiting.delete(m.id); clearTimeout(w.timer);
+-      if (m.status) last = m.status;
+-      if (m.ok) w.res(m.status || null);
+-      else w.rej(Object.assign(new Error(NATIVE_ERRORS[m.error] || m.error || 'Recorder error'), { code: m.error, status: m.status }));
+-      return;
+-    }
+-    if (m.type === 'level') levelCbs.forEach((cb) => cb({ me: Number(m.me) || 0, them: 0 }));
+-    else if (m.type === 'state') { last = m; stateCbs.forEach((cb) => cb(m)); }
+-    else if (m.type === 'pcm' && typeof m.pcm === 'string' && m.pcm.length <= 12000) { try { const s = atob(m.pcm); const pcm = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) pcm[i] = s.charCodeAt(i); if (!(pcm.length % 2)) pcmCbs.forEach(cb => cb({ meetingId: m.meetingId, startMs: m.startMs, pcm })); } catch { /* ignore invalid transient frames */ } }
+-  };
+-  const send = (cmd, extra = {}) => new Promise((res, rej) => {
+-    const id = `c${++n}`;
+-    const timer = setTimeout(() => { if (waiting.delete(id)) rej(new Error('The phone recorder did not answer.')); }, 12000);
+-    waiting.set(id, { res, rej, timer });
+-    port.postMessage(JSON.stringify({ id, cmd, ...extra }));
+-  });
+-  const meetings = {
+-    shell: 'wizard-os', systemAudio: false,
+-    start: ({ meetingId }) => send('start', { meetingId }),
+-    pause: () => send('pause'), resume: () => send('resume'), stop: () => send('stop'), status: () => send('status'),
+-    onLevel: (cb) => { levelCbs.add(cb); return () => levelCbs.delete(cb); },
+-    onState: (cb) => { stateCbs.add(cb); return () => stateCbs.delete(cb); },
+-    onPcm: (cb) => { pcmCbs.add(cb); return () => pcmCbs.delete(cb); },
+-    pcm: (meetingId, enabled) => send('pcm', { meetingId, enabled }),
+-    last: () => last,
+-  };
+-  window.wizardNative = Object.assign(window.wizardNative || {}, { meetings });
+-  return meetings;
++  const items=take.streamChunks||[];if(!items.length && take.blob?.size>44)throw new Error('Shared PCM delivery metadata missing; audio retained.');
++  if(!items.length)return;
++  const first=Math.round(Math.min(...items.map(c=>c.startMs))*16),end=Math.round(Math.max(...items.map(c=>c.startMs+c.durationMs))*16);
++  const expected=new Int32Array(end-first);
++  for(const c of items) {const samples=pcmData(await c.blob.arrayBuffer()),at=Math.round(c.startMs*16)-first;for(let i=0;i<samples.length;i++)expected[at+i]+=samples[i];}
++  const response=await fetch(API.audioUrl(meetingId)+`?capture_readback=${enc(take.id)}`,{credentials:'same-origin',cache:'no-store'});
++  if(!response.ok)throw new Error('Backend audio readback failed; shared capture retained.');
++  const actual=pcmData(await response.arrayBuffer());if(actual.length<end)throw new Error('Backend PCM is incomplete; audio retained.');
++  for(let i=0;i<expected.length;i++)if(actual[first+i]!==Math.max(-32768,Math.min(32767,expected[i])))throw new Error('Backend PCM differs from shared capture; audio retained.');
+ }
+ 
+ // ───────────────────────── 9. Recording controller + floating recorder ─────────────────────────
+@@ -1279,17 +1111,10 @@ async function beginRecording({ warm = null, resume = false, fresh = false } = {
+     onLive: (samples, at) => live.audio(samples, at),
+     onNative: (s, eng) => onNativeState(s, eng),
+   };
+-  const bridge = window.wizardNative?.meetings;
+-  let engine;
+-  if (bridge) engine = new NativeRecorder(bridge, m.id, cbs);
+-  else {
+-    const seqBase = {}; let offsetMs = 0;
+-    if (resume) {
+-      for (const t of m.audio?.tracks || []) seqBase[t.source] = t.chunks || 0;
+-      offsetMs = Math.max(m.duration_ms || 0, ...(m.segments || []).map((s) => s.end_ms || 0), (seqBase.me || 0) * 5000);
+-    }
+-    engine = new BrowserRecorder(m.id, cbs, { warm, seqBase, offsetMs });
+-  }
++  const seqBase = {}; let offsetMs = 0;
++  if (resume) { for(const t of m.audio?.tracks||[])seqBase[t.source]=t.chunks||0;
++    offsetMs=Math.max(m.duration_ms||0,...(m.segments||[]).map(s=>s.end_ms||0),(seqBase.me||0)*5000); }
++  const engine=new SharedMeeting(m.id,cbs,{warm,seqBase,offsetMs});
+   state.rec = { meetingId: m.id, title: m.title, engine, phase: 'starting', paused: false, error: null };
+   renderDoc(); renderRecBanner();
+   try {
+@@ -1298,7 +1123,7 @@ async function beginRecording({ warm = null, resume = false, fresh = false } = {
+     state.rec.phase = 'recording';
+     if (fresh && !resume && state.current?.id === m.id) showParticipantsHint();
+     // New phone builds tee 250 ms PCM frames while durable uploads stay at 5 s. Older builds follow uploads.
+-    live.start(m.id, m.title, { follow: engine instanceof NativeRecorder && !engine.livePcm });
++    live.start(m.id, m.title, { follow: engine.native && !engine.livePcm });
+     if (state.current?.id === m.id && state.current.status !== 'recording') setCurrent({ ...state.current, status: 'recording' });
+     if (state.current?.id === m.id && !isImported(m) && !els.notepad.hidden && !mobileMQ.matches) els.notepad.focus({ preventScroll: true });
+   } catch (e) {
+@@ -1339,66 +1164,60 @@ function onNativeState(s, eng) {
+     renderPillQueue();
+     return;
+   }
+-  if (r.phase === 'recording' && !s.recording) {
+-    const id = r.meetingId;
+-    eng.detach(); endRecSession();
+-    toast(s.pausedMs >= (s.pauseTimeoutMs || PAUSE_LIMIT_MS) - 1000 ? 'Paused for 30 minutes, so the recording was finished and saved.' : 'Recording stopped on the phone. Saved.');
+-    if (state.current?.id === id) loadMeeting(id); else loadMeetings();
++  if (r.phase === 'recording' && s.recording === false) {
++    // Notification Stop crosses the same durable task finalization path; never delete on a push alone.
++    void stopRecording({reason:s.pausedMs >= (s.pauseTimeoutMs||PAUSE_LIMIT_MS)-1000 ? 'pause_timeout' : 'user'});
+   }
+ }
+-// After a reload (or opening Mizel again) the phone may still be recording: pick it back up.
+-async function reattachNative() {
+-  const b = window.wizardNative?.meetings; if (!b?.status || typeof b.onState !== 'function' || state.rec) return;
+-  let s; try { s = await b.status(); } catch { return; }
+-  if (!s?.recording || !s.meetingId || state.rec) return;
+-  const cbs = { onLevel: (lvl) => updateLevel(lvl), onQueue: () => renderPillQueue(), onState: () => renderPill(), onWarn: (msg) => toast(msg, { error: true }), onLive: (samples, at) => live.audio(samples, at), onNative: (x, eng) => onNativeState(x, eng) };
+-  const engine = new NativeRecorder(b, s.meetingId, cbs);
+-  state.rec = { meetingId: s.meetingId, title: '', engine, phase: 'recording', paused: !!s.paused, error: null };
+-  engine.attach(s);
+-  renderRecBanner(); startPillClock(); notifyNative();
+-  live.start(s.meetingId, '', { follow: !engine.livePcm });
+-  if (state.current?.id === s.meetingId) { renderDoc(); schedulePoll(); }
++// Rebind fresh app observers after iframe reload. The shell retains the physical recorder and PCM custody.
++async function reattachShared() {
++  if(state.rec)return;
++  try {
++    const current=WizardApp.capture.current();
++    const pending=await WizardApp.capture.pending();
++    const take=current || pending.find(t=>t.meta?.captureRecovery?.resumable) || pending[0];
++    if(!take?.meta?.meetingId)return;
++    const id=take.meta.meetingId;
++    const cbs={onLevel:updateLevel,onQueue:renderPillQueue,onState:renderPill,onWarn:msg=>toast(msg,{error:true}),onLive:(samples,at)=>live.audio(samples,at),onNative:onNativeState};
++    const engine=new SharedMeeting(id,cbs,{captureId:take.id});
++    state.rec={meetingId:id,title:'',engine,phase:'starting',paused:false,error:null};recordingUpdateHold ||= WizardApp.update.hold('Mizel capture or durable task save');startPillClock();
++    if(current || take.meta?.captureRecovery?.resumable) {
++      await engine.start({systemAudio:false});state.rec.phase='recording';state.rec.paused=!!engine.info.paused;
++      if(engine.info.phase==='error'||engine.info.inputStopped){state.rec.phase='error';await stopRecording();return;}
++      live.start(id,'',{follow:engine.native&&!engine.livePcm});
++    } else {
++      engine.result=take;engine.captureId=take.id;for(const c of take.streamChunks||[])engine.acceptChunk(c);
++      state.rec.phase='uploading';renderPill();await engine.uploader.drain();
++      if(!take.meta?.native?.backendStopOwned)await API.stop(id,{final_seq:engine.finalSeq,reason:take.partial?'process_death':'user'});
++      await engine.acknowledge();endRecSession();void reattachShared();
++    }
++    renderRecBanner();renderPill();notifyNative();if(state.current?.id===id)renderDoc();
++  }catch(e){if(state.rec){state.rec.phase='error';state.rec.error=errMsg(e);renderPill();renderRecBanner();if(state.current?.id===state.rec.meetingId)renderDoc();}toast('Capture retained: '+errMsg(e),{error:true,action:{label:'Retry save',fn:()=>stopRecording()}});}
+ }
++
+ async function toggleSystemAudio() {
+-  const r = state.rec; if (!(r?.engine instanceof BrowserRecorder)) return;
++  const r = state.rec; if (!r?.engine?.systemAudioAvailable) return;
+   try { if (r.engine.hasSystemAudio) await r.engine.removeSystemAudio(); else await r.engine.addSystemAudio(); }
+   catch (e) { if (e?.name !== 'NotAllowedError') toast(`Computer audio: ${e.message || e.name}`, { error: true }); }
+   renderPill();
+ }
+ async function stopRecording({ reason = 'user' } = {}) {
+-  const r = state.rec; if (!r?.engine || r.phase !== 'recording') return;
++  const r = state.rec; if (!r?.engine || !['recording','error'].includes(r.phase)) return;
+   const id = r.meetingId; const engine = r.engine;
+   clearTimeout(r.pauseTimer);
+   r.phase = 'stopping'; renderPill(); renderAskBar();
+   live.stop();
+-  if (engine.wos) {
+-    // The phone finishes on its own: it uploads what is left and then tells the server, with final_seq.
+-    try {
+-      const s = await engine.stop();
+-      // The phone still uploads its last pieces before the server hears "stop"; until then the meeting
+-      // reads as recording. Remember that it was stopped here so that isn't mistaken for an orphan.
+-      stoppedHere = { id, at: Date.now() };
+-      endRecSession();
+-      const left = engine.st?.pendingChunks || 0;
+-      toast(left ? `Saved on the phone. Uploading the last ${pluralize(left, 'piece')}; the transcript and notes follow.` : 'Saved. Transcript and summary are on their way.');
+-      if (state.current?.id === id) loadMeeting(id); else loadMeetings();
+-    } catch (e) {
+-      r.phase = 'recording'; renderPill(); toast(`Couldn't stop: ${errMsg(e)}`, { error: true });
+-    }
+-    return;
+-  }
+   try {
+-    await engine.stop();
+-    r.phase = 'uploading'; renderPill();
+-    await engine.uploader.drain();
+-    if (engine.uploader.abandoned) return; // "Stop anyway" took over
+-    await finishStop(id, { final_seq: engine.finalSeq && Object.keys(engine.finalSeq).length ? engine.finalSeq : undefined, reason });
+-  } catch (e) {
+-    r.phase = 'error'; r.error = `Couldn't finish the recording: ${errMsg(e)}`; renderPill();
+-    if (state.current?.id === id) renderDoc();
+-    toast(r.error, { error: true, action: { label: 'Retry stop', fn: () => finishStop(id) } });
+-  }
++    const take=await engine.stop();r.phase='uploading';renderPill();await engine.uploader.drain();
++    // Native Android owns uploads/final_seq/Stop; Mac and browser keep the existing app Stop controller.
++    if(!take.meta?.native?.backendStopOwned)await API.stop(id,{final_seq:engine.finalSeq,reason});
++    await engine.acknowledge();stoppedHere={id,at:Date.now()};endRecSession();
++    if(state.current?.id===id)await loadMeeting(id);else loadMeetings();
++    toast('Saved. Transcript and summary are on their way.');
++  }catch(e){r.phase='error';r.error='Audio retained: '+errMsg(e);renderPill();if(state.current?.id===id)renderDoc();
++    toast(r.error,{error:true,action:{label:'Retry save',fn:()=>stopRecording({reason})}});}
+ }
++
+ async function finishStop(id, body) {
+   try {
+     const d = await API.stop(id, body && (body.final_seq || body.reason !== 'user') ? body : undefined);
+@@ -1414,17 +1233,17 @@ async function finishStop(id, body) {
+ function stopAnyway() {
+   const r = state.rec; if (!r) return;
+   const lost = r.engine?.uploader?.pending || 0;
+-  const go = () => { r.engine?.uploader?.abandon?.(); finishStop(r.meetingId); };
+-  if (lost) confirmToast(`${pluralize(lost, 'chunk')} of audio could not be uploaded and will be lost.`, 'Stop anyway', go); else go();
++  toast(`${pluralize(lost, 'chunk')} retained by shared capture. Reconnect and retry saving.`, {error:true,action:{label:'Retry save',fn:()=>stopRecording()}});
+ }
+ async function finishWithoutAudio(m) {
+-  if (state.rec?.meetingId === m.id) { try { await state.rec.engine?.abort?.(); } catch { /* ignore */ } endRecSession(); }
++  if (state.rec?.meetingId === m.id) { await stopRecording(); return; }
+   await finishStop(m.id);
+ }
+-function endRecSession() { live.stop(); stopPillClock(); state.rec = null; renderRecBanner(); renderPill(); renderAskBar(); els.docPane.dataset.rec = ''; if (state.current) renderHeader(state.current); notifyNative(); }
++function endRecSession() { state.rec?.engine?.detach?.(); clearTimeout(state.rec?.pauseTimer); recordingUpdateHold?.release(); recordingUpdateHold = null; live.stop(); stopPillClock(); state.rec = null; renderRecBanner(); renderPill(); renderAskBar(); els.docPane.dataset.rec = ''; if (state.current) renderHeader(state.current); notifyNative(); }
+ 
+ let pillClock = 0;
+-function startPillClock() { stopPillClock(); pillClock = setInterval(() => { tickPillClock(); renderRecBanner(); }, 500); }
++let recordingUpdateHold = null;
++function startPillClock() { if (!recordingUpdateHold) recordingUpdateHold = WizardApp.update.hold('Mizel recording'); stopPillClock(); pillClock = setInterval(() => { tickPillClock(); renderRecBanner(); }, 500); }
+ function stopPillClock() { clearInterval(pillClock); pillClock = 0; }
+ function tickPillClock() { const c = $('.clock', els.pill); if (c && state.rec) c.textContent = fmtClock(recElapsed()); }
+ const BAR_SHAPE = [0.5, 0.8, 1, 0.75, 0.45];
+@@ -1453,8 +1272,8 @@ function renderPill() {
+     renderPillQueue(); return;
+   }
+   const segCount = m.segments?.length || 0;
+-  const browser = r.engine instanceof BrowserRecorder;
+-  const sysOk = browser && supportsSystemAudio();
++  const browser = !r.engine?.native;
++  const sysOk = !!r.engine?.systemAudioAvailable;
+   const themOn = !!r.engine?.hasSystemAudio;
+   const meter = () => h('span', { class: 'w-meter', 'aria-hidden': 'true' }, ...BAR_SHAPE.map(() => h('i')));
+   const them = h(sysOk ? 'button' : 'span', {
+@@ -1470,7 +1289,7 @@ function renderPill() {
+     them,
+     h('span', { class: 'divider' }),
+     h('span', { class: 'q qstate' }),
+-    (browser || !!window.wizardNative?.meetings?.pause) && h('button', { class: 'w-icon-btn', type: 'button', title: r.paused ? 'Resume' : 'Pause', 'aria-label': r.paused ? 'Resume' : 'Pause', onclick: togglePause }, icon(r.paused ? 'play' : 'pause')),
++    (browser || !!r.engine?.info?.capabilities?.pause) && h('button', { class: 'w-icon-btn', type: 'button', title: r.paused ? 'Resume' : 'Pause', 'aria-label': r.paused ? 'Resume' : 'Pause', onclick: togglePause }, icon(r.paused ? 'play' : 'pause')),
+     h('button', { class: 'stop', type: 'button', title: `Stop recording (${MOD}↩)`, 'aria-label': 'Stop recording', onclick: stopRecording }, icon('stop'), h('span', { class: 'txt', text: 'Stop' }), h('kbd', { text: `${MOD === '⌘' ? '⌘' : 'Ctrl+'}↩` })));
+   renderPillQueue();
+ }
+@@ -1478,6 +1297,7 @@ function renderPillQueue() {
+   const r = state.rec; const el = $('.qstate', els.pill); if (!r || !el) return;
+   const up = r.engine?.uploader; const n = up?.pending || 0; const failing = !!up?.lastError;
+   if (r.phase === 'uploading' || r.phase === 'stopping') {
++    if(r.engine.native && r.phase==='uploading'){el.textContent='Native recorder is saving…';return;}
+     el.textContent = r.phase === 'stopping' ? 'Finishing…' : n ? `Uploading ${n} ${n === 1 ? 'chunk' : 'chunks'}…${failing ? ` (${navigator.onLine ? 'retrying' : 'offline'})` : ''}` : 'Saving…';
+     const btn = $('.w-btn', els.pill); if (btn) btn.hidden = !(failing && n);
+     return;
+@@ -1761,23 +1581,9 @@ function closeOverlay({ fromHistory = false, preserveEntry = false } = {}) {
+   if (o.manualHistory && !fromHistory && !preserveEntry && history.state?.mizelManualComposer) history.back();
+   return true;
+ }
+-let rootExitArm = 0;
+ window.addEventListener('popstate', (e) => {
+-  if (overlay?.manualHistory && !e.state?.mizelManualComposer) { closeOverlay({ fromHistory: true }); return; }
+-  if (e.state?.mizelRoot && parseHash().view === 'home') {
+-    const now = Date.now();
+-    if (rootExitArm && now - rootExitArm < 2000) { rootExitArm = 0; history.back(); return; }
+-    rootExitArm = now; history.pushState({ mizelRootFloor: true }, '', '#/');
+-    toast('Press back again to exit');
+-  }
++  if (overlay?.manualHistory && !e.state?.mizelManualComposer) closeOverlay({ fromHistory: true });
+ });
+-window.wizardAppBack = () => {
+-  if (overlay?.askId && state.route.ask) { history.back(); return true; }
+-  if (closeOverlay() || closeMenu()) return true;
+-  if (state.drawerOpen) { closeDrawer(); return true; }
+-  if (parseHash().view !== 'home') history.back();
+-  return true; // Native root never leaves the app.
+-};
+ function openOverlay(build) {
+   closeOverlay();
+   const scrim = h('div', { class: 'w-scrim', onclick: () => closeOverlay() });
+@@ -1871,8 +1677,7 @@ function onKey(e) {
+   else if (e.key === '/') { e.preventDefault(); if (state.route.view === 'meeting' && !els.askMeeting.hidden) els.askMeetingInput.focus(); else if (state.route.view === 'home') els.askAllInput.focus(); else openPalette(); }
+ }
+ 
+-// Native hook for Wizard.app / Android shells. The page-side capture bridge stays window.wizardNative.meetings
+-// (see NativeRecorder). The shell may also drive the view through window.mizel:
++// Domain view hook for existing shells. All recorder access flows through WizardApp.capture. The shell may also drive the view through window.mizel:
+ //   mizel.open(id) · mizel.newMeeting() · mizel.stop() · mizel.state()
+ //   mizel.setNativeRecorder(true)  → hides the in-page recorder while a native floating pill is shown
+ //   mizel.onNativeEvent({type:'level', me, them}) → feeds the in-page meters
+@@ -1890,17 +1695,29 @@ window.mizel = Object.freeze({
+   stop: () => stopRecording(),
+   state: () => ({ view: state.route.view, meetingId: state.route.id, recording: state.rec?.phase === 'recording', recordingMeetingId: state.rec?.meetingId || null }),
+   setNativeRecorder: (on) => { document.documentElement.dataset.nativeRecorder = on ? '1' : ''; },
+-  onNativeEvent: (evt) => { if (evt?.type === 'level') updateLevel(evt); else if (evt?.type === 'stopped' && state.rec) finishStop(state.rec.meetingId); },
++  onNativeEvent: (evt) => { if (evt?.type === 'level') updateLevel(evt); else if (evt?.type === 'stopped' && state.rec) void stopRecording(); },
+ });
+ 
+ // Wizard Back closes the current app layer before taking a shell step.
+-window.__wizardCloseOverlay = () => {
++function appBack() {
+   if (overlay?.askId && state.route.ask) { closeAskSheet(); return true; }
+   if (closeOverlay() || closeMenu()) return true;
+   if (state.drawerOpen) { closeDrawer(); return true; }
+   if (state.route.view !== 'home') { goBack(); return true; }
+   return false;
+-};
++}
++WizardApp.ready({ name: 'Mizel', version: '1' });
++const appCanGoBack = () => !!overlay || !!(els.docActions && $('.w-menu', els.docActions)) || state.drawerOpen || state.route.view !== 'home';
++WizardApp.back.useHistory({ isRoot: () => !appCanGoBack() });
++WizardApp.back.register({ canGoBack: appCanGoBack, back: appBack });
++// Native Back uses the same domain callback; the shared client supplies the root policy.
++window.wizardAppBack = () => { appBack(); return true; };
++let notesUpdateHold = null;
++function syncNotesUpdateHold() {
++  const busy = state.notes.dirty || state.notes.saving || !!state.notes.conflict;
++  if (busy && !notesUpdateHold) notesUpdateHold = WizardApp.update.hold('Mizel unsaved notes');
++  if (!busy && notesUpdateHold) { notesUpdateHold.release(); notesUpdateHold = null; }
++}
+ 
+ // ───────────────────────── 12. Boot ─────────────────────────
+ function bind() {
+@@ -1953,7 +1770,7 @@ function bind() {
+   els.askMeeting.addEventListener('submit', (e) => { e.preventDefault(); const q = els.askMeetingInput.value; els.askMeetingInput.value = ''; askMeeting(q); });
+   els.askAllForm.addEventListener('submit', (e) => { e.preventDefault(); const q = els.askAllInput.value; els.askAllInput.value = ''; askAll(q); });
+ 
+-  els.sysAudioRow.hidden = !(supportsSystemAudio() || !!window.wizardNative?.meetings);
++  els.sysAudioRow.hidden = !captureCaps().systemAudioStart;
+   els.sysAudio.checked = prefs.systemAudio;
+   els.sysAudio.addEventListener('change', () => { prefs.systemAudio = els.sysAudio.checked; });
+   els.recBanner.addEventListener('click', () => { if (state.rec) navigate(state.rec.meetingId); });
+@@ -1973,17 +1790,15 @@ function bind() {
+ }
+ 
+ function boot() {
+-  installWizardOsPort();
+   bind();
+   // Guarantee a Home entry beneath any deep link so Android Back steps document → list, never out of the app.
+   const route = parseHash();
+   const initialHash = location.hash || '#/';
+   history.replaceState({ mizelRoot: true }, '', '#/');
+-  history.pushState({ mizelRootFloor: true }, '', '#/');
+   if (route.view === 'meeting' || route.view === 'archimedes') history.pushState(null, '', initialHash);
+   applyRoute(route);
+   refreshAll();
+   if (route.view !== 'archimedes') loadAllAsks();
+-  reattachNative();
++  reattachShared();
+ }
+ boot();
+diff --git a/web/capture-worklet.js b/web/capture-worklet.js
+deleted file mode 100644
+index 6c65bfa..0000000
+--- a/web/capture-worklet.js
++++ /dev/null
+@@ -1,57 +0,0 @@
+-/*
+- * capture-worklet.js — AudioWorkletProcessor that mixes the input to mono,
+- * downsamples to 16 kHz with a box filter, and posts PCM16 buffers of
+- * `chunkSeconds` seconds to the main thread (which wraps them as WAV).
+- *
+- * Messages in:  { type: 'flush' }  → emit whatever is buffered, flagged final.
+- * Messages out: { type: 'chunk', samples: Int16Array, final: boolean }
+- */
+-class PCM16Downsampler extends AudioWorkletProcessor {
+-  constructor(options) {
+-    super();
+-    const opts = (options && options.processorOptions) || {};
+-    this.targetRate = opts.targetRate || 16000;
+-    this.chunkSamples = Math.round(this.targetRate * (opts.chunkSeconds || 5));
+-    this.ratio = sampleRate / this.targetRate; // e.g. 3 for 48 kHz, 2.756 for 44.1 kHz
+-    this.buf = new Int16Array(this.chunkSamples);
+-    this.len = 0;
+-    this.acc = 0; // running sum of input samples for the current output sample
+-    this.accN = 0; // how many input samples are in `acc`
+-    this.pos = 0; // fractional position inside the current output sample
+-    this.port.onmessage = (e) => {
+-      if (e.data && e.data.type === 'flush') this.emit(true);
+-    };
+-  }
+-
+-  emit(final) {
+-    const out = this.buf.slice(0, this.len);
+-    this.port.postMessage({ type: 'chunk', samples: out, final: !!final }, [out.buffer]);
+-    this.len = 0;
+-  }
+-
+-  process(inputs) {
+-    const input = inputs[0];
+-    if (!input || input.length === 0 || !input[0]) return true;
+-    const channels = input.length;
+-    const frames = input[0].length;
+-    for (let i = 0; i < frames; i++) {
+-      let s = 0;
+-      for (let c = 0; c < channels; c++) s += input[c][i];
+-      this.acc += s / channels;
+-      this.accN++;
+-      this.pos++;
+-      if (this.pos >= this.ratio) {
+-        this.pos -= this.ratio;
+-        let v = this.acc / this.accN;
+-        this.acc = 0;
+-        this.accN = 0;
+-        if (v > 1) v = 1; else if (v < -1) v = -1;
+-        this.buf[this.len++] = v < 0 ? v * 32768 : v * 32767;
+-        if (this.len >= this.chunkSamples) this.emit(false);
+-      }
+-    }
+-    return true;
+-  }
+-}
+-
+-registerProcessor('pcm16-downsampler', PCM16Downsampler);
+diff --git a/web/index.html b/web/index.html
+index a9d0267..906c26b 100644
+--- a/web/index.html
++++ b/web/index.html
+@@ -1,6 +1,8 @@
+ <!doctype html>
+-<html lang="en">
++<html lang="en" data-app="mizel">
+ <head>
++  <script src="/wizard-os-home/core/app-capture.js"></script>
++  <script src="/wizard-os-home/core/app-client.js"></script>
+   <meta charset="utf-8">
+   <title>Mizel</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+@@ -17,8 +19,8 @@
+   <link rel="stylesheet" href="wizard-style.css">
+   <link rel="stylesheet" href="styles.css">
+   <link rel="stylesheet" href="wizard-appearance.css">
+-  <script src="wizard-appearance.js"></script>
+-</head>
++  
++  </head>
+ <body>
+   <svg hidden aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+     <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+diff --git a/web/wizard-appearance.js b/web/wizard-appearance.js
+index dc94cf8..c8c56ce 100644
+--- a/web/wizard-appearance.js
++++ b/web/wizard-appearance.js
+@@ -1,44 +1 @@
+-/* @wizard/ui Appearance v1 client — vendored copy, to be extracted into @wizard/ui later (wizard-os spec/APPEARANCE.md).
+- * WIZARD_APPEARANCE_CLIENT_V1. Framework-neutral; no shell selectors, no shell globals, no data or agent rights.
+- *
+- * Standalone (plain tab, or an older host): nothing changes; the app paints its own base colours.
+- * Hosted (a Wizard shell sent a valid context): writes --wz-* custom properties on <html>, sets
+- * html[data-wz-hosted], data-skin, data-presentation (window | immersive) and data-color-scheme, and the app's
+- * wizard-appearance.css then makes the canvas transparent so the app sits on the shell's window glass.
+- * Accepts only: exact host origin (same origin), source === parent, schema v1, colour-only token values,
+- * non-stale revisions. Acknowledges each applied revision. Dispatches `wizard:theme` on window. */
+-(() => {
+-  'use strict';
+-  if (window.WizardTheme) return;
+-  const root = document.documentElement;
+-  const NAMES = ['canvas', 'base', 'chrome', 'overlay', 'surface', 'surface-raised', 'text', 'text-secondary', 'text-muted', 'border', 'accent', 'accent-soft', 'on-accent', 'reader-surface'];
+-  const trustedHost = location.origin; // same-origin hosting today; installed apps get their host origin from the App Manager
+-  let current = null, connected = false;
+-  const isColor = v => typeof v === 'string' && v.length > 0 && v.length < 96 && !/[;{}]|url\(/i.test(v) && (!window.CSS || !CSS.supports || CSS.supports('color', v));
+-  function valid(a) {
+-    if (!a || a.version !== 1 || !Number.isSafeInteger(a.revision) || a.revision < 0) return false;
+-    if (!['window', 'immersive'].includes(a.presentation)) return false;
+-    if (!['dark', 'light'].includes(a.colorScheme) || typeof a.skin !== 'string' || !/^[a-z0-9-]{1,40}$/.test(a.skin)) return false;
+-    if (!a.tokens || typeof a.tokens !== 'object') return false;
+-    return NAMES.every(k => isColor(a.tokens[k]));
+-  }
+-  function apply(a) {
+-    if (!valid(a)) return false;
+-    if (connected && current && a.revision < current.revision) return false; // stale
+-    for (const k of NAMES) root.style.setProperty('--wz-' + k, a.tokens[k]);
+-    root.style.colorScheme = a.colorScheme;
+-    root.dataset.skin = a.skin; root.dataset.presentation = a.presentation; root.dataset.colorScheme = a.colorScheme;
+-    root.setAttribute('data-wz-hosted', '');
+-    current = Object.freeze({ version: 1, revision: a.revision, skin: a.skin, colorScheme: a.colorScheme, presentation: a.presentation, tokens: Object.freeze({ ...a.tokens }) });
+-    connected = true;
+-    try { dispatchEvent(new CustomEvent('wizard:theme', { detail: current })); } catch (e) {}
+-    return true;
+-  }
+-  root.dataset.presentation = 'standalone';
+-  addEventListener('message', e => {
+-    if (parent === window || e.source !== parent || e.origin !== trustedHost || !e.data || e.data.type !== 'wizard:appearance') return;
+-    if (apply(e.data.appearance)) parent.postMessage({ type: 'wizard:appearance:ack', version: 1, revision: current.revision }, trustedHost);
+-  });
+-  window.WizardTheme = { version: 1, get current() { return current; }, get connected() { return connected; } };
+-  if (parent !== window) { try { parent.postMessage({ type: 'wizard:appearance:ready', version: 1, app: root.dataset.app || '' }, trustedHost); } catch (e) {} }
+-})();
++/* Appearance is owned by WizardApp; app CSS retains fonts, art and status hues. */

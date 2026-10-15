@@ -14,6 +14,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Share to Wizard: the background upload of shared files (ShareService, type dataSync). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Native parity (0.7.0): background orb recorder, in-app update. -->
@@ -204,6 +206,17 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+        <!-- Share to Wizard: shared files upload in the background (resumable /wizard/v1/shares), through app
+             close, network loss and reboot. The service holds the read grant while it copies; the job resumes. -->
+        <service
+            android:name=".share.ShareService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+        <service
+            android:name=".share.ShareJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <!-- Reply-ready notifications: backstop poll after the app process is gone. -->
         <service
             android:name=".notify.ReplyJob"
