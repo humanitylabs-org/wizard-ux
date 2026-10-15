@@ -2622,7 +2622,7 @@
   async function cancelVoice(quiet) {
     if(parking){toast('⏸','Saving paused reply · original retained');return;}
     if(V.admitting){V.admitCancelled=true;return;}
-    if(V.native&&!V.meetingLoan){const linked=window.WosOrbHandoff?.forTake(V.native);if(linked)window.WosOrbHandoff.update(linked.id,{status:'cancelled',endedAt:Date.now()});}
+    if(V.native&&!V.meetingLoan){try{const linked=window.WosOrbHandoff?.forTake(V.native);if(linked)window.WosOrbHandoff.update(linked.id,{status:'cancelled',endedAt:Date.now()});}catch(e){toast('!','Link storage unavailable · stopping recorder; original kept');}}
     if(V.meetingLoan){
       const loan=V.meetingLoan;V.meetingLoan=null;
       if(V.native){const id=V.native;try{DEV().recCancel(id);}catch{}V.native=null;await window.WosOrbHandoff.end(loan,{status:'cancelled',voiceTakeId:id});}
