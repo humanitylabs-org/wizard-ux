@@ -312,6 +312,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function renderChatList(w, el) {
     if (!el) return;
+    if (window.__wosScrollCapture?.hold(el, null)) { ch(w.id).heldList = true; return; }
     ch(w.id).heldList = false;
     H.threadShown?.(w.id, null); // the list is showing: nothing is bound to this window
     const c = ch(w.id), n = norm(c.q);
@@ -771,6 +772,7 @@ window.WizCore.chats = function createChats(H) {
     }
   }
   let selT = 0;
+  document.addEventListener('wos-scroll-capture-end', () => queueMicrotask(flushHeld));
   document.addEventListener('selectionchange', () => {
     const s = window.getSelection?.(), on = !!s && !s.isCollapsed;
     if (!on) SEL.since = 0; else if (!SEL.since) SEL.since = Date.now();
@@ -779,6 +781,7 @@ window.WizCore.chats = function createChats(H) {
   setInterval(flushHeld, 10000); // bounded recovery for lost touch/selection-end or an external sheet close
   const PAGE = 60;
   function renderThread(w, el, keep) {
+    if (window.__wosScrollCapture?.hold(el, draftKey(w))) { ch(w.id).held = true; return; }
     ch(w.id).held = false; // explicit actions/navigation may repaint immediately
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
     // The thread's own agent (pinned at creation); a new chat belongs to the window's agent.
