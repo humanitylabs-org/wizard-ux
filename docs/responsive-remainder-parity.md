@@ -32,4 +32,29 @@ All browser and sustained tests run on `thales.local`, under the external-volume
 - `qa-manager-orb.cjs` uses the live Manager page and installed registry with fixture state and intercepted mutation requests; this proves route/custody, not real Manager admission.
 - `npm test` discovers the existing guards plus common grammar/dispatch, bound lifecycle and finite inventory tests.
 
-Final exact-SHA receipts are recorded below after the candidate gates complete. Parent owns protected-branch promotion and independent live phone/desktop verification.
+### Exact candidate proof
+
+Tested executable commit: `e32ee97cb98c1907cb8f160edfe7bced4401da87`. Exact web tree: `d907bb411cce52cff5ce7bdbf1ac49ba2c8e1955`.
+
+`docs/responsive-remainder-verification.json` is the read-back Thales receipt. It verifies SHA-256 equality for **286** tracked source/test files against the pushed commit, with zero mismatches. Subsequent documentation-only commits retain this executable tree.
+
+Evidence root on `thales.local`: `/Volumes/ThalesMedia/QA/responsive-parity-remainder-20261015`.
+
+| Gate | Passed | Failed | Receipt under evidence root |
+|---|---:|---:|---|
+| Discovered Node suite | 78 | 0 | `unit-release.log` |
+| New both-shell browser parity | 92 | 0 | `parity-release/receipt.json` |
+| Existing full focused custody callers | 88 | 0 | `custody-release/receipt.json` |
+| Shared Settings + real generated reviews/Music/Maps | 91 | 0 | `live-read-release/result.json` |
+| Foreground Manager routing/custody | 35 | 0 | `manager-release/result.json` |
+
+The live-read run recorded 117 live Wizard GET/HEAD reads, with **zero page errors and zero mutation attempts**. Other browser suites use isolated/explicitly intercepted mutation fixtures and report no page errors in their passing gates. No untouched-baseline failure is waived.
+
+Inspected screenshots: `parity-release/desktop-360-capture.png`, `desktop-paused-controls.png`, `phone-paused-controls.png`; `live-read-release/{desktop,phone}-real-reviews.png` and `{desktop,phone}-real-maps.png`. The final narrow-desktop gate verifies controls are wholly inside the viewport, do not cover the thread header, retain the composer, and remain usable in fullscreen. Inspection caught toolbar clipping and stale tile heights before release; the final source fixes both, with assertions.
+
+Finite coverage: 14 newly shared implementations, 7 already-live PR31 outcomes, 41 inherited shared capabilities, 9 genuine OS/capability adapters, 1 conditional origin migration and 1 excluded simulated preview; all 73 rows and 163 legacy links are machine-checked. Day/week/month reviews and Maps are additionally explicit in the supplemental view records.
+
+### Parent promotion
+
+PR42 is for `daily`; this lane has not merged or deployed anything. The branch starts at live `cd9c92d`. During this work, daily acquired PR41 native PCM (`e477ac4`) and PR43 canonical app deep links (`4f68e1b`); these unrelated upstream changes must be retained by the parent's merge. They were not reverted or folded into this isolated branch's source proof. Re-run the relevant merged-source acceptance and independently verify served hashes and live phone/desktop paths after protected-branch promotion. No APK/VM rebuild is needed.
+
