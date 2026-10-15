@@ -129,6 +129,8 @@ export async function verifyRelease(a,api=gh) {
   const raw=Buffer.from(md.content || '','base64').toString('utf8');
   if(!new RegExp(`^id:\\s*["']?${a.id}["']?\\s*$`,'m').test(raw)) fail('manifest_identity_mismatch');
   const release=await api(`repos/${a.repo}/releases/tags/${encodeURIComponent(a.tag)}`);
+  const tagged=await api(`repos/${a.repo}/commits/${encodeURIComponent(a.tag)}`);
+  if(tagged.sha!==a.commit) fail('release_tag_commit_mismatch');
   for(const i of Object.values(a.images)) {
     const asset=release.assets?.find(x=>x.id===i.asset_id);
     if(!asset || asset.name!==i.asset || asset.size!==i.bytes || (asset.digest && asset.digest!==`sha256:${i.sha256}`)) fail('artifact_identity_mismatch');
@@ -169,6 +171,11 @@ export async function install({source,id,commit,update=false},home=stateDir(),{r
     const policy=readJSON(join(home,'install-policy.json'));
     // Executables/activation adapter are owner-local, never supplied by the remote catalog or browser.
     if(!Array.isArray(policy.wam) || !Array.isArray(policy.activate) || !policy.activate.length) fail('activation_not_configured');
+    if(!policy.registry) fail('installed_registry_required');
+    const registry=readJSON(policy.registry), existing=registry.apps?.find(x=>x.id===id);
+    if(existing && existing.repo!==a.repo) fail('installed_repository_conflict');
+    if(existing && !update) fail('already_installed_explicit_update_required');
+    if(!existing && update) fail('not_installed_use_install');
     const dir=join(home,'installs',`${source}-${id}-${commit}`); mkdirSync(dir,{recursive:true,mode:0o700});
     const catalog=join(dir,'catalog.json'); atomic(catalog,{schema:1,scope:'private-test',apps:[a]});
     const env={...process.env,WAM_PRIVATE_CATALOG:catalog};

@@ -30,7 +30,7 @@
   const S = { apps: [], installed: new Map(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map() };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id);
-  const selected = a => ({...a, ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a)))});
+  const selected = a => ({...a, ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, installed_source:a.installed_source, installed_commit:a.installed_commit, update_available:a.update_available});
   const badge = a => a.conflict ? '<span class="alpha-badge conflict">Source conflict</span>' : a.alpha_badge ? `<span class="alpha-badge">${esc(a.alpha_badge)}</span>` : '';
   if (/\.staging\.wizard001\.com$/.test(location.hostname)) $('preview').hidden = false;
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
@@ -99,7 +99,7 @@
   }
   function action(a, cls = '') {
     if(a.conflict) return '<span class="get have">Resolve conflict</span>';
-    const changed = a.commit && a.installed_commit && (a.commit!==a.installed_commit || a.source!==a.installed_source);
+    const changed = a.commit && ((a.installed_commit && (a.commit!==a.installed_commit || a.source!==a.installed_source)) || (a.channel==='alpha' && isInstalled(a) && !a.installed_commit));
     if(changed || a.update_available) return `<button class="get ${cls}" data-get="${esc(key(a))}">Update</button>`;
     if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(a.id)}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
