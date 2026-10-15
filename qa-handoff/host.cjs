@@ -52,7 +52,9 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
  await test('park reply, dictate in other app, restore exact target/model/text/audio paused',async()=>{
    await p.evaluate(()=>__wos.openWizardThread('qa-0'));await p.locator('[data-chmic]').first().waitFor();
    const input=p.locator('.ch-compose textarea').first();await p.evaluate(()=>{tone=440;});
-   await p.locator('[data-chmic]').first().click();await p.waitForTimeout(700);await p.locator('#arcPause').click();await input.fill('original typed draft');
+   await p.locator('[data-chmic]').first().click();await p.waitForTimeout(700);
+   const initialSends=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,touch=await f.context.newCDPSession(p),orb=await p.locator('#orbWrap').boundingBox();await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:orb.x+orb.width/2,y:orb.y+orb.height/2,id:8}]});await p.waitForTimeout(600);await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});assert.equal(await p.evaluate(()=>__wos.voice),'listen');assert.equal(f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,initialSends);
+   await p.locator('#arcPause').click();await input.fill('original typed draft');
    const original=await p.evaluate(()=>({reply:__wos.V.replyTo,route:__wos.V.snap.route}));assert.equal(original.reply.sid,'qa-0');
    // Open another app without cancelling the parked reply (unlike the old fixture helper).
    await p.evaluate(()=>__wos.openApp(window.__qaApp));await p.waitForTimeout(400);
@@ -120,5 +122,11 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
    await p.waitForFunction(()=>__wos.voice==='idle');await tones(p);await p.evaluate(async()=>{window.meeting=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:500,meta:{meetingId:'manual-during-loan'}});});await p.waitForTimeout(300);await p.evaluate(()=>__wos.startVoice('auto'));await p.waitForTimeout(300);await p.evaluate(()=>meeting.pause());
    assert.equal(await p.evaluate(async()=>{try{await meeting.resume();}catch(e){return e.code;}}),'mic_borrowed');await p.evaluate(()=>__wos.cancelVoice(true));assert.equal(await p.evaluate(()=>WizAppCapture.getState().phase),'paused');await p.evaluate(()=>meeting.stop());
  });
+ await test('parked multipart fallback survives IDB failure/reload and explicit deletion removes hidden parts',async()=>{
+   const saved=await p.evaluate(async()=>{const old=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(value,...args){if(this.name==='items'&&value.parkedDraft)throw new DOMException('synthetic quota','QuotaExceededError');return old.call(this,value,...args);};try{const parts=[new Blob([new Uint8Array([1,2,3])],{type:'audio/test'}),new Blob([new Uint8Array([4,5])],{type:'audio/test'})];const it=await WosOutbox.stage({audio:new Blob(parts),parkedDraft:{parts},kind:'reply',sessionId:'fallback-synthetic'});await WosOutbox.transition(it.id,'held');return {id:it.id,durable:it.durable};}finally{IDBObjectStore.prototype.put=old;}});assert.equal(saved.durable,true);
+   await p.reload();await p.waitForFunction(()=>WosOutbox?.recoveryComplete);assert.deepEqual(await p.evaluate(async id=>{const it=WosOutbox.get(id);return Promise.all(it.parkedDraft.parts.map(async b=>Array.from(new Uint8Array(await b.arrayBuffer()))));},saved.id),[[1,2,3],[4,5]]);
+   await p.evaluate(id=>WosOutbox.remove(id),saved.id);assert.equal(await p.evaluate(id=>!!WosOutbox.get(id).parkedDraft,saved.id),false);
+ });
+ assert.deepEqual(f.errors,[]);
  fs.writeFileSync(path.join(evidence,'receipt.json'),JSON.stringify({sourceSHA:process.env.SOURCE_SHA,checks,pageErrors:f.errors,synthetic:true,nativeEvidence:false},null,2));
 })().catch(e=>{console.error(e);fs.writeFileSync(path.join(evidence,'failure.json'),JSON.stringify({error:e.stack,checks},null,2));process.exitCode=1;}).finally(async()=>{await browser?.close();server.close();});

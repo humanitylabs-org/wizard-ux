@@ -2167,6 +2167,7 @@
   let NOMIC = false;
   function setVoice(s) {
     V.state = s; device.dataset.voice = s; tourEv('voice', { state: s });
+    $('#arcPause small').textContent=s==='paused'?'Resume':'Pause';$('#arcPause').setAttribute('aria-label',s==='paused'?'Resume recording':'Pause recording');
     CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
     reportVoice(s);
     keepAwake(s === 'listen' || s === 'paused' || s === 'command' || s === 'think');

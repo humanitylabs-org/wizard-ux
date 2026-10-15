@@ -102,6 +102,7 @@
     const it = items.get(id); if (!it) return;
     // A tombstone survives an interrupted delete, preventing stale IDB/fallback rows from replaying.
     Object.assign(it, { state: 'sent', sentAt: now(), audio: null, error: '' });
+    delete it.parkedDraft; // a deletion tombstone must not retain hidden audio parts
     await put(it);
     // Never erase the durable terminal marker: an inaccessible legacy/fallback store may
     // still contain an older sendable copy. A small marker wins on every future recovery.
