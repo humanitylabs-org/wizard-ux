@@ -245,6 +245,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).cancelScrollCapture();
                 pageUrl = url;
                 screenCaptureId = null;
                 setKeepAwake(false);
