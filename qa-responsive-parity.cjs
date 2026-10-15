@@ -4,6 +4,7 @@ const fs = require('node:fs'), path = require('node:path'), os = require('node:o
 if (!os.hostname().toLowerCase().includes('thales') || !process.env.QA_OUT?.startsWith('/Volumes/ThalesMedia/') || !process.env.QA_CHROME) throw Error('Thales/external-volume QA only');
 const BASE = process.argv[2], OUT = process.env.QA_OUT, SOURCE = process.env.QA_SOURCE, baseline = process.env.QA_BASELINE === '1';
 fs.mkdirSync(OUT,{recursive:true});
+process.env.TMPDIR=path.join(OUT,'tmp');fs.mkdirSync(process.env.TMPDIR,{recursive:true});
 const checks=[], errors=[], writes=[], reads=[], hashes={}; let browser;
 const nap=ms=>new Promise(r=>setTimeout(r,ms));
 function ok(pass,name,detail) { checks.push({pass:!!pass,name,detail}); console.log(pass?'PASS':'FAIL',name,detail===undefined?'':JSON.stringify(detail)); }
@@ -30,6 +31,7 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   ok(await p.locator(selector).isVisible(),kind+' skin deep link opens Settings');
   ok(await p.locator('[data-skinpick]').count()===5,kind+' same five approved skins');
   ok(await p.evaluate(()=>!!WosSettings && !!WosSkin),kind+' shared modules mounted');
+  ok(await p.locator('[data-st=web-update]').count()===1,kind+' common web update check is reachable');
   const features=await p.locator('[data-settings-feature]').evaluateAll(es=>es.map(e=>e.dataset.settingsFeature));
   ok(['unsent','look','voice','cancelled','wizard','usage'].every(x=>features.includes(x)),kind+' all common settings features',features);
   ok(phone?await p.locator('[data-st=everywhere][disabled]').count()===1:await p.locator('[data-st=everywhere]').count()===0,kind+' honest Android capability gate');

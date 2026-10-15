@@ -12,12 +12,16 @@ test('both entrypoints load shared feature surface, skin engine and CSS exactly 
     for (const asset of ['core/settings.js', 'core/settings.css', 'core/skins.js', 'core/skins.css', 'core/scenery.js', 'core/cancelled.js']) assert.equal(assets.filter(x => x === asset).length, 1, file + ': ' + asset);
     assert.ok(assets.indexOf('core/scenery.js') < assets.indexOf('core/skins.js'));
     assert.ok(assets.indexOf('core/settings.js') < assets.indexOf(file === 'index.html' ? 'app.js' : 'desktop/desktop.js'));
-    for (const asset of assets) assert.ok(fs.existsSync(new URL('../web/' + asset.replace(/^\/wizard-os-home\//, ''), import.meta.url)), file + ': missing ' + asset);
+    // data.js and summaries.js are owner-generated runtime payloads, not committed modules.
+    for (const asset of assets.filter(a => !['data.js', 'summaries.js'].includes(a))) assert.ok(fs.existsSync(new URL('../web/' + asset.replace(/^\/wizard-os-home\//, ''), import.meta.url)), file + ': missing ' + asset);
   }
 });
 
 test('new entrypoint-exclusive features fail the parity guard (all current module/style differences explicitly audited)', () => {
   const phone = new Set(assetList(read('web/index.html'))), desktop = new Set(assetList(read('web/desktop.html')));
+  assert.deepEqual([...phone].filter(x => desktop.has(x)).sort(), inventory.sharedAssets, 'Update the full shared-asset inventory when registering a new module.');
+  const modules = fs.readdirSync(new URL('../web/core/', import.meta.url)).filter(x => x.endsWith('.js')).map(x => 'core/' + x).sort();
+  assert.deepEqual(modules, Object.keys(inventory.coreModules).sort());
   const exclusive = [...phone].filter(x => !desktop.has(x)).concat([...desktop].filter(x => !phone.has(x))).sort();
   assert.deepEqual(exclusive, Object.keys(inventory.exceptions).sort(), 'Load new cross-platform features in BOTH shells. Do not add a general-purpose feature to the native/input exception list.');
   for (const [asset, entry] of Object.entries(inventory.exceptions)) {
@@ -73,4 +77,22 @@ test('editing a recording/in-flight message cannot delete its custody; text edit
     sandbox.WosSettings.unsentAction({ outbox: { get: () => item }, editUnsent: it => edits.push(it), toast: (...args) => notices.push(args) }, item.id, 'app', 'edit');
   }
   assert.equal(edits.length,1); assert.equal(edits[0].agent,'private'); assert.equal(notices.length,3);
+});
+
+test('desktop Cancel retains a long take including its final chunk, never a short take or next recording', async () => {
+  let now = 0, rec, stopped = 0; const saved = [], stops = [];
+  class Recorder {
+    static isTypeSupported() { return true; }
+    constructor(_stream, opts) { this.mimeType = opts.mimeType; rec = this; }
+    start() { this.state = 'recording'; }
+    stop() { this.state = 'inactive'; stops.push(() => { this.ondataavailable?.({ data: new Blob(['final']) }); this.onstop?.(); }); }
+  }
+  const sandbox = { Blob, performance: { now: () => now }, navigator: { userAgent: 'Desktop', mediaDevices: { enumerateDevices: async () => [], getUserMedia: async () => ({ getTracks: () => [{ stop: () => stopped++ }] }) } }, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, MediaRecorder: Recorder,
+    AudioContext: class { createMediaStreamSource() { return { connect() {} }; } createAnalyser() { return {}; } close() {} },
+    WosCancelled: { keepWeb: (blob, ms, _retained, _text, source) => saved.push({ blob, ms, source }) } };
+  sandbox.window = sandbox; vm.runInNewContext(read('web/core/voice.js'), sandbox);
+  const v = sandbox.WizCore.voice(); await v.start(); rec.ondataavailable({ data: new Blob(['earlier']) }); now = 16000; v.cancel();
+  assert.equal(v.state, 'idle'); await v.start(); stops.shift()();
+  assert.equal(saved.length, 1); assert.equal(await saved[0].blob.text(), 'earlierfinal'); assert.equal(saved[0].source, 'desktop');
+  now += 1000; v.cancel(); stops.shift()(); assert.equal(saved.length, 1); assert.equal(stopped, 2);
 });

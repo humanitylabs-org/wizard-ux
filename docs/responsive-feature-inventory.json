@@ -94,12 +94,12 @@
     "data.js": {
       "shell": "phone",
       "classification": "open-gap",
-      "reason": "Phone local day/week/month review data. Desktop has no review renderer."
+      "reason": "Owner-generated runtime review/brief data (not committed). Phone consumes it; desktop review views remain an open gap."
     },
     "summaries.js": {
       "shell": "phone",
       "classification": "open-gap",
-      "reason": "Phone review views; must be extracted before claiming global parity."
+      "reason": "Owner-generated runtime review summary data (not committed). Phone review renderer remains in app.js."
     },
     "core/music-voice.js": {
       "shell": "phone",
@@ -125,6 +125,375 @@
       "shell": "phone",
       "classification": "preview",
       "reason": "Opt-in Live Mode motion styles."
+    }
+  },
+  "sharedAssets": [
+    "/wizard-os-home/apple-touch-icon.png",
+    "core/agents.js",
+    "core/app-capture.js",
+    "core/app-reading-position.js",
+    "core/app-route.css",
+    "core/app-route.js",
+    "core/app-services.js",
+    "core/appearance-host.css",
+    "core/appearance-host.js",
+    "core/apps.js",
+    "core/base.css",
+    "core/brand.css",
+    "core/brand.js",
+    "core/bridge.js",
+    "core/cancelled.js",
+    "core/chat-errors.js",
+    "core/chat-kit.js",
+    "core/chat-models.js",
+    "core/chat-power.css",
+    "core/chat-power.js",
+    "core/chat-search.js",
+    "core/chat-work.js",
+    "core/chats.css",
+    "core/chats.js",
+    "core/config.js",
+    "core/core.js",
+    "core/deeplink.js",
+    "core/files.js",
+    "core/focused-field.js",
+    "core/links.css",
+    "core/links.js",
+    "core/polish.css",
+    "core/resources.css",
+    "core/resources.js",
+    "core/scenery.js",
+    "core/screen-text.js",
+    "core/settings.css",
+    "core/settings.js",
+    "core/shell.js",
+    "core/sigils.css",
+    "core/sigils.js",
+    "core/skins.css",
+    "core/skins.js",
+    "core/status.js",
+    "core/update-banner.css",
+    "core/uploads.js",
+    "core/usage.js",
+    "core/video-desks.js",
+    "core/voice-status.js",
+    "core/web-update.js",
+    "core/workspace-navigation.js",
+    "favicon.ico",
+    "icon-192.png",
+    "live.js",
+    "manifest.webmanifest",
+    "outbox.js"
+  ],
+  "coreModules": {
+    "core/agents.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/android-relay.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/app-capture.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/app-client.js": {
+      "loadedBy": [],
+      "note": "Support/client/export module; not directly mounted by either shell"
+    },
+    "core/app-reading-position.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/app-route.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/app-services.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/appearance-host.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/apps.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/brand.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/bridge.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/cancelled.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/carry-in.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/carry-out.js": {
+      "loadedBy": [],
+      "note": "Support/client/export module; not directly mounted by either shell"
+    },
+    "core/chat-errors.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/chat-kit.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/chat-models.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/chat-power.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/chat-search.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/chat-work.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/chats.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/config.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/core.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/deeplink.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/files.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/focused-field.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/links.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/music-voice.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/resources.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/scenery.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/screen-capture.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/screen-text.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/sel-menu.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/settings.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/shell.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/sigils.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/skins.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/status.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/tour.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/uploads.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/usage.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/video-desks.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/voice-status.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/voice.js": {
+      "loadedBy": [
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/web-update.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/workspace-navigation.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
     }
   }
 }
