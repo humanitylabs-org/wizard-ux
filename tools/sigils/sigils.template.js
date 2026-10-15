@@ -11,7 +11,7 @@
  */
 (() => {
   'use strict';
-  const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private']);
+  const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents']);
   const HOUSE = /*HOUSE*/;
   const FALLBACK = /*FALLBACK*/;
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
