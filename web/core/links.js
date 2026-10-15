@@ -251,6 +251,8 @@
     doc.addEventListener('click', e => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
+      // Verified app-owned thread action saves its draft before native navigation.
+      if (window.WizAppServices?.ownsThreadLink(win, a)) return;
       const u = abs(a.getAttribute('href'), win.location.href); if (!u || !/^https?:$/.test(u.protocol)) return;
       if (u.origin === ORIGIN && isImage(u)) { if (viewImage(u, doc)) { e.preventDefault(); e.stopPropagation(); } return; }
       if (!leaves(u, a.getAttribute('target'))) return;
