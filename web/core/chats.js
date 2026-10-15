@@ -813,6 +813,24 @@ window.WizCore.chats = function createChats(H) {
   });
   setInterval(flushHeld, 10000); // bounded recovery for lost touch/selection-end or an external sheet close
   const PAGE = 60;
+  // Photos in the thread, keyed by src. Returns a function that puts the loaded ones back after a repaint.
+  function keepLoadedImages(root) {
+    const byKey = new Map();
+    for (const im of root.querySelectorAll('.ch-msgs img')) {
+      const k = im.getAttribute('src');
+      if (k && im.complete && im.naturalWidth && !byKey.has(k)) byKey.set(k, im);
+    }
+    return fresh => {
+      if (!byKey.size) return;
+      for (const im of fresh.querySelectorAll('.ch-msgs img')) {
+        const old = byKey.get(im.getAttribute('src'));
+        if (!old) continue;
+        byKey.delete(im.getAttribute('src'));
+        for (const a of ['alt', 'class', 'loading', 'decoding']) { const v = im.getAttribute(a); if (v === null) old.removeAttribute(a); else old.setAttribute(a, v); }
+        im.replaceWith(old);
+      }
+    };
+  }
   function renderThread(w, el, keep) {
     if (window.__wosScrollCapture?.hold(el, draftKey(w))) { ch(w.id).held = true; return; }
     ch(w.id).held = false; // explicit actions/navigation may repaint immediately
@@ -868,12 +886,15 @@ window.WizCore.chats = function createChats(H) {
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
+    // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
+    const keepImgs = keepLoadedImages(el);
     el.innerHTML = `<div class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       <form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
+    keepImgs(el);
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
     const nb = el.querySelector('.ch-msgs');
     if (keep) nb.scrollTop = nb.scrollHeight - keep.h + keep.top;
