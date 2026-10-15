@@ -1089,19 +1089,22 @@ window.WizCore.chats = function createChats(H) {
       refreshCompose(wid);
     }
     KIT.drafts.set(dkey, '', rest);
-    const skey = SEALED + sid + ':' + Date.now().toString(36);
+    const skey = SEALED + sid + ':' + crypto.randomUUID().replaceAll('-', '');
     KIT.drafts.set(skey, text, files);
     let open = true;
-    return { text, files,
-      done() { if (open) { open = false; KIT.drafts.clear(skey); } },
+    return { text, files, key: skey,
+      done(it) { if (it && !it.durable) return; if (open) { open = false; KIT.drafts.clear(skey); } },
       putBack() { if (!open) return; open = false; KIT.drafts.clear(skey); restoreInto(wid, sid, text, files); } };
   }
   // At start: words taken by a voice send that never reached the outbox (the page died mid-send) go back.
+  const startupSeals = new Set(Object.keys(KIT.drafts.all()).filter(k => k.startsWith(SEALED)));
   function restoreSealed() {
+    if (!OUTBOX?.recoveryComplete) return;
     for (const k of Object.keys(KIT.drafts.all())) {
-      if (!k.startsWith(SEALED)) continue;
+      if (!startupSeals.has(k)) continue;
+      startupSeals.delete(k);
       const d = KIT.drafts.get(k), sid = k.slice(SEALED.length).replace(/:[a-z0-9]+$/, '');
-      KIT.drafts.clear(k); if (sid) restoreInto('', sid, d.text, d.files);
+      KIT.drafts.clear(k); if (sid && !OUTBOX.ownsSeal(k)) restoreInto('', sid, d.text, d.files);
     }
   }
   // Typed words first, then what was said (legacy order: the pasted link is the context the voice talks about).
@@ -1151,7 +1154,7 @@ window.WizCore.chats = function createChats(H) {
     // Saved on the phone; the outbox delivers it (and retries) from here.
     let it;
     try {
-      it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
+      it = await OUTBOX.enqueue({ custodyId: opts.custodyId, sealKey: sealed?.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
         instructions: opts.instructions || viewContext(wid, how), files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), wid: here ? wid : '', how, source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
     } catch (e) {
       // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
@@ -1164,7 +1167,7 @@ window.WizCore.chats = function createChats(H) {
       toast('!', 'Couldn’t save that message · your words are back in the thread', 3200);
       return null;
     }
-    sealed?.done();
+    sealed?.done(it);
     if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     return it;
   }
@@ -1344,6 +1347,8 @@ window.WizCore.chats = function createChats(H) {
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
   OUTBOX?.onChange(() => {
+    restoreSealed();
+    for (const it of OUTBOX._items.values()) if (it.durable && it.sealKey) KIT.drafts.clear(it.sealKey);
     const sig = OUTBOX.unsent().filter(it => it.kind === 'new' || it.kind === 'reply').map(it => it.id + ':' + it.state + ':' + (it.error || '')).join(',');
     if (sig === outSig) return; outSig = sig;
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
