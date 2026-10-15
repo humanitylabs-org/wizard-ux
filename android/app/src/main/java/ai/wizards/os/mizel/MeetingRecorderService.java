@@ -85,7 +85,11 @@ public class MeetingRecorderService extends Service {
             s.pause(0);
             if (!l.paused || s.capture != null || MicOwner.holder() != null) return "null";
             MeetingBorrow b = new MeetingBorrow(eventId, meetingId, wasPaused, l.mediaMs(), System.currentTimeMillis());
-            if (!s.saveBorrow(b, "paused")) return "null"; // no durable event => no lease
+            if (!s.saveBorrow(b, "paused")) {
+                // No request was admitted: restore only the pause we introduced.
+                if (!wasPaused) s.resume(0);
+                return "null";
+            }
             borrow = b;
             return s.borrowJson(b, "paused").toString();
         });

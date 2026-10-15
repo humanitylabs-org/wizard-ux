@@ -359,7 +359,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         summary.update(version=ver, uid=uid, api=sx('getprop ro.build.version.sdk').strip())
         sx(f'run-as {PKG} mkdir -p files')
         sx(f"run-as {PKG} sh -c 'echo http://10.0.2.2:{FAKE} > files/qa_origin.txt'")
-        qa_cfg = {'pauseTimeoutMs': 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 2 if os.environ.get('QA_PCM_ONLY') == '1' else 1, 'staticNotification': 1}
+        qa_cfg = {'pauseTimeoutMs': 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 2 if os.environ.get('QA_PCM_ONLY') == '1' or os.environ.get('QA_HANDOFF_ONLY') == '1' else 1, 'staticNotification': 1}
         (job / 'qa_mizel.json').write_text(json.dumps(qa_cfg))
         sh(ADB, '-s', S, 'push', job / 'qa_mizel.json', '/data/local/tmp/qa_mizel.json')
         sx(f'run-as {PKG} cp /data/local/tmp/qa_mizel.json files/qa_mizel.json')
@@ -378,6 +378,15 @@ with (BASE / 'worker.lock').open('a') as lock:
         # ------------------------------------------------ (f) origin scoping + iframe reach
         shell_port = pg.ev("typeof window.wizardMizelPort")
         check('bridge', 'shell main frame (https://private.wizard001.com/wizard-os-home/) has wizardMizelPort', shell_port == 'object', shell_port)
+        if os.environ.get('QA_HANDOFF_ONLY') == '1':
+            from qa_orb_handoff_native import run as run_handoff
+            run_handoff(pg,sx,top,check,save,ORIGIN,PKG,ST,LOCK)
+            shot('02-orb-handoff')
+            check('handoff','no native crash','ai.wizards.os' not in sx('logcat -b crash -d'))
+            summary.update(results=RES,passed=sum(r['ok'] for r in RES),failed=sum(not r['ok'] for r in RES))
+            save('summary.json',summary)
+            print(f"{summary['passed']}/{len(RES)} passed",flush=True)
+            raise SystemExit(1 if summary['failed'] else 0)
         if os.environ.get('QA_SHARED_CAPTURE_ONLY') == '1':
             from qa_shared_capture_native import run as run_shared_native
             summary['shared_source_hashes']=shared_hashes

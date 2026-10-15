@@ -107,13 +107,17 @@ public class RecorderService extends Service {
         String id = RecordingStore.get(c).create(kind);
         if (borrowed && !ai.wizards.os.mizel.MeetingRecorderService.bindBorrow(eventId, id)) {
             ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);
+            new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
             RecordingStore.get(c).delete(id); return "";
         }
         borrowEvent = borrowed ? eventId : null;
         if (borrowed) RecordingStore.get(c).set(id, "meetingHandoffId", eventId);
         JSONObject saved = RecordingStore.get(c).read(id);
         if (saved == null || (borrowed && !eventId.equals(saved.optString("meetingHandoffId")))) {
-            ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB); return "";
+            ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);
+            borrowEvent = null;
+            if (borrowed) new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
+            return "";
         }
         activeId = id; stopWanted = null; paused = false; pausedMs = 0; level = 0; source = "";
         startedAt = SystemClock.elapsedRealtime();
