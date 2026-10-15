@@ -6,11 +6,14 @@ import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { WebSocketServer } from 'ws';
 import { validateDocument } from './web/model.js';
+import { OutlineRealtime } from './realtime.mjs';
+import { joinWav } from './audio.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url)), data=resolve(process.env.OUTLINE_DATA || './app-data');
 mkdirSync(data,{recursive:true,mode:0o700});
 const db=new DatabaseSync(join(data,'outline.sqlite'));
 db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS document (id INTEGER PRIMARY KEY, rev INTEGER NOT NULL, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS audio (take TEXT, seq INTEGER, hash TEXT, bytes BLOB, PRIMARY KEY(take,seq)); CREATE TABLE IF NOT EXISTS speech (id TEXT PRIMARY KEY, target TEXT, seq INTEGER, text TEXT, status TEXT, updated INTEGER);');
+db.exec('CREATE TABLE IF NOT EXISTS audio_take (id TEXT PRIMARY KEY,created INTEGER NOT NULL)');
 const initial={title:'Untitled outline',nodes:[{id:'first-bullet',parent:null,text:'',folded:false}],applied:[]};
 db.prepare('INSERT OR IGNORE INTO document VALUES(1,0,?)').run(JSON.stringify(initial));
 const getDoc=()=>{const row=db.prepare('SELECT * FROM document WHERE id=1').get();return {rev:row.rev,document:JSON.parse(row.body)};};
@@ -30,6 +33,15 @@ const server=http.createServer(async(req,res)=>{
   if(path==='/api/document' && req.method==='GET')return json(res,200,getDoc());
   if(path==='/api/document' && req.method==='PUT'){const result=putDoc(JSON.parse(await body(req)));return json(res,result.conflict?409:200,result);}
   if(path==='/api/speech' && req.method==='GET')return json(res,200,{utterances:db.prepare('SELECT id,target,seq,text,status FROM speech ORDER BY updated LIMIT 5000').all()});
+  if(path==='/api/audio' && req.method==='GET'){
+   const takes=db.prepare('SELECT take AS id,sum(length(bytes)) AS bytes FROM audio GROUP BY take ORDER BY min(rowid) DESC').all().map(t=>({...t,createdAt:db.prepare('SELECT created FROM audio_take WHERE id=?').get(t.id)?.created||null,chunks:db.prepare('SELECT seq,length(bytes) AS bytes FROM audio WHERE take=? ORDER BY seq').all(t.id)}));return json(res,200,{takes});
+  }
+  const playback=path.match(/^\/api\/audio\/([A-Za-z0-9_-]{1,128})\/wav$/);
+  if(playback && req.method==='GET'){
+   const chunks=db.prepare('SELECT seq,bytes FROM audio WHERE take=? ORDER BY seq').all(playback[1]);if(!chunks.length)return json(res,404,{error:'Recording not found'});
+   if(chunks.some((c,i)=>i&&c.seq!==chunks[i-1].seq+1))return json(res,409,{error:'Recording has missing chunks; recover pending audio first'});
+   const wav=joinWav(chunks.map(c=>c.bytes));res.writeHead(200,{'content-type':'audio/wav','content-length':wav.length,'cache-control':'no-store','content-disposition':`inline; filename="outline-${playback[1]}.wav"`});return res.end(wav);
+  }
   const audio=path.match(/^\/api\/audio\/([A-Za-z0-9_-]{1,128})\/(\d{1,6})$/);
   if(audio){const [,take,num]=audio,seq=Number(num);
    if(req.method==='PUT'){
@@ -39,6 +51,7 @@ const server=http.createServer(async(req,res)=>{
     const size=db.prepare('SELECT coalesce(sum(length(bytes)),0) AS size FROM audio').get().size;
     if(!old && size+b.length>512*1024*1024)return json(res,507,{error:'Audio storage full; capture retained on device'});
     db.prepare('INSERT OR IGNORE INTO audio VALUES(?,?,?,?)').run(take,seq,hash,b);
+    db.prepare('INSERT OR IGNORE INTO audio_take VALUES(?,?)').run(take,Date.now());
     return json(res,200,{take,seq,hash,bytes:b.length});
    }
    const row=db.prepare('SELECT hash,bytes FROM audio WHERE take=? AND seq=?').get(take,seq);
@@ -74,7 +87,7 @@ wss.on('connection',ws=>{
  sockets++;const streams=new Map();let active=null,closed=false,total=0;
  const send=m=>{if(ws.readyState===1)ws.send(JSON.stringify(m));};
  const save=(s,status,text)=>db.prepare('INSERT INTO speech VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET text=excluded.text,status=excluded.status,updated=excluded.updated').run(s.id,s.target,s.seq,text,status,Date.now());
- const fail=(s,e)=>{s.failed=true;save(s,'draft',s.text);send({type:'error',id:s.id,reason:String(e.message||e).slice(0,200)});};
+ const fail=(s,e)=>{if(s.failed||s.final)return;s.failed=true;clearTimeout(s.timer);s.stream?.abort();streams.delete(s.id);save(s,'draft',s.text);send({type:'error',id:s.id,reason:String(e.message||e).slice(0,200)});};
  ws.on('message',async(raw,binary)=>{
   try{
    if(binary){const s=streams.get(active);if(!s||s.ended||s.failed)throw new Error('No live utterance');total+=raw.length;if(total>32*1024*1024)throw new Error('Live safety limit reached; stop and save');s.bytes+=raw.length;
@@ -85,18 +98,19 @@ wss.on('connection',ws=>{
     if(streams.size>=3)throw new Error('Waiting for earlier finals; pause before continuing');
     if(db.prepare('SELECT id FROM speech WHERE id=?').get(m.id))throw new Error('Utterance already exists');
     const s={id:m.id,target:m.target,seq:m.seq,text:'',queue:[],queued:0,bytes:0,ended:false};streams.set(s.id,s);active=s.id;save(s,'draft','');
-    s.stream=await provider.openRealtime({delta:t=>{s.text+=t;save(s,'draft',s.text);send({type:'delta',id:s.id,target:s.target,seq:s.seq,text:s.text,audioBytes:s.bytes});},completed:t=>{s.text=t||s.text;save(s,'final',s.text);send({type:'final',id:s.id,target:s.target,seq:s.seq,text:s.text});streams.delete(s.id);clearTimeout(s.timer);},error:e=>fail(s,e)});
-    if(s.failed||closed){s.stream.close().catch(()=>{});return;}
-    for(const b of s.queue)s.stream.append(b);s.queue=[];s.queued=0;send({type:'ready',id:s.id});if(s.ended)s.stream.close().catch(e=>fail(s,e));
+    s.stream=new OutlineRealtime(provider.client,{delta:t=>{if(s.failed||s.final)return;if(s.retrying){s.text='';s.retrying=false;}s.text+=t;save(s,'draft',s.text);send({type:'delta',id:s.id,target:s.target,seq:s.seq,text:s.text,audioBytes:s.bytes});},completed:t=>{if(s.failed||s.final)return;s.final=true;s.text=t||s.text;save(s,'final',s.text);send({type:'final',id:s.id,target:s.target,seq:s.seq,text:s.text});streams.delete(s.id);clearTimeout(s.timer);},reset:()=>{s.retrying=true;},error:e=>fail(s,e)});
+    await s.stream.open();
+    if(s.failed||closed){s.stream.abort();return;}
+    for(const b of s.queue)s.stream.append(b);s.queue=[];s.queued=0;send({type:'ready',id:s.id});if(s.ended)void s.stream.close();
    }else if(m.type==='end'){
     const s=streams.get(m.id);if(!s)return;s.ended=true;if(active===s.id)active=null;
-    s.timer=setTimeout(()=>{fail(s,new Error('Final timed out — draft retained'));streams.delete(s.id);s.stream?.close().catch(()=>{});},35000);
-    if(!s.bytes){clearTimeout(s.timer);save(s,'final','');send({type:'final',id:s.id,target:s.target,seq:s.seq,text:''});streams.delete(s.id);}
-    s.stream?.close().catch(e=>fail(s,e));
+    s.timer=setTimeout(()=>fail(s,new Error('Final timed out — recording retained')),33000);
+    if(!s.bytes){clearTimeout(s.timer);s.final=true;save(s,'final','');send({type:'final',id:s.id,target:s.target,seq:s.seq,text:''});streams.delete(s.id);s.stream?.abort();}
+    else void s.stream?.close();
    }else throw new Error('Unknown live control');
   }catch(e){send({type:'error',reason:e.message});}
  });
- ws.on('close',()=>{closed=true;sockets--;for(const s of streams.values()){clearTimeout(s.timer);s.stream?.close().catch(()=>{});}streams.clear();});
+ ws.on('close',()=>{closed=true;sockets--;for(const s of streams.values()){clearTimeout(s.timer);s.stream?.abort();}streams.clear();});
  send({type:'connected',model:'voxtral-mini-4b-realtime'});
 });
 server.listen(Number(process.env.PORT||8799),process.env.BIND||'127.0.0.1',()=>console.log(JSON.stringify({event:'listening',port:server.address().port,liveReady:!!provider})));
