@@ -35,8 +35,8 @@ async function close(p) { if (await visible(p)) await p.keyboard.press('Escape')
   await p.keyboard.press('Control+o');
   ok(await visible(p) && await focused(p), 'Ctrl+O opens app selector with search focus');
   if (await visible(p)) {
-    await p.fill('#palInput', 'agents');
-    ok((await p.locator('#palList').innerText()).includes('Agents'), 'app selector searches Agents');
+    await p.fill('#palInput', 'Private Agent');
+    ok((await p.locator('#palList').innerText()).includes('Private Agent'), 'app selector searches private agent');
     await p.keyboard.press('Escape');
     const restored = await p.evaluate(() => ({ value:document.querySelector(`.win[data-win="${__wux.ws[0].focus}"] textarea`)?.value, active:document.activeElement?.id, focusSame:document.activeElement === __qaComposer, nodeSame:document.querySelector('.win.focus') === __qaWin, capturedConnected:__qaComposer?.isConnected }));
     restored.value = await ta.inputValue();
@@ -59,7 +59,8 @@ async function close(p) { if (await visible(p)) await p.keyboard.press('Escape')
   if (await visible(p)) {
     const geom = await p.locator('#palList .ic.sgt').first().evaluate(e => { const r = e.getBoundingClientRect(); return { w: r.width, h: r.height, radius: getComputedStyle(e).borderRadius }; });
     ok(geom.w >= 48 && Math.abs(geom.w - geom.h) < 1, 'picker uses large square app tiles', geom);
-    ok((await p.locator('#palList').innerText()).includes('Agents'), 'empty app selector includes Agents');
+    ok((await p.locator('#palList').innerText()).includes('Private Agent'), 'empty app selector includes private agent');
+    ok(await p.locator('#palList .nm').filter({hasText:/^Agents$/}).count() === 0, 'app selector preserves management separation');
     const sel = () => p.evaluate(() => document.querySelector('#palList .sel')?.dataset.i);
     const a = await sel(); await p.keyboard.press('ArrowRight'); const b = await sel(); await p.keyboard.press('ArrowDown'); const c = await sel(); await p.keyboard.press('ArrowUp'); const d = await sel(); await p.keyboard.press('ArrowLeft'); const e = await sel();
     ok(a !== b && b !== c && b === d && a === e, 'four-arrow grid navigation is spatial and reversible', { a, b, c, d, e });
@@ -103,21 +104,22 @@ async function close(p) { if (await visible(p)) await p.keyboard.press('Escape')
   // Launch the real built-in Agents UI through its read-only API, not an invented app.
   await p.keyboard.press('Control+o');
   if (!await visible(p)) await p.keyboard.press('Control+k');
-  await p.fill('#palInput', 'Agents'); await p.keyboard.press('Enter'); await nap(500);
-  ok(await p.evaluate(() => Object.values(__wux.wins).some(w => w.appId === 'agents')), 'search + Enter launches actual Agents app');
-  const agentsBefore = await p.evaluate(() => Object.values(__wux.wins).filter(w => w.appId === 'agents').length);
+  await p.fill('#palInput', 'Files'); await p.keyboard.press('Enter'); await nap(500);
+  ok(await p.evaluate(() => Object.values(__wux.wins).some(w => w.appId === 'files')), 'search + Enter launches actual Files app');
+  const agentsBefore = await p.evaluate(() => Object.values(__wux.wins).filter(w => w.appId === 'files').length);
   await p.evaluate(() => __wux.newDesktop());
   if (!await visible(p)) await p.keyboard.press('Control+k');
-  await p.fill('#palInput', 'Agents');
+  await p.fill('#palInput', 'Files');
   await p.locator('#palList [data-i]').first().focus(); await p.keyboard.press('Enter');
-  ok(await p.evaluate(n => Object.values(__wux.wins).filter(w => w.appId === 'agents').length === n, agentsBefore), 'focused result button Enter preserves single instance across desktops');
+  ok(await p.evaluate(n => Object.values(__wux.wins).filter(w => w.appId === 'files').length === n, agentsBefore), 'focused result button Enter preserves single instance across desktops');
+  await p.evaluate(() => __wux.openApp(WizCore.apps('desktop').APP.agents)); await nap(350);
   ok(await p.locator('#wsList .sg-agents').count() > 0 && await p.locator('.wbar .sg-agents').count() > 0, 'layered Agents identity reaches workspace and header');
   await shot(p, 'desktop-agents');
   const chatsBefore = await p.evaluate(() => Object.values(__wux.wins).filter(w => w.app === 'chats').length);
   await p.evaluate(() => __wux.newDesktop());
   if (await visible(p)) {
     const targetDesk = await p.evaluate(() => __wux.ws[__wux.cur].id);
-    await p.fill('#palInput','Chats'); await p.keyboard.press('Shift+Enter');
+    await p.fill('#palInput', await p.evaluate(() => WizCore.apps('desktop').APP.wizard.name)); await p.keyboard.press('Shift+Enter');
     ok(await p.evaluate(([n,id]) => Object.values(__wux.wins).filter(w => w.app === 'chats').length === n + 1 && __wux.ws[__wux.cur].id === id && __wux.ws[__wux.cur].wins.length === 1,[chatsBefore,targetDesk]), 'Shift+Enter makes a fresh local Chats window on the selected desk');
     ok(!await visible(p), 'app placement dismisses new-desktop picker');
   }
@@ -129,7 +131,7 @@ async function close(p) { if (await visible(p)) await p.keyboard.press('Escape')
   if (await visible(p)) { await p.evaluate(() => history.back()); await nap(250); ok(!await visible(p) && await p.evaluate(() => __wux.homeOpen) && p.url().includes('wizard-os-home'), 'browser Back closes picker only, stays Home'); }
   await p.keyboard.press('Control+k'); await p.fill('#palInput', 'Home');
   ok(await p.locator('#palList .pal-grp').allTextContents().then(x => x.includes('Commands')), 'Ctrl+K retains command search');
-  await p.fill('#palInput', 'Agents');
+  await p.fill('#palInput', 'Files');
   ok(await p.locator('#palList .pal-grp').first().textContent() === 'Apps', 'Ctrl+K keeps apps-first query search');
   await p.fill('#palInput', '');
   ok(await p.locator('#palList .pal-grp').allTextContents().then(x => x.some(s => /needs|unread|working/i.test(s))), 'Ctrl+K retains attention threads');
@@ -171,8 +173,8 @@ async function close(p) { if (await visible(p)) await p.keyboard.press('Escape')
   // The active phone desk is represented by the orb, not a duplicate app icon. Check its mark off-active.
   await m.evaluate(() => __wos.goDesk(0,true)); await nap(500);
   ok(await m.locator('#dock .sg-agents').count() > 0 && agentHeader > 0, 'phone Agents identity reaches off-active dock and active header');
-  await m.evaluate(() => __wos.openSheet('launcher')); await nap(400); await m.fill('#search','Agents');
-  ok(await m.locator('#launcher .sg-agents').count() > 0, 'phone app chooser uses layered Agents');
+  await m.evaluate(() => __wos.openSheet('launcher')); await nap(400); await m.fill('#search','Private Agent');
+  ok(await m.locator('#launcher .sg-hat-private').count() > 0, 'phone app chooser uses private keyhole');
   await shot(m,'phone-app-chooser'); await m.evaluate(() => __wos.closeSheets(true));
   await m.evaluate(() => __wos.openOverview()); await shot(m,'phone-overview'); await m.evaluate(() => __wos.closeOverview());
   await m.evaluate(() => __wos.goDesk(0,true)); await nap(500);
