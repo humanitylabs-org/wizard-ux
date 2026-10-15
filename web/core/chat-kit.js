@@ -485,6 +485,11 @@
     return (await copyText([payload.text, payload.url].filter(Boolean).join('\n'))) ? 'copied' : 'unsupported';
   }
   function shareText(text, title) { return sharePayload({ text, title }); }
+  // Resolve identity at the tap, so renamed wizards never keep a stale attribution.
+  function shareAssistantText(text, title) {
+    const name = String(window.WizConfig?.agent?.() || '').trim() || 'Wizard';
+    return shareText(`From ${name}:\n\n${text}`, title);
+  }
   async function fetchBlob(url) {
     if (url.startsWith('data:')) { const r = await fetch(url); return r.blob(); }
     const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
@@ -718,5 +723,5 @@
     return action && choices.length ? { requestId: str(it.request_id, it.id) || undefined, action, choices } : null;
   }
 
-  window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, sharePayload, shareText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
+  window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, sharePayload, shareText, shareAssistantText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
 })();

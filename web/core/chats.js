@@ -1331,16 +1331,16 @@ window.WizCore.chats = function createChats(H) {
     const qs = e.target.closest('[data-quoteshare]');
     if (qs) {
       const text = qs.closest('blockquote[data-quote-source]')?.dataset.quoteSource || '';
-      KIT.shareText(text).then(r => {
+      (qs.closest('.msg.u') ? KIT.shareText(text) : KIT.shareAssistantText(text)).then(r => {
         if (r === 'copied') toast('⧉', 'Copied · sharing isn’t available here', 1800);
         else if (r === 'unsupported' || r === 'failed') toast('!', 'Couldn’t share', 1800);
       }).catch(() => toast('!', 'Couldn’t share', 1800));
       return true;
     }
     const cc = e.target.closest('[data-codecopy]'); if (cc) { const t = cc.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.copyText(t).then(ok => { cc.textContent = ok ? 'Copied' : 'Couldn’t copy'; setTimeout(() => { cc.textContent = 'Copy'; }, 1500); }); return true; }
-    const cs = e.target.closest('[data-codeshare]'); if (cs) { const t = cs.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.shareText(t).then(r => r === 'copied' && toast('⧉', 'Copied · sharing isn’t available here', 1800)); return true; }
+    const cs = e.target.closest('[data-codeshare]'); if (cs) { const t = cs.closest('.code')?.querySelector('pre')?.textContent || ''; (cs.closest('.msg.u') ? KIT.shareText(t) : KIT.shareAssistantText(t)).then(r => r === 'copied' && toast('⧉', 'Copied · sharing isn’t available here', 1800)); return true; }
     const mc = e.target.closest('[data-mcopy]'); if (mc) { const t = ch(id).texts?.[+mc.dataset.mcopy] ?? ''; (KIT.copyRich || KIT.copyText)(t).then(ok => toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400)); return true; }
-    const ms = e.target.closest('[data-mshare]'); if (ms) { const t = ch(id).texts?.[+ms.dataset.mshare] ?? ''; KIT.shareText(`From ${window.WizConfig.agent()}:\n\n${t}`).then(r => r === 'copied' ? toast('⧉', 'Copied · sharing isn’t available here', 1800) : r === 'failed' && toast('!', 'Couldn’t share', 1800)); return true; }
+    const ms = e.target.closest('[data-mshare]'); if (ms) { const t = ch(id).texts?.[+ms.dataset.mshare] ?? ''; KIT.shareAssistantText(t).then(r => r === 'copied' ? toast('⧉', 'Copied · sharing isn’t available here', 1800) : r === 'failed' && toast('!', 'Couldn’t share', 1800)); return true; }
     const v = e.target.closest('.vnote[data-vnote]'); if (v) { e.preventDefault(); toggleVoice(v.dataset.vnote); return true; }
     return false;
   }
