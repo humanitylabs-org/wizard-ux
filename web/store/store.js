@@ -1,6 +1,6 @@
 /* Wizard App Store: an app-discovery app that runs in its own Wizard window (or on its own).
  * Listings come from the public Wizard App Index; "installed" from this Wizard's Runtipi; "Open" asks the shell.
- * Browse-only until App installation lands: Get explains instead of installing. Back: detail → list → Store root,
+ * Get asks this Wizard's App Manager to install the app (owner only); progress shows on the button. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
 (() => {
   'use strict';
@@ -27,7 +27,7 @@
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), stack: [], q: '', loaded: false, error: '' };
+  const S = { apps: [], installed: new Map(), busy: new Set(), stack: [], q: '', loaded: false, error: '' };
   if (/\.staging\.wizard001\.com$/.test(location.hostname)) $('preview').hidden = false;
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
 
@@ -71,6 +71,7 @@
   function action(a, cls = '') {
     if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(a.id)}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
+    if (S.busy.has(a.id)) return `<span class="get have ${cls}" aria-live="polite">Installing…</span>`;
     return `<button class="get ${cls}" data-get="${esc(a.id)}">Get</button>`;
   }
   const row = a => `<div class="row" data-app="${esc(a.id)}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b><small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;
@@ -118,7 +119,7 @@
       <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc((a.version || '—').split(/[-+]/)[0])}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
       ${needs}${powers}${gives}
-      ${a.private ? `<section class="d-sec"><h3>Private test installation</h3><p>Requires existing repository access. Ask your agent to use the pinned private test catalog and run <code>wam install ${esc(a.id)}</code>. Source and architecture-matching image archives are authenticated and checksum verified; no public registry permission is needed.</p></section>` : ''}
+      ${a.private ? `<section class="d-sec"><h3>Private test installation</h3><p>Get installs it from the pinned private test catalog (this Wizard needs access to the release). Source and architecture-matching image archives are authenticated and checksum verified; no public registry permission is needed. Your agent can also run <code>wam install ${esc(a.id)}</code>.</p></section>` : ''}
       <section class="d-sec"><h3>Information</h3><dl class="info">${info}</dl>${a.url && /^https:\/\/github\.com\//.test(a.url) ? `<a class="src" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">View source on GitHub ↗</a>` : ''}</section>`;
     window.scrollTo(0, 0);
   }
@@ -148,14 +149,46 @@
     if (!keep) window.scrollTo(0, 0);
   }
   function openApp(id) { push('detail', id); showDetail(id); }
+  // Repaint whatever screen is showing (buttons change while an install runs) without touching history or scroll.
+  function refresh() {
+    const t = S.stack[S.stack.length - 1], y = window.scrollY;
+    paint();
+    if (t?.t === 'detail') showDetail(t.arg); else if (t?.t === 'list') openKind(t.arg, true); else if (t?.t === 'search') search(S.q);
+    requestAnimationFrame(() => window.scrollTo(0, y));
+  }
 
   let toastT = 0;
   function toast(html) { const t = $('toast'); t.innerHTML = html; t.hidden = false; requestAnimationFrame(() => t.classList.add('on')); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { t.hidden = true; }, 250); }, 3600); }
 
+  // Get: the App Manager installs it (owner only, on this Wizard's private address). The browser sends only the id.
+  const INSTALL = DATA.replace(/store-data\/$/, 'store-install/');
+  async function install(a) {
+    if (!a || S.busy.has(a.id) || isInstalled(a)) return;
+    S.busy.add(a.id); refresh();
+    const say = (m, ok) => toast(`<b>${esc(a.name)}${ok ? ' is ready' : ' wasn’t installed'}</b><span>${esc(m)}</span>`);
+    try {
+      const r = await fetch(INSTALL + encodeURIComponent(a.id), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: '{}' });
+      let j = await r.json().catch(() => ({}));
+      if (r.status === 403 || r.status === 404) throw new Error(r.status === 404 && !j.error ? 'Installing from the Store isn’t set up on this Wizard yet. Ask your agent to install it.' : (j.error || 'Not allowed.'));
+      if (!r.ok && r.status !== 202) throw new Error(j.error || `Install failed (${r.status}).`);
+      for (let i = 0; j.state === 'installing' && i < 360; i++) {
+        await new Promise(res => setTimeout(res, 2500));
+        const s = await fetch(INSTALL + encodeURIComponent(a.id), { credentials: 'same-origin', cache: 'no-store' });
+        j = await s.json().catch(() => ({ state: 'installing' }));
+      }
+      if (j.state !== 'installed') throw new Error(j.error || 'It didn’t finish. Ask your agent to check the App Manager.');
+      S.installed.set(a.id, { status: j.status || 'running' });
+      say('Find it in your apps.', true);
+      try { if (framed) parent.postMessage({ type: 'wizard:apps-changed', id: a.id }, location.origin); } catch (_) {}
+    } catch (err) { say(err.message || 'Install failed.'); }
+    finally { S.busy.delete(a.id); refresh(); }
+  }
+
   document.addEventListener('click', e => {
     if (e.target.closest('[data-back]')) { pop(); return; }
     const g = e.target.closest('[data-get]');
-    if (g) { e.stopPropagation(); const a = S.apps.find(x => x.id === g.dataset.get); toast(a?.private ? `<b>Private test release</b><span>Ask your agent to install ${esc(a.name)} using the pinned private test catalog: <code>wam install ${esc(a.id)}</code>.</span>` : `<b>Installing from the Store is almost here.</b><span>For now, ask your agent: “install ${esc(a?.name || 'it')}”.</span>`); return; }
+    if (g) { e.stopPropagation(); install(S.apps.find(x => x.id === g.dataset.get)); return; }
     const o = e.target.closest('[data-open]');
     if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
     const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);
