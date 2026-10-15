@@ -2569,7 +2569,21 @@
     if(V.native&&!V.meetingLoan){try{const linked=window.WosOrbHandoff?.forTake(V.native);if(linked)window.WosOrbHandoff.update(linked.id,{status:'cancelled',endedAt:Date.now()});}catch(e){toast('!','Link storage unavailable · stopping recorder; original kept');}}
     if(V.meetingLoan){
       const loan=V.meetingLoan;V.meetingLoan=null;
-      if(V.native){const id=V.native;try{DEV().recCancel(id);}catch{}V.native=null;await window.WosOrbHandoff.end(loan,{status:'cancelled',voiceTakeId:id});}
+      if(V.native){
+        const id=V.native;
+        try{DEV().recCancel(id);}catch{}
+        V.native=null;
+        await window.WosOrbHandoff.end(loan,{status:'cancelled',voiceTakeId:id});
+        // Borrowed native Cancel retains its original as a stopped take. Move those exact
+        // bytes to held custody before releasing it, rather than re-offering it as notification Send.
+        try {
+          const meta=JSON.parse(DEV().recPending()||'[]').find(t=>t.id===id);
+          if(meta){const item=await OUTBOX.capture(nativeBlob(id,meta.bytes),'cancelled-'+id);
+            await OUTBOX.transition(item.id,'held','Cancelled meeting interruption · original kept');
+            if(item.durable)recDone(id);
+          }
+        }catch{toast('!','Cancelled original kept on device · recovery available');}
+      }
       else {
         const parts=V.parts.slice(),chunks=V.chunks,rec=V.rec;
         if(rec && rec.state!=='inactive')await new Promise(resolve=>{rec.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data);};rec.onstop=resolve;rec.stop();});

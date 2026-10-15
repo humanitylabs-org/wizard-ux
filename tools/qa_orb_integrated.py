@@ -61,7 +61,12 @@ class Fixture:
         if p.startswith('/mizel-live/api/meetings/'):
             mid=p.split('/')[4]
             if p.endswith('/segments'):return reply({'segments':[]})
-            return reply(self.meetings.get(mid,{}))
+            m=self.meetings.get(mid,{})
+            if mid in getattr(self,'native_state',{}).get('status',{}):m['status']=self.native_state['status'][mid]
+            chunks=list(getattr(self,'native_state',{}).get('chunks',{}).get(mid,{}).values())
+            m['duration_ms']=max((c['start_ms']+c['dur_ms'] for c in chunks),default=0)
+            m['audio']={'tracks':[{'source':'me','chunks':len(chunks)}]}
+            return reply(m)
         if p.endswith('/api/calendar'):return reply({'events':[]})
         if p.endswith('/asks'):return reply({'asks':[]})
         if p.endswith('/summary'):return reply({'summary':{'topics':[]}})
@@ -77,26 +82,29 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
     def wait(expr,secs=15):
         value=pg.pump(secs,lambda:ev(expr),.2)
         if not value:
-            save('integrated-failure-state.json',ev("({voice:window.__wos?.voice,v:window.__wos&&{kind:__wos.V.kind,native:__wos.V.native,reply:__wos.V.replyTo,acc:__wos.V.acc,parts:__wos.V.parts?.map(b=>({size:b.size,type:b.type})),snap:__wos.V.snap},text:document.body.innerText,errors:window.qaErrors})"))
+            save('integrated-failure-state.json',ev("({voice:window.__wos?.voice,v:window.__wos&&{kind:__wos.V.kind,native:__wos.V.native,reply:__wos.V.replyTo,acc:__wos.V.acc,parts:__wos.V.parts?.map(b=>({size:b.size,type:b.type})),snap:__wos.V.snap},text:document.body.innerText,errors:window.qaErrors,capture:window.WizAppCapture?.getState(),frames:[...document.querySelectorAll('iframe')].map(f=>({src:f.src,text:f.contentDocument?.body?.innerText}))})"))
             fixture.save();raise AssertionError('Timed out: '+expr)
         return value
     def touch(selector='#orbWrap',hold=0):
         box=ev("(()=>{const e=[...document.querySelectorAll("+json.dumps(selector)+")].find(e=>e.getClientRects().length);if(!e)throw Error('missing control');const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()")
-        pg.call('Input.dispatchTouchEvent',type='touchStart',touchPoints=[dict(box,id=1)])
-        pg.pump(hold or .08)
-        pg.call('Input.dispatchTouchEvent',type='touchEnd',touchPoints=[])
-        pg.pump(.15)
+        # Do not run Runtime.evaluate/native polling while a short tap is down:
+        # a synchronous JNI call can extend it past the hold threshold.
+        pg._send({'id':2000001,'method':'Input.dispatchTouchEvent','params':{'type':'touchStart','touchPoints':[dict(box,id=1)]}})
+        if hold: pg.pump(hold,every=.02)
+        else: time.sleep(.06)
+        pg._send({'id':2000002,'method':'Input.dispatchTouchEvent','params':{'type':'touchEnd','touchPoints':[]}})
+        pg.pump(.3,every=.05)
     def native():return ev("JSON.parse(WizardOSDevice.recActive()||'null')")
     def cap():return ev('WizAppCapture.getState()')
     def mf(expr):return ev("(()=>{const w=[...document.querySelectorAll('iframe')].find(f=>f.src.includes('/mizel-live/')).contentWindow;return w.eval("+json.dumps(expr)+")})()")
     def start_meeting():
         ev("__wos.closeSheets(true);__wos.openApp('mizel')")
-        wait("[...document.querySelectorAll('iframe')].some(f=>f.src.includes('/mizel-live/')&&f.contentDocument?.querySelector('#btnNewMobile'))")
-        mf("document.querySelector('#btnNewMobile').click()")
+        wait("[...document.querySelectorAll('iframe')].some(f=>f.src.includes('/mizel-live/')&&f.contentDocument?.querySelector('#btn-new-mobile'))")
+        mf("document.querySelector('#btn-new-mobile').click()")
         wait("WizAppCapture.getState().phase==='recording'",25);pg.pump(1.5)
-        return cap()['meta']['meetingId']
+        return cap()['meetingId']
     def stop_meeting():
-        ev("WizAppCapture.stop('mizel')")
+        mf("document.querySelector('[aria-label=\"Stop recording\"]').click()")
         pg.pump(3)
     check('integrated','actual shell and native bridge loaded',ev("!!__wos&&WizardOSDevice.recHandoffVersion()===1&&!!WizAppCapture"))
     ev('WosModels.load()')

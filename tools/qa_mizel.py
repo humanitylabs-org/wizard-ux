@@ -340,6 +340,7 @@ if os.environ.get('QA_SHARED_CAPTURE_ONLY') == '1':
 if os.environ.get('QA_INTEGRATED_ONLY') == '1':
     from qa_orb_integrated import Fixture
     integrated_fixture=Fixture(P(__file__).resolve().parent.parent,os.environ['QA_ADOPTION'],job)
+    integrated_fixture.native_state=ST
 
 em = None; pg = None; summary = {'job': str(job), 'apk': str(apk), 'long_secs': LONG}
 print('job', job, flush=True)
@@ -385,6 +386,7 @@ with (BASE / 'worker.lock').open('a') as lock:
             pg.call('Page.navigate', url=ORIGIN + '/mizel-qa/host.html')
             assert pg.pump(25, lambda: pg.ev("typeof mz==='function' && typeof wizardMizelPort==='object'"), .5)
         if os.environ.get('QA_INTEGRATED_ONLY') == '1':
+            pg.call('Page.enable')
             pg.call('Page.addScriptToEvaluateOnNewDocument',source="window.qaErrors=[];addEventListener('error',e=>qaErrors.push(e.message));addEventListener('unhandledrejection',e=>qaErrors.push(String(e.reason)));localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wos.voiceTipSeen','true');")
             pg.call('Page.navigate',url=ORIGIN+'/wizard-os-home/')
             assert pg.pump(30,lambda:pg.ev('!!window.__wos?.live?.ok'),.3)
