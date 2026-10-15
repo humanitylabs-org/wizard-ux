@@ -13,6 +13,9 @@ export class OutlineRealtime {
   this.timer=setTimeout(()=>this.failed(gen,new Error('Live connection timed out')),this.handshakeMs);
   try {
    const rt=await this.client.realtime({model:this.model});
+   // Register the SDK error handler before every possible terminate(), including
+   // a CONNECTING socket delivered after abort/handshake expiry.
+   rt.on('error',e=>this.failed(gen,new Error(e?.error?.message||e?.message||'Live provider error')));
    if(gen!==this.generation||this.terminal){rt.socket?.terminate();return;}
    this.rt=rt;
    rt.on('session.created',()=>{
@@ -27,7 +30,6 @@ export class OutlineRealtime {
    });
    rt.on('transcription.delta',e=>{if(this.current(gen)){this.deltaAt=Date.now();this.stalledSince=null;this.handlers.delta?.(e.delta||'');}});
    rt.on('transcription.done',e=>{if(this.current(gen)){this.terminal=true;this.dispose();this.handlers.completed?.(e.text||'');this.resolve(true);}});
-   rt.on('error',e=>this.failed(gen,new Error(e?.error?.message||e?.message||'Live provider error')));
    rt.socket?.on('close',()=>{if(this.current(gen))this.failed(gen,new Error('Live connection closed'));});
   }catch(e){this.failed(gen,e);}
  }

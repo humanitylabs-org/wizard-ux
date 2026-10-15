@@ -33,7 +33,17 @@ function newBullet(child=false){const n=doc.nodes.find(n=>n.id===selected)||doc.
 function move(direction){const op=moveOperation(doc,selected,direction);if(op)operation(op);else note(direction>0?'No previous sibling to indent beneath.':'Already at the outer level.');}
 function fold(){const n=doc.nodes.find(n=>n.id===selected);if(n)operation({kind:'fold',target:n.id,folded:!n.folded});}
 function historyStep(forward){const from=forward?redo:undo,to=forward?undo:redo,item=from.pop();if(!item)return;operation(forward?item.forward:item.back,{history:false});to.push(item);remember();render();}
+function recoverMissingSpeech(){
+ for(const s of Object.values(ledger.items)){
+  if(doc.applied.includes('speech-'+s.id)||doc.nodes.some(n=>n.id===s.target))continue;
+  const target='recovered-'+s.id,parent=null;
+  if(!doc.nodes.some(n=>n.id===target))operation({kind:'insert',node:{id:target,parent,text:'',folded:false}},{history:false,renderView:false});
+  s.target=target;if(current?.id===s.id)current.target=target;
+  note('Retained speech moved to a recovery bullet because its original bullet was removed.');
+ }
+}
 function render(){
+ recoverMissingSpeech();
  const draftFocused=document.activeElement?.classList.contains('draft-editor');const focused=document.activeElement?.tagName==='TEXTAREA',position=focused?document.activeElement.selectionStart:null;
  const scroll=$('canvas').scrollTop;const tree=$('tree');tree.replaceChildren();
  if(document.activeElement!==$('title'))$('title').value=doc.title;
