@@ -1283,6 +1283,21 @@ window.WizCore.chats = function createChats(H) {
     if (al && window.WizCore.deeplink?.route(al.getAttribute('href'), al)) { e.preventDefault(); return true; }
     if (al && H.openLink) { let u = null; try { u = new URL(al.getAttribute('href'), location.href); } catch (err) {}
       if (u && (window.WosChat?.isHomeUrl ? window.WosChat.isHomeUrl(u) : u.origin === location.origin) && !u.pathname.startsWith('/wizard-os-home')) { e.preventDefault(); H.openLink(u.pathname + u.search + u.hash, (al.textContent || '').trim().slice(0, 40) || u.pathname); return true; } }
+    const qc = e.target.closest('[data-quotecopy]');
+    if (qc) {
+      const text = qc.closest('blockquote[data-quote-source]')?.dataset.quoteSource || '';
+      (KIT.copyRich || KIT.copyText)(text).then(ok => { qc.textContent = ok ? 'Copied' : 'Couldn’t copy'; setTimeout(() => { qc.textContent = 'Copy'; }, 1500); });
+      return true;
+    }
+    const qs = e.target.closest('[data-quoteshare]');
+    if (qs) {
+      const text = qs.closest('blockquote[data-quote-source]')?.dataset.quoteSource || '';
+      KIT.shareText(text).then(r => {
+        if (r === 'copied') toast('⧉', 'Copied · sharing isn’t available here', 1800);
+        else if (r === 'unsupported' || r === 'failed') toast('!', 'Couldn’t share', 1800);
+      }).catch(() => toast('!', 'Couldn’t share', 1800));
+      return true;
+    }
     const cc = e.target.closest('[data-codecopy]'); if (cc) { const t = cc.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.copyText(t).then(ok => { cc.textContent = ok ? 'Copied' : 'Couldn’t copy'; setTimeout(() => { cc.textContent = 'Copy'; }, 1500); }); return true; }
     const cs = e.target.closest('[data-codeshare]'); if (cs) { const t = cs.closest('.code')?.querySelector('pre')?.textContent || ''; KIT.shareText(t).then(r => r === 'copied' && toast('⧉', 'Copied · sharing isn’t available here', 1800)); return true; }
     const mc = e.target.closest('[data-mcopy]'); if (mc) { const t = ch(id).texts?.[+mc.dataset.mcopy] ?? ''; (KIT.copyRich || KIT.copyText)(t).then(ok => toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400)); return true; }
