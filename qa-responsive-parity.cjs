@@ -86,10 +86,10 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   const privateDraft=await p.evaluate(()=>{const s=window.__wos||window.__wux;return Object.values(s.wins).filter(w=>w.agent==='private'&&w.thread==='__new__').map(w=>({id:w.id,agent:w.agent}));});
   ok(privateDraft.length>0,kind+' unsent Edit opens original private agent, never main',privateDraft);
   await open(p,phone,'unsent');await p.click('[data-ubid=wos-qa-private] [data-ub=delete]');await nap(350);
-  ok(await p.evaluate(()=>!WosOutbox.get('wos-qa-private') && WosChat.drafts.get('agentnew:private')?.text==='QA existing private draft'),kind+' explicit fixture Delete preserves unrelated draft');
+  ok(await p.evaluate(()=>WosOutbox.get('wos-qa-private')?.state==='sent' && WosOutbox.get('wos-qa-private')?.durable && !WosOutbox.unsent().some(it=>it.id==='wos-qa-private') && WosChat.drafts.get('agentnew:private')?.text==='QA existing private draft'),kind+' explicit fixture Delete preserves unrelated draft');
   await p.evaluate(()=>WosOutbox._items.set('wos-qa-edit',{id:'wos-qa-edit',state:'failed',kind:'new',agent:'',sessionId:'qa-not-a-real-session-2',text:'QA successful retained edit',files:[],createdAt:Date.now(),durable:true,attempts:99}));
   await open(p,phone,'unsent');await p.click('[data-ubid=wos-qa-edit] [data-ub=edit]');await nap(250);
-  ok(await p.evaluate(()=>!WosOutbox.get('wos-qa-edit')&&WosChat.drafts.get('new').text==='QA successful retained edit'&&WosChat.drafts.get('agentnew:private').text==='QA existing private draft'),kind+' successful Edit saves words before consuming unsent and preserves other agent draft');
+  ok(await p.evaluate(()=>WosOutbox.get('wos-qa-edit')?.state==='sent' && WosOutbox.get('wos-qa-edit')?.durable && !WosOutbox.unsent().some(it=>it.id==='wos-qa-edit')&&WosChat.drafts.get('new').text==='QA successful retained edit'&&WosChat.drafts.get('agentnew:private').text==='QA existing private draft'),kind+' successful Edit saves words before consuming unsent and preserves other agent draft');
   await open(p,phone,'settings');
   await p.evaluate(async()=>{await WosCancelled.keepWeb(new Blob([new Uint8Array(4096)],{type:'audio/webm'}),16000);WizConfig.transcribe=async()=>({text:'QA cancelled fixture transcript'});WosChat.copyText=async text=>{window.__qaClipboard=text;return true;};});
   await p.click('[data-cx=copy]');await nap(250);
@@ -97,7 +97,7 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   await p.click('[data-cx=show]');await p.click('[data-cx=show]');
   ok(await p.locator('[data-cxtext]').innerText()==='QA cancelled fixture transcript',kind+' cancelled words hide/show');
   await p.reload();await p.waitForFunction(m=>m?window.__wos:window.__wux,phone);await open(p,phone,'settings');
-  ok(await p.evaluate(()=>WosChat.drafts.get('agentnew:private')?.text==='QA existing private draft' && !WosOutbox.get('wos-qa-private') && WosCancelled.list().length===1),kind+' reload retains draft/cancelled record and durable delete');
+  ok(await p.evaluate(()=>WosChat.drafts.get('agentnew:private')?.text==='QA existing private draft' && WosOutbox.get('wos-qa-private')?.state==='sent' && WosOutbox.get('wos-qa-private')?.durable && !WosOutbox.unsent().some(it=>it.id==='wos-qa-private') && WosCancelled.list().length===1),kind+' reload retains draft/cancelled record and durable delete');
   await p.click('[data-cx=delete]');await nap(250);ok(await p.evaluate(()=>WosCancelled.list().length===0),kind+' explicit cancelled fixture delete');
   await open(p,phone);await p.setViewportSize({width:360,height:800});await shot(p,kind+'-360');
   ok(await p.locator('[data-skinpick]').evaluateAll(es=>es.every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1;})),kind+' 360px skin controls do not overflow');

@@ -97,6 +97,21 @@ test('desktop Cancel retains a long take including its final chunk, never a shor
   now += 1000; v.cancel(); stops.shift()(); assert.equal(saved.length, 1); assert.equal(stopped, 2);
 });
 
+
+test('shared recovery controls preserve quarantine, uncertain steering, audio and frozen model routes', () => {
+  const { sandbox } = harness(); const calls = [], notices = [];
+  for (const item of [{ id:'uncertain', state:'unconfirmed' }, { id:'quarantined', state:'failed' }, { id:'sealed', body:{} }]) {
+    const outbox = { get: () => item, quarantined: id => id === 'quarantined', retry: () => calls.push('retry') };
+    sandbox.WosSettings.unsentAction({ outbox, editUnsent: () => calls.push('edit'), toast: (...args) => notices.push(args) }, item.id, 'app', 'edit');
+    if (!item.body) sandbox.WosSettings.unsentAction({ outbox }, item.id, 'app', 'retry');
+  }
+  assert.deepEqual(calls, []);
+  const opts = { chats: { ch: () => { throw Error('must retain before composer'); } }, wid:'x', outbox:{}, toast:()=>{} };
+  for (const item of [{audio:{}}, {model:'original',provider:'original-provider'}]) {
+    assert.equal(sandbox.WosSettings.moveDraft({...opts,item}), false);
+  }
+});
+
 test('unsent Edit consumes only after the shared draft store verifies text and attachments', () => {
   const { sandbox } = harness(); const removed = [], notices = []; let saved;
   const state = { draft: '', files: [], draftFor: 'agentnew:private' };
