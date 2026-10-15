@@ -92,7 +92,7 @@ async function run(browser,mobile){
  if(mobile)await p.evaluate(()=>__wosNativeBack());else await p.keyboard.press('Escape');
  ok(label+' nested Back and Manager root Back never exit',p.url().includes('/wizard-os-home/')&&await f.locator('#message').inputValue()==='Retained Manager draft');
  await p.evaluate(m=>m?__wos.goDesk(0):__wux.goHome(),mobile);await delay(350);
- const awayRead=await read();
+ const awayRead=await read();const awayScroll=await f.evaluate(()=>JSON.parse(localStorage.getItem('wizard-manager:conversation:v1')).scroll);console.log('AWAY SCROLL',JSON.stringify({label,position,awayScroll,actual:await f.locator('#conversation').evaluate(n=>n.scrollTop)}));
  ok(label+' hidden Manager reports unread visibility correctly',await f.evaluate(()=>WizardApp.view.isVisible())===false);
  R.messages.push({...R.messages[0],id:26,title:'Arrival while Manager away'});await delay(900);
  ok(label+' hidden app leaves durable read watermark unchanged',JSON.stringify(await read())===JSON.stringify(awayRead));
@@ -100,10 +100,10 @@ async function run(browser,mobile){
  await p.reload();await p.waitForFunction(m=>m?!!window.__wos:!!window.__wux,mobile);
  await p.evaluate(async m=>{await WizCore.appsLoaded();const s=m?__wos:__wux;s.openApp(WizCore.apps(m?'mobile':'desktop').APP['wizard-manager']);},mobile);
  await p.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.src.includes('/wizard-manager/')&&f.contentWindow?.WizardApp?.hosted));
- f=p.frames().find(x=>x.url().includes('/wizard-manager/'));await f.waitForFunction(()=>document.querySelector('[data-message-id="26"]'));await delay(200);
+ f=p.frames().find(x=>x.url().includes('/wizard-manager/'));await f.waitForFunction(()=>document.querySelector('[data-message-id="26"]'));await delay(1200);
  ok(label+' away arrival remains unread after re-entry',!(await read()).viewed.includes(26)&&(await read()).seen<26);
  ok(label+' reload retains draft and divider',await f.locator('#message').inputValue()==='Retained Manager draft'&&await boundary()===anchor);
- ok(label+' reload restores reading position',Math.abs(await f.locator('#conversation').evaluate(n=>n.scrollTop)-position)<=2);
+ ok(label+' reload restores reading position',Math.abs(await f.locator('#conversation').evaluate(n=>n.scrollTop)-position)<=2,{position,after:await f.locator('#conversation').evaluate(n=>n.scrollTop),awayScroll,afterScroll:await f.evaluate(()=>JSON.parse(localStorage.getItem('wizard-manager:conversation:v1')).scroll)});
  await delay(700);await p.screenshot({path:path.join(OUT,label+'-catchup.png')});
  await f.locator('.mgr-new-messages').scrollIntoViewIfNeeded();await p.screenshot({path:path.join(OUT,label+'-divider.png')});
  await f.locator('#conversation').evaluate(n=>{n.scrollTop=350;});

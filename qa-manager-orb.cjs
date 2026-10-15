@@ -148,7 +148,7 @@ async function gestureChecks(f,label) {
    await f.p.waitForFunction(()=>__wos.voice==='idle');
    ok(label+' focused Manager field dictation inserts only, never sends',await f.frame.locator('#message').inputValue().then(x=>x.includes('QA orb message'))&&posts(f).length===beforeDictation&&forbidden(f).length===0);
   }
-  receipts.push({label,writes:f.writes,errors:f.errors,served:[...new Set(f.served)]});await f.ctx.close();
+  receipts.push({label,writes:f.writes,errors:f.errors,served:[...new Set(f.served)]});await f.ctx.unrouteAll({behavior:'ignoreErrors'});await f.ctx.close();
  }
  }finally{await browser.close();fs.writeFileSync(path.join(OUT,'result.json'),JSON.stringify({baseline,checks,receipts,limitations:['STT, Manager state and every POST are explicit fixtures; no production admission tested','Chrome fake microphone, not physical mic or native Android bridge','Live tailnet registry and shell reads; candidate assets overlaid in browser only']},null,2));}
 })().catch(e=>{console.error(e);process.exitCode=1});
