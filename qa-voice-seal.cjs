@@ -60,7 +60,11 @@ const pickThread = p => p.evaluate(() => __wos.live.sessions.filter(s => !s.arch
 const draftOf = (p, sid) => p.evaluate(k => JSON.parse(localStorage.getItem('wos.chat.drafts.v1') || '{}')[k] || null, 'direct:' + sid);
 const sealedKeys = p => p.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('wos.chat.drafts.v1') || '{}')).filter(k => k.startsWith('sealed:')));
 const compose = wid => `[data-chats="${wid}"] .ch-compose`;
-async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); await p.touchscreen.tap(o.x + o.width / 2, o.y + o.height / 2); }
+// Focused-field tap is now dictation (qa-in-app-dictation.cjs). This suite explicitly tests AGENT voice.
+async function tapOrb(p) {
+  await p.evaluate(() => { if (__wos.voice === 'idle') document.activeElement?.blur(); });
+  const o = await p.locator('#orbWrap').boundingBox(); await p.touchscreen.tap(o.x + o.width / 2, o.y + o.height / 2);
+}
 async function openIdle(p, wid, X) {
   await p.evaluate(([w, x]) => { __wos.openChat(w, x); const s = __wos.live.session(x); if (s) Object.assign(s, { status: 'completed', runId: '' }); }, [wid, X]);
   await p.waitForTimeout(700);

@@ -56,7 +56,7 @@ HOUSE = {
     'files':         ('files',    232, None),
     'wizard-search': ('search',   256, None),
     'projects':      ('projects', 276, None),
-    'wizard':        ('chats',    296, None),
+    'wizard':        ('hat',      296, None),
     'social':        ('social',   322, None),
     'wizard-music':  ('music',    344, None),
     'iching':        ('iching',   75,  0.06),
@@ -88,7 +88,7 @@ def main():
 
     house = {k: [g, tone(h, c)] for k, (g, h, c) in HOUSE.items()}
     for k, (g, _, _) in HOUSE.items():
-        assert g in lib, (k, g)
+        assert g in lib or g in ('hat', 'hat-private'), (k, g)
     js = open(os.path.join(HERE, 'sigils.template.js')).read()
     js = js.replace('/*NAMES*/', json.dumps(sorted(lib.keys())))
     js = js.replace('/*HOUSE*/', json.dumps(house, separators=(',', ':')))

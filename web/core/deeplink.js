@@ -4,6 +4,7 @@
  *   ?view=<name>[&section] open a screen: inbox | work | chats | apps | settings | files | day | week | month | help | tour
  *   ?video=<32 hex>        play a Wizard attachment in the in-app viewer (checked with HEAD: must be video/*)
  *   ?open=<app id>         open an app (the desktop already had this; the phone gets it too)
+ *   ?agent=<agent id>      open that agent's own Chats (Agents MVP)
  * A session is more specific than a view, so it wins when both are present (legacy deepLink.ts).
  * The params are removed from the address bar once used (history entry and its state are kept), so a
  * reload doesn't replay them and Back walks the app's own stack: thread → Chats list → Home, never out.
@@ -17,9 +18,9 @@
   const C = window.WizCore = window.WizCore || {};
   const SESSION_ID = /^(?!\.{1,2}$)[A-Za-z0-9._:-]{1,180}$/;
   const VIDEO_ID = /^[a-f0-9]{32}$/;
-  const VIEWS = new Set(['home', 'inbox', 'work', 'chats', 'apps', 'store', 'system', 'settings', 'files', 'day', 'week', 'month', 'usage', 'help', 'tour', 'skin']);
+  const VIEWS = new Set(['home', 'inbox', 'work', 'chats', 'apps', 'store', 'system', 'agents', 'settings', 'files', 'day', 'week', 'month', 'usage', 'help', 'tour', 'skin']);
   const SECTIONS = new Set(['errors', 'working', 'ready', 'yesterday', 'pastWeek', 'deferred', 'archive', 'drafts']);
-  const KEYS = ['session', 'view', 'section', 'video', 'open'];
+  const KEYS = ['session', 'view', 'section', 'video', 'open', 'agent'];
   let H = null;
   const log = s => { window.__deeplinkLog = (window.__deeplinkLog || []).concat(s).slice(-30); };
 
@@ -30,6 +31,8 @@
     const view = (q.get('view') || '').trim(); if (!out.session && VIEWS.has(view)) { out.view = view; const s = q.get('section') || ''; if (SECTIONS.has(s)) out.section = s === 'deferred' ? 'ready' : s; } // Deferred lives at the bottom of Ready
     const vid = (q.get('video') || '').trim().toLowerCase(); if (VIDEO_ID.test(vid)) out.video = vid;
     const open = (q.get('open') || '').trim(); if (!out.session && !out.view && /^[a-z0-9-]{1,40}$/i.test(open)) out.open = open;
+    // ?agent=<id>: that agent's own Chats (Agents MVP).
+    const agent = (q.get('agent') || '').trim(); if (!out.session && !out.view && !out.open && /^[a-z0-9][a-z0-9-]{0,40}$/.test(agent)) out.agent = agent;
     return Object.keys(out).length ? out : null;
   }
   // Is this a link to this app (the Wizard UX page itself), as opposed to another app on the origin?
@@ -55,6 +58,7 @@
     if (d.session) { log('session:' + d.session); H.thread(d.session); }
     else if (d.view) { log('view:' + d.view); H.view(d.view, d.section || ''); }
     else if (d.open) { log('open:' + d.open); H.app?.(d.open, src || null); }
+    else if (d.agent) { log('agent:' + d.agent); H.agent?.(d.agent); }
     if (d.video) playVideo(d.video);
     return true;
   }

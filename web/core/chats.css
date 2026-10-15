@@ -428,3 +428,31 @@ body > .mviewer { position: fixed; z-index: 200; }
 .wk-helper.stalled{border-color:#a87837;}
 .wk-helper button{align-self:flex-start;min-height:44px;border:1px solid #567966;background:#233d31;color:#e1f9e9;padding:8px 14px;border-radius:10px;font:inherit;}
 .wk-helper button:disabled{opacity:.55;}
+
+/* ---- Agents MVP: which agent is open. A persistent strip at the top of an agent's Chats (list and thread, phone
+ * and desktop): the agent's sigil and colour, its name, its model, and a lock for a private agent. The colour also
+ * edges the window, so a glance tells Private from the main agent even mid-scroll. ---- */
+.ch-agent { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; margin: 8px 10px 0; padding: 7px 10px 7px 7px; border-radius: 14px;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--ag) 20%, transparent), color-mix(in oklab, var(--ag) 6%, transparent) 70%), rgba(10, 8, 20, .5);
+  border: 1px solid color-mix(in oklab, var(--ag) 42%, transparent); }
+.ch-agent.thread { margin: 0; border-radius: 0; border-width: 0 0 1px; padding: 6px 12px 6px 10px; }
+.ch-agent .ag-sig { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 10px; font-size: 14px; }
+.ch-agent.thread .ag-sig { width: 24px; height: 24px; border-radius: 8px; }
+.ch-agent .ag-t { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.ch-agent .ag-t b { font-size: 14px; font-weight: 750; color: color-mix(in oklab, var(--ag) 55%, var(--ink)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-agent .ag-t small { font-size: 11.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-agent.thread .ag-t { flex-direction: row; align-items: baseline; gap: 8px; }
+.ch-agent.thread .ag-t b { font-size: 13px; }
+.ch-agent .ag-priv { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px 0 7px; border-radius: 12px; font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
+  color: color-mix(in oklab, var(--ag) 60%, var(--ink)); background: color-mix(in oklab, var(--ag) 18%, transparent); border: 1px solid color-mix(in oklab, var(--ag) 45%, transparent); }
+.ag-lock { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ch-list.agent, .ch-thread.agent { box-shadow: inset 3px 0 0 var(--agc, transparent); }
+.ch-model.agent { color: color-mix(in oklab, var(--agc, var(--violet-2)) 70%, var(--ink)); background: color-mix(in oklab, var(--agc, #8f63ff) 16%, transparent); }
+
+/* Resumable upload progress (core/uploads.js): a thin bar along the chip's foot, a % on photo tiles. */
+.ch-att.up { position: relative; overflow: hidden; }
+.ch-att .ch-attbar { position: absolute; left: 0; bottom: 0; height: 3px; width: var(--up, 0%); background: var(--accent, #b9a6ff); border-radius: 0 2px 2px 0; transition: width .2s linear; }
+.ch-att.up.wait .ch-attbar { background: var(--ink-3, #888); animation: ch-attwait 1.2s ease-in-out infinite; }
+@keyframes ch-attwait { 50% { opacity: .35; } }
+.ch-att.ch-attimg .ch-attpct { position: absolute; left: 0; right: 0; top: 50%; margin-top: 14px; text-align: center; font: 600 11px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); }
+.ch-att.up .nm small { font-variant-numeric: tabular-nums; }

@@ -113,16 +113,24 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= #11 models ================= */
   function threadModel(s) {
-    const selected = s && M?.selections.get(s.id); if (selected) return selected;
-    return s ? { model: s.model || '', provider: s.provider || '' } : { model: '', provider: '' };
+    return M?.currentRoute(s?.id || '') || { model: '', provider: '' };
   }
-  function newModel(c) { return c.newModel || (M?.defaultOption() ? { model: M.defaultOption().value, provider: M.defaultOption().provider, isDefault: true } : null); }
+  // Agents MVP: the agent a window or thread belongs to (null = the main agent).
+  const agentOfWin = (w, s) => { const AG = window.WosAgents; const id = (s && LIVE.agentOf?.(s.id)) || (w && w.agent) || ''; return AG && id && AG.isOther(id) ? AG.get(id) || { id, label: id, missing: true } : null; };
+  function newModel(c, w) {
+    if (c.newModel) return c.newModel;
+    const ag = agentOfWin(w || H.win(Object.keys(A.CH).find(k => A.CH[k] === c) || ''), null);
+    if (ag) { const r = ag.missing ? null : window.WosAgents.route(ag); return r ? { ...r, isDefault: true } : null; }
+    return M?.defaultOption() ? { model: M.defaultOption().value, provider: M.defaultOption().provider, isDefault: true } : null;
+  }
   // The chip in the thread header: the model this thread (or this new chat) runs on. Tap to change it.
   function modelChip(w, s) {
     if (!M) return '';
-    const cur = w.thread === '__new__' ? newModel(ch(w.id)) : s ? threadModel(s) : null;
-    const label = cur?.model ? M.short(cur.model, cur.provider) : M.ready ? 'Default model' : 'Model';
-    return `<button type="button" class="ch-model" data-chmodel aria-label="Model: ${esc(cur?.model ? M.name(cur.model, cur.provider) : 'default')}. Change model" title="${esc(cur?.model || '')}">${esc(label)}<i aria-hidden="true">▾</i></button>`;
+    const ag = agentOfWin(w, s);
+    const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
+    const full = cur?.model ? (ag ? window.WosAgents.modelName(ag, cur.model) : M.name(cur.model, cur.provider)) : 'default';
+    const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
+    return `<button type="button" class="ch-model${ag ? ' agent' : ''}" data-chmodel aria-label="Model: ${esc(full)}. Change model" title="${esc(cur?.model || '')}">${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
   let modelsAsked = false;
   function ensureModels() {
@@ -133,7 +141,7 @@ window.WosChatPower = function chatPower(A) {
   async function pickModel(o) {
     const sh = sheet; if (!sh || sh.type !== 'model') return;
     const c = ch(sh.wid), w = H.win(sh.wid); closeSheet();
-    if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider }; toast('◇', `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
+    if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     const cur = threadModel(s);
     const same = cur.model === o.value && (!o.provider || cur.provider === o.provider);
@@ -247,7 +255,7 @@ window.WosChatPower = function chatPower(A) {
     try {
       it = await OUTBOX.enqueue({ kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', typed: sealed.text, audio: blob,
         instructions: H.viewContext(wid, 'a voice reply recorded in this thread'), files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
-        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}) });
+        wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && w?.agent ? { agent: w.agent } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
       if (isNew && nm) c.newModel = nm;
@@ -274,7 +282,7 @@ window.WosChatPower = function chatPower(A) {
     el.querySelectorAll('.ch-psheet').forEach(n => n.remove());
     let html = '';
     if (sheet.type === 'model') {
-      const r = M.sheetHtml({ mode: sheet.mode, cur: sheet.cur, all: sheet.all, title: '' });
+      const r = M.sheetHtml({ mode: sheet.mode, cur: sheet.cur, all: sheet.all, title: '', agent: sheet.agent || null });
       sheet.list = r.list; html = r.html;
     } else if (sheet.type === 'files') {
       const tw = H.win(sheet.wid), c = ch(sheet.wid);
@@ -290,8 +298,8 @@ window.WosChatPower = function chatPower(A) {
     if (!M) return;
     const wid = A.owner(pane), w = H.win(wid); if (!w || !w.thread) return;
     const s = w.thread === '__new__' ? null : LIVE.session(w.thread);
-    const cur = mode === 'new' ? newModel(ch(wid)) : threadModel(s);
-    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false });
+    const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(s);
+    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent: agentOfWin(w, s) });
     if (!M.ready) M.load().then(() => { if (sheet?.type === 'model') paint(sheet.pane, A.elOf(sheet.pane)); });
   }
   function openFiles(pane) {

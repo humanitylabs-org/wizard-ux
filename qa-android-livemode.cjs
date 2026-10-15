@@ -11,7 +11,7 @@ const top = () => adb('adb shell dumpsys activity activities | grep -m1 topResum
 let pass = 0, fail = 0;
 const ok = (c, m, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${m}${d ? ' — ' + String(d).slice(0, 220) : ''}`); };
 (async () => {
-  adb('adb shell am force-stop com.android.chrome; adb shell input keyevent KEYCODE_WAKEUP; adb shell wm dismiss-keyguard; sleep 1; adb shell am start -a android.intent.action.VIEW -d "https://legacy.wizard.example/wizard-os-home-preview/?demo=1" com.android.chrome >/dev/null; sleep 7; adb forward tcp:9333 localabstract:chrome_devtools_remote >/dev/null');
+  adb('adb shell am force-stop com.android.chrome; adb shell input keyevent KEYCODE_WAKEUP; adb shell wm dismiss-keyguard; sleep 1; adb shell am start -a android.intent.action.VIEW -d "https://wizard.tailc0f369.ts.net/wizard-os-home-preview/?demo=1" com.android.chrome >/dev/null; sleep 7; adb forward tcp:9333 localabstract:chrome_devtools_remote >/dev/null');
   const b = await chromium.connectOverCDP('http://127.0.0.1:9333');
   const pages = b.contexts()[0].pages();
   let p = null;

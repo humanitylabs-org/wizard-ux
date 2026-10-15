@@ -5,8 +5,8 @@
 // QA_WEB_DIR=<dir> serves app.js/live.js/styles.css from a worktree instead of the live server.
 const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://legacy.wizard.example/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP legacy.wizard.example 127.0.0.1:18443';
+const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
 const WEB = process.env.QA_WEB_DIR || '';
 const OUT = process.env.QA_OUT || '/home/developer/apps/wizard-os-home/qa-live';
 const EXEC = process.env.QA_CHROME || '/home/developer/.local/bin/google-chrome';

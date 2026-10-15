@@ -11,6 +11,32 @@
  */
 (() => {
   'use strict';
+  // Opening a Bluetooth headset's mic flips the headset from music (A2DP) to call mode (HFP):
+  // music goes muffled, quiet or drops out while you talk (James, 14 Oct). Record from the
+  // computer's built-in mic instead, so headphones keep playing music. A USB/wired mic the
+  // user plugged in still wins; no built-in mic → the system default, as before.
+  const BLUETOOTH = /bluetooth|bluez|airpods|beats|buds|headset|hands-?free|\bh[fs]p\b|wh-1000|wf-1000|bose|jabra|soundcore|pixel buds/i;
+  const BUILT_IN = /built-?in|internal|digital mic|macbook|laptop|analog stereo|front mic|dmic/i;
+  const WIRED = /usb|yeti|rode|shure|scarlett|focusrite|audio interface|webcam|brio|c9[0-9]{2}/i;
+  async function pickMic() {
+    try {
+      if (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)) return null; // phones route mics themselves
+      const ins = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput' && d.deviceId && !/^(default|communications)$/.test(d.deviceId));
+      if (!ins.some(d => d.label)) return null; // no permission yet: labels hidden
+      if (ins.some(d => WIRED.test(d.label) && !BLUETOOTH.test(d.label))) return null;
+      const builtIn = ins.find(d => BUILT_IN.test(d.label) && !BLUETOOTH.test(d.label));
+      return builtIn ? builtIn.deviceId : null;
+    } catch (e) { return null; }
+  }
+  const BASE = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  async function openMic() {
+    const id = await pickMic();
+    if (id) {
+      try { return await navigator.mediaDevices.getUserMedia({ audio: { ...BASE, deviceId: { exact: id } } }); }
+      catch (e) { if (e && e.name === 'NotAllowedError') throw e; } // device vanished: fall back to the default
+    }
+    return navigator.mediaDevices.getUserMedia({ audio: BASE });
+  }
   function voice(opts = {}) {
     const V = { state: 'idle', chunks: [], rec: null, stream: null, ac: null, an: null, t0: 0, raf: 0 };
     const set = st => { V.state = st; try { opts.onState && opts.onState(st); } catch (e) {} };
@@ -36,7 +62,7 @@
       V.chunks = []; V.t0 = performance.now(); V.cancelled = false; set('listen');
       try {
         if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('This browser has no microphone access here.');
-        V.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        V.stream = await openMic();
         if (V.cancelled) { stop(); return false; }
         const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
         const src = V.ac.createMediaStreamSource(V.stream); V.an = V.ac.createAnalyser(); V.an.fftSize = 1024; src.connect(V.an);
@@ -72,4 +98,5 @@
   }
   window.WizCore = window.WizCore || {};
   window.WizCore.voice = voice;
+  window.WizCore.voice.pickMic = pickMic;
 })();

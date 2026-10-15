@@ -75,7 +75,7 @@ async function ctxFor(b, mobile) {
     ok(house.every(t => t.h > 30), 'phone: glyphs are drawn at tile size (>30px)', JSON.stringify(house.map(t => [t.id, t.h])));
     const cols = house.map(t => t.c.toLowerCase());
     ok(new Set(cols).size === cols.length, `phone: each app has its own colour (${new Set(cols).size}/${cols.length})`, JSON.stringify(house.map(t => [t.id, t.c])));
-    for (const [id, g] of [['wizard', 'sg-chats'], ['wizard-signal', 'sg-signal'], ['wisdom', 'sg-wisdom'], ['shopping', 'sg-bag'], ['mizel', 'sg-mic'], ['files', 'sg-files']])
+    for (const [id, g] of [['wizard', 'sg-hat'], ['wizard-signal', 'sg-signal'], ['wisdom', 'sg-wisdom'], ['shopping', 'sg-bag'], ['mizel', 'sg-mic'], ['files', 'sg-files']])
       if (T[id]) ok(T[id].glyph === g, `phone: ${id} wears ${g}`, T[id].glyph);
     ok(T['qa-owned'] && T['qa-owned'].glyph === 'sg-eye' && T['qa-owned'].c.toLowerCase() === '#ff3366', 'phone: launcher.json glyph + colour override wins', JSON.stringify(T['qa-owned']));
     ok(T['qa-plain'] && T['qa-plain'].letter === 'P' && /^#[0-9a-f]{6}$/i.test(T['qa-plain'].c), 'phone: app with no sigil shows its initial on its own colour', JSON.stringify(T['qa-plain']));

@@ -3,9 +3,9 @@
 // a new thread and hit send and then I open a thread, it posts it as a reply to the thread I just opened."
 // Cause: the orb path decided the destination after transcription + routing (seconds), from whatever was in front.
 // Usage: QA_WEB_DIR=<repo> node qa-new-thread-pin.cjs [url]. Real Wizard reads; every write is intercepted.
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/developer/node_modules/playwright')); }
-const URL_ = process.argv[2] || 'https://legacy.wizard.example/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP legacy.wizard.example 127.0.0.1:18443';
+let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
 const W = process.env.QA_WEB_DIR || '';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };

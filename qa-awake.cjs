@@ -1,8 +1,8 @@
 // QA: the screen stays awake while the orb records, and lets go as soon as it stops.
 // Covers both paths: the browser Screen Wake Lock API, and the native shell bridge (WizardOSNative.keepAwake).
 // Usage: QA_WEB_DIR=<repo> node qa-awake.cjs [url]. Every Hermes/Wizard write is intercepted.
-const { chromium } = require('/home/developer/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://legacy.wizard.example/wizard-os-home/';
+const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/home/telos/node_modules/playwright');
+const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
 
 const W = process.env.QA_WEB_DIR || __dirname;
 let pass = 0, fail = 0;
@@ -14,7 +14,7 @@ async function boot(b, native) {
   // Self-contained: the shell comes from the working tree, the Wizard API is faked, nothing leaves the box.
   await ctx.route('**/*', r => {
     const q = r.request(), u = new URL(q.url());
-    if (!/private\.wizard\.example$/.test(u.hostname)) return r.abort();
+    if (!/wizard\.tailc0f369\.ts\.net$/.test(u.hostname)) return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET' && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = require('path').join(W, 'web', f);

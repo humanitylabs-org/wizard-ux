@@ -94,6 +94,8 @@
       modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
       request: userText,
+      // Agents MVP: the agent this thread is pinned to (server metadata). '' = the main agent.
+      agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
     };
   }
 
@@ -155,12 +157,15 @@
     return r;
   }
   /* Every thread Wizard lists (same endpoint, same paging). A full walk runs at boot and
-   * every few minutes; in between only the recent pages are re-read and merged over it,
-   * so the Chats list always holds the whole history, including the archive. */
-  async function fetchSessions(full) {
+   * every few minutes; in between only the first page is re-read and merged over it,
+   * so the Chats list always holds the whole history, including the archive.
+   * Battery (14 Oct 2026): the list is ordered by last activity, so any thread that changes
+   * rises to page 1. The between-walk poll used to re-read ~6 pages (~1 MB) every 15 s;
+   * one page carries the same news. The full walk still catches edits that don't bump activity. */
+  async function fetchSessions(full, agent = '') {
     const out = []; let snapshot = '';
     for (let offset = 0; offset < 5000; ) {
-      const q = `limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}`;
+      const q = `limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`;
       const p = await (await req(`/wizard/hermes/api/sessions?${q}`)).json();
       if (!snapshot && typeof p.snapshot === 'string') snapshot = p.snapshot;
       const rows = p.data || p.sessions || p.items || [];
@@ -168,12 +173,22 @@
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
       if (!more || !rows.length) return { sessions: out, complete: true };
-      const oldest = Math.min(...rows.map(r => { const s = normalize(r); return s ? Date.parse(s.activityAt || s.updatedAt) || Infinity : Infinity; }));
-      if (!full && oldest < Date.now() - 2 * WEEK) return { sessions: out, complete: false };
+      if (!full) return { sessions: out, complete: false };
     }
     return { sessions: out, complete: true };
   }
   const FULL_EVERY = 3 * 60 * 1000;
+  /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>) and kept
+   * apart from the main list, so Home, search and the main Chats never show them. Every thread/run call for such
+   * a thread names its agent. ---- */
+  const AG = () => window.WosAgents || null;
+  const otherAgent = id => { const a = AG(); return !!id && (a ? a.isOther(id) : id !== 'hermes'); };
+  const AGENT_OF = new Map(); // sessionId -> agent id, for threads of non-default agents (incl. not yet listed)
+  const AGENT_SEEN_KEY = 'wos.agentSeen.v1';
+  const AGENT_SEEN = (() => { try { const v = JSON.parse(localStorage.getItem(AGENT_SEEN_KEY) || 'null'); if (v && v.threads) return v; } catch (e) {} return { initializedAt: Date.now(), threads: {} }; })();
+  const aq = (sid, sep = '?') => { const a = L.agentOf(sid); return a ? `${sep}agent=${encodeURIComponent(a)}` : ''; };
+  const runAgent = runId => { for (const list of [L.sessions, ...Object.values(L.agentSessions)]) { const s = list.find(x => x.runId === runId); if (s) return L.agentOf(s.id); } return ''; };
+  const rq = (runId, sep = '?') => { const a = runAgent(runId); return a ? `${sep}agent=${encodeURIComponent(a)}` : ''; };
 
   /* ---- Work sections: exact port of wizard-mobile src/workSections.ts ---- */
   const DAY = 864e5;
@@ -314,7 +329,8 @@
       if (drop) { PEND.delete(sid); continue; }
       if (RELEASED.has(it.id) || (it.state === 'sent' && !known && Date.now() - (it.sentAt || 0) > PEND_MAX)) { if (known?.key === it.id) PEND.delete(sid); continue; } // already settled
       const text = String(it.text || it.typed || '').replace(/\s+/g, ' ').trim() || (it.audio || it.audioFile ? '🎙 Voice note' : (it.files || []).length ? '📎 Attachment' : '');
-      PEND.set(sid, { key: it.id, kind: it.kind, text, at: it.createdAt, state: it.state === 'sent' ? 'sent' : it.state === 'waiting' ? 'waiting' : 'sending', sentAt: it.sentAt || 0, runId: it.runId || '' });
+      if (it.agent && otherAgent(it.agent)) AGENT_OF.set(sid, it.agent);
+      PEND.set(sid, { key: it.id, kind: it.kind, text, at: it.createdAt, state: it.state === 'sent' ? 'sent' : it.state === 'waiting' ? 'waiting' : 'sending', sentAt: it.sentAt || 0, runId: it.runId || '', agent: it.agent && otherAgent(it.agent) ? it.agent : '' });
     }
     // An orb send still being transcribed/routed: Working from the send tap (outranks an older message's state).
     for (const [sid, t] of TAPS) {
@@ -326,14 +342,19 @@
     for (const s of L.sessions) if (PEND.has(s.id) || s.pend !== undefined) applyPend(s);
     L.sessions = L.sessions.filter(s => !(s.synthetic && !PEND.has(s.id)));
     addSynthetic(L.sessions);
+    for (const [a, list] of Object.entries(L.agentSessions)) {
+      for (const s of list) if (PEND.has(s.id) || s.pend !== undefined) applyPend(s);
+      L.agentSessions[a] = list.filter(s => !(s.synthetic && !PEND.has(s.id)));
+      addSynthetic(L.agentSessions[a], a);
+    }
     return before !== [...PEND].map(([k, p]) => k + p.key + p.state).join();
   }
   // A new chat is listed before Wizard has created it, so it lands in Working the moment it is sent.
-  function addSynthetic(list) {
+  function addSynthetic(list, agent = '') {
     for (const [sid, p] of PEND) {
-      if (p.kind !== 'new' || list.some(s => s.id === sid)) continue;
+      if (p.kind !== 'new' || (p.agent || '') !== agent || list.some(s => s.id === sid)) continue;
       const at = new Date(p.at).toISOString();
-      const s = { id: sid, runtime: 'direct', title: (p.text || 'New chat').slice(0, 60), status: 'submitting', updatedAt: at, preview: p.text, previewRole: 'user', source: 'wizard-mobile', optimistic: true, synthetic: true };
+      const s = { id: sid, runtime: 'direct', title: (p.text || 'New chat').slice(0, 60), status: 'submitting', updatedAt: at, preview: p.text, previewRole: 'user', source: 'wizard-mobile', optimistic: true, synthetic: true, agent };
       list.unshift(s); applyPend(s);
     }
   }
@@ -342,15 +363,18 @@
   /* ---- store ---- */
   const L = {
     ok: false, error: '', sessions: [], seen: readLocal(), deferred: {}, at: 0, listeners: new Set(), loading: null,
+    agentSessions: {}, agentStatus: {}, // non-default agents: id -> sessions / { ok, error, at }
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
-    isNew(s) { return hasNew(s, this.seen); },
+    isNew(s) { return hasNew(s, this.seenOf(s)); },
+    // A non-default agent's read state stays on this device (never PUT to the main agent's thread-seen store).
+    seenOf(s) { return s && s.agent && otherAgent(s.agent) ? AGENT_SEEN : this.seen; },
     workGroups(sessions, now) { return groupWork(sessions || this.sessions, now); },
     readyByPriority: byPriority,
     cardAt,
-    groups() {
+    groups(agent = '') {
       const now = Date.now(), needs = [], ready = [], working = [];
-      for (const s of this.sessions) {
+      for (const s of this.sessionsFor(agent)) {
         if (s.archived || s.hidden) continue;
         const def = this.deferred[keyOf(s)]?.deferred;
         if (s.status === 'waiting_for_approval') { needs.push(s); continue; }
@@ -358,7 +382,7 @@
         if (def) continue;
         const at = Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt);
         if (isFinite(at) && at < now - WEEK) continue;
-        if (!hasNew(s, this.seen)) continue;
+        if (!hasNew(s, this.seenOf(s))) continue;
         if (s.status === 'failed' || s.status === 'interrupted' || s.critical) needs.push(s); else ready.push(s);
       }
       const t = s => Date.parse(s.lastAssistantAt || s.activityAt || s.updatedAt) || 0;
@@ -372,7 +396,8 @@
           const started = Date.now();
           const full = !this.fullAt || Date.now() - this.fullAt > FULL_EVERY;
           const [got, deferred, remote] = await Promise.all([fetchSessions(full), fetchDispositions(), fetchSeen().catch(() => null)]);
-          let sessions = got.sessions;
+          // The main list holds the main agent's threads only, even if a server ever lists another agent's here.
+          let sessions = got.sessions.filter(s => !otherAgent(s.agent));
           window.WosModels?.reconcile(sessions);
           if (got.complete) this.fullAt = Date.now();
           else { const fresh = new Set(sessions.map(s => s.id)); sessions = sessions.concat(this.sessions.filter(s => !fresh.has(s.id) && !s.optimistic)); }
@@ -393,15 +418,50 @@
           }
           this.seen = merged; writeLocal(merged);
           this.ok = true; this.error = ''; this.at = Date.now();
+          await this.refreshAgents(deferred);
         } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
         finally { this.loading = null; this.emit(); }
       })();
       return this.loading;
     },
+    /* Each non-default agent's threads, from that agent (agent=<id>). One agent failing never hides another. */
+    async refreshAgents(deferred = this.deferred) {
+      const A = AG(); if (!A) return;
+      if (!A.ready) await A.load().catch(() => {});
+      const ids = A.others().map(a => a.id);
+      for (const k of Object.keys(this.agentSessions)) if (!ids.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
+      await Promise.all(ids.map(async id => {
+        try {
+          const got = await fetchSessions(true, id);
+          const list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
+          for (const s of list) {
+            const d = deferred[keyOf(s)];
+            delete s.deferred; delete s.restoredAt;
+            if (d) { if (d.deferred) s.deferred = true; else s.restoredAt = d.updatedAt; }
+            applyLocal(s);
+          }
+          addSynthetic(list, id);
+          window.WosModels?.reconcile(list);
+          this.agentSessions[id] = list; this.agentStatus[id] = { ok: true, error: '', at: Date.now() };
+        } catch (e) {
+          this.agentSessions[id] = this.agentSessions[id] || [];
+          this.agentStatus[id] = { ok: false, error: e.status === 403 ? 'access' : 'offline', at: Date.now() };
+        }
+      }));
+    },
+    // The threads of one agent ('' or the default agent = the main list).
+    sessionsFor(agent = '') { return otherAgent(agent) ? (this.agentSessions[agent] || []) : this.sessions; },
+    statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error }; },
+    // The non-default agent a thread is pinned to, or '' for the main agent.
+    agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
+    pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
     markSeen(ids) {
-      const list = (Array.isArray(ids) ? ids : [ids]).map(id => this.sessions.find(s => s.id === id)).filter(Boolean);
-      if (!list.length) return;
+      const all = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       const ts = Date.now();
+      const mine = all.filter(s => s.agent && otherAgent(s.agent));
+      if (mine.length) { for (const s of mine) AGENT_SEEN.threads[keyOf(s)] = recordFor(s, ts); try { localStorage.setItem(AGENT_SEEN_KEY, JSON.stringify(AGENT_SEEN)); } catch (e) {} this.emit(); }
+      const list = all.filter(s => !mine.includes(s));
+      if (!list.length) return;
       let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
       const threads = { ...state.threads };
       for (const s of list) threads[keyOf(s)] = recordFor(s, ts);
@@ -409,7 +469,11 @@
       this.seen = state; writeLocal(state); this.emit();
       putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
     },
-    session(id) { return this.sessions.find(s => s.id === id) || null; },
+    session(id) {
+      const s = this.sessions.find(x => x.id === id); if (s) return s;
+      for (const list of Object.values(this.agentSessions)) { const a = list.find(x => x.id === id); if (a) return a; }
+      return null;
+    },
     chatUrl(id) { return id ? `/wizard/?session=${encodeURIComponent(id)}` : '/wizard/?view=work'; },
     /* A real Archimedes request: same admission path the Wizard app uses.
      * `instructions` rides as Hermes's per-run ephemeral system prompt: the agent
@@ -417,16 +481,19 @@
     async send(input, opts = {}) {
       const M = window.WosModels;
       if (!M) throw new Error('Model selector unavailable · reload Wizard');
-      const route = await M.resolveRoute(M.snapshot('', opts.model ? { model: opts.model, provider: opts.provider } : null));
+      const agent = opts.agent && otherAgent(opts.agent) ? opts.agent : '';
+      const route = await M.resolveRoute(M.snapshot('', opts.model ? { model: opts.model, provider: opts.provider } : null, agent));
       const id = `wizard_${Date.now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
-      await req('/wizard/hermes/api/sessions', { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id }) });
+      if (agent) AGENT_OF.set(id, agent);
+      await req('/wizard/hermes/api/sessions' + aq(id), { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id, ...(agent ? { agent } : {}) }) });
       const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
       if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
-      const r = await req('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
+      const r = await req('/wizard/hermes/v1/runs' + aq(id), { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
       const run = await r.json().catch(() => ({}));
       const runId = run.run_id || run.id || '';
-      this.sessions.unshift({ id, runtime: 'direct', title: input.slice(0, 60), status: 'running', runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: input, source: 'wizard-mobile' });
+      const row = { id, runtime: 'direct', title: input.slice(0, 60), status: 'running', runId, updatedAt: new Date().toISOString(), lastUserAt: new Date().toISOString(), preview: input, source: 'wizard-mobile', agent };
+      if (agent) (this.agentSessions[agent] = this.agentSessions[agent] || []).unshift(row); else this.sessions.unshift(row);
       this.emit(); setTimeout(() => this.refresh(), 4000);
       return { sessionId: id, runId };
     },
@@ -438,19 +505,19 @@
       const s = this.session(id);
       if (s && WORKING.has(s.status) && s.runId) {
         try {
-          const active = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}`)).json();
+          const active = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}${aq(id)}`)).json();
           if (!M.matchesRuntime(active.runtime, route))
             throw Object.assign(new Error('Queue on the selected model'), { status: 409 });
           const steer = { input, ...route, require_model_lock: true };
           if (opts.fileIds?.length) steer.wizard_file_ids = opts.fileIds.slice(0, 8);
-          await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}/steer`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
+          await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}/steer${aq(id)}`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
           return { steered: true, runId: s.runId };
         } catch (e) { if (![404, 409, 410].includes(e.status)) throw e; }
       }
       const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
       if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
-      const r = await req('/wizard/hermes/v1/runs', { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
+      const r = await req('/wizard/hermes/v1/runs' + aq(id), { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
       const run = await r.json().catch(() => ({}));
       const runId = run.run_id || run.id || '';
       if (s) Object.assign(s, { status: 'running', runId, lastUserAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
@@ -461,7 +528,7 @@
     async messages(id) {
       const rows = [];
       for (let offset = 0; offset < 5000; offset += 500) {
-        const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard`)).json();
+        const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard${aq(id, '&')}`)).json();
         const page = p.data || p.messages || p.items || [];
         rows.push(...page);
         const n = Number(p.pagination?.returned ?? page.length);
@@ -470,11 +537,14 @@
       return rows;
     },
     async sessionInfo(id) {
-      const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}`)).json();
+      const agent = this.agentOf(id);
+      const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`)).json();
       const s = normalize(p.session || p); if (!s) return null;
-      const i = this.sessions.findIndex(x => x.id === id);
-      if (i >= 0) this.sessions[i] = { ...this.sessions[i], ...s }; else this.sessions.push(s);
-      applyLocal(this.sessions[i >= 0 ? i : this.sessions.length - 1]);
+      if (agent) s.agent = agent;
+      const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
+      const i = list.findIndex(x => x.id === id);
+      if (i >= 0) list[i] = { ...list[i], ...s }; else list.push(s);
+      applyLocal(list[i >= 0 ? i : list.length - 1]);
       return s;
     },
     /* ---- thread actions ---- */
@@ -495,19 +565,21 @@
     archive(id, { file = false } = {}) {
       return this._act(id, { archived: true, deferred: false }, async s => {
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
-        if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
-        let r = await fetch('/wizard/filings', { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ session_id: id, client_command_id: commandId(), runtime: s.runtime || 'direct' }) });
+        if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
+        const ag = this.agentOf(id);
+        let r = await fetch('/wizard/filings' + aq(id), { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ session_id: id, client_command_id: commandId(), runtime: s.runtime || 'direct', ...(ag ? { agent: ag } : {}) }) });
         const until = Date.now() + 10 * 60000; let wait = 500;
         while (r.status === 202 && Date.now() < until) {
           await new Promise(res => setTimeout(res, wait)); wait = Math.min(2000, wait + 250);
-          r = await fetch(`/wizard/filings/${encodeURIComponent(id)}/status`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ runtime: s.runtime || 'direct' }) });
+          r = await fetch(`/wizard/filings/${encodeURIComponent(id)}/status${aq(id)}`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ runtime: s.runtime || 'direct' }) });
         }
         if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
       });
     },
     async _defer(id, deferred) {
       const s = this.session(id); if (!s) throw new Error('gone');
-      const p = await (await req('/wizard/thread-dispositions', { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', deferred }) })).json();
+      const ag = this.agentOf(id);
+      const p = await (await req('/wizard/thread-dispositions' + aq(id), { method: 'PUT', headers: J, body: JSON.stringify({ sessionId: id, runtime: s.runtime || 'direct', deferred, ...(ag ? { agent: ag } : {}) }) })).json();
       if (p?.record?.deferred !== deferred || !isFinite(Date.parse(p.record.updatedAt))) throw new Error('Thread disposition was not saved.');
       this.deferred[keyOf(s)] = p.record;
       return p.record;
@@ -521,7 +593,7 @@
       const before = { title: s.title };
       Object.assign(s, { title: t }); this.emit();
       try {
-        const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: t }) });
+        const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: t }) });
         if (!r.ok) { let msg = ''; try { msg = (await r.json())?.error?.message || ''; } catch (e) {} throw Object.assign(new Error(msg || 'rename failed'), { status: r.status }); }
         setTimeout(() => this.refresh(), 50); return true;
       } catch (e) { const c = this.session(id); if (c) Object.assign(c, before); this.emit(); return /already in use/i.test(e.message) ? 'taken' : false; }
@@ -532,20 +604,20 @@
       const at = new Date().toISOString();
       if (s.deferred && !s.archived) return this._act(id, { deferred: false, restoredAt: at }, () => this._defer(id, false));
       return this._act(id, { archived: false, deferred: false, restoredAt: at }, async () => {
-        await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: false }) });
+        await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: false }) });
         writeRestored({ ...readRestored(), [id]: at });
       });
     },
     /* ---- the live run: status, approval, stop (api.ts run/approve/stop) ---- */
-    async run(runId) { return (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}`)).json(); },
+    async run(runId) { return (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${rq(runId)}`)).json(); },
     async approve(runId, choice, requestId) {
       const body = { choice }; if (requestId) body.request_id = requestId;
-      await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/approval`, { method: 'POST', headers: J, body: JSON.stringify(body) });
+      await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/approval${rq(runId)}`, { method: 'POST', headers: J, body: JSON.stringify(body) });
     },
     async stop(runId) {
-      await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop`, { method: 'POST' });
+      await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/stop${rq(runId)}`, { method: 'POST' });
       STOPPING.set(runId, Date.now());
-      const s = this.sessions.find(x => x.runId === runId); if (s) { applyLocal(s); this.emit(); }
+      const s = [this.sessions, ...Object.values(this.agentSessions)].flat().find(x => x.runId === runId); if (s) { applyLocal(s); this.emit(); }
       setTimeout(() => this.refresh(), 2500);
     },
   };
@@ -560,6 +632,9 @@
     OB.onChange(sync); OB.load().then(sync).catch(() => {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox); else setTimeout(attachOutbox, 0);
+  // A new or changed agent: read its threads now (not at the next poll), then repaint.
+  const attachAgents = () => { const A = AG(); if (!A || L._agents) return; L._agents = true; A.onChange(() => { if (L.ok) L.refreshAgents().then(() => L.emit()); else L.emit(); }); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachAgents); else setTimeout(attachAgents, 0);
   L.pending = id => PEND.get(id) || null;
   const resync = () => { const OB = window.WosOutbox; if (OB && syncPending(OB)) L.emit(); };
   // Returns a token for releaseSend. '__new__' has no row to move (a new chat is listed once it is in the outbox).

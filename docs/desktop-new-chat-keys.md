@@ -1,4 +1,6 @@
-# Desktop new-chat shortcuts — isolated candidate
+# Historical: initial desktop new-chat shortcuts candidate
+
+**Superseded:** This note records the earlier 0.5.1-based experiment only. Current commands, native 0.5.2 installation requirements and release evidence are in [desktop-commands.md](desktop-commands.md). The “no native update” statement below applied only to that earlier limited experiment and is not the current delivery instruction.
 
 Requested: a desktop hotkey for a new chat, and a voice hotkey that always creates a new chat.
 

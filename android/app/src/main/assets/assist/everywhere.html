@@ -20,7 +20,14 @@
   #mic{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;opacity:0;
     transition:opacity .25s;filter:drop-shadow(0 0 6px rgba(0,0,0,.8))}
   body.kb #mic{opacity:.92}
-  body.kb.live #mic{opacity:0}
+  body.kb.live #mic,body.busy #mic{opacity:0}
+  /* Processing is active work, including retry waits. True idle remains a still frame. */
+  #processing{position:absolute;inset:11%;border:2px solid transparent;border-top-color:var(--cyan);
+    border-right-color:var(--cyan);border-radius:50%;display:none}
+  body.busy #processing{display:block;animation:processing 1s linear infinite}
+  body.busy #timer{opacity:1;color:var(--cyan)}
+  body.busy #timer::before{display:none}
+  @keyframes processing{to{transform:rotate(360deg)}}
   #mic path{fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   #badge{position:absolute;right:4px;top:3px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;display:none;
     place-items:center;background:var(--amber);color:#1b1206;font:800 10px/1 system-ui}
@@ -44,11 +51,18 @@
   <canvas id="orb" width="64" height="64" aria-hidden="true"></canvas>
   <img id="orbFallback" src="robert-thread-orb.png" alt="" hidden>
   <svg id="mic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+  <div id="processing" role="status" aria-label="Processing recording"></div>
   <span id="badge"></span>
   <div id="timer">0:00</div>
 </div>
 <script>window.ORB_R = .64;</script>
 <script src="orb.js"></script>
+<script>
+/* Battery (14 Oct 2026): at rest the floating orb holds a still frame, like the in-app orb.
+   It used to redraw ~12 times a second over every other app whenever the screen was on.
+   Touch, listening, thinking and level changes still wake it to full rate. */
+window.Orb && Orb.setRestingMotion && Orb.setRestingMotion(false);
+</script>
 <script>
 const $ = id => document.getElementById(id);
 const N = window.EverywhereNative || { log(){} };
@@ -78,8 +92,12 @@ const E = window.E = {
     document.body.classList.toggle('paused', S.mode === 'paused');
     document.body.classList.toggle('kb', S.kb || S.mode === 'type' || S.mode === 'typing');
     document.body.classList.toggle('live', live);
+    const busy = ['transcribe', 'sending', 'retry'].includes(S.mode);
+    document.body.classList.toggle('busy', busy);
+    $('processing').setAttribute('aria-label', S.mode === 'retry' ? 'Waiting to retry transcription' : 'Processing recording');
+    if (busy) $('timer').textContent = S.mode === 'retry' ? 'retry…' : '•••';
     if (live) $('timer').textContent = fmt(S.ms + (S.paused ? 0 : performance.now() - S.t0));
-    Orb.setMode(S.mode === 'typing' ? 'typing' : S.mode);
+    Orb.setMode(busy ? 'think' : S.mode);
     if (!live) Orb.setLevel(0);
     const f = +o.failed || 0; $('badge').textContent = f; $('badge').classList.toggle('on', f > 0);
   },

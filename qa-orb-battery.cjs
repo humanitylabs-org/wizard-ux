@@ -14,7 +14,7 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2.625, hasTouch: true, isMobile: true, permissions: ['microphone'] });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (u.hostname !== 'legacy.wizard.example') return r.abort();
+    if (u.hostname !== 'wizard.tailc0f369.ts.net') return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET' && !m[1].startsWith('api/')) {
       const f = (m[1] || 'index.html'), p = path.join(W, 'web', f);
@@ -34,7 +34,7 @@ const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name)
   });
   const pg = await ctx.newPage();
   const errs = []; pg.on('pageerror', e => errs.push(String(e)));
-  await pg.goto('https://legacy.wizard.example/wizard-os-home/', { waitUntil: 'load' });
+  await pg.goto('https://wizard.tailc0f369.ts.net/wizard-os-home/', { waitUntil: 'load' });
   await pg.waitForTimeout(3000);
   const webgl = await pg.evaluate(() => !!(window.Orb && Orb.webgl));
   const rate = async (setup) => {

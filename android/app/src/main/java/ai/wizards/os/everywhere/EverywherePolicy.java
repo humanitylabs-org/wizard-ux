@@ -30,6 +30,15 @@ public final class EverywherePolicy {
         return message == null || message.isEmpty() ? "Wizard refused it (" + status + ")" : message;
     }
 
+    /** A stopped floating take owns logical admission until delivery/insertion finishes.
+     * The microphone is free; that does not mean the orb is ready for another take. */
+    static String processingMode(String source, String state, String text, boolean retryWait) {
+        if (!("dictation".equals(source) || "everywhere".equals(source))) return "";
+        if (!("waiting".equals(state) || "sending".equals(state))) return "";
+        if (retryWait) return "retry";
+        return text == null || text.isEmpty() ? "transcribe" : "sending";
+    }
+
     /** The floating button shows only when it is switched on, Android allows it, and Wizard OS is not in front. */
     public static boolean bubbleVisible(boolean enabled, boolean overlayAllowed, boolean appInFront) {
         return enabled && overlayAllowed && !appInFront;

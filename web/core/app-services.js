@@ -46,6 +46,9 @@
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); };
     frames.set(frame, st); frame.addEventListener('load', load);
+    const detachReading = window.WizAppReadingPosition?.attach(frame, { appId, authorize: () => valid(st) });
+    const detachServices = st.detach;
+    st.detach = () => { detachReading?.(); detachServices(); };
     // App scripts can run before the frame load event. Attach when mounting, not only on load.
     try { frame.contentWindow.WizardApp?.ready?.(); } catch (_) {}
     cleanupLegacy(st).catch(() => {});

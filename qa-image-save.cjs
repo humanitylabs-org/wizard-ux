@@ -5,7 +5,7 @@
 // Usage: QA_SEARCH=http://127.0.0.1:9289 node qa-image-save.cjs. Every Hermes/Wizard write is refused and recorded.
 const { chromium } = require('/home/developer/node_modules/playwright');
 const fs = require('fs'), path = require('path');
-const ORIGIN = 'https://legacy.wizard.example', URL_ = ORIGIN + '/wizard-os-home/';
+const ORIGIN = 'https://wizard.tailc0f369.ts.net', URL_ = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname, SEARCH = process.env.QA_SEARCH || 'http://127.0.0.1:9288';
 const SHOTS = process.env.QA_SHOTS || '';
 const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 15; SM-S928B Build/AP3A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36 WizardOS-Android/0.9.0';
@@ -22,7 +22,7 @@ async function boot(b, ua) {
   const json = (r, o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
-    if (u.hostname !== 'legacy.wizard.example') return m === 'GET' ? r.continue() : r.abort();
+    if (u.hostname !== 'wizard.tailc0f369.ts.net') return m === 'GET' ? r.continue() : r.abort();
     if (u.pathname.startsWith('/wizard-search/')) {
       const res = await r.fetch({ url: SEARCH + u.pathname + u.search }).catch(() => null);
       return res ? r.fulfill({ response: res }) : r.abort();
