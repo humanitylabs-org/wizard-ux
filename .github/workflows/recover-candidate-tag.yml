@@ -1,0 +1,78 @@
+name: Recover published candidate tag
+
+# One-time recovery of the already-built candidate. No build or worker lease.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: recover-candidate-20261012
+  cancel-in-progress: false
+jobs:
+  tag-existing:
+    if: github.repository == 'humanitylabs-org/wizard-ux' && github.ref == 'refs/heads/daily'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/humanitylabs-org/wizard-ux
+      IMAGE_SHA: 8c777bbafac8b802ba347c17a2ea616d5e36e59d
+      DIGEST: sha256:6ad909a8c1bc290c493fee66dae3ff1e12a2c8eedcd784b7173e6b22320f1627
+      RELEASE_TAG: 0.3.0-candidate.20261012
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Verify original published source anonymously before tagging
+        run: >-
+          python3 scripts/ci/ghcr_image.py verify --image "$IMAGE"
+          --sha "$IMAGE_SHA" --digest "$DIGEST"
+      - name: Create only the missing alias without rebuilding
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, subprocess, sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, 'scripts/ci')
+          from ghcr_image import Registry, clean_env
+          image, digest, release = (os.environ[k] for k in ('IMAGE', 'DIGEST', 'RELEASE_TAG'))
+          registry = Registry(image, authenticated=True)
+          if registry.manifest('sha-' + os.environ['IMAGE_SHA'])[0] != digest:
+              raise RuntimeError('Original SHA tag changed')
+          existing = registry.manifest(release, missing_ok=True)
+          if existing:
+              if existing[0] != digest:
+                  raise RuntimeError('Candidate already exists with a different digest; refusing overwrite')
+              print('Candidate already matches; no registry write needed')
+          else:
+              with tempfile.TemporaryDirectory(prefix='candidate-auth-') as config:
+                  auth = base64.b64encode((os.environ['GITHUB_ACTOR'] + ':' + os.environ['GHCR_TOKEN']).encode()).decode()
+                  path = Path(config, 'config.json')
+                  with path.open('x') as f:
+                      os.chmod(path, 0o600)
+                      json.dump({'auths': {'ghcr.io': {'auth': auth}}}, f)
+                  subprocess.run(['docker', 'buildx', 'imagetools', 'create', '--tag', image + ':' + release, image + '@' + digest], env=clean_env(config), check=True)
+              if Registry(image, authenticated=True).manifest(release)[0] != digest:
+                  raise RuntimeError('Candidate alias digest mismatch')
+              print('Created candidate alias for the original published image')
+          PY
+  anonymous-pull:
+    needs: tag-existing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Pull original digest and candidate tag with no credentials
+        run: >-
+          python3 scripts/ci/ghcr_image.py verify
+          --image ghcr.io/humanitylabs-org/wizard-ux
+          --sha 8c777bbafac8b802ba347c17a2ea616d5e36e59d
+          --digest sha256:6ad909a8c1bc290c493fee66dae3ff1e12a2c8eedcd784b7173e6b22320f1627
+          --release 0.3.0-candidate.20261012
