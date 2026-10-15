@@ -3043,8 +3043,10 @@
     generalTarget.hidden = V.state !== 'idle' && V.state !== 'command';
     generalTarget.classList.toggle('hold-target', V.state === 'command');
     generalTarget.textContent = V.state === 'command' ? '↑ ' + window.WizConfig.agent() + ' · release to keep talking' : 'Record for ' + window.WizConfig.agent();
+    generalTarget.setAttribute('aria-label', generalTarget.textContent);
   }
   paintVoiceDestination();
+  window.addEventListener('wizard:config', paintVoiceDestination);
   let G = null;
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());

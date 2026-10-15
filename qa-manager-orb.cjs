@@ -60,6 +60,7 @@ const forbidden=f=>f.writes.filter(x=>/\/route$|\/api\/sessions$|\/v1\/runs(?:\/
 async function retry(f,it){await f.p.evaluate(id=>WosOutbox.retryConversation(id),it.id);return last(f);}
 async function gestureChecks(f,label) {
  const {p,mobile}=f;
+ ok(label+' accessible general action uses live configured name',await p.evaluate(()=>document.getElementById('generalVoice').getAttribute('aria-label')==='Record for '+WizConfig.agent()));
  await p.evaluate(()=>window.__qaBefore=[...WosOutbox._items.keys()]);
  await p.evaluate(()=>{window.__qaRecorder={starts:0,stops:0};for(const op of ['start','stop']){const original=MediaRecorder.prototype[op];MediaRecorder.prototype[op]=function(...args){__qaRecorder[op==='start'?'starts':'stops']++;return original.apply(this,args);};}});
  const before=posts(f).length;

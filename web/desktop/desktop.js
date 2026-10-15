@@ -953,8 +953,8 @@
   }
   const generalVoice = document.createElement('button');
   generalVoice.id = 'generalVoice'; generalVoice.className = 'general-voice';
-  generalVoice.textContent = 'Record for ' + window.WizConfig.agent();
-  generalVoice.setAttribute('aria-label', generalVoice.textContent);
+  const paintGeneralVoice = () => { generalVoice.textContent = 'Record for ' + window.WizConfig.agent(); generalVoice.setAttribute('aria-label', generalVoice.textContent); };
+  paintGeneralVoice(); window.addEventListener('wizard:config', paintGeneralVoice);
   mic.insertAdjacentElement('afterend', generalVoice);
   generalVoice.addEventListener('click', () => talkNew('Tap to send'));
   async function talk(action = 'toggle', forceNew = false, newKey = `${CMD}⇧N`) {
