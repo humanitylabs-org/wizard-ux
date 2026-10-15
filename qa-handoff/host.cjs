@@ -38,7 +38,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
  });
  await test('foreground Manager meeting request stages before return and bypasses conversation dispatch',async()=>{
    await p.waitForFunction(()=>__wos.voice==='idle');
-   await p.evaluate(()=>__wos.openApp(window.__qaApp));await p.waitForTimeout(300);
+   await p.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['qa-iching']));await p.waitForTimeout(300);
    await p.evaluate(async()=>{const w=Object.values(__wos.wins).find(w=>w.app==='frame');w.appId='wizard-manager';window.meeting=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:500,meta:{meetingId:'manager-meeting',title:'PRIVATE MANAGER NOTES'}});window.managerOrder=[];const stage=WosOutbox.stage,send=WosOutbox.sendConversation,end=WosOrbHandoff.end;WosOutbox.stage=async function(o){const r=await stage.call(this,o);managerOrder.push(['stage',r.durable]);return r;};WosOutbox.sendConversation=async()=>{throw Error('Manager conversation must not receive meeting loan');};WosOrbHandoff.end=async(...a)=>{managerOrder.push(['return']);return end(...a);};window.restoreManagerProbe=()=>{WosOutbox.stage=stage;WosOutbox.sendConversation=send;WosOrbHandoff.end=end;w.appId='qa-iching';};});
    const before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;f.R.delay=1300;
    await p.evaluate(()=>__wos.startVoice('auto'));await p.waitForTimeout(450);
@@ -87,7 +87,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
    await p.locator('#arcPause').click();await input.fill('original typed draft');
    const original=await p.evaluate(()=>({reply:__wos.V.replyTo,route:__wos.V.snap.route}));assert.equal(original.reply.sid,'qa-0');
    // Open another app without cancelling the parked reply (unlike the old fixture helper).
-   await p.evaluate(()=>__wos.openApp(window.__qaApp));await p.waitForTimeout(400);
+   await p.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['qa-iching']));await p.waitForTimeout(400);
    const frame=p.frames().find(x=>x.url().includes('/qa-iching/'));await select(frame);
    const before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;
    await p.evaluate(()=>{tone=880;});await tap(p);await p.waitForFunction(()=>__wos.V.kind==='dictation');await p.waitForTimeout(700);await tap(p);
@@ -107,7 +107,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
  });
  await test('cancelled and failed borrowed dictation keep exact paused original without sends',async()=>{
    const frame=p.frames().find(x=>x.url().includes('/qa-iching/'));
-   await p.evaluate(()=>__wos.openApp(window.__qaApp));await p.waitForTimeout(350);const fieldFrame=p.frames().find(x=>x.url().includes('/qa-iching/'));await select(fieldFrame);
+   await p.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['qa-iching']));await p.waitForTimeout(350);const fieldFrame=p.frames().find(x=>x.url().includes('/qa-iching/'));await select(fieldFrame);
    const original=await p.evaluate(()=>({id:__wos.V.custodyCapture,text:__wos.V.seal.text,reply:__wos.V.replyTo,route:__wos.V.snap.route})),before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;
    await tap(p);await p.waitForTimeout(500);await p.evaluate(()=>__wos.cancelVoice(true));assert.equal(await p.evaluate(()=>__wos.voice),'paused');
    await select(fieldFrame);f.R.fail=true;await tap(p);await p.waitForTimeout(550);await tap(p);await p.waitForFunction(()=>__wos.voice==='paused');f.R.fail=false;
@@ -145,7 +145,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
  });
  await test('native parked reply closes to durable custody and explicit Resume reopens native recorder (mock)',async()=>{
    const native=await boot(browser,true),n=native.p;await n.evaluate(async()=>{await WosModels.load();__wos.openWizardThread('qa-0');});await n.locator('[data-chmic]').first().click();await n.waitForTimeout(600);await n.locator('#arcPause').click();
-   const original=await n.evaluate(()=>__wos.V.native);await n.evaluate(()=>__wos.openApp(window.__qaApp));await n.waitForTimeout(400);const nf=n.frames().find(x=>x.url().includes('/qa-iching/'));await select(nf);await tap(n);await n.waitForFunction(()=>__wos.V.kind==='dictation'&&!!__wos.V.native);await n.evaluate(()=>__wos.cancelVoice(true));
+   const original=await n.evaluate(()=>__wos.V.native);await n.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['qa-iching']));await n.waitForTimeout(400);const nf=n.frames().find(x=>x.url().includes('/qa-iching/'));await select(nf);await tap(n);await n.waitForFunction(()=>__wos.V.kind==='dictation'&&!!__wos.V.native);await n.evaluate(()=>__wos.cancelVoice(true));
    assert.equal(await n.evaluate(()=>__wos.voice),'paused');assert.equal(await n.evaluate(()=>__wos.V.resumeNative),true);assert.equal(await n.evaluate(()=>WosOutbox.get(__wos.V.custodyCapture).durable),true);
    await n.waitForTimeout(500);await n.locator('#arcPause').click();await n.waitForFunction(()=>__wos.voice==='listen'&&!!__wos.V.native);assert.notEqual(await n.evaluate(()=>__wos.V.native),original);assert.equal(await n.evaluate(()=>__wos.V.replyTo.sid),'qa-0');assert.deepEqual(native.errors,[]);await native.context.close();
  });
