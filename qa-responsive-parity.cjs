@@ -33,10 +33,18 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   const features=await p.locator('[data-settings-feature]').evaluateAll(es=>es.map(e=>e.dataset.settingsFeature));
   ok(['unsent','look','voice','cancelled','wizard','usage'].every(x=>features.includes(x)),kind+' all common settings features',features);
   ok(phone?await p.locator('[data-st=everywhere][disabled]').count()===1:await p.locator('[data-st=everywhere]').count()===0,kind+' honest Android capability gate');
+  await p.evaluate(()=>WizCore.deeplink.route('/wizard-os-home/?open=wisdom'));
+  await p.waitForFunction(()=>WizAppearance.inspect().some(x=>/wisdom/.test(x.src)&&x.acked),null,{timeout:30000});
+  const appFrame=p.frames().find(f=>/\/wisdom\//.test(f.url()));
+  await appFrame.evaluate(()=>window.__qaSkinDocument='kept');await open(p,phone);
   for(const skin of ['nebula','grove','tide','ember','signal']) {
    await p.click('[data-skinpick='+skin+']');await nap(200);
    const state=await p.evaluate(()=>({skin:document.documentElement.dataset.skin,saved:localStorage.getItem('wos.skin'),bg:getComputedStyle(document.body).getPropertyValue('--bg').trim(),canvases:WosSkin._bg.cv.length,scenery:WosScenery.state()}));
-   ok(state.skin===skin && state.saved===skin && state.canvases===2,kind+' '+skin+' applies and persists',state);await shot(p,kind+'-'+skin);
+   ok(state.skin===skin && state.saved===skin && state.canvases===2,kind+' '+skin+' applies and persists',state);
+   await appFrame.waitForFunction(s=>window.WizardTheme?.current?.skin===s,skin,{timeout:10000});
+   const app=await appFrame.evaluate(()=>({skin:WizardTheme.current.skin,base:WizardTheme.current.tokens.base,marker:__qaSkinDocument,bg:getComputedStyle(document.body).backgroundColor}));
+   ok(app.skin===skin && app.base===state.bg && app.marker==='kept' && app.bg==='rgba(0, 0, 0, 0)',kind+' '+skin+' styles hosted Wisdom without reload',app);
+   await shot(p,kind+'-'+skin);
   }
   await p.reload();await p.waitForFunction(m=>m?window.__wos:window.__wux,phone);await open(p,phone);
   ok(await p.evaluate(()=>WosSkin.current==='signal'),kind+' reload retains selected skin');
@@ -47,7 +55,7 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   await open(p,phone,'qa-feature');await p.click('[data-qa-feature]');
   ok(await p.evaluate(()=>__qaFeatureWorked===1),kind+' synthetic feature added once is reachable and works');
   // Focus survives polling re-render and remains in the settings dialog.
-  await p.locator('[data-skinpick=ember]').focus();await p.evaluate(()=>WosOutbox.retryAll = WosOutbox.retryAll); // no mutation/send
+  await p.locator('[data-skinpick=ember]').focus();await p.evaluate(()=>WosSettings.register({id:'qa-refresh',html:()=>''})); // force live-style re-render
   await p.keyboard.press('Tab');ok(await p.evaluate(()=>!!document.activeElement.closest('[data-settings-root]')),kind+' keyboard focus stays in Settings');
   await p.keyboard.press('Escape');await nap(250);ok(!await p.locator(selector).isVisible(),kind+' Escape closes Settings');
   await open(p,phone,'settings');await p.click('[data-st=help]');await nap(300);await p.evaluate(()=>history.back());await nap(350);
@@ -59,6 +67,32 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   // Actual live private-agent rows, without messages or API writes.
   await p.evaluate(()=>WosAgents.load());await p.evaluate(()=>WizOpenAgentChats('private'));await nap(600);
   ok(await p.locator('[data-agent-titlebar=private]').count()>0,kind+' private Chats scope still reachable');
+  // State-changing actions are isolated local fixtures, never real chats/runs/transcription.
+  await p.evaluate(async()=>{
+    const item={id:'wos-qa-private',state:'failed',kind:'new',agent:'private',sessionId:'qa-not-a-real-session',text:'QA retained unsent words',files:[],createdAt:Date.now(),durable:true,attempts:99};
+    WosOutbox._items.set(item.id,item);
+    await new Promise((resolve,reject)=>{const o=indexedDB.open('wos-outbox',1);o.onsuccess=()=>{const t=o.result.transaction('items','readwrite');t.objectStore('items').put(item);t.oncomplete=()=>{o.result.close();resolve();};t.onerror=()=>reject(t.error);};o.onerror=()=>reject(o.error);});
+    WosChat.drafts.set('agentnew:private','QA existing private draft',[]);
+    window.__qaRetries=[];WosOutbox.retry=id=>__qaRetries.push(id);WosOutbox.retryAll=()=>__qaRetries.push('*');
+  });
+  await open(p,phone,'unsent');
+  await p.click('[data-ubid=wos-qa-private] [data-ub=retry]');
+  ok(await p.evaluate(()=>__qaRetries[0]==='wos-qa-private' && WosOutbox.get('wos-qa-private').text==='QA retained unsent words'),kind+' fixture retry reaches common dispatch without losing words');
+  await p.click('[data-ubid=wos-qa-private] [data-ub=edit]');await nap(350);
+  ok(await p.evaluate(()=>WosOutbox.get('wos-qa-private')?.text==='QA retained unsent words' && WosChat.drafts.get('agentnew:private')?.text==='QA existing private draft'),kind+' editing cannot overwrite existing private draft');
+  await p.locator('.win[data-agent=private] textarea').count(); // scope is verified from canonical shell state below
+  const privateDraft=await p.evaluate(()=>{const s=window.__wos||window.__wux;return Object.values(s.wins).filter(w=>w.agent==='private'&&w.thread==='__new__').map(w=>({id:w.id,agent:w.agent}));});
+  ok(privateDraft.length>0,kind+' unsent Edit opens original private agent, never main',privateDraft);
+  await open(p,phone,'unsent');await p.click('[data-ubid=wos-qa-private] [data-ub=delete]');await nap(350);
+  ok(await p.evaluate(()=>!WosOutbox.get('wos-qa-private') && WosChat.drafts.get('agentnew:private')?.text==='QA existing private draft'),kind+' explicit fixture Delete preserves unrelated draft');
+  await p.evaluate(async()=>{await WosCancelled.keepWeb(new Blob([new Uint8Array(4096)],{type:'audio/webm'}),16000);WizConfig.transcribe=async()=>({text:'QA cancelled fixture transcript'});WosChat.copyText=async text=>{window.__qaClipboard=text;return true;};});
+  await p.click('[data-cx=copy]');await nap(250);
+  ok(await p.evaluate(()=>__qaClipboard==='QA cancelled fixture transcript' && WosCancelled.list().length===1),kind+' cancelled fixture transcribes and copies via shared module');
+  await p.click('[data-cx=show]');await p.click('[data-cx=show]');
+  ok(await p.locator('[data-cxtext]').innerText()==='QA cancelled fixture transcript',kind+' cancelled words hide/show');
+  await p.reload();await p.waitForFunction(m=>m?window.__wos:window.__wux,phone);await open(p,phone,'settings');
+  ok(await p.evaluate(()=>WosChat.drafts.get('agentnew:private')?.text==='QA existing private draft' && !WosOutbox.get('wos-qa-private') && WosCancelled.list().length===1),kind+' reload retains draft/cancelled record and durable delete');
+  await p.click('[data-cx=delete]');await nap(250);ok(await p.evaluate(()=>WosCancelled.list().length===0),kind+' explicit cancelled fixture delete');
   await open(p,phone);await p.setViewportSize({width:360,height:800});await shot(p,kind+'-360');
   ok(await p.locator('[data-skinpick]').evaluateAll(es=>es.every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1;})),kind+' 360px skin controls do not overflow');
   await p.setViewportSize({width:1000,height:800});await shot(p,kind+'-resized');

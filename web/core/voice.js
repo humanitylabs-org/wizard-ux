@@ -75,7 +75,7 @@
     function cancel() {
       V.cancelled = true;
       const rec = V.rec, chunks = V.chunks, ms = performance.now() - V.t0;
-      const keep = () => { if (ms >= 15000 && chunks.length) window.WosCancelled?.keepWeb(new Blob(chunks, { type: rec?.mimeType || 'audio/webm' }), ms); };
+      const keep = () => { if (ms >= 15000 && chunks.length) window.WosCancelled?.keepWeb(new Blob(chunks, { type: rec?.mimeType || 'audio/webm' }), ms, false, '', 'desktop'); };
       // Capture this take before another recorder can replace V; onstop includes the final chunk.
       try { if (rec && rec.state !== 'inactive') { rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); }; rec.onstop = keep; rec.stop(); } else keep(); } catch (_) { keep(); }
       V.rec = null; stop(); set('idle');
