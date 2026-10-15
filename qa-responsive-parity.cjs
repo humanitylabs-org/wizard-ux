@@ -87,6 +87,10 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   ok(privateDraft.length>0,kind+' unsent Edit opens original private agent, never main',privateDraft);
   await open(p,phone,'unsent');await p.click('[data-ubid=wos-qa-private] [data-ub=delete]');await nap(350);
   ok(await p.evaluate(()=>!WosOutbox.get('wos-qa-private') && WosChat.drafts.get('agentnew:private')?.text==='QA existing private draft'),kind+' explicit fixture Delete preserves unrelated draft');
+  await p.evaluate(()=>WosOutbox._items.set('wos-qa-edit',{id:'wos-qa-edit',state:'failed',kind:'new',agent:'',sessionId:'qa-not-a-real-session-2',text:'QA successful retained edit',files:[],createdAt:Date.now(),durable:true,attempts:99}));
+  await open(p,phone,'unsent');await p.click('[data-ubid=wos-qa-edit] [data-ub=edit]');await nap(250);
+  ok(await p.evaluate(()=>!WosOutbox.get('wos-qa-edit')&&WosChat.drafts.get('new').text==='QA successful retained edit'&&WosChat.drafts.get('agentnew:private').text==='QA existing private draft'),kind+' successful Edit saves words before consuming unsent and preserves other agent draft');
+  await open(p,phone,'settings');
   await p.evaluate(async()=>{await WosCancelled.keepWeb(new Blob([new Uint8Array(4096)],{type:'audio/webm'}),16000);WizConfig.transcribe=async()=>({text:'QA cancelled fixture transcript'});WosChat.copyText=async text=>{window.__qaClipboard=text;return true;};});
   await p.click('[data-cx=copy]');await nap(250);
   ok(await p.evaluate(()=>__qaClipboard==='QA cancelled fixture transcript' && WosCancelled.list().length===1),kind+' cancelled fixture transcribes and copies via shared module');
