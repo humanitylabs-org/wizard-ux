@@ -2,6 +2,14 @@
 (() => {
   if (window.__wosScrollCapture) return;
   let selected = null, active = null;
+  // The chat window's own floating controls (new chat, send status, jump to latest). Like a
+  // native list's sibling overlays they are not part of the scrolled content: they may cover
+  // the scroller and are hidden while pixels are acquired so they are never stamped into tiles.
+  const DOCK = '.ch-fab,.ch-pill,.ch-latest';
+  const docked = (hit, e) => {
+    const d = hit?.closest?.(DOCK), owner = e.closest('[data-chats]');
+    return !!d && !!owner?.contains(d) && !d.contains(e);
+  };
   function bounds(e) {
     if (!e?.isConnected || document.hidden) return null;
     const r = e.getBoundingClientRect(), s = getComputedStyle(e);
@@ -25,7 +33,7 @@
     // Exclude covered/background desks and overlays, not merely display:none nodes.
     for (const x of [.1,.5,.9]) for (const y of [.1,.5,.9]) {
       const hit = document.elementFromPoint(r.left + r.width*x, r.top + r.height*y);
-      if (!hit || !e.contains(hit)) return null;
+      if (!hit || !(e.contains(hit) || docked(hit, e))) return null;
     }
     return {x:r.left + e.clientLeft,y:r.top + e.clientTop,w:e.clientWidth,h:e.clientHeight,
       vw:innerWidth,dpr:devicePixelRatio,top:e.scrollTop,height:e.scrollHeight};
@@ -36,6 +44,7 @@
     // Only touch the exact original element. Never a selector into a new thread.
     if (a.url === location.href && a.owner?.dataset.draftFor === a.thread) a.e.scrollTop = a.top;
     for (const [k,v,p] of a.styles) v ? a.e.style.setProperty(k,v,p) : a.e.style.removeProperty(k);
+    for (const [d,v,p] of a.dock) v ? d.style.setProperty('visibility',v,p) : d.style.removeProperty('visibility');
     delete a.e.dataset.wosScrollCapture;
     document.removeEventListener('scroll', a.scroll, true);
     document.dispatchEvent(new Event('wos-scroll-capture-end'));
@@ -66,6 +75,9 @@
       e.style.setProperty('scroll-behavior','auto','important');
       e.style.setProperty('overflow-anchor','none','important');
       e.style.setProperty('scroll-snap-type','none','important');
+      a.dock=[...(owner?owner.querySelectorAll(DOCK):[])].filter(d=>!d.contains(e))
+        .map(d=>[d,d.style.getPropertyValue('visibility'),d.style.getPropertyPriority('visibility')]);
+      for (const [d] of a.dock) d.style.setProperty('visibility','hidden','important');
       e.dataset.wosScrollCapture=id;
       a.scroll=ev=>{if(ev.target===e) ev.stopImmediatePropagation();};
       document.addEventListener('scroll',a.scroll,true);
