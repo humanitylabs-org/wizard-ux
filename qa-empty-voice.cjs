@@ -28,4 +28,39 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   ok(await f.p.evaluate(id=>WosOutbox.dismissEmpty(id),id2)===false,`${label}: dismissal refuses already sent notes`);
   await f.done(label+' empty-note recovery');
  }
+ // The screenshot's held state is created by local/interrupt recovery, not empty STT.
+ for(const desktop of [false,true]){
+  const label=desktop?'desktop':'phone',f=await boot(desktop);
+  const open=async sessionId=>{await f.p.evaluate(({wid,sessionId})=>{const A=window.__wos||window.__wux;A.chats.openChat(wid,sessionId);A.focusWin?.(wid);},{wid:f.wid,sessionId});await sleep(300);};
+  const add=async(sessionId,intent='auto')=>f.p.evaluate(async({sessionId,intent,model,provider})=>{
+   const it=await WosOutbox.stage({kind:'reply',sessionId,intent,model,provider,audio:new Blob(['held original audio'],{type:'audio/webm'})});
+   if(intent!=='command')await WosOutbox.transition(it.id,'held','Original kept after local routing');return it.id;
+  },{sessionId,intent,model,provider});
+  const id=await add(sid),id2=await add('held-second-thread','command');
+  // Recover interrupted command via the production load path, not a hand-edited state.
+  await f.p.reload();await f.p.waitForFunction(()=>WosOutbox?.recoveryComplete&&(window.__wos||window.__wux)?.chats);
+  await open(sid);
+  await f.p.waitForSelector(`[data-ob="${id}"]`);
+  const txt=await f.p.locator(`[data-ob="${id}"]`).last().innerText();
+  const button=f.p.locator(`[data-obdismiss="${id}"]`).last();
+  ok(txt.includes('Kept on this device')&&!txt.includes('words come when')&&await button.count()===1,`${label}: held screenshot state has visible Dismiss and honest wording`,txt);
+  if(!await button.count()){await f.done(label+' held baseline');continue;}
+  const snapshot=()=>f.p.evaluate(async id=>{const r=WosOutbox.get(id);return JSON.stringify({bytes:Array.from(new Uint8Array(await r.audio.arrayBuffer())),file:r.audioFile,sessionId:r.sessionId,model:r.model,provider:r.provider,state:r.state});},id);
+  const before=await snapshot();await f.p.screenshot({path:path.join(out,`${label}-held.png`)});
+  await button.click();await f.p.waitForFunction(id=>WosOutbox.get(id)?.threadHidden===true,id);await sleep(200);
+  ok(await f.p.locator(`[data-ob="${id}"]`).count()===0,`${label}: held Dismiss removes selected bubble`);
+  ok(before===await snapshot(),`${label}: held Dismiss preserves exact original bytes and route`);
+  ok(await f.p.evaluate(id=>WosOutbox.get(id).state==='held'&&!WosOutbox.get(id).threadHidden,id2),`${label}: interrupted second thread remains independently recoverable`);
+  await f.p.reload();await f.p.waitForFunction(()=>WosOutbox?.recoveryComplete&&(window.__wos||window.__wux)?.chats);
+  await open(sid);await sleep(250);
+  ok(before===await snapshot()&&await f.p.locator(`[data-ob="${id}"]`).count()===0&&await f.p.evaluate(id=>WosOutbox.unsent().some(x=>x.id===id)&&WosOutbox.recordings().some(x=>x.id===id),id),`${label}: held dismissal survives reload/reopen with recovery retained`);
+  await open('held-second-thread');await f.p.waitForSelector(`[data-obdismiss="${id2}"]`);
+  await f.p.screenshot({path:path.join(out,`${label}-second-held.png`)});
+  await f.p.locator(`[data-ob="${id2}"] [data-obdismiss="${id2}"]`).click();await f.p.waitForFunction(id=>WosOutbox.get(id)?.threadHidden===true,id2);
+  await f.p.evaluate(wid=>{const A=window.__wos||window.__wux;A.chats.openChat(wid,null);},f.wid);await sleep(250);
+  ok(await f.p.locator(`[data-chats="${f.wid}"] .ch-pill`).count()===0,`${label}: dismissed held notes leave no list pill or false Sent`,await f.p.locator('.ch-pill').allTextContents());
+  ok(f.state.posts.length===0&&f.state.uploads.length===0,`${label}: held dismissal/recovery never uploads or admits`);
+  await f.done(label+' held-note recovery');
+ }
+
 };
