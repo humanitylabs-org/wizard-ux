@@ -35,7 +35,7 @@
   /** -> {op, ...} | null. `strong` marks a phrase that can only mean music (safe on a tap).
    * inMusic: a held take with Wizard Music in front (anything is for the player). front: Music is in front. */
   function parse(text, inMusic, front) {
-    const s = norm(text).replace(/^(?:hey |ok |okay )?(?:wizard|archimedes)\s*/, '').replace(/ (?:please|for me|now)$/, '').replace(/^(?:(?:can|could|would|will) you |please |maybe |just |go ahead and )+/, '');
+    const s = norm(window.WizConfig.stripAddress(text)).replace(/ (?:please|for me|now)$/, '').replace(/^(?:(?:can|could|would|will) you |please |maybe |just |go ahead and )+/, '');
     if (!s) return null;
     for (const rx of SPELL) { const q = s.match(rx); if (q) return { op: 'search', query: asSaid(text, q[1]), strong: true }; }
     { const q = (inMusic || front) ? s.match(PLAIN_FIND) : null; if (q) return { op: 'search', query: asSaid(text, q[1]), strong: true }; }

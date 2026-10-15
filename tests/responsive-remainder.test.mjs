@@ -10,6 +10,7 @@ function grammar(){
  box.WosMusic={available:()=>true,parse:s=>s==='pause the music'?{op:'pause',strong:true}:s==='next track'?{op:'next',strong:true}:null,run:c=>{events.push(['music',c.op]);return true;}};
  box.WosFeatures={entries:[{id:'maps',title:'Maps'},{id:'week',title:'Week in review'},{id:'future',title:'Future view'}],open:(id,o)=>{events.push(['view',id,o]);return ['maps','future'].includes(id);}};
  box.WosSettings={route:(id,open)=>{if(!['help','skin','settings'].includes(id))return false;open(id);return true;}};
+ vm.runInNewContext(read('core/config.js'),Object.assign(box,{document:{addEventListener(){}}}));
  vm.runInNewContext(read('core/commands.js'),box);
  const CHATS={matchFilters:s=>s==='ready'?[{field:'status',value:'ready'}]:[],addFilter:(_w,f)=>events.push(['filter',f]),clearAll:()=>events.push(['clear']),setQuery:(_w,q)=>events.push(['query',q])};
  const find=s=>['Music','music','wizard-music'].includes(s)?app:null;

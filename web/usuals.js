@@ -120,8 +120,8 @@
   const NEW_SPELL = /^(?!(?:.* )?get (?:me |us )?something$)(?:(?:please |can you |could you |let'?s |i(?: want to| wanna| would like to|'d like to) )?(?:order|get)(?: me| us)? (?:some |a |my )?(?:food|foods|grab|grab ?food|lunch|dinner|breakfast|brunch|supper|a snack|snacks|takeout|takeaway|take out|take away|delivery|food delivery|something(?: new| different| else)?(?: to eat)?)(?: (?:from|on|with|through) grab)?|order (?:from|on) grab|(?:a )?(?:food|grab|grab food) order|grab (?:me )?(?:some )?food|grab me something(?: new)? to eat|new (?:food|grab) order)$/;
   const OPEN_SPELL = /^(?:food|wizard food|wizard eats|eats|my food|grab food app|food app|my orders|my saved orders|saved orders|my usuals|usuals)$/;
   function spell(text) {
-    const s = String(text || '').toLowerCase().replace(/[’]/g, "'").replace(/[.!?,]+/g, ' ').replace(/\s+/g, ' ').trim()
-      .replace(/^(hey |ok |okay )?(wizard|archimedes) /, '').replace(/ (please|now|for me)$/, '').trim();
+    const s = window.WizConfig.stripAddress(text).toLowerCase().replace(/[’]/g, "'").replace(/[.!?,]+/g, ' ').replace(/\s+/g, ' ').trim()
+      .replace(/ (please|now|for me)$/, '').trim();
     if (NEW_SPELL.test(s)) return 'new';
     if (OPEN_SPELL.test(s)) return 'open';
     return '';

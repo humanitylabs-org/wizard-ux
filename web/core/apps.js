@@ -164,7 +164,7 @@
   /* "image search capybaras", "pictures of eames chairs", "search why is the sky blue", "quick search …".
    * Returns { query, tab: 'images' | 'all' } or null. Thread/app searches ("search my chats for …") stay with the shell. */
   function parseQuickSearch(text) {
-    let s = String(text || '').trim().replace(/^(hey |ok |okay )?(wizard|archimedes)[,.!]?\s+/i, '').replace(/[.!?,\s]+$/, '').replace(/,?\s+please$/i, '');
+    let s = window.WizConfig.stripAddress(text).replace(/[.!?,\s]+$/, '').replace(/,?\s+please$/i, '');
     const IMG = '(?:image|images|picture|pictures|photo|photos|pic|pics)';
     let m = s.match(new RegExp(`^${IMG}\\s*search(?:\\s+(?:for|of))?\\s+(.+)$`, 'i'))
       || s.match(new RegExp(`^search\\s+(?:for\\s+)?${IMG}\\s+(?:of|for)\\s+(.+)$`, 'i'))
