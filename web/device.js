@@ -85,6 +85,8 @@
     try {
       const state = capture.getState?.();
       if (Array.isArray(state?.nativeDeviceTakeIds) && state.nativeDeviceTakeIds.includes(id)) return 'app';
+      const loan=window.WosOrbHandoff?.nativeTake(id);
+      if(state?.nativeRegistryReady && loan && (!state.active || state.meetingId===loan.meetingId))return 'voice';
       if (state?.nativeOwnershipReady !== true || !Array.isArray(state.nativeDeviceTakeIds) || state.active || state.recording) return 'unknown';
       return 'voice';
     } catch (_) { return 'unknown'; }

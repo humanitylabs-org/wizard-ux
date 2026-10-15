@@ -1832,6 +1832,8 @@
   function nativeTakeAppOwned(id) {
     const shared = window.WizAppCapture?.getState?.();
     if(V.meetingLoan?.native && V.native===id && shared?.voiceBorrow?.id===V.meetingLoan.id) return false;
+    const loan=window.WosOrbHandoff?.nativeTake(id);
+    if(loan && !shared?.nativeDeviceTakeIds?.includes(id) && (!shared?.active || shared.meetingId===loan.meetingId))return false;
     return !!shared?.active || !!shared?.nativeDeviceTakeIds?.includes(id);
   }
   function pauseNativeTake(on) {

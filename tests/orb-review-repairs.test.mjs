@@ -7,8 +7,8 @@ const read=p=>readFileSync(new URL('../web/'+p,import.meta.url),'utf8');
 const phone=read('app.js'),device=read('device.js');
 const section=(s,a,b)=>s.slice(s.indexOf(a),s.indexOf(b,s.indexOf(a)));
 function storage(data={}) {return {getItem:k=>data[k]??null,setItem:(k,v)=>data[k]=v,removeItem:k=>delete data[k]};}
-function handoff(localStorage=storage()) {
- const c={window:{},localStorage,navigator:{onLine:false},crypto:webcrypto,setInterval(){},addEventListener(){},console};
+function handoff(localStorage=storage(),device=null) {
+ const c={window:{WizardOSDevice:device},localStorage,navigator:{onLine:false},crypto:webcrypto,setInterval(){},addEventListener(){},console};
  vm.runInNewContext(read('core/orb-handoff.js'),c);return c.window.WosOrbHandoff;
 }
 const databases=new WeakMap();
@@ -18,6 +18,16 @@ function outbox(store=storage()) {
  const c={window:{},Blob,Uint8Array,crypto:webcrypto,console,AbortController,AbortSignal,atob,btoa,setTimeout(){},clearTimeout(){},addEventListener(){},document:{documentElement:{dataset:{}},body:null,addEventListener(){}},localStorage:store,indexedDB,FileReader:class {readAsDataURL(b){b.arrayBuffer().then(a=>{this.result='data:'+b.type+';base64,'+Buffer.from(a).toString('base64');this.onload();});}}};
  vm.runInNewContext(read('outbox.js'),c);return c.window.WosOutbox;
 }
+test('real native receipt admits only its exact recovered borrower while meeting is active',()=>{
+ const receipt={id:'event-a',meetingId:'meeting-a',voiceTakeId:'native-a',open:true,status:'capturing'};
+ const h=handoff(storage(),{recHandoffEvents:()=>JSON.stringify({'event-a':JSON.stringify(receipt)})});
+ h.update('event-a',{meetingId:'meeting-a',voiceTakeId:'native-a',status:'paused'});
+ const state={active:true,recording:true,meetingId:'meeting-a',nativeRegistryReady:true,nativeDeviceTakeIds:[]};
+ const c={window:{WosOrbHandoff:h,WizAppCapture:{getState:()=>state}}};vm.createContext(c);vm.runInContext(section(device,'  function nativeOwner(','  function offerRecorderControls('),c);
+ assert.equal(c.nativeOwner('native-a'),'voice');assert.equal(c.nativeOwner('unrelated'),'unknown');
+ receipt.voiceTakeId='different';assert.equal(c.nativeOwner('native-a'),'unknown');
+ receipt.voiceTakeId='native-a';state.nativeDeviceTakeIds=['native-a'];assert.equal(c.nativeOwner('native-a'),'app');
+});
 const route={model:'private-model',provider:'private-provider'};
 function producer(thread) {
  const c={W:{w:{app:'chats',thread}},agentWin:()=>true,agentApp:()=>({agent:'private-agent',name:'Private',private:true}),winTitle:()=> 'PRIVATE TITLE'};

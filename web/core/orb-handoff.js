@@ -50,7 +50,15 @@
   function bind(loan,takeId,snap){if(!loan)return;const v=snap?.view;update(loan.id,{voiceTakeId:takeId,routing:{route:snap?.route||null,target:['chat thread','agent chats'].includes(v?.kind)?{kind:v.kind,id:v.id,thread:v.thread||'',agent:v.agent||'',private:!!v.private}:null}});}
   function forTake(takeId){return takeId?Object.values(read()).find(row=>row.voiceTakeId===takeId)||null:null;}
   function takeSnap(takeId){const row=forTake(takeId);if(!row)return null;return {meetingEventId:row.id,route:row.routing?.route||null,view:row.routing?.target?{...row.routing.target}:null,conversation:null,others:[],screen:''};}
-  window.WosOrbHandoff={begin,end,update,sync,read,track,bind,forTake,takeSnap};
+  // Read the real native producer: events is a map of JSON-encoded receipt strings.
+  // This proves an already-created take's ownership; it never recreates a microphone loan.
+  function nativeTake(takeId) {
+    const row=forTake(takeId);if(!row)return null;
+    try{const events=JSON.parse(window.WizardOSDevice?.recHandoffEvents?.()||'{}'),receipt=JSON.parse(events[row.id]||'null');
+      return receipt?.id===row.id && receipt.meetingId===row.meetingId && receipt.voiceTakeId===takeId ? {...row,native:true,nativeReceipt:receipt}:null;
+    }catch{return null;}
+  }
+  window.WosOrbHandoff={begin,end,update,sync,read,track,bind,forTake,takeSnap,nativeTake};
   const ob=window.WosOutbox;
   ob?.onChange(()=>{for(const it of ob._items.values())try{track(it);}catch(e){console.error('Meeting link retained in outbox',e);}});
   ob?.onSent(track);

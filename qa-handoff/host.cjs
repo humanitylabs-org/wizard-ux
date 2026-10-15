@@ -55,6 +55,16 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
    const result=await p.evaluate(async id=>{const first=WosOutbox.nativeItem('review-segment-a');const duplicate=await WosOutbox.stage({nativeId:'review-segment-a',audio:new Blob(['do not duplicate'])});const appended=await WosOutbox.stage({captureId:id,nativeId:'review-segment-b',audio:new Blob([first.audio,'later']),typed:'typed kept',kind:'reply',sessionId:'qa-0'});await WosOutbox.transition(id,'held');await WosOutbox.remove(id);return {duplicate:duplicate.id,appended:appended.id,typed:appended.typed};},first.id);assert.equal(result.duplicate,first.id);assert.equal(result.appended,first.id);assert.equal(result.typed,'typed kept');
    await p.reload();await p.waitForFunction(()=>WosOutbox?.recoveryComplete);await tones(p);assert.deepEqual(await p.evaluate(()=>['review-segment-a','review-segment-b'].map(id=>({id:WosOutbox.nativeItem(id)?.id,state:WosOutbox.nativeItem(id)?.state}))),[{id:first.id,state:'sent'},{id:first.id,state:'sent'}]);
  });
+ if(process.env.HOST_REVIEW_ONLY==='1') {
+   await test('explicit user Pause during browser loan wins after durable cancel',async()=>{
+     await p.evaluate(async()=>{window.meeting=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:500,meta:{meetingId:'review-user-pause'}});});
+     await p.waitForTimeout(300);await p.evaluate(()=>__wos.startVoice('auto'));await p.waitForTimeout(350);await p.evaluate(()=>meeting.pause());
+     assert.equal(await p.evaluate(async()=>{try{await meeting.resume();}catch(e){return e.code;}}),'mic_borrowed');
+     await p.evaluate(()=>__wos.cancelVoice(true));assert.equal(await p.evaluate(()=>WizAppCapture.getState().phase),'paused');await p.evaluate(()=>meeting.stop());
+   });
+   assert.deepEqual(f.errors,[]);await p.screenshot({path:path.join(evidence,'review-host.png')});
+   fs.writeFileSync(path.join(evidence,'receipt.json'),JSON.stringify({sourceSHA:process.env.SOURCE_SHA,checks,pageErrors:f.errors,synthetic:true,nativeEvidence:false,authorityFixture:'OrbEvents.refresh upstream affirmative idempotency_key equals exact outbox deliveryKey; latest adopted store, no live service'},null,2));return;
+ }
  await test('cancel restores same meeting and leaves cancelled durable original without send',async()=>{
    f.R.delay=0;const before=f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length;
    await p.evaluate(async()=>{window.meeting=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:500,meta:{meetingId:'synthetic-cancel'}});});await p.waitForTimeout(450);

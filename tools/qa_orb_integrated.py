@@ -4,6 +4,7 @@ Run through QA_INTEGRATED_ONLY=1 tools/qa_mizel.py on Thales. Fail-closed all We
 import base64
 import hashlib
 import json
+import os
 import mimetypes
 import pathlib
 import re
@@ -118,6 +119,31 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
         pg.pump(1)
     check('integrated','actual shell and native bridge loaded',ev("!!__wos&&WizardOSDevice.recHandoffVersion()===1&&!!WizAppCapture"))
     ev('WosModels.load()')
+    if os.environ.get('QA_REVIEW_ONLY')=='1':
+        for mode in ['active','stopped']:
+            mid=start_meeting();ev("__wos.openWizardThread('qa-0')");pg.pump(.8)
+            ev("__wos.startVoice('auto')");wait('!!__wos.V.native');pg.pump(1.2)
+            take=ev('__wos.V.native');ident=ev('__wos.V.meetingLoan.id');snap=ev('__wos.V.snap')
+            check('review',mode+' actual producer pins chat thread',snap.get('view',{}).get('kind')=='chat thread' and snap['view']['thread']=='qa-0',snap)
+            ev("__wos.openWizardThread('qa-1')");pg.pump(.3)
+            if mode=='stopped':
+                # Interrupt after real native closure and the existing exact-ID recovery journal,
+                # before web outbox admission. No native bytes are deleted or fabricated.
+                ev("(()=>{const id=__wos.V.native,m=JSON.parse(WizardOSDevice.recStop(id));localStorage.setItem('wos.voice-recovery.v1',JSON.stringify({[id]:{...m,send:false}}));location.reload()})()")
+            else:ev('location.reload()')
+            wait('!!window.__wos&&WosOutbox.recoveryComplete',25)
+            if mode=='active':
+                wait('__wos.V.native==='+json.dumps(take),25)
+                restored=ev('__wos.V.snap');check('review','active recovery restores exact event and original thread',restored.get('meetingEventId')==ident and restored.get('view',{}).get('thread')=='qa-0',restored)
+                ev('__wos.finishVoice()')
+            else:
+                wait('!!document.querySelector("[data-rec-send]")',25)
+                ev('document.querySelector("[data-rec-send]").click()')
+            wait("Array.from(WosOutbox._items.values()).some(i=>i.meetingEventId==="+json.dumps(ident)+"&&i.state==='sent')",25)
+            item=ev("(()=>{const i=Array.from(WosOutbox._items.values()).find(i=>i.meetingEventId==="+json.dumps(ident)+");return {id:i.id,sessionId:i.sessionId,steerRunId:i.steerRunId,meetingEventId:i.meetingEventId,model:i.model,provider:i.provider}})()")
+            check('review',mode+' recovered request sends once to pinned thread with event and no steering',item['sessionId']=='qa-0' and item['meetingEventId']==ident and not item['steerRunId'],item)
+            wait("__wos.voice==='idle'");stop_meeting()
+        fixture.save();shot('review-recovery-final');return
     mid=start_meeting();check('integrated','actual adopted UI starts native meeting through SDK',cap().get('native') is True,cap())
     fixture.delay=5;before=len(fixture.runs());touch();wait("!!__wos.V.native&&!!__wos.V.meetingLoan")
     ident=ev('__wos.V.meetingLoan.id');take=ev('__wos.V.native');pg.pump(1.5)
