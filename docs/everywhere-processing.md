@@ -16,6 +16,9 @@ Standard bounded native reliability repair; no new interface/dependency/schema/p
 ## History
 Missing processing state and unrestricted re-entry are already present in 02667b0 (9 Oct 2026, voice-typing insertion parity). On 14 Oct ff637a9 (replayed battery patch d6e640c), `Orb.setRestingMotion(false)` made the erroneous idle state draw zero frames; shipped in 0.9.15/39. The optimization correctly preserves actual think/listen animation; native simply never sent think. Fix native lifecycle rather than undoing idle savings.
 
+## Delivered (15 Oct 2026)
+PR #19 merged at `0d5b91a39e3aec0d18ca4214825ea203ca11072f`. Published 0.9.16 / 40 to the existing private native update feed and download mirror. Thales independently fetched both live feeds and full APKs, confirming SHA `5501f50180999f7a0819a6867a6f753ce854bb2a424dcd6f1c9b0a91a686cb10`, 3,685,269 bytes, and the mirror index 302 to 0.9.16. Download page title and current-release notes read back. Existing automatic updater handles installation; physical phone install is not claimed. No remaining owner gate for this repair.
+
 ## Verification (15 Oct 2026)
 - Final product source `1d5ef5b337057c2254a31dd24dee71edd710ebb0`, pushed to `fix/everywhere-transcribing-20261015`.
 - Thales release receipt `/Volumes/ThalesMedia/AndroidBuilds/jobs/20261015T040020Z-02709a1a/receipt.json`: release unit tests 188/188, lint zero errors, signed APK `5501f50180999f7a0819a6867a6f753ce854bb2a424dcd6f1c9b0a91a686cb10`, 3,685,269 bytes, same production signer, 0.9.16 / 40.
