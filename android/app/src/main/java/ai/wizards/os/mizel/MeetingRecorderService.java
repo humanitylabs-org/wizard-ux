@@ -50,7 +50,7 @@ public class MeetingRecorderService extends Service {
     public static final String ACTION_STOP = "ai.wizards.os.mizel.STOP";
     static final String EXTRA_MEETING = "meetingId", EXTRA_REASON = "reason", EXTRA_REQ = "req";
     static final String CH_REC = "mizel", CH_ALERT = "mizel-alerts";
-    static final int N_REC = 7301, N_ENDED_BASE = 7310;
+    static final int N_REC = 7303, N_ENDED_BASE = 7310; // distinct from orb recorder notification
     public static final String LIVE_PATH = "/mizel-live/#/m/";
 
     /** What the bridge and the notification read about the session in progress. */
@@ -68,8 +68,75 @@ public class MeetingRecorderService extends Service {
     }
 
     private static volatile Live live;
+    private static volatile MeetingRecorderService instance;
+    private static volatile MeetingBorrow borrow;
 
     public static Live live() { return live; }
+
+    /** Bridge thread waits for actual pause/flush/release, never just a posted intent. */
+    public static String beginBorrow(String eventId, String meetingId) {
+        if (eventId == null || !eventId.matches("[A-Za-z0-9_-]{8,100}")) return "null";
+        return onMain(() -> {
+            MeetingRecorderService s = instance; Live l = live;
+            if (s == null || l == null || !l.meetingId.equals(meetingId) || l.stopping) return "null";
+            if (borrow != null && borrow.open()) return borrow.eventId.equals(eventId) ? s.borrowJson(borrow, "paused").toString() : "null";
+            if (ai.wizards.os.recording.RecorderService.active() != null) return "null";
+            boolean wasPaused = l.paused;
+            s.pause(0);
+            if (!l.paused || s.capture != null || MicOwner.holder() != null) return "null";
+            MeetingBorrow b = new MeetingBorrow(eventId, meetingId, wasPaused, l.mediaMs(), System.currentTimeMillis());
+            if (!s.saveBorrow(b, "paused")) return "null"; // no durable event => no lease
+            borrow = b;
+            return s.borrowJson(b, "paused").toString();
+        });
+    }
+
+    public static boolean permitsBorrow(String eventId) {
+        MeetingBorrow b = borrow; Live l = live;
+        return b != null && l != null && b.permits(eventId, l.meetingId, l.paused && !l.stopping, MicOwner.holder() == null);
+    }
+
+    public static boolean bindBorrow(String eventId, String takeId) {
+        MeetingRecorderService s = instance; MeetingBorrow b = borrow;
+        return s != null && b != null && b.bind(eventId, takeId) && s.saveBorrow(b, "capturing");
+    }
+
+    /** File closure/release happens before this call. No upload/STT/assistant wait. */
+    public static String endBorrow(String eventId, String outcome) {
+        return onMain(() -> {
+            MeetingRecorderService s = instance; MeetingBorrow b = borrow; Live l = live;
+            if (s == null || b == null || !b.eventId.equals(eventId)) return "null";
+            if (ai.wizards.os.recording.RecorderService.active() != null || MicOwner.holder() != null) return "null";
+            if (b.open()) {
+                if (!s.saveBorrow(b, outcome)) return "null";
+                b.close(eventId);
+                // Notification Stop and pre-existing manual Pause always win.
+                if (b.resumeAfter && l != null && l.meetingId.equals(b.meetingId) && l.paused && !l.stopping) s.resume(0);
+            }
+            String status = live != null && live.meetingId.equals(b.meetingId) ? (live.paused ? "paused" : "recording") : "stopped";
+            s.saveBorrow(b, status);
+            return s.borrowJson(b, status).toString();
+        });
+    }
+
+    private org.json.JSONObject borrowJson(MeetingBorrow b, String status) {
+        org.json.JSONObject o = new org.json.JSONObject();
+        try { o.put("id", b.eventId).put("meetingId", b.meetingId).put("voiceTakeId", b.take())
+            .put("atMediaMs", b.atMediaMs).put("pausedAt", b.pausedAt).put("pausedByHandoff", b.resumeAfter)
+            .put("status", status).put("open", b.open()); } catch (org.json.JSONException ignored) { }
+        return o;
+    }
+    private boolean saveBorrow(MeetingBorrow b, String status) {
+        return getSharedPreferences("meeting-handoffs-v1", MODE_PRIVATE).edit()
+            .putString(b.eventId, borrowJson(b, status).toString()).commit();
+    }
+    private static String onMain(java.util.concurrent.Callable<String> work) {
+        if (Looper.myLooper() == Looper.getMainLooper()) { try { return work.call(); } catch (Exception e) { return "null"; } }
+        java.util.concurrent.FutureTask<String> task = new java.util.concurrent.FutureTask<>(work);
+        new Handler(Looper.getMainLooper()).post(task);
+        try { return task.get(12, java.util.concurrent.TimeUnit.SECONDS); }
+        catch (Exception e) { task.cancel(false); return "null"; } // ambiguous failure never grants a mic lease
+    }
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private MizelStore store;
@@ -139,6 +206,7 @@ public class MeetingRecorderService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        instance = this;
         store = MizelHub.store(this);
         uploader = MizelUploader.get(this);
         channels(this);
@@ -190,6 +258,7 @@ public class MeetingRecorderService extends Service {
         }
         MicOwner.release(MicOwner.MEETING);
         releaseWake();
+        if (instance == this) instance = null;
         super.onDestroy();
     }
 
@@ -255,7 +324,7 @@ public class MeetingRecorderService extends Service {
         Live l = live;
         if (l == null) { MizelHub.done(req, MizelProtocol.E_NOT_RECORDING); return; }
         if (l.paused) { MizelHub.done(req, null); return; }
-        stopCapture(); // flushes the partial chunk and releases the microphone
+        if (!stopCapture()) { MizelHub.done(req, MizelProtocol.E_MIC_BUSY); return; }
         long now = System.currentTimeMillis();
         l.paused = true;
         l.pausedAtWall = now;
@@ -275,6 +344,9 @@ public class MeetingRecorderService extends Service {
         Live l = live;
         if (l == null) { MizelHub.done(req, MizelProtocol.E_NOT_RECORDING); return; }
         if (!l.paused) { MizelHub.done(req, null); return; }
+        if ((borrow != null && borrow.open()) || ai.wizards.os.recording.RecorderService.active() != null) {
+            MizelHub.done(req, MizelProtocol.E_MIC_BUSY); return;
+        }
         if (!MicOwner.tryAcquire(MicOwner.MEETING)) {
             Log.i(TAG, "resume refused: mic held by " + MicOwner.holder());
             toast(MicOwner.reason(MicOwner.MEETING));
@@ -303,7 +375,8 @@ public class MeetingRecorderService extends Service {
         if (l == null) { MizelHub.done(req, MizelProtocol.E_NOT_RECORDING); return; }
         l.stopping = true;
         main.removeCallbacks(pauseTimeout);
-        stopCapture();
+        if (!stopCapture()) { l.stopping = false; MizelHub.done(req, MizelProtocol.E_MIC_BUSY); return; }
+        if (borrow != null && borrow.open()) { borrow.close(borrow.eventId); saveBorrow(borrow, "meeting_stopped"); }
         MizelJournal j = store.requestStop(l.meetingId, reason, System.currentTimeMillis());
         live = null;
         MicOwner.release(MicOwner.MEETING);
@@ -378,10 +451,11 @@ public class MeetingRecorderService extends Service {
         return true;
     }
 
-    private void stopCapture() {
+    private boolean stopCapture() {
         Capture c = capture;
+        if (c != null && !c.finish()) return false;
         capture = null;
-        if (c != null) c.finish();
+        return true;
     }
 
     /** Owns one AudioRecord between start/resume and pause/stop; writes chunks on its own thread. */
@@ -534,7 +608,7 @@ public class MeetingRecorderService extends Service {
         }
 
         /** Stop reading, flush the partial chunk, release the microphone. Blocks until done. */
-        void finish() {
+        boolean finish() {
             running = false;
             try { join(3000); } catch (InterruptedException ignored) { }
             if (isAlive()) {
@@ -542,6 +616,7 @@ public class MeetingRecorderService extends Service {
                 if (rec != null) try { rec.stop(); } catch (IllegalStateException ignored) { }
                 try { join(2000); } catch (InterruptedException ignored) { }
             }
+            return !isAlive();
         }
     }
 

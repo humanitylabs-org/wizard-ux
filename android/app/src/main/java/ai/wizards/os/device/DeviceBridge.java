@@ -113,6 +113,30 @@ public final class DeviceBridge implements RecorderService.Listener {
     @JavascriptInterface
     public int version() { return 1; }
 
+    /** Additive capability: older APKs keep refusing meeting/orb competition. */
+    @JavascriptInterface
+    public int recHandoffVersion() { return 1; }
+
+    @JavascriptInterface
+    public String recHandoffBegin(String eventId, String meetingId) {
+        return ai.wizards.os.mizel.MeetingRecorderService.beginBorrow(eventId, meetingId);
+    }
+
+    @JavascriptInterface
+    public String recStartBorrowed(String kind, String eventId) {
+        return RecorderService.start(activity, kind, eventId);
+    }
+
+    @JavascriptInterface
+    public String recHandoffEnd(String eventId) {
+        return ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "cancelled");
+    }
+
+    @JavascriptInterface
+    public String recHandoffEvents() {
+        return new JSONObject(activity.getSharedPreferences("meeting-handoffs-v1", Context.MODE_PRIVATE).getAll()).toString();
+    }
+
     /* --- recorder --- */
 
     @JavascriptInterface
