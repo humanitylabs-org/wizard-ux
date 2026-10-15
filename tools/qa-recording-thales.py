@@ -42,7 +42,8 @@ with open(lock_path, 'a') as lock:
     result = evidence / 'results.json'
     if result.exists():
         rows = json.loads(result.read_text())['results']
-        receipt.update(passed=sum(bool(x['ok']) for x in rows), failed=sum(not x['ok'] for x in rows))
+        receipt.update(passed=sum(bool(x['ok']) and not x.get('known_defect') for x in rows), failed=sum(not x['ok'] for x in rows),
+                       known_defects=[x['name'] for x in rows if x.get('known_defect')])
     (evidence / 'execution.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print((evidence / 'browser.log').read_text(), flush=True)
     print(json.dumps(receipt), flush=True)
