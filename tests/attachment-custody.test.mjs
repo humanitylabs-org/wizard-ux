@@ -4,7 +4,15 @@ import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 
 const source = path => readFileSync(new URL('../web/' + path, import.meta.url), 'utf8')
-const slice = (file, first, last) => { const s=source(file); return s.slice(s.indexOf(first),s.indexOf(last,s.indexOf(first))) }
+const slice = (file, first, last) => { const s=source(file), start=s.indexOf(first), end=s.indexOf(last,start); assert(start>=0 && end>start, `production function bounds: ${first}`); return s.slice(start,end) }
+
+test('actual enqueue cannot let model routing overwrite selected agent even with missing agent registry', async () => {
+  const context={ window:{ WosModels:{ snapshot:()=>({model:'m',provider:'p',agent:'hermes'}),resolveRoute:async x=>x }, WizLive:{agentOf:()=>''} },
+    load:async()=>{},items:new Map(),make:o=>({...o,state:'preparing'}),put:async()=>{},bounded:async fn=>fn(),pump(){},api:{} }
+  vm.runInNewContext('var enqueue = ({'+slice('outbox.js','    async enqueue(o) {','    retry(id)')+'}).enqueue;',context)
+  const item=await context.enqueue({kind:'new',agent:'private-agent',text:'private message'})
+  assert.equal(item.agent,'private-agent');assert.equal(item.state,'failed');assert.match(item.error,/Selected route changed/)
+})
 
 test('real resumable client binds every create/status/PATCH/complete to captured agent', async () => {
   const calls=[]; let offset=0

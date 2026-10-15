@@ -335,7 +335,7 @@
       catch (e) { routeError = e; }
       await load();
       const held = (o.custodyId && items.get(o.custodyId)) || (o.nativeId && api.nativeItem(o.nativeId));
-      const it = held || make({ ...o, agent, ...(snapshot || {}) });
+      const it = held || make({ ...o, ...(snapshot || {}), agent });
       if (held) {
         if (held.state === 'sent' || held.body) return held;
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
@@ -352,7 +352,7 @@
         let expectedProvider = it.provider;
         if (!it.agent && expectedProvider === 'tinfoil') expectedProvider = 'custom:tinfoil-operator';
         if (!it.agent && M.providers?.some(p => p.slug === expectedProvider && p.is_user_defined)) expectedProvider = 'custom:' + expectedProvider;
-        if (it.model && (route.model !== it.model || (expectedProvider && route.provider !== expectedProvider) || ((route.agent || '') !== (it.agent || '')))) throw new Error('Selected route changed · original message kept');
+        if ((route.agent || '') !== (it.agent || '') || (it.model && (route.model !== it.model || (expectedProvider && route.provider !== expectedProvider)))) throw new Error('Selected route changed · original message kept');
         Object.assign(it, route, { state: 'queued' });
         if (it.agent) window.WizLive?.pinAgent?.(it.sessionId, it.agent);
       } catch (e) { it.state = 'failed'; it.error = String(e.message || e); }
