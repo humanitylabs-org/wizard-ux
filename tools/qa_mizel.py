@@ -372,6 +372,11 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('logcat -c'); sx('logcat -G 16M')
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(9)
         pg = Page(); pg.pump(4)
+        if os.environ.get('QA_HANDOFF_ONLY') == '1':
+            # A fresh emulator has no Tailnet DNS. Navigate via CDP to the
+            # intercepted trusted-origin fixture, not from chrome-error://.
+            pg.call('Page.navigate', url=ORIGIN + '/mizel-qa/host.html')
+            assert pg.pump(25, lambda: pg.ev("typeof mz==='function' && typeof wizardMizelPort==='object'"), .5)
         pg.ev("try {localStorage.setItem('wos.tour.v1','true'); window.WosTour?.finish('qa');}catch(e){}")
         pg.ev("new Promise(r => { const t0=Date.now(); const t = () => (window.__wos || Date.now()-t0>20000) ? r() : setTimeout(t, 200); t(); })")
         pg.ev("(() => { const c = document.querySelector('#coach'); if (c && !c.hidden) document.querySelector('#coachGo').click(); return true; })()")
@@ -381,7 +386,7 @@ with (BASE / 'worker.lock').open('a') as lock:
 
         # ------------------------------------------------ (f) origin scoping + iframe reach
         shell_port = pg.ev("typeof window.wizardMizelPort")
-        check('bridge', 'shell main frame (https://private.wizard001.com/wizard-os-home/) has wizardMizelPort', shell_port == 'object', shell_port)
+        check('bridge', 'trusted-origin main-frame fixture has wizardMizelPort' if os.environ.get('QA_HANDOFF_ONLY') == '1' else 'shell main frame has wizardMizelPort', shell_port == 'object', shell_port)
         if os.environ.get('QA_HANDOFF_ONLY') == '1':
             from qa_orb_handoff_native import run as run_handoff
             run_handoff(pg,sx,top,check,save,ORIGIN,PKG,ST,LOCK)
