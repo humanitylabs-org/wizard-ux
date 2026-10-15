@@ -41,7 +41,7 @@
     if (!a || typeof a !== 'object' || !ID.test(a.id || '')) return null;
     return { id: a.id, name: txt(a.name, 60) || a.id, summary: txt(a.summary, 280), publisher: txt(a.publisher, 60), version: txt(a.version, 40),
       type: ['view', 'service', 'agent', 'external'].includes(a.type) ? a.type : 'service', category: txt(a.category, 24), logo: typeof a.logo === 'string' && /^https:\/\//.test(a.logo),
-      url: txt(a.url, 200), tags: words(a.tags), provides: words(a.provides), uses: ids(a.uses), architectures: words(a.architectures),
+      url: txt(a.url, 200), private: a.private === true, tags: words(a.tags), provides: words(a.provides), uses: ids(a.uses), architectures: words(a.architectures),
       installs: Number.isSafeInteger(a.installs) && a.installs > 0 ? a.installs : 0, checked_at: Number.isFinite(a.checked_at) ? a.checked_at : 0 };
   }
   const get = p => fetch(DATA + p, { credentials: 'same-origin', cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
@@ -54,6 +54,8 @@
       if (!prev || x.app?.status === 'running') S.installed.set(id, { status: x.app?.status || 'unknown' });
     }
     S.loaded = true; paint();
+    const requested = new URLSearchParams(location.search).get('app');
+    if (requested && S.apps.some(a => a.id === requested)) openApp(requested);
   }
   const isInstalled = a => S.installed.has(a.id);
   // The shell knows which apps have a view it can open; only those get "Open".
@@ -116,6 +118,7 @@
       <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc((a.version || '—').split(/[-+]/)[0])}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
       ${needs}${powers}${gives}
+      ${a.private ? `<section class="d-sec"><h3>Private test installation</h3><p>Requires existing repository access. Ask your agent to use the pinned private test catalog and run <code>wam install ${esc(a.id)}</code>. Source and architecture-matching image archives are authenticated and checksum verified; no public registry permission is needed.</p></section>` : ''}
       <section class="d-sec"><h3>Information</h3><dl class="info">${info}</dl>${a.url && /^https:\/\/github\.com\//.test(a.url) ? `<a class="src" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">View source on GitHub ↗</a>` : ''}</section>`;
     window.scrollTo(0, 0);
   }
@@ -152,7 +155,7 @@
   document.addEventListener('click', e => {
     if (e.target.closest('[data-back]')) { pop(); return; }
     const g = e.target.closest('[data-get]');
-    if (g) { e.stopPropagation(); const a = S.apps.find(x => x.id === g.dataset.get); toast(`<b>Installing from the Store is almost here.</b><span>For now, ask your agent: “install ${esc(a?.name || 'it')}”.</span>`); return; }
+    if (g) { e.stopPropagation(); const a = S.apps.find(x => x.id === g.dataset.get); toast(a?.private ? `<b>Private test release</b><span>Ask your agent to install ${esc(a.name)} using the pinned private test catalog: <code>wam install ${esc(a.id)}</code>.</span>` : `<b>Installing from the Store is almost here.</b><span>For now, ask your agent: “install ${esc(a?.name || 'it')}”.</span>`); return; }
     const o = e.target.closest('[data-open]');
     if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
     const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);

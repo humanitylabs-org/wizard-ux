@@ -27,7 +27,7 @@
   function parse(href) {
     let u; try { u = new URL(href, location.href); } catch (e) { return null; }
     const q = u.searchParams, out = {};
-    const sid = (q.get('session') || '').trim(); if (SESSION_ID.test(sid)) out.session = sid;
+    const sid = q.get('session') || ''; if (SESSION_ID.test(sid)) out.session = sid;
     const view = (q.get('view') || '').trim(); if (!out.session && VIEWS.has(view)) { out.view = view; const s = q.get('section') || ''; if (SECTIONS.has(s)) out.section = s === 'deferred' ? 'ready' : s; } // Deferred lives at the bottom of Ready
     const vid = (q.get('video') || '').trim().toLowerCase(); if (VIDEO_ID.test(vid)) out.video = vid;
     const open = (q.get('open') || '').trim(); if (!out.session && !out.view && (/^[a-z0-9-]{1,40}$/i.test(open) || /^agent:[a-z0-9][a-z0-9-]{0,40}$/.test(open))) out.open = open;
@@ -38,6 +38,8 @@
   // Is this a link to this app (the Wizard UX page itself), as opposed to another app on the origin?
   function isOwn(u) {
     if (!u || u.origin !== location.origin) return false;
+    // Only thread links own the old launcher roots; /?open=… and attachments are not shell routes.
+    if ((u.pathname === '/' || u.pathname === '/wizard/') && SESSION_ID.test(u.searchParams.get('session') || '')) return true;
     const here = location.pathname.replace(/[^/]*$/, ''); // …/wizard-os-home/
     return u.pathname === here || u.pathname === here + 'index.html' || u.pathname === here + 'desktop.html';
   }
@@ -74,7 +76,7 @@
     consume() { const d = parse(location.href); strip(); if (d) run(d); return d; },
     /* A link clicked inside the app. True when it was ours and is now open in-app. src = the tapped link, so
      * an app it opens knows where it came from (Back closes it and lands there again). */
-    route(href, src) { let u; try { u = new URL(href, location.href); } catch (e) { return false; } if (!isOwn(u)) return false; const d = parse(u.href); if (!d) return false; run(d, src); return true; },
+    route(href, src) { let u; try { u = new URL(href, location.href); } catch (e) { return false; } if (!isOwn(u)) return false; const d = parse(u.href); if (!d) return false; run((u.pathname === '/' || u.pathname === '/wizard/') && d.session ? { session: d.session } : d, src); return true; },
     get log() { return window.__deeplinkLog || []; },
   };
 })();

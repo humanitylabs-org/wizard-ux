@@ -8,6 +8,7 @@ import { createHmac } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { createIndexProxy, readCapped, readWizardApps } from './store-index-views.mjs';
 import { buildOverview, gatherSources } from './system-overview.mjs';
+import { withPrivateCatalog } from './store-private-catalog.mjs';
 export const PREFIX = '/wizard-os-home/store-data/';
 const APPS = join(homedir(), '.wizard-os/apps.json');
 const ENV = join(homedir(), 'runtipi/.env');
@@ -34,7 +35,7 @@ function runtipi() {
   const now = Math.floor(Date.now()/1000), h=b64({alg:'HS256',typ:'JWT'}), p=b64({sub:'cli',iat:now,nbf:now,exp:now+60});
   return { base:`http://${host}:${port}`, token:`${h}.${p}.${createHmac('sha256',env.JWT_SECRET).update(`${h}.${p}`).digest('base64url')}` };
 }
-export function createStoreDataRoutes({ fetchImpl = fetch, index = createIndexProxy(), readApps = () => readWizardApps(APPS), readRuntipi = runtipi, overview } = {}) {
+export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readRuntipi = runtipi, overview } = {}) {
   // Installed list straight from Runtipi, reduced to validated scalars (used by the Store and the System overview).
   const installedList = async () => {
     const auth=readRuntipi();

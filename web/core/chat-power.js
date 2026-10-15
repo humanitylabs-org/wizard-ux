@@ -246,21 +246,22 @@ window.WosChatPower = function chatPower(A) {
     const wasHere = !!w && w.thread === sid;
     if (isNew) c.newModel = null;
     c.follow = true;
-    // Send and go: a voice reply from the composer mic steps back to the list like a typed send (chats.js), on
+    const instructions = H.viewContext(wid, 'a voice reply recorded in this thread');
+    // Send and go: a voice reply steps back one level like a typed send (chats.js), on
     // the tap, not after the recording has been written to the phone's storage (a blob commit can take seconds).
-    const left = !!w && !!A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
+    const left = w && A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
     const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
     if (w) A.renderChats(w);
     let it;
     try {
       it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: '', typed: sealed.text, audio: blob,
-        instructions: H.viewContext(wid, 'a voice reply recorded in this thread'), files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
+        instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
         wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && w?.agent ? { agent: w.agent } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
       if (isNew && nm) c.newModel = nm;
       sealed.putBack();
-      if (left && w && !w.thread) A.openChat(wid, sid);
+      if (left) left.restore();
       throw e;
     }
     sealed.done(it);
