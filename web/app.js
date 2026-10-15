@@ -1096,11 +1096,7 @@
   let NATIVE_UNSENT = [];
   function readNativeUnsent() { try { NATIVE_UNSENT = NATIVE() && window.WizardOSNative.unsent ? JSON.parse(window.WizardOSNative.unsent()) : []; } catch (e) { NATIVE_UNSENT = []; } }
   // From the app (outbox) and from the Everywhere button (native), oldest first.
-  function unsentAll() {
-    const web = OUTBOX ? OUTBOX.unsent().map(it => ({ ...it, origin: 'app' })) : [];
-    const nat = (NATIVE_UNSENT || []).map(it => ({ ...it, origin: 'everywhere' }));
-    return [...web, ...nat].sort((a, b) => a.createdAt - b.createdAt);
-  }
+  function unsentAll() { return window.WosSettings.unsentAll(settingsContext()); }
   function unsentCard() {
     const all = unsentAll(); if (!all.length) return '';
     const failed = all.filter(x => x.state === 'failed').length;
@@ -1108,65 +1104,26 @@
     const v = esc(clip(all[0].text || 'Voice note', 70));
     return `<button class="now-card unsent-card ${failed ? 'fail' : ''}" style="--c:${failed ? 'var(--amber)' : 'var(--violet-2)'}" data-act="unsent"><span class="pip ${failed ? '' : 'pulse'}"></span><span class="meta"><span class="k">${k}</span><span class="v">${v}</span></span><span class="side-go">${failed ? 'Retry' : 'View'}</span></button>`;
   }
-  function unsentRow(it) {
-    const when = ago(new Date(it.createdAt).toISOString());
-    const blocked = it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id);
-    const st = blocked ? esc(OUTBOX?.quarantined(it.id) ? 'Waiting for device storage verification' : it.error) : it.state === 'held' ? 'Kept on this device · not queued' : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
-    const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
-    return `<div class="ub-row ${it.state}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}">
-      <div class="ub-t">${it.audio || it.audioFile || it.hasAudio ? MIC_SVG : ''}<span>${esc(it.text || 'Voice note · words come when it sends')}</span></div>
-      <div class="ub-m">${src} · ${esc(when)} · ${st}</div>
-      <div class="ub-a">${!blocked && it.state !== 'held' ? `<button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>` : ''}${it.origin === 'app' && it.sessionId && LIVE?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' && !blocked ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
-  }
+  function unsentRow(it) { return window.WosSettings.unsentRow(it, settingsContext()); }
+  let settingsView = null;
+  const settingsContext = () => ({ outbox: OUTBOX, live: LIVE, ago, toast,
+    haptic: vib, visible: () => sheet === 'settings',
+    helpSub: 'How the orb, desks and Back work · practice again',
+    sideReady: () => SIDE?.step === 'press' || SIDE?.step === 'ready',
+    changed: onUnsentChange,
+    openThread: id => { closeSheets(true); openWizardThread(id); },
+    editUnsent,
+    openSub: id => {
+      if (id === 'files') { settingsReturn = id; openFilesScreen(); }
+      if (id === 'help') { settingsReturn = id; closeSheets(true); window.WosTour?.openHelp(); }
+      if (id === 'side') { closeSheets(true); sideButtonTap(true); }
+    },
+  });
+  let settingsReturn = '', settingsFocus = null;
   function renderSettings() {
-    readNativeUnsent();
-    const all = unsentAll(), native = NATIVE(), evNative = native && typeof window.WizardOSNative.setEverywhere === 'function';
-    let ev = null; try { ev = evNative ? JSON.parse(window.WizardOSNative.everywhere()) : null; } catch (e) {}
-    const evOn = !!ev?.enabled;
-    const evSub = !native ? 'Works in the Wizard OS Android app' : !evNative ? 'Update the Wizard OS app (0.5.0) to turn this on' : evOn ? (ev.overlay ? (ev.hold ? 'On · tap to talk · hold for Select text, Translate and Hide' : 'On · floats over other apps, hides while Wizard OS is open') : 'Needs “Display over other apps”') : 'A floating Wizard button over your other apps. Tap to talk, drag to move.';
-    const side = !native ? 'Works in the Wizard OS Android app' : !SIDE ? '' : SIDE.step === 'press' || SIDE.step === 'ready' ? 'On · hold the side button to talk' : 'Hold the side button to talk, even when locked';
-    $('#settingsBody').innerHTML = `
-      <h3 class="st-title">Settings</h3>
-      <div class="st-group"><h4>Unsent <span>${all.length || ''}</span></h4>
-        ${all.length ? all.map(unsentRow).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">Everything you’ve said reached Wizard.</div>'}
-        <p class="st-note">Originals are kept while delivery is pending. Unconfirmed steering is never automatically retried.</p></div>
-      ${lookGroup()}
-      <div class="st-group"><h4>Assistant</h4>
-        <button class="st-row" data-st="everywhere" ${evNative ? '' : 'disabled'}><span class="st-ic">${window.WizBrand.html}</span><span class="st-tx"><b>Wizard Everywhere</b><small>${esc(evSub)}</small></span><span class="sw ${evOn ? 'on' : ''}"><i></i></span></button>
-        ${evNative && evOn && typeof window.WizardOSNative.voiceTypingSettings === 'function' ? `<button class="st-row" data-st="typing"><span class="st-ic">⌨</span><span class="st-tx" id="stTyping"><b>Voice typing &amp; screenshots</b><small>${esc(ev?.keyboard ? 'On · with a keyboard open the orb types what you say' : 'Off · tap to set up: the orb types into any app and attaches screenshots')}</small></span>${ev?.keyboard ? '<span class="sw on"><i></i></span>' : '<span class="st-go">›</span>'}</button>` : ''}
-        <button class="st-row" data-st="side" ${native ? '' : 'disabled'}><span class="st-ic">◉</span><span class="st-tx"><b>Side button</b><small>${esc(side)}</small></span><span class="st-go">›</span></button>
-      </div>
-      ${window.WizCore.voiceStatus?.card() || ''}
-      ${window.WosCancelled ? window.WosCancelled.html() : ''}
-      ${window.WosSelMenu ? window.WosSelMenu.html() : ''}
-      <div class="st-group"><h4>Wizard</h4>
-        <div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…'}</b><small>${native ? esc(window.WizardOSNative.platform()) : 'Web'} · ${esc(location.host)}</small></span></div>
-        ${window.WosDevice?.settingsHtml?.() || ''}
-        <button class="st-row" data-st="help"><span class="st-ic">?</span><span class="st-tx"><b>Gestures &amp; help</b><small>How the orb, desks and Back work · practice again</small></span><span class="st-go">›</span></button>
-        ${window.WosFiles ? `<button class="st-row" data-st="files"><span class="st-ic">▤</span><span class="st-tx"><b>Files</b><small>Everything in Wizard Files · preview, attach to a chat</small></span><span class="st-go">›</span></button>` : ''}
-      </div>
-      ${window.WosUsage ? window.WosUsage.html() : ''}`;
-    // AI usage (#24): read when Settings opens, painted in place when it lands.
-    if (window.WosUsage && !window.WosUsage.loading && (!window.WosUsage.snap || Date.now() - window.WosUsage.at > 60e3)) window.WosUsage.load().then(paintUsage);
+    if (!settingsView) settingsView = window.WosSettings.mount($('#settingsBody'), settingsContext());
+    else settingsView.render();
   }
-  /* Settings → Look (James, 12 Oct 2026): the skin picker. Tap applies at once (WosSkin.set) and is kept on this
-   * device (localStorage wos.skin; box-level theme.json sync is a later step). Hosted apps re-dress through the
-   * appearance host, which watches html[data-skin]/style. */
-  function lookGroup() {
-    const S = window.WosSkin; if (!S) return '';
-    const cur = S.current, nm = (S.list.find(k => k.id === cur) || {}).name || '';
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4>
-      <div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(nm)} · tap to wear</small></span></div>
-        <div class="sk-sw" role="group" aria-label="Skin">${S.list.map(k => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`).join('')}</div></div></div>`;
-  }
-  function pickSkin(id) {
-    const S = window.WosSkin; if (!S) return;
-    const now = S.set(id), nm = (S.list.find(k => k.id === now) || {}).name || '';
-    $$('#settingsBody [data-skinpick]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.skinpick === now)));
-    const n = $('#settingsBody [data-skinname]'); if (n) n.textContent = `${nm} · tap to wear`;
-    vib(8);
-  }
-  function paintUsage() { const g = $('#settingsBody [data-usage]'); if (g && sheet === 'settings') g.outerHTML = window.WosUsage.html(); }
   function openFilesScreen() {
     closeSheets(true);
     let wid = chatsWinAny();
@@ -1174,41 +1131,26 @@
     focusWin(wid); renderChats(W[wid]);
     setTimeout(() => CHATS.PW?.openFiles(wid), 30);
   }
-  function openSettings(focusUnsent) {
+  function openSettings(focus) {
     openSheet('settings');
-    if (focusUnsent === 'look') { // scroll the sheet body only (scrollIntoView would also move the fixed shell)
-      const body = $('#settingsBody'), g = $('#settingsBody [data-stgroup="look"]');
-      if (body && g) body.scrollTop += g.getBoundingClientRect().top - body.getBoundingClientRect().top - 8;
-      return;
-    }
-    if (focusUnsent) { const g = $('#settingsBody .st-group'); g && g.scrollIntoView({ block: 'start' }); }
+    settingsView?.focus(focus === true ? 'unsent' : focus);
   }
-  function unsentAction(id, origin, a) {
-    if (origin === 'everywhere') {
-      if (a === 'retry' && window.WizardOSNative?.retryUnsent) window.WizardOSNative.retryUnsent(id);
-      if (a === 'delete' && window.WizardOSNative?.deleteUnsent) window.WizardOSNative.deleteUnsent(id);
-      setTimeout(onUnsentChange, 300); return;
-    }
-    const it = OUTBOX.get(id); if (!it) return;
-    if (a === 'retry') { OUTBOX.retry(id); toast('↻', 'Sending again', 1400); }
-    if (a === 'delete') OUTBOX.remove(id).then(ok => toast(ok ? '✕' : '!', ok ? 'Deleted' : 'Could not save deletion · keep Wizard open', 2400));
-    if (a === 'open') { closeSheets(true); openWizardThread(it.sessionId); }
-    if (a === 'edit') editUnsent(it);
-  }
+  function unsentAction(id, origin, action) { return window.WosSettings.unsentAction(settingsContext(), id, origin, action); }
   // Edit puts the words back in a composer (the thread's, or a new chat's) and takes the item out of the queue.
   function editUnsent(it) {
     if (it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id)) { toast('!', it.error || 'Waiting for device storage verification · original kept', 3200); return; }
     if (it.body) { toast('!', 'Delivery is uncertain · retry this submission to reconcile before editing', 3000); return; }
     closeSheets(true);
-    const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
-    let wid = chatsWinAny();
-    if (!wid) { const w = openWin({ app: 'chats', thread: null }); if (!w) return; wid = w.id; }
-    focusWin(wid); openChat(wid, known ? it.sessionId : '__new__');
-    CHATS.setDraft(wid, it.text || it.typed || '', (it.files || []).filter(f => f !== it.audioFile));
-    if (it.audio || it.body) OUTBOX.transition(it.id, 'held', 'Editing a copy · original recording and uncertain send retained');
-    else OUTBOX.remove(it.id);
-    renderChats(W[wid]);
-    setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 50);
+    const known = it.kind === 'reply' || LIVE?.session(it.sessionId);
+    let wid;
+    if (known) { openWizardThread(it.sessionId); wid = desks[idx].focus; }
+    else {
+      const agent = it.agent || '';
+      const w = openWin({ app: 'chats', thread: null, ...(agent ? { agent } : {}) }); if (!w) return;
+      wid = w.id; focusWin(wid); openChat(wid, '__new__');
+    }
+    if (!window.WosSettings.moveDraft({ chats: CHATS, wid: wid, item: it, outbox: OUTBOX, toast })) return; renderChats(W[wid]);
+    setTimeout(() => { const ta = track.querySelector(`[data-chats="${wid}"] textarea`); ta?.focus(); }, 50);
   }
   let lastUnsentSig = '';
   function onUnsentChange() {
@@ -1773,7 +1715,7 @@
     sheet = which; device.classList.add('sheet-open'); tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
     if (which === 'launcher') { renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
-    else if (which === 'settings') { renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; }
+    else if (which === 'settings') { settingsFocus = document.activeElement; renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; settingsView?.focus(); }
     else { renderInbox(); inboxEl.classList.add('open'); }
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
     window.WosScenery?.update(); // scenery hook: a sheet over Home freezes the background
@@ -1785,24 +1727,16 @@
     launcher.classList.remove('open'); inboxEl.classList.remove('open'); settingsEl.classList.remove('open');
     [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
     $('#search').blur();
+    if (was === 'settings' && settingsFocus?.isConnected) settingsFocus.focus({ preventScroll: true });
     window.WosResources?.sync();
     window.WosScenery?.update(); // scenery hook: sheet closed, Home may animate again
   }
+  settingsEl.setAttribute('role', 'dialog'); settingsEl.setAttribute('aria-modal', 'true');
+  settingsEl.addEventListener('keydown', e => window.WosSettings.trap(e, settingsEl));
   $('#scrim').addEventListener('click', () => closeSheets());
   settingsEl.addEventListener('click', e => {
     if (e.target.closest('[data-stclose]')) return closeSheets();
-    { const sk = e.target.closest('[data-skinpick]'); if (sk) return pickSkin(sk.dataset.skinpick); }
-    if (window.WosCancelled?.act(e.target)) return;
-    if (window.WosSelMenu?.act(e.target)) return;
-    const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
-    if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); return setTimeout(onUnsentChange, 300); }
-    const st = e.target.closest('[data-st]')?.dataset.st;
-    if (st === 'typing' && NATIVE() && window.WizardOSNative.voiceTypingSettings) { window.WizardOSNative.voiceTypingSettings(); return; }
-    if (st === 'everywhere' && NATIVE() && typeof window.WizardOSNative.setEverywhere === 'function') { let on = false; try { on = JSON.parse(window.WizardOSNative.everywhere()).enabled; } catch (x) {} window.WizardOSNative.setEverywhere(!on); setTimeout(renderSettings, 250); vib(8); }
-    if (st === 'side') { closeSheets(true); sideButtonTap(true); }
-    if (st === 'files') return openFilesScreen();
-    if (st === 'help') { closeSheets(true); return window.WosTour?.openHelp(); }
-    if (e.target.closest('[data-usage-refresh]')) { window.WosUsage?.load(true).then(paintUsage); paintUsage(); }
+
   });
 
   function appTile(a) { return `<button class="lapp" data-app="${a.id}" style="--i:${tileN++}">${ico('span', 'ic', a, a.kind === 'native' ? '<span class="badge">APK</span>' : '')}<span class="nm">${esc(a.name)}</span></button>`; }
@@ -3193,7 +3127,7 @@
     return result || 'notReady';
   }
   function backStep(skipHosted) {
-    { const t = window.WosTour?.back(); if (t) return t; } // the first-run tour and the Help sheet sit above everything
+    { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
     // Recording keeps going: Back navigates like it always does. Only the Cancel button discards a take.
@@ -3201,7 +3135,7 @@
     const lm = window.LiveMode?.back?.(); if (lm) return lm;
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
-    const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
+    const ov = CHATS.closeOverlay(); if (ov) { if (settingsReturn === 'files') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="files"]')?.focus(); } return ov; } // media viewer, then the thread actions sheet
     const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
     if (window.WosResources?.back()) return 'resources';
     { const fw = W[desks[idx]?.focus]; if (fw?.app === 'usuals') { const u = window.WosUsuals?.back?.(); if (u) return u; } }
@@ -3472,8 +3406,7 @@
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'system') return openApp(APP.system);
       if (v === 'agents') return openApp(APP.agents);
-      if (v === 'settings' || v === 'usage') return openSettings();
-      if (v === 'skin') return openSettings('look');
+      if (window.WosSettings.route(v, openSettings)) return;
       if (v === 'day' || v === 'week' || v === 'month') return openReview(v);
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); toast('◇', 'Files isn’t on this Wizard', 1800); return; }
       // work / chats: the Chats window, at the asked-for section.

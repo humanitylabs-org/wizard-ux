@@ -23,8 +23,8 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const J = s => { try { return JSON.parse(s); } catch (e) { return null; } };
   const fmt = ms => { const s = Math.round((Number(ms) || 0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-  const toast = (i, t, ms) => window.__wos?.toast?.(i, t, ms);
-  const SRC = { everywhere: 'Floating orb', side: 'Side button', app: 'Orb', web: 'Orb' };
+  const toast = (i, t, ms) => (window.__wos || window.__wux)?.toast?.(i, t, ms);
+  const SRC = { everywhere: 'Floating orb', side: 'Side button', app: 'Orb', web: 'Orb', desktop: 'Microphone' };
   let web = [];          // [{id, at, ms, source, mime, bytes, blob}]
   const sessionWeb = new Map(); // Failed durable writes keep an explicit retry owner in this page.
   let busy = new Set(), errs = {}, open = new Set();
@@ -69,9 +69,9 @@
   }
   async function removeWeb(id) { sessionWeb.delete(id); web = web.filter(t => t.id !== id); try { await tx('readwrite', s => s.delete(id)); } catch (e) {} }
 
-  async function keepWeb(blob, ms, retained = false, text = '') {
+  async function keepWeb(blob, ms, retained = false, text = '', source = 'web') {
     if (!(blob instanceof Blob) || blob.size < (retained ? 1200 : 2000) || (!retained && !(ms >= KEEP_FROM_MS))) return false;
-    const t = { retained, id: 'w' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), at: Date.now(), ms: Math.round(ms), source: 'web', mime: blob.type || 'audio/webm', bytes: blob.size, blob };
+    const t = { retained, id: 'w' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), at: Date.now(), ms: Math.round(ms), source, mime: blob.type || 'audio/webm', bytes: blob.size, blob };
     let persisted = true;
     if (text) t.text = text;
     try { await tx('readwrite', s => s.put(t)); } catch (e) { persisted = false; /* memory only for this session */ }
@@ -168,7 +168,7 @@
       <p class="st-note">Interrupted and retained recordings stay until deleted. Older cancelled recordings may expire after a week (the newest ${MAX_KEPT}). Transcribe &amp; copy never sends to an agent.</p></div>`;
   }
   function repaint() {
-    const g = document.querySelector('#settingsBody [data-cancelled]');
+    const g = document.querySelector('[data-settings-root] [data-cancelled]');
     if (g) g.outerHTML = html();
   }
   function act(el) {

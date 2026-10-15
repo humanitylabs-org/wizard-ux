@@ -278,13 +278,12 @@
   function editUnsent(it) {
     if (it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id)) { toast('!', it.error || 'Waiting for device storage verification · original kept', 3200); return; }
     if (it.body) { toast('!', 'Delivery is uncertain · retry this submission to reconcile before editing', 3000); return; }
-    const known = it.kind === 'reply' || (LIVE && LIVE.session(it.sessionId));
-    const w = known ? (openThread(it.sessionId), focused()) : newChat();
+    const known = it.kind === 'reply' || LIVE?.session(it.sessionId);
+    let w;
+    if (known) { openThread(it.sessionId); w = focused(); }
+    else { w = newWin({ app: 'chats', thread: null, ...(it.agent ? { agent: it.agent } : {}) }); focusWin(w.id); CHATS.openChat(w.id, '__new__'); syncChatsPane(w.id); }
     if (!w) return;
-    CHATS.setDraft(w.id, it.text || it.typed || '', (it.files || []).filter(f => f !== it.audioFile));
-    if (it.audio || it.body) OUTBOX.transition(it.id, 'held', 'Editing a copy · original recording and uncertain send retained');
-    else OUTBOX.remove(it.id);
-    CHATS.renderChats(w); syncChatsPane(w.id);
+    if (!window.WosSettings.moveDraft({ chats: CHATS, wid: w.id, item: it, outbox: OUTBOX, toast })) return; CHATS.renderChats(w); syncChatsPane(w.id);
   }
 
   /* ---------------- rendering ---------------- */
@@ -868,21 +867,43 @@
     const r = e.target.closest('[data-thread]'); if (r) { closeInbox(); openThread(r.dataset.thread); }
   });
 
-  /* ---------------- settings (⌥, or the palette): connection and the voice provider, read-only ---------------- */
-  const setEl = document.createElement('div');
-  setEl.id = 'dsettings'; setEl.className = 'keys dsettings'; setEl.hidden = true;
+  /* Shared responsive feature surface; this adapter owns only desktop navigation and focus. */
+  const setEl = document.createElement('section');
+  setEl.id = 'dsettings'; setEl.className = 'dsettings'; setEl.hidden = true;
+  setEl.setAttribute('role', 'dialog'); setEl.setAttribute('aria-label', 'Settings'); setEl.setAttribute('aria-modal', 'true');
+  setEl.innerHTML = '<button class="st-close" data-close aria-label="Close settings">✕</button><div id="settingsBody"></div>';
   document.body.appendChild(setEl);
-  function renderSettings() {
-    if (setEl.hidden) return;
-    const st = LIVE?.ok ? 'Connected' : LIVE?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
-    setEl.innerHTML = `<div class="keys-card set-card" role="dialog" aria-label="Settings"><div class="keys-head"><b>Settings</b><small>Wizard on this computer</small><button class="x" data-close aria-label="Close">✕</button></div>
-      <div class="set-body"><div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(st)}</b><small>Desktop · ${esc(location.host)}</small></span></div></div>
-      ${C.voiceStatus?.card() || ''}</div></div>`;
+  let settingsFocus = null, settingsReturn = '';
+  const settingsView = window.WosSettings.mount($('#settingsBody'), {
+    outbox: OUTBOX, live: LIVE, ago, toast, visible: () => !setEl.hidden,
+    helpSub: 'Keyboard shortcuts, desks and Back',
+    openThread: id => { closeSettings(); openThread(id); },
+    editUnsent: it => { closeSettings(); editUnsent(it); },
+    openSub: id => {
+      closeSettings(); settingsReturn = id;
+      if (id === 'files') openFiles();
+      if (id === 'help') toggleKeys(true);
+    },
+  });
+  function renderSettings() { settingsView.render(); }
+  function openSettings(focus) {
+    window.WosResources?.back(); closePalette(); closeInbox(); toggleKeys(false);
+    settingsFocus = document.activeElement; setEl.hidden = false; settingsReturn = '';
+    renderSettings(); settingsView.focus(focus); window.WosScenery?.update();
   }
-  function openSettings() { window.WosResources?.back(); setEl.hidden = false; renderSettings(); setEl.querySelector('[data-close]')?.focus(); }
-  function closeSettings() { setEl.hidden = true; const f = focused(); if (f) focusInside(f.id); }
-  setEl.addEventListener('click', e => { if (e.target === setEl || e.target.closest('[data-close]')) closeSettings(); });
+  function closeSettings() {
+    if (setEl.hidden) return;
+    setEl.hidden = true;
+    if (settingsFocus?.isConnected && settingsFocus.getClientRects().length) settingsFocus.focus({ preventScroll: true });
+    else if (focused()) focusInside(focused().id);
+    window.WosScenery?.update();
+  }
+  function returnToSettings() { if (!settingsReturn) return; const from = settingsReturn; openSettings(); setEl.querySelector(`[data-st="${from}"]`)?.focus({ preventScroll: true }); }
+  setEl.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeSettings(); });
+  setEl.addEventListener('keydown', e => window.WosSettings.trap(e, setEl));
+  $('#settingsBtn').addEventListener('click', () => openSettings());
   C.voiceStatus?.onChange(() => renderSettings());
+  OUTBOX?.onChange(() => renderSettings());
 
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
@@ -1124,9 +1145,10 @@
     if (window.WizWebUpdate?.back()) return 'update-list'; // the update card's thread list folds first
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
     if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
-    if (!keysEl.hidden) { toggleKeys(false); return 'keys'; }
+    if (!keysEl.hidden) { toggleKeys(false); returnToSettings(); return 'keys'; }
     if (window.WosResources?.back()) return 'resources';
     if (closeUsage()) return 'usage';
+    if (settingsReturn === 'files') { const nested = CHATS.closeOverlay(); if (nested) { returnToSettings(); return nested; } settingsReturn = ''; }
     if (setEl && !setEl.hidden) { closeSettings(); return 'settings'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
@@ -1149,6 +1171,7 @@
     const k = e.key, code = e.code, alt = e.altKey && !e.metaKey && !e.ctrlKey, shift = e.shiftKey;
     const digit = /^Digit([1-9])$/.exec(code);
     const hit = fn => { e.preventDefault(); e.stopPropagation(); fn(); };
+    if (code === 'Comma' && !shift && (alt || ((e.metaKey || e.ctrlKey) && !e.altKey))) return hit(() => setEl.hidden ? openSettings() : closeSettings());
     // Home is the first icon (⌥1); app desktops follow left to right (⌥2…9).
     // Handle this before palette/Settings ownership, just like the Home button.
     if (alt && !shift && code === 'Digit1') return hit(() => { if (!e.repeat) goHome(); });
@@ -1340,7 +1363,7 @@
       if (v === 'store') return openApp(APP['app-store']);
       if (v === 'system') return openApp(APP.system);
       if (v === 'agents') return openApp(APP.agents);
-      if (v === 'settings' || v === 'usage') return openSettings();
+      if (window.WosSettings.route(v, openSettings)) return;
       if (v === 'files') { const a = findApp('files') || APP.files; if (a) return openApp(a); return toast('◇', 'Files isn’t on this Wizard', 1800); }
       if (v === 'day' || v === 'week' || v === 'month') { const a = APP['v-' + v]; if (a?.url) return openApp(a); }
       openApp(APP.wizard);
@@ -1358,6 +1381,8 @@
     toast,
   });
   C.deeplink.consume();
+  window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && keysEl.hidden && ib.hidden && usageEl.hidden && !window.WosResources?.state?.panel });
+  new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
   C.status?.attach({ openInbox, inboxOpen: () => !ib.hidden, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
