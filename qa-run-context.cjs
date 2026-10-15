@@ -13,8 +13,8 @@ const original = '[Wizard follow-through] Cross-thread note from the "Mizel.ai �
 const rows = [
  {id:1,role:'user',content:'How is the Mac build?',timestamp:t},
  {id:2,role:'assistant',content:'The Mac build is being checked.',timestamp:t+20},
- {id:3,role:'system',content:'',display_kind:'run_context',timestamp:t+40,run_context:{kind:'cross_thread',from:'Mizel.ai · Orb handoff',summary:'The microphone fix passed browser checks and is waiting for the build machine.',requested_action:'Please release it at the next safe checkpoint.',original}},
- {id:4,role:'assistant',content:'This note was sent to the wrong thread.',timestamp:t+42},
+ {id:3,role:'system',content:'',display_kind:'run_context',timestamp:t+120,run_context:{kind:'cross_thread',from:'Mizel.ai · Orb handoff',summary:'The microphone fix passed browser checks and is waiting for the build machine.',requested_action:'Please release it at the next safe checkpoint.',original}},
+ {id:4,role:'assistant',content:'This note was sent to the wrong thread.',timestamp:t+122},
 ];
 const fixtures = {
  qa_context: rows,
@@ -22,7 +22,7 @@ const fixtures = {
  qa_secret: [rows[0],rows[1],{...rows[2],run_context:{kind:'continuation',from:'Wizard follow-through',summary:'<img src=x onerror="window.pwned=true">',original:'<script>window.pwned=true</script>\n'+ 'long-token-'.repeat(600),redacted:true,original_truncated:true}},rows[3]],
  qa_waiting: rows.slice(0,3),
 };
-const session = id => ({id,title:'Run context · '+id,source:'wizard-mobile',status:id==='qa_waiting'?'running':'completed',wizard_last_user_at:t,wizard_activity_at:t+42,wizard_last_assistant_at:t+42,message_count:fixtures[id].length,last_user_message:{role:'user',content:'How is the Mac build?',timestamp:t},last_active:t+42});
+const session = id => ({id,title:'Run context · '+id,source:'wizard-mobile',status:id==='qa_waiting'?'running':'completed',wizard_last_user_at:t,wizard_activity_at:t+122,wizard_last_assistant_at:t+122,message_count:fixtures[id].length,last_user_message:{role:'user',content:'How is the Mac build?',timestamp:t},last_active:t+122});
 (async()=>{
  const browser=await chromium.launch();
  for(const desktop of [false,true]) {
@@ -43,9 +43,9 @@ const session = id => ({id,title:'Run context · '+id,source:'wizard-mobile',sta
   });
   const p=await ctx.newPage();p.on('pageerror',e=>errors.push(String(e)));
   await p.addInitScript(()=>localStorage.setItem('wos.coached','true'));
-  await p.goto(desktop?base+'desktop/':base,{waitUntil:'domcontentloaded'});
-  await p.waitForFunction(()=>window.__wos&&window.WizLive);
-  async function open(id){await p.evaluate(async id=>{await WizLive.refresh();__wos.openWizardThread(id)},id);await p.waitForFunction(()=>document.querySelector('.ch-msgs .msg'));await p.waitForTimeout(700);}
+  await p.goto(desktop?base+'desktop.html':base,{waitUntil:'domcontentloaded'});
+  await p.waitForFunction(()=>(window.__wos||window.__wux)&&window.WizLive);
+  async function open(id){await p.evaluate(async id=>{await WizLive.refresh();if(window.__wos)__wos.openWizardThread(id);else __wux.openThread(id)},id);await p.waitForFunction(()=>document.querySelector('.ch-msgs .msg'));await p.waitForTimeout(700);}
   await open('qa_context');
   const card=p.locator('[data-run-context]').last();
   await card.waitFor();
