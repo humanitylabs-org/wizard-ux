@@ -11,7 +11,7 @@ export function depth(d,n){let v=0;while(n?.parent){v++;n=d.nodes.find(x=>x.id==
 export function visible(d){return d.nodes.filter(n=>{let p=n;while(p.parent){p=d.nodes.find(x=>x.id===p.parent);if(p?.folded)return false;}return true;});}
 function indexAfter(d,id){const ids=descendants(d,id);let at=d.nodes.findIndex(n=>n.id===id);while(at+1<d.nodes.length&&ids.has(d.nodes[at+1].id))at++;return at+1;}
 export function apply(d,op){
- if(d.applied.includes(op.id))return false;
+ if(d.applied.includes(op.id)||(op.speechId&&d.applied.includes('speech-'+op.speechId)))return false;
  const n=d.nodes.find(n=>n.id===op.target);
  if(op.kind==='insert'){
   if(!d.nodes.some(n=>n.id===op.node.id)){const node=clone(op.node);if(node.parent&&!d.nodes.some(n=>n.id===node.parent))node.parent=null;const at=op.after&&d.nodes.some(n=>n.id===op.after)?indexAfter(d,op.after):node.parent?d.nodes.findIndex(n=>n.id===node.parent)+1:d.nodes.length;d.nodes.splice(at,0,node);}
@@ -26,6 +26,7 @@ export function apply(d,op){
   const ids=descendants(d,n.id);if(!ids.has(op.parent)&&(!op.parent||d.nodes.some(x=>x.id===op.parent))){const group=d.nodes.filter(x=>ids.has(x.id));d.nodes=d.nodes.filter(x=>!ids.has(x.id));n.parent=op.parent;const at=op.before&&d.nodes.some(x=>x.id===op.before)?d.nodes.findIndex(x=>x.id===op.before):op.after&&d.nodes.some(x=>x.id===op.after)?indexAfter(d,op.after):op.parent?d.nodes.findIndex(x=>x.id===op.parent)+1:d.nodes.length;d.nodes.splice(at,0,...group);}
  }else if(op.kind==='delete'&&n){const ids=descendants(d,n.id);d.nodes=d.nodes.filter(x=>!ids.has(x.id));if(!d.nodes.length)d.nodes.push({id:'empty-'+op.id,parent:null,text:'',folded:false});}
  else if(op.kind==='title')d.title=op.text;
+ if(op.speechId)d.applied.push('speech-'+op.speechId);
  d.applied.push(op.id);return true;
 }
 export function moveOperation(d,id,direction){
@@ -38,6 +39,7 @@ export function inverse(d,op){
  const n=d.nodes.find(n=>n.id===op.target);
  if(op.kind==='insert')return {kind:'delete',target:op.node.id};
  if(op.kind==='text'&&n)return {kind:'text',target:n.id,text:n.text,before:op.text};
+ if(op.kind==='voice'&&!n)return {kind:'delete',target:op.target};
  if(op.kind==='voice'&&n)return {kind:'text',target:n.id,text:n.text,before:n.text+(n.text&&op.text?' ':'')+op.text};
  if(op.kind==='fold'&&n)return {kind:'fold',target:n.id,folded:n.folded};
  if(op.kind==='move'&&n){const sib=d.nodes.filter(x=>x.parent===n.parent);return {kind:'move',target:n.id,parent:n.parent,after:sib[sib.indexOf(n)-1]?.id||null,before:sib[sib.indexOf(n)+1]?.id||null};}
@@ -49,6 +51,6 @@ export function markdown(d){return '# '+d.title+'\n\n'+d.nodes.map(n=>'  '.repea
 export class SpeechLedger {
  constructor(drafts={}){this.items=drafts;}
  begin(id,target,seq){return this.items[id]={id,target,seq,text:'',status:'draft'};}
- event(e){let s=this.items[e.id];if(!s)s=this.items[e.id]={id:e.id,target:e.target,seq:e.seq,text:'',status:'draft'};if(s.status==='final')return null;s.text=e.text;s.status=e.type==='final'?'final':'draft';return s;}
- detach(target,newId){for(const s of Object.values(this.items))if(s.target===target&&s.status!=='final')s.target=newId;}
+ event(e){let s=this.items[e.id];if(!s)s=this.items[e.id]={id:e.id,target:e.target,seq:e.seq,text:'',status:'draft'};if(s.status==='final')return null;if(s.edited){s.status='unconfirmed';return s;}s.text=e.text||'';s.status=e.type==='final'?'final':'draft';return s;}
+ detach(target,newId,applied=[]){for(const s of Object.values(this.items))if(s.target===target&&!applied.includes('speech-'+s.id))s.target=newId;}
 }

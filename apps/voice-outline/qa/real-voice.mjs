@@ -1,6 +1,7 @@
 import {createRequire} from 'node:module';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const base=process.env.OUTLINE_URL||'http://127.0.0.1:18871',out=process.env.EVIDENCE_DIR||'./evidence';mkdirSync(out,{recursive:true});
 const receipt={kind:'real-shared-capture-real-tinfoil',url:base,started:new Date().toISOString(),checks:[],errors:[],events:[]};
@@ -25,13 +26,14 @@ try{
  await page.locator('#child').click();const secondTarget=await page.locator('.live-target').getAttribute('data-id');if(firstTarget===secondTarget)throw Error('Did not retarget next thought');
  await page.waitForTimeout(9000);
  await check('menu Back keeps app and recording',async()=>{await page.locator('#menu').click();await page.goBack();await page.waitForTimeout(120);if(await page.locator('#sheet').isVisible())throw Error('Sheet stayed');if(!await page.locator('#live').textContent().then(s=>s.includes('Recording')))throw Error('Recording stopped by Back');});
+ await check('root Back retains live recording and app',async()=>{await page.locator('#canvas').click({position:{x:3,y:3}});await page.goBack();await page.waitForTimeout(150);assert.equal(new URL(page.url()).origin,new URL(base).origin);assert((await page.locator('#live').textContent()).includes('Recording'));assert.equal(await page.evaluate(()=>WizardApp.capture.current()?.getInfo().inputStopped),false);});
  await page.locator('#live').click();await page.waitForFunction(()=>document.querySelector('#live').textContent.includes('Go Live'),{},{timeout:65000});
  await page.waitForFunction(()=>document.querySelector('#save').textContent==='Saved');
  const document=await page.request.get(base+'/api/document').then(r=>r.json()),speech=await page.request.get(base+'/api/speech').then(r=>r.json());
  receipt.document=document;receipt.speech=speech;receipt.notice=await page.locator('#notice').textContent();
- await check('real finals retained on their exact target IDs',async()=>{for(const id of [firstTarget,secondTarget]){const u=speech.utterances.find(s=>s.target===id&&s.status==='final'&&s.text.length>5);if(!u)throw Error('Missing final for '+id);if(!document.document.nodes.find(n=>n.id===id)?.text.includes(u.text))throw Error('Final absent from target');}});
+ await check('real finals retained on their exact target IDs',async()=>{for(const id of [firstTarget,secondTarget]){const u=speech.utterances.find(s=>s.target===id&&s.status==='final'&&s.text.length>5);if(!u)throw Error('Missing final for '+id);assert.equal(document.document.nodes.find(n=>n.id===id)?.text,u.text,'Exact final absent from target');}});
  await check('shared custody acknowledged only after durable audio',async()=>{if(await page.evaluate(async()=> (await WizardApp.capture.pending()).length))throw Error('Audio remains pending');});
- await page.reload();await page.waitForFunction(()=>document.querySelector('#save').textContent==='Saved');await check('reload retains tree and dictation',async()=>{const texts=await page.locator('.text').allTextContents();if(!texts.some(t=>t.includes('garden')))throw Error('Transcript missing');});
+ await page.reload();await page.waitForFunction(()=>document.querySelector('#save').textContent==='Saved');await check('reload retains tree and dictation',async()=>{const reloaded=await page.request.get(base+'/api/document').then(r=>r.json());assert.deepEqual(reloaded.document,document.document);for(const id of [firstTarget,secondTarget]){const expected=document.document.nodes.find(n=>n.id===id).text;assert(expected.length>5);assert.equal(await page.locator(`[data-id="${id}"] .text`).textContent(),expected);}});
  await page.screenshot({path:out+'/phone-final.png',fullPage:true});await page.setViewportSize({width:1280,height:900});await page.screenshot({path:out+'/desktop-final.png',fullPage:true});
  receipt.ok=true;
 }catch(e){receipt.ok=false;receipt.failure=e.stack;receipt.state=await page.evaluate(async()=>({notice:document.querySelector('#notice').textContent,capture:WizAppCapture.getState?.(),current:WizardApp.capture.current()?.getInfo?.(),locks:await navigator.locks.query()}));console.log(JSON.stringify(receipt.state));await page.screenshot({path:out+'/failure.png',fullPage:true}).catch(()=>{});}
