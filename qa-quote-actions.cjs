@@ -47,6 +47,9 @@ let pass=0,fail=0;const ok=(v,label)=>{console.log(v?'PASS':'FAIL',label);v?pass
  const selectionShare=async selector=>{await p.locator(selector).last().evaluate(el=>{const r=document.createRange();r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r);WosSelMenu.show();});await p.locator('[data-sm="share"]').click();};
  await selectionShare('.msg.a blockquote p');ok(await p.evaluate(()=>__shares.at(-1).text.startsWith('From Wizard:\n\n')),mode+' selected assistant text attributed');
  await selectionShare('.msg.u .bub p');ok(await p.evaluate(()=>__shares.at(-1).text==='Give me a message for Miguel'),mode+' own selected words not attributed');
+ await p.locator('.msg.u .bub').last().evaluate(el=>{el.innerHTML=WosChat.md('> My quoted words.\n\n```text\nmy code\n```');});
+ await p.locator('.msg.u [data-quoteshare]').last().click();ok(await p.evaluate(()=>__shares.at(-1).text==='My quoted words.'),mode+' owner quote remains unattributed');
+ await p.locator('.msg.u [data-codeshare]').last().click();ok(await p.evaluate(()=>__shares.at(-1).text==='my code'),mode+' owner code remains unattributed');
  await p.evaluate(()=>__cancelShare=true);await msg.locator('[data-quoteshare]').first().click();await p.waitForTimeout(100);ok(!errors.length,mode+' cancellation harmless');
  await p.evaluate(()=>{__cancelShare=false;navigator.share=undefined;});await msg.locator('[data-quoteshare]').first().click();await p.waitForTimeout(100);ok((await p.evaluate(()=>navigator.clipboard.readText()))==='From Wizard:\n\n'+quote,mode+' unavailable share copies attributed quote');
  await controls.first().scrollIntoViewIfNeeded();const geom=await msg.evaluate(el=>{const q=el.querySelector('blockquote'),a=q.querySelector('.quote-actions'),b=el.querySelector('[data-mcopy]');return {nested:a.getBoundingClientRect().left>q.getBoundingClientRect().left+8,overflow:q.scrollWidth>q.clientWidth+1};});
