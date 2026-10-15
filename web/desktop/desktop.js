@@ -292,7 +292,7 @@
   }
   function winHtml(w) {
     const a = appOf(w);
-    return `<div class="wbar" data-drag>${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>
+    return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
       ${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
       <button data-wact="mono" title="Full screen (${CMD}F / ${MOD}F)" aria-label="Full screen">⤢</button>
       <button data-wact="close" title="Close app (⌘W / ${MOD}W)" aria-label="Close window">✕</button></div>
@@ -315,7 +315,7 @@
     const el = winEl(base); if (!el) return;
     const box = el.querySelector('.dchats'); if (box) box.dataset.thread = w.thread || '';
     $$('.ch-row', el).forEach(r => r.classList.toggle('cur', r.dataset.chopen === w.thread));
-    const t = el.querySelector('.wbar .t'); if (t) t.textContent = winTitle(w);
+    window.WosAgents.refreshTitlebars();
     el.setAttribute('aria-label', winTitle(w));
     if (focused()?.id === base) document.title = `${winTitle(w)} · Wizard`;
   }
