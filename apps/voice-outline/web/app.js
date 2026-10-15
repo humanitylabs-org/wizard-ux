@@ -1,7 +1,7 @@
 import {uid,clone,apply,depth,visible,moveOperation,inverse,markdown,SpeechLedger} from './model.js';
 const $=id=>document.getElementById(id), W=window.WizardApp;
 let doc={title:'Untitled outline',nodes:[{id:'first-bullet',parent:null,text:'',folded:false}],applied:[]},rev=0,ops=[],selected='first-bullet',editing=null,undo=[],redo=[],ledger=new SpeechLedger(),saving=false,saveTimer,db,localWrites=Promise.resolve(),hold;
-let session=null,socket=null,current=null,seq=0,starting=false,stopping=false,paused=false,offs=[],uploadChain=Promise.resolve(),uploadError=null,acked=new Set(),finalWait,liveTimer,startedAt=0;
+let session=null,socket=null,current=null,seq=0,starting=false,stopping=false,stopObserved=false,paused=false,offs=[],uploadChain=Promise.resolve(),uploadError=null,acked=new Set(),finalWait,liveTimer,startedAt=0;
 const note=t=>{$('notice').textContent=t;};
 const request=async(path,options={})=>{const r=await fetch(path,{cache:'no-store',...options});const value=await r.json();if(!r.ok)throw Object.assign(new Error(value.error||'Request failed'),{status:r.status,value});return value;};
 const put=value=>({method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(value)});
@@ -82,17 +82,17 @@ async function startLive(){
   socket.onclose=()=>{if(session&&!stopping){note('Connection lost. Recording paused; stop to save retained audio.');pauseLive();}};
   editing=null;
   session=await W.capture.start({kind:'outline',pcm:true,mime:'audio/wav',chunkMs:5000,maxMs:15*60*1000,maxBytes:32*1024*1024,preparedId:prepared.id,meta:{app:'voice-outline'},audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
-  startedAt=Date.now();paused=false;begin();const take=session.id;
+  startedAt=Date.now();paused=false;stopObserved=false;begin();const take=session.id;
   offs.push(session.onPcm(f=>{if(!current||paused)return;if(socket.readyState!==1||socket.bufferedAmount>640000){note('Live network is behind. Paused; audio retained.');pauseLive();return;}socket.send(f.pcm);}),session.onChunk(c=>upload(take,c)),session.onWarn(w=>note(String(w?.message||w))),session.onState(st=>{if(stoppedByCore())stopLive();}));
   liveTimer=setInterval(liveUI,1000);note('Listening to the marked bullet. New bullet or Child starts the next thought.');liveUI();render();
  }catch(e){note(e.message);socket?.close();socket=null;if(session)await stopLive();}
  finally{prepared?.release();starting=false;$('live').disabled=false;}
 }
-function stoppedByCore(){return session?.getInfo().inputStopped&&!stopping;}
+function stoppedByCore(){return session?.getInfo().inputStopped&&!stopping&&!stopObserved;}
 function liveUI(){if(stoppedByCore())void stopLive();$('live').classList.toggle('active',!!session);$('live').textContent=session?'◉ '+(paused?'Paused':'Recording'):'◉ Go Live';$('live-status').textContent=session?`${Math.floor((Date.now()-startedAt)/60000)}:${String(Math.floor((Date.now()-startedAt)/1000)%60).padStart(2,'0')} · Tap to stop`:'Your words, not a rewrite.';}
 async function pauseLive(){if(!session||stopping)return;try{if(paused){if(socket?.readyState!==1)throw new Error('Connection closed. Stop & save, then start Live again.');await session.resume();paused=false;begin();}else{await session.pause();paused=true;if(current){socket?.send(JSON.stringify({type:'end',id:current.id}));current=null;}}liveUI();render();}catch(e){note(e.message);}}
 async function stopLive(){
- if(!session||stopping)return;stopping=true;$('live').disabled=true;const s=session;
+ if(!session||stopping)return;stopping=true;stopObserved=true;$('live').disabled=true;const s=session;
  try{const result=await s.stop();if(current){socket?.send(JSON.stringify({type:'end',id:current.id}));current=null;}
   note('Microphone stopped. Waiting for final words and audio readback…');
   await archive(result);
