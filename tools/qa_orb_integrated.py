@@ -169,6 +169,15 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
     if os.environ.get('QA_HELD_ONLY')=='1':
         ev("Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false})")
     mid=start_meeting();check('integrated','actual adopted UI starts native meeting through SDK',cap().get('native') is True,cap())
+    notes=None
+    if os.environ.get('QA_HELD_ONLY')=='1':
+        # Isolate the reported case from an earlier command's Settings sheet.
+        # Start with actual visible Mizel and focus its real notes field.
+        mf("Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Notes')?.click();document.querySelector('#notepad').focus()")
+        pg.pump(1)
+        check('held','actual Mizel notes field has focus with no covering sheet',mf("document.activeElement.id==='notepad'") and ev("!document.querySelector('.sheet.open')"))
+        notes=mf("document.querySelector('#notepad').value")
+        save('focused-gesture-start.json',ev("({voice:__wos.voice,sheetOpen:document.querySelector('#device')?.classList.contains('sheet-open'),height:innerHeight,orb:document.querySelector('#orbWrap').getBoundingClientRect().toJSON()})"))
     # The formerly omitted case: idle shell, active actual Mizel, real hold/release.
     fixture.words='open settings';fixture.delay=5;before=len(fixture.runs())
     check('held','starts idle during native Mizel recording',ev("__wos.voice==='idle'") and cap()['phase']=='recording',cap())
@@ -180,18 +189,8 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
     save('idle-held-proof.json',{'meetingId':mid,'capture':cap(),'runs':fixture.runs(),'voice':ev('__wos.voice')})
     ev('__wos.closeSheets(true)');fixture.words='synthetic explicit question';pg.pump(.5)
     if os.environ.get('QA_HELD_ONLY')=='1':
-        ev("__wos.openApp({id:'mizel',kind:'wizard',url:'/mizel-live/',name:'Mizel'})")
-        pg.pump(.8)
-        mf("Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Notes')?.click();document.querySelector('#notepad').focus()")
-        pg.pump(.5)
-        check('held','actual Mizel notes field has focus',mf("document.activeElement.id==='notepad'"))
-        notes=mf("document.querySelector('#notepad').value");fixture.words='open settings';fixture.delay=5;before=len(fixture.runs())
-        touch(hold=1.5)
-        wait("WizAppCapture.getState().phase==='recording'",3)
-        check('held','focused notes hold returns same native meeting before STT',cap()['meetingId']==mid and len(fixture.runs())==before,cap())
-        wait("__wos.voice==='idle'",20)
-        check('held','focused notes command executes locally without insertion or agent send',ev("document.querySelector('#settings').classList.contains('open')") and mf("document.querySelector('#notepad').value")==notes and len(fixture.runs())==before)
-        ev('__wos.closeSheets(true)');mf("document.querySelector('#notepad').blur()")
+        check('held','focused notes command leaves draft untouched and sends no agent request',mf("document.querySelector('#notepad').value")==notes and len(fixture.runs())==before)
+        mf("document.querySelector('#notepad').blur()")
         stop_meeting()
         check('held','false offline flag permits durable marker sync and capture acknowledgement',not cap().get('recording') and ev("Object.values(WosOrbHandoff.read()).every(r=>r.status==='reserving'||r.acked===r.clientRevision)"))
         check('held','finished app has one truthful state and no stale End meeting',mf("!document.querySelector('#doc-status').textContent.includes('offline')&&!document.querySelector('#doc-status').textContent.includes('End meeting')"))
