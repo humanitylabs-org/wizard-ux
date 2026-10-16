@@ -1,0 +1,71 @@
+# Wizard for iPhone (Capacitor). Run from ios/: `fastlane sim` or `fastlane beta`.
+# Settings come from ios/fastlane/.env (copy .env.example). The .p8 key file stays outside the repo.
+default_platform(:ios)
+
+PROJECT = "native/App/App.xcodeproj"
+SCHEME = "App"
+
+platform :ios do
+  def asc_key
+    app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_filepath: File.expand_path(ENV.fetch("ASC_KEY_PATH")),
+      in_house: false
+    )
+  end
+
+  def signing_args
+    "-allowProvisioningUpdates " \
+      "-authenticationKeyPath #{File.expand_path(ENV.fetch('ASC_KEY_PATH'))} " \
+      "-authenticationKeyID #{ENV.fetch('ASC_KEY_ID')} " \
+      "-authenticationKeyIssuerID #{ENV.fetch('ASC_ISSUER_ID')}"
+  end
+
+  def origin_arg
+    ENV["WIZARD_ORIGIN"].to_s.empty? ? "" : " WIZARD_ORIGIN=#{ENV['WIZARD_ORIGIN']}"
+  end
+
+  desc "Install npm deps and copy web assets/config/plugins into the Xcode project"
+  lane :sync do
+    Dir.chdir("..") do
+      sh("npm", "ci")
+      sh("npx", "cap", "sync", "ios")
+    end
+  end
+
+  desc "Build for the iOS Simulator (no signing) to check it compiles"
+  lane :sim do
+    sync
+    Dir.chdir("..") do
+      sh("xcodebuild", "-project", PROJECT, "-scheme", SCHEME,
+         "-destination", "generic/platform=iOS Simulator", "-configuration", "Debug",
+         "-derivedDataPath", "build/DerivedData", "CODE_SIGNING_ALLOWED=NO", "build")
+    end
+  end
+
+  desc "Build, sign and upload a new build to TestFlight"
+  lane :beta do
+    key = asc_key
+    sync
+    build = latest_testflight_build_number(api_key: key, app_identifier: ENV.fetch("APP_IDENTIFIER"),
+                                           initial_build_number: 0) + 1
+    build_app(
+      project: PROJECT,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build",
+      xcargs: "#{signing_args} DEVELOPMENT_TEAM=#{ENV.fetch('DEVELOPMENT_TEAM')} " \
+              "PRODUCT_BUNDLE_IDENTIFIER=#{ENV.fetch('APP_IDENTIFIER')} CURRENT_PROJECT_VERSION=#{build}#{origin_arg}",
+      export_xcargs: signing_args,
+      export_options: { signingStyle: "automatic", teamID: ENV.fetch("DEVELOPMENT_TEAM") }
+    )
+    upload_to_testflight(
+      api_key: key,
+      skip_waiting_for_build_processing: true,
+      changelog: ENV["CHANGELOG"] || "Wizard for iPhone test build"
+    )
+    UI.success("Uploaded build #{build} to TestFlight")
+  end
+end
