@@ -18,6 +18,23 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
  browser=await chromium.launch({executablePath:process.env.CHROMIUM,headless:true,args:['--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  let f=await boot(browser,false),p=f.p;await tones(p);const store=new OrbEvents(path.join(evidence,'events.json'));
  await f.context.route('**/mizel-live/orb-events**',async r=>{try{if(r.request().method()==='PUT'){const event=store.upsert(r.request().postDataJSON());return r.fulfill({json:{event}});}return r.fulfill({json:{events:store.list(new URL(r.request().url()).searchParams.get('meetingId'))}});}catch(e){console.error('EVENT REJECT',e.message,r.request().postData());return r.fulfill({status:409,json:{error:e.message}});}});
+ await test('idle held command borrows active meeting and resumes before STT without agent send',async()=>{
+   await p.evaluate(async()=>{await WosModels.load();window.meeting=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:500,meta:{meetingId:'idle-held-command'}});});
+   await p.waitForTimeout(650);f.R.words='open settings';f.R.delay=2200;
+   const touch=await f.context.newCDPSession(p),b=await p.locator('#orbWrap').boundingBox();
+   await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:b.x+b.width/2,y:b.y+b.height/2,id:9}]});await p.waitForTimeout(1000);
+   const started=await p.evaluate(()=>({voice:__wos.voice,kind:__wos.V.kind,capture:WizAppCapture.getState(),errors:document.querySelector('#toast').textContent}));
+   fs.writeFileSync(path.join(evidence,'idle-hold-start.json'),JSON.stringify(started,null,2));
+   assert.equal(started.voice,'command');assert.equal(started.capture.phase,'handoff');
+   await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+   await p.waitForFunction(()=>WizAppCapture.getState().phase==='recording',null,{timeout:1700});
+   assert.equal(await p.evaluate(()=>WizAppCapture.getState().meetingId),'idle-held-command');
+   assert.equal(f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,0);
+   await p.waitForFunction(()=>__wos.voice==='idle',null,{timeout:7000});
+   assert.equal(await p.evaluate(()=>document.querySelector('#settings').classList.contains('open')),true);
+   assert.equal(f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,0);
+   await p.evaluate(async()=>{__wos.closeSheets(true);await meeting.stop();});f.R.words='spoken words';f.R.delay=0;
+ });
  await test('actual shell admits borrowed orb, resumes before delayed STT, sends only explicit question once',async()=>{
    await p.evaluate(async()=>{await WosModels.load();window.meeting=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:500,meta:{meetingId:'synthetic-host-meeting',title:'PRIVATE MUST NOT SEND'}});});
    await p.waitForTimeout(750);await p.evaluate(()=>{tone=880;});f.R.delay=2200;
