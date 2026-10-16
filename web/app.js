@@ -2931,6 +2931,13 @@
   paintVoiceDestination();
   window.addEventListener('wizard:config', paintVoiceDestination);
   let G = null;
+  function mayHoldCommand() {
+    if (sheet) return false;
+    const focused = FIELDS.refresh(), capture = window.WizAppCapture?.getState?.();
+    // A deliberate hold during a meeting is a command even when notes retain
+    // focus. Tap still dictates; startVoice retains the microphone loan checks.
+    return !focused || !!(capture?.recording && capture?.meetingId);
+  }
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
@@ -2939,7 +2946,7 @@
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
     G.corner = device.classList.contains('orb-corner');
-    if (!sheet && !FIELDS.refresh()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
+    if (mayHoldCommand()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
   });
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
   // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
