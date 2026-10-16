@@ -1,8 +1,7 @@
 services:
   outline-streaming-demo:
-    image: caddy:2.10.2-alpine
-    # Copy drops the stock binary's unnecessary file capability; keep cap_drop ALL.
-    command: ["/bin/sh", "-ec", "cp /usr/bin/caddy /tmp/caddy; exec /tmp/caddy reverse-proxy --from http://:8799 --to \"$${OUTLINE_TRIAL_UPSTREAM}\""]
+    image: haproxy:3.0-alpine
+    command: ["/bin/sh", "-ec", "printf 'global\\n  maxconn 128\\ndefaults\\n  mode tcp\\n  timeout connect 5s\\n  timeout client 610s\\n  timeout server 610s\\nfrontend trial\\n  bind :8799\\n  default_backend upstream\\nbackend upstream\\n  server local %s check\\n' \"$${OUTLINE_TRIAL_UPSTREAM}\" > /tmp/haproxy.cfg; exec haproxy -db -f /tmp/haproxy.cfg"]
     environment:
       OUTLINE_TRIAL_UPSTREAM: ${OUTLINE_TRIAL_UPSTREAM}
     restart: unless-stopped

@@ -42,7 +42,7 @@ def fetch_selected(repo_arg, commit, dest, tok):
             archive.extractall(dest, filter='data')
 
 def runtime_pull(image, tok):
-    if image != 'caddy:2.10.2-alpine':
+    if image != 'haproxy:3.0-alpine':
         raise ValueError('Unexpected image: '+image)
     # The unchanged Runtipi install operation pulls this public stock image.
     # This only avoids a redundant CLI-side pull requiring direct Docker access.
@@ -57,11 +57,19 @@ try:
     # Never broaden filesystem/Docker permissions just to create this override.
     rt = c.runtipi()
     urn = 'outline-streaming-demo:wizardapps'
+    from urllib.parse import urlsplit
+    upstream = urlsplit(a.upstream)
+    if upstream.hostname != '127.0.0.1' or not upstream.port or upstream.path not in ('', '/') or upstream.query or upstream.username:
+        raise ValueError('Expected a loopback HTTP service URL')
+    cfg = ('global\n  maxconn 128\ndefaults\n  mode tcp\n  timeout connect 5s\n'
+           '  timeout client 610s\n  timeout server 610s\nfrontend trial\n'
+           f'  bind 127.0.0.1:{a.listen_port}\n  default_backend upstream\n'
+           f'backend upstream\n  server local 127.0.0.1:{upstream.port} check\n')
+    import shlex
     override = ('services:\n  outline-streaming-demo:\n    network_mode: host\n'
                 '    ports: !reset []\n    networks: !reset []\n    command: ' +
-                json.dumps(['/bin/sh', '-ec',
-                            'cp /usr/bin/caddy /tmp/caddy; exec /tmp/caddy reverse-proxy '
-                            f'--from http://127.0.0.1:{a.listen_port} --to "$OUTLINE_TRIAL_UPSTREAM"'])+'\n')
+                json.dumps(['/bin/sh', '-ec', 'printf %s '+shlex.quote(cfg)+
+                            ' > /tmp/haproxy.cfg; exec haproxy -db -f /tmp/haproxy.cfg'])+'\n')
     rt.req('PUT', '/user-config/'+urn, {'dockerCompose': override, 'appEnv': ''})
     saved = rt.req('GET', '/user-config/'+urn)
     if saved['dockerCompose'].strip() != override.strip() or not saved['isEnabled']:
@@ -71,7 +79,7 @@ try:
     result = cli.install(c, 'outline-streaming-demo', {'OUTLINE_TRIAL_UPSTREAM': a.upstream}, wait=False)
     if result.get('status') == 'already installed':
         result = {'id': 'outline-streaming-demo', 'operation': 'update',
-                  'result': rt.req('PATCH', '/app-lifecycle/'+urn+'/update', {})}
+                  'result': rt.req('PATCH', '/app-lifecycle/'+urn+'/update', {'performBackup': False})}
     print(json.dumps(result, indent=2))
 finally:
     private.fetch = original_fetch
