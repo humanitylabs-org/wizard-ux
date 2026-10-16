@@ -1085,7 +1085,7 @@
     if (commandTake) {
       dictationFinishing = true; const snap = vSnapshot;
       try { const r=await VOICE.finish({transcribe:false}); if(!r?.blob)return 'none'; const take=await OUTBOX.retainDictation(r.blob,r.captureId); const it=await OUTBOX.transcribeDictation(take.id); if(!it?.text)return 'retained';
-        const ok=localCommand(it.text,snap); if(ok) await OUTBOX.transition(it.id,'held','Local command handled · original recording kept');
+        const cmd=LOCAL_COMMANDS.parse(it.text,snap,'command'); const ok=cmd && executeCommand(cmd,it.text,snap); if(window.WosCommands.completedLocally(cmd,ok)) await OUTBOX.completeLocal(it.id);
         toast(ok?'⚡':'!',ok?'Command handled on-device':'No local command matched · nothing sent · recording kept',2600);return ok?'local':'retained';
       } finally { commandTake=false;dictationFinishing=false; }
     }
@@ -1128,7 +1128,7 @@
         if(staged.durable) {
           try { transcript=String((await window.WizConfig.transcribe(r.blob,{prompt:window.WizConfig.voicePrompt(),signal:AbortSignal.timeout(45000)})).text||'').trim(); } catch(_) {}
           const cmd=transcript && LOCAL_COMMANDS.parse(transcript,vSnapshot,'auto');
-          if(cmd && executeCommand(cmd,transcript,vSnapshot)) { staged.text=transcript;await OUTBOX.transition(stagedId,'held','Local command handled · original recording kept');toast('⚡','Command handled on-device',1800);return 'local'; }
+          if(cmd && executeCommand(cmd,transcript,vSnapshot)) { staged.text=transcript;if(window.WosCommands.completedLocally(cmd,true)) await OUTBOX.completeLocal(stagedId);else await OUTBOX.transition(stagedId,'held','Command accepted · completion unconfirmed; original recording kept');toast('⚡','Command handled on-device',1800);return 'local'; }
         }
       }
     }
