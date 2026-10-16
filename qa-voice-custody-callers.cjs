@@ -18,7 +18,8 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    const q=r.request(),u=new URL(q.url()),p=u.pathname,json=(o,status=200)=>r.fulfill({status,contentType:'application/json',body:JSON.stringify(o)});
    if(q.method()==='GET'&&p.startsWith('/wizard-os-home/')){if(process.env.QA_LIVE_ORIGIN)return r.continue();let f=p.slice('/wizard-os-home/'.length)||'index.html';if(f==='outbox.js'&&legacyOutbox?.source)return r.fulfill({body:legacyOutbox.source,contentType:'application/javascript'});f=path.join(root,'web',f);if(fs.existsSync(f)&&fs.statSync(f).isFile())return r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml'});}
    if(p==='/fixture-capture')return r.fulfill({contentType:'text/html',body:'<meta name="wizard-os-voice" content="capture"><p>Local capture fixture</p>'});
-   if(p.endsWith('/bootstrap'))return json({bootstrap:1,display:{agent_name:'Wizard',owner_name:'Tester'},endpoints:{transcribe:'/wizard/v1/transcribe',route:'/wizard/v1/route'},files:{upload_url:'/wizard/files/upload'},capabilities:{voice:true,router:true,files:true,steer:true}});
+   if(p.endsWith('/bootstrap'))return json({bootstrap:1,display:{agent_name:'Wizard',owner_name:'Tester'},endpoints:{transcribe:'/wizard/v1/transcribe',route:'/wizard/v1/route',apps:'/wizard/v1/apps'},files:{upload_url:'/wizard/files/upload'},capabilities:{voice:true,router:true,files:true,steer:true}});
+   if(p==='/wizard/v1/apps'&&process.env.QA_LOCAL_ONLY==='1')return json({apps:[{id:'wisdom',name:'Wisdom',url:'/fixture-wisdom/'},{id:'mizel',name:'Mizel.ai',url:'/fixture-mizel/'}]});
    if(p.endsWith('/transcribe')){await sleep(state.sttDelay);return json({text:state.text,ms:5}).catch(()=>{});}
    if(p.endsWith('/route'))return json({cmd:state.cmd,ms:5});
    if(p==='/wizard/files/upload'){
@@ -48,7 +49,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   await ctx.addInitScript(({allFail,model,provider})=>{
    localStorage.setItem('wos.coached','true');localStorage.setItem('wos.voiceTipSeen','true');localStorage.setItem('wos.model.pref.v1',JSON.stringify({model,provider}));
    window.__fault={all:allFail};const put=IDBObjectStore.prototype.put,open=indexedDB.open.bind(indexedDB),set=Storage.prototype.setItem;
-   IDBObjectStore.prototype.put=function(...args){if(__fault.all)throw new DOMException('Injected device save failure','QuotaExceededError');return put.apply(this,args);};
+   IDBObjectStore.prototype.put=function(...args){if(__fault.all||__fault.idb)throw new DOMException('Injected device save failure','QuotaExceededError');return put.apply(this,args);};
    indexedDB.open=function(...args){return open(...args);};
    Storage.prototype.setItem=function(k,v){if(__fault.all&&(k.startsWith('wos.outbox.fallback')))throw new DOMException('Injected full storage','QuotaExceededError');return set.call(this,k,v);};
   },{allFail,model,provider});
@@ -64,10 +65,12 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   return {ctx,p,state,wid,take,rows,done};
  }
  if(process.env.QA_PARITY_ONLY==='1'){await require('./qa-responsive-remainder.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}
+ if(process.env.QA_LOCAL_ONLY==='1'){await require('./qa-local-command-completion.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_RECOVERY_ONLY==='1'){await require('./qa-voice-recovery.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_EMPTY_ONLY==='1'){await require('./qa-empty-voice.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_DEADLINE_ONLY==='1'){await require('./qa-voice-deadline.cjs')({boot,ok,sleep,sid,model,provider});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_UPGRADE_ONLY==='1'){await require('./qa-voice-upgrade.cjs')({boot,ok,sleep,sid,model,provider});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
+ await require('./qa-local-command-completion.cjs')({boot,ok,sleep,sid,model,provider,out});
  await require('./qa-voice-upgrade.cjs')({boot,ok,sleep,sid,model,provider});
  await require('./qa-voice-recovery.cjs')({boot,ok,sleep,sid,model,provider,out});
  await require('./qa-voice-deadline.cjs')({boot,ok,sleep,sid,model,provider});
@@ -85,7 +88,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   ok((await f.rows()).find(x=>x.id===row.id)?.state==='failed','phone: interrupted pre-send take retained, not auto-sent');
   await f.done('phone seal');
  }
- // Actual routing paths: no staged audio deletion, including text-only and delayed then_agent.
+ // Actual routing paths: only a verified local action releases staged audio.
  for(const route of ['text-only','local','untrusted-frame','then_agent']){
   const f=await boot();
   await f.p.evaluate(()=>__wos.goDesk(0));
@@ -96,11 +99,10 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    await sleep(300);
   }
   if(route==='then_agent')f.state.cmd={route:'command',action:'open',app:'chats',then_agent:'follow up after opening'};
-  await f.take();await f.p.waitForFunction(()=>WosOutbox.unsent().some(x=>!['processing','preparing'].includes(x.state)),null,{timeout:12000});
+  await f.take();await f.p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>x.completion==='local')||WosOutbox.unsent().some(x=>!['processing','preparing'].includes(x.state)),null,{timeout:12000});
   const row=(await f.rows()).find(x=>x.kind!=='capture'&&x.state!=='sent');
-  ok(row?.blob>0,`phone ${route}: original retained without receipt`,row);
-  if(route==='local')ok(row?.state==='held'&&f.state.posts.length===0,`phone ${route}: explicit local outcome never queues an agent run`,row);
-  else ok(['waiting','queued','sending'].includes(row?.state),`phone ${route}: same staged owner passed to outbox`,row);
+  if(route==='local')ok(!row&&f.state.posts.length===0&&await f.p.evaluate(()=>[...WosOutbox._items.values()].some(x=>x.completion==='local'&&!x.audio)),`phone ${route}: explicit local completion releases audio without an agent run`,row);
+  else {ok(row?.blob>0,`phone ${route}: original retained without receipt`,row);ok(['waiting','queued','sending'].includes(row?.state),`phone ${route}: same staged owner passed to outbox`,row);}
   if(route==='untrusted-frame')ok(row?.kind==='new'&&row?.blob>0, 'self-asserted frame metadata cannot consume voice; original remains in general-route custody',row);
   await f.done('phone '+route);
  }

@@ -15,7 +15,7 @@
   // One authority check for explicit retry and automatic delivery. Terminal/ambiguous
   // custody is not a queue. Empty speech requires a per-recording choice, never bulk.
   function eligible(it, states) {
-    return !!it && !quarantine.has(it.id) && ['new', 'reply'].includes(it.kind) &&
+    return !!it && !localCompletions.has(it.id) && !it.localCompleted && !quarantine.has(it.id) && ['new', 'reply'].includes(it.kind) &&
       (it.intent !== 'command' || it.deliveryRequested === true) && it.steerDispatch !== 'started' && states.includes(it.state);
   }
   function queueRetry(it, states) {
@@ -114,9 +114,18 @@
     }
     emit(); return it;
   }
+  const localCompletions = new Set();
   function put(it) {
-    items.set(it.id, it); it.updatedAt = now();
-    return serial(it.id, () => persist(it));
+    const current = items.get(it.id);
+    if (current?.completion === 'local' && current !== it) return Promise.resolve(current);
+    if (!localCompletions.has(it.id)) items.set(it.id, it);
+    it.updatedAt = now();
+    return serial(it.id, () => {
+      const owner = items.get(it.id);
+      // A queued storage retry must never resurrect a locally completed take.
+      if (owner !== it) return owner || it;
+      return persist(it);
+    });
   }
   async function del(id) {
     const it = items.get(id); if (!it) return;
@@ -133,6 +142,33 @@
       items.set(id, marker); await put(marker);
     }
     emit();
+  }
+  // A successful on-device action is terminal custody, without an agent receipt
+  // or onSent notification. Never consume a sealed message or unrelated draft.
+  function localCompletable(it) {
+    return !!it && !quarantine.has(it.id) && ['new', 'reply', 'dictation'].includes(it.kind) &&
+      ['processing', 'held'].includes(it.state) && !it.deliveryRequested && !it.body && !it.steerBody &&
+      !it.steerDispatch && !it.runId && !it.parkedDraft && !String(it.typed || '').trim() &&
+      !(it.files || []).some(f => f.id !== it.audioFile?.id);
+  }
+  async function completeLocal(id) {
+    const it = items.get(id);
+    if (!localCompletable(it) || localCompletions.has(id)) return false;
+    localCompletions.add(id);
+    // Persist a terminal marker before releasing any bytes. A quota/IDB failure
+    // keeps the original owner, and never authorizes native acknowledgement.
+    const marker = { id, state: 'sent', completion: 'local', compact: true,
+      sentAt: now(), updatedAt: now(), createdAt: it.createdAt, sealKey: it.sealKey,
+      nativeId: it.nativeId, nativeIds: it.nativeIds, meetingEventId: it.meetingEventId };
+    try {
+      return await serial(id, async () => {
+        if (items.get(id) !== it || !localCompletable(it)) return false;
+        await persist(marker);
+        if (marker.durable) { items.set(id, marker); emit(); schedule(); return true; }
+        Object.assign(it, { state: 'held', localCompleted: true, error: 'Command completed · device cleanup failed; recording kept' });
+        await persist(it); schedule(); return false;
+      });
+    } finally { localCompletions.delete(id); }
   }
   function recover(it, durable = true) {
     // Upgrade pre-flag explicit sends without granting held commands delivery intent.
@@ -185,6 +221,12 @@
         let safe = true;
         for (const x of C.outbox) { if (!items.has(x.id)) recover(decode(x), false); const it = items.get(x.id); if (!(await put(it)).durable) safe = false; }
         if (safe) { window.WosCarry = null; try { C.done(); } catch (_) {} }
+      }
+      // Only this version's explicit completion receipt qualifies. Old generic
+      // 'handled' labels also covered pending music/app work, so keep those.
+      for (const it of [...items.values()]) {
+        if (recovered && it.completion === 'local') await put(it); // move fallback receipts into the available primary store
+        else if (it.state === 'held' && it.localCompleted) await completeLocal(it.id);
       }
       emit(); schedule();
     })().finally(() => { if (!recovered) ready = null; });
@@ -452,7 +494,7 @@
       if (prior?.captureWrite) await prior.captureWrite;
       const existing = o.nativeId && api.nativeItem(o.nativeId);
       if (existing && existing !== prior) return existing;
-      if (prior && (quarantine.has(prior.id) || prior.state === 'sent' || prior.body || prior.steerBody)) return prior;
+      if (prior && (localCompletions.has(prior.id) || prior.localCompleted || quarantine.has(prior.id) || prior.state === 'sent' || prior.body || prior.steerBody)) return prior;
       const it = make(o); if (prior) { it.id = prior.id; it.createdAt = prior.createdAt; it.nativeId ||= prior.nativeId; it.nativeIds = [...new Set([...(prior.nativeIds || []), prior.nativeId, ...it.nativeIds].filter(Boolean))]; }
       // Parking is held at its first durable boundary, even before transition.
       it.state = it.parkedDraft ? 'held' : 'processing'; await put(it); schedule(); return it;
@@ -473,10 +515,11 @@
     async protect(id) { const it = items.get(id); if (it) await keepAudio(it); return it; },
     // Callers must await this instead of mutating a recovered item only in RAM.
     async transition(id, state, error = '') {
-      const it = items.get(id); if (!it || quarantine.has(id) || it.steerDispatch === 'started' || it.state === 'sent') return it;
+      const it = items.get(id); if (!it || localCompletions.has(id) || quarantine.has(id) || it.steerDispatch === 'started' || it.state === 'sent') return it;
       if (!['empty', 'held', 'failed'].includes(state)) throw new Error('Invalid custody transition');
       Object.assign(it, { state, error, nextAt: 0 }); await put(it); schedule(); return it;
     },
+    completeLocal,
     get recoveryComplete() { return recovered; },
     quarantined(id) { return quarantine.has(id); },
     ownsSeal(key) { return [...items.values()].some(it => it.sealKey === key); },
@@ -494,7 +537,7 @@
       const held = (o.custodyId && items.get(o.custodyId)) || (o.nativeId && api.nativeItem(o.nativeId));
       const it = held || make({ ...o, agent, ...(snapshot || {}) });
       if (held) {
-        if (held.state === 'sent' || held.body || held.steerBody || quarantine.has(held.id)) return held;
+        if (localCompletions.has(held.id) || held.localCompleted || held.state === 'sent' || held.body || held.steerBody || quarantine.has(held.id)) return held;
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
         Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid });

@@ -117,5 +117,11 @@
    if (/open|launch|app/.test(a)) { const app = H.findApp(c.app || c.target); return app ? !!H.openApp(app) : false; }
    return H.layout(c, text);
  }
- window.WosCommands = { create, execute };
+ // These handlers finish synchronous shell navigation before returning. Music,
+ // purchases, searches and app voice handoffs may only acknowledge acceptance.
+ function completedLocally(c, ok) {
+   return !!ok && !c?.then_agent && ['open_app','open','launch','app','open_view','view','show',
+     'chats_filter','chats_search','desk','clear_desk','close_window','fullscreen','move_window'].includes(c?.action);
+ }
+ window.WosCommands = { create, execute, completedLocally };
 })();
