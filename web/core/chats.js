@@ -1064,6 +1064,13 @@ window.WizCore.chats = function createChats(H) {
   let lp = null, lpUntil = 0;
   // Long-press / swipe / right-click on rows, and paste-to-attach; bound to each shell's root in bind().
   function bindGestures(root) {
+    // Opinionated (phone): swipe right from the left edge of a thread to go back to the list.
+    if (document.documentElement.dataset.shell !== 'desktop') {
+      let sw = null;
+      root.addEventListener('touchstart', e => { const th = e.target.closest?.('.ch-thread'); const t0 = e.touches[0]; if (!th || e.touches.length !== 1 || t0.clientX > 40) { sw = null; return; } sw = { x: t0.clientX, y: t0.clientY, th }; }, { passive: true });
+      root.addEventListener('touchend', e => { if (!sw) return; const t1 = e.changedTouches[0], dx = t1.clientX - sw.x, dy = Math.abs(t1.clientY - sw.y); const s = sw; sw = null;
+        if (dx > 70 && dy < 50) { const w = W[idOf(s.th)]; if (w) threadBack(w); } }, { passive: true });
+    }
     root.addEventListener('touchstart', e => {
       const node = e.target.closest?.('.ch-msgs, .ch-scroll'); if (!node) return;
       const g = readGuard(node); g.at = Date.now();
