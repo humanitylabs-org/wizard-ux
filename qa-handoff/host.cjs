@@ -20,8 +20,8 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
  await f.context.route('**/mizel-live/orb-events**',async r=>{try{if(r.request().method()==='PUT'){const event=store.upsert(r.request().postDataJSON());return r.fulfill({json:{event}});}return r.fulfill({json:{events:store.list(new URL(r.request().url()).searchParams.get('meetingId'))}});}catch(e){console.error('EVENT REJECT',e.message,r.request().postData());return r.fulfill({status:409,json:{error:e.message}});}});
  for(const focused of [false,true]) await test('idle held command borrows active meeting and resumes before STT without agent send; field focused='+focused,async()=>{
    await p.evaluate(async()=>{await WosModels.load();window.meeting=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:500,meta:{meetingId:'idle-held-command'}});});
-   let inputFrame;
-   if(focused){await p.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['qa-iching']));await p.waitForTimeout(400);inputFrame=p.frames().find(x=>x.url().includes('/qa-iching/'));await select(inputFrame);}
+   let inputFrame,originalField;
+   if(focused){await p.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['qa-iching']));await p.waitForTimeout(400);inputFrame=p.frames().find(x=>x.url().includes('/qa-iching/'));await select(inputFrame);originalField=await inputFrame.locator('#a').inputValue();}
    await p.waitForTimeout(650);f.R.words='open settings';f.R.delay=2200;
    const touch=await f.context.newCDPSession(p),b=await p.locator('#orbWrap').boundingBox();
    await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:b.x+b.width/2,y:b.y+b.height/2,id:9}]});await p.waitForTimeout(1000);
@@ -35,7 +35,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
    await p.waitForFunction(()=>__wos.voice==='idle',null,{timeout:7000});
    assert.equal(await p.evaluate(()=>document.querySelector('#settings').classList.contains('open')),true);
    assert.equal(f.writes.filter(w=>/\/v1\/runs$/.test(w.path)).length,0);
-   if(focused)assert.equal(await inputFrame.locator('#a').inputValue(),'one two three','command must not overwrite the focused field');
+   if(focused)assert.equal(await inputFrame.locator('#a').inputValue(),originalField,'command must not overwrite the focused field');
    await p.evaluate(async()=>{__wos.closeSheets(true);await meeting.stop();});f.R.words='spoken words';f.R.delay=0;
    if(focused)await inputFrame.locator('#away').click();
  });
