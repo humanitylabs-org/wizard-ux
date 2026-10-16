@@ -132,15 +132,43 @@ window.WosChatPower = function chatPower(A) {
     const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
     return `<button type="button" class="ch-model${ag ? ' agent' : ''}" data-chmodel aria-label="Model: ${esc(full)}. Change model" title="${esc(cur?.model || '')}">${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
+  /* Opinionated (phone): a three-position slide switch (Opus · Astra · Sol) at the bottom, drag or tap; ⋯ opens every model. */
+  const SW_NAMES = ['Opus', 'Astra', 'Sol'];
+  function switchOpts(w, s) {
+    const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
+    const vis = M && M.ready ? M.visible(cur?.model || '', cur?.provider || '') : [];
+    const opts = SW_NAMES.map(n => vis.find(o => M.short(o.value, o.provider) === n) || null);
+    const at = cur?.model ? opts.findIndex(o => o && o.value === cur.model) : -1;
+    return { opts, at };
+  }
+  function modelSwitch(w, s) {
+    if (!M || agentOfWin(w, s)) return modelChip(w, s);
+    const { opts, at } = switchOpts(w, s);
+    const label = at < 0 ? (s ? M.short(threadModel(s).model, threadModel(s).provider) || 'Model' : 'Default') : '';
+    return `<div class="ms" data-mswid="${esc(w.id)}" style="--ms-i:${at < 0 ? 1 : at}"><div class="ms-track${at < 0 ? ' off' : ''}" role="radiogroup" aria-label="Model">${SW_NAMES.map((n, i) => `<button type="button" role="radio" class="ms-o${i === at ? ' on' : ''}" data-msi="${i}" aria-checked="${i === at}"${opts[i] ? '' : ' disabled'}>${n}</button>`).join('')}<i class="ms-thumb" aria-hidden="true"></i></div><button type="button" class="ms-more" data-chmodel aria-label="All models${label ? ` · now ${esc(label)}` : ''}">${label ? `<small>${esc(label)}</small>` : ''}⋯</button></div>`;
+  }
+  async function switchTo(wid, i) {
+    const w = H.win(wid); if (!w?.thread) return;
+    const s = w.thread === '__new__' ? null : LIVE.session(w.thread);
+    const o = switchOpts(w, s).opts[i]; if (!o) return;
+    await pickModel(o, { wid, sid: w.thread, mode: w.thread === '__new__' ? 'new' : 'thread' });
+  }
+  (() => { // drag the thumb, or tap a position
+    let drag = null;
+    document.addEventListener('pointerdown', e => { const tr = e.target.closest?.('.ms-track'); if (!tr) return; const r = tr.getBoundingClientRect(); drag = { tr, r, wid: tr.parentElement.dataset.mswid, moved: false, x0: e.clientX }; tr.setPointerCapture?.(e.pointerId); });
+    document.addEventListener('pointermove', e => { if (!drag) return; if (Math.abs(e.clientX - drag.x0) > 6) drag.moved = true; if (!drag.moved) return; const f = Math.max(0, Math.min(1, (e.clientX - drag.r.left) / drag.r.width)); drag.tr.parentElement.style.setProperty('--ms-i', (f * 3 - .5).toFixed(3)); drag.tr.classList.add('dragging'); });
+    const end = e => { if (!drag) return; const d = drag; drag = null; d.tr.classList.remove('dragging'); const f = Math.max(0, Math.min(.999, (e.clientX - d.r.left) / d.r.width)); const i = Math.floor(f * 3); d.tr.parentElement.style.setProperty('--ms-i', i); switchTo(d.wid, i); };
+    document.addEventListener('pointerup', end); document.addEventListener('pointercancel', () => { if (drag) { drag.tr.classList.remove('dragging'); drag = null; } });
+  })();
   let modelsAsked = false;
   function ensureModels() {
     if (!M || modelsAsked) return;
     modelsAsked = true;
     M.load().then(() => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } }); // background: waits for a selection
   }
-  async function pickModel(o) {
-    const sh = sheet; if (!sh || sh.type !== 'model') return;
-    const c = ch(sh.wid), w = H.win(sh.wid); closeSheet();
+  async function pickModel(o, direct) {
+    const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model')) return;
+    const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     const cur = threadModel(s);
@@ -380,6 +408,6 @@ window.WosChatPower = function chatPower(A) {
   }
   const opened = (wid, sid) => { const c = ch(wid); c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
-  return { position, latestBtn, filesBtn, workHtml, modelChip, ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  return { position, latestBtn, filesBtn, workHtml, modelChip, modelSwitch, ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };
