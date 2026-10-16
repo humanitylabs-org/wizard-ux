@@ -7,7 +7,7 @@ const request=async(path,options={})=>{const r=await fetch(path,{cache:'no-store
 const put=value=>({method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(value)});
 const config=await request('./api/config');
 if(config.local){
- document.title='Outline · Local trial';document.querySelector('.eyebrow').textContent='Local Nemotron trial';
+ document.title='Outline · Local trial';document.querySelector('h1').textContent='Outline · Nemotron trial';document.querySelector('.eyebrow').textContent='Local Mac CPU · no cloud';
  $('provider-note').textContent='Private trial · Wizard’s shared microphone → local Nemotron on the Mac. Raw words, no cloud transcription or rewriting. Keep this tab open. Start a new bullet before 9 minutes 50 seconds per thought; takes stop at 15 minutes. Audio is retained until verified.';
  $('trial-note').hidden=false;$('trial-note').textContent='Parakeet is withheld: its buffered trial omitted the ending of a long note on both hosts. Nemotron kept the tested ending and Apple reference, but can miss words (including an opening “Do”). Review the original audio; this is not a perfect-accuracy claim. Your installed Outline, Orb and daily voice provider are unchanged.';
 }
