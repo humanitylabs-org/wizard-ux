@@ -1,0 +1,13 @@
+services:
+  outline-streaming-demo:
+    image: caddy:2.10.2-alpine
+    command: ["caddy", "reverse-proxy", "--from", "http://:8799", "--to", "${OUTLINE_TRIAL_UPSTREAM}"]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp, /config, /data]
+    ports: ["127.0.0.1:${APP_PORT}:8799"]
+    x-runtipi:
+      is_main: true
+      internal_port: 8799

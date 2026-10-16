@@ -1,0 +1,244 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Outline API",
+    "version": "0.1.0",
+    "description": "Single-owner loopback service; authenticated private gateway required for remote use. WebSocket /api/live accepts begin {id,target,seq}, mono 16kHz PCM binary frames, then end {id}. Server emits connected, ready, delta, final, error with immutable utterance identity. Only real configured Tinfoil voxtral-mini-4b-realtime is accepted."
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Service health and real provider configuration",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        }
+      }
+    },
+    "/api/document": {
+      "get": {
+        "summary": "Read or revision-check replace the owner outline",
+        "responses": {
+          "200": {
+            "description": "Durable result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionDocument"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        }
+      },
+      "put": {
+        "summary": "Read or revision-check replace the owner outline",
+        "responses": {
+          "200": {
+            "description": "Durable result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionDocument"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionDocument"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/speech": {
+      "get": {
+        "summary": "Recover durable verbatim speech events",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        },
+        "description": "Persisted provider events with id, target, seq, text, and status (draft/final); drafts are not authoritative final text."
+      }
+    },
+    "/api/audio": {
+      "get": {
+        "summary": "List saved original recording takes",
+        "responses": {"200": {"description": "Object with takes: [{id, bytes, chunks: [{seq, bytes}], createdAt}]. Uploaded audio is not evidence of a recovered transcript."}}
+      }
+    },
+    "/api/audio/{take}/wav": {
+      "parameters": [{"name":"take","in":"path","required":true,"schema":{"type":"string","pattern":"^[A-Za-z0-9_-]{1,128}$"}}],
+      "get": {
+        "summary": "Play or download the combined original PCM WAV",
+        "responses": {"200":{"description":"Original take audio","content":{"audio/wav":{"schema":{"type":"string","format":"binary"}}}},"404":{"description":"Take not found"}}
+      }
+    },
+    "/api/audio/{take}/{seq}": {
+      "get": {
+        "summary": "Immutable audio upload and hash/byte-count readback",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        }
+      },
+      "put": {
+        "summary": "Immutable audio upload and hash/byte-count readback",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "audio/wav": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "take",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$"
+          }
+        },
+        {
+          "name": "seq",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999999
+          }
+        }
+      ]
+    },
+    "/mcp": {
+      "post": {
+        "summary": "Streamable HTTP MCP tools",
+        "responses": {
+          "200": {
+            "description": "Durable result"
+          },
+          "409": {
+            "description": "Revision or immutable chunk conflict"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Bullet": {
+        "type": "object",
+        "required": [
+          "id",
+          "parent",
+          "text",
+          "folded"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "parent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "folded": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Document": {
+        "type": "object",
+        "required": [
+          "title",
+          "nodes",
+          "applied"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "nodes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5000,
+            "items": {
+              "$ref": "#/components/schemas/Bullet"
+            }
+          },
+          "applied": {
+            "type": "array",
+            "maxItems": 50000,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RevisionDocument": {
+        "type": "object",
+        "required": [
+          "rev",
+          "document"
+        ],
+        "properties": {
+          "rev": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "document": {
+            "$ref": "#/components/schemas/Document"
+          }
+        }
+      }
+    }
+  }
+}

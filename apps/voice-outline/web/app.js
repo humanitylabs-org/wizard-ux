@@ -92,7 +92,14 @@ async function recover(){try{const pending=await W.capture.pending();for(const r
 async function startLive(){
  if(starting||stopping)return;starting=true;$('live').disabled=true;$('live').textContent='Starting…';let prepared;
  try{
-  if(!W.capture.capabilities({kind:'outline',pcm:true}).pcm)throw new Error('Live PCM is unavailable in this recorder. Use the browser preview; no meeting will be created.');
+  if(!W.capture.capabilities({kind:'outline',pcm:true}).pcm){
+   if(config.local&&!W.hosted){
+    note('This link is not connected to Wizard’s shared microphone. ');
+    const entry=document.createElement('a');entry.href='/wizard-os-home/?open=outline-streaming-demo';entry.target='_top';entry.textContent='Open Outline voice trial in Wizard';$('notice').append(entry);
+    return;
+   }
+   throw new Error('This recorder does not support live PCM. No recording or meeting was started.');
+  }
   prepared=W.capture.prepare({kind:'outline',pcm:true});
   if((await W.capture.pending()).length)throw new Error('Retained audio needs recovery first. Open the menu → Recover.');
   const health=await request('./healthz');if(!health.liveReady)throw new Error(config.local?'Local Nemotron is unavailable. No fallback is enabled; try again when the Mac is ready.':'Tinfoil is not configured on this preview.');
