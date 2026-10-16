@@ -494,10 +494,37 @@ html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scrol
 .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
 /* Opinionated (phone): thread title + Back sit at the bottom, under the composer, within thumb reach. */
 html:not([data-shell="desktop"]) .ch-thread { display: flex; flex-direction: column; }
-html:not([data-shell="desktop"]) .ch-thread > .ch-head { order: 9; border-bottom: 0; border-top: 1px solid var(--line); padding-bottom: calc(6px + var(--safe-b, 0px)); }
 /* The orb is the voice button: no second mic in the composer. Start typing and the orb steps aside for Send. */
 html:not([data-shell="desktop"]) .ch-compose:not(.has-text) .ch-mic:not(.on) { display: none; }
 html:not([data-shell="desktop"]) .device:has(.ch-compose.has-text) .dock { opacity: 0; pointer-events: none; transform: translateY(40%); }
 /* Archive: a slim collapsed row pinned under the search bar; the live list hugs the bottom. */
-html:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--ink) 6%, var(--bg)); border-radius: 12px; margin-bottom: auto; }
+html:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--ink) 6%, var(--bg)); border-radius: 12px; }
 html:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"]:not(.open) .ch-sec-h { min-height: 34px; padding-top: 6px; padding-bottom: 6px; opacity: .8; }
+
+/* Phone v3: Archive then Working pinned at the top; Ready alone at the bottom, under the thumb. */
+html:not([data-shell="desktop"]) .ch-list .ch-scroll { flex-direction: column; }
+html:not([data-shell="desktop"]) .ch-list .ch-sec { order: 1; flex-direction: column; }
+html:not([data-shell="desktop"]) .ch-list .ch-sec:not([data-sec="ready"]) .ch-sec-b { flex-direction: column; }
+html:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { order: 0; }
+html:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { order: 2; margin-top: auto; flex-direction: column-reverse; }
+html:not([data-shell="desktop"]) .ch-list .ch-sec + .ch-sec { border-bottom: 0; }
+html:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { border-top: 1px solid var(--line); }
+/* Phone thread: title on top; Back + model switch in a bar above the composer; the orb sits where the mic was. */
+html:not([data-shell="desktop"]) .ch-head .ch-back, html:not([data-shell="desktop"]) .ch-head .ch-model { display: none; }
+html:not([data-shell="desktop"]) .ch-head { padding-left: 14px; }
+.ch-bbar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 6px 10px 0; }
+.ch-back2 { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; border: 1px solid var(--line-2); }
+.ch-back2 svg { width: 20px; height: 20px; fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.ms { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; --ms-i: 1; }
+.ms-track { position: relative; flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); height: 40px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--glass); touch-action: none; user-select: none; }
+.ms-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 3); border-radius: 9px; background: var(--ink); transform: translateX(calc(var(--ms-i) * 100%)); transition: transform 220ms var(--spring); pointer-events: none; }
+.ms-track.dragging .ms-thumb { transition: none; }
+.ms-track.off .ms-thumb { opacity: 0; }
+.ms-o { position: relative; z-index: 1; font-size: 13.5px; font-weight: 700; color: var(--ink-2); transition: color 200ms; }
+.ms-o.on { color: var(--bg); }
+.ms-o:disabled { opacity: .35; }
+.ms-more { flex: 0 0 auto; height: 40px; min-width: 40px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--line-2); color: var(--ink-2); font-weight: 800; display: flex; align-items: center; gap: 6px; }
+.ms-more small { font-size: 11.5px; font-weight: 650; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#device.orb-lift { --corner-b: 9px; }
+#device.orb-corner .win.full .ch-compose:not(.has-text) { padding-right: calc(var(--corner-orb) + var(--corner-r) + 8px); }
+#device.orb-corner .win.full .ch-compose.has-text { padding-right: 10px; }
