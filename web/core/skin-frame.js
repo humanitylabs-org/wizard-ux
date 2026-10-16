@@ -3,9 +3,9 @@
   'use strict';
   const foundations = Object.freeze({
     framed: Object.freeze({ foundation: 'framed' }),
-    borderless: Object.freeze({ foundation: 'borderless', border: 0, radius: 0, gutter: 16, gap: 8 }),
+    borderless: Object.freeze({ foundation: 'borderless', border: 0, radius: 0, gutter: 0, padding: 16, gap: 8 }),
   });
-  const bounds = { border: [0, 2], radius: [0, 28], gutter: [0, 16], gap: [4, 16] };
+  const bounds = { border: [0, 2], radius: [0, 28], gutter: [0, 16], padding: [0, 32], gap: [4, 16] };
   const object = (o, field) => { if (!o || typeof o !== 'object' || Array.isArray(o) || ![Object.prototype, null].includes(Object.getPrototypeOf(o))) throw new Error(`${field}: expected an object`); };
   function frame(value = {}) {
     object(value, 'frame');

@@ -4,13 +4,13 @@
   document.documentElement.classList.add('sf-preview');
   // Update the previous preview's materialized built-in defaults, once. Keep
   // explicit Standard choices and imported custom compositions unchanged.
-  const S = window.WosSkin, key = 'wos.frame-preview-spacing.v1';
+  const S = window.WosSkin, key = 'wos.frame-preview-padding.v2';
   try {
     if (!localStorage.getItem(key)) {
-      const f = S?.composition?.frame;
-      if (f?.foundation === 'borderless' && f.border === 0 && f.radius === 0 && f.gutter === 0 && f.gap === 8)
+      const f = JSON.parse(localStorage.getItem('wos.skin.composition.v1') || 'null')?.frame;
+      if (f?.foundation === 'borderless' && f.border === 0 && f.radius === 0 && [0, 16].includes(f.gutter) && f.padding === undefined && f.gap === 8)
         S.setFoundation('borderless');
       localStorage.setItem(key, '1');
     }
-  } catch (_) { /* Storage denied: fresh foundation still has comfortable margins. */ }
+  } catch (_) { /* Storage denied: fresh foundation still has internal padding. */ }
 })();
