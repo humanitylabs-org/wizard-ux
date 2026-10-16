@@ -42,6 +42,15 @@ module.exports=async({boot,ok,sleep,sid,model,provider})=>{
   ok(await f.p.evaluate(id=>WosOutbox.get(id)?.completion==='local'&&!WosOutbox.get(id)?.audio,failure.id),label+': saved local receipt completes cleanup when storage returns');
   await f.done(label+' local upgrade');
  }
+ {
+  const f=await boot();f.state.text='zoom in';f.state.cmd={route:'command',action:'zoom',dir:'in'};
+  await f.p.evaluate(()=>{__wos.goDesk(0);__wos.execute({action:'zoom',dir:'in'},'zoom in');const timeout=window.setTimeout;window.setTimeout=(fn,ms,...args)=>{if(ms===200&&String(fn).includes('zoomOut')){window.__deferredZoom=fn;return 0;}return timeout(fn,ms,...args);};});
+  await f.take();await f.p.waitForFunction(()=>window.__deferredZoom&&WosOutbox.unsent().some(x=>x.state==='held'));
+  ok(await f.p.evaluate(()=>!WosCommands.completedLocally({action:'zoom'},true)&&WosOutbox.unsent().some(x=>x.state==='held'&&x.audio?.size>0))&&f.state.posts.length===0,'phone deferred zoom: keeps recording until actual command completion');
+  await f.p.reload();await f.p.waitForFunction(()=>WosOutbox?.recoveryComplete);
+  ok(await f.p.evaluate(()=>WosOutbox.unsent().some(x=>x.state==='held'&&x.audio?.size>0)),'phone deferred zoom: reload before callback retains original');
+  await f.done('phone deferred zoom');
+ }
  for(const desktop of [false,true]){
   const label=desktop?'desktop':'phone',f=await boot(desktop);f.state.text='pause music';f.state.cmd={route:'command',action:'music',cmd:{op:'pause'}};
   await f.p.evaluate(()=>{WosMusic.available=()=>true;WosMusic.parse=()=>({op:'pause',strong:true});WosMusic.run=()=>{window.__musicAccepted=true;return true;};});
