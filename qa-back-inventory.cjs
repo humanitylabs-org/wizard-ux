@@ -1,0 +1,33 @@
+// Effective inventory discovery and explicit nested Back probes. No production mutations.
+const fs=require('fs'),path=require('path'),crypto=require('crypto');const {chromium}=require(process.env.PW||'playwright');
+const BASE=process.env.QA_ORIGIN,OUT=process.env.QA_OUT;if(!BASE||!OUT)throw Error('Set QA_ORIGIN, QA_OUT');fs.mkdirSync(OUT,{recursive:true});
+const only=process.argv.slice(2),specs=process.env.QA_SPECS?JSON.parse(fs.readFileSync(process.env.QA_SPECS)):{};
+(async()=>{const b=await chromium.launch({executablePath:process.env.QA_CHROME});let inventory;
+const ctx=await b.newContext({viewport:{width:412,height:892},isMobile:true,hasTouch:true,serviceWorkers:'block'});await ctx.addInitScript(()=>{try{if(window===top)localStorage.clear();localStorage.setItem('wos.coached','true')}catch{}});
+let writes=[],assets=[];
+await ctx.route('**/*',r=>{const q=r.request(),u=new URL(q.url());if(!['GET','HEAD'].includes(q.method())){writes.push({method:q.method(),path:u.pathname});return r.fulfill({status:403,contentType:'application/json',body:'{}'})}if(u.searchParams.get('build')==='1')return r.abort();if(u.pathname==='/wizard-os-home/core/app-client.js'&&process.env.QA_UX)return r.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(process.env.QA_UX,'web/core/app-client.js'))});if(u.pathname==='/wisdom/wisdom.js'&&process.env.QA_WISDOM)return r.fulfill({contentType:'application/javascript',body:fs.readFileSync(path.join(process.env.QA_WISDOM,'static/wisdom.js'))});return r.continue()});
+const p=await ctx.newPage();p.setDefaultTimeout(10000);p.setDefaultNavigationTimeout(30000);
+p.on('response',async r=>{try{if(/\.js(?:\?|$)/.test(r.url())&&!r.url().includes('/wizard-os-home/')){const text=await r.text();assets.push({url:r.url(),sha256:crypto.createHash('sha256').update(text).digest('hex'),sharedBack:text.includes('WizardApp.back'),useHistory:text.includes('back.useHistory'),legacyHook:text.includes('__wizardCloseOverlay')});}}catch{}});
+await p.goto(BASE+'/wizard-os-home/');await p.waitForFunction(()=>window.__wos&&window.WizCore);await p.evaluate(()=>WizCore.appsLoaded());inventory=await p.evaluate(()=>({api:fetch('/wizard/v1/apps').then(r=>r.json()),effective:WizCore.apps('mobile').APPS.map(({id,name,url,kind})=>({id,name,url,kind}))}));inventory.api=await p.evaluate(()=>fetch('/wizard/v1/apps').then(r=>r.json()));fs.writeFileSync(path.join(OUT,'effective-inventory.json'),JSON.stringify(inventory,null,2));
+const apps=inventory.effective.filter(a=>!only.length||only.includes(a.id));
+for(const a of apps){writes=[];assets=[];const row={...a,actualURL:null,contract:null,opener:null,status:'coverage-gap',gap:'No explicit nested opener exercised'};try{
+await p.goto(BASE+'/wizard-os-home/?open='+encodeURIComponent(a.id),{waitUntil:'domcontentloaded'});await p.waitForFunction(()=>window.__wos&&window.WizCore);await p.evaluate(()=>WizCore.appsLoaded());await p.waitForTimeout(1800);
+row.shell=await p.evaluate(()=>{const d=__wos.desks[__wos.idx],w=__wos.wins[d.focus];return{idx:__wos.idx,focus:d.focus,appId:w?.appId||w?.app,full:d.full}});
+if(!a.url||a.kind==='native'){row.gap='Native/builtin surface: requires dedicated nested opener';continue}
+const el=p.locator('.win[data-win="'+row.shell.focus+'"] iframe');const f=await (await el.elementHandle())?.contentFrame();if(!f){row.gap='Canonical link produced no iframe';continue}
+await f.waitForLoadState('domcontentloaded').catch(()=>{});await p.waitForTimeout(1200);
+const state=()=>f.evaluate(()=>{const visible=e=>!!(e.getBoundingClientRect().width&&e.getBoundingClientRect().height)&&getComputedStyle(e).visibility!=='hidden';return{url:location.href,heading:[...document.querySelectorAll('h1,h2')].filter(visible).map(x=>x.textContent),dialogs:[...document.querySelectorAll('[role="dialog"],[aria-modal="true"],dialog[open]')].filter(visible).map(x=>x.getAttribute('aria-label')||x.className),text:document.body.innerText.slice(0,1600),controls:[...document.querySelectorAll('a,button,[role="button"],.card,[data-id]')].filter(visible).slice(0,55).map(x=>({tag:x.tagName,text:(x.getAttribute('aria-label')||x.innerText).trim().slice(0,100),href:x.getAttribute('href'),cls:x.className,html:x.outerHTML.slice(0,320)})),contract:{shared:!!window.WizardApp,hosted:window.WizardApp?.hosted,legacy:typeof window.__wizardCloseOverlay==='function'}}});
+row.before=await state();row.actualURL=row.before.url;row.contract=row.before.contract;
+const spec=specs[a.id];if(!spec)continue;
+for(const selector of spec.open){await f.locator(selector).first().tap();await p.waitForTimeout(500)}
+if(spec.nested)await f.locator(spec.nested).first().waitFor({state:'visible'});
+row.opener=spec.open;row.nested=await state();await p.screenshot({path:path.join(OUT,a.id+'-nested.png')});
+const beforeShell=await p.evaluate(()=>({idx:__wos.idx,focus:__wos.desks[__wos.idx].focus,full:__wos.desks[__wos.idx].full}));
+await p.evaluate(()=>__wos.onBack());await p.waitForTimeout(1300);row.after=await state();row.afterShell=await p.evaluate(()=>({idx:__wos.idx,focus:__wos.desks[__wos.idx].focus,full:__wos.desks[__wos.idx].full,log:window.__backLog}));
+let returned=true;if(spec.returned)returned=await f.locator(spec.returned).first().isVisible();if(spec.closed)returned=returned&&!(await f.locator(spec.closed).first().isVisible());
+const changed=row.nested.url!==row.after.url||JSON.stringify(row.nested.dialogs)!==JSON.stringify(row.after.dialogs)||row.nested.text!==row.after.text;
+row.status=returned&&changed&&beforeShell.idx===row.afterShell.idx&&beforeShell.focus===row.afterShell.focus&&beforeShell.full===row.afterShell.full?'nested-pass':'nested-fail';row.gap=null;
+await p.waitForTimeout(1400);row.delayedShell=await p.evaluate(()=>({idx:__wos.idx,focus:__wos.desks[__wos.idx].focus}));if(row.delayedShell.idx!==beforeShell.idx||row.delayedShell.focus!==beforeShell.focus)row.status='nested-fail';
+await p.screenshot({path:path.join(OUT,a.id+'-back.png')});
+}catch(e){row.gap=String(e);row.status=row.opener?'nested-fail':'coverage-gap'}finally{row.assets=assets;row.blockedWrites=writes;fs.writeFileSync(path.join(OUT,a.id+'.json'),JSON.stringify(row,null,2));console.log(a.id,row.status,row.gap||'')}}
+await b.close();})().catch(e=>{console.error(e);process.exit(2)});
