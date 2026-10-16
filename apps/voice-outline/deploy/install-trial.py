@@ -76,7 +76,7 @@ try:
         raise RuntimeError('Owner override readback mismatch')
     original_resolve = cli.resolve_any
     cli.resolve_any = lambda c, ref: record if ref == 'outline-streaming-demo' else original_resolve(c, ref)
-    result = cli.install(c, 'outline-streaming-demo', {'OUTLINE_TRIAL_UPSTREAM': a.upstream}, wait=False)
+    result = cli.install(c, 'outline-streaming-demo', {'OUTLINE_TRIAL_UPSTREAM': upstream.netloc}, wait=False)
     if result.get('status') == 'already installed':
         result = {'id': 'outline-streaming-demo', 'operation': 'update',
                   'result': rt.req('PATCH', '/app-lifecycle/'+urn+'/update', {'performBackup': False})}
