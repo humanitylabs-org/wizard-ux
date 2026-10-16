@@ -1,7 +1,8 @@
-"""Credential-free launchd entrypoint. Config/data/logs stay outside pinned source.
+"""Credential-free foreground service. Config/data stay outside pinned source.
 
 Usage: python3 local-service.py /absolute/private/config.json web|adapter
-Launchd owns both processes; do not source a production provider environment.
+Own each process via a systemd SSH -tt service (PTY hangup kills the remote
+foreground process). Do not source a production provider environment.
 """
 import json
 import os
@@ -27,6 +28,8 @@ if role == 'web':
     os.chdir(config['source'])
     os.execve(config['node'], [config['node'], 'server.mjs'], env)
 elif role == 'adapter':
+    if (root/'runtime/adapter-paused').exists():
+        raise SystemExit('Adapter paused for isolated outage acceptance')
     env.update(OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='4', HF_HUB_OFFLINE='1')
     argv = [config['python'], config['adapter'], '--model', 'nemotron',
             '--model-dir', config['model_dir'], '--threads', '4',

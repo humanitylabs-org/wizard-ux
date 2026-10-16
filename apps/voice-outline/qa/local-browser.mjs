@@ -1,7 +1,7 @@
 // Bounded browser acceptance, not a benchmark. Chrome file -> real shared microphone
 // capture -> real local adapter. Never inject transcripts or replace capture/ASR.
 import {createRequire} from 'node:module';
-import {mkdirSync,writeFileSync} from 'node:fs';
+import {mkdirSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import assert from 'node:assert/strict';
@@ -11,7 +11,7 @@ assert(out&&process.env.QA_SPEECH&&process.env.QA_SILENCE);mkdirSync(out,{recurs
 const receipt={kind:'chrome-microphone-shared-capture-real-local-nemotron',url:base,started:new Date().toISOString(),checks:[],errors:[],events:[],requests:[],audio:[]};
 const hash=b=>createHash('sha256').update(b).digest('hex');
 let browser,page,adapterStopped=false;
-const plist=process.env.QA_ADAPTER_PLIST,domain=`gui/${process.getuid()}`;
+const adapterRoot=process.env.QA_ADAPTER_ROOT;
 async function launch(file){
  browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',`--use-file-for-fake-audio-capture=${file}`]});
  const context=await browser.newContext({viewport:{width:393,height:852},permissions:['microphone'],colorScheme:'dark'});page=await context.newPage();
@@ -46,15 +46,17 @@ try{
  await page.screenshot({path:out+'/phone-final.png',fullPage:true});await page.setViewportSize({width:1280,height:900});await page.screenshot({path:out+'/desktop-final.png',fullPage:true});
  await page.locator('#menu').click();assert.match(await page.locator('#trial-note').textContent(),/Parakeet is withheld/);await page.screenshot({path:out+'/model-note.png',fullPage:true});await browser.close();
  await launch(process.env.QA_SILENCE);await page.locator('#new').click();await page.keyboard.press('Escape');const silent=await page.locator('.selected').getAttribute('data-id');await live();await page.waitForTimeout(2500);await stop();const silentSpeech=(await get('/api/speech')).utterances.find(u=>u.target===silent);assert.equal(silentSpeech?.status,'final');assert.equal(silentSpeech.text,'');receipt.checks.push('silence stop returns empty final, no invented words');await browser.close();
- if(plist){
-  assert(plist.includes('/outline-streaming-demo/')&&plist.endsWith('adapter.plist'));
+ if(adapterRoot){
+  assert(adapterRoot.endsWith('/WizardApps/outline-streaming-demo'));
   await launch(process.env.QA_SPEECH);await page.locator('#new').click();await page.keyboard.press('Escape');await live();await words();
-  execFileSync('/bin/launchctl',['bootout',domain,plist]);adapterStopped=true;
+  const pid=JSON.parse(readFileSync(adapterRoot+'/evidence/adapter-runtime.json')).snapshot.pid;
+  const argv=execFileSync('/bin/ps',['-p',String(pid),'-o','command='],{encoding:'utf8'});assert(argv.includes('adapter.py')&&argv.includes('--port 18885'));
+  writeFileSync(adapterRoot+'/runtime/adapter-paused','owned browser outage test');adapterStopped=true;process.kill(pid,'SIGTERM');
   await page.waitForFunction(()=>document.querySelector('#live').textContent.includes('Paused'),null,{timeout:10000});
   await stop();assert(await page.locator('.draft').filter({hasText:'Unconfirmed speech'}).count());await audioReadback();await page.screenshot({path:out+'/error-retained.png',fullPage:true});receipt.checks.push('real adapter shutdown leaves unconfirmed text and verified original audio');
   const unhealthy=await get('/healthz');assert.equal(unhealthy.liveReady,false);await page.locator('#live').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('unavailable'));assert.equal(await page.evaluate(()=>WizardApp.capture.current()),null);receipt.checks.push('unavailable model blocks new capture, no fallback');
-  execFileSync('/bin/launchctl',['bootstrap',domain,plist]);adapterStopped=false;
+  rmSync(adapterRoot+'/runtime/adapter-paused');adapterStopped=false;
  }
  assert.equal(receipt.errors.length,0);assert(receipt.requests.every(u=>new URL(u).origin===new URL(base).origin));receipt.checks.push('no JavaScript errors; all browser requests stay same-origin');receipt.ok=true;
 }catch(e){receipt.ok=false;receipt.failure=e.stack;receipt.state=await page?.evaluate(()=>({notice:document.querySelector('#notice')?.textContent,live:document.querySelector('#live')?.textContent})).catch(()=>null);await page?.screenshot({path:out+'/failure.png',fullPage:true}).catch(()=>{});}
-finally{if(adapterStopped)execFileSync('/bin/launchctl',['bootstrap',domain,plist]);await browser?.close();receipt.finished=new Date().toISOString();writeFileSync(out+'/local-browser.json',JSON.stringify(receipt,null,2));console.log(JSON.stringify({ok:receipt.ok,checks:receipt.checks,errors:receipt.errors,failure:receipt.failure,state:receipt.state}));if(!receipt.ok)process.exitCode=1;}
+finally{if(adapterStopped)rmSync(adapterRoot+'/runtime/adapter-paused',{force:true});await browser?.close();receipt.finished=new Date().toISOString();writeFileSync(out+'/local-browser.json',JSON.stringify(receipt,null,2));console.log(JSON.stringify({ok:receipt.ok,checks:receipt.checks,errors:receipt.errors,failure:receipt.failure,state:receipt.state}));if(!receipt.ok)process.exitCode=1;}
