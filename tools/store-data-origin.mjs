@@ -35,7 +35,24 @@ function runtipi() {
   const now = Math.floor(Date.now()/1000), h=b64({alg:'HS256',typ:'JWT'}), p=b64({sub:'cli',iat:now,nbf:now,exp:now+60});
   return { base:`http://${host}:${port}`, token:`${h}.${p}.${createHmac('sha256',env.JWT_SECRET).update(`${h}.${p}`).digest('base64url')}` };
 }
-export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readRuntipi = runtipi, overview } = {}) {
+// Only installation identity is exposed. Never project config, environment, health or MCP URLs.
+export function wamMetadata(doc) {
+  if (!Array.isArray(doc?.apps)) throw Error('registry_unavailable');
+  return doc.apps.filter(a => /^[a-z0-9][a-z0-9-]{0,63}$/.test(a?.id || '')).slice(0,500).map(a => clean({
+    id:a.id, app_id:str(a.app_id,64,/^[a-z0-9][a-z0-9-]{0,63}$/),
+    repo:str(a.repo,201,/^[\w.-]+\/[\w.-]+$/), commit:str(a.commit,40,/^[a-f0-9]{40}$/),
+    version:str(a.version,40), status:str(a.status,24,/^[a-z_-]+$/),
+    source:str(a.source,64,/^[a-z0-9][a-z0-9-]{0,63}$/), channel:['alpha','standard'].includes(a.channel)?a.channel:undefined,
+  }));
+}
+export function shellMetadata(doc) {
+  if (!Array.isArray(doc?.apps)) throw Error('registry_unavailable');
+  return doc.apps.filter(a => /^[a-z0-9][a-z0-9-]{0,63}$/.test(a?.id || '')).slice(0,500).map(a => clean({
+    id:a.id, url:str(a.url,500,/^(?:\/(?!\/)[^\s]*|https:\/\/[^\s]+)$/),
+    status:str(a.status,24,/^[a-z_-]+$/), system:a.system === true,
+  }));
+}
+export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview } = {}) {
   // Installed list straight from Runtipi, reduced to validated scalars (used by the Store and the System overview).
   const installedList = async () => {
     const auth=readRuntipi();
@@ -59,6 +76,16 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCa
       const u=new URL(req.url,'http://localhost');
       if (!u.pathname.startsWith(PREFIX)) { send(404,{error:'not_found'}); return; }
       const path=u.pathname.slice(PREFIX.length);
+      if (path === 'wizard/v1/installed-apps') {
+        if (u.search) { send(400,{error:'invalid_query'}); return; }
+        const [wam,shell] = await Promise.allSettled([
+          Promise.resolve().then(() => wamMetadata(readWam())),
+          serviceJson('/wizard/v1/apps').then(shellMetadata),
+        ]);
+        send(200,{wam:wam.status==='fulfilled'?wam.value:[], shell:shell.status==='fulfilled'?shell.value:[],
+          complete:wam.status==='fulfilled' && shell.status==='fulfilled',
+          unavailable:[...(wam.status==='rejected'?['wam']:[]),...(shell.status==='rejected'?['shell']:[])]}); return;
+      }
       if (path === 'wizard/v1/wizard-apps') { send(200,readApps()); return; }
       if (path.startsWith('wizard/v1/index/')) { const r=await index('/'+path.slice('wizard/v1/index/'.length),u.searchParams); send(r.status,r.body); return; }
       if (path === 'system/v1/overview') {

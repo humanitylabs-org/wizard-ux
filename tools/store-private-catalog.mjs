@@ -34,9 +34,9 @@ export function mergeRows(rows,installed={}) {
     // Migrate only an exact legacy identity/pin; different legacy versions remain selectable.
     releases=releases.filter(a=>a.source!=='owner-private' || !releases.some(b=>b.channel==='alpha' && b.commit===a.commit));
     const i=installed[releases[0].id], preferred=releases.find(a=>a.source===i?.source) || releases.find(a=>a.channel==='standard') || releases[0];
-    const alpha=releases.some(a=>a.channel==='alpha'), standard=releases.some(a=>a.channel==='standard');
-    return {...preferred,releases,alpha_badge:alpha?(standard?'Alpha available':'Alpha'):'',conflict:repos.get(preferred.id).size>1,
-      installed_source:text(i?.source,64),installed_commit:text(i?.commit,40),installed_app_id:text(i?.launcher_id,64),update_available:!!i && releases.some(a=>a.source===i.source && a.commit && a.commit!==i.commit)};
+    const alpha=releases.some(a=>a.channel==='alpha');
+    return {...preferred,releases,alpha_badge:alpha?'Alpha':'',conflict:repos.get(preferred.id).size>1,
+      installed_source:text(i?.source,64),installed_commit:text(i?.commit,40),installed_app_id:text(i?.launcher_id,64)};
   });
 }
 export function withPrivateCatalog(upstream,read=privateApps,{home=stateDir(),sourceRead=()=>cached(home),refreshSource=()=>refresh(home),now=Date.now}={}) {
