@@ -104,11 +104,12 @@ let browser;
  check('unregistered Music-path same-origin frame lacks capability',!await foreign.evaluate(()=>parent.WizBackgroundAudio.canAttach(window)));
  await page.evaluate(()=>document.querySelector('#audio-evil')?.remove());
  const hold=await snap();await page.evaluate(()=>{const id=Object.values(__wos.wins).find(w=>w.appId==='wizard-music')?.id;__wos.closeWin(id,true);});await wait(1500);
- const service=await sx('dumpsys activity services '+PKG);check('closing Music UI leaves foreground audio service alive',service.result.includes('BackgroundAudioService'));
+ const closedSession=await sx('dumpsys media_session');check('closing Music UI pauses native playback',/state=2\b/.test(closedSession.result),closedSession.result);
  await page.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['wizard-music']));
  for(let i=0;i<80&&!frame();i++)await wait(250);
  if(!frame())throw new Error('Music frame did not reopen');
- await frame().locator('.music-row-main').first().waitFor();const reattached=await snap();check('recreated Music UI sees live native session',reattached.sessionId===hold.sessionId&&reattached.wantPlaying,reattached);
+ await frame().locator('.music-row-main').first().waitFor();const reattached=await snap();check('recreated Music UI preserves queue and stays paused',reattached.sessionId===hold.sessionId&&!reattached.wantPlaying&&!reattached.playing&&reattached.queue[reattached.index]?.id===hold.queue[hold.index]?.id,reattached);
+ await audio('play'); // Subsequent playback/notification checks start by explicit user intent.
  // Nested Now Playing Back is an actual Android key, and must retain Wizard.
  await frame().locator('.music-mini-open').click();await wait(300);await sx('input keyevent KEYCODE_BACK');await wait(600);const top=await sx('dumpsys activity activities');check('Android nested Back retains Wizard Activity',top.result.includes(PKG+'/ai.wizards.os.MainActivity'));
  const last=await server('/qa/stats');const events=last.events.filter(e=>e.action==='played');const keys=events.map(e=>e.eventId);check('native only reports playback; no UI duplicates',keys.length>0&&keys.every(Boolean)&&new Set(keys).size===keys.length,events);

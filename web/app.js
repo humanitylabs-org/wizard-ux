@@ -592,7 +592,7 @@
   function closeDesk(i) {
     const d = desks[i]; if (!d || d.home) return false;
     const name = deskName(i);
-    [...d.wins].forEach(id => { delete W[id]; delete CH[id]; }); d.wins = [];
+    [...d.wins].forEach(id => { closeAppPlayback(W[id]); delete W[id]; delete CH[id]; }); d.wins = [];
     renderDesk(i); pruneDesks(); toast('✕', `Closed ${esc(name)}`); ovLog('close'); return true;
   }
 
@@ -636,9 +636,13 @@
     announce(`Opened <b>${esc(winApp(w).name)}</b>`);
     return w;
   }
+  function closeAppPlayback(w) {
+    window.WizBackgroundAudio?.closeApp(w?.appId)?.catch(() => toast('♫', 'Music could not stop. Pause it from the media controls.'));
+  }
   function closeWin(id, quiet) {
     const i = deskOf(id); if (i < 0) return;
     const w = W[id], d = desks[i], name = winTitle(w);
+    closeAppPlayback(w);
     CHATS.closeHosted(id);
     if (quiet) { d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id]; if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null; if (!d.wins.length) d.full = false; renderDesk(i); pruneDesks(); return; }
     // ✕ on a bound view: it stays closed for this reply (opening the thread again, or a new reply, binds again).
