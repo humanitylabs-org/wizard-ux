@@ -516,7 +516,7 @@ window.WizCore.chats = function createChats(H) {
   /* Mic until there are typed words (.has-text swaps it for Send); a voice take recording in this thread turns
    * the mic itself into Send (.ch-mic.on). Staged files alone keep the mic: talk, and the voice reply carries them. */
   const hasContent = text => !!String(text || '').trim();
-  function syncSend(form, c) { if (form) form.classList.toggle('has-text', hasContent(form.querySelector('textarea')?.value)); }
+  function syncSend(form, c) { if (!form) return; const on = hasContent(form.querySelector('textarea')?.value); form.classList.toggle('has-text', on); document.getElementById('device')?.classList.toggle('composing', on); }
   function refreshCompose(wid) {
     const el = track.querySelector(`[data-chats="${wid}"]`); const form = el?.querySelector('[data-chform]'); if (!form) return;
     const c = ch(wid), old = form.querySelector('.ch-tray');

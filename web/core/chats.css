@@ -496,7 +496,6 @@ html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scrol
 html:not([data-shell="desktop"]) .ch-thread { display: flex; flex-direction: column; }
 /* The orb is the voice button: no second mic in the composer. Start typing and the orb steps aside for Send. */
 html:not([data-shell="desktop"]) .ch-compose:not(.has-text) .ch-mic:not(.on) { display: none; }
-html:not([data-shell="desktop"]) .device:has(.ch-compose.has-text) .dock { opacity: 0; pointer-events: none; transform: translateY(40%); }
 /* Archive: a slim collapsed row pinned under the search bar; the live list hugs the bottom. */
 html:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--ink) 6%, var(--bg)); border-radius: 12px; }
 html:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"]:not(.open) .ch-sec-h { min-height: 34px; padding-top: 6px; padding-bottom: 6px; opacity: .8; }
@@ -554,3 +553,9 @@ html:not([data-shell="desktop"]) .ch-compose { border-top: 0; padding-bottom: ca
 html:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { flex-direction: column; }
 html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: calc(var(--safe-b, 0px) + var(--corner-b)); }
 html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-rdy-bar { min-height: var(--corner-orb); align-items: center; padding-right: calc(var(--corner-r) + 2 * var(--corner-orb) + 18px); margin: 0; }
+
+/* Typing: the orb is fully gone (not just faded) so a tap on Send can never land on it. */
+#device.composing .dock, #device.composing #orbWrap { visibility: hidden !important; pointer-events: none !important; }
+/* Paperclip: a plain icon in every skin (Obsidian painted it white-on-white). */
+html .ch-compose button.ch-attach { background: none !important; border: 0 !important; box-shadow: none !important; }
+html .ch-compose button.ch-attach svg { stroke: var(--ink-2) !important; }
