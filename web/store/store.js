@@ -2,6 +2,7 @@
  * Listings come from the public Wizard App Index; "installed" from this Wizard's Runtipi; "Open" asks the shell.
  * Browse-only until App installation lands: Get explains instead of installing. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
+import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp} from './store-status.mjs';
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -27,11 +28,11 @@
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map() };
+  const S = { apps: [], installed: new Map(), complete:false, stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map() };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id);
-  const selected = a => ({...a, ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, installed_source:a.installed_source, installed_commit:a.installed_commit, installed_app_id:a.installed_app_id, update_available:a.update_available});
-  const badge = a => a.conflict ? '<span class="alpha-badge conflict">Source conflict</span>' : a.alpha_badge ? `<span class="alpha-badge">${esc(a.alpha_badge)}</span>` : '';
+  const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
+  const badge = a => (a.alpha_badge ? '<span class="alpha-badge">Alpha</span>' : '') + (a.conflict ? '<span class="conflict-badge">Source conflict</span>' : '');
   if (/\.staging\.wizard001\.com$/.test(location.hostname)) $('preview').hidden = false;
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
 
@@ -65,15 +66,25 @@
   }
   async function load(force=false) {
     $('refresh').disabled=true;
-    const [idx, inst] = await Promise.allSettled([allApps(force), get('api/apps/installed')]);
+    const [idx, inst, registry] = await Promise.allSettled([allApps(force), get('api/apps/installed'), get('wizard/v1/installed-apps')]);
     $('refresh').disabled=false;
-    if (idx.status !== 'fulfilled') { S.error = 'The App Index isn’t reachable right now.'; S.loaded = true; return paint(); }
+    if (idx.status !== 'fulfilled') {
+      S.error = 'The App Index isn’t reachable right now.'; S.loaded = true; S.complete=false; paint();
+      if(top()==='detail') showDetail(S.stack.at(-1).arg);
+      else if(top()==='list') openKind(S.stack.at(-1).arg,true);
+      else if(top()==='search') search(S.q);
+      return;
+    }
     S.error=''; S.sources=idx.value.sources;
-    S.apps = (Array.isArray(idx.value.apps) ? idx.value.apps : []).map(clean).filter(Boolean).filter(a => a.id !== 'wizard-shell');
+    S.apps = (Array.isArray(idx.value.apps) ? idx.value.apps : []).map(clean).filter(Boolean).filter(isUserApp).sort(compareApps);
     S.installed.clear();
-    if (inst.status === 'fulfilled') for (const x of inst.value.installed || []) {
-      const id = x?.info?.id; if (!id) continue; const prev = S.installed.get(id);
-      if (!prev || x.app?.status === 'running') S.installed.set(id, { status: x.app?.status || 'unknown' });
+    const snapshot=registry.status==='fulfilled' ? registry.value : {wam:[],shell:[],complete:false};
+    const runtipi=inst.status==='fulfilled' && Array.isArray(inst.value.installed) ? inst.value.installed : [];
+    S.complete=snapshot.complete===true && Array.isArray(snapshot.wam) && Array.isArray(snapshot.shell) && inst.status==='fulfilled' && Array.isArray(inst.value.installed);
+    for (const a of S.apps) {
+      const i=resolveInstalled(a,snapshot,runtipi); if(i) S.installed.set(key(a),i);
+      // Never silently substitute a removed explicit release after Refresh.
+      if(S.selections.has(key(a)) && !a.releases.some(r=>`${r.source}:${r.commit}`===S.selections.get(key(a)))) S.selections.set(key(a),'unavailable');
     }
     S.loaded = true; paint();
     if(top()==='detail') showDetail(S.stack.at(-1).arg);
@@ -86,9 +97,10 @@
       openApp(key(a));
     }
   }
-  const isInstalled = a => S.installed.has(a.id);
+  const isInstalled = a => !!S.installed.get(key(a)) && !S.installed.get(key(a)).conflict;
+  const status = a => S.selections.get(key(a))==='unavailable' ? 'unknown' : releaseState(a,S.installed.get(key(a)),S.selections.has(key(a)),S.complete);
   // The shell knows which apps have a view it can open; only those get "Open".
-  const openId = a => a.source===a.installed_source && a.commit===a.installed_commit && ID.test(a.installed_app_id || '') ? a.installed_app_id : a.id;
+  const openId = a => S.installed.get(key(a))?.id || '';
   const canOpen = a => { try { return framed && typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(openId(a)); } catch (_) { return false; } };
 
   /* ---------------- pieces ---------------- */
@@ -99,14 +111,15 @@
     return `<span class="ic ic-${size}" style="--c1:${c1};--c2:${c2}"><b>${letter}</b>${img}</span>`;
   }
   function action(a, cls = '') {
-    if(a.conflict) return '<span class="get have">Resolve conflict</span>';
-    const changed = a.commit && ((a.installed_commit && (a.commit!==a.installed_commit || a.source!==a.installed_source)) || (a.channel==='alpha' && isInstalled(a) && !a.installed_commit));
-    if(changed || a.update_available) return `<button class="get ${cls}" data-get="${esc(key(a))}">Update</button>`;
+    const state=status(a);
+    if(state==='conflict') return '<span class="get have">Resolve conflict</span>';
+    if(state==='unknown') return '<span class="get have" aria-label="Status unavailable">Status unavailable</span>';
+    if(state==='switch' || state==='update') return `<button class="get ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
     if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
     return `<button class="get ${cls}" data-get="${esc(key(a))}">Get</button>`;
   }
-  const row = a => `<div class="row" data-app="${esc(key(a))}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b>${badge(a)}<small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;
+  const row = base => {const a=selected(base); return `<div class="row" data-app="${esc(key(a))}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b>${badge(base)}<small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;};
 
   /* ---------------- screens ---------------- */
   function paint() {
@@ -117,8 +130,8 @@
     $('browse-status').hidden = S.loaded && !S.error;
     $('browse-status').textContent = S.error || 'Loading the App Index…';
     const stale=S.sources.filter(s=>s.stale);
-    $('source-status').hidden=!stale.length;
-    $('source-status').textContent=stale.map(s=>`${txt(s.name,60)} unavailable — showing last valid data where available.`).join(' ');
+    $('source-status').hidden=!stale.length && S.complete;
+    $('source-status').textContent=[...stale.map(s=>`${txt(s.name,60)} unavailable — showing last valid data where available.`),...(!S.complete && S.loaded?['Installed status is incomplete. Refresh before requesting a release change.']:[])].join(' ');
   }
 
   function showList(title, list, sub = '') {
@@ -132,7 +145,7 @@
       const hay = [a.name, a.summary, a.publisher, ...(a.tags || []), ...(a.provides || []), kindOf(a).one].join(' ').toLowerCase();
       const s = a.name.toLowerCase().startsWith(n) ? 3 : a.name.toLowerCase().includes(n) ? 2 : hay.includes(n) ? 1 : 0;
       return [s, a];
-    }).filter(([s]) => s).sort((x, y) => y[0] - x[0]).map(([, a]) => a);
+    }).filter(([s]) => s).sort((x, y) => Number(!!y[1].alpha_badge)-Number(!!x[1].alpha_badge) || y[0]-x[0] || compareApps(x[1],y[1])).map(([, a]) => a);
     if (top() !== 'search') push('search');
     showList('Results', hits, `${hits.length} for “${S.q}”`);
   }
@@ -151,7 +164,7 @@
       .filter(([, v]) => v).map(([l, v]) => `<div><dt>${esc(l)}</dt><dd>${esc(v)}</dd></div>`).join('');
     $('detail').innerHTML = `<div class="d-hero" style="--c1:${c1};--c2:${c2}"><button class="back" data-back aria-label="Back">‹</button>
         ${icon(a, 'l')}<div class="d-id"><h2>${esc(a.name)}</h2>${badge(base)}<p>${esc(k.one)}${a.publisher ? ` · ${esc(a.publisher)}` : ''}</p>${action(a, 'big')}</div></div>
-      ${base.releases.length>1 ? `<section class="d-sec"><label class="release-label">Release <select id="release-choice" data-release="${esc(key(base))}">${base.releases.map(r=>`<option value="${esc(`${r.source}:${r.commit}`)}" ${r.source===a.source && r.commit===a.commit?'selected':''}>${r.channel==='alpha'?'Alpha':'Standard'} · ${esc(r.version)} · ${esc(r.source_name)}</option>`).join('')}</select></label><p class="d-note">One installed copy. Switching release requires an explicit update through your agent.</p></section>` : ''}
+      ${base.releases.length ? `<section class="d-sec"><label class="release-label">Release <select id="release-choice" data-release="${esc(key(base))}">${S.selections.get(key(base))==='unavailable'?'<option selected disabled>Selected release no longer available</option>':''}${base.releases.map(r=>`<option value="${esc(`${r.source}:${r.commit}`)}" ${S.selections.get(key(base))!=='unavailable' && r.source===a.source && r.commit===a.commit?'selected':''}>${r.channel==='alpha'?'Alpha':'Standard'} · ${esc(r.version)} · ${esc(r.source_name)}</option>`).join('')}</select></label><p class="d-note">Alpha marks availability, not your installed channel. Open uses your existing app; choosing another release never installs it automatically.</p></section>` : ''}
       ${base.conflict?'<section class="d-sec"><p class="d-note">This app ID belongs to different repositories across sources. Installation is blocked here; ask your agent to resolve the source conflict without overwriting an installed app.</p></section>':''}
       <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc((a.version || '—').split(/[-+]/)[0])}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
@@ -190,8 +203,8 @@
 
   let toastT = 0, lastInstallRequest = '';
   function installRequest(a) {
-    const verb=isInstalled(a) || a.installed_commit ? 'Update' : 'Install';
-    if(a.channel==='alpha') return `${verb} ${a.name} from ${a.source_name}: source ${a.source}, app ${a.id}, commit ${a.commit}, version ${a.version}. Use wizard-alpha install --source ${a.source} --app ${a.id} --commit ${a.commit}${verb==='Update'?' --update':''}. Verify the authenticated view opens before reporting success.`;
+    const verb=status(a)==='switch'?'Switch release for':status(a)==='update'?'Update':isInstalled(a)?'Selected release for':'Install';
+    if(a.channel==='alpha') return `${verb} ${a.name} from ${a.source_name}: source ${a.source}, app ${a.id}, repository ${a.repo}, commit ${a.commit}, version ${a.version}. Use wizard-alpha install --source ${a.source} --app ${a.id} --commit ${a.commit}${isInstalled(a)?' --update':''}. Preserve existing data. Verify the authenticated view opens before reporting success.`;
     if(a.private) return `${verb} ${a.name} using owner-private source, repository ${a.repo}, exact commit ${a.commit}, version ${a.version}. Do not substitute the Alpha release.`;
     return `${verb} ${a.name} from Standard, repository ${a.repo}, version ${a.version}${a.commit?`, commit ${a.commit}`:''}. Do not substitute an Alpha release.`;
   }
@@ -200,7 +213,7 @@
   document.addEventListener('click', e => {
     if (e.target.closest('[data-back]')) { pop(); return; }
     const g = e.target.closest('[data-get]');
-    if (g) { e.stopPropagation(); const base=find(g.dataset.get); if(!base || base.conflict) return; const a=selected(base); lastInstallRequest=installRequest(a); toast(`<b>Ask your agent</b><span>${esc(lastInstallRequest)}</span><button class="get" data-copy-install>Copy request</button>`,15000); return; }
+    if (g) { e.stopPropagation(); const base=find(g.dataset.get); if(!base) return; const a=selected(base); if(!['get','switch','update'].includes(status(a))) return; lastInstallRequest=installRequest(a); toast(`<b>Ask your agent</b><span>${esc(lastInstallRequest)}</span><button class="get" data-copy-install>Copy request</button>`,15000); return; }
     if(e.target.closest('[data-copy-install]')) { if(!navigator.clipboard?.writeText) {toast('<b>Select the request in app details to copy it.</b>');return;} navigator.clipboard.writeText(lastInstallRequest).then(()=>toast('<b>Request copied</b>')).catch(()=>toast('<b>Select the request in app details to copy it.</b>')); return; }
     const o = e.target.closest('[data-open]');
     if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
