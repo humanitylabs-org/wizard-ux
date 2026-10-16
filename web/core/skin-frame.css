@@ -47,6 +47,7 @@ html[data-skin-frame="borderless"] .device.wx-on .tiles { top: calc(var(--sb) + 
 /* Preview-only review strip reserves space instead of covering app/orb controls.
  * Never present without the explicit deployment meta; comparison changes no strip geometry. */
 html.sf-preview { --sf-review-h: 46px; }
+html.sf-preview #wiz-staging-tag { display: none !important; } /* review strip carries the private-preview label */
 .sf-preview-bar { position: fixed; z-index: 9999; top: env(safe-area-inset-top, 0px); left: 0; right: 0; height: 46px; display: flex; justify-content: center; align-items: center; gap: 10px; background: var(--bg); border-bottom: 1px solid var(--line); color: var(--ink-3); font: 11px system-ui; }
 .sf-preview-bar .sf-choices { gap: 4px; }
 .sf-preview-bar button { min-height: 40px; padding: 6px 12px; font-size: 12px; }
