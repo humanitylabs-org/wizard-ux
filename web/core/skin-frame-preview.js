@@ -1,18 +1,16 @@
-/* Review aid, not a second appearance preference. Enabled only by deployment HTML meta. */
+/* Preview starts borderless; comparison lives in Settings, never over an app. */
 (() => {
   if (!document.querySelector('meta[name="wos-frame-preview"]')) return;
-  const S = window.WosSkin, F = window.WosSkinFrame;
-  if (!S || !F) return;
   document.documentElement.classList.add('sf-preview');
-  const bar = document.createElement('details'); bar.className = 'sf-preview-bar';
-  bar.setAttribute('aria-label', 'Private skin comparison');
-  const returnURL = document.querySelector('meta[name="wos-frame-preview-return"]')?.content;
-  bar.innerHTML = `<summary>Private preview</summary><div class="sf-preview-panel"><p>Skin foundation · read-only preview</p>${F.choices(S.frame.foundation)}</div>`;
-  if (returnURL) {
-    const url = new URL(returnURL, location.href);
-    if (url.protocol === 'https:') { const a = document.createElement('a'); a.href = url.href; a.textContent = 'Return to daily Wizard ↗'; bar.querySelector('.sf-preview-panel').appendChild(a); }
-  }
-  bar.addEventListener('click', e => { const b = e.target.closest('[data-skinfoundation]'); if (b) S.setFoundation(b.dataset.skinfoundation); });
-  addEventListener('wos:skin-frame', () => bar.querySelectorAll('[data-skinfoundation]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.skinfoundation === S.frame.foundation))));
-  document.body.appendChild(bar);
+  // Update the previous preview's materialized built-in defaults, once. Keep
+  // explicit Standard choices and imported custom compositions unchanged.
+  const S = window.WosSkin, key = 'wos.frame-preview-spacing.v1';
+  try {
+    if (!localStorage.getItem(key)) {
+      const f = S?.composition?.frame;
+      if (f?.foundation === 'borderless' && f.border === 0 && f.radius === 0 && f.gutter === 0 && f.gap === 8)
+        S.setFoundation('borderless');
+      localStorage.setItem(key, '1');
+    }
+  } catch (_) { /* Storage denied: fresh foundation still has comfortable margins. */ }
 })();

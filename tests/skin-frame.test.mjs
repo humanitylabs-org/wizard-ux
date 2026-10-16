@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url), F = require('../web/core/skin-fr
 const skins = [{id:'nebula'},{id:'grove',frame:{foundation:'borderless'}}];
 test('foundations are reusable, backwards compatible and independently overridable', () => {
   assert.deepEqual(F.frame(), {foundation:'framed'});
-  assert.deepEqual(F.frame({foundation:'borderless',border:1,radius:12}), {foundation:'borderless',border:1,radius:12,gutter:0,gap:8});
+  assert.deepEqual(F.frame({foundation:'borderless',border:1,radius:12}), {foundation:'borderless',border:1,radius:12,gutter:16,gap:8});
   assert.equal(F.composition({version:1,extends:'grove'},skins).frame.foundation,'borderless');
   assert.equal(F.composition({version:1,extends:'nebula'},skins).frame.foundation,'framed');
   assert.ok(Object.isFrozen(F.foundations.borderless));
