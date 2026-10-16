@@ -528,3 +528,25 @@ html:not([data-shell="desktop"]) .ch-head { padding-left: 14px; }
 #device.orb-lift { --corner-b: 9px; }
 #device.orb-corner .win.full .ch-compose:not(.has-text) { padding-right: calc(var(--corner-orb) + var(--corner-r) + 8px); }
 #device.orb-corner .win.full .ch-compose.has-text { padding-right: 10px; }
+/* Phone v4: one quiet style. Compact title, no boxes around Back/More, Latest sits above the controls row. */
+html:not([data-shell="desktop"]) .ch-head { padding: 4px 10px 4px 14px; border-bottom: 0; }
+html:not([data-shell="desktop"]) .ch-head .ti, html:not([data-shell="desktop"]) .ch-head .ti .ti-b { min-height: 26px; }
+html:not([data-shell="desktop"]) .ch-head .ti b { font-size: 14.5px; font-weight: 650; color: var(--ink-2); }
+html:not([data-shell="desktop"]) .win.full .wbar { height: 28px; border-bottom: 0; }
+.ch-back2, .ms-more { border: 0; background: none; }
+.ch-back2 { width: 36px; }
+.ms-track { border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); height: 36px; border-radius: 18px; }
+.ms-thumb { border-radius: 15px; }
+.ms-more { height: 36px; }
+.ch-bbar { padding: 4px 8px 2px; }
+html:not([data-shell="desktop"]) .ch-tacts button { border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+html:not([data-shell="desktop"]) .ch-latest { bottom: auto; top: auto; right: 50%; transform: translateX(50%); bottom: 140px; }
+/* Session list: + sits just left of the orb; Home's counters drop to the bottom. */
+html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-fab { right: calc(var(--corner-r) + var(--corner-orb) + 10px); bottom: calc(var(--safe-b) + var(--corner-b)); width: 44px; height: 44px; border-radius: 22px; }
+/* Phone v4b: borderless input, quiet attach, title gets its own backing, orb/badge breathing room. */
+html:not([data-shell="desktop"]) .ch-compose textarea { border-color: transparent; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+html:not([data-shell="desktop"]) .ch-compose .ch-attach { background: none; border: 0; color: var(--ink-2); }
+html:not([data-shell="desktop"]) .ch-compose .ch-attach svg { stroke: var(--ink-2); }
+html:not([data-shell="desktop"]) .ch-thread > .ch-head { background: var(--bg); position: relative; z-index: 2; }
+html:not([data-shell="desktop"]) .ch-compose { border-top: 0; padding-bottom: calc(10px + var(--safe-b, 0px)); }
+#device.orb-corner { --corner-r: 16px; }
