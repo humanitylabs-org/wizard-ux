@@ -808,3 +808,16 @@ body {
 @media (hover: hover) { .home-system:hover { color: var(--ink); border-color: var(--violet-2); } }
 .device.wx-on .home-tools { top: calc(var(--sb) + var(--safe-t) + 42px); }
 .device.wx-on .home-tools .gear { top: auto; }
+/* Opinionated (phone): the bottom menu hugs the home indicator. iPhones reserve ~34px; use only part of it. */
+:root { --safe-b-low: calc(var(--safe-b) * .45); }
+html:not([data-shell="desktop"]) .dock { height: calc(var(--dock-h) + var(--safe-b-low)); padding-bottom: calc(6px + var(--safe-b-low)); }
+html:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
+html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-compose { padding-bottom: calc(8px + var(--safe-b-low)) !important; }
+/* Opinionated (phone): orb, its count and the workspace dots. No ring, halo arc or moons at rest;
+   the halo still shows while listening/thinking so voice feedback stays. */
+html:not([data-shell="desktop"]) :is(.orb-ring, .orb-shock, #moons) { display: none !important; }
+html:not([data-shell="desktop"]) .orb-wrap:not([data-mode="listen"]):not([data-mode="command"]):not([data-mode="think"]) .orb-halo { display: none; }
+html:not([data-shell="desktop"]) { --orb: 54px; }
+html:not([data-shell="desktop"]) .device.orb-corner { --corner-orb: 50px; }
+/* Opinionated (phone): no visible scrub line under the orb; the desk-scrub gesture still works, label still shows. */
+html:not([data-shell="desktop"]) .scrub i { opacity: 0 !important; box-shadow: none !important; }
