@@ -23,7 +23,10 @@ http.createServer((req, res) => {
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { 'content-type':mime[path.extname(file)] || 'application/octet-stream','cache-control':'no-store','content-security-policy':csp,'permissions-policy':'microphone=()' });
     if (req.method === 'HEAD') return res.end();
-    if (['index.html','desktop.html'].includes(rel)) return res.end(fs.readFileSync(file,'utf8').replace('<head>','<head>\n<meta name="wos-frame-preview" content="borderless">'));
+    if (['index.html','desktop.html'].includes(rel)) {
+      const returnURL = new URL('/wizard-os-home/', upstream).href.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+      return res.end(fs.readFileSync(file,'utf8').replace('<head>',`<head>\n<meta name="wos-frame-preview" content="borderless"><meta name="wos-frame-preview-return" content="${returnURL}">`));
+    }
     return fs.createReadStream(file).pipe(res);
   }
   const p = https.request({ hostname:'127.0.0.1', port:connectPort, servername:upstream.hostname, method:req.method, path:req.url,

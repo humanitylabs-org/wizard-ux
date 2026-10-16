@@ -11,7 +11,7 @@ A skin now composes a palette/scenery definition with a window foundation. Desig
 | Field | Allowed values | Meaning |
 |---|---|---|
 | version | 1 | Composition format |
-| frame.foundation | framed, borderless | Standard titlebar or floating controls on a transparent ledge |
+| frame.foundation | framed, borderless | Standard titlebar or relocatable overlay controls |
 | frame.border | number 0–2 | Shell perimeter width, CSS pixels |
 | frame.radius | number 0–28 | Window/content corner radius |
 | frame.gutter | number 0–16 | Phone tiled layout side clearance |
@@ -29,11 +29,11 @@ The composition is stored as `wos.skin.composition.v1`; the existing palette cho
 
 ## The top-right safety seam
 
-All content—including arbitrary hosted iframes—starts below a transparent control ledge. The app's toolbar is never under the shell's close/fullscreen controls. The ledge has no full-width fill or divider; the buttons are separate floating targets. Phone targets are 44 px. Phone top gap drops from 10 to 0 while the ledge grows from 34 to 44: app content starts at approximately the same vertical position as Standard, with more side width, **not** underneath the X. We intentionally do not claim edge-to-top overlay for uncooperative apps. Desktop keeps its draggable header, split tiles keep their own controls, and immersive fullscreen keeps its existing exit affordance. The orb and desktop row are not restyled.
+All content—including arbitrary hosted iframes—starts at the window top. The original header is an absolute overlay, not a reserved row: only a 44 px menu target and 44 px X remain visible. The compact expanded menu reveals the original title, route, fullscreen, bound/review and detach nodes; desktop title dragging keeps the existing window-manager behavior. Move controls (↔) shifts the cluster to the opposite corner and collapses it, exposing app actions underneath without a blanket app inset. Back/Escape dismisses the expanded controls before navigating the app. Each split tile owns its controls, safe areas stay respected, and immersive fullscreen keeps its existing exit affordance. The orb and desktop row are not restyled.
 
 ## Preview-only default
 
-The source HTML does not select Borderless. A private deployment may inject `<meta name="wos-frame-preview" content="borderless">` **before** the skin scripts. Only fresh preview storage starts Borderless; a saved explicit choice wins. A fixed review strip reserves 46 px above the shell and exposes instant Standard/Borderless comparison without a Settings sheet. It never overlays the app or orb. The strip is a preview aid, not shipping shell chrome. The regular build remains Standard by default.
+The source HTML does not select Borderless. A private deployment may inject `<meta name="wos-frame-preview" content="borderless">` **before** the skin scripts. Only fresh preview storage starts Borderless; a saved explicit choice wins. A collapsible Private preview edge tab exposes instant Standard/Borderless comparison and an explicit return to daily Wizard. It reserves no shell height and stays away from the bottom orb/dock. The edge tab is a preview aid, not shipping shell chrome. The regular build remains Standard by default.
 
 `tools/skin-preview-origin.cjs` serves an immutable checkout behind the existing staging router. It injects only that meta, refuses every non-GET/HEAD request before routing, strips cookies and blocks cross-origin redirects. Configure PREVIEW_WEB, PORT, PREVIEW_SHA, PREVIEW_UPSTREAM (HTTPS), PREVIEW_UPSTREAM_PORT (loopback TLS tunnel), and optionally PREVIEW_GENERATED for untracked data.js/summaries.js. No upstream credentials are carried. Read-only preview cannot verify voice uploads, app writes or production recording delivery.
 

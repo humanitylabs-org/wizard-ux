@@ -38,7 +38,63 @@
     return f;
   }
   function choices(current) { return `<div class="sf-choices" role="group" aria-label="Window foundation">${[['framed', 'Standard'], ['borderless', 'Borderless']].map(([id, name]) => `<button type="button" data-skinfoundation="${id}" aria-pressed="${current === id}">${name}</button>`).join('')}</div>`; }
-  const api = Object.freeze({ foundations, frame, composition, apply, choices });
+  // Enhance the original control nodes, never clone a window or its lifecycle actions.
+  let expanded = null;
+  function collapse(restoreFocus = false) {
+    if (!expanded) return false;
+    const bar = expanded; expanded = null;
+    bar.classList.remove('sf-expanded');
+    const toggle = bar.querySelector('[data-wact="frame-menu"]');
+    toggle?.setAttribute('aria-expanded', 'false');
+    if (restoreFocus && toggle?.isConnected) toggle.focus();
+    return true;
+  }
+  function back() {
+    const review = document.querySelector('.sf-preview-bar[open]');
+    if (review) { review.open = false; review.querySelector('summary')?.focus(); return true; }
+    return collapse(true);
+  }
+  function enhance(bar) {
+    if (bar.querySelector('[data-wact="frame-menu"]')) return;
+    const toggle = document.createElement('button');
+    toggle.type = 'button'; toggle.className = 'sf-menu'; toggle.dataset.wact = 'frame-menu';
+    toggle.textContent = '⋯'; toggle.setAttribute('aria-label', 'Window controls');
+    toggle.setAttribute('aria-expanded', 'false'); toggle.title = 'Window controls · move controls if they cover an app action';
+    const move = document.createElement('button');
+    move.type = 'button'; move.className = 'sf-move'; move.dataset.wact = 'frame-move';
+    move.textContent = '↔'; move.setAttribute('aria-label', 'Move controls to the other corner'); move.title = 'Move controls to the other corner';
+    bar.append(toggle, move);
+    bar.addEventListener('click', e => {
+      const act = e.target.closest('[data-wact]')?.dataset.wact;
+      if (act === 'frame-menu' || act === 'frame-move') {
+        e.preventDefault(); e.stopPropagation();
+        if (act === 'frame-move') {
+          bar.dataset.sfSide = bar.dataset.sfSide === 'left' ? 'right' : 'left';
+          collapse(true);
+        } else if (expanded === bar) collapse(true);
+        else { collapse(); expanded = bar; bar.classList.add('sf-expanded'); toggle.setAttribute('aria-expanded', 'true'); }
+      } else if (act) {
+        // Let the original delegated route/full/close/bound action run unchanged.
+        queueMicrotask(() => collapse());
+      }
+    });
+  }
+  function mountControls() {
+    const scan = root => {
+      if (root.nodeType !== 1) return;
+      if (root.matches('.win > .wbar')) enhance(root);
+      root.querySelectorAll('.win > .wbar').forEach(enhance);
+    };
+    scan(document.body);
+    new MutationObserver(records => records.forEach(r => r.addedNodes.forEach(scan))).observe(document.body, { childList: true, subtree: true });
+    document.addEventListener('pointerdown', e => { if (expanded && !expanded.contains(e.target)) collapse(); }, true);
+    addEventListener('wos:skin-frame', () => collapse());
+  }
+  if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountControls, { once: true });
+    else mountControls();
+  }
+  const api = Object.freeze({ foundations, frame, composition, apply, choices, back });
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else window.WosSkinFrame = api;
 })();
