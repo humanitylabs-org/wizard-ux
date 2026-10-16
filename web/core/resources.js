@@ -32,7 +32,18 @@
     const k=m[id];return k&&number(k.limit)>0?{...k,stale:true}:null;}
   function extraCell(p,x) {const label=`${p.name} extra`,old=x.stale||staleAI(p);return `<span class="rs-account rs-extra ${old?'rs-stale':''}" data-res-account="${esc(p.id)}:extra" title="Extra usage: ${esc(cash(x.left,x.exp,x.cur))} left of ${esc(cash(x.limit,x.exp,x.cur))}${old?' (last known reading)':''}"><span class="rs-account-line"><span>${esc(label)}</span><b class="${x.pct<=15?'rs-warning':''}">${esc(cash(x.left,x.exp,x.cur))}</b></span>${bar(x.pct,'ai')}${old?'<small>Last known reading</small>':''}</span>`;}
   // Every subscription remains visible; do not silently rank accounts out of Home.
-  function homeCells(providers) {const counts=(S.ai?.accountCounts||[]).map(p=>`<span class="rs-account" data-provider-count="${esc(p.id)}">${esc(p.name)} · ${p.count} subscription${p.count===1?'':'s'}</span>`).join('');return counts+providers.map(p=>{const x=extraFor(p);return account(p)+(x?extraCell(p,x):'');}).join('');}
+  /* One column per provider: its heading, then each of its subscriptions underneath. */
+  function homeCells(providers) {
+    const kind=p=>String(p.provider||p.id||'').split(':')[0];
+    const counts=S.ai?.accountCounts||[];
+    const ids=[...counts.map(c=>c.id),...providers.map(kind)].filter((v,i,a)=>v&&a.indexOf(v)===i);
+    return ids.map(id=>{
+      const c=counts.find(x=>x.id===id),mine=providers.filter(p=>kind(p)===id);
+      const name=c?.name||mine[0]?.providerName||id.charAt(0).toUpperCase()+id.slice(1),n=c?.count??mine.length;
+      const rows=mine.map(p=>{const x=extraFor(p);return account(p)+(x?extraCell(p,x):'');}).join('');
+      return `<span class="rs-provider" data-provider-count="${esc(id)}"><span class="rs-provider-h">${esc(name)} <i>${n}</i></span>${rows}</span>`;
+    }).join('');
+  }
   // Devices (wizard-os spec/DEVICES.md): this box first, then every machine the Wizard was given access to,
   // then the rest of the tailnet with online lights. Nothing here names a specific machine.
   const DOT={online:'Online',stale:'Last reading',offline:'Offline',unreachable:'Online · not reachable',connecting:'Connecting'};
