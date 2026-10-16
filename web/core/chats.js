@@ -997,7 +997,9 @@ window.WizCore.chats = function createChats(H) {
     const dock = document.querySelector('.dock'), orb = document.getElementById('orbWrap'); if (!dock || !orb) return;
     const bar = [...document.querySelectorAll('.ch-list .ch-rdy-bar')].find(b => { const r = b.getBoundingClientRect(); return r.height && r.bottom > 0 && r.top < innerHeight; });
     const fab = bar?.closest('.ch-list')?.querySelector('.ch-fab');
-    if (!bar || document.getElementById('device')?.classList.contains('composing')) { if (dock.style.translate) dock.style.translate = ''; return; }
+    const dv = document.getElementById('device');
+    // Only move the dock when it is just the corner orb (full-screen chats). Never shift the normal bottom menu.
+    if (!bar || !dv?.classList.contains('orb-corner') || dv.classList.contains('composing')) { if (fab) { fab.style.right = ''; fab.style.bottom = ''; } if (dock.style.translate) dock.style.translate = ''; return; }
     const br = bar.getBoundingClientRect(), cur = parseFloat((dock.style.translate || '0 0').split(' ')[1]) || 0;
     const or = orb.getBoundingClientRect(), d = (br.top + br.height / 2) - (or.top + or.height / 2) + cur;
     if (Math.abs(d - cur) > 1 && d < 0 && d > -200) dock.style.translate = `0 ${Math.round(d)}px`;
