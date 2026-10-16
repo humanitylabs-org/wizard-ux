@@ -825,3 +825,5 @@ html:not([data-shell="desktop"]) :is(.orb-ring, .orb-shock, #moons, .desk-dots) 
 html:not([data-shell="desktop"]) .orb-wrap:not([data-mode="listen"]):not([data-mode="command"]):not([data-mode="think"]) .orb-halo { display: none; }
 html:not([data-shell="desktop"]) { --orb: 54px; }
 html:not([data-shell="desktop"]) .device.orb-corner { --corner-orb: 50px; }
+/* Opinionated (phone): no visible scrub line under the orb; the desk-scrub gesture still works, label still shows. */
+html:not([data-shell="desktop"]) .scrub i { opacity: 0 !important; box-shadow: none !important; }
