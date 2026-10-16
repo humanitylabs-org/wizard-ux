@@ -27,7 +27,7 @@
 .ub-m { margin-top: 5px; font-size: 12px; color: var(--ink-3); }
 .ub-m .fail { color: var(--amber); font-weight: 700; }
 .ub-a { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-.ub-a button { padding: 8px 14px; border-radius: 99px; background: rgba(143, 99, 255, .24); color: var(--ink); font-size: 13px; font-weight: 650; }
+.ub-a button { min-height: 44px; min-width: 44px; padding: 8px 14px; border-radius: 99px; background: rgba(143, 99, 255, .24); color: var(--ink); font-size: 13px; font-weight: 650; }
 .ub-a button.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
 
 .cx-row { padding: 12px; margin-bottom: 8px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); }

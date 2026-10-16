@@ -275,6 +275,7 @@ window.WizCore.chats = function createChats(H) {
     let cls = '', label, btns = '';
     if (items.some(it => it.state === 'unconfirmed' || OUTBOX?.quarantined(it.id))) {
       cls = ' fail'; label = 'Could not confirm · originals kept';
+      if (items.some(it => OUTBOX.canRetry(it) && it.state !== 'empty')) btns = '<button type="button" class="pbtn" data-obretryall>Retry eligible</button>';
     } else if (items.every(it => it.state === 'empty')) {
       cls = ' fail'; label = 'No speech detected · recordings kept';
       btns = one ? `<button type="button" class="pbtn ghost" data-obdismiss="${esc(one.id)}">Dismiss</button>` : '';
@@ -284,7 +285,7 @@ window.WizCore.chats = function createChats(H) {
     } else if (failed.length) {
       cls = ' fail';
       label = one ? `Not sent · ${esc(clip(name(one), 34))}` : `${failed.length} not sent`;
-      btns = one ? `<button type="button" class="pbtn" data-obretry="${esc(one.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(one.id)}">Edit</button>`
+      btns = one ? `<button type="button" class="pbtn" data-obretry="${esc(one.id)}">Retry</button>${!one.audio && !one.audioFile && !one.body ? `<button type="button" class="pbtn ghost" data-obedit="${esc(one.id)}">Edit</button>` : ''}`
         : `<button type="button" class="pbtn" data-obretryall>Retry all</button>`;
     } else if (waiting.length) {
       cls = ' wait';
@@ -293,6 +294,7 @@ window.WizCore.chats = function createChats(H) {
     } else {
       label = one ? `Sending · ${esc(clip(name(one), 34))}` : `Sending ${items.length} messages`;
     }
+    if (one && !OUTBOX.canRetry(one) && ['failed', 'waiting'].includes(one.state)) btns = '';
     const spin = failed.length || items.some(it => ['unconfirmed', 'held', 'empty'].includes(it.state) || OUTBOX?.quarantined(it.id)) ? '' : '<i class="dots"><b></b><b></b><b></b></i>';
     return `<div class="ch-pill${cls}" data-sendpill="${items.length}" role="status"><span class="pl"${open}>${spin}<span>${label}</span></span>${btns}</div>`;
   }
@@ -380,8 +382,8 @@ window.WizCore.chats = function createChats(H) {
     let body;
     const draftSec = drafts.length ? `<section class="ch-sec open" data-sec="drafts"><div class="ch-sec-h static"><span>Drafts</span><small>${drafts.length}</small></div><div class="ch-sec-b">${drafts.map(d => draftRow(d, d.key === 'new' && curThread === '__new__')).join('')}</div></section>` : '';
     // Messages still on the phone (the window went back to the list on send), new chats and replies: shown until
-    // Wizard takes them, so a send never vanishes from Chats. Failed voice notes live in Errors.
-    const outNew = OUTBOX ? OUTBOX.unsent().filter(it => (it.agent || '') === AGID && (it.kind === 'new' || it.kind === 'reply') && !(it.state === 'failed' && (it.audio || it.audioFile)) && (!n || norm(it.text).includes(n))) : [];
+    // Wizard takes them. Local recovery is independent of list/search/server availability.
+    const outNew = OUTBOX ? OUTBOX.unsent().filter(it => (it.agent || '') === AGID && (it.kind === 'new' || it.kind === 'reply')) : [];
     // A message still leaving the phone already shows as its thread's "Sending…" row in Working; the pill is only
     // for trouble (offline / not sent) or a thread that isn't in the list.
     const pill = sendPill(outNew.filter(it => ['failed', 'waiting', 'unconfirmed'].includes(it.state) || OUTBOX?.quarantined(it.id) || !LIVE.session(it.sessionId)), w);
@@ -1044,10 +1046,11 @@ window.WizCore.chats = function createChats(H) {
   }
   function pendingState(p) {
     if (OUTBOX?.quarantined(p.id)) return '<span class="pst wait">Waiting for device storage verification · not sending</span>';
-    if (p.state === 'unconfirmed') return `<span class="pst fail">${esc(p.error)}</span>`;
+    const recover = H.recoverUnsent ? `<button type="button" class="pbtn" data-obrecover="${esc(p.id)}">Recover</button>` : '';
+    if (p.state === 'unconfirmed') return `<span class="pst fail">${esc(p.error)}</span>${recover}`;
     if (p.state === 'empty') return `<span class="pst fail">No speech detected · recording kept</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry transcription</button><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
-    if (p.state === 'held') return `<span class="pst">Kept on this device · not queued</span><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
-    if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button><button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`;
+    if (p.state === 'held') return `<span class="pst">Kept on this device · not queued</span>${recover}<button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
+    if (p.state === 'failed') return `<span class="pst fail">Not sent · ${esc(p.error || 'Wizard didn’t take it')}</span>${OUTBOX.canRetry(p) ? `<button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry</button>` : ''}${p.audio || p.audioFile || p.body ? recover : `<button type="button" class="pbtn ghost" data-obedit="${esc(p.id)}">Edit</button>`}`;
     if (p.state === 'waiting') return `<span class="pst wait">${esc(p.error || 'Couldn’t reach Wizard')} · retrying</span><button type="button" class="pbtn" data-obretry="${esc(p.id)}">Retry now</button>`;
     const agent = esc(window.WizConfig.agent());
     if (p.state === 'sent') {
@@ -1333,8 +1336,9 @@ window.WizCore.chats = function createChats(H) {
         H.toast(ok ? '✓' : '!', ok ? (sent ? 'Sent bubble dismissed · message stays in this chat' : 'Bubble dismissed · recording kept in Unsent messages') : 'Could not save dismissal · original kept', 2400);
       }); return true;
     }
-    const rb = e.target.closest('[data-obretry]'); if (rb) { OUTBOX.retry(rb.dataset.obretry); H.toast('↻', 'Sending again', 1400); return true; }
-    if (e.target.closest('[data-obretryall]')) { OUTBOX.retryAll(); H.toast('↻', 'Sending again', 1400); return true; }
+    const recovery = e.target.closest('[data-obrecover]'); if (recovery) { H.recoverUnsent?.(recovery.dataset.obrecover); return true; }
+    const rb = e.target.closest('[data-obretry]'); if (rb) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retry(rb.dataset.obretry)), 2400); return true; }
+    if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;
     if (justPressed() && e.target.closest('[data-chopen]')) return true; // a long-press/swipe just opened the actions sheet

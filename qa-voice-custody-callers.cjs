@@ -11,12 +11,12 @@ const sessions=[{id:sid,source:'wizard-mobile',title:'Custody original',status:'
 function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v?'PASS':'FAIL'} ${name}`,!v?JSON.stringify(detail):'');}
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM||undefined,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
- async function boot(desktop=false,allFail=false){
+ async function boot(desktop=false,allFail=false,legacyOutbox=null){
   const ctx=await browser.newContext({viewport:desktop?{width:1440,height:960}:{width:390,height:844},isMobile:!desktop,hasTouch:!desktop,permissions:['microphone'],serviceWorkers:'block'});
   const state={down:true,sttDelay:0,text:words,cmd:{route:'agent'},uploads:[],posts:[],runs:new Map(),seq:0,errors:[]};
   await ctx.route('**/*',async r=>{
    const q=r.request(),u=new URL(q.url()),p=u.pathname,json=(o,status=200)=>r.fulfill({status,contentType:'application/json',body:JSON.stringify(o)});
-   if(q.method()==='GET'&&p.startsWith('/wizard-os-home/')){let f=p.slice('/wizard-os-home/'.length)||'index.html';f=path.join(root,'web',f);if(fs.existsSync(f)&&fs.statSync(f).isFile())return r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml'});}
+   if(q.method()==='GET'&&p.startsWith('/wizard-os-home/')){if(process.env.QA_LIVE_ORIGIN)return r.continue();let f=p.slice('/wizard-os-home/'.length)||'index.html';if(f==='outbox.js'&&legacyOutbox?.source)return r.fulfill({body:legacyOutbox.source,contentType:'application/javascript'});f=path.join(root,'web',f);if(fs.existsSync(f)&&fs.statSync(f).isFile())return r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml'});}
    if(p==='/fixture-capture')return r.fulfill({contentType:'text/html',body:'<meta name="wizard-os-voice" content="capture"><p>Local capture fixture</p>'});
    if(p.endsWith('/bootstrap'))return json({bootstrap:1,display:{agent_name:'Wizard',owner_name:'Tester'},endpoints:{transcribe:'/wizard/v1/transcribe',route:'/wizard/v1/route'},files:{upload_url:'/wizard/files/upload'},capabilities:{voice:true,router:true,files:true,steer:true}});
    if(p.endsWith('/transcribe')){await sleep(state.sttDelay);return json({text:state.text,ms:5}).catch(()=>{});}
@@ -28,12 +28,12 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
     return json({file:{id:'drop_fixture'+(++state.seq),filename:'original.webm',mime,bytes:b.length}});
    }
    if(p.endsWith('/v1/runs')&&q.method()==='POST'){
-    const body=JSON.parse(q.postData());state.posts.push(body);if(state.down)return json({error:'offline'},503);
-    const key=q.headers()['idempotency-key'];if(!state.runs.has(key))state.runs.set(key,{run_id:'run-fixture-'+state.runs.size,status:'queued'});return json(state.runs.get(key),202);
+    const body=JSON.parse(q.postData());state.calls ||= [];state.calls.push({key:q.headers()['idempotency-key'],body:q.postData()});state.posts.push(body);if(state.down)return json({error:'offline'},503);
+    const key=q.headers()['idempotency-key'];if(!state.runs.has(key))state.runs.set(key,{run_id:'run-fixture-'+state.runs.size,status:'queued'});if(state.dropReceipt){state.dropReceipt=false;return r.abort('connectionreset');}return json(state.runs.get(key),202);
    }
    if(p.endsWith('/api/sessions')&&q.method()==='POST')return json({session:{id:JSON.parse(q.postData()).id}});
    if(p.includes('/api/sessions/')&&q.method()==='GET')return json({session:sessions[0],messages:sessions[0].messages});
-   if(p.endsWith('/api/sessions'))return json({sessions});
+   if(p.endsWith('/api/sessions'))return state.listDown?json({error:'offline'},503):json({sessions:state.emptyList?[]:sessions});
    if(p.endsWith('/api/jobs'))return json({jobs:[]});
    if(p.endsWith('/v1/runs'))return json({runs:[]});
    if(p.endsWith('/api/model/options'))return json({model,provider,providers:[{slug:provider,name:'QA provider',authenticated:true,is_current:true,models:[model]}]});
@@ -53,7 +53,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    Storage.prototype.setItem=function(k,v){if(__fault.all&&(k.startsWith('wos.outbox.fallback')))throw new DOMException('Injected full storage','QuotaExceededError');return set.call(this,k,v);};
   },{allFail,model,provider});
   const p=await ctx.newPage();p.on('pageerror',e=>state.errors.push(String(e)));
-  await p.goto('http://localhost:9481/wizard-os-home/'+(desktop?'desktop.html':''));
+  await p.goto((process.env.QA_LIVE_ORIGIN||'http://localhost:9481')+'/wizard-os-home/'+(desktop?'desktop.html':''));
   await p.waitForFunction(()=>!!(window.__wos||window.__wux)?.chats&&window.WosOutbox?.recoveryComplete);
   await p.evaluate(()=>WosModels.load());await p.waitForFunction(()=>window.WosModels?.snapshot()?.model);await sleep(250);
   const wid=await p.evaluate(sid=>{const A=window.__wos||window.__wux;const w=A.openWin?A.openWin({app:'chats'}):null;const id=w?.id||Object.keys(A.wins).find(k=>A.wins[k].app==='chats');if(!id)throw Error('No chat window');A.chats.openChat(id,sid);A.focusWin?.(id);return id;},sid);
@@ -64,7 +64,13 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   return {ctx,p,state,wid,take,rows,done};
  }
  if(process.env.QA_PARITY_ONLY==='1'){await require('./qa-responsive-remainder.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}
+ if(process.env.QA_RECOVERY_ONLY==='1'){await require('./qa-voice-recovery.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_EMPTY_ONLY==='1'){await require('./qa-empty-voice.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
+ if(process.env.QA_DEADLINE_ONLY==='1'){await require('./qa-voice-deadline.cjs')({boot,ok,sleep,sid,model,provider});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
+ if(process.env.QA_UPGRADE_ONLY==='1'){await require('./qa-voice-upgrade.cjs')({boot,ok,sleep,sid,model,provider});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
+ await require('./qa-voice-upgrade.cjs')({boot,ok,sleep,sid,model,provider});
+ await require('./qa-voice-recovery.cjs')({boot,ok,sleep,sid,model,provider,out});
+ await require('./qa-voice-deadline.cjs')({boot,ok,sleep,sid,model,provider});
  await require('./qa-voice-custody-repairs.cjs')({boot,ok,sleep,sid,model,provider});
  if(process.env.QA_REPAIR_ONLY==='1'){await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  // Phone voice+composer: crash while preprocessing must not restore a second composer owner.

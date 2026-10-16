@@ -152,6 +152,7 @@
     viewContext: (id, how) => viewContext(id, how),
     visible: () => desks[idx].wins,
     editUnsent: it => editUnsent(it),
+    recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
     newChatHint: 'Type below, or tap the orb and talk.',
     // The composer's mic (#13): the orb's own recorder, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
@@ -1729,7 +1730,7 @@
   inboxEl.addEventListener('click', e => {
     if (e.target.closest('[data-allread]')) { LIVE.markSeen(live().ready.map(s => s.id)); vib(8); toast('✓', 'All marked read'); return; }
     const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
-    if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); setTimeout(onUnsentChange, 300); }
+    if (e.target.closest('[data-ub-all]')) window.WosSettings.retryAll({ outbox: OUTBOX, toast, render: onUnsentChange });
   });
 
   // Moons orbit the orb: one per running agent (violet) or thread that needs you (amber).
@@ -2348,7 +2349,7 @@
         // The bounded request below is the evidence; retain audio on real failure.
         const result = await Promise.race([
           window.WizConfig.transcribe(part, { prompt: window.WizConfig.voicePrompt(), language: 'en', signal: op.abort.signal }),
-          new Promise((_, reject) => { timer = setTimeout(() => { op.abort.abort(); reject(new Error('Transcription timed out')); }, Math.min(45000, 12000 + Math.round(part.size / 20))); }),
+          new Promise((_, reject) => { timer = setTimeout(() => { op.abort.abort(); reject(new Error('Transcription timed out')); }, OUTBOX.TRANSCRIBE_TIMEOUT_MS); }),
         ]);
         clearTimeout(timer);
         if (!live()) return;
@@ -2560,7 +2561,7 @@
       // Its bounded failure retains the take; commands never become agent messages.
       for (const part of blobs) {   // more than one part only after the mic was interrupted mid-take
         // A flaky line can hang a request for a long time: past this bound the take goes to the outbox instead.
-        const jj = await OUTBOX.bounded(signal => window.WizConfig.transcribe(part, { prompt, language: 'en', signal }));
+        const jj = await OUTBOX.bounded(signal => window.WizConfig.transcribe(part, { prompt, language: 'en', signal }), OUTBOX.TRANSCRIBE_TIMEOUT_MS);
         words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
       }
       const text = words.filter(Boolean).join(' ').trim();
@@ -2569,11 +2570,12 @@
         releaseNative(); unhold(); setVoice('idle'); txHide();
         toast('◌', 'No speech detected · recording and text kept in Unsent'); tourEv('nospeech'); return;
       }
+      await OUTBOX.keepTranscript(snap.custodyId, text);
       const outcome = await handleText(text, kind, false, j.ms, aimAt, snap);
       if (OUTBOX.get(snap.custodyId)?.state === 'processing') {
         await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'local'
           ? 'Handled on this device · original recording kept; not queued to the agent'
-          : 'No delivery receipt · original recording kept; nothing sent');
+          : 'Delivery not confirmed · original recording kept; not queued for retry');
       }
       releaseNative(); unhold();
     } catch (err) {
