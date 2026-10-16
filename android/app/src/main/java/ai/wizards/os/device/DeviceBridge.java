@@ -2,6 +2,7 @@ package ai.wizards.os.device;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -90,7 +91,7 @@ public final class DeviceBridge implements RecorderService.Listener {
 
     public void onStart() { AppState.setFront(true); ReplyWatcher.appFront(activity); }
     public void onStop() { AppState.setFront(false); ReplyWatcher.kick(activity); Updater.onStop(activity); }
-    public void onResume() { Updater.onResume(activity); }
+    public void onResume() { Updater.onResume(activity); WizardIdentity.refresh(activity); }
     public void onDestroy() {
         // A take still running (app swiped away) carries on; its notification's Stop/Send take over from here.
         RecorderService.setListener(null);
@@ -112,6 +113,30 @@ public final class DeviceBridge implements RecorderService.Listener {
 
     @JavascriptInterface
     public int version() { return 1; }
+
+    /** Additive capability: older APKs keep refusing meeting/orb competition. */
+    @JavascriptInterface
+    public int recHandoffVersion() { return 1; }
+
+    @JavascriptInterface
+    public String recHandoffBegin(String eventId, String meetingId) {
+        return ai.wizards.os.mizel.MeetingRecorderService.beginBorrow(eventId, meetingId);
+    }
+
+    @JavascriptInterface
+    public String recStartBorrowed(String kind, String eventId) {
+        return RecorderService.start(activity, kind, eventId);
+    }
+
+    @JavascriptInterface
+    public String recHandoffEnd(String eventId) {
+        return ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "cancelled");
+    }
+
+    @JavascriptInterface
+    public String recHandoffEvents() {
+        return new JSONObject(activity.getSharedPreferences("meeting-handoffs-v1", Context.MODE_PRIVATE).getAll()).toString();
+    }
 
     /* --- recorder --- */
 
