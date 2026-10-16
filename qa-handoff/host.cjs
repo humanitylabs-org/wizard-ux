@@ -17,6 +17,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
  ({boot,app,select,tap,contexts}=new Function('require','__dirname','process',fixture+'\nreturn {boot,app,select,tap,contexts};')((name)=>name==='playwright-core'?{chromium}:require(name),root,process));
  browser=await chromium.launch({executablePath:process.env.CHROMIUM,headless:true,args:['--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  let f=await boot(browser,false),p=f.p;await tones(p);const store=new OrbEvents(path.join(evidence,'events.json'));
+ await p.evaluate(()=>Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false}));
  await f.context.route('**/mizel-live/orb-events**',async r=>{try{if(r.request().method()==='PUT'){const event=store.upsert(r.request().postDataJSON());return r.fulfill({json:{event}});}return r.fulfill({json:{events:store.list(new URL(r.request().url()).searchParams.get('meetingId'))}});}catch(e){console.error('EVENT REJECT',e.message,r.request().postData());return r.fulfill({status:409,json:{error:e.message}});}});
  for(const focused of [false,true]) await test('idle held command borrows active meeting and resumes before STT without agent send; field focused='+focused,async()=>{
    await p.evaluate(async()=>{await WosModels.load();window.meeting=await WizAppCapture.start('mizel',{kind:'meeting',chunkMs:500,meta:{meetingId:'idle-held-command'}});});
