@@ -47,7 +47,7 @@ const snapshot=JSON.parse(fs.readFileSync(process.env.QA_SNAPSHOT));
    await f.locator(`#detail [data-open="${target}"]`).waitFor();
    if(id==='cinequeue') await p.screenshot({path:path.join(out,`movies-${width}.png`),fullPage:true});
    await f.locator(`#detail [data-open="${target}"]`).click();
-   await p.waitForFunction(url=>Array.from(document.querySelectorAll('iframe')).some(f=>new URL(f.src,location.href).pathname.startsWith(url)),url);
+   await p.waitForFunction(url=>Array.from(document.querySelectorAll('iframe')).some(f=>{try{return f.contentWindow.location.pathname.startsWith(url);}catch{return false;}}),url);
    const app=p.frames().find(x=>new URL(x.url() || 'about:blank').pathname.startsWith(url));
    await app.locator('body').waitFor();assert.ok((await app.locator('body').innerText()).trim().length>0);
    opened.push({id,target,url:app.url()});

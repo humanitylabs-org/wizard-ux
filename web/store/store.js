@@ -86,6 +86,8 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
       // Never silently substitute a removed explicit release after Refresh.
       if(S.selections.has(key(a)) && !a.releases.some(r=>`${r.source}:${r.commit}`===S.selections.get(key(a)))) S.selections.set(key(a),'unavailable');
     }
+    // First-run shell discovery can finish after the Store's own reads.
+    try { if(framed) await parent.WizCore?.appsLoaded?.(); } catch (_) {}
     S.loaded = true; paint();
     if(top()==='detail') showDetail(S.stack.at(-1).arg);
     else if(top()==='list') openKind(S.stack.at(-1).arg,true);
@@ -227,6 +229,16 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   });
   $('q').addEventListener('input', () => search($('q').value));
   $('refresh').addEventListener('click',()=>load(true));
+  const shellChanged=()=>{
+    if(!S.loaded) return;
+    if(top()==='detail') showDetail(S.stack.at(-1).arg);
+    else if(top()==='list') openKind(S.stack.at(-1).arg,true);
+    else if(top()==='search') search(S.q);
+  };
+  try { if(framed) {
+    parent.addEventListener('wizard:apps',shellChanged);
+    addEventListener('pagehide',()=>parent.removeEventListener('wizard:apps',shellChanged),{once:true});
+  } } catch (_) {}
   document.addEventListener('change',e=>{if(e.target.matches('[data-release]')) {S.selections.set(e.target.dataset.release,e.target.value);showDetail(e.target.dataset.release);}});
   $('q').addEventListener('keydown', e => { if (e.key === 'Enter') $('q').blur(); });
 
