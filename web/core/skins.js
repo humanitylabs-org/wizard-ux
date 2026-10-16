@@ -200,47 +200,6 @@
       },
     },
     'obsidian-light': { init(s, W, H) { BG.obsidian.prep(s, W, H, '#ffffff', 0); }, draw(c, s, t, dt, W, H) { BG.obsidian.draw(c, s, t, dt, W, H); } },
-    // Landscapes: one wallpaper at a time, cover-fitted once into an offscreen canvas (a frame is one or two drawImage
-    // calls). Each app load starts on the next one, and every minute on Home moves on with a 2.5 s crossfade; only the current and next
-    // files are fetched. Frozen with the scenery gate like every other skin.
-    landscapes: {
-      FILES: ['00-10-9', '01-10-10', '02-10-11', '03-10-12', '04-10-13', '05-10-14-day', '06-10-14-night', '07-10-15-day', '08-10-15-night',
-        '09-11-big-sur-day', '10-11-big-sur-night', '11-26-tahoe-beach-dawn', '12-26-tahoe-beach-day', '13-26-tahoe-beach-dusk', '14-26-tahoe-beach-night', '15-27-golden-gate-bridge'],
-      AVG: ['#347883', '#937b75', '#71747c', '#715c63', '#9b8773', '#6d5d5a', '#232d43', '#4f4d60', '#18253e', '#40576a', '#0d1b2e', '#8a818c', '#4d8da3', '#405877', '#0d1011', '#87736a'],
-      HOLD: 60, FADE: 2.5, KEY: 'wos.skin.landscapes.at',
-      load(s, i, W, H) {
-        if (s.img[i]) return s.img[i];
-        const slot = s.img[i] = { ready: false, c: null }, im = new Image();
-        im.decoding = 'async';
-        im.onload = () => { const o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'), k = Math.max(o.width / im.naturalWidth, o.height / im.naturalHeight),
-          w = im.naturalWidth * k, h = im.naturalHeight * k; x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h);
-          // a soft top and bottom scrim so the clock and the bottom bar stay legible on bright skies
-          const g = x.createLinearGradient(0, 0, 0, o.height); g.addColorStop(0, 'rgba(11,10,16,.42)'); g.addColorStop(.28, 'rgba(11,10,16,0)'); g.addColorStop(.7, 'rgba(11,10,16,0)'); g.addColorStop(1, 'rgba(11,10,16,.55)');
-          x.fillStyle = g; x.fillRect(0, 0, o.width, o.height); slot.c = o; slot.ready = true; wake(); };
-        im.src = `/wizard-os-home/core/skins/macos/${this.FILES[i]}.webp`;
-        return slot;
-      },
-      init(s, W, H) {
-        const n = this.FILES.length; let at = 0;
-        try { at = (parseInt(localStorage.getItem(this.KEY), 10) + 1) % n; if (!isFinite(at)) at = 0; localStorage.setItem(this.KEY, String(at)); } catch (e) {}
-        s.img = {}; s.cur = at; s.from = null; s.fadeAt = 0; s.shownAt = BGL.t; s.n = n;
-        this.load(s, at, W, H); this.load(s, (at + 1) % n, W, H);
-      },
-      draw(c, s, t, dt, W, H) {
-        const cur = s.img[s.cur];
-        if (cur?.ready && t - s.shownAt > this.HOLD) {
-          const nx = (s.cur + 1) % s.n, nxt = this.load(s, nx, W, H);
-          if (nxt.ready) { s.from = s.cur; s.cur = nx; s.fadeAt = t; s.shownAt = t; try { localStorage.setItem(this.KEY, String(nx)); } catch (e) {} this.load(s, (nx + 1) % s.n, W, H);
-            for (const k of Object.keys(s.img)) if (+k !== s.cur && +k !== s.from && +k !== (nx + 1) % s.n) delete s.img[k]; }
-        }
-        const f = s.from == null ? 1 : Math.min(1, (t - s.fadeAt) / this.FADE);
-        const prev = s.from != null ? s.img[s.from] : null;
-        if (prev?.ready && f < 1) c.drawImage(prev.c, 0, 0, W, H);
-        else if (!s.img[s.cur]?.ready) { c.fillStyle = this.AVG[s.cur]; c.fillRect(0, 0, W, H); }
-        if (s.img[s.cur]?.ready) { c.globalAlpha = f; c.drawImage(s.img[s.cur].c, 0, 0, W, H); c.globalAlpha = 1; }
-        if (f >= 1) s.from = null;
-      },
-    },
   };
   function size() {
     const d = BGL.cv[0] && BGL.cv[0].parentElement; if (!d) return;
