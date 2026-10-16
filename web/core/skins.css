@@ -106,3 +106,20 @@ html[data-skin^="obsidian"] :is(.bub blockquote, .msg.agentnote .an-body, .rc-bo
 html[data-skin^="obsidian"] :is(.us-bar i, .ls-load) { background: var(--ink); }
 html[data-skin^="obsidian"] .pal-card { background: var(--glass-2); }
 html[data-skin="obsidian-light"] :is(.msg.agentnote > summary, .laterrun, .msg.agentnote .an-body, .rc-body) { color: var(--ink-2); }
+
+/* Obsidian strictness: buttons painted with var(--violet) hard-code white text; under Obsidian --violet IS white
+   (or black in Light), so their text follows the background instead. */
+html[data-skin^="obsidian"] :is(.sw.on, .dv-update button, .ch-sec-h b:not(.wait), .bub .tick.on, .dv-btn.primary, .get.open, .get.big) { color: var(--bg); }
+html[data-skin^="obsidian"] #device > #generalVoice.selected { color: var(--bg); }
+/* Status icons and labels: shape carries meaning, not colour. Needs-you / failed keep full ink, the rest step down. */
+html[data-skin^="obsidian"] .ch-row .emo.sti:is(.needs, .approval, .failed, .offline) { color: var(--ink); background: var(--ob-tint); box-shadow: inset 0 0 0 1.5px var(--ink); }
+html[data-skin^="obsidian"] .ch-row .emo.sti:is(.check, .fyi, .done, .deferred) { color: var(--ink-2); background: var(--ob-tint); box-shadow: inset 0 0 0 1px var(--ob-edge); }
+html[data-skin^="obsidian"] .ch-row .emo.sti.working { background: var(--ob-tint); }
+html[data-skin^="obsidian"] .ch-row .emo.sti .spin { border-color: var(--ob-edge); border-top-color: var(--ink); }
+html[data-skin^="obsidian"] .ch-row .emo.sti svg .k { stroke: var(--bg); }
+html[data-skin^="obsidian"] .ch-row .emo.sti svg .kd { fill: var(--bg); }
+html[data-skin^="obsidian"] .ch-row .pv em.att { color: var(--ink); font-weight: 700; }
+html[data-skin^="obsidian"] .ch-sec-h b.wait { background: var(--ob-tint); color: var(--ink); }
+/* App sigils and the brand mark go grey; each app keeps its silhouette. */
+html[data-skin^="obsidian"] :is(.sgi, .logo, .wic, .dsg) { filter: grayscale(1); }
+html[data-skin="obsidian-light"] .sgi { filter: grayscale(1) brightness(.35); }
