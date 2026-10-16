@@ -937,7 +937,7 @@ window.WizCore.chats = function createChats(H) {
     const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd];
     const canStop = working && !!s?.runId && s.status !== 'stopping';
     PW?.ensureModels();
-    const chip = PW ? PW.modelChip(w, s) : '';
+    const chip = PW ? (document.documentElement.dataset.shell === 'desktop' && PW.modelSwitch ? PW.modelSwitch(w, s) : PW.modelChip(w, s)) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
@@ -991,6 +991,18 @@ window.WizCore.chats = function createChats(H) {
   /* Long-press or swipe left on a thread row → thread actions (listeners in bind()). */
   let lp = null, lpUntil = 0;
   // Long-press / swipe / right-click on rows, and paste-to-attach; bound to each shell's root in bind().
+  // Opinionated (phone): keep the order pills, + and the orb on one line. The orb lives in the dock, so measure and
+  // lift the dock to the pills' centre, then park + just left of the orb. Cleared anywhere else.
+  if (document.documentElement.dataset.shell !== 'desktop') setInterval(() => {
+    const dock = document.querySelector('.dock'), orb = document.getElementById('orbWrap'); if (!dock || !orb) return;
+    const bar = [...document.querySelectorAll('.ch-list .ch-rdy-bar')].find(b => { const r = b.getBoundingClientRect(); return r.height && r.bottom > 0 && r.top < innerHeight; });
+    const fab = bar?.closest('.ch-list')?.querySelector('.ch-fab');
+    if (!bar || document.getElementById('device')?.classList.contains('composing')) { if (dock.style.translate) dock.style.translate = ''; return; }
+    const br = bar.getBoundingClientRect(), cur = parseFloat((dock.style.translate || '0 0').split(' ')[1]) || 0;
+    const or = orb.getBoundingClientRect(), d = (br.top + br.height / 2) - (or.top + or.height / 2) + cur;
+    if (Math.abs(d - cur) > 1 && d < 0 && d > -200) dock.style.translate = `0 ${Math.round(d)}px`;
+    if (fab) { const lr = fab.offsetParent?.getBoundingClientRect(); const o2 = orb.getBoundingClientRect(); if (lr) { fab.style.right = `${Math.round(lr.right - o2.left + 10)}px`; fab.style.bottom = `${Math.round(lr.bottom - (br.top + br.height / 2) - fab.offsetHeight / 2)}px`; } }
+  }, 400);
   function bindGestures(root) {
     // Opinionated (phone): swipe right from the left edge of a thread to go back to the list.
     if (document.documentElement.dataset.shell !== 'desktop') {
