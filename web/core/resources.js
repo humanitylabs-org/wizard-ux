@@ -30,7 +30,7 @@
     if(live){if(p.status==='ok'){m[id]={...live,at:Date.parse(p.fetchedAt)||Date.now()};memo.put(m);}return {...live,stale:p.status==='stale'};}
     if(p?.status==='ok'&&(p.paid?.enabled===false||!p.paid)){if(m[id]){delete m[id];memo.put(m);}return null;}
     const k=m[id];return k&&number(k.limit)>0?{...k,stale:true}:null;}
-  function extraCell(p,x) {const label=`${p.name} extra`,old=x.stale||staleAI(p);return `<span class="rs-account rs-extra ${old?'rs-stale':''}" data-res-account="${esc(p.id)}:extra" title="Extra usage: ${esc(cash(x.left,x.exp,x.cur))} left of ${esc(cash(x.limit,x.exp,x.cur))}${old?' (last known reading)':''}"><span class="rs-account-line"><span>${esc(label)}</span><b class="${x.pct<=15?'rs-warning':''}">${esc(cash(x.left,x.exp,x.cur))}</b></span>${bar(x.pct,'ai')}${old?'<small>Last known reading</small>':''}</span>`;}
+  function extraCell(p,x) {const label=`${p.name} extra`,old=x.stale||staleAI(p);return `<span class="rs-account rs-extra ${old?'rs-stale':''}" data-res-account="${esc(p.id)}:extra" title="Extra usage: ${esc(cash(x.left,x.exp,x.cur))} left of ${esc(cash(x.limit,x.exp,x.cur))}${old?' (last known reading)':''}"><span class="rs-account-line"><span>${esc(label)}</span><b class="${x.pct>=85?'rs-warning':''}">${x.pct}%</b></span>${bar(x.pct,'ai')}${old?'<small>Last known reading</small>':''}</span>`;}
   // Every subscription remains visible; do not silently rank accounts out of Home.
   /* One column per provider: its heading, then each of its subscriptions underneath. */
   function homeCells(providers) {
