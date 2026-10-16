@@ -71,7 +71,7 @@ try:
     result = cli.install(c, 'outline-streaming-demo', {'OUTLINE_TRIAL_UPSTREAM': a.upstream}, wait=False)
     if result.get('status') == 'already installed':
         result = {'id': 'outline-streaming-demo', 'operation': 'update',
-                  'result': rt.req('POST', '/app-lifecycle/'+urn+'/update', {})}
+                  'result': rt.req('PATCH', '/app-lifecycle/'+urn+'/update', {})}
     print(json.dumps(result, indent=2))
 finally:
     private.fetch = original_fetch
