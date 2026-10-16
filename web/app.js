@@ -2573,8 +2573,10 @@
       await OUTBOX.keepTranscript(snap.custodyId, text);
       const outcome = await handleText(text, kind, false, j.ms, aimAt, snap);
       if (OUTBOX.get(snap.custodyId)?.state === 'processing') {
-        await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'local'
-          ? 'Handled on this device · original recording kept; not queued to the agent'
+        const completed = outcome?.outcome === 'local' && await OUTBOX.completeLocal(snap.custodyId);
+        if (!completed && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'local'
+          ? 'Command completed · accompanying draft or attachments kept'
+          : outcome?.outcome === 'local-pending' ? 'Command accepted · completion unconfirmed; original recording kept'
           : 'Delivery not confirmed · original recording kept; not queued for retry');
       }
       releaseNative(); unhold();
@@ -2839,7 +2841,7 @@
     if (!ok) { $('#txRouteText').textContent += ' · no match'; }
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
     txHide(ok ? (isPill() ? 1200 : 1300) : 3200);
-    return { outcome: ok ? 'local' : 'unhandled' };
+    return { outcome: ok ? (window.WosCommands.completedLocally(c, ok) ? 'local' : 'local-pending') : 'unhandled' };
   }
   async function toView(v, text, label, snap) {
     showRouted('view', label); setVoice('done'); vib([8, 40, 8]);
@@ -2848,7 +2850,7 @@
     if (!v.thread || W[v.id]?.thread === v.thread) focusWin(v.id); // never pull James back from where he went since
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
     txHide(isPill() ? 1200 : 1500);
-    return ok === true ? { outcome: 'local' } : ok;
+    return ok === true ? { outcome: 'local-pending' } : ok;
   }
   function execute(c, text, opts = {}) {
     return window.WosCommands.execute(c, text, {
