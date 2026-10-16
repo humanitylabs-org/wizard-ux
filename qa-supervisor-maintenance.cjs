@@ -49,7 +49,7 @@ async function context(browser, phone, mode = '') {
    await p.waitForFunction(()=>WizCore.apps('desktop').APP['wizard-supervisor']);
    await check(shell+' real shell and session reads', async()=> {
      assert.equal(await p.evaluate(()=>document.documentElement.dataset.shell),shell);
-     await p.waitForFunction(()=> (window.__wos?.live || window.__wux?.live)?.sessions?.length > 0);
+     await p.waitForFunction(()=> {const l=window.__wos?.live || window.__wux?.live;return l?.ok && l.sessions?.length > 0;});
    });
    const sys = p.frameLocator('iframe[src*="system/index.html"]').first();
    await sys.locator('#s-apps').waitFor({timeout:20000});
@@ -102,7 +102,7 @@ async function context(browser, phone, mode = '') {
    await sys.locator('#s-apps').waitFor();
    await check(shell+' System Maintenance visible after reopening',async()=> {
      await sys.locator('[data-supervisor]').waitFor({state:'visible',timeout:3000});
-     await p.waitForFunction(()=> (window.__wos?.live || window.__wux?.live)?.sessions?.length > 0);
+     await p.waitForFunction(()=> {const l=window.__wos?.live || window.__wux?.live;return l?.ok && l.sessions?.length > 0;});
      await p.screenshot({path:path.join(OUT,shell+'-system.png')});
    });
    await check(shell+' focused System node Back clears focus and retains shell',async()=> {
@@ -117,6 +117,11 @@ async function context(browser, phone, mode = '') {
      await p.waitForTimeout(350); await p.evaluate(()=>history.back()); await p.waitForTimeout(350);
      assert(p.url().includes('/wizard-os-home/'));
      assert(await p.evaluate(()=>!!(window.__wos||window.__wux)));
+   });
+   await p.goto(BASE+'?open=wizard');
+   await check(shell+' real Chats rows render',async()=> {
+     await p.waitForFunction(()=> {const l=window.__wos?.live || window.__wux?.live;return l?.ok && l.sessions?.length > 0;});
+     await p.locator('[data-chopen]').first().waitFor({state:'visible'});
    });
    await check(shell+' no page errors',async()=>assert.deepEqual(errors,[]));
    await check(shell+' zero agent run attempts',async()=>assert(!blocked.some(u=>/\/v1\/runs$/.test(u))));
