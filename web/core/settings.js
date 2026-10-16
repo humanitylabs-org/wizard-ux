@@ -62,6 +62,15 @@
     ctx.root.querySelector('[data-skinname]').textContent = `${S.list.find(k => k.id === now)?.name || ''} · tap to wear`;
     ctx.haptic?.(8); return true;
   } });
+  register({ id: 'skin-frame', html() {
+    const S = window.WosSkin; if (!S?.frame) return '';
+    return `<div class="st-group sf-section"><h4>Skin · Window foundation</h4>${window.WosSkinFrame.choices(S.frame.foundation)}<p>Combine either foundation with any skin. Your open apps stay in place.</p><label class="sf-import">Import skin JSON<input type="file" data-skinfile accept="application/json,.json" hidden></label><button class="sf-reset" data-skinreset>Skin default</button><p data-skinimport-status role="status"></p></div>`;
+  }, act(ctx, el) {
+    const b = el.closest('[data-skinfoundation]');
+    if (!b && !el.closest('[data-skinreset]')) return false;
+    if (b) window.WosSkin.setFoundation(b.dataset.skinfoundation); else window.WosSkin.resetFrame();
+    ctx.render(); return true;
+  } });
   register({ id: 'assistant', available: android, html(ctx) {
     const N = native(), evNative = typeof N?.setEverywhere === 'function'; let ev = null;
     try { ev = evNative ? JSON.parse(N.everywhere()) : null; } catch (_) {}
@@ -129,6 +138,19 @@
       return !!f?.act?.(ctx, el);
     }
     const click = e => dispatch(e.target);
+    const change = async e => {
+      const input = e.target.closest('[data-skinfile]'); if (!input) return;
+      const file = input.files?.[0]; if (!file) return;
+      try {
+        if (file.size > 8192) throw new Error('Skin JSON must be 8 KB or smaller');
+        const definition = JSON.parse(await file.text());
+        if (!root.isConnected) return;
+        window.WosSkin.compose(definition); render();
+        root.querySelector('[data-skinimport-status]').textContent = 'Skin composition applied on this device.';
+      } catch (error) {
+        const status = root.querySelector('[data-skinimport-status]'); if (status) status.textContent = `Not applied: ${error.message}`;
+      } finally { input.value = ''; }
+    };
     const key = e => {
       const b = e.target.closest('[data-skinpick]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
       e.preventDefault(); const buttons = [...root.querySelectorAll('[data-skinpick]')], at = buttons.indexOf(b);
@@ -136,8 +158,8 @@
       buttons[n].focus(); buttons[n].click();
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
-    function destroy() { if (typeof unsubscribe === 'function') unsubscribe(); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); }
-    root.addEventListener('click', click); root.addEventListener('keydown', key); mounts.add(api); render(); return api;
+    function destroy() { if (typeof unsubscribe === 'function') unsubscribe(); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   function route(view, open) {
     if (view === 'settings') { open(); return true; }

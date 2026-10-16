@@ -1,0 +1,56 @@
+/* Frame foundations compose with every colour skin. Only shell-owned geometry changes.
+ * The transparent ledge is outside content: never obscure an unknown app toolbar. */
+html[data-skin-frame] .win { border-width: var(--sf-border, 1px); border-radius: var(--sf-radius, 18px); }
+html[data-shell="desktop"][data-skin-frame] .win { border-radius: var(--sf-radius, var(--radius)); }
+html[data-skin-frame] .tiles:not(.has-full) { left: var(--sf-gutter, 10px); right: var(--sf-gutter, 10px); gap: var(--sf-gap, var(--gap)); }
+html[data-skin-frame="borderless"] .tiles:not(.has-full) { top: calc(var(--sb) + var(--safe-t)); }
+html[data-skin-frame="borderless"] .win { background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+html[data-skin-frame="borderless"] .win > .wbody { background: var(--sk-win); border-radius: var(--sf-radius, 0px); overflow: hidden; }
+html[data-skin-frame="borderless"] .win > .wbar {
+  height: 44px; flex: 0 0 44px; min-width: 0; gap: 2px; padding: 0 4px;
+  border: 0; background: transparent; position: relative; z-index: 4;
+}
+html[data-skin-frame="borderless"] .wbar > :is(.wic, .ic) { display: none; }
+html[data-skin-frame="borderless"] .wbar > :is(.wt, .t) { font-size: 11px; padding: 5px 8px; border-radius: 99px; }
+html[data-skin-frame="borderless"] .wbar > button {
+  min-width: 44px; width: 44px; height: 44px; border-radius: 50%; color: var(--ink-2); flex-shrink: 0;
+  background: color-mix(in srgb, var(--sk-win) 92%, transparent);
+}
+html[data-skin-frame="borderless"] .wbar > button:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -3px; }
+html[data-skin-frame="borderless"] .wbar > button:hover { color: var(--ink); background: var(--glass-2); }
+html[data-skin-frame="borderless"] .wbar > [data-wact="close"] { color: var(--ink); }
+html[data-skin-frame="borderless"] .win.focus > .wbar > :is(.wt, .t) { color: var(--violet-2); }
+html[data-skin-frame="borderless"] .shield { top: 44px; }
+/* Busy bound/review controls remain scroll-reachable in narrow split panes. */
+html[data-skin-frame="borderless"] .wbar { overflow-x: auto; scrollbar-width: none; }
+html[data-skin-frame="borderless"] .wbar::-webkit-scrollbar { display: none; }
+html[data-skin-frame="borderless"] .wbar > [data-wact="close"] { position: sticky; right: 0; z-index: 2; }
+html[data-skin-frame="borderless"] .wbar > .wpin { width: auto; padding: 0 10px; border-radius: 99px; }
+html[data-skin-frame="borderless"] .tiles[data-n] .wbar .wb[data-wact="full"] { display: grid; }
+html[data-shell="desktop"][data-skin-frame="borderless"] .win > .wbar { height: 36px; flex-basis: 36px; cursor: grab; }
+html[data-shell="desktop"][data-skin-frame="borderless"] .wbar > button { min-width: 32px; width: 32px; height: 32px; }
+/* Immersive remains a separate presentation with its existing exit/Back controls. */
+html[data-skin-frame] .device.immersive .win.full,
+html[data-skin-frame] body.desktop-fullscreen .win.full { border: 0; border-radius: 0; }
+html[data-skin-frame] .device.immersive .win.full > .wbar,
+html[data-skin-frame] body.desktop-fullscreen .win.full > .wbar { display: none; }
+html[data-skin-frame="borderless"] .device.wx-on .tiles { top: calc(var(--sb) + var(--safe-t) + 44px); }
+/* Shared Settings controls; JSON import is local and never executes designer code. */
+.sf-section { padding: 10px 12px; }
+.sf-section p { font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+.sf-choices { display: flex; gap: 6px; }
+.sf-choices button, .sf-import, .sf-reset { min-height: 44px; padding: 8px 14px; border-radius: 99px; border: 1px solid var(--line); background: var(--glass); color: var(--ink-2); font: inherit; cursor: pointer; }
+.sf-choices button[aria-pressed="true"] { background: var(--glass-2); border-color: var(--violet-2); color: var(--ink); }
+.sf-import { display: inline-flex; align-items: center; margin-top: 8px; }
+.sf-reset { margin: 8px 0 0 6px; }
+.sf-error { color: var(--red); }
+/* Preview-only review strip reserves space instead of covering app/orb controls.
+ * Never present without the explicit deployment meta; comparison changes no strip geometry. */
+html.sf-preview { --sf-review-h: 46px; }
+.sf-preview-bar { position: fixed; z-index: 9999; top: env(safe-area-inset-top, 0px); left: 0; right: 0; height: 46px; display: flex; justify-content: center; align-items: center; gap: 10px; background: var(--bg); border-bottom: 1px solid var(--line); color: var(--ink-3); font: 11px system-ui; }
+.sf-preview-bar .sf-choices { gap: 4px; }
+.sf-preview-bar button { min-height: 40px; padding: 6px 12px; font-size: 12px; }
+html.sf-preview .device { top: calc(var(--sf-review-h) + env(safe-area-inset-top, 0px)); height: calc(100% - var(--sf-review-h) - env(safe-area-inset-top, 0px)); }
+html.sf-preview[data-shell="desktop"] .bar { top: var(--sf-review-h); }
+html.sf-preview[data-shell="desktop"] .stage { top: calc(var(--bar-h) + var(--sf-review-h)); }
+html.sf-preview[data-shell="desktop"] body.desktop-fullscreen .stage { top: var(--sf-review-h); }
