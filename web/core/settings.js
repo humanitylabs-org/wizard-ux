@@ -64,8 +64,9 @@
   } });
   register({ id: 'skin-frame', html() {
     const S = window.WosSkin; if (!S?.frame) return '';
-    return `<div class="st-group sf-section"><h4>Skin · Window foundation</h4>${window.WosSkinFrame.choices(S.frame.foundation)}<p>Combine either foundation with any skin. Your open apps stay in place.</p><label class="sf-import">Import skin JSON<input type="file" data-skinfile accept="application/json,.json" hidden></label><button class="sf-reset" data-skinreset>Skin default</button><p data-skinimport-status role="status"></p></div>`;
+    return `<div class="st-group sf-section"><h4>Skin · Window foundation</h4>${window.WosSkinFrame.choices(S.frame.foundation)}<p>Combine either foundation with any skin. Your open apps stay in place.</p><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><button class="sf-reset" data-skinreset>Skin default</button><p data-skinimport-status role="status"></p></div>`;
   }, act(ctx, el) {
+    if (el.closest('[data-skinimport]')) { ctx.root.querySelector('[data-skinfile]').click(); return true; }
     const b = el.closest('[data-skinfoundation]');
     if (!b && !el.closest('[data-skinreset]')) return false;
     if (b) window.WosSkin.setFoundation(b.dataset.skinfoundation); else window.WosSkin.resetFrame();
@@ -115,6 +116,7 @@
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
     const ctx = { ...adapter, root }, api = { render, focus, destroy, dispatch, context: ctx };
+    let skinImportMessage = '';
     ctx.render = render;
     ctx.paintUsage = () => { const g = root.querySelector('[data-usage]'); if (g) g.outerHTML = window.WosUsage.html(); };
     function render() {
@@ -124,6 +126,7 @@
       const record = active?.closest('[data-ubid]')?.dataset.ubid;
       root.innerHTML = `<div class="st-inner"><h3 class="st-title" tabindex="-1">Settings</h3>${[...features.values()].filter(f => !f.available || f.available(ctx)).map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('')}</div>`;
       root.scrollTop = top;
+      const importStatus = root.querySelector('[data-skinimport-status]'); if (importStatus) importStatus.textContent = skinImportMessage;
       if (attrs.length) { const scope = record ? root.querySelector(`[data-ubid="${CSS.escape(record)}"]`) : root; const sel = attrs.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join(''); scope?.querySelector(sel)?.focus({ preventScroll: true }); }
       const U = window.WosUsage;
       if (U && !U.loading && (!U.snap || Date.now() - U.at > 60000)) U.load().then(ctx.paintUsage);
@@ -145,10 +148,11 @@
         if (file.size > 8192) throw new Error('Skin JSON must be 8 KB or smaller');
         const definition = JSON.parse(await file.text());
         if (!root.isConnected) return;
-        window.WosSkin.compose(definition); render();
-        root.querySelector('[data-skinimport-status]').textContent = 'Skin composition applied on this device.';
+        window.WosSkin.compose(definition);
+        skinImportMessage = 'Skin composition applied on this device.'; render();
       } catch (error) {
-        const status = root.querySelector('[data-skinimport-status]'); if (status) status.textContent = `Not applied: ${error.message}`;
+        skinImportMessage = `Not applied: ${error.message}`;
+        const status = root.querySelector('[data-skinimport-status]'); if (status) status.textContent = skinImportMessage;
       } finally { input.value = ''; }
     };
     const key = e => {
