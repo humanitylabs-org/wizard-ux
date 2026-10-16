@@ -73,9 +73,6 @@
           collapse(true);
         } else if (expanded === bar) collapse(true);
         else { collapse(); expanded = bar; bar.classList.add('sf-expanded'); toggle.setAttribute('aria-expanded', 'true'); }
-      } else if (act) {
-        // Let the original delegated route/full/close/bound action run unchanged.
-        queueMicrotask(() => collapse());
       }
     });
   }
@@ -88,6 +85,18 @@
     scan(document.body);
     new MutationObserver(records => records.forEach(r => r.addedNodes.forEach(scan))).observe(document.body, { childList: true, subtree: true });
     document.addEventListener('pointerdown', e => { if (expanded && !expanded.contains(e.target)) collapse(); }, true);
+    // Route/bound modules may stop clicks in document capture. Observe at window
+    // capture, then fold only after their original dispatch has completed.
+    addEventListener('click', e => {
+      const button = e.target.closest?.('.wbar button');
+      if (expanded && button && !['frame-menu', 'frame-move'].includes(button.dataset.wact)) {
+        const owner = expanded;
+        setTimeout(() => { if (expanded === owner) collapse(); }, 0);
+      }
+    }, true);
+    addEventListener('blur', () => setTimeout(() => {
+      if (document.activeElement?.tagName === 'IFRAME') collapse();
+    }, 0));
     addEventListener('wos:skin-frame', () => collapse());
   }
   if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
