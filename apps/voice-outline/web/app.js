@@ -5,6 +5,12 @@ let session=null,socket=null,current=null,seq=0,starting=false,stopping=false,st
 const note=t=>{$('notice').textContent=t;};
 const request=async(path,options={})=>{const r=await fetch(path,{cache:'no-store',...options});const value=await r.json();if(!r.ok)throw Object.assign(new Error(value.error||'Request failed'),{status:r.status,value});return value;};
 const put=value=>({method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(value)});
+const config=await request('./api/config');
+if(config.local){
+ document.title='Outline · Local trial';document.querySelector('.eyebrow').textContent='Local Nemotron trial';
+ $('provider-note').textContent='Private trial · Wizard’s shared microphone → local Nemotron on the Mac. Raw words, no cloud transcription or rewriting. Keep this tab open. Start a new bullet before 9 minutes 50 seconds per thought; takes stop at 15 minutes. Audio is retained until verified.';
+ $('trial-note').hidden=false;$('trial-note').textContent='Parakeet is withheld: its buffered trial omitted the ending of a long note on both hosts. Nemotron kept the tested ending and Apple reference, but can miss words (including an opening “Do”). Review the original audio; this is not a perfect-accuracy claim. Your installed Outline, Orb and daily voice provider are unchanged.';
+}
 function remember(){
  const state=clone({doc,rev,ops,selected,drafts:ledger.items,seq,undo,redo});
  localWrites=localWrites.catch(()=>{}).then(()=>new Promise((resolve,reject)=>{if(!db)return reject(new Error('Local recovery unavailable'));const tx=db.transaction('recovery','readwrite');tx.objectStore('recovery').put(state,'outline');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);}));
@@ -89,13 +95,13 @@ async function startLive(){
   if(!W.capture.capabilities({kind:'outline',pcm:true}).pcm)throw new Error('Live PCM is unavailable in this recorder. Use the browser preview; no meeting will be created.');
   prepared=W.capture.prepare({kind:'outline',pcm:true});
   if((await W.capture.pending()).length)throw new Error('Retained audio needs recovery first. Open the menu → Recover.');
-  const health=await request('./healthz');if(!health.liveReady)throw new Error('Tinfoil is not configured on this preview.');
+  const health=await request('./healthz');if(!health.liveReady)throw new Error(config.local?'Local Nemotron is unavailable. No fallback is enabled; try again when the Mac is ready.':'Tinfoil is not configured on this preview.');
   socket=new WebSocket(new URL('./api/live',location.href).href.replace(/^http/,'ws'));socket.binaryType='arraybuffer';
   await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Live connection timed out')),12000);socket.onopen=()=>{clearTimeout(timer);resolve();};socket.onerror=()=>{clearTimeout(timer);reject(new Error('Live connection failed'));};});
   socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='delta'||m.type==='final'){ledger.event(m);if(m.type==='final')settle();else{remember();render();}}else if(m.type==='error'){note('Live words unavailable: '+m.reason+'. Audio remains retained.');if(m.id&&ledger.items[m.id]&&ledger.items[m.id].status!=='final')ledger.items[m.id].status='unconfirmed';settle();if(session&&!paused&&(!m.id||m.id===current?.id))pauseLive();}};
   socket.onclose=()=>{if(session&&!stopping){note('Connection lost. Recording paused; stop to save retained audio.');pauseLive();}};
   editing=null;
-  session=await W.capture.start({kind:'outline',pcm:true,mime:'audio/wav',chunkMs:5000,maxMs:15*60*1000,maxBytes:32*1024*1024,preparedId:prepared.id,meta:{app:'voice-outline'},audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  session=await W.capture.start({kind:'outline',pcm:true,mime:'audio/wav',chunkMs:5000,maxMs:15*60*1000,maxBytes:32*1024*1024,preparedId:prepared.id,meta:{app:config.local?'outline-streaming-demo':'voice-outline'},audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
   startedAt=Date.now();paused=false;stopObserved=false;begin();const take=session.id;
   offs.push(session.onPcm(f=>{if(!current||paused)return;if(socket.readyState!==1||socket.bufferedAmount>640000){note('Live network is behind. Paused; audio retained.');pauseLive();return;}socket.send(f.pcm);}),session.onChunk(c=>upload(take,c)),session.onWarn(w=>note(String(w?.message||w))),session.onState(st=>{if(stoppedByCore())stopLive();}));
   liveTimer=setInterval(liveUI,1000);note('Listening to the marked bullet. New bullet or Child starts the next thought.');liveUI();render();
@@ -129,7 +135,7 @@ $('live').onclick=()=>session?stopLive():startLive();$('stop').onclick=()=>{clos
 addEventListener('online',()=>save());document.addEventListener('keydown',e=>{if(e.target.tagName!=='TEXTAREA')keys(e);});
 async function load(){
  let remoteRead=false;
- try{db=await new Promise((resolve,reject)=>{const req=indexedDB.open('voice-outline-recovery',1);req.onupgradeneeded=()=>req.result.createObjectStore('recovery');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
+ try{db=await new Promise((resolve,reject)=>{const req=indexedDB.open(config.recovery,1);req.onupgradeneeded=()=>req.result.createObjectStore('recovery');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
   const local=await new Promise((resolve,reject)=>{const req=db.transaction('recovery').objectStore('recovery').get('outline');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
   if(local){({doc,rev,ops,selected,seq}=local);undo=local.undo||[];redo=local.redo||[];for(const item of [...undo,...redo]){delete item.forward.id;delete item.forward.speechId;}ledger=new SpeechLedger(local.drafts||{});for(const s of Object.values(ledger.items))if(s.status==='draft')s.status='unconfirmed';}
   try{const remote=await request('./api/document');remoteRead=true;rev=remote.rev;doc=remote.document;for(const op of ops)apply(doc,op);const speech=await request('./api/speech');for(const s of speech.utterances){if(!doc.applied.includes('speech-'+s.id)){ledger.event({...s,type:s.status==='final'?'final':'delta'});if(s.status!=='final')ledger.items[s.id].status='unconfirmed';}}}catch(e){note('Offline recovery. Changes stay on this device until the server returns.');}

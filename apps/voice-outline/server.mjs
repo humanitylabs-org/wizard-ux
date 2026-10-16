@@ -7,6 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { WebSocketServer } from 'ws';
 import { validateDocument } from './web/model.js';
 import { OutlineRealtime } from './realtime.mjs';
+import { OutlineLocalRealtime, localEndpoint, localHealth, LOCAL_MODEL } from './local-realtime.mjs';
 import { joinWav } from './audio.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url)), data=resolve(process.env.OUTLINE_DATA || './app-data');
@@ -23,13 +24,17 @@ function trusted(req){let u;try{u=new URL('http://'+req.headers.host);}catch{ret
 function json(res,code,value){res.writeHead(code,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(value));}
 async function body(req,limit=2e6){const parts=[];let bytes=0;for await(const b of req){bytes+=b.length;if(bytes>limit)throw Object.assign(new Error('Request too large'),{status:413});parts.push(b);}return Buffer.concat(parts);}
 function putDoc(payload){validateDocument(payload.document);const old=getDoc();if(payload.rev!==old.rev)return {conflict:true,...old};db.prepare('UPDATE document SET rev=?,body=? WHERE id=1').run(old.rev+1,JSON.stringify(payload.document));return getDoc();}
-let provider;
-if(process.env.TINFOIL_API_KEY && process.env.TINFOIL_PROVIDER_MODULE){const {TinfoilProvider}=await import(pathToFileURL(resolve(process.env.TINFOIL_PROVIDER_MODULE)));provider=new TinfoilProvider(process.env.TINFOIL_API_KEY,null,'voxtral-mini-4b-realtime');}
+const local=process.env.OUTLINE_PROVIDER==='local-nemotron';
+const endpoint=local?localEndpoint(process.env.OUTLINE_LOCAL_WS||'ws://127.0.0.1:18885'):null;
+const model=local?LOCAL_MODEL:'voxtral-mini-4b-realtime';
+let provider=local?{local:true}:null;
+if(!local && process.env.TINFOIL_API_KEY && process.env.TINFOIL_PROVIDER_MODULE){const {TinfoilProvider}=await import(pathToFileURL(resolve(process.env.TINFOIL_PROVIDER_MODULE)));provider=new TinfoilProvider(process.env.TINFOIL_API_KEY,null,'voxtral-mini-4b-realtime');}
 const server=http.createServer(async(req,res)=>{
  try{
   if(!trusted(req))return json(res,403,{error:'Host or Origin not trusted'});
   const url=new URL(req.url,'http://localhost'), path=url.pathname;
-  if(path==='/healthz')return json(res,200,{ok:true,app:'voice-outline',liveReady:!!provider,model:'voxtral-mini-4b-realtime',source:process.env.SOURCE_SHA||null});
+  if(path==='/healthz')return json(res,200,{ok:true,app:local?'outline-streaming-demo':'voice-outline',liveReady:local?await localHealth(endpoint):!!provider,model,provider:local?'local-sherpa-cpu':'tinfoil',fallback:null,adapterSource:local?process.env.OUTLINE_ADAPTER_SHA||null:null,source:process.env.SOURCE_SHA||null});
+  if(path==='/api/config')return json(res,200,{local,model,recovery:local?'outline-streaming-demo-recovery':'voice-outline-recovery'});
   if(path==='/api/document' && req.method==='GET')return json(res,200,getDoc());
   if(path==='/api/document' && req.method==='PUT'){const result=putDoc(JSON.parse(await body(req)));return json(res,result.conflict?409:200,result);}
   if(path==='/api/speech' && req.method==='GET')return json(res,200,{utterances:db.prepare('SELECT id,target,seq,text,status FROM speech ORDER BY updated LIMIT 5000').all()});
@@ -78,10 +83,10 @@ const server=http.createServer(async(req,res)=>{
    if(!file.startsWith(resolve(root,'web')+'/'))return json(res,403,{error:'Forbidden'});
   }
   if(!existsSync(file))return json(res,404,{error:'Not found'});
-  res.writeHead(200,{'content-type':({'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml'})[extname(file)]||'application/octet-stream','cache-control':'no-cache','x-content-type-options':'nosniff','referrer-policy':'same-origin'});res.end(readFileSync(file));
+  res.writeHead(200,{'content-type':({'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml'})[extname(file)]||'application/octet-stream','cache-control':'no-cache','x-content-type-options':'nosniff','referrer-policy':'same-origin'});const content=readFileSync(file);res.end(local&&file.endsWith('/index.html')?content.toString().replace('data-app="voice-outline"','data-app="outline-streaming-demo"'):content);
  }catch(e){json(res,e.status||400,{error:e.message});}
 });
-const wss=new WebSocketServer({noServer:true,maxPayload:100000});let sockets=0;
+const wss=new WebSocketServer({noServer:true,maxPayload:100000});let sockets=0,localTail=Promise.resolve();
 server.on('upgrade',(req,socket,head)=>{if(!trusted(req)||req.url!=='/api/live'||!provider||sockets>=4){socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');return;}wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws));});
 wss.on('connection',ws=>{
  sockets++;const streams=new Map();let active=null,closed=false,total=0,providerTail=Promise.resolve();
@@ -98,13 +103,14 @@ wss.on('connection',ws=>{
     if(streams.size>=3)throw new Error('Waiting for earlier finals; pause before continuing');
     if(db.prepare('SELECT id FROM speech WHERE id=?').get(m.id))throw new Error('Utterance already exists');
     const s={id:m.id,target:m.target,seq:m.seq,text:'',queue:[],queued:0,bytes:0,ended:false};streams.set(s.id,s);active=s.id;save(s,'draft','');
-    s.stream=new OutlineRealtime(provider.client,{delta:t=>{if(s.failed||s.final)return;if(s.retrying){s.text='';s.retrying=false;}s.text+=t;save(s,'draft',s.text);send({type:'delta',id:s.id,target:s.target,seq:s.seq,text:s.text,audioBytes:s.bytes});},completed:t=>{if(s.failed||s.final)return;s.final=true;s.text=t||s.text;save(s,'final',s.text);send({type:'final',id:s.id,target:s.target,seq:s.seq,text:s.text});streams.delete(s.id);clearTimeout(s.timer);},reset:()=>{s.retrying=true;},error:e=>fail(s,e)});
+    const handlers={delta:t=>{if(s.failed||s.final)return;if(s.retrying){s.text='';s.retrying=false;}s.text+=t;save(s,'draft',s.text);send({type:'delta',id:s.id,target:s.target,seq:s.seq,text:s.text,audioBytes:s.bytes});},replace:t=>{if(s.failed||s.final)return;s.text=t;save(s,'draft',t);send({type:'delta',replace:true,id:s.id,target:s.target,seq:s.seq,text:t,audioBytes:s.bytes});},completed:t=>{if(s.failed||s.final)return;s.final=true;s.text=local?t:(t||s.text);save(s,'final',s.text);send({type:'final',id:s.id,target:s.target,seq:s.seq,text:s.text});streams.delete(s.id);clearTimeout(s.timer);},reset:()=>{s.retrying=true;},error:e=>fail(s,e)};
+    s.stream=local?new OutlineLocalRealtime(endpoint,handlers):new OutlineRealtime(provider.client,handlers);
     // Keep recording while the previous thought drains, but serialize native
     // provider generations. The next stream retains its PCM before open().
-    const previous=providerTail;providerTail=s.stream.result;await previous;
-    if(s.failed||closed){s.stream.abort();return;}
+    const previous=local?localTail:providerTail;providerTail=s.stream.result;if(local)localTail=previous.then(()=>s.stream.result);await previous;
+    if(s.failed||s.final||closed){s.stream.abort();return;}
     await s.stream.open();
-    if(s.failed||closed){s.stream.abort();return;}
+    if(s.failed||s.final||closed){s.stream.abort();return;}
     for(const b of s.queue)s.stream.append(b);s.queue=[];s.queued=0;send({type:'ready',id:s.id});if(s.ended)void s.stream.close();
    }else if(m.type==='end'){
     const s=streams.get(m.id);if(!s)return;s.ended=true;if(active===s.id)active=null;
@@ -115,7 +121,7 @@ wss.on('connection',ws=>{
   }catch(e){send({type:'error',reason:e.message});}
  });
  ws.on('close',()=>{closed=true;sockets--;for(const s of streams.values()){clearTimeout(s.timer);s.stream?.abort();}streams.clear();});
- send({type:'connected',model:'voxtral-mini-4b-realtime'});
+ send({type:'connected',model,provider:local?'local-sherpa-cpu':'tinfoil'});
 });
 server.listen(Number(process.env.PORT||8799),process.env.BIND||'127.0.0.1',()=>console.log(JSON.stringify({event:'listening',port:server.address().port,liveReady:!!provider})));
 process.on('SIGTERM',()=>{wss.clients.forEach(w=>w.close());server.close(()=>{db.close();process.exit(0);});});
