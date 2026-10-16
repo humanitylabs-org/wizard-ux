@@ -23,7 +23,7 @@
     const blocked = it.state === 'unconfirmed' || ctx.outbox?.quarantined?.(it.id);
     const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error) : it.state === 'empty' ? 'No speech detected · recording kept' : it.state === 'held' ? 'Kept on this device · not queued' : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : it.state === 'sending' ? 'Sending…' : `${esc(it.error || 'Waiting')} · retrying`;
     const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
-    return `<div class="ub-row ${esc(it.state)}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}"><div class="ub-t"><span>${esc(it.text || (it.state === 'empty' ? 'Voice recording' : 'Voice note · words come when it sends'))}</span></div><div class="ub-m">${src} · ${esc(when)} · ${st}</div><div class="ub-a">${!blocked && it.state !== 'held' ? `<button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>` : ''}${it.origin === 'app' && it.sessionId && ctx.live?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' && !blocked ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
+    return `<div class="ub-row ${esc(it.state)}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}"><div class="ub-t"><span>${esc(it.text || (it.state === 'empty' ? 'Voice recording' : 'Voice note · words come when it sends'))}</span></div><div class="ub-m">${src} · ${esc(when)} · ${st}</div><div class="ub-a">${it.parkedDraft && ctx.restoreReply ? '<button data-ub="restore-reply">Return to paused reply</button>' : ''}${!blocked && it.state !== 'held' ? `<button data-ub="retry">${it.state === 'failed' ? 'Retry' : 'Retry now'}</button>` : ''}${it.origin === 'app' && it.sessionId && ctx.live?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' && !blocked ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
   }
   function unsentAction(ctx, id, origin, action) {
     if (origin === 'everywhere') {
@@ -32,6 +32,7 @@
       setTimeout(() => ctx.changed?.(), 300); return;
     }
     const it = ctx.outbox?.get(id); if (!it) return;
+    if (action === 'restore-reply') { ctx.restoreReply?.(id); return; }
     if (action === 'retry') { if (it.state === 'held' || it.state === 'unconfirmed' || ctx.outbox.quarantined?.(id)) return; ctx.outbox.retry(id); ctx.toast?.('↻', 'Sending again', 1400); }
     if (action === 'delete') Promise.resolve(ctx.outbox.remove(id)).then(ok => ctx.toast?.(ok === false ? '!' : '✕', ok === false ? 'Could not save deletion · keep Wizard open' : 'Deleted', 2400));
     if (action === 'open') ctx.openThread(it.sessionId);

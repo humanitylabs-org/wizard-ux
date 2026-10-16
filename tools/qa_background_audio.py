@@ -13,8 +13,9 @@ def sh(*args,stdin=None,timeout=120):
     if r.returncode: raise RuntimeError('command failed '+str(args)[:180]+'\n'+r.stderr[-2000:]+'\n'+r.stdout[-2000:])
     return r.stdout
 def sx(cmd): return sh(ADB,'-s',SERIAL,'shell',cmd)
-registry=json.load(urllib.request.urlopen('https://music-background.staging.wizard001.com/wizard/v1/apps',timeout=20))
-bootstrap=json.load(urllib.request.urlopen('https://music-background.staging.wizard001.com/wizard/v1/bootstrap',timeout=20))
+discovery=os.environ.get('WOS_QA_DISCOVERY_ORIGIN','https://music-background.staging.wizard001.com').rstrip('/')
+registry=json.load(urllib.request.urlopen(discovery+'/wizard/v1/apps',timeout=20))
+bootstrap=json.load(urllib.request.urlopen(discovery+'/wizard/v1/bootstrap',timeout=20))
 state={'tracks':[], 'events':[], 'bytes':0,'gets':[], 'refills':0,'batches':{},'next':3,'down':False}
 LOCK=threading.Lock(); em=None;server=None
 stale_release=threading.Event();stale_release.set()

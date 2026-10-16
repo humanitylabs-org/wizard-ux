@@ -130,12 +130,23 @@
   // One turn = what the owner said (words, photos, files), the work in between, the answer and anything the agent sent.
   function parseRows(rows) {
     const out = []; let cur = null;
+    const contextIds = new Set();
     const newTurn = u => { cur = { u, a: null, notes: [], steps: 0, media: [], at: u?.at, work: [], steers: [] }; out.push(cur); return cur; };
     for (const m of rows || []) {
       const kind = m.display_kind || '';
       const content = m.display_content ?? m.content;
       const raw = partsText(content);
       const at = tsMs(m.timestamp ?? m.created_at);
+      // Display-only startup context is supplied by the service. It belongs to
+      // the following run, never to the owner's preceding request or work receipt.
+      if (kind === 'run_context' && m.role === 'system' && m.run_context && typeof m.run_context === 'object') {
+        const id = String(m.id ?? m.message_id ?? `${at}:${m.run_context.original || ''}`);
+        if (contextIds.has(id)) continue;
+        contextIds.add(id);
+        newTurn(null); cur.at = at;
+        cur.later = { at, context: m.run_context, id };
+        continue;
+      }
       if (m.role === 'user') {
         const isSteer = kind === 'steer' || raw.trimStart().startsWith(STEER_OPEN);
         const note = agentNote(raw);
@@ -715,12 +726,14 @@
   function normalizeApproval(value) {
     const it = value && typeof value === 'object' ? value : {};
     const str = (...v) => v.find(x => typeof x === 'string' && x.trim()) || '';
-    const action = str(it.command, it.redacted_action, it.action, it.description);
+    const canonical = typeof it.prompt_id === 'string';
+    if (canonical && (!it.prompt_id || !Number.isSafeInteger(it.execution_generation))) return null;
+    const action = str(it.question, it.command, it.redacted_action, it.action, it.description);
     const choices = (Array.isArray(it.choices) ? it.choices : []).map(c => {
       if (typeof c === 'string') return { value: c, label: friendlyChoice(c) };
       const v = str(c?.value, c?.choice, c?.id); return v ? { value: v, label: str(c?.label, c?.name) || friendlyChoice(v) } : null;
     }).filter(Boolean);
-    return action && choices.length ? { requestId: str(it.request_id, it.id) || undefined, action, choices } : null;
+    return action && (choices.length || it.kind === 'clarify') ? { kind: it.kind || 'approval', requestId: str(it.prompt_id, it.request_id, it.id) || undefined, generation: canonical ? it.execution_generation : undefined, action, choices } : null;
   }
 
   window.WosChat = { K, esc, homePath, isHomeUrl, parseRows, helm, imagesOf, chipFiles, md, inline, time, drafts, copyText, copyRich, richParts, sharePayload, shareText, shareAssistantText, shareFile, saveFile, viewer, normalizeApproval, friendlyChoice, choiceReceipt };
