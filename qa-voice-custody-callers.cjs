@@ -11,12 +11,12 @@ const sessions=[{id:sid,source:'wizard-mobile',title:'Custody original',status:'
 function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v?'PASS':'FAIL'} ${name}`,!v?JSON.stringify(detail):'');}
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM||undefined,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
- async function boot(desktop=false,allFail=false){
+ async function boot(desktop=false,allFail=false,legacyOutbox=null){
   const ctx=await browser.newContext({viewport:desktop?{width:1440,height:960}:{width:390,height:844},isMobile:!desktop,hasTouch:!desktop,permissions:['microphone'],serviceWorkers:'block'});
   const state={down:true,sttDelay:0,text:words,cmd:{route:'agent'},uploads:[],posts:[],runs:new Map(),seq:0,errors:[]};
   await ctx.route('**/*',async r=>{
    const q=r.request(),u=new URL(q.url()),p=u.pathname,json=(o,status=200)=>r.fulfill({status,contentType:'application/json',body:JSON.stringify(o)});
-   if(q.method()==='GET'&&p.startsWith('/wizard-os-home/')){let f=p.slice('/wizard-os-home/'.length)||'index.html';f=path.join(root,'web',f);if(fs.existsSync(f)&&fs.statSync(f).isFile())return r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml'});}
+   if(q.method()==='GET'&&p.startsWith('/wizard-os-home/')){let f=p.slice('/wizard-os-home/'.length)||'index.html';if(f==='outbox.js'&&legacyOutbox?.source)return r.fulfill({body:legacyOutbox.source,contentType:'application/javascript'});f=path.join(root,'web',f);if(fs.existsSync(f)&&fs.statSync(f).isFile())return r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml'});}
    if(p==='/fixture-capture')return r.fulfill({contentType:'text/html',body:'<meta name="wizard-os-voice" content="capture"><p>Local capture fixture</p>'});
    if(p.endsWith('/bootstrap'))return json({bootstrap:1,display:{agent_name:'Wizard',owner_name:'Tester'},endpoints:{transcribe:'/wizard/v1/transcribe',route:'/wizard/v1/route'},files:{upload_url:'/wizard/files/upload'},capabilities:{voice:true,router:true,files:true,steer:true}});
    if(p.endsWith('/transcribe')){await sleep(state.sttDelay);return json({text:state.text,ms:5}).catch(()=>{});}
@@ -67,6 +67,8 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
  if(process.env.QA_RECOVERY_ONLY==='1'){await require('./qa-voice-recovery.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_EMPTY_ONLY==='1'){await require('./qa-empty-voice.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_DEADLINE_ONLY==='1'){await require('./qa-voice-deadline.cjs')({boot,ok,sleep,sid,model,provider});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
+ if(process.env.QA_UPGRADE_ONLY==='1'){await require('./qa-voice-upgrade.cjs')({boot,ok,sleep,sid,model,provider});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
+ await require('./qa-voice-upgrade.cjs')({boot,ok,sleep,sid,model,provider});
  await require('./qa-voice-recovery.cjs')({boot,ok,sleep,sid,model,provider,out});
  await require('./qa-voice-deadline.cjs')({boot,ok,sleep,sid,model,provider});
  await require('./qa-voice-custody-repairs.cjs')({boot,ok,sleep,sid,model,provider});

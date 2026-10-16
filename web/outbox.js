@@ -135,6 +135,19 @@
     emit();
   }
   function recover(it, durable = true) {
+    // Upgrade pre-flag explicit sends without granting held commands delivery intent.
+    // Only enqueue could produce queued/waiting/sending; a sealed admission/steer
+    // envelope also proves the old delivery path ran. Keep its exact key/body/route.
+    if (it.intent === 'command' && it.deliveryRequested === undefined && ['new', 'reply'].includes(it.kind)) {
+      let sealed = false;
+      try {
+        const body = JSON.parse(it.body || it.steerBody || 'null');
+        sealed = !!body && !!it.model && !!it.provider && body.model === it.model && body.provider === it.provider &&
+          (body.agent || '') === (it.agent || '') && body.require_model_lock === true &&
+          (it.body ? body.session_id === it.sessionId : it.steerTarget === it.steerRunId && !!it.steerRunId);
+      } catch (_) {}
+      if (['queued', 'waiting', 'sending'].includes(it.state) || (it.state === 'failed' && sealed)) it.deliveryRequested = true;
+    }
     if (it.kind === 'conversation' && it.state !== 'sent') { it.state = 'held'; it.error = 'App voice input recording kept · retry original or copy transcript; never sent to Chats'; }
     if (it.kind === 'dictation' && it.state === 'transcribing') it.state = 'held';
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
@@ -337,7 +350,7 @@
       kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
-      sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false };
+      sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false };
   }
   function notice() {
     const troubled = [...items.values()].filter(it => !quarantine.has(it.id) && it.state !== 'sent' && (it.storageError || !it.durable));
