@@ -559,3 +559,16 @@ html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-rdy-b
 /* Paperclip: a plain icon in every skin (Obsidian painted it white-on-white). */
 html .ch-compose button.ch-attach { background: none !important; border: 0 !important; box-shadow: none !important; }
 html .ch-compose button.ch-attach svg { stroke: var(--ink-2) !important; }
+/* Phone: pills leave room for + and the orb on their line. */
+html:not([data-shell="desktop"]) .ch-list .ch-rdy-bar { padding-right: 120px; }
+html:not([data-shell="desktop"]) .ch-fab { width: 44px; height: 44px; border-radius: 22px; }
+/* Desktop: Archive on top, then Working, then Ready uninterrupted at the bottom. */
+html[data-shell="desktop"] .ch-list .ch-scroll { display: flex; flex-direction: column; }
+html[data-shell="desktop"] .ch-list .ch-sec[data-sec="archive"] { order: -2; }
+html[data-shell="desktop"] .ch-list .ch-sec[data-sec="working"] { order: -1; }
+html[data-shell="desktop"] .ch-list .ch-sec[data-sec="ready"] { order: 0; }
+html[data-shell="desktop"] .ch-list .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
+/* Desktop: model switch sits in the thread header; the composer mic becomes a small orb. */
+html[data-shell="desktop"] .ch-head .ms { flex: 0 1 280px; }
+html[data-shell="desktop"] .ch-compose button.ch-mic:not(.on) { border: 0 !important; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--ink) 70%, transparent), color-mix(in srgb, var(--violet) 55%, var(--bg)) 55%, var(--bg) 100%) !important; box-shadow: 0 0 0 1px var(--line-2), 0 0 14px color-mix(in srgb, var(--violet) 35%, transparent) !important; }
+html[data-shell="desktop"] .ch-compose button.ch-mic:not(.on) svg { opacity: 0; }
