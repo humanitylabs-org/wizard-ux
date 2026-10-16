@@ -146,7 +146,10 @@ window.WosChatPower = function chatPower(A) {
   function switchOpts(w, s) {
     const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
     const vis = M && M.ready ? M.visible(cur?.model || '', cur?.provider || '') : [];
-    const opts = SW_NAMES.map(n => vis.find(o => M.short(o.value, o.provider) === n) || null);
+    // Match by family in the model id (newest first), so e.g. gpt-6.1-sol still fills the Sol slot.
+    const RX = [/opus/i, /astra/i, /-sol(-|$)/i], all = M && M.ready ? M.options.filter(o => !/-900k$/i.test(o.value)) : [];
+    const newest = l => l.slice().sort((x, y) => y.value.localeCompare(x.value, 'en', { numeric: true }))[0] || null;
+    const opts = RX.map(rx => vis.find(o => rx.test(o.value)) || newest(all.filter(o => rx.test(o.value))));
     const at = cur?.model ? opts.findIndex(o => o && o.value === cur.model) : -1;
     return { opts, at };
   }
