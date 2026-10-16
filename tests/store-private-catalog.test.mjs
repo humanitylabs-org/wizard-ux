@@ -20,10 +20,10 @@ test('same repo gets choices, exact legacy pin migrates, conflict remains visibl
  const alpha={...row,source:'wizard-alpha',channel:'alpha'};
  const standard={...row,source:'standard',commit:'b'.repeat(40)};
  const rows=mergeRows([row,alpha,standard]);
- assert.equal(rows.length,1);assert.equal(rows[0].releases.length,2);assert.equal(rows[0].source,'standard');assert.equal(rows[0].alpha_badge,'Alpha available');
+ assert.equal(rows.length,1);assert.equal(rows[0].releases.length,2);assert.equal(rows[0].source,'standard');assert.equal(rows[0].alpha_badge,'Alpha');
  assert.equal(mergeRows([alpha])[0].alpha_badge,'Alpha');
  const conflicts=mergeRows([alpha,{...standard,repo:'other/repo'}]);assert.equal(conflicts.length,2);assert.ok(conflicts.every(a=>a.conflict));
- const selected=mergeRows([alpha,standard],{'private-app':{source:'wizard-alpha',commit:'c'.repeat(40)}})[0];assert.equal(selected.source,'wizard-alpha');assert.equal(selected.update_available,true);
+ const selected=mergeRows([alpha,standard],{'private-app':{source:'wizard-alpha',commit:'c'.repeat(40)}})[0];assert.equal(selected.source,'wizard-alpha');assert.equal(selected.update_available,undefined); // Different is not newer.
 });
 test('bad private update preserves snapshot; response allowlist strips commands and credentials',async()=>{
  let bad=false;const proxy=withPrivateCatalog(async()=>({status:200,body:{apps:[]}}),()=>{if(bad)throw Error('secret');return [{...row,install_command:'secret',token:'secret',extra:{secret:true}}]},opts);
