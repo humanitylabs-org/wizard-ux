@@ -182,16 +182,19 @@ window.WizCore.chats = function createChats(H) {
   const READY_ORDER_LABEL = { newest: 'Newest', priority: 'Priority', subject: 'By subject' };
   let readyOrder = (() => {
     try {
-      const v = localStorage.getItem(READY_ORDER_KEY); if (READY_ORDERS.includes(v)) return v;
+      const v = localStorage.getItem(READY_ORDER_KEY); if (READY_ORDERS.includes(v) || v === 'oldest') return v;
       if (localStorage.getItem('wos.chats.readyBySubject.v1') === '1') return 'subject'; // the old two-way toggle
     } catch (e) {}
     return 'newest';
   })();
   const waitsOn = s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && ['needs_you', 'check'].includes(attOf(s)?.state));
   // Newest keeps groupWork's recency order; Priority and By subject put what waits on James first.
-  const readyOrdered = list => readyOrder === 'newest' ? list : LIVE.readyByPriority(list);
+  const ARCH_OPTS = [[1, '1 day'], [3, '3 days'], [7, '1 week'], [14, '2 weeks'], [30, '1 month'], [0, 'Never']];
+  const archSel = () => { const cur = LIVE.archiveAfterDays; return `<label class="ch-arch-sel">Auto-archive after <select data-archafter>${ARCH_OPTS.map(([d, l]) => `<option value="${d}"${d === cur ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`; };
+  // Opinionated: tapping Newest again flips it to Oldest (same button, no fourth option).
+  const readyOrdered = list => readyOrder === 'newest' ? list : readyOrder === 'oldest' ? list.slice().reverse() : LIVE.readyByPriority(list);
   function readyBody(list, rowFn) {
-    const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready">${READY_ORDERS.map(o => `<button type="button" data-rdyorder="${o}" aria-pressed="${readyOrder === o}"${readyOrder === o ? ' class="on"' : ''}>${READY_ORDER_LABEL[o]}</button>`).join('')}</div>`;
+    const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready">${READY_ORDERS.map(o => { const on = readyOrder === o || (o === 'newest' && readyOrder === 'oldest'); return `<button type="button" data-rdyorder="${o}" aria-pressed="${on}"${on ? ' class="on"' : ''}>${o === 'newest' && readyOrder === 'oldest' ? 'Oldest' : READY_ORDER_LABEL[o]}</button>`; }).join('')}</div>`;
     if (readyOrder !== 'subject') return bar + list.map(rowFn).join('');
     const groups = new Map();
     for (const s of list) { const k = attOf(s)?.subject || 'Other'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
@@ -406,11 +409,11 @@ window.WizCore.chats = function createChats(H) {
       if (!list.length && !extra.n && (k === 'errors' || n || filtered)) return '';
       // While searching, every section with a hit opens so nothing is buried.
       const open = n || filtered ? true : secOpen[k];
-      const newN = k === 'ready' ? list.filter(s => LIVE.isNew(s) && !waitsOn(s)).length : 0;
-      const waitN = k === 'ready' || k === 'yesterday' || k === 'pastWeek' ? list.filter(s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you')).length : 0;
+      const newN = 0; // Opinionated: no subtotal badges; the Ready count and icon colours say it
+      const waitN = false ? list.filter(s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you')).length : 0;
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
+        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered ? archSel() : ''}${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
     }).join('');
     if (bs && LST.ok) body += BS.footer(bs);
     const place = listPlace(el) || c.listPlace;
@@ -1370,7 +1373,7 @@ window.WizCore.chats = function createChats(H) {
     if (sm) { const shown = [...(sm.closest('[data-sec]') || document).querySelectorAll('[data-subjmove="up"]')].map(b => b.dataset.subjkey);
       if (!sm.disabled && moveSubject(sm.dataset.subjkey, sm.dataset.subjmove, shown)) for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const rg = e.target.closest('[data-rdyorder]');
-    if (rg) { if (READY_ORDERS.includes(rg.dataset.rdyorder)) readyOrder = rg.dataset.rdyorder; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
+    if (rg) { const o = rg.dataset.rdyorder; if (o === 'newest' && (readyOrder === 'newest' || readyOrder === 'oldest')) readyOrder = readyOrder === 'newest' ? 'oldest' : 'newest'; else if (READY_ORDERS.includes(o)) readyOrder = o; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
@@ -1450,6 +1453,9 @@ window.WizCore.chats = function createChats(H) {
       }
       if (e.target.matches('[data-clarify-answer]')) { const c = ch(idOf(e.target)); if (c.approval?.kind === 'clarify') c.approval.answer = e.target.value; }
       if (e.target.matches('.ch-compose textarea')) { growTa(e.target); const id = idOf(e.target); ch(id).draft = e.target.value; saveDraft(id); syncSend(e.target.form, ch(id)); }
+    });
+    root.addEventListener('change', e => {
+      if (e.target.matches('[data-archafter]')) { LIVE.archiveAfterDays = +e.target.value; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } }
     });
     root.addEventListener('keydown', e => {
       // Opinionated: with a hardware keyboard, Enter sends and Shift+Enter is a new line (touch keyboards keep Enter = new line).

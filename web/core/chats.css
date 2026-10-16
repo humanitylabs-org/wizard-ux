@@ -475,21 +475,6 @@ body > .mviewer { position: fixed; z-index: 200; }
 @keyframes ch-attwait { 50% { opacity: .35; } }
 .ch-att.ch-attimg .ch-attpct { position: absolute; left: 0; right: 0; top: 50%; margin-top: 14px; text-align: center; font: 600 11px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); }
 .ch-att.up .nm small { font-variant-numeric: tabular-nums; }
-
-/* Notifications bell beside search (core/notif-bell.js): opens the Notifications app; a dot when something needs you. */
-.ch-bell { position: relative; flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(205, 190, 255, .06); border: 1px solid var(--line); }
-.ch-bell svg { width: 18px; height: 18px; fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.ch-bell b { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center; font-size: 11px; font-weight: 800; line-height: 1; color: var(--on-accent, #160b32); background: var(--violet-2, #b99bff); }
-.ch-bell.needs b { background: var(--amber, #ffbe55); }
-.ch-bell:active { background: rgba(205, 190, 255, .12); }
-
-/* Unsent voice takes at the top of the Chats list (replaces the old notifications panel's Unsent group). */
-.ch-unsent { display: flex; align-items: center; gap: 10px; width: 100%; margin: 4px 0 8px; padding: 10px 12px; border-radius: 14px; text-align: left;
-  background: rgba(143, 99, 255, .12); border: 1px solid rgba(185, 155, 255, .35); color: inherit; font: inherit; }
-.ch-unsent.fail { background: rgba(255, 190, 85, .1); border-color: rgba(255, 190, 85, .45); }
-.ch-unsent .pip { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--violet-2, #b99bff); }
-.ch-unsent.fail .pip { background: var(--amber, #ffbe55); }
-.ch-unsent .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ch-unsent .tx b { font-size: 14px; font-weight: 700; }
-.ch-unsent .tx small { font-size: 12.5px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ch-unsent .go { flex: none; font-size: 13px; font-weight: 700; color: var(--violet-2, #b99bff); }
+/* Opinionated: Archive header selector for the auto-archive age. */
+.ch-arch-sel { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px 10px; font-size: 12.5px; color: var(--ink-3); }
+.ch-arch-sel select { font: inherit; color: var(--ink); background: var(--glass); border: 1px solid var(--line-2); border-radius: 10px; padding: 4px 8px; }
