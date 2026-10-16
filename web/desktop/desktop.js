@@ -1180,9 +1180,9 @@
     recovery.innerHTML = takes.map(it => `<article>
       <strong>${it.kind === 'dictation' ? 'Dictation' : 'Voice recording'} kept</strong>
       <p role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
-      <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || (it.text ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
-      ${it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
-      <button data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to app' : 'Retry'}</button>
+      <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || ((it.recoveryText || it.text) ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
+      ${it.recoveryText || it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.recoveryText || it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
+      <button data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to app' : OUTBOX.canRetry(it) ? 'Retry send' : 'Transcribe only'}</button>
       <button data-record-download="${esc(it.id)}">Download audio</button>
       <button data-record-discard="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Discard</button>
     </article>`).join('');
@@ -1194,14 +1194,14 @@
     const it = O.get(id); if (!it) return;
     if (b.dataset.recordRetry) {
       if (it.kind === 'conversation') await O.retryConversation(id);
-      else if (['dictation', 'capture'].includes(it.kind) || it.state === 'held') await O.transcribeDictation(id); else O.retry(id);
+      else if (O.canRetry(it)) toast('↻', O.retryFeedback(O.retry(id)), 2400); else await O.transcribeRecording(id);
     } else if (b.dataset.recordDownload) {
       const url = URL.createObjectURL(it.audio), a = document.createElement('a');
       const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /wav/.test(it.audioType) ? 'wav' : 'webm';
       a.href = url; a.download = `wizard-recording-${id}.${ext}`; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } else if (b.dataset.recordCopy) {
-      try { await navigator.clipboard.writeText(it.text); toast('📋', 'Transcript copied · recording kept until you discard it', 2600); }
+      try { await navigator.clipboard.writeText(it.recoveryText || it.text); toast('📋', 'Transcript copied · recording kept until you discard it', 2600); }
       catch (e) { toast('!', 'Select and copy the transcript above', 2600); }
     } else if (confirm('Discard this retained recording and transcript?')) O.remove(id);
   });

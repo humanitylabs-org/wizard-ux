@@ -9,7 +9,24 @@
   const BACKOFF = [2000, 5000, 15000, 30000, 60000, 120000], AUTO_TRIES = BACKOFF.length;
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
-  const conversationWork = new Map();
+  const conversationWork = new Map(), transcriptWork = new Map();
+  // One authority check for explicit retry and automatic delivery. Terminal/ambiguous
+  // custody is not a queue. Empty speech requires a per-recording choice, never bulk.
+  function eligible(it, states) {
+    return !!it && !quarantine.has(it.id) && ['new', 'reply'].includes(it.kind) &&
+      (it.intent !== 'command' || it.deliveryRequested === true) && it.steerDispatch !== 'started' && states.includes(it.state);
+  }
+  function queueRetry(it, states) {
+    if (!eligible(it, states)) return false;
+    // Claim synchronously before the first persistence await: a double tap cannot
+    // reset an in-flight attempt back to waiting and cause a second dispatch.
+    Object.assign(it, { state: 'queued', threadHidden: false, nextAt: 0, attempts: 0 });
+    put(it).then(pump); return true;
+  }
+  function wake() {
+    for (const it of items.values()) if (eligible(it, ['waiting'])) it.nextAt = 0;
+    pump();
+  }
   // Unreconciled fallback rows must not overwrite or replay an inaccessible primary receipt.
   const quarantine = new Set();
   const unconfirmed = 'Could not confirm steering · original kept. Not retried: the run may already have received it.';
@@ -121,7 +138,7 @@
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
     if (it.steerDispatch === 'started' && it.state !== 'sent') { it.state = 'unconfirmed'; it.error = unconfirmed; }
     if (it.state === 'sending') it.state = 'waiting';
-    if (it.state === 'processing' || it.state === 'preparing') { it.state = it.intent === 'command' ? 'held' : 'failed'; it.error = 'Interrupted before sending · recording kept. Retry sends to its original destination.'; }
+    if (it.state === 'processing' || it.state === 'preparing') { it.state = it.intent === 'command' ? 'held' : 'failed'; it.error = it.intent === 'command' ? 'Interrupted command · original recording kept; not queued to an agent' : 'Interrupted before sending · recording kept. Retry sends to its original destination.'; }
     it.durable = durable;
     const old = items.get(it.id);
     if (!old || (old.state !== 'sent' && (it.state === 'sent' || (it.updatedAt || it.createdAt) > (old.updatedAt || old.createdAt) || (it.steerDispatch === 'started' && (it.updatedAt || it.createdAt) === (old.updatedAt || old.createdAt))))) items.set(it.id, it);
@@ -293,7 +310,7 @@
       await load();
       for (const it of items.values()) if (it.storageError || !it.durable) await put(it);
       for (;;) {
-        const due = [...items.values()].filter(it => !quarantine.has(it.id) && it.kind !== 'dictation' && ['queued', 'waiting'].includes(it.state) && (it.nextAt || 0) <= now()).sort((a, b) => a.createdAt - b.createdAt)[0];
+        const due = [...items.values()].filter(it => eligible(it, ['queued', 'waiting']) && (it.nextAt || 0) <= now()).sort((a, b) => a.createdAt - b.createdAt)[0];
         if (!due) break;
         await attempt(due);
       }
@@ -303,9 +320,9 @@
   function schedule(ms) {
     clearTimeout(timer);
     if (ms == null) {
-      const next = [...items.values()].filter(it => !quarantine.has(it.id) && it.state === 'waiting').map(it => it.nextAt || 0);
+      const next = [...items.values()].filter(it => eligible(it, ['waiting'])).map(it => it.nextAt || 0);
       if (!recovered || [...items.values()].some(it => it.storageError || !it.durable)) next.push(now() + 5000);
-      if ([...items.values()].some(it => !quarantine.has(it.id) && it.kind !== 'dictation' && it.state === 'queued')) next.push(now());
+      if ([...items.values()].some(it => eligible(it, ['queued']))) next.push(now());
       if (!next.length) return;
       ms = Math.max(0, Math.min(...next) - now());
     }
@@ -373,6 +390,21 @@
         return it;
       })().finally(() => conversationWork.delete(id));
       conversationWork.set(id, work); return work;
+    },
+    // Recovery transcription is a read of retained audio, NOT a delivery transition.
+    // Keep frozen send text/body, state, receipts and reason unchanged (even unconfirmed).
+    async keepTranscript(id, text) { const it = items.get(id); if (!it || it.state === 'sent' || quarantine.has(id)) return; it.recoveryText = String(text || '').trim(); await put(it); },
+    transcribingRecording(id) { return transcriptWork.has(id); },
+    transcribeRecording(id) {
+      if (transcriptWork.has(id)) return transcriptWork.get(id);
+      const it = items.get(id);
+      if (!it?.audio || quarantine.has(id) || !['held', 'empty', 'failed', 'unconfirmed'].includes(it.state)) return Promise.resolve(null);
+      const work = (async () => {
+        try { it.recoveryText = String(await transcribe(it) || '').trim(); it.recoveryError = it.recoveryText ? '' : 'No speech detected · original kept'; }
+        catch (e) { it.recoveryError = String(e.message || e); }
+        await put(it); return it;
+      })().finally(() => { transcriptWork.delete(id); emit(); });
+      transcriptWork.set(id, work); emit(); return work;
     },
     // Dictation shares this store and transcriber, but NEVER enters message delivery.
     async retainDictation(audio, captureId = null) {
@@ -452,6 +484,9 @@
         // message delivery always retains the send-time thread and selected provider.
         Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid });
       }
+      // Only the delivery caller (including an explicit Send-to-agent choice) may
+      // promote a command. Recovery and reconnect never create this authorization.
+      it.deliveryRequested = true;
       await put(it); // own the entire submission even if route discovery fails
       try {
         if (routeError) throw routeError;
@@ -463,8 +498,10 @@
       } catch (e) { it.state = 'failed'; it.error = String(e.message || e); }
       await put(it); pump(); return it;
     },
-    retry(id) { const it = items.get(id); if (!it || quarantine.has(id) || it.steerDispatch === 'started' || it.kind === 'dictation' || ['sent', 'unconfirmed', 'sending', 'processing', 'preparing', 'missing', 'held'].includes(it.state)) return; Object.assign(it, { state: 'waiting', threadHidden: false, nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); put(it).then(pump); },
-    retryAll() { for (const it of items.values()) if (it.kind !== 'dictation' && it.state === 'waiting') Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); Promise.all([...items.values()].map(put)).then(pump); },
+    canRetry(it) { return eligible(typeof it === 'string' ? items.get(it) : it, ['failed', 'waiting', 'empty']); },
+    retry(id) { return queueRetry(items.get(id), ['failed', 'waiting', 'empty']); },
+    retryAll(agent) { let n = 0; for (const it of items.values()) if ((agent === undefined || (it.agent || '') === agent) && queueRetry(it, ['failed', 'waiting'])) n++; return n; },
+    retryFeedback(n) { return n ? `Queued ${n === true || n === 1 ? 'retry' : n + ' retries'} · originals kept until confirmed` : 'Nothing eligible to retry · originals kept'; },
     unsent() { return [...items.values()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
     forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && !(['empty', 'held', 'sent'].includes(it.state) && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
     dismissEmpty(id) { return this.get(id)?.state === 'sent' ? Promise.resolve(false) : this.dismissBubble(id); },
@@ -483,8 +520,8 @@
     notice, paintNotice, pump, load, bounded, _items: items, AUTO_TRIES, BACKOFF,
   };
   addEventListener('beforeunload', e => { if ([...items.values()].some(it => it.state !== 'sent' && !it.durable)) { e.preventDefault(); e.returnValue = ''; } });
-  addEventListener('online', () => api.retryAll());
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { for (const it of items.values()) if (it.state === 'waiting') it.nextAt = 0; pump(); } });
+  addEventListener('online', wake);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
   window.WosOutbox = api;
   load().then(() => schedule(0));
 })();

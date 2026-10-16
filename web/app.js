@@ -1729,7 +1729,7 @@
   inboxEl.addEventListener('click', e => {
     if (e.target.closest('[data-allread]')) { LIVE.markSeen(live().ready.map(s => s.id)); vib(8); toast('✓', 'All marked read'); return; }
     const ub = e.target.closest('[data-ub]'); if (ub) { const r = ub.closest('[data-ubid]'); return unsentAction(r.dataset.ubid, r.dataset.uborigin, ub.dataset.ub); }
-    if (e.target.closest('[data-ub-all]')) { OUTBOX?.retryAll(); try { NATIVE() && window.WizardOSNative.retryUnsent && window.WizardOSNative.retryUnsent('*'); } catch (x) {} toast('↻', 'Sending everything again', 1600); setTimeout(onUnsentChange, 300); }
+    if (e.target.closest('[data-ub-all]')) window.WosSettings.retryAll({ outbox: OUTBOX, toast, render: onUnsentChange });
   });
 
   // Moons orbit the orb: one per running agent (violet) or thread that needs you (amber).
@@ -2569,11 +2569,12 @@
         releaseNative(); unhold(); setVoice('idle'); txHide();
         toast('◌', 'No speech detected · recording and text kept in Unsent'); tourEv('nospeech'); return;
       }
+      await OUTBOX.keepTranscript(snap.custodyId, text);
       const outcome = await handleText(text, kind, false, j.ms, aimAt, snap);
       if (OUTBOX.get(snap.custodyId)?.state === 'processing') {
         await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'local'
           ? 'Handled on this device · original recording kept; not queued to the agent'
-          : 'No delivery receipt · original recording kept; nothing sent');
+          : 'Delivery not confirmed · original recording kept; not queued for retry');
       }
       releaseNative(); unhold();
     } catch (err) {
