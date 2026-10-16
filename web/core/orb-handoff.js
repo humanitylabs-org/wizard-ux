@@ -10,7 +10,9 @@
     void sync();return next;
   }
   async function sync() {
-    if(syncing || navigator.onLine===false)return;syncing=true;
+    // Android/WebView connectivity is only a hint; native uploads can succeed
+    // while it reports offline. Try the endpoint; retain the journal on failure.
+    if(syncing)return;syncing=true;
     try {for(const row of Object.values(read())) {
       if(row.status==='reserving'||row.acked===row.clientRevision)continue;
       try {

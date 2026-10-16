@@ -131,7 +131,7 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
         done="(async()=>!WizAppCapture.getState().recording&&(await WizAppCapture.pending('mizel')).length===0)()"
         for _ in range(3):
             if pg.pump(8,lambda:ev(done),.2):break
-            mf("[...document.querySelectorAll('button')].find(e=>e.textContent.trim()==='Try again')?.click()")
+            mf("[...document.querySelectorAll('button')].find(e=>['Try again','Retry save'].includes(e.textContent.trim()))?.click()")
         wait(done,10)
         pg.pump(1)
     check('integrated','actual shell and native bridge loaded',ev("!!__wos&&WizardOSDevice.recHandoffVersion()===1&&!!WizAppCapture"))
@@ -166,7 +166,35 @@ def run(pg,sx,top,check,save,origin,pkg,state,lock,fixture,tap_note_action,shot)
             check('review',mode+' recovered request sends once to pinned thread with event and no steering',item['sessionId']=='qa-0' and item['meetingEventId']==ident and not item['steerRunId'],item)
             wait("__wos.voice==='idle'");stop_meeting()
         fixture.save();shot('review-recovery-final');return
+    if os.environ.get('QA_HELD_ONLY')=='1':
+        ev("Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false})")
     mid=start_meeting();check('integrated','actual adopted UI starts native meeting through SDK',cap().get('native') is True,cap())
+    notes=None
+    if os.environ.get('QA_HELD_ONLY')=='1':
+        # Isolate the reported case from an earlier command's Settings sheet.
+        # Start with actual visible Mizel and focus its real notes field.
+        mf("Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Notes')?.click();document.querySelector('#notepad').focus()")
+        pg.pump(1)
+        check('held','actual Mizel notes field has focus with no covering sheet',mf("document.activeElement.id==='notepad'") and ev("!document.querySelector('.sheet.open')"))
+        notes=mf("document.querySelector('#notepad').value")
+        save('focused-gesture-start.json',ev("({voice:__wos.voice,sheetOpen:document.querySelector('#device')?.classList.contains('sheet-open'),height:innerHeight,orb:document.querySelector('#orbWrap').getBoundingClientRect().toJSON()})"))
+    # The formerly omitted case: idle shell, active actual Mizel, real hold/release.
+    fixture.words='open settings';fixture.delay=5;before=len(fixture.runs())
+    check('held','starts idle during native Mizel recording',ev("__wos.voice==='idle'") and cap()['phase']=='recording',cap())
+    touch(hold=1.5)
+    wait("WizAppCapture.getState().phase==='recording'",3)
+    check('held','release restores same meeting before STT without agent request',cap()['meetingId']==mid and len(fixture.runs())==before,cap())
+    wait("__wos.voice==='idle'",20)
+    check('held','command executes Settings locally without agent request',ev("document.querySelector('#settings').classList.contains('open')") and len(fixture.runs())==before,ev('document.body.innerText'))
+    save('idle-held-proof.json',{'meetingId':mid,'capture':cap(),'runs':fixture.runs(),'voice':ev('__wos.voice')})
+    ev('__wos.closeSheets(true)');fixture.words='synthetic explicit question';pg.pump(.5)
+    if os.environ.get('QA_HELD_ONLY')=='1':
+        check('held','focused notes command leaves draft untouched and sends no agent request',mf("document.querySelector('#notepad').value")==notes and len(fixture.runs())==before)
+        mf("document.querySelector('#notepad').blur()")
+        stop_meeting()
+        check('held','false offline flag permits durable marker sync and capture acknowledgement',not cap().get('recording') and ev("Object.values(WosOrbHandoff.read()).every(r=>r.status==='reserving'||r.acked===r.clientRevision)"))
+        check('held','finished app has one truthful state and no stale End meeting',mf("!document.querySelector('#doc-status').textContent.includes('offline')&&!document.querySelector('#doc-status').textContent.includes('End meeting')"))
+        fixture.save();shot('held-focused-finished');return
     fixture.delay=5;before=len(fixture.runs());touch();wait("!!__wos.V.native&&!!__wos.V.meetingLoan")
     ident=ev('__wos.V.meetingLoan.id');take=ev('__wos.V.native');pg.pump(1.5)
     check('integrated','UI orb owns real borrowed recorder and frozen meeting',native()['id']==take and cap()['phase']=='handoff',{'take':take,'capture':cap()})

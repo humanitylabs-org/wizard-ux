@@ -2339,7 +2339,8 @@
       }
       const words = [];
       for (const part of blobs) {
-        if (navigator.onLine === false) throw new Error('Offline');
+        // WebView can report offline while the configured voice endpoint works.
+        // The bounded request below is the evidence; retain audio on real failure.
         const result = await Promise.race([
           window.WizConfig.transcribe(part, { prompt: window.WizConfig.voicePrompt(), language: 'en', signal: op.abort.signal }),
           new Promise((_, reject) => { timer = setTimeout(() => { op.abort.abort(); reject(new Error('Transcription timed out')); }, Math.min(45000, 12000 + Math.round(part.size / 20))); }),
@@ -2550,8 +2551,8 @@
       await OUTBOX.protect(snap.custodyId);
       const words = []; const j = { ms: 0 };
       const prompt = window.WizConfig.voicePrompt(APPS.map(a => a.name).slice(0, 40));
-      // No network: straight to the outbox (it transcribes and sends when Wizard is back), no waiting on a dead line.
-      if (navigator.onLine === false) throw new Error('offline');
+      // Try the configured endpoint even when WebView's network hint is false.
+      // Its bounded failure retains the take; commands never become agent messages.
       for (const part of blobs) {   // more than one part only after the mic was interrupted mid-take
         // A flaky line can hang a request for a long time: past this bound the take goes to the outbox instead.
         const jj = await OUTBOX.bounded(signal => window.WizConfig.transcribe(part, { prompt, language: 'en', signal }));
@@ -2931,6 +2932,13 @@
   paintVoiceDestination();
   window.addEventListener('wizard:config', paintVoiceDestination);
   let G = null;
+  function mayHoldCommand() {
+    if (sheet) return false;
+    const focused = FIELDS.refresh(), capture = window.WizAppCapture?.getState?.();
+    // A deliberate hold during a meeting is a command even when notes retain
+    // focus. Tap still dictates; startVoice retains the microphone loan checks.
+    return !focused || !!(capture?.recording && capture?.meetingId);
+  }
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
@@ -2939,7 +2947,7 @@
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
     G.corner = device.classList.contains('orb-corner');
-    if (!sheet && !FIELDS.refresh()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
+    if (mayHoldCommand()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
   });
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
   // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
