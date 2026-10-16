@@ -77,9 +77,10 @@
   },
   "system": {
     "open": [
-      "button.stat"
+      "button[data-node]"
     ],
-    "returned": "button.stat"
+    "nested": "#focus",
+    "closed": "#focus"
   },
   "cinequeue-next": {
     "open": [
@@ -116,7 +117,7 @@
     "open": [
       ".rw"
     ],
-    "returned": ".rw"
+    "routedThread": true
   },
   "calendar": {
     "open": [
@@ -162,9 +163,10 @@
   },
   "wizard-manager": {
     "open": [
-      "button.mgr-text-action"
+      "button.mgr-text-action:visible"
     ],
-    "returned": "button.mgr-text-action"
+    "nested": ".mgr-card.is-target",
+    "closed": ".mgr-card.is-target"
   },
   "shopping": {
     "open": [
@@ -172,5 +174,10 @@
       "button.info"
     ],
     "returned": "button.info"
+  },
+  "wizard-music": {
+    "open": [
+      "button.music-tile"
+    ]
   }
 }

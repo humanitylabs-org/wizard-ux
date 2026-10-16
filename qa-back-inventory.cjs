@@ -13,6 +13,9 @@ const apps=inventory.effective.filter(a=>!only.length||only.includes(a.id));
 for(const a of apps){writes=[];assets=[];const row={...a,actualURL:null,contract:null,opener:null,status:'coverage-gap',gap:'No explicit nested opener exercised'};try{
 await p.goto(BASE+'/wizard-os-home/?open='+encodeURIComponent(a.id),{waitUntil:'domcontentloaded'});await p.waitForFunction(()=>window.__wos&&window.WizCore);await p.evaluate(()=>WizCore.appsLoaded());await p.waitForTimeout(1800);
 row.shell=await p.evaluate(()=>{const d=__wos.desks[__wos.idx],w=__wos.wins[d.focus];return{idx:__wos.idx,focus:d.focus,appId:w?.appId||w?.app,full:d.full}});
+if(['wizard','agent:private'].includes(a.id)){
+row.actualURL=p.url();row.contract={shellNativeChats:true};const win=p.locator('.win[data-win="'+row.shell.focus+'"]');await win.locator('[data-chopen]').first().tap();await win.locator('[data-chback]').waitFor({state:'visible'});row.opener=['[data-chopen]'];row.nestedShell=await p.evaluate(()=>({idx:__wos.idx,focus:__wos.desks[__wos.idx].focus,thread:__wos.wins[__wos.desks[__wos.idx].focus]?.thread}));await p.screenshot({path:path.join(OUT,a.id.replace(':','-')+'-nested.png')});await p.evaluate(()=>__wos.onBack());await p.waitForTimeout(1600);row.afterShell=await p.evaluate(()=>({idx:__wos.idx,focus:__wos.desks[__wos.idx].focus,thread:__wos.wins[__wos.desks[__wos.idx].focus]?.thread}));row.status=row.nestedShell.thread&&!row.afterShell.thread&&row.nestedShell.idx===row.afterShell.idx&&row.nestedShell.focus===row.afterShell.focus?'nested-pass':'nested-fail';row.gap=null;continue;
+}
 if(!a.url||a.kind==='native'){row.gap='Native/builtin surface: requires dedicated nested opener';continue}
 const el=p.locator('.win[data-win="'+row.shell.focus+'"] iframe');const f=await (await el.elementHandle())?.contentFrame();if(!f){row.gap='Canonical link produced no iframe';continue}
 await f.waitForLoadState('domcontentloaded').catch(()=>{});await p.waitForTimeout(1200);
@@ -22,10 +25,10 @@ const spec=specs[a.id];if(!spec)continue;
 for(const selector of spec.open){await f.locator(selector).first().tap();await p.waitForTimeout(500)}
 if(spec.nested)await f.locator(spec.nested).first().waitFor({state:'visible'});
 row.opener=spec.open;row.nested=await state();await p.screenshot({path:path.join(OUT,a.id+'-nested.png')});
-const beforeShell=await p.evaluate(()=>({idx:__wos.idx,focus:__wos.desks[__wos.idx].focus,full:__wos.desks[__wos.idx].full}));
-await p.evaluate(()=>__wos.onBack());await p.waitForTimeout(1300);row.after=await state();row.afterShell=await p.evaluate(()=>({idx:__wos.idx,focus:__wos.desks[__wos.idx].focus,full:__wos.desks[__wos.idx].full,log:window.__backLog}));
+const beforeShell=await p.evaluate(()=>({idx:__wos.idx,focus:__wos.desks[__wos.idx].focus,full:__wos.desks[__wos.idx].full,thread:__wos.wins[__wos.desks[__wos.idx].focus]?.thread}));row.nestedShell=beforeShell;
+await p.evaluate(()=>__wos.onBack());await p.waitForTimeout(1300);row.after=await state();row.afterShell=await p.evaluate(()=>({idx:__wos.idx,focus:__wos.desks[__wos.idx].focus,full:__wos.desks[__wos.idx].full,thread:__wos.wins[__wos.desks[__wos.idx].focus]?.thread,log:window.__backLog}));
 let returned=true;if(spec.returned)returned=await f.locator(spec.returned).first().isVisible();if(spec.closed)returned=returned&&!(await f.locator(spec.closed).first().isVisible());
-const changed=row.nested.url!==row.after.url||JSON.stringify(row.nested.dialogs)!==JSON.stringify(row.after.dialogs)||row.nested.text!==row.after.text;
+const changed=spec.routedThread?!!beforeShell.thread&&!row.afterShell.thread:!!(spec.nested&&spec.closed&&returned)||row.nested.url!==row.after.url||JSON.stringify(row.nested.dialogs)!==JSON.stringify(row.after.dialogs)||row.nested.text!==row.after.text;
 row.status=returned&&changed&&beforeShell.idx===row.afterShell.idx&&beforeShell.focus===row.afterShell.focus&&beforeShell.full===row.afterShell.full?'nested-pass':'nested-fail';row.gap=null;
 await p.waitForTimeout(1400);row.delayedShell=await p.evaluate(()=>({idx:__wos.idx,focus:__wos.desks[__wos.idx].focus}));if(row.delayedShell.idx!==beforeShell.idx||row.delayedShell.focus!==beforeShell.focus)row.status='nested-fail';
 await p.screenshot({path:path.join(OUT,a.id+'-back.png')});
