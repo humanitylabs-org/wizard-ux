@@ -152,6 +152,7 @@
     viewContext: (id, how) => viewContext(id, how),
     visible: () => desks[idx].wins,
     editUnsent: it => editUnsent(it),
+    recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
     newChatHint: 'Type below, or tap the orb and talk.',
     // The composer's mic (#13): the orb's own recorder, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
@@ -2348,7 +2349,7 @@
         // The bounded request below is the evidence; retain audio on real failure.
         const result = await Promise.race([
           window.WizConfig.transcribe(part, { prompt: window.WizConfig.voicePrompt(), language: 'en', signal: op.abort.signal }),
-          new Promise((_, reject) => { timer = setTimeout(() => { op.abort.abort(); reject(new Error('Transcription timed out')); }, Math.min(45000, 12000 + Math.round(part.size / 20))); }),
+          new Promise((_, reject) => { timer = setTimeout(() => { op.abort.abort(); reject(new Error('Transcription timed out')); }, OUTBOX.TRANSCRIBE_TIMEOUT_MS); }),
         ]);
         clearTimeout(timer);
         if (!live()) return;
@@ -2560,7 +2561,7 @@
       // Its bounded failure retains the take; commands never become agent messages.
       for (const part of blobs) {   // more than one part only after the mic was interrupted mid-take
         // A flaky line can hang a request for a long time: past this bound the take goes to the outbox instead.
-        const jj = await OUTBOX.bounded(signal => window.WizConfig.transcribe(part, { prompt, language: 'en', signal }));
+        const jj = await OUTBOX.bounded(signal => window.WizConfig.transcribe(part, { prompt, language: 'en', signal }), OUTBOX.TRANSCRIBE_TIMEOUT_MS);
         words.push((jj.text || '').trim()); j.ms += jj.ms || 0;
       }
       const text = words.filter(Boolean).join(' ').trim();

@@ -11,6 +11,16 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   await f.p.reload();await f.p.waitForFunction(()=>WosOutbox?.recoveryComplete&&(window.__wos||window.__wux)?.chats);
   const settings=await f.p.evaluate(id=>WosSettings.unsentRow({...WosOutbox.get(id),origin:'app'},{outbox:WosOutbox,live:WizLive}),held);
   ok(settings.includes('Handled on this device')&&!settings.includes('words come when it sends')&&!settings.includes('data-ub="edit"')&&settings.includes('data-ub="transcribe"')&&settings.includes('data-ub="play"'),label+': held recovery exposes reason and non-delivery actions',settings);
+  const recover=f.p.locator(`[data-chats="${f.wid}"] [data-obrecover="${held}"]`);
+  await recover.click(); await sleep(200);
+  ok(await f.p.locator(`#settingsBody [data-ubid="${held}"] [data-ub="transcribe"]`).isVisible(),label+': held bubble Recover opens selected recording controls');
+  if(desktop)await f.p.evaluate(()=>__wux.closeSettings());else await f.p.locator('[data-stclose]:visible').click();
+  const newHeld=await add('held',{kind:'new',sessionId:'',wid:f.wid,intent:'command'});
+  await f.p.evaluate(wid=>(window.__wos||window.__wux).chats.openChat(wid,'__new__'),f.wid);await sleep(150);
+  await f.p.locator(`[data-chats="${f.wid}"] [data-obrecover="${newHeld}"]`).click();await sleep(150);
+  ok(await f.p.locator(`#settingsBody [data-ubid="${newHeld}"] [data-ub="play"]`).isVisible(),label+': screenshot New chat held note has working recovery');
+  if(desktop)await f.p.evaluate(()=>__wux.closeSettings());else await f.p.locator('[data-stclose]:visible').click();
+  await f.p.evaluate(id=>WosOutbox.dismissBubble(id),newHeld);
   await f.p.evaluate(()=>{dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'));});await sleep(150);
   ok(f.state.posts.length===0,label+': automatic wake never sends permanent failure or held command');
   await f.p.evaluate(wid=>{const A=window.__wos||window.__wux;A.chats.openChat(wid,null);A.focusWin?.(wid);},f.wid);await sleep(200);

@@ -7,6 +7,8 @@
   if (document.documentElement.dataset.leaving) return;
   const DB = 'wos-outbox', STORE = 'items', LS = 'wos.outbox.fallback', PREFIX = LS + '.v2.';
   const BACKOFF = [2000, 5000, 15000, 30000, 60000, 120000], AUTO_TRIES = BACKOFF.length;
+  // Agent Service allows 180 seconds of STT; leave time for upload/response transit.
+  const TRANSCRIBE_TIMEOUT_MS = 195000;
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
   const conversationWork = new Map(), transcriptWork = new Map();
@@ -198,7 +200,7 @@
     finally { clearTimeout(timer); }
   }
   async function transcribe(it) {
-    try { return (await bounded(signal => window.WizConfig.transcribe(it.audio, { prompt: window.WizConfig.voicePrompt(), signal }), 45000)).text; }
+    try { return (await bounded(signal => window.WizConfig.transcribe(it.audio, { prompt: window.WizConfig.voicePrompt(), signal }), TRANSCRIBE_TIMEOUT_MS)).text; }
     catch (e) { throw new HttpError(e.status || 0, e.message); }
   }
   async function uploadAudio(it) {
@@ -517,7 +519,7 @@
     async remove(id) { const it = items.get(id); if (!it || quarantine.has(id) || ['sending', 'transcribing', 'processing'].includes(it.state)) return false; await del(id); return !!items.get(id)?.durable; },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     onSent(fn) { sentHooks.add(fn); return () => sentHooks.delete(fn); },
-    notice, paintNotice, pump, load, bounded, _items: items, AUTO_TRIES, BACKOFF,
+    notice, paintNotice, pump, load, bounded, TRANSCRIBE_TIMEOUT_MS, _items: items, AUTO_TRIES, BACKOFF,
   };
   addEventListener('beforeunload', e => { if ([...items.values()].some(it => it.state !== 'sent' && !it.durable)) { e.preventDefault(); e.returnValue = ''; } });
   addEventListener('online', wake);
