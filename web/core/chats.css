@@ -478,3 +478,12 @@ body > .mviewer { position: fixed; z-index: 200; }
 /* Opinionated: Archive header selector for the auto-archive age. */
 .ch-arch-sel { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px 10px; font-size: 12.5px; color: var(--ink-3); }
 .ch-arch-sel select { font: inherit; color: var(--ink); background: var(--glass); border: 1px solid var(--line-2); border-radius: 10px; padding: 4px 8px; }
+/* Opinionated: Compact list hides previews. */
+.ch-list.compact .ch-row .pv { display: none; }
+/* Opinionated (phone only): the list reads bottom-up so everything sits under the thumb.
+   Working is at the bottom, then Ready, then Archive on top; each section's header sits below its rows,
+   with the order pills just above the header. Search stays at the top. */
+html:not([data-shell="desktop"]) .ch-list .ch-scroll { display: flex; flex-direction: column-reverse; }
+html:not([data-shell="desktop"]) .ch-list .ch-sec { display: flex; flex-direction: column-reverse; }
+html:not([data-shell="desktop"]) .ch-list .ch-sec-b { display: flex; flex-direction: column-reverse; }
+html:not([data-shell="desktop"]) .ch-list .ch-sec + .ch-sec { border-top: 0; border-bottom: 1px solid var(--line); }
