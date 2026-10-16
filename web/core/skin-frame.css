@@ -8,17 +8,31 @@ html[data-skin-frame="borderless"] .tiles {
 }
 html[data-skin-frame="borderless"] .win {
   background: var(--sk-win); box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
-  padding: 12px var(--sf-padding, 16px) 0; box-sizing: border-box;
+  padding: 12px 0 0; box-sizing: border-box;
+}
+/* The heading continues the app's own canvas: the opaque colour the shell measured along the app's top edge
+ * (--frame-top: a full-width header, gradient or hero image), else its page background (--frame-bg), else the frame fill.
+ * Themed apps are transparent below their art, so there --frame-top paints only the heading band (--sf-head) and the
+ * rest of the window keeps the skin material. */
+html[data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed) { background: var(--frame-top, var(--frame-bg, #0f1014)); }
+html[data-shell="desktop"][data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed) { background: var(--frame-top, var(--frame-bg, #05030c)); }
+html[data-skin-frame="borderless"] .win.wz-themed:has(> .wbody iframe) {
+  background: linear-gradient(var(--frame-top, transparent), var(--frame-top, transparent)) top / 100% var(--sf-head, 76px) no-repeat,
+    var(--frame-bg, var(--sk-win));
 }
 html[data-shell="phone"][data-skin-frame="borderless"] .win {
   padding-top: calc(12px + var(--sb) + var(--safe-t));
+  --sf-head: calc(76px + var(--sb) + var(--safe-t));
 }
 html[data-skin-frame="borderless"] .tiles.has-full .win.full { border-radius: var(--sf-radius, 0px); }
+/* App content is full-bleed: apps own their content gutters, so hero art and backgrounds reach the screen edges.
+ * --sf-padding insets only the shell heading. */
 html[data-skin-frame="borderless"] .win > .wbody { background: transparent; border-radius: 0; overflow: hidden; }
 /* An app heading, not a bordered toolbar. Search and app content begin below it. */
 html[data-skin-frame="borderless"] .win > .wbar {
   position: relative; height: 64px; min-height: 64px; flex: 0 0 64px;
-  display: flex; align-items: center; gap: 8px; padding: 0 52px 12px 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 calc(52px + var(--sf-padding, 16px)) 12px var(--sf-padding, 16px);
   border: 0; background: transparent; overflow: visible; box-sizing: border-box;
 }
 html[data-skin-frame="borderless"] .wbar > :is(.wic, .ic),
@@ -30,9 +44,9 @@ html[data-skin-frame="borderless"] .wbar > :is(.wt, .t) {
   overflow: hidden; text-overflow: ellipsis;
 }
 html[data-skin-frame="borderless"] .wbar > [data-wact="close"] {
-  position: absolute; top: 4px; right: 0; display: grid;
+  position: absolute; top: 4px; right: var(--sf-padding, 16px); display: grid;
   min-width: 44px; width: 44px; height: 44px; border-radius: 50%; color: var(--ink-2);
-  background: color-mix(in srgb, var(--sk-win) 72%, transparent);
+  background: transparent;   /* stands on the heading, which already carries the app's canvas colour */
 }
 html[data-skin-frame="borderless"] .wbar > [data-wact="close"]:focus-visible { outline: 2px solid var(--violet-2); outline-offset: -3px; }
 html[data-skin-frame="borderless"] .wbar > [data-wact="close"]:hover { color: var(--ink); background: var(--glass-2); }
