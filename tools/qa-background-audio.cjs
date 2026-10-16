@@ -27,6 +27,13 @@ let browser;
  await frame().locator('.music-row-main').first().click();
  for(let i=0;i<30;i++){const s=await snap();if(s.playing)break;await wait(500);}
  const a=await snap();check('real streamed song decoder plays',a.playing&&a.positionMs>0,a);
+ if(process.env.WOS_QA_CLOSE_ONLY==='1'){
+  await require('./qa-music-close.cjs')({page,frame,audio,snap,sx,server,wait,check,out});
+  check('no unexpected candidate JS errors',errors.length===0,errors);
+  fs.writeFileSync(path.join(out,'results.json'),JSON.stringify(rows,null,2));
+  console.log(rows.filter(r=>r.ok).length+'/'+rows.length+' passed');
+  await browser.close();process.exit(rows.some(r=>!r.ok)?1:0);
+ }
  async function checkVoiceCoexistence(){
  // Existing recorder API + canned mic fixture: no routing/input device changes in this test.
  await audio('play');await audio('seek',{positionMs:1000});await wait(400);const beforeRecording=await snap();
@@ -104,7 +111,7 @@ let browser;
  check('unregistered Music-path same-origin frame lacks capability',!await foreign.evaluate(()=>parent.WizBackgroundAudio.canAttach(window)));
  await page.evaluate(()=>document.querySelector('#audio-evil')?.remove());
  const hold=await snap();await page.evaluate(()=>{const id=Object.values(__wos.wins).find(w=>w.appId==='wizard-music')?.id;__wos.closeWin(id,true);});await wait(1500);
- const closedSession=await sx('dumpsys media_session');check('closing Music UI pauses native playback',/state=2\b/.test(closedSession.result),closedSession.result);
+ const closedSession=await sx('dumpsys media_session');const closedBlock=closedSession.result.split(/(?=^\s*package=)/m).find(s=>/^\s*package=ai\.wizards\.os\.musicpreview\s/m.test(s));check('closing Music UI pauses native playback',!!closedBlock&&/state=(?:PAUSED\(2\)|2)(?=[,\s}])/.test(closedBlock),closedBlock||closedSession.result);
  await page.evaluate(()=>__wos.openApp(WizCore.apps('mobile').APP['wizard-music']));
  for(let i=0;i<80&&!frame();i++)await wait(250);
  if(!frame())throw new Error('Music frame did not reopen');

@@ -72,3 +72,10 @@ test('closing the whole Music desk stops playback before deleting windows',()=>{
   const {c,calls,W}=shellFixture();c.closeDesk(0);
   assert.equal(calls[0].id,'wizard-music');assert.equal(calls[0].present,true);assert.equal(W.music,undefined);
 });
+test('automatic bound-view disposal preserves background playback',()=>{
+  const {c,calls,W}=shellFixture();c.closeWin('music',true,true);
+  assert.equal(calls.length,0);assert.equal(W.music,undefined);
+  assert.match(shell,/close: id => closeWin\(id, true, true\)/);
+  assert.match(shell,/if \(b\) closeWin\(b.id, true, true\)/);
+  assert.match(shell,/try \{ closeWin\(w.id, true, true\)/);
+});

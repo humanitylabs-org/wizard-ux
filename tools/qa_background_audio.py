@@ -19,8 +19,19 @@ bootstrap=json.load(urllib.request.urlopen(discovery+'/wizard/v1/bootstrap',time
 state={'tracks':[], 'events':[], 'bytes':0,'gets':[], 'refills':0,'batches':{},'next':3,'down':False}
 LOCK=threading.Lock(); em=None;server=None
 stale_release=threading.Event();stale_release.set()
-with P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock').open('a') as worker:
-    fcntl.flock(worker,fcntl.LOCK_EX)
+def worker_lease():
+    lock_path=P('/Volumes/ThalesMedia/AndroidBuilds/worker.lock')
+    inherited=os.environ.get('WIZARD_HEAVY_LOCK_FD')
+    if inherited is not None:
+        fd=int(inherited); actual=os.fstat(fd); expected=lock_path.stat()
+        if (actual.st_dev,actual.st_ino)!=(expected.st_dev,expected.st_ino):
+            raise RuntimeError('Inherited heavy lease is not the shared worker lock')
+        # Re-lock the inherited open-file description, never a second description.
+        fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        return os.fdopen(os.dup(fd),'a')
+    worker=lock_path.open('a');fcntl.flock(worker,fcntl.LOCK_EX)
+    return worker
+with worker_lease() as worker:
     try:
         cache=P.home()/'.wizard-home/music-hub/cache'; con=sqlite3.connect(P.home()/'.wizard-home/music-hub/hub.sqlite3')
         envfile=P.home()/'.wizard-home/music-hub/hub.env'; tok=''

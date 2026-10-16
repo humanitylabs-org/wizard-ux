@@ -639,10 +639,10 @@
   function closeAppPlayback(w) {
     window.WizBackgroundAudio?.closeApp(w?.appId)?.catch(() => toast('♫', 'Music could not stop. Pause it from the media controls.'));
   }
-  function closeWin(id, quiet) {
+  function closeWin(id, quiet, preservePlayback = false) {
     const i = deskOf(id); if (i < 0) return;
     const w = W[id], d = desks[i], name = winTitle(w);
-    closeAppPlayback(w);
+    if (!preservePlayback) closeAppPlayback(w);
     CHATS.closeHosted(id);
     if (quiet) { d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id]; if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null; if (!d.wins.length) d.full = false; renderDesk(i); pruneDesks(); return; }
     // ✕ on a bound view: it stays closed for this reply (opening the thread again, or a new reply, binds again).
@@ -801,13 +801,14 @@
   var boundOff = {}, boundBusy = false;
   const boundTarget = el => window.WosBoundView.target(el, { findApp, APP, linkTitle });
   const boundOf = wid => Object.values(W).find(x => x.bound === wid && deskOf(x.id) >= 0) || null;
-  function unbind(wid) { const b = boundOf(wid); if (b) closeWin(b.id, true); }
+  // Automatic bound-view disposal is navigation, not the user's Music Close action.
+  function unbind(wid) { const b = boundOf(wid); if (b) closeWin(b.id, true, true); }
   // Called by Chats whenever a window paints a loaded thread (el) or its list (null).
   let boundManager;
   function threadShown(wid, el) {
     if (boundBusy) return;
     boundManager ||= window.WosBoundView.create({ windows: () => Object.values(W), win: id => W[id], findApp, APP, linkTitle,
-      visible: id => deskOf(id) === idx, from: fromOf, title: winTitle, close: id => closeWin(id, true),
+      visible: id => deskOf(id) === idx, from: fromOf, title: winTitle, close: id => closeWin(id, true, true),
       open: (obj, origin) => { openWin(obj, { stay:true }); boundTip(origin); },
       reload: id => { save(); const f = winEl(id)?.querySelector('iframe'); if (f) f.src = f.src; }, changed: syncPeek });
     boundManager.shown(wid, el);
@@ -815,7 +816,7 @@
   // Re-check every open thread (after a desk change) and drop bound views whose thread went away.
   function syncBound() {
     if (boundBusy) return;
-    for (const w of Object.values(W)) if (w.bound && deskOf(w.id) >= 0) { const c = W[w.bound]; if (!c || deskOf(c.id) < 0 || c.thread !== w.bsid) { boundBusy = true; try { closeWin(w.id, true); } finally { boundBusy = false; } } }
+    for (const w of Object.values(W)) if (w.bound && deskOf(w.id) >= 0) { const c = W[w.bound]; if (!c || deskOf(c.id) < 0 || c.thread !== w.bsid) { boundBusy = true; try { closeWin(w.id, true, true); } finally { boundBusy = false; } } }
     const f = W[desks[idx]?.focus];
     if (f && f.app === 'chats' && f.thread && f.thread !== '__new__') { const el = winEl(f.id)?.querySelector('[data-chats]'); if (el && el.querySelector('.ch-thread') && CHATS.ch(f.id).loadedFor === f.thread) threadShown(f.id, el); }
     syncPeek();
