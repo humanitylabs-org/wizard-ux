@@ -86,8 +86,9 @@
         if (p.status === 'unavailable' || !p.limits.length) { notes.push(`${p.name}${p.plan ? ' · ' + p.plan : ''}: ${p.status === 'unavailable' ? 'couldn’t read usage' : 'no quota windows'}${p.error ? ' · ' + p.error : ''}`); }
         if (p.status === 'stale') notes.push(`${p.name}: last known reading`);
         if (p.status === 'unavailable') continue;
-        for (const l of p.limits) rows.push(`<div class="us-row ${tone(l.remainingPercent)}${p.status === 'stale' ? ' stale' : ''}" data-usage-row="${esc(p.id + ':' + l.id)}"><div class="us-t"><b>${esc(rowLabel(p, l))}</b><span class="us-p">${l.remainingPercent}% left</span></div>`
-          + `<div class="us-bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${l.remainingPercent}" aria-label="${esc(rowLabel(p, l))} remaining"><i style="width:${l.remainingPercent}%"></i></div>`
+        // Every bar in Wizard shows how much is USED (fills up toward 100%), like the server and Home bars.
+        for (const l of p.limits) rows.push(`<div class="us-row ${tone(l.remainingPercent)}${p.status === 'stale' ? ' stale' : ''}" data-usage-row="${esc(p.id + ':' + l.id)}"><div class="us-t"><b>${esc(rowLabel(p, l))}</b><span class="us-p">${l.usedPercent}% used</span></div>`
+          + `<div class="us-bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${l.usedPercent}" aria-label="${esc(rowLabel(p, l))} used"><i style="width:${l.usedPercent}%"></i></div>`
           + `<small class="us-r">${esc(resetLine(l.resetsAt, now) || 'No reset time reported')}</small></div>`);
         const pl = paidLine(p.paid); if (pl) notes.push(`${p.name}: ${pl}`);
       }

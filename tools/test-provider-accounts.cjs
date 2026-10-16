@@ -8,7 +8,7 @@ test('provider counts and separate account usage survive normalization',()=>{
  const s=U.normalize({providers:[{id:'chatgpt',name:'ChatGPT',accounts:[a('a',20),a('b',80)]},{id:'claude',name:'Claude',accounts:[]}]});
  assert.equal(s.providers.length,2);assert.equal(s.accountCounts[0].count,2);assert.equal(s.accountCounts[1].count,0);
  assert.equal(s.providers[0].limits[0].remainingPercent,20);assert.equal(s.providers[1].limits[0].remainingPercent,80);
- U.snap=s;const html=U.html();assert.match(html,/20% left/);assert.match(html,/80% left/);assert.doesNotMatch(html,/50% left/);
+ U.snap=s;const html=U.html();assert.match(html,/80% used/);assert.match(html,/20% used/);assert.doesNotMatch(html,/50% used/);assert.doesNotMatch(html,/% left/);
 });
 test('dynamic empty inventory removes account rows',()=>{
  const s=U.normalize({providers:[{id:'chatgpt',name:'ChatGPT',accounts:[]}]});assert.equal(s.providers.length,0);assert.equal(s.accountCounts[0].count,0);
