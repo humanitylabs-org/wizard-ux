@@ -11,3 +11,6 @@ services:
     x-runtipi:
       is_main: true
       internal_port: 8799
+x-runtipi:
+  schema_version: 2
+  overrides: []

@@ -19,7 +19,10 @@ p.add_argument('--source', type=Path, required=True)
 p.add_argument('--commit', required=True)
 p.add_argument('--branch', required=True)
 p.add_argument('--upstream', required=True)
+p.add_argument('--listen-port', type=int, required=True)
 a = p.parse_args()
+if not 1024 <= a.listen_port <= 65535 or not a.upstream.startswith('http://127.0.0.1:'):
+    raise SystemExit('Owner connection must use an unprivileged loopback endpoint')
 repo = 'humanitylabs-org/wizard-ux'
 remote = subprocess.check_output(['git', 'ls-remote', 'https://github.com/'+repo+'.git', 'refs/heads/'+a.branch], text=True).split()[0]
 if remote != a.commit:
@@ -50,6 +53,18 @@ try:
     private.head_commit = lambda repo_arg, tok: a.commit
     c = cli.Config()
     record = private.prepare(c.runtipi_root, cli.STORE, repo)
+    # Runtipi's supported user-config API owns root-owned override files.
+    # Never broaden filesystem/Docker permissions just to create this override.
+    rt = c.runtipi()
+    urn = 'outline-streaming-demo:wizardapps'
+    override = ('services:\n  outline-streaming-demo:\n    network_mode: host\n'
+                '    ports: !reset []\n    networks: !reset []\n    command: ' +
+                json.dumps(['caddy', 'reverse-proxy', '--from',
+                            f'http://127.0.0.1:{a.listen_port}', '--to', a.upstream])+'\n')
+    rt.req('PUT', '/user-config/'+urn, {'dockerCompose': override, 'appEnv': ''})
+    saved = rt.req('GET', '/user-config/'+urn)
+    if saved['dockerCompose'].strip() != override.strip() or not saved['isEnabled']:
+        raise RuntimeError('Owner override readback mismatch')
     original_resolve = cli.resolve_any
     cli.resolve_any = lambda c, ref: record if ref == 'outline-streaming-demo' else original_resolve(c, ref)
     result = cli.install(c, 'outline-streaming-demo', {'OUTLINE_TRIAL_UPSTREAM': a.upstream}, wait=False)
