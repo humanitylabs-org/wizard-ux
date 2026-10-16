@@ -487,3 +487,8 @@ html:not([data-shell="desktop"]) .ch-list .ch-scroll { display: flex; flex-direc
 html:not([data-shell="desktop"]) .ch-list .ch-sec { display: flex; flex-direction: column-reverse; }
 html:not([data-shell="desktop"]) .ch-list .ch-sec-b { display: flex; flex-direction: column-reverse; }
 html:not([data-shell="desktop"]) .ch-list .ch-sec + .ch-sec { border-top: 0; border-bottom: 1px solid var(--line); }
+/* Phone: rows hug the bottom; the + button floats over them instead of pushing the list up. */
+html:not([data-shell="desktop"]) .ch-list .ch-scroll { padding-bottom: 8px; }
+html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: 8px; }
+/* Archive reads as a different place: a light tinted panel. */
+.ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
