@@ -59,8 +59,9 @@ try:
     urn = 'outline-streaming-demo:wizardapps'
     override = ('services:\n  outline-streaming-demo:\n    network_mode: host\n'
                 '    ports: !reset []\n    networks: !reset []\n    command: ' +
-                json.dumps(['caddy', 'reverse-proxy', '--from',
-                            f'http://127.0.0.1:{a.listen_port}', '--to', a.upstream])+'\n')
+                json.dumps(['/bin/sh', '-ec',
+                            'cp /usr/bin/caddy /tmp/caddy; exec /tmp/caddy reverse-proxy '
+                            f'--from http://127.0.0.1:{a.listen_port} --to "$OUTLINE_TRIAL_UPSTREAM"'])+'\n')
     rt.req('PUT', '/user-config/'+urn, {'dockerCompose': override, 'appEnv': ''})
     saved = rt.req('GET', '/user-config/'+urn)
     if saved['dockerCompose'].strip() != override.strip() or not saved['isEnabled']:
@@ -68,6 +69,9 @@ try:
     original_resolve = cli.resolve_any
     cli.resolve_any = lambda c, ref: record if ref == 'outline-streaming-demo' else original_resolve(c, ref)
     result = cli.install(c, 'outline-streaming-demo', {'OUTLINE_TRIAL_UPSTREAM': a.upstream}, wait=False)
+    if result.get('status') == 'already installed':
+        result = {'id': 'outline-streaming-demo', 'operation': 'update',
+                  'result': rt.req('POST', '/app-lifecycle/'+urn+'/update', {})}
     print(json.dumps(result, indent=2))
 finally:
     private.fetch = original_fetch

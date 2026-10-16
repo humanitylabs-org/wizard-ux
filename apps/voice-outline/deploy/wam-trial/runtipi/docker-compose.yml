@@ -1,7 +1,10 @@
 services:
   outline-streaming-demo:
     image: caddy:2.10.2-alpine
-    command: ["caddy", "reverse-proxy", "--from", "http://:8799", "--to", "${OUTLINE_TRIAL_UPSTREAM}"]
+    # Copy drops the stock binary's unnecessary file capability; keep cap_drop ALL.
+    command: ["/bin/sh", "-ec", "cp /usr/bin/caddy /tmp/caddy; exec /tmp/caddy reverse-proxy --from http://:8799 --to \"$${OUTLINE_TRIAL_UPSTREAM}\""]
+    environment:
+      OUTLINE_TRIAL_UPSTREAM: ${OUTLINE_TRIAL_UPSTREAM}
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
