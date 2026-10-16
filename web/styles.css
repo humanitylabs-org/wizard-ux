@@ -819,3 +819,9 @@ body {
 html:not([data-shell="desktop"]) .dock { height: calc(var(--dock-h) + var(--safe-b-low)); padding-bottom: calc(6px + var(--safe-b-low)); }
 html:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
 html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-compose { padding-bottom: calc(8px + var(--safe-b-low)) !important; }
+/* Opinionated (phone): just the orb and its count. No ring, halo arc, moons or desk dots at rest;
+   the halo still shows while listening/thinking so voice feedback stays. */
+html:not([data-shell="desktop"]) :is(.orb-ring, .orb-shock, #moons, .desk-dots) { display: none !important; }
+html:not([data-shell="desktop"]) .orb-wrap:not([data-mode="listen"]):not([data-mode="command"]):not([data-mode="think"]) .orb-halo { display: none; }
+html:not([data-shell="desktop"]) { --orb: 54px; }
+html:not([data-shell="desktop"]) .device.orb-corner { --corner-orb: 50px; }
