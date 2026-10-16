@@ -15,10 +15,16 @@ async function get(path){return page.request.get(base+path).then(r=>r.json())}
 async function attach(){await page.waitForFunction(()=>window.__wos&&Array.from(document.querySelectorAll('iframe')).some(f=>{try{return f.contentWindow.location.pathname==='/voice-outline-streaming/'&&f.contentWindow.WizardApp}catch{return false}}),null,{timeout:25000});app=page.frames().find(f=>f.url().includes('/voice-outline-streaming/'));await app.waitForFunction(()=>document.querySelector('#save')?.textContent==='Saved');}
 try{
  browser=await chromium.launch({channel:'chrome',headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',`--use-file-for-fake-audio-capture=${wav}`]});
- const context=await browser.newContext({viewport:{width:393,height:852},isMobile:true,hasTouch:true,permissions:['microphone'],colorScheme:'dark'});page=await context.newPage();
+ const context=await browser.newContext({viewport:{width:393,height:852},isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',permissions:['microphone'],colorScheme:'dark'});page=await context.newPage();
  page.on('pageerror',e=>receipt.errors.push(e.message));
  page.on('websocket',ws=>{if(!ws.url().includes('/voice-outline-streaming/'))return;ws.on('framesent',e=>{if(typeof e.payload!=='string'){receipt.pcmFrames=(receipt.pcmFrames||0)+1;receipt.pcmBytes=(receipt.pcmBytes||0)+e.payload.length;}else{try{receipt.events.push({direction:'sent',...JSON.parse(e.payload)})}catch{}}});ws.on('framereceived',e=>{try{receipt.events.push({direction:'received',...JSON.parse(e.payload)})}catch{}})});
  await page.goto(entry);await attach();
+ if(process.env.QA_NATIVE_ABI_SEAM==='1'){
+  receipt.nativeABI={kind:'mock DeviceBridge ABI selection seam; not handset acoustics'};
+  await page.evaluate(()=>{window.__qaAACCalls=0;window.WizardOSDevice={recActive:()=> 'null',recList:()=> '[]',recStart:()=>{window.__qaAACCalls++;throw new Error('AAC must not be selected for explicit PCM')}}});
+  receipt.nativeABI.nonPCM=await app.evaluate(()=>WizardApp.capture.capabilities({kind:'outline'}));
+  check('mock Android AAC ABI selected only for non-PCM',receipt.nativeABI.nonPCM.native==='wizard-device'&&!receipt.nativeABI.nonPCM.pcm);
+ }
  receipt.ready=await app.evaluate(async()=>({ready:await WizardApp.ready(),capabilities:WizardApp.capture.capabilities({kind:'outline',pcm:true})}));
  check('canonical app identity, hosted shared PCM',receipt.ready.ready.hosted&&receipt.ready.ready.appId==='outline-streaming-demo'&&receipt.ready.capabilities.pcm);
  receipt.windows=await page.evaluate(()=>Object.values(__wos.wins).map(w=>({appId:w.appId,url:w.url,title:w.title})));
@@ -40,11 +46,16 @@ try{
  check('nonempty original audio hash readback',receipt.audio.length>0);
  receipt.pending=await app.evaluate(async()=>await WizardApp.capture.pending());check('custody acknowledged after verified readback',receipt.pending.length===0);
  check('shared capture ended cleanly',await app.evaluate(()=>WizardApp.capture.current()===null));
+ receipt.idle=await page.evaluate(()=>({capture:WizAppCapture.getState(),voice:__wos.voice}));
+ check('ordinary voice path no longer blocked by capture',!receipt.idle.capture.hold&&!receipt.idle.capture.recording&&receipt.idle.voice==='idle');
+ if(receipt.nativeABI){receipt.nativeABI.aacStarts=await page.evaluate(()=>window.__qaAACCalls);check('explicit PCM never invoked mock AAC recorder',receipt.nativeABI.aacStarts===0);await page.evaluate(()=>delete window.WizardOSDevice)}
  check('real PCM sent and replacement events received',receipt.pcmBytes>0&&receipt.events.some(e=>e.direction==='received'&&e.type==='delta'&&e.replace===true));
  await page.screenshot({path:out+'/in-shell-final.png',fullPage:true});
  await page.reload();await attach();check('in-shell reload preserves exact finals',JSON.stringify((await get('api/document')).document)===JSON.stringify(receipt.after.document.document));
  await app.locator('#menu').click();await page.goBack();await page.waitForTimeout(300);check('menu Back stays in shell',new URL(page.url()).pathname==='/wizard-os-home/'&&await app.locator('#sheet').isVisible()===false);
  await page.screenshot({path:out+'/in-shell-back.png',fullPage:true});
+ await page.goBack();await page.waitForTimeout(300);receipt.rootBack={url:page.url(),frames:page.frames().map(f=>f.url())};check('root Back retains Wizard and app',new URL(page.url()).pathname==='/wizard-os-home/'&&receipt.rootBack.frames.some(u=>u.includes('/voice-outline-streaming/')));
+ const desktopContext=await browser.newContext({viewport:{width:1280,height:900}}),desktop=await desktopContext.newPage();await desktop.goto(entry);await desktop.waitForFunction(()=>Array.from(document.querySelectorAll('iframe')).some(f=>{try{return f.contentWindow.location.pathname==='/voice-outline-streaming/'&&f.contentWindow.WizardApp}catch{return false}}));const desktopApp=desktop.frames().find(f=>f.url().includes('/voice-outline-streaming/'));await desktopApp.waitForFunction(()=>document.querySelector('#save')?.textContent==='Saved');receipt.desktop=await desktopApp.evaluate(async()=>({ready:await WizardApp.ready(),cap:WizardApp.capture.capabilities({kind:'outline',pcm:true})}));check('cold desktop hosted PCM launch',receipt.desktop.ready.hosted&&receipt.desktop.ready.appId==='outline-streaming-demo'&&receipt.desktop.cap.pcm);await desktop.screenshot({path:out+'/desktop-shell.png',fullPage:true});await desktopContext.close();
  // Raw link window remains untrusted even though the private app is installed.
  await page.evaluate(url=>__wos.openLinkDesk(url),base);await page.waitForTimeout(700);
  const linkFrames=page.frames().filter(f=>f.url().includes('/voice-outline-streaming/'));
