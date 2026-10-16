@@ -28,6 +28,10 @@ check('detail: hero art reaches both screen edges',art.x===0&&art.right===art.vw
 const y=g.body.y;const [h1,h2,e0,e1,mid,below,skin]=await px(p,[[200,6],[200,y-6],[1,y+40],[410,y+40],[206,y+40],[4,y+art.bottom+60],[200,6]]);
 check('detail: no shell gutter, edge pixels match the art beside them',near(e0,mid,14)&&near(e1,mid,14),{e0,e1,mid});
 check('detail: heading takes the hero top colour, no contrasting strip',near(h2,mid,14)&&near(h1,h2,4),{h1,h2,mid});
+// The seam itself: heading 3px above vs rendered art 3px below, same columns. Mean within 4/255, every column within 8.
+const xs=[30,90,150,262,322,382],ab=await px(p,xs.flatMap(x=>[[x,y-3],[x,y+3]])),up=ab.filter((_,i)=>!(i%2)),dn=ab.filter((_,i)=>i%2);
+const avg=a=>[0,1,2].map(k=>Math.round(a.reduce((s,v)=>s+v[k],0)/a.length));
+check('detail: no tonal step at the heading/art seam',near(avg(up),avg(dn),4)&&up.every((u,i)=>near(u,dn[i],8)),{up:avg(up),down:avg(dn),cols:up.map((u,i)=>[u,dn[i]])});
 check('detail: below the hero the page keeps the library skin canvas',near(below,bd,16),{below,library:bd});
 await p.screenshot({path:OUT+'/phone-critical-buddhism.png'});
 await p.evaluate(()=>__wosNativeBack());await p.waitForTimeout(1200);g=await geo(p);[hd]=await px(p,[[200,8]]);

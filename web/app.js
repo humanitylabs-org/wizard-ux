@@ -716,8 +716,23 @@
         if (n.tagName === 'IMG') {   // full-width hero art: average its top rows (same-origin images only; a tainted canvas throws)
           if (!n.complete || !n.naturalWidth) continue;
           try {
+            // Sample what is on screen, not the source file: the visible top 12px under object-fit/position, through the
+            // image's CSS filter, then under any full-width shade the app layers above it (first colour of its gradient).
+            const cs = d.defaultView.getComputedStyle(n), r = n.getBoundingClientRect(), nw = n.naturalWidth, nh = n.naturalHeight;
             const cv = d.createElement('canvas'); cv.width = 8; cv.height = 1;
-            const x = cv.getContext('2d'); x.drawImage(n, 0, 0, n.naturalWidth, Math.max(1, n.naturalHeight * .03), 0, 0, 8, 1);
+            const x = cv.getContext('2d'), band = Math.min(12, r.height);
+            let sx = 0, sy = 0, sw = nw, sh = band * nh / r.height;
+            if (cs.objectFit === 'cover') {
+              const k = Math.max(r.width / nw, r.height / nh), [px, py] = cs.objectPosition.split(' ').map(p => p.endsWith('%') ? parseFloat(p) / 100 : .5);
+              sx = (nw * k - r.width) * px / k; sy = (nh * k - r.height) * py / k; sw = r.width / k; sh = band / k;
+            }
+            if (cs.filter && cs.filter !== 'none') x.filter = cs.filter;
+            x.drawImage(n, sx, sy, sw, Math.max(1, sh), 0, 0, 8, 1); x.filter = 'none';
+            for (let s = n.nextElementSibling; s; s = s.nextElementSibling) {
+              const sr = s.getBoundingClientRect(); if (sr.top > r.top + 1 || sr.width < r.width * .9) continue;
+              const ss = d.defaultView.getComputedStyle(s), sg = /^linear-gradient\((?:to bottom, |180deg, )?(rgba?\([^)]*\))/.exec(ss.backgroundImage);
+              for (const c of [ss.backgroundColor, sg && sg[1]]) if (c && c !== 'rgba(0, 0, 0, 0)') { x.fillStyle = c; x.fillRect(0, 0, 8, 1); }
+            }
             const px = x.getImageData(0, 0, 8, 1).data, s = [0, 0, 0];
             for (let i = 0; i < 32; i += 4) for (let k = 0; k < 3; k++) s[k] += px[i + k];
             top = `rgb(${s.map(v => Math.round(v / 8)).join(', ')})`;
