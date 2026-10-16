@@ -2,6 +2,8 @@
 // A launcher is evidence of an installed app, NOT evidence of its release version.
 const HOST_ALIASES = {
   'wizard-calendar': {repo:'humanitylabs-org/wizard-calendar', id:'calendar', url:'/wizard-calendar/'},
+  'wizard-music': {repo:'humanitylabs-org/wizard-music', id:'wizard-music', url:'/wizard-music/'},
+  'wizard-search': {repo:'humanitylabs-org/wizard-search', id:'wizard-search', url:'/wizard-search/'},
 };
 const repo = s => typeof s === 'string' ? s.toLowerCase() : '';
 const sameRepo = (a,b) => !!repo(a) && repo(a) === repo(b);
@@ -23,10 +25,14 @@ export function resolveInstalled(a, snapshot, runtipi) {
   if (matches.length) return {conflict:true}; // Never fall back to a same-ID launcher for another repo.
   const shell = (snapshot.shell || []).filter(i => i.url && !i.system);
   const alias = HOST_ALIASES[a.id];
-  const host = shell.find(i => i.id === a.id) || (alias && sameRepo(alias.repo,a.repo) && shell.find(i => i.id === alias.id && i.url === alias.url));
+  // Host launchers do not carry repository pins. Only reviewed id/repo/path aliases
+  // may bridge that missing identity; a same-ID foreign catalog is not this app.
+  const host = alias && sameRepo(alias.repo,a.repo) && shell.find(i => i.id === alias.id && i.url === alias.url);
   if (host) return {id:host.id, status:host.status || 'unknown'};
+  if(shell.some(i => i.id === a.id || i.id === alias?.id)) return {conflict:true};
   const managed = (runtipi || []).find(i => i.info?.id === a.id);
-  return managed ? {id:a.id,status:managed.app?.status || 'unknown'} : null;
+  // Runtipi proves presence by package ID, not which shell launcher owns the repo.
+  return managed ? {id:'',status:managed.app?.status || 'unknown'} : null;
 }
 export function preferredRelease(a,i) {
   return (a.releases || []).find(r => i?.commit && sameRepo(i.repo,r.repo) && i.commit === r.commit) || a;
@@ -52,7 +58,7 @@ export function releaseState(a,i,explicit,complete) {
   if(a.conflict || i?.conflict) return 'conflict';
   if(!i) return complete ? 'get' : 'unknown';
   if(a.commit && i.commit === a.commit && sameRepo(a.repo,i.repo)) return 'installed';
-  const newer = sameRepo(a.repo,i.repo) && a.commit && i.commit && a.source === i.source && a.channel === i.channel && newerVersion(a.version,i.version);
+  const newer = sameRepo(a.repo,i.repo) && a.commit && i.commit && i.source && i.channel && a.source === i.source && a.channel === i.channel && newerVersion(a.version,i.version);
   if(newer) return complete ? 'update' : 'unknown';
   if(explicit) return complete ? 'switch' : 'unknown';
   // An unknown/different/older pin isn't an upgrade; default action opens the existing copy.

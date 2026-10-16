@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp } from '../web/store/store-status.mjs';
+import { resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp } from '../web/store/store-status.js';
 const pin = c => c.repeat(40);
 const app = {id:'cinequeue',repo:'org/movies',commit:pin('a'),version:'0.2.1',source:'wizard-alpha',channel:'alpha'};
 const wam = {id:'cinequeue-next',app_id:'cinequeue',repo:'org/movies',commit:pin('a'),version:'0.2.1'};
@@ -13,8 +13,9 @@ test('host Calendar alias requires reviewed repo + canonical shell path; Music i
  const shell=[{id:'calendar',url:'/wizard-calendar/'},{id:'wizard-music',url:'/wizard-music/'}];
  assert.equal(resolveInstalled({id:'wizard-calendar',repo:'humanitylabs-org/wizard-calendar'},{wam:[],shell},[]).id,'calendar');
  assert.equal(resolveInstalled({id:'wizard-music',repo:'humanitylabs-org/wizard-music'},{wam:[],shell},[]).id,'wizard-music');
- assert.equal(resolveInstalled({id:'wizard-calendar',repo:'wrong/repo'},{wam:[],shell},[]),null);
- assert.equal(resolveInstalled({id:'wizard-calendar',repo:'humanitylabs-org/wizard-calendar'},{wam:[],shell:[{id:'calendar',url:'/another/'}]},[]),null);
+ assert.equal(resolveInstalled({id:'wizard-calendar',repo:'wrong/repo'},{wam:[],shell},[]).conflict,true);
+ assert.equal(resolveInstalled({id:'wizard-music',repo:'wrong/repo'},{wam:[],shell},[]).conflict,true);
+ assert.equal(resolveInstalled({id:'wizard-calendar',repo:'humanitylabs-org/wizard-calendar'},{wam:[],shell:[{id:'calendar',url:'/another/'}]},[]).conflict,true);
 });
 test('repo mismatch never falls back to same-ID shell and never opens wrong app',()=>{
  const i=resolveInstalled({...app,repo:'other/repo'},snapshot,[]); assert.equal(i.conflict,true);

@@ -1,8 +1,8 @@
 /* Wizard App Store: an app-discovery app that runs in its own Wizard window (or on its own).
- * Listings come from the public Wizard App Index; "installed" from this Wizard's Runtipi; "Open" asks the shell.
+ * Listings merge configured catalogs; installation identity joins WAM, canonical shell and Runtipi reads.
  * Browse-only until App installation lands: Get explains instead of installing. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
-import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp} from './store-status.mjs';
+import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp} from './store-status.js';
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);

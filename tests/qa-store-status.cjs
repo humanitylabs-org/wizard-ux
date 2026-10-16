@@ -11,7 +11,7 @@ const snapshot=JSON.parse(fs.readFileSync(process.env.QA_SNAPSHOT));
   let mode='live',lastCatalog; const errors=[];
   await ctx.route('**/wizard-os-home/store/*',async r=>{
    const file=path.basename(new URL(r.request().url()).pathname);
-   if(!['index.html','store.js','store.css','store-status.mjs'].includes(file)) return r.continue();
+   if(!['index.html','store.js','store.css','store-status.js'].includes(file)) return r.continue();
    await r.fulfill({status:200,contentType:file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'text/javascript',body:fs.readFileSync(path.join(root,'web/store',file))});
   });
   await ctx.route('**/store-data/wizard/v1/installed-apps',r=>r.fulfill({status:mode==='outage'?503:200,contentType:'application/json',body:JSON.stringify(snapshot)}));
@@ -28,7 +28,11 @@ const snapshot=JSON.parse(fs.readFileSync(process.env.QA_SNAPSHOT));
    await p.waitForFunction(()=>Array.from(document.querySelectorAll('iframe')).some(f=>f.src.includes('/store/index.html')));
    const f=p.frames().find(f=>f.url().includes('/store/index.html'));
    await f.locator('[data-kind="apps"]:not([disabled])').waitFor();
-   await f.locator('[data-kind="apps"]').click(); return f;
+   try {await f.locator('[data-kind="apps"]').click({timeout:5000});} catch(e) {
+    await p.screenshot({path:path.join(out,`failure-${width}.png`)});
+    console.log('FRAME DEBUG',await f.evaluate(()=>({url:location.href,scroll:scrollY,body:document.body.innerText,frames:parent.document.querySelectorAll('iframe').length,apps:document.querySelector('[data-kind="apps"]').getBoundingClientRect().toJSON(),results:document.querySelector('#results').getBoundingClientRect().toJSON()})));
+    throw e;
+   } return f;
   };
   let f=await openStore();
   const list=await f.locator('.row').evaluateAll(rows=>rows.map(r=>({key:r.dataset.app,name:r.querySelector('.tx b').textContent,alpha:r.querySelector('.alpha-badge')?.textContent,action:r.querySelector('.get').textContent})));
@@ -39,18 +43,19 @@ const snapshot=JSON.parse(fs.readFileSync(process.env.QA_SNAPSHOT));
   const opens=[['wizard-calendar','calendar','/wizard-calendar/'],['wizard-music','wizard-music','/wizard-music/'],['cinequeue','cinequeue-next','/cinequeue-next/'],['wisdom','wisdom','/wisdom/'],['wizard-shopping','wizard-shopping','/alpha-wizard-shopping/']];
   for(const [id,target] of opens) assert.equal(list.find(a=>a.key.startsWith(id+'|'))?.action,'Open',id);
   const badgeStyle=await f.locator('.alpha-badge').first().evaluate(e=>({size:getComputedStyle(e).fontSize,bg:getComputedStyle(e).backgroundColor}));assert.equal(badgeStyle.size,'14px');
-  await p.screenshot({path:path.join(out,`apps-${width}.png`),fullPage:true});
+  await p.waitForTimeout(600);await p.screenshot({path:path.join(out,`apps-${width}.png`),fullPage:true});
   const opened=[];
   for(const [id,target,url] of opens) {
    if(opened.length) f=await openStore();
    await f.locator(`.row[data-app^="${id}|"] .tx`).click();
    await f.locator(`#detail [data-open="${target}"]`).waitFor();
-   if(id==='cinequeue') await p.screenshot({path:path.join(out,`movies-${width}.png`),fullPage:true});
+   if(id==='cinequeue') {await p.waitForTimeout(600);await p.screenshot({path:path.join(out,`movies-${width}.png`),fullPage:true});}
    await f.locator(`#detail [data-open="${target}"]`).click();
    await p.waitForFunction(url=>Array.from(document.querySelectorAll('iframe')).some(f=>{try{return f.contentWindow.location.pathname.startsWith(url);}catch{return false;}}),url);
    const app=p.frames().find(x=>new URL(x.url() || 'about:blank').pathname.startsWith(url));
-   await app.locator('body').waitFor();assert.ok((await app.locator('body').innerText()).trim().length>0);
+   await app.waitForFunction(()=>document.body?.innerText.trim().length>0);
    opened.push({id,target,url:app.url()});
+   if(width===1440) await p.locator('.win').filter({has:p.locator(`iframe[src^="${url}"]`)}).locator('[data-wact="close"]').click();
   }
   // Reload returns to real installed releases, not a forced older Alpha selection.
   f=await openStore();await p.reload();
@@ -67,7 +72,7 @@ const snapshot=JSON.parse(fs.readFileSync(process.env.QA_SNAPSHOT));
   assert.equal(await f.locator('#detail [data-get]').innerText(),'Switch release');
   assert.equal(await f.locator('#detail .alpha-badge').innerText(),'Alpha');
   assert.equal(await f.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-  await p.screenshot({path:path.join(out,`switch-${width}.png`),fullPage:true});
+  await p.waitForTimeout(600);await p.screenshot({path:path.join(out,`switch-${width}.png`),fullPage:true});
   await f.locator('#release-choice').selectOption(installedChoice);assert.equal(await f.locator('#detail .get').first().innerText(),'Open');
   // Canonical hosted Back hook must close detail, then list, without leaving Store.
   assert.equal(await f.evaluate(()=>window.__wizardCloseOverlay()),true);assert.equal(await f.locator('#results').isVisible(),true);
@@ -80,10 +85,10 @@ const snapshot=JSON.parse(fs.readFileSync(process.env.QA_SNAPSHOT));
   // Selected release disappearing on refresh blocks, rather than replacing its exact pin.
   mode='live';await f.locator('#refresh').click();await f.locator('#refresh:not([disabled])').waitFor();await f.locator('.row[data-app^="wisdom|"] .tx').click();await f.locator('#release-choice').selectOption(`${alpha.source}:${alpha.commit}`);
   mode='removed';await f.locator('#refresh').click();await f.locator('#refresh:not([disabled])').waitFor();assert.equal(await f.locator('#detail [data-get]').count(),0);assert.ok((await f.locator('#release-choice').innerText()).includes('no longer available'));
-  assert.deepEqual(errors,[]);result.widths.push({width,list,badgeStyle,opened,refresh_selection:true,unknown_no_get:true,conflict_no_open:true,removed_pin_blocked:true,back_stays:true,errors});await ctx.close();
+  assert.deepEqual(errors,[]);result.widths.push({width,list,badgeStyle,opened,refresh_selection:true,unknown_no_get:true,conflict_no_open:true,removed_pin_blocked:true,back_stays:true,errors});fs.writeFileSync(path.join(out,'browser.json'),JSON.stringify(result,null,2));await ctx.close();
  }
  // Actual browser Back in standalone mode keeps Store open.
- const c=await browser.newContext();await c.route('**/wizard-os-home/store/*',async r=>{const file=path.basename(new URL(r.request().url()).pathname);if(!['index.html','store.js','store.css','store-status.mjs'].includes(file))return r.continue();return r.fulfill({contentType:file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'text/javascript',body:fs.readFileSync(path.join(root,'web/store',file))});});
+ const c=await browser.newContext();await c.route('**/wizard-os-home/store/*',async r=>{const file=path.basename(new URL(r.request().url()).pathname);if(!['index.html','store.js','store.css','store-status.js'].includes(file))return r.continue();return r.fulfill({contentType:file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'text/javascript',body:fs.readFileSync(path.join(root,'web/store',file))});});
  await c.route('**/store-data/wizard/v1/installed-apps',r=>r.fulfill({json:snapshot}));
  const page=await c.newPage();await page.goto(base+'store/index.html');await page.locator('[data-kind="apps"]:not([disabled])').click();await page.locator('.row .tx').first().click();await page.goBack();assert.equal(await page.locator('#results').isVisible(),true);assert.ok(page.url().includes('/store/index.html'));result.standalone_back=true;await c.close();
  assert.deepEqual(result.mutations,[]);fs.writeFileSync(path.join(out,'browser.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
