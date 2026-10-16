@@ -22,7 +22,7 @@
     if (!eligible(it, states)) return false;
     // Claim synchronously before the first persistence await: a double tap cannot
     // reset an in-flight attempt back to waiting and cause a second dispatch.
-    Object.assign(it, { state: 'queued', threadHidden: false, nextAt: 0, attempts: 0 });
+    Object.assign(it, { state: 'queued', threadHidden: false, nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) });
     put(it).then(pump); return true;
   }
   function wake() {

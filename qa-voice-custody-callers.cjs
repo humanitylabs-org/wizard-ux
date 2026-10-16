@@ -16,7 +16,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   const state={down:true,sttDelay:0,text:words,cmd:{route:'agent'},uploads:[],posts:[],runs:new Map(),seq:0,errors:[]};
   await ctx.route('**/*',async r=>{
    const q=r.request(),u=new URL(q.url()),p=u.pathname,json=(o,status=200)=>r.fulfill({status,contentType:'application/json',body:JSON.stringify(o)});
-   if(q.method()==='GET'&&p.startsWith('/wizard-os-home/')){let f=p.slice('/wizard-os-home/'.length)||'index.html';if(f==='outbox.js'&&legacyOutbox?.source)return r.fulfill({body:legacyOutbox.source,contentType:'application/javascript'});f=path.join(root,'web',f);if(fs.existsSync(f)&&fs.statSync(f).isFile())return r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml'});}
+   if(q.method()==='GET'&&p.startsWith('/wizard-os-home/')){if(process.env.QA_LIVE_ORIGIN)return r.continue();let f=p.slice('/wizard-os-home/'.length)||'index.html';if(f==='outbox.js'&&legacyOutbox?.source)return r.fulfill({body:legacyOutbox.source,contentType:'application/javascript'});f=path.join(root,'web',f);if(fs.existsSync(f)&&fs.statSync(f).isFile())return r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml'});}
    if(p==='/fixture-capture')return r.fulfill({contentType:'text/html',body:'<meta name="wizard-os-voice" content="capture"><p>Local capture fixture</p>'});
    if(p.endsWith('/bootstrap'))return json({bootstrap:1,display:{agent_name:'Wizard',owner_name:'Tester'},endpoints:{transcribe:'/wizard/v1/transcribe',route:'/wizard/v1/route'},files:{upload_url:'/wizard/files/upload'},capabilities:{voice:true,router:true,files:true,steer:true}});
    if(p.endsWith('/transcribe')){await sleep(state.sttDelay);return json({text:state.text,ms:5}).catch(()=>{});}
@@ -53,7 +53,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    Storage.prototype.setItem=function(k,v){if(__fault.all&&(k.startsWith('wos.outbox.fallback')))throw new DOMException('Injected full storage','QuotaExceededError');return set.call(this,k,v);};
   },{allFail,model,provider});
   const p=await ctx.newPage();p.on('pageerror',e=>state.errors.push(String(e)));
-  await p.goto('http://localhost:9481/wizard-os-home/'+(desktop?'desktop.html':''));
+  await p.goto((process.env.QA_LIVE_ORIGIN||'http://localhost:9481')+'/wizard-os-home/'+(desktop?'desktop.html':''));
   await p.waitForFunction(()=>!!(window.__wos||window.__wux)?.chats&&window.WosOutbox?.recoveryComplete);
   await p.evaluate(()=>WosModels.load());await p.waitForFunction(()=>window.WosModels?.snapshot()?.model);await sleep(250);
   const wid=await p.evaluate(sid=>{const A=window.__wos||window.__wux;const w=A.openWin?A.openWin({app:'chats'}):null;const id=w?.id||Object.keys(A.wins).find(k=>A.wins[k].app==='chats');if(!id)throw Error('No chat window');A.chats.openChat(id,sid);A.focusWin?.(id);return id;},sid);
