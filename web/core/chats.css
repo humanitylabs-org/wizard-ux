@@ -550,3 +550,7 @@ html:not([data-shell="desktop"]) .ch-compose .ch-attach svg { stroke: var(--ink-
 html:not([data-shell="desktop"]) .ch-thread > .ch-head { background: var(--bg); position: relative; z-index: 2; }
 html:not([data-shell="desktop"]) .ch-compose { border-top: 0; padding-bottom: calc(10px + var(--safe-b, 0px)); }
 #device.orb-corner { --corner-r: 16px; }
+/* Phone v5: Ready header on top of its rows; the order pills are the last line, level with + and the orb. */
+html:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { flex-direction: column; }
+html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: calc(var(--safe-b, 0px) + var(--corner-b)); }
+html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-rdy-bar { min-height: var(--corner-orb); align-items: center; padding-right: calc(var(--corner-r) + 2 * var(--corner-orb) + 18px); margin: 0; }
