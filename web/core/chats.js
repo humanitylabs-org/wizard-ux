@@ -80,7 +80,7 @@ window.WizCore.chats = function createChats(H) {
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
   // Same sections, order and day boundaries as Wizard's Work view.
   // Deferred threads live at the bottom of Ready with a Deferred status (live.js groupWork), not in a section.
-  const SECTIONS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['yesterday', 'Yesterday'], ['pastWeek', 'Past week'], ['archive', 'Archive']];
+  const SECTIONS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['archive', 'Archive']];
   const SEC_OPEN_KEY = 'wos.chats.sections.v1';
   /* Filters (James + Claude Fable, 11 Oct 2026): a filter is a chip inside the search field. One status chip and
    * one subject chip at most; chips and search text combine (AND). Three ways in: the funnel button at the end
@@ -182,16 +182,19 @@ window.WizCore.chats = function createChats(H) {
   const READY_ORDER_LABEL = { newest: 'Newest', priority: 'Priority', subject: 'By subject' };
   let readyOrder = (() => {
     try {
-      const v = localStorage.getItem(READY_ORDER_KEY); if (READY_ORDERS.includes(v)) return v;
+      const v = localStorage.getItem(READY_ORDER_KEY); if (READY_ORDERS.includes(v) || v === 'oldest') return v;
       if (localStorage.getItem('wos.chats.readyBySubject.v1') === '1') return 'subject'; // the old two-way toggle
     } catch (e) {}
     return 'newest';
   })();
   const waitsOn = s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && ['needs_you', 'check'].includes(attOf(s)?.state));
   // Newest keeps groupWork's recency order; Priority and By subject put what waits on James first.
-  const readyOrdered = list => readyOrder === 'newest' ? list : LIVE.readyByPriority(list);
+  const ARCH_OPTS = [[1, '1 day'], [3, '3 days'], [7, '1 week'], [14, '2 weeks'], [30, '1 month'], [0, 'Never']];
+  const archSel = () => { const cur = LIVE.archiveAfterDays; return `<label class="ch-arch-sel">Auto-archive after <select data-archafter>${ARCH_OPTS.map(([d, l]) => `<option value="${d}"${d === cur ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`; };
+  // Opinionated: tapping Newest again flips it to Oldest (same button, no fourth option).
+  const readyOrdered = list => readyOrder === 'newest' ? list : readyOrder === 'oldest' ? list.slice().reverse() : LIVE.readyByPriority(list);
   function readyBody(list, rowFn) {
-    const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready">${READY_ORDERS.map(o => `<button type="button" data-rdyorder="${o}" aria-pressed="${readyOrder === o}"${readyOrder === o ? ' class="on"' : ''}>${READY_ORDER_LABEL[o]}</button>`).join('')}</div>`;
+    const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready">${READY_ORDERS.map(o => { const on = readyOrder === o || (o === 'newest' && readyOrder === 'oldest'); return `<button type="button" data-rdyorder="${o}" aria-pressed="${on}"${on ? ' class="on"' : ''}>${o === 'newest' && readyOrder === 'oldest' ? 'Oldest' : READY_ORDER_LABEL[o]}</button>`; }).join('')}</div>`;
     if (readyOrder !== 'subject') return bar + list.map(rowFn).join('');
     const groups = new Map();
     for (const s of list) { const k = attOf(s)?.subject || 'Other'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
@@ -319,11 +322,15 @@ window.WizCore.chats = function createChats(H) {
   }
   function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
 
+  // Opinionated: Compact list (titles only, no previews), chosen in the Filter sheet, remembered per device.
+  const COMPACT_KEY = 'wos.chats.compact.v1';
+  const compactOn = () => { try { return localStorage.getItem(COMPACT_KEY) === '1'; } catch (e) { return false; } };
   function filterSheet(c) {
     const opt = (k, key, label, on) => `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chfopt="${k}:${esc(key)}"><i class="ch-fdot ${k === 'status' ? key : 'subject'}"></i>${esc(label)}${on ? '<b>✓</b>' : ''}</button>`;
     const sj = subjects();
     return `<div class="ch-fsheet" data-chfsheet><div class="ch-fcard" role="dialog" aria-label="Filter chats"><div class="ch-fh"><b>Filter</b>${c.filter || c.subject ? '<button type="button" data-chfclear>Clear</button>' : ''}</div>
       <h5>Status</h5><div class="ch-fopts">${Object.entries(STATUS).map(([k, f]) => opt('status', k, f.label, c.filter === k)).join('')}</div>
+      <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button></div>
       ${sj.length ? `<h5>Subject</h5><div class="ch-fopts">${sj.map(k => opt('subject', k, k, c.subject === k)).join('')}</div>` : ''}</div></div>`;
   }
   // The phone replaces the list with the thread. Keep a bounded return bookmark before
@@ -401,11 +408,11 @@ window.WizCore.chats = function createChats(H) {
       if (!list.length && !extra.n && (k === 'errors' || n || filtered)) return '';
       // While searching, every section with a hit opens so nothing is buried.
       const open = n || filtered ? true : secOpen[k];
-      const newN = k === 'ready' ? list.filter(s => LIVE.isNew(s) && !waitsOn(s)).length : 0;
-      const waitN = k === 'ready' || k === 'yesterday' || k === 'pastWeek' ? list.filter(s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you')).length : 0;
+      const newN = 0; // Opinionated: no subtotal badges; the Ready count and icon colours say it
+      const waitN = false ? list.filter(s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you')).length : 0;
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
+        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered ? archSel() : ''}${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
     }).join('');
     if (bs && LST.ok) body += BS.footer(bs);
     const place = listPlace(el) || c.listPlace;
@@ -413,7 +420,7 @@ window.WizCore.chats = function createChats(H) {
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
     const fab = `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
-    const html = `<div class="ch-list${AGID ? ' agent' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}<div class="ch-scroll">${sugHtml}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
+    const html = `<div class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}<div class="ch-scroll">${sugHtml}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -1352,6 +1359,7 @@ window.WizCore.chats = function createChats(H) {
     const cx = e.target.closest('[data-chchipx]'); if (cx) { const c = ch(id); if (cx.dataset.chchipx === 'subject') c.subject = ''; else { c.filter = ''; c.filterFrom = null; } c.coach = false; c.lastChip = c.filter ? 'status' : c.subject ? 'subject' : ''; rerenderList(w); return true; }
     if (e.target.closest('[data-chfbtn]')) { const c = ch(id); c.sheet = !c.sheet; c.focus = false; rerenderList(w); return true; }
     if (e.target.closest('[data-chfclear]')) { const c = ch(id); c.sheet = false; c.coach = false; clearAll(w); return true; }
+    if (e.target.closest('[data-chcompact]')) { const on = !compactOn(); try { localStorage.setItem(COMPACT_KEY, on ? '1' : '0'); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     const fo = e.target.closest('[data-chfopt]'); if (fo) { const c = ch(id), [k, ...r] = fo.dataset.chfopt.split(':'), key = r.join(':'); c.sheet = false; c.coach = false;
       if (k === 'status') { c.filter = c.filter === key ? '' : key; c.filterFrom = null; } else c.subject = c.subject === key ? '' : key;
       c.lastChip = k; rerenderList(w); return true; }
@@ -1364,7 +1372,7 @@ window.WizCore.chats = function createChats(H) {
     if (sm) { const shown = [...(sm.closest('[data-sec]') || document).querySelectorAll('[data-subjmove="up"]')].map(b => b.dataset.subjkey);
       if (!sm.disabled && moveSubject(sm.dataset.subjkey, sm.dataset.subjmove, shown)) for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const rg = e.target.closest('[data-rdyorder]');
-    if (rg) { if (READY_ORDERS.includes(rg.dataset.rdyorder)) readyOrder = rg.dataset.rdyorder; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
+    if (rg) { const o = rg.dataset.rdyorder; if (o === 'newest' && (readyOrder === 'newest' || readyOrder === 'oldest')) readyOrder = readyOrder === 'newest' ? 'oldest' : 'newest'; else if (READY_ORDERS.includes(o)) readyOrder = o; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
@@ -1444,6 +1452,9 @@ window.WizCore.chats = function createChats(H) {
       }
       if (e.target.matches('[data-clarify-answer]')) { const c = ch(idOf(e.target)); if (c.approval?.kind === 'clarify') c.approval.answer = e.target.value; }
       if (e.target.matches('.ch-compose textarea')) { growTa(e.target); const id = idOf(e.target); ch(id).draft = e.target.value; saveDraft(id); syncSend(e.target.form, ch(id)); }
+    });
+    root.addEventListener('change', e => {
+      if (e.target.matches('[data-archafter]')) { LIVE.archiveAfterDays = +e.target.value; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } }
     });
     root.addEventListener('keydown', e => {
       if (e.target.matches('.ch-compose textarea') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.target.form.requestSubmit(); }

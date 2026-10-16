@@ -208,6 +208,9 @@
     if (isFinite(a) !== isFinite(b)) return isFinite(a) ? -1 : 1;
     return (isFinite(a) ? b - a : 0) || l.title.localeCompare(r.title);
   };
+  // Opinionated: auto-archive age is the owner's choice (Archive header selector); 0 = never. Default one week.
+  const ARCH_KEY = 'wos.chats.archiveAfter.v1';
+  const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
   // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
@@ -222,7 +225,7 @@
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
-    const readyB = workDayStart(now), yB = readyB - DAY, archB = now - WEEK;
+    const readyB = workDayStart(now), yB = readyB - DAY, archDays = archiveAfterDays(), archB = archDays ? now - archDays * DAY : -Infinity;
     for (const s of sessions) {
       if (s.hidden) continue;
       const t = sectionTime(s);
@@ -232,9 +235,7 @@
       else if (isErr(s)) g.errors.push(s);
       else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
-      else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
-      else if (t < readyB) g.yesterday.push(s);
-      else g.ready.push(s);
+      else g.ready.push(s); // Opinionated: no Yesterday / Past week; everything under a week old is Ready
     }
     for (const list of Object.values(g)) list.sort(newestFirst);
     // Newest: approvals pinned, then recency; deferred threads always last (Priority re-sorts with readyRank).
@@ -372,6 +373,8 @@
     seenOf(s) { return s && s.agent && otherAgent(s.agent) ? AGENT_SEEN : this.seen; },
     workGroups(sessions, now) { return groupWork(sessions || this.sessions, now); },
     readyByPriority: byPriority,
+    get archiveAfterDays() { return archiveAfterDays(); },
+    set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} },
     cardAt,
     groups(agent = '') {
       const now = Date.now(), needs = [], ready = [], working = [];
