@@ -80,7 +80,7 @@ window.WizCore.chats = function createChats(H) {
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
   // Same sections, order and day boundaries as Wizard's Work view.
   // Deferred threads live at the bottom of Ready with a Deferred status (live.js groupWork), not in a section.
-  const SECTIONS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['yesterday', 'Yesterday'], ['pastWeek', 'Past week'], ['archive', 'Archive']];
+  const SECTIONS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['archive', 'Archive']];
   const SEC_OPEN_KEY = 'wos.chats.sections.v1';
   /* Filters (James + Claude Fable, 11 Oct 2026): a filter is a chip inside the search field. One status chip and
    * one subject chip at most; chips and search text combine (AND). Three ways in: the funnel button at the end

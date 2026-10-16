@@ -208,6 +208,7 @@
     if (isFinite(a) !== isFinite(b)) return isFinite(a) ? -1 : 1;
     return (isFinite(a) ? b - a : 0) || l.title.localeCompare(r.title);
   };
+  const oldestFirst = (l, r) => newestFirst(r, l);
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
   // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
@@ -219,7 +220,7 @@
   // restored or done.
   const isDeferred = s => !!s.deferred && !s.archived;
   const readyRank = s => needsApproval(s) ? 0 : isDeferred(s) ? 9 : s.attention?.state === 'needs_you' ? 1 : s.attention?.state === 'check' ? 2 : 3;
-  const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
+  const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || oldestFirst(l, r));
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archB = now - WEEK;
@@ -232,13 +233,12 @@
       else if (isErr(s)) g.errors.push(s);
       else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
-      else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
-      else if (t < readyB) g.yesterday.push(s);
-      else g.ready.push(s);
+      else g.ready.push(s); // Opinionated: no Yesterday / Past week; everything under a week old is Ready
     }
-    for (const list of Object.values(g)) list.sort(newestFirst);
+    // Opinionated: oldest at the top, newest at the bottom (like a chat log), in every group.
+    for (const list of Object.values(g)) list.sort(oldestFirst);
     // Newest: approvals pinned, then recency; deferred threads always last (Priority re-sorts with readyRank).
-    g.ready.sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(l, r));
+    g.ready.sort((l, r) => Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || oldestFirst(l, r));
     return g;
   }
   async function fetchDispositions() {
