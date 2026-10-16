@@ -229,6 +229,18 @@
   // Opinionated: auto-archive age is the owner's choice (Archive header selector); 0 = never. Default one week.
   const ARCH_KEY = 'wos.chats.archiveAfter.v1';
   const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
+  // Shared with every device on this box via /wizard-os-home/ui-prefs (falls back to this device when absent).
+  const PREFS_URL = '/wizard-os-home/ui-prefs';
+  const putPrefs = body => fetch(PREFS_URL, { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+  const pullPrefs = () => fetch(PREFS_URL, { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(j => {
+    if (!j) return; let changed = false;
+    try {
+      if (typeof j.archiveAfterDays === 'number' && localStorage.getItem(ARCH_KEY) !== String(j.archiveAfterDays)) { localStorage.setItem(ARCH_KEY, String(j.archiveAfterDays)); changed = true; }
+      if (typeof j.compact === 'boolean' && localStorage.getItem('wos.chats.compact.v1') !== (j.compact ? '1' : '0')) { localStorage.setItem('wos.chats.compact.v1', j.compact ? '1' : '0'); changed = true; }
+    } catch (e) {}
+    if (changed) try { window.dispatchEvent(new Event('wos:prefs')); } catch (e) {}
+  }).catch(() => {});
+  pullPrefs(); setInterval(pullPrefs, 30000); try { addEventListener('focus', pullPrefs); } catch (e) {}
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
   // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
@@ -432,7 +444,8 @@
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
     get archiveAfterDays() { return archiveAfterDays(); },
-    set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} },
+    set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
+    putPrefs,
     cardAt,
     groups(agent = '') {
       const now = Date.now(), needs = [], ready = [], working = [];
