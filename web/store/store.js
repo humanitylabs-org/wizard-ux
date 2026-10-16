@@ -1,6 +1,6 @@
 /* Wizard App Store: an app-discovery app that runs in its own Wizard window (or on its own).
  * Listings merge configured catalogs; installation identity joins WAM, canonical shell and Runtipi reads.
- * Browse-only until App installation lands: Get explains instead of installing. Back: detail → list → Store root,
+ * Standard Get uses this Wizard's App Manager; pinned private/channel changes stay agent-mediated. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
 import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp} from './store-status.js';
 (() => {
@@ -28,7 +28,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map() };
+  const S = { apps: [], installed: new Map(), complete:false, busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map() };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
@@ -119,6 +119,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
     if(state==='switch' || state==='update') return `<button class="get ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
     if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
+    if (S.busy.has(a.id)) return `<span class="get have ${cls}" aria-live="polite">Installing…</span>`;
     return `<button class="get ${cls}" data-get="${esc(key(a))}">Get</button>`;
   }
   const row = base => {const a=selected(base); return `<div class="row" data-app="${esc(key(a))}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b>${badge(base)}<small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;};
@@ -202,6 +203,13 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
     if (!keep) window.scrollTo(0, 0);
   }
   function openApp(id) { push('detail', id); showDetail(id); }
+  // Repaint whatever screen is showing (buttons change while an install runs) without touching history or scroll.
+  function refresh() {
+    const t = S.stack[S.stack.length - 1], y = window.scrollY;
+    paint();
+    if (t?.t === 'detail') showDetail(t.arg); else if (t?.t === 'list') openKind(t.arg, true); else if (t?.t === 'search') search(S.q);
+    requestAnimationFrame(() => window.scrollTo(0, y));
+  }
 
   let toastT = 0, lastInstallRequest = '';
   function installRequest(a) {
@@ -212,10 +220,42 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   }
   function toast(html, duration=3600) { const t = $('toast'); t.innerHTML = html; t.hidden = false; requestAnimationFrame(() => t.classList.add('on')); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { if(!t.classList.contains('on')) t.hidden = true; }, 250); }, duration); }
 
+  // Get: the App Manager installs it (owner only, on this Wizard's private address). The browser sends only the id.
+  const INSTALL = DATA.replace(/store-data\/$/, 'store-install/');
+  function askAgent(a) { lastInstallRequest=installRequest(a); toast(`<b>Ask your agent</b><span>${esc(lastInstallRequest)}</span><button class="get" data-copy-install>Copy request</button>`,15000); }
+  async function install(a) {
+    if (!a || S.busy.has(a.id) || status(a)!=='get') return;
+    S.busy.add(a.id); refresh();
+    const say = (m, ok) => toast(`<b>${esc(a.name)}${ok ? ' is ready' : ' wasn’t installed'}</b><span>${esc(m)}</span>`);
+    try {
+      const r = await fetch(INSTALL + encodeURIComponent(a.id), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: '{}' });
+      let j = await r.json().catch(() => ({}));
+      if (r.status === 404 && !j.error) { S.busy.delete(a.id); refresh(); askAgent(a); return; }   // no App Manager install here: agent request
+      if (r.status === 403 || r.status === 404) throw new Error(j.error || 'Not allowed.');
+      if (!r.ok && r.status !== 202) throw new Error(j.error || `Install failed (${r.status}).`);
+      for (let i = 0; j.state === 'installing' && i < 360; i++) {
+        await new Promise(res => setTimeout(res, 2500));
+        const s = await fetch(INSTALL + encodeURIComponent(a.id), { credentials: 'same-origin', cache: 'no-store' });
+        j = await s.json().catch(() => ({ state: 'installing' }));
+      }
+      if (j.state !== 'installed') throw new Error(j.error || 'It didn’t finish. Ask your agent to check the App Manager.');
+      try { if (framed) parent.postMessage({ type: 'wizard:apps-changed', id: a.id }, location.origin); } catch (_) {}
+      await load(true);
+      if(!isInstalled(a)) throw new Error('Installation finished, but its registered status is not available yet. Refresh to check.');
+      say('Find it in your apps.', true);
+    } catch (err) { say(err.message || 'Install failed.'); }
+    finally { S.busy.delete(a.id); refresh(); }
+  }
+
   document.addEventListener('click', e => {
     if (e.target.closest('[data-back]')) { pop(); return; }
     const g = e.target.closest('[data-get]');
-    if (g) { e.stopPropagation(); const base=find(g.dataset.get); if(!base) return; const a=selected(base); if(!['get','switch','update'].includes(status(a))) return; lastInstallRequest=installRequest(a); toast(`<b>Ask your agent</b><span>${esc(lastInstallRequest)}</span><button class="get" data-copy-install>Copy request</button>`,15000); return; }
+    if (g) { e.stopPropagation(); const base=find(g.dataset.get); if(!base) return; const a=selected(base), state=status(a);
+      if(!['get','switch','update'].includes(state)) return;
+      // Only an uninstalled Standard release may use the ID-only manager API.
+      if(state==='get' && !a.private && a.channel!=='alpha' && !a.commit) { install(a); return; }
+      askAgent(a); return; }
     if(e.target.closest('[data-copy-install]')) { if(!navigator.clipboard?.writeText) {toast('<b>Select the request in app details to copy it.</b>');return;} navigator.clipboard.writeText(lastInstallRequest).then(()=>toast('<b>Request copied</b>')).catch(()=>toast('<b>Select the request in app details to copy it.</b>')); return; }
     const o = e.target.closest('[data-open]');
     if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
