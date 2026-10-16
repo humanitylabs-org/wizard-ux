@@ -808,3 +808,9 @@ body {
 @media (hover: hover) { .home-system:hover { color: var(--ink); border-color: var(--violet-2); } }
 .device.wx-on .home-tools { top: calc(var(--sb) + var(--safe-t) + 42px); }
 .device.wx-on .home-tools .gear { top: auto; }
+/* Opinionated: Home shows Ready / Working as two small side-by-side counters; the line under the clock is gone. */
+.home .home-line:empty { display: none; }
+.home .constellation { flex-direction: row; gap: 9px; }
+.home .constellation .now-card { flex: 1 1 0; min-height: 0; padding: 10px 12px; gap: 9px; }
+.home .home-attn { margin-top: auto; }
+.home .home-gap-b { display: none; }
