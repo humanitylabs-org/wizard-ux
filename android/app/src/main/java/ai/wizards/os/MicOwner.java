@@ -8,7 +8,7 @@ package ai.wizards.os;
  * sharing the mic. Pure Java so it is unit-testable off-device.
  */
 public final class MicOwner {
-    public static final String MEETING = "meeting", EVERYWHERE = "everywhere", SIDE = "side";
+    public static final String MEETING = "meeting", EVERYWHERE = "everywhere", SIDE = "side", ORB = "orb";
 
     private static String holder;
 
@@ -16,13 +16,13 @@ public final class MicOwner {
 
     /** Takes the mic for {@code who}. True if it was free or already held by {@code who}. */
     public static synchronized boolean tryAcquire(String who) {
-        if (holder == null || holder.equals(who)) { holder = who; return true; }
+        if (holder == null || holder.equals(who)) { holder = who; ai.wizards.os.audio.AudioRecordingGate.set("mic", true); return true; }
         return false;
     }
 
     /** Gives the mic back; a no-op if {@code who} does not hold it. */
     public static synchronized void release(String who) {
-        if (who != null && who.equals(holder)) holder = null;
+        if (who != null && who.equals(holder)) { holder = null; ai.wizards.os.audio.AudioRecordingGate.set("mic", false); }
     }
 
     public static synchronized String holder() { return holder; }
@@ -39,5 +39,5 @@ public final class MicOwner {
     }
 
     /** Tests only. */
-    static synchronized void resetForTest() { holder = null; }
+    static synchronized void resetForTest() { holder = null; ai.wizards.os.audio.AudioRecordingGate.set("mic", false); }
 }

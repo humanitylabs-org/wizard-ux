@@ -55,6 +55,7 @@ public class RecorderService extends Service {
     private static volatile long startedAt, pausedMs, pauseStart;
     private static volatile int level; // 0..100 for the orb
     private static volatile String source = "";
+    private static volatile String borrowEvent;
     private static volatile Listener listener;
     private static RecorderService live;
 
@@ -93,17 +94,40 @@ public class RecorderService extends Service {
 
     /** Starts a take and returns its id; "" when the mic is not allowed. A running take is returned as-is. */
     public static synchronized String start(Context c, String kind) {
+        return start(c, kind, null);
+    }
+
+    public static synchronized String start(Context c, String kind, String eventId) {
         if (!micAllowed(c)) return "";
-        // A meeting retains logical custody while paused too. Reject before allocating a voice take.
-        if (ai.wizards.os.mizel.MeetingRecorderService.live() != null ||
-                ai.wizards.os.MicOwner.MEETING.equals(ai.wizards.os.MicOwner.holder())) return "";
+        boolean borrowed = eventId != null && ai.wizards.os.mizel.MeetingRecorderService.permitsBorrow(eventId);
+        if (eventId != null && !borrowed) return "";
+        if (!borrowed && ai.wizards.os.mizel.MeetingRecorderService.live() != null) return "";
         if (activeId != null) return activeId;
+        if (!ai.wizards.os.MicOwner.tryAcquire(ai.wizards.os.MicOwner.ORB)) return "";
         String id = RecordingStore.get(c).create(kind);
+        if (borrowed && !ai.wizards.os.mizel.MeetingRecorderService.bindBorrow(eventId, id)) {
+            ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);
+            new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
+            RecordingStore.get(c).delete(id); return "";
+        }
+        borrowEvent = borrowed ? eventId : null;
+        if (borrowed) RecordingStore.get(c).set(id, "meetingHandoffId", eventId);
+        JSONObject saved = RecordingStore.get(c).read(id);
+        if (saved == null || (borrowed && !eventId.equals(saved.optString("meetingHandoffId")))) {
+            ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);
+            borrowEvent = null;
+            if (borrowed) new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
+            return "";
+        }
         activeId = id; stopWanted = null; paused = false; pausedMs = 0; level = 0; source = "";
+        ai.wizards.os.audio.AudioRecordingGate.set("recorder", true);
         startedAt = SystemClock.elapsedRealtime();
         Intent i = new Intent(c, RecorderService.class).setAction(ACTION_START).putExtra(EXTRA_ID, id);
         try { c.startForegroundService(i); }
-        catch (RuntimeException e) { Log.w(TAG, "start: " + e); activeId = null; RecordingStore.get(c).delete(id); return ""; }
+        catch (RuntimeException e) { Log.w(TAG, "start: " + e); activeId = null; ai.wizards.os.audio.AudioRecordingGate.set("recorder", false);
+            ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);
+            if (borrowed) new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
+            RecordingStore.get(c).delete(id); return ""; }
         return id;
     }
 
@@ -188,6 +212,9 @@ public class RecorderService extends Service {
                     finishTake("cancelled", "app");
                     RecordingStore st = RecordingStore.get(this);
                     JSONObject m = st.read(take); // a long take cancelled by accident is kept for Settings → Cancelled recordings
+                    // A meeting-linked loan keeps its original even when short/cancelled.
+                    // Normal recovery/explicit acknowledgement owns eventual deletion.
+                    if (m != null && m.has("meetingHandoffId")) break;
                     CancelledTakes.keep(this, st.audio(take), m == null ? 0 : m.optLong("ms"), "app", RecordingStore.MIME);
                     st.delete(take);
                 }
@@ -290,6 +317,19 @@ public class RecorderService extends Service {
             st.set(id, "state", state);
         }
         activeId = null; stopWanted = null; paused = false; level = 0;
+        ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);
+        // Native file closure is durable custody. Keep it until the normal outbox acknowledges it.
+        String event = borrowEvent; borrowEvent = null;
+        if (event != null) {
+            boolean durable = false;
+            try (java.io.RandomAccessFile file = new java.io.RandomAccessFile(RecordingStore.get(this).audio(id), "rw")) {
+                file.getFD().sync();
+                JSONObject saved = RecordingStore.get(this).read(id);
+                durable = saved != null && state.equals(saved.optString("state"));
+            } catch (IOException e) { Log.w(TAG, "handoff custody not confirmed", e); }
+            if (durable) ai.wizards.os.mizel.MeetingRecorderService.endBorrow(event, state);
+        }
+        ai.wizards.os.audio.AudioRecordingGate.set("recorder", false);
         Log.i(TAG, "take " + id + " " + state + " via=" + via);
         if (id != null && listener != null && "stopped".equals(state)) {
             // The app takes it from here (transcribe, outbox). Stay in the foreground until it says it has the take

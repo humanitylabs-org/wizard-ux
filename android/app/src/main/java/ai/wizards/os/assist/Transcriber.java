@@ -19,8 +19,7 @@ import org.json.JSONObject;
 public final class Transcriber {
     static final String ORIGIN = ai.wizards.os.BuildConfig.ORIGIN;
     static final String ENDPOINT = ORIGIN + "/wizard-os-home/api/transcribe";
-    static final String PROMPT = "Wizard voice request spoken to Archimedes on a phone lock screen. "
-            + "Names: Archimedes, Wizard, Miguel, Hermes, Thales, Mizel, Telegram, Bangkok.";
+
 
     public static final class Result {
         public final String text;
@@ -28,7 +27,10 @@ public final class Transcriber {
         Result(String text, long ms) { this.text = text; this.ms = ms; }
     }
 
-    static Result transcribe(File audio) throws IOException { return transcribe(audio, ai.wizards.os.device.AppState.live(ORIGIN), PROMPT); }
+    static Result transcribe(android.content.Context context, File audio) throws IOException {
+        return transcribe(audio, ai.wizards.os.device.AppState.origin(context),
+                ai.wizards.os.device.WizardIdentity.voicePrompt(ai.wizards.os.device.WizardIdentity.name(context)));
+    }
 
     /** origin is the private Wizard origin (a local fake in unit tests). */
     public static Result transcribe(File audio, String origin, String prompt) throws IOException {

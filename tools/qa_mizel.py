@@ -38,7 +38,10 @@ OUT = job / 'shots'; OUT.mkdir(exist_ok=True)
 env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
 env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
-ADB = str(SDK / 'platform-tools/adb'); PORT = 5698; S = f'emulator-{PORT}'; DEVTOOLS = 9351; FAKE = 18791
+ADB = str(SDK / 'platform-tools/adb'); PORT = 5698; S = f'emulator-{PORT}'; DEVTOOLS = 9351
+# The fake server binds before the worker lease; use an OS-assigned port so
+# queued suites and unrelated tunnels cannot collide or receive our audio.
+FAKE = 0
 ORIGIN = 'https://wizard.tailc0f369.ts.net'
 RES = []
 def check(group, n, ok, d: object = ''):
@@ -136,6 +139,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
             ST['status'][mid] = 'processing'
             return self._json(200, {'id': mid, 'status': 'processing'})
 srv = http.server.ThreadingHTTPServer(('127.0.0.1', FAKE), Fake)
+FAKE = srv.server_address[1]
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 
 def verify_meeting(group, mid, reason, expect_min_chunks=1):
@@ -213,6 +217,8 @@ class Page:
         buf = b''
         while b'\r\n\r\n' not in buf: buf += self.s.recv(4096)
         self.buf = buf.split(b'\r\n\r\n', 1)[1]
+        if os.environ.get('QA_INTEGRATED_ONLY') == '1':
+            self.call('Fetch.enable', patterns=[{'urlPattern':'*'}]); return
         self.call('Fetch.enable', patterns=[{'urlPattern': '*/mizel-qa/*'}, {'urlPattern': '*/mizel-live/*'}, {'urlPattern': 'https://example.org/*'},
                                             {'urlPattern': '*/meetings/api/*'}, {'urlPattern': '*/hermes/*'}, {'urlPattern': '*/v1/*'}, {'urlPattern': '*/wizard/*'}])
     def _send(self, obj):
@@ -236,6 +242,7 @@ class Page:
             msg += payload
             if b1 & 0x80: return json.loads(msg.decode())
     def _paused(self, d):
+        if os.environ.get('QA_INTEGRATED_ONLY') == '1': return integrated_fixture.serve(self,d)
         r = d['params']['request']; url = r['url']; rid = d['params']['requestId']
         pu = urllib.parse.urlparse(url)
         key = 'example.org' + pu.path if pu.hostname == 'example.org' else pu.path
@@ -293,16 +300,29 @@ def tap_note_action(title, action, shot_name):
     """Real tap on a notification action button: open the shade, expand our notification if its actions are
     folded, tap the action closest below the title."""
     sx('cmd statusbar expand-notifications'); time.sleep(2)
-    for attempt in range(3):
-        ns = nodes(ui())
+    for attempt in range(6):
+        xml = ui(); save(shot_name+'-'+str(attempt)+'.xml',xml)
+        ns = nodes(xml)
         t = next((b for l, b in ns if re.search(title, l)), None)
         if not t: time.sleep(1); continue
         acts = [b for l, b in ns if re.fullmatch(action, l, re.I) and b[1] >= t[1]]
         if acts:
             b = min(acts, key=lambda b: b[1] - t[1]); shot(shot_name)
             sx(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}'); time.sleep(1.5); sx('cmd statusbar collapse'); return action
-        # folded: drag the notification down to expand it
-        sx(f'input swipe {(t[0] + t[2]) // 2} {t[1]} {(t[0] + t[2]) // 2} {t[1] + 400} 300'); time.sleep(1.5)
+        # Android groups the orb and meeting under one app. Expand the nearest
+        # actual disclosure button, not a drag that expands the other recorder.
+        import xml.etree.ElementTree as ET
+        buttons=[]
+        for n in ET.fromstring(xml).iter('node'):
+            if n.get('resource-id','').endswith('/expand_button') and n.get('clickable')=='true':
+                b=list(map(int,re.findall(r'\d+',n.get('bounds',''))))
+                if len(b)==4:buttons.append(b)
+        if buttons:
+            b=min(buttons,key=lambda b:abs((b[1]+b[3])/2-(t[1]+t[3])/2))
+            save(shot_name+'-tap-'+str(attempt)+'.json',{'title':t,'button':b})
+            sx(f'input tap {b[2]-30} {(b[1]+b[3])//2}'); time.sleep(1.2)
+        else:
+            sx(f'input swipe {(t[0] + t[2]) // 2} {t[1]} {(t[0] + t[2]) // 2} {t[1] + 400} 300'); time.sleep(1.5)
     shot(shot_name + '-notfound'); sx('cmd statusbar collapse')
     return None
 
@@ -329,6 +349,11 @@ if os.environ.get('QA_SHARED_CAPTURE_ONLY') == '1':
     from qa_shared_capture_native import pages as shared_pages
     extra_pages, shared_hashes = shared_pages(P(__file__).resolve().parent.parent)
     PAGES.update(extra_pages)
+
+if os.environ.get('QA_INTEGRATED_ONLY') == '1':
+    from qa_orb_integrated import Fixture
+    integrated_fixture=Fixture(P(__file__).resolve().parent.parent,os.environ['QA_ADOPTION'],job)
+    integrated_fixture.native_state=ST
 
 em = None; pg = None; summary = {'job': str(job), 'apk': str(apk), 'long_secs': LONG}
 print('job', job, flush=True)
@@ -359,7 +384,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         summary.update(version=ver, uid=uid, api=sx('getprop ro.build.version.sdk').strip())
         sx(f'run-as {PKG} mkdir -p files')
         sx(f"run-as {PKG} sh -c 'echo http://10.0.2.2:{FAKE} > files/qa_origin.txt'")
-        qa_cfg = {'pauseTimeoutMs': 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 2 if os.environ.get('QA_PCM_ONLY') == '1' else 1, 'staticNotification': 1}
+        qa_cfg = {'pauseTimeoutMs': 120000 if os.environ.get('QA_INTEGRATED_ONLY') == '1' else 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 2 if os.environ.get('QA_PCM_ONLY') == '1' or os.environ.get('QA_HANDOFF_ONLY') == '1' or os.environ.get('QA_INTEGRATED_ONLY') == '1' else 1, 'staticNotification': 1}
         (job / 'qa_mizel.json').write_text(json.dumps(qa_cfg))
         sh(ADB, '-s', S, 'push', job / 'qa_mizel.json', '/data/local/tmp/qa_mizel.json')
         sx(f'run-as {PKG} cp /data/local/tmp/qa_mizel.json files/qa_mizel.json')
@@ -368,6 +393,16 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('logcat -c'); sx('logcat -G 16M')
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(9)
         pg = Page(); pg.pump(4)
+        if os.environ.get('QA_HANDOFF_ONLY') == '1':
+            # A fresh emulator has no Tailnet DNS. Navigate via CDP to the
+            # intercepted trusted-origin fixture, not from chrome-error://.
+            pg.call('Page.navigate', url=ORIGIN + '/mizel-qa/host.html')
+            assert pg.pump(25, lambda: pg.ev("typeof mz==='function' && typeof wizardMizelPort==='object'"), .5)
+        if os.environ.get('QA_INTEGRATED_ONLY') == '1':
+            pg.call('Page.enable')
+            pg.call('Page.addScriptToEvaluateOnNewDocument',source="window.qaErrors=[];addEventListener('error',e=>qaErrors.push(e.message));addEventListener('unhandledrejection',e=>qaErrors.push(String(e.reason)));localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wos.voiceTipSeen','true');")
+            pg.call('Page.navigate',url=ORIGIN+'/wizard-os-home/')
+            assert pg.pump(30,lambda:pg.ev('!!window.__wos?.live?.ok'),.3)
         pg.ev("try {localStorage.setItem('wos.tour.v1','true'); window.WosTour?.finish('qa');}catch(e){}")
         pg.ev("new Promise(r => { const t0=Date.now(); const t = () => (window.__wos || Date.now()-t0>20000) ? r() : setTimeout(t, 200); t(); })")
         pg.ev("(() => { const c = document.querySelector('#coach'); if (c && !c.hidden) document.querySelector('#coachGo').click(); return true; })()")
@@ -377,7 +412,23 @@ with (BASE / 'worker.lock').open('a') as lock:
 
         # ------------------------------------------------ (f) origin scoping + iframe reach
         shell_port = pg.ev("typeof window.wizardMizelPort")
-        check('bridge', 'shell main frame (https://private.wizard001.com/wizard-os-home/) has wizardMizelPort', shell_port == 'object', shell_port)
+        check('bridge', 'trusted-origin main-frame fixture has wizardMizelPort' if os.environ.get('QA_HANDOFF_ONLY') == '1' else 'shell main frame has wizardMizelPort', shell_port == 'object', shell_port)
+        if os.environ.get('QA_INTEGRATED_ONLY') == '1':
+            from qa_orb_integrated import run as run_integrated
+            run_integrated(pg,sx,top,check,save,ORIGIN,PKG,ST,LOCK,integrated_fixture,tap_note_action,shot)
+            check('integrated','no native crash','ai.wizards.os' not in sx('logcat -b crash -d'))
+            summary.update(results=RES,passed=sum(r['ok'] for r in RES),failed=sum(not r['ok'] for r in RES))
+            save('summary.json',summary)
+            raise SystemExit(1 if summary['failed'] else 0)
+        if os.environ.get('QA_HANDOFF_ONLY') == '1':
+            from qa_orb_handoff_native import run as run_handoff
+            run_handoff(pg,sx,top,check,save,ORIGIN,PKG,ST,LOCK)
+            shot('02-orb-handoff')
+            check('handoff','no native crash','ai.wizards.os' not in sx('logcat -b crash -d'))
+            summary.update(results=RES,passed=sum(r['ok'] for r in RES),failed=sum(not r['ok'] for r in RES))
+            save('summary.json',summary)
+            print(f"{summary['passed']}/{len(RES)} passed",flush=True)
+            raise SystemExit(1 if summary['failed'] else 0)
         if os.environ.get('QA_SHARED_CAPTURE_ONLY') == '1':
             from qa_shared_capture_native import run as run_shared_native
             summary['shared_source_hashes']=shared_hashes
@@ -690,6 +741,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         with LOCK:
             save('server.json', {'events': ST['events'], 'stops': ST['stops'], 'dups': ST['dups'], 'gets': ST['gets'],
                                  'chunks': {m: {str(k): {kk: vv for kk, vv in v.items()} for k, v in c.items()} for m, c in ST['chunks'].items()}})
+        if os.environ.get('QA_INTEGRATED_ONLY') == '1': integrated_fixture.save()
         if pg: pg.close()
         if em and os.environ.get('QA_KEEP_EMU') != '1':
             subprocess.run([ADB, '-s', S, 'emu', 'kill'], env=env, capture_output=True)

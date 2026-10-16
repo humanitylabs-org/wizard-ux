@@ -210,6 +210,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     public static void appVoiceState(Context c, String state, long elapsedMs) {
         boolean rec = "listen".equals(state) || "paused".equals(state);
         String was = appVoice;
+        ai.wizards.os.audio.AudioRecordingGate.set("appVoice", rec);
         appVoice = rec ? state : null;
         appVoiceElapsed = Math.max(0, elapsedMs);
         if (!rec && was == null) return;
@@ -308,7 +309,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (!canNotify(c) || appInFront || it.dictation()) return;
         Notification note = new Notification.Builder(c, CH_REPLIES)
                 .setSmallIcon(android.R.drawable.stat_notify_chat)
-                .setContentTitle("Archimedes · " + EverywherePolicy.clip(it.text, 50))
+                .setContentTitle(ai.wizards.os.device.WizardIdentity.everywhereTitle(ai.wizards.os.device.WizardIdentity.name(c), EverywherePolicy.clip(it.text, 50)))
                 .setContentText(EverywherePolicy.clip(text, 140))
                 .setStyle(new Notification.BigTextStyle().bigText(EverywherePolicy.clip(text, 600)))
                 .setContentIntent(openApp(c, MainActivity.ACTION_THREAD, 100 + (it.id.hashCode() & 0xffff), it.sessionId))

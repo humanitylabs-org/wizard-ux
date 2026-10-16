@@ -60,7 +60,7 @@
     } };
     return tokensCache;
   }
-  const presentation = f => f.closest('.device.immersive .win.full') ? 'immersive' : 'window';
+  const presentation = f => f.closest('.device.immersive .win.full, body.desktop-fullscreen .win.full') ? 'immersive' : 'window';
   function context(f) { const t = tokens(); return { version: VERSION, revision, skin: t.skin, colorScheme: t.colorScheme, presentation: presentation(f), tokens: t.tokens }; }
 
   function send(f, force) {

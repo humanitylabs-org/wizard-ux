@@ -85,6 +85,8 @@
     try {
       const state = capture.getState?.();
       if (Array.isArray(state?.nativeDeviceTakeIds) && state.nativeDeviceTakeIds.includes(id)) return 'app';
+      const loan=window.WosOrbHandoff?.nativeTake(id);
+      if(state?.nativeRegistryReady && loan && (!state.active || state.meetingId===loan.meetingId))return 'voice';
       if (state?.nativeOwnershipReady !== true || !Array.isArray(state.nativeDeviceTakeIds) || state.active || state.recording) return 'unknown';
       return 'voice';
     } catch (_) { return 'unknown'; }
@@ -121,11 +123,13 @@
   }
   function offerPending(why) {
     const d = DEV(); if (!d || sheet || W$()?.voice !== 'idle') return;
+    if (!OUTBOX?.recoveryComplete) return; // native IDs cannot race durable custody hydration
+    releaseNativeCustody();
     const native = J(d.recPending()) || [];
     const retained = [...(window.__wosDictationRecovery?.() || []), ...(window.__wosVoiceRecovery?.() || [])];
     const merged = new Map(native.map(t => [t.id, t]));
     for (const t of retained) if (!merged.has(t.id)) merged.set(t.id, t);
-    const list = [...merged.values()].filter(t => voiceKind(t) && !handledTakes.has(t.id));
+    const list = [...merged.values()].filter(t => voiceKind(t) && !handledTakes.has(t.id) && !OUTBOX.nativeItem(t.id));
     if (!list.length) return;
     // Send was already pressed in the notification: the owner said send, so send.
     const go = list.filter(t => t.send && !isDictation(t));
@@ -158,17 +162,27 @@
     }
     handledTakes.add(t.id);
     try {
+    await OUTBOX.load();
+    // Held parking and terminal tombstones own their native leftovers, never a second Send.
+    if (OUTBOX.nativeItem(t.id)) { releaseNativeCustody(); return; }
+    const pin = window.__wosReplyTake?.(t.id);
+    if (pin?.custodyId) {
+      if (!w.nativeResume({...t,paused:true})) throw Error('Original reply retained · restore it in Recordings');
+      return await w.nativeFinish(t.id,true);
+    }
     // Keep the native pending owner discoverable until durable handoff. recRead does not
     // require recClaim; claiming now hides it from recPending after a WebView reload.
     const blob = readRecording(t.id, t.bytes);
     if (blob.size < 600 || (Number(t.bytes) > 0 && blob.size !== Number(t.bytes))) throw new Error('Incomplete native recording · original kept on device');
     // A voice reply started from a thread's composer mic stays that thread's, even when it ended outside the page.
-    const pin = window.__wosReplyTake?.(t.id);
-    const route = window.WosModels.voiceRoute(t.id);
-    const it = await OUTBOX.enqueue({ nativeId: t.id, ...(route || {}), kind: pin ? 'reply' : 'new', sessionId: pin ? pin.sid : '', steerRunId: pin?.steerRunId || '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
+    const snap = window.WosOrbHandoff?.takeSnap(t.id), target = snap?.view;
+    const route = snap?.route || window.WosModels.voiceRoute(t.id);
+    const sid = target?.thread || pin?.sid || '';
+    const it = await OUTBOX.enqueue({ nativeId: t.id, ...(route || {}), meetingEventId:snap?.meetingEventId||'', agent:target?.agent||'', kind: sid && sid!=='__new__' ? 'reply' : 'new', sessionId: sid==='__new__'?'':sid, steerRunId: snap?.meetingEventId ? '' : pin?.steerRunId || '', text: '', audio: blob, source: pin ? 'chat' : 'orb', how,
       instructions: (window.WizConfig.owner() ? window.WizConfig.owner() + ' recorded' : 'The owner recorded') + ' this with the Wizard OS orb on their Android phone' + (pin ? ' as a voice reply in this thread' : '') + (how === 'recovered' ? '; the recording was interrupted and recovered' : '') + '. The original recording is attached as a voice note.' });
     releaseNativeCustody();
     log('rec:sent', t.id, it.id, how);
+    if(snap?.meetingEventId && it.durable)await window.WosOrbHandoff.end(window.WosOrbHandoff.forTake(t.id),{status:'captured',voiceTakeId:t.id,deliveryKey:it.id});
     toast('✦', it.durable ? 'Recording kept · waiting to send' : 'Device save failed · original kept by Android', 2400);
     try { w.openWizardThread(it.sessionId); } catch (e) {}
     } catch (e) { handledTakes.delete(t.id); toast('!', String(e.message || 'Recording kept on device · retry from recording recovery'), 4000); }
@@ -177,12 +191,15 @@
   function releaseNativeCustody() {
     const d = DEV(); if (!d) return;
     for (const it of OUTBOX?._items.values() || []) {
-      if (OUTBOX.quarantined(it.id) || !it.nativeId || releasedNative.has(it.nativeId) || (!it.durable && it.state !== 'sent')) continue;
+      if (OUTBOX.quarantined(it.id) || !it.durable) continue;
+      for (const id of new Set([it.nativeId,...(it.nativeIds||[])].filter(Boolean))) {
+      if (releasedNative.has(id)) continue;
       try {
         if (!W$()) continue;
-        W$().recDone(it.nativeId); releasedNative.add(it.nativeId);
-        const pin = window.__wosReplyTake?.(it.nativeId); if (pin) window.__wosReplyTake(null);
+        W$().recDone(id); releasedNative.add(id);
+        const pin = window.__wosReplyTake?.(id); if (pin) window.__wosReplyTake(null);
       } catch (_) {} // native still owns its copy if the bridge is unavailable
+      }
     }
   }
   OUTBOX?.onChange(releaseNativeCustody);
@@ -349,6 +366,7 @@
   }
   // An app window playing sound (Wizard Music, Meditate…): a reload would cut it off, so never do that behind your back.
   function mediaPlaying() {
+    if (window.WizBackgroundAudio?.lastState?.wantPlaying) return true;
     return [...document.querySelectorAll('iframe')].some(f => {
       try {
         const w = f.contentWindow, d = f.contentDocument; if (!w || !d) return false;

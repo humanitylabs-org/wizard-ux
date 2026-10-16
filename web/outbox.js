@@ -64,6 +64,7 @@
   }
   function decode(x) {
     const it = { ...x }; delete it.audio64;
+    if(x.parkedDraft?.parts64){it.parkedDraft={...x.parkedDraft,parts:x.parkedDraft.parts64.map(part=>decode({audio64:part.data,audioType:part.type}).audio)};delete it.parkedDraft.parts64;}
     if (x.audio64) {
       const bin = atob(x.audio64), bytes = new Uint8Array(bin.length);
       for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
@@ -87,6 +88,7 @@
       try {
         const { audio, ...x } = copy;
         if (audio) x.audio64 = await encode(audio);
+        if(copy.parkedDraft?.parts){x.parkedDraft={...copy.parkedDraft,parts:undefined,parts64:await Promise.all(copy.parkedDraft.parts.map(async part=>({type:part.type,data:await encode(part)})))};}
         localStorage.setItem(PREFIX + it.id, JSON.stringify(x));
         it.durable = true;
       } catch (_) { /* Keep the entire item and Blob in RAM; the notice stays until custody is durable. */ }
@@ -101,13 +103,14 @@
     const it = items.get(id); if (!it) return;
     // A tombstone survives an interrupted delete, preventing stale IDB/fallback rows from replaying.
     Object.assign(it, { state: 'sent', sentAt: now(), audio: null, error: '' });
+    delete it.parkedDraft; // a deletion tombstone must not retain hidden audio parts
     await put(it);
     // Never erase the durable terminal marker: an inaccessible legacy/fallback store may
     // still contain an older sendable copy. A small marker wins on every future recovery.
     // Keep sealKey/nativeId too, so their independent owners cannot restore a duplicate.
     if (it.durable) {
       const marker = { id, state: 'sent', sentAt: it.sentAt, updatedAt: it.updatedAt,
-        createdAt: it.createdAt, sealKey: it.sealKey, nativeId: it.nativeId, compact: true };
+        createdAt: it.createdAt, sealKey: it.sealKey, nativeId: it.nativeId, nativeIds: it.nativeIds, meetingEventId: it.meetingEventId, compact: true };
       items.set(id, marker); await put(marker);
     }
     emit();
@@ -182,7 +185,7 @@
     catch (e) { throw new HttpError(e.status || 0, e.message); }
   }
   async function uploadAudio(it) {
-    const ext = /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /aac/.test(it.audioType) ? 'aac' : 'webm';
+    const ext = /wav/.test(it.audioType) ? 'wav' : /mp4|m4a/.test(it.audioType) ? 'm4a' : /ogg/.test(it.audioType) ? 'ogg' : /aac/.test(it.audioType) ? 'aac' : 'webm';
     const name = `wizard-voice-${new Date(it.createdAt).toISOString().replace(/[:.]/g, '-')}.${ext}`;
     const r = await call('/wizard/files/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': name, 'X-Wizard-Mime': it.audioType || 'audio/webm' }, body: it.audio });
     const f = (await r.json()).file || {};
@@ -264,11 +267,11 @@
     let run; try { run = await r.json(); } catch (_) { throw new HttpError(502, 'Wizard’s send receipt was lost'); }
     const runId = run.run_id || run.id;
     if (!runId) throw new HttpError(502, 'Wizard returned no send receipt');
-    return done(it, { steered: false, runId });
+    return done(it, { steered: false, runId, userMessageId: run.user_message_id || null });
   }
   async function done(it, res) {
     if (it.audio && !it.audioFile?.id) throw new HttpError(502, 'No recording upload receipt · original kept');
-    Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, steered: !!res.steered, steerQueued: !!res.steerQueued, error: '' });
+    Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, userMessageId: res.userMessageId || null, steered: !!res.steered, steerQueued: !!res.steerQueued, error: '' });
     delete it.audio;
     await put(it);
     for (const fn of sentHooks) try { fn(it, res); } catch (e) { console.error(e); }
@@ -311,7 +314,8 @@
   const newSessionId = () => `wizard_${now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
   function make(o) {
     return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
-      kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.steerRunId || '',
+      meetingEventId: o.meetingEventId || '', parkedDraft: o.parkedDraft || null, nativeIds: [...new Set([...(o.nativeIds || []), o.nativeId].filter(Boolean))],
+      kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
       sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false };
@@ -399,18 +403,22 @@
       await load();
       const prior = o.captureId && items.get(o.captureId);
       if (prior?.captureWrite) await prior.captureWrite;
-      const existing = o.nativeId && api.nativeItem(o.nativeId); if (existing) return existing;
-      const it = make(o); if (prior) { it.id = prior.id; it.createdAt = prior.createdAt; }
-      it.state = 'processing'; await put(it); schedule(); return it;
+      const existing = o.nativeId && api.nativeItem(o.nativeId);
+      if (existing && existing !== prior) return existing;
+      if (prior && (quarantine.has(prior.id) || prior.state === 'sent' || prior.body || prior.steerBody)) return prior;
+      const it = make(o); if (prior) { it.id = prior.id; it.createdAt = prior.createdAt; it.nativeId ||= prior.nativeId; it.nativeIds = [...new Set([...(prior.nativeIds || []), prior.nativeId, ...it.nativeIds].filter(Boolean))]; }
+      // Parking is held at its first durable boundary, even before transition.
+      it.state = it.parkedDraft ? 'held' : 'processing'; await put(it); schedule(); return it;
     },
-    capture(blob, id) {
+    capture(blob, id, parts) {
       let it = items.get(id);
       if (!it) { it = make({ audio: blob }); it.id = id; it.kind = 'capture'; it.state = 'capturing'; items.set(id, it); }
-      if (it.kind !== 'capture' || it.state === 'sent') return Promise.resolve(it);
+      if ((it.kind !== 'capture' && !it.parkedDraft) || it.state === 'sent') return Promise.resolve(it);
+      if(it.parkedDraft && parts)it.parkedDraft.parts=parts;
       it.audio = blob;
       // One pending write per capture; the next flush takes the latest chunks, not an unbounded backlog.
       if (!it.captureWrite) {
-        const work = put(it).then(() => { delete it.captureWrite; if (it.audio !== blob && it.kind === 'capture') return api.capture(it.audio, id); return it; });
+        const work = put(it).then(() => { delete it.captureWrite; if (it.audio !== blob && (it.kind === 'capture'||it.parkedDraft)) return api.capture(it.audio, id); return it; });
         Object.defineProperty(it, 'captureWrite', { value: work, writable: true, configurable: true, enumerable: false });
       }
       return it.captureWrite;
@@ -425,12 +433,12 @@
     get recoveryComplete() { return recovered; },
     quarantined(id) { return quarantine.has(id); },
     ownsSeal(key) { return [...items.values()].some(it => it.sealKey === key); },
-    nativeItem(id) { return [...items.values()].find(it => it.nativeId === id); },
+    nativeItem(id) { return [...items.values()].find(it => it.nativeId === id || it.nativeIds?.includes(id)); },
     async enqueue(o) {
       if (o.conversation || o.kind === 'conversation') return api.sendConversation(o);
       if (o.captureId) { const staged = await api.stage(o); o = { ...o, custodyId: staged.id }; }
       const M = window.WosModels, AG = window.WosAgents;
-      const agent0 = o.kind === 'reply' ? (window.WizLive?.agentOf?.(o.sessionId) || '') : String(o.agent || '');
+      const agent0 = o.kind === 'reply' ? (o.agent || window.WizLive?.agentOf?.(o.sessionId) || '') : String(o.agent || '');
       const agent = agent0 && AG?.isOther(agent0) ? agent0 : '';
       let snapshot = o.model ? { model: o.model, provider: o.provider || '' } : null, routeError;
       try { if (!snapshot && o.nativeId) throw new Error('Saved recording model route unavailable · original kept'); snapshot = M?.snapshot(o.kind === 'reply' ? o.sessionId : '', snapshot, agent) || snapshot; }
@@ -458,9 +466,11 @@
     retry(id) { const it = items.get(id); if (!it || quarantine.has(id) || it.steerDispatch === 'started' || it.kind === 'dictation' || ['sent', 'unconfirmed', 'sending', 'processing', 'preparing', 'missing', 'held'].includes(it.state)) return; Object.assign(it, { state: 'waiting', threadHidden: false, nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); put(it).then(pump); },
     retryAll() { for (const it of items.values()) if (it.kind !== 'dictation' && it.state === 'waiting') Object.assign(it, { state: 'waiting', nextAt: 0, attempts: Math.min(it.attempts || 0, AUTO_TRIES - 1) }); Promise.all([...items.values()].map(put)).then(pump); },
     unsent() { return [...items.values()].filter(it => !['dictation', 'capture'].includes(it.kind) && it.state !== 'sent').sort((a, b) => a.createdAt - b.createdAt); },
-    forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && !(it.state === 'empty' && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
-    async dismissEmpty(id) {
-      const it = items.get(id); if (!it || it.state !== 'empty' || quarantine.has(id)) return false;
+    forThread(sessionId, wid) { return [...items.values()].filter(it => !it.compact && !(['empty', 'held', 'sent'].includes(it.state) && it.threadHidden) && !['dictation', 'conversation'].includes(it.kind) && (it.sessionId === sessionId || (wid && it.wid === wid && it.kind === 'new' && it.state !== 'sent'))).sort((a, b) => a.createdAt - b.createdAt); },
+    dismissEmpty(id) { return this.get(id)?.state === 'sent' ? Promise.resolve(false) : this.dismissBubble(id); },
+    async dismissBubble(id) {
+      // Hide only the local presentation; accepted work and original recovery custody stay untouched.
+      const it = items.get(id); if (!it || !['empty', 'held', 'sent'].includes(it.state) || quarantine.has(id) || conversationWork.has(id)) return false;
       it.threadHidden = true; await put(it);
       if (!it.durable) { delete it.threadHidden; emit(); return false; }
       return true; // Presentation only: original audio and upload receipt remain recoverable.
