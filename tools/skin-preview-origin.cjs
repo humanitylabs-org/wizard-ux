@@ -12,6 +12,7 @@ http.createServer((req, res) => {
   if (!['GET','HEAD'].includes(req.method)) { refused++; res.writeHead(403, { 'content-type':'application/json' }); return res.end('{"error":"Read-only skin preview: writes are disabled"}'); }
   const u = new URL(req.url, 'http://preview');
   if (u.pathname === '/__preview/receipt') { res.setHeader('content-type','application/json'); return res.end(JSON.stringify({sha:process.env.PREVIEW_SHA,readOnly:true,refused})); }
+  if (u.pathname === '/wizard-os-home/ux-version.txt') { res.writeHead(200, {'content-type':'text/plain','cache-control':'no-store'}); return res.end(process.env.PREVIEW_SHA + '\n'); }
   if (u.pathname === '/') { res.writeHead(302,{location:'/wizard-os-home/?open=wisdom'}); return res.end(); }
   if (u.pathname.startsWith('/wizard-os-home/')) {
     let rel; try { rel = decodeURIComponent(u.pathname.slice('/wizard-os-home/'.length)) || 'index.html'; } catch { res.writeHead(400); return res.end(); }

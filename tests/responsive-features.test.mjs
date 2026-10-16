@@ -9,7 +9,8 @@ const inventory = JSON.parse(read('docs/responsive-feature-inventory.json'));
 test('both entrypoints load shared feature surface, skin engine and CSS exactly once and in dependency order', () => {
   for (const file of ['index.html', 'desktop.html']) {
     const assets = assetList(read('web/' + file));
-    for (const asset of ['core/settings.js', 'core/settings.css', 'core/skins.js', 'core/skins.css', 'core/scenery.js', 'core/cancelled.js']) assert.equal(assets.filter(x => x === asset).length, 1, file + ': ' + asset);
+    for (const asset of ['core/settings.js', 'core/settings.css', 'core/skin-frame.js', 'core/skin-frame.css', 'core/skin-frame-preview.js', 'core/skins.js', 'core/skins.css', 'core/scenery.js', 'core/cancelled.js']) assert.equal(assets.filter(x => x === asset).length, 1, file + ': ' + asset);
+    assert.ok(assets.indexOf('core/skin-frame.js') < assets.indexOf('core/skins.js'));
     assert.ok(assets.indexOf('core/scenery.js') < assets.indexOf('core/skins.js'));
     assert.ok(assets.indexOf('core/settings.js') < assets.indexOf(file === 'index.html' ? 'app.js' : 'desktop/desktop.js'));
     // data.js and summaries.js are owner-generated runtime payloads, not committed modules.
