@@ -132,5 +132,5 @@ html[data-skin^="obsidian"] .ch-row .emo.sti svg .kd { fill: var(--bg); }
 html[data-skin^="obsidian"] .ch-row .pv em.att { color: var(--ink); font-weight: 700; }
 html[data-skin^="obsidian"] .ch-sec-h b.wait { background: var(--ob-tint); color: var(--ink); }
 /* App sigils and the brand mark go grey; each app keeps its silhouette. */
-html[data-skin^="obsidian"] :is(.sgi, .logo, .wic, .dsg) { filter: grayscale(1); }
+html[data-skin^="obsidian"] :is(.sgi, .logo, .wic) { filter: grayscale(1); }
 html[data-skin="obsidian-light"] .sgi { filter: grayscale(1) brightness(.35); }
