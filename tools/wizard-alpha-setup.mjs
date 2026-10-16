@@ -50,7 +50,7 @@ async function main() {
       // companions may be newer than this bundle; preserve them byte-for-byte.
       preserveCompanions(d.tools_dir,save);
       for(const name of ['store-data-origin.mjs','store-private-catalog.mjs','wizard-alpha.mjs','wizard-alpha-activate.py','wizard-alpha-wam.py']) save(join(d.tools_dir,name),readFileSync(join(root,'tools',name)),0o644);
-      for(const name of ['index.html','store.js','store.css']) save(join(d.store_dir,name),readFileSync(join(root,'web/store',name)),0o644);
+      for(const name of ['index.html','store.js','store-status.js','store.css']) save(join(d.store_dir,name),readFileSync(join(root,'web/store',name)),0o644);
       save(join(skillDir,'wizard-alpha/SKILL.md'),readFileSync(join(root,'skills/wizard-alpha/SKILL.md')),0o644);
       save(join(skillDir,'wizard-alpha/README.md'),readFileSync(join(root,'docs/wizard-alpha.md')),0o644);
       save(join(d.prefix,'bin/wizard-alpha'),`#!/bin/sh\nexport WIZARD_ALPHA_HOME=${quote(home)}\nexec ${quote(process.execPath)} ${quote(join(d.tools_dir,'wizard-alpha.mjs'))} "$@"\n`,0o755);
