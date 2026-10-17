@@ -391,7 +391,7 @@
     $$('.ch-row', el).forEach(r => r.classList.toggle('cur', r.dataset.chopen === w.thread));
     window.WosAgents.refreshTitlebars();
     el.setAttribute('aria-label', winTitle(w));
-    if (focused()?.id === base) document.title = `${winTitle(w)} · Wizard`;
+    if (focused()?.id === base) document.title = `${winTitle(w)} · Wizard Test`;
   }
   /* ---- the list/thread divider: drag, arrow keys, double-click to reset; one width for every Chats window ---- */
   const LIST_W = [220, 640, 340];
@@ -536,7 +536,7 @@
   function paintFocus() {
     const d = ws[cur];
     $$('.win', stage).forEach(el => el.classList.toggle('focus', el.dataset.win === d.focus));
-    const f = focused(); document.title = f ? `${winTitle(f)} · Wizard` : 'Wizard';
+    const f = focused(); document.title = f ? `${winTitle(f)} · Wizard Test` : 'Wizard Test';
     if (d.mono) layout();
   }
   function goWs(i, { from } = {}) {
