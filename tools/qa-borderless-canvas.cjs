@@ -8,7 +8,7 @@ const near=(a,b,t=10)=>a&&b&&Math.abs(a[0]-b[0])<=t&&Math.abs(a[1]-b[1])<=t&&Mat
 (async()=>{fs.mkdirSync(OUT,{recursive:true});const b=await chromium.launch();
 const ctx=async o=>{const c=await b.newContext({serviceWorkers:'block',...o});
   await c.route('**/*',r=>['GET','HEAD'].includes(r.request().method())?r.fallback():r.abort());
-  if(CAND)await c.route('**/wizard-os-home/**',r=>{const f=path.join(CAND,new URL(r.request().url()).pathname.replace('/wizard-os-home/',''));return fs.existsSync(f)&&fs.statSync(f).isFile()?r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'application/javascript'}):r.fallback();});
+  if(CAND)await c.route('**/wizard-os-home/**',r=>{const f=path.join(CAND,new URL(r.request().url()).pathname.replace(/^.*?\/wizard-os-home\//,'')||'index.html');return fs.existsSync(f)&&fs.statSync(f).isFile()?r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'application/javascript'}):r.fallback();});
   return c;};
 // Sample screen pixels from a real screenshot, decoded in the page.
 const px=async(p,pts)=>{const b64=(await p.screenshot()).toString('base64');return p.evaluate(async([b64,pts])=>{const i=new Image();i.src='data:image/png;base64,'+b64;await i.decode();const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);return pts.map(([a,b])=>Array.from(x.getImageData(Math.round(a),Math.round(b),1,1).data.slice(0,3)));},[b64,pts]);};

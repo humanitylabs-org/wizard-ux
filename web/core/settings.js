@@ -96,15 +96,16 @@
     ctx.root.querySelector('[data-skinname]').textContent = `${S.list.find(k => k.id === now)?.name || ''} · tap to wear`;
     ctx.haptic?.(8); return true;
   } });
-  register({ id: 'skin-frame', html() {
+  // Phone only: desktop always keeps framed windows. One switch, on by default; skin JSON import stays for designers.
+  register({ id: 'skin-frame', available: () => !!window.WosSkin?.frameAdjustable, html() {
     const S = window.WosSkin; if (!S?.frame) return '';
-    return `<div class="st-group sf-section"><h4>Skin · Window foundation</h4>${window.WosSkinFrame.choices(S.frame.foundation)}<p>Combine either foundation with any skin. Your open apps stay in place.</p><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><button class="sf-reset" data-skinreset>Skin default</button><p data-skinimport-status role="status"></p></div>`;
+    const on = S.frame.foundation === 'borderless';
+    return `<div class="st-group sf-section"><h4>Windows</h4><button class="st-row" data-skinborderless role="switch" aria-checked="${on}"><span class="st-ic">▢</span><span class="st-tx"><b>Borderless apps</b><small>${on ? 'On · apps fill the screen with a floating X' : 'Off · apps open in framed windows'}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></div>`;
   }, act(ctx, el) {
     if (el.closest('[data-skinimport]')) { ctx.root.querySelector('[data-skinfile]').click(); return true; }
-    const b = el.closest('[data-skinfoundation]');
-    if (!b && !el.closest('[data-skinreset]')) return false;
-    if (b) window.WosSkin.setFoundation(b.dataset.skinfoundation); else window.WosSkin.resetFrame();
-    ctx.render(); return true;
+    if (!el.closest('[data-skinborderless]')) return false;
+    const S = window.WosSkin; S.setFoundation(S.frame.foundation === 'borderless' ? 'framed' : 'borderless');
+    ctx.haptic?.(8); ctx.render(); return true;
   } });
   register({ id: 'assistant', available: android, html(ctx) {
     const N = native(), evNative = typeof N?.setEverywhere === 'function'; let ev = null;

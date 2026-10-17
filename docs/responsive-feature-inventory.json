@@ -153,7 +153,6 @@
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
-    "core/skin-frame-preview.js",
     "core/skin-frame.css",
     "core/skin-frame.js",
     "core/skins.css",
@@ -416,10 +415,6 @@
     "core/skin-frame.js": {
       "loadedBy": ["phone", "desktop"],
       "note": "Shared validated skin frame foundations, loaded before skin composition"
-    },
-    "core/skin-frame-preview.js": {
-      "loadedBy": ["phone", "desktop"],
-      "note": "Shared private comparison strip; inert without deployment preview meta"
     },
     "core/settings.js": {
       "loadedBy": [
