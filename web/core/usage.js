@@ -16,7 +16,18 @@
   const iso = v => (typeof v === 'string' && isFinite(Date.parse(v)) ? v : null);
   function normalize(j) {
     const groups = (Array.isArray(j?.providers) ? j.providers : []);
-    const accountCounts = groups.filter(p => Array.isArray(p?.accounts)).map(p => ({id:String(p.id), name:String(p.name || p.id), count:p.accounts.length}));
+    // Provider identity is presentation only: never merge subscriptions by label.
+    const family = p => {
+      const raw = String(p.providerId || p.provider || p.id || '').split(':')[0];
+      return /^(?:codex(?:-\d+)?|openai-codex|chatgpt)$/i.test(raw) ? 'chatgpt' : raw;
+    };
+    const counts = new Map();
+    for (const p of groups) {
+      if (!p?.id) continue;
+      const id = family(p), prior = counts.get(id);
+      counts.set(id, {id, name: id === 'chatgpt' ? 'ChatGPT' : String(p.name || id), count:(prior?.count || 0) + (Array.isArray(p.accounts) ? p.accounts.length : 1)});
+    }
+    const accountCounts = [...counts.values()];
     const expanded = groups.flatMap(p => Array.isArray(p?.accounts) ? p.accounts.map(a => ({...a, providerId:p.id, providerName:p.name, status:p.status === 'stale' ? 'stale' : a.status})) : [p]);
     const providers = expanded.map(p => {
       if (!p || typeof p !== 'object' || !p.id) return null;
