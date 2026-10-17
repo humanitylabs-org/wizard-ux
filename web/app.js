@@ -281,8 +281,11 @@
     sec.classList.toggle('review-desk', isReviewDesk(i));
     applyLayout(i);
   }
+  // Phone has one view (owner request): every app is already edge to edge, so there is no separate full-screen mode to pinch into.
+  const ONE_VIEW = document.documentElement.dataset.shell === 'phone';
   function applyLayout(i) {
     const d = desks[i], sec = secOf(i); if (!sec) return;
+    if (ONE_VIEW && d.full) d.full = false;
     const tiles = $('.tiles', sec), n = Math.min(d.wins.length, MAXW);
     tiles.dataset.n = String(n);
     tiles.classList.toggle('has-full', !!(d.full && d.focus));
@@ -750,6 +753,7 @@
   }
   function setFull(id, on) {
     const i = deskOf(id); if (i < 0) return;
+    if (ONE_VIEW) on = false;
     const d = desks[i]; d.focus = id; d.full = !!on; fullAt = performance.now(); applyLayout(i); save(); vib(on ? 10 : 6);
   }
   function clearDesk(i) { closeDesk(i); }
