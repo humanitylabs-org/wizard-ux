@@ -19,6 +19,8 @@ await p.goto(BASE+'/wizard-os-home/?open=wisdom&shell=phone',{waitUntil:'domcont
 await p.frameLocator('iframe[src*="/wisdom/"]').locator('body').waitFor({timeout:30000});await p.waitForTimeout(2000);
 let s=await state(p);check('phone: fresh install starts Borderless',s.frame==='borderless',s);
 check('phone: app canvas is edge to edge',s.body&&s.body.x===0&&Math.round(s.body.right)===412,s);
+const hd=await p.evaluate(()=>{const w=document.querySelector(`.win[data-win="${__wos.desks[__wos.idx].focus}"]`),bar=w.querySelector('.wbar').getBoundingClientRect(),t=getComputedStyle(w.querySelector('.wt')),x=w.querySelector('[data-wact="close"]').getBoundingClientRect();return {appTop:Math.round(w.querySelector('.wbody').getBoundingClientRect().y-w.getBoundingClientRect().y),bar:Math.round(bar.height),font:t.fontSize,xH:Math.round(x.height),xInBar:x.top>=bar.top-1&&x.bottom<=bar.bottom+1};});
+check('phone: compact heading (app starts within 52px of the window top, 17px title, 44px X inside the bar)',hd.appTop<=52&&hd.font==='17px'&&hd.xH===44&&hd.xInBar,hd);
 await p.screenshot({path:OUT+'/phone-borderless.png'});
 const tag=s.iframeTag;
 await p.evaluate(()=>__wos.openSettings());await p.waitForTimeout(600);

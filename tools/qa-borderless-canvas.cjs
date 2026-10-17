@@ -18,7 +18,7 @@ await p.goto(BASE+'/wizard-os-home/?open=wisdom&shell=phone',{waitUntil:'domcont
 await p.frameLocator('iframe[src*="/wisdom/"]').locator('a.wb-pick[data-wisdom-route]').first().waitFor({timeout:30000});await p.waitForTimeout(1500);
 const f=p.frames().find(f=>f.url().includes('/wisdom/'));let g=await geo(p);const lib=g;
 check('borderless foundation, title and floating X, no ellipsis/move/review tab',await p.evaluate(()=>WosSkin.frame.foundation==='borderless')&&g.title&&g.close&&g.menu===0,g);
-check('library: full-bleed app canvas, heading inset only',g.win.x===0&&g.body.x===0&&g.body.right===412&&g.title.x===16&&g.close.right===396,g);
+check('library: full-bleed app canvas, heading inset only',g.win.x===0&&g.body.x===0&&g.body.right===412&&g.title.x===16&&g.close.right===402,g);
 check('X has no contrasting plate',g.closeBg==='rgba(0, 0, 0, 0)',g.closeBg);
 let [hd,bd]=await px(p,[[200,8],[4,g.body.y+30]]);check('library: heading continues the window canvas',near(hd,bd,14),{hd,bd});await p.screenshot({path:OUT+'/phone-library.png'});
 await f.evaluate(()=>{const a=document.querySelector('a.wb-pick[data-wisdom-route]');a.dataset.wisdomRoute='/collection/critical-buddhism';a.click();});
@@ -39,7 +39,7 @@ check('Back from detail stays in Wisdom and the heading returns to the skin canv
 check('orb/dock unchanged across routes',JSON.stringify(g.orb)===JSON.stringify(lib.orb)&&JSON.stringify(g.dock)===JSON.stringify(lib.dock)&&Math.abs(g.body.bottom-g.dock.y)<1,{g,lib});
 await p.screenshot({path:OUT+'/phone-after-back.png'});
 await p.evaluate(()=>__wos.openWin({app:'chats',thread:null}));await p.waitForTimeout(1200);g=await geo(p);
-check('Chats: full-bleed body with inset heading',g.body.x===0&&g.body.right===412&&g.title.x>=16&&g.close.right===396,g);await p.screenshot({path:OUT+'/phone-chats.png'});
+check('Chats: full-bleed body with inset heading',g.body.x===0&&g.body.right===412&&g.title.x>=16&&g.close.right===402,g);await p.screenshot({path:OUT+'/phone-chats.png'});
 await p.evaluate(()=>__wosNativeBack());await p.waitForTimeout(600);check('Back from Chats keeps shell open',p.url().startsWith(BASE)&&await p.locator('#device').isVisible(),p.url());
 const dc=await ctx({viewport:{width:1440,height:900}}),dp=await dc.newPage();dp.on('pageerror',e=>errs.push(e.message));
 await dp.goto(BASE+'/wizard-os-home/?open=wisdom&shell=desktop',{waitUntil:'domcontentloaded'});await dp.frameLocator('iframe[src*="/wisdom/"]').locator('a.wb-pick[data-wisdom-route]').first().waitFor({timeout:30000});await dp.waitForTimeout(1500);
