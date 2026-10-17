@@ -476,6 +476,28 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-att.ch-attimg .ch-attpct { position: absolute; left: 0; right: 0; top: 50%; margin-top: 14px; text-align: center; font: 600 11px/1 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .7); }
 .ch-att.up .nm small { font-variant-numeric: tabular-nums; }
 
+/* Opinionated: three primary models and the complete picker, shared by both shells. */
+.ms { flex: 0 1 300px; min-width: 0; display: flex; align-items: center; gap: 6px; --ms-i: 1; }
+.ms-track { position: relative; flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); height: 36px; border-radius: 18px; background: color-mix(in srgb, var(--ink) 7%, transparent); touch-action: none; user-select: none; }
+.ms-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 3); border-radius: 15px; background: var(--ink); transform: translateX(calc(var(--ms-i) * 100%)); transition: transform 220ms var(--spring); pointer-events: none; }
+.ms-track.dragging .ms-thumb { transition: none; }
+.ms-track.off .ms-thumb { opacity: 0; }
+.ms-o { position: relative; z-index: 1; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
+.ms-o.on { color: var(--bg); }
+.ms-o:disabled { opacity: .35; }
+.ms-o:focus-visible, .ms-more:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.ms-more { flex: 0 0 auto; height: 36px; min-width: 36px; padding: 0 8px; border: 0; background: none; color: var(--ink-2); font-weight: 800; display: flex; align-items: center; gap: 6px; }
+.ms-more small { font-size: 11.5px; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Opinionated (desktop): model switch + ⋯ sit just above the composer on the left; Defer / Done on the right. */
+html[data-shell="desktop"] .ch-dbar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px 0; }
+html[data-shell="desktop"] .ch-dbar .ms { flex: 0 1 300px; }
+html[data-shell="desktop"] .ch-dbar .ch-tacts { margin: 0; }
+html[data-shell="desktop"] .ch-dbar .ch-tacts button { height: 32px; }
+/* Desktop: a slimmer thread title row. */
+html[data-shell="desktop"] .ch-head { padding: 3px 10px 3px 4px; min-height: 0; }
+html[data-shell="desktop"] .ch-head .ti b { font-size: 14px; }
+html[data-shell="desktop"] .ch-head .ch-back { width: 30px; height: 30px; }
+html[data-shell="desktop"] .ch-dbar + .ch-compose { border-top: 0; }
 /* Notifications bell beside search (core/notif-bell.js): opens the Notifications app; a dot when something needs you. */
 .ch-bell { position: relative; flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(205, 190, 255, .06); border: 1px solid var(--line); }
 .ch-bell svg { width: 18px; height: 18px; fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
