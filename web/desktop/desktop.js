@@ -485,6 +485,11 @@
     // Apply chrome before measuring, including a single app, reload and workspace switches.
     const full = !homeOpen && !!d.mono && !!d.wins.length;
     document.body.classList.toggle('desktop-fullscreen', full);
+    // Opinionated: a visible way out of full screen (the title bar and its ⤢ are hidden there).
+    let ex = document.getElementById('exitFull');
+    if (!ex) { ex = document.createElement('button'); ex.id = 'exitFull'; ex.type = 'button'; ex.className = 'exit-full'; ex.title = `Exit full screen (Esc / ${MOD}F)`; ex.setAttribute('aria-label', 'Exit full screen');
+      ex.innerHTML = '⤡<span>Exit full screen</span>'; ex.addEventListener('click', () => { if (ws[cur].mono) toggleMono(); }); document.body.appendChild(ex); }
+    ex.hidden = !full;
     const W_ = host.clientWidth, H_ = host.clientHeight, g = full ? 0 : 8;
     const n = d.wins.length;
     const rects = {};
