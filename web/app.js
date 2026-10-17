@@ -702,16 +702,57 @@
    * and paints the strip above in the app's own background colour. */
   function frameEdge(f) {
     const we = f.closest('.win'); if (!we) return;
-    let own = false, bg = '';
+    let own = false, bg = '', top = '';
     try {
       const d = f.contentDocument;
       own = !!d.querySelector('meta[name="wizard-os-edge"][content="cover"]');
       if (!own) for (const sh of d.styleSheets) { let t = ''; try { t = Array.from(sh.cssRules, r => r.cssText).join(''); } catch (e) {} if (t.includes('--wos-cutout')) { own = true; break; } }
       const pick = el => { const c = el && d.defaultView.getComputedStyle(el).backgroundColor; return c && !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(c) ? c : ''; };
       bg = pick(d.body) || pick(d.documentElement);
+      // The opaque colour actually painted along the app's top edge (a full-width header or page wrapper), so a
+      // heading drawn above the app can continue it. Art without a colour yields nothing; the heading keeps its default.
+      const vw = d.documentElement.clientWidth;
+      for (let n = d.elementFromPoint(vw / 2, 1); n && n !== d.documentElement && !top; n = n.parentElement) {
+        if (n.getBoundingClientRect().width < vw * .9) continue;
+        if (n.tagName === 'IMG') {   // full-width hero art: average its top rows (same-origin images only; a tainted canvas throws)
+          if (!n.complete || !n.naturalWidth) continue;
+          try {
+            // Sample what is on screen, not the source file: the visible top 12px under object-fit/position, through the
+            // image's CSS filter, then under any full-width shade the app layers above it (first colour of its gradient).
+            const cs = d.defaultView.getComputedStyle(n), r = n.getBoundingClientRect(), nw = n.naturalWidth, nh = n.naturalHeight;
+            const cv = d.createElement('canvas'); cv.width = 8; cv.height = 1;
+            const x = cv.getContext('2d'), band = Math.min(12, r.height);
+            let sx = 0, sy = 0, sw = nw, sh = band * nh / r.height;
+            if (cs.objectFit === 'cover') {
+              const k = Math.max(r.width / nw, r.height / nh), [px, py] = cs.objectPosition.split(' ').map(p => p.endsWith('%') ? parseFloat(p) / 100 : .5);
+              sx = (nw * k - r.width) * px / k; sy = (nh * k - r.height) * py / k; sw = r.width / k; sh = band / k;
+            }
+            if (cs.filter && cs.filter !== 'none') x.filter = cs.filter;
+            x.drawImage(n, sx, sy, sw, Math.max(1, sh), 0, 0, 8, 1); x.filter = 'none';
+            for (let s = n.nextElementSibling; s; s = s.nextElementSibling) {
+              const sr = s.getBoundingClientRect(); if (sr.top > r.top + 1 || sr.width < r.width * .9) continue;
+              const ss = d.defaultView.getComputedStyle(s), sg = /^linear-gradient\((?:to bottom, |180deg, )?(rgba?\([^)]*\))/.exec(ss.backgroundImage);
+              for (const c of [ss.backgroundColor, sg && sg[1]]) if (c && c !== 'rgba(0, 0, 0, 0)') { x.fillStyle = c; x.fillRect(0, 0, 8, 1); }
+            }
+            const px = x.getImageData(0, 0, 8, 1).data, s = [0, 0, 0];
+            for (let i = 0; i < 32; i += 4) for (let k = 0; k < 3; k++) s[k] += px[i + k];
+            top = `rgb(${s.map(v => Math.round(v / 8)).join(', ')})`;
+          } catch (e) {}
+          continue;
+        }
+        const c = pick(n), g = /^linear-gradient\((?:to bottom, |180deg, )?(rgb\([^)]*\))/.exec(d.defaultView.getComputedStyle(n).backgroundImage);
+        if (g) top = g[1]; else if (c && c.startsWith('rgb(')) top = c;
+      }
+      // Re-sample after in-app navigation and whenever an image finishes loading (routes render their hero art late).
+      const v = d.defaultView; if (!v.__wosTopWatch) {
+        let t = 0; const again = () => { clearTimeout(t); t = setTimeout(() => { if (f.isConnected) frameEdge(f); }, 150); };
+        v.__wosTopWatch = 1; ['hashchange', 'popstate'].forEach(e => v.addEventListener(e, again));
+        d.addEventListener('load', e => { if (e.target.tagName === 'IMG') again(); }, true);
+      }
     } catch (e) {}
     we.classList.toggle('edge-own', own);
     if (bg) we.style.setProperty('--frame-bg', bg); else we.style.removeProperty('--frame-bg');
+    if (top) we.style.setProperty('--frame-top', top); else we.style.removeProperty('--frame-top');
   }
   function syncImmersive() {
     const d = desks[idx], w = d && d.full && d.focus ? W[d.focus] : null, on = !!w;
@@ -3113,6 +3154,7 @@
     if (closeReviewCoach()) return 'review-coach';
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet) { closeSheets(); return 'sheet'; }
+    if (window.WosSkinFrame?.back()) return 'skin-controls';
     const d = desks[idx], f = W[d.focus];
     if (f && CHATS.isHosted(f.id)) return CHATS.threadBack(f);
     if (f) {

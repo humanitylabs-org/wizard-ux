@@ -96,6 +96,16 @@
     ctx.root.querySelector('[data-skinname]').textContent = `${S.list.find(k => k.id === now)?.name || ''} · tap to wear`;
     ctx.haptic?.(8); return true;
   } });
+  register({ id: 'skin-frame', html() {
+    const S = window.WosSkin; if (!S?.frame) return '';
+    return `<div class="st-group sf-section"><h4>Skin · Window foundation</h4>${window.WosSkinFrame.choices(S.frame.foundation)}<p>Combine either foundation with any skin. Your open apps stay in place.</p><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><button class="sf-reset" data-skinreset>Skin default</button><p data-skinimport-status role="status"></p></div>`;
+  }, act(ctx, el) {
+    if (el.closest('[data-skinimport]')) { ctx.root.querySelector('[data-skinfile]').click(); return true; }
+    const b = el.closest('[data-skinfoundation]');
+    if (!b && !el.closest('[data-skinreset]')) return false;
+    if (b) window.WosSkin.setFoundation(b.dataset.skinfoundation); else window.WosSkin.resetFrame();
+    ctx.render(); return true;
+  } });
   register({ id: 'assistant', available: android, html(ctx) {
     const N = native(), evNative = typeof N?.setEverywhere === 'function'; let ev = null;
     try { ev = evNative ? JSON.parse(N.everywhere()) : null; } catch (_) {}
@@ -140,6 +150,7 @@
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
     const ctx = { ...adapter, root }, api = { render, focus, destroy, dispatch, context: ctx };
+    let skinImportMessage = '';
     ctx.render = render;
     ctx.paintUsage = () => { const g = root.querySelector('[data-usage]'); if (g) g.outerHTML = window.WosUsage.html(); };
     function render() {
@@ -149,6 +160,7 @@
       const record = active?.closest('[data-ubid]')?.dataset.ubid;
       root.innerHTML = `<div class="st-inner"><h3 class="st-title" tabindex="-1">Settings</h3>${[...features.values()].filter(f => !f.available || f.available(ctx)).map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('')}</div>`;
       root.scrollTop = top;
+      const importStatus = root.querySelector('[data-skinimport-status]'); if (importStatus) importStatus.textContent = skinImportMessage;
       if (attrs.length) { const scope = record ? root.querySelector(`[data-ubid="${CSS.escape(record)}"]`) : root; const sel = attrs.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join(''); scope?.querySelector(sel)?.focus({ preventScroll: true }); }
       const U = window.WosUsage;
       if (U && !U.loading && (!U.snap || Date.now() - U.at > 60000)) U.load().then(ctx.paintUsage);
@@ -163,6 +175,20 @@
       return !!f?.act?.(ctx, el);
     }
     const click = e => dispatch(e.target);
+    const change = async e => {
+      const input = e.target.closest('[data-skinfile]'); if (!input) return;
+      const file = input.files?.[0]; if (!file) return;
+      try {
+        if (file.size > 8192) throw new Error('Skin JSON must be 8 KB or smaller');
+        const definition = JSON.parse(await file.text());
+        if (!root.isConnected) return;
+        window.WosSkin.compose(definition);
+        skinImportMessage = 'Skin composition applied on this device.'; render();
+      } catch (error) {
+        skinImportMessage = `Not applied: ${error.message}`;
+        const status = root.querySelector('[data-skinimport-status]'); if (status) status.textContent = skinImportMessage;
+      } finally { input.value = ''; }
+    };
     const key = e => {
       const b = e.target.closest('[data-skinpick]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
       e.preventDefault(); const buttons = [...root.querySelectorAll('[data-skinpick]')], at = buttons.indexOf(b);
@@ -170,8 +196,8 @@
       buttons[n].focus(); buttons[n].click();
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
-    function destroy() { if (typeof unsubscribe === 'function') unsubscribe(); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); }
-    root.addEventListener('click', click); root.addEventListener('keydown', key); mounts.add(api); render(); return api;
+    function destroy() { if (typeof unsubscribe === 'function') unsubscribe(); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   function route(view, open) {
     if (view === 'settings') { open(); return true; }

@@ -1,4 +1,6 @@
-/* Wizard OS skins: one shell, many looks (James, 11 Oct 2026: "same exact layout, feel and sizing; a skin of
+/* Wizard OS skins: one shell, many looks. Frame composition extends the original colour-only contract.
+ * See docs/SKIN-FRAMES.md. Existing definitions without frame retain the Standard foundation.
+ * Original palette contract (James, 11 Oct 2026: "same exact layout, feel and sizing; a skin of
  * our existing operating system"). A skin changes only:
  *   - design tokens, set inline on <html> so every existing var(--ink)/var(--glass)/… follows (blended while browsing)
  *   - the clock typeface and a few card details (core/skins.css, keyed on html[data-skin])
@@ -52,6 +54,12 @@
   const N = SKINS.length;
   const idxOf = id => Math.max(0, SKINS.findIndex(s => s.id === id));
   const stored = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
+  const FRAME_KEY = 'wos.skin.composition.v1', F = window.WosSkinFrame;
+  let composition = null;
+  try { const saved = JSON.parse(localStorage.getItem(FRAME_KEY)); if (saved) composition = F.composition(saved, SKINS); } catch (_) { /* corrupt/old data: safe skin default */ }
+  const previewFrame = document.querySelector('meta[name="wos-frame-preview"]')?.content === 'borderless' ? { foundation: 'borderless' } : null;
+  function applyFrame(skin) { F?.apply(composition?.frame || skin.frame || previewFrame || {}); }
+  function saveComposition() { try { localStorage.setItem(FRAME_KEY, JSON.stringify(composition)); } catch (_) {} }
 
   /* ---------- colour blending ---------- */
   const parse = c => {
@@ -76,6 +84,7 @@
     const space = a === 0 ? 1 - f : 0; st.setProperty('--sk-space', space.toFixed(3));
     const near = Math.round(p);
     if (near !== shown) { shown = near; root.dataset.skin = SKINS[near].id; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = SKINS[near].t.bg; }
+    applyFrame(SKINS[near]);
     BGL.a = a; BGL.b = b; BGL.f = f; wake();
   }
 
@@ -279,7 +288,16 @@
     get chosen() { return stored(); },
     index: idxOf,
     preview(p) { paint(p); },
-    set(id) { const i = idxOf(id); paint(i); try { localStorage.setItem(KEY, SKINS[i].id); } catch (e) {} return SKINS[i].id; },
+    set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); } catch (e) {} return SKINS[i].id; },
+    get frame() { return F.frame(composition?.frame || SKINS[Math.round(pos)].frame || previewFrame || {}); },
+    get composition() { return { version: 1, extends: this.current, frame: this.frame }; },
+    compose(value) {
+      const next = F.composition(value, SKINS); // validate all fields before any mutation
+      composition = next; this.set(next.extends);
+      dispatchEvent(new CustomEvent('wos:skin-frame')); return this.composition;
+    },
+    setFoundation(foundation) { return this.compose({ version: 1, extends: this.current, frame: { foundation } }); },
+    resetFrame() { return this.compose({ version: 1, extends: this.current, frame: SKINS[Math.round(pos)].frame || {} }); },
     commit(i) { return this.set(SKINS[Math.max(0, Math.min(N - 1, Math.round(i)))].id); },
     _bg: BGL,
   };
