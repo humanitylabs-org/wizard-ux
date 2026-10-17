@@ -831,3 +831,11 @@ html:not([data-shell="desktop"]) #device.orb-corner { --corner-b: 4px; }
 html:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
 html:not([data-shell="desktop"]) .imm-edge { height: calc(12px + var(--safe-b-low)); }
 html:not([data-shell="desktop"]) .imm-edge i { bottom: 3px; }
+/* Opinionated: Ready / Working counters, quiet. A small flat dot, the label in plain ink, the count beside it;
+   no glow, no pulsing ring, no coloured caps. They sit clear of the resources widget below. */
+.home .constellation { margin-bottom: 20px; }
+.home .constellation .now-card { min-height: 0; padding: 9px 14px; gap: 8px; background: color-mix(in srgb, var(--ink) 5%, transparent); border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.home .constellation .now-card .pip { flex-basis: 7px; height: 7px; box-shadow: none; }
+.home .constellation .now-card .pip.pulse::after { display: none; }
+.home .constellation .now-card .k { font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--ink-2); }
+.home .constellation .now-card .n { font-size: 16px; font-weight: 500; color: var(--ink); padding-left: 4px; }
