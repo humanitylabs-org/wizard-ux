@@ -1307,6 +1307,7 @@
     if (setEl && !setEl.hidden) { closeSettings(); return 'settings'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
+    if (window.WosSkinFrame?.back()) return 'skin-controls';
     // Leave fullscreen before navigating the app underneath; preserve its thread and draft.
     if (homeOpen) return '';
     if (focused() && CHATS.isHosted(focused().id)) return CHATS.threadBack(focused());
