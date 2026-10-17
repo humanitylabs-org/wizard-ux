@@ -819,3 +819,7 @@ body {
 html:not([data-shell="desktop"]) .dock { height: calc(var(--dock-h) + var(--safe-b-low)); padding-bottom: calc(6px + var(--safe-b-low)); }
 html:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
 html:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-compose { padding-bottom: calc(8px + var(--safe-b-low)) !important; }
+/* Fix (phone): the lowered bottom menu dropped the orb onto the scrub handle, which then swallowed orb swipes and taps.
+   The orb always wins its own circle, and the handle sits below it in the leftover home-indicator strip. */
+.dock .orb-wrap { z-index: 3; }
+html:not([data-shell="desktop"]) .scrub { bottom: max(0px, calc(var(--safe-b-low) - 10px)); height: 12px; z-index: 1; }
