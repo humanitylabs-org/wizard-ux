@@ -1083,9 +1083,17 @@ window.WizCore.chats = function createChats(H) {
     // Opinionated (phone): swipe right from the left edge of a thread to go back to the list.
     if (document.documentElement.dataset.shell !== 'desktop') {
       let sw = null;
-      root.addEventListener('touchstart', e => { const th = e.target.closest?.('.ch-thread'); const t0 = e.touches[0]; if (!th || e.touches.length !== 1 || t0.clientX > 40) { sw = null; return; } sw = { x: t0.clientX, y: t0.clientY, th }; }, { passive: true });
-      root.addEventListener('touchend', e => { if (!sw) return; const t1 = e.changedTouches[0], dx = t1.clientX - sw.x, dy = Math.abs(t1.clientY - sw.y); const s = sw; sw = null;
-        if (dx > 70 && dy < 50) { const w = W[idOf(s.th)]; if (w) threadBack(w); } }, { passive: true });
+      // Anywhere in the thread (not only the edge): a mostly-horizontal left-to-right swipe = Back. Code blocks and
+      // tables that scroll sideways, the composer and selected text keep their own gestures.
+      root.addEventListener('touchstart', e => { const th = e.target.closest?.('.ch-thread'); const t0 = e.touches[0];
+        if (!th || e.touches.length !== 1 || e.target.closest('pre, table, .ch-compose, .ms-track, input, textarea') || String(getSelection?.() || '')) { sw = null; return; }
+        sw = { x: t0.clientX, y: t0.clientY, t: performance.now(), th }; }, { passive: true });
+      root.addEventListener('touchmove', e => { if (!sw) return; const t = e.touches[0], dx = t.clientX - sw.x, dy = Math.abs(t.clientY - sw.y);
+        if (dy > 36 && dy > dx) { sw = null; return; } if (dx > 14 && dx > dy * 1.6) { sw.on = true; sw.th.style.transform = `translateX(${Math.min(dx, 140) * .5}px)`; sw.th.style.opacity = String(1 - Math.min(dx, 160) / 500); } }, { passive: true });
+      const swEnd = e => { if (!sw) return; const s = sw; sw = null; s.th.style.transform = ''; s.th.style.opacity = '';
+        const t1 = e.changedTouches?.[0]; if (!t1 || e.type === 'touchcancel') return; const dx = t1.clientX - s.x, dy = Math.abs(t1.clientY - s.y), v = dx / ((performance.now() - s.t) || 1);
+        if (s.on && (dx > 90 || (dx > 40 && v > .45)) && dy < 70) { const w = W[idOf(s.th)]; if (w) { H.vib?.(8); threadBack(w); } } };
+      root.addEventListener('touchend', swEnd, { passive: true }); root.addEventListener('touchcancel', swEnd, { passive: true });
     }
     root.addEventListener('touchstart', e => {
       const node = e.target.closest?.('.ch-msgs, .ch-scroll'); if (!node) return;
