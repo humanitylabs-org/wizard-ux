@@ -139,6 +139,7 @@
     "core/links.css",
     "core/links.js",
     "core/music-voice.js",
+    "core/notif-bell.js",
     "core/polish.css",
     "core/resources.css",
     "core/resources.js",
@@ -527,6 +528,13 @@
       "note": "Direct entrypoint import"
     },
     "core/views.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/notif-bell.js": {
       "loadedBy": [
         "phone",
         "desktop"
