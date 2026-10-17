@@ -130,6 +130,11 @@
       for (const a of APPS) {
         const n = norm(a.name);
         let s = n === q ? 100 : n.startsWith(q) ? 80 : n.includes(q) ? 60 : q.includes(n) && n.length > 3 ? 50 : 0;
+        // One spoken word that shares a long stem with a name word ("meditation" → Meditate). Shorter names win ties.
+        if (!s && !q.includes(' ')) for (const w of n.split(' ')) {
+          let k = 0; while (k < w.length && k < q.length && w[k] === q[k]) k++;
+          if (k >= 6 && k >= 0.75 * Math.min(w.length, q.length)) s = Math.max(s, 55 - n.length / 100);
+        }
         if (s > bs) { bs = s; best = a; }
       }
       return bs >= 50 ? best : null;
