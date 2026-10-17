@@ -851,3 +851,5 @@ html[data-shell="phone"] .tiles:not(.has-full) .win.focus { box-shadow: inset 0 
 html[data-shell="phone"] .win .wb[data-wact="full"] { display: none; }
 html[data-shell="phone"] .tiles:not(.has-full) .win.solo.app-chats > .wbar { display: none; }
 html[data-shell="phone"] .tiles:not(.has-full) .win.solo { border-radius: 0; }
+/* One view: the dock below already clears the home indicator, so the composer needs no safe-area padding of its own. */
+html[data-shell="phone"] .tiles:not(.has-full) .ch-compose { padding-bottom: 4px !important; padding-top: 6px; gap: 6px; }
