@@ -187,6 +187,11 @@ window.WizCore.chats = function createChats(H) {
     } catch (e) {}
     return 'newest';
   })();
+  window.addEventListener('wos:prefs', () => {
+    try { const v = localStorage.getItem(READY_ORDER_KEY); if (READY_ORDERS.includes(v) || v === 'oldest') readyOrder = v; } catch (e) {}
+    for (const id of Object.keys(CH)) if (W[id]) renderChats(W[id]);
+  });
+  window.addEventListener('wos:prefs-error', () => toast('!', 'Saved on this device only — box preferences unavailable', 4000));
   const waitsOn = s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && ['needs_you', 'check'].includes(attOf(s)?.state));
   // Newest keeps groupWork's recency order; Priority and By subject put what waits on James first.
   const ARCH_OPTS = [[1, '1 day'], [3, '3 days'], [7, '1 week'], [14, '2 weeks'], [30, '1 month'], [0, 'Never']];
@@ -209,7 +214,7 @@ window.WizCore.chats = function createChats(H) {
    * thread list, which is sequential", so no reach to the top bar). Runs after search and filter chips come off. */
   function readyBack() {
     if (readyOrder === 'newest') return false;
-    readyOrder = 'newest'; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (e) {}
+    readyOrder = 'newest'; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (e) {} LIVE.putPrefs?.({ readyOrder });
     for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); }
     return true;
   }
@@ -228,7 +233,7 @@ window.WizCore.chats = function createChats(H) {
     keys.splice(i, 1); keys.splice(j, 0, key);
     // The shown order becomes the remembered order; subjects not in today's Ready keep their old relative place after it.
     const next = keys.concat(subjOrder().filter(k => !keys.includes(k)));
-    try { localStorage.setItem(SUBJ_ORDER_KEY, JSON.stringify(next.slice(0, 60))); } catch (e) {}
+    try { localStorage.setItem(SUBJ_ORDER_KEY, JSON.stringify(next.slice(0, 60))); } catch (e) {} LIVE.putPrefs?.({ subjectOrder: next.slice(0, 60) });
     return true;
   }
   // A thread James just wrote to sits in Working from the tap on; its status follows the message (live.js PEND).
@@ -322,7 +327,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
 
-  // Opinionated: Compact list (titles only, no previews), chosen in the Filter sheet, remembered per device.
+  // Opinionated: Compact list (titles only, no previews), chosen in the Filter sheet, cached per device and persisted by Agent Service.
   const COMPACT_KEY = 'wos.chats.compact.v1';
   const compactOn = () => { try { return localStorage.getItem(COMPACT_KEY) === '1'; } catch (e) { return false; } };
   function filterSheet(c) {
@@ -1359,7 +1364,7 @@ window.WizCore.chats = function createChats(H) {
     const cx = e.target.closest('[data-chchipx]'); if (cx) { const c = ch(id); if (cx.dataset.chchipx === 'subject') c.subject = ''; else { c.filter = ''; c.filterFrom = null; } c.coach = false; c.lastChip = c.filter ? 'status' : c.subject ? 'subject' : ''; rerenderList(w); return true; }
     if (e.target.closest('[data-chfbtn]')) { const c = ch(id); c.sheet = !c.sheet; c.focus = false; rerenderList(w); return true; }
     if (e.target.closest('[data-chfclear]')) { const c = ch(id); c.sheet = false; c.coach = false; clearAll(w); return true; }
-    if (e.target.closest('[data-chcompact]')) { const on = !compactOn(); try { localStorage.setItem(COMPACT_KEY, on ? '1' : '0'); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
+    if (e.target.closest('[data-chcompact]')) { const on = !compactOn(); try { localStorage.setItem(COMPACT_KEY, on ? '1' : '0'); } catch (err) {} LIVE.putPrefs?.({ compact: on }); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     const fo = e.target.closest('[data-chfopt]'); if (fo) { const c = ch(id), [k, ...r] = fo.dataset.chfopt.split(':'), key = r.join(':'); c.sheet = false; c.coach = false;
       if (k === 'status') { c.filter = c.filter === key ? '' : key; c.filterFrom = null; } else c.subject = c.subject === key ? '' : key;
       c.lastChip = k; rerenderList(w); return true; }
@@ -1372,7 +1377,7 @@ window.WizCore.chats = function createChats(H) {
     if (sm) { const shown = [...(sm.closest('[data-sec]') || document).querySelectorAll('[data-subjmove="up"]')].map(b => b.dataset.subjkey);
       if (!sm.disabled && moveSubject(sm.dataset.subjkey, sm.dataset.subjmove, shown)) for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const rg = e.target.closest('[data-rdyorder]');
-    if (rg) { const o = rg.dataset.rdyorder; if (o === 'newest' && (readyOrder === 'newest' || readyOrder === 'oldest')) readyOrder = readyOrder === 'newest' ? 'oldest' : 'newest'; else if (READY_ORDERS.includes(o)) readyOrder = o; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
+    if (rg) { const o = rg.dataset.rdyorder; if (o === 'newest' && (readyOrder === 'newest' || readyOrder === 'oldest')) readyOrder = readyOrder === 'newest' ? 'oldest' : 'newest'; else if (READY_ORDERS.includes(o)) readyOrder = o; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} LIVE.putPrefs?.({ readyOrder }); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }

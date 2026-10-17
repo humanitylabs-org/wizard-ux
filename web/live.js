@@ -211,6 +211,44 @@
   // Opinionated: auto-archive age is the owner's choice (Archive header selector); 0 = never. Default one week.
   const ARCH_KEY = 'wos.chats.archiveAfter.v1';
   const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
+  // Agent Service owns box-wide preferences. localStorage is only an offline cache.
+  const PREFS_URL = '/wizard/v1/ui-preferences';
+  let prefsWrites = Promise.resolve(), prefsPending = 0, prefsRevision = 0;
+  const prefsFields = {
+    archiveAfterDays: ['wos.chats.archiveAfter.v1', v => Number.isInteger(v) && [0, 1, 3, 7, 14, 30].includes(v), String],
+    compact: ['wos.chats.compact.v1', v => typeof v === 'boolean', v => v ? '1' : '0'],
+    readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
+    subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+  };
+  const putPrefs = patch => {
+    prefsPending++; prefsRevision++;
+    prefsWrites = prefsWrites.then(async () => {
+      try {
+        const r = await req(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+        if (!r.ok) throw new Error('Preferences unavailable');
+      } catch (e) { window.dispatchEvent(new Event('wos:prefs-error')); }
+      finally { prefsPending--; }
+    });
+    return prefsWrites;
+  };
+  const pullPrefs = async () => {
+    if (prefsPending) return;
+    const rev = prefsRevision;
+    try {
+      const r = await req(PREFS_URL, { cache: 'no-store' });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (!j || prefsPending || rev !== prefsRevision) return;
+      let changed = false;
+      for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if (valid(j[name])) {
+        const value = encode(j[name]);
+        if (localStorage.getItem(key) !== value) { localStorage.setItem(key, value); changed = true; }
+      }
+      if (changed) window.dispatchEvent(new Event('wos:prefs'));
+    } catch (e) { /* Older/offline service: retain this device's cached choice, never reset it. */ }
+  };
+  pullPrefs(); setInterval(pullPrefs, 30000);
+  try { addEventListener('focus', pullPrefs); } catch (e) {}
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
   // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
@@ -374,7 +412,8 @@
     workGroups(sessions, now) { return groupWork(sessions || this.sessions, now); },
     readyByPriority: byPriority,
     get archiveAfterDays() { return archiveAfterDays(); },
-    set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} },
+    set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
+    putPrefs,
     cardAt,
     groups(agent = '') {
       const now = Date.now(), needs = [], ready = [], working = [];
