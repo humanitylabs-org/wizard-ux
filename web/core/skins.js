@@ -7,7 +7,7 @@
  *     last 45 s; otherwise frozen on the last frame (James, 12 Oct: no battery drain when not viewed).
  *   - the orb's colour, through a CSS filter; orb.js stays byte-identical with the Android copy
  * Nebula is the original look and sets nothing. Choice persists per device in localStorage 'wos.skin'
- * (box-level theme.json sync comes later). Five skins: Nebula, Grove, Tide, Ember, Signal (Paper retired 12 Oct).
+ * (box-level theme.json sync comes later). Seven skins: Nebula, Grove, Tide, Ember, Signal, Obsidian, Obsidian Light (Paper retired 12 Oct).
  * API: WosSkin.list, .current, .set(id), .preview(pos), .commit(i), .index(id). */
 (() => {
   'use strict';
@@ -35,6 +35,14 @@
       t: T({ bg: '#000000', ink: '#d8ffd8', 'ink-2': '#8fc79a', 'ink-3': '#4f8a5a', line: 'rgba(57,255,140,.16)', 'line-2': 'rgba(57,255,140,.32)', glass: 'rgba(0,10,4,.62)', 'glass-2': 'rgba(0,20,8,.76)',
         violet: '#39ff8c', 'violet-2': '#ffbe55', pink: '#5ad1ff', cyan: '#5ad1ff', amber: '#ffbe55', green: '#39ff8c', red: '#ff5f56',
         'sk-time-a': '#e6ffe6', 'sk-time-b': '#39ff8c', 'sk-dock': 'rgba(0,0,0,.96)', 'sk-dock-line': 'rgba(57,255,140,.18)', 'sk-ddot': 'rgba(57,255,140,.5)', 'sk-tour': 'rgba(0,8,3,.88)', 'sk-dim': 'rgba(0,0,0,.76)', 'sk-win': 'rgba(0,10,4,.86)' }) },
+    { id: 'obsidian', name: 'Obsidian', who: 'For minimalists. Black, white and nothing else.', orb: [0, 0, 1.15],
+      t: T({ bg: '#000000', ink: '#f7f7f7', 'ink-2': '#c4c4c4', 'ink-3': '#8a8a8a', line: 'rgba(255,255,255,.12)', 'line-2': 'rgba(255,255,255,.26)', glass: 'rgba(20,20,20,.62)', 'glass-2': 'rgba(24,24,24,.86)',
+        violet: '#ffffff', 'violet-2': '#e8e8e8', pink: '#bdbdbd', cyan: '#d6d6d6', amber: '#e6b15c', green: '#9fd8a8', red: '#ff6b6b',
+        'sk-time-a': '#ffffff', 'sk-time-b': '#9a9a9a', 'sk-dock': 'rgba(0,0,0,.96)', 'sk-dock-line': 'rgba(255,255,255,.12)', 'sk-ddot': 'rgba(255,255,255,.5)', 'sk-tour': 'rgba(10,10,10,.9)', 'sk-dim': 'rgba(0,0,0,.78)', 'sk-win': 'rgba(10,10,10,.9)' }) },
+    { id: 'obsidian-light', name: 'Obsidian Light', who: 'Obsidian in daylight. Ink on white paper.', orb: [0, 0, .55],
+      t: T({ bg: '#ffffff', ink: '#000000', 'ink-2': '#2e2e2e', 'ink-3': '#6b6b6b', line: 'rgba(0,0,0,.14)', 'line-2': 'rgba(0,0,0,.32)', glass: 'rgba(244,244,244,.78)', 'glass-2': 'rgba(240,240,240,.94)',
+        violet: '#000000', 'violet-2': '#1a1a1a', pink: '#555555', cyan: '#3a3a3a', amber: '#9a6400', green: '#0f7a3e', red: '#c62828',
+        'sk-time-a': '#000000', 'sk-time-b': '#5a5a5a', 'sk-dock': 'rgba(255,255,255,.96)', 'sk-dock-line': 'rgba(0,0,0,.12)', 'sk-ddot': 'rgba(0,0,0,.5)', 'sk-tour': 'rgba(250,250,250,.94)', 'sk-dim': 'rgba(255,255,255,.72)', 'sk-win': 'rgba(255,255,255,.94)' }) },
   ];
   const N = SKINS.length;
   const idxOf = id => Math.max(0, SKINS.findIndex(s => s.id === id));
@@ -160,6 +168,25 @@
         }
       }
     },
+    // Obsidian: still film grain plus one slow, soft light drifting across. Pre-rendered noise tiles, so a frame is
+    // two drawImage calls and a gradient; frozen by the scenery gate whenever Home is not live.
+    obsidian: {
+      init(s, W, H) { this.prep(s, W, H, '#000000', 255); },
+      prep(s, W, H, base, ink) {
+        s.base = base; s.ink = ink;
+        s.tiles = [0, 1, 2].map(() => { const n = mk(160, 160), x = n.getContext('2d'), d = x.createImageData(160, 160);
+          for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() < .5 ? 0 : 1; d.data[i] = d.data[i + 1] = d.data[i + 2] = ink; d.data[i + 3] = v ? (Math.random() * 22) | 0 : 0; }
+          x.putImageData(d, 0, 0); return n; });
+      },
+      draw(c, s, t, dt, W, H) {
+        c.fillStyle = s.base; c.fillRect(0, 0, W, H);
+        const lx = W * (.5 + .42 * Math.sin(t * .05)), ly = H * (.35 + .22 * Math.sin(t * .037 + 1.3)), R = Math.max(W, H) * .75;
+        const g = c.createRadialGradient(lx, ly, 0, lx, ly, R); g.addColorStop(0, `rgba(${s.ink},${s.ink},${s.ink},.07)`); g.addColorStop(1, `rgba(${s.ink},${s.ink},${s.ink},0)`);
+        c.fillStyle = g; c.fillRect(0, 0, W, H);
+        c.fillStyle = c.createPattern(s.tiles[((t * 8) | 0) % 3], 'repeat'); c.fillRect(0, 0, W, H);
+      },
+    },
+    'obsidian-light': { init(s, W, H) { BG.obsidian.prep(s, W, H, '#ffffff', 0); }, draw(c, s, t, dt, W, H) { BG.obsidian.draw(c, s, t, dt, W, H); } },
   };
   function size() {
     const d = BGL.cv[0] && BGL.cv[0].parentElement; if (!d) return;
