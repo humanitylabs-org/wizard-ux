@@ -126,8 +126,8 @@
   }
   function commandSnapshot() { const w=focused(); return {id:w?.id,thread:w?.thread,view:{appId:w?.appId,kind:w?.app==='chats' ? w.thread ? 'chat thread' : 'thread list' : 'app'}}; }
   const LOCAL_COMMANDS = window.WosCommands.create({CHATS,APP,findApp,appByName,quickSearch,sendSnap:commandSnapshot});
-  function executeCommand(c,text,snap) {
-    return window.WosCommands.execute(c,text,{maps:openMaps,search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,inbox:openInbox,launcher:openPalette,findApp,openApp,
+  function executeCommand(c,text,snap,musicDone) {
+    return window.WosCommands.execute(c,text,{maps:openMaps,search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,inbox:openInbox,launcher:openPalette,findApp,openApp,musicDone,
       layout(c) { const f=snap?.id?W[snap.id]:focused();
         if(c.action==='desk') { if(c.to==='home') goHome(); else goWs(c.to==='next'?cur+1:c.to==='prev'?cur-1:+c.to-1); return true; }
         if(c.action==='close_window') { if(!f)return false;closeWin(f.id);return true; }
@@ -259,6 +259,7 @@
   // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
+  window.WizOpenApp = id => { const x = hostedOpenable(id); return x ? openApp(x) : false; };
   // Only the App Store and System windows may ask; the sender is checked by its actual frame, not by anything it says.
   addEventListener('message', e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
@@ -485,6 +486,11 @@
     // Apply chrome before measuring, including a single app, reload and workspace switches.
     const full = !homeOpen && !!d.mono && !!d.wins.length;
     document.body.classList.toggle('desktop-fullscreen', full);
+    // Opinionated: a visible way out of full screen (the title bar and its ⤢ are hidden there).
+    let ex = document.getElementById('exitFull');
+    if (!ex) { ex = document.createElement('button'); ex.id = 'exitFull'; ex.type = 'button'; ex.className = 'exit-full'; ex.title = `Exit full screen (Esc / ${MOD}F)`; ex.setAttribute('aria-label', 'Exit full screen');
+      ex.innerHTML = '⤡<span>Exit full screen</span>'; ex.addEventListener('click', () => { if (ws[cur].mono) toggleMono(); }); document.body.appendChild(ex); }
+    ex.hidden = !full;
     const W_ = host.clientWidth, H_ = host.clientHeight, g = full ? 0 : 8;
     const n = d.wins.length;
     const rects = {};
@@ -1085,8 +1091,12 @@
     if (commandTake) {
       dictationFinishing = true; const snap = vSnapshot;
       try { const r=await VOICE.finish({transcribe:false}); if(!r?.blob)return 'none'; const take=await OUTBOX.retainDictation(r.blob,r.captureId); const it=await OUTBOX.transcribeDictation(take.id); if(!it?.text)return 'retained';
-        const cmd=LOCAL_COMMANDS.parse(it.text,snap,'command'); const ok=cmd && executeCommand(cmd,it.text,snap); if(window.WosCommands.completedLocally(cmd,ok)) await OUTBOX.completeLocal(it.id);
-        toast(ok?'⚡':'!',ok?'Command handled on-device':'No local command matched · nothing sent · recording kept',2600);return ok?'local':'retained';
+        // A command take is never a message: executed or unmatched, its custody finishes here.
+        // Music settles on the player's done receipt; a failure keeps the recording.
+        const cmd=LOCAL_COMMANDS.parse(it.text,snap,'command'); const music=/^(music|play_music)$/.test(cmd?.action||'');
+        const ok=cmd && executeCommand(cmd,it.text,snap,music?(done=>{if(done)OUTBOX.completeLocal(it.id);}):undefined);
+        if(!music || !ok) await OUTBOX.completeLocal(it.id);
+        toast(ok?'⚡':'!',ok?'Command handled on-device':'No command matched · nothing sent',2600);return ok?'local':'none';
       } finally { commandTake=false;dictationFinishing=false; }
     }
     if (forceNew) { vConversation = null; vTarget = null; vNewChat = true; }
@@ -1128,7 +1138,8 @@
         if(staged.durable) {
           try { transcript=String((await window.WizConfig.transcribe(r.blob,{prompt:window.WizConfig.voicePrompt(),signal:AbortSignal.timeout(45000)})).text||'').trim(); } catch(_) {}
           const cmd=transcript && LOCAL_COMMANDS.parse(transcript,vSnapshot,'auto');
-          if(cmd && executeCommand(cmd,transcript,vSnapshot)) { staged.text=transcript;if(window.WosCommands.completedLocally(cmd,true)) await OUTBOX.completeLocal(stagedId);else await OUTBOX.transition(stagedId,'held','Command accepted · completion unconfirmed; original recording kept');toast('⚡','Command handled on-device',1800);return 'local'; }
+          const music=/^(music|play_music)$/.test(cmd?.action||''), sid0=stagedId;
+          if(cmd && executeCommand(cmd,transcript,vSnapshot,music?(done=>{if(done)OUTBOX.completeLocal(sid0);}):undefined)) { staged.text=transcript;if(window.WosCommands.completedLocally(cmd,true)) await OUTBOX.completeLocal(stagedId);else await OUTBOX.transition(stagedId,'held','Command accepted · completion unconfirmed; original recording kept');toast('⚡','Command handled on-device',1800);return 'local'; }
         }
       }
     }

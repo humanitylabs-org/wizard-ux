@@ -134,3 +134,10 @@ html[data-skin^="obsidian"] .ch-sec-h b.wait { background: var(--ob-tint); color
 /* App sigils and the brand mark go grey; each app keeps its silhouette. */
 html[data-skin^="obsidian"] :is(.sgi, .logo, .wic) { filter: grayscale(1); }
 html[data-skin="obsidian-light"] .sgi { filter: grayscale(1) brightness(.35); }
+
+/* Landscapes (rotating macOS wallpapers): frosted glass over the photo, white type with a soft shadow, Sora clock. */
+html[data-skin="landscapes"] .home-time { font-family: var(--font-display, ui-sans-serif); font-weight: 300; letter-spacing: -.05em; text-shadow: none; filter: drop-shadow(0 2px 14px rgba(0, 0, 0, .35)); }
+html[data-skin="landscapes"] :is(.home-date, .home-line) { text-shadow: 0 1px 8px rgba(0, 0, 0, .45); }
+html[data-skin="landscapes"] :is(.now-card, .side-card, .win, .launcher, .inbox, .dock) { -webkit-backdrop-filter: blur(22px) saturate(1.25); backdrop-filter: blur(22px) saturate(1.25); }
+html[data-skin="landscapes"] .now-card { background: rgba(16, 14, 22, .42); border-color: rgba(255, 255, 255, .14); box-shadow: none; }
+html[data-skin="landscapes"] .dock { border-top-color: transparent; }
