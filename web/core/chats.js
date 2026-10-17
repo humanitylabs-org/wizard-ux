@@ -925,9 +925,12 @@ window.WizCore.chats = function createChats(H) {
     const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd];
     const canStop = working && !!s?.runId && s.status !== 'stopping';
     PW?.ensureModels();
-    const chip = PW ? (document.documentElement.dataset.shell === 'desktop' && PW.modelSwitch ? PW.modelSwitch(w, s) : PW.modelChip(w, s)) : '';
+    const DESK = document.documentElement.dataset.shell === 'desktop';
+    const chip = ''; // Preview phone controls move below messages; desktop uses its standalone composer row.
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
-    const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
+    const tacts0 = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
+    const tacts = DESK ? '' : tacts0;
+    const dbar = DESK ? `<div class="ch-dbar">${PW ? PW.modelSwitch(w, s) : ''}${tacts0}</div>` : '';
     clearReading(w.id);
     // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
     const keepImgs = keepLoadedImages(el);
@@ -936,7 +939,7 @@ window.WizCore.chats = function createChats(H) {
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       ${document.documentElement.dataset.shell !== 'desktop' ? `<div class="ch-bbar"><button type="button" class="ch-back2" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${PW && s !== undefined ? PW.modelSwitch(w, s) : ''}</div>` : ''}
-      <form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
+      ${dbar}<form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     for (const detail of el.querySelectorAll('[data-run-original]')) detail.open = openContexts.has(detail.dataset.runOriginal);
     if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
@@ -994,13 +997,6 @@ window.WizCore.chats = function createChats(H) {
     if (fab) { const lr = fab.offsetParent?.getBoundingClientRect(); const o2 = orb.getBoundingClientRect(); if (lr) { fab.style.right = `${Math.round(lr.right - o2.left + 10)}px`; fab.style.bottom = `${Math.round(lr.bottom - (br.top + br.height / 2) - fab.offsetHeight / 2)}px`; } }
   }, 400);
   function bindGestures(root) {
-    // Opinionated (phone): swipe right from the left edge of a thread to go back to the list.
-    if (document.documentElement.dataset.shell !== 'desktop') {
-      let sw = null;
-      root.addEventListener('touchstart', e => { const th = e.target.closest?.('.ch-thread'); const t0 = e.touches[0]; if (!th || e.touches.length !== 1 || t0.clientX > 40) { sw = null; return; } sw = { x: t0.clientX, y: t0.clientY, th }; }, { passive: true });
-      root.addEventListener('touchend', e => { if (!sw) return; const t1 = e.changedTouches[0], dx = t1.clientX - sw.x, dy = Math.abs(t1.clientY - sw.y); const s = sw; sw = null;
-        if (dx > 70 && dy < 50) { const w = W[idOf(s.th)]; if (w) threadBack(w); } }, { passive: true });
-    }
     root.addEventListener('touchstart', e => {
       const node = e.target.closest?.('.ch-msgs, .ch-scroll'); if (!node) return;
       const g = readGuard(node); g.at = Date.now();
@@ -1468,7 +1464,8 @@ window.WizCore.chats = function createChats(H) {
       if (e.target.matches('.ch-compose textarea')) { growTa(e.target); const id = idOf(e.target); ch(id).draft = e.target.value; saveDraft(id); syncSend(e.target.form, ch(id)); }
     });
     root.addEventListener('keydown', e => {
-      if (e.target.matches('.ch-compose textarea') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.target.form.requestSubmit(); }
+      // Opinionated: with a hardware keyboard, Enter sends and Shift+Enter is a new line (touch keyboards keep Enter = new line).
+      if (e.target.matches('.ch-compose textarea') && e.key === 'Enter' && !e.isComposing && !e.shiftKey && (e.metaKey || e.ctrlKey || !matchMedia('(pointer: coarse)').matches)) { e.preventDefault(); e.target.form.requestSubmit(); }
     });
     bindGestures(root);
     PW?.bind(root);

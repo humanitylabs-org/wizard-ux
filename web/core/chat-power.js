@@ -163,6 +163,7 @@ window.WosChatPower = function chatPower(A) {
     const end = e => { if (!drag) return; const d = drag; drag = null; d.tr.classList.remove('dragging'); const f = Math.max(0, Math.min(.999, (e.clientX - d.r.left) / d.r.width)); const i = Math.floor(f * 3); d.tr.parentElement.style.setProperty('--ms-i', i); switchTo(d.wid, i); };
     document.addEventListener('pointerup', end); document.addEventListener('pointercancel', () => { if (drag) { drag.tr.classList.remove('dragging'); drag = null; } });
   })();
+  document.addEventListener('click', e => { const b = e.target.closest?.('[data-msi]'); if (b && !b.disabled && e.detail === 0) switchTo(b.closest('.ms').dataset.mswid, +b.dataset.msi); });
   let modelsAsked = false;
   function ensureModels() {
     if (!M || modelsAsked) return;
