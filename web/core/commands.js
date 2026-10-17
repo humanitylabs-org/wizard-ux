@@ -97,7 +97,10 @@
  }
  function execute(c, text, H) {
    const a = c.action;
-   if (a === 'music') return window.WosMusic?.run(c.cmd) || false;
+   if (a === 'music') return window.WosMusic?.run(c.cmd, H.musicDone) || false;
+   // Router vocabulary (server ROUTER_SYSTEM): play_music and search had no handler, so they silently failed.
+   if (a === 'play_music') return window.WosMusic?.run({ op: 'play', said: 'play ' + String(c.query || '').trim() }, H.musicDone) || false;
+   if (a === 'search' && c.query) return H.search(c.query, c.tab);
    if (a === 'usual') return window.WosUsuals?.run(c.id) || false;
    if (/direction|navigat|route/.test(a)) { H.maps('dir', c.destination || c.query || text); return true; }
    if (/maps_search|map/.test(a)) { H.maps('search', c.query || text); return true; }
