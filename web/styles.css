@@ -841,33 +841,12 @@ html:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--s
 html:not([data-shell="desktop"]) .imm-edge { height: calc(12px + var(--safe-b-low)); }
 html:not([data-shell="desktop"]) .imm-edge i { bottom: 3px; }
 
-/* ================= Distraction-free (James, 18 Oct 2026) =================
- * A short swipe down on the orb (or just above it) hides the bottom bar and every window's title bar. Same layout,
- * no system bars toggled: the tiles grow into the space through their existing inset transition and the title bar
- * slides up out of its window, so the change is one smooth motion. A faint handle marks the bottom edge; swipe up
- * there (or Back) to bring the bars back. A live voice take shows the bar again until it ends. */
-.wbar { transition: height 340ms var(--ease), flex-basis 340ms var(--ease), min-height 340ms var(--ease), opacity 220ms, border-color 220ms; }
-.win { transition: border-color 220ms, box-shadow 220ms, opacity 280ms, transform 380ms var(--ease), border-radius 340ms var(--ease), padding 340ms var(--ease); }
-/* Collapse the bar by height (skins size it 34-44 px), so no sliver of it is left above the app. */
-.device.zen .wbar { height: 0 !important; min-height: 0 !important; flex-basis: 0 !important; overflow: hidden; border-bottom-color: transparent; opacity: 0; pointer-events: none; }
-.device.zen .win { padding-top: 0 !important; }
-/* The app takes the whole viewport; the handle floats over it on a transparent strip. */
-.device.zen .tiles { top: calc(var(--sb) + var(--safe-t) + 4px); bottom: 0; }
-.device.zen .tiles[data-n="1"], .device.zen .tiles.has-full { left: 0; right: 0; top: 0; bottom: 0; }
-.device.zen .tiles[data-n="1"] .win, .device.zen .tiles.has-full .win.full { border-radius: 0; border-color: transparent; box-shadow: none; }
-.device.zen .desk { padding-bottom: var(--safe-b); }
-.device.zen .dock { transform: translateY(110%); opacity: 0; pointer-events: none; }
-.device.zen #scrub, .device.zen .desk-label { opacity: 0 !important; pointer-events: none; }
-.device.zen[data-voice]:not([data-voice="idle"]) .dock { transform: none; opacity: 1; pointer-events: auto; }
-/* full-screen Chats: the corner orb hides too, and the composer takes its column back */
-.device.zen.orb-corner.immersive .tiles.has-full { top: 0; bottom: 0; }
-.device.zen.orb-corner .win.full .ch-compose { padding-right: 10px; }
-.device.zen.orb-corner .win.full .ch-latest { right: 12px; }
-.zen-edge { position: absolute; left: 0; right: 0; bottom: 0; height: calc(24px + var(--safe-b)); z-index: 59; display: none; touch-action: none; cursor: grab; -webkit-tap-highlight-color: transparent; }
-.device.zen .zen-edge { display: block; }
-.device.zen.immersive:not(.orb-corner) .zen-edge { display: none; }
-.device.zen[data-voice]:not([data-voice="idle"]) .zen-edge { display: none; }
-.zen-edge i { position: absolute; left: 50%; bottom: calc(10px + var(--safe-b)); width: 44px; height: 4px; margin-left: -22px; border-radius: 99px;
-  background: rgba(205, 190, 255, .55); box-shadow: 0 0 0 1px rgba(0, 0, 0, .28), 0 1px 6px rgba(0, 0, 0, .35); transition: width 220ms var(--spring), margin-left 220ms var(--spring), background 300ms, box-shadow 300ms; }
-.device.zen-tip .zen-edge i, .zen-edge.pull i { width: 96px; margin-left: -48px; background: rgba(205, 190, 255, .7); box-shadow: 0 0 10px rgba(143, 99, 255, .5); }
-.device.zen .imm-edge i { opacity: 0 !important; } /* one handle at a time: the distraction-free one wins */
+/* ================= Distraction-free (James, 18 Oct 2026) ==========
+/* Dock Back (phone, main-agent thread): a big thumb target bottom-left; the in-thread back above the composer goes. */
+.dock-back { position: absolute; left: 14px; top: 50%; transform: translateY(calc(-50% - var(--safe-b-low, 0px) / 2)); width: 52px; height: 52px; border-radius: 50%;
+  display: grid; place-items: center; pointer-events: auto; color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: transform 160ms var(--ease), background 160ms; }
+.dock-back svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.dock-back:active { transform: translateY(calc(-50% - var(--safe-b-low, 0px) / 2)) scale(.92); background: color-mix(in srgb, var(--ink) 16%, transparent); }
+.device.dock-back-on #dotsL { visibility: hidden; }
+html[data-shell="phone"] .device.dock-back-on .ch-bbar .ch-back2 { display: none; }
