@@ -2577,12 +2577,21 @@
       }
       await OUTBOX.keepTranscript(snap.custodyId, text);
       const outcome = await handleText(text, kind, false, j.ms, aimAt, snap);
+      // A held take is a command, never a message: once routed, there is nothing left to deliver.
+      // Executed, unmatched or declined commands finish custody instead of posing as failed sends.
+      const settled = kind === 'command' && (outcome === false || outcome == null || outcome?.outcome === 'unhandled' || (outcome?.outcome === 'local-pending' && !outcome.done));
+      if (settled && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.completeLocal(snap.custodyId);
       if (OUTBOX.get(snap.custodyId)?.state === 'processing') {
         const completed = outcome?.outcome === 'local' && await OUTBOX.completeLocal(snap.custodyId);
         if (!completed && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'local'
           ? 'Command completed · accompanying draft or attachments kept'
           : outcome?.outcome === 'local-pending' ? 'Command accepted · completion unconfirmed; original recording kept'
           : 'Delivery not confirmed · original recording kept; not queued for retry');
+      }
+      if (outcome?.done) {
+        const id = snap.custodyId;
+        outcome.done.then(ok => ok ? OUTBOX.completeLocal(id)
+          : OUTBOX.get(id)?.state === 'held' && OUTBOX.transition(id, 'held', 'Music didn’t confirm · recording kept; nothing sent')).catch(() => {});
       }
       releaseNative(); unhold();
     } catch (err) {
@@ -2782,7 +2791,8 @@
       showRouted('command', `Command · on-device · ${ms} ms${sttNote}`);
       return finishCmd(loc, text, opts);
     }
-    if (kind === 'command' && !typed) return holdNoMatch(text, opts);
+    // A held take with no on-device match still asks the router (force: 'command'); only a non-command
+    // answer falls back to the no-match choice card, so nothing is ever sent without a tap.
     // A capturing view takes a tap utterance as-is.
     if (kind !== 'command' && v?.mode === 'capture' && target == null) return toView(v, text, `To ${v.name}${sttNote}`, snap);
     // An open thread owns what James says: unless it is a phone command (or aimed at another desk), it goes
@@ -2841,12 +2851,15 @@
   }
   function finishCmd(c, text, opts) {
     setVoice('done'); vib([8, 40, 8]);
-    const ok = execute(c, text, opts);
+    // Music only acknowledges acceptance; its done/fail receipt settles the recording later.
+    let settle = null;
+    const done = /^(music|play_music)$/.test(c?.action || '') ? new Promise(r => { settle = r; }) : null;
+    const ok = execute(c, text, settle ? { ...opts, musicDone: settle } : opts);
     tourEv('command', { ok: !!ok, text });
     if (!ok) { $('#txRouteText').textContent += ' · no match'; }
     setTimeout(() => { if (V.state === 'done') setVoice('idle'); }, 900);
     txHide(ok ? (isPill() ? 1200 : 1300) : 3200);
-    return { outcome: ok ? (window.WosCommands.completedLocally(c, ok) ? 'local' : 'local-pending') : 'unhandled' };
+    return { outcome: ok ? (window.WosCommands.completedLocally(c, ok) ? 'local' : 'local-pending') : 'unhandled', done: ok ? done : null };
   }
   async function toView(v, text, label, snap) {
     showRouted('view', label); setVoice('done'); vib([8, 40, 8]);
@@ -2861,7 +2874,7 @@
     return window.WosCommands.execute(c, text, {
       maps: (mode, dest) => openMaps(mode, dest, opts), search: openSearch, settings: openSettings,
       focused: () => W[opts.snap?.id || desks[idx].focus], chats: CHATS, inbox: () => openSheet('inbox'), launcher: q => openSheet('launcher', q),
-      findApp, openApp: app => openApp(app, {}, opts), layout: c => {
+      findApp, openApp: app => openApp(app, {}, opts), musicDone: opts.musicDone, layout: c => {
         const a = c.action, f = opts.snap?.id || desks[idx].focus;
     if (a === 'zoom') {
       let id = W[f]?.app === 'review' ? f : desks[idx].wins.find(x => W[x].app === 'review');
@@ -3281,7 +3294,7 @@
     const k = b.dataset.hold, q = V.holdText || '', opts = V.holdOpts || {};
     V.holdText = ''; V.holdOpts = null; $('#txChips').innerHTML = '';
     if (k === 'search' || k === 'images') { txHide(0); openSearch(q, k === 'images' ? 'images' : 'all'); return; }
-    if (k === 'agent' && q) { toAgent(q, `To ${window.WizConfig.agent()} · from a held command`, { ...opts, how: 'voice (held command, sent on purpose)' }); return; }
+    if (k === 'agent' && q) { toAgent(q, `To ${window.WizConfig.agent()} · from a held command`, { ...opts, snap: opts.snap ? { ...opts.snap, custodyId: null } : opts.snap, how: 'voice (held command, sent on purpose)' }); return; }
     txHide(0);
   });
   // Native bridge v0 (core/bridge.js): the same events drive the phone and the desktop shell.

@@ -126,8 +126,8 @@
   }
   function commandSnapshot() { const w=focused(); return {id:w?.id,thread:w?.thread,view:{appId:w?.appId,kind:w?.app==='chats' ? w.thread ? 'chat thread' : 'thread list' : 'app'}}; }
   const LOCAL_COMMANDS = window.WosCommands.create({CHATS,APP,findApp,appByName,quickSearch,sendSnap:commandSnapshot});
-  function executeCommand(c,text,snap) {
-    return window.WosCommands.execute(c,text,{maps:openMaps,search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,inbox:openInbox,launcher:openPalette,findApp,openApp,
+  function executeCommand(c,text,snap,musicDone) {
+    return window.WosCommands.execute(c,text,{maps:openMaps,search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,inbox:openInbox,launcher:openPalette,findApp,openApp,musicDone,
       layout(c) { const f=snap?.id?W[snap.id]:focused();
         if(c.action==='desk') { if(c.to==='home') goHome(); else goWs(c.to==='next'?cur+1:c.to==='prev'?cur-1:+c.to-1); return true; }
         if(c.action==='close_window') { if(!f)return false;closeWin(f.id);return true; }
@@ -1090,8 +1090,12 @@
     if (commandTake) {
       dictationFinishing = true; const snap = vSnapshot;
       try { const r=await VOICE.finish({transcribe:false}); if(!r?.blob)return 'none'; const take=await OUTBOX.retainDictation(r.blob,r.captureId); const it=await OUTBOX.transcribeDictation(take.id); if(!it?.text)return 'retained';
-        const cmd=LOCAL_COMMANDS.parse(it.text,snap,'command'); const ok=cmd && executeCommand(cmd,it.text,snap); if(window.WosCommands.completedLocally(cmd,ok)) await OUTBOX.completeLocal(it.id);
-        toast(ok?'⚡':'!',ok?'Command handled on-device':'No local command matched · nothing sent · recording kept',2600);return ok?'local':'retained';
+        // A command take is never a message: executed or unmatched, its custody finishes here.
+        // Music settles on the player's done receipt; a failure keeps the recording.
+        const cmd=LOCAL_COMMANDS.parse(it.text,snap,'command'); const music=/^(music|play_music)$/.test(cmd?.action||'');
+        const ok=cmd && executeCommand(cmd,it.text,snap,music?(done=>{if(done)OUTBOX.completeLocal(it.id);}):undefined);
+        if(!music || !ok) await OUTBOX.completeLocal(it.id);
+        toast(ok?'⚡':'!',ok?'Command handled on-device':'No command matched · nothing sent',2600);return ok?'local':'none';
       } finally { commandTake=false;dictationFinishing=false; }
     }
     if (forceNew) { vConversation = null; vTarget = null; vNewChat = true; }
@@ -1133,7 +1137,8 @@
         if(staged.durable) {
           try { transcript=String((await window.WizConfig.transcribe(r.blob,{prompt:window.WizConfig.voicePrompt(),signal:AbortSignal.timeout(45000)})).text||'').trim(); } catch(_) {}
           const cmd=transcript && LOCAL_COMMANDS.parse(transcript,vSnapshot,'auto');
-          if(cmd && executeCommand(cmd,transcript,vSnapshot)) { staged.text=transcript;if(window.WosCommands.completedLocally(cmd,true)) await OUTBOX.completeLocal(stagedId);else await OUTBOX.transition(stagedId,'held','Command accepted · completion unconfirmed; original recording kept');toast('⚡','Command handled on-device',1800);return 'local'; }
+          const music=/^(music|play_music)$/.test(cmd?.action||''), sid0=stagedId;
+          if(cmd && executeCommand(cmd,transcript,vSnapshot,music?(done=>{if(done)OUTBOX.completeLocal(sid0);}):undefined)) { staged.text=transcript;if(window.WosCommands.completedLocally(cmd,true)) await OUTBOX.completeLocal(stagedId);else await OUTBOX.transition(stagedId,'held','Command accepted · completion unconfirmed; original recording kept');toast('⚡','Command handled on-device',1800);return 'local'; }
         }
       }
     }
