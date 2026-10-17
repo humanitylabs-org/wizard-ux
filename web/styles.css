@@ -814,3 +814,11 @@ body {
 .home .constellation .now-card { flex: 1 1 0; min-height: 0; padding: 10px 12px; gap: 9px; }
 .home .home-attn { margin-top: auto; }
 .home .home-gap-b { display: none; }
+/* Ready / Working counters, quiet: a small flat dot, the label in plain ink, the count beside it; no glow, no pulsing
+   ring, no coloured caps. They sit clear of the resources widget below. */
+.home .constellation { margin-bottom: 20px; }
+.home .constellation .now-card { min-height: 0; padding: 9px 14px; gap: 8px; background: color-mix(in srgb, var(--ink) 5%, transparent); border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.home .constellation .now-card .pip { flex-basis: 7px; height: 7px; box-shadow: none; }
+.home .constellation .now-card .pip.pulse::after { display: none; }
+.home .constellation .now-card .k { font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--ink-2); }
+.home .constellation .now-card .n { font-size: 16px; font-weight: 500; color: var(--ink); padding-left: 4px; }
