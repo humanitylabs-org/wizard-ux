@@ -19,6 +19,9 @@
 .rs-bar i{display:block;height:100%;width:var(--rs-value);background:var(--green);border-radius:inherit}
 .rs-accounts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px}
 .rs-account{display:block;min-width:0}
+.rs-provider{display:flex;flex-direction:column;gap:10px;min-width:0;align-self:start}
+.rs-provider-h{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--wz-text-secondary,var(--ink-2))}
+.rs-provider-h i{font-style:normal;font-weight:600;margin-left:4px;color:var(--wz-text-muted,var(--ink-3))}
 .rs-account-line{display:flex;align-items:baseline;justify-content:space-between;gap:5px;font-size:12px}
 .rs-account-line>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--wz-text-secondary,var(--ink-2))}
 .rs-account-line b{font-size:13px;font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}
