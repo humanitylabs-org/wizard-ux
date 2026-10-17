@@ -281,7 +281,7 @@
     sec.classList.toggle('review-desk', isReviewDesk(i));
     applyLayout(i);
   }
-  // Phone has one view (Miguel, 17 Oct): every app is already edge to edge, so there is no separate full-screen mode to pinch into.
+  // Phone has one view (owner request): every app is already edge to edge, so there is no separate full-screen mode to pinch into.
   const ONE_VIEW = document.documentElement.dataset.shell === 'phone';
   function applyLayout(i) {
     const d = desks[i], sec = secOf(i); if (!sec) return;
