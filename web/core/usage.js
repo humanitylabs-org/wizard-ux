@@ -16,7 +16,18 @@
   const iso = v => (typeof v === 'string' && isFinite(Date.parse(v)) ? v : null);
   function normalize(j) {
     const groups = (Array.isArray(j?.providers) ? j.providers : []);
-    const accountCounts = groups.filter(p => Array.isArray(p?.accounts)).map(p => ({id:String(p.id), name:String(p.name || p.id), count:p.accounts.length}));
+    // Provider identity is presentation only: never merge subscriptions by label.
+    const family = p => {
+      const raw = String(p.providerId || p.provider || p.id || '').split(':')[0];
+      return /^(?:codex(?:-\d+)?|openai-codex|chatgpt)$/i.test(raw) ? 'chatgpt' : raw;
+    };
+    const counts = new Map();
+    for (const p of groups) {
+      if (!p?.id) continue;
+      const id = family(p), prior = counts.get(id);
+      counts.set(id, {id, name: id === 'chatgpt' ? 'ChatGPT' : String(p.name || id), count:(prior?.count || 0) + (Array.isArray(p.accounts) ? p.accounts.length : 1)});
+    }
+    const accountCounts = [...counts.values()];
     const expanded = groups.flatMap(p => Array.isArray(p?.accounts) ? p.accounts.map(a => ({...a, providerId:p.id, providerName:p.name, status:p.status === 'stale' ? 'stale' : a.status})) : [p]);
     const providers = expanded.map(p => {
       if (!p || typeof p !== 'object' || !p.id) return null;
@@ -25,7 +36,7 @@
         return { id: String(l.id || l.label || ''), label: String(l.label || 'Quota'), remainingPercent: rem, usedPercent: 100 - rem, resetsAt: iso(l.resetsAt) };
       }).filter(Boolean);
       const paid = p.paid && typeof p.paid === 'object' ? p.paid : null;
-      return { id: String(p.id), name: String(p.name || p.id), plan: p.plan ? String(p.plan) : '', status: ['ok', 'stale', 'unavailable'].includes(p.status) ? p.status : (limits.length ? 'ok' : 'unavailable'),
+      return { id: String(p.id), provider: family(p), providerName: family(p) === 'chatgpt' ? 'ChatGPT' : String(p.providerName || p.name || p.id), name: String(p.name || p.id), plan: p.plan ? String(p.plan) : '', status: ['ok', 'stale', 'unavailable'].includes(p.status) ? p.status : (limits.length ? 'ok' : 'unavailable'),
         fetchedAt: iso(p.fetchedAt), limits, paid, error: p.error ? String(p.error.message || p.error) : '' };
     }).filter(Boolean);
     return { fetchedAt: iso(j?.fetchedAt), providers, accountCounts };
