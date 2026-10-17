@@ -228,8 +228,15 @@
       s = s.replace(/\[((?:[^\[\]\n]|\[[^\]\n]*\])+)\]\(\s*<?([^\s)>]+?(?:\([^\s)]*\)[^\s)>]*)?)>?(?:\s+"[^"]*")?\s*\)/g, (_, text, url) => put(linkHtml(url, inline(text, true))));
       s = s.replace(/<((?:https?:\/\/|mailto:)[^\s>]+)>/g, (_, u) => put(linkHtml(u, esc(u))));
       // Every bare URL becomes a link, whatever wraps it (**bold**, _italic_, ~~del~~, [brackets], "Link:url").
-      // Emphasis markers and closing punctuation at the end stay outside the link.
-      s = s.replace(/(^|[^A-Za-z0-9/.@=&%+-])(https?:\/\/[^\s<>"'*\u0001\u0002]*[^\s<>"'*_~.,;:!?)\]’”\u0001\u0002])/g, (_, pre, u) => pre + put(linkHtml(u, esc(u))));
+      // Emphasis markers and closing punctuation at the end stay outside the link. A trailing underscore is
+      // part of the URL (tokens often end in one) unless an underscore opened emphasis right before the URL.
+      s = s.replace(/(^|[^A-Za-z0-9/.@=&%+-])(https?:\/\/[^\s<>"'*\u0001\u0002]*[^\s<>"'*~.,;:!?)\]’”\u0001\u0002])/g, (_, pre, u, at, all) => {
+        // Strip only as many trailing underscores as opened emphasis immediately before the URL.
+        const open = (all.slice(0, at + pre.length).match(/_+$/) || [''])[0].length;
+        const close = Math.min(open, (u.match(/_+$/) || [''])[0].length);
+        const tail = u.slice(u.length - close); u = u.slice(0, u.length - close);
+        return pre + put(linkHtml(u, esc(u))) + tail;
+      });
       s = s.replace(SESSION_REF, (m, id) => put(sessionHtml(id, esc(m))));
     }
     let h = esc(s)
