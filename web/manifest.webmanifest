@@ -1,17 +1,27 @@
 {
   "id": "/wizard-os-home/",
-  "name": "Wizard OS",
-  "short_name": "Wizard OS",
-  "description": "Your Wizard home: desks, apps, threads and the orb.",
+  "name": "Wizard OS Test",
+  "short_name": "Wizard Test",
+  "description": "Wizard OS test port: experimental build.",
   "start_url": "/wizard-os-home/",
   "scope": "/wizard-os-home/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#05030c",
-  "theme_color": "#05030c",
+  "background_color": "#0B0A10",
+  "theme_color": "#0B0A10",
   "prefer_related_applications": false,
   "icons": [
-    { "src": "/wizard-os-home/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/wizard-os-home/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "/wizard-os-home/icon-192.png?v=lab1",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/wizard-os-home/icon-512.png?v=lab1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }
