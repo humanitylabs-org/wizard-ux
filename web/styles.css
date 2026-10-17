@@ -847,3 +847,7 @@ html[data-shell="phone"] .tiles:not(.has-full) { left: 0; right: 0; top: calc(va
 html[data-shell="phone"] .tiles:not(.has-full) .win { border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; }
 html[data-shell="phone"] .tiles:not(.has-full) .win.solo { border-top: 0; border-bottom: 0; border-radius: 0 0 22px 22px; }
 html[data-shell="phone"] .tiles:not(.has-full) .win.focus { box-shadow: inset 0 0 0 1px rgba(185, 155, 255, .5); }
+/* One view: no resize control; Chats needs no title bar (its own header names the thread), other apps keep theirs for ✕. */
+html[data-shell="phone"] .win .wb[data-wact="full"] { display: none; }
+html[data-shell="phone"] .tiles:not(.has-full) .win.solo.app-chats > .wbar { display: none; }
+html[data-shell="phone"] .tiles:not(.has-full) .win.solo { border-radius: 0; }
