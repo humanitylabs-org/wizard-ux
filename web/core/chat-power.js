@@ -132,7 +132,7 @@ window.WosChatPower = function chatPower(A) {
     const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
     return `<button type="button" class="ch-model${ag ? ' agent' : ''}" data-chmodel aria-label="Model: ${esc(full)}. Change model" title="${esc(cur?.model || '')}">${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
-  /* Opinionated (phone): a three-position slide switch (Opus · Astra · Sol) at the bottom, drag or tap; ⋯ opens every model. */
+  /* Opinionated: a shared three-position switch (Opus · Astra · Sol), drag or tap; ⋯ opens every model. */
   const SW_NAMES = ['Opus', 'Astra', 'Sol'];
   function switchOpts(w, s) {
     const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
