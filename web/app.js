@@ -783,6 +783,14 @@
     if (bg) we.style.setProperty('--frame-bg', bg); else we.style.removeProperty('--frame-bg');
     if (top) we.style.setProperty('--frame-top', top); else we.style.removeProperty('--frame-top');
   }
+  /* Phone: Back to the chat list lives bottom-left in the dock, under the thumb, whenever a main-agent thread is open. */
+  function syncDockBack() {
+    const b = document.getElementById('dockBack'); if (!b) return;
+    const w = W[desks[idx]?.focus], on = !sheet && mainChats(w) && !!w.thread;
+    b.hidden = !on; device.classList.toggle('dock-back-on', on);
+  }
+  document.getElementById('dockBack')?.addEventListener('click', e => { e.stopPropagation(); const w = W[desks[idx]?.focus]; if (mainChats(w) && w.thread) { vib(8); CHATS.threadBack(w); syncDockBack(); } });
+  setInterval(syncDockBack, 400);
   function syncImmersive() {
     const d = desks[idx], w = d && d.full && d.focus ? W[d.focus] : null, on = !!w;
     FIELDS?.refresh();
