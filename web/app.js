@@ -1883,11 +1883,11 @@
       const nativePin = saved?.conversation;
       if (!snap.meetingEventId && nativePin && V.target == null && !V.replyTo && V.kind !== 'command') snap.conversation = nativePin; // old token fails closed after shell reload
       else if (!hadSnap) snap.conversation = null; // never infer a recovered native destination from today's focus
-      if (!snap.conversation && !snap.route) {
+      if (!snap.conversation && !(snap.route?.model&&snap.route?.provider)) {
         const pin = V.replyTo || (snap.view?.thread ? { wid: snap.view.id, sid: snap.view.thread } : null);
         snap.route = (!hadSnap && window.WosModels.voiceRoute(id)) || CHATS.modelRoute(pin?.wid, pin?.sid || '');
       }
-      if (!snap.conversation && (!snap.route?.model || !snap.route?.provider)) throw new Error('Choose a model before sending');
+      if (!snap.conversation && !(snap.route?.model&&snap.route?.provider)) { snap.route = null; window.WosModels.load?.(); throw new Error('Choose a model before sending'); }
       if (!snap.conversation) saveVoiceRoute(id, snap.route); V.snap = snap;
     } catch (e) {
       // The native file remains on disk; no claim, transcription or inference happens on an uncertain route.
@@ -2114,8 +2114,8 @@
     parking=true;
     try{
       if(V.files.some(f=>f.uploading)||CHATS.composerBusy(V.replyTo.wid,V.replyTo.sid))throw Error('Wait for attachments before borrowing');
-      V.snap ||= sendSnap();V.snap.route ||= CHATS.modelRoute(V.replyTo.wid,V.replyTo.sid);
-      if(!V.snap.route)throw Error('Choose a model before parking the reply');
+      V.snap ||= sendSnap();if(!(V.snap.route?.model&&V.snap.route?.provider))V.snap.route=CHATS.modelRoute(V.replyTo.wid,V.replyTo.sid);
+      if(!(V.snap.route?.model&&V.snap.route?.provider)){V.snap.route=null;throw Error('Choose a model before parking the reply');}
       let parkedNativeId=null;
       if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const meta=JSON.parse(DEV().recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
       if(V.rec && V.rec.state!=='inactive')await new Promise(resolve=>{V.rec.onstop=resolve;V.rec.stop();});
@@ -2399,8 +2399,10 @@
     try {
       const pin = sealAt || (V.snap.view?.thread ? { wid: V.snap.view.id, sid: V.snap.view.thread } : null);
       if (!V.snap.conversation) {
-        V.snap.route ||= V.snap.general ? CHATS.modelRoute() : CHATS.modelRoute(pin?.wid, pin?.sid || '');
-        if (!V.snap.route) { toast('!', 'Choose a model before sending', 2200); return; }
+        // A route missing its provider (catalogue still loading) was never sent; each Send tap re-resolves it,
+        // so a model the owner picks afterwards takes effect instead of the stale half-route.
+        if (!(V.snap.route?.model&&V.snap.route?.provider)) V.snap.route = V.snap.general ? CHATS.modelRoute() : CHATS.modelRoute(pin?.wid, pin?.sid || '');
+        if (!(V.snap.route?.model&&V.snap.route?.provider)) { V.snap.route = null; window.WosModels.load?.(); toast('!', 'Choose a model before sending', 2200); return; }
         if (V.native) saveVoiceRoute(V.native, V.snap.route);
       }
     } catch (e) { toast('!', String(e.message || e), 2200); return; }

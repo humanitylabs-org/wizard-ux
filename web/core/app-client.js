@@ -85,8 +85,11 @@
     history.pushState = wrappedPush; history.replaceState = wrappedReplace;
     const pop = e => { const mark = e.state?.__wizardApp; if (mark?.id === id) index = mark.index; else index = 0; pending = false; };
     addEventListener('popstate', pop);
-    const unregister = register({ canGoBack: () => !pending && !isRoot() && index > 0,
-      back: () => { if (pending || isRoot() || index <= 0) return false; pending = true; history.back(); return true; } });
+    // A traversal already admitted by this adapter still owns Back until its
+    // popstate arrives. Reporting root while it is pending lets a rapid second
+    // hardware callback collapse fullscreen or send the shell Home.
+    const unregister = register({ canGoBack: () => pending || (!isRoot() && index > 0),
+      back: () => { if (pending) return true; if (isRoot() || index <= 0) return false; pending = true; history.back(); return true; } });
     return () => { unregister(); removeEventListener('popstate', pop); if (history.pushState === wrappedPush) history.pushState = priorPush; if (history.replaceState === wrappedReplace) history.replaceState = priorReplace; if (standaloneIsRoot === isRoot) standaloneIsRoot = null; };
   }
   const listen = (set, fn, value) => { if (typeof fn !== 'function') throw new TypeError('Subscriber must be a function'); set.add(fn); if (value) fn(value); return () => set.delete(fn); };
