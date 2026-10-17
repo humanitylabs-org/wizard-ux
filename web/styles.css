@@ -850,3 +850,4 @@ html:not([data-shell="desktop"]) .imm-edge i { bottom: 3px; }
 .dock-back:active { transform: translateY(calc(-50% - var(--safe-b-low, 0px) / 2)) scale(.92); background: color-mix(in srgb, var(--ink) 16%, transparent); }
 .device.dock-back-on #dotsL { visibility: hidden; }
 html[data-shell="phone"] .device.dock-back-on .ch-bbar .ch-back2 { display: none; }
+.dock-back[hidden] { display: none !important; }
