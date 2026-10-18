@@ -3,13 +3,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 const read = p => fs.readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-function harness(options) {
+function harness(options, cur) {
   const handlers = {}, c = {}, w = { id: 'w', thread: '__new__' }, renders = [];
-  const M = { ready: true, options, visible: () => options, defaultOption: () => options[0], short: x => x, currentRoute: () => ({model: 'other-model', provider: 'other'}) };
+  const PRIMARY = [{ family: 'claude:opus', name: 'Opus' }, { family: 'gpt:astra', name: 'Astra' }, { family: 'gpt:sol', name: 'Sol' }];
+  const family = v => /opus/.test(v) ? 'claude:opus' : /astra/.test(v) ? 'gpt:astra' : /-sol$/.test(v) ? 'gpt:sol' : null;
+  const M = { ready: true, options, PRIMARY, family, visible: () => options, defaultOption: () => options[0], short: x => x, currentRoute: () => ({model: 'other-model', provider: 'other'}) };
+  const toasts = [];
   const ctx = { window: { WizCore: { esc: String, clip: String }, WizLive: { session: () => null }, WosModels: M }, document: { addEventListener: (k, fn) => handlers[k] = fn } };
   vm.runInNewContext(read('web/core/chat-power.js'), ctx);
-  const power = ctx.window.WosChatPower({ ch: () => c, H: { win: () => w }, CH: { w: c }, toast() {}, renderThreadNow: x => renders.push(x.id) });
-  return { power, c, w, handlers, renders };
+  const power = ctx.window.WosChatPower({ ch: () => c, H: { win: () => w }, CH: { w: c }, toast: (...a) => toasts.push(a), renderThreadNow: x => renders.push(x.id) });
+  if (cur) c.newModel = cur;
+  return { power, c, w, handlers, renders, toasts };
 }
 const options = [{ value: 'claude-opus-4', provider: 'anthropic', name: 'Opus' }, { value: 'gpt-6-astra', provider: 'openai', name: 'Astra' }, { value: 'gpt-6-sol', provider: 'openai', name: 'Sol' }];
 test('three primary slots plus full picker render; unavailable models are disabled, other current routes remain visible', () => {
@@ -27,4 +31,18 @@ test('desktop title remains slim and the model/actions bar is immediately before
   const source = read('web/core/chats.js');
   assert.match(source, /\$\{dbar\}<form class="ch-compose/); assert.match(source, /class="ch-dbar"/);
   assert.match(read('web/core/chats.css'), /\.ch-dbar \.ms/);
+});
+test('the switch slots and the picker read one shared PRIMARY list', () => {
+  const power = read('web/core/chat-power.js'), models = read('web/core/chat-models.js');
+  assert.doesNotMatch(power, /SW_NAMES|\/astra\/i/); assert.match(power, /M\.PRIMARY/); assert.match(models, /const PRIMARY = \[/); assert.match(models, /PRIMARY, family/);
+});
+test('tapping the slot that is already selected does nothing (no toast, no re-render, no route change)', async () => {
+  const { handlers, c, renders, toasts } = harness(options, { model: 'gpt-6-sol', provider: 'openai' });
+  const b = { disabled: false, dataset: { msi: '2' }, closest: () => ({ dataset: { mswid: 'w' } }) };
+  await handlers.click({ detail: 0, target: { closest: () => b } });
+  assert.equal(c.newModel.model, 'gpt-6-sol'); assert.deepEqual(renders, []); assert.deepEqual(toasts, []);
+});
+test('phone puts the switch in its own row above the composer, never beside the title', () => {
+  const source = read('web/core/chats.js');
+  assert.match(source, /ch-dbar ch-pbar/); assert.match(source, /const chip = DESK \? '' : isSw \? '' : sw/);
 });
