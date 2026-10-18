@@ -113,9 +113,15 @@ try:
     emu.sx('input tap %d %d' % (sx, sy)); emu.sx('input keyevent KEYCODE_MOVE_END')
     if old: emu.sx('input keyevent ' + ' '.join(['KEYCODE_DEL'] * len(old)))
     emu.sx('input text wisdom'); time.sleep(1); emu.sx('input keyevent KEYCODE_BACK'); time.sleep(0.8)
+    # The results sheet re-lays out after the keyboard closes (more groups appear above the app row):
+    # wait until the Wisdom app row reports the same position twice in a row before pressing it.
+    row, prev = None, None
+    for _ in range(12):
+        time.sleep(1.2); row = bounds(emu.ui(), 'Wisdom', app_row=True)
+        if row and row == prev: break
+        prev = row
     cap('02-apps-search')
-    row = bounds(emu.ui(), 'Wisdom', app_row=True)
-    check('Wisdom row in the real Apps menu', row is not None, row)
+    check('Wisdom row in the real Apps menu (stable position)', row is not None and row == prev, (row, prev))
     emu.sx('input swipe %d %d %d %d 650' % (row[0], row[1], row[0], row[1])); time.sleep(0.6)
     cap('03-long-press-sheet')
     sheet = ' '.join(labels(emu.ui()))
@@ -136,7 +142,8 @@ try:
         if icon: break
         emu.sx('input swipe 900 1100 150 1100 250'); time.sleep(1)
     cap('06-launcher-home')
-    check('Wisdom icon on the Android home screen', icon is not None, icon)
+    if not check('Wisdom icon on the Android home screen', icon is not None, icon):
+        raise AssertionError('no pinned Wisdom icon on the launcher')
     emu.sx('input tap %d %d' % icon)
     check('shortcut opens the app-only task (AppSessionActivity)', wait(lambda: '.AppSessionActivity' in emu.top(), 30), emu.top())
     time.sleep(6); xml = emu.ui(); cap('07-pinned-wisdom')
