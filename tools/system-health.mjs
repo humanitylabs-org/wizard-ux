@@ -28,7 +28,8 @@ export function cleanHealth(raw, now = Date.now()) {
     if (!KEY_RE.test(key) || checks.some(c => c.key === key)) continue;
     if (READINGS.has(key)) continue;
     const status = STATUS.has(it.status) ? it.status : 'warn';
-    if (QUIET_UNLESS_PROBLEM.has(key) && status === 'ok') continue;
+    // quiet: the watchdog marks rows the owner only needs to see while something is wrong (sign-ins, voice, forecasts).
+    if ((it.quiet === true || QUIET_UNLESS_PROBLEM.has(key)) && status === 'ok') continue;
     checks.push({
       key,
       label: clip(it.label, 40) || key,
