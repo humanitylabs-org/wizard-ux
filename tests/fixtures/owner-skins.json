@@ -1,0 +1,11 @@
+{
+  "note": "James's skins (Nebula, Grove, Tide, Ember, Signal) and the base shell look. Update only with James's explicit approval; name it in the commit.",
+  "hashes": {
+    "base": "6b08a59778a37980",
+    "nebula": "3bd6f1bb5473f77f",
+    "grove": "7a28f6d0e952b2d9",
+    "tide": "9e70f67f23e47f15",
+    "ember": "47178b9243aa389a",
+    "signal": "e71f86e31185108c"
+  }
+}
