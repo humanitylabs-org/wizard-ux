@@ -399,6 +399,7 @@
   // small count. The current desk is the orb. Each is a thumb-sized button, so one tap jumps there.
   const deskSigil = i => window.WizCore.workspaceNav.icon(desks[i], W, winApp);
   function renderDots() {
+    if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
     const L = []; for (let i = Math.max(0, idx - 3); i < idx; i++) L.push(i);
     const R = []; for (let i = idx + 1; i <= Math.min(desks.length - 1, idx + 3); i++) R.push(i);
@@ -1858,10 +1859,15 @@
     const m = [...L.needs.map(() => 'var(--amber)'), ...L.working.map(() => 'var(--violet-2)'), ...L.ready.map(() => 'var(--green)')].slice(0, 8);
     $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
-    const badge = LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0; // Opinionated: Ready count, not unread
-    $('#orbBadge').textContent = badge > 99 ? '99+' : String(badge || '');
-    $('#orbBadge').hidden = !badge;
+    // Opinionated: Ready count, not unread. It belongs to Chats; the orb shows the count of the desk in view.
+    window.WizCore.workspaceNav.setCount(CHATS_APP.id, LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0);
+    paintOrbBadge();
   }
+  function paintOrbBadge() {
+    const N = window.WizCore.workspaceNav, n = desks[idx] ? N.deskCount(desks[idx], W, winApp) : 0;
+    $('#orbBadge').textContent = n ? N.fmt(n) : ''; $('#orbBadge').hidden = !n;
+  }
+  addEventListener('wizard:app-counts', () => { renderDots(); paintOrbBadge(); });
   // One place reacts to live changes: reads anywhere, new replies, finished runs.
   if (LIVE) LIVE.onChange(() => {
     renderMoons(); refreshHome(); markVisibleThreadsSeen(); refreshRecStrips();
