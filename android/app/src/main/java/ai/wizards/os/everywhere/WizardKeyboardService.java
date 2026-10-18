@@ -335,6 +335,16 @@ public class WizardKeyboardService extends AccessibilityService {
         return text;
     }
 
+    /** Package of the app whose text field has the cursor (or of the active window), "" when unknown. */
+    public String targetPackage() {
+        try {
+            AccessibilityNodeInfo n = findEditable();
+            CharSequence p = n == null ? null : n.getPackageName();
+            if (p == null) { AccessibilityNodeInfo root = getRootInActiveWindow(); p = root == null ? null : root.getPackageName(); }
+            return p == null ? "" : p.toString();
+        } catch (Exception e) { return ""; }
+    }
+
     private AccessibilityNodeInfo findEditable() {
         AccessibilityNodeInfo root = getRootInActiveWindow();
         AccessibilityNodeInfo f = root == null ? null : root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
