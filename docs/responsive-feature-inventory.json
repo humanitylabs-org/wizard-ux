@@ -103,7 +103,7 @@
     },
     "core/swipe-strip.js": {
       "shell": "phone",
-      "classification": "touch-only",
+      "classification": "adapter",
       "reason": "Finger swipe between chat list, thread and the desk a thread opened; desktop has no swipe and uses windows/side panels."
     }
   },
@@ -418,7 +418,10 @@
       "note": "Direct entrypoint import"
     },
     "core/skin-frame.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared validated skin frame foundations, loaded before skin composition"
     },
     "core/settings.js": {
@@ -551,6 +554,12 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/swipe-strip.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Phone touch adapter: finger swipe list ⇄ thread ⇄ the desk a thread opened."
     }
   }
 }
