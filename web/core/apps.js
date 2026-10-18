@@ -38,6 +38,8 @@
     const hasHistory = !!(window.WIZ_DATA && Array.isArray(window.WIZ_DATA.threads) && window.WIZ_DATA.threads.length);
     return list.filter(a => {
       if (a.kind === 'view' && a.view !== 'inbox' && !hasHistory) return false;
+      // Phone: no Inbox tile; notifications are the Chats list ("open inbox" still opens Chats).
+      if (shell !== 'desktop' && a.view === 'inbox') return false;
       if (a.id === 'side-button' && !nativeSide) return false;
       if (a.id === 'usuals' && !(window.WizardOSNative && typeof window.WizardOSNative.usuals === 'function')) return false;
       if (shell === 'desktop') return a.kind !== 'native' && !(a.kind === 'view' && a.view !== 'inbox');

@@ -12,6 +12,7 @@ test('exact WAM identity and commit opens staged Movies, never the daily copy',(
 test('host Calendar alias requires reviewed repo + canonical shell path; Music is exact ID',()=>{
  const shell=[{id:'calendar',url:'/wizard-calendar/'},{id:'wizard-music',url:'/wizard-music/'}];
  assert.equal(resolveInstalled({id:'wizard-calendar',repo:'humanitylabs-org/wizard-calendar'},{wam:[],shell},[]).id,'calendar');
+ assert.equal(resolveInstalled({id:'android-apps',repo:'humanitylabs-org/android-apps'},{wam:[],shell:[{id:'android-apps',url:'/android-apps/'}]},[]).id,'android-apps'); // host service registered via launcher.json
  assert.equal(resolveInstalled({id:'wizard-music',repo:'humanitylabs-org/wizard-music'},{wam:[],shell},[]).id,'wizard-music');
  assert.equal(resolveInstalled({id:'wizard-calendar',repo:'wrong/repo'},{wam:[],shell},[]).conflict,true);
  assert.equal(resolveInstalled({id:'wizard-music',repo:'wrong/repo'},{wam:[],shell},[]).conflict,true);

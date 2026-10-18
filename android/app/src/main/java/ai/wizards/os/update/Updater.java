@@ -154,7 +154,6 @@ public final class Updater {
         io.execute(() -> {
             try {
                 String feed = feed(app);
-                // (Under the shell's safety net AppState.origin is the old name, so a fix can still arrive.)
                 JSONObject j = Http.json("GET", feed + "?t=" + System.currentTimeMillis(), AppState.origin(app), null, null);
                 UpdatePolicy.Release r = UpdatePolicy.parse(j, feed);
                 if (r == null) { set("error", "message", "The update feed is unreadable"); return; }

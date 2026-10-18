@@ -29,6 +29,7 @@ import urllib.request
 P = pathlib.Path
 BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
 APK = P(sys.argv[1]); NEXT = P(sys.argv[2]); WEB = P(sys.argv[3])
+UXV = WEB / 'ux-version.txt'; UXV0 = [None]  # web build id the banner watches (#22b)
 PKG = 'ai.wizards.os.qa'
 job = P(sys.argv[4]) if len(sys.argv) > 4 else BASE / 'qa' / ('wos-native-' + uuid.uuid4().hex[:8])
 job.mkdir(parents=True, exist_ok=True)
@@ -37,6 +38,7 @@ env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libe
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
 env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5702; S = 'emulator-%d' % PORT; DEVTOOLS = 9353; FAKE = 18787
+FAKE = int(os.environ.get('WOS_QA_FAKE_PORT') or FAKE)  # move the fake Wizard off a port the Mac already holds
 ORIGIN = 'http://localhost:%d' % FAKE
 res = []; receipt = {'checks': [], 'job': str(job)}
 
@@ -129,6 +131,11 @@ class Fake(http.server.BaseHTTPRequestHandler):
         if u == '/reports/wizard-os/wizard-os-qanext.apk':
             ST['apk_gets'] += 1
             return self._send(200, NEXT.read_bytes(), 'application/vnd.android.package-archive')
+        # Since 0.9.10 every send seals a confirmed model route (outbox.js refuses one without it); serve the
+        # same synthetic catalogue as qa_orb_integrated / qa-playwright-thales.
+        if u == '/wizard/hermes/api/model/options':
+            return self._json(200, {'model': 'qa-model', 'provider': 'qa-provider', 'providers': [
+                {'slug': 'qa-provider', 'name': 'Synthetic QA provider', 'authenticated': True, 'is_current': True, 'models': ['qa-model']}]})
         if u == '/wizard/hermes/api/sessions': return self._json(200, {'data': self._sessions(), 'has_more': False})
         m = re.match(r'^/wizard/hermes/api/sessions/([^/]+)/messages$', u)
         if m:
@@ -147,6 +154,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
             return self._json(200, {'run_id': rid, 'status': 'running'})
         m = re.match(r'^/wizard/files/([^/]+)/content$', u)
         if m and m.group(1) in FILES: return self._send(200, FILES[m.group(1)][1], FILES[m.group(1)][0])
+        if u == '/wizard/v1/bootstrap': return self._json(200, {'capabilities': {'resumable_uploads': False}})
         if u == '/wizard/thread-seen': return self._json(200, {'state': {'initializedAt': int(time.time() * 1000), 'threads': {}}})
         if u == '/wizard/thread-dispositions': return self._json(200, {'state': {}})
         return self._json(200, {})
@@ -277,6 +285,8 @@ def connect(secs=40):
             pg = Page()
             pg.ev("new Promise((r, j) => { const t0 = Date.now(); const t = () => (window.__wos && window.__wos.live && window.__wos.live.ok && window.WosDevice && window.WosDevice.ready) ? r(true) : Date.now() - t0 > 30000 ? j(new Error('shell not ready')) : setTimeout(t, 250); t(); })")
             pg.ev("(() => { const c = document.querySelector('#coach'); if (c && !c.hidden) document.querySelector('#coachGo')?.click(); return true; })()")
+            # A fresh install opens the first-run practice tour (0.9.3+), which by design swallows orb taps: finish it.
+            pg.ev("(() => { try { localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} try { window.WosTour?.finish('qa'); } catch (e) {} return true; })()")
             return pg
         except Exception as e:
             err = e; time.sleep(1.5)
@@ -294,6 +304,17 @@ def notifs(): return sx('dumpsys notification --noredact | grep -E "pkg=%s|andro
 def front(): return PKG in top()
 def bring_front(): sx('am start -W -n %s/ai.wizards.os.MainActivity' % PKG); time.sleep(2)
 def runs_n(): return len(ST['runs'])
+
+
+def native_sheet_send(secs=12):
+    """Since 0.9.15 a share opens the native 'Send to Wizard' sheet first. This fake Wizard has no resumable
+    uploads, so its Send hands the files to the in-app Share sheet (the previous route) that #20 checks."""
+    xml = wait(lambda: (lambda x: x if 'Send to Wizard' in x else '')(ui()), secs, 1)
+    if not xml: return ''
+    time.sleep(3)  # let the sheet's background /wizard/v1/bootstrap refresh learn resumable_uploads=false
+    hit = tap_text(r'^Send$', ui())
+    time.sleep(3)
+    return ('native sheet: ' + (hit or 'no Send')) + (' · qa-share' if 'qa-share' in xml else '')
 FOREIGN = []
 def sweep():
     """Every resource this page has loaded that isn't the fake Wizard (the real one must never be touched)."""
@@ -309,7 +330,7 @@ with (BASE / 'worker.lock').open('a') as lock:
     fcntl.flock(lock, fcntl.LOCK_EX)
     try:
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'np', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
-        # Dead DNS: nothing on the emulator can resolve private.wizard001.com (QA must never reach the real Wizard).
+        # Dead DNS: nothing on the emulator can resolve the real Wizard's name (QA must never reach it).
         em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'np', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect', '-dns-server', '10.0.2.250'],
                               env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)
         for _ in range(140):
@@ -529,6 +550,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         if not wait(front, 6):
             sx("am start -n %s/ai.wizards.os.share.ShareActivity -a android.intent.action.SEND -t image/png --eu android.intent.extra.STREAM %s --es android.intent.extra.TEXT 'Shared from the QA gallery' --grant-read-uri-permission" % (PKG, media))
             time.sleep(3)
+        nat = native_sheet_send()
+        check('#20 the native Send to Wizard sheet shows the image and hands off to Wizard OS', 'qa-share' in nat and 'Send' in nat and wait(front, 8), (nat, top()[:100]))
         connect()
         sheet = wait(lambda: pg.ev("(() => { const e = document.querySelector('[data-dv=share]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()"), 15)
         check('#20 Wizard OS opens the Share sheet with the image and text', sheet and 'Share to Wizard' in sheet and 'qa-share' in sheet and pg.ev("document.querySelector('[data-dv=share] textarea')?.value || ''").startswith('Shared from'), sheet)
@@ -542,6 +565,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         if not front():
             tap_text(r'^Wizard$'); time.sleep(1.5)
             if not wait(front, 6): tap_text(r'^Just once$|^Always$'); time.sleep(2)
+        native_sheet_send()
         connect()
         sheet2 = wait(lambda: pg.ev("(() => { const e = document.querySelector('[data-dv=share]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()"), 15)
         check('#20 sharing again opens a fresh Share sheet with the image', sheet2 and 'qa-share' in sheet2, (sheet2, logs('WizardShare', '.')))
@@ -586,10 +610,16 @@ with (BASE / 'worker.lock').open('a') as lock:
         pg.ev("window.__wos.openWizardThread('qa_old_thread')"); time.sleep(2)
         pg.ev("(() => { const t = document.querySelector('.win.focus .ch-compose textarea') || document.querySelector('.ch-compose textarea'); t.value = 'Half-typed draft that must survive'; t.dispatchEvent(new Event('input', { bubbles: true })); return true; })()")
         pg.ev("window.WosDevice.checkWeb(true)"); time.sleep(2)
-        os.utime(WEB / 'app.js', None)  # "deploy": app.js changes on the server
+        # "deploy": app.js changes on the server. Since f88b430 (14 Oct) the banner reads web/ux-version.txt (the
+        # git tree id of web/, rewritten by the repo hooks) before falling back to asset headers, so a deploy must
+        # flip that file too; the original is restored in the finally block.
+        os.utime(WEB / 'app.js', None)
+        if UXV.exists():
+            UXV0[0] = UXV.read_text(); UXV.write_text(hashlib.sha1(b'qa-native-parity-deploy').hexdigest() + '\n')
         time.sleep(1.2); pg.ev("window.WosDevice.checkWeb(true)"); time.sleep(2)
         bn = pg.ev("(() => { const e = document.querySelector('#dvWeb'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()")
-        check('#22 web update detected → "Wizard OS was updated · Reload"', 'updated' in (bn or ''), bn)
+        # No change list → "Wizard OS was updated"; with ux-changes.json → "Update ready · <thread>". Both end in Reload.
+        check('#22 web update detected → "Wizard OS was updated / Update ready · Reload"', ('was updated' in (bn or '') or 'Update ready' in (bn or '')) and 'Reload' in (bn or ''), bn)
         shot('22b-web-updated')
         sweep(); pg.ev("window.__qaMark = 1"); pg.tap('#dvWeb [data-web=go]'); time.sleep(4)
         connect()
@@ -652,6 +682,9 @@ with (BASE / 'worker.lock').open('a') as lock:
         writes = [l for l in ST['log'] if not l.startswith('GET')]
         receipt['fake_writes'] = writes
     finally:
+        if UXV0[0] is not None:
+            try: UXV.write_text(UXV0[0])
+            except Exception: pass
         try:
             if pg: pg.close()
         except Exception: pass
