@@ -57,7 +57,8 @@ public class RecorderService extends Service {
     private static volatile String source = "";
     private static volatile String borrowEvent;
     private static volatile Listener listener;
-    private static RecorderService live;
+    private static volatile RecorderService live;
+    public static boolean serviceAlive() { return live != null; }
 
     public interface Listener { void onRecorderEvent(String type, String id); }
 

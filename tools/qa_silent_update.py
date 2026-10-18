@@ -279,8 +279,13 @@ def native_id(): return pg.ev("window.__wos.V && window.__wos.V.native || ''")
 
 
 em = None
-with (BASE / 'worker.lock').open('a') as lock:
-    fcntl.flock(lock, fcntl.LOCK_EX)
+_inherited = os.environ.get('WIZARD_HEAVY_LOCK_FD')
+_lockfile = os.fdopen(int(_inherited), 'a', closefd=False) if _inherited else (BASE / 'worker.lock').open('a')
+with _lockfile as lock:
+    if _inherited:
+        expected, actual = (BASE / 'worker.lock').stat(), os.fstat(lock.fileno())
+        if (expected.st_dev, expected.st_ino) != (actual.st_dev, actual.st_ino): raise SystemExit('inherited lock identity mismatch')
+    fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if _inherited else 0))
     try:
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'su', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
         em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'su', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect', '-dns-server', '10.0.2.250'],
@@ -442,6 +447,15 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('R: while recording it is deferred, nothing installs', d and vcode() == NEXT_VC and lg.count('DEFER') >= 2 and 'session' not in logs('session'), (vcode(), lg[-400:]))
         bring_front(); connect()
         check('R: the take is still recording after the deferral', native_id() == rid, (native_id(), rid))
+        check('R: native deferred state identifies a genuine take', pg.ev("JSON.parse(WizardDevice.updateState()).reason") == 'take')
+        pg.ev("WizardDevice.updateInstall()"); time.sleep(3)
+        check('R: explicit native tap still cannot install over a genuine take',
+              vcode() == NEXT_VC and native_id() == rid and pg.ev("JSON.parse(WizardDevice.updateState()).state") == 'deferred')
+        pg.ev("WizardDevice.recPause(true)"); time.sleep(1)
+        pg.ev("WizardDevice.updateInstall()"); time.sleep(2)
+        check('R: paused native take also survives an explicit install tap',
+              vcode() == NEXT_VC and native_id() == rid and pg.ev("JSON.parse(WizardDevice.updateState()).reason") == 'take')
+        pg.ev("WizardDevice.recPause(false)")
         shot('R1-deferred-while-recording')
         db = banner()
         pg.ev("window.__wos.cancelVoice && window.__wos.cancelVoice(true)"); time.sleep(2)
@@ -470,6 +484,36 @@ with (BASE / 'worker.lock').open('a') as lock:
         except Exception as e:
             check('R: the silently-updated app (%d) starts and loads Wizard OS' % LATER_VC, False, e)
 
+        # Each simulated non-take hold gets a fresh QA install, not a fabricated policy-only result.
+        # The release APK has no hold-fixture hook. Permanent-signer upgrade is covered by qa_upgrade.py.
+        for reason in ('music', 'mic'):
+            ST['feed'] = None
+            if pg: pg.close(); pg = None
+            sh(ADB, '-s', S, 'uninstall', PKG)
+            out = sh(ADB, '-s', S, 'install', NEXT)
+            check(reason + ': fresh next fixture installs', 'Success' in out and vcode() == NEXT_VC, out)
+            stage()
+            sx('pm grant %s android.permission.RECORD_AUDIO' % PKG)
+            sx('pm grant %s android.permission.POST_NOTIFICATIONS' % PKG)
+            sx('appops set %s REQUEST_INSTALL_PACKAGES allow' % PKG)
+            runas('echo %s > files/qa_update_hold.txt' % reason)
+            bring_front(); connect()
+            pg.ev("window.WosTour?.finish('qa')")
+            home(); sx('logcat -c'); feed('later'); run_job()
+            deferred_hold = wait(lambda: 'DEFER' in logs('step'), 60, 1)
+            time.sleep(22)
+            check(reason + ': unattended update stays deferred through a retry',
+                  deferred_hold and vcode() == NEXT_VC and logs('step', 10).count('DEFER') >= 2)
+            bring_front(); connect()
+            state = pg.ev('JSON.parse(WizardDevice.updateState())')
+            check(reason + ': native JSON carries exact hold reason', state.get('state') == 'deferred' and state.get('reason') == reason, state)
+            check(reason + ': banner offers Install now', 'Install now' in banner(), banner())
+            shot('hold-' + reason)
+            tapped = pg.tap('#dvUpdate [data-upd=go]')
+            installed = wait(lambda: vcode() == LATER_VC, 90, 1)
+            check(reason + ': one Install now tap installs despite the hold', tapped and installed, logs('step|session|status', 12))
+            check(reason + ': updater actually commits a PackageInstaller session', 'session' in logs('session', 10))
+        check('no agent run was created by updater QA', not any('/runs' in x and x.startswith('POST ') for x in ST['log']))
         crashed = sx('logcat -d -b crash')
         check('no crashes', 'FATAL EXCEPTION' not in crashed, crashed[:300])
         receipt['wizard_log'] = sx('logcat -d -s WizardUpdate:*')[-6000:]
@@ -486,3 +530,4 @@ with (BASE / 'worker.lock').open('a') as lock:
                        real_wizard_requests=[l for l in ST['log'] if 'wizard001' in l])
         (job / 'receipt.json').write_text(json.dumps(receipt, indent=1, default=str))
 print('%d/%d passed · %s' % (sum(res), len(res), job))
+sys.exit(0 if res and all(res) else 1)

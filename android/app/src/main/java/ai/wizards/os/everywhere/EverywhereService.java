@@ -97,6 +97,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     /** Hold this long (still) for the orb's menu. A little longer than Android's 400 ms so a slow tap still talks. */
     static final int LONG_PRESS_MS = 450;
 
+    private static volatile EverywhereService liveService;
+    public static boolean serviceAlive() { return liveService != null; }
     private static boolean appInFront;
     /** The side-button surface is showing: it has its own orb, so the floating one steps aside. */
     private static boolean surfaceInFront;
@@ -324,6 +326,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     @Override
     public void onCreate() {
         super.onCreate();
+        liveService = this;
         ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers still unsent from an earlier run
         wm = getSystemService(WindowManager.class);
         density = getResources().getDisplayMetrics().density;
@@ -432,6 +435,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (screen != null) screen.close();
         detach();
         if (web != null) { web.destroy(); web = null; }
+        liveService = null;
         super.onDestroy();
     }
 

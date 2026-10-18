@@ -46,7 +46,8 @@ final class VoiceCapture {
         default void onPaused(boolean paused) { }
     }
 
-    private static VoiceCapture instance;
+    private static volatile VoiceCapture instance;
+    static boolean captureAlive() { VoiceCapture c = instance; return c != null && (c.listening || c.loan != null); }
 
     static synchronized VoiceCapture get(Context c) {
         if (instance == null) instance = new VoiceCapture(c.getApplicationContext());
@@ -62,7 +63,7 @@ final class VoiceCapture {
     private File recording;
     private File qaAudio;
     private SilenceDetector detector;
-    private boolean listening;
+    private volatile boolean listening;
     private boolean sending;
     private boolean paused;
     private final android.app.KeyguardManager keyguard;
@@ -436,7 +437,7 @@ final class VoiceCapture {
 
     /* ---------------------------------------------------------------- meeting microphone loan */
 
-    private ai.wizards.os.mizel.MicLoan loan;
+    private volatile ai.wizards.os.mizel.MicLoan loan;
     private String takeId;
     private String meetingEvent = "";
 
