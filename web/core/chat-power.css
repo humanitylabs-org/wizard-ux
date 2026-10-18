@@ -159,5 +159,5 @@
  * outside the textarea's scrolling area. Text can never run under it. */
 .ch-compose .ch-field.lab-row { flex-direction: column; padding-bottom: 24px; border-radius: 20px; border: 1px solid var(--line-2); background: rgba(205, 190, 255, .06); }
 .ch-compose .ch-field.lab-row:focus-within { border-color: rgba(185, 155, 255, .6); }
-.ch-compose .ch-field.lab-row > textarea { border: 0; background: transparent; border-radius: 20px 20px 0 0; padding-bottom: 2px; }
+.ch-compose .ch-field.lab-row > textarea { flex: none; border: 0; background: transparent; border-radius: 20px 20px 0 0; padding-bottom: 2px; }
 .ch-compose .ch-field.lab-row > .ch-mlabel { bottom: 1px; height: 26px; }
