@@ -135,6 +135,12 @@ window.WosChatPower = function chatPower(A) {
     const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
     return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv ? AG.lock() : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
+  /* The model label inside the message box, bottom-right (James 18 Oct: just the name, small, white; no bubble).
+   * Tapping it opens the compact model menu over the right side, just above it. */
+  function modelLabel(w, s) {
+    const chip = modelChip(w, s); if (!chip) return '';
+    return chip.replace('class="ch-model', 'class="ch-mlabel ch-model').replace(/<i aria-hidden="true">▾<\/i>/, '');
+  }
   let modelsAsked = false;
   function ensureModels() {
     if (!M || modelsAsked) return;
@@ -289,19 +295,29 @@ window.WosChatPower = function chatPower(A) {
     el.querySelectorAll('.ch-psheet').forEach(n => n.remove());
     let html = '';
     if (sheet.type === 'model') {
-      const r = M.sheetHtml({ mode: sheet.mode, cur: sheet.cur, all: sheet.all, title: '', agent: sheet.agent || null, priv: sheet.priv || null });
+      const opt = { mode: sheet.mode, cur: sheet.cur, all: sheet.all, title: '', agent: sheet.agent || null, priv: sheet.priv || null };
+      const r = sheet.pop && M.popHtml ? M.popHtml(opt) : M.sheetHtml(opt);
       sheet.list = r.list; html = r.html;
     } else if (sheet.type === 'files') {
       const tw = H.win(sheet.wid), c = ch(sheet.wid);
       html = F.panelHtml({ q: sheet.q, kind: sheet.kind, attach: !!tw?.thread, picked: (c.files || []).map(f => f.id).filter(Boolean), when: ms => `${A.KIT.time.day(ms)} ${A.KIT.time.clock(ms)}` });
     }
     el.insertAdjacentHTML('beforeend', html.replace('class="ch-sheet ', 'class="ch-sheet ch-psheet '));
+    if (sheet.pop) placePop(el);
+  }
+  // The compact menu sits on the right, its bottom edge just above the model label (whatever the composer's height).
+  function placePop(el) {
+    const pop = el.querySelector('.ch-psheet.ch-mpop'), lab = el.querySelector('.ch-mlabel'); if (!pop || !lab) return;
+    const pr = pop.getBoundingClientRect(), lr = lab.getBoundingClientRect(); if (!pr.height) return;
+    pop.style.setProperty('--mpop-b', `${Math.max(8, Math.round(pr.bottom - lr.top + 6))}px`);
+    pop.style.setProperty('--mpop-r', `${Math.max(8, Math.round(pr.right - lr.right - 6))}px`);
+    const list = pop.querySelector('.msheet-list'); if (list) list.scrollTop = list.scrollHeight; // the thumb end (current models) in view
   }
   function openSheet(o) {
     A.closeRowSheet(); closeSheet();
     sheet = o; const el = A.elOf(o.pane); paint(o.pane, el); H.overlay?.(true); A.vib(8);
   }
-  function openModels(pane, mode) {
+  function openModels(pane, mode, pop) {
     if (!M) return;
     const wid = A.owner(pane), w = H.win(wid); if (!w || !w.thread) return;
     const s = w.thread === '__new__' ? null : LIVE.session(w.thread);
@@ -309,7 +325,7 @@ window.WosChatPower = function chatPower(A) {
     const agent = agentOfWin(w, s);
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !w.agent && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
-    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv });
+    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     if (!M.ready) M.load().then(() => { if (sheet?.type === 'model') paint(sheet.pane, A.elOf(sheet.pane)); });
   }
   function openFiles(pane) {
@@ -336,7 +352,7 @@ window.WosChatPower = function chatPower(A) {
     if (sheet && sheet.pane === id) {
       if (t.closest('[data-ficlose]') || (t.closest('.ch-psheet') && !t.closest('.ch-sheet-b'))) { closeSheet(); return true; }
       if (sheet.type === 'model') {
-        if (t.closest('[data-mall]')) { sheet.all = true; paint(id, A.elOf(id)); return true; }
+        if (t.closest('[data-mall]')) { sheet.all = true; paint(id, A.elOf(id)); if (sheet.pop) { const l = A.elOf(id)?.querySelector('.ch-mpop .msheet-list'); if (l) l.scrollTop = 0; } return true; }
         const p = t.closest('[data-mpick]'); if (p) { const o = sheet.list?.[+p.dataset.mpick]; if (o) pickModel(o); return true; }
       }
       if (sheet.type === 'files') {
@@ -348,7 +364,7 @@ window.WosChatPower = function chatPower(A) {
     }
     const w = H.win(id);
     if (t.closest('[data-chfiles]')) { openFiles(id); return true; }
-    if (t.closest('[data-chmodel]')) { const ww = H.win(A.owner(id)); openModels(id, ww?.thread === '__new__' ? 'new' : 'thread'); return true; }
+    if (t.closest('[data-chmodel]')) { const ww = H.win(A.owner(id)); openModels(id, ww?.thread === '__new__' ? 'new' : 'thread', !!t.closest('.ch-mlabel')); return true; }
     if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { ch(id).follow = true; nb.scrollTo({ top: nb.scrollHeight, behavior: 'smooth' }); } return true; }
     if (t.closest('[data-chmic]')) {
       if (!w?.thread || !H.recordReply) return true;
@@ -389,6 +405,6 @@ window.WosChatPower = function chatPower(A) {
   }
   const opened = (wid, sid) => { const c = ch(wid); c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
-  return { position, latestBtn, filesBtn, workHtml, modelChip, ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  return { position, latestBtn, filesBtn, workHtml, modelChip, modelLabel, ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };
