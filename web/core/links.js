@@ -248,6 +248,7 @@
       for (const b of menu.querySelectorAll('button')) b.style.cssText = 'display:block;width:100%;text-align:left;border:0;background:none;padding:12px 10px;font:inherit;color:inherit;border-radius:8px;cursor:pointer';
       menu.querySelector('.wl-host').style.cssText = 'padding:6px 10px 4px;font-size:12px;color:#8a82a6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
       doc.body.appendChild(menu);
+      if (!isFinite(x) || !isFinite(y)) { const ar = a.getBoundingClientRect(); x = ar.left; y = ar.bottom + 6; } // no pointer position: sit under the link
       const r = menu.getBoundingClientRect(), vw = doc.documentElement.clientWidth, vh = doc.documentElement.clientHeight;
       menu.style.left = Math.max(8, Math.min(x, vw - r.width - 8)) + 'px';
       menu.style.top = Math.max(8, Math.min(y, vh - r.height - 8)) + 'px';
