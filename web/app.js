@@ -2262,7 +2262,19 @@
     }
     if (V.state !== 'idle' || !sid) return 'busy';
     const shared = window.WizAppCapture?.getState?.();
-    if (shared?.active || shared?.recording || shared?.hold) { toast('🎙', 'Microphone held by another app', 2000); return 'busy'; }
+    const pin = { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' };
+    if (shared?.active || shared?.recording || shared?.hold) {
+      // A recording meeting lends the mic exactly as it does to the orb: startVoice pauses it (WosOrbHandoff),
+      // and it resumes once this reply's take is kept. The reply pin is set once the loan is granted.
+      if (!window.WosOrbHandoff) { toast('🎙', 'Microphone held by another app', 2000); return 'none'; }
+      return Promise.resolve(startVoice('auto')).then(r => {
+        if (r === 'busy' || !['listen', 'paused'].includes(V.state)) return 'none'; // startVoice already said why
+        V.replyTo = pin;
+        if (V.native) replyTake(V.native, V.replyTo);
+        CHATS.PW?.paintMic(true, sid);
+        return 'recording';
+      });
+    }
     try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id) { toast('🎙', 'An existing native recording is still held', 2200); return 'busy'; } } catch (_) { return 'busy'; }
     startVoice('auto');
     V.replyTo = { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' };

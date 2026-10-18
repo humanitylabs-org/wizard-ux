@@ -80,7 +80,25 @@ def wait_for(fn, secs, step=1.0):
 
 # ---------------------------------------------------------------- fake meetings server
 LOCK = threading.Lock()
-ST = {'events': [], 'chunks': {}, 'stops': {}, 'status': {}, 'down': None, 'dups': 0, 'gets': 0, 'n': 0}
+ST = {'events': [], 'chunks': {}, 'stops': {}, 'status': {}, 'down': None, 'dups': 0, 'gets': 0, 'n': 0,
+      # Everywhere / side-button loans (QA_EVERYWHERE_MEETING_ONLY): fake Wizard + Mizel orb-events projection.
+      'orb': {}, 'orb_rejects': [], 'wruns': [], 'wkeys': {}, 'wsessions': set(), 'uploads': 0, 'tx': 0, 'tx_done': [], 'tx_delay': 0}
+ORB_STATUSES = ['paused', 'captured', 'queued', 'failed', 'unconfirmed', 'sent', 'cancelled', 'local']
+def orb_upsert(v):
+    """The live Mizel server's OrbEvents.upsert rules (adoptions/mizel-live/orb-events.mjs), for the fake."""
+    idok = lambda x: isinstance(x, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,160}', x)
+    if not (idok(v.get('id')) and idok(v.get('meetingId')) and idok(v.get('captureId')) and isinstance(v.get('atMediaMs'), (int, float)) and v['atMediaMs'] >= 0
+            and isinstance(v.get('clientRevision'), int) and v['clientRevision'] >= 1 and v.get('status') in ORB_STATUSES): raise ValueError('Invalid orb event')
+    if v['meetingId'] not in ST['status']: raise ValueError('Existing meeting could not be verified')
+    old = ST['orb'].get(v['id'])
+    for k in ['meetingId', 'captureId', 'atMediaMs', 'voiceTakeId', 'deliveryKey', 'threadId', 'runId', 'audioFileId', 'agent']:
+        if old and old.get(k) is not None and v.get(k) is not None and old[k] != v[k]: raise ValueError('Orb event identity conflict: ' + k)
+    if old and v['clientRevision'] <= old['clientRevision']: return old
+    if old and old['status'] == 'cancelled' and v['status'] != 'cancelled': raise ValueError('Cancelled event cannot be sent')
+    row = dict(old or {}); row.update({k: v[k] for k in v if k in ('id', 'meetingId', 'captureId', 'atMediaMs', 'clientRevision', 'status', 'question', 'pausedByHandoff',
+               'pausedAt', 'endedAt', 'voiceTakeId', 'deliveryKey', 'threadId', 'runId', 'audioFileId', 'agent', 'steered', 'kind', 'source', 'target')})
+    row['revision'] = (old or {}).get('revision', 0) + 1
+    ST['orb'][v['id']] = row; return row
 def wav_info(b):
     if len(b) < 44 or b[:4] != b'RIFF' or b[8:12] != b'WAVE': return None
     fmt, ch, rate = struct.unpack('<HHI', b[20:28]); bits = struct.unpack('<H', b[34:36])[0]; data = struct.unpack('<I', b[40:44])[0]
@@ -90,6 +108,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def _json(self, code, obj):
         b = json.dumps(obj).encode(); self.send_response(code); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(b))); self.end_headers(); self.wfile.write(b)
+        return True
     def _drop(self):
         try: self.connection.shutdown(socket.SHUT_RDWR)
         except Exception: pass
@@ -103,6 +122,13 @@ class Fake(http.server.BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path)
         m = re.match(r'^/meetings/api/meetings/([^/]+)$', u.path)
         if self._down(): return
+        if u.path == '/mizel-live/orb-events':
+            mid = urllib.parse.parse_qs(u.query).get('meetingId', [''])[0]
+            with LOCK: ev = sorted([dict(e) for e in ST['orb'].values() if e['meetingId'] == mid], key=lambda e: (e['atMediaMs'], e['id']))
+            return self._json(200, {'events': ev, 'discussions': ''})
+        mr = re.match(r'^/wizard/hermes/v1/runs/([^/?]+)', u.path)
+        if mr: return self._json(200, {'run_id': mr.group(1), 'status': 'completed', 'output': 'QA reply from the fake Wizard.'})
+        if u.path == '/wizard/hermes/api/sessions': return self._json(200, {'data': [], 'has_more': False})
         if m:
             mid = m.group(1)
             with LOCK:
@@ -112,10 +138,47 @@ class Fake(http.server.BaseHTTPRequestHandler):
             if not st: return self._json(404, {'error': 'meeting not found'})
             return self._json(200, {'id': mid, 'status': st})
         self._json(404, {'error': 'nope'})
+    def do_PUT(self):
+        n = int(self.headers.get('Content-Length') or 0); body = self.rfile.read(n) if n else b''
+        if self._down(): return
+        if urllib.parse.urlparse(self.path).path != '/mizel-live/orb-events': return self._json(404, {'error': 'nope'})
+        try:
+            v = json.loads(body or b'{}')
+            with LOCK: row = orb_upsert(v)
+            return self._json(200, {'event': row})
+        except Exception as e:
+            with LOCK: ST['orb_rejects'].append({'error': str(e), 'body': body.decode(errors='replace')[:400]})
+            return self._json(409, {'error': str(e)})
+    def _wizard(self, u, body):
+        if u.path == '/wizard-os-home/api/transcribe':
+            with LOCK: ST['tx'] += 1; delay = ST['tx_delay']
+            if delay: time.sleep(delay)
+            with LOCK: ST['tx_done'].append(time.time())
+            return self._json(200, {'text': 'Meeting loan QA words number %d' % ST['tx']})
+        if u.path == '/wizard/files/upload':
+            with LOCK: ST['uploads'] += 1; n = ST['uploads']
+            return self._json(200, {'file': {'id': 'drop_qa%d' % n, 'filename': self.headers.get('X-Wizard-Filename'), 'mime': 'audio/mp4', 'bytes': len(body)}})
+        if u.path == '/wizard/hermes/api/sessions':
+            sid = json.loads(body or b'{}').get('id')
+            with LOCK:
+                if sid in ST['wsessions']: return self._json(409, {'error': 'exists'})
+                ST['wsessions'].add(sid)
+            return self._json(201, {'id': sid})
+        if u.path == '/wizard/hermes/v1/runs':
+            key = self.headers.get('Idempotency-Key') or ''
+            with LOCK:
+                if key in ST['wkeys']: return self._json(202, {'run_id': ST['wkeys'][key], 'status': 'queued'})
+                rid = 'run_qa%d' % (len(ST['wruns']) + 1); ST['wkeys'][key] = rid
+                ST['wruns'].append({'key': key, 'body': json.loads(body or b'{}'), 'id': rid, 't': time.time()})
+            return self._json(202, {'run_id': rid, 'status': 'queued'})
+        return None
     def do_POST(self):
         n = int(self.headers.get('Content-Length') or 0); body = self.rfile.read(n) if n else b''
         if self._down(): return
         u = urllib.parse.urlparse(self.path); q = urllib.parse.parse_qs(u.query)
+        if u.path.startswith('/wizard'):
+            if not self._wizard(u, body): self._json(404, {'error': 'nope'})
+            return
         m = re.match(r'^/meetings/api/meetings/([^/]+)/(chunks|stop)$', u.path)
         if not m: return self._json(404, {'error': 'nope'})
         mid, kind = m.groups()
@@ -384,7 +447,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         summary.update(version=ver, uid=uid, api=sx('getprop ro.build.version.sdk').strip())
         sx(f'run-as {PKG} mkdir -p files')
         sx(f"run-as {PKG} sh -c 'echo http://10.0.2.2:{FAKE} > files/qa_origin.txt'")
-        qa_cfg = {'pauseTimeoutMs': 120000 if os.environ.get('QA_INTEGRATED_ONLY') == '1' else 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 2 if os.environ.get('QA_PCM_ONLY') == '1' or os.environ.get('QA_HANDOFF_ONLY') == '1' or os.environ.get('QA_INTEGRATED_ONLY') == '1' else 1, 'staticNotification': 1}
+        qa_cfg = {'pauseTimeoutMs': 120000 if os.environ.get('QA_INTEGRATED_ONLY') == '1' or os.environ.get('QA_EVERYWHERE_MEETING_ONLY') == '1' else 20000, 'drainGraceMs': 30000, 'statusEveryMs': 3000, 'keepAfterReadyMs': 8000, 'fakeMic': 2 if os.environ.get('QA_PCM_ONLY') == '1' or os.environ.get('QA_HANDOFF_ONLY') == '1' or os.environ.get('QA_EVERYWHERE_MEETING_ONLY') == '1' or os.environ.get('QA_INTEGRATED_ONLY') == '1' else 1, 'staticNotification': 1}
         (job / 'qa_mizel.json').write_text(json.dumps(qa_cfg))
         sh(ADB, '-s', S, 'push', job / 'qa_mizel.json', '/data/local/tmp/qa_mizel.json')
         sx(f'run-as {PKG} cp /data/local/tmp/qa_mizel.json files/qa_mizel.json')
@@ -393,7 +456,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('logcat -c'); sx('logcat -G 16M')
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(9)
         pg = Page(); pg.pump(4)
-        if os.environ.get('QA_HANDOFF_ONLY') == '1':
+        if os.environ.get('QA_HANDOFF_ONLY') == '1' or os.environ.get('QA_EVERYWHERE_MEETING_ONLY') == '1':
             # A fresh emulator has no Tailnet DNS. Navigate via CDP to the
             # intercepted trusted-origin fixture, not from chrome-error://.
             pg.call('Page.navigate', url=ORIGIN + '/mizel-qa/host.html')
@@ -419,6 +482,15 @@ with (BASE / 'worker.lock').open('a') as lock:
             check('integrated','no native crash','ai.wizards.os' not in sx('logcat -b crash -d'))
             summary.update(results=RES,passed=sum(r['ok'] for r in RES),failed=sum(not r['ok'] for r in RES))
             save('summary.json',summary)
+            raise SystemExit(1 if summary['failed'] else 0)
+        if os.environ.get('QA_EVERYWHERE_MEETING_ONLY') == '1':
+            # The floating orb / side button borrowing the meeting's microphone (tools/qa_everywhere_meeting.py).
+            if not open_host(pg): pg.call('Page.navigate', url=ORIGIN + '/mizel-qa/host.html'); pg.pump(25, lambda: pg.ev("typeof mz==='function'"), .5)
+            from qa_everywhere_meeting import run as run_loan
+            run_loan(pg, sx, sh, top, check, save, shot, PKG, ST, LOCK, FAKE, lambda *a: mz(pg, *a), lambda _pg=None: open_host(pg), tap_note_action, ADB, S, job)
+            summary.update(results=RES, passed=sum(r['ok'] for r in RES), failed=sum(not r['ok'] for r in RES))
+            with LOCK: save('loan-fake-wizard.json', {'runs': ST['wruns'], 'orb': ST['orb'], 'orb_rejects': ST['orb_rejects'], 'tx': ST['tx']})
+            save('summary.json', summary); print(f"{summary['passed']}/{len(RES)} passed", flush=True)
             raise SystemExit(1 if summary['failed'] else 0)
         if os.environ.get('QA_HANDOFF_ONLY') == '1':
             from qa_orb_handoff_native import run as run_handoff
