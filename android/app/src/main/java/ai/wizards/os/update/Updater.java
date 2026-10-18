@@ -146,6 +146,7 @@ public final class Updater {
 
     /** Read the feed and carry on as far as the rules allow. {@code done} runs (on the io thread) when this pass is over. */
     public static void check(Context c, Runnable done) {
+        if (BuildConfig.BUILD_TYPE.startsWith("preview")) { set("current", "message", "Preview updates are reviewed separately"); if (done != null) done.run(); return; }
         final Context app = c.getApplicationContext();
         appCtx = app;
         lastCheck = System.currentTimeMillis();
