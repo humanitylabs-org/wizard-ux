@@ -51,5 +51,10 @@ public final class BackupScheduler {
         }
         return false;
     }
-    public static boolean charging(Context c) { return c.getSystemService(BatteryManager.class).isCharging(); }
+    /** Plugged in counts: phones at 100% or in battery-protection mode report "not charging" while on power. */
+    public static boolean charging(Context c) {
+        android.content.Intent b=c.registerReceiver(null,new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED));
+        if(b!=null && b.getIntExtra(BatteryManager.EXTRA_PLUGGED,0)!=0) return true;
+        return c.getSystemService(BatteryManager.class).isCharging();
+    }
 }

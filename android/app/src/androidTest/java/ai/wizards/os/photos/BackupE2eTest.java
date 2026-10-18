@@ -114,7 +114,7 @@ public class BackupE2eTest {
             settings.prefs.edit().putBoolean("charge",true).putBoolean("wifi",true).putBoolean("enabled",true).commit(); settings.change();
             shell("dumpsys battery unplug"); BackupScheduler.schedule(c); BackupScheduler.enqueue(c);
             Thread.sleep(6000); assertEquals(0,count(scope,false)); record("initial_charge_constraint","pass: no uploads while unplugged");
-            shell("dumpsys battery set ac 1");
+            shell("cmd battery set ac 1"); shell("cmd battery set status 2"); shell("cmd battery set level 60");
             waitFor("initial full sync",240,()->settings.prefs.getLong("last_sync",0)>0);
             assertEquals(51,count(scope,false)); assertEquals(50,count(scope,true));
             record("initial_backup",new JSONObject().put("items",51).put("unique_server_ids",50).put("pass",true));

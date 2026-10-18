@@ -147,6 +147,7 @@ def main():
         em.sh(ADB,'-s',em.S,'logcat','-c')
         test = em.sh(ADB,'-s',em.S,'shell','am','instrument','-w','-r','-e','class','ai.wizards.os.photos.BackupE2eTest','ai.wizards.os.qa.test/androidx.test.runner.AndroidJUnitRunner',timeout=1100)
         (out/'instrumentation.txt').write_text(test)
+        (out/'logcat-photos.txt').write_text(em.sh(ADB,'-s',em.S,'logcat','-d','-s','WizardPhotos:V','WM-WorkerWrapper:V','WM-Processor:V','WM-GreedyScheduler:V','WM-ConstraintTracker:V','JobScheduler:V','AndroidRuntime:E'))
         for name in ('receipt.json','photos.png'):
             content=em.sh(ADB,'-s',em.S,'exec-out','run-as',em.pkg,'dd','status=none','if=files/photos-e2e/'+name,binary=True)
             # dd writes statistics on stderr; exec-out output contains only its stdout.

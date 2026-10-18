@@ -94,6 +94,7 @@ public final class BackupWorker extends Worker {
             settings.status(e.code==401 || e.code==403 ? "Sign in again · backup key unavailable or revoked" : "Photo server unavailable · Retry");
             return e.code==401 || e.code==403 ? Result.failure() : Result.retry();
         } catch(Exception e) {
+            android.util.Log.w("WizardPhotos","backup run deferred: "+e);
             if(generation.equals(settings.generation())) settings.status("Backup waiting for network / charging or server · Retry");
             return isStopped()?Result.success():Result.retry();
         } finally { client=null; RUN.unlock(); }
