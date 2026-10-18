@@ -27,8 +27,15 @@ _vn = re.search(r"versionName='([^']+)'", sh(bt / 'aapt2', 'dump', 'badging', ne
 WANT_VN = os.environ.get('WOS_NEW') or (_vn.group(1) if _vn else '')
 print('expect versionName', WANT_VN)
 em = None
-with (BASE / 'worker.lock').open('a') as lock:
-    fcntl.flock(lock, fcntl.LOCK_EX)
+# Under a wizard_heavy lease the caller already owns worker.lock through an inherited fd: reuse that same
+# open file description (a fresh fd would wait on our own ancestor forever). Standalone runs queue as before.
+_inherited = os.environ.get('WIZARD_HEAVY_LOCK_FD')
+_lockfile = os.fdopen(int(_inherited), 'a', closefd=False) if _inherited else (BASE / 'worker.lock').open('a')
+with _lockfile as lock:
+    if _inherited:
+        _want, _have = (BASE / 'worker.lock').stat(), os.fstat(lock.fileno())
+        if (_want.st_dev, _want.st_ino) != (_have.st_dev, _have.st_ino): raise SystemExit('inherited lock identity mismatch')
+    fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if _inherited else 0))
     try:
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'q', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
         em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'q', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'], env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)
