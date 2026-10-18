@@ -233,9 +233,8 @@
     }, true);
   }
 
-  /* Long-press (or right-click) an outside link in a chat: choose where it opens. "Your browser" is the normal
-   * tap; "Agent's browser" drops a ready request into this thread's composer so the agent works on the site in
-   * its own browser (and hands the tab over if it hits a CAPTCHA or login). Nothing is sent until the user sends. */
+  /* Long-press (or right-click) an outside link in a chat: open it in your own browser, or copy it.
+   * (James 18 Oct 2026: links in chats mostly come from the agent, so asking the agent to open its own link added nothing.) */
   function linkMenu(root, scope = '.bub, .note-line, .steps') {
     let menu = null, timer = 0, at = null, swallow = 0;
     const shut = () => { if (menu) { menu.remove(); menu = null; } };
@@ -244,23 +243,19 @@
       shut();
       const doc = a.ownerDocument;
       menu = doc.createElement('div'); menu.className = 'wiz-linkmenu'; menu.setAttribute('role', 'menu');
-      menu.innerHTML = `<div class="wl-host">${esc(u.hostname)}</div><button type="button" role="menuitem" data-wl="mine">Open in your browser</button><button type="button" role="menuitem" data-wl="agent">Open in agent's browser</button>`;
-      menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:220px;background:#fff;color:#111;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:6px;font:15px/1.3 system-ui,sans-serif';
+      menu.innerHTML = `<div class="wl-host">${esc(u.hostname)}</div><button type="button" role="menuitem" data-wl="mine">Open in your browser</button><button type="button" role="menuitem" data-wl="copy">Copy link</button>`;
+      menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:220px;max-width:min(300px,calc(100vw - 16px));background:rgba(22,14,46,.98);color:#f1ecff;border:1px solid rgba(205,190,255,.18);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.55);padding:6px;font:15px/1.3 system-ui,sans-serif';
       for (const b of menu.querySelectorAll('button')) b.style.cssText = 'display:block;width:100%;text-align:left;border:0;background:none;padding:12px 10px;font:inherit;color:inherit;border-radius:8px;cursor:pointer';
-      menu.querySelector('.wl-host').style.cssText = 'padding:6px 10px 4px;font-size:12px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      menu.querySelector('.wl-host').style.cssText = 'padding:6px 10px 4px;font-size:12px;color:#8a82a6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
       doc.body.appendChild(menu);
       const r = menu.getBoundingClientRect(), vw = doc.documentElement.clientWidth, vh = doc.documentElement.clientHeight;
       menu.style.left = Math.max(8, Math.min(x, vw - r.width - 8)) + 'px';
       menu.style.top = Math.max(8, Math.min(y, vh - r.height - 8)) + 'px';
       menu.addEventListener('click', e => {
-        const b = e.target.closest('[data-wl]'); if (!b) return; e.preventDefault(); e.stopPropagation(); shut();
-        if (b.dataset.wl === 'mine') return external(u);
-        const win = a.closest('.win, [data-chats]') || doc, ta = win.querySelector('.ch-compose textarea');
-        if (!ta) return external(u);
-        const ask = `Open this in your browser and take a look: ${u.href}`;
-        ta.value = ta.value.trim() ? ta.value.replace(/\s*$/, '\n') + ask : ask;
-        ta.dispatchEvent(new Event('input', { bubbles: true }));
-        ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (_) {}
+        const b = e.target.closest('[data-wl]'); if (!b) return; e.preventDefault(); e.stopPropagation();
+        if (b.dataset.wl === 'mine') { shut(); return external(u); }
+        const done = ok => { b.textContent = ok ? 'Link copied' : 'Couldn’t copy'; setTimeout(shut, 700); };
+        try { (doc.defaultView.navigator.clipboard?.writeText(u.href) || Promise.reject()).then(() => done(true), () => done(false)); } catch (_) { done(false); }
       });
       setTimeout(() => doc.addEventListener('pointerdown', function off(e) { if (!menu || !menu.contains(e.target)) { shut(); doc.removeEventListener('pointerdown', off, true); } }, true), 0);
       return true;
