@@ -509,7 +509,7 @@ window.WizCore.chats = function createChats(H) {
   /* Mic until there are typed words (.has-text swaps it for Send); a voice take recording in this thread turns
    * the mic itself into Send (.ch-mic.on). Staged files alone keep the mic: talk, and the voice reply carries them. */
   const hasContent = text => !!String(text || '').trim();
-  function syncSend(form, c) { if (form) form.classList.toggle('has-text', hasContent(form.querySelector('textarea')?.value)); }
+  function syncSend(form, c) { if (!form) return; const on = hasContent(form.querySelector('textarea')?.value); form.classList.toggle('has-text', on); document.getElementById('device')?.classList.toggle('composing', on); }
   function refreshCompose(wid) {
     const el = track.querySelector(`[data-chats="${wid}"]`); const form = el?.querySelector('[data-chform]'); if (!form) return;
     const c = ch(wid), old = form.querySelector('.ch-tray');
@@ -931,7 +931,7 @@ window.WizCore.chats = function createChats(H) {
     const canStop = working && !!s?.runId && s.status !== 'stopping';
     PW?.ensureModels();
     const DESK = document.documentElement.dataset.shell === 'desktop';
-    const chip = PW ? (DESK ? '' : PW.modelSwitch(w, s)) : '';
+    const chip = ''; // Preview phone controls move below messages; desktop uses its standalone composer row.
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts0 = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
     const tacts = DESK ? '' : tacts0;
@@ -943,6 +943,7 @@ window.WizCore.chats = function createChats(H) {
     el.innerHTML = `<div class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
+      ${document.documentElement.dataset.shell !== 'desktop' ? `<div class="ch-bbar"><button type="button" class="ch-back2" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${PW && s !== undefined ? PW.modelSwitch(w, s) : ''}</div>` : ''}
       ${dbar}<form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     for (const detail of el.querySelectorAll('[data-run-original]')) detail.open = openContexts.has(detail.dataset.runOriginal);
@@ -986,6 +987,20 @@ window.WizCore.chats = function createChats(H) {
   /* Long-press or swipe left on a thread row → thread actions (listeners in bind()). */
   let lp = null, lpUntil = 0;
   // Long-press / swipe / right-click on rows, and paste-to-attach; bound to each shell's root in bind().
+  // Opinionated (phone): keep the order pills, + and the orb on one line. The orb lives in the dock, so measure and
+  // lift the dock to the pills' centre, then park + just left of the orb. Cleared anywhere else.
+  if (document.documentElement.dataset.shell !== 'desktop') setInterval(() => {
+    const dock = document.querySelector('.dock'), orb = document.getElementById('orbWrap'); if (!dock || !orb) return;
+    const bar = [...document.querySelectorAll('.ch-list .ch-rdy-bar')].find(b => { const r = b.getBoundingClientRect(); return r.height && r.bottom > 0 && r.top < innerHeight; });
+    const fab = bar?.closest('.ch-list')?.querySelector('.ch-fab');
+    const dv = document.getElementById('device');
+    // Only move the dock when it is just the corner orb (full-screen chats). Never shift the normal bottom menu.
+    if (!bar || !dv?.classList.contains('orb-corner') || dv.classList.contains('composing')) { if (fab) { fab.style.right = ''; fab.style.bottom = ''; } if (dock.style.translate) dock.style.translate = ''; return; }
+    const br = bar.getBoundingClientRect(), cur = parseFloat((dock.style.translate || '0 0').split(' ')[1]) || 0;
+    const or = orb.getBoundingClientRect(), d = (br.top + br.height / 2) - (or.top + or.height / 2) + cur;
+    if (Math.abs(d - cur) > 1 && d < 0 && d > -200) dock.style.translate = `0 ${Math.round(d)}px`;
+    if (fab) { const lr = fab.offsetParent?.getBoundingClientRect(); const o2 = orb.getBoundingClientRect(); if (lr) { fab.style.right = `${Math.round(lr.right - o2.left + 10)}px`; fab.style.bottom = `${Math.round(lr.bottom - (br.top + br.height / 2) - fab.offsetHeight / 2)}px`; } }
+  }, 400);
   function bindGestures(root) {
     root.addEventListener('touchstart', e => {
       const node = e.target.closest?.('.ch-msgs, .ch-scroll'); if (!node) return;
