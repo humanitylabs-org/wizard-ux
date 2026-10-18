@@ -493,3 +493,21 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-unsent .tx b { font-size: 14px; font-weight: 700; }
 .ch-unsent .tx small { font-size: 12.5px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-unsent .go { flex: none; font-size: 13px; font-weight: 700; color: var(--violet-2, #b99bff); }
+
+/* Morning: the daily check-in pinned at the top of Ready (core/chats.js morningCard). */
+.ch-morning { display: flex; align-items: center; gap: 12px; width: 100%; margin: 4px 0 10px; padding: 13px 14px; border-radius: 18px; text-align: left; color: inherit; font: inherit; cursor: pointer;
+  border: 1px solid rgba(255, 184, 107, .38); background: linear-gradient(135deg, rgba(255, 184, 107, .15), rgba(255, 111, 145, .09) 45%, rgba(143, 99, 255, .08)); }
+.ch-morning:active { transform: scale(.99); }
+.ch-morning .sun { flex: none; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle at 50% 70%, #fff3d6, #ffb86b 40%, #ff6f91 75%); box-shadow: 0 0 18px rgba(255, 184, 107, .4); }
+.ch-morning .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ch-morning .hd { display: flex; align-items: center; gap: 8px; }
+.ch-morning .hd b { font-size: 16px; }
+.ch-morning .hd i { font-style: normal; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: #ffb86b; border: 1px solid rgba(255, 184, 107, .4); border-radius: 999px; padding: 0 7px; }
+.ch-morning small { color: var(--wz-text-secondary, rgba(239, 234, 255, .7)); font-size: 13px; }
+.ch-morning .dots { display: flex; gap: 5px; margin-top: 4px; }
+.ch-morning .dots i { width: 24px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .12); }
+.ch-morning .dots i.on { background: linear-gradient(90deg, #ffb86b, #ff6f91); }
+.ch-morning .go { flex: none; font-size: 22px; opacity: .6; }
+.ch-morning.done { padding: 9px 14px; border-color: var(--wz-border, rgba(205, 190, 255, .13)); background: rgba(255, 255, 255, .03); }
+.ch-morning.done .sun { width: 26px; height: 26px; opacity: .7; }
+.ch-morning.done .hd i { color: #4fe0a8; border-color: rgba(79, 224, 168, .4); }
