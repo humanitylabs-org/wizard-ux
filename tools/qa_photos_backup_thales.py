@@ -199,7 +199,11 @@ def main():
             page.close(); em.sh(ADB,'-s',em.S,'forward','--remove',f'tcp:{devtools}')
         inventory=api('/search/metadata',{'size':100,'page':1},token)
         (out/'disposable-inventory.json').write_text(json.dumps(inventory,indent=2))
-        items=inventory['assets']['items']; assert len(items)==52, f'Expected 52 unique generated assets, got {len(items)}'
+        items=inventory['assets']['items']
+        # 50 unique initial + 1 auto-detected; the photo taken off Wi-Fi only counts when Wi-Fi resume was testable.
+        expected=51+(1 if str(acceptance.get('wifi_resume','')).startswith('pass') else 0)
+        assert len(items)==expected, f'Expected {expected} unique generated assets, got {len(items)}'
+        assert len({i['originalFileName'] for i in items})==len(items), 'duplicate asset on server'
         result['server_unique_assets']=len(items)
         # Release has a separate signed job: never compare debug/test certificates against the owner signer.
         release_job=P(args.release_job)
