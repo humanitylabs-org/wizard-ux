@@ -225,6 +225,55 @@
     if (isFinite(a) !== isFinite(b)) return isFinite(a) ? -1 : 1;
     return (isFinite(a) ? b - a : 0) || l.title.localeCompare(r.title);
   };
+  // Opinionated: auto-archive age is the owner's choice (Archive header selector); 0 = never. Default one week.
+  const ARCH_KEY = 'wos.chats.archiveAfter.v1';
+  // Chat-list layout: 'day' (Ready = today, then Yesterday, Past week; the default) or 'status' (Working / Ready / Archive).
+  const LAYOUT_KEY = 'wos.chats.layout.v1';
+  const chatLayout = () => { try { return localStorage.getItem(LAYOUT_KEY) === 'status' ? 'status' : 'day'; } catch (e) { return 'day'; } };
+  const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
+  // Agent Service owns box-wide preferences. localStorage is only an offline cache.
+  const PREFS_URL = '/wizard/v1/ui-preferences';
+  let prefsWrites = Promise.resolve(), prefsPending = 0, prefsRevision = 0;
+  const prefsFields = {
+    archiveAfterDays: ['wos.chats.archiveAfter.v1', v => Number.isInteger(v) && [0, 1, 3, 7, 14, 30].includes(v), String],
+    compact: ['wos.chats.compact.v1', v => typeof v === 'boolean', v => v ? '1' : '0'],
+    chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
+    readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
+    subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
+  };
+  let prefsOff = false;
+  const putPrefs = patch => {
+    if (prefsOff) return prefsWrites;
+    prefsPending++; prefsRevision++;
+    prefsWrites = prefsWrites.then(async () => {
+      try {
+        const r = await req(PREFS_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+        if (r.status === 404) { prefsOff = true; return; } // this Agent Service has no shared preferences yet: keep the choice on this device, quietly
+        if (!r.ok) throw new Error('Preferences unavailable');
+      } catch (e) { window.dispatchEvent(new Event('wos:prefs-error')); }
+      finally { prefsPending--; }
+    });
+    return prefsWrites;
+  };
+  const pullPrefs = async () => {
+    if (prefsPending || prefsOff) return;
+    const rev = prefsRevision;
+    try {
+      const r = await req(PREFS_URL, { cache: 'no-store' });
+      if (r.status === 404) { prefsOff = true; return; }
+      if (!r.ok) return;
+      const j = await r.json();
+      if (!j || prefsPending || rev !== prefsRevision) return;
+      let changed = false;
+      for (const [name, [key, valid, encode]] of Object.entries(prefsFields)) if (valid(j[name])) {
+        const value = encode(j[name]);
+        if (localStorage.getItem(key) !== value) { localStorage.setItem(key, value); changed = true; }
+      }
+      if (changed) window.dispatchEvent(new Event('wos:prefs'));
+    } catch (e) { /* Older/offline service: retain this device's cached choice, never reset it. */ }
+  };
+  pullPrefs(); setInterval(pullPrefs, 30000);
+  try { addEventListener('focus', pullPrefs); } catch (e) {}
   const sectionTime = s => Math.max(...[s.restoredAt, s.assignedAt, s.previewAt, s.requestAt, s.activityAt, s.lastUserAt, s.updatedAt].map(v => Date.parse(v ?? '')).filter(isFinite));
   // Ready has two orders (James, 10 Oct 2026: "Newest … the newest appears at the top … another option, priority"):
   //   Newest   = approvals pinned, then pure recency, status labels ignored (groupWork's default).
@@ -239,7 +288,7 @@
   const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
-    const readyB = workDayStart(now), yB = readyB - DAY, archB = now - WEEK;
+    const readyB = workDayStart(now), yB = readyB - DAY, archDays = archiveAfterDays(), archB = archDays ? now - archDays * DAY : -Infinity;
     for (const s of sessions) {
       if (s.hidden) continue;
       const t = sectionTime(s);
@@ -249,6 +298,7 @@
       else if (isErr(s)) g.errors.push(s);
       else if (s.archived) g.archive.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
+      else if (chatLayout() === 'status') g.ready.push(s); // By status: everything not yet archived is Ready
       else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
       else if (t < readyB) g.yesterday.push(s);
       else g.ready.push(s);
@@ -429,6 +479,11 @@
     seenOf(s) { return s && s.agent && otherAgent(s.agent) ? AGENT_SEEN : this.seen; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
+    get archiveAfterDays() { return archiveAfterDays(); },
+    get chatLayout() { return chatLayout(); },
+    set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
+    set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
+    putPrefs,
     cardAt,
     groups(agent = '') {
       const now = Date.now(), needs = [], ready = [], working = [];
