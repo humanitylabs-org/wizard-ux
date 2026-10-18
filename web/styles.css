@@ -853,3 +853,16 @@ body {
   background: rgba(205, 190, 255, .55); box-shadow: 0 0 0 1px rgba(0, 0, 0, .28), 0 1px 6px rgba(0, 0, 0, .35); transition: width 220ms var(--spring), margin-left 220ms var(--spring), background 300ms, box-shadow 300ms; }
 .device.zen-tip .zen-edge i, .zen-edge.pull i { width: 96px; margin-left: -48px; background: rgba(205, 190, 255, .7); box-shadow: 0 0 10px rgba(143, 99, 255, .5); }
 .device.zen .imm-edge i { opacity: 0 !important; } /* one handle at a time: the distraction-free one wins */
+/* Voice "Sending…" status lives in the dock, on the orb's top edge, like the voice destination label (Miguel,
+ * 18 Oct): never over list rows or sort chips, never takes a tap, so another session stays one tap away. */
+.device:not(.orb-corner) .voice .transcript.brief:not(.tip) {
+  bottom: calc(var(--safe-b) + var(--dock-h) - 18px); z-index: 150; height: 18px; max-width: calc(100% - 24px);
+  padding: 0 7px 0 3px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--bg, rgba(8, 5, 18, .94));
+  box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; pointer-events: none !important;
+  display: flex; align-items: center; transform: translate(-50%, 4px) scale(.96);
+}
+.device:not(.orb-corner) .voice.tx .transcript.brief:not(.tip) { transform: translate(-50%, 0); }
+.device:not(.orb-corner) .transcript.brief:not(.tip) .tx-route { font-size: 10px; line-height: 16px; gap: 4px; font-weight: 650; }
+.device:not(.orb-corner) .transcript.brief:not(.tip) .tx-route b { width: 12px; height: 12px; font-size: 8px; background: none !important; }
+/* While that label shows, the voice destination label (same spot) steps aside. */
+.device:has(.voice.tx .transcript.brief:not(.tip)) > #voiceDestination { visibility: hidden; }
