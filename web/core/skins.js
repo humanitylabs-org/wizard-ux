@@ -1,4 +1,6 @@
-/* Wizard OS skins: one shell, many looks (James, 11 Oct 2026: "same exact layout, feel and sizing; a skin of
+/* Wizard OS skins: one shell, many looks. Frame composition extends the original colour-only contract.
+ * See docs/SKIN-FRAMES.md. Existing definitions without frame retain the Standard foundation.
+ * Original palette contract (James, 11 Oct 2026: "same exact layout, feel and sizing; a skin of
  * our existing operating system"). A skin changes only:
  *   - design tokens, set inline on <html> so every existing var(--ink)/var(--glass)/… follows (blended while browsing)
  *   - the clock typeface and a few card details (core/skins.css, keyed on html[data-skin])
@@ -7,7 +9,7 @@
  *     last 45 s; otherwise frozen on the last frame (James, 12 Oct: no battery drain when not viewed).
  *   - the orb's colour, through a CSS filter; orb.js stays byte-identical with the Android copy
  * Nebula is the original look and sets nothing. Choice persists per device in localStorage 'wos.skin'
- * (box-level theme.json sync comes later). Seven skins: Nebula, Grove, Tide, Ember, Signal, Obsidian, Obsidian Light (Paper retired 12 Oct).
+ * (box-level theme.json sync comes later). Eight skins: Nebula, Grove, Tide, Ember, Signal, Obsidian, Obsidian Light, Landscapes (Paper retired 12 Oct).
  * API: WosSkin.list, .current, .set(id), .preview(pos), .commit(i), .index(id). */
 (() => {
   'use strict';
@@ -43,10 +45,25 @@
       t: T({ bg: '#ffffff', ink: '#000000', 'ink-2': '#2e2e2e', 'ink-3': '#6b6b6b', line: 'rgba(0,0,0,.14)', 'line-2': 'rgba(0,0,0,.32)', glass: 'rgba(244,244,244,.78)', 'glass-2': 'rgba(240,240,240,.94)',
         violet: '#000000', 'violet-2': '#1a1a1a', pink: '#555555', cyan: '#3a3a3a', amber: '#9a6400', green: '#0f7a3e', red: '#c62828',
         'sk-time-a': '#000000', 'sk-time-b': '#5a5a5a', 'sk-dock': 'rgba(255,255,255,.96)', 'sk-dock-line': 'rgba(0,0,0,.12)', 'sk-ddot': 'rgba(0,0,0,.5)', 'sk-tour': 'rgba(250,250,250,.94)', 'sk-dim': 'rgba(255,255,255,.72)', 'sk-win': 'rgba(255,255,255,.94)' }) },
+    // Opinionated: Landscapes rotates the classic macOS landscape wallpapers (Mavericks → Golden Gate) behind frosted glass.
+    { id: 'landscapes', name: 'Landscapes', who: 'For wanderers. A new view of the world every minute.', orb: [0, 1, 1.05],
+      t: T({ bg: '#0B0A10', ink: '#ffffff', 'ink-2': 'rgba(255,255,255,.80)', 'ink-3': 'rgba(255,255,255,.58)', line: 'rgba(255,255,255,.16)', 'line-2': 'rgba(255,255,255,.28)', glass: 'rgba(16,14,22,.52)', 'glass-2': 'rgba(20,18,26,.74)',
+        violet: '#7A5CFF', 'violet-2': '#A08CFF', pink: '#ff7ac8', cyan: '#6fd8ff', amber: '#ffbe55', green: '#62e6a8', red: '#ff6b86',
+        'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(11,10,16,.62)', 'sk-dock-line': 'rgba(255,255,255,.10)', 'sk-ddot': 'rgba(255,255,255,.6)', 'sk-tour': 'rgba(11,10,16,.80)', 'sk-dim': 'rgba(11,10,16,.70)', 'sk-win': 'rgba(16,14,22,.72)' }) },
   ];
   const N = SKINS.length;
   const idxOf = id => Math.max(0, SKINS.findIndex(s => s.id === id));
   const stored = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
+  const FRAME_KEY = 'wos.skin.composition.v1', F = window.WosSkinFrame;
+  let composition = null;
+  try { const saved = JSON.parse(localStorage.getItem(FRAME_KEY)); if (saved && F) composition = F.composition(saved, SKINS); } catch (_) { /* corrupt/old data: safe skin default */ }
+  // Borderless is the phone default; desktop always keeps its framed windows (James, 17 Oct 2026: "borderless mode on
+  // mobile, keep the borders on desktop; a toggle in settings, on by default"). A saved phone choice wins.
+  const PHONE = (document.documentElement.dataset.shell || 'phone') === 'phone';
+  const shellFrame = PHONE ? { foundation: 'borderless' } : null;
+  const frameOf = skin => PHONE ? (composition?.frame || skin.frame || shellFrame) : {};
+  function applyFrame(skin) { F?.apply(frameOf(skin)); }
+  function saveComposition() { try { localStorage.setItem(FRAME_KEY, JSON.stringify(composition)); } catch (_) {} }
 
   /* ---------- colour blending ---------- */
   const parse = c => {
@@ -71,6 +88,7 @@
     const space = a === 0 ? 1 - f : 0; st.setProperty('--sk-space', space.toFixed(3));
     const near = Math.round(p);
     if (near !== shown) { shown = near; root.dataset.skin = SKINS[near].id; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = SKINS[near].t.bg; }
+    applyFrame(SKINS[near]);
     BGL.a = a; BGL.b = b; BGL.f = f; wake();
   }
 
@@ -187,6 +205,47 @@
       },
     },
     'obsidian-light': { init(s, W, H) { BG.obsidian.prep(s, W, H, '#ffffff', 0); }, draw(c, s, t, dt, W, H) { BG.obsidian.draw(c, s, t, dt, W, H); } },
+    // Landscapes: one wallpaper at a time, cover-fitted once into an offscreen canvas (a frame is one or two drawImage
+    // calls). Each app load starts on the next one, and every minute on Home moves on with a 2.5 s crossfade; only the current and next
+    // files are fetched. Frozen with the scenery gate like every other skin.
+    landscapes: {
+      FILES: ['00-10-9', '01-10-10', '02-10-11', '03-10-12', '04-10-13', '05-10-14-day', '06-10-14-night', '07-10-15-day', '08-10-15-night',
+        '09-11-big-sur-day', '10-11-big-sur-night', '11-26-tahoe-beach-dawn', '12-26-tahoe-beach-day', '13-26-tahoe-beach-dusk', '14-26-tahoe-beach-night', '15-27-golden-gate-bridge'],
+      AVG: ['#347883', '#937b75', '#71747c', '#715c63', '#9b8773', '#6d5d5a', '#232d43', '#4f4d60', '#18253e', '#40576a', '#0d1b2e', '#8a818c', '#4d8da3', '#405877', '#0d1011', '#87736a'],
+      HOLD: 60, FADE: 2.5, KEY: 'wos.skin.landscapes.at',
+      load(s, i, W, H) {
+        if (s.img[i]) return s.img[i];
+        const slot = s.img[i] = { ready: false, c: null }, im = new Image();
+        im.decoding = 'async';
+        im.onload = () => { const o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'), k = Math.max(o.width / im.naturalWidth, o.height / im.naturalHeight),
+          w = im.naturalWidth * k, h = im.naturalHeight * k; x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h);
+          // a soft top and bottom scrim so the clock and the bottom bar stay legible on bright skies
+          const g = x.createLinearGradient(0, 0, 0, o.height); g.addColorStop(0, 'rgba(11,10,16,.42)'); g.addColorStop(.28, 'rgba(11,10,16,0)'); g.addColorStop(.7, 'rgba(11,10,16,0)'); g.addColorStop(1, 'rgba(11,10,16,.55)');
+          x.fillStyle = g; x.fillRect(0, 0, o.width, o.height); slot.c = o; slot.ready = true; wake(); };
+        im.src = `/wizard-os-home/core/skins/macos/${this.FILES[i]}.webp`;
+        return slot;
+      },
+      init(s, W, H) {
+        const n = this.FILES.length; let at = 0;
+        try { at = (parseInt(localStorage.getItem(this.KEY), 10) + 1) % n; if (!isFinite(at)) at = 0; localStorage.setItem(this.KEY, String(at)); } catch (e) {}
+        s.img = {}; s.cur = at; s.from = null; s.fadeAt = 0; s.shownAt = BGL.t; s.n = n;
+        this.load(s, at, W, H); this.load(s, (at + 1) % n, W, H);
+      },
+      draw(c, s, t, dt, W, H) {
+        const cur = s.img[s.cur];
+        if (cur?.ready && t - s.shownAt > this.HOLD) {
+          const nx = (s.cur + 1) % s.n, nxt = this.load(s, nx, W, H);
+          if (nxt.ready) { s.from = s.cur; s.cur = nx; s.fadeAt = t; s.shownAt = t; try { localStorage.setItem(this.KEY, String(nx)); } catch (e) {} this.load(s, (nx + 1) % s.n, W, H);
+            for (const k of Object.keys(s.img)) if (+k !== s.cur && +k !== s.from && +k !== (nx + 1) % s.n) delete s.img[k]; }
+        }
+        const f = s.from == null ? 1 : Math.min(1, (t - s.fadeAt) / this.FADE);
+        const prev = s.from != null ? s.img[s.from] : null;
+        if (prev?.ready && f < 1) c.drawImage(prev.c, 0, 0, W, H);
+        else if (!s.img[s.cur]?.ready) { c.fillStyle = this.AVG[s.cur]; c.fillRect(0, 0, W, H); }
+        if (s.img[s.cur]?.ready) { c.globalAlpha = f; c.drawImage(s.img[s.cur].c, 0, 0, W, H); c.globalAlpha = 1; }
+        if (f >= 1) s.from = null;
+      },
+    },
   };
   function size() {
     const d = BGL.cv[0] && BGL.cv[0].parentElement; if (!d) return;
@@ -233,7 +292,17 @@
     get chosen() { return stored(); },
     index: idxOf,
     preview(p) { paint(p); },
-    set(id) { const i = idxOf(id); paint(i); try { localStorage.setItem(KEY, SKINS[i].id); } catch (e) {} return SKINS[i].id; },
+    set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); } catch (e) {} return SKINS[i].id; },
+    get frame() { return F ? F.frame(frameOf(SKINS[Math.round(pos)])) : { foundation: 'framed' }; },
+    get frameAdjustable() { return PHONE; },
+    get composition() { return { version: 1, extends: this.current, frame: this.frame }; },
+    compose(value) {
+      const next = F.composition(value, SKINS); // validate all fields before any mutation
+      composition = next; this.set(next.extends);
+      dispatchEvent(new CustomEvent('wos:skin-frame')); return this.composition;
+    },
+    setFoundation(foundation) { return this.compose({ version: 1, extends: this.current, frame: { foundation } }); },
+    resetFrame() { return this.compose({ version: 1, extends: this.current, frame: SKINS[Math.round(pos)].frame || shellFrame || {} }); },
     commit(i) { return this.set(SKINS[Math.max(0, Math.min(N - 1, Math.round(i)))].id); },
     _bg: BGL,
   };

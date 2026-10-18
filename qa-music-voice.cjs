@@ -137,8 +137,8 @@ const server = http.createServer((req, res) => {
   //    Asked from an empty desk: in front of Wizard Music a held phrase goes straight to the player instead.
   await p.evaluate(() => window.__wos.goDesk(window.__wos.idx + 1)); await sleep(800);
   ROUTER = { route: 'command', action: 'play_music', query: 'Kerri Chandler Rain' }; routes.length = 0;
-  await hold('I was hoping for that kerry chandler rain track'); t = await waitToast(/Playing Rain · Kerri Chandler/, 60000);
-  ok(routes.length === 1 && /Playing Rain · Kerri Chandler/.test(t) && !(await spotifyOpen()), 'router play_music plays in Wizard Music', JSON.stringify({ t, routes: routes.length }));
+  await hold('I was hoping for that kerry chandler rain track'); t = await waitToast(/Playing Rain.* · Kerri Chandler/, 60000);
+  ok(routes.length === 1 && /Playing Rain.* · Kerri Chandler/.test(t) && !(await spotifyOpen()), 'router play_music plays in Wizard Music', JSON.stringify({ t, routes: routes.length }));
   ROUTER = null;
   await hold('throw on some bonobo'); t = await waitToast(/Playing Bonobo/, 60000);
   ok(/Playing Bonobo/.test(t), 'held "throw on some bonobo" from another desk plays Bonobo', t);

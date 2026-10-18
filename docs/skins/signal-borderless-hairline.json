@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "extends": "signal",
+  "frame": {
+    "foundation": "borderless",
+    "border": 1,
+    "radius": 6,
+    "gutter": 4,
+    "gap": 6
+  }
+}

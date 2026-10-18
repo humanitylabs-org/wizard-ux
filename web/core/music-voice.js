@@ -56,6 +56,9 @@
     if (/^(?:what s|what is|whats) (?:this|playing|this song|the song|this track)$|^what song is (?:this|playing)$|^who (?:is|s) (?:this|singing|playing)$/.test(s)) return c({ op: 'what' });
     m = s.match(/^(?:play|put on|throw on|queue up|shuffle|blast|spin|listen to|i want to (?:hear|listen to)|i wanna (?:hear|listen to)|let s (?:hear|listen to))\b\s*(.*)$/);
     if (m) return c({ op: 'play', said: String(text).trim() });
+    // "Open music and play Home Tides": the player is the app being opened, so this is a play.
+    m = s.match(/^(?:open|launch|start|go to) (?:wizard |my |the )?music(?: app)?(?: and| then)+ (?:play|put on) (.+)$/);
+    if (m) return { op: 'play', said: 'play ' + asSaid(text, m[1]).replace(/[.!?]+$/, ''), strong: true };
     if (inMusic) return c({ op: 'play', said: String(text).trim() });
     return null;
   }
@@ -65,17 +68,18 @@
   const pending = new Map(); // id -> { win, cmd, timer, acked, t0 }
   const log = e => { window.__musicLog = (window.__musicLog || []).concat(e).slice(-40); };
 
+  const settle = (p, ok) => { const f = p.onDone; p.onDone = null; try { f && f(ok); } catch (_) {} };
   function post(id) {
     const p = pending.get(id); if (!p || p.acked) return;
     const f = host.frameOf(p.win);
     try { if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'wizard-os:music', id, cmd: p.cmd }, location.origin); } catch (e) {}
-    if (performance.now() - p.t0 > 20000) { pending.delete(id); log('timeout:' + p.cmd.op); host.toast('♫', 'Wizard Music didn’t answer · open it and try again', 3200); return; }
+    if (performance.now() - p.t0 > 20000) { pending.delete(id); log('timeout:' + p.cmd.op); settle(p, false); host.toast('♫', 'Wizard Music didn’t answer · open it and try again', 3200); return; }
     p.timer = setTimeout(() => post(id), 400);
   }
-  function send(win, cmd) {
+  function send(win, cmd, onDone) {
     const id = 'm' + Date.now().toString(36) + (++seq);
     const clean = { ...cmd }; delete clean.strong;
-    pending.set(id, { win, cmd: clean, acked: false, t0: performance.now(), timer: 0 });
+    pending.set(id, { win, cmd: clean, acked: false, t0: performance.now(), timer: 0, onDone });
     log('send:' + clean.op);
     post(id);
     return id;
@@ -86,19 +90,19 @@
     const p = d.id ? pending.get(d.id) : null;
     if (d.type === 'wizard-os:music:ack' && p) { p.acked = true; clearTimeout(p.timer); log('ack:' + p.cmd.op); return; }
     if (d.type === 'wizard-os:music:done') {
-      if (p) { clearTimeout(p.timer); pending.delete(d.id); }
+      if (p) { clearTimeout(p.timer); pending.delete(d.id); settle(p, !!d.ok); }
       log((d.ok ? 'done:' : 'fail:') + (d.text || ''));
       if (d.text) host.toast(d.ok ? '♫' : '♪', String(d.text).replace(/[<>&]/g, ''), d.ok ? 2400 : 3400);
     }
   });
 
   /** Run a parsed command. True when it was taken (the outcome arrives as a toast). */
-  function run(cmd) {
+  function run(cmd, onDone) {
     if (!host) return false;
     let win = host.findWin();
     if (!win) {
       // Nothing to control without the player; "play …", "music search …" (and resume) open Wizard Music on this desk.
-      if (cmd.op !== 'play' && cmd.op !== 'resume' && cmd.op !== 'search') { host.toast('♪', 'Nothing is playing · say “play …” to start', 2600); return true; }
+      if (cmd.op !== 'play' && cmd.op !== 'resume' && cmd.op !== 'search') { host.toast('♪', 'Nothing is playing · say “play …” to start', 2600); if (onDone) onDone(true); return true; }
       win = host.openMusic();
       if (!win) return false;
     }
@@ -107,7 +111,7 @@
       const what = String(cmd.said || '').replace(/^\s*(?:play|put on)\s+/i, '').replace(/[.!?]+$/, '');
       host.toast('♫', what && !/^(?:some |the )?music$/i.test(what) ? `Finding “${what.replace(/[<>&]/g, '')}”…` : 'Starting your music…', 4000);
     }
-    send(win, cmd);
+    send(win, cmd, onDone);
     return true;
   }
 

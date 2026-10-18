@@ -8,6 +8,7 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#05030c">
   <script src="core/scenery.js"></script>
+  <script src="core/skin-frame.js"></script>
   <script src="core/skins.js"></script>
   <meta name="mobile-web-app-capable" content="yes">
   <title>Wizard OS</title>
@@ -38,6 +39,7 @@
   <link rel="stylesheet" href="core/desks.css">
   <link rel="stylesheet" href="core/tour.css">
   <link rel="stylesheet" href="core/skins.css">
+  <link rel="stylesheet" href="core/skin-frame.css">
 </head>
 <body>
   <div id="device" class="device">
@@ -82,7 +84,7 @@
         <div class="orb-ring"></div>
         <div class="orb-shock"></div>
         <div id="moons" class="moons"></div>
-        <canvas id="orb" class="orb" width="220" height="220" aria-label="Wizard orb. Tap to talk, hold for a command, swipe up for apps, down for inbox, sideways for desks." role="button" tabindex="0"></canvas>
+        <canvas id="orb" class="orb" width="220" height="220" aria-label="Wizard orb. Tap to talk, hold for a command, swipe up for apps, down to hide the bars, sideways for desks." role="button" tabindex="0"></canvas>
         <img id="orbFallback" class="orb-fallback" src="robert-thread-orb.png" alt="" hidden>
         <span id="timer" class="timer">0:00</span>
         <span id="dictationStatus" class="dictation-status" role="status" aria-live="polite"></span>
@@ -148,6 +150,7 @@
   <script src="core/chat-power.js"></script>
   <script src="core/chat-search.js"></script>
   <script src="core/uploads.js"></script>
+  <script src="core/notif-bell.js"></script>
   <script src="core/chats.js"></script>
   <script src="core/deeplink.js"></script>
   <script src="core/video-desks.js"></script>

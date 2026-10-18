@@ -38,6 +38,8 @@
     const hasHistory = !!(window.WIZ_DATA && Array.isArray(window.WIZ_DATA.threads) && window.WIZ_DATA.threads.length);
     return list.filter(a => {
       if (a.kind === 'view' && a.view !== 'inbox' && !hasHistory) return false;
+      // Phone: no Inbox tile; notifications are the Chats list ("open inbox" still opens Chats).
+      if (shell !== 'desktop' && a.view === 'inbox') return false;
       if (a.id === 'side-button' && !nativeSide) return false;
       if (a.id === 'usuals' && !(window.WizardOSNative && typeof window.WizardOSNative.usuals === 'function')) return false;
       if (shell === 'desktop') return a.kind !== 'native' && !(a.kind === 'view' && a.view !== 'inbox');
@@ -130,6 +132,11 @@
       for (const a of APPS) {
         const n = norm(a.name);
         let s = n === q ? 100 : n.startsWith(q) ? 80 : n.includes(q) ? 60 : q.includes(n) && n.length > 3 ? 50 : 0;
+        // One spoken word that shares a long stem with a name word ("meditation" → Meditate). Shorter names win ties.
+        if (!s && !q.includes(' ')) for (const w of n.split(' ')) {
+          let k = 0; while (k < w.length && k < q.length && w[k] === q[k]) k++;
+          if (k >= 6 && k >= 0.75 * Math.min(w.length, q.length)) s = Math.max(s, 55 - n.length / 100);
+        }
         if (s > bs) { bs = s; best = a; }
       }
       return bs >= 50 ? best : null;
