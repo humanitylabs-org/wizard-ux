@@ -173,7 +173,8 @@ async function phone(b) {
   ok(await p.evaluate(() => __wos.wins[__wos.desks[__wos.idx].focus]?.appId === 'agents'), 'phone: System → Agents opens the Agents app');
   await shot(p, 'phone-14-system-link');
   // ---- App → agent binding ("Sends its work to"; default = main agent; stopped bound agent shows clearly) ----
-  await bindingPhone(p, created);
+  // A failure in the binding section is reported on its own; the desktop half still runs.
+  try { await bindingPhone(p, created); } catch (e) { ok(false, 'phone binding section threw', e.message); }
   ok(errs.length === 0, 'phone: no page errors', errs.slice(0, 5).join(' | '));
   await c.close();
   return created;
