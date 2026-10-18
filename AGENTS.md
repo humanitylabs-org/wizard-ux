@@ -11,3 +11,9 @@ New cross-platform UX belongs in `web/core/`, registered once and rendered by bo
 - Never claim universal parity from an import test alone. Feature reachability/actions and native-specific limits need runtime evidence. A screenshot-only or mocked-API-only pass is not enough.
 
 Protected `daily` changes only by PR. Push every commit immediately. Do not merge/deploy from an implementation lane. Preserve concurrent voice-custody work when integrating.
+
+## Skins: build your own look (James, 18 Oct 2026)
+
+Nebula (default), Grove, Tide, Ember and Signal are James's skins, together with the base shell look in `web/core/base.css` (palette and body font). Collaborators ship UX features and fixes as usual. A different look, palette, font or card style goes into a new skin of your own: a `SKINS` entry in `web/core/skins.js` plus `html[data-skin="<yours>"]` rules (Obsidian and Landscapes are working examples). Leave James's five skins and the shared base untouched, and keep fonts scoped to your skin rather than `body`, `.win` or controls.
+
+`tests/owner-skins-guard.test.mjs` fingerprints those skins and fails on any change to them or on a shell-wide font rule. `tests/fixtures/owner-skins.json` changes only with James's explicit approval, named in the commit.
