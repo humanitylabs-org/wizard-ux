@@ -1403,7 +1403,7 @@ window.WizCore.chats = function createChats(H) {
     const text = ta.value || ta.placeholder || '';
     mirror.textContent = text; const end = document.createElement('span'); end.textContent = '\u200b'; mirror.appendChild(end);
     const lastEnd = end.offsetLeft; // x where the last line ends
-    const room = inner - (lw - 4); // the label covers the right lw px of the last line (its own padding included)
+    const room = inner - lw + 12; // last-line text may come within ~8px of the label's visible name (the label has 10px inner padding)
     const lh = parseFloat(cs.lineHeight) || 20;
     ta.style.paddingBottom = lastEnd > room ? `${10 + lh}px` : '';
   }
