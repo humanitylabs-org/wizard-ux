@@ -115,6 +115,11 @@ try:
     emu.sx('input text wisdom'); time.sleep(1); emu.sx('input keyevent KEYCODE_BACK'); time.sleep(0.8)
     # The results sheet re-lays out after the keyboard closes (more groups appear above the app row):
     # wait until the Wisdom app row reports the same position twice in a row before pressing it.
+    # Wait for the keyboard to be fully gone: while the IME window animates out, the accessibility tree and
+    # screenshots still show the keyboard-state layout, and the row then jumps ~800px once the WebView re-expands.
+    ime_gone = wait(lambda: 'mInputShown=false' in emu.sx('dumpsys input_method').replace(' ', ''), 15)
+    check('keyboard dismissed before measuring the Apps row', ime_gone)
+    time.sleep(2)
     row, prev = None, None
     for _ in range(12):
         time.sleep(1.2); row = bounds(emu.ui(), 'Wisdom', app_row=True)
