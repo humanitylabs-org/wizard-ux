@@ -304,7 +304,7 @@
   }
   function installUpdate() {
     const d = DEV(); if (!d) return;
-    if (upd?.state === 'deferred' && (upd.reason === 'take' || knownTakeLive())) {
+    if (upd?.state === 'deferred' && upd.reason && (upd.reason === 'take' || knownTakeLive())) {
       if (Date.now() >= updateConfirmUntil) {
         updateConfirmUntil = Date.now() + 4000;
         clearTimeout(updateConfirmTimer);
