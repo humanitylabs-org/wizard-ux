@@ -26,8 +26,11 @@ public final class BackupWorker extends Worker {
     private BackupSettings settings;
     private String generation;
     public BackupWorker(Context c,WorkerParameters p) { super(c,p); }
+    private long envCheckedAt=0, foregroundAt=0;
     private void guard() throws IOException {
         if(isStopped() || !settings.enabled() || !generation.equals(settings.generation())) throw new IOException("Backup paused");
+        // Network/power checks are system calls; read() calls guard() per buffer, so re-check at most every 2 s.
+        long now=android.os.SystemClock.elapsedRealtime(); if(now-envCheckedAt<2000) return; envCheckedAt=now;
         if(!BackupScheduler.networkAllowed(getApplicationContext(),settings.wifi())) throw new IOException("Waiting for Wi-Fi / network");
         if(settings.initialCharging() && !BackupScheduler.charging(getApplicationContext())) throw new IOException("First backup waits for charging");
     }
@@ -78,7 +81,8 @@ public final class BackupWorker extends Worker {
                     catch(ImmichClient.HttpFailure e) { if(e.code==401 || e.code==403) throw e; failed++; }
                     catch(Exception e) { guard(); failed++; }
                     settings.prefs.edit().putInt("done",done).putInt("last_uploaded",uploaded).commit();
-                    setForegroundAsync(foreground(done,items.size())).get();
+                    long t=android.os.SystemClock.elapsedRealtime();
+                    if(t-foregroundAt>=1000 || done==items.size()) { foregroundAt=t; setForegroundAsync(foreground(done,items.size())).get(); }
                 }
             }
             guard();

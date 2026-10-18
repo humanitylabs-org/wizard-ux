@@ -13,7 +13,10 @@ public final class BackupScheduler {
     private BackupScheduler() {}
     static final String TAG="photos-backup", PERIOD="photos-period", WATCH="photos-watch", NOW="photos-now";
     static Constraints constraints(BackupSettings s,boolean watch) {
-        Constraints.Builder b=new Constraints.Builder().setRequiredNetworkType(s.wifi()?NetworkType.UNMETERED:NetworkType.CONNECTED).setRequiresCharging(s.initialCharging());
+        // The watcher only notices new media; the backup run it enqueues carries the network/charging rules.
+        // Keeping network off the watcher means a photo taken offline still wakes the app once seen.
+        Constraints.Builder b=new Constraints.Builder();
+        if(!watch) b.setRequiredNetworkType(s.wifi()?NetworkType.UNMETERED:NetworkType.CONNECTED).setRequiresCharging(s.initialCharging());
         if(watch) b.addContentUriTrigger(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,true)
                 .addContentUriTrigger(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,true)
                 .setTriggerContentUpdateDelay(15,TimeUnit.SECONDS).setTriggerContentMaxDelay(60,TimeUnit.SECONDS);
