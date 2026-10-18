@@ -24,7 +24,8 @@
     const s = S(); if (!s) return;
     // Keep the edge peeks in step with list ⇄ thread changes (the shell only re-checks them on desk moves).
     const f = focusWin(), sig = s.idx + ':' + (f ? f.id + ':' + (f.w.thread || '') : '');
-    if (sig !== lastSig) { lastSig = sig; try { s.syncPeek && s.syncPeek(); } catch (_) {} }
+    const want = f && f.w.app === 'chats' && f.w.thread && !document.querySelector('#track .desk.bound-peek') && !(G && G.lock);
+    if (sig !== lastSig || want) { lastSig = sig; try { s.syncPeek && s.syncPeek(); } catch (_) {} }
     for (const [id, w] of Object.entries(s.wins)) if (w.app === 'chats' && w.thread && w.thread !== '__new__' && lastThread[id] !== w.thread) { lastThread[id] = w.thread; saveLast(); }
   }
   setInterval(remember, 250);
