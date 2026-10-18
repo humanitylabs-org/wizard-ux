@@ -670,7 +670,7 @@
     return rawMeetingBridge;
   }
   // James's contract (18 Oct 2026): Wizard records only from the phone's own mic, never a Bluetooth speaker's.
-  const EXTERNAL_MIC = "Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again.";
+  const EXTERNAL_MIC = "Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again, or choose another mic in Settings → Microphone.";
   async function externalMic() {
     const d = W.WizardOSDevice; if (!d || typeof d.micRoute !== 'function') return false;
     for (let i = 0; i < 4; i++) {

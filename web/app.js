@@ -2330,7 +2330,7 @@
     } catch (err) {
       if (captureEpoch !== V.captureEpoch || V.cancelled || V.state === 'idle') return;
       stopStream(); V.rec = null;
-      if (err?.code === 'external_mic') { await cancelVoice(true); toast('!', 'Bluetooth has the mic · Wizard uses the phone mic only. Try again'); return; }
+      if (err?.code === 'external_mic') { await cancelVoice(true); toast('!', 'Bluetooth has the mic · Wizard uses the phone mic · change in Settings → Microphone', 5000); return; }
       if(meetingLoan || parkedReply){await cancelVoice(true);toast('!', 'Microphone unavailable · original retained');return;}
       if (kind === 'dictation') { cancelVoice(true); toast('!', 'Microphone unavailable · nothing inserted or sent'); return; }
       V.sim = true; NOMIC = true; tourEv('nomic', { kind });
@@ -2360,7 +2360,7 @@
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     // The phone's own mic only (18 Oct 2026): a take Android puts on a Bluetooth or external mic is refused.
-    if (await browserMicIsExternal()) { stream.getTracks().forEach(t => t.stop()); const e = new Error("Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again."); e.code = 'external_mic'; throw e; }
+    if (await browserMicIsExternal()) { stream.getTracks().forEach(t => t.stop()); const e = new Error("Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again, or choose another mic in Settings → Microphone."); e.code = 'external_mic'; throw e; }
     if (epoch !== V.captureEpoch || V.cancelled || V.state === 'idle') { stream.getTracks().forEach(t => t.stop()); return false; }
     V.stream = stream;
     const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();

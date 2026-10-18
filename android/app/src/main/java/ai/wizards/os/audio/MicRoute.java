@@ -8,7 +8,12 @@ import android.media.MediaRecorder;
 import android.os.SystemClock;
 import android.util.Log;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Every Wizard OS recording listens through the phone's own microphone (James's standing contract).
@@ -17,9 +22,10 @@ import java.io.IOException;
  * {@code VOICE_RECOGNITION} recording to that device's mic over SCO. The take then arrives near-silent and
  * band-limited (nothing above ~8 kHz) and speech-to-text invents words (18 Oct 2026).
  *
- * 0.9.27 asked for the built-in mic. 0.9.28 enforces it: after starting, the recorder's actual route is read back;
+ * 0.9.27 asked for the built-in mic. 0.9.30 enforces it: after starting, the recorder's actual route is read back;
  * a take Android confirms on another input is stopped, retried once with the plain {@code MIC} source, and refused
- * if it still is not the phone's mic. Only the input is touched; Bluetooth playback keeps its route.
+ * if it still is not an allowed mic. Only the input is touched; Bluetooth playback keeps its route.
+ * Which mic is allowed is the per-phone {@link MicPolicy} (default: the phone's own), set from Settings → Microphone.
  * Pure decisions live in {@link #pick} and {@link #verdict} for unit tests.
  */
 public final class MicRoute {
@@ -28,7 +34,7 @@ public final class MicRoute {
     public static final String BUILTIN = "builtin", EXTERNAL = "external", UNKNOWN = "unknown", SYSTEM = "system";
     /** What the person is told when Android keeps the mic on another device. */
     public static final String EXTERNAL_MESSAGE =
-            "Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again.";
+            "Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again, or choose another mic in Settings → Microphone.";
     /** Sources tried in order: the speech-tuned one, then the plain mic, which Android less often hands to Bluetooth. */
     public static final int[] SOURCES = {MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC};
 
@@ -74,25 +80,75 @@ public final class MicRoute {
     /** Configures a fresh recorder for {@code source}: set the source first, then format, encoder and output file. */
     public interface Setup { void apply(MediaRecorder r, int source) throws Exception; }
 
+    /** The mic a recording should hold to under the saved {@link MicPolicy}: the device to pin, or none. */
+    static final class Choice {
+        final MicPolicy policy; final AudioDeviceInfo device; final MicPolicy.Input input;
+        Choice(MicPolicy policy, AudioDeviceInfo device, MicPolicy.Input input) { this.policy = policy; this.device = device; this.input = input; }
+        String verdict(AudioDeviceInfo routed) { return policy.verdict(routed == null ? null : input(routed), input); }
+    }
+
+    static Choice choose(Context c) {
+        MicPolicy p = MicPolicy.load(c);
+        AudioDeviceInfo[] ins = inputs(c);
+        List<MicPolicy.Input> list = new ArrayList<>();
+        for (AudioDeviceInfo d : ins) list.add(input(d));
+        int at = p.target(list);
+        return at < 0 ? new Choice(p, null, null) : new Choice(p, ins[at], list.get(at));
+    }
+
+    private static AudioDeviceInfo[] inputs(Context c) {
+        try {
+            AudioManager am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
+            return am == null ? new AudioDeviceInfo[0] : am.getDevices(AudioManager.GET_DEVICES_INPUTS);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "input list failed", e);
+            return new AudioDeviceInfo[0];
+        }
+    }
+
+    static MicPolicy.Input input(AudioDeviceInfo d) {
+        String addr = "";
+        try { addr = d.getAddress(); } catch (RuntimeException ignored) { }
+        CharSequence n = d.getProductName();
+        return new MicPolicy.Input(typeName(d.getType()), n == null ? "" : n.toString(), addr);
+    }
+
+    /** The connected microphones and the saved policy, for Settings → Microphone. */
+    public static String settingsJson(Context c) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("v", MicPolicy.VERSION).put("policy", new JSONObject(MicPolicy.load(c).json()));
+            JSONArray a = new JSONArray();
+            for (AudioDeviceInfo d : inputs(c)) {
+                MicPolicy.Input in = input(d);
+                if (d.getType() == AudioDeviceInfo.TYPE_TELEPHONY || d.getType() == AudioDeviceInfo.TYPE_REMOTE_SUBMIX) continue;
+                a.put(new JSONObject().put("type", in.type).put("name", in.name).put("address", in.address));
+            }
+            return o.put("inputs", a).toString();
+        } catch (Exception e) {
+            return "{\"v\":1,\"policy\":{\"v\":1,\"mode\":\"phone\"},\"inputs\":[]}";
+        }
+    }
+
     /**
-     * Opens and starts a MediaRecorder on the phone's built-in mic, or throws. Tries each of {@link #SOURCES}; a take
-     * Android confirms on another input is stopped and released, never returned.
+     * Opens and starts a MediaRecorder on the mic the saved {@link MicPolicy} allows (by default the phone's own), or
+     * throws. Tries each of {@link #SOURCES}; a take Android confirms on a disallowed input is stopped and released.
      */
     public static MediaRecorder start(Context c, Maker maker, Setup setup) throws IOException {
-        AudioDeviceInfo mic = builtIn(c);
+        Choice ch = choose(c);
         IOException last = new IOException("The microphone did not start");
         for (int src : SOURCES) {
             MediaRecorder r = maker.make();
             boolean started = false;
             try {
                 setup.apply(r, src);
-                if (mic != null && !r.setPreferredDevice(mic)) throw new IOException("Android refused the phone's microphone");
+                if (ch.device != null && !r.setPreferredDevice(ch.device)) throw new IOException("Android refused the chosen microphone");
                 r.prepare();
                 r.start();
                 started = true;
-                int type = type(awaitRouted(r));
-                String v = verdict(type, mic != null);
-                Log.i(TAG, "recorder source=" + src + " routed=" + typeName(type) + " -> " + v);
+                AudioDeviceInfo routed = awaitRouted(r);
+                String v = ch.verdict(routed);
+                Log.i(TAG, "recorder policy=" + ch.policy.mode + " source=" + src + " routed=" + name(routed) + " -> " + v);
                 if (!EXTERNAL.equals(v)) return r;
                 last = new IOException(EXTERNAL_MESSAGE);
             } catch (Exception e) {
@@ -107,12 +163,12 @@ public final class MicRoute {
     }
 
     /**
-     * Pins a constructed AudioRecord to the built-in mic, starts it and reads back its route. False (already stopped and
-     * released) when it could not start or Android confirmed another input; the caller tries its next source.
+     * Pins a constructed AudioRecord to the mic the policy allows, starts it and reads back its route. False (already
+     * stopped and released) when it could not start or Android confirmed a disallowed input; the caller tries its next source.
      */
     public static boolean startOnBuiltIn(Context c, AudioRecord r) {
-        AudioDeviceInfo mic = builtIn(c);
-        if (mic != null && !r.setPreferredDevice(mic)) { Log.w(TAG, "audio record refused the built-in mic"); r.release(); return false; }
+        Choice ch = choose(c);
+        if (ch.device != null && !r.setPreferredDevice(ch.device)) { Log.w(TAG, "audio record refused the chosen mic"); r.release(); return false; }
         try {
             r.startRecording();
         } catch (IllegalStateException e) {
@@ -120,9 +176,9 @@ public final class MicRoute {
             return false;
         }
         if (r.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) { r.release(); return false; }
-        int type = type(awaitRouted(r));
-        String v = verdict(type, mic != null);
-        Log.i(TAG, "audio record routed=" + typeName(type) + " -> " + v);
+        AudioDeviceInfo routed = awaitRouted(r);
+        String v = ch.verdict(routed);
+        Log.i(TAG, "audio record policy=" + ch.policy.mode + " routed=" + name(routed) + " -> " + v);
         if (!EXTERNAL.equals(v)) return true;
         try { r.stop(); } catch (IllegalStateException ignored) { }
         r.release();
@@ -132,18 +188,18 @@ public final class MicRoute {
     /**
      * What this app is recording through right now, as the page's browser recorder sees it (18 Oct 2026): the
      * WebView's getUserMedia never passes through {@link #start}, so after the page opens the mic it asks here.
-     * Returns {@link #verdict} over this app's active recordings: "external" if any is on another input.
+     * "external" if any of this app's active recordings is on an input the saved policy does not allow.
      */
     public static String browserVerdict(Context c) {
         try {
             AudioManager am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
             if (am == null) return UNKNOWN;
-            boolean mic = builtIn(c) != null;
+            Choice ch = choose(c);
             String out = UNKNOWN;
             for (android.media.AudioRecordingConfiguration cfg : am.getActiveRecordingConfigurations()) {
                 AudioDeviceInfo d = cfg.getAudioDevice();
-                String v = verdict(d == null ? -1 : d.getType(), mic);
-                Log.i(TAG, "browser recording routed=" + name(d) + " -> " + v);
+                String v = ch.verdict(d);
+                Log.i(TAG, "browser recording policy=" + ch.policy.mode + " routed=" + name(d) + " -> " + v);
                 if (EXTERNAL.equals(v)) return EXTERNAL;
                 if (!UNKNOWN.equals(v)) out = v;
             }

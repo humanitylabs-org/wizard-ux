@@ -163,6 +163,17 @@ public final class DeviceBridge implements RecorderService.Listener {
     @JavascriptInterface
     public String micRoute() { return ai.wizards.os.audio.MicRoute.browserVerdict(activity); }
 
+    /**
+     * Settings → Microphone: {"v":1,"policy":{…},"inputs":[{type,name,address}…]}. The policy shape is documented on
+     * {@link ai.wizards.os.audio.MicPolicy}; the page can offer new choices (per-device order) without a native update.
+     */
+    @JavascriptInterface
+    public String micPolicy() { return ai.wizards.os.audio.MicRoute.settingsJson(activity); }
+
+    /** Saves a microphone policy from Settings. Returns the policy actually stored (the default for bad input). */
+    @JavascriptInterface
+    public String setMicPolicy(String json) { return ai.wizards.os.audio.MicPolicy.save(activity, json).json(); }
+
     @JavascriptInterface
     public String recActive() {
         String id = RecorderService.active();
