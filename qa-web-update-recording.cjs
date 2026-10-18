@@ -215,6 +215,7 @@ const markPage = P => P.p.evaluate(() => { window.__qaMark = 1; });
     await sleep(6500); // past one native 5 s chunk
     f = mizel(p);
     const notes = 'QA notes typed just before the reload';
+    await f.locator('#doc-toolbar [data-mode="notes"]').click();
     await f.locator('#notepad').fill(notes);
     ok(await raiseUpdate(P), 'native: an update raises the banner during the recording');
     const before = { media: N.mediaMs, clock: secs((await pillState(f)).clock), navs: P.navs(), words: live.filter(s => s.meetingId === meetingId).length };
