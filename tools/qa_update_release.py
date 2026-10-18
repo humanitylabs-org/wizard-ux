@@ -66,12 +66,12 @@ def main():
         qa = build(qa_job, 'qa-build')
         assert len(release) == 1
         version, signed_apk = next(iter(release.items()))
-        assert version == '0.9.29'
+        assert version == '0.9.31'
         meta = receipt['release-build']['artifacts'][0]
-        assert meta['aapt2']['version_code'] == '53'
+        assert meta['aapt2']['version_code'] == '55'
         assert meta['aapt2']['package'] == 'ai.wizards.os'
         assert meta['signer_sha256'] == '3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
-        assert receipt['old_sha256'] == '8409aad023c8cf0f8b83af701bfb4550652d1743ae011221f179e64e49452c6e'
+        assert receipt['old_sha256'] == '31db00254c7c901c04da98b0d3b8719be217666f6d57bbc6c6a5dccfa2b06166'
         src = qa_job / 'source'
         run('signed-upgrade', [sys.executable, src / 'tools/qa_upgrade.py', old_apk, signed_apk])
         run('silent-update', [sys.executable, src / 'tools/qa_silent_update.py', qa[version+'-qa'], qa[version+'-qanext'], qa[version+'-qalater'], src / 'web', output / 'silent-update'])
