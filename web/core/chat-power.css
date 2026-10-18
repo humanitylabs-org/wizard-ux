@@ -119,3 +119,13 @@
 /* desktop: the AI usage card */
 .usage-ov .usage-body { padding: 10px 16px 4px; }
 .usage-ov .keys-card { width: min(520px, calc(100vw - 32px)); }
+
+/* Unified Chats: the picker's Private group and a Private chip (lock, private agent green). */
+.ch-model.private { color: hsl(160 72% 62%); background: color-mix(in oklab, hsl(160 72% 62%) 15%, transparent); }
+.ch-model .ag-lock { width: 12px; height: 12px; flex: 0 0 auto; }
+.msheet-grp.priv { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .08); }
+.msheet-gh { display: flex; align-items: center; gap: 6px; padding: 4px 12px 6px; font-size: 12px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; color: hsl(160 72% 62%); }
+.msheet-gh .ag-lock, .mrow.priv .ag-lock { width: 12px; height: 12px; }
+.mrow.priv .mn b { display: inline-flex; align-items: center; gap: 6px; }
+.mrow.priv .mn b .ag-lock { color: hsl(160 72% 62%); }
+.msheet-gn { margin: 4px 12px 0; font-size: 12px; opacity: .7; line-height: 1.35; }

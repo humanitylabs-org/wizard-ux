@@ -163,7 +163,7 @@
    * Battery (14 Oct 2026): the list is ordered by last activity, so any thread that changes
    * rises to page 1. The between-walk poll used to re-read ~6 pages (~1 MB) every 15 s;
    * one page carries the same news. The full walk still catches edits that don't bump activity. */
-  async function fetchSessions(full, agent = '') {
+  async function fetchSessions(full, agent = '', onFirst = null) {
     const out = []; let snapshot = '';
     for (let offset = 0; offset < 5000; ) {
       const q = `limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`;
@@ -175,13 +175,19 @@
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
       if (!more || !rows.length) return { sessions: out, complete: true };
       if (!full) return { sessions: out, complete: false };
+      // First paint (18 Oct 2026): the boot walk is ~9 sequential pages (~1.4 MB) and grows with history; Chats
+      // waited on all of it behind "Connecting to Wizard…". Page 1 already holds every recent thread, so the
+      // caller paints it while the rest of the walk continues.
+      if (onFirst && offset === rows.length) await onFirst({ sessions: out.slice(), complete: false });
     }
     return { sessions: out, complete: true };
   }
   const FULL_EVERY = 3 * 60 * 1000;
-  /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>) and kept
-   * apart from the main list, so Home, search and the main Chats never show them. Every thread/run call for such
-   * a thread names its agent. ---- */
+  /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>), always
+   * through the owner's own Agent Service. Every thread/run call for such a thread names its agent, so a private
+   * agent's #59 seal still refuses id-only reads from anything else.
+   * Unified Chats (wizard-os spec/AGENTS.md, 18 Oct 2026): the owner's main Chats list (and its Ready/unread counts)
+   * merges every agent's threads by recency; `L.sessions` stays the main agent's own list (search, status, links). ---- */
   const AG = () => window.WosAgents || null;
   const otherAgent = id => { const a = AG(); return !!id && (a ? a.isOther(id) : id !== 'hermes'); };
   const AGENT_OF = new Map(); // sessionId -> agent id, for threads of non-default agents (incl. not yet listed)
@@ -361,16 +367,42 @@
   }
   const commandId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 
+  /* ---- last list snapshot (James, 18 Oct 2026) ----
+   * Chats opens on the list this device last saw, marked "Updating…", while the fresh read runs, instead of an empty
+   * "Connecting to Wizard…" box. The main agent's threads only: a private agent's rows are never written to storage
+   * (they merge in from that agent as before). Newest SNAP_N threads, long text clipped; written at most once a
+   * minute and when the page is hidden. Nothing is ever sent from it: every action re-reads the live list. */
+  const SNAP_KEY = `wos.chats.snapshot.v1:${SCOPE}`, SNAP_N = 150, SNAP_EVERY = 60 * 1000;
+  const clipDeep = v => typeof v === 'string' ? (v.length > 600 ? v.slice(0, 600) : v) : v && typeof v === 'object' ? (Array.isArray(v) ? v.slice(0, 20).map(clipDeep) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clipDeep(x)]))) : v;
+  function readSnap() {
+    try {
+      const v = JSON.parse(localStorage.getItem(SNAP_KEY) || 'null');
+      return v && v.schema === 1 && Array.isArray(v.sessions) && isFinite(v.at) ? v : null;
+    } catch (e) { return null; }
+  }
+  function writeSnap(store) {
+    if (!store.ok || store.cached) return;
+    try {
+      const act = s => Date.parse(s.activityAt || s.updatedAt || '') || 0;
+      const rows = store.sessions.filter(s => s && s.id && !s.optimistic && !s.synthetic && !s.hidden && !(s.agent && otherAgent(s.agent)))
+        .sort((a, b) => act(b) - act(a)).slice(0, SNAP_N).map(clipDeep);
+      localStorage.setItem(SNAP_KEY, JSON.stringify({ schema: 1, at: store.at || Date.now(), sessions: rows, deferred: store.deferred || {} }));
+      store.snapAt = Date.now();
+    } catch (e) { try { localStorage.removeItem(SNAP_KEY); } catch (_) {} }
+  }
+
   /* ---- store ---- */
   const L = {
     ok: false, error: '', sessions: [], seen: readLocal(), deferred: {}, at: 0, listeners: new Set(), loading: null,
+    // cached: the list on screen is the stored snapshot (cachedAt = when it was read live); cleared by the first fresh read.
+    cached: false, cachedAt: 0, snapAt: 0,
     agentSessions: {}, agentStatus: {}, // non-default agents: id -> sessions / { ok, error, at }
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
     isNew(s) { return hasNew(s, this.seenOf(s)); },
     // A non-default agent's read state stays on this device (never PUT to the main agent's thread-seen store).
     seenOf(s) { return s && s.agent && otherAgent(s.agent) ? AGENT_SEEN : this.seen; },
-    workGroups(sessions, now) { return groupWork(sessions || this.sessions, now); },
+    workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
     cardAt,
     groups(agent = '') {
@@ -396,7 +428,8 @@
         try {
           const started = Date.now();
           const full = !this.fullAt || Date.now() - this.fullAt > FULL_EVERY;
-          const [got, deferred, remote] = await Promise.all([fetchSessions(full), fetchDispositions(), fetchSeen().catch(() => null)]);
+          const side = Promise.all([fetchDispositions(), fetchSeen().catch(() => null)]);
+          const apply = (got, deferred, remote) => {
           // The main list holds the main agent's threads only, even if a server ever lists another agent's here.
           let sessions = got.sessions.filter(s => !otherAgent(s.agent));
           window.WosModels?.reconcile(sessions);
@@ -418,7 +451,17 @@
             putSeen(merged).catch(() => {});
           }
           this.seen = merged; writeLocal(merged);
-          this.ok = true; this.error = ''; this.at = Date.now();
+          this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
+          };
+          // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
+          // A first run anywhere (no read state on device or server) waits for the whole list, which it marks read.
+          const early = (!this.ok || this.cached) && full ? async page => { const [d, r] = await side; if (!merge(readLocal(), merge(this.seen, r))) return; apply(page, d, r); this.emit(); } : null;
+          const got = await fetchSessions(full, '', early);
+          const [deferred, remote] = await side;
+          apply(got, deferred, remote);
+          if (Date.now() - this.snapAt > SNAP_EVERY) writeSnap(this);
+          // Other agents' threads merge in after the main list is on screen; one slow agent never holds Chats.
+          this.emit();
           await this.refreshAgents(deferred);
         } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
         finally { this.loading = null; this.emit(); }
@@ -450,9 +493,19 @@
         }
       }));
     },
-    // The threads of one agent ('' or the default agent = the main list).
-    sessionsFor(agent = '') { return otherAgent(agent) ? (this.agentSessions[agent] || []) : this.sessions; },
-    statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error }; },
+    // The threads of one agent; '' (or the default agent) = the unified list the owner's main Chats shows.
+    sessionsFor(agent = '') { return otherAgent(agent) ? (this.agentSessions[agent] || []) : this.unified(); },
+    // Every agent's threads, main first; an id listed by two agents counts once. Order is the caller's (groupWork sorts).
+    unified() {
+      const extra = Object.entries(this.agentSessions).filter(([a, list]) => otherAgent(a) && list.length);
+      if (!extra.length) return this.sessions;
+      const seen = new Set(this.sessions.map(s => s.id)), out = this.sessions.slice();
+      for (const [, list] of extra) for (const s of list) if (!seen.has(s.id)) { seen.add(s.id); out.push(s); }
+      return out;
+    },
+    // A private agent's thread (by id): its rows carry the lock and its words never enter another agent's context.
+    isPrivate(id) { const a = this.agentOf(id), A = AG(); return !!a && !!A && A.isPrivate(A.get(a)); },
+    statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error, cached: this.cached, cachedAt: this.cachedAt, loading: !!this.loading }; },
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
     pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
@@ -633,6 +686,10 @@
   };
   // Wizard (in its desk, or another tab) writes the same key when a chat is opened.
   addEventListener('storage', e => { if (e.key === SEEN_KEY || e.key === SEEN_BASE) { L.seen = merge(L.seen, readLocal()); L.emit(); } });
+  // Open on the last snapshot (see SNAP_KEY). at stays 0, so the connection banner never counts it as a live read.
+  { const snap = readSnap(); if (snap && snap.sessions.length) { L.sessions = snap.sessions; L.deferred = snap.deferred || {}; for (const s of L.sessions) applyLocal(s); L.ok = true; L.cached = true; L.cachedAt = snap.at; } }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) writeSnap(L); });
+  addEventListener('pagehide', () => writeSnap(L));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) L.refresh(); });
   setInterval(() => { if (!document.hidden) L.refresh(); }, 15000);
   // outbox.js loads after this file: follow it once every script has run.

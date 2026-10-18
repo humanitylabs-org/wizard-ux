@@ -21,6 +21,14 @@
     return h >>> 0;
   }
   function visible(el) { return el && el.clientHeight > 0 && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden'; }
+  function flowAnchor(el, owner, doc) {
+    // A sticky/fixed header does not move with the scroller. Its viewport offset
+    // cannot reconstruct a reading place; keep the saved numerical position.
+    for (let n = el; n && n !== owner; n = n.parentElement) {
+      if (['sticky','fixed'].includes(doc.defaultView.getComputedStyle(n).position)) return false;
+    }
+    return true;
+  }
   function snapshot(el, doc) {
     const root = el === doc.scrollingElement, box = root ? { top: 0, bottom: doc.defaultView.innerHeight } : el.getBoundingClientRect();
     // A short visible text block anchors the paragraph as fonts/images above it change.
@@ -28,12 +36,12 @@
       const b = n.getBoundingClientRect();
       let owner = n.parentElement;
       while (owner && owner !== el && !/auto|scroll/.test(doc.defaultView.getComputedStyle(owner).overflowY)) owner = owner.parentElement;
-      return owner === el && b.height > 0 && b.bottom > box.top + 1 && b.top < box.bottom;
+      return owner === el && flowAnchor(n, el, doc) && b.height > 0 && b.bottom > box.top + 1 && b.top < box.bottom;
     });
     return { path: selector(el, doc), x: el.scrollLeft, y: el.scrollTop, height: el.scrollHeight,
       ...(anchor ? { anchor: selector(anchor, doc), hash: hash(anchor), offset: anchor.getBoundingClientRect().top - box.top } : {}) };
   }
-  function attach(frame, { appId, authorize }) {
+  function attach(frame, { appId, authorize, storage = sessionStorage }) {
     let current = null, stopped = false;
     const slot = frame.closest('[data-win]')?.dataset.win || appId;
     const keyFor = w => PREFIX + JSON.stringify([appId, slot, w.location.pathname + w.location.search + w.location.hash]);
@@ -45,7 +53,7 @@
       const key = keyFor(w), tracked = new Set(), offs = [];
       let restoring = true, held = false, pending = null, saveTimer = null, quiet = null, deadline = null, raf = null, budget = WAIT, started = 0;
       try {
-        const value = JSON.parse(sessionStorage.getItem(key));
+        const value = JSON.parse(storage.getItem(key));
         if (restore && value?.v === 1 && Array.isArray(value.scrolls)) pending = value.scrolls.slice(0, 24).filter(s => typeof s.path === 'string' && s.path.length < 1500 && Number.isFinite(s.y) && s.y >= 0 && Number.isFinite(s.x) && Number.isFinite(s.height));
       } catch (_) {}
       const allowed = () => !stopped && frame.isConnected && authorize() && frame.contentWindow.document === doc && keyFor(w) === key;
@@ -62,9 +70,9 @@
         const scrolls = [...tracked].filter(el => el.isConnected && visible(el) && (el === root || /auto|scroll/.test(w.getComputedStyle(el).overflowY + w.getComputedStyle(el).overflowX))).slice(0, 24).map(el => snapshot(el, doc));
         if (!scrolls.length) return;
         try {
-          sessionStorage.setItem(key, JSON.stringify({ v: 1, at: Date.now(), scrolls }));
-          const keys = Object.keys(sessionStorage).filter(k => k.startsWith(PREFIX));
-          if (keys.length > MAX) keys.sort((a,b) => (JSON.parse(sessionStorage.getItem(a) || '{}').at || 0) - (JSON.parse(sessionStorage.getItem(b) || '{}').at || 0)).slice(0, keys.length - MAX).forEach(k => sessionStorage.removeItem(k));
+          storage.setItem(key, JSON.stringify({ v: 1, at: Date.now(), scrolls }));
+          const keys = Object.keys(storage).filter(k => k.startsWith(PREFIX));
+          if (keys.length > MAX) keys.sort((a,b) => (JSON.parse(storage.getItem(a) || '{}').at || 0) - (JSON.parse(storage.getItem(b) || '{}').at || 0)).slice(0, keys.length - MAX).forEach(k => storage.removeItem(k));
         } catch (_) {} // storage denial must not break an app or Reload
       }
       function pause() {
@@ -94,7 +102,7 @@
           tracked.add(el); resize.observe(el);
           const root = el === doc.scrollingElement, anchor = s.anchor && find(doc, s.anchor);
           let y = s.y;
-          if (anchor && hash(anchor) === s.hash && visible(anchor)) y = el.scrollTop + anchor.getBoundingClientRect().top - (root ? 0 : el.getBoundingClientRect().top) - s.offset;
+          if (anchor && flowAnchor(anchor, el, doc) && hash(anchor) === s.hash && visible(anchor)) y = el.scrollTop + anchor.getBoundingClientRect().top - (root ? 0 : el.getBoundingClientRect().top) - s.offset;
           const max = Math.max(0, el.scrollHeight - el.clientHeight);
           // Reachable alone is insufficient: a surviving anchor can appear early
           // while the earlier text is still loading. Keep the original checkpoint.
