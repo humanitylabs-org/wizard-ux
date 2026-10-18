@@ -2262,19 +2262,18 @@
       if (V.replyTo) { shock(); finishVoice(); return 'sent'; }
       return 'busy';
     }
+    // A second mic tap while a meeting is lending its microphone sends this reply as soon as the take opens, like the orb.
+    if (V.admitting) { if (V.admitReply) { V.admitSend = true; return 'sent'; } return 'busy'; }
     if (V.state !== 'idle' || !sid) return 'busy';
-    const shared = window.WizAppCapture?.getState?.();
-    if (shared?.active || shared?.recording || shared?.hold) { toast('🎙', 'Microphone held by another app', 2000); return 'busy'; }
-    try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id) { toast('🎙', 'An existing native recording is still held', 2200); return 'busy'; } } catch (_) { return 'busy'; }
-    startVoice('auto');
-    V.replyTo = { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' };
-    if (V.native) replyTake(V.native, V.replyTo);
-    CHATS.PW?.paintMic(true, sid);
+    // One recorder pathway (James, 18 Oct 2026: "the orb works … shouldn't the microphone button be triggering the same
+    // pathway"): startVoice owns admission, so a Mizel meeting lends its microphone to the composer mic exactly as it
+    // does to the orb, and the reply pin is set before the take opens (it survives the asynchronous loan).
+    startVoice('auto', { replyTo: { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' } });
     // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
     // animates."): the lit mic, the orb and its timer already say a reply is recording.
     return 'recording';
   }
-  async function startVoice(kind) {
+  async function startVoice(kind, opt = {}) {
     V.onAt = performance.now();
     if(V.admitting||parking)return 'busy';
     if(V.state==='paused' && V.replyTo && ['dictation','command'].includes(kind)) {
@@ -2286,10 +2285,10 @@
     const shared = window.WizAppCapture?.getState?.();
     let meetingLoan=null;
     if (shared?.active || shared?.recording || shared?.hold) {
-      V.admitting=true;V.admitCancelled=false;V.admitSend=false;
+      V.admitting=true;V.admitCancelled=false;V.admitSend=false;V.admitReply=opt.replyTo||null;
       try {meetingLoan=await window.WosOrbHandoff.begin();}
       catch(e){restoreReply();toast('🎙',esc(e.message),3000);return 'busy';}
-      finally{V.admitting=false;}
+      finally{V.admitting=false;V.admitReply=null;}
       if(V.admitCancelled){await window.WosOrbHandoff.end(meetingLoan,{status:'cancelled'});return;}
     }
     try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id) { if(meetingLoan)await window.WosOrbHandoff.end(meetingLoan,{status:'cancelled'});restoreReply();toast('🎙', 'An existing native recording is still held', 2200); return 'busy'; } } catch (_) { if(meetingLoan)await window.WosOrbHandoff.end(meetingLoan,{status:'cancelled'});restoreReply();return 'busy'; }
@@ -2301,7 +2300,7 @@
     // the exact route is still sealed at Send, and unavailable routes remain fail-closed.
     window.WosModels?.load().catch(() => {});
     clearTimeout(txHideT);
-    Object.assign(V, { kind, custodyCapture: null, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, nativeSegmentBase:0,resumeNative:false,t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, custodyCapture: null, target: null, replyTo: opt.replyTo || null, snap: null, seal: null, chunks: [], parts: [], acc: 0, nativeSegmentBase:0,resumeNative:false,t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
@@ -2321,7 +2320,7 @@
     const dev = DEV();
     if (dev) { let id = ''; try { id = (meetingLoan?.native ? dev.recStartBorrowed(kind === 'general' ? 'auto' : kind,meetingLoan.id) : dev.recStart(kind === 'general' ? 'auto' : kind)) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && V.snap?.conversation) voiceRecovery(id, { kind, conversation: V.snap.conversation }); else if (id && kind !== 'dictation') { const route = V.snap?.route || CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) { if (id && V.snap?.conversation) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Manager destination could not be saved · nothing sent'); return; } }
       if (id && kind === 'dictation' && !dictationTake(id)) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Dictation could not be safely retained'); return; }
-      if (id) { V.native = id;try{window.WosOrbHandoff?.bind(meetingLoan,id,V.snap);}catch(e){await cancelVoice(true);toast('!','Could not save microphone link · original retained');return;} if (V.snap?.general) { try { voiceRecovery(id, { kind:'general', general:true, conversation:null }); saveVoiceRoute(id,V.snap.route); } catch (_) { V.stopAsked=true;pauseCommandCapture();toast('!','General destination could not be saved · recording kept');return; } } voiceTake(id, kind === 'general' ? 'auto' : kind); reportVoice(V.state); if(V.admitSend){V.admitSend=false;finishVoice();}else if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; }
+      if (id) { V.native = id;if (V.replyTo) replyTake(id, V.replyTo);try{window.WosOrbHandoff?.bind(meetingLoan,id,V.snap);}catch(e){await cancelVoice(true);toast('!','Could not save microphone link · original retained');return;} if (V.snap?.general) { try { voiceRecovery(id, { kind:'general', general:true, conversation:null }); saveVoiceRoute(id,V.snap.route); } catch (_) { V.stopAsked=true;pauseCommandCapture();toast('!','General destination could not be saved · recording kept');return; } } voiceTake(id, kind === 'general' ? 'auto' : kind); reportVoice(V.state); if(V.admitSend){V.admitSend=false;finishVoice();}else if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; }
       if(meetingLoan?.native){await cancelVoice(true);toast('!', 'Native handoff refused · meeting restored');return;}
     } // A refused native loan NEVER falls through to browser capture.
     try {
