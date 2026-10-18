@@ -2688,7 +2688,9 @@
       if (settled && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.completeLocal(snap.custodyId);
       if (OUTBOX.get(snap.custodyId)?.state === 'processing') {
         const completed = outcome?.outcome === 'local' && await OUTBOX.completeLocal(snap.custodyId);
-        if (!completed && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'local'
+        if (!completed && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'held-message'
+          ? 'Held take sounded like a message · kept here to send'
+          : outcome?.outcome === 'local'
           ? 'Command completed · accompanying draft or attachments kept'
           : outcome?.outcome === 'local-pending' ? 'Command accepted · completion unconfirmed; original recording kept'
           : 'Delivery not confirmed · original recording kept; not queued for retry');
@@ -2942,15 +2944,18 @@
   function holdNoMatch(text, opts) {
     tourEv('nomatch', { text });
     setVoice('idle'); vib(12);
-    txShow(text, 'No command matched · nothing sent', 'command', '⚡');
     const q = String(text || '').trim().replace(/[.!?,\s]+$/, '');
+    // A long held take is a message, not a missed command (James, 18 Oct: a 40 s task vanished with the 4 s card).
+    // It keeps the card until he taps Send or ×, with Send first and no search chips.
+    const long = q.split(/\s+/).length > 20;
+    txShow(text, long ? 'Not a command · tap Send to keep it' : 'No command matched · nothing sent', 'command', '⚡');
     const btn = (k, label) => `<button data-hold="${k}">${esc(label)}</button>`;
-    $('#txChips').innerHTML = (searchUrl(q) ? btn('search', 'Search the web') + btn('images', 'Image search') : '')
-      + btn('agent', `Send to ${window.WizConfig.agent()}`);
-    V.holdText = q; V.holdOpts = opts;
+    $('#txChips').innerHTML = long ? btn('agent', `Send to ${window.WizConfig.agent()}`)
+      : (searchUrl(q) ? btn('search', 'Search the web') + btn('images', 'Image search') : '') + btn('agent', `Send to ${window.WizConfig.agent()}`);
+    V.holdText = q; V.holdOpts = opts; V.holdLong = long;
     window.__backLog = (window.__backLog || []).concat('hold:nomatch').slice(-30);
-    txHide(NOMATCH_MS); // James (11 Oct): 9 s lingered far too long; × closes it at once
-    return false;
+    if (long) clearTimeout(txHideT); else txHide(NOMATCH_MS); // James (11 Oct): 9 s lingered far too long; × closes it at once
+    return long ? { outcome: 'held-message' } : false;
   }
   function showRouted(kind, label) {
     if (isPill()) {
@@ -3452,15 +3457,21 @@
   };
   $('#txChips').addEventListener('click', e => { if (e.target.closest('[data-handoff="drop"]')) { $('#txChips').innerHTML = ''; txHide(0); } });
   // × on a choice card: clear it now, nothing sent. Touching the card keeps it up while James reads/picks.
-  const closeChoice = () => { $('#txChips').innerHTML = ''; V.holdText = ''; V.holdOpts = null; window.__backLog = (window.__backLog || []).concat('tx:close').slice(-30); txHide(0); };
+  const closeChoice = () => { $('#txChips').innerHTML = ''; V.holdText = ''; V.holdOpts = null; V.holdLong = false; window.__backLog = (window.__backLog || []).concat('tx:close').slice(-30); txHide(0); };
   $('#txClose').addEventListener('click', e => { e.stopPropagation(); closeChoice(); });
-  tx.addEventListener('pointerdown', e => { if (!e.target.closest('#txClose') && V.holdText && $('#txChips').childElementCount) txHide(NOMATCH_MS); });
+  tx.addEventListener('pointerdown', e => { if (!e.target.closest('#txClose') && V.holdText && !V.holdLong && $('#txChips').childElementCount) txHide(NOMATCH_MS); });
   $('#txChips').addEventListener('click', e => {
     const b = e.target.closest('[data-hold]'); if (!b) return;
     const k = b.dataset.hold, q = V.holdText || '', opts = V.holdOpts || {};
-    V.holdText = ''; V.holdOpts = null; $('#txChips').innerHTML = '';
+    V.holdText = ''; V.holdOpts = null; V.holdLong = false; $('#txChips').innerHTML = '';
     if (k === 'search' || k === 'images') { txHide(0); openSearch(q, k === 'images' ? 'images' : 'all'); return; }
-    if (k === 'agent' && q) { toAgent(q, `To ${window.WizConfig.agent()} · from a held command`, { ...opts, snap: opts.snap ? { ...opts.snap, custodyId: null } : opts.snap, how: 'voice (held command, sent on purpose)' }); return; }
+    if (k === 'agent' && q) {
+      // A long take parked in Unsent (held-message) is settled once this explicit Send has its own outbox item.
+      const parked = opts.snap?.custodyId;
+      Promise.resolve(toAgent(q, `To ${window.WizConfig.agent()} · from a held command`, { ...opts, snap: opts.snap ? { ...opts.snap, custodyId: null } : opts.snap, how: 'voice (held command, sent on purpose)' }))
+        .then(item => { if (item && parked && OUTBOX.get(parked)?.state === 'held') return OUTBOX.completeLocal(parked); }).catch(() => {});
+      return;
+    }
     txHide(0);
   });
   // Native bridge v0 (core/bridge.js): the same events drive the phone and the desktop shell.
