@@ -71,6 +71,9 @@
 .dsg.empty { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid rgba(205, 190, 255, .4); opacity: 1; }
 .dsg .dn { position: absolute; right: -7px; bottom: -5px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px;
   font: 700 9px/13px system-ui, sans-serif; text-align: center; color: #0c0814; background: var(--c); }
+/* App count badge, pinned to the app's mark (top right); the orb mirrors the desk in view. */
+.dsg .dbg { position: absolute; right: -9px; top: -7px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 99px;
+  font: 800 9.5px/15px system-ui, sans-serif; text-align: center; color: #160b05; background: var(--amber); box-shadow: 0 0 0 1.5px rgba(5, 3, 12, .9); pointer-events: none; }
 /* App with no sigil yet: its initial, set in the app's colour. */
 .sgi.sgl {
   -webkit-mask: none; mask: none; background: none;
