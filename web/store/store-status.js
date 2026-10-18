@@ -1,6 +1,7 @@
 // Read-only identity/release decisions shared by Store rendering and contract tests.
 // A launcher is evidence of an installed app, NOT evidence of its release version.
 const HOST_ALIASES = {
+  'android-apps': {repo:'humanitylabs-org/android-apps', id:'android-apps', url:'/android-apps/'},
   'wizard-calendar': {repo:'humanitylabs-org/wizard-calendar', id:'calendar', url:'/wizard-calendar/'},
   'wizard-music': {repo:'humanitylabs-org/wizard-music', id:'wizard-music', url:'/wizard-music/'},
   'wizard-search': {repo:'humanitylabs-org/wizard-search', id:'wizard-search', url:'/wizard-search/'},
