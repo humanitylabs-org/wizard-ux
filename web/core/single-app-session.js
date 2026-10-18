@@ -9,7 +9,7 @@
   const win = document.createElement('article');
   win.id = 'singleApp'; win.className = 'win full'; win.dataset.win = key;
   device.appendChild(win);
-  let frame = null, app = null, detach = null, mountedURL = '', loaded = false, cut = 0;
+  let frame = null, app = null, detach = null, mountedURL = '', loaded = false, cut = 0, top = 0;
   const read = () => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { return null; } };
   function toast(icon, text) { const el = document.getElementById('toast'); el.textContent = text; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 1400); }
   // Reuse the shared link/media utilities, but never their desk-placement action.
@@ -44,15 +44,18 @@
     try {
       const d = frame.contentDocument;
       if (!d?.documentElement) return;
-      d.documentElement.style.setProperty('--wos-cutout', cut + 'px');
+      // Android keeps its status bar and navigation buttons (James, 18 Oct): the app starts below the taller of
+      // the status bar and the camera cutout; the native view already pads the navigation bar at the bottom.
+      const edge = Math.max(cut, top);
+      d.documentElement.style.setProperty('--wos-cutout', edge + 'px');
       let own = !!d.querySelector('meta[name="wizard-os-edge"][content="cover"]');
       if (!own) for (const sh of d.styleSheets) { try { if ([...sh.cssRules].some(r => r.cssText.includes('--wos-cutout'))) { own = true; break; } } catch (_) {} }
-      win.style.setProperty('--single-cut', (own ? 0 : cut) + 'px');
+      win.style.setProperty('--single-cut', (own ? 0 : edge) + 'px');
     } catch (_) {}
   }
   window.__wosCutout = px => { cut = Math.max(0, px | 0); safeInsets(); };
-  window.__wosTop = () => {};
-  try { cut = +window.WizardOSNative?.cutoutTop?.() || 0; window.WizardOSNative?.immersive?.(true); } catch (_) {}
+  window.__wosTop = px => { top = Math.max(0, px | 0); safeInsets(); };
+  try { window.WizardOSNative?.immersive?.(false); cut = +window.WizardOSNative?.cutoutTop?.() || 0; top = +window.WizardOSNative?.insetTop?.() || 0; } catch (_) {}
   window.__wosSessionCheckpoint = checkpoint;
   window.__wos = { toast, links, get singleApp() { return id; }, get voice() { return 'idle'; } };
   window.__wosNativeBack = () => {
