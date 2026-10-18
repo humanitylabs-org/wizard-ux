@@ -1,6 +1,7 @@
 // Outline's target/custody lifecycle around the SAME openRealtime implementation
 // used by Mizel Live. No provider protocol, credentials, attestation or ASR here.
 import {createRequire} from 'node:module';
+import {connect} from 'node:net';
 
 // Use Wizard's existing attestation proxy, not a second remote speech service.
 // The OpenAI SDK is transport only: both URL and model remain Tinfoil-only.
@@ -9,7 +10,10 @@ export function sharedProxyClient(modulePath, apiKey, proxyURL) {
  if(url.protocol!=='http:'||!['127.0.0.1','[::1]'].includes(url.hostname)||url.username||url.password||url.search||url.hash||!['','/'].includes(url.pathname))throw new Error('Shared voice proxy must be the configured loopback attestation tunnel');
  const require=createRequire(modulePath),{OpenAI}=require('openai'),{OpenAIRealtimeWS}=require('openai/realtime/ws');
  const client=new OpenAI({apiKey,baseURL:url.origin+'/v1'});
- return {realtime:async({model})=>{if(model!=='voxtral-mini-4b-realtime')throw new Error('Unsupported shared live voice model');return new OpenAIRealtimeWS({model},client);}};
+ // SDK forces a wss URL even for HTTP baseURL. Its connection hook carries
+ // plaintext ONLY to the validated loopback SSH tunnel; the existing proxy
+ // performs enclave attestation and pinned TLS on the external connection.
+ return {realtime:async({model})=>{if(model!=='voxtral-mini-4b-realtime')throw new Error('Unsupported shared live voice model');return new OpenAIRealtimeWS({model,options:{createConnection:()=>connect({host:url.hostname.replace(/[\[\]]/g,''),port:Number(url.port)||80})}},client);}};
 }
 
 export class OutlineSharedRealtime {
