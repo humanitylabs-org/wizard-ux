@@ -241,10 +241,12 @@ public class RecorderService extends Service {
                 r.setAudioSamplingRate(44100);
                 r.setAudioEncodingBitRate(64000);
                 r.setOutputFile(out.getAbsolutePath());
+                ai.wizards.os.audio.MicRoute.pin(this, r); // the phone's mic, never a Bluetooth speaker's
                 r.prepare();
                 r.start();
                 rec = r;
                 source = "mic";
+                RecordingStore.get(this).set(id, "route", ai.wizards.os.audio.MicRoute.routed(r));
             } catch (Exception e) {
                 Log.w(TAG, "recorder failed: " + e);
                 RecordingStore.get(this).set(id, "error", String.valueOf(e.getMessage()));

@@ -231,13 +231,7 @@ final class VoiceCapture {
     }
 
     private void preferBuiltInMic(MediaRecorder r) {
-        AudioManager am = (AudioManager) app.getSystemService(Context.AUDIO_SERVICE);
-        for (AudioDeviceInfo d : am.getDevices(AudioManager.GET_DEVICES_INPUTS)) {
-            if (d.getType() == AudioDeviceInfo.TYPE_BUILTIN_MIC) {
-                r.setPreferredDevice(d);
-                return;
-            }
-        }
+        ai.wizards.os.audio.MicRoute.pin(app, r);
     }
 
     private final Runnable meter = new Runnable() {
