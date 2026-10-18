@@ -72,6 +72,7 @@ public class MeetingRecorderService extends Service {
     private static volatile MeetingBorrow borrow;
 
     public static Live live() { return live; }
+    public static boolean serviceAlive() { return instance != null; }
 
     /** Bridge thread waits for actual pause/flush/release, never just a posted intent. */
     public static String beginBorrow(String eventId, String meetingId) {
