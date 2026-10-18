@@ -569,8 +569,10 @@
   function closeCurrent() { const f = focused(); if (f) { closeWin(f.id); return 'app'; } return closeDesktop() ? 'desktop' : 'root'; }
 
   /* ---------------- top bar ---------------- */
+  addEventListener('wizard:app-counts', () => paintBar());
   function paintBar() {
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
+    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0);
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
     $('#logo').innerHTML = C.workspaceNav.icon({ home: true }, W, appOf);
     $('#wsList').innerHTML = ws.map((d, i) => {

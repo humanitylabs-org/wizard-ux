@@ -1074,18 +1074,20 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         if (qa != null) recording = qa;
         else try {
             recording = new File(getCacheDir(), "everywhere-" + SystemClock.elapsedRealtime() + ".m4a");
-            MediaRecorder r = Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(this) : new MediaRecorder();
-            r.setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION);
-            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-            r.setAudioChannels(1);
-            r.setAudioSamplingRate(32000);
-            r.setAudioEncodingBitRate(64000);
-            r.setOutputFile(recording.getAbsolutePath());
-            r.setOnErrorListener((mr, what, extra) -> main.post(() -> micLost(mr, what)));
-            ai.wizards.os.audio.MicRoute.pin(this, r); // the phone's mic, never a Bluetooth speaker's
-            r.prepare();
-            r.start();
+            final File file = recording;
+            // The phone's mic, never a Bluetooth speaker's: MicRoute refuses a take Android puts elsewhere.
+            MediaRecorder r = ai.wizards.os.audio.MicRoute.start(this,
+                    () -> Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(this) : new MediaRecorder(),
+                    (m, src) -> {
+                        m.setAudioSource(src);
+                        m.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+                        m.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+                        m.setAudioChannels(1);
+                        m.setAudioSamplingRate(32000);
+                        m.setAudioEncodingBitRate(64000);
+                        m.setOutputFile(file.getAbsolutePath());
+                        m.setOnErrorListener((mr, what, extra) -> main.post(() -> micLost(mr, what)));
+                    });
             recorder = r;
             Log.i(TAG, "recording via " + ai.wizards.os.audio.MicRoute.routed(r));
         } catch (Exception e) {
@@ -1093,7 +1095,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             dropRecorder();
             listening = false;
             endLoan("start_failed", "The microphone did not start");
-            Toast.makeText(this, "The microphone is busy. Try again in a moment.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, ai.wizards.os.audio.MicRoute.why(e, "The microphone is busy. Try again in a moment."), Toast.LENGTH_LONG).show();
             startForegroundSafe(false);
             return;
         }

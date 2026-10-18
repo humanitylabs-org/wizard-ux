@@ -120,6 +120,7 @@
     if (st === 'side' && N) { ctx.openSub('side'); return true; } return false;
   } });
   register({ id: 'voice', html: () => window.WizCore.voiceStatus?.card() || '' });
+  register({ id: 'microphone', aliases: ['mic'], available: () => !!window.WosMic?.available(), html: () => window.WosMic?.html() || '', act: (ctx, el) => window.WosMic?.act(el, ctx) });
   register({ id: 'cancelled', html: () => window.WosCancelled?.html() || '', act: (ctx, el) => window.WosCancelled?.act(el) });
   register({ id: 'selection', html: () => window.WosSelMenu?.html() || '', act: (ctx, el) => window.WosSelMenu?.act(el) });
   register({ id: 'wizard', html(ctx) {

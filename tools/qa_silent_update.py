@@ -470,6 +470,8 @@ with _lockfile as lock:
             if installer_ui(tt): ui_seen.append(tt[-80:])
             time.sleep(1)
         took = int(time.time() - t0)
+        # The install receipt is logged by the replaced process; give it time to land before reading.
+        wait(lambda: re.search(r'status 0|replaced', logs('session|status|replaced', 10)), 30, 1)
         lg = logs('session|status|replaced', 10)
         receipt['taps']['second_update'] = 0
         check('R: the second update installs with ZERO taps (versionCode %d, %ds after leaving)' % (LATER_VC, took), vcode() == LATER_VC, (vcode(), lg[-400:]))
