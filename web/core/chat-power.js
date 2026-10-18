@@ -181,10 +181,8 @@ window.WosChatPower = function chatPower(A) {
   async function retryThread(wid, sid, o) {
     let s = LIVE.session(sid); if (!s || !OUTBOX) return false;
     // A list/snapshot preview is never retry input, even after an earlier detail read.
-    if (s.listVersion === 1 || LIVE.cached) {
-      try { s = await LIVE.sessionInfo(sid); } catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return false; }
-    }
-    const w = H.win(wid), text = requestOf(w && w.thread === sid ? w : null, s);
+    try { s = await LIVE.sessionInfo(sid); } catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return false; }
+    const w = H.win(wid), text = s?.request || ''; // only the freshly hydrated input, never cached turns
     if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
     const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
     const c = w ? ch(wid) : null; if (c) c.retrying = sid;
