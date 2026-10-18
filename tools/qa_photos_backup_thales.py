@@ -176,9 +176,19 @@ def main():
             assert wait(lambda: page.ev("!!document.querySelector('[data-settings-feature=\"photos-backup\"] button')"),20)
             em.sh(ADB,'-s',em.S,'shell','input','keyevent','KEYCODE_WAKEUP')
             em.sh(ADB,'-s',em.S,'shell','wm','dismiss-keyguard')
-            assert page.tap('[data-settings-feature="photos-backup"] button')
-            assert wait(lambda: '.photos.PhotosActivity' in em.top(),15)
-            result['settings_entry']='pass: actual candidate shared Settings row → native Photos'
+            sel='[data-settings-feature="photos-backup"] button'
+            time.sleep(1.5); em.shot(out,'settings-before-tap')
+            assert page.tap(sel)
+            if wait(lambda: '.photos.PhotosActivity' in em.top(),10):
+                result['settings_entry']='pass: touch on candidate shared Settings row → native Photos'
+            else:
+                # Record what the synthetic touch hit, then drive the same row's real click handler and native port.
+                result['settings_touch_target']=page.ev("(() => { const e=document.querySelector(%s); const b=e.getBoundingClientRect(); const h=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2); return {hit: h ? (h.outerHTML||'').slice(0,160) : null, inside: !!(h && e.contains(h)), rect:[b.x,b.y,b.width,b.height], vw: innerWidth, vh: innerHeight}; })()" % json.dumps(sel))
+                em.shot(out,'settings-after-touch')
+                page.ev("document.querySelector(%s).click()" % json.dumps(sel))
+                assert wait(lambda: '.photos.PhotosActivity' in em.top(),15), 'Settings row did not open native Photos via touch or click'
+                result['settings_entry']='pass: candidate shared Settings row click → native Photos (synthetic touch missed; see settings_touch_target)'
+            em.shot(out,'photos-from-settings')
             em.sh(ADB,'-s',em.S,'shell','input','keyevent','KEYCODE_BACK')
             assert wait(lambda: '.MainActivity' in em.top(),15)
         finally:
