@@ -192,15 +192,13 @@ window.WizCore.chats = function createChats(H) {
     const row = (w1, w2) => `<div class="ch-skel-row"><i class="ch-sk av"></i><span class="bd"><i class="ch-sk" style="width:${w1}%"></i><i class="ch-sk sm" style="width:${w2}%"></i></span></div>`;
     return `<div class="ch-skel" role="status" aria-label="${esc(label)}…">${row(46, 78)}${row(62, 70)}${row(38, 84)}${row(54, 66)}${row(44, 74)}</div>`;
   }
-  /* New chat, Miguel's skins only (Obsidian, Obsidian Light, Landscapes; core/chats.css): the agent's mark, a
-   * time-of-day greeting and key chips. Every other skin keeps the boxed "New chat" (.nc-classic) unchanged. */
+  /* New chat: the agent's mark, a time-of-day greeting and the ways to start, instead of a boxed "New chat". */
   function newChatHtml(TAG) {
     const hr = (window.WizConfig.dayParts?.() || { h: new Date().getHours() }).h;
     const part = hr < 5 ? 'Up late' : hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
-    const who = (window.WizConfig.owner?.() || '').split(/\s+/)[0];
-    const priv = TAG && AGS()?.isPrivate(agentRec(TAG));
+    const who = window.WizConfig.owner?.() || '';
     const hint = H.newChatKeys ? H.newChatKeys.map(k => `<span class="nc-key">${k.keys.map(x => `<kbd>${esc(x)}</kbd>`).join('')}<small>${esc(k.label)}</small></span>`).join('') : `<span class="nc-tip">${esc(H.newChatHint || 'Type below.')}</span>`;
-    return `<div class="ch-newchat" role="note"><span class="nc-mark" aria-hidden="true"><i class="sgi ${priv ? 'sg-hat-private' : 'sg-hat'}"></i></span><b class="nc-hi">${esc(part)}${who ? `, ${esc(who)}` : ''}</b><span class="nc-sub">What should ${esc(agentName(TAG))} work on${priv ? ' privately' : ''}?</span><span class="nc-keys">${hint}</span></div>`;
+    return `<div class="ch-newchat" role="note"><span class="nc-mark" aria-hidden="true"><i class="sgi sg-hat"></i></span><b class="nc-hi">${esc(part)}${who ? `, ${esc(who.split(/\s+/)[0])}` : ''}</b><span class="nc-sub">What should ${esc(agentName(TAG))} work on?</span><span class="nc-keys">${hint}</span></div>`;
   }
   function skelThread() {
     return `<div class="ch-skel thread" role="status" aria-label="Loading thread…"><i class="ch-sk bub u" style="width:52%"></i><span class="ch-skel-a"><i class="ch-sk" style="width:92%"></i><i class="ch-sk" style="width:84%"></i><i class="ch-sk" style="width:58%"></i></span><i class="ch-sk bub u" style="width:36%"></i><span class="ch-skel-a"><i class="ch-sk" style="width:88%"></i><i class="ch-sk" style="width:64%"></i></span></div>`;
@@ -962,7 +960,7 @@ window.WizCore.chats = function createChats(H) {
     c.media = []; c.texts = [];
     let msgs;
     const pend = pendingFor(w);
-    if (isNew && !pend.length) msgs = `<div class="ch-empty"><b>New chat</b><br>${esc(H.newChatHint || 'Type below.')}</div>`;
+    if (isNew && !pend.length) msgs = newChatHtml(TAG);
     else if (!turns && !isNew && !pend.length) msgs = c.err ? `<div class="ch-empty">${esc(c.err)}</div>` : skelThread();
     else {
       const all = turns || [];
@@ -1200,30 +1198,18 @@ window.WizCore.chats = function createChats(H) {
     const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
-    // Speed: a thread not yet read this page paints its last on-device copy at once (no skeleton);
-    // the read below still runs and replaces it.
-    if (c.loadedFor !== sid && c.cachedFor !== sid && LIVE.cachedMessages) {
+    if (fresh && !force) { if (c.loadedFor === w.thread && hk !== c.hk) { c.hk = hk; const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el); } return; }
+    // Speed: a thread opened for the first time this page paints its last on-device copy at once (no skeleton);
+    // the read below still runs and replaces it. Pending sends and errors keep their own paths.
+    if (c.loadedFor !== sid && LIVE.cachedMessages) {
       const cached = LIVE.cachedMessages(sid);
       if (cached && cached.length) {
         try {
-          Object.assign(c, { turns: toTurns(cached), cachedFor: sid, err: '' }); // loadedFor stays for the server read
+          const turns = toTurns(cached);
+          Object.assign(c, { turns, loadedFor: sid, at: 0, err: '', sig: '', readRevision: '' });
           const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el);
         } catch (e) {}
       }
-    }
-    if (fresh && !force) {
-      // Reopening a cached quiet transcript still refreshes rename/retry metadata,
-      // once per navigation, without throwing away its 60-second history cache.
-      if (s?.listVersion === 1 && c.detailNav !== nav && c.detailLoadingNav !== nav) {
-        c.detailLoadingNav=nav;
-        try {
-          await LIVE.sessionInfo(sid);
-          if (W[w.id] === w && w.thread === sid && c.readNav === nav) { c.detailNav=nav; const el=elOf(w.id); if(el) renderLive(w,el); }
-        } catch (_) { /* retry itself fails closed until full detail can be fetched */ }
-        finally { if(c.detailLoadingNav===nav) c.detailLoadingNav=null; }
-      }
-      if (c.loadedFor === w.thread && hk !== c.hk) { c.hk = hk; const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el); }
-      return;
     }
     // Every read owns a captured thread AND navigation generation. A -> B -> A is a new read;
     // an old completion must neither publish into it nor release its loading lock.

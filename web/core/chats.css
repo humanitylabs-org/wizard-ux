@@ -34,6 +34,21 @@
 .st.needs { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
 .ch-empty { margin: 24px 16px; padding: 18px; border-radius: 16px; text-align: center; color: var(--ink-3); font-size: 14px; line-height: 1.5; background: rgba(205, 190, 255, .04); border: 1px solid var(--line); }
 .ch-empty b { color: var(--ink); font-size: 16px; }
+/* New chat: no box, centred in the space above the composer. */
+.ch-newchat { margin: auto; padding: 28px 16px 36px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; max-width: 440px; animation: ncIn .32s ease-out both; }
+.ch-newchat .nc-mark { width: 64px; height: 64px; margin-bottom: 10px; border-radius: 22px; display: grid; place-items: center; --c: #fff;
+  background: radial-gradient(120% 120% at 30% 20%, color-mix(in oklab, var(--agc, var(--violet-2, #b9a6ff)) 70%, #fff 10%), color-mix(in oklab, var(--agc, #8f63ff) 85%, #000 25%));
+  box-shadow: 0 10px 34px color-mix(in oklab, var(--agc, #8f63ff) 45%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+.ch-newchat .nc-mark .sgi { width: 64%; height: 64%; }
+.ch-newchat .nc-hi { color: var(--ink); font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
+.ch-newchat .nc-sub { color: var(--ink-2); font-size: 15px; }
+.ch-newchat .nc-keys { margin-top: 14px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; color: var(--ink-3); font-size: 12px; }
+.ch-newchat .nc-key { display: inline-flex; align-items: center; gap: 3px; }
+.ch-newchat .nc-key small { margin-left: 4px; font-size: 12px; }
+.ch-newchat .nc-key kbd { display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 6px; font: 600 11px/17px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-2); background: rgba(205,190,255,.08); border: 1px solid var(--line-2, var(--line)); border-bottom-width: 2px; }
+.ch-newchat .nc-tip { font-size: 13px; }
+@keyframes ncIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ch-newchat { animation: none; } }
 
 .ch-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 4px; border-bottom: 1px solid var(--line); }
 .ch-back { flex: 0 0 auto; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; color: var(--ink-2); }
