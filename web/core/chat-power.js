@@ -176,11 +176,25 @@ window.WosChatPower = function chatPower(A) {
     const req = requestOf(w, s);
     return M.failureHtml({ s: { ...s, ...threadModel(s) }, busy, canRetry: !!req });
   }
-  function requestOf(w, s) {
-    if (s?.request) return s.request;
+  // Retry and Choose another model stay live on every failed thread. A failed turn the owner didn't type (a
+  // coordinator's follow-through note, a photo-only message, a run a watcher started) is retried with a plain
+  // "Retry" from the owner, since the thread's history already holds the request. Before, such a thread had no
+  // request text, so both buttons stayed grey, also after changing the model, and James typed "Retry" by hand (18 Oct 2026).
+  const RETRY_WORD = 'Retry';
+  // The open thread's latest turn has no typed words (a note or a later run started it). Only the turn's kind is
+  // read here; the words sent are always the freshly hydrated request, never cached turn text.
+  function noteTurn(w, s) {
     const c = w && ch(w.id), turns = c && c.loadedFor === s?.id ? c.turns || [] : [];
-    for (let i = turns.length - 1; i >= 0; i--) if (turns[i].u?.text) return turns[i].u.text;
-    return '';
+    for (let i = turns.length - 1; i >= 0; i--) {
+      const tn = turns[i];
+      if (tn.u?.text) return false;
+      if (tn.u || tn.note || tn.later) return true;
+    }
+    return false;
+  }
+  function requestOf(w, s) {
+    if (s && FAILED.has(s.status)) return true;
+    return !!(s?.request || (w && !noteTurn(w, s) && (ch(w.id)?.turns || []).some(tn => tn.u?.text)));
   }
   // Retry = send the thread's last request again, through the durable outbox, on the same thread
   // (and the same model, unless one was just picked). controller.ts retryServerFailedSession.
@@ -188,13 +202,17 @@ window.WosChatPower = function chatPower(A) {
     let s = LIVE.session(sid); if (!s || !OUTBOX) return false;
     // A list/snapshot preview is never retry input, even after an earlier detail read.
     try { s = await LIVE.sessionInfo(sid); } catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return false; }
-    const w = H.win(wid), text = s?.request || ''; // only the freshly hydrated input, never cached turns
+    const w = H.win(wid);
+    // Only the freshly hydrated input, never cached turns. A failed note-started turn (the server's request skips
+    // follow-through notes, so it is empty or an older request) goes again as a plain "Retry".
+    const note = noteTurn(w && w.thread === sid ? w : null, s);
+    const text = note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
     if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
     const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
     const c = w ? ch(wid) : null; if (c) c.retrying = sid;
     try {
       await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, text, wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
-        instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. This is the same request again.`,
+        instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
       toast('↻', o ? `Retrying on ${o.name}` : 'Retrying', 1600);
