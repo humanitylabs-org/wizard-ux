@@ -1,6 +1,6 @@
 /* Opinionated: WizardOS brand guide (Oct 2026, wizardos style guide).
  * Palette: Ultraviolet #7A5CFF, White #FFFFFF, Void #0B0A10, Etch #1D1A24; neutral white hairlines.
- * Type: Sora for display and titles (600, tight tracking), Inter for text; eyebrows are 500 / .18em / uppercase.
+ * Type: Sora on the Home clock only; the rest of the shell keeps its own font.
  * Shapes: 22px cards, pill chips. Skins keep their own clock faces and colours; this sets the shared base. */
 @font-face { font-family: 'WOS Sora'; src: url(/wizard-os-home/brand/fonts/sora-var.woff2) format('woff2'); font-weight: 100 800; font-display: swap; }
 @font-face { font-family: 'WOS Inter'; src: url(/wizard-os-home/brand/fonts/inter-var-latin.woff2) format('woff2'); font-weight: 100 900; font-display: swap;
@@ -11,17 +11,10 @@
   --font-display: 'WOS Sora', 'WOS Inter', ui-sans-serif, system-ui, sans-serif;
   --r-card: 22px;
 }
-body, .device, .win, button, input, textarea, select { font-family: var(--font-text); }
-body { letter-spacing: -.005em; }
-
-/* Display + titles in Sora */
+/* Type scope (James, 18 Oct 2026): the brand fonts apply to the Home clock only.
+ * Chats, windows, titles and controls keep the shell's own font; no body-wide Inter, no Sora titles. */
 .home-time { font-family: var(--font-display); font-weight: 300; letter-spacing: -.05em; }
-:is(.ch-head .ti b, .wbar .t, .wbar b, .st-group h4, .sheet-title, .launcher h3, .inbox h3, .ch-fh b, .pal-card h3, .dv-title, .desk-label) {
-  font-family: var(--font-display); font-weight: 600; letter-spacing: -.02em; }
-
-/* Eyebrows: the guide's quiet uppercase label */
-:is(.ch-sec-h, .sec-title, .ch-fcard h5, .home-date) { font-weight: 500; letter-spacing: .18em; }
-.ch-sec-h span { font-family: var(--font-text); }
+.home-date { font-weight: 500; letter-spacing: .18em; }
 
 /* Cards and pills */
 .now-card, .side-card, .ch-fcard, .pal-card { border-radius: var(--r-card); }
