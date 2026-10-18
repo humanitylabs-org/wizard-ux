@@ -51,6 +51,7 @@
     return { state: v.state, ask, subject: String(v.subject || '').replace(/\s+/g, ' ').trim().slice(0, 40) };
   }
   function normalize(item) {
+    if (item.listVersion === 1) return { ...item, runtime: 'direct', request: '', renames: [], detailNeeded: true };
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
     const status = ALIASES[raw] || raw || undefined;
@@ -94,7 +95,7 @@
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
       modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
-      request: userText,
+      request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
       // Agents MVP: the agent this thread is pinned to (server metadata). '' = the main agent.
       agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
     };
@@ -166,7 +167,7 @@
   async function fetchSessions(full, agent = '', onFirst = null) {
     const out = []; let snapshot = '';
     for (let offset = 0; offset < 5000; ) {
-      const q = `limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`;
+      const q = `view=list&limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`;
       const p = await (await req(`/wizard/hermes/api/sessions?${q}`)).json();
       if (!snapshot && typeof p.snapshot === 'string') snapshot = p.snapshot;
       const rows = p.data || p.sessions || p.items || [];
@@ -580,6 +581,7 @@
     },
     /* Full message history of one thread (oldest first), paged like Wizard. */
     async messages(id) {
+      if (!this.session(id) || this.session(id).detailNeeded) await this.sessionInfo(id);
       const rows = [];
       for (let offset = 0; offset < 5000; offset += 500) {
         const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard${aq(id, '&')}`)).json();
@@ -597,7 +599,10 @@
       if (agent) s.agent = agent;
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       const i = list.findIndex(x => x.id === id);
-      if (i >= 0) list[i] = { ...list[i], ...s }; else list.push(s);
+      if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
+      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, renames: s.renames, detailNeeded: false,
+        ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
+      else list.push({ ...s, detailNeeded: false });
       applyLocal(list[i >= 0 ? i : list.length - 1]);
       return s;
     },
