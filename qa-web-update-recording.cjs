@@ -205,7 +205,7 @@ const markPage = P => P.p.evaluate(() => { window.__qaMark = 1; });
   const summary = {};
   /* ---------- A. native meeting survives Reload ---------- */
   {
-    const P = await phase(b, { native: true, label: 'native' }), { p, S, N } = P;
+    const P = await phase(b, { native: true, label: "native" }), { p, S, N, live } = P;
     await bootShell(P);
     let f = await openMizel(P); ok(!!f, 'native: Mizel opens in the phone shell');
     await newMeeting(f);
