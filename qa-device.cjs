@@ -7,7 +7,7 @@
 //   #22 the native update banner shows/acts; the web hot-reload swaps in new code and keeps chat drafts.
 // Usage: QA_WEB_DIR=<worktree> node qa-device.cjs  (self-contained: every request is routed; nothing leaves the box)
 // Negative control: QA_WEB_DIR=/home/telos/apps/wizard-os-home node qa-device.cjs must FAIL.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require(process.env.PW || '/home/telos/node_modules/playwright');
 const fs = require('fs'), path = require('path');
 const URL_ = 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
@@ -115,7 +115,50 @@ const shot = async (p, n) => { fs.mkdirSync(SHOTS, { recursive: true }); await p
 async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); await p.touchscreen.tap(o.x + o.width / 2, o.y + o.height / 2); await sleep(900); }
 
 (async () => {
-  const b = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+  const b = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+
+  /* ---- #22 deferred update: all routes intercepted, zero agent writes ---- */
+  {
+    const { ctx, p, errs } = await boot(b);
+    await open(p);
+    const writes0 = [W.runs.length, W.uploads.length, W.sessions.size, W.transcribes];
+    const downloads = [];
+    await ctx.route('**/reports/wizard-os/latest.json', r => r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({versionCode:99,url:'wizard-os-fixture.apk'})}));
+    await ctx.route('**/reports/wizard-os/*.apk', r => { downloads.push(r.request().url()); return r.fulfill({status:200,contentType:'application/vnd.android.package-archive',headers:{'content-disposition':'attachment; filename="fixture.apk"'},body:'QA fixture only'}); });
+    const state = reason => p.evaluate(reason => {
+      window.__dev.upd = {state:'deferred',version:'0.9.99',versionCode:99,...(reason === null ? {} : {reason})};
+      window.WosDevice.event('update', window.__dev.upd);
+    }, reason);
+    const count = async () => (await dev(p)).calls.filter(c => c === 'updateInstall').length;
+    const click = () => p.evaluate(() => document.querySelector('#dvUpdate [data-upd="go"]')?.click());
+    await state('music');
+    ok(/installs when music stops/.test(await p.locator('#dvUpdate').innerText()) && /Install now/.test(await p.locator('#dvUpdate').innerText()), 'deferred music explains hold and offers Install now');
+    let n = await count(); await click();
+    ok(await count() === n + 1, 'deferred music Install now calls native updateInstall');
+    await sleep(3200); ok(downloads.length === 0, 'reason-aware APK never uses legacy download escape');
+    await state('mic');
+    ok(/microphone in use/.test(await p.locator('#dvUpdate').innerText()), 'bare mic is not labelled a recording');
+    await p.evaluate(() => window.__wos.openSettings()); await sleep(300);
+    n = await count(); await p.evaluate(() => document.querySelector('[data-dvupd]')?.click());
+    ok(await count() === n + 1, 'deferred Settings row installs rather than checks');
+    await p.evaluate(() => window.__wos.closeSheets());
+    await state('take'); n = await count(); await click();
+    ok(await count() === n && /Tap again to stop the recording and update/.test(await p.locator('#dvUpdate').innerText()), 'take first tap arms confirmation without installing');
+    await click(); ok(await count() === n + 1, 'take second tap asks native installer (native keeps live-take fence)');
+    await click(); await sleep(4200); n = await count(); await click();
+    ok(await count() === n, 'take confirmation expires after four seconds');
+    await state(null);
+    ok(/waiting for the microphone/.test(await p.locator('#dvUpdate').innerText()), 'old APK uses honest unknown-hold label');
+    await click(); await sleep(3400);
+    ok(downloads[0] === 'https://wizard.tailc0f369.ts.net/reports/wizard-os/wizard-os-fixture.apk', 'old APK still deferred opens feed APK URL after three seconds');
+    ok(JSON.stringify(writes0) === JSON.stringify([W.runs.length,W.uploads.length,W.sessions.size,W.transcribes]), 'update scenarios produce zero agent writes');
+    ok(errs.length === 0, 'no page errors (deferred updater)', errs.join(' | '));
+    await shot(p, '22-deferred');
+    await ctx.close();
+  }
+  if (process.env.QA_DEVICE_UPDATES_ONLY) {
+    await b.close(); console.log(`RESULT ${pass} pass / ${fail} fail`); process.exit(fail ? 1 : 0);
+  }
 
   /* ---- #14 native recorder: tap → native take → tap → stop, transcribe, one run with the voice note path ---- */
   {

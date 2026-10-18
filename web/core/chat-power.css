@@ -119,3 +119,38 @@
 /* desktop: the AI usage card */
 .usage-ov .usage-body { padding: 10px 16px 4px; }
 .usage-ov .keys-card { width: min(520px, calc(100vw - 32px)); }
+
+/* Unified Chats: the picker's Private group and a Private chip (lock, private agent green). */
+.ch-model.private { color: hsl(160 72% 62%); background: color-mix(in oklab, hsl(160 72% 62%) 15%, transparent); }
+.ch-model .ag-lock { width: 12px; height: 12px; flex: 0 0 auto; }
+.msheet-grp.priv { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .08); }
+.msheet-gh { display: flex; align-items: center; gap: 6px; padding: 4px 12px 6px; font-size: 12px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; color: hsl(160 72% 62%); }
+.msheet-gh .ag-lock, .mrow.priv .ag-lock { width: 12px; height: 12px; }
+.mrow.priv .mn b { display: inline-flex; align-items: center; gap: 6px; }
+.mrow.priv .mn b .ag-lock { color: hsl(160 72% 62%); }
+.msheet-gn { margin: 4px 12px 0; font-size: 12px; opacity: .7; line-height: 1.35; }
+
+/* Model label in the message box (James 18 Oct 2026): just the model name, small and white, bottom-right inside the
+ * box. The text wraps early to leave its corner free (chats.js fitLabel). Tapping it opens the compact menu below. */
+.ch-field { flex: 1; min-width: 0; position: relative; display: flex; }
+.ch-field > textarea { flex: 1; width: 100%; }
+.ch-compose .ch-field > .ch-mlabel { position: absolute; right: 4px; bottom: 1px; width: auto; height: 40px; max-width: 42%; padding: 0 10px; border-radius: 16px;
+  display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; font-size: 13.5px; font-weight: 650; letter-spacing: .01em; color: var(--ink); opacity: .9; }
+.ch-compose .ch-field > .ch-mlabel:active { opacity: 1; background: rgba(205, 190, 255, .08); }
+.ch-compose .ch-field > .ch-mlabel.private { color: hsl(160 72% 62%); }
+.ch-compose .ch-field > .ch-mlabel.agent { color: color-mix(in oklab, var(--agc, var(--violet-2)) 70%, var(--ink)); }
+.ch-compose .ch-field > .ch-mlabel .ag-lock { width: 12px; height: 12px; }
+.ch-compose .ch-field > .ch-mlabel svg { fill: none; stroke: currentColor; }
+
+/* Compact model menu: a small card over the right side, just above the label, read bottom-up from the thumb. */
+.ch-sheet.ch-mpop { background: rgba(3, 1, 10, .28); align-items: stretch; justify-content: flex-end; }
+.ch-mpop .ch-sheet-b { position: absolute; right: var(--mpop-r, 10px); bottom: var(--mpop-b, 72px); width: min(236px, calc(100% - 24px)); max-height: min(64%, 440px);
+  display: flex; flex-direction: column; padding: 6px; border-radius: 16px; border: 1px solid var(--line-2); background: rgba(22, 14, 46, .98); box-shadow: 0 14px 40px rgba(0, 0, 0, .55); animation: mpop-in 140ms ease-out both; transform-origin: bottom right; }
+@keyframes mpop-in { from { opacity: 0; transform: translateY(6px) scale(.97); } }
+.ch-mpop .msheet-list { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.ch-mpop .mpop-sec + .mpop-sec, .ch-mpop .mrow.more + .mpop-sec { margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255, 255, 255, .08); }
+.ch-mpop .msheet-gh { padding: 7px 10px 3px; font-size: 11px; color: var(--ink-3); }
+.ch-mpop .mpop-sec.priv .msheet-gh { color: hsl(160 72% 62%); }
+.ch-mpop .ch-sheet-b .mrow { padding: 10px 12px; border-radius: 11px; font-size: 14.5px; }
+.ch-mpop .ch-sheet-b .mrow.more { justify-content: flex-start; font-size: 13px; color: var(--violet-2); padding: 8px 12px; }
+.ch-mpop .mrow .mn b { font-weight: 620; }

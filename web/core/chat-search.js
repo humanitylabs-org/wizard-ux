@@ -25,10 +25,10 @@
   const words = q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
 
   async function textsOf(s, signal) {
-    const sig = sigOf(s), hit = cache.get(s.id);
-    if (hit && hit.sig === sig) { cache.delete(s.id); cache.set(s.id, hit); return hit.texts; }
+    const key = `${s.agent || 'hermes'}:${s.id}`, sig = sigOf(s), hit = cache.get(key);
+    if (hit && hit.sig === sig) { cache.delete(key); cache.set(key, hit); return hit.texts; }
     stats.fetches++;
-    const r = await fetch(`${base()}/${encodeURIComponent(s.id)}/messages?order=latest&limit=${LIMIT}&view=wizard`, { credentials: 'same-origin', cache: 'no-store', signal });
+    const r = await fetch(`${base()}/${encodeURIComponent(s.id)}/messages?order=latest&limit=${LIMIT}&view=wizard${s.agent && s.agent !== 'hermes' ? `&agent=${encodeURIComponent(s.agent)}` : ''}`, { credentials: 'same-origin', cache: 'no-store', signal });
     if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status });
     const p = await r.json();
     const rows = p.data || p.messages || p.items || [];
@@ -37,7 +37,7 @@
     try {
       for (const t of KIT.parseRows(rows)) { if (t.u?.text) texts.push(t.u.text); for (const n of t.notes || []) texts.push(n); if (t.a?.text) texts.push(t.a.text); }
     } catch (e) {}
-    cache.set(s.id, { sig, texts });
+    cache.set(key, { sig, texts });
     while (cache.size > CACHE_N) cache.delete(cache.keys().next().value);
     return texts;
   }
@@ -57,19 +57,35 @@
     }
     return null;
   }
-  function candidates() {
+  function candidates(agent = '') {
     const L = window.WizLive; if (!L?.ok) return [];
     const at = s => Date.parse(L.cardAt ? L.cardAt(s) : s.updatedAt) || 0;
-    return L.sessions.filter(s => !s.hidden && !s.optimistic && s.id && !String(s.id).startsWith('wizard_pending_')).sort((a, b) => at(b) - at(a));
+    return (L.sessionsFor ? L.sessionsFor(agent) : L.sessions).filter(s => !s.hidden && !s.optimistic && s.id && !String(s.id).startsWith('wizard_pending_')).sort((a, b) => at(b) - at(a));
   }
   async function pump(wid, r) {
     if (r.busy) return; r.busy = true;
-    const ws = words(r.q), list = candidates();
+    const ws = words(r.q), list = candidates(r.agent);
     try {
+      if (!r.serverDone && window.WizLive?.searchSessions) {
+        try {
+          const publish = rows => {
+            if (r.ctrl.signal.aborted || runs[wid] !== r) return;
+            for (const s of rows || []) {
+              r.rows.set(s.id,s); window.WizLive.rememberSearch?.(s);
+              r.hits.set(s.id,match([s.searchSnippet || s.preview || s.title],ws) || {snippet:s.searchSnippet || s.preview || '',html:esc(s.searchSnippet || s.preview || '')});
+            }
+            r.onUpdate?.();
+          };
+          const rows = await window.WizLive.searchSessions(r.q, r.agent, r.ctrl.signal, publish);
+          if (r.ctrl.signal.aborted || runs[wid] !== r) return;
+          r.serverDone = true; r.server = rows !== null; r.partial = !!rows?.partial;
+          publish(rows);
+        } catch(e) { if(e.name==='AbortError') throw e; r.errors++; r.serverError=true; }
+      }
       while (!r.ctrl.signal.aborted && r.scanned < Math.min(r.want, list.length)) {
         const slice = list.slice(r.scanned, Math.min(r.want, list.length, r.scanned + CONC));
         await Promise.all(slice.map(async s => {
-          try { const m = match(await textsOf(s, r.ctrl.signal), ws); if (m) r.hits.set(s.id, m); }
+          try { const m = match(await textsOf(s, r.ctrl.signal), ws); if (m && !r.ctrl.signal.aborted && runs[wid] === r) r.hits.set(s.id, m); }
           catch (e) { if (e.name === 'AbortError') throw e; r.errors++; }
         }));
         r.scanned += slice.length;
@@ -82,13 +98,13 @@
   }
   function cancel(wid) { const r = runs[wid]; if (r) { r.ctrl.abort(); delete runs[wid]; } }
   C.chatSearch = {
-    query(wid, q, onUpdate) {
+    query(wid, q, onUpdate, agent = '') {
       const ws = words(q);
       if (!ws.length || ws.join(' ').length < 2) { cancel(wid); return null; }
       let r = runs[wid];
-      if (!r || r.q !== ws.join(' ')) {
+      if (!r || r.q !== ws.join(' ') || r.agent !== agent) {
         cancel(wid);
-        r = runs[wid] = { q: ws.join(' '), want: BATCH, scanned: 0, total: candidates().length, hits: new Map(), ctrl: new AbortController(), busy: false, errors: 0, onUpdate };
+        r = runs[wid] = { q: ws.join(' '), agent, rows:new Map(), want: BATCH, scanned: 0, total: candidates(agent).length, hits: new Map(), ctrl: new AbortController(), busy: false, errors: 0, onUpdate };
         // Wait for the typing to settle before reading anything.
         setTimeout(() => { if (runs[wid] === r) pump(wid, r); }, 250);
       } else r.onUpdate = onUpdate;
@@ -102,6 +118,9 @@
       const total = Math.min(r.total || candidates().length, MAX_SCAN), upto = Math.min(r.want, total);
       if (r.busy || r.scanned < upto) return `<div class="ch-bodysearch busy" data-chbs="busy"><span class="wx-spin" aria-hidden="true"></span>Searching messages · ${r.scanned} of ${upto} recent threads</div>`;
       const n = r.hits.size, more = upto < total;
+      if (r.serverError) return '<div class="ch-bodysearch">Couldn’t search older threads · check your connection and try again</div>';
+      if (r.partial) return `<div class="ch-bodysearch" data-chbs="done">Searched available agents · ${n} with matches · some agents could not be searched</div>`;
+      if (r.server) return `<div class="ch-bodysearch" data-chbs="done">Searched all thread titles and requests · ${n} with matches${more ? ' <button type="button" data-chbsmore>Search more message history</button>' : ''}</div>`;
       return `<div class="ch-bodysearch" data-chbs="done">Searched messages in the ${r.scanned} most recent threads${n ? ` · ${n} with matches` : ''}${more ? ` <button type="button" data-chbsmore>Search older threads</button>` : ''}</div>`;
     },
     get stats() { return { ...stats, cached: cache.size, runs: Object.fromEntries(Object.entries(runs).map(([k, r]) => [k, { q: r.q, scanned: r.scanned, want: r.want, hits: [...r.hits.keys()], busy: r.busy }])) }; },

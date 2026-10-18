@@ -1,7 +1,8 @@
 /* Wizard OS — home shell prototype */
 (() => {
   'use strict';
-  if (document.documentElement.dataset.leaving) return; // core/shell.js is switching to the other shell
+  if (document.documentElement.dataset.leaving || window.WizHomeScreenPolicy?.mode) return; // single-app sessions never initialize desks
+
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -396,6 +397,7 @@
   // small count. The current desk is the orb. Each is a thumb-sized button, so one tap jumps there.
   const deskSigil = i => window.WizCore.workspaceNav.icon(desks[i], W, winApp);
   function renderDots() {
+    if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
     const L = []; for (let i = Math.max(0, idx - 3); i < idx; i++) L.push(i);
     const R = []; for (let i = idx + 1; i <= Math.min(desks.length - 1, idx + 3); i++) R.push(i);
@@ -1762,6 +1764,7 @@
     const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
     closeSheets(); setTimeout(() => openApp(a), 120);
   }
+  window.WizHomeScreenApps?.attach(launcher, id => APP[id]);
   launcher.addEventListener('click', e => {
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
     const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }
@@ -1846,10 +1849,15 @@
     const m = [...L.needs.map(() => 'var(--amber)'), ...L.working.map(() => 'var(--violet-2)'), ...L.ready.map(() => 'var(--green)')].slice(0, 8);
     $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
-    const badge = LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0; // Opinionated: Ready count, not unread
-    $('#orbBadge').textContent = badge > 99 ? '99+' : String(badge || '');
-    $('#orbBadge').hidden = !badge;
+    // Opinionated: Ready count, not unread. It belongs to Chats; the orb shows the count of the desk in view.
+    window.WizCore.workspaceNav.setCount(CHATS_APP.id, LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0);
+    paintOrbBadge();
   }
+  function paintOrbBadge() {
+    const N = window.WizCore.workspaceNav, n = desks[idx] ? N.deskCount(desks[idx], W, winApp) : 0;
+    $('#orbBadge').textContent = n ? N.fmt(n) : ''; $('#orbBadge').hidden = !n;
+  }
+  addEventListener('wizard:app-counts', () => { renderDots(); paintOrbBadge(); });
   // One place reacts to live changes: reads anywhere, new replies, finished runs.
   if (LIVE) LIVE.onChange(() => {
     renderMoons(); refreshHome(); markVisibleThreadsSeen(); refreshRecStrips();
@@ -2260,19 +2268,18 @@
       if (V.replyTo) { shock(); finishVoice(); return 'sent'; }
       return 'busy';
     }
+    // A second mic tap while a meeting is lending its microphone sends this reply as soon as the take opens, like the orb.
+    if (V.admitting) { if (V.admitReply) { V.admitSend = true; return 'sent'; } return 'busy'; }
     if (V.state !== 'idle' || !sid) return 'busy';
-    const shared = window.WizAppCapture?.getState?.();
-    if (shared?.active || shared?.recording || shared?.hold) { toast('🎙', 'Microphone held by another app', 2000); return 'busy'; }
-    try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id) { toast('🎙', 'An existing native recording is still held', 2200); return 'busy'; } } catch (_) { return 'busy'; }
-    startVoice('auto');
-    V.replyTo = { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' };
-    if (V.native) replyTake(V.native, V.replyTo);
-    CHATS.PW?.paintMic(true, sid);
+    // One recorder pathway (James, 18 Oct 2026: "the orb works … shouldn't the microphone button be triggering the same
+    // pathway"): startVoice owns admission, so a Mizel meeting lends its microphone to the composer mic exactly as it
+    // does to the orb, and the reply pin is set before the take opens (it survives the asynchronous loan).
+    startVoice('auto', { replyTo: { wid, sid, steerRunId: CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : '' } });
     // No pill (James, 10 Oct 2026: "a giant pillbox pops up and covers my orb … I know I'm replying. The orb
     // animates."): the lit mic, the orb and its timer already say a reply is recording.
     return 'recording';
   }
-  async function startVoice(kind) {
+  async function startVoice(kind, opt = {}) {
     V.onAt = performance.now();
     if(V.admitting||parking)return 'busy';
     if(V.state==='paused' && V.replyTo && ['dictation','command'].includes(kind)) {
@@ -2284,10 +2291,10 @@
     const shared = window.WizAppCapture?.getState?.();
     let meetingLoan=null;
     if (shared?.active || shared?.recording || shared?.hold) {
-      V.admitting=true;V.admitCancelled=false;V.admitSend=false;
+      V.admitting=true;V.admitCancelled=false;V.admitSend=false;V.admitReply=opt.replyTo||null;
       try {meetingLoan=await window.WosOrbHandoff.begin();}
       catch(e){restoreReply();toast('🎙',esc(e.message),3000);return 'busy';}
-      finally{V.admitting=false;}
+      finally{V.admitting=false;V.admitReply=null;}
       if(V.admitCancelled){await window.WosOrbHandoff.end(meetingLoan,{status:'cancelled'});return;}
     }
     try { if (JSON.parse(DEV()?.recActive?.() || 'null')?.id) { if(meetingLoan)await window.WosOrbHandoff.end(meetingLoan,{status:'cancelled'});restoreReply();toast('🎙', 'An existing native recording is still held', 2200); return 'busy'; } } catch (_) { if(meetingLoan)await window.WosOrbHandoff.end(meetingLoan,{status:'cancelled'});restoreReply();return 'busy'; }
@@ -2299,7 +2306,7 @@
     // the exact route is still sealed at Send, and unavailable routes remain fail-closed.
     window.WosModels?.load().catch(() => {});
     clearTimeout(txHideT);
-    Object.assign(V, { kind, custodyCapture: null, target: null, replyTo: null, snap: null, seal: null, chunks: [], parts: [], acc: 0, nativeSegmentBase:0,resumeNative:false,t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
+    Object.assign(V, { kind, custodyCapture: null, target: null, replyTo: opt.replyTo || null, snap: null, seal: null, chunks: [], parts: [], acc: 0, nativeSegmentBase:0,resumeNative:false,t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, simText: '', files: [], pickPaused: false }); renderVoiceFiles();
     // The take belongs where James was when he STARTED talking (James, 10 Oct 2026: "I started a thread on the chat
     // list, I clicked into a thread while I was recording it, and then I hit send and it replied to that thread").
     // Browsing to another thread mid-take, or after the send tap, never moves the message.
@@ -2319,7 +2326,7 @@
     const dev = DEV();
     if (dev) { let id = ''; try { id = (meetingLoan?.native ? dev.recStartBorrowed(kind === 'general' ? 'auto' : kind,meetingLoan.id) : dev.recStart(kind === 'general' ? 'auto' : kind)) || ''; if (id && kind === 'dictation') dictationTake(id, true); if (id && V.snap?.conversation) voiceRecovery(id, { kind, conversation: V.snap.conversation }); else if (id && kind !== 'dictation') { const route = V.snap?.route || CHATS.modelRoute(V.replyTo?.wid || V.snap?.view?.id, V.replyTo?.sid || V.snap?.view?.thread || ''); if (route) saveVoiceRoute(id, route); } } catch (e) { if (id && V.snap?.conversation) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Manager destination could not be saved · nothing sent'); return; } }
       if (id && kind === 'dictation' && !dictationTake(id)) { try { dev.recCancel(id); } catch (_) {} cancelVoice(true); toast('!', 'Dictation could not be safely retained'); return; }
-      if (id) { V.native = id;try{window.WosOrbHandoff?.bind(meetingLoan,id,V.snap);}catch(e){await cancelVoice(true);toast('!','Could not save microphone link · original retained');return;} if (V.snap?.general) { try { voiceRecovery(id, { kind:'general', general:true, conversation:null }); saveVoiceRoute(id,V.snap.route); } catch (_) { V.stopAsked=true;pauseCommandCapture();toast('!','General destination could not be saved · recording kept');return; } } voiceTake(id, kind === 'general' ? 'auto' : kind); reportVoice(V.state); if(V.admitSend){V.admitSend=false;finishVoice();}else if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; }
+      if (id) { V.native = id;if (V.replyTo) replyTake(id, V.replyTo);try{window.WosOrbHandoff?.bind(meetingLoan,id,V.snap);}catch(e){await cancelVoice(true);toast('!','Could not save microphone link · original retained');return;} if (V.snap?.general) { try { voiceRecovery(id, { kind:'general', general:true, conversation:null }); saveVoiceRoute(id,V.snap.route); } catch (_) { V.stopAsked=true;pauseCommandCapture();toast('!','General destination could not be saved · recording kept');return; } } voiceTake(id, kind === 'general' ? 'auto' : kind); reportVoice(V.state); if(V.admitSend){V.admitSend=false;finishVoice();}else if (V.stopAsked) { pauseCommandCapture(); if (V.sendAsked) finishVoice(); } return; }
       if(meetingLoan?.native){await cancelVoice(true);toast('!', 'Native handoff refused · meeting restored');return;}
     } // A refused native loan NEVER falls through to browser capture.
     try {
@@ -2687,7 +2694,9 @@
       if (settled && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.completeLocal(snap.custodyId);
       if (OUTBOX.get(snap.custodyId)?.state === 'processing') {
         const completed = outcome?.outcome === 'local' && await OUTBOX.completeLocal(snap.custodyId);
-        if (!completed && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'local'
+        if (!completed && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'held-message'
+          ? 'Held take sounded like a message · kept here to send'
+          : outcome?.outcome === 'local'
           ? 'Command completed · accompanying draft or attachments kept'
           : outcome?.outcome === 'local-pending' ? 'Command accepted · completion unconfirmed; original recording kept'
           : 'Delivery not confirmed · original recording kept; not queued for retry');
@@ -2775,6 +2784,12 @@
       return { id, mode: 'auto', kind: w.thread ? 'chat thread' : 'agent chats', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
         name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats` };
     }
+    // Unified Chats: a private agent's thread open in the main Chats is named like its own Chats, never by title.
+    if (w.app === 'chats' && w.thread && LIVE?.isPrivate?.(w.thread)) { const ag = window.WosAgents?.get(LIVE.agentOf(w.thread)) || { id: LIVE.agentOf(w.thread), label: 'Private' };
+      return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, agent: ag.id, agentLabel: ag.label, private: true, name: `${ag.label} thread (private agent)` }; }
+    // A new chat on a Private model in the main Chats: what is said here goes to that agent (never the router).
+    if (mainChats(w) && w.thread === '__new__') { const nm = CHATS.ch?.(id)?.newModel, AGx = window.WosAgents, ag = nm?.agent && AGx?.isOther(nm.agent) ? AGx.get(nm.agent) : null;
+      if (ag && AGx.isPrivate(ag)) return { id, mode: 'auto', kind: 'chat thread', thread: '__new__', agent: ag.id, agentLabel: ag.label, private: true, name: `New ${ag.label} chat (private agent)` }; }
     if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, name: w.thread === '__new__' ? 'New chat' : `Chats thread “${winTitle(w)}”` };
     if (w.app === 'frame' && w.from && w.from.sid) return { id, mode: '', kind: 'review', review: true, thread: w.from.sid, threadTitle: w.from.title || '', name: `Review of ${winTitle(w)}`, url: frameHref(id) || w.url };
     if (w.app === 'frame') return { id, mode: '', kind: 'app', name: winApp(w).name, url: frameHref(id) || winApp(w).url };
@@ -2794,7 +2809,8 @@
     // already the conversation, so it is not repeated.
     const screen = view && view.kind !== 'chat thread' && !view.private ? (window.WizScreen?.read(winEl(fid)) || '') : '';
     // A private agent's window is named, never read: its thread titles stay with that agent.
-    const nameOf = x => agentWin(W[x]) && agentApp(W[x]).private ? `${agentApp(W[x]).name} chats (private agent)` : winTitle(W[x]);
+    const nameOf = x => agentWin(W[x]) && agentApp(W[x]).private ? `${agentApp(W[x]).name} chats (private agent)`
+      : W[x]?.app === 'chats' && W[x].thread && LIVE?.isPrivate?.(W[x].thread) ? 'A private agent’s thread' : winTitle(W[x]);
     const capability = window.WizAppServices?.voiceInput;
     const app = APP[W[fid]?.appId];
     const conversation = CHATS.isHosted(fid) ? null : capability ? capability.pin(winEl(fid)?.querySelector('iframe'), app?.id)
@@ -2934,15 +2950,18 @@
   function holdNoMatch(text, opts) {
     tourEv('nomatch', { text });
     setVoice('idle'); vib(12);
-    txShow(text, 'No command matched · nothing sent', 'command', '⚡');
     const q = String(text || '').trim().replace(/[.!?,\s]+$/, '');
+    // A long held take is a message, not a missed command (James, 18 Oct: a 40 s task vanished with the 4 s card).
+    // It keeps the card until he taps Send or ×, with Send first and no search chips.
+    const long = q.split(/\s+/).length > 20;
+    txShow(text, long ? 'Not a command · tap Send to keep it' : 'No command matched · nothing sent', 'command', '⚡');
     const btn = (k, label) => `<button data-hold="${k}">${esc(label)}</button>`;
-    $('#txChips').innerHTML = (searchUrl(q) ? btn('search', 'Search the web') + btn('images', 'Image search') : '')
-      + btn('agent', `Send to ${window.WizConfig.agent()}`);
-    V.holdText = q; V.holdOpts = opts;
+    $('#txChips').innerHTML = long ? btn('agent', `Send to ${window.WizConfig.agent()}`)
+      : (searchUrl(q) ? btn('search', 'Search the web') + btn('images', 'Image search') : '') + btn('agent', `Send to ${window.WizConfig.agent()}`);
+    V.holdText = q; V.holdOpts = opts; V.holdLong = long;
     window.__backLog = (window.__backLog || []).concat('hold:nomatch').slice(-30);
-    txHide(NOMATCH_MS); // James (11 Oct): 9 s lingered far too long; × closes it at once
-    return false;
+    if (long) clearTimeout(txHideT); else txHide(NOMATCH_MS); // James (11 Oct): 9 s lingered far too long; × closes it at once
+    return long ? { outcome: 'held-message' } : false;
   }
   function showRouted(kind, label) {
     if (isPill()) {
@@ -3228,7 +3247,8 @@
     if (e.type !== 'pointercancel' && s.dy < -8 && v < -.3) setZen(false);
   };
   zenEdge.addEventListener('pointerup', zenEnd); zenEdge.addEventListener('pointercancel', zenEnd);
-  setZen(store.get('zen', false), true);
+  // Every load starts with the orb and bars showing (James, 18 Oct); distraction-free is a per-session choice.
+  store.set('zen', false);
 
   /* ---------------- Back never leaves Wizard OS ----------------
    * Android Back is an in-app back gesture, one step at a time:
@@ -3248,6 +3268,7 @@
     return result || 'notReady';
   }
   function backStep(skipHosted) {
+    if (window.WizHomeScreenApps?.back()) return 'pin-sheet';
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
@@ -3442,15 +3463,21 @@
   };
   $('#txChips').addEventListener('click', e => { if (e.target.closest('[data-handoff="drop"]')) { $('#txChips').innerHTML = ''; txHide(0); } });
   // × on a choice card: clear it now, nothing sent. Touching the card keeps it up while James reads/picks.
-  const closeChoice = () => { $('#txChips').innerHTML = ''; V.holdText = ''; V.holdOpts = null; window.__backLog = (window.__backLog || []).concat('tx:close').slice(-30); txHide(0); };
+  const closeChoice = () => { $('#txChips').innerHTML = ''; V.holdText = ''; V.holdOpts = null; V.holdLong = false; window.__backLog = (window.__backLog || []).concat('tx:close').slice(-30); txHide(0); };
   $('#txClose').addEventListener('click', e => { e.stopPropagation(); closeChoice(); });
-  tx.addEventListener('pointerdown', e => { if (!e.target.closest('#txClose') && V.holdText && $('#txChips').childElementCount) txHide(NOMATCH_MS); });
+  tx.addEventListener('pointerdown', e => { if (!e.target.closest('#txClose') && V.holdText && !V.holdLong && $('#txChips').childElementCount) txHide(NOMATCH_MS); });
   $('#txChips').addEventListener('click', e => {
     const b = e.target.closest('[data-hold]'); if (!b) return;
     const k = b.dataset.hold, q = V.holdText || '', opts = V.holdOpts || {};
-    V.holdText = ''; V.holdOpts = null; $('#txChips').innerHTML = '';
+    V.holdText = ''; V.holdOpts = null; V.holdLong = false; $('#txChips').innerHTML = '';
     if (k === 'search' || k === 'images') { txHide(0); openSearch(q, k === 'images' ? 'images' : 'all'); return; }
-    if (k === 'agent' && q) { toAgent(q, `To ${window.WizConfig.agent()} · from a held command`, { ...opts, snap: opts.snap ? { ...opts.snap, custodyId: null } : opts.snap, how: 'voice (held command, sent on purpose)' }); return; }
+    if (k === 'agent' && q) {
+      // A long take parked in Unsent (held-message) is settled once this explicit Send has its own outbox item.
+      const parked = opts.snap?.custodyId;
+      Promise.resolve(toAgent(q, `To ${window.WizConfig.agent()} · from a held command`, { ...opts, snap: opts.snap ? { ...opts.snap, custodyId: null } : opts.snap, how: 'voice (held command, sent on purpose)' }))
+        .then(item => { if (item && parked && OUTBOX.get(parked)?.state === 'held') return OUTBOX.completeLocal(parked); }).catch(() => {});
+      return;
+    }
     txHide(0);
   });
   // Native bridge v0 (core/bridge.js): the same events drive the phone and the desktop shell.

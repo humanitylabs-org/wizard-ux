@@ -9,8 +9,8 @@ BT = sorted((SDK / 'build-tools').iterdir())[-1]
 
 
 class Emu:
-    def __init__(self, job, port, pkg):
-        self.job, self.port, self.pkg = job, port, pkg
+    def __init__(self, job, port, pkg, dns='10.0.2.250'):
+        self.job, self.port, self.pkg, self.dns = job, port, pkg, dns
         self.S = 'emulator-%d' % port
         self.env = os.environ.copy()
         self.env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
@@ -29,7 +29,7 @@ class Emu:
         self.sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'aa', '-k',
                 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', self.job / 'dev', stdin='no\n')
         self.proc = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'aa', '-port', str(self.port), '-no-window', '-no-snapshot',
-                                      '-no-audio', '-gpu', 'swiftshader_indirect', '-dns-server', '10.0.2.250'],
+                                      '-no-audio', '-gpu', 'swiftshader_indirect', '-dns-server', self.dns],
                                      env=self.env, stdout=open(self.job / 'em.log', 'w'), stderr=subprocess.STDOUT)
         for _ in range(140):
             if self.sx('getprop sys.boot_completed').strip() == '1': break
