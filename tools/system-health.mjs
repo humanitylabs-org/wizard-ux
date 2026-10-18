@@ -10,6 +10,11 @@ export const HEALTH_PATH = () => process.env.WIZARD_SYSTEM_HEALTH_FILE || '';
 // A watchdog that runs every few minutes is stale after an hour; the shell labels it instead of trusting old greens.
 export const STALE_MS = 60 * 60 * 1000;
 const STATUS = new Set(['ok', 'warn', 'error']);
+// Health is for things the owner would not otherwise see. CPU, memory and disk already have live meters (and their own
+// warning) in Resources → Server, so the watchdog's copies of them are dropped. Low-level capacity checks such as inodes
+// mean nothing to an owner until they fail, so they appear only when they need attention.
+export const READINGS = new Set(['root-disk', 'disk', 'memory', 'load', 'cpu']);
+export const QUIET_UNLESS_PROBLEM = new Set(['root-inodes', 'inodes']);
 const KEY_RE = /^[a-z0-9][a-z0-9._-]{0,47}$/;
 const clip = (s, n) => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
 
@@ -21,10 +26,13 @@ export function cleanHealth(raw, now = Date.now()) {
     if (!it || typeof it !== 'object') continue;
     const key = clip(it.key, 48).toLowerCase();
     if (!KEY_RE.test(key) || checks.some(c => c.key === key)) continue;
+    if (READINGS.has(key)) continue;
+    const status = STATUS.has(it.status) ? it.status : 'warn';
+    if (QUIET_UNLESS_PROBLEM.has(key) && status === 'ok') continue;
     checks.push({
       key,
       label: clip(it.label, 40) || key,
-      status: STATUS.has(it.status) ? it.status : 'warn',
+      status,
       value: clip(it.value, 40),
       detail: clip(it.detail, 300),
     });
