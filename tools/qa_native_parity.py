@@ -29,6 +29,7 @@ import urllib.request
 P = pathlib.Path
 BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
 APK = P(sys.argv[1]); NEXT = P(sys.argv[2]); WEB = P(sys.argv[3])
+UXV = WEB / 'ux-version.txt'; UXV0 = [None]  # web build id the banner watches (#22b)
 PKG = 'ai.wizards.os.qa'
 job = P(sys.argv[4]) if len(sys.argv) > 4 else BASE / 'qa' / ('wos-native-' + uuid.uuid4().hex[:8])
 job.mkdir(parents=True, exist_ok=True)
@@ -609,10 +610,16 @@ with (BASE / 'worker.lock').open('a') as lock:
         pg.ev("window.__wos.openWizardThread('qa_old_thread')"); time.sleep(2)
         pg.ev("(() => { const t = document.querySelector('.win.focus .ch-compose textarea') || document.querySelector('.ch-compose textarea'); t.value = 'Half-typed draft that must survive'; t.dispatchEvent(new Event('input', { bubbles: true })); return true; })()")
         pg.ev("window.WosDevice.checkWeb(true)"); time.sleep(2)
-        os.utime(WEB / 'app.js', None)  # "deploy": app.js changes on the server
+        # "deploy": app.js changes on the server. Since f88b430 (14 Oct) the banner reads web/ux-version.txt (the
+        # git tree id of web/, rewritten by the repo hooks) before falling back to asset headers, so a deploy must
+        # flip that file too; the original is restored in the finally block.
+        os.utime(WEB / 'app.js', None)
+        if UXV.exists():
+            UXV0[0] = UXV.read_text(); UXV.write_text(hashlib.sha1(b'qa-native-parity-deploy').hexdigest() + '\n')
         time.sleep(1.2); pg.ev("window.WosDevice.checkWeb(true)"); time.sleep(2)
         bn = pg.ev("(() => { const e = document.querySelector('#dvWeb'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()")
-        check('#22 web update detected → "Wizard OS was updated · Reload"', 'updated' in (bn or ''), bn)
+        # No change list → "Wizard OS was updated"; with ux-changes.json → "Update ready · <thread>". Both end in Reload.
+        check('#22 web update detected → "Wizard OS was updated / Update ready · Reload"', ('was updated' in (bn or '') or 'Update ready' in (bn or '')) and 'Reload' in (bn or ''), bn)
         shot('22b-web-updated')
         sweep(); pg.ev("window.__qaMark = 1"); pg.tap('#dvWeb [data-web=go]'); time.sleep(4)
         connect()
@@ -675,6 +682,9 @@ with (BASE / 'worker.lock').open('a') as lock:
         writes = [l for l in ST['log'] if not l.startswith('GET')]
         receipt['fake_writes'] = writes
     finally:
+        if UXV0[0] is not None:
+            try: UXV.write_text(UXV0[0])
+            except Exception: pass
         try:
             if pg: pg.close()
         except Exception: pass
