@@ -119,6 +119,12 @@
     if (st === 'everywhere' && N?.setEverywhere) { let on = false; try { on = JSON.parse(N.everywhere()).enabled; } catch (_) {} N.setEverywhere(!on); setTimeout(ctx.render, 250); ctx.haptic?.(8); return true; }
     if (st === 'side' && N) { ctx.openSub('side'); return true; } return false;
   } });
+  register({ id: 'photos-backup', available: () => typeof window.wizardPhotosPort?.postMessage === 'function', html() {
+    return `<div class="st-group"><h4>Photos</h4>${row('photos-backup', '▧', 'Photos backup', 'Originals backed up to your photo server')}</div>`;
+  }, act(ctx, el) {
+    if (el.closest('[data-st]')?.dataset.st !== 'photos-backup') return false;
+    window.wizardPhotosPort.postMessage('open'); return true;
+  } });
   register({ id: 'voice', html: () => window.WizCore.voiceStatus?.card() || '' });
   register({ id: 'microphone', aliases: ['mic'], available: () => !!window.WosMic?.available(), html: () => window.WosMic?.html() || '', act: (ctx, el) => window.WosMic?.act(el, ctx) });
   register({ id: 'cancelled', html: () => window.WosCancelled?.html() || '', act: (ctx, el) => window.WosCancelled?.act(el) });
