@@ -37,6 +37,7 @@ env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libe
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
 env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5702; S = 'emulator-%d' % PORT; DEVTOOLS = 9353; FAKE = 18787
+FAKE = int(os.environ.get('WOS_QA_FAKE_PORT') or FAKE)  # move the fake Wizard off a port the Mac already holds
 ORIGIN = 'http://localhost:%d' % FAKE
 res = []; receipt = {'checks': [], 'job': str(job)}
 

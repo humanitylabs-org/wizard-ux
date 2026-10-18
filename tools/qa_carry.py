@@ -34,6 +34,8 @@ env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libe
 env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5706; S = 'emulator-%d' % PORT; DEVTOOLS = 9357
 OLD_PORT, NEW_PORT = 18791, 18792
+# A busy Mac can hold these (e.g. a stale Colima port forward): WOS_QA_CARRY_PORTS=OLD,NEW moves both fake Wizards.
+if os.environ.get('WOS_QA_CARRY_PORTS'): OLD_PORT, NEW_PORT = (int(x) for x in os.environ['WOS_QA_CARRY_PORTS'].split(','))
 OLD, NEW = 'http://localhost:%d' % OLD_PORT, 'http://localhost:%d' % NEW_PORT
 res = []
 
