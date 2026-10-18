@@ -89,12 +89,12 @@ async function phone(b) {
   // ---- 2. New chat on a Private model ----
   await p.locator(`[data-chats="${wid}"] [data-chfab]`).click(); await wait(700);
   await p.locator(`[data-chats="${wid}"] [data-chmodel]`).click(); await wait(400);
-  const grp = p.locator('.ch-psheet .msheet-grp.priv');
+  const grp = p.locator('.ch-psheet :is(.msheet-grp,.mpop-sec).priv');
   ok(await grp.count() === 1 && await grp.locator('.msheet-gh .ag-lock').count() === 1 && /private/i.test(await grp.locator('.msheet-gh').innerText()), 'phone: main Chats picker has a Private group with a lock');
   const privRows = await grp.locator('.mrow').allInnerTexts();
   ok(privRows.length === 2 && /GLM 5\.3/.test(privRows[0]) && /DeepSeek/.test(privRows[1]), 'phone: Private group lists the private agent’s models', JSON.stringify(privRows));
-  const mainRows = await p.locator('.ch-psheet .msheet-list > .mrow:not(.more)').allInnerTexts();
-  ok(mainRows.some(t => /Opus/.test(t)), 'phone: the main agent’s models are still listed above', JSON.stringify(mainRows));
+  const mainRows = await p.locator('.ch-psheet .mrow:not(.more):not(.priv)').allInnerTexts();
+  ok(mainRows.some(t => /Opus/.test(t)), 'phone: the main agent’s models are still available beside the Private group', JSON.stringify(mainRows));
   await shot(p, 'phone-04-picker-private-group');
   await grp.locator('.mrow', { hasText: 'DeepSeek' }).click(); await wait(500);
   const chip = await p.locator(`[data-chats="${wid}"] [data-chmodel]`).evaluate(e => ({ t: e.innerText, priv: e.classList.contains('private'), lock: !!e.querySelector('.ag-lock') }));
@@ -121,8 +121,9 @@ async function phone(b) {
   const stdBefore = (await api(p, '/wizard/hermes/api/sessions/wizard_fixture_main_2/messages')).body.data.length;
   await p.evaluate(([w, sid]) => __wos.openChat(w, sid), [wid, 'wizard_fixture_main_2']); await wait(1800);
   await p.locator(`[data-chats="${wid}"] [data-chmodel]`).click(); await wait(400);
-  ok(/new private chat with this conversation quoted/i.test(await p.locator('.ch-psheet .msheet-grp.priv').innerText().catch(() => '')), 'phone: in a standard thread the Private group explains it starts a new private chat');
-  await p.locator('.ch-psheet .msheet-grp.priv .mrow', { hasText: 'GLM' }).click(); await wait(900);
+  const carryChoices = p.locator('.ch-psheet :is(.msheet-grp,.mpop-sec).priv');
+  ok(await carryChoices.count() === 1 && await carryChoices.locator('.mrow[data-mprivate]').count() === 2 && await carryChoices.locator('.msheet-gh .ag-lock').count() === 1, 'phone: a standard thread offers the locked Private continuation choices');
+  await p.locator('.ch-psheet :is(.msheet-grp,.mpop-sec).priv .mrow', { hasText: 'GLM' }).click(); await wait(900);
   const now = await p.evaluate(w => __wos.wins[w]?.thread, wid);
   ok(now === '__new__', 'phone: a Private pick in a standard thread opens a new chat', now);
   const carry = await p.locator(`[data-chats="${wid}"] .ch-carry`).innerText().catch(() => '');
@@ -175,7 +176,7 @@ async function desktop(b) {
   const nw = await p.evaluate(() => Object.values(__wux.wins).find(w => w.app === 'chats' && !w.agent && w.thread === '__new__')?.id || '');
   const nwin = p.locator(`.win[data-win="${nw}"]`);
   await nwin.locator('[data-chmodel]').first().click(); await wait(500);
-  const grp = p.locator('.ch-psheet .msheet-grp.priv');
+  const grp = p.locator('.ch-psheet :is(.msheet-grp,.mpop-sec).priv');
   ok(await grp.count() === 1 && (await grp.locator('.mrow').count()) === 2, 'desktop: new chat picker has the Private group (GLM, DeepSeek)');
   await shot(p, 'desktop-03-picker');
   await grp.locator('.mrow', { hasText: 'DeepSeek' }).click(); await wait(400);
