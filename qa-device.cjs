@@ -175,7 +175,16 @@ async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); 
     ok(apkRequests.length === 0 && apkNavigations.length === 0, 'legacy deferred: zero APK requests or navigations after 5.5 seconds', JSON.stringify({apkRequests, apkNavigations}));
     ok(feeds.length === 0, 'legacy deferred: zero latest.json fetches after 5.5 seconds', JSON.stringify(feeds));
     fs.writeFileSync(path.join(SHOTS, 'update-network.json'), JSON.stringify({web: WEB, waitMs:5500, apkRequests, apkNavigations, feeds}, null, 2));
+    // A legacy APK cannot honor the reason-aware stop-and-install confirmation either.
     await p.evaluate(() => {
+      __dev.active = 'qa-legacy-take';
+      __dev.takes[__dev.active] = {id:__dev.active, state:'recording', startedAt:Date.now(), data:[]};
+    });
+    n = await count(); await click();
+    ok(await count() === n + 1, 'legacy live-take tap still calls native updateInstall');
+    ok(await p.evaluate(() => __dev.active === 'qa-legacy-take') && /Installs by itself once music or recording stops/.test(await p.locator('#dvUpdate').innerText()), 'legacy live take stays intact with truthful automatic-install text');
+    await p.evaluate(() => {
+      __dev.active = null; delete __dev.takes['qa-legacy-take'];
       document.querySelector('#qa-playing-music').remove();
       __dev.upd = {state:'ready',version:'0.9.99',versionCode:99};
       WosDevice.event('update', __dev.upd);
