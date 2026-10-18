@@ -818,6 +818,25 @@
     const i = deskOf(id); if (i < 0) return;
     const d = desks[i]; d.focus = id; d.full = !!on; fullAt = performance.now(); applyLayout(i); save(); vib(on ? 10 : 6);
   }
+  /* Distraction-free (James, 18 Oct 2026): a short swipe down on the orb, or just above it, hides the bottom bar and
+   * every window's title bar. The windows grow into the freed space through the inset transition the tiles already
+   * use and the title bar slides up out of the window, so nothing jumps and no system bars change. Swipe up from the
+   * bottom edge, or Back, brings them back. Voice still shows the bar while a take is live. This replaces the old
+   * swipe-down Inbox shade (the Inbox stays reachable by voice and its other entry points). */
+  var zen = false, zenTipT = 0; // var: boot restores it before later lets run
+  function setZen(on, quiet) {
+    on = !!on; if (on === zen) return; zen = on;
+    device.classList.toggle('zen', on); store.set('zen', on);
+    clearTimeout(zenTipT); device.classList.remove('zen-tip');
+    if (on && !quiet) {
+      try { armBack(); } catch (e) {}
+      void device.offsetWidth; device.classList.add('zen-tip');
+      zenTipT = setTimeout(() => device.classList.remove('zen-tip'), 2400);
+      const n = store.get('zenTips', 0);
+      if (n < 3) { store.set('zenTips', n + 1); toast('↑', 'Swipe up from the bottom to bring the orb back', 2200); }
+    }
+    if (!quiet) { vib(on ? 8 : 6); tourEv('zen', { on }); }
+  }
   function clearDesk(i) { closeDesk(i); }
   /* Apps open as windows. Views reuse a review window already on this desk. */
   function mountLinks() {
@@ -3049,7 +3068,7 @@
   orbWrap.addEventListener('pointermove', e => {
     if (!G || e.pointerId !== G.pointerId) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
     // A hold that starts travelling right after it fired was really a swipe (slow frame ate the moves).
-    if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && Math.hypot(G.dx, G.dy) > 34 && !(G.dy < -20 && Math.abs(G.dx) < 100)) {
+    if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && (Math.hypot(G.dx, G.dy) > 34 || (G.dy > 16 && G.dy > Math.abs(G.dx) * 1.4)) && !(G.dy < -20 && Math.abs(G.dx) < 100)) {
       cancelVoice(true); G.mode = 'pending';
     }
     if (G.mode === 'hold') {
@@ -3069,7 +3088,8 @@
     // Swipes work in every voice state: recording or sending never locks navigation.
     if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14 && G.corner) { clearTimeout(G.hold); G.mode = 'still'; }
     if (G.mode === 'still') return; // the corner orb only talks: a slid finger cancels, it never swipes the shell
-    if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14) {
+    // A downward slide commits sooner (10 px): the orb sits near the bottom of the glass, so there is little room below it.
+    if (G.mode === 'pending' && (Math.hypot(G.dx, G.dy) > 14 || (G.dy > 10 && G.dy > Math.abs(G.dx) * 1.4))) {
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
     }
     if (G.mode === 'h' && !sheet) {
@@ -3077,17 +3097,16 @@
       placeTrack(dx * 1.1, false);
       orbWrap.dataset.dir = Math.abs(G.dx) > 50 ? (G.dx < 0 ? (idx < desks.length - 1 ? `${clip(deskName(idx + 1), 16)} →` : atPickerEnd() ? '' : 'New desk →') : (idx > 0 ? `← ${clip(deskName(idx - 1), 16)}` : '')) : '';
     } else if (G.mode === 'v') {
-      if (!sheet) {
+      if (!sheet && G.dy < 0) {
         const p = Math.min(1, Math.abs(G.dy) / 240);
-        const el = G.dy < 0 ? launcher : inboxEl, other = G.dy < 0 ? inboxEl : launcher;
-        other.style.transform = ''; other.style.opacity = '';
-        el.classList.add('dragging');
-        if (G.dy < 0 && !el._rendered) { renderLauncher(''); el._rendered = true; }
-        if (G.dy > 0 && !el._rendered) { renderInbox(); el._rendered = true; }
-        el.style.transform = G.dy < 0 ? `translateY(calc(${(1 - p) * 100}% + ${(1 - p) * 160}px))` : `translateY(calc(${-(1 - p) * 100}% - ${(1 - p) * 60}px))`;
-        el.style.opacity = String(Math.min(1, p * 1.6));
-      }
-      orbWrap.dataset.dir = Math.abs(G.dy) > 40 ? (sheet ? 'Close' : G.dy < 0 ? '↑ Apps' : '↓ Inbox') : '';
+        launcher.classList.add('dragging');
+        if (!launcher._rendered) { renderLauncher(''); launcher._rendered = true; }
+        launcher.style.transform = `translateY(calc(${(1 - p) * 100}% + ${(1 - p) * 160}px))`;
+        launcher.style.opacity = String(Math.min(1, p * 1.6));
+      } else if (!sheet) { launcher.style.transform = ''; launcher.style.opacity = ''; }
+      // Down: the bar follows the finger a little, then hides (distraction-free). Little room below the orb, so short.
+      if (!sheet && V.state === 'idle') $('#dock').style.transform = G.dy > 0 ? `translateY(${Math.min(G.dy, 40) * .5}px)` : '';
+      orbWrap.dataset.dir = sheet ? (Math.abs(G.dy) > 40 ? 'Close' : '') : G.dy < -40 ? '↑ Apps' : G.dy > 12 && V.state === 'idle' ? '↓ Hide' : '';
     }
   });
   function endGesture(e, cancelled) {
@@ -3125,12 +3144,15 @@
       if (g.dx < -60 || v < -.5) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); } else if (g.dx > 60 || v > .5) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); } else placeTrack(0, true);
     } else if (g.mode === 'v') {
       [launcher, inboxEl].forEach(el => el.classList.remove('dragging'));
-      launcher._rendered = inboxEl._rendered = false;
-      if (sheet) { if ((sheet === 'launcher' && g.dy > 40) || (sheet === 'inbox' && g.dy < -40) || (sheet === 'settings' && Math.abs(g.dy) > 40)) closeSheets(); else if (Math.abs(g.dy) > 40) openSheet(g.dy < 0 ? 'launcher' : 'inbox'); return; }
+      launcher._rendered = inboxEl._rendered = false; $('#dock').style.transform = '';
+      if (sheet) { if ((sheet === 'launcher' && g.dy > 40) || (sheet === 'inbox' && g.dy < -40) || (sheet === 'settings' && Math.abs(g.dy) > 40)) closeSheets(); else if (g.dy < -40) openSheet('launcher'); return; }
       const v = g.dy / vt;
       if (g.dy < -70 || v < -.55) openSheet('launcher');
-      else if (g.dy > 70 || v > .55) openSheet('inbox');
-      else { [launcher, inboxEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; }); }
+      else if (!cancelled && V.state === 'idle' && (g.dy > 18 || (g.dy > 8 && v > .3))) setZen(true);
+      else { launcher.style.transform = ''; launcher.style.opacity = ''; }
+    } else if (g.mode === 'still') {
+      // The full-screen Chats corner orb only talks, but a clear downward slide hides it too.
+      if (!cancelled && V.state === 'idle' && g.dy > 18 && g.dy > Math.abs(g.dx)) setZen(true);
     }
   }
   orbWrap.addEventListener('pointerup', e => endGesture(e, false));
@@ -3143,6 +3165,52 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) endGesture(null, true); });
   orbWrap.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (V.state === 'idle') startOrbVoice(); else finishVoice(); } });
   orbWrap.tabIndex = 0;
+
+  /* Distraction-free, forgiving start (James, 18 Oct 2026): the swipe down may begin a little above the orb. Passive
+   * touch watch over the strip above the orb: taps and scrolls there behave exactly as before; only a clear, mostly
+   * vertical drag down of ~26 px hides the bars. Touch events (not pointer) so a list that starts scrolling under
+   * the finger does not cancel the watch. */
+  let ZA = null;
+  document.addEventListener('touchstart', e => {
+    ZA = null;
+    if (zen || sheet || G || e.touches.length !== 1 || V.state !== 'idle') return;
+    if (device.classList.contains('immersive') && !device.classList.contains('orb-corner')) return;
+    if (e.target.closest && e.target.closest('#orbWrap, #zenEdge, #immEdge')) return;
+    const t = e.touches[0], r = orbWrap.getBoundingClientRect(); if (!r.width) return;
+    if (t.clientX < r.left - 48 || t.clientX > r.right + 48 || t.clientY < r.top - 72 || t.clientY > r.top + 6) return;
+    ZA = { x: t.clientX, y: t.clientY };
+  }, { capture: true, passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!ZA || e.touches.length !== 1) { ZA = null; return; }
+    const t = e.touches[0], dx = t.clientX - ZA.x, dy = t.clientY - ZA.y;
+    if (dy < -12 || Math.abs(dx) > 44) { ZA = null; return; }
+    if (dy > 26 && dy > Math.abs(dx) * 1.4) { ZA = null; setZen(true); }
+  }, { capture: true, passive: true });
+  ['touchend', 'touchcancel'].forEach(t => document.addEventListener(t, () => { ZA = null; }, { capture: true, passive: true }));
+
+  /* Bottom edge while distraction-free: swipe up anywhere along it to bring the bars back. A real >=24 px target so
+   * touch adjustment never hands the swipe to a composer above it (see immEdge). */
+  const zenEdge = document.createElement('div'); zenEdge.id = 'zenEdge'; zenEdge.className = 'zen-edge';
+  zenEdge.innerHTML = '<i></i>'; zenEdge.setAttribute('aria-label', 'Swipe up to show the orb'); device.appendChild(zenEdge);
+  zenEdge.addEventListener('click', e => e.preventDefault());
+  zenEdge.addEventListener('touchmove', e => { if (ZE && e.cancelable) e.preventDefault(); }, { passive: false });
+  let ZE = null;
+  zenEdge.addEventListener('pointerdown', e => {
+    if (!zen) return; e.preventDefault(); try { zenEdge.setPointerCapture(e.pointerId); } catch (_) {}
+    ZE = { y: e.clientY, t: performance.now(), id: e.pointerId, dy: 0 };
+  });
+  zenEdge.addEventListener('pointermove', e => {
+    if (!ZE || e.pointerId !== ZE.id) return; ZE.dy = Math.min(0, e.clientY - ZE.y);
+    zenEdge.classList.toggle('pull', -ZE.dy > 10);
+    if (-ZE.dy > 22 && zen) { ZE = null; zenEdge.classList.remove('pull'); setZen(false); } // reveal as soon as the intent is clear
+  });
+  const zenEnd = e => {
+    if (!ZE || e.pointerId !== ZE.id) return; const s = ZE; ZE = null; zenEdge.classList.remove('pull');
+    const v = s.dy / ((performance.now() - s.t) || 1);
+    if (e.type !== 'pointercancel' && s.dy < -8 && v < -.3) setZen(false);
+  };
+  zenEdge.addEventListener('pointerup', zenEnd); zenEdge.addEventListener('pointercancel', zenEnd);
+  setZen(store.get('zen', false), true);
 
   /* ---------------- Back never leaves Wizard OS ----------------
    * Android Back is an in-app back gesture, one step at a time:
@@ -3204,6 +3272,7 @@
       if (f.bound && W[f.bound] && deskOf(f.bound) >= 0) { goDesk(deskOf(f.bound)); return 'bound-back'; }
       if (f.from) { closeWin(f.id); return 'review-close'; } // a link's desk: Back closes it and lands where it came from
     }
+    if (zen) { setZen(false); return 'zen'; }
     if (idx !== HOME) { goDesk(HOME); return 'home'; }
     return null;
   }
@@ -3301,6 +3370,7 @@
     cmdExample: () => (findApp('calendar') ? 'Open Calendar' : 'Open Day in review'),
     noMic: () => NOMIC,
     closeSheets: () => closeSheets(),
+    setZen: on => setZen(on),
     dismissVoice: () => { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(1200); },
     prepare: () => { if (V.state !== 'idle') cancelVoice(true); closeMenu(); closeOverview(); closeSheets(true); const d = desks[idx]; if (d.full && d.focus) setFull(d.focus, false); },
     say: (t, kind) => runUtterance(t, kind || 'auto'),

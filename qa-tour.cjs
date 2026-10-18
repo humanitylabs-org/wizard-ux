@@ -4,7 +4,7 @@
 //  beat 1 tap-talk: silence → "didn't hear" nudge (no advance); real speech → sent → beat 2
 //  beat 2 hold-command: a non-command → "Didn't catch a command" (no advance, nothing opened); "Open Calendar"
 //         → the app opens on the desk next to Home → beat 3. No slide-to-aim anywhere.
-//  beat 3 swipe down → inbox → Back → end card → tap finishes and remembers.
+//  beat 3 swipe down → bars hide (distraction-free) → Back brings them back → end card → tap finishes and remembers.
 //  No mic (permission denied) → typed fallback that sends what was typed.
 //  Help: "help" opens the sheet (no agent run); Settings → Gestures & help; Practice again; Skip; ?view=tour.
 // Usage: node qa-tour.cjs [origin=http://127.0.0.1:9431/wizard-os-home/]
@@ -89,15 +89,15 @@ const settle = (p, ms = 3500) => p.waitForFunction(() => document.querySelector(
   await p.waitForFunction(() => WosTour.step === 3, null, { timeout: 5000 }).catch(() => {});
   t = await T(p); ok(t.step === 3 && t.idx === 0, 'beat 2 → beat 3 back on Home', JSON.stringify(t));
 
-  // Beat 3: swipe up is steered; swipe down opens the real inbox; Back closes it.
+  // Beat 3: swipe up is steered; swipe down hides the bars (distraction-free); Back brings them back.
   await swipe(p, -120); t = await T(p);
   ok(t.step === 3 && /Down, not up/.test(t.copy) && !(await p.evaluate(() => __wos.sheet)), 'beat 3: swipe up → "Down, not up."', t.copy);
   await p.waitForTimeout(2400);
   await swipe(p, 140); await p.waitForTimeout(400);
-  t = await T(p); ok((await p.evaluate(() => __wos.sheet)) === 'inbox' && /press Back/.test(t.copy), 'beat 3: swipe down opens the inbox, "Now press Back."', JSON.stringify(t));
-  await p.screenshot({ path: `${SHOTS}/06-beat3-inbox.png` });
+  t = await T(p); ok(!(await p.evaluate(() => __wos.sheet)) && (await p.evaluate(() => document.querySelector('#device').classList.contains('zen'))) && /Swipe up from the bottom/.test(t.copy), 'beat 3: swipe down hides the bars, "Swipe up from the bottom edge…"', JSON.stringify(t));
+  await p.screenshot({ path: `${SHOTS}/06-beat3-hidden.png` });
   await p.evaluate(() => __wos.onBack()); await p.waitForTimeout(700);
-  t = await T(p); ok(t.step === 4 && t.idx === 0, 'beat 3: Back closes the inbox → end card on Home', JSON.stringify(t));
+  t = await T(p); ok(t.step === 4 && t.idx === 0 && !(await p.evaluate(() => document.querySelector('#device').classList.contains('zen'))), 'beat 3: Back brings the bars back → end card on Home', JSON.stringify(t));
   ok(await p.evaluate(() => document.visibilityState === 'visible' && !!document.querySelector('#orbWrap')), 'Back in the tour: app still open');
   ok(/say “help”/.test(t.copy), 'end card: "Need this again? Hold the orb and say “help”."', t.copy);
   await p.screenshot({ path: `${SHOTS}/07-done.png` });
