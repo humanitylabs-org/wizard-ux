@@ -147,6 +147,61 @@
       const x0 = lines.length === 1 && !wide ? b.x + Math.max(0, (b.w - l.w) / 2) : b.x;
       for (const wd of l.ws) { wd.x = x0 + wd._x; wd.y = y0 + n * lh + f * .05; wd.w = wd._w; wd.h = f * 1.15; wd.ln = n; }
     });
+    return lines;
+  }
+  /**
+   * Rows of ink inside a box on the frozen screenshot: [{x0, x1, y0, y1}] in page px, top to bottom. Lets words the
+   * app didn't place sit on the real text (a web paragraph's box is often the whole column, not its words).
+   */
+  function inkBands(b) {
+    if (!px) return null;
+    const d = st.o.dpr || 1, ox = st.o.ox || 0, oy = st.o.oy || 0, k = px.k;
+    const X0 = Math.max(0, Math.floor((b.x * d + ox) * k)), Y0 = Math.max(0, Math.floor((b.y * d + oy) * k));
+    const X1 = Math.min(px.w, Math.ceil(((b.x + b.w) * d + ox) * k)), Y1 = Math.min(px.h, Math.ceil(((b.y + b.h) * d + oy) * k));
+    const W = X1 - X0, H = Y1 - Y0; if (W < 6 || H < 4) return null;
+    let data; try { data = px.x.getImageData(X0, Y0, W, H).data; } catch (e) { return null; }
+    const ring = [];
+    for (let i = 0; i < W; i += 2) for (const j of [0, H - 1]) { const q = (j * W + i) * 4; ring.push(data[q] + data[q + 1] * 2 + data[q + 2]); }
+    for (let j = 0; j < H; j += 2) for (const i of [0, W - 1]) { const q = (j * W + i) * 4; ring.push(data[q] + data[q + 1] * 2 + data[q + 2]); }
+    ring.sort((a, c) => a - c);
+    const bgv = ring[Math.floor(ring.length / 2)];
+    const ink = (i, j) => { const q = (j * W + i) * 4; return Math.abs(data[q] + data[q + 1] * 2 + data[q + 2] - bgv) > 150; };
+    const rows = [];
+    for (let j = 0; j < H; j++) { let n = 0; for (let i = 0; i < W; i++) if (ink(i, j)) n++; rows.push(n); }
+    const bands = []; let cur = null, gap = 0;
+    for (let j = 0; j < H; j++) {
+      if (rows[j] > 0) { if (!cur) cur = { y0: j, y1: j }; cur.y1 = j; gap = 0; }
+      else if (cur && ++gap > Math.max(2, (cur.y1 - cur.y0) * .35)) { bands.push(cur); cur = null; gap = 0; }
+    }
+    if (cur) bands.push(cur);
+    const out = [];
+    for (const bd of bands) {
+      if (bd.y1 - bd.y0 < 3) continue;
+      let x0 = W, x1 = -1;
+      for (let j = bd.y0; j <= bd.y1; j++) for (let i = 0; i < W; i++) if (ink(i, j)) { if (i < x0) x0 = i; if (i > x1) x1 = i; }
+      if (x1 < x0) continue;
+      const toX = v => ((X0 + v) / k - ox) / d, toY = v => ((Y0 + v) / k - oy) / d;
+      out.push({ x0: toX(x0), x1: toX(x1 + 1), y0: toY(bd.y0), y1: toY(bd.y1 + 1) });
+    }
+    return out.length ? out : null;
+  }
+  /** Lay unplaced words out, then pull each line onto its row of ink when the counts agree. */
+  function placeWords(b, ws) {
+    const bands = inkBands(b);
+    let box = b;
+    if (bands) {
+      const x0 = Math.min(...bands.map(q => q.x0)), x1 = Math.max(...bands.map(q => q.x1));
+      const y0 = bands[0].y0, y1 = bands[bands.length - 1].y1;
+      box = { x: x0, y: y0, w: Math.max(4, x1 - x0), h: Math.max(4, y1 - y0) };
+    }
+    const lines = layout(box, ws) || [];
+    if (!bands || bands.length !== lines.length) return;
+    lines.forEach((l, n) => {
+      const bd = bands[n], last = l.ws[l.ws.length - 1], first = l.ws[0];
+      const span = Math.max(1, last.x + last.w - first.x), sc = (bd.x1 - bd.x0) / span, base = first.x;
+      const pad = (bd.y1 - bd.y0) * .18;
+      for (const wd of l.ws) { wd.x = bd.x0 + (wd.x - base) * sc; wd.w = wd.w * sc; wd.y = bd.y0 - pad; wd.h = bd.y1 - bd.y0 + pad * 2; }
+    });
   }
   function buildWords() {
     const o = st.o, dpr = o.dpr || devicePixelRatio || 1, ox = o.ox || 0, oy = o.oy || 0;
@@ -160,7 +215,7 @@
         ws = ws.filter(w => w.w > 0 && w.h > 0);
         let ln = 0;
         ws.forEach((w, k) => { if (k && Math.abs((w.y + w.h / 2) - (ws[k - 1].y + ws[k - 1].h / 2)) > Math.max(w.h, ws[k - 1].h) / 2) ln++; w.ln = ln; });
-      } else layout(b, ws);
+      } else placeWords(b, ws);
       for (const w of ws) { w.b = i; w.i = st.words.length; w.line = i * 1000 + w.ln; b.wi.push(w.i); st.words.push(w); }
     });
   }
@@ -176,16 +231,20 @@
   }
 
   /* ================= open ================= */
-  function open(o) {
+  async function open(o) {
     st.o = o; st.mode = o.mode === 'translate' ? 'translate' : 'select';
     document.documentElement.style.setProperty('--top', (o.top || 24) + 'px');
     document.documentElement.style.setProperty('--bot', (o.bot || 0) + 'px');
-    buildWords();
     if (o.shot) {
       const b64 = N.shot();
-      if (b64) { $('#shot').style.backgroundImage = 'url(data:image/jpeg;base64,' + b64 + ')'; loadPixels(b64); }
+      if (b64) {
+        $('#shot').style.backgroundImage = 'url(data:image/jpeg;base64,' + b64 + ')';
+        // the pixels place words the app didn't (and colour translations); never wait more than a moment
+        await Promise.race([loadPixels(b64), new Promise(r => setTimeout(r, 700))]);
+      }
       $('#pic').hidden = false;
     }
+    buildWords();
     if (!st.words.length) {
       const bl = $('#blank'); bl.style.display = 'flex';
       bl.textContent = o.shot ? 'This screen has no text Android can read. Reading the picture…' : 'This app hides its screen and its text from other apps.';
@@ -422,16 +481,20 @@
   }
   /** The screenshot's pixels, to give each translation the background and ink of the text it covers. */
   function loadPixels(b64) {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
-        const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0);
-        px = { x, w: c.width, h: c.height, k: c.width / ((st.o && st.o.sw) || c.width) };
-      } catch (e) { px = null; }
-      if (wantPaint) paint();
-    };
-    img.src = 'data:image/jpeg;base64,' + b64;
+    return new Promise(res => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+          const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0);
+          px = { x, w: c.width, h: c.height, k: c.width / ((st.o && st.o.sw) || c.width) };
+        } catch (e) { px = null; }
+        if (wantPaint) paint();
+        res();
+      };
+      img.onerror = () => res();
+      img.src = 'data:image/jpeg;base64,' + b64;
+    });
   }
   const lum = (r, g, b) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
   function colors(r) {

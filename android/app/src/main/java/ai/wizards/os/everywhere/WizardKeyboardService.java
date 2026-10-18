@@ -371,7 +371,8 @@ public class WizardKeyboardService extends AccessibilityService {
     public java.util.List<ScreenPolicy.Block> screenText() {
         java.util.List<ScreenPolicy.Block> out = new java.util.ArrayList<>();
         int[] budget = {6000};
-        charDeadline = SystemClock.uptimeMillis() + 900; // where each word sits: at most ~0.9 s of lookups
+        charDeadline = SystemClock.uptimeMillis() + 1500; // where each word sits: at most ~1.5 s of lookups
+        java.util.Arrays.fill(charStats, 0);
         try {
             List<AccessibilityWindowInfo> ws = getWindows();
             boolean any = false;
@@ -386,6 +387,8 @@ public class WizardKeyboardService extends AccessibilityService {
             }
             if (!any) { AccessibilityNodeInfo r = getRootInActiveWindow(); if (r != null && !ownPackage(r)) walk(r, out, budget, 0); }
         } catch (Exception e) { Log.w(TAG, "screen text failed", e); }
+        Log.i(TAG, "screen char positions: ok=" + charStats[0] + " noKey=" + charStats[1] + " refused=" + charStats[2]
+                + " empty=" + charStats[3] + " late=" + charStats[4] + " long=" + charStats[5]);
         return out;
     }
 
@@ -415,6 +418,8 @@ public class WizardKeyboardService extends AccessibilityService {
     }
 
     private long charDeadline;
+    /** ok, no key, refresh refused, no rects, past the deadline, too long: why words were or weren't placed. */
+    private final int[] charStats = new int[6];
 
     /**
      * Where Android drew each character of this node's text, in screen pixels (the same data TalkBack uses), so a
@@ -423,16 +428,18 @@ public class WizardKeyboardService extends AccessibilityService {
      */
     @SuppressWarnings("deprecation") // Bundle.getParcelableArray(String): the typed variant is API 33+, minSdk is 28
     private float[][] charRects(AccessibilityNodeInfo n, int len) {
-        if (len <= 0 || len > 3000 || SystemClock.uptimeMillis() > charDeadline) return null;
+        if (len <= 0) return null;
+        if (len > 3000) { charStats[5]++; return null; }
+        if (SystemClock.uptimeMillis() > charDeadline) { charStats[4]++; return null; }
         try {
             List<String> extra = n.getAvailableExtraData();
-            if (extra == null || !extra.contains(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY)) return null;
+            if (extra == null || !extra.contains(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY)) { charStats[1]++; return null; }
             android.os.Bundle a = new android.os.Bundle();
             a.putInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_START_INDEX, 0);
             a.putInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_LENGTH, len);
-            if (!n.refreshWithExtraData(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY, a)) return null;
+            if (!n.refreshWithExtraData(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY, a)) { charStats[2]++; return null; }
             android.os.Parcelable[] ps = n.getExtras().getParcelableArray(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY);
-            if (ps == null) return null;
+            if (ps == null) { charStats[3]++; return null; }
             float[][] r = new float[len][];
             boolean any = false;
             for (int i = 0; i < Math.min(len, ps.length); i++) {
@@ -442,6 +449,7 @@ public class WizardKeyboardService extends AccessibilityService {
                 r[i] = new float[]{f.left, f.top, f.right, f.bottom};
                 any = true;
             }
+            charStats[any ? 0 : 3]++;
             return any ? r : null;
         } catch (RuntimeException e) {
             return null;

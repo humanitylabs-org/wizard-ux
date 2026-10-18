@@ -28,26 +28,29 @@ const LINES = [
     const c = document.getElementById('c').getContext('2d'); c.scale(DPR, DPR);
     c.fillStyle = '#fff'; c.fillRect(0, 0, W, H);
     c.fillStyle = '#eee'; c.fillRect(0, 0, W, 60); c.fillStyle = '#333'; c.font = '16px sans-serif'; c.fillText('Menu', 16, 36);
-    const blocks = [];
+    const blocks = [], truth = {};
     LINES.forEach((L, li) => {
       c.font = L.f + 'px sans-serif';
       const tw = c.measureText(L.t).width;
       c.fillStyle = L.bg; c.fillRect(L.x - 6, L.y - L.f - 4, tw + 12, L.f * 1.5 + 4);
       c.fillStyle = L.fg; c.fillText(L.t, L.x, L.y);
       const top = L.y - L.f * 0.95, h = L.f * 1.25;
-      const blk = { t: L.t, x: (L.x - 2) * DPR, y: top * DPR, w: (tw + 4) * DPR, h: h * DPR, l: false };
+      // line 1 is reported like a web paragraph: the whole column, not the words (the page must find the ink)
+      const blk = li === 1 ? { t: L.t, x: 8 * DPR, y: (top - 6) * DPR, w: (W - 16) * DPR, h: (h + 12) * DPR, l: false }
+        : { t: L.t, x: (L.x - 2) * DPR, y: top * DPR, w: (tw + 4) * DPR, h: h * DPR, l: false };
       // words (split on spaces; Thai as one word) with exact boxes for lines 0, 2, 3; line 1 has none (layout path)
       const parts = L.t.split(/( )/), wd = []; let x = L.x;
       for (let i = 0; i < parts.length; i += 2) {
         const w = c.measureText(parts[i]).width, sp = parts[i + 1] ? ' ' : '';
         wd.push(li === 1 ? [parts[i], sp] : [parts[i], sp, Math.round(x * DPR), Math.round(top * DPR), Math.round(w * DPR), Math.round(h * DPR)]);
+        if (li === 1) truth[parts[i]] = { l: x, r: x + w, y: L.y - L.f / 2 };
         x += w + (sp ? c.measureText(' ').width : 0);
       }
       blk.wd = wd; blk.ex = li !== 1;
       blocks.push(blk);
     });
     blocks.push({ t: 'Menu', x: 10 * DPR, y: 10 * DPR, w: 60 * DPR, h: 40 * DPR, l: true }); // icon label
-    return { blocks, jpeg: document.getElementById('c').toDataURL('image/jpeg', .9).split(',')[1] };
+    return { blocks, truth, jpeg: document.getElementById('c').toDataURL('image/jpeg', .9).split(',')[1] };
   }, { LINES, DPR, W, H });
   await app.close();
 
@@ -98,6 +101,12 @@ const LINES = [
   check('the hint says drag or tap', (await p.textContent('#hint')).includes('Drag'));
   await p.screenshot({ path: OUT + '/01-select-open.png' });
   const W_ = t => k.words.find(w => w.t === t);
+  {
+    const w200 = W_('200'), t200 = scr.truth['200'], wB = W_('บาท'), tB = scr.truth['บาท'];
+    const off = (w, t) => [Math.round(css(p, w.l) - t.l), Math.round(css(p, w.r) - t.r), Math.round(css(p, w.y) - t.y)];
+    check('words the app did not place still land on their real ink (fitted from the screenshot)',
+      w200 && wB && off(w200, t200).every(v => Math.abs(v) <= 8) && off(wB, tB).every(v => Math.abs(v) <= 8), [off(w200, t200), off(wB, tB)]);
+  }
   const w1 = W_('number'), w2 = W_('ready');
   await touchDrag(p, [css(p, w1.l) + 2, css(p, w1.y)], [css(p, w2.r) - 2, css(p, w2.y)]);
   k = await peek(p);

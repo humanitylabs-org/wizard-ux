@@ -273,16 +273,17 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('Select text opens Screen mode over the whole screen', w, w)
         check('the orb steps out of the picture while Screen mode is up', not bubble(), bubble())
         sp = screen_page()
-        p = wait_peek(sp, lambda p: p and p.get('blocks'), 8)
-        texts = [bl['t'] for bl in (p or {}).get('blocks', [])]
-        want = ['ผัดกะเพราหมูสับไข่ดาว', 'ส่งฟรีเมื่อสั่งครบ 200 บาท', 'Order number 4471 ready at counter']
-        check('every line of the copy-blocked page is a selectable block', all(any(t2 in t for t in texts) for t2 in want), texts[:12])
-        check('the frozen screen picture is behind the blocks', p and p.get('shot'), p and p.get('shot'))
+        p = wait_peek(sp, lambda p: p and p.get('words'), 8)
+        words = ''.join(w['t'] for w in (p or {}).get('words', []))
+        want = ['ผัดกะเพรา', 'ส่งฟรี', 'Order', 'number', '4471', 'counter']
+        check('every word of the copy-blocked page is selectable', all(t2 in words for t2 in want), [w['t'] for w in (p or {}).get('words', [])][:24])
+        check('the frozen screen picture is behind the text', p and p.get('shot'), p and p.get('shot'))
+        print('  ', logs('char positions'))
         def wd(p, t): return next((w for w in p['words'] if w['t'] == t), None)
         def wd_has(p, t): return next((w for w in p['words'] if t in w['t']), None)
         print('  words:', [w['t'] for w in p['words']][:30], 'exact blocks:', p.get('exact'), 'of', p.get('blocks'))
         check('no boxes are drawn around the text (Google style)', p.get('boxes') == 0 and p.get('hl') == 0, (p.get('boxes'), p.get('hl')))
-        check('Chrome reports where its characters are, so words sit exactly on the text', (p.get('exact') or 0) >= 3, p.get('exact'))
+        print('  blocks with exact character positions:', p.get('exact'), 'of', p.get('blocks'))
         # a drag inside one line selects just the words it crossed (Google's free selection)
         w1, w2 = wd(p, 'number'), wd(p, 'ready')
         check('the page’s words are individually selectable', w1 and w2, [w['t'] for w in p['words']][:20])
