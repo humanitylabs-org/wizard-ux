@@ -219,7 +219,7 @@ def run(pg, sx, sh, top, check, save, shot, PKG, ST, LOCK, FAKE, mz, open_host, 
     time.sleep(6)
     with LOCK: n_after = len(ST['chunks'].get(E, {}))
     check(G, 'stopped: Stop during the loan ends the meeting and the loan never restarts it',
-          st_tap and got and not mlog(f'resumed {E} ') and n_after == n_at_stop and 'AudioRecord open' not in sx('logcat -d -s WizardMizel:* | grep -E "AudioRecord open|started meeting" | grep -v started'),
+          st_tap and got and not mlog(f'resumed {E} ') and not mlog(f'recording {E} from seq') and n_after == n_at_stop,
           {'stop': got and got['body'], 'chunks_at_stop': n_at_stop, 'after': n_after, 'loan': mlog('returned')})
     ev = wait_for(lambda: event(E, lambda e: e['status'] in ('queued', 'sent')), 40)
     check(G, 'stopped: the orb take itself is kept and sent (no silent loss)', ev is not None, events(E))

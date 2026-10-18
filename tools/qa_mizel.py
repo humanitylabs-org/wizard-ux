@@ -20,7 +20,7 @@ Checks
            contiguous seqs, start_ms = media time, every chunk acked, stop after the last chunk (a, e)
   pause    pause releases the mic (appops/audio dumps), resume re-acquires it, media time excludes the pause;
            notification Pause action; pause_timeout with the QA-short timeout (b)
-  owner    side-button and Everywhere refused while a meeting records; a meeting refused while Everywhere listens (d)
+  owner    side-button and Everywhere borrow the mic from a recording meeting (0.9.24); a meeting refused while Everywhere listens (d)
   death    kill -9 mid-recording → service restarts, sends stop process_death, notification, no chunk lost;
            force-stop → next app open does the same (c)
   link     notification/deep link opens /mizel-live/#/m/<id> inside the app
@@ -694,8 +694,9 @@ with (BASE / 'worker.lock').open('a') as lock:
         sx('logcat -c')
         sx(f'am start -W -a android.intent.action.ASSIST -n {PKG}/ai.wizards.os.assist.AssistLockActivity'); time.sleep(4)
         shot('06-side-refused')
-        al = sx('logcat -d -s WizardOSAssist:* | grep -E "start refused|recorder failed|listening" | tail -4').strip()
-        check('owner', 'side-button take refused while a meeting records (toast + reason)', 'start refused: mic held by meeting' in al, al)
+        al = sx('logcat -d -s WizardOSAssist:* | grep -E "start refused|recorder failed|listening|meeting paused for" | tail -4').strip()
+        # 0.9.24: the side button borrows the meeting's mic (meeting pauses) instead of refusing.
+        check('owner', 'side-button take borrows the mic while a meeting records (meeting paused, not refused)', 'meeting paused for orb-' in al and 'start refused' not in al, al)
         sx('input keyevent KEYCODE_BACK'); time.sleep(2)
         if PKG + '/ai.wizards.os.MainActivity' not in top():
             sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(2)
@@ -711,17 +712,20 @@ with (BASE / 'worker.lock').open('a') as lock:
             return None
         b = wait_for(bubble, 15)
         if b:
-            sx('logcat -c'); sx(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}'); time.sleep(3); shot('07-everywhere-refused')
+            sx('logcat -c'); sx(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}'); time.sleep(3); shot('07-everywhere-borrows')
             el = sx('logcat -d -s WizardEverywhere:* | grep -E "start refused|listening|recorder failed" | tail -4').strip()
-            check('owner', 'Everywhere orb take refused while a meeting records (toast + reason)', 'start refused: mic held by meeting' in el, el)
+            check('owner', 'Everywhere orb take borrows the mic while a meeting records (meeting paused, not refused)', 'meeting paused for orb-' in el and 'start refused' not in el, el)
         else:
-            check('owner', 'Everywhere orb take refused while a meeting records', False, 'floating orb never appeared')
+            check('owner', 'Everywhere orb take borrows the mic while a meeting records', False, 'floating orb never appeared')
         # Stop from the notification while the app is in the background (real tap on the Stop action).
         st_tap = tap_note_action('Recording meeting', 'Stop', '07b-shade-stop')
         got = wait_for(lambda: ST['stops'].get(C), 40)
         check('owner', 'notification Stop action ends the meeting (reason user)', st_tap and got and got['body'].get('reason') == 'user', {'tapped': st_tap})
         if not got: mz(pg, 'stop'); wait_for(lambda: ST['stops'].get(C), 40)   # keep the rest of the run meaningful
         verify_meeting('owner', C, 'user', 1)
+        if b:   # the borrowed take is still listening: send it (the stopped meeting is never restarted)
+            sx('logcat -c'); sx(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}'); time.sleep(3)
+            check('owner', 'meeting stopped during the loan is not restarted when the orb take ends', not mlog(f'resumed {C} ') and not mlog(f'recording {C} from seq'), mlog('returned|resumed|recording'))
         # Reverse: Everywhere listening → meeting start refused.
         if b:
             sx('logcat -c'); sx(f'input tap {(b[0] + b[2]) // 2} {(b[1] + b[3]) // 2}'); time.sleep(1.2)

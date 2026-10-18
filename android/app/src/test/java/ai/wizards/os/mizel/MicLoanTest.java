@@ -49,7 +49,10 @@ public class MicLoanTest {
     }
 
     @Before
-    public void reset() { MicOwner.resetForTest(); MicLoan.resetForTest(); }
+    public void reset() {
+        for (String w : new String[]{MicOwner.MEETING, MicOwner.EVERYWHERE, MicOwner.SIDE, MicOwner.ORB}) MicOwner.release(w);
+        MicLoan.resetForTest();
+    }
 
     @Test
     public void meetingLendsTheMicToTheFloatingOrbAndGetsItBack() {
