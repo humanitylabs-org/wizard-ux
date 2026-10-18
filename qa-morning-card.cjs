@@ -74,8 +74,12 @@ const ok = (c, m) => { if (c) { pass++; console.log('PASS', m); } else { fail++;
   // Back to Chats: the card updated from the app's message without waiting for a poll.
   await p.evaluate(() => window.__wos.onBack && window.__wos.onBack()); await p.waitForTimeout(600);
   await p.evaluate(() => window.__wos.goDesk(1)).catch(() => {}); await p.waitForTimeout(1500);
-  const after = await p.evaluate(() => { const c = document.querySelector('[data-chmorning]'); return { done: c?.classList.contains('done'), text: c?.innerText }; });
-  ok(after.done && /Done for today/.test(after.text || ''), '13 card shows Done for today once all three are ticked');
+  const after = await p.evaluate(() => ({ card: !!document.querySelector('[data-chmorning]'), ready: !!document.querySelector('[data-sec="ready"]') }));
+  ok(after.ready && !after.card, '13 card disappears once all three are ticked (Ready still shows)');
+  // A new day (Morning rolls over) brings it back.
+  Object.assign(model, { day: 'qa2' }); for (const k of Object.keys(model.steps)) model.steps[k] = { done: false }; recount();
+  await p.evaluate(() => postMessage({ type: 'wizard:morning', status: { day: 'qa2', done: 0, total: 3, next_label: 'Workout' } }, location.origin)); await p.waitForTimeout(800);
+  ok(await p.evaluate(() => !!document.querySelector('[data-chmorning]')), '13b next morning the card is back');
   await p.screenshot({ path: OUT + '/4-ready-done.png' });
   ok(agentWrites === 0, `14 no Wizard agent writes (${agentWrites})`);
   ok(!errs.length, '15 no page errors ' + errs.slice(0, 3).join(' | '));
