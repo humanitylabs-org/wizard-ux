@@ -29,6 +29,7 @@ if role == 'web':
         # Reuse the exact attested provider module and credential already installed
         # for Wizard voice. Never copy a key into source or choose another model.
         env['TINFOIL_PROVIDER_MODULE'] = config['shared_provider_module']
+        env['WIZARD_VOICE_PROXY_URL'] = config['shared_proxy_url']
         for line in Path(config['shared_provider_env']).read_text().splitlines():
             if line.startswith('TINFOIL_API_KEY='):
                 env['TINFOIL_API_KEY'] = line.split('=', 1)[1].strip().strip("\"'")

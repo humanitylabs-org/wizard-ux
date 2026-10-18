@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { WebSocketServer } from 'ws';
 import { validateDocument } from './web/model.js';
 import { OutlineRealtime } from './realtime.mjs';
-import { OutlineSharedRealtime } from './shared-realtime.mjs';
+import { OutlineSharedRealtime, sharedProxyClient } from './shared-realtime.mjs';
 import { OutlineLocalRealtime, localEndpoint, localHealth, LOCAL_MODEL } from './local-realtime.mjs';
 import { joinWav } from './audio.mjs';
 
@@ -31,7 +31,7 @@ const trial=local||shared, appId=trial?'outline-streaming-demo':'voice-outline';
 const endpoint=local?localEndpoint(process.env.OUTLINE_LOCAL_WS||'ws://127.0.0.1:18885'):null;
 const model=local?LOCAL_MODEL:'voxtral-mini-4b-realtime';
 let provider=local?{local:true}:null;
-if(!local && process.env.TINFOIL_API_KEY && process.env.TINFOIL_PROVIDER_MODULE){const {TinfoilProvider}=await import(pathToFileURL(resolve(process.env.TINFOIL_PROVIDER_MODULE)));provider=new TinfoilProvider(process.env.TINFOIL_API_KEY,null,'voxtral-mini-4b-realtime');}
+if(!local && process.env.TINFOIL_API_KEY && process.env.TINFOIL_PROVIDER_MODULE){const {TinfoilProvider}=await import(pathToFileURL(resolve(process.env.TINFOIL_PROVIDER_MODULE)));const client=shared?sharedProxyClient(resolve(process.env.TINFOIL_PROVIDER_MODULE),process.env.TINFOIL_API_KEY,process.env.WIZARD_VOICE_PROXY_URL):null;provider=new TinfoilProvider(process.env.TINFOIL_API_KEY,client,'voxtral-mini-4b-realtime');}
 const server=http.createServer(async(req,res)=>{
  try{
   if(!trusted(req))return json(res,403,{error:'Host or Origin not trusted'});

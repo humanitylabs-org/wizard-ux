@@ -13,7 +13,11 @@ meeting ID. Desktop success does not prove handset microphone permission or PCM.
 This repair selects `wizard-shared` in the trial launcher, imports the installed
 Mizel TinfoilProvider and calls its openRealtime API. OutlineSharedRealtime only
 adapts target lifecycle; it contains no ASR/provider wire protocol. The shared
-provider uses tinfoil-js attestation and voxtral-mini-4b-realtime, with no fallback.
+provider uses Wizard's existing loopback Tinfoil attestation proxy over an SSH
+reverse tunnel and voxtral-mini-4b-realtime, with no fallback. The OpenAI SDK is
+only the existing provider's WebSocket transport; no OpenAI endpoint is used.
+Direct tinfoil-js connections on Thales produced TLS bad-record/illegal-parameter
+errors during acceptance, so they are not the deployed route.
 The Nemotron implementation remains available explicitly as local-nemotron.
 
 Runtime config supplies shared_provider_module and shared_provider_env. The

@@ -1,5 +1,17 @@
 // Outline's target/custody lifecycle around the SAME openRealtime implementation
 // used by Mizel Live. No provider protocol, credentials, attestation or ASR here.
+import {createRequire} from 'node:module';
+
+// Use Wizard's existing attestation proxy, not a second remote speech service.
+// The OpenAI SDK is transport only: both URL and model remain Tinfoil-only.
+export function sharedProxyClient(modulePath, apiKey, proxyURL) {
+ const url=new URL(proxyURL);
+ if(url.protocol!=='http:'||!['127.0.0.1','[::1]'].includes(url.hostname)||url.username||url.password||url.search||url.hash||!['','/'].includes(url.pathname))throw new Error('Shared voice proxy must be the configured loopback attestation tunnel');
+ const require=createRequire(modulePath),{OpenAI}=require('openai'),{OpenAIRealtimeWS}=require('openai/realtime/ws');
+ const client=new OpenAI({apiKey,baseURL:url.origin+'/v1'});
+ return {realtime:async({model})=>{if(model!=='voxtral-mini-4b-realtime')throw new Error('Unsupported shared live voice model');return new OpenAIRealtimeWS({model},client);}};
+}
+
 export class OutlineSharedRealtime {
  constructor(provider, handlers, {openMs=12000}={}) {
   Object.assign(this,{provider,handlers,openMs});this.queue=[];this.bytes=0;this.ended=false;this.terminal=false;
