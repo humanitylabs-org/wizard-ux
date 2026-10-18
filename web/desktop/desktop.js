@@ -80,6 +80,7 @@
     visible: () => homeOpen ? [] : ws[cur].wins,
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
+    openUnsent: () => openSettings('unsent'),
     newChatHint: `Type below and press ${CMD}Enter, or press ${MOD}⇧V for a new voice chat.`,
     threadShown: (wid, el) => threadShown(wid, el),
     dictationField: () => vMode === 'dictate' && (VOICE.state !== 'idle' || dictationFinishing) ? dictTarget?.el : null,
