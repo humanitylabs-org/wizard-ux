@@ -358,29 +358,22 @@
   /* iPhone: a quick swipe home along the bottom edge also reaches the dock and flips a desk just as the app
    * goes away, so it reopens one desk over. A desk change in the last moment before the page is hidden was
    * that swipe, not a choice: put the desk back. */
-  /* Path-independent guard: any desk change made by a touch (dock, orb, scrubber, swipe strip, dot tap) that
-   * hasn't settled for 1.2 s when the page hides is undone, a touch move while hidden is ignored, and stray
-   * touches replayed in the first moment after coming back can't move desks either. */
-  let settledId = desks[idx]?.id || '', settleT = 0, touchAt = 0, shownAt = Date.now();
-  document.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') touchAt = Date.now(); }, true);
-  const settle = () => { clearTimeout(settleT); settleT = setTimeout(() => { if (!document.hidden) settledId = desks[idx]?.id || ''; }, 1200); };
-  const touchMove = () => Date.now() - touchAt < 2500;
-  const undoUnsettled = () => {
-    clearTimeout(settleT);
-    const back = desks.findIndex(d => d.id === settledId);
+  let lastMove = null;
+  const undoLastMove = () => {
+    if (!lastMove || Date.now() - lastMove.at > 1500) return;
+    const back = desks.findIndex(d => d.id === lastMove.from); lastMove = null;
     if (back >= 0 && back !== idx) { idx = back; placeTrack(0, false); renderDots(); save(); }
   };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) undoUnsettled(); else { shownAt = Date.now(); undoUnsettled(); } });
-  addEventListener('pagehide', undoUnsettled);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) undoLastMove(); });
+  addEventListener('pagehide', undoLastMove);
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
-    if (touchMove() && (document.hidden || Date.now() - shownAt < 700)) { placeTrack(0, false); return; } // the iPhone's swipe out, not a choice
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
     const from = desks[idx], to = desks[n];
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to; idx = n;
-    if (moved) { if (touchMove()) settle(); else { clearTimeout(settleT); settledId = desks[idx]?.id || ''; } }
+    if (moved) lastMove = { from: from && from.id, at: Date.now() };
     if (moved) window.WosResources?.back();
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
@@ -628,17 +621,25 @@
   let SC = null; const SC_STEP = 26;
   scrub.addEventListener('pointerdown', e => {
     e.preventDefault(); scrub.setPointerCapture(e.pointerId);
-    SC = { x: e.clientX, start: idx, at: idx, live: false, t: setTimeout(() => { if (SC) { SC.live = true; scrub.classList.add('on'); scLabel(); vib(10); } }, 140) };
+    SC = { x: e.clientX, y: e.clientY, start: idx, at: idx, live: false, t: setTimeout(() => { if (SC) { SC.live = true; scrub.classList.add('on'); scLabel(); vib(10); } }, 140) };
   });
   scrub.addEventListener('pointermove', e => {
-    if (!SC) return; const dx = e.clientX - SC.x;
-    if (!SC.live && Math.abs(dx) > 10) { clearTimeout(SC.t); SC.live = true; scrub.classList.add('on'); }
+    if (!SC) return; const dx = e.clientX - SC.x, dy = e.clientY - SC.y;
+    if (dy < -30) { if (SC.live) { idx = SC.start; placeTrack(0, true); renderDots(); } SC.live = false; clearTimeout(SC.t); return; } // going up: iOS swipe out
+    if (!SC.live && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { clearTimeout(SC.t); SC.live = true; scrub.classList.add('on'); }
     if (!SC.live) return;
     const n = Math.max(0, Math.min(desks.length - 1, SC.start + Math.round(dx / SC_STEP)));
     if (n !== SC.at) { SC.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(); }
   });
   function scLabel() { scrub.querySelector('.sc-label').textContent = deskName(SC.at); }
-  const scEnd = () => { if (!SC) return; clearTimeout(SC.t); const live = SC.live; const at = SC.at; SC = null; scrub.classList.remove('on'); if (live) goDesk(at, true); };
+  // A cancelled touch (iOS takes it for its own swipe home) or one that rose more than a nudge is the system's
+  // swipe out, not a scrub: put the desk back where it started instead of landing on the scrubbed one.
+  const scEnd = e => {
+    if (!SC) return; clearTimeout(SC.t); const { live, at, start, y } = SC; SC = null; scrub.classList.remove('on');
+    if (!live) return;
+    if (e.type === 'pointercancel' || e.clientY - y < -30) { idx = start; placeTrack(0, true); renderDots(); return; }
+    goDesk(at, true);
+  };
   scrub.addEventListener('pointerup', scEnd); scrub.addEventListener('pointercancel', scEnd);
 
   /* ---------------- window operations ---------------- */

@@ -9,9 +9,9 @@ let pass=0,fail=0,writes=0;const ok=(v,n,x='')=>{console.log(v?'PASS':'FAIL',n,v
 const UA='Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/141.0.0.0 Mobile Safari/537.36';
 const iso=ms=>new Date(Date.now()-ms).toISOString();
 const FIX={
-  bad:{available:true,checkedAt:iso(120000),stale:false,status:'error',counts:{ok:1,warn:1,error:1},checks:[{key:'root-disk',label:'Root disk',status:'ok',value:'68%',detail:'260.9G used / 386.4G; 125.5G free'},{key:'memory',label:'Memory',status:'warn',value:'12% free',detail:'3.8G available / 31.3G'},{key:'hermes-backup',label:'Hermes backup',status:'error',value:'needs attention',detail:'latest 3d ago; health check failed'}]},
-  good:{available:true,checkedAt:iso(60000),stale:false,status:'ok',counts:{ok:2,warn:0,error:0},checks:[{key:'root-disk',label:'Root disk',status:'ok',value:'68%',detail:''},{key:'services',label:'Services',status:'ok',value:'0 failed',detail:'system and user units clean'}]},
-  stale:{available:true,checkedAt:iso(3*3600e3),stale:true,status:'ok',counts:{ok:1,warn:0,error:0},checks:[{key:'root-disk',label:'Root disk',status:'ok',value:'68%',detail:''}]},
+  bad:{available:true,checkedAt:iso(120000),stale:false,status:'error',counts:{ok:0,warn:1,error:1},checks:[{key:'services',label:'Services',status:'warn',value:'1 failed',detail:'user: wizard-stt.service'},{key:'hermes-backup',label:'Hermes backup',status:'error',value:'needs attention',detail:'latest 3d ago; health check failed'}]},
+  good:{available:true,checkedAt:iso(60000),stale:false,status:'ok',counts:{ok:2,warn:0,error:0},checks:[{key:'hermes-backup',label:'Hermes backup',status:'ok',value:'healthy',detail:''},{key:'services',label:'Services',status:'ok',value:'0 failed',detail:'system and user units clean'}]},
+  stale:{available:true,checkedAt:iso(3*3600e3),stale:true,status:'ok',counts:{ok:1,warn:0,error:0},checks:[{key:'services',label:'Services',status:'ok',value:'0 failed',detail:''}]},
   none:{available:false,checks:[]},
 };
 async function ctxFor(b,size=[412,892],health=null){const c=await b.newContext({viewport:{width:size[0],height:size[1]},hasTouch:true,isMobile:true,serviceWorkers:'block',userAgent:UA,ignoreHTTPSErrors:true});await c.addInitScript(()=>localStorage.setItem('wos.coached','true'));
@@ -25,6 +25,7 @@ async function home(c){const p=await c.newPage(),errs=[];p.on('pageerror',e=>err
   // 1. Real reading from this install.
   {const c=await ctxFor(b),{p,errs}=await home(c);allErrs.push(...errs);const st=await p.evaluate(()=>WosResources.state);const h=st.health;console.log('REAL HEALTH',JSON.stringify({counts:h?.counts,stale:h?.stale,checks:h?.checks?.map(x=>x.key+':'+x.status)}));
     ok(h&&h.available&&h.checks.length>=1,'Real /api/system/health reaches the shell with checks');
+    ok(!h.checks.some(x=>['root-disk','memory','load'].includes(x.key))&&!h.checks.some(x=>x.key==='root-inodes'&&x.status==='ok'),'No Server readings or healthy inodes in Health',JSON.stringify(h.checks.map(x=>x.key)));
     const problems=await p.evaluate(()=>WosResources.healthProblems());const alert=p.locator('.home-desk .rs-health-alert');
     ok(problems.length?await alert.count()===1:await alert.count()===0,'Home alert line present exactly when a check needs attention',JSON.stringify(problems));
     if(problems.length)ok((await alert.innerText()).includes(problems[0].text),'Home alert names the failing check',await alert.innerText());
@@ -44,7 +45,7 @@ async function home(c){const p=await c.newPage(),errs=[];p.on('pageerror',e=>err
   // 2. Fixture: error + warn. Alert is red, both named, tap lands on Health.
   for(const size of [[360,740],[412,892]]){const c=await ctxFor(b,size,'bad'),{p,errs}=await home(c);allErrs.push(...errs);const a=p.locator('.home-desk .rs-health-alert');
     ok(await a.count()===1&&(await a.getAttribute('class')).includes('rs-health-error'),`[fixture ${size.join('×')}] error check gives a red Home line`);
-    const t=await a.innerText();ok(t.includes('Hermes backup needs attention')&&t.includes('Memory 12% free')&&t.indexOf('Hermes')<t.indexOf('Memory'),'[fixture] errors named before warnings',t);
+    const t=await a.innerText();ok(t.includes('Hermes backup needs attention')&&t.includes('Services 1 failed')&&t.indexOf('Hermes')<t.indexOf('Services'),'[fixture] errors named before warnings',t);
     const g=await p.evaluate(()=>{const w=document.querySelector('.home-desk .rs-widget').getBoundingClientRect(),d=document.querySelector('#dock').getBoundingClientRect(),al=document.querySelector('.home-desk .rs-health-alert').getBoundingClientRect();return{top:w.top,bottom:w.bottom,dock:d.top,right:w.right,vw:innerWidth,alertH:al.height};});
     ok(g.right<=g.vw&&g.bottom<=g.dock&&g.alertH>=36,`[fixture ${size.join('×')}] widget with alert fits above the dock`,JSON.stringify(g));
     if(OUT)await p.screenshot({path:`${OUT}/home-alert-${size.join('x')}.png`});
