@@ -126,11 +126,14 @@ window.WosChatPower = function chatPower(A) {
   // The chip in the thread header: the model this thread (or this new chat) runs on. Tap to change it.
   function modelChip(w, s) {
     if (!M) return '';
-    const ag = agentOfWin(w, s);
     const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
-    const full = cur?.model ? (ag ? window.WosAgents.modelName(ag, cur.model) : M.name(cur.model, cur.provider)) : 'default';
+    // A new chat in the main Chats on a Private model belongs to that private agent (unified Chats).
+    const AG = window.WosAgents;
+    const ag = agentOfWin(w, s) || (w.thread === '__new__' && cur?.agent && AG?.isOther(cur.agent) ? AG.get(cur.agent) || null : null);
+    const priv = !!ag && AG?.isPrivate(ag);
+    const full = cur?.model ? (ag ? AG.modelName(ag, cur.model) : M.name(cur.model, cur.provider)) : 'default';
     const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
-    return `<button type="button" class="ch-model${ag ? ' agent' : ''}" data-chmodel aria-label="Model: ${esc(full)}. Change model" title="${esc(cur?.model || '')}">${esc(label)}<i aria-hidden="true">▾</i></button>`;
+    return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv ? AG.lock() : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
   let modelsAsked = false;
   function ensureModels() {
@@ -141,8 +144,11 @@ window.WosChatPower = function chatPower(A) {
   async function pickModel(o) {
     const sh = sheet; if (!sh || sh.type !== 'model') return;
     const c = ch(sh.wid), w = H.win(sh.wid); closeSheet();
-    if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
+    if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
+    // A Private model picked in a standard thread: a new private chat continues this conversation (quoted context);
+    // this thread is left exactly as it is. Private → standard is never offered (a private thread lists only its own).
+    if (o.agent && o.private && !LIVE.agentOf?.(sh.sid)) { if (sh.mode === 'thread' && A.continueInAgent) A.continueInAgent(sh.wid, sh.sid, o); return; }
     const cur = threadModel(s);
     const same = cur.model === o.value && (!o.provider || cur.provider === o.provider);
     if (!same) {
@@ -283,7 +289,7 @@ window.WosChatPower = function chatPower(A) {
     el.querySelectorAll('.ch-psheet').forEach(n => n.remove());
     let html = '';
     if (sheet.type === 'model') {
-      const r = M.sheetHtml({ mode: sheet.mode, cur: sheet.cur, all: sheet.all, title: '', agent: sheet.agent || null });
+      const r = M.sheetHtml({ mode: sheet.mode, cur: sheet.cur, all: sheet.all, title: '', agent: sheet.agent || null, priv: sheet.priv || null });
       sheet.list = r.list; html = r.html;
     } else if (sheet.type === 'files') {
       const tw = H.win(sheet.wid), c = ch(sheet.wid);
@@ -300,7 +306,10 @@ window.WosChatPower = function chatPower(A) {
     const wid = A.owner(pane), w = H.win(wid); if (!w || !w.thread) return;
     const s = w.thread === '__new__' ? null : LIVE.session(w.thread);
     const cur = mode === 'new' ? newModel(ch(wid), w) : threadModel(s);
-    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent: agentOfWin(w, s) });
+    const agent = agentOfWin(w, s);
+    // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
+    const priv = !agent && !w.agent && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
+    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv });
     if (!M.ready) M.load().then(() => { if (sheet?.type === 'model') paint(sheet.pane, A.elOf(sheet.pane)); });
   }
   function openFiles(pane) {
