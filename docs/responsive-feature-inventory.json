@@ -135,6 +135,7 @@
     "core/apps.js",
     "core/base.css",
     "core/bound-view.js",
+    "core/brand-guide.css",
     "core/brand.css",
     "core/brand.js",
     "core/bridge.js",
