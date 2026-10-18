@@ -5,31 +5,46 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Wizard Screen</title>
 <style>
-  :root { --top: 24px; --bot: 0px; --acc: #b99bff; --ink: #f4f1ff; --mut: #a79fc4; --card: rgba(18, 14, 36, .97); --line: rgba(205, 190, 255, .16); }
+  :root { --top: 24px; --bot: 0px; --acc: #b99bff; --ink: #f4f1ff; --mut: #a79fc4; --card: rgba(18, 14, 36, .97); --line: rgba(205, 190, 255, .16); --sel: rgba(150, 120, 255, .42); }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: #07060f; color: var(--ink); font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; user-select: none; -webkit-user-select: none; }
   #shot { position: fixed; inset: 0; background: #07060f center / 100% 100% no-repeat; }
-  #shot.dim::after { content: ""; position: absolute; inset: 0; background: rgba(7, 6, 15, .28); }
+  #shot::after { content: ""; position: absolute; inset: 0; background: rgba(7, 6, 15, 0); transition: background .25s; }
+  body.select #shot::after { background: rgba(7, 6, 15, .2); }
   #blank { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 32px; text-align: center; color: var(--mut); }
+  /* translations painted over the original text, Google Lens style */
+  #paint { position: fixed; inset: 0; pointer-events: none; }
+  body.orig #paint { display: none; }
+  .pt { position: absolute; display: flex; align-items: center; overflow: hidden; line-height: 1.12; padding: 0 2px; border-radius: 3px; word-break: break-word; font-weight: 500; }
+  .pt.on { outline: 2px solid var(--acc); outline-offset: 1px; }
+  /* selection */
+  #hl { position: fixed; inset: 0; pointer-events: none; }
+  .hl { position: absolute; background: var(--sel); border-radius: 3px; }
+  .shim { position: absolute; background: rgba(255, 255, 255, .5); border-radius: 3px; opacity: 0; animation: shim .9s ease-out forwards; }
+  @keyframes shim { 0% { opacity: 0; } 35% { opacity: .55; } 100% { opacity: 0; } }
   #layer { position: fixed; inset: 0; touch-action: none; }
-  .b { position: absolute; border-radius: 6px; border: 1px solid rgba(185, 155, 255, .42); background: rgba(185, 155, 255, .06); transition: background .12s, border-color .12s; }
-  .b.l { border-style: dashed; border-color: rgba(185, 155, 255, .3); }
-  .b.on { background: rgba(185, 155, 255, .34); border: 1.5px solid var(--acc); box-shadow: 0 0 0 1px rgba(7, 6, 15, .4); }
-  .b .en { position: absolute; inset: 0; border-radius: 5px; background: rgba(12, 10, 24, .93); color: #fff; overflow: hidden; padding: 1px 4px; display: flex; align-items: center; line-height: 1.12; word-break: break-word; }
-  .b.on .en { background: rgba(58, 40, 112, .95); }
-  body.orig .b .en { display: none; }
-  #trail { position: fixed; inset: 0; pointer-events: none; }
+  .hd { position: fixed; width: 44px; height: 44px; display: none; touch-action: none; z-index: 5; }
+  .hd i { position: absolute; width: 22px; height: 22px; background: var(--acc); box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
+  #hA i { right: 0; top: 0; border-radius: 50% 0 50% 50%; }
+  #hB i { left: 0; top: 0; border-radius: 0 50% 50% 50%; }
   /* top bar */
-  #top { position: fixed; left: 0; right: 0; top: var(--top); padding: 8px 10px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
+  #top { position: fixed; left: 0; right: 0; top: var(--top); padding: 8px 10px; display: flex; gap: 8px; align-items: center; pointer-events: none; z-index: 6; }
   #top > * { pointer-events: auto; }
-  .chip { height: 36px; min-width: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 600 13.5px system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+  .chip { height: 36px; min-width: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: 600 13.5px system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); white-space: nowrap; }
   .chip.x { padding: 0; width: 36px; font-size: 20px; font-weight: 400; }
   .chip.on { background: #3a2870; border-color: var(--acc); }
   .chip[hidden] { display: none; }
-  #hint { flex: 1; text-align: center; color: var(--ink); font-size: 13px; text-shadow: 0 1px 6px #000, 0 0 2px #000; pointer-events: none; }
+  #mid { flex: 1; }
+  /* second row: the hint, or the language pill (Lens puts it centred under the bar) */
+  #sub { position: fixed; left: 0; right: 0; top: calc(var(--top) + 54px); display: flex; justify-content: center; pointer-events: none; z-index: 6; padding: 0 12px; }
+  #sub > * { pointer-events: auto; }
+  #hint { color: #fff; font: 600 13px system-ui, sans-serif; background: rgba(18, 14, 36, .82); padding: 6px 12px; border-radius: 14px; pointer-events: none; }
+  #hint:empty { display: none; }
+  #pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; height: 38px; padding: 0 16px; font-size: 14px; }
+  #pill b { font-weight: 700; color: var(--acc); }
   /* bottom sheet */
-  #sheet { position: fixed; left: 8px; right: 8px; bottom: calc(var(--bot) + 8px); background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 10px 34px rgba(0, 0, 0, .6); padding: 12px 12px 10px; transform: translateY(130%); transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
-  #sheet.show { transform: none; }
+  .sheet { position: fixed; left: 8px; right: 8px; bottom: calc(var(--bot) + 8px); background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 10px 34px rgba(0, 0, 0, .6); padding: 12px 12px 10px; transform: translateY(140%); transition: transform .2s cubic-bezier(.2, .8, .2, 1); z-index: 7; }
+  .sheet.show { transform: none; }
   #sel { max-height: 30vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 15px; color: var(--ink); user-select: text; -webkit-user-select: text; padding: 2px 2px 10px; }
   #sel .lab { display: block; font: 600 11.5px system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--acc); margin-bottom: 4px; user-select: none; }
   #sel .err { color: #ff9db3; }
@@ -40,10 +55,16 @@
   .acts button i { font-style: normal; font-size: 17px; line-height: 1; color: var(--acc); }
   .acts button:active { background: rgba(185, 155, 255, .18); }
   .acts button[disabled] { opacity: .45; }
+  #tbar { padding: 8px; }
+  #langs { max-height: 60vh; display: flex; flex-direction: column; }
+  #langs h4 { margin: 2px 4px 8px; font: 600 12px system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--acc); }
+  #langs .ll { overflow: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  #langs button { height: 42px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--ink); font: 600 14px system-ui, sans-serif; }
+  #langs button.on { background: #3a2870; border-color: var(--acc); }
   /* search strip above the native search sheet */
-  #sstrip { position: fixed; left: 8px; right: 8px; display: none; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+  #sstrip { position: fixed; left: 8px; right: 8px; display: none; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; z-index: 8; }
   #sstrip b { flex: 1; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #toast { position: fixed; left: 50%; top: calc(var(--top) + 60px); transform: translate(-50%, -10px); opacity: 0; background: #241a48; border: 1px solid var(--acc); color: #fff; padding: 9px 16px; border-radius: 20px; font: 600 13.5px system-ui, sans-serif; transition: opacity .15s, transform .15s; pointer-events: none; white-space: nowrap; }
+  #toast { position: fixed; left: 50%; top: calc(var(--top) + 60px); transform: translate(-50%, -10px); opacity: 0; background: #241a48; border: 1px solid var(--acc); color: #fff; padding: 9px 16px; border-radius: 20px; font: 600 13.5px system-ui, sans-serif; transition: opacity .15s, transform .15s; pointer-events: none; white-space: nowrap; z-index: 9; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
   .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(185, 155, 255, .35); border-top-color: var(--acc); border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -2px; }
   @keyframes sp { to { transform: rotate(360deg); } }
@@ -52,16 +73,20 @@
 <body>
 <div id="shot"></div>
 <div id="blank"></div>
+<div id="paint"></div>
+<div id="hl"></div>
 <div id="layer"></div>
-<canvas id="trail"></canvas>
+<div class="hd" id="hA"><i></i></div>
+<div class="hd" id="hB"><i></i></div>
 <div id="top">
   <button class="chip x" id="close" aria-label="Close">×</button>
-  <div id="hint">Tap or swipe over text</div>
-  <button class="chip" id="lang" hidden>English</button>
+  <div id="mid"></div>
+  <button class="chip" id="orig" hidden>Original</button>
   <button class="chip" id="pic" hidden>Picture text</button>
-  <button class="chip" id="all">All</button>
+  <button class="chip" id="all">Select all</button>
 </div>
-<div id="sheet">
+<div id="sub"><div id="hint"></div><button class="chip" id="pill" hidden></button></div>
+<div class="sheet" id="sheet">
   <div id="sel"></div>
   <div class="acts">
     <button id="aCopy"><i>⧉</i>Copy</button>
@@ -70,6 +95,14 @@
     <button id="aAsk"><i>✦</i>Ask Wizard</button>
   </div>
 </div>
+<div class="sheet" id="tbar">
+  <div class="acts">
+    <button id="tCopy"><i>⧉</i>Copy translation</button>
+    <button id="tSel"><i>⌶</i>Select text</button>
+    <button id="tAsk"><i>✦</i>Ask Wizard</button>
+  </div>
+</div>
+<div class="sheet" id="langs"><h4>Translate into</h4><div class="ll"></div></div>
 <div id="sstrip"><b id="sq"></b><button class="chip" id="sBig">Bigger</button><button class="chip x" id="sClose" aria-label="Close search">×</button></div>
 <div id="toast"></div>
 <script>
@@ -77,107 +110,222 @@
   'use strict';
   const $ = s => document.querySelector(s);
   const N = window.ScreenNative || { close() {}, copy() {}, search() {}, sheet() {}, closeSearch() {}, translate() {}, picture() {}, ask() {}, shot() { return ''; }, log() {} };
-  const st = { o: null, blocks: [], sel: new Set(), en: null, enFrom: '', showEn: true, pic: null, picSel: new Set(), panel: 'sel', trans: null, searching: false, big: false, seq: 0, pending: {} };
-  let toastT = 0;
-  function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('show'), 1400); }
+  const LANGS = ['English', 'Thai', 'Chinese', 'Japanese', 'Korean', 'Vietnamese', 'Indonesian', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Russian', 'Hindi', 'Arabic'];
+  const st = {
+    o: null, mode: 'select', blocks: [], words: [], a: -1, f: -1,
+    to: (() => { try { return localStorage.getItem('wizScreenTo') || 'English'; } catch (e) { return 'English'; } })(),
+    tr: null, trFrom: '', trBusy: false, trPick: -1, showOrig: false, langsOpen: false,
+    pic: null, picSel: new Set(), panel: 'sel', trans: null, searching: false, big: false, seq: 0, pending: {},
+  };
+  if (!LANGS.includes(st.to)) st.to = 'English';
+  let toastT = 0, px = null, wantPaint = false;
+  function toast(t) { const e = $('#toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('show'), 1600); }
   function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
   function id() { return 'r' + (++st.seq); }
 
-  /* ---------------- layout ---------------- */
+  /* ================= words: where every word sits on the frozen screen ================= */
+  const meas = document.createElement('canvas').getContext('2d');
+  function textW(t, f) { meas.font = f + 'px system-ui, Roboto, sans-serif'; return meas.measureText(t).width; }
+  /** The app didn't say where its characters are: lay the words out inside the block the way a TextView would. */
+  function layout(b, ws) {
+    if (!ws.length || b.w < 4 || b.h < 4) return;
+    const wrap = f => {
+      const lines = []; let cur = [], w = 0; const sp = textW(' ', f);
+      ws.forEach((wd, k) => {
+        const ww = textW(wd.t, f), lead = cur.length ? (ws[k - 1].sp === ' ' ? sp : 0) : 0;
+        if (cur.length && (ws[k - 1].sp === '\n' || w + lead + ww > b.w * 1.02)) { lines.push({ ws: cur, w }); cur = []; w = 0; }
+        wd._x = w + (cur.length ? lead : 0); wd._w = ww; w = wd._x + ww; cur.push(wd);
+      });
+      if (cur.length) lines.push({ ws: cur, w });
+      return lines;
+    };
+    let f = Math.min(64, b.h / 1.2), lines = wrap(f);
+    while (f > 6 && (lines.length * f * 1.25 > b.h * 1.08 || lines.some(l => l.w > b.w * 1.02))) { f -= .5; lines = wrap(f); }
+    const lh = f * 1.25, y0 = b.y + Math.max(0, (b.h - lines.length * lh) / 2);
+    const wide = b.w > innerWidth * .6;
+    lines.forEach((l, n) => {
+      const x0 = lines.length === 1 && !wide ? b.x + Math.max(0, (b.w - l.w) / 2) : b.x;
+      for (const wd of l.ws) { wd.x = x0 + wd._x; wd.y = y0 + n * lh + f * .05; wd.w = wd._w; wd.h = f * 1.15; wd.ln = n; }
+    });
+  }
+  function buildWords() {
+    const o = st.o, dpr = o.dpr || devicePixelRatio || 1, ox = o.ox || 0, oy = o.oy || 0;
+    st.words = [];
+    st.blocks = (o.blocks || []).map((b, i) => ({ i, t: b.t, l: !!b.l, ex: !!b.ex, x: (b.x - ox) / dpr, y: (b.y - oy) / dpr, w: b.w / dpr, h: b.h / dpr, wi: [] }));
+    st.blocks.forEach((b, i) => {
+      const raw = (o.blocks[i].wd || []);
+      if (b.l || !raw.length) return; // icon labels are not text you can see
+      let ws = raw.map(r => ({ t: r[0], sp: r[1] || '', x: r.length >= 6 ? (r[2] - ox) / dpr : 0, y: r.length >= 6 ? (r[3] - oy) / dpr : 0, w: r.length >= 6 ? r[4] / dpr : 0, h: r.length >= 6 ? r[5] / dpr : 0, ln: 0 }));
+      if (b.ex) {
+        ws = ws.filter(w => w.w > 0 && w.h > 0);
+        let ln = 0;
+        ws.forEach((w, k) => { if (k && Math.abs((w.y + w.h / 2) - (ws[k - 1].y + ws[k - 1].h / 2)) > Math.max(w.h, ws[k - 1].h) / 2) ln++; w.ln = ln; });
+      } else layout(b, ws);
+      for (const w of ws) { w.b = i; w.i = st.words.length; w.line = i * 1000 + w.ln; b.wi.push(w.i); st.words.push(w); }
+    });
+  }
+  /** The word under a point (or the nearest one within max px); vertical distance counts more than horizontal. */
+  function wordAt(x, y, max) {
+    let best = null, bd = Infinity;
+    for (const w of st.words) {
+      const dx = Math.max(w.x - x, 0, x - (w.x + w.w)), dy = Math.max(w.y - y, 0, y - (w.y + w.h));
+      const d = Math.hypot(dx, dy * 2.2);
+      if (d < bd) { bd = d; best = w; }
+    }
+    return best && bd <= max ? best : null;
+  }
+
+  /* ================= open ================= */
   function open(o) {
-    st.o = o;
+    st.o = o; st.mode = o.mode === 'translate' ? 'translate' : 'select';
     document.documentElement.style.setProperty('--top', (o.top || 24) + 'px');
     document.documentElement.style.setProperty('--bot', (o.bot || 0) + 'px');
-    const dpr = o.dpr || devicePixelRatio || 1, ox = o.ox || 0, oy = o.oy || 0;
-    st.blocks = (o.blocks || []).map((b, i) => ({ i, t: b.t, l: !!b.l, x: (b.x - ox) / dpr, y: (b.y - oy) / dpr, w: b.w / dpr, h: b.h / dpr }));
+    buildWords();
     if (o.shot) {
       const b64 = N.shot();
-      if (b64) { $('#shot').style.backgroundImage = 'url(data:image/jpeg;base64,' + b64 + ')'; $('#shot').classList.add('dim'); }
+      if (b64) { $('#shot').style.backgroundImage = 'url(data:image/jpeg;base64,' + b64 + ')'; loadPixels(b64); }
       $('#pic').hidden = false;
     }
-    const layer = $('#layer');
-    layer.innerHTML = st.blocks.map(b => `<div class="b${b.l ? ' l' : ''}" data-i="${b.i}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px"></div>`).join('');
-    if (!st.blocks.length) {
+    if (!st.words.length) {
       const bl = $('#blank'); bl.style.display = 'flex';
       bl.textContent = o.shot ? 'This screen has no text Android can read. Reading the picture…' : 'This app hides its screen and its text from other apps.';
       $('#all').hidden = true;
     }
-    $('#hint').textContent = o.mode === 'translate' ? 'Translating…' : st.blocks.length ? 'Tap or swipe over text' : '';
-    sizeTrail();
-    if (o.mode === 'translate') translateScreen();
-    else if (o.few && o.shot) picture();
-    N.log('screen page open mode=' + o.mode + ' blocks=' + st.blocks.length + ' shot=' + o.shot);
+    setMode(st.mode);
+    if (st.mode === 'translate') translateScreen();
+    else { shimmer(); if (o.few && o.shot) picture(); }
+    N.log('screen page open mode=' + o.mode + ' blocks=' + st.blocks.length + ' words=' + st.words.length
+      + ' exact=' + st.blocks.filter(b => b.ex).length + ' shot=' + o.shot);
   }
-  function sizeTrail() { const c = $('#trail'); c.width = innerWidth * devicePixelRatio; c.height = innerHeight * devicePixelRatio; c.style.width = innerWidth + 'px'; c.style.height = innerHeight + 'px'; }
-
-  /* ---------------- selection on the screen ---------------- */
-  function el(i) { return $('#layer').children[i]; }
-  function hit(x, y, pad) {
-    let best = null;
-    for (const b of st.blocks) {
-      if (x >= b.x - pad && x <= b.x + b.w + pad && y >= b.y - pad && y <= b.y + b.h + pad) {
-        if (!best || b.w * b.h < best.w * best.h) best = b;
-      }
+  function setMode(m) {
+    st.mode = m;
+    document.body.classList.toggle('select', m === 'select');
+    $('#hint').hidden = m !== 'select';
+    $('#pill').hidden = m !== 'translate';
+    $('#orig').hidden = m !== 'translate' || !st.tr;
+    $('#all').hidden = m !== 'select' || !st.words.length;
+    $('#pic').hidden = m !== 'select' || !(st.o && st.o.shot);
+    if (m === 'select') { st.showOrig = true; document.body.classList.add('orig'); }
+    else { st.showOrig = false; document.body.classList.remove('orig'); }
+    syncHint(); syncSheet();
+  }
+  function syncHint() { $('#hint').textContent = st.mode === 'select' && st.words.length && st.a < 0 && st.panel !== 'pic' ? 'Drag over text, or tap it' : ''; }
+  /** Google's sparkle: every line of selectable text glows once, top to bottom. */
+  function shimmer() {
+    const hl = $('#hl'), lines = lineRects(st.words);
+    const top = lines.length ? lines[0].y : 0, span = Math.max(1, (lines.length ? lines[lines.length - 1].y : 0) - top);
+    for (const r of lines) {
+      const d = document.createElement('div'); d.className = 'shim';
+      Object.assign(d.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px', animationDelay: Math.round((r.y - top) / span * 350) + 'ms' });
+      hl.appendChild(d);
     }
-    return best;
+    setTimeout(() => hl.querySelectorAll('.shim').forEach(e => e.remove()), 1400);
   }
-  function setSel(i, on) { if (on) st.sel.add(i); else st.sel.delete(i); const e = el(i); if (e) e.classList.toggle('on', on); }
-  function clearSel() { for (const i of [...st.sel]) setSel(i, false); }
-  function textOf(useEn) {
-    const list = [...st.sel].sort((a, b) => a - b).map(i => st.blocks[i]);
-    let out = '', prev = null;
-    for (const b of list) {
-      const t = useEn && st.en && st.en[b.i] ? st.en[b.i] : b.t;
-      if (prev) out += Math.abs((prev.y + prev.h / 2) - (b.y + b.h / 2)) <= Math.max(6, Math.min(prev.h, b.h) / 2) ? ' ' : '\n';
-      out += t; prev = b;
+
+  /* ================= free selection ================= */
+  function lineRects(ws) {
+    const out = []; let cur = null;
+    for (const w of ws) {
+      if (cur && cur.line === w.line) { const r = Math.max(cur.x + cur.w, w.x + w.w), b = Math.max(cur.y + cur.h, w.y + w.h); cur.x = Math.min(cur.x, w.x); cur.y = Math.min(cur.y, w.y); cur.w = r - cur.x; cur.h = b - cur.y; }
+      else { cur = { line: w.line, x: w.x, y: w.y, w: w.w, h: w.h }; out.push(cur); }
     }
     return out;
   }
-  let drag = null;
-  const trail = $('#trail'), tctx = trail.getContext('2d');
-  function trailTo(x, y) {
-    const d = devicePixelRatio;
-    tctx.strokeStyle = 'rgba(185,155,255,.55)'; tctx.lineWidth = 16 * d; tctx.lineCap = tctx.lineJoin = 'round';
-    tctx.beginPath(); tctx.moveTo(drag.lx * d, drag.ly * d); tctx.lineTo(x * d, y * d); tctx.stroke();
-    drag.lx = x; drag.ly = y;
+  function range() { return st.a < 0 ? null : [Math.min(st.a, st.f), Math.max(st.a, st.f)]; }
+  function selWords() { const r = range(); return r ? st.words.slice(r[0], r[1] + 1) : []; }
+  function joinWords(ws) {
+    let s = '';
+    ws.forEach((w, k) => {
+      s += w.t;
+      const n = ws[k + 1]; if (!n) return;
+      if (n.b === w.b) s += w.sp;
+      else { const a = st.blocks[w.b], b = st.blocks[n.b]; s += Math.abs((a.y + a.h / 2) - (b.y + b.h / 2)) <= Math.max(6, Math.min(a.h, b.h) / 2) ? ' ' : '\n'; }
+    });
+    return s.trim();
   }
-  $('#layer').addEventListener('pointerdown', e => {
-    if (st.panel === 'pic' || st.searching) return;
-    const b = hit(e.clientX, e.clientY, 8);
-    drag = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, add: !(b && st.sel.has(b.i)), first: b };
-    $('#layer').setPointerCapture(e.pointerId);
-  });
-  $('#layer').addEventListener('pointermove', e => {
-    if (!drag) return;
-    if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 9) return;
-    if (!drag.moved) { drag.moved = true; if (drag.first) setSel(drag.first.i, drag.add); }
-    // every point on the way: the text it passes over joins (or leaves) the selection
-    const steps = Math.max(1, Math.ceil(Math.hypot(e.clientX - drag.lx, e.clientY - drag.ly) / 6));
-    for (let k = 1; k <= steps; k++) {
-      const x = drag.lx + (e.clientX - drag.lx) * k / steps, y = drag.ly + (e.clientY - drag.ly) * k / steps;
-      const b = hit(x, y, 4); if (b) setSel(b.i, drag.add);
+  function selText() { return joinWords(selWords()); }
+  function renderSel() {
+    const hl = $('#hl');
+    hl.querySelectorAll('.hl').forEach(e => e.remove());
+    $('#paint').querySelectorAll('.pt.on').forEach(e => e.classList.remove('on'));
+    const ws = selWords(), A = $('#hA'), B = $('#hB');
+    if (!ws.length || st.mode !== 'select') { A.style.display = B.style.display = 'none'; return; }
+    for (const r of lineRects(ws)) {
+      const d = document.createElement('div'); d.className = 'hl';
+      Object.assign(d.style, { left: (r.x - 1) + 'px', top: (r.y - 1) + 'px', width: (r.w + 2) + 'px', height: (r.h + 2) + 'px' });
+      hl.appendChild(d);
     }
-    trailTo(e.clientX, e.clientY);
-    syncSheet();
+    const f = ws[0], l = ws[ws.length - 1];
+    Object.assign(A.style, { display: 'block', left: (f.x - 44) + 'px', top: (f.y + f.h) + 'px' });
+    Object.assign(B.style, { display: 'block', left: (l.x + l.w) + 'px', top: (l.y + l.h) + 'px' });
+  }
+  function selectRange(a, f) { st.a = a; st.f = f; st.trans = null; st.trPick = -1; renderSel(); syncHint(); }
+  function clearSel() { st.a = st.f = -1; st.trPick = -1; st.trans = null; renderSel(); syncHint(); syncSheet(); }
+  function selectBlock(bi) { const b = st.blocks[bi]; if (b && b.wi.length) selectRange(b.wi[0], b.wi[b.wi.length - 1]); }
+
+  let drag = null;
+  const layer = $('#layer');
+  layer.addEventListener('pointerdown', e => {
+    if (st.panel === 'pic' || st.searching || st.langsOpen) return;
+    drag = { x: e.clientX, y: e.clientY, moved: false, w0: wordAt(e.clientX, e.clientY, 26) };
+    layer.setPointerCapture(e.pointerId);
+  });
+  layer.addEventListener('pointermove', e => {
+    if (!drag || drag.handle) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 10) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      if (st.mode !== 'select') { drag = null; return; }
+      drag.w0 = drag.w0 || wordAt(drag.x, drag.y, 60);
+      if (!drag.w0) { drag = null; return; }
+      $('#sheet').classList.remove('show');
+    }
+    const w = wordAt(e.clientX, e.clientY, Infinity);
+    if (w) selectRange(drag.w0.i, w.i);
   });
   function endDrag(e) {
     if (!drag) return;
     const d = drag; drag = null;
-    tctx.clearRect(0, 0, trail.width, trail.height);
     if (!d.moved) {
-      if (d.first) setSel(d.first.i, !st.sel.has(d.first.i));
-      else if (st.sel.size) clearSel();
+      if (st.mode === 'translate') {
+        const bi = paintedAt(d.x, d.y);
+        if (bi >= 0) { pickTranslated(bi); return; }
+        if (st.trPick >= 0) { st.trPick = -1; st.trans = null; markPicked(); syncSheet(); }
+        return;
+      }
+      const w = wordAt(d.x, d.y, 24);
+      if (w) selectBlock(w.b);  // a tap picks the whole piece of text; the handles trim it
+      else if (st.a >= 0) clearSel();
     }
-    st.panel = 'sel'; st.trans = null;
+    st.panel = 'sel';
     syncSheet();
   }
-  $('#layer').addEventListener('pointerup', endDrag);
-  $('#layer').addEventListener('pointercancel', endDrag);
+  layer.addEventListener('pointerup', endDrag);
+  layer.addEventListener('pointercancel', endDrag);
+  // handles: drag either end; the finger sits under the text, so aim a little above it
+  for (const [hid, end] of [['#hA', 'start'], ['#hB', 'end']]) {
+    const h = $(hid);
+    h.addEventListener('pointerdown', e => {
+      e.stopPropagation(); h.setPointerCapture(e.pointerId);
+      const r = range(); if (!r) return;
+      st.a = end === 'start' ? r[1] : r[0]; st.f = end === 'start' ? r[0] : r[1];
+      drag = { handle: true };
+      $('#sheet').classList.remove('show');
+    });
+    h.addEventListener('pointermove', e => {
+      if (!drag || !drag.handle) return;
+      const w = wordAt(e.clientX, e.clientY - 26, Infinity);
+      if (w) { st.f = w.i; renderSel(); }
+    });
+    const up = () => { if (drag && drag.handle) { drag = null; syncSheet(); } };
+    h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+  }
 
-  /* ---------------- the sheet ---------------- */
+  /* ================= the sheet ================= */
   function current() {
     if (st.panel === 'pic') return [...st.picSel].sort((a, b) => a - b).map(i => st.pic[i]).join('\n');
-    return textOf(st.showEn);
+    if (st.trPick >= 0) return blockText(st.blocks[st.trPick]);
+    return selText();
   }
   function syncSheet() {
     const sel = $('#sel'), sh = $('#sheet');
@@ -188,22 +336,24 @@
       else if (st.pic.error) html = '<span class="lab">Text in the picture</span><span class="err">' + esc(st.pic.error) + '</span>';
       else if (!st.pic.length) html = '<span class="lab">Text in the picture</span>No text found in the picture.';
       else html = '<span class="lab">Text in the picture · tap lines to pick</span>' + st.pic.map((t, i) => `<span class="pl${st.picSel.has(i) ? ' on' : ''}" data-pl="${i}">${esc(t)}</span>`).join('');
-    } else if (st.sel.size) {
+    } else if (st.a >= 0 || st.trPick >= 0) {
       any = true;
-      html = esc(textOf(st.showEn && !!st.en));
+      html = esc(current());
     }
     if (st.trans) {
       any = true;
-      html += '<span class="lab" style="margin-top:10px">' + esc(st.trans.from ? 'English · from ' + st.trans.from : 'English') + '</span>'
+      html += '<span class="lab" style="margin-top:10px">' + esc(st.to + (st.trans.from ? ' · from ' + st.trans.from : '')) + '</span>'
         + (st.trans.busy ? '<span class="spin"></span> Translating…' : st.trans.error ? '<span class="err">' + esc(st.trans.error) + '</span>' : esc(st.trans.text));
     }
     sel.innerHTML = html;
     const has = !!current().trim();
     for (const b of ['#aCopy', '#aSearch', '#aTrans', '#aAsk']) $(b).disabled = !has;
-    sh.classList.toggle('show', any && !st.searching);
-    $('#all').textContent = (st.panel === 'pic' ? (st.pic && st.pic.length && st.picSel.size === st.pic.length) : (st.blocks.length && st.sel.size === st.blocks.length)) ? 'None' : 'All';
-    if (st.sel.size || st.panel === 'pic') $('#hint').textContent = '';
-    else if (st.o && st.o.mode !== 'translate' && st.blocks.length) $('#hint').textContent = 'Tap or swipe over text';
+    const showSheet = any && !st.searching && !st.langsOpen && !(drag && drag.moved);
+    sh.classList.toggle('show', showSheet);
+    $('#tbar').classList.toggle('show', st.mode === 'translate' && !showSheet && !st.searching && !st.langsOpen && !!st.tr);
+    $('#all').textContent = st.panel === 'pic' ? (st.pic && st.pic.length && st.picSel.size === st.pic.length ? 'None' : 'Select all')
+      : (st.words.length && range() && range()[0] === 0 && range()[1] === st.words.length - 1) ? 'None' : 'Select all';
+    syncHint();
   }
   $('#sel').addEventListener('click', e => {
     const p = e.target.closest('[data-pl]'); if (!p) return;
@@ -214,17 +364,17 @@
     if (st.panel === 'pic') {
       if (!st.pic || !st.pic.length) return;
       if (st.picSel.size === st.pic.length) st.picSel.clear(); else st.pic.forEach((_, i) => st.picSel.add(i));
-    } else {
-      if (st.sel.size === st.blocks.length) clearSel(); else st.blocks.forEach(b => setSel(b.i, true));
+      st.trans = null; syncSheet(); return;
     }
-    st.trans = null; syncSheet();
+    if (!st.words.length) return;
+    const r = range();
+    if (r && r[0] === 0 && r[1] === st.words.length - 1) clearSel(); else { selectRange(0, st.words.length - 1); syncSheet(); }
   });
   $('#close').addEventListener('click', () => N.close());
 
-  /* ---------------- actions ---------------- */
+  /* ================= actions ================= */
   function picked() {
-    // A part picked inside the sheet (long-press text there) wins over the whole selection.
-    const s = String(getSelection() || '').trim();
+    const s = String(getSelection() || '').trim(); // a part picked inside the sheet wins
     return s || current().trim();
   }
   $('#aCopy').addEventListener('click', () => {
@@ -235,9 +385,9 @@
   $('#aAsk').addEventListener('click', () => {
     const own = String(getSelection() || '').trim();
     if (own) return N.ask(own);
-    let t = st.panel === 'pic' ? current().trim() : textOf(false).trim();
-    const en = st.trans && st.trans.text ? st.trans.text : st.panel !== 'pic' && st.showEn && st.en ? textOf(true).trim() : '';
-    if (en && en !== t) t += '\n\nEnglish:\n' + en;
+    let t = current().trim();
+    const en = st.trans && st.trans.text ? st.trans.text : '';
+    if (en && en !== t) t += '\n\n' + st.to + ':\n' + en;
     if (t) N.ask(t);
   });
   $('#aTrans').addEventListener('click', () => {
@@ -245,44 +395,139 @@
     const items = t.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 150);
     const rid = id(); st.pending[rid] = { kind: 'sel', items };
     st.trans = { busy: true }; syncSheet();
-    N.translate(rid, JSON.stringify(items));
+    N.translate(rid, JSON.stringify(items), st.to);
   });
 
-  /* Translate screen: English laid over every piece of text, in place. */
-  function translateScreen() {
-    if (!st.blocks.length) { picture(true); return; }
-    // Real text only: icon labels (content descriptions) would paint English boxes over toolbars and buttons, and
-    // a web address or a bare number has nothing to translate.
-    const idx = st.blocks.filter(b => !b.l && !notWords(b.t)).map(b => b.i);
-    if (!idx.length) { picture(true); return; }
-    const rid = id(); st.pending[rid] = { kind: 'screen', idx };
-    $('#hint').innerHTML = '<span class="spin"></span> Translating…';
-    N.translate(rid, JSON.stringify(idx.map(i => st.blocks[i].t)));
-  }
+  /* ================= Translate screen (Google Lens style) ================= */
+  function blockText(b) { return b.wi.length ? joinWords(b.wi.map(i => st.words[i])) : b.t; }
   function notWords(t) {
     const s = String(t).trim();
-    return /^(https?:|data:|file:|www\.)/i.test(s) || (/^\S+$/.test(s) && /[./:]\S/.test(s) && !/\s/.test(s) && s.length > 12)
+    return /^(https?:|data:|file:|www\.)/i.test(s) || (/^\S+$/.test(s) && /[./:]\S/.test(s) && s.length > 12)
       || /^[\d\s.,:;%+\-–—/()฿$€£¥#*]+$/.test(s);
   }
-  function paintEnglish() {
-    for (const b of st.blocks) {
-      const e = el(b.i); if (!e) continue;
-      let en = e.querySelector('.en');
-      const t = st.en && st.en[b.i];
-      if (!t || t === b.t) { if (en) en.remove(); continue; }
-      if (!en) { en = document.createElement('div'); en.className = 'en'; e.appendChild(en); }
-      en.textContent = t;
-      let fs = Math.max(9, Math.min(22, b.h * 0.62));
-      en.style.fontSize = fs + 'px';
-      while (fs > 7 && (en.scrollHeight > en.clientHeight + 1 || en.scrollWidth > en.clientWidth + 1)) { fs -= 1; en.style.fontSize = fs + 'px'; }
-    }
-    $('#lang').hidden = false;
-    $('#lang').classList.toggle('on', st.showEn);
-    $('#lang').textContent = st.showEn ? 'English' : 'Original';
-    document.body.classList.toggle('orig', !st.showEn);
+  function setPill(html) { $('#pill').innerHTML = html; }
+  function translateScreen() {
+    if (!st.words.length) { picture(true); return; }
+    const idx = st.blocks.filter(b => b.wi.length && !notWords(blockText(b))).map(b => b.i);
+    if (!idx.length) { picture(true); return; }
+    st.tr = null; st.trBusy = true; paint();
+    const rid = id(); st.pending[rid] = { kind: 'screen', idx, to: st.to };
+    setPill('<span class="spin"></span> Detecting language…');
+    N.translate(rid, JSON.stringify(idx.map(i => blockText(st.blocks[i]))), st.to);
   }
-  $('#lang').addEventListener('click', () => { st.showEn = !st.showEn; paintEnglish(); syncSheet(); });
+  function pillDone() {
+    const n = st.tr ? Object.keys(st.tr).length : 0;
+    if (!n) setPill('Already in <b>' + esc(st.to) + '</b> ▾');
+    else setPill(esc(st.trFrom || 'Detected') + ' → <b>' + esc(st.to) + '</b> ▾');
+  }
+  /** The screenshot's pixels, to give each translation the background and ink of the text it covers. */
+  function loadPixels(b64) {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+        const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0);
+        px = { x, w: c.width, h: c.height, k: c.width / ((st.o && st.o.sw) || c.width) };
+      } catch (e) { px = null; }
+      if (wantPaint) paint();
+    };
+    img.src = 'data:image/jpeg;base64,' + b64;
+  }
+  const lum = (r, g, b) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  function colors(r) {
+    const dark = { bg: 'rgb(24,22,34)', fg: '#fff' };
+    if (!px) return dark;
+    const d = st.o.dpr || 1, ox = st.o.ox || 0, oy = st.o.oy || 0;
+    const x0 = Math.max(0, Math.floor(((r.x - 3) * d + ox) * px.k)), y0 = Math.max(0, Math.floor(((r.y - 3) * d + oy) * px.k));
+    const x1 = Math.min(px.w, Math.ceil(((r.x + r.w + 3) * d + ox) * px.k)), y1 = Math.min(px.h, Math.ceil(((r.y + r.h + 3) * d + oy) * px.k));
+    const W = x1 - x0, H = y1 - y0; if (W < 4 || H < 4) return dark;
+    let data; try { data = px.x.getImageData(x0, y0, W, H).data; } catch (e) { return dark; }
+    const ring = [], inner = [];
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      const k = (j * W + i) * 4, p = [data[k], data[k + 1], data[k + 2]];
+      if (i < 2 || j < 2 || i >= W - 2 || j >= H - 2) ring.push(p); else if ((i + j) % 2 === 0) inner.push(p);
+    }
+    ring.sort((a, b) => lum(...a) - lum(...b));
+    const bg = ring[Math.floor(ring.length / 2)] || [24, 22, 34];
+    const dist = p => Math.abs(p[0] - bg[0]) + Math.abs(p[1] - bg[1]) + Math.abs(p[2] - bg[2]);
+    inner.sort((a, b) => dist(b) - dist(a));
+    const top = inner.slice(0, Math.max(1, Math.floor(inner.length * .08)));
+    let fg = [0, 1, 2].map(c => Math.round(top.reduce((s, p) => s + p[c], 0) / top.length));
+    if (Math.abs(lum(...fg) - lum(...bg)) < .35) fg = lum(...bg) > .5 ? [20, 20, 24] : [250, 250, 252];
+    return { bg: `rgb(${bg.join(',')})`, fg: `rgb(${fg.join(',')})` };
+  }
+  function textArea(b) {
+    if (!b.wi.length) return { x: b.x, y: b.y, w: b.w, h: b.h, f: b.h * .6 };
+    const ws = b.wi.map(i => st.words[i]);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const w of ws) { x0 = Math.min(x0, w.x); y0 = Math.min(y0, w.y); x1 = Math.max(x1, w.x + w.w); y1 = Math.max(y1, w.y + w.h); }
+    const hs = ws.map(w => w.h).sort((a, c) => a - c);
+    return { x: x0 - 2, y: y0 - 1, w: x1 - x0 + 4, h: y1 - y0 + 2, f: hs[Math.floor(hs.length / 2)] * .78 };
+  }
+  function paint() {
+    const P = $('#paint'); P.innerHTML = '';
+    if (!st.tr) return;
+    if (st.o.shot && !px) wantPaint = true;
+    for (const [bi, t] of Object.entries(st.tr)) {
+      const b = st.blocks[+bi], a = textArea(b), c = colors(a);
+      const e = document.createElement('div'); e.className = 'pt'; e.dataset.b = bi; e.textContent = t;
+      Object.assign(e.style, { left: a.x + 'px', top: a.y + 'px', width: a.w + 'px', height: a.h + 'px', background: c.bg, color: c.fg });
+      P.appendChild(e);
+      let f = Math.max(8, Math.min(40, a.f)); e.style.fontSize = f + 'px';
+      // Like Lens: a longer translation first takes room to its right (up to the screen edge), then wraps, and only
+      // then gets smaller, never below about 80 % of the original text size.
+      const maxW = Math.max(a.w, innerWidth - a.x - 6);
+      e.style.whiteSpace = 'nowrap';
+      if (e.scrollWidth > e.clientWidth + 1) e.style.width = Math.min(maxW, e.scrollWidth + 6) + 'px';
+      e.style.whiteSpace = '';
+      const floor = Math.max(8, a.f * .8);
+      while (f > floor && (e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1)) { f -= .5; e.style.fontSize = f + 'px'; }
+      if (e.scrollHeight > e.clientHeight + 1) { e.style.height = 'auto'; e.style.minHeight = a.h + 'px'; }
+    }
+    markPicked();
+  }
+  function paintedAt(x, y) {
+    for (const e of $('#paint').children) { const r = e.getBoundingClientRect(); if (x >= r.left - 6 && x <= r.right + 6 && y >= r.top - 6 && y <= r.bottom + 6) return +e.dataset.b; }
+    return -1;
+  }
+  function markPicked() { for (const e of $('#paint').children) e.classList.toggle('on', +e.dataset.b === st.trPick); }
+  function pickTranslated(bi) {
+    st.trPick = bi; st.trans = { text: st.tr[bi], from: st.trFrom };
+    markPicked(); syncSheet();
+  }
+  $('#orig').addEventListener('click', () => {
+    st.showOrig = !st.showOrig;
+    document.body.classList.toggle('orig', st.showOrig);
+    $('#orig').classList.toggle('on', st.showOrig);
+    $('#orig').textContent = st.showOrig ? 'Translated' : 'Original';
+  });
+  $('#tCopy').addEventListener('click', () => {
+    const t = Object.keys(st.tr || {}).map(Number).sort((a, b) => a - b).map(i => st.tr[i]).join('\n');
+    if (t) { N.copy(t); toast('Translation copied'); }
+  });
+  $('#tSel').addEventListener('click', () => { setMode('select'); shimmer(); });
+  $('#tAsk').addEventListener('click', () => {
+    const ks = Object.keys(st.tr || {}).map(Number).sort((a, b) => a - b);
+    const orig = ks.map(i => blockText(st.blocks[i])).join('\n'), en = ks.map(i => st.tr[i]).join('\n');
+    if (orig) N.ask(orig + '\n\n' + st.to + ':\n' + en);
+  });
+  // language picker
+  function openLangs(on) {
+    st.langsOpen = on;
+    if (on) $('#langs .ll').innerHTML = LANGS.map(l => `<button data-lang="${l}" class="${l === st.to ? 'on' : ''}">${l}</button>`).join('');
+    $('#langs').classList.toggle('show', on);
+    syncSheet();
+  }
+  $('#pill').addEventListener('click', () => openLangs(!st.langsOpen));
+  $('#langs').addEventListener('click', e => {
+    const b = e.target.closest('[data-lang]'); if (!b) return;
+    const was = st.to; st.to = b.dataset.lang;
+    try { localStorage.setItem('wizScreenTo', st.to); } catch (x) { }
+    openLangs(false);
+    if (st.to !== was) { st.trPick = -1; st.trans = null; translateScreen(); }
+  });
 
+  /* ================= picture text (no text layer) ================= */
   function picture(thenTranslate) {
     if (!st.o || !st.o.shot) return;
     st.panel = 'pic'; st.pic = null; st.picSel.clear(); st.trans = null;
@@ -297,33 +542,41 @@
     picture(false);
   });
 
-  /* ---------------- native callbacks ---------------- */
+  /* ================= native callbacks ================= */
   window.S = {
     open,
-    /** QA: what the page holds, with each block's centre in screen pixels (for real taps). */
+    /** QA: what the page holds, in screen pixels (for real touches). */
     peek() {
-      const o = st.o || {}, d = o.dpr || 1;
-      return { mode: o.mode, shot: !!o.shot, sel: [...st.sel], panel: st.panel, searching: st.searching, showEn: st.showEn,
-        en: st.en ? Object.keys(st.en).length : 0, pic: Array.isArray(st.pic) ? st.pic : st.pic, trans: st.trans,
-        sheet: $('#sheet').classList.contains('show'), sheetText: $('#sel').innerText,
-        blocks: st.blocks.map(b => ({ t: b.t, x: Math.round((b.x + b.w / 2) * d + (o.ox || 0)), y: Math.round((b.y + b.h / 2) * d + (o.oy || 0)) })),
-        btn: Object.fromEntries(['aCopy', 'aSearch', 'aTrans', 'aAsk', 'pic', 'all', 'close', 'lang', 'sClose'].map(k => {
-          const r = document.getElementById(k).getBoundingClientRect();
-          return [k, r.width ? [Math.round((r.left + r.width / 2) * d + (o.ox || 0)), Math.round((r.top + r.height / 2) * d + (o.oy || 0))] : null];
-        })) };
+      const o = st.o || {}, d = o.dpr || 1, sx = x => Math.round(x * d + (o.ox || 0)), sy = y => Math.round(y * d + (o.oy || 0));
+      const ctr = el => { const r = el.getBoundingClientRect(); return r.width ? [sx(r.left + r.width / 2), sy(r.top + r.height / 2)] : null; };
+      const r = range();
+      return { mode: st.mode, shot: !!o.shot, panel: st.panel, searching: st.searching, langsOpen: st.langsOpen,
+        words: st.words.map(w => ({ t: w.t, b: w.b, x: sx(w.x + w.w / 2), y: sy(w.y + w.h / 2), l: sx(w.x), r: sx(w.x + w.w) })),
+        exact: st.blocks.filter(b => b.ex).length, blocks: st.blocks.length, boxes: document.querySelectorAll('.b').length,
+        sel: r, selText: r ? selText() : '', hl: document.querySelectorAll('.hl').length,
+        handles: [ctr($('#hA')), ctr($('#hB'))].map(h => $('#hA').style.display === 'none' ? null : h),
+        to: st.to, from: st.trFrom, tr: st.tr, painted: [...$('#paint').children].map(e => ({ b: +e.dataset.b, t: e.textContent, bg: e.style.background, fg: e.style.color, c: ctr(e) })),
+        pill: $('#pill').hidden ? null : $('#pill').innerText, showOrig: st.showOrig, trPick: st.trPick,
+        pic: Array.isArray(st.pic) ? st.pic : st.pic, trans: st.trans,
+        sheet: $('#sheet').classList.contains('show'), tbar: $('#tbar').classList.contains('show'), sheetText: $('#sel').innerText,
+        btn: Object.fromEntries(['aCopy', 'aSearch', 'aTrans', 'aAsk', 'pic', 'all', 'close', 'pill', 'orig', 'sClose', 'tCopy', 'tSel', 'tAsk'].map(k => [k, ctr(document.getElementById(k))])),
+        langBtn: Object.fromEntries([...document.querySelectorAll('#langs [data-lang]')].map(b => [b.dataset.lang, ctr(b)])) };
     },
     back() {
       if (st.searching) { N.closeSearch(); return true; }
-      if (st.trans) { st.trans = null; syncSheet(); return true; }
+      if (st.langsOpen) { openLangs(false); return true; }
+      if (st.trans && st.trPick < 0) { st.trans = null; syncSheet(); return true; }
+      if (st.trPick >= 0) { st.trPick = -1; st.trans = null; markPicked(); syncSheet(); return true; }
       if (st.panel === 'pic' && st.picSel.size) { st.picSel.clear(); syncSheet(); return true; }
-      if (st.panel === 'pic' && st.blocks.length) { st.panel = 'sel'; $('#pic').classList.remove('on'); syncSheet(); return true; }
-      if (st.sel.size) { clearSel(); syncSheet(); return true; }
+      if (st.panel === 'pic' && st.words.length) { st.panel = 'sel'; $('#pic').classList.remove('on'); syncSheet(); return true; }
+      if (st.a >= 0) { clearSel(); return true; }
+      if (st.mode === 'select' && st.tr && st.o.mode === 'translate') { setMode('translate'); return true; }
       return false;
     },
-    searchShown(q, px) {
+    searchShown(q, h) {
       st.searching = true;
       const s = $('#sstrip'); s.style.display = 'flex';
-      s.style.bottom = 'calc(var(--bot) + ' + (px + 6) + 'px)';
+      s.style.bottom = 'calc(var(--bot) + ' + (h + 6) + 'px)';
       $('#sq').textContent = 'Search · ' + q;
       $('#sBig').textContent = st.big ? 'Smaller' : 'Bigger';
       syncSheet();
@@ -332,12 +585,20 @@
     translated(rid, r) {
       const p = st.pending[rid]; delete st.pending[rid]; if (!p) return;
       if (p.kind === 'screen') {
-        if (r.error) { $('#hint').textContent = r.error; return; }
-        st.en = {}; (r.items || []).forEach((t, k) => { const i = p.idx ? p.idx[k] : k; if (st.blocks[i]) st.en[i] = t; });
-        st.enFrom = r.from || '';
-        $('#hint').textContent = st.enFrom ? 'From ' + st.enFrom + ' · tap text to pick' : 'Tap text to pick';
-        paintEnglish(); syncSheet();
-        N.log('screen translated items=' + (r.items || []).length);
+        if (p.to !== st.to) return; // a newer language was picked
+        st.trBusy = false;
+        if (r.error) { setPill('<span style="color:#ff9db3">' + esc(r.error) + '</span>'); return; }
+        st.tr = {};
+        (r.items || []).forEach((t, k) => {
+          const i = p.idx[k], foreign = Array.isArray(r.foreign) ? !!r.foreign[k] : t && t !== blockText(st.blocks[i]);
+          if (st.blocks[i] && foreign && t) st.tr[i] = t;
+        });
+        st.trFrom = r.from || '';
+        pillDone(); paint();
+        $('#orig').hidden = !Object.keys(st.tr).length;
+        if (!Object.keys(st.tr).length) toast('No foreign text on this screen');
+        syncSheet();
+        N.log('screen translated items=' + (r.items || []).length + ' foreign=' + Object.keys(st.tr).length + ' from=' + st.trFrom);
         return;
       }
       if (p.kind === 'pictr') {
@@ -351,17 +612,17 @@
     pictured(rid, r) {
       const p = st.pending[rid]; delete st.pending[rid]; if (!p) return;
       st.pic = r.error ? { error: r.error } : (r.lines || []);
-      if (!r.error && !st.blocks.length) { $('#blank').style.display = 'none'; }
+      if (!r.error && !st.words.length) { $('#blank').style.display = 'none'; }
       syncSheet();
       N.log('picture lines=' + (r.lines ? r.lines.length : 'error'));
       if (p.thenTranslate && Array.isArray(st.pic) && st.pic.length) {
-        const t = id(); st.pending[t] = { kind: 'pictr' }; N.translate(t, JSON.stringify(st.pic));
+        setPill('Picture text → <b>' + esc(st.to) + '</b>');
+        const t = id(); st.pending[t] = { kind: 'pictr' }; N.translate(t, JSON.stringify(st.pic), st.to);
       }
     },
   };
   $('#sClose').addEventListener('click', () => N.closeSearch());
   $('#sBig').addEventListener('click', () => { st.big = !st.big; N.sheet(st.big ? 0.9 : 0.62); });
-  addEventListener('resize', sizeTrail);
   N.log('screen page ready');
 })();
 </script>

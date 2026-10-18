@@ -8,10 +8,12 @@ A fake Wizard Search on the Mac (the emulator reaches it as 10.0.2.2) answers /w
 
 Checks
   hold the orb → a menu with Select text · Translate screen · Hide orb, the orb does not move or start talking
-  Select text over Chrome showing text the page blocks from copying → every line is a block, a tap selects it,
-  Copy puts it on the clipboard, Search opens Wizard Search in a sheet, Translate gives English
+  Select text over Chrome showing text the page blocks from copying (0.9.21, Google style): no boxes; a finger
+  drag selects exactly the words it crosses, handles extend it, Copy copies it, Search opens Wizard Search in a
+  sheet, Translate gives English; a tap picks a whole line
   Back steps out one layer at a time (search → selection → Screen) and never leaves the app underneath
-  Translate screen → English laid over the text
+  Translate screen (Google Lens style) → the foreign text alone is translated and painted over in place, the pill
+  names the detected language, the language list re-translates
   Ask Wizard → Wizard OS opens on its share sheet with the text
   a screen with no text layer (a picture) → Read picture text runs by itself
   Hide orb → the orb is gone, a "Floating orb hidden" notification brings it back; opening Wizard OS does too
@@ -93,8 +95,13 @@ class Fake(http.server.BaseHTTPRequestHandler):
         n = int(self.headers.get('Content-Length') or 0); body = self.rfile.read(n) if n else b''
         STATE['log'].append('POST ' + self.path)
         if self.path == '/wizard-search/api/translate':
-            items = json.loads(body).get('items', []); STATE['translate'].append(items)
-            return self._json(200, {'to': 'English', 'from': 'Thai', 'items': ['EN(' + str(i) + ')' for i in items], 'ms': 5})
+            j = json.loads(body); items = j.get('items', []); to = j.get('to', 'English'); STATE['translate'].append(items)
+            STATE.setdefault('to', []).append(to)
+            thai = [bool(re.search('[\u0E00-\u0E7F]', str(i))) for i in items]
+            foreign = thai if to == 'English' else [True] * len(items)
+            return self._json(200, {'to': to, 'from': 'Thai' if any(thai) else '', 'ms': 5,
+                                    'items': [('EN(' if to == 'English' else to[:2].upper() + '(') + str(i) + ')' if f else str(i) for i, f in zip(items, foreign)],
+                                    'langs': ['Thai' if t else 'English' for t in thai], 'foreign': foreign})
         if self.path == '/wizard-search/api/read-image':
             STATE['read'] += 1
             return self._json(200, {'lines': ['CLOSED ON MONDAY', 'ปิดวันจันทร์'], 'model': 'qa', 'ms': 5})
@@ -255,29 +262,45 @@ with (BASE / 'worker.lock').open('a') as lock:
         want = ['ผัดกะเพราหมูสับไข่ดาว', 'ส่งฟรีเมื่อสั่งครบ 200 บาท', 'Order number 4471 ready at counter']
         check('every line of the copy-blocked page is a selectable block', all(any(t2 in t for t in texts) for t2 in want), texts[:12])
         check('the frozen screen picture is behind the blocks', p and p.get('shot'), p and p.get('shot'))
-        thai = next(bl for bl in p['blocks'] if 'ผัดกะเพรา' in bl['t'])
-        sx(f"input tap {thai['x']} {thai['y']}"); time.sleep(0.8)
-        p = peek(sp); shot('04-selected')
-        check('a tap selects that line and the action sheet shows it', p['sheet'] and 'ผัดกะเพรา' in p['sheetText'] and len(p['sel']) == 1, (p['sel'], p['sheetText'][:80]))
+        def wd(p, t): return next((w for w in p['words'] if w['t'] == t), None)
+        def wd_has(p, t): return next((w for w in p['words'] if t in w['t']), None)
+        print('  words:', [w['t'] for w in p['words']][:30], 'exact blocks:', p.get('exact'), 'of', p.get('blocks'))
+        check('no boxes are drawn around the text (Google style)', p.get('boxes') == 0 and p.get('hl') == 0, (p.get('boxes'), p.get('hl')))
+        check('Chrome reports where its characters are, so words sit exactly on the text', (p.get('exact') or 0) >= 3, p.get('exact'))
+        # a drag inside one line selects just the words it crossed (Google's free selection)
+        w1, w2 = wd(p, 'number'), wd(p, 'ready')
+        check('the page’s words are individually selectable', w1 and w2, [w['t'] for w in p['words']][:20])
+        sx(f"input swipe {w1['l'] + 4} {w1['y']} {w2['r'] - 4} {w2['y']} 700"); time.sleep(0.8)
+        p = peek(sp); shot('04-drag-select')
+        check('a finger drag from “number” to “ready” selects exactly “number 4471 ready”', p['selText'] == 'number 4471 ready', p['selText'])
+        check('the selection is highlighted with two handles and the action sheet shows it', p['hl'] >= 1 and all(p['handles']) and p['sheet'] and 'number 4471 ready' in p['sheetText'], (p['hl'], p['handles'], p['sheetText'][:60]))
+        # drag the end handle onto the next line
+        h = p['handles'][1]; ctr = wd(p, 'counter')
+        sx(f"input swipe {h[0]} {h[1]} {ctr['r'] - 4} {ctr['y'] + 70} 700"); time.sleep(0.8)
+        p = peek(sp)
+        check('dragging the end handle extends the selection to “counter”', p['selText'] == 'number 4471 ready at counter', p['selText'])
         sx(f"input tap {p['btn']['aCopy'][0]} {p['btn']['aCopy'][1]}"); time.sleep(0.8)
         cl = wait_log('screen copied chars=', 4)
-        check('Copy puts it on the clipboard (text the page blocks from copying)', cl and 'chars=' in cl, cl)
-        # a swipe across the other two lines adds them
-        b2 = next(bl for bl in p['blocks'] if 'ส่งฟรี' in bl['t']); b3 = next(bl for bl in p['blocks'] if 'Order number' in bl['t'])
-        sx(f"input swipe {b2['x']} {b2['y']} {b3['x']} {b3['y']} 500"); time.sleep(0.8)
-        p = peek(sp)
-        check('a swipe over more lines adds them to the selection', len(p['sel']) >= 3 and 'Order number' in p['sheetText'], (p['sel'], p['sheetText'][:120]))
+        check('Copy copies exactly the selection (text the page blocks from copying)', cl and 'chars=28' in cl, cl)
+        # a drag across two lines from the Thai dish down into the delivery line
+        th, baht = wd_has(p, 'ผัด'), wd(p, '200')
+        sx(f"input swipe {th['l'] + 6} {th['y']} {baht['r'] - 4} {baht['y']} 900"); time.sleep(0.8)
+        p = peek(sp); shot('05-drag-two-lines')
+        check('a drag across lines selects from the start word to the end word', p['selText'].startswith('ผัด') and p['selText'].endswith('200') and '\n' in p['selText'], p['selText'])
         sx(f"input tap {p['btn']['aTrans'][0]} {p['btn']['aTrans'][1]}")
-        p = wait_peek(sp, lambda p: p.get('trans') and p['trans'].get('text'), 8); shot('05-translated-selection')
-        check('Translate turns the selection into English (Wizard Search)', p.get('trans') and 'EN(' in (p['trans'].get('text') or '') and STATE['translate'], (p.get('trans'), STATE['translate'][-1:] if STATE['translate'] else None))
+        p = wait_peek(sp, lambda p: p.get('trans') and p['trans'].get('text'), 8); shot('06-translated-selection')
+        check('Translate turns the selection into English (Wizard Search)', p.get('trans') and 'EN(' in (p['trans'].get('text') or ''), (p.get('trans'), STATE['translate'][-1:]))
         sx(f"input tap {p['btn']['aSearch'][0]} {p['btn']['aSearch'][1]}")
-        p = wait_peek(sp, lambda p: p.get('searching'), 6); time.sleep(2.5); shot('06-search-sheet')
-        check('Search opens Wizard Search for the selection in a sheet', p.get('searching') and STATE['search'] and 'ผัดกะเพรา' in STATE['search'][-1], STATE['search'][-1:] if STATE['search'] else None)
-        # Back: one layer at a time
+        p = wait_peek(sp, lambda p: p.get('searching'), 6); time.sleep(2.5); shot('07-search-sheet')
+        check('Search opens Wizard Search for the selection in a sheet', p.get('searching') and STATE['search'] and 'ผัด' in STATE['search'][-1], STATE['search'][-1:] if STATE['search'] else None)
         sx('input keyevent KEYCODE_BACK'); time.sleep(1)
         p = peek(sp)
         check('Back closes the search sheet first, Screen mode stays', not p.get('searching') and window('WizScreen'), (p.get('searching'), window('WizScreen')))
-        for i in range(4):
+        # a tap on a word picks its whole line; a tap on nothing clears
+        o = wd(p, 'Order')
+        sx(f"input tap {o['x']} {o['y']}"); time.sleep(0.8); p = peek(sp)
+        check('a tap on text picks that whole line', p['selText'] == 'Order number 4471 ready at counter', p['selText'])
+        for i in range(5):
             if not window('WizScreen'): break
             sx('input keyevent KEYCODE_BACK'); time.sleep(1)
         check('more Backs step out of the selection, then out of Screen mode', not window('WizScreen'), i)
@@ -285,20 +308,38 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('the orb comes back when Screen mode closes', wait_window('WizardEverywhere', True, 6), bubble())
         sp.close()
 
-        # ---------------- Translate screen
+        # ---------------- Translate screen (Google Lens style)
         b, m = open_menu()
         tap_text(r'^Translate screen$'); time.sleep(0.5)
         wait_window('WizScreen', True, 8)
         sp = screen_page()
-        p = wait_peek(sp, lambda p: p and p.get('en', 0) > 0, 10); shot('07-translate-screen')
-        check('Translate screen lays English over the text in place', p and p.get('en', 0) >= 3 and p.get('showEn'), (p or {}).get('en'))
+        p = wait_peek(sp, lambda p: p and p.get('painted'), 10); shot('08-translate-screen')
+        painted = [e['t'] for e in (p or {}).get('painted', [])]
+        check('Translate screen detects the foreign text and paints English over it by itself', len(painted) == 2 and all(t.startswith('EN(') for t in painted), painted)
+        check('English text on the page is left as it is', not any('Order number' in t for t in painted), painted)
+        check('the pill names the detected language: Thai → English', p.get('pill') and 'Thai' in p['pill'] and 'English' in p['pill'], p.get('pill'))
         sent = STATE['translate'][-1] if STATE['translate'] else []
-        check('… text only: toolbar icon labels are not translated over the icons', sent and not any(t in sent for t in ('New tab', 'Switch or close tabs', 'Customize and control Google Chrome')), sent[:8])
-        # Ask Wizard from here: select one line, Ask
-        thai = next(bl for bl in p['blocks'] if 'ผัดกะเพรา' in bl['t'])
-        sx(f"input tap {thai['x']} {thai['y']}"); time.sleep(0.8); p = peek(sp)
-        sx(f"input tap {p['btn']['aAsk'][0]} {p['btn']['aAsk'][1]}"); time.sleep(4)
-        ask = wait_log('screen ask staged', 5); shot('08-ask-wizard')
+        check('… text only: toolbar icon labels and the address bar are never sent', sent and not any(t in sent for t in ('New tab', 'Switch or close tabs', 'Customize and control Google Chrome')) and not any(t.startswith('data:') for t in sent), sent[:8])
+        # tap a translation → the sheet shows original + English
+        e0 = next(e for e in p['painted'] if 'ผัด' in e['t'])
+        sx(f"input tap {e0['c'][0]} {e0['c'][1]}"); time.sleep(0.8); p = peek(sp); shot('09-translate-tap')
+        check('tapping a translation shows the original and the English in the sheet', p['sheet'] and 'ผัด' in p['sheetText'] and 'EN(' in p['sheetText'], p['sheetText'][:120])
+        sx('input keyevent KEYCODE_BACK'); time.sleep(0.8)
+        # the pill → language list → Japanese
+        p = peek(sp)
+        sx(f"input tap {p['btn']['pill'][0]} {p['btn']['pill'][1]}"); time.sleep(0.8); p = peek(sp)
+        jp = (p.get('langBtn') or {}).get('Japanese')
+        check('the language pill opens a list of languages', p.get('langsOpen') and jp, list((p.get('langBtn') or {}).keys())[:6])
+        if jp:
+            sx(f"input tap {jp[0]} {jp[1]}")
+            p = wait_peek(sp, lambda p: p.get('to') == 'Japanese' and p.get('painted') and p['painted'][0]['t'].startswith('JA('), 8); shot('10-japanese')
+            check('picking Japanese translates the screen into Japanese', p.get('to') == 'Japanese' and STATE['to'][-1] == 'Japanese', (p.get('to'), [e['t'] for e in p.get('painted', [])][:3]))
+            sx(f"input tap {p['btn']['pill'][0]} {p['btn']['pill'][1]}"); time.sleep(0.8); p = peek(sp)
+            en = p['langBtn']['English']; sx(f"input tap {en[0]} {en[1]}")
+            p = wait_peek(sp, lambda p: p.get('to') == 'English' and p.get('painted') and p['painted'][0]['t'].startswith('EN('), 8)
+        # Ask Wizard from the whole translated screen
+        sx(f"input tap {p['btn']['tAsk'][0]} {p['btn']['tAsk'][1]}"); time.sleep(4)
+        ask = wait_log('screen ask staged', 5); shot('11-ask-wizard')
         check('Ask Wizard opens Wizard OS with the text (and the screen picture)', ask and 'shot=' in ask and PKG in top(), (ask, top()))
         sp.close()
         try:
@@ -308,7 +349,7 @@ with (BASE / 'worker.lock').open('a') as lock:
                 sheet = pg.ev("(() => { const t = document.querySelector('.dv-text'); const img = document.querySelectorAll('.dv-item').length; return t ? {text: t.value, items: img} : null; })()")
                 if sheet: break
                 time.sleep(0.6)
-            check('the Wizard OS share sheet holds the original text, its English and the screen picture', sheet and 'ผัดกะเพรา' in sheet['text'] and 'English:' in sheet['text'] and 'EN(' in sheet['text'] and sheet['items'] == 1, sheet)
+            check('the Wizard OS share sheet holds the original text, its English and the screen picture', sheet and 'ผัด' in sheet['text'] and 'English:' in sheet['text'] and 'EN(' in sheet['text'] and sheet['items'] == 1, sheet)
             sx('input keyevent KEYCODE_BACK'); time.sleep(1)
             pg.close()
         except Exception as e:
