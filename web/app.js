@@ -929,10 +929,14 @@
   /* The peek (James, 12 Oct 2026: no tab, the bottom bar swipe is enough): on the thread the bound desk leans
    * 36 px in from the right; on the bound view its thread leans 12 px in from the left. */
   function syncPeek() {
-    const f = W[desks[idx]?.focus], b0 = f && f.app === 'chats' && f.thread ? boundOf(f.id) : null, b = b0 && b0.bsid === f.thread ? b0 : null;
+    const f = W[desks[idx]?.focus], b0 = f && f.app === 'chats' && f.thread ? boundOf(f.id) : null;
+    // Opinionated (test port): a link tapped in this thread peeks in from the right just like a bound view,
+    // and its desk shows the thread peeking from the left, so you can always see there is something to swipe to.
+    const tapped = !b0 && f && f.app === 'chats' && f.thread ? (desks[idx + 1]?.wins || []).map(id => W[id]).find(x => x && x.from && x.from.win === f.id && x.from.sid === f.thread) : null;
+    const b = b0 && b0.bsid === f.thread ? b0 : tapped || null;
     const on = !!(b && deskOf(b.id) === idx + 1);
-    const owner = f?.bound ? W[f.bound] : null;
-    const left = !!(owner && owner.thread === f.bsid && deskOf(owner.id) === idx - 1);
+    const owner = f?.bound ? W[f.bound] : (f?.from?.win ? W[f.from.win] : null), osid = f?.bound ? f.bsid : f?.from?.sid;
+    const left = !!(owner && osid && owner.thread === osid && deskOf(owner.id) === idx - 1);
     const nsec = on ? secOf(idx + 1) : null;
     const psec = left ? secOf(idx - 1) : null;
     const hsec = on ? secOf(idx) : null;
@@ -3508,7 +3512,7 @@
     toast,
   });
   window.__wos = {
-    get links() { return LINKS; }, placeTrack,
+    get links() { return LINKS; }, placeTrack, syncPeek,
     get voiceBorrowing() { return parking || !!parkedReply || !!V.admitting; },
     openAgentChats,
     live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
