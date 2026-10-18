@@ -111,8 +111,11 @@ public class BackupE2eTest {
             for(int i=0;i<2;i++) insert("wizard-video-"+i+".mp4","Camera","video/mp4",Files.readAllBytes(new File(c.getFilesDir(),"fixture-video-"+i+".mp4").toPath()));
             assertEquals(51,new PhotoLibrary(c).list(true).size());
             JSONObject auth=settings.secret("credentials"); String scope=settings.scope(auth);
+            // Unplug first and wait until both the app and Android's job scheduler see battery power.
+            shell("dumpsys battery unplug"); shell("cmd battery unplug");
+            waitFor("unplugged",20,()->!BackupScheduler.charging(c)); Thread.sleep(2000);
             settings.prefs.edit().putBoolean("charge",true).putBoolean("wifi",true).putBoolean("enabled",true).commit(); settings.change();
-            shell("dumpsys battery unplug"); BackupScheduler.schedule(c); BackupScheduler.enqueue(c);
+            BackupScheduler.schedule(c); BackupScheduler.enqueue(c);
             Thread.sleep(6000); assertEquals(0,count(scope,false)); record("initial_charge_constraint","pass: no uploads while unplugged");
             shell("cmd battery set ac 1"); shell("cmd battery set status 2"); shell("cmd battery set level 60");
             waitFor("initial full sync",240,()->settings.prefs.getLong("last_sync",0)>0);

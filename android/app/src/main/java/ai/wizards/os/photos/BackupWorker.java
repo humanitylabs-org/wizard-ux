@@ -65,7 +65,7 @@ public final class BackupWorker extends Worker {
             try(BackupLedger ledger=new BackupLedger(getApplicationContext())) {
                 String scope=settings.scope(auth);
                 for(PhotoLibrary.Item item:items) {
-                    guard();
+                    envCheckedAt=0; guard(); // full network/power check before every item; only mid-file reads are throttled
                     try {
                         if(ledger.contains(scope,item.identity)) { done++; }
                         else {
