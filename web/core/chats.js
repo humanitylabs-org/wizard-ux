@@ -1407,7 +1407,7 @@ window.WizCore.chats = function createChats(H) {
     const lh = parseFloat(cs.lineHeight) || 20;
     ta.style.paddingBottom = lastEnd > room ? `${10 + lh}px` : '';
   }
-  function growTa(ta) {  function growTa(ta) {
+  function growTa(ta) {
     if (!ta) return;
     fitLabel(ta);
     ta.style.height = 'auto';

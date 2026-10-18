@@ -56,3 +56,7 @@ test('the thread header no longer carries the model; the label lives inside the 
   assert.match(power, /pop: !!pop && mode !== 'retry'/);
   assert.match(css, /\.ch-field > \.ch-mlabel \{ position: absolute; right: 4px; bottom: 1px;/);
 });
+
+test('the composer scripts parse', () => {
+  for (const f of ['web/core/chats.js', 'web/core/chat-power.js', 'web/core/chat-models.js']) assert.doesNotThrow(() => new vm.Script(read(f), { filename: f }));
+});
