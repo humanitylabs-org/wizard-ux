@@ -48,6 +48,13 @@
   function begin(e) {
     const s = S(); if (!s || e.button > 0 || s.sheet || (s.links && s.links.isOpen && s.links.isOpen())) return;
     if (e.target.closest('input, textarea, select, [contenteditable], .mviewer, .ms-track, #dock, #orbWrap, .sheet, .overview')) return;
+    // A neighbour desk peeking in at the edge (bound view or tapped link): touching it drags toward it, a tap goes there.
+    const peekDesk = e.target.closest('#track .desk.bound-chat-peek, #track .desk.bound-peek');
+    if (peekDesk) {
+      const toward = peekDesk.classList.contains('bound-peek') ? 1 : -1;
+      G = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), lx: e.clientX, lt: performance.now(), v: 0, kind: toward > 0 ? 'peek-next' : 'back-desk', peek: toward, el: null, lock: 'h', act: null };
+      e.preventDefault(); e.stopImmediatePropagation(); try { document.body.setPointerCapture(e.pointerId); } catch (_) {} return;
+    }
     const winEl = e.target.closest('#track .win[data-win]'); if (!winEl) return;
     const f = focusWin(); if (!f || f.id !== winEl.dataset.win) return;
     const r = winEl.getBoundingClientRect(), x = e.clientX - r.left;
@@ -78,6 +85,7 @@
     if (G.kind === 'thread') G.act = dx > 0 ? 'to-list' : (nextDeskUsable() ? 'to-next' : null);
     else if (G.kind === 'list') G.act = dx < 0 ? (lastThread[G.wid] ? 'to-thread' : (nextDeskUsable() ? 'to-next' : null)) : null;
     else if (G.kind === 'back-desk') G.act = dx > 0 && s.idx > 0 ? 'to-prev' : null;
+    else if (G.kind === 'peek-next') G.act = dx < 0 ? 'to-next' : null;
     if (G.act === 'to-next' || G.act === 'to-prev') { reset(G.el); s.placeTrack && s.placeTrack(dx, false); }
     else if (G.act === 'to-list' || G.act === 'to-thread') { if (s.placeTrack) s.placeTrack(0, false); G.el.classList.add('ss-move'); G.el.classList.remove('ss-anim'); G.el.style.transform = `translate3d(${dx}px,0,0)`; G.el.style.opacity = String(1 - Math.min(.5, Math.abs(dx) / 700)); }
     else { reset(G.el); s.placeTrack && s.placeTrack(dx * .15, false); }
@@ -88,6 +96,7 @@
     if (g.lock !== 'h') return;
     blockClick = Date.now() + 350;
     const s = S(), dx = e.clientX - g.x, far = Math.abs(dx) > GO || Math.abs(g.v) > VGO;
+    if (g.peek && e.type !== 'pointercancel' && Math.abs(dx) < 8) { if (s.placeTrack) s.placeTrack(0, true); s.goDesk(s.idx + g.peek); return; } // tap on a peek
     const fire = e.type !== 'pointercancel' && far && g.act && ((dx < 0) === (g.act === 'to-next' || g.act === 'to-thread'));
     if (!fire) { if (s.placeTrack) s.placeTrack(0, true); slideBack(g.el); return; }
     if (g.act === 'to-next') { reset(g.el); s.goDesk(s.idx + 1); }
