@@ -31,6 +31,8 @@
   const SUBSCRIPTIONS = ['openai-codex', SUB];
   const CLAUDE_ORDER = ['fable', 'opus', 'sonnet', 'haiku'];
   const GPT_ORDER = ['astra', 'sol', 'terra', 'luna', 'codex-spark'];
+  // The models closest to the thumb in the compact model menu (James 18 Oct 2026). Everything else is one tap away.
+  const PRIMARY = [{ family: 'claude:opus', name: 'Opus' }, { family: 'gpt:astra', name: 'Astra' }, { family: 'gpt:sol', name: 'Sol' }];
   const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
 
   const claudeFamily = (model, provider) => (!provider || CLAUDE_PROVIDERS.has(provider)) ? /^claude-(fable|opus|sonnet|haiku)(?:-|$)/i.exec(model)?.[1].toLowerCase() : undefined;
@@ -129,7 +131,7 @@
         .finally(() => { M.loading = null; });
       return M.loading;
     },
-    normalize, visibleChoices,
+    normalize, visibleChoices, PRIMARY, family,
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
     visible(model, provider) { return visibleChoices(M.options, model, provider); },
@@ -281,6 +283,32 @@
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
         <div class="msheet-list">${rows}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
+    },
+    /* The compact model menu opened from the label in the message box: a small card over the right side.
+     * Read bottom-up (thumb first): this mode's primary models, then the other section (Private agent models in the
+     * main Chats), then More models. An agent's own chats list only that agent's models. */
+    popHtml({ mode, cur, all, agent, priv }) {
+      const own = agent && !agent.missing ? window.WosAgents.modelOptions(agent) : null;
+      const isCur = o => cur && o.value === cur.model && (!cur.provider || o.provider === cur.provider) && (cur.agent || '') === (o.agent || '');
+      const lock = window.WosAgents?.lock?.() || '';
+      const famOf = o => family(o.value, o.provider), up = PRIMARY.map(p => p.family);
+      const vis = own ? [] : M.visible(cur?.model || '', cur?.provider || '');
+      const primary = own || up.map(f => vis.find(o => famOf(o) === f)).filter(Boolean).concat(vis.filter(o => isCur(o) && !up.includes(famOf(o))));
+      const rest = own ? [] : (all ? M.options : []).filter(o => !primary.includes(o));
+      const privList = !own && Array.isArray(priv) ? priv : [];
+      const curPriv = privList.some(isCur);
+      const list = [], row = (o, cls = '') => { const i = list.push(o) - 1; const p = cls.includes('priv');
+        return `<button type="button" class="mrow${cls}${isCur(o) ? ' on' : ''}" data-mpick="${i}"${p ? ` data-mprivate="${esc(o.agent)}"` : ''} aria-pressed="${isCur(o)}"><span class="mn"><b>${p ? lock : ''}${esc(own ? o.name : M.short(o.value, o.provider) || o.name)}</b></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; };
+      const sec = (label, rows, cls = '') => rows ? `<div class="mpop-sec${cls}" role="group" aria-label="${esc(label)}"><div class="msheet-gh">${cls.includes('priv') ? lock : ''}<span>${esc(label)}</span></div>${rows}</div>` : '';
+      const mainRows = primary.map(o => row(o)).join('');
+      const privRows = privList.map(o => row(o, ' priv')).join('');
+      const moreRows = rest.map(o => row(o)).join('');
+      const moreBtn = !own && M.ready && !all && M.options.length > primary.length ? `<button type="button" class="mrow more" data-mall>More models</button>` : '';
+      // The section you're in sits at the bottom, by your thumb; the other section is right above it.
+      const mainSec = sec(own ? agent.label : 'Models', mainRows), privSec = sec('Private agent', privRows, ' priv');
+      const body = !M.ready && !primary.length && !own ? `<p class="ch-sheet-n">${M.error ? esc(M.error) : 'Loading models…'}</p>`
+        : (moreRows ? sec('More models', moreRows) : moreBtn) + (curPriv ? mainSec + privSec : privSec + mainSec);
+      return { list, html: `<div class="ch-sheet ch-mpop" role="dialog" aria-label="${mode === 'new' ? 'Model for this new chat' : 'Model for this thread'}"><div class="ch-sheet-b"><div class="msheet-list">${body}</div></div></div>` };
     },
     /* A failed thread: what happened, on which model, and the ways out (Retry · Choose another model · Dismiss). */
     failureHtml({ s, busy, canRetry }) {
