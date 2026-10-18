@@ -482,3 +482,14 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-bell b { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center; font-size: 11px; font-weight: 800; line-height: 1; color: var(--on-accent, #160b32); background: var(--violet-2, #b99bff); }
 .ch-bell.needs b { background: var(--amber, #ffbe55); }
 .ch-bell:active { background: rgba(205, 190, 255, .12); }
+
+/* Unsent voice takes at the top of the Chats list (replaces the old notifications panel's Unsent group). */
+.ch-unsent { display: flex; align-items: center; gap: 10px; width: 100%; margin: 4px 0 8px; padding: 10px 12px; border-radius: 14px; text-align: left;
+  background: rgba(143, 99, 255, .12); border: 1px solid rgba(185, 155, 255, .35); color: inherit; font: inherit; }
+.ch-unsent.fail { background: rgba(255, 190, 85, .1); border-color: rgba(255, 190, 85, .45); }
+.ch-unsent .pip { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--violet-2, #b99bff); }
+.ch-unsent.fail .pip { background: var(--amber, #ffbe55); }
+.ch-unsent .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ch-unsent .tx b { font-size: 14px; font-weight: 700; }
+.ch-unsent .tx small { font-size: 12.5px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-unsent .go { flex: none; font-size: 13px; font-weight: 700; color: var(--violet-2, #b99bff); }
