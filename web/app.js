@@ -939,8 +939,8 @@
     const f = W[desks[idx]?.focus], b0 = f && f.app === 'chats' && f.thread ? boundOf(f.id) : null;
     // Opinionated (test port): a link tapped in this thread peeks in from the right just like a bound view,
     // and its desk shows the thread peeking from the left, so you can always see there is something to swipe to.
-    const tapped = !b0 && f && f.app === 'chats' && f.thread ? (desks[idx + 1]?.wins || []).map(id => W[id]).find(x => x && x.from && x.from.win === f.id && x.from.sid === f.thread) : null;
-    const b = b0 && b0.bsid === f.thread ? b0 : tapped || null;
+    const tapped = f && f.app === 'chats' && f.thread ? (desks[idx + 1]?.wins || []).map(id => W[id]).find(x => x && x.from && x.from.win === f.id && x.from.sid === f.thread) : null;
+    const b = (b0 && b0.bsid === f.thread && deskOf(b0.id) === idx + 1 ? b0 : null) || tapped || null;
     const on = !!(b && deskOf(b.id) === idx + 1);
     const owner = f?.bound ? W[f.bound] : (f?.from?.win ? W[f.from.win] : null), osid = f?.bound ? f.bsid : f?.from?.sid;
     const left = !!(owner && osid && owner.thread === osid && deskOf(owner.id) === idx - 1);
