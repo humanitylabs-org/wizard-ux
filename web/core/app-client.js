@@ -3,6 +3,10 @@
  * the same resource modules; hosted apps never own a root guard or install worker. */
 (() => {
   'use strict';
+  // Runs before frontend scripts, including iframe refresh/recreation. The native
+  // document-start hook is an additional fence, not the sole ordering guarantee.
+  // Ordinary workspace/standalone clients are unchanged: the policy is session-only.
+  try { if (parent !== window && parent.WizHomeScreenPolicy?.mode) parent.WizHomeScreenPolicy.installPresentationStorage(window); } catch (_) {}
   if (window.WizardApp) return;
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
   let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
