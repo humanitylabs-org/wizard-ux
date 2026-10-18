@@ -621,17 +621,25 @@
   let SC = null; const SC_STEP = 26;
   scrub.addEventListener('pointerdown', e => {
     e.preventDefault(); scrub.setPointerCapture(e.pointerId);
-    SC = { x: e.clientX, start: idx, at: idx, live: false, t: setTimeout(() => { if (SC) { SC.live = true; scrub.classList.add('on'); scLabel(); vib(10); } }, 140) };
+    SC = { x: e.clientX, y: e.clientY, start: idx, at: idx, live: false, t: setTimeout(() => { if (SC) { SC.live = true; scrub.classList.add('on'); scLabel(); vib(10); } }, 140) };
   });
   scrub.addEventListener('pointermove', e => {
-    if (!SC) return; const dx = e.clientX - SC.x;
-    if (!SC.live && Math.abs(dx) > 10) { clearTimeout(SC.t); SC.live = true; scrub.classList.add('on'); }
+    if (!SC) return; const dx = e.clientX - SC.x, dy = e.clientY - SC.y;
+    if (dy < -30) { if (SC.live) { idx = SC.start; placeTrack(0, true); renderDots(); } SC.live = false; clearTimeout(SC.t); return; } // going up: iOS swipe out
+    if (!SC.live && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { clearTimeout(SC.t); SC.live = true; scrub.classList.add('on'); }
     if (!SC.live) return;
     const n = Math.max(0, Math.min(desks.length - 1, SC.start + Math.round(dx / SC_STEP)));
     if (n !== SC.at) { SC.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(); }
   });
   function scLabel() { scrub.querySelector('.sc-label').textContent = deskName(SC.at); }
-  const scEnd = () => { if (!SC) return; clearTimeout(SC.t); const live = SC.live; const at = SC.at; SC = null; scrub.classList.remove('on'); if (live) goDesk(at, true); };
+  // A cancelled touch (iOS takes it for its own swipe home) or one that rose more than a nudge is the system's
+  // swipe out, not a scrub: put the desk back where it started instead of landing on the scrubbed one.
+  const scEnd = e => {
+    if (!SC) return; clearTimeout(SC.t); const { live, at, start, y } = SC; SC = null; scrub.classList.remove('on');
+    if (!live) return;
+    if (e.type === 'pointercancel' || e.clientY - y < -30) { idx = start; placeTrack(0, true); renderDots(); return; }
+    goDesk(at, true);
+  };
   scrub.addEventListener('pointerup', scEnd); scrub.addEventListener('pointercancel', scEnd);
 
   /* ---------------- window operations ---------------- */
