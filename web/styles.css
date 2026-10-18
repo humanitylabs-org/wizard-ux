@@ -835,7 +835,9 @@ body {
 .device.zen .win { padding-top: 0 !important; }
 /* The app takes the whole viewport; the handle floats over it on a transparent strip. */
 .device.zen .tiles { top: calc(var(--sb) + var(--safe-t) + 4px); bottom: 0; }
-.device.zen .tiles[data-n="1"], .device.zen .tiles.has-full { left: 0; right: 0; top: 0; bottom: 0; }
+/* Distraction-free keeps the phone's status bar (only immersive full screen hides it), so the app starts below it. */
+.device.zen .tiles[data-n="1"], .device.zen .tiles.has-full { left: 0; right: 0; top: calc(var(--sb) + var(--safe-t)); bottom: 0; }
+.device.zen.immersive .tiles.has-full { top: 0; }
 .device.zen .tiles[data-n="1"] .win, .device.zen .tiles.has-full .win.full { border-radius: 0; border-color: transparent; box-shadow: none; }
 .device.zen .desk { padding-bottom: var(--safe-b); }
 .device.zen .dock { transform: translateY(110%); opacity: 0; pointer-events: none; }

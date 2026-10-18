@@ -100,6 +100,12 @@ const maxStep = async p => { await p.waitForTimeout(2200); return p.evaluate(() 
   ok(st.last < st.first && st.mid >= 1, 'content glides up (animated through in-between positions, no snap)', JSON.stringify(st));
   const hv = await p.evaluate(() => { const e = document.querySelector('#zenEdge'), r = e.getBoundingClientRect(), h = document.elementFromPoint(innerWidth / 2, r.top + r.height / 2); return { h: r.height, hit: h === e || e.contains(h) }; });
   ok(hv.h >= 24 && hv.hit, 'bottom-edge handle is a real >=24px target', JSON.stringify(hv));
+  // Native shell draws under the status bar and reports its height (--nat-t); distraction-free keeps the bar,
+  // so the app must start below it (James, 18 Oct: thread title overlapped the clock).
+  await p.evaluate(() => window.__wosTop(44));
+  const sb = await state(p);
+  ok(sb.win.y >= 44, 'distraction-free app starts below the native status bar', JSON.stringify(sb.win));
+  await p.evaluate(() => window.__wosTop(0));
   await shot(p, 'zen-1-hidden');
   // 2. Swipe up from the bottom edge brings everything back.
   await sampleRows(p);
