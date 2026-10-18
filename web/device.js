@@ -336,7 +336,7 @@
   function webBusy() {
     try { if (J(DEV()?.recActive?.())?.id) return true; } catch (_) { return true; }
     const w = W$(); if (!w) return true;
-    if (w.voice !== 'idle' || sheet) return true;
+    if (w.voice !== 'idle' || sheet || w.voiceBorrowing) return true; // incl. an orb take parked on a meeting loan
     return Object.keys(w.wins).some(k => (w.chatState(k).files || []).some(f => f.uploading));
   }
   function saveDrafts() {

@@ -107,7 +107,9 @@
   // Never armed while the meeting's microphone is lent to the orb: that voice message ends by itself, but its
   // send follows straight after, and a reload mid-send is exactly what this guard is for.
   const loan = p => (p.blocking || []).some(b => b.reason === 'microphone_loan');
-  const armable = p => !p.host && !loan(p) && (p.recording || !!p.keeps);
+  // Otherwise arm only for a recording, or for the kept meeting app's own quick save (its notes); another app's
+  // unsaved work is never a reason to reload on its own later.
+  const armable = p => !p.host && !loan(p) && (p.recording || (!!p.keeps && (p.blocking || []).every(b => b.appId === p.keeps.appId)));
   function arm(p) {
     armed = { at: Date.now(), recording: p.recording };
     log('web:reload-armed', p.recording ? 'recording' : 'saving');
