@@ -139,7 +139,8 @@ window.WizCore.chats = function createChats(H) {
   const SEC_PAGE = 40;
   /* ---- Morning: the owner's daily check-in (Morning app, /morning/), pinned at the top of Ready ----
    * Status is the Morning app's /morning/api/status; the app also posts {type:'wizard:morning'} when a step is
-   * ticked so the card updates at once. No Morning app on this Wizard (not in Apps, or unreachable) = no card.
+   * ticked so the card updates at once. No Morning app on this Wizard (not in Apps, or unreachable) = no card;
+   * all steps done = no card until Morning's day rolls over.
    * Read at most once a minute, from list paints only; the HTML is built from that state alone, so an unchanged
    * state never rebuilds the list (the 15 s sessions poll keeps the same nodes). */
   const MORNING = { data: null, at: 0, busy: false };
@@ -160,8 +161,9 @@ window.WizCore.chats = function createChats(H) {
   addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'wizard:morning') { MORNING.at = Date.now(); morningSet(e.data.status); } });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { MORNING.at = 0; morningPoll(); } });
   function morningCard() {
-    const d = MORNING.data; if (!d || !morningInstalled()) return '';
-    const all = d.done >= d.total;
+    // Done for today = gone until the next morning (the day rolls at the owner's day start, on Morning's side).
+    const d = MORNING.data; if (!d || !morningInstalled() || d.done >= d.total) return '';
+    const all = false;
     const sub = all ? 'Done for today' : d.done ? `${d.done} of ${d.total} done · next: ${d.next_label}` : 'Workout · Meditate · Read';
     const dots = Array.from({ length: d.total }, (_, i) => `<i${i < d.done ? ' class="on"' : ''}></i>`).join('');
     return `<button type="button" class="ch-morning${all ? ' done' : ''}" data-chmorning aria-label="Open Morning · ${esc(sub)}"><span class="sun" aria-hidden="true"></span><span class="tx"><span class="hd"><b>Morning</b><i>${all ? 'Done' : 'Pinned'}</i></span><small>${esc(sub)}</small>${all ? '' : `<span class="dots" aria-hidden="true">${dots}</span>`}</span><span class="go" aria-hidden="true">›</span></button>`;
