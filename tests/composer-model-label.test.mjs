@@ -49,7 +49,9 @@ test('the thread header no longer carries the model; the label lives inside the 
   assert.match(chats, /<div class="ch-field"><textarea/);
   assert.match(chats, /\$\{mlabel\}<\/div>/);
   assert.match(chats, /const chip = PW && !PW\.modelLabel \? PW\.modelChip\(w, s\) : ''/);
-  assert.match(chats, /function fitLabel\(el\)/);
+  assert.match(chats, /function fitLabel\(root\)/);
+  assert.match(chats, /ta\.style\.paddingBottom = lastEnd > room/);
+  assert.match(chats, /function growTa\(ta\) \{\n    if \(!ta\) return;\n    fitLabel\(ta\);/);
   assert.match(power, /function modelLabel\(w, s\)/);
   assert.match(power, /pop: !!pop && mode !== 'retry'/);
   assert.match(css, /\.ch-field > \.ch-mlabel \{ position: absolute; right: 4px; bottom: 1px;/);
