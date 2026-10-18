@@ -154,3 +154,10 @@
 .ch-mpop .ch-sheet-b .mrow { padding: 10px 12px; border-radius: 11px; font-size: 14.5px; }
 .ch-mpop .ch-sheet-b .mrow.more { justify-content: flex-start; font-size: 13px; color: var(--violet-2); padding: 8px 12px; }
 .ch-mpop .mrow .mn b { font-weight: 620; }
+
+/* Label strip (chats.js fitLabel): the box itself carries the border so the name sits on its own row under the text,
+ * outside the textarea's scrolling area. Text can never run under it. */
+.ch-compose .ch-field.lab-row { flex-direction: column; padding-bottom: 24px; border-radius: 20px; border: 1px solid var(--line-2); background: rgba(205, 190, 255, .06); }
+.ch-compose .ch-field.lab-row:focus-within { border-color: rgba(185, 155, 255, .6); }
+.ch-compose .ch-field.lab-row > textarea { border: 0; background: transparent; border-radius: 20px 20px 0 0; padding-bottom: 2px; }
+.ch-compose .ch-field.lab-row > .ch-mlabel { bottom: 1px; height: 26px; }
