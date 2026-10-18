@@ -27,7 +27,9 @@ import fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threa
 import shlex, urllib.parse, urllib.request
 P = pathlib.Path
 BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
-apk = P(sys.argv[1]); PKG = sys.argv[2]; old = P(sys.argv[3]) if len(sys.argv) > 3 else None
+apk = P(sys.argv[1]); PKG = sys.argv[2]; old = P(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] not in ('', '-') else None
+# The shell is served by the fake Wizard (the emulator can't reach the tailnet): WOS_WEB or the worktree's web/.
+WEB = P(os.environ.get('WOS_WEB') or (P(__file__).resolve().parent.parent / 'web'))
 job = BASE / 'qa' / ('wos-everywhere-' + uuid.uuid4().hex[:8]); job.mkdir(parents=True)
 OUT = job / 'shots'; OUT.mkdir()
 env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
@@ -68,6 +70,19 @@ class Fake(http.server.BaseHTTPRequestHandler):
         except Exception: pass
         self.close_connection = True
     def do_GET(self):
+        u = self.path.split('?')[0]
+        if u == '/wizard-os-home':
+            self.send_response(301); self.send_header('Location', '/wizard-os-home/'); self.send_header('Content-Length', '0'); self.end_headers(); return
+        mw = re.match(r'^/wizard-os-home/(.*)$', u)
+        if mw and not mw.group(1).startswith('api/'):
+            f = mw.group(1) or 'index.html'; p = (WEB / f).resolve()
+            if f in ('data.js', 'summaries.js') or not str(p).startswith(str(WEB.resolve())) or not p.is_file():
+                b = b''; self.send_response(200 if f.endswith('.js') else 404); ct = 'application/javascript'
+            else:
+                b = p.read_bytes(); self.send_response(200)
+                ct = {'css': 'text/css', 'html': 'text/html; charset=utf-8', 'png': 'image/png', 'svg': 'image/svg+xml', 'webmanifest': 'application/manifest+json', 'js': 'application/javascript', 'json': 'application/json'}.get(f.rsplit('.', 1)[-1], 'application/octet-stream')
+            self.send_header('Content-Type', ct); self.send_header('Content-Length', str(len(b))); self.end_headers(); self.wfile.write(b); return
+        if u == '/wizard/hermes/api/sessions': return self._json(200, {'data': [], 'has_more': False})
         m = re.match(r'^/wizard/hermes/v1/runs/([^/?]+)', self.path)
         if m: return self._json(200, {'run_id': m.group(1), 'status': 'completed', 'output': 'QA reply from the fake Wizard.'})
         self._json(404, {'error': 'nope'})
@@ -235,7 +250,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         sh('afconvert', '-f', 'm4af', '-d', 'aac', aiff, canned)
         sh(ADB, '-s', S, 'push', canned, '/data/local/tmp/qa_voice.m4a')
         def stage_audio(): sx(f'run-as {PKG} cp /data/local/tmp/qa_voice.m4a files/qa_next.m4a')
-        sx(f'run-as {PKG} mkdir -p files'); sx(f"run-as {PKG} sh -c 'echo http://10.0.2.2:{FAKE} > files/qa_origin.txt'")
+        sx(f'run-as {PKG} mkdir -p files'); sx(f"run-as {PKG} sh -c 'echo http://10.0.2.2:{FAKE} > files/qa_origin.txt; echo http://localhost:{FAKE} > files/qa_home.txt'")
+        sh(ADB, '-s', S, 'reverse', f'tcp:{FAKE}', f'tcp:{FAKE}')
         sx(f'pm grant {PKG} android.permission.RECORD_AUDIO'); sx(f'pm grant {PKG} android.permission.POST_NOTIFICATIONS')
         sx('logcat -c')
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(9)
