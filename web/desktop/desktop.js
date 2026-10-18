@@ -82,6 +82,7 @@
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
     openUnsent: () => openSettings('unsent'),
     newChatHint: `Type below and press ${CMD}Enter, or press ${MOD}⇧V for a new voice chat.`,
+    newChatKeys: [{ keys: [CMD.replace('+', ''), 'Enter'], label: 'send' }, { keys: [MOD.replace('+', ''), '⇧', 'V'], label: 'new voice chat' }],
     threadShown: (wid, el) => threadShown(wid, el),
     dictationField: () => vMode === 'dictate' && (VOICE.state !== 'idle' || dictationFinishing) ? dictTarget?.el : null,
     owner: id => String(id).replace(/::list$/, ''),
