@@ -293,9 +293,9 @@
 
   /* ================= #22 updates: native APK banner ================= */
   let upd = null, updHidden = 0;
-  // UPDATE_HOLD_REASONS_V1: older APKs need an explicit installer escape hatch.
-  let updateConfirmUntil = 0, updateConfirmTimer = 0, updateFallbackTimer = 0;
-  const deferredText = u => ({ take: 'Update ready · installs after this recording', music: 'Update ready · installs when music stops', mic: 'Update ready · microphone in use' }[u.reason] || 'Update ready · waiting for the microphone');
+  // Installation stays with the native updater, including older APKs without hold reasons.
+  let updateConfirmUntil = 0, updateConfirmTimer = 0;
+  const deferredText = u => ({ take: 'Update ready · installs after this recording', music: 'Update ready · installs when music stops', mic: 'Update ready · microphone in use' }[u.reason] || 'Installs by itself once music or recording stops');
   function knownTakeLive() {
     try {
       const w = W$(), c = window.WizAppCapture?.getState?.();
@@ -315,27 +315,7 @@
       // Native still fences live takes. Never cancel/delete/send a recording just to install.
     }
     updateConfirmUntil = 0; clearTimeout(updateConfirmTimer);
-    clearTimeout(updateFallbackTimer);
-    const requestedCode = upd?.versionCode;
     d.updateInstall(); log('update:install'); renderUpdate();
-    updateFallbackTimer = setTimeout(async () => {
-      updateFallbackTimer = 0;
-      const legacyDeferred = () => {
-        const s = J(d.updateState());
-        return s?.state === 'deferred' && !Object.prototype.hasOwnProperty.call(s, 'reason') && s.versionCode === requestedCode && !knownTakeLive();
-      };
-      try {
-        if (!legacyDeferred()) return;
-        const response = await fetch('/reports/wizard-os/latest.json', { cache: 'no-store' });
-        if (!response.ok) throw Error('feed');
-        const u = await response.json();
-        const url = new URL(u.url, new URL('/reports/wizard-os/', location.origin));
-        if (url.origin !== location.origin || !url.pathname.startsWith('/reports/wizard-os/') || !url.pathname.endsWith('.apk') || u.versionCode !== requestedCode) throw Error('release');
-        if (!legacyDeferred()) return;
-        // WebView DownloadListener owns the APK download and Android installer consent.
-        location.assign(url.href);
-      } catch (_) { toast('!', 'Couldn’t open the update · tap Install now to retry', 3000); }
-    }, 3000);
   }
   const UPD_TEXT = {
     available: u => [`Wizard OS ${u.version} is available`, 'Update'],
