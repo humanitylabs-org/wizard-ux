@@ -265,14 +265,17 @@ const markPage = P => P.p.evaluate(() => { window.__qaMark = 1; });
     ok(S.webChunks.length === 0 && seqs.every((s, i) => s === i), 'native: chunks stay native-owned and contiguous (none lost or duplicated by the page)', JSON.stringify({ web: S.webChunks.length, seqs }));
     /* B. an orb microphone loan blocks Reload outright (never armed) */
     await raiseUpdate(P);
-    await p.evaluate(() => { window.WizardOSDevice = { recActive: () => 'null', recHandoffVersion: () => 1, recStartBorrowed: () => 'qa-voice', recHandoffBegin: (id, mid) => JSON.stringify({ id, meetingId: mid, status: 'paused', open: true }), recHandoffEnd: id => JSON.stringify({ id, open: false, status: 'recording', pausedByHandoff: true }) }; });
+    await p.evaluate(() => { window.WizardOSDevice = { recActive: () => 'null', recHandoffVersion: () => 1, recStartBorrowed: () => 'qa-voice', recHandoffBegin: (id, mid) => JSON.stringify({ id, meetingId: mid, status: 'paused', open: true, atMediaMs: 9000, pausedAt: Date.now(), pausedByHandoff: true }), recHandoffEnd: id => JSON.stringify({ id, open: false, status: 'recording', pausedByHandoff: true }) }; });
     const loan = await p.evaluate(() => window.WosOrbHandoff.begin().then(l => { window.__qaLoan = l; return true; }, e => String(e && e.message)));
     await markPage(P); await p.locator('#dvWeb [data-web="go"]').click(); await sleep(400);
     const loanToast = await p.evaluate(() => document.body.innerText.includes('Finish the voice message first'));
     await sleep(2500);
     ok(loan === true && !(await reloaded(P)) && !(await p.evaluate(() => window.WizWebUpdate.armed)) && loanToast, 'loan: Reload refused and not armed while the orb borrows the meeting microphone', JSON.stringify({ loan, loanToast }));
     await p.evaluate(() => window.WosOrbHandoff.end(window.__qaLoan, { status: 'cancelled' }));
-    await p.evaluate(() => window.WosOrbHandoff.sync());
+    // The orb journal syncs on its own (every 5 s); Mizel's save reads it back, so let it land first.
+    const synced = await until(async () => { const j = await p.evaluate(() => window.WosOrbHandoff.read()); const row = Object.values(j)[0];
+      const e = row && S.events?.get(row.id); return !!e && !!row.endedAt && e.endedAt === row.endedAt && e.clientRevision === row.clientRevision; }, 15000, 500);
+    ok(synced, 'loan: the orb handoff journal synced to the meeting');
     await p.evaluate(() => { delete window.WizardOSDevice; });
     ok(await p.evaluate(() => window.WizWebUpdate.plan().ok), 'loan: after the loan ends the meeting is reload-safe again');
     // Stop after the reload saves normally.
