@@ -60,7 +60,7 @@ async function phone(b) {
   ok(await f.locator('#agName').count() === 1 && (await f.locator('#agName').inputValue()) === 'Private', 'phone: Back in step 2 returns to step 1 with the name kept');
   await f.locator('[data-next]').click(); await wait(300);
   await f.locator('.ag-choice[data-pick="provider"][data-v="tinfoil"]').click(); await wait(200);
-  ok(await f.locator('.ag-chip[data-v="glm-5-3"][aria-checked="true"]').count() === 1, 'phone: Tinfoil picks its only model, GLM 5.3');
+  ok(await f.locator('.ag-chip[data-v="glm-5-3"][aria-checked="true"]').count() === 1, 'phone: Tinfoil preselects its default model, GLM 5.3');
   ok(/No fallback/.test(await f.locator('.ag').innerText()), 'phone: Tinfoil says no fallback');
   await shot(p, 'phone-03-new-provider');
   await f.locator('[data-next]').click(); await wait(300);

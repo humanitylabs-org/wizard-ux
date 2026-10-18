@@ -370,7 +370,7 @@
     if (d.pick && S.view.name === 'new') {
       const dr = S.draft;
       if (d.pick === 'harness') dr.harness = d.v;
-      if (d.pick === 'provider' && dr.provider !== d.v) { dr.provider = d.v; const p = provider(d.v); dr.model = p?.models.length === 1 ? p.models[0].id : ''; dr.preset = ''; }
+      if (d.pick === 'provider' && dr.provider !== d.v) { dr.provider = d.v; const p = provider(d.v); dr.model = p?.models.length === 1 || p?.confidential ? p.models[0]?.id || '' : ''; // Tinfoil: its default (first) model, still changeable dr.preset = ''; }
       if (d.pick === 'model') dr.model = d.v;
       if (d.pick === 'preset') applyPreset(dr, d.v);
       render(); return;
