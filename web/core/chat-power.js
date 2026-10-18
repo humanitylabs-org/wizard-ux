@@ -188,7 +188,7 @@ window.WosChatPower = function chatPower(A) {
     if (!same) {
       let route;
       try { route = await M.setThreadModel(sh.sid, o); }
-      catch (e) { toast('!', 'Couldn’t change the model · try again', 2600); return; }
+      catch (e) { toast('!', 'Couldn’t change the model · try again', 2600); if (w) A.renderThreadNow(w); return; } // the switch thumb snaps back to the real model
       Object.assign(s, route);
     }
     if (sh.mode === 'retry') return retryThread(sh.wid, sh.sid, o);
