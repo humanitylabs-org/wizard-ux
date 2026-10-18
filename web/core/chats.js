@@ -1002,13 +1002,14 @@ window.WizCore.chats = function createChats(H) {
     if (fab) { const lr = fab.offsetParent?.getBoundingClientRect(); const o2 = orb.getBoundingClientRect(); if (lr) { fab.style.right = `${Math.round(lr.right - o2.left + 10)}px`; fab.style.bottom = `${Math.round(lr.bottom - (br.top + br.height / 2) - fab.offsetHeight / 2)}px`; } }
   }, 400);
   function bindGestures(root) {
-    // Opinionated (phone): swipe right from the left edge of a thread to go back to the list.
+    // Opinionated (phone): a rightward swipe inside a thread goes back to the list. Touches that start in the
+    // outer 24px are left to the OS/browser edge gesture.
     if (document.documentElement.dataset.shell !== 'desktop') {
       let sw = null;
       // Anywhere in the thread (not only the edge): a mostly-horizontal left-to-right swipe = Back. Code blocks and
       // tables that scroll sideways, the composer and selected text keep their own gestures.
       root.addEventListener('touchstart', e => { const th = e.target.closest?.('.ch-thread'); const t0 = e.touches[0];
-        if (!th || e.touches.length !== 1 || e.target.closest('pre, table, .ch-compose, .ms-track, input, textarea') || String(getSelection?.() || '')) { sw = null; return; }
+        if (!th || e.touches.length !== 1 || t0.clientX < 24 || e.target.closest('pre, table, .ch-compose, .ms-track, input, textarea') || String(getSelection?.() || '')) { sw = null; return; }
         sw = { x: t0.clientX, y: t0.clientY, t: performance.now(), th }; }, { passive: true });
       root.addEventListener('touchmove', e => { if (!sw) return; const t = e.touches[0], dx = t.clientX - sw.x, dy = Math.abs(t.clientY - sw.y);
         if (dy > 36 && dy > dx) { sw = null; return; } if (dx > 14 && dx > dy * 1.6) { sw.on = true; sw.th.style.transform = `translateX(${Math.min(dx, 140) * .5}px)`; sw.th.style.opacity = String(1 - Math.min(dx, 160) / 500); } }, { passive: true });
