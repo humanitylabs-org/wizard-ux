@@ -358,22 +358,29 @@
   /* iPhone: a quick swipe home along the bottom edge also reaches the dock and flips a desk just as the app
    * goes away, so it reopens one desk over. A desk change in the last moment before the page is hidden was
    * that swipe, not a choice: put the desk back. */
-  let lastMove = null;
-  const undoLastMove = () => {
-    if (!lastMove || Date.now() - lastMove.at > 1500) return;
-    const back = desks.findIndex(d => d.id === lastMove.from); lastMove = null;
+  /* Path-independent guard: any desk change made by a touch (dock, orb, scrubber, swipe strip, dot tap) that
+   * hasn't settled for 1.2 s when the page hides is undone, a touch move while hidden is ignored, and stray
+   * touches replayed in the first moment after coming back can't move desks either. */
+  let settledId = desks[idx]?.id || '', settleT = 0, touchAt = 0, shownAt = Date.now();
+  document.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') touchAt = Date.now(); }, true);
+  const settle = () => { clearTimeout(settleT); settleT = setTimeout(() => { if (!document.hidden) settledId = desks[idx]?.id || ''; }, 1200); };
+  const touchMove = () => Date.now() - touchAt < 2500;
+  const undoUnsettled = () => {
+    clearTimeout(settleT);
+    const back = desks.findIndex(d => d.id === settledId);
     if (back >= 0 && back !== idx) { idx = back; placeTrack(0, false); renderDots(); save(); }
   };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) undoLastMove(); });
-  addEventListener('pagehide', undoLastMove);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) undoUnsettled(); else { shownAt = Date.now(); undoUnsettled(); } });
+  addEventListener('pagehide', undoUnsettled);
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
+    if (touchMove() && (document.hidden || Date.now() - shownAt < 700)) { placeTrack(0, false); return; } // the iPhone's swipe out, not a choice
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
     const from = desks[idx], to = desks[n];
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to; idx = n;
-    if (moved) lastMove = { from: from && from.id, at: Date.now() };
+    if (moved) { if (touchMove()) settle(); else { clearTimeout(settleT); settledId = desks[idx]?.id || ''; } }
     if (moved) window.WosResources?.back();
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
