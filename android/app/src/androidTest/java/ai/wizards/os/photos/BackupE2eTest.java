@@ -161,7 +161,12 @@ public class BackupE2eTest {
                 Thread.sleep(15000);
                 record("wifi_toggle","pass: setting persisted; cellular upload not testable (emulator cellular unvalidated)");
             }
-            shell("svc wifi enable");
+            shell("svc data disable"); shell("svc wifi enable");
+            // Android only runs network jobs on a validated default network; wait for Wi-Fi to be that network first.
+            waitFor("validated Wi-Fi default network",120,()->{
+                android.net.NetworkCapabilities w=cm.getNetworkCapabilities(cm.getActiveNetwork());
+                return w!=null && w.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) && w.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+            });
             waitFor("backup resumes when Wi-Fi returns",180,()->count(scope,false)==53);
             record("wifi_resume","pass: waiting photo uploaded automatically once Wi-Fi returned");
             device.findObject(By.text("Albums · Camera & Screenshots by default")).click();
