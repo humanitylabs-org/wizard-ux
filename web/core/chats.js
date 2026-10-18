@@ -1442,14 +1442,17 @@ window.WizCore.chats = function createChats(H) {
     mirror.textContent = text; const end = document.createElement('span'); end.textContent = '\u200b'; mirror.appendChild(end);
     const lastEnd = end.offsetLeft; // x where the last line ends
     const room = inner - lw + 12; // last-line text may come within ~8px of the label's visible name (the label has 10px inner padding)
-    const lh = parseFloat(cs.lineHeight) || 20;
-    ta.style.paddingBottom = lastEnd > room ? `${10 + lh}px` : '';
+    // The name gets its own strip below the text (outside the scrolling area) when the last line would reach it, or
+    // once the box is at full height and scrolls: a scrolled textarea can't be trusted to keep bottom padding clear.
+    const scrolls = ta.scrollHeight > ta.clientHeight + 2;
+    ta.style.paddingBottom = '';
+    ta.parentElement.classList.toggle('lab-row', lastEnd > room || scrolls);
   }
   function growTa(ta) {
     if (!ta) return;
-    fitLabel(ta);
     ta.style.height = 'auto';
     if (ta.getClientRects().length && ta.clientWidth) ta.style.height = Math.min(Math.max(42, ta.scrollHeight + 2), 140) + 'px';
+    fitLabel(ta);
   }
   // While a thread is on screen AND James is at that screen, new replies count as read (same rule as Wizard).
   // "At the screen" = the page was opened, brought to the front, touched, clicked, typed in or scrolled within
