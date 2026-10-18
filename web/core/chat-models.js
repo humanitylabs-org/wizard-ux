@@ -294,16 +294,18 @@
       const famOf = o => family(o.value, o.provider), up = PRIMARY.map(p => p.family);
       const vis = own ? [] : M.visible(cur?.model || '', cur?.provider || '');
       const primary = own || up.map(f => vis.find(o => famOf(o) === f)).filter(Boolean).concat(vis.filter(o => isCur(o) && !up.includes(famOf(o))));
-      const rest = own ? [] : (all ? M.options : []).filter(o => !primary.includes(o));
+      const rest = own || !all ? [] : vis.filter(o => !primary.includes(o)); // the other families' newest models (Fable, Sonnet, Haiku, Terra, Luna)
       const privList = !own && Array.isArray(priv) ? priv : [];
       const curPriv = privList.some(isCur);
+      // Primary rows read Opus · Astra · Sol; everything else keeps its catalogue name (GLM 5.3, Fable 5.1…).
+      const label = (o, p) => own || p ? o.name : PRIMARY.find(x => x.family === famOf(o))?.name || o.name || M.short(o.value, o.provider);
       const list = [], row = (o, cls = '') => { const i = list.push(o) - 1; const p = cls.includes('priv');
-        return `<button type="button" class="mrow${cls}${isCur(o) ? ' on' : ''}" data-mpick="${i}"${p ? ` data-mprivate="${esc(o.agent)}"` : ''} aria-pressed="${isCur(o)}"><span class="mn"><b>${p ? lock : ''}${esc(own ? o.name : M.short(o.value, o.provider) || o.name)}</b></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; };
+        return `<button type="button" class="mrow${cls}${isCur(o) ? ' on' : ''}" data-mpick="${i}"${p ? ` data-mprivate="${esc(o.agent)}"` : ''} aria-pressed="${isCur(o)}"><span class="mn"><b>${p ? lock : ''}${esc(label(o, p))}</b></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; };
       const sec = (label, rows, cls = '') => rows ? `<div class="mpop-sec${cls}" role="group" aria-label="${esc(label)}"><div class="msheet-gh">${cls.includes('priv') ? lock : ''}<span>${esc(label)}</span></div>${rows}</div>` : '';
       const mainRows = primary.map(o => row(o)).join('');
       const privRows = privList.map(o => row(o, ' priv')).join('');
       const moreRows = rest.map(o => row(o)).join('');
-      const moreBtn = !own && M.ready && !all && M.options.length > primary.length ? `<button type="button" class="mrow more" data-mall>More models</button>` : '';
+      const moreBtn = !own && M.ready && !all && vis.some(o => !primary.includes(o)) ? `<button type="button" class="mrow more" data-mall>More models</button>` : '';
       // The section you're in sits at the bottom, by your thumb; the other section is right above it.
       const mainSec = sec(own ? agent.label : 'Models', mainRows), privSec = sec('Private agent', privRows, ' priv');
       const body = !M.ready && !primary.length && !own ? `<p class="ch-sheet-n">${M.error ? esc(M.error) : 'Loading models…'}</p>`
