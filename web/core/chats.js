@@ -1009,6 +1009,7 @@ window.WizCore.chats = function createChats(H) {
       // Anywhere in the thread (not only the edge): a mostly-horizontal left-to-right swipe = Back. Code blocks and
       // tables that scroll sideways, the composer and selected text keep their own gestures.
       root.addEventListener('touchstart', e => { const th = e.target.closest?.('.ch-thread'); const t0 = e.touches[0];
+        if (window.WosSwipeStrip) { sw = null; return; } // core/swipe-strip.js owns horizontal swipes (list ⇄ thread ⇄ next desk)
         if (!th || e.touches.length !== 1 || t0.clientX < 24 || e.target.closest('pre, table, .ch-compose, .ms-track, input, textarea') || String(getSelection?.() || '')) { sw = null; return; }
         sw = { x: t0.clientX, y: t0.clientY, t: performance.now(), th }; }, { passive: true });
       root.addEventListener('touchmove', e => { if (!sw) return; const t = e.touches[0], dx = t.clientX - sw.x, dy = Math.abs(t.clientY - sw.y);
