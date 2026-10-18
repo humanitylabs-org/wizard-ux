@@ -550,10 +550,10 @@ public class MeetingRecorderService extends Service {
                 try {
                     AudioRecord r = new AudioRecord(src, Wav.RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size);
                     if (r.getState() != AudioRecord.STATE_INITIALIZED) { r.release(); continue; }
-                    r.startRecording();
-                    if (r.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) { r.release(); continue; }
+                    // The phone's mic, never a Bluetooth speaker's: a source Android routes elsewhere is dropped.
+                    if (!ai.wizards.os.audio.MicRoute.startOnBuiltIn(MeetingRecorderService.this, r)) continue;
                     rec = r;
-                    Log.i(TAG, "AudioRecord open source=" + src + " buffer=" + size);
+                    Log.i(TAG, "AudioRecord open source=" + src + " buffer=" + size + " via " + ai.wizards.os.audio.MicRoute.routed(r));
                     return true;
                 } catch (SecurityException | IllegalStateException | IllegalArgumentException e) {
                     Log.w(TAG, "AudioRecord source " + src + " failed", e);

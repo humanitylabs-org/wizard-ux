@@ -35,6 +35,9 @@
     }
     // The music search spell ("music search Home Tides") wins everywhere, even over the Chats list's "search …".
     { const ms = window.WosMusic?.available() && window.WosMusic.parse(t, false, false); if (ms && ms.op === 'search') return { action: 'music', cmd: ms }; }
+    // The strong quick-search spells ("ask AI …", "image search …", "find images of …") win everywhere too: on the
+    // Chats list a held "find images of cats" used to filter the list instead of opening Search.
+    { const q0 = quickSearch(t); if (q0?.strong) return { action: 'quick_search', query: q0.query, tab: q0.tab }; }
     { const cv = chatsVoice(t, snap || sendSnap(), kind); if (cv) return cv; }
     // Food spells (James, 12 Oct): "order food" / "order grab" / "order lunch" open Grab for a new order; "order kra pao"
     // or "order my usual kra pao" runs a saved one; "food" on its own opens the Food app. All on the phone, nothing to Wizard.

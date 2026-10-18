@@ -16,8 +16,8 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         minSdk 28
         targetSdk 35
-        versionCode 50
-        versionName '0.9.26-photos'
+        versionCode 56
+        versionName '0.9.32'
         // Owner-specific default is injected at build time, not committed in shared source.
         buildConfigField 'String', 'PHOTOS_SERVER', '"' + (project.findProperty('photosServer') ?: '') + '"'
         buildConfigField 'String', 'HOME_URL', '"https://wizard.tailc0f369.ts.net/wizard-os-home/"'

@@ -11,13 +11,13 @@ import ai.wizards.os.BuildConfig;
 
 /** Small process-wide facts the native features share (kept out of MainActivity so branches merge cleanly). */
 public final class AppState {
-    private static volatile boolean front;
+    private static final java.util.Set<Object> visible = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
 
     private AppState() {}
 
     /** Wizard OS is on screen (MainActivity started). Reply notifications only fire while it is not. */
-    public static boolean front() { return front; }
-    public static void setFront(boolean on) { front = on; }
+    public static synchronized boolean front() { return !visible.isEmpty(); }
+    public static synchronized void setFront(Object owner, boolean on) { if (on) visible.add(owner); else visible.remove(owner); }
 
     /**
      * Where native HTTP goes. Release: the private Wizard origin. Debug (QA) builds only: files/qa_home.txt may

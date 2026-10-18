@@ -397,6 +397,7 @@
   // small count. The current desk is the orb. Each is a thumb-sized button, so one tap jumps there.
   const deskSigil = i => window.WizCore.workspaceNav.icon(desks[i], W, winApp);
   function renderDots() {
+    if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
     const L = []; for (let i = Math.max(0, idx - 3); i < idx; i++) L.push(i);
     const R = []; for (let i = idx + 1; i <= Math.min(desks.length - 1, idx + 3); i++) R.push(i);
@@ -1848,10 +1849,15 @@
     const m = [...L.needs.map(() => 'var(--amber)'), ...L.working.map(() => 'var(--violet-2)'), ...L.ready.map(() => 'var(--green)')].slice(0, 8);
     $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
-    const badge = LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0; // Opinionated: Ready count, not unread
-    $('#orbBadge').textContent = badge > 99 ? '99+' : String(badge || '');
-    $('#orbBadge').hidden = !badge;
+    // Opinionated: Ready count, not unread. It belongs to Chats; the orb shows the count of the desk in view.
+    window.WizCore.workspaceNav.setCount(CHATS_APP.id, LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0);
+    paintOrbBadge();
   }
+  function paintOrbBadge() {
+    const N = window.WizCore.workspaceNav, n = desks[idx] ? N.deskCount(desks[idx], W, winApp) : 0;
+    $('#orbBadge').textContent = n ? N.fmt(n) : ''; $('#orbBadge').hidden = !n;
+  }
+  addEventListener('wizard:app-counts', () => { renderDots(); paintOrbBadge(); });
   // One place reacts to live changes: reads anywhere, new replies, finished runs.
   if (LIVE) LIVE.onChange(() => {
     renderMoons(); refreshHome(); markVisibleThreadsSeen(); refreshRecStrips();
@@ -2330,6 +2336,7 @@
     } catch (err) {
       if (captureEpoch !== V.captureEpoch || V.cancelled || V.state === 'idle') return;
       stopStream(); V.rec = null;
+      if (err?.code === 'external_mic') { await cancelVoice(true); toast('!', 'Bluetooth has the mic · Wizard uses the phone mic · change in Settings → Microphone', 5000); return; }
       if(meetingLoan || parkedReply){await cancelVoice(true);toast('!', 'Microphone unavailable · original retained');return;}
       if (kind === 'dictation') { cancelVoice(true); toast('!', 'Microphone unavailable · nothing inserted or sent'); return; }
       V.sim = true; NOMIC = true; tourEv('nomic', { kind });
@@ -2345,9 +2352,21 @@
   $('#txChips').addEventListener('click', e => { const b = e.target.closest('[data-sim]'); if (!b) return; const k = V.kind; cancelVoice(true); runUtterance(b.dataset.sim, k); });
   // Only a tap (or Cancel) ends a take. If Android takes the mic away (a call, another app, the system), the
   // part recorded so far is kept and the take pauses: tap the orb to send it, or Pause to carry on recording.
+  async function browserMicIsExternal() {
+    const d = window.WizardOSDevice; if (!d || typeof d.micRoute !== 'function') return false;
+    for (let i = 0; i < 4; i++) {
+      await new Promise(r => setTimeout(r, 120));
+      let v = 'unknown'; try { v = String(d.micRoute()); } catch (_) { return false; }
+      if (v === 'external') return true;
+      if (v !== 'unknown') return false;
+    }
+    return false;
+  }
   async function openRec(epoch = V.captureEpoch) {
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('nomic');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    // The phone's own mic only (18 Oct 2026): a take Android puts on a Bluetooth or external mic is refused.
+    if (await browserMicIsExternal()) { stream.getTracks().forEach(t => t.stop()); const e = new Error("Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again, or choose another mic in Settings → Microphone."); e.code = 'external_mic'; throw e; }
     if (epoch !== V.captureEpoch || V.cancelled || V.state === 'idle') { stream.getTracks().forEach(t => t.stop()); return false; }
     V.stream = stream;
     const AC = window.AudioContext || window.webkitAudioContext; V.ac = new AC();
@@ -2688,7 +2707,9 @@
       if (settled && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.completeLocal(snap.custodyId);
       if (OUTBOX.get(snap.custodyId)?.state === 'processing') {
         const completed = outcome?.outcome === 'local' && await OUTBOX.completeLocal(snap.custodyId);
-        if (!completed && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'local'
+        if (!completed && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.transition(snap.custodyId, 'held', outcome?.outcome === 'held-message'
+          ? 'Held take sounded like a message · kept here to send'
+          : outcome?.outcome === 'local'
           ? 'Command completed · accompanying draft or attachments kept'
           : outcome?.outcome === 'local-pending' ? 'Command accepted · completion unconfirmed; original recording kept'
           : 'Delivery not confirmed · original recording kept; not queued for retry');
@@ -2942,15 +2963,18 @@
   function holdNoMatch(text, opts) {
     tourEv('nomatch', { text });
     setVoice('idle'); vib(12);
-    txShow(text, 'No command matched · nothing sent', 'command', '⚡');
     const q = String(text || '').trim().replace(/[.!?,\s]+$/, '');
+    // A long held take is a message, not a missed command (James, 18 Oct: a 40 s task vanished with the 4 s card).
+    // It keeps the card until he taps Send or ×, with Send first and no search chips.
+    const long = q.split(/\s+/).length > 20;
+    txShow(text, long ? 'Not a command · tap Send to keep it' : 'No command matched · nothing sent', 'command', '⚡');
     const btn = (k, label) => `<button data-hold="${k}">${esc(label)}</button>`;
-    $('#txChips').innerHTML = (searchUrl(q) ? btn('search', 'Search the web') + btn('images', 'Image search') : '')
-      + btn('agent', `Send to ${window.WizConfig.agent()}`);
-    V.holdText = q; V.holdOpts = opts;
+    $('#txChips').innerHTML = long ? btn('agent', `Send to ${window.WizConfig.agent()}`)
+      : (searchUrl(q) ? btn('search', 'Search the web') + btn('images', 'Image search') : '') + btn('agent', `Send to ${window.WizConfig.agent()}`);
+    V.holdText = q; V.holdOpts = opts; V.holdLong = long;
     window.__backLog = (window.__backLog || []).concat('hold:nomatch').slice(-30);
-    txHide(NOMATCH_MS); // James (11 Oct): 9 s lingered far too long; × closes it at once
-    return false;
+    if (long) clearTimeout(txHideT); else txHide(NOMATCH_MS); // James (11 Oct): 9 s lingered far too long; × closes it at once
+    return long ? { outcome: 'held-message' } : false;
   }
   function showRouted(kind, label) {
     if (isPill()) {
@@ -3236,7 +3260,8 @@
     if (e.type !== 'pointercancel' && s.dy < -8 && v < -.3) setZen(false);
   };
   zenEdge.addEventListener('pointerup', zenEnd); zenEdge.addEventListener('pointercancel', zenEnd);
-  setZen(store.get('zen', false), true);
+  // Every load starts with the orb and bars showing (James, 18 Oct); distraction-free is a per-session choice.
+  store.set('zen', false);
 
   /* ---------------- Back never leaves Wizard OS ----------------
    * Android Back is an in-app back gesture, one step at a time:
@@ -3451,15 +3476,21 @@
   };
   $('#txChips').addEventListener('click', e => { if (e.target.closest('[data-handoff="drop"]')) { $('#txChips').innerHTML = ''; txHide(0); } });
   // × on a choice card: clear it now, nothing sent. Touching the card keeps it up while James reads/picks.
-  const closeChoice = () => { $('#txChips').innerHTML = ''; V.holdText = ''; V.holdOpts = null; window.__backLog = (window.__backLog || []).concat('tx:close').slice(-30); txHide(0); };
+  const closeChoice = () => { $('#txChips').innerHTML = ''; V.holdText = ''; V.holdOpts = null; V.holdLong = false; window.__backLog = (window.__backLog || []).concat('tx:close').slice(-30); txHide(0); };
   $('#txClose').addEventListener('click', e => { e.stopPropagation(); closeChoice(); });
-  tx.addEventListener('pointerdown', e => { if (!e.target.closest('#txClose') && V.holdText && $('#txChips').childElementCount) txHide(NOMATCH_MS); });
+  tx.addEventListener('pointerdown', e => { if (!e.target.closest('#txClose') && V.holdText && !V.holdLong && $('#txChips').childElementCount) txHide(NOMATCH_MS); });
   $('#txChips').addEventListener('click', e => {
     const b = e.target.closest('[data-hold]'); if (!b) return;
     const k = b.dataset.hold, q = V.holdText || '', opts = V.holdOpts || {};
-    V.holdText = ''; V.holdOpts = null; $('#txChips').innerHTML = '';
+    V.holdText = ''; V.holdOpts = null; V.holdLong = false; $('#txChips').innerHTML = '';
     if (k === 'search' || k === 'images') { txHide(0); openSearch(q, k === 'images' ? 'images' : 'all'); return; }
-    if (k === 'agent' && q) { toAgent(q, `To ${window.WizConfig.agent()} · from a held command`, { ...opts, snap: opts.snap ? { ...opts.snap, custodyId: null } : opts.snap, how: 'voice (held command, sent on purpose)' }); return; }
+    if (k === 'agent' && q) {
+      // A long take parked in Unsent (held-message) is settled once this explicit Send has its own outbox item.
+      const parked = opts.snap?.custodyId;
+      Promise.resolve(toAgent(q, `To ${window.WizConfig.agent()} · from a held command`, { ...opts, snap: opts.snap ? { ...opts.snap, custodyId: null } : opts.snap, how: 'voice (held command, sent on purpose)' }))
+        .then(item => { if (item && parked && OUTBOX.get(parked)?.state === 'held') return OUTBOX.completeLocal(parked); }).catch(() => {});
+      return;
+    }
     txHide(0);
   });
   // Native bridge v0 (core/bridge.js): the same events drive the phone and the desktop shell.

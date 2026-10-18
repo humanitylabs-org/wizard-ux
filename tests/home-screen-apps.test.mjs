@@ -160,3 +160,17 @@ test('mounted session Back consumes app overlay, safe in-app history and forever
   w.navigation.currentEntry.index=0;assert.equal(window.__wosNativeBack(),'root');assert.equal(window.__wosNativeBack(),'root');assert.equal(traversals,1);
   assert.equal(store.getItem('wos.wins4'),null);assert.ok(store.getItem(p.key('https://box.example','wisdom')));assert.ok(flushes>0);
 });
+
+test('pinned app keeps Android status bar and navigation buttons; content starts below the status bar',async()=>{
+  const {p}=policy('?app-session=wisdom'); const calls=[]; const winStyle={};
+  const element=()=>({classList:{add(){},remove(){}},dataset:{},style:{setProperty(k,v){winStyle[k]=v}},appendChild(){},replaceChildren(){},append(){},setAttribute(){},addEventListener(){}});
+  const host=element(); const document={getElementById:()=>host,createElement:()=>element(),addEventListener(){},title:''};
+  const window={WizHomeScreenPolicy:p,WizCore:{apps:()=>({APP:{}}),appsLoaded:()=>Promise.resolve()},WosSelMenu:{back:()=>false},WizAppServices:{guardBack(){}},
+    WizardOSNative:{immersive(on){calls.push(on)},cutoutTop:()=>24,insetTop:()=>36}};
+  const ctx=vm.createContext({window,document,location:{origin:'https://box.example'},URL,localStorage:storage(),addEventListener(){},setInterval(){},setTimeout(){}});
+  vm.runInContext(read('core/single-app-session.js'),ctx);
+  assert.deepEqual(calls,[false],'never asks Android to hide its bars');
+  assert.equal(typeof window.__wosTop,'function'); window.__wosTop(40);
+  const java=fs.readFileSync(root+'android/app/src/main/java/ai/wizards/os/AppSessionActivity.java','utf8');
+  assert.doesNotMatch(java,/applyImmersive\(true\)/); assert.match(java,/super\.applyImmersive\(false\)/);
+});

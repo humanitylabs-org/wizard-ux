@@ -100,6 +100,12 @@ const maxStep = async p => { await p.waitForTimeout(2200); return p.evaluate(() 
   ok(st.last < st.first && st.mid >= 1, 'content glides up (animated through in-between positions, no snap)', JSON.stringify(st));
   const hv = await p.evaluate(() => { const e = document.querySelector('#zenEdge'), r = e.getBoundingClientRect(), h = document.elementFromPoint(innerWidth / 2, r.top + r.height / 2); return { h: r.height, hit: h === e || e.contains(h) }; });
   ok(hv.h >= 24 && hv.hit, 'bottom-edge handle is a real >=24px target', JSON.stringify(hv));
+  // Native shell draws under the status bar and reports its height (--nat-t); distraction-free keeps the bar,
+  // so the app must start below it (James, 18 Oct: thread title overlapped the clock).
+  await p.evaluate(() => window.__wosTop(44));
+  const sb = await state(p);
+  ok(sb.win.y >= 44, 'distraction-free app starts below the native status bar', JSON.stringify(sb.win));
+  await p.evaluate(() => window.__wosTop(0));
   await shot(p, 'zen-1-hidden');
   // 2. Swipe up from the bottom edge brings everything back.
   await sampleRows(p);
@@ -127,12 +133,11 @@ const maxStep = async p => { await p.waitForTimeout(2200); return p.evaluate(() 
   s = await state(p);
   ok(s.sheet === 'launcher', 'swipe up on the orb still opens Apps', String(s.sheet));
   await p.evaluate(() => __wos.closeSheets()); await p.waitForTimeout(500);
-  // 6. Distraction-free survives a reload.
+  // 6. A reload always starts with the orb showing (James, 18 Oct: it was starting hidden).
   await swipe(p, ox, oy, oy + 24, 2); await p.waitForTimeout(400);
   await p.reload({ waitUntil: 'load' });
   await p.waitForFunction(() => window.__wos && window.__wos.live && window.__wos.live.ok, null, { timeout: 30000 }); await p.waitForTimeout(800);
-  ok(await zenOn(p), 'distraction-free survives a reload');
-  await p.evaluate(() => __wos.onBack()); await p.waitForTimeout(400);
+  ok(!(await zenOn(p)) && (await state(p)).orbVis, 'orb shows again after a reload');
   // 7. Home desk too.
   await p.evaluate(() => __wos.goDesk(0, true)); await p.waitForTimeout(700);
   s = await state(p);

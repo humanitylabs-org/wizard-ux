@@ -89,6 +89,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Each canonical box/app URI is one independent reusable document task. -->
+        <activity
+            android:name=".AppSessionActivity"
+            android:exported="true"
+            android:documentLaunchMode="intoExisting"
+            android:launchMode="standard"
+            android:taskAffinity="${applicationId}.homeapp"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density"
+            android:windowSoftInputMode="adjustResize"
+            android:screenOrientation="portrait" />
+        <receiver android:name=".HomeScreenShortcuts$PinConfirmed" android:exported="false" />
         <activity android:name=".photos.PhotosActivity" android:exported="true" android:launchMode="singleTop" android:parentActivityName=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

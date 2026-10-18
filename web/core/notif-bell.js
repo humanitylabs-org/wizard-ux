@@ -12,6 +12,7 @@
     return `<button type="button" class="ch-bell${S.needs ? ' needs' : ''}" data-chbell aria-label="${lbl}">${BELL}${n ? `<b>${n > 99 ? '99+' : n}</b>` : ''}</button>`;
   }
   function paint() {
+    window.WizCore?.workspaceNav?.setCount('notifications', S.unread);
     for (const b of document.querySelectorAll('[data-chbell]')) {
       const h = html(); if (!h) { b.remove(); continue; }
       const t = document.createElement('div'); t.innerHTML = h; const nb = t.firstElementChild;

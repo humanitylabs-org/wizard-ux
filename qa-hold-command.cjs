@@ -173,6 +173,60 @@ const outboxN = p => p.evaluate(() => (window.__wos.outbox?.unsent?.() || []).le
   ok(s.open && /q=brutalist\+architecture/.test(s.url) && agentWrites(writes).length === 0, 'router "search" on a hold opens Wizard Search', JSON.stringify({ s, writes }));
   await closeSheet(p);
 
+  // 9. "Ask AI …" (James, 18 Oct 2026) is the quick-question spell for Wizard Search: held or tapped, anywhere.
+  for (const [t, q, where] of [['Ask AI is milk bad for gout?', 'is\\+milk\\+bad\\+for\\+gout', 'home'], ['Ask AI, what is the capital of Peru?', 'what\\+is\\+the\\+capital\\+of\\+Peru', 'home']]) {
+    writes.length = 0; routes.length = 0;
+    await hold(p, t); await sleep(900);
+    s = await sheetState(p);
+    ok(s.open && new RegExp(`/wizard-search/\\?q=${q}(&|$)`).test(s.url) && routes.length === 0 && agentWrites(writes).length === 0, `held "${t}" on ${where} → Search on-device`, JSON.stringify({ s, routes, writes }));
+    await closeSheet(p);
+  }
+  await p.evaluate(() => window.__wos.openWizardThread('qa-0')); await sleep(1200);
+  writes.length = 0; routes.length = 0;
+  await p.evaluate(() => window.__wos.handleText('Ask AI how long do capybaras live', 'auto', false, 300, null)); await sleep(900);
+  s = await sheetState(p);
+  ok(s.open && /q=how\+long\+do\+capybaras\+live/.test(s.url) && agentWrites(writes).length === 0, 'tapped "Ask AI …" over an open thread → Search, nothing into the thread', JSON.stringify({ s, writes }));
+  await closeSheet(p);
+  // STT writes the spell with a colon ("Search: is milk bad for gout?"); that used to miss and go to the router.
+  writes.length = 0; routes.length = 0;
+  await hold(p, 'Search: is milk bad for gout?'); await sleep(900);
+  s = await sheetState(p);
+  ok(s.open && /q=is\+milk\+bad\+for\+gout(&|$)/.test(s.url) && routes.length === 0, 'held "Search: …" (STT colon) → Search on-device', JSON.stringify({ s, routes }));
+  await closeSheet(p);
+  // On the Chats list "find images of …" opens image search (it used to filter the chat list).
+  await p.evaluate(() => window.__wos.onBack()); await sleep(800);
+  const onList = await p.evaluate(() => { const d = window.__wos.desks[window.__wos.idx], w = window.__wos.wins[d.focus]; return w && w.app === 'chats' && !w.thread; });
+  for (const [t, q] of [['find images of capybaras', 'capybaras'], ['Find images red pandas', 'red\\+pandas'], ['image search eames chair', 'eames\\+chair']]) {
+    writes.length = 0;
+    await hold(p, t); await sleep(900);
+    s = await sheetState(p);
+    ok(onList && s.open && new RegExp(`q=${q}&tab=images`).test(s.url), `held "${t}" on the Chats list → image search`, JSON.stringify({ onList, s }));
+    await closeSheet(p);
+  }
+  // A plain "search …" on the Chats list still searches the chats (unchanged).
+  await hold(p, 'search gout'); await sleep(700);
+  s = await sheetState(p);
+  ok(!s.open, 'plain "search gout" on the Chats list stays a chat search', JSON.stringify(s));
+  await p.evaluate(() => window.__wos.goDesk(window.__wos.HOME, true)); await sleep(500);
+
+  // 10. A long held take is a message, not a missed command: the card stays with Send until tapped, nothing auto-sent.
+  writes.length = 0; R.cmd = { route: 'agent', summary: 'x' };
+  const longText = "Need a quick command added. When I say search, it doesn't know I'm looking for the search app a lot of the time. So I think a better spell might be ask AI.";
+  const res = await p.evaluate(t => window.__wos.handleText(t, 'command', false, 300, null), longText); await sleep(900);
+  c = await card(p);
+  ok(res && res.outcome === 'held-message', 'long held take returns held-message (custody keeps it in Unsent)', JSON.stringify(res));
+  ok(c.chips.join() === 'agent' && /tap Send/i.test(c.label), 'long held take: Send is the only choice, card says tap Send', JSON.stringify(c));
+  await sleep(5500); x = await xs();
+  ok(x.up && (await card(p)).chips.length === 1, 'long held take card is still up after 6 s', JSON.stringify(x));
+  await p.locator('#txText').tap().catch(() => {}); await sleep(4500); x = await xs();
+  ok(x.up, 'touching the long card does not start the 4 s fade', JSON.stringify(x));
+  ok(agentWrites(writes).length === 0, 'long held take: nothing sent before Send', JSON.stringify(writes));
+  const obL = await outboxN(p);
+  await p.locator('#txChips [data-hold="agent"]').tap(); await sleep(2500);
+  ok(agentWrites(writes).length > 0 || (await outboxN(p)) > obL, 'tapping Send delivers the long take', JSON.stringify(writes));
+  await p.evaluate(() => { const o = window.__wos.outbox; for (const it of o.unsent()) o.remove(it.id); });
+  await sleep(2700);
+
   // 8. A tap (not a hold) still reaches the agent as before.
   writes.length = 0; R.cmd = { route: 'agent', summary: 'x' };
   const obA = await outboxN(p);

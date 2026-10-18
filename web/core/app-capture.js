@@ -366,6 +366,8 @@
     if (nativeActive?.id || nativeOwner || unknownMeetingActive) throw fail('busy', 'An existing native recorder is held.', { appId: nativeOwner?.appId || 'native-recording' });
     if (!navigator.mediaDevices?.getUserMedia) throw fail('unsupported', 'Microphone capture is unavailable.');
     s.stream = await navigator.mediaDevices.getUserMedia({ audio: s.opts.audio ?? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    // On the Android app the browser recorder skips the native phone-mic guard; ask Android where it really listens.
+    if (await externalMic()) { s.stream.getTracks().forEach(t => t.stop()); s.stream = null; throw fail('external_mic', EXTERNAL_MIC); }
     s.stream.getAudioTracks().forEach(t => t.addEventListener('ended', () => { if (s.phase === 'starting') s.interrupted = true; else if (!s.inputStopped && !s.discard && active === s) void finish(s, true).catch(() => {}); }));
     const ctx = s.ctx, source = ctx?.createMediaStreamSource(s.stream), analyser = ctx?.createAnalyser();
     s.nodes = []; if (analyser) { analyser.fftSize = 512; source.connect(analyser); s.nodes.push(source, analyser); }
@@ -666,6 +668,18 @@
     const listen = set => cb => { set.add(cb); return () => set.delete(cb); };
     rawMeetingBridge = { start: ({ meetingId }) => send('start', { meetingId }), stop: () => send('stop'), status: () => send('status'), pause: () => send('pause'), resume: () => send('resume'), pcm: (meetingId, enabled) => send('pcm', { meetingId, enabled }), onLevel: listen(levels), onState: listen(states), onPcm: listen(pcms) };
     return rawMeetingBridge;
+  }
+  // James's contract (18 Oct 2026): Wizard records only from the phone's own mic, never a Bluetooth speaker's.
+  const EXTERNAL_MIC = "Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again, or choose another mic in Settings → Microphone.";
+  async function externalMic() {
+    const d = W.WizardOSDevice; if (!d || typeof d.micRoute !== 'function') return false;
+    for (let i = 0; i < 4; i++) {
+      await new Promise(r => setTimeout(r, 120));
+      let v = 'unknown'; try { v = String(d.micRoute()); } catch (_) { return false; }
+      if (v === 'external') return true;
+      if (v !== 'unknown') return false;
+    }
+    return false;
   }
   function adapter(opts, row) {
     if (configuredNative) return configuredNative;

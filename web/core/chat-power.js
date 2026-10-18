@@ -135,6 +135,12 @@ window.WosChatPower = function chatPower(A) {
     const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
     return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv ? AG.lock() : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
+  /* The model label inside the message box, bottom-right (James 18 Oct: just the name, small, white; no bubble).
+   * Tapping it opens the compact model menu over the right side, just above it. */
+  function modelLabel(w, s) {
+    const chip = modelChip(w, s); if (!chip) return '';
+    return chip.replace('class="ch-model', 'class="ch-mlabel ch-model').replace(/<i aria-hidden="true">▾<\/i>/, '');
+  }
   let modelsAsked = false;
   function ensureModels() {
     if (!M || modelsAsked) return;
@@ -170,23 +176,43 @@ window.WosChatPower = function chatPower(A) {
     const req = requestOf(w, s);
     return M.failureHtml({ s: { ...s, ...threadModel(s) }, busy, canRetry: !!req });
   }
-  function requestOf(w, s) {
-    if (s?.request) return s.request;
+  // Retry and Choose another model stay live on every failed thread. A failed turn the owner didn't type (a
+  // coordinator's follow-through note, a photo-only message, a run a watcher started) is retried with a plain
+  // "Retry" from the owner, since the thread's history already holds the request. Before, such a thread had no
+  // request text, so both buttons stayed grey, also after changing the model, and James typed "Retry" by hand (18 Oct 2026).
+  const RETRY_WORD = 'Retry';
+  // The open thread's latest turn has no typed words (a note or a later run started it). Only the turn's kind is
+  // read here; the words sent are always the freshly hydrated request, never cached turn text.
+  function noteTurn(w, s) {
     const c = w && ch(w.id), turns = c && c.loadedFor === s?.id ? c.turns || [] : [];
-    for (let i = turns.length - 1; i >= 0; i--) if (turns[i].u?.text) return turns[i].u.text;
-    return '';
+    for (let i = turns.length - 1; i >= 0; i--) {
+      const tn = turns[i];
+      if (tn.u?.text) return false;
+      if (tn.u || tn.note || tn.later) return true;
+    }
+    return false;
+  }
+  function requestOf(w, s) {
+    if (s && FAILED.has(s.status)) return true;
+    return !!(s?.request || (w && !noteTurn(w, s) && (ch(w.id)?.turns || []).some(tn => tn.u?.text)));
   }
   // Retry = send the thread's last request again, through the durable outbox, on the same thread
   // (and the same model, unless one was just picked). controller.ts retryServerFailedSession.
   async function retryThread(wid, sid, o) {
-    const s = LIVE.session(sid); if (!s || !OUTBOX) return false;
-    const w = H.win(wid), text = requestOf(w && w.thread === sid ? w : null, s);
+    let s = LIVE.session(sid); if (!s || !OUTBOX) return false;
+    // A list/snapshot preview is never retry input, even after an earlier detail read.
+    try { s = await LIVE.sessionInfo(sid); } catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return false; }
+    const w = H.win(wid);
+    // Only the freshly hydrated input, never cached turns. A failed note-started turn (the server's request skips
+    // follow-through notes, so it is empty or an older request) goes again as a plain "Retry".
+    const note = noteTurn(w && w.thread === sid ? w : null, s);
+    const text = note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
     if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
     const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
     const c = w ? ch(wid) : null; if (c) c.retrying = sid;
     try {
       await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, text, wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
-        instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. This is the same request again.`,
+        instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
       toast('↻', o ? `Retrying on ${o.name}` : 'Retrying', 1600);
@@ -289,19 +315,29 @@ window.WosChatPower = function chatPower(A) {
     el.querySelectorAll('.ch-psheet').forEach(n => n.remove());
     let html = '';
     if (sheet.type === 'model') {
-      const r = M.sheetHtml({ mode: sheet.mode, cur: sheet.cur, all: sheet.all, title: '', agent: sheet.agent || null, priv: sheet.priv || null });
+      const opt = { mode: sheet.mode, cur: sheet.cur, all: sheet.all, title: '', agent: sheet.agent || null, priv: sheet.priv || null };
+      const r = sheet.pop && M.popHtml ? M.popHtml(opt) : M.sheetHtml(opt);
       sheet.list = r.list; html = r.html;
     } else if (sheet.type === 'files') {
       const tw = H.win(sheet.wid), c = ch(sheet.wid);
       html = F.panelHtml({ q: sheet.q, kind: sheet.kind, attach: !!tw?.thread, picked: (c.files || []).map(f => f.id).filter(Boolean), when: ms => `${A.KIT.time.day(ms)} ${A.KIT.time.clock(ms)}` });
     }
     el.insertAdjacentHTML('beforeend', html.replace('class="ch-sheet ', 'class="ch-sheet ch-psheet '));
+    if (sheet.pop) placePop(el);
+  }
+  // The compact menu sits on the right, its bottom edge just above the model label (whatever the composer's height).
+  function placePop(el) {
+    const pop = el.querySelector('.ch-psheet.ch-mpop'), lab = el.querySelector('.ch-mlabel'); if (!pop || !lab) return;
+    const pr = pop.getBoundingClientRect(), lr = lab.getBoundingClientRect(); if (!pr.height) return;
+    pop.style.setProperty('--mpop-b', `${Math.max(8, Math.round(pr.bottom - lr.top + 6))}px`);
+    pop.style.setProperty('--mpop-r', `${Math.max(8, Math.round(pr.right - lr.right - 6))}px`);
+    const list = pop.querySelector('.msheet-list'); if (list) list.scrollTop = list.scrollHeight; // the thumb end (current models) in view
   }
   function openSheet(o) {
     A.closeRowSheet(); closeSheet();
     sheet = o; const el = A.elOf(o.pane); paint(o.pane, el); H.overlay?.(true); A.vib(8);
   }
-  function openModels(pane, mode) {
+  function openModels(pane, mode, pop) {
     if (!M) return;
     const wid = A.owner(pane), w = H.win(wid); if (!w || !w.thread) return;
     const s = w.thread === '__new__' ? null : LIVE.session(w.thread);
@@ -309,7 +345,7 @@ window.WosChatPower = function chatPower(A) {
     const agent = agentOfWin(w, s);
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !w.agent && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
-    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv });
+    openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, all: false, agent, priv, pop: !!pop && mode !== 'retry' });
     if (!M.ready) M.load().then(() => { if (sheet?.type === 'model') paint(sheet.pane, A.elOf(sheet.pane)); });
   }
   function openFiles(pane) {
@@ -336,7 +372,7 @@ window.WosChatPower = function chatPower(A) {
     if (sheet && sheet.pane === id) {
       if (t.closest('[data-ficlose]') || (t.closest('.ch-psheet') && !t.closest('.ch-sheet-b'))) { closeSheet(); return true; }
       if (sheet.type === 'model') {
-        if (t.closest('[data-mall]')) { sheet.all = true; paint(id, A.elOf(id)); return true; }
+        if (t.closest('[data-mall]')) { sheet.all = true; paint(id, A.elOf(id)); if (sheet.pop) { const l = A.elOf(id)?.querySelector('.ch-mpop .msheet-list'); if (l) l.scrollTop = 0; } return true; }
         const p = t.closest('[data-mpick]'); if (p) { const o = sheet.list?.[+p.dataset.mpick]; if (o) pickModel(o); return true; }
       }
       if (sheet.type === 'files') {
@@ -348,7 +384,7 @@ window.WosChatPower = function chatPower(A) {
     }
     const w = H.win(id);
     if (t.closest('[data-chfiles]')) { openFiles(id); return true; }
-    if (t.closest('[data-chmodel]')) { const ww = H.win(A.owner(id)); openModels(id, ww?.thread === '__new__' ? 'new' : 'thread'); return true; }
+    if (t.closest('[data-chmodel]')) { const ww = H.win(A.owner(id)); openModels(id, ww?.thread === '__new__' ? 'new' : 'thread', !!t.closest('.ch-mlabel')); return true; }
     if (t.closest('[data-chlatest]')) { const nb = A.elOf(id)?.querySelector('.ch-msgs'); if (nb) { ch(id).follow = true; nb.scrollTo({ top: nb.scrollHeight, behavior: 'smooth' }); } return true; }
     if (t.closest('[data-chmic]')) {
       if (!w?.thread || !H.recordReply) return true;
@@ -389,6 +425,6 @@ window.WosChatPower = function chatPower(A) {
   }
   const opened = (wid, sid) => { const c = ch(wid); c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
-  return { position, latestBtn, filesBtn, workHtml, modelChip, ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  return { position, latestBtn, filesBtn, workHtml, modelChip, modelLabel, ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };
