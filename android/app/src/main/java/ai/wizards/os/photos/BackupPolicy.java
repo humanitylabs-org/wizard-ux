@@ -31,7 +31,7 @@ public final class BackupPolicy {
         try { return Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8))); }
         catch (Exception e) { throw new IllegalStateException(e); }
     }
-    public static String filename(String name) { return name.replaceAll("[\r\n\"\\\\]", "_"); }
+    public static String filename(String name) { return (name == null ? "original" : name).replaceAll("[\r\n\"\\\\]", "_"); }
     public static boolean defaultAlbum(String name) { return "camera".equals(name.toLowerCase(Locale.ROOT)) || "screenshots".equals(name.toLowerCase(Locale.ROOT)); }
     public static boolean validCallback(String url, String state) {
         try {
@@ -39,7 +39,7 @@ public final class BackupPolicy {
             if (!CALLBACK.equals(u.getScheme() + "://" + u.getRawAuthority() + u.getRawPath()) || u.getFragment() != null || state.isEmpty()) return false;
             String found = null, code = null;
             for (String part : u.getRawQuery().split("&")) {
-                String[] pair = part.split("=", 2); String v = pair.length == 2 ? java.net.URLDecoder.decode(pair[1], StandardCharsets.UTF_8) : "";
+                String[] pair = part.split("=", 2); String v = pair.length == 2 ? java.net.URLDecoder.decode(pair[1], "UTF-8") : "";
                 if (pair[0].equals("state")) { if (found != null) return false; found = v; }
                 if (pair[0].equals("code")) { if (code != null) return false; code = v; }
                 if (pair[0].equals("error")) return false;

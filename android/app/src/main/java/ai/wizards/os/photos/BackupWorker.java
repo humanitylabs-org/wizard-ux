@@ -50,7 +50,9 @@ public final class BackupWorker extends Worker {
             if(!library.readable() || (Build.VERSION.SDK_INT>=29 && !library.has(Manifest.permission.ACCESS_MEDIA_LOCATION))) {
                 settings.status("Photo and original-location permissions needed · originals not uploaded"); return Result.failure();
             }
-            JSONObject auth=settings.secret("credentials");
+            JSONObject auth;
+            try { auth=settings.secret("credentials"); }
+            catch(Exception unavailable) { settings.status("Sign in again · secure backup key unavailable"); return Result.failure(); }
             if(!auth.has("key")) { settings.status("Sign in to enable backup"); return Result.failure(); }
             client=new ImmichClient(auth.getString("server"),auth.getString("key"),"",this::guard);
             setForegroundAsync(foreground(0,0)).get();
