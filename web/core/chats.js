@@ -1008,7 +1008,6 @@ window.WizCore.chats = function createChats(H) {
     // Photos load after layout: keep a thread that was at the bottom pinned to the bottom.
     if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
-    fitLabel(el);
     growTa(el.querySelector('textarea'));
     // Desktop renders before revealing its thread pane. Measure once it is visible,
     // retaining a usable first layout even before the user types or a live repaint runs.
@@ -1387,13 +1386,30 @@ window.WizCore.chats = function createChats(H) {
   document.body.appendChild(picker);
   let pickFor = '';
   picker.addEventListener('change', () => { const list = [...picker.files]; picker.value = ''; if (pickFor && W[pickFor] && list.length) addFiles(pickFor, list); });
-  // Words wrap a little early so they never run under the model label in the box's bottom-right corner.
-  function fitLabel(el) {
-    const lab = el?.querySelector('.ch-field .ch-mlabel'), ta = el?.querySelector('.ch-field textarea');
-    if (lab && ta && lab.offsetWidth) ta.style.paddingRight = `${lab.offsetWidth + 14}px`;
+  // Typed text uses the full width of the box. Only when the last line would run into the model label (bottom-right)
+  // does the box add one line, so the label sits under the text and nothing is hidden (James 18 Oct 2026).
+  // A textarea can't wrap one line early, so a hidden mirror measures where the last line ends.
+  let mirror = null;
+  function fitLabel(root) {
+    const ta = root?.matches?.('textarea') ? root : root?.querySelector('.ch-field textarea');
+    const lab = ta?.parentElement?.querySelector('.ch-mlabel');
+    if (!ta || !lab) return;
+    const lw = lab.offsetWidth; if (!lw || !ta.clientWidth) return;
+    const cs = getComputedStyle(ta), padL = parseFloat(cs.paddingLeft) || 0, padR = 14;
+    ta.style.paddingRight = `${padR}px`;
+    const inner = ta.clientWidth - padL - padR;
+    if (!mirror) { mirror = document.createElement('div'); mirror.setAttribute('aria-hidden', 'true'); mirror.style.cssText = 'position:fixed;left:-9999px;top:0;visibility:hidden;white-space:pre-wrap;overflow-wrap:break-word;word-break:break-word;pointer-events:none'; document.body.appendChild(mirror); }
+    mirror.style.width = `${inner}px`; mirror.style.font = cs.font; mirror.style.letterSpacing = cs.letterSpacing; mirror.style.lineHeight = cs.lineHeight;
+    const text = ta.value || ta.placeholder || '';
+    mirror.textContent = text; const end = document.createElement('span'); end.textContent = '\u200b'; mirror.appendChild(end);
+    const lastEnd = end.offsetLeft; // x where the last line ends
+    const room = inner - (lw - 4); // the label covers the right lw px of the last line (its own padding included)
+    const lh = parseFloat(cs.lineHeight) || 20;
+    ta.style.paddingBottom = lastEnd > room ? `${10 + lh}px` : '';
   }
-  function growTa(ta) {
+  function growTa(ta) {  function growTa(ta) {
     if (!ta) return;
+    fitLabel(ta);
     ta.style.height = 'auto';
     if (ta.getClientRects().length && ta.clientWidth) ta.style.height = Math.min(Math.max(42, ta.scrollHeight + 2), 140) + 'px';
   }
