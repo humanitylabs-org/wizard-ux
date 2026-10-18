@@ -107,6 +107,18 @@ public class MainActivity extends Activity {
                 });
     }
 
+    /** Main-frame settings navigation only; no media or credential bridge. */
+    private void installPhotosPort(WebView target) {
+        if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER)) return;
+        java.util.Set<String> origins = java.util.Collections.singleton(ai.wizards.os.device.AppState.primaryOrigin(this));
+        androidx.webkit.WebViewCompat.addWebMessageListener(target, "wizardPhotosPort", origins,
+                (view, message, sourceOrigin, isMainFrame, reply) -> {
+                    if (!isMainFrame || web != target || sourceOrigin == null || !origins.contains(sourceOrigin.toString())) return;
+                    if (message != null && "open".equals(message.getData()))
+                        startActivity(new Intent(this, ai.wizards.os.photos.PhotosActivity.class));
+                });
+    }
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -169,6 +181,8 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         web.addJavascriptInterface(new Bridge(), "WizardOSNative");
         installScreenPort(web);
+        installPhotosPort(web);
+        ai.wizards.os.photos.BackupScheduler.schedule(this);
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         web.addJavascriptInterface(device, "WizardOSDevice");
         if (mizel != null) mizel.detach();
