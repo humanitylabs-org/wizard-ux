@@ -179,9 +179,11 @@
     return { sessions: out, complete: true };
   }
   const FULL_EVERY = 3 * 60 * 1000;
-  /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>) and kept
-   * apart from the main list, so Home, search and the main Chats never show them. Every thread/run call for such
-   * a thread names its agent. ---- */
+  /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>), always
+   * through the owner's own Agent Service. Every thread/run call for such a thread names its agent, so a private
+   * agent's #59 seal still refuses id-only reads from anything else.
+   * Unified Chats (wizard-os spec/AGENTS.md, 18 Oct 2026): the owner's main Chats list (and its Ready/unread counts)
+   * merges every agent's threads by recency; `L.sessions` stays the main agent's own list (search, status, links). ---- */
   const AG = () => window.WosAgents || null;
   const otherAgent = id => { const a = AG(); return !!id && (a ? a.isOther(id) : id !== 'hermes'); };
   const AGENT_OF = new Map(); // sessionId -> agent id, for threads of non-default agents (incl. not yet listed)
@@ -370,7 +372,7 @@
     isNew(s) { return hasNew(s, this.seenOf(s)); },
     // A non-default agent's read state stays on this device (never PUT to the main agent's thread-seen store).
     seenOf(s) { return s && s.agent && otherAgent(s.agent) ? AGENT_SEEN : this.seen; },
-    workGroups(sessions, now) { return groupWork(sessions || this.sessions, now); },
+    workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
     cardAt,
     groups(agent = '') {
@@ -450,8 +452,18 @@
         }
       }));
     },
-    // The threads of one agent ('' or the default agent = the main list).
-    sessionsFor(agent = '') { return otherAgent(agent) ? (this.agentSessions[agent] || []) : this.sessions; },
+    // The threads of one agent; '' (or the default agent) = the unified list the owner's main Chats shows.
+    sessionsFor(agent = '') { return otherAgent(agent) ? (this.agentSessions[agent] || []) : this.unified(); },
+    // Every agent's threads, main first; an id listed by two agents counts once. Order is the caller's (groupWork sorts).
+    unified() {
+      const extra = Object.entries(this.agentSessions).filter(([a, list]) => otherAgent(a) && list.length);
+      if (!extra.length) return this.sessions;
+      const seen = new Set(this.sessions.map(s => s.id)), out = this.sessions.slice();
+      for (const [, list] of extra) for (const s of list) if (!seen.has(s.id)) { seen.add(s.id); out.push(s); }
+      return out;
+    },
+    // A private agent's thread (by id): its rows carry the lock and its words never enter another agent's context.
+    isPrivate(id) { const a = this.agentOf(id), A = AG(); return !!a && !!A && A.isPrivate(A.get(a)); },
     statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error }; },
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },

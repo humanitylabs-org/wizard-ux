@@ -158,7 +158,8 @@
       return AG.route(a, want);
     },
     currentRoute(sid, choice, agent) {
-      const ag = M.agentFor(sid, agent);
+      // A choice from the picker's Private group names its agent: it routes there, never to the main catalogue.
+      const ag = M.agentFor(sid, agent || choice?.agent || '');
       if (ag) return M.agentRoute(ag, sid, choice);
       const s = sid && window.WizLive?.session(sid);
       const route = choice?.model ? choice : sid && M.selections.get(sid) || (s?.model ? { model: s.model, provider: s.provider } : M.defaultOption());
@@ -177,9 +178,9 @@
     },
     snapshot(sid, choice, agent) {
       if (sid && M.pending.has(sid)) throw new Error('Model change is still saving · send after it finishes');
-      const ag = M.agentFor(sid, agent);
+      const ag = M.agentFor(sid, agent || choice?.agent || '');
       if (ag?.missing) throw new Error('Agent unavailable · open Agents and check it is running');
-      return M.currentRoute(sid, choice, agent);
+      return M.currentRoute(sid, choice, agent || choice?.agent || '');
     },
     keepVoiceRoute(id, route) {
       const all = JSON.parse(localStorage.getItem('wos.voice-model-routes.v1') || '{}');
@@ -249,21 +250,36 @@
       M.pending.set(sid, task);
       return task.finally(() => M.pending.delete(sid));
     },
-    /* The picker. mode: 'new' | 'thread' | 'retry'; cur = { model, provider }; all = show the full catalogue. */
-    sheetHtml({ mode, cur, all, title, agent }) {
+    /* Unified Chats: the owner's private agents' models, for the picker's Private group (oldest agent first, the
+     * same order the Agent Service routes by). Each option names its agent; picking one routes the chat there. */
+    privateOptions() {
+      const AG = window.WosAgents; if (!AG?.ready) return [];
+      const agents = AG.others().filter(a => AG.isPrivate(a)).sort((a, b) => (Number(a.created_at) || 0) - (Number(b.created_at) || 0) || String(a.id).localeCompare(String(b.id)));
+      const multi = agents.length > 1;
+      return agents.flatMap(a => AG.modelOptions(a).map(o => ({ ...o, private: true, description: [multi ? a.label : '', o.description].filter(Boolean).join(' · ') })));
+    },
+    /* The picker. mode: 'new' | 'thread' | 'retry'; cur = { model, provider }; all = show the full catalogue.
+     * priv: the Private group (main Chats only), listed after the main agent's models. */
+    sheetHtml({ mode, cur, all, title, agent, priv }) {
       // An agent's chats: only that agent's allowed models. No "More models": the rest are not this agent's.
       const own = agent && !agent.missing ? window.WosAgents.modelOptions(agent) : null;
-      const list = own || (all ? M.options : M.visible(cur?.model || '', cur?.provider || ''));
-      const isCur = o => cur && o.value === cur.model && (!cur.provider || o.provider === cur.provider);
+      const main = own || (all ? M.options : M.visible(cur?.model || '', cur?.provider || ''));
+      const privList = !own && Array.isArray(priv) ? priv : [];
+      const list = main.concat(privList);
+      const isCur = o => cur && o.value === cur.model && (!cur.provider || o.provider === cur.provider) && (cur.agent || '') === (o.agent || '');
       const head = mode === 'retry' ? 'Retry with another model' : mode === 'new' ? 'Model for this new chat' : 'Model for this thread';
       const note = own ? `${agent.label} can only use ${own.length === 1 ? 'this model' : 'these models'}.${agent.privacy === 'private' ? ' Private: no other provider, no fallback.' : ''}`
         : mode === 'retry' ? 'Sends your last request again on the model you pick.' : mode === 'new' ? 'New chats start on your Wizard’s default.' : 'Replies in this thread use this model from now on.';
       const rows = own ? list.map((o, i) => `<button type="button" class="mrow${isCur(o) ? ' on' : ''}" data-mpick="${i}" aria-pressed="${isCur(o)}"><span class="mn"><b>${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Agent default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`).join('')
-        : !M.ready && !list.length ? `<p class="ch-sheet-n">${M.error ? esc(M.error) : 'Loading models…'}</p>`
-        : list.map((o, i) => `<button type="button" class="mrow${isCur(o) ? ' on' : ''}" data-mpick="${i}" aria-pressed="${isCur(o)}"><span class="mn"><b>${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · ') || o.value)}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`).join('');
+        : !M.ready && !main.length ? `<p class="ch-sheet-n">${M.error ? esc(M.error) : 'Loading models…'}</p>`
+        : main.map((o, i) => `<button type="button" class="mrow${isCur(o) ? ' on' : ''}" data-mpick="${i}" aria-pressed="${isCur(o)}"><span class="mn"><b>${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · ') || o.value)}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`).join('');
+      const lock = window.WosAgents?.lock?.() || '';
+      const privNote = mode === 'thread' ? 'Starts a new private chat with this conversation quoted. This thread stays as it is.' : 'Runs on your private agent: its own history, no fallback.';
+      const privRows = privList.length ? `<div class="msheet-grp priv" role="group" aria-label="Private models"><div class="msheet-gh">${lock}<span>Private</span></div>`
+        + privList.map((o, k) => { const i = main.length + k; return `<button type="button" class="mrow priv${isCur(o) ? ' on' : ''}" data-mpick="${i}" data-mprivate="${esc(o.agent)}" aria-pressed="${isCur(o)}"><span class="mn"><b>${lock}${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; }).join('')
+        + `<p class="msheet-gn">${esc(privNote)}</p></div>` : '';
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
-        <div class="msheet-list">${rows}</div>
-        ${!own && M.ready && !all && M.options.length > list.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}
+        <div class="msheet-list">${rows}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
     },
     /* A failed thread: what happened, on which model, and the ways out (Retry · Choose another model · Dismiss). */

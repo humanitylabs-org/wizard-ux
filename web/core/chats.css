@@ -511,3 +511,16 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-morning.done { padding: 9px 14px; border-color: var(--wz-border, rgba(205, 190, 255, .13)); background: rgba(255, 255, 255, .03); }
 .ch-morning.done .sun { width: 26px; height: 26px; opacity: .7; }
 .ch-morning.done .hd i { color: #4fe0a8; border-color: rgba(79, 224, 168, .4); }
+
+/* Unified Chats (18 Oct 2026): a private agent's thread in the owner's main list wears a small lock; its header says
+   Private; a private chat continuing a standard thread shows what goes with its first message. */
+:root { --ch-priv: hsl(160 72% 62%); }
+.ch-row .tp b .ch-plock { display: inline-flex; vertical-align: -1px; margin-right: 5px; color: var(--ch-priv); }
+.ch-row .tp b .ch-plock .ag-lock { width: 12px; height: 12px; stroke-width: 2.2; }
+.ch-head .ti { min-width: 0; }
+.ch-privtag { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; height: 20px; margin-left: 6px; padding: 0 7px 0 6px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--ch-priv); background: color-mix(in oklab, var(--ch-priv) 16%, transparent); vertical-align: 2px; }
+.ch-privtag .ag-lock { width: 11px; height: 11px; stroke-width: 2.3; }
+.ch-carry { margin: 14px auto 0; max-width: 520px; display: grid; gap: 6px; padding: 12px 14px; border-radius: 14px; border: 1px solid color-mix(in oklab, var(--ch-priv) 35%, transparent); background: color-mix(in oklab, var(--ch-priv) 8%, transparent); text-align: left; font-size: 13px; line-height: 1.4; }
+.ch-carry b { display: inline-flex; align-items: center; gap: 6px; color: var(--ch-priv); }
+.ch-carry span { opacity: .82; }
+.ch-carry button { justify-self: start; min-height: 32px; padding: 0 12px; border-radius: 16px; font: inherit; font-size: 12.5px; font-weight: 650; color: inherit; background: rgba(255, 255, 255, .08); }

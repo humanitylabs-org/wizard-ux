@@ -163,7 +163,8 @@ async function phone(b) {
   const mainWin = await p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats' && !w.agent)?.id || '');
   const mainStrip = await p.locator(`.win[data-win="${mainWin}"] [data-agent-titlebar]`).innerText().catch(() => '');
   ok(/Atlas/.test(mainStrip) && !/Private/.test(mainStrip), 'phone: main Chats header names the main agent once several exist', mainStrip);
-  ok(!(await p.locator(`[data-chats="${mainWin}"] .ch-list`).innerText()).includes('Recap my private recording'), 'phone: main Chats list has no private thread');
+  // Unified Chats (18 Oct 2026): the owner's main Chats lists the private agent's threads too, each with the lock.
+  ok(await p.locator(`[data-chats="${mainWin}"] .ch-list .ch-row.private`, { hasText: 'Recap my private recording' }).locator('.ch-plock').count() === 1, 'phone: main Chats (unified) lists the private thread with a lock');
   await shot(p, 'phone-13-main-chats');
   // System links to Agents (its own app, opened beside System).
   await p.evaluate(() => __wos.openApp(window.WizCore.apps('mobile').APPS.find(a => a.id === 'system'))); await wait(1500);
