@@ -156,6 +156,13 @@ public final class DeviceBridge implements RecorderService.Listener {
     @JavascriptInterface
     public int recLevel() { return RecorderService.level(); }
 
+    /**
+     * The route of the page's own browser recording: "builtin", "external", "system" or "unknown". The page calls it
+     * right after getUserMedia and stops a take Android has put on a Bluetooth or external mic.
+     */
+    @JavascriptInterface
+    public String micRoute() { return ai.wizards.os.audio.MicRoute.browserVerdict(activity); }
+
     @JavascriptInterface
     public String recActive() {
         String id = RecorderService.active();

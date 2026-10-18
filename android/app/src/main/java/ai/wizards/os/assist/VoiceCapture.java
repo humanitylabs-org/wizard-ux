@@ -198,24 +198,26 @@ final class VoiceCapture {
         try {
             // ADTS on internal storage: what was said survives the process dying mid-take (see recoverOrphans)
             recording = new File(takesDir(app), "side-" + System.currentTimeMillis() + ".aac");
-            MediaRecorder r = Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(app) : new MediaRecorder();
-            r.setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION);
-            r.setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS);
-            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-            r.setAudioChannels(1);
-            r.setAudioSamplingRate(32000);
-            r.setAudioEncodingBitRate(64000);
-            r.setOutputFile(recording.getAbsolutePath());
-            preferBuiltInMic(r);
-            r.prepare();
-            r.start();
+            final File file = recording;
+            // The phone's mic, never a Bluetooth speaker's: MicRoute refuses a take Android puts elsewhere.
+            MediaRecorder r = ai.wizards.os.audio.MicRoute.start(app,
+                    () -> Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(app) : new MediaRecorder(),
+                    (m, src) -> {
+                        m.setAudioSource(src);
+                        m.setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS);
+                        m.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+                        m.setAudioChannels(1);
+                        m.setAudioSamplingRate(32000);
+                        m.setAudioEncodingBitRate(64000);
+                        m.setOutputFile(file.getAbsolutePath());
+                    });
             recorder = r;
         } catch (Exception e) {
             dropRecorder();
             if (qa == null) {
                 endLoan("start_failed", "cancelled", "The microphone did not start");
                 Log.w(TAG, "recorder failed", e);
-                emitError("mic", "The microphone is busy. Try again in a moment.");
+                emitError("mic", ai.wizards.os.audio.MicRoute.why(e, "The microphone is busy. Try again in a moment."));
                 return;
             }
             Log.i(TAG, "qa: no emulator mic, using qa_audio");
@@ -230,9 +232,6 @@ final class VoiceCapture {
         if (autoSendMs > 0) main.postDelayed(qaSend = () -> { if (paused) main.postDelayed(qaSend, 500); else send("qa"); }, autoSendMs);
     }
 
-    private void preferBuiltInMic(MediaRecorder r) {
-        ai.wizards.os.audio.MicRoute.pin(app, r);
-    }
 
     private final Runnable meter = new Runnable() {
         @Override

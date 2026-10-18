@@ -44,9 +44,22 @@ public final class CancelledTakes {
      * delete its own copy afterwards either way. Returns true when kept. Never throws.
      */
     public static boolean keep(Context c, File audio, long ms, String source, String mime) {
+        return keep(c, audio, ms, source, mime, false);
+    }
+
+    /**
+     * A take speech-to-text heard nothing in (18 Oct 2026): kept whatever its length, so a quiet or misrouted
+     * recording is never deleted. It is listed with the cancelled ones and can be transcribed again from Settings.
+     */
+    public static boolean keepUnheard(Context c, File audio, String source, String mime) {
+        long ms = audio == null ? 0 : audio.length() / 8; // ≈ duration at the recorders' 64 kbit/s AAC
+        return keep(c, audio, ms, source, mime, true);
+    }
+
+    private static boolean keep(Context c, File audio, long ms, String source, String mime, boolean always) {
         try {
             if (audio == null || !audio.isFile()) return false;
-            if (!CancelPolicy.keep(ms, audio.length())) { Log.i(TAG, "not kept ms=" + ms + " bytes=" + audio.length()); return false; }
+            if (!always && !CancelPolicy.keep(ms, audio.length())) { Log.i(TAG, "not kept ms=" + ms + " bytes=" + audio.length()); return false; }
             long now = System.currentTimeMillis();
             String id = "c" + now + "-" + (source == null ? "orb" : source.replaceAll("[^a-z]", ""));
             String name = audio.getName();
