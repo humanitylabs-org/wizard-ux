@@ -170,11 +170,22 @@ window.WosChatPower = function chatPower(A) {
     const req = requestOf(w, s);
     return M.failureHtml({ s: { ...s, ...threadModel(s) }, busy, canRetry: !!req });
   }
+  // The request to send again: the owner's words from the latest turn. A failed turn the owner didn't type (a
+  // coordinator's follow-through note, a photo-only message, a run a watcher started) is retried with a plain
+  // "Retry" from the owner, since the thread's history already holds the request. It used to fall back to '' and
+  // grey out Retry and Choose another model, so James had to type "Retry" by hand (18 Oct 2026).
+  const RETRY_WORD = 'Retry';
   function requestOf(w, s) {
-    if (s?.request) return s.request;
+    // The open thread's turns come first: the server's last_user_message skips follow-through notes, so s.request
+    // can be an older typed request than the one that failed.
     const c = w && ch(w.id), turns = c && c.loadedFor === s?.id ? c.turns || [] : [];
-    for (let i = turns.length - 1; i >= 0; i--) if (turns[i].u?.text) return turns[i].u.text;
-    return '';
+    for (let i = turns.length - 1; i >= 0; i--) {
+      const tn = turns[i];
+      if (tn.u?.text) return tn.u.text;
+      if (tn.u || tn.note || tn.later) return RETRY_WORD;
+    }
+    if (s?.request) return s.request;
+    return s && FAILED.has(s.status) ? RETRY_WORD : '';
   }
   // Retry = send the thread's last request again, through the durable outbox, on the same thread
   // (and the same model, unless one was just picked). controller.ts retryServerFailedSession.
@@ -186,7 +197,7 @@ window.WosChatPower = function chatPower(A) {
     const c = w ? ch(wid) : null; if (c) c.retrying = sid;
     try {
       await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, text, wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
-        instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. This is the same request again.`,
+        instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
         ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
       E?.cleared.set(sid, Date.now());
       toast('↻', o ? `Retrying on ${o.name}` : 'Retrying', 1600);
