@@ -168,15 +168,21 @@
     }
     return { APPS, APP, findApp, appByName, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
   }
-  /* "image search capybaras", "pictures of eames chairs", "search why is the sky blue", "quick search …".
+  /* "ask AI is milk bad for gout", "image search capybaras", "find images of eames chairs", "search why is the sky blue", "quick search …".
    * Returns { query, tab: 'images' | 'all' } or null. Thread/app searches ("search my chats for …") stay with the shell. */
   function parseQuickSearch(text) {
     let s = window.WizConfig.stripAddress(text).replace(/[.!?,\s]+$/, '').replace(/,?\s+please$/i, '');
+    // Speech-to-text punctuates the spell itself ("Search: is milk bad for gout?", "Ask AI, what's …"): a colon,
+    // comma or dash inside the first three words is just a pause.
+    s = s.replace(/^((?:\S+\s+){0,2}?\S+?)\s*[:,;\u2013\u2014-]\s+/, '$1 ');
+    // "ask AI …" (James, 18 Oct 2026): the unmistakable spell for a quick question to the Search app, anywhere.
+    let m = s.match(/^ask\s+(?:the\s+|an?\s+)?(?:a\.?\s?i\.?|ai)(?:\s+(?:about|for))?[\s:,.!?]+(.+)$/i);
+    if (m) return { query: m[1].trim(), tab: 'all', strong: true };
     const IMG = '(?:image|images|picture|pictures|photo|photos|pic|pics)';
-    let m = s.match(new RegExp(`^${IMG}\\s*search(?:\\s+(?:for|of))?\\s+(.+)$`, 'i'))
+    m = s.match(new RegExp(`^${IMG}\\s*search(?:\\s+(?:for|of))?\\s+(.+)$`, 'i'))
       || s.match(new RegExp(`^search\\s+(?:for\\s+)?${IMG}\\s+(?:of|for)\\s+(.+)$`, 'i'))
       || s.match(new RegExp(`^search\\s+${IMG}\\s+(.+)$`, 'i'))
-      || s.match(new RegExp(`^(?:show me|find|find me|get me|pull up)\\s+(?:some\\s+)?${IMG}\\s+of\\s+(.+)$`, 'i'))
+      || s.match(new RegExp(`^(?:show me|find|find me|get me|pull up|search for)\\s+(?:some\\s+)?${IMG}\\s+(?:of\\s+|for\\s+)?(.+)$`, 'i'))
       || s.match(new RegExp(`^${IMG}\\s+of\\s+(.+)$`, 'i'));
     if (m) return { query: m[1].trim(), tab: 'images', strong: true };
     if (/^search\s+(?:in\s+)?(?:my|the)\s+(?:chats?|threads?|inbox|apps?|files|notes|messages)\b/i.test(s)) return null;

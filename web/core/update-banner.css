@@ -18,6 +18,8 @@
 .dv-um.two b { white-space: normal; font-weight: 650; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; } /* a long thread name wraps once rather than being cut */
 .dv-update button.dv-wt { flex: none; padding: 5px 9px; border: 1px solid var(--line-2); color: var(--ink-2); font-weight: 600; font-size: 12px; }
 .dv-update.web .dv-wtop > button[data-web="go"] { flex: none; padding: 7px 12px; }
+/* Reload tapped during a recording that cannot survive it: waiting, tap again to cancel. */
+.dv-update.web .dv-wtop > button[data-web="go"].armed { background: transparent; border: 1px solid var(--violet); color: var(--ink); font-weight: 600; font-size: 12px; white-space: nowrap; }
 .dv-wl { display: flex; flex-direction: column; margin-top: 8px; max-height: 46vh; overflow-y: auto; border-top: 1px solid var(--line); }
 .dv-update .dv-wr { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; text-align: left; padding: 9px 4px; border-radius: 0; background: transparent; color: var(--ink); font-weight: 400; border-bottom: 1px solid var(--line); }
 .dv-wr:last-child { border-bottom: 0; }

@@ -52,7 +52,7 @@ const iso = s => new Date(s * 1000).toISOString();
 const OPTIONS = {
   harnesses: [{ id: 'hermes', label: 'Hermes', description: 'Stock Hermes in its own container: tools, memory and skills of its own.' }],
   providers: [
-    { id: 'tinfoil', label: 'Tinfoil (confidential)', confidential: true, description: 'Confidential: encrypted, attested hardware. Tinfoil can’t read what it processes.', models: [{ id: 'glm-5-3', label: 'GLM 5.3' }] },
+    { id: 'tinfoil', label: 'Tinfoil (confidential)', confidential: true, description: 'Confidential: encrypted, attested hardware. Tinfoil can’t read what it processes.', models: [{ id: 'glm-5-3', label: 'GLM 5.3' }, { id: 'deepseek-v4-1-flash', label: 'DeepSeek V4.1 Flash' }] },
     { id: 'anthropic', label: 'Claude', confidential: false, description: 'Your Claude account (AI Accounts).', models: [{ id: 'claude-opus-5-5', label: 'Claude Opus 5.5' }, { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' }] },
     { id: 'openai-codex', label: 'ChatGPT', confidential: false, description: 'Your ChatGPT account (AI Accounts).', models: [{ id: 'gpt-5.5', label: 'GPT-5.5' }] },
   ],
@@ -197,8 +197,12 @@ function seedMain() {
 function seedPrivate() {
   const [, j] = createAgent({ label: 'Private', harness: 'hermes', model: { provider: 'tinfoil', model: 'glm-5-3' }, permissions: { preset: 'private' }, appearance: { glyph: 'lock', hue: 160 } });
   const a = AGENTS.get(j.agent.id); a.status = 'running';
+  // The owner allows both Tinfoil chat models (PERSONAL_CONFIG): GLM default, DeepSeek on pick.
+  a.model.allowed_models = ['glm-5-3', 'deepseek-v4-1-flash'];
   const t = now();
   addSession(a.id, 'wizard_fixture_private_1', 'Recording recap · Team call', [{ role: 'user', content: 'Recap of today’s recording', timestamp: t - 1800 }, { role: 'assistant', content: 'Recap kept in the Private agent. Nothing left this agent.', timestamp: t - 1750 }]);
+  // A Mizel-style app delivery (assistant-only recap), newer than every main thread: tops the unified Chats.
+  addSession(a.id, 'wizard_app_mizel_fixture1', 'Mizel recap · Fixture standup', [{ role: 'assistant', content: 'Fixture recap: three decisions, two follow-ups.', timestamp: t - 60 }]);
 }
 if (MAIN === 'fixture') seedMain();
 if (SEED === 'private') seedPrivate();
@@ -215,6 +219,7 @@ function startRun(a, s, body) {
   s.messages.push({ role: 'user', content: input, timestamp: t }); s.status = 'running'; s.run = id; s.updated_at = t;
   if (s.title === 'Untitled chat' || !s.title) s.title = input.slice(0, 50);
   const model = body.model || s.model;
+  s.model = model; // Hermes records the run's model on the session
   const run = { id, run_id: id, session_id: s.id, agent: a.id, status: 'running', model, provider: a.model.provider, runtime: 'direct' };
   RUNS.set(id, run);
   setTimeout(() => {
@@ -297,7 +302,17 @@ async function api(req, res, u) {
   }
   if (p === '/__fixture/log') return send(res, 200, { log });
   // ---- threads/runs ----
-  const agentId = agentParam(u, body);
+  let agentId = agentParam(u, body);
+  const pinnedTo = sid => { for (const [other, map] of SESS) if (other !== 'hermes' && map.has(sid)) return other; return ''; };
+  const pathSid = (p.match(/^\/wizard\/hermes\/api\/sessions\/([^/]+)/) || [])[1];
+  // #59 (as the Agent Service): a private agent's thread read by id alone is sealed; the client must name the agent.
+  if (!agentId && m === 'GET' && pathSid) { const o = pinnedTo(decodeURIComponent(pathSid)); if (o && AGENTS.get(o)?.privacy === 'private') return send(res, 409, { error: 'private_agent_sealed', check: 'agent.private_sealed' }); }
+  // Unified Chats routing (as the Agent Service): a new chat on a private agent's model goes to that agent.
+  if (!agentId && m === 'POST' && (p === '/wizard/hermes/api/sessions' || p === '/wizard/hermes/v1/runs') && body?.provider === 'tinfoil') {
+    const owner = [...AGENTS.values()].filter(x => x.privacy === 'private' && x.model.allowed_models.includes(body.model))[0];
+    if (owner) { agentId = owner.id; log.push({ at: Date.now(), routed: owner.id, path: p }); }
+  }
+  if (!agentId && m === 'POST' && p === '/wizard/hermes/v1/runs') { const o = pinnedTo(String(body?.session_id || '')); if (o) agentId = o; }
   const isFixtureAgent = agentId && agentId !== 'hermes';
   if (MAIN === 'proxy' && !isFixtureAgent) return proxy(req, res);
   const aid = agentId || 'hermes';
@@ -313,7 +328,9 @@ async function api(req, res, u) {
     // Pinned at creation: an id that already belongs to another agent is refused, naming the check.
     for (const [other, map] of SESS) if (other !== aid && map.has(sid)) return send(res, 409, { error: 'This thread belongs to another agent', check: 'thread.agent_pinned' });
     if (sessions.has(sid)) return send(res, 409, { error: 'exists' });
-    addSession(aid, sid, 'Untitled chat'); return send(res, 201, { session: row(sessions.get(sid)) });
+    const made = addSession(aid, sid, 'Untitled chat');
+    if (typeof body.model === 'string' && (!a.model.allowed_models.length || a.model.allowed_models.includes(body.model))) made.model = body.model;
+    return send(res, 201, { session: row(made) });
   }
   mm = p.match(/^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages|\/model)?$/);
   if (mm) {

@@ -51,6 +51,7 @@
     return { state: v.state, ask, subject: String(v.subject || '').replace(/\s+/g, ' ').trim().slice(0, 40) };
   }
   function normalize(item) {
+    if (item.listVersion === 1) return { safeError:'', critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runtime: 'direct', request: '', renames: [], detailNeeded: true };
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
     const status = ALIASES[raw] || raw || undefined;
@@ -94,7 +95,7 @@
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
       modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
-      request: userText,
+      request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
       // Agents MVP: the agent this thread is pinned to (server metadata). '' = the main agent.
       agent: typeof item.agent === 'string' ? item.agent : item.agent && typeof item.agent === 'object' && typeof item.agent.id === 'string' ? item.agent.id : '',
     };
@@ -163,25 +164,41 @@
    * Battery (14 Oct 2026): the list is ordered by last activity, so any thread that changes
    * rises to page 1. The between-walk poll used to re-read ~6 pages (~1 MB) every 15 s;
    * one page carries the same news. The full walk still catches edits that don't bump activity. */
-  async function fetchSessions(full, agent = '') {
-    const out = []; let snapshot = '';
-    for (let offset = 0; offset < 5000; ) {
-      const q = `limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`;
-      const p = await (await req(`/wizard/hermes/api/sessions?${q}`)).json();
+  const LIST_SUPPORT = new Map(), DETAIL = new Map();
+  async function fetchSessions(full, agent = '', onFirst = null) {
+    const out = []; let snapshot = '', meta = null, resets = 0;
+    const overrides = JSON.stringify(listOverrides(agent));
+    for (let offset = 0; offset < 100000; ) {
+      const slim = LIST_SUPPORT.get(agent) !== false;
+      const q = `${slim ? `view=list&window=archive-50&overrides=${encodeURIComponent(overrides)}&` : ''}limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`;
+      let p;
+      try { p = await (await req(`/wizard/hermes/api/sessions?${q}`)).json(); }
+      catch (e) {
+        if (slim && offset === 0 && [400,404].includes(e.status)) { LIST_SUPPORT.set(agent,false); continue; }
+        if (offset > 0 && e.status === 409 && resets++ < 1) { offset=0; snapshot=''; out.length=0; continue; }
+        throw e;
+      }
+      if (slim && p.list_version === 1 && p.window !== 'archive-50') { LIST_SUPPORT.set(agent,false); snapshot=''; out.length=0; offset=0; continue; }
+      if (p.list_version === 1) LIST_SUPPORT.set(agent,true);
       if (!snapshot && typeof p.snapshot === 'string') snapshot = p.snapshot;
+      if (p.window === 'archive-50') meta = { archiveTotal:p.archive_total, archiveReturned:p.archive_returned, cursor:p.archive_cursor };
       const rows = p.data || p.sessions || p.items || [];
       out.push(...rows.map(normalize).filter(Boolean));
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
-      if (!more || !rows.length) return { sessions: out, complete: true };
-      if (!full) return { sessions: out, complete: false };
+      if (!more) return { sessions:out, complete:true, meta };
+      if (!rows.length) throw new Error('Incomplete session window');
+      if (!full) return { sessions:out, complete:false, meta };
+      if (onFirst && offset === rows.length) await onFirst({ sessions:out.slice(), complete:false, meta });
     }
-    return { sessions: out, complete: true };
+    throw new Error('Session window limit reached');
   }
   const FULL_EVERY = 3 * 60 * 1000;
-  /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>) and kept
-   * apart from the main list, so Home, search and the main Chats never show them. Every thread/run call for such
-   * a thread names its agent. ---- */
+  /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>), always
+   * through the owner's own Agent Service. Every thread/run call for such a thread names its agent, so a private
+   * agent's #59 seal still refuses id-only reads from anything else.
+   * Unified Chats (wizard-os spec/AGENTS.md, 18 Oct 2026): the owner's main Chats list (and its Ready/unread counts)
+   * merges every agent's threads by recency; `L.sessions` stays the main agent's own list (search, status, links). ---- */
   const AG = () => window.WosAgents || null;
   const otherAgent = id => { const a = AG(); return !!id && (a ? a.isOther(id) : id !== 'hermes'); };
   const AGENT_OF = new Map(); // sessionId -> agent id, for threads of non-default agents (incl. not yet listed)
@@ -361,16 +378,56 @@
   }
   const commandId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 
+  /* ---- last list snapshot (James, 18 Oct 2026) ----
+   * Chats opens on the list this device last saw, marked "Updating…", while the fresh read runs, instead of an empty
+   * "Connecting to Wizard…" box. The main agent's threads only: a private agent's rows are never written to storage
+   * (they merge in from that agent as before). Newest SNAP_N threads, long text clipped; written at most once a
+   * minute and when the page is hidden. Nothing is ever sent from it: every action re-reads the live list. */
+  const SNAP_KEY = `wos.chats.snapshot.v1:${SCOPE}`, SNAP_N = 150, SNAP_EVERY = 60 * 1000;
+  const clipDeep = v => typeof v === 'string' ? (v.length > 600 ? v.slice(0, 600) : v) : v && typeof v === 'object' ? (Array.isArray(v) ? v.slice(0, 20).map(clipDeep) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clipDeep(x)]))) : v;
+  function readSnap() {
+    try {
+      const v = JSON.parse(localStorage.getItem(SNAP_KEY) || 'null');
+      return v && v.schema === 1 && Array.isArray(v.sessions) && isFinite(v.at) ? v : null;
+    } catch (e) { return null; }
+  }
+  function writeSnap(store) {
+    if (!store.ok || store.cached) return;
+    try {
+      const act = s => Date.parse(s.activityAt || s.updatedAt || '') || 0;
+      const rows = store.sessions.filter(s => s && s.id && !s.optimistic && !s.synthetic && !s.hidden && !(s.agent && otherAgent(s.agent)))
+        .sort((a, b) => act(b) - act(a)).slice(0, SNAP_N).map(s => clipDeep(s.listVersion === 1 ? { ...s, request:'', renames:[], detailNeeded:true } : s));
+      localStorage.setItem(SNAP_KEY, JSON.stringify({ schema: 1, at: store.at || Date.now(), sessions: rows, deferred: store.deferred || {} }));
+      store.snapAt = Date.now();
+    } catch (e) { try { localStorage.removeItem(SNAP_KEY); } catch (_) {} }
+  }
+
   /* ---- store ---- */
+  function listOverrides(agent = '') {
+    const out = {}, scoped = id => (L.agentOf(id) || '') === (otherAgent(agent) ? agent : '');
+    for (const [id, at] of Object.entries(readRestored())) if (scoped(id) && Date.now()-Date.parse(at)<WEEK) out[id]={restoredAt:at};
+    for (const [key,d] of Object.entries(L.deferred)) {
+      const id=key.replace(/^direct:/,''); if (!scoped(id)) continue;
+      out[id]={...(d.deferred ? {deferred:true} : {restoredAt:d.updatedAt}),...out[id]};
+    }
+    for (const [id,o] of OVER) if (scoped(id)) {
+      const fields={}; for (const k of ['archived','deferred','restoredAt']) if (o.patch[k] !== undefined) fields[k]=o.patch[k];
+      out[id]={...out[id],...fields};
+    }
+    return out;
+  }
   const L = {
+    windows: {},
     ok: false, error: '', sessions: [], seen: readLocal(), deferred: {}, at: 0, listeners: new Set(), loading: null,
+    // cached: the list on screen is the stored snapshot (cachedAt = when it was read live); cleared by the first fresh read.
+    cached: false, cachedAt: 0, snapAt: 0,
     agentSessions: {}, agentStatus: {}, // non-default agents: id -> sessions / { ok, error, at }
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
     isNew(s) { return hasNew(s, this.seenOf(s)); },
     // A non-default agent's read state stays on this device (never PUT to the main agent's thread-seen store).
     seenOf(s) { return s && s.agent && otherAgent(s.agent) ? AGENT_SEEN : this.seen; },
-    workGroups(sessions, now) { return groupWork(sessions || this.sessions, now); },
+    workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
     cardAt,
     groups(agent = '') {
@@ -396,8 +453,10 @@
         try {
           const started = Date.now();
           const full = !this.fullAt || Date.now() - this.fullAt > FULL_EVERY;
-          const [got, deferred, remote] = await Promise.all([fetchSessions(full), fetchDispositions(), fetchSeen().catch(() => null)]);
+          const side = Promise.all([fetchDispositions(), fetchSeen().catch(() => null)]);
+          const apply = (got, deferred, remote) => {
           // The main list holds the main agent's threads only, even if a server ever lists another agent's here.
+          if (got.meta) this.windows.hermes = got.meta;
           let sessions = got.sessions.filter(s => !otherAgent(s.agent));
           window.WosModels?.reconcile(sessions);
           if (got.complete) this.fullAt = Date.now();
@@ -418,7 +477,17 @@
             putSeen(merged).catch(() => {});
           }
           this.seen = merged; writeLocal(merged);
-          this.ok = true; this.error = ''; this.at = Date.now();
+          this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
+          };
+          // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
+          // A first run anywhere (no read state on device or server) waits for the whole list, which it marks read.
+          const early = (!this.ok || this.cached) && full ? async page => { const [d, r] = await side; if (!merge(readLocal(), merge(this.seen, r))) return; apply(page, d, r); this.emit(); } : null;
+          const got = await fetchSessions(full, '', early);
+          const [deferred, remote] = await side;
+          apply(got, deferred, remote);
+          if (Date.now() - this.snapAt > SNAP_EVERY) writeSnap(this);
+          // Other agents' threads merge in after the main list is on screen; one slow agent never holds Chats.
+          this.emit();
           await this.refreshAgents(deferred);
         } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
         finally { this.loading = null; this.emit(); }
@@ -434,6 +503,7 @@
       await Promise.all(ids.map(async id => {
         try {
           const got = await fetchSessions(true, id);
+          if (got.meta) this.windows[id] = got.meta;
           const list = got.sessions.filter(s => !s.agent || s.agent === id).map(s => { s.agent = id; AGENT_OF.set(s.id, id); return s; });
           for (const s of list) {
             const d = deferred[keyOf(s)];
@@ -450,9 +520,19 @@
         }
       }));
     },
-    // The threads of one agent ('' or the default agent = the main list).
-    sessionsFor(agent = '') { return otherAgent(agent) ? (this.agentSessions[agent] || []) : this.sessions; },
-    statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error }; },
+    // The threads of one agent; '' (or the default agent) = the unified list the owner's main Chats shows.
+    sessionsFor(agent = '') { return otherAgent(agent) ? (this.agentSessions[agent] || []) : this.unified(); },
+    // Every agent's threads, main first; an id listed by two agents counts once. Order is the caller's (groupWork sorts).
+    unified() {
+      const extra = Object.entries(this.agentSessions).filter(([a, list]) => otherAgent(a) && list.length);
+      if (!extra.length) return this.sessions;
+      const seen = new Set(this.sessions.map(s => s.id)), out = this.sessions.slice();
+      for (const [, list] of extra) for (const s of list) if (!seen.has(s.id)) { seen.add(s.id); out.push(s); }
+      return out;
+    },
+    // A private agent's thread (by id): its rows carry the lock and its words never enter another agent's context.
+    isPrivate(id) { const a = this.agentOf(id), A = AG(); return !!a && !!A && A.isPrivate(A.get(a)); },
+    statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error, cached: this.cached, cachedAt: this.cachedAt, loading: !!this.loading }; },
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
     pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
@@ -473,7 +553,7 @@
     session(id) {
       const s = this.sessions.find(x => x.id === id); if (s) return s;
       for (const list of Object.values(this.agentSessions)) { const a = list.find(x => x.id === id); if (a) return a; }
-      return null;
+      return DETAIL.get(id) || null;
     },
     chatUrl(id) { return id ? `/wizard/?session=${encodeURIComponent(id)}` : '/wizard/?view=work'; },
     /* A real Archimedes request: same admission path the Wizard app uses.
@@ -527,6 +607,7 @@
     },
     /* Full message history of one thread (oldest first), paged like Wizard. */
     async messages(id) {
+      if (!this.session(id) || this.session(id).detailNeeded) await this.sessionInfo(id);
       const rows = [];
       for (let offset = 0; offset < 5000; offset += 500) {
         const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=oldest&limit=500&offset=${offset}&include_compacted=true&view=wizard${aq(id, '&')}`)).json();
@@ -537,15 +618,74 @@
       }
       return rows;
     },
+    async searchSessions(q, agent = '', signal, onBatch) {
+      const scopes = otherAgent(agent) ? [agent] : ['', ...(AG()?.others() || []).map(a=>a.id)];
+      const settled = await Promise.allSettled(scopes.map(async scope => {
+        const found=[]; let snapshot='', resets=0;
+        for(let offset=0; offset<100000;) {
+          const params=new URLSearchParams({view:'list',q,limit:'100',offset:String(offset),include_children:'false'});
+          if(scope) params.set('agent',scope); if(snapshot) params.set('snapshot',snapshot);
+          let p;
+          try { p=await (await req(`/wizard/hermes/api/sessions?${params}`,{signal})).json(); }
+          catch(e) {
+            if([400,404].includes(e.status)) return null;
+            if(e.status===409 && offset && resets++<1) {offset=0;snapshot='';found.length=0;continue;}
+            throw e;
+          }
+          if(p.list_version!==1 || !Number.isInteger(p.search_total)) return null;
+          snapshot=p.snapshot || snapshot;
+          const rows=p.data||p.sessions||p.items||[];
+          for(const raw of rows) {
+            const s=normalize(raw); if(!s || (s.agent||'hermes')!==(scope||'hermes')) continue;
+            if(signal?.aborted) throw new DOMException('Aborted','AbortError');
+            if(scope) AGENT_OF.set(s.id,scope);
+            found.push(s);
+          }
+          if(!p.has_more) { if(!signal?.aborted) onBatch?.(found); return found; }
+          if(!rows.length) throw new Error('Incomplete search');
+          offset+=rows.length;
+        }
+        throw new Error('Search limit reached');
+      }));
+      if(signal?.aborted) throw new DOMException('Aborted','AbortError');
+      const good=settled.filter(x=>x.status==='fulfilled' && Array.isArray(x.value));
+      const failed=settled.filter(x=>x.status==='rejected');
+      if(!good.length) { if(failed.length) throw failed[0].reason; return null; }
+      const found=good.flatMap(x=>x.value); found.partial=good.length!==scopes.length;
+      return found;
+    },
+    rememberSearch(s) { if(s?.id) { if(otherAgent(s.agent)) AGENT_OF.set(s.id,s.agent); DETAIL.set(s.id,s); while(DETAIL.size>300) DETAIL.delete(DETAIL.keys().next().value); } },
     async sessionInfo(id) {
       const agent = this.agentOf(id);
-      const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`)).json();
-      const s = normalize(p.session || p); if (!s) return null;
+      let p;
+      try { p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${aq(id,'&')}`)).json(); }
+      catch(e) { if (![400,404].includes(e.status)) throw e; p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`)).json(); }
+      const raw = p.session || p;
+      if (!raw?.id && !raw?.session_id) return null;
+      // Older services do not have view=detail. Their preview may itself be clipped
+      // at 1,000, so recover visible original input from history rather than trusting it.
+      if (!Object.prototype.hasOwnProperty.call(raw,'wizard_retry_input')) {
+        raw.wizard_retry_input='';
+        for(let offset=0; offset<100000; offset+=100) {
+          const page=await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}/messages?order=latest&limit=100&offset=${offset}&include_compacted=true&view=wizard${aq(id,'&')}`)).json();
+          const rows=page.data||page.messages||page.items||[], turns=window.WosChat?.parseRows(rows)||[];
+          const user=turns.slice().reverse().find(t=>t.u?.text);
+          if(user) { raw.wizard_retry_input=user.u.text; break; }
+          if(page.has_more===false || (page.has_more!==true && rows.length<100)) break;
+          if(!rows.length || offset>=99900) throw new Error('Incomplete retry history');
+        }
+      }
+      const s = normalize(raw); if (!s) return null;
+      if (s.agent && (s.agent || 'hermes') !== (agent || 'hermes')) throw new Error('Thread scope changed');
       if (agent) s.agent = agent;
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
       const i = list.findIndex(x => x.id === id);
-      if (i >= 0) list[i] = { ...list[i], ...s }; else list.push(s);
-      applyLocal(list[i >= 0 ? i : list.length - 1]);
+      if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
+      if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, renames: s.renames, detailNeeded: false,
+        ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
+      else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
+      else list.push({ ...s, detailNeeded: false });
+      applyLocal(i >= 0 ? list[i] : DETAIL.get(id) || s);
       return s;
     },
     /* ---- thread actions ---- */
@@ -633,6 +773,10 @@
   };
   // Wizard (in its desk, or another tab) writes the same key when a chat is opened.
   addEventListener('storage', e => { if (e.key === SEEN_KEY || e.key === SEEN_BASE) { L.seen = merge(L.seen, readLocal()); L.emit(); } });
+  // Open on the last snapshot (see SNAP_KEY). at stays 0, so the connection banner never counts it as a live read.
+  { const snap = readSnap(); if (snap && snap.sessions.length) { L.sessions = snap.sessions; L.deferred = snap.deferred || {}; for (const s of L.sessions) applyLocal(s); L.ok = true; L.cached = true; L.cachedAt = snap.at; } }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) writeSnap(L); });
+  addEventListener('pagehide', () => writeSnap(L));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) L.refresh(); });
   setInterval(() => { if (!document.hidden) L.refresh(); }, 15000);
   // outbox.js loads after this file: follow it once every script has run.
