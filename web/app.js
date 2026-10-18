@@ -127,13 +127,7 @@
   // load, which used to shift the saved position onto the next desk to the right).
   let idx = (() => { const id = store.get('idxDesk', ''), at = id ? desks.findIndex(d => d.id === id) : -1; return at >= 0 ? at : store.get('idx4', HOME); })();
   if (!(idx >= 0 && idx < desks.length)) idx = HOME;
-  // The saved desk is the last *settled* one: iOS can freeze a PWA mid swipe-out without firing any event, so a
-  // desk flip from that swipe must never reach storage in the first place (see settledId below).
-  const save = () => {
-    store.set('wins4', W); store.set('strip', desks);
-    let at = typeof settledId === 'string' && settledId ? desks.findIndex(d => d.id === settledId) : -1; if (at < 0) at = idx;
-    store.set('idx4', at); store.set('idxDesk', desks[at]?.id || '');
-  };
+  const save = () => { store.set('wins4', W); store.set('strip', desks); store.set('idx4', idx); store.set('idxDesk', desks[idx]?.id || ''); };
 
   /* Live Wizard state: inbox, unread, working come from the real Wizard backend. */
   // Thread emojis are Wizard's own (same-origin storage), read fresh each render.
@@ -372,12 +366,9 @@
   /* Path-independent guard: any desk change made by a touch (dock, orb, scrubber, swipe strip, dot tap) that
    * hasn't settled for 1.2 s when the page hides is undone, a touch move while hidden is ignored, and stray
    * touches replayed in the first moment after coming back can't move desks either. */
-  var settledId = desks[idx]?.id || ''; let settleT = 0, touchAt = 0, shownAt = Date.now();
+  let settledId = desks[idx]?.id || '', settleT = 0, touchAt = 0, shownAt = Date.now();
   document.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') touchAt = Date.now(); }, true);
-  const settle = () => { clearTimeout(settleT); const armed = Date.now(); settleT = setTimeout(() => {
-    // A timer that fires late was frozen with the page (iOS swipe out): that flip never settled.
-    if (document.hidden || Date.now() - armed > 2500) return undoUnsettled();
-    settledId = desks[idx]?.id || ''; save(); }, 1200); };
+  const settle = () => { clearTimeout(settleT); settleT = setTimeout(() => { if (!document.hidden) settledId = desks[idx]?.id || ''; }, 1200); };
   const touchMove = () => Date.now() - touchAt < 2500;
   const undoUnsettled = () => {
     clearTimeout(settleT);
@@ -386,8 +377,6 @@
   };
   document.addEventListener('visibilitychange', () => { if (document.hidden) undoUnsettled(); else { shownAt = Date.now(); undoUnsettled(); } });
   addEventListener('pagehide', undoUnsettled);
-  addEventListener('pageshow', () => { shownAt = Date.now(); undoUnsettled(); });
-  addEventListener('focus', () => { if (Date.now() - touchAt > 2500) undoUnsettled(); });
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
@@ -395,7 +384,7 @@
     const from = desks[idx], to = desks[n];
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to; idx = n;
-    if (moved) { if (touchMove()) settle(); else { clearTimeout(settleT); settledId = desks[idx]?.id || ''; save(); } }
+    if (moved) { if (touchMove()) settle(); else { clearTimeout(settleT); settledId = desks[idx]?.id || ''; } }
     if (moved) window.WosResources?.back();
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
@@ -950,8 +939,8 @@
     const f = W[desks[idx]?.focus], b0 = f && f.app === 'chats' && f.thread ? boundOf(f.id) : null;
     // Opinionated (test port): a link tapped in this thread peeks in from the right just like a bound view,
     // and its desk shows the thread peeking from the left, so you can always see there is something to swipe to.
-    const tapped = f && f.app === 'chats' && f.thread ? (desks[idx + 1]?.wins || []).map(id => W[id]).find(x => x && x.from && x.from.win === f.id && x.from.sid === f.thread) : null;
-    const bb = b0 && b0.bsid === f.thread && deskOf(b0.id) === idx + 1 ? b0 : null, b = bb || tapped || null;
+    const tapped = !b0 && f && f.app === 'chats' && f.thread ? (desks[idx + 1]?.wins || []).map(id => W[id]).find(x => x && x.from && x.from.win === f.id && x.from.sid === f.thread) : null;
+    const b = b0 && b0.bsid === f.thread ? b0 : tapped || null;
     const on = !!(b && deskOf(b.id) === idx + 1);
     const owner = f?.bound ? W[f.bound] : (f?.from?.win ? W[f.from.win] : null), osid = f?.bound ? f.bsid : f?.from?.sid;
     const left = !!(owner && osid && owner.thread === osid && deskOf(owner.id) === idx - 1);
