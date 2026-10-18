@@ -90,7 +90,7 @@ async function phone(b) {
   await p.locator(`[data-chats="${wid}"] [data-chfab]`).click(); await wait(700);
   await p.locator(`[data-chats="${wid}"] [data-chmodel]`).click(); await wait(400);
   const grp = p.locator('.ch-psheet .msheet-grp.priv');
-  ok(await grp.count() === 1 && await grp.locator('.msheet-gh .ag-lock').count() === 1 && /Private/.test(await grp.innerText()), 'phone: main Chats picker has a Private group with a lock');
+  ok(await grp.count() === 1 && await grp.locator('.msheet-gh .ag-lock').count() === 1 && /private/i.test(await grp.locator('.msheet-gh').innerText()), 'phone: main Chats picker has a Private group with a lock');
   const privRows = await grp.locator('.mrow').allInnerTexts();
   ok(privRows.length === 2 && /GLM 5\.3/.test(privRows[0]) && /DeepSeek/.test(privRows[1]), 'phone: Private group lists the private agent’s models', JSON.stringify(privRows));
   const mainRows = await p.locator('.ch-psheet .msheet-list > .mrow:not(.more)').allInnerTexts();
