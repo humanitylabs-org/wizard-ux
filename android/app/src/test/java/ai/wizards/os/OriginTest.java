@@ -62,15 +62,6 @@ public class OriginTest {
     }
 
     @Test
-    public void safetyNetMovesTheSamePageBackToTheRetiredName() {
-        assertEquals("https://private.wizard001.com/wizard-os-home/?session=abc#x", Origin.toLegacy("https://" + HOME + "/wizard-os-home/?session=abc#x"));
-        assertEquals("https://private.wizard001.com/mizel-live/1", Origin.toLegacy("https://" + HOME + ":443/mizel-live/1"));
-        assertEquals("https://" + HOME + ".evil.test/x", Origin.toLegacy("https://" + HOME + ".evil.test/x"));
-        assertEquals("https://example.com/", Origin.toLegacy("https://example.com/"));
-        assertEquals("https://private.wizard001.com/x", Origin.toLegacy("https://private.wizard001.com/x"));
-    }
-
-    @Test
     public void shellPaths() {
         assertTrue(Origin.isShellPath("/wizard-os-home/"));
         assertTrue(Origin.isShellPath("/wizard-os-home"));

@@ -37,6 +37,7 @@ env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libe
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
 env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5702; S = 'emulator-%d' % PORT; DEVTOOLS = 9353; FAKE = 18787
+FAKE = int(os.environ.get('WOS_QA_FAKE_PORT') or FAKE)  # move the fake Wizard off a port the Mac already holds
 ORIGIN = 'http://localhost:%d' % FAKE
 res = []; receipt = {'checks': [], 'job': str(job)}
 
@@ -147,6 +148,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
             return self._json(200, {'run_id': rid, 'status': 'running'})
         m = re.match(r'^/wizard/files/([^/]+)/content$', u)
         if m and m.group(1) in FILES: return self._send(200, FILES[m.group(1)][1], FILES[m.group(1)][0])
+        if u == '/wizard/v1/bootstrap': return self._json(200, {'capabilities': {'resumable_uploads': False}})
         if u == '/wizard/thread-seen': return self._json(200, {'state': {'initializedAt': int(time.time() * 1000), 'threads': {}}})
         if u == '/wizard/thread-dispositions': return self._json(200, {'state': {}})
         return self._json(200, {})
@@ -277,6 +279,8 @@ def connect(secs=40):
             pg = Page()
             pg.ev("new Promise((r, j) => { const t0 = Date.now(); const t = () => (window.__wos && window.__wos.live && window.__wos.live.ok && window.WosDevice && window.WosDevice.ready) ? r(true) : Date.now() - t0 > 30000 ? j(new Error('shell not ready')) : setTimeout(t, 250); t(); })")
             pg.ev("(() => { const c = document.querySelector('#coach'); if (c && !c.hidden) document.querySelector('#coachGo')?.click(); return true; })()")
+            # A fresh install opens the first-run practice tour (0.9.3+), which by design swallows orb taps: finish it.
+            pg.ev("(() => { try { localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} try { window.WosTour?.finish('qa'); } catch (e) {} return true; })()")
             return pg
         except Exception as e:
             err = e; time.sleep(1.5)
@@ -294,6 +298,17 @@ def notifs(): return sx('dumpsys notification --noredact | grep -E "pkg=%s|andro
 def front(): return PKG in top()
 def bring_front(): sx('am start -W -n %s/ai.wizards.os.MainActivity' % PKG); time.sleep(2)
 def runs_n(): return len(ST['runs'])
+
+
+def native_sheet_send(secs=12):
+    """Since 0.9.15 a share opens the native 'Send to Wizard' sheet first. This fake Wizard has no resumable
+    uploads, so its Send hands the files to the in-app Share sheet (the previous route) that #20 checks."""
+    xml = wait(lambda: (lambda x: x if 'Send to Wizard' in x else '')(ui()), secs, 1)
+    if not xml: return ''
+    time.sleep(3)  # let the sheet's background /wizard/v1/bootstrap refresh learn resumable_uploads=false
+    hit = tap_text(r'^Send$', ui())
+    time.sleep(3)
+    return ('native sheet: ' + (hit or 'no Send')) + (' · qa-share' if 'qa-share' in xml else '')
 FOREIGN = []
 def sweep():
     """Every resource this page has loaded that isn't the fake Wizard (the real one must never be touched)."""
@@ -309,7 +324,7 @@ with (BASE / 'worker.lock').open('a') as lock:
     fcntl.flock(lock, fcntl.LOCK_EX)
     try:
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'np', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
-        # Dead DNS: nothing on the emulator can resolve private.wizard001.com (QA must never reach the real Wizard).
+        # Dead DNS: nothing on the emulator can resolve the real Wizard's name (QA must never reach it).
         em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'np', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect', '-dns-server', '10.0.2.250'],
                               env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)
         for _ in range(140):
@@ -529,6 +544,8 @@ with (BASE / 'worker.lock').open('a') as lock:
         if not wait(front, 6):
             sx("am start -n %s/ai.wizards.os.share.ShareActivity -a android.intent.action.SEND -t image/png --eu android.intent.extra.STREAM %s --es android.intent.extra.TEXT 'Shared from the QA gallery' --grant-read-uri-permission" % (PKG, media))
             time.sleep(3)
+        nat = native_sheet_send()
+        check('#20 the native Send to Wizard sheet shows the image and hands off to Wizard OS', 'qa-share' in nat and 'Send' in nat and wait(front, 8), (nat, top()[:100]))
         connect()
         sheet = wait(lambda: pg.ev("(() => { const e = document.querySelector('[data-dv=share]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()"), 15)
         check('#20 Wizard OS opens the Share sheet with the image and text', sheet and 'Share to Wizard' in sheet and 'qa-share' in sheet and pg.ev("document.querySelector('[data-dv=share] textarea')?.value || ''").startswith('Shared from'), sheet)
@@ -542,6 +559,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         if not front():
             tap_text(r'^Wizard$'); time.sleep(1.5)
             if not wait(front, 6): tap_text(r'^Just once$|^Always$'); time.sleep(2)
+        native_sheet_send()
         connect()
         sheet2 = wait(lambda: pg.ev("(() => { const e = document.querySelector('[data-dv=share]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; })()"), 15)
         check('#20 sharing again opens a fresh Share sheet with the image', sheet2 and 'qa-share' in sheet2, (sheet2, logs('WizardShare', '.')))
