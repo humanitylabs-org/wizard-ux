@@ -331,9 +331,9 @@
   const DRAFTS = 'wos.drafts.v1';
   const WEB = () => window.WizWebUpdate;
   const checkWeb = force => WEB()?.check(force);
-  // Safe to reload: not recording, nothing uploading, no sheet or share in progress.
+  // The phone's own work that a reload would lose: a voice take (device recorder or in-page), a sheet or share,
+  // uploads. App recorders and holds are judged by core/web-update.js (a native Mizel meeting survives a reload).
   function webBusy() {
-    if (window.WizAppServices?.update.busy()) return true;
     try { if (J(DEV()?.recActive?.())?.id) return true; } catch (_) { return true; }
     const w = W$(); if (!w) return true;
     if (w.voice !== 'idle' || sheet) return true;
