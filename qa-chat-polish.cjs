@@ -142,7 +142,7 @@ const ours = p => p.url().startsWith(BASE);
   /* ---- #28 ?view= and ?video= (phone) ---- */
   try {
     await p.goto(BASE + '?view=inbox', { waitUntil: 'domcontentloaded' }); await p.waitForFunction(() => window.__wos?.live?.ok, null, { timeout: 20000 }).catch(() => {}); await sleep(600);
-    ok(await p.evaluate(() => __wos.sheet === 'inbox'), '#28 ?view=inbox opens the Inbox');
+    ok(await p.evaluate(() => (() => { const d = __wos.desks[__wos.idx], w = __wos.wins[d.focus]; return !__wos.sheet && w?.app === 'chats' && !w.thread; })()), '#28 ?view=inbox opens the Chats list (the notifications panel is retired)');
     await back();
     ok(await p.evaluate(() => __wos.sheet === null) && ours(p), '#28 Back closes the deep-linked Inbox, app stays');
     await p.goto(BASE + '?view=work&section=archive', { waitUntil: 'domcontentloaded' }); await p.waitForFunction(() => window.__wos?.live?.ok, null, { timeout: 20000 }).catch(() => {}); await sleep(900);
@@ -266,7 +266,7 @@ const ours = p => p.url().startsWith(BASE);
   try {
     await p.evaluate(() => { __wos.closeSheets(); __wos.goDesk(__wos.HOME); }); await sleep(1400);
     const cb = await p.evaluate(() => { const b = document.querySelector('[data-wxcritbox]'); return b ? b.textContent : null; });
-    ok(/1 critical issue needs attention/.test(cb || '') && /Open Inbox to resolve a critical issue/.test(cb || ''), '#31 banner: 1 critical issue (the failed one is left to Errors)', cb);
+    ok(/1 critical issue needs attention/.test(cb || '') && /Tap to see the critical issue/.test(cb || ''), '#31 banner: 1 critical issue (the failed one is left to Errors)', cb);
     await shot(p, 'phone-critical-banner');
     await p.evaluate(() => __wos.openWizardThread('qa_t00')); await sleep(1400);
     ok(await p.evaluate(() => !!document.querySelector('[data-wxcritbox]')), '#31 the banner stays across screens (inside another thread)');
@@ -274,9 +274,7 @@ const ours = p => p.url().startsWith(BASE);
     ok(await p.evaluate(() => !document.querySelector('[data-wxcritbox]')), '#31 hidden while that critical thread is in front');
     await back(); await sleep(1300);
     await p.click('[data-wxcrit]').catch(() => {}); await sleep(500);
-    ok(await p.evaluate(() => __wos.sheet === 'inbox'), '#31 tapping it opens the Inbox');
-    await sleep(1300);
-    ok(await p.evaluate(() => !document.querySelector('[data-wxcritbox]')), '#31 hidden while the Inbox is open');
+    ok(await p.evaluate(() => (() => { const d = __wos.desks[__wos.idx], w = __wos.wins[d.focus]; return !__wos.sheet && w?.app === 'chats' && !w.thread; })()), '#31 tapping it opens the Chats list');
     await back(); await sleep(1300);
     await p.click('[data-wxcrit-x]').catch(() => {}); await sleep(300);
     ok(await p.evaluate(() => !document.querySelector('[data-wxcritbox]')), '#31 × hides it');

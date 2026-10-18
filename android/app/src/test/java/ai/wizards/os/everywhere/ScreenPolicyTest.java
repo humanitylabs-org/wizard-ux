@@ -97,6 +97,86 @@ public class ScreenPolicyTest {
         assertTrue(c.endsWith("…"));
     }
 
+    /* ---------------- 0.9.21: words for Google-style free selection ---------------- */
+
+    private static String joined(List<ScreenPolicy.Word> ws) {
+        StringBuilder b = new StringBuilder();
+        for (ScreenPolicy.Word w : ws) b.append(w.t).append(w.sp);
+        return b.toString().trim();
+    }
+
+    /** Character boxes for one line of text: each character 10 px wide, 20 px tall, starting at x0, y. */
+    private static float[][] line(String t, int x0, int y) {
+        float[][] r = new float[t.length()][];
+        for (int i = 0; i < t.length(); i++) r[i] = new float[]{x0 + i * 10, y, x0 + i * 10 + 10, y + 20};
+        return r;
+    }
+
+    @Test public void punctuationSticksToItsWordAndSpacesSeparate() {
+        List<ScreenPolicy.Word> ws = ScreenPolicy.words("Hello, world (test).", null);
+        assertEquals(Arrays.asList("Hello,", "world", "(test)."), Arrays.asList(ws.get(0).t, ws.get(1).t, ws.get(2).t));
+        assertEquals(" ", ws.get(0).sp);
+        assertEquals("Hello, world (test).", joined(ws));
+    }
+
+    @Test public void lineBreaksSurviveTheJoin() {
+        List<ScreenPolicy.Word> ws = ScreenPolicy.words("Order 4,471\nready now", null);
+        assertEquals("\n", ws.get(1).sp);
+        assertEquals("4,471", ws.get(1).t);
+        assertEquals("Order 4,471\nready now", joined(ws));
+    }
+
+    @Test public void thaiWithoutSpacesStillJoinsBackExactly() {
+        String t = "ผัดกะเพราหมูสับไข่ดาว";
+        List<ScreenPolicy.Word> ws = ScreenPolicy.words(t, null);
+        assertTrue(ws.size() >= 1);
+        assertEquals(t, joined(ws));
+        for (ScreenPolicy.Word w : ws) assertEquals("", w.sp);
+    }
+
+    @Test public void wordsGetTheirBoxFromCharacterPositions() {
+        List<ScreenPolicy.Word> ws = ScreenPolicy.words("ab cd", line("ab cd", 100, 500));
+        assertEquals(2, ws.size());
+        assertEquals(100, ws.get(0).x);
+        assertEquals(20, ws.get(0).w);
+        assertEquals(130, ws.get(1).x);
+        assertEquals(500, ws.get(1).y);
+        assertEquals(20, ws.get(1).h);
+    }
+
+    @Test public void aWrappedWordKeepsItsFirstLineAndUndrawnWordsDrop() {
+        float[][] r = line("abcd ef gh", 0, 0);
+        r[3] = new float[]{0, 40, 10, 60};   // "d" wrapped to the next line
+        r[5] = null; r[6] = null;            // "ef" is not drawn (scrolled away)
+        List<ScreenPolicy.Word> ws = ScreenPolicy.words("abcd ef gh", r);
+        assertEquals(Arrays.asList("abcd", "gh"), Arrays.asList(ws.get(0).t, ws.get(1).t));
+        assertEquals(30, ws.get(0).w);        // a, b, c only
+        assertEquals(20, ws.get(0).h);
+        assertEquals(" ", ws.get(0).sp);
+    }
+
+    @Test public void offScreenWordsAreDroppedAndTheJsonCarriesWordBoxes() throws Exception {
+        List<ScreenPolicy.Word> ws = ScreenPolicy.words("in out", new float[][]{{10, 10, 20, 30}, {20, 10, 30, 30}, null,
+                {2000, 10, 2010, 30}, {2010, 10, 2020, 30}, {2020, 10, 2030, 30}});
+        List<ScreenPolicy.Block> out = ScreenPolicy.clean(Arrays.asList(
+                new ScreenPolicy.Block("in out", 0, 0, 3000, 40, false, ws, true)), 1080, 2400);
+        assertEquals(1, out.get(0).words.size());
+        JSONArray a = ScreenPolicy.toJson(out);
+        JSONArray w0 = a.getJSONObject(0).getJSONArray("wd").getJSONArray(0);
+        assertEquals("in", w0.getString(0));
+        assertEquals(10, w0.getInt(2));
+        assertEquals(6, w0.length());
+        assertTrue(a.getJSONObject(0).getBoolean("ex"));
+    }
+
+    @Test public void theCopyThatKnowsWhereItsWordsAreWins() {
+        List<ScreenPolicy.Word> ws = ScreenPolicy.words("Order now", line("Order now", 0, 100));
+        List<ScreenPolicy.Block> out = ScreenPolicy.clean(Arrays.asList(
+                b("Order now", 20, 120, 300, 60), new ScreenPolicy.Block("Order now", 0, 100, 400, 120, false, ws, true)), 1080, 2400);
+        assertEquals(1, out.size());
+        assertTrue(out.get(0).exact);
+    }
+
     /* ---------------- Hide orb + the menu's spot ---------------- */
 
     @Test public void hiddenOrbStaysHiddenUntilWizardOsOpens() {
