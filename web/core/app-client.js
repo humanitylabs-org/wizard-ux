@@ -7,6 +7,8 @@
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
   let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
   const requests = new Map();
+  const guardPush = history.pushState.bind(history);
+  let guardBase = null, standaloneIsRoot = null;
   let conversation = null;
   const voiceInput = Object.freeze({ register(handler) {
     if (typeof handler?.snapshot !== 'function' || typeof handler?.receive !== 'function') throw new TypeError('Voice input needs snapshot and receive');
@@ -73,7 +75,8 @@
     const history = window.history, id = 'wh-' + Math.random().toString(36).slice(2);
     const priorPush = history.pushState, priorReplace = history.replaceState;
     let index = 0, pending = false;
-    const stamp = state => ({ ...(state && typeof state === 'object' ? state : {}), __wizardApp: { version: VERSION, id, index } });
+    const stamp = state => { const next = { ...(state && typeof state === 'object' ? state : {}), __wizardApp: { version: VERSION, id, index } }; delete next.__wizardAppGuard; return next; };
+    if (!framed) standaloneIsRoot = isRoot;
     priorReplace.call(history, stamp(history.state), '');
     const wrappedPush = function (state, title, url) {
       index++; try { return priorPush.call(history, stamp(state), title, url); } catch (e) { index--; throw e; }
@@ -82,9 +85,12 @@
     history.pushState = wrappedPush; history.replaceState = wrappedReplace;
     const pop = e => { const mark = e.state?.__wizardApp; if (mark?.id === id) index = mark.index; else index = 0; pending = false; };
     addEventListener('popstate', pop);
-    const unregister = register({ canGoBack: () => !pending && !isRoot() && index > 0,
-      back: () => { if (pending || isRoot() || index <= 0) return false; pending = true; history.back(); return true; } });
-    return () => { unregister(); removeEventListener('popstate', pop); if (history.pushState === wrappedPush) history.pushState = priorPush; if (history.replaceState === wrappedReplace) history.replaceState = priorReplace; };
+    // A traversal already admitted by this adapter still owns Back until its
+    // popstate arrives. Reporting root while it is pending lets a rapid second
+    // hardware callback collapse fullscreen or send the shell Home.
+    const unregister = register({ canGoBack: () => pending || (!isRoot() && index > 0),
+      back: () => { if (pending) return true; if (isRoot() || index <= 0) return false; pending = true; history.back(); return true; } });
+    return () => { unregister(); removeEventListener('popstate', pop); if (history.pushState === wrappedPush) history.pushState = priorPush; if (history.replaceState === wrappedReplace) history.replaceState = priorReplace; if (standaloneIsRoot === isRoot) standaloneIsRoot = null; };
   }
   const listen = (set, fn, value) => { if (typeof fn !== 'function') throw new TypeError('Subscriber must be a function'); set.add(fn); if (value) fn(value); return () => set.delete(fn); };
   const TOKENS = ['canvas', 'base', 'chrome', 'overlay', 'surface', 'surface-raised', 'text', 'text-secondary', 'text-muted', 'border', 'accent', 'accent-soft', 'on-accent', 'reader-surface'];
@@ -182,21 +188,34 @@
     try { rootWatcher?.destroy(); } catch (_) {} rootWatcher = null;
     setTimeout(() => { if (Date.now() >= exitUntil) { exitUntil = 0; el.remove(); armStandalone(); } }, 2100);
   }
+  function pushStandaloneGuard() {
+    // A guard protects the current domain entry; it is not another app route.
+    guardBase = history.state?.__wizardApp || null;
+    guardPush({ ...history.state, __wizardAppGuard: true }, ''); guarded = true;
+  }
   function armStandalone() {
     if (framed || !detached() || Date.now() < exitUntil) return;
     if ('CloseWatcher' in window && !rootWatcher) {
       rootWatcher = new CloseWatcher(); rootWatcher.onclose = () => { rootWatcher = null; stayBack(); setTimeout(armStandalone, 0); };
     }
     if (!guarded && navigator.userActivation?.isActive) {
-      history.pushState({ ...history.state, __wizardAppGuard: true }, ''); guarded = true;
+      pushStandaloneGuard();
     }
   }
   if (!framed) {
     document.addEventListener('pointerdown', armStandalone, true);
     addEventListener('popstate', e => {
       if (Date.now() < exitUntil) { history.back(); return; }
-      if (e.state?.__wizardApp) return; // a real app route: its router owns this step
-      guarded = false; stayBack(); if (!exitUntil) { history.pushState({ ...history.state, __wizardAppGuard: true }, ''); guarded = true; }
+      guarded = !!e.state?.__wizardAppGuard;
+      const mark = e.state?.__wizardApp;
+      const rootGuard = !guarded && mark && guardBase && mark.id === guardBase.id && mark.index === guardBase.index && standaloneIsRoot?.();
+      if (mark && !rootGuard) {
+        // Let the router finish its one domain step, then protect a newly reached
+        // root even when the next Back comes without another pointer gesture.
+        setTimeout(() => { if (!guarded && !exitUntil && detached() && standaloneIsRoot?.()) pushStandaloneGuard(); }, 0);
+        return;
+      }
+      stayBack(); if (!exitUntil) pushStandaloneGuard();
     });
   }
   const sharedResult = promise => promise.then(value => ['shared', 'copied', 'cancelled', 'unsupported'].includes(value) ? value : 'unsupported', () => 'unsupported');

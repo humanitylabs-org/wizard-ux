@@ -139,6 +139,7 @@
     "core/links.css",
     "core/links.js",
     "core/music-voice.js",
+    "core/notif-bell.js",
     "core/polish.css",
     "core/resources.css",
     "core/resources.js",
@@ -152,6 +153,8 @@
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
+    "core/skin-frame.css",
+    "core/skin-frame.js",
     "core/skins.css",
     "core/skins.js",
     "core/status.js",
@@ -409,6 +412,10 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/skin-frame.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared validated skin frame foundations, loaded before skin composition"
+    },
     "core/settings.js": {
       "loadedBy": [
         "phone",
@@ -527,6 +534,13 @@
       "note": "Direct entrypoint import"
     },
     "core/views.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/notif-bell.js": {
       "loadedBy": [
         "phone",
         "desktop"

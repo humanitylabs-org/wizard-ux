@@ -15,17 +15,31 @@
   const pct = v => { if (v == null || v === '') return null; const n = Number(v); return isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null; };
   const iso = v => (typeof v === 'string' && isFinite(Date.parse(v)) ? v : null);
   function normalize(j) {
-    const providers = (Array.isArray(j?.providers) ? j.providers : []).map(p => {
+    const groups = (Array.isArray(j?.providers) ? j.providers : []);
+    // Provider identity is presentation only: never merge subscriptions by label.
+    const family = p => {
+      const raw = String(p.providerId || p.provider || p.id || '').split(':')[0];
+      return /^(?:codex(?:-\d+)?|openai-codex|chatgpt)$/i.test(raw) ? 'chatgpt' : raw;
+    };
+    const counts = new Map();
+    for (const p of groups) {
+      if (!p?.id) continue;
+      const id = family(p), prior = counts.get(id);
+      counts.set(id, {id, name: id === 'chatgpt' ? 'ChatGPT' : String(p.name || id), count:(prior?.count || 0) + (Array.isArray(p.accounts) ? p.accounts.length : 1)});
+    }
+    const accountCounts = [...counts.values()];
+    const expanded = groups.flatMap(p => Array.isArray(p?.accounts) ? p.accounts.map(a => ({...a, providerId:p.id, providerName:p.name, status:p.status === 'stale' ? 'stale' : a.status})) : [p]);
+    const providers = expanded.map(p => {
       if (!p || typeof p !== 'object' || !p.id) return null;
       const limits = (Array.isArray(p.limits) ? p.limits : []).map(l => {
         const rem = pct(l?.remainingPercent ?? (l?.usedPercent != null ? 100 - l.usedPercent : null)); if (rem == null) return null;
         return { id: String(l.id || l.label || ''), label: String(l.label || 'Quota'), remainingPercent: rem, usedPercent: 100 - rem, resetsAt: iso(l.resetsAt) };
       }).filter(Boolean);
       const paid = p.paid && typeof p.paid === 'object' ? p.paid : null;
-      return { id: String(p.id), name: String(p.name || p.id), plan: p.plan ? String(p.plan) : '', status: ['ok', 'stale', 'unavailable'].includes(p.status) ? p.status : (limits.length ? 'ok' : 'unavailable'),
+      return { id: String(p.id), provider: family(p), providerName: family(p) === 'chatgpt' ? 'ChatGPT' : String(p.providerName || p.name || p.id), name: String(p.name || p.id), plan: p.plan ? String(p.plan) : '', status: ['ok', 'stale', 'unavailable'].includes(p.status) ? p.status : (limits.length ? 'ok' : 'unavailable'),
         fetchedAt: iso(p.fetchedAt), limits, paid, error: p.error ? String(p.error.message || p.error) : '' };
     }).filter(Boolean);
-    return { fetchedAt: iso(j?.fetchedAt), providers };
+    return { fetchedAt: iso(j?.fetchedAt), providers, accountCounts };
   }
   const tone = rem => (rem <= 10 ? 'alert' : rem <= 25 ? 'warning' : 'normal');
   const zone = () => (window.WizConfig?.timeZone?.() || undefined);
@@ -83,8 +97,9 @@
         if (p.status === 'unavailable' || !p.limits.length) { notes.push(`${p.name}${p.plan ? ' · ' + p.plan : ''}: ${p.status === 'unavailable' ? 'couldn’t read usage' : 'no quota windows'}${p.error ? ' · ' + p.error : ''}`); }
         if (p.status === 'stale') notes.push(`${p.name}: last known reading`);
         if (p.status === 'unavailable') continue;
-        for (const l of p.limits) rows.push(`<div class="us-row ${tone(l.remainingPercent)}${p.status === 'stale' ? ' stale' : ''}" data-usage-row="${esc(p.id + ':' + l.id)}"><div class="us-t"><b>${esc(rowLabel(p, l))}</b><span class="us-p">${l.remainingPercent}% left</span></div>`
-          + `<div class="us-bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${l.remainingPercent}" aria-label="${esc(rowLabel(p, l))} remaining"><i style="width:${l.remainingPercent}%"></i></div>`
+        // Every bar in Wizard shows how much is USED (fills up toward 100%), like the server and Home bars.
+        for (const l of p.limits) rows.push(`<div class="us-row ${tone(l.remainingPercent)}${p.status === 'stale' ? ' stale' : ''}" data-usage-row="${esc(p.id + ':' + l.id)}"><div class="us-t"><b>${esc(rowLabel(p, l))}</b><span class="us-p">${l.usedPercent}% used</span></div>`
+          + `<div class="us-bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${l.usedPercent}" aria-label="${esc(rowLabel(p, l))} used"><i style="width:${l.usedPercent}%"></i></div>`
           + `<small class="us-r">${esc(resetLine(l.resetsAt, now) || 'No reset time reported')}</small></div>`);
         const pl = paidLine(p.paid); if (pl) notes.push(`${p.name}: ${pl}`);
       }

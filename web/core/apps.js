@@ -65,7 +65,7 @@
   const toTile = (a, trusted = false) => ({
     id: String(a.id), kind: 'wizard', name: String(a.name || a.id), icon: a.icon || String(a.name || a.id).trim().charAt(0).toUpperCase(),
     g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id), url: a.url || '', desc: a.desc || '',
-    ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '',
+    ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '', system: a.system === true,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
@@ -130,6 +130,11 @@
       for (const a of APPS) {
         const n = norm(a.name);
         let s = n === q ? 100 : n.startsWith(q) ? 80 : n.includes(q) ? 60 : q.includes(n) && n.length > 3 ? 50 : 0;
+        // One spoken word that shares a long stem with a name word ("meditation" → Meditate). Shorter names win ties.
+        if (!s && !q.includes(' ')) for (const w of n.split(' ')) {
+          let k = 0; while (k < w.length && k < q.length && w[k] === q[k]) k++;
+          if (k >= 6 && k >= 0.75 * Math.min(w.length, q.length)) s = Math.max(s, 55 - n.length / 100);
+        }
         if (s > bs) { bs = s; best = a; }
       }
       return bs >= 50 ? best : null;
@@ -181,5 +186,7 @@
     if (m) return { query: m[1].trim(), tab: 'all', strong: false };
     return null;
   }
+  // Maintenance stays addressable by deep link/voice, but is not an ordinary Apps entry.
+  window.WizCore.isMaintenanceApp = a => a?.id === 'wizard-supervisor';
   window.WizCore.apps = registry;
 })();

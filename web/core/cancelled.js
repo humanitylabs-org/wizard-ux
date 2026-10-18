@@ -131,7 +131,7 @@
     try {
       const blob = blobOf(t); if (!blob || blob.size < 1000) throw new Error('The recording is empty');
       const prompt = window.WizConfig.voicePrompt?.() || '';
-      const j = t.custody ? await window.WosOutbox.transcribeDictation(id) : await window.WosOutbox.bounded(signal => window.WizConfig.transcribe(blob, { prompt, language: 'en', signal }));
+      const j = t.custody ? await window.WosOutbox.transcribeDictation(id) : await window.WosOutbox.bounded(signal => window.WizConfig.transcribe(blob, { prompt, language: 'en', signal }), window.WosOutbox.TRANSCRIBE_TIMEOUT_MS);
       const text = String(j.text || '').trim();
       if (!text) throw new Error('No speech found in it');
       texts[id] = text; saveTexts(); open.add(id);

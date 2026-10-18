@@ -19,6 +19,9 @@
 .rs-bar i{display:block;height:100%;width:var(--rs-value);background:var(--green);border-radius:inherit}
 .rs-accounts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px}
 .rs-account{display:block;min-width:0}
+.rs-provider{display:flex;flex-direction:column;gap:10px;min-width:0;align-self:start}
+.rs-provider-h{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--wz-text-secondary,var(--ink-2))}
+.rs-provider-h i{font-style:normal;font-weight:600;margin-left:4px;color:var(--wz-text-muted,var(--ink-3))}
 .rs-account-line{display:flex;align-items:baseline;justify-content:space-between;gap:5px;font-size:12px}
 .rs-account-line>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--wz-text-secondary,var(--ink-2))}
 .rs-account-line b{font-size:13px;font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -81,3 +84,29 @@
 .rs-net li small{font-size:11px;color:var(--wz-text-muted,var(--ink-3));white-space:nowrap}
 .rs-net .rs-st-offline{opacity:.6}
 .rs-net-hint{margin:10px 2px 0}
+
+/* Health tab + Home alert line (tools/system-health.mjs). Problems first; one tappable amber/red line on Home. */
+.rs-health-alert{display:flex;align-items:center;gap:9px;width:100%;min-height:40px;padding:8px 15px;border:0;border-top:1px solid var(--line);background:color-mix(in srgb,var(--amber) 8%,transparent);color:var(--amber);font-size:12px;text-align:left}
+.rs-health-alert span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-health-alert em{font-style:normal;opacity:.8}
+.rs-health-alert .rs-dot{background:var(--amber);box-shadow:0 0 0 3px color-mix(in srgb,var(--amber) 22%,transparent)}
+.rs-health-alert.rs-health-error{color:var(--red,#ff6b6b);background:color-mix(in srgb,var(--red,#ff6b6b) 9%,transparent)}
+.rs-health-alert.rs-health-error .rs-dot{background:var(--red,#ff6b6b);box-shadow:0 0 0 3px color-mix(in srgb,var(--red,#ff6b6b) 22%,transparent)}
+.rs-health-alert:active{filter:brightness(1.15)}
+.rs-health-alert:focus-visible{outline:2px solid var(--violet-2);outline-offset:-3px}
+.rs-health-sum{margin:0 2px 14px;font-size:12px;color:var(--wz-text-secondary,var(--ink-2))}
+.rs-health{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.rs-health li{padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--wz-surface-raised,rgba(255,255,255,.025))}
+.rs-health-line{display:flex;align-items:center;gap:10px;font-size:14px}
+.rs-health-line b{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-health-line span{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--wz-text,var(--ink))}
+.rs-health li p{margin:7px 0 0 19px;font-size:12px;line-height:1.45;color:var(--wz-text-secondary,var(--ink-2));overflow-wrap:anywhere}
+.rs-health li small{display:block;margin:6px 0 0 19px;font-size:11px;line-height:1.45;color:var(--wz-text-muted,var(--ink-3))}
+.rs-h-ok .rs-dot{background:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 22%,transparent)}
+.rs-h-warn .rs-dot{background:var(--amber)}
+.rs-h-warn{border-color:color-mix(in srgb,var(--amber) 45%,var(--line))!important}
+.rs-h-warn .rs-health-line span{color:var(--amber)}
+.rs-h-error .rs-dot{background:var(--red,#ff6b6b);box-shadow:0 0 0 3px color-mix(in srgb,var(--red,#ff6b6b) 22%,transparent)}
+.rs-h-error{border-color:color-mix(in srgb,var(--red,#ff6b6b) 50%,var(--line))!important}
+.rs-h-error .rs-health-line span{color:var(--red,#ff6b6b)}
+.rs-health.rs-stale{opacity:.7}
