@@ -137,6 +137,35 @@ window.WizCore.chats = function createChats(H) {
   const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false };
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
   const SEC_PAGE = 40;
+  /* ---- Morning: the owner's daily check-in (Morning app, /morning/), pinned at the top of Ready ----
+   * Status is the Morning app's /morning/api/status; the app also posts {type:'wizard:morning'} when a step is
+   * ticked so the card updates at once. No Morning app on this Wizard (not in Apps, or unreachable) = no card.
+   * Read at most once a minute, from list paints only; the HTML is built from that state alone, so an unchanged
+   * state never rebuilds the list (the 15 s sessions poll keeps the same nodes). */
+  const MORNING = { data: null, at: 0, busy: false };
+  const morningInstalled = () => typeof window.WizCanOpen === 'function' ? window.WizCanOpen('morning') : false;
+  function morningSet(d) {
+    const ok = d && typeof d.done === 'number' && typeof d.total === 'number' && typeof d.day === 'string';
+    const next = ok ? { day: d.day, done: d.done, total: d.total, next_label: String(d.next_label || '') } : null;
+    if (JSON.stringify(next) === JSON.stringify(MORNING.data)) return;
+    MORNING.data = next;
+    for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && el.querySelector('.ch-list') && !holdList(id)) renderChatList(w, el); }
+  }
+  function morningPoll() {
+    if (MORNING.busy || Date.now() - MORNING.at < 60000 || !morningInstalled()) return;
+    MORNING.busy = true; MORNING.at = Date.now();
+    fetch('/morning/api/status', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null)
+      .then(morningSet, () => {}).finally(() => { MORNING.busy = false; });
+  }
+  addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'wizard:morning') { MORNING.at = Date.now(); morningSet(e.data.status); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { MORNING.at = 0; morningPoll(); } });
+  function morningCard() {
+    const d = MORNING.data; if (!d || !morningInstalled()) return '';
+    const all = d.done >= d.total;
+    const sub = all ? 'Done for today' : d.done ? `${d.done} of ${d.total} done · next: ${d.next_label}` : 'Workout · Meditate · Read';
+    const dots = Array.from({ length: d.total }, (_, i) => `<i${i < d.done ? ' class="on"' : ''}></i>`).join('');
+    return `<button type="button" class="ch-morning${all ? ' done' : ''}" data-chmorning aria-label="Open Morning · ${esc(sub)}"><span class="sun" aria-hidden="true"></span><span class="tx"><span class="hd"><b>Morning</b><i>${all ? 'Done' : 'Pinned'}</i></span><small>${esc(sub)}</small>${all ? '' : `<span class="dots" aria-hidden="true">${dots}</span>`}</span><span class="go" aria-hidden="true">›</span></button>`;
+  }
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
   const deferredOf = s => !!s.deferred && !s.archived;
@@ -353,6 +382,7 @@ window.WizCore.chats = function createChats(H) {
     H.threadShown?.(w.id, null); // the list is showing: nothing is bound to this window
     const c = ch(w.id), n = norm(c.q);
     const AGID = winAgent(w), LST = LIVE.statusFor ? LIVE.statusFor(AGID) : { ok: LIVE.ok, error: LIVE.error };
+    if (!AGID) morningPoll();
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, SJ = c.subject || '';
     const fids = F?.ids ? F.ids(AGID) : null;
     const all = (LST.ok ? (LIVE.sessionsFor ? LIVE.sessionsFor(AGID) : LIVE.sessions).filter(s => !s.hidden) : []).filter(s => (!F || (fids ? fids.has(s.id) : F.test(s))) && (!SJ || subjectOf(s) === SJ));
@@ -410,7 +440,7 @@ window.WizCore.chats = function createChats(H) {
       const waitN = k === 'ready' || k === 'yesterday' || k === 'pastWeek' ? list.filter(s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you')).length : 0;
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
+        ${open ? `<div class="ch-sec-b">${k === 'ready' && !n && !filtered && !AGID ? morningCard() : ''}${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
     }).join('');
     if (bs && LST.ok) body += BS.footer(bs);
     const place = listPlace(el) || c.listPlace;
@@ -1344,6 +1374,7 @@ window.WizCore.chats = function createChats(H) {
     const recovery = e.target.closest('[data-obrecover]'); if (recovery) { H.recoverUnsent?.(recovery.dataset.obrecover); return true; }
     const rb = e.target.closest('[data-obretry]'); if (rb) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retry(rb.dataset.obretry)), 2400); return true; }
     if (e.target.closest('[data-chunsent]')) { H.openUnsent?.(); return true; }
+    if (e.target.closest('[data-chmorning]')) { MORNING.at = 0; if (!(window.WizOpenApp?.('morning'))) H.openLink?.('/morning/', 'Morning'); return true; }
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;
