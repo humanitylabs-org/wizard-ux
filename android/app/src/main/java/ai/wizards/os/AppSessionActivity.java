@@ -16,7 +16,7 @@ public final class AppSessionActivity extends MainActivity {
         setIntent(new Intent(this,AppSessionActivity.class).setAction(Intent.ACTION_VIEW)
             .setData(requested == null ? null : getIntent().getData()));
         super.onCreate(state);
-        applyImmersive(true);
+        applyImmersive(false);
         String app = HomeScreenShortcuts.appId(this,getIntent());
         if (app != null) {
             // ShortcutManager performs binder/disk work; keep it off the first-paint UI thread.
@@ -64,5 +64,6 @@ public final class AppSessionActivity extends MainActivity {
                 && (id == null ? "" : id).equals(u.getQueryParameter("app-session"));
         } catch (Exception invalid) { return false; }
     }
-    @Override void applyImmersive(boolean ignored) { super.applyImmersive(true); }
+    /** A pinned app is a normal Android app window: status bar and navigation buttons stay visible (James, 18 Oct). */
+    @Override void applyImmersive(boolean ignored) { super.applyImmersive(false); }
 }

@@ -52,6 +52,8 @@ failure = None
 try:
     emu.boot()
     for ime in emu.sx('ime list -s').split(): emu.sx('ime disable ' + ime)
+    # Samsung-style three-button navigation, so the check sees Back/Home/Recents the way James uses them.
+    emu.sx('cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.threebutton'); time.sleep(2)
     check('debug build of the same source installs', 'Success' in emu.sh(ADB, '-s', emu.S, 'install', '-r', str(apk)))
     emu.sx('am start -W -n %s/ai.wizards.os.MainActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER' % PKG)
     for _ in range(12):
@@ -95,11 +97,14 @@ try:
     emu.sx('input tap %d %d' % icon)
     check('icon opens Wisdom as its own app (AppSessionActivity)', wait(lambda: '.AppSessionActivity' in emu.top(), 30), emu.top())
     time.sleep(7)
-    # Android shows a one-time "Viewing full screen / Got it" hint over a new immersive task; it hides the page from
-    # the accessibility tree (r1: Wisdom home rendered underneath). Dismiss it the way a person would.
-    if emu.tap_text(r'^(Got it|GOT IT)$'): time.sleep(2)
     cap('p06-pinned-wisdom')
     xml = emu.ui(); text = ' '.join(labels(xml))
+    check('no "Viewing full screen" hint (pinned app is not immersive)', 'Viewing full screen' not in text, text[:160])
+    win = emu.sx('dumpsys window'); (out / 'window-pinned.txt').write_text(win)
+    def bar_visible(kind):
+        return bool(re.search(r'InsetsSource[^\n]*type=' + kind + r'[^\n]*visible=true', win))
+    check('status bar stays visible in the pinned app', bar_visible('statusBars'))
+    check('three-button navigation stays visible in the pinned app', bar_visible('navigationBars') and 'threebutton' in emu.sx('cmd overlay list'))
     check('pinned app shows Wisdom content', bool(re.search(r'Currently reading|Suggested|Browse all|collection|Wisdom', text)), text[:300])
     check('pinned app has no Wizard orb/dock', not any(s.startswith('Wizard orb.') for s in labels(xml)))
     emu.sx('input keyevent KEYCODE_BACK'); time.sleep(1.2); emu.sx('input keyevent KEYCODE_BACK'); time.sleep(1.2)
