@@ -129,7 +129,15 @@ def main():
         for port in (2286,2290): run([ADB,'-s',em.S,'reverse',f'tcp:{port}',f'tcp:{port}'],capture_output=True)
         em.sx('run-as ai.wizards.os.qa mkdir -p files')
         def private_file(name, data):
-            run([ADB,'-s',em.S,'exec-in','run-as',em.pkg,'dd','status=none','of=files/'+name],input=data,capture_output=True)
+            # exec-in + run-as dd wrote empty files on API 35; stage via /data/local/tmp and verify the size.
+            staged = out / ('.stage-' + name); staged.write_bytes(data)
+            tmp = '/data/local/tmp/wizard-photos-' + name
+            run([ADB,'-s',em.S,'push',staged,tmp],capture_output=True); staged.unlink()
+            em.sx(f'chmod 644 {tmp}')
+            em.sx(f'run-as {em.pkg} cp {tmp} files/{name}')
+            em.sx(f'rm -f {tmp}')
+            got = em.sx(f'run-as {em.pkg} stat -c %s files/{name}').strip()
+            assert got == str(len(data)), f'private fixture {name}: expected {len(data)} bytes, got {got!r}'
         private_file('photos-test.json', json.dumps({'server':'http://localhost:2286','key':key}).encode())
         private_file('qa_home.txt', b'http://localhost:2290')
         for i,color in enumerate(('red','blue')):
