@@ -101,25 +101,10 @@
       "classification": "preview",
       "reason": "Opt-in Live Mode motion styles."
     },
-    "core/home-screen-policy.js": {
+    "core/swipe-strip.js": {
       "shell": "phone",
-      "classification": "native",
-      "reason": "Android launcher-shortcut task policy; desktop has no home-screen pinning."
-    },
-    "core/home-screen-apps.css": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android Add to home screen sheet styling; native ShortcutManager only."
-    },
-    "core/home-screen-apps.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android Add to home screen via ShortcutManager pin request; no desktop equivalent."
-    },
-    "core/single-app-session.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
+      "classification": "touch-only",
+      "reason": "Finger swipe between chat list, thread and the desk a thread opened; desktop has no swipe and uses windows/side panels."
     }
   },
   "sharedAssets": [

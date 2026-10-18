@@ -3542,7 +3542,7 @@
     toast,
   });
   window.__wos = {
-    get links() { return LINKS; },
+    get links() { return LINKS; }, placeTrack,
     get voiceBorrowing() { return parking || !!parkedReply || !!V.admitting; },
     openAgentChats,
     live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
