@@ -159,6 +159,7 @@
     "core/focused-field.js",
     "core/links.css",
     "core/links.js",
+    "core/mic.js",
     "core/music-voice.js",
     "core/notif-bell.js",
     "core/polish.css",
@@ -390,6 +391,13 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/mic.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
     },
     "core/music-voice.js": {
       "loadedBy": [

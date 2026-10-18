@@ -384,10 +384,14 @@ public final class EverywhereOutbox {
             try { t = Transcriber.transcribe(audio, ai.wizards.os.device.AppState.live(origin), it.dictation() ? DICTATION_PROMPT : ai.wizards.os.device.WizardIdentity.voicePrompt(ai.wizards.os.device.WizardIdentity.name(app))); }
             catch (IOException e) { throw asHttp(e); }
             if (t.text.isEmpty()) {
-                synchronized (this) { it.state = "empty"; it.error = "No speech in that recording"; items.remove(it.id); save(); }
-                meetingNote(it, "event", "failed", "error", "No speech in that recording");
+                // Never delete an unheard take: a quiet or misrouted recording stays in Settings → Cancelled recordings.
+                boolean kept = app != null && ai.wizards.os.recording.CancelledTakes.keepUnheard(app, audio, it.source, "");
+                String why = kept ? "No words heard · recording kept in Settings → Cancelled recordings" : "No speech in that recording";
+                synchronized (this) { it.state = "empty"; it.error = why; items.remove(it.id); save(); }
+                meetingNote(it, "event", "failed", "error", why);
+                Log.i(TAG, "no words in " + it.id + (kept ? " · kept" : " · not kept"));
                 //noinspection ResultOfMethodCallIgnored
-                audio.delete();
+                if (!kept) audio.delete();
                 changed();
                 return;
             }
