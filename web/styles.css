@@ -870,7 +870,6 @@ html:not([data-shell="desktop"]) .imm-edge i { bottom: 3px; }
   background: rgba(205, 190, 255, .55); box-shadow: 0 0 0 1px rgba(0, 0, 0, .28), 0 1px 6px rgba(0, 0, 0, .35); transition: width 220ms var(--spring), margin-left 220ms var(--spring), background 300ms, box-shadow 300ms; }
 .device.zen-tip .zen-edge i, .zen-edge.pull i { width: 96px; margin-left: -48px; background: rgba(205, 190, 255, .7); box-shadow: 0 0 10px rgba(143, 99, 255, .5); }
 .device.zen .imm-edge i { opacity: 0 !important; } /* one handle at a time: the distraction-free one wins */
-=======
 /* Phone, edge-to-edge by default (Miguel, 17 Oct): an open app fills the screen instead of floating as a small
  * card; the dock stays, so the orb in the middle is the one place to talk. Several windows on a desk still tile,
  * flush to the edges. Explicit full screen (pinch / ⤢) keeps its own immersive layout. */
