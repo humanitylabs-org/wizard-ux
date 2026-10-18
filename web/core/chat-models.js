@@ -31,6 +31,8 @@
   const SUBSCRIPTIONS = ['openai-codex', SUB];
   const CLAUDE_ORDER = ['fable', 'opus', 'sonnet', 'haiku'];
   const GPT_ORDER = ['astra', 'sol', 'terra', 'luna', 'codex-spark'];
+  // The one list of primary models: the thread switch's slots and the picker's up-front rows both read it.
+  const PRIMARY = [{ family: 'claude:opus', name: 'Opus' }, { family: 'gpt:astra', name: 'Astra' }, { family: 'gpt:sol', name: 'Sol' }];
   const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
 
   const claudeFamily = (model, provider) => (!provider || CLAUDE_PROVIDERS.has(provider)) ? /^claude-(fable|opus|sonnet|haiku)(?:-|$)/i.exec(model)?.[1].toLowerCase() : undefined;
@@ -114,7 +116,9 @@
       return CLAUDE_ORDER.length + GPT_ORDER.length + 1;
     };
     // Routes outside the known families (another provider's catalogue) stay behind "More models".
-    return models.filter(m => { const f = family(m.value, m.provider); return f ? winners.get(f) === m : m.isGlobalDefault || selected(m); }).sort((a, b) => rank(a) - rank(b));
+    // Opinionated: only the PRIMARY families up front; Fable, Sonnet, Haiku, Terra, Luna live under More models.
+    const up = new Set(PRIMARY.map(p => p.family));
+    return models.filter(m => { const f = family(m.value, m.provider); return f ? winners.get(f) === m && (up.has(f) || selected(m)) : selected(m); }).sort((a, b) => rank(a) - rank(b));
   }
 
   const M = {
@@ -129,7 +133,7 @@
         .finally(() => { M.loading = null; });
       return M.loading;
     },
-    normalize, visibleChoices,
+    normalize, visibleChoices, PRIMARY, family,
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
     visible(model, provider) { return visibleChoices(M.options, model, provider); },
