@@ -122,8 +122,11 @@
   if (desks[0].wins.length) { const d = blank({ wins: desks[0].wins, focus: desks[0].focus }); desks[0] = blank({ id: 'home', home: true }); desks.splice(1, 0, d); }
   desks = desks.filter((d, i) => i === 0 || d.wins.length);
   Object.keys(W).forEach(id => { if (!desks.some(d => d.wins.includes(id))) delete W[id]; });
-  let idx = store.get('idx4', HOME); if (!(idx >= 0 && idx < desks.length)) idx = HOME;
-  const save = () => { store.set('wins4', W); store.set('strip', desks); store.set('idx4', idx); };
+  // Reopen exactly where he left off: remember the desk itself, not its position (empty desks are pruned on
+  // load, which used to shift the saved position onto the next desk to the right).
+  let idx = (() => { const id = store.get('idxDesk', ''), at = id ? desks.findIndex(d => d.id === id) : -1; return at >= 0 ? at : store.get('idx4', HOME); })();
+  if (!(idx >= 0 && idx < desks.length)) idx = HOME;
+  const save = () => { store.set('wins4', W); store.set('strip', desks); store.set('idx4', idx); store.set('idxDesk', desks[idx]?.id || ''); };
 
   /* Live Wizard state: inbox, unread, working come from the real Wizard backend. */
   // Thread emojis are Wizard's own (same-origin storage), read fresh each render.
@@ -352,13 +355,32 @@
     if (step > 0 && idx === desks.length - 1) return newDesk();
     goDesk(idx + step);
   }
+  /* iPhone: a quick swipe home along the bottom edge also reaches the dock and flips a desk just as the app
+   * goes away, so it reopens one desk over. A desk change in the last moment before the page is hidden was
+   * that swipe, not a choice: put the desk back. */
+  /* Path-independent guard: any desk change made by a touch (dock, orb, scrubber, swipe strip, dot tap) that
+   * hasn't settled for 1.2 s when the page hides is undone, a touch move while hidden is ignored, and stray
+   * touches replayed in the first moment after coming back can't move desks either. */
+  let settledId = desks[idx]?.id || '', settleT = 0, touchAt = 0, shownAt = Date.now();
+  document.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') touchAt = Date.now(); }, true);
+  const settle = () => { clearTimeout(settleT); settleT = setTimeout(() => { if (!document.hidden) settledId = desks[idx]?.id || ''; }, 1200); };
+  const touchMove = () => Date.now() - touchAt < 2500;
+  const undoUnsettled = () => {
+    clearTimeout(settleT);
+    const back = desks.findIndex(d => d.id === settledId);
+    if (back >= 0 && back !== idx) { idx = back; placeTrack(0, false); renderDots(); save(); }
+  };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) undoUnsettled(); else { shownAt = Date.now(); undoUnsettled(); } });
+  addEventListener('pagehide', undoUnsettled);
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
+    if (touchMove() && (document.hidden || Date.now() - shownAt < 700)) { placeTrack(0, false); return; } // the iPhone's swipe out, not a choice
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
     const from = desks[idx], to = desks[n];
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to; idx = n;
+    if (moved) { if (touchMove()) settle(); else { clearTimeout(settleT); settledId = desks[idx]?.id || ''; } }
     if (moved) window.WosResources?.back();
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
@@ -409,6 +431,7 @@
   let DS = null, dockSwiped = 0;
   $('#dock').addEventListener('pointerdown', e => {
     if (e.target.closest('#orbWrap, #scrub') || sheet) return;
+    if (e.pointerType === 'touch' && e.clientY > innerHeight - 22) return; // iOS home-indicator strip: the system's swipe
     DS = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, h: false };
   });
   $('#dock').addEventListener('pointermove', e => {
@@ -423,6 +446,7 @@
     if (!s.h) return;
     const dx = e.clientX - s.x, v = dx / ((performance.now() - s.t) || 1);
     dockSwiped = Date.now();
+    if (e.clientY - s.y < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
     if (e.type !== 'pointercancel' && (dx < -60 || v < -.5)) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); }
     else if (e.type !== 'pointercancel' && (dx > 60 || v > .5)) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); }
     else placeTrack(0, true);
@@ -3095,7 +3119,7 @@
       return finishVoice();
     } else if (g.mode === 'h') {
       if (sheet) return;
-      if (cancelled) return placeTrack(0, true);
+      if (cancelled || g.dy < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
       const v = g.dx / vt;
       if (g.dx < -60 || v < -.5) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); } else if (g.dx > 60 || v > .5) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); } else placeTrack(0, true);
     } else if (g.mode === 'v') {
