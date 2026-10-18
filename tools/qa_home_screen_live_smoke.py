@@ -89,6 +89,10 @@ try:
     inst = emu.sh(ADB, '-s', emu.S, 'install', '-r', str(apk))
     check('exact signed production APK installs', 'Success' in inst, inst)
     check('installed version matches build', str(a['aapt2'].get('version_code')) in emu.sx('dumpsys package %s | grep versionCode' % PKG), a['aapt2'].get('version_code'))
+    # No on-screen keyboard: typed search text arrives as key events. With an IME, the WebView relayouts when it
+    # closes and its accessibility tree keeps the keyboard-state bounds (r6 screenshot: row at y~1850, tree 1027).
+    for ime in emu.sx('ime list -s').split():
+        emu.sx('ime disable ' + ime)
     emu.sx('am start -W -n %s/.MainActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER' % PKG)
     check('ordinary launch opens MainActivity', wait(lambda: '.MainActivity' in emu.top(), 30), emu.top())
     # Fresh install: get past Android immersive education and the first-run practice tour (Skip).
@@ -112,7 +116,7 @@ try:
     (sx, sy), old = found
     emu.sx('input tap %d %d' % (sx, sy)); emu.sx('input keyevent KEYCODE_MOVE_END')
     if old: emu.sx('input keyevent ' + ' '.join(['KEYCODE_DEL'] * len(old)))
-    emu.sx('input text wisdom'); time.sleep(1); emu.sx('input keyevent KEYCODE_BACK'); time.sleep(0.8)
+    emu.sx('input text wisdom'); time.sleep(1.5)
     # The results sheet re-lays out after the keyboard closes (more groups appear above the app row):
     # wait until the Wisdom app row reports the same position twice in a row before pressing it.
     # Wait for the keyboard to be fully gone: while the IME window animates out, the accessibility tree and
