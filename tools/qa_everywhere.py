@@ -262,6 +262,13 @@ with (BASE / 'worker.lock').open('a') as lock:
         gear = pg.ev("!!document.querySelector('.gear')")
         check('Home has the Settings gear (top right)', gear)
         pg.ev("document.querySelector('.gear').click()"); time.sleep(1.2)
+        def dialog(pat, secs=6):
+            t0 = time.time()
+            while time.time() - t0 < secs:
+                x = ui()
+                if re.search(pat, x, re.I): return x
+                time.sleep(0.8)
+            return ''
         legacy_settings = bool(pg.ev("!!document.querySelector('[data-st=everywhere]')"))
         if not legacy_settings:
             # The current Settings UI no longer has the [data-st=everywhere] row these steps were written for.
@@ -298,13 +305,6 @@ with (BASE / 'worker.lock').open('a') as lock:
             st = json.loads(pg.ev("window.WizardOSNative.everywhere()"))
             check('switch reads on with overlay allowed', st.get('enabled') and st.get('overlay'), st)
             # 0.6.1: switching it on asks for Accessibility right away, one dialog, one button.
-            def dialog(pat, secs=6):
-                t0 = time.time()
-                while time.time() - t0 < secs:
-                    x = ui()
-                    if re.search(pat, x, re.I): return x
-                    time.sleep(0.8)
-                return ''
             d1 = dialog('Turn on voice typing')
             shot('03a-a11y-dialog')
             check('turning Everywhere on shows the voice typing & screenshots dialog', d1 and 'Open Accessibility' in d1, re.findall(r'text="([^"]+)"', d1)[:8])
