@@ -488,7 +488,7 @@ window.WizCore.chats = function createChats(H) {
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
     const fab = `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
-    const html = `<div class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}<div class="ch-scroll">${sugHtml}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
+    const html = `<div class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}<div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
