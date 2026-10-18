@@ -1079,9 +1079,11 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             r.setAudioEncodingBitRate(64000);
             r.setOutputFile(recording.getAbsolutePath());
             r.setOnErrorListener((mr, what, extra) -> main.post(() -> micLost(mr, what)));
+            ai.wizards.os.audio.MicRoute.pin(this, r); // the phone's mic, never a Bluetooth speaker's
             r.prepare();
             r.start();
             recorder = r;
+            Log.i(TAG, "recording via " + ai.wizards.os.audio.MicRoute.routed(r));
         } catch (Exception e) {
             Log.w(TAG, "recorder failed", e);
             dropRecorder();
