@@ -122,8 +122,11 @@
   if (desks[0].wins.length) { const d = blank({ wins: desks[0].wins, focus: desks[0].focus }); desks[0] = blank({ id: 'home', home: true }); desks.splice(1, 0, d); }
   desks = desks.filter((d, i) => i === 0 || d.wins.length);
   Object.keys(W).forEach(id => { if (!desks.some(d => d.wins.includes(id))) delete W[id]; });
-  let idx = store.get('idx4', HOME); if (!(idx >= 0 && idx < desks.length)) idx = HOME;
-  const save = () => { store.set('wins4', W); store.set('strip', desks); store.set('idx4', idx); };
+  // Reopen exactly where he left off: remember the desk itself, not its position (empty desks are pruned on
+  // load, which used to shift the saved position onto the next desk to the right).
+  let idx = (() => { const id = store.get('idxDesk', ''), at = id ? desks.findIndex(d => d.id === id) : -1; return at >= 0 ? at : store.get('idx4', HOME); })();
+  if (!(idx >= 0 && idx < desks.length)) idx = HOME;
+  const save = () => { store.set('wins4', W); store.set('strip', desks); store.set('idx4', idx); store.set('idxDesk', desks[idx]?.id || ''); };
 
   /* Live Wizard state: inbox, unread, working come from the real Wizard backend. */
   // Thread emojis are Wizard's own (same-origin storage), read fresh each render.
