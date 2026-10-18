@@ -46,19 +46,6 @@ final class Origin {
         return "https://" + HOST + (rest.isEmpty() || rest.charAt(0) != '/' ? "/" + rest : rest);
     }
 
-    /** The same page on the retired name (the fallback when the tailnet name cannot be reached). */
-    static String toLegacy(String url) {
-        if (url == null) return null;
-        String lower = url.toLowerCase(Locale.ROOT);
-        String home = "https://" + HOST.toLowerCase(Locale.ROOT);
-        String rest;
-        if (lower.startsWith(home + ":443")) rest = url.substring(home.length() + 4);
-        else if (lower.startsWith(home)) rest = url.substring(home.length());
-        else return url;
-        if (!rest.isEmpty() && "/?#".indexOf(rest.charAt(0)) < 0) return url;
-        return "https://" + LEGACY_HOST + (rest.isEmpty() || rest.charAt(0) != '/' ? "/" + rest : rest);
-    }
-
     static boolean isHome(Uri u) {
         return u != null && "https".equals(u.getScheme()) && HOST.equalsIgnoreCase(u.getHost()) && (u.getPort() == -1 || u.getPort() == 443);
     }

@@ -122,8 +122,11 @@
   if (desks[0].wins.length) { const d = blank({ wins: desks[0].wins, focus: desks[0].focus }); desks[0] = blank({ id: 'home', home: true }); desks.splice(1, 0, d); }
   desks = desks.filter((d, i) => i === 0 || d.wins.length);
   Object.keys(W).forEach(id => { if (!desks.some(d => d.wins.includes(id))) delete W[id]; });
-  let idx = store.get('idx4', HOME); if (!(idx >= 0 && idx < desks.length)) idx = HOME;
-  const save = () => { store.set('wins4', W); store.set('strip', desks); store.set('idx4', idx); };
+  // Reopen exactly where he left off: remember the desk itself, not its position (empty desks are pruned on
+  // load, which used to shift the saved position onto the next desk to the right).
+  let idx = (() => { const id = store.get('idxDesk', ''), at = id ? desks.findIndex(d => d.id === id) : -1; return at >= 0 ? at : store.get('idx4', HOME); })();
+  if (!(idx >= 0 && idx < desks.length)) idx = HOME;
+  const save = () => { store.set('wins4', W); store.set('strip', desks); store.set('idx4', idx); store.set('idxDesk', desks[idx]?.id || ''); };
 
   /* Live Wizard state: inbox, unread, working come from the real Wizard backend. */
   // Thread emojis are Wizard's own (same-origin storage), read fresh each render.
@@ -153,6 +156,7 @@
     visible: () => desks[idx].wins,
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
+    openUnsent: () => openSettings(true),
     newChatHint: 'Type below, or tap the orb and talk.',
     // The composer's mic (#13): the orb's own recorder, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
@@ -352,6 +356,17 @@
     if (step > 0 && idx === desks.length - 1) return newDesk();
     goDesk(idx + step);
   }
+  /* iPhone: a quick swipe home along the bottom edge also reaches the dock and flips a desk just as the app
+   * goes away, so it reopens one desk over. A desk change in the last moment before the page is hidden was
+   * that swipe, not a choice: put the desk back. */
+  let lastMove = null;
+  const undoLastMove = () => {
+    if (!lastMove || Date.now() - lastMove.at > 1500) return;
+    const back = desks.findIndex(d => d.id === lastMove.from); lastMove = null;
+    if (back >= 0 && back !== idx) { idx = back; placeTrack(0, false); renderDots(); save(); }
+  };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) undoLastMove(); });
+  addEventListener('pagehide', undoLastMove);
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
@@ -359,6 +374,7 @@
     const from = desks[idx], to = desks[n];
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to; idx = n;
+    if (moved) lastMove = { from: from && from.id, at: Date.now() };
     if (moved) window.WosResources?.back();
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
@@ -409,6 +425,7 @@
   let DS = null, dockSwiped = 0;
   $('#dock').addEventListener('pointerdown', e => {
     if (e.target.closest('#orbWrap, #scrub') || sheet) return;
+    if (e.pointerType === 'touch' && e.clientY > innerHeight - 22) return; // iOS home-indicator strip: the system's swipe
     DS = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, h: false };
   });
   $('#dock').addEventListener('pointermove', e => {
@@ -423,6 +440,7 @@
     if (!s.h) return;
     const dx = e.clientX - s.x, v = dx / ((performance.now() - s.t) || 1);
     dockSwiped = Date.now();
+    if (e.clientY - s.y < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
     if (e.type !== 'pointercancel' && (dx < -60 || v < -.5)) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); }
     else if (e.type !== 'pointercancel' && (dx > 60 || v > .5)) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); }
     else placeTrack(0, true);
@@ -604,17 +622,25 @@
   let SC = null; const SC_STEP = 26;
   scrub.addEventListener('pointerdown', e => {
     e.preventDefault(); scrub.setPointerCapture(e.pointerId);
-    SC = { x: e.clientX, start: idx, at: idx, live: false, t: setTimeout(() => { if (SC) { SC.live = true; scrub.classList.add('on'); scLabel(); vib(10); } }, 140) };
+    SC = { x: e.clientX, y: e.clientY, start: idx, at: idx, live: false, t: setTimeout(() => { if (SC) { SC.live = true; scrub.classList.add('on'); scLabel(); vib(10); } }, 140) };
   });
   scrub.addEventListener('pointermove', e => {
-    if (!SC) return; const dx = e.clientX - SC.x;
-    if (!SC.live && Math.abs(dx) > 10) { clearTimeout(SC.t); SC.live = true; scrub.classList.add('on'); }
+    if (!SC) return; const dx = e.clientX - SC.x, dy = e.clientY - SC.y;
+    if (dy < -30) { if (SC.live) { idx = SC.start; placeTrack(0, true); renderDots(); } SC.live = false; clearTimeout(SC.t); return; } // going up: iOS swipe out
+    if (!SC.live && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { clearTimeout(SC.t); SC.live = true; scrub.classList.add('on'); }
     if (!SC.live) return;
     const n = Math.max(0, Math.min(desks.length - 1, SC.start + Math.round(dx / SC_STEP)));
     if (n !== SC.at) { SC.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(); }
   });
   function scLabel() { scrub.querySelector('.sc-label').textContent = deskName(SC.at); }
-  const scEnd = () => { if (!SC) return; clearTimeout(SC.t); const live = SC.live; const at = SC.at; SC = null; scrub.classList.remove('on'); if (live) goDesk(at, true); };
+  // A cancelled touch (iOS takes it for its own swipe home) or one that rose more than a nudge is the system's
+  // swipe out, not a scrub: put the desk back where it started instead of landing on the scrubbed one.
+  const scEnd = e => {
+    if (!SC) return; clearTimeout(SC.t); const { live, at, start, y } = SC; SC = null; scrub.classList.remove('on');
+    if (!live) return;
+    if (e.type === 'pointercancel' || e.clientY - y < -30) { idx = start; placeTrack(0, true); renderDots(); return; }
+    goDesk(at, true);
+  };
   scrub.addEventListener('pointerup', scEnd); scrub.addEventListener('pointercancel', scEnd);
 
   /* ---------------- window operations ---------------- */
@@ -702,16 +728,57 @@
    * and paints the strip above in the app's own background colour. */
   function frameEdge(f) {
     const we = f.closest('.win'); if (!we) return;
-    let own = false, bg = '';
+    let own = false, bg = '', top = '';
     try {
       const d = f.contentDocument;
       own = !!d.querySelector('meta[name="wizard-os-edge"][content="cover"]');
       if (!own) for (const sh of d.styleSheets) { let t = ''; try { t = Array.from(sh.cssRules, r => r.cssText).join(''); } catch (e) {} if (t.includes('--wos-cutout')) { own = true; break; } }
       const pick = el => { const c = el && d.defaultView.getComputedStyle(el).backgroundColor; return c && !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(c) ? c : ''; };
       bg = pick(d.body) || pick(d.documentElement);
+      // The opaque colour actually painted along the app's top edge (a full-width header or page wrapper), so a
+      // heading drawn above the app can continue it. Art without a colour yields nothing; the heading keeps its default.
+      const vw = d.documentElement.clientWidth;
+      for (let n = d.elementFromPoint(vw / 2, 1); n && n !== d.documentElement && !top; n = n.parentElement) {
+        if (n.getBoundingClientRect().width < vw * .9) continue;
+        if (n.tagName === 'IMG') {   // full-width hero art: average its top rows (same-origin images only; a tainted canvas throws)
+          if (!n.complete || !n.naturalWidth) continue;
+          try {
+            // Sample what is on screen, not the source file: the visible top 12px under object-fit/position, through the
+            // image's CSS filter, then under any full-width shade the app layers above it (first colour of its gradient).
+            const cs = d.defaultView.getComputedStyle(n), r = n.getBoundingClientRect(), nw = n.naturalWidth, nh = n.naturalHeight;
+            const cv = d.createElement('canvas'); cv.width = 8; cv.height = 1;
+            const x = cv.getContext('2d'), band = Math.min(12, r.height);
+            let sx = 0, sy = 0, sw = nw, sh = band * nh / r.height;
+            if (cs.objectFit === 'cover') {
+              const k = Math.max(r.width / nw, r.height / nh), [px, py] = cs.objectPosition.split(' ').map(p => p.endsWith('%') ? parseFloat(p) / 100 : .5);
+              sx = (nw * k - r.width) * px / k; sy = (nh * k - r.height) * py / k; sw = r.width / k; sh = band / k;
+            }
+            if (cs.filter && cs.filter !== 'none') x.filter = cs.filter;
+            x.drawImage(n, sx, sy, sw, Math.max(1, sh), 0, 0, 8, 1); x.filter = 'none';
+            for (let s = n.nextElementSibling; s; s = s.nextElementSibling) {
+              const sr = s.getBoundingClientRect(); if (sr.top > r.top + 1 || sr.width < r.width * .9) continue;
+              const ss = d.defaultView.getComputedStyle(s), sg = /^linear-gradient\((?:to bottom, |180deg, )?(rgba?\([^)]*\))/.exec(ss.backgroundImage);
+              for (const c of [ss.backgroundColor, sg && sg[1]]) if (c && c !== 'rgba(0, 0, 0, 0)') { x.fillStyle = c; x.fillRect(0, 0, 8, 1); }
+            }
+            const px = x.getImageData(0, 0, 8, 1).data, s = [0, 0, 0];
+            for (let i = 0; i < 32; i += 4) for (let k = 0; k < 3; k++) s[k] += px[i + k];
+            top = `rgb(${s.map(v => Math.round(v / 8)).join(', ')})`;
+          } catch (e) {}
+          continue;
+        }
+        const c = pick(n), g = /^linear-gradient\((?:to bottom, |180deg, )?(rgb\([^)]*\))/.exec(d.defaultView.getComputedStyle(n).backgroundImage);
+        if (g) top = g[1]; else if (c && c.startsWith('rgb(')) top = c;
+      }
+      // Re-sample after in-app navigation and whenever an image finishes loading (routes render their hero art late).
+      const v = d.defaultView; if (!v.__wosTopWatch) {
+        let t = 0; const again = () => { clearTimeout(t); t = setTimeout(() => { if (f.isConnected) frameEdge(f); }, 150); };
+        v.__wosTopWatch = 1; ['hashchange', 'popstate'].forEach(e => v.addEventListener(e, again));
+        d.addEventListener('load', e => { if (e.target.tagName === 'IMG') again(); }, true);
+      }
     } catch (e) {}
     we.classList.toggle('edge-own', own);
     if (bg) we.style.setProperty('--frame-bg', bg); else we.style.removeProperty('--frame-bg');
+    if (top) we.style.setProperty('--frame-top', top); else we.style.removeProperty('--frame-top');
   }
   function syncImmersive() {
     const d = desks[idx], w = d && d.full && d.focus ? W[d.focus] : null, on = !!w;
@@ -751,6 +818,25 @@
   function setFull(id, on) {
     const i = deskOf(id); if (i < 0) return;
     const d = desks[i]; d.focus = id; d.full = !!on; fullAt = performance.now(); applyLayout(i); save(); vib(on ? 10 : 6);
+  }
+  /* Distraction-free (James, 18 Oct 2026): a short swipe down on the orb, or just above it, hides the bottom bar and
+   * every window's title bar. The windows grow into the freed space through the inset transition the tiles already
+   * use and the title bar slides up out of the window, so nothing jumps and no system bars change. Swipe up from the
+   * bottom edge, or Back, brings them back. Voice still shows the bar while a take is live. This replaces the old
+   * swipe-down Inbox shade (the Inbox stays reachable by voice and its other entry points). */
+  var zen = false, zenTipT = 0; // var: boot restores it before later lets run
+  function setZen(on, quiet) {
+    on = !!on; if (on === zen) return; zen = on;
+    device.classList.toggle('zen', on); store.set('zen', on);
+    clearTimeout(zenTipT); device.classList.remove('zen-tip');
+    if (on && !quiet) {
+      try { armBack(); } catch (e) {}
+      void device.offsetWidth; device.classList.add('zen-tip');
+      zenTipT = setTimeout(() => device.classList.remove('zen-tip'), 2400);
+      const n = store.get('zenTips', 0);
+      if (n < 3) { store.set('zenTips', n + 1); toast('↑', 'Swipe up from the bottom to bring the orb back', 2200); }
+    }
+    if (!quiet) { vib(on ? 8 : 6); tourEv('zen', { on }); }
   }
   function clearDesk(i) { closeDesk(i); }
   /* Apps open as windows. Views reuse a review window already on this desk. */
@@ -999,6 +1085,18 @@
     }
     syncDesks(); save();
   }
+  /* Notifications = the Chats list itself: unfiltered, out of any thread, scrolled to the top (Working, Ready). */
+  function openChatsList() {
+    closeSheets(true);
+    let here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0);
+    if (!here) { openApp(APP.wizard); here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0); }
+    if (!here) return;
+    const t = deskOf(here); if (t !== idx) goDesk(t, true);
+    focusWin(here); const w = W[here], d = desks[t]; if (d.full && d.focus !== here) setFull(d.focus, false);
+    const c = CHATS.ch(here); c.subject = ''; c.q = ''; c.sheet = false; c.fromCard = false; c.coach = false; c.filterFrom = null;
+    if (!CHATS.setFilter(w, '')) CHATS.renderChats(w);
+    requestAnimationFrame(() => { const sc = winEl(here)?.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; });
+  }
   /* Home's Unread and Working cards: the Chats window, filtered to just those threads. Back clears the filter
    * and returns to the desk the card was tapped on. */
   function openChatsFiltered(f, opts = {}) {
@@ -1126,6 +1224,7 @@
     refreshHome(); renderMoons();
     desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g) g.innerHTML = renderEmpty(i); } });
     for (const id of Object.keys(W)) { const w = W[id]; if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el) renderThread(w, el); } }
+    for (const id of Object.keys(W)) { const w = W[id]; if (w.app === 'chats' && !w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el && el.querySelector('.ch-list')) CHATS.renderChatList(w, el); } }
     // Tell Android how many app messages are stuck, so it can say so in a notification while the app is closed.
     const failed = OUTBOX ? OUTBOX.unsent().filter(x => x.state === 'failed') : [];
     const sig = failed.map(x => x.id).join(',');
@@ -1579,6 +1678,10 @@
   let sheet = null;
   const sheetOpen = () => !!sheet;
   function openSheet(which, q) {
+    // The pull-down notifications panel is retired (James, 18 Oct 2026): every way in (the Inbox tile, "open
+    // inbox"/"notifications", ?view=inbox, the critical banner, the arrow key) opens Chats, whose Working and Ready
+    // sections hold the same threads and which can stay open on a desk.
+    if (which === 'inbox') return openChatsList();
     closeSheets(true); closeMenu();
     sheet = which; device.classList.add('sheet-open'); tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
@@ -1687,7 +1790,7 @@
       .sort((p, q) => (Date.parse(q.activityAt || q.updatedAt) || 0) - (Date.parse(p.activityAt || p.updatedAt) || 0)).slice(0, 10);
     const items = rows.map(r => { const st = recState(r); const t = r.title.replace(/^\s*\u{1F399}\uFE0F?\s*/u, '');
       return `<button class="rec-row ${st.k}${LIVE.isNew(r) ? ' new' : ''}" data-rec="${esc(r.id)}" title="${esc(st.t)}"><span class="rt">${esc(ago(r.activityAt || r.updatedAt))}</span><span class="rn">${esc(t)}</span><span class="rs" aria-label="${esc(st.t)}">${st.g}</span></button>`; }).join('');
-    return `<div class="rec-h"><b>◉ Recordings</b><span>${rows.length ? rows.length + ' latest' : ''}</span></div><div class="rec-list">${items || '<div class="rec-empty">New recordings land here and in the shade.</div>'}</div>`;
+    return `<div class="rec-h"><b>◉ Recordings</b><span>${rows.length ? rows.length + ' latest' : ''}</span></div><div class="rec-list">${items || '<div class="rec-empty">New recordings land here and in Chats.</div>'}</div>`;
   }
   function refreshRecStrips() { const h = recStripHtml(); document.querySelectorAll('.rec-strip').forEach(el => { if (el.innerHTML !== h) el.innerHTML = h; }); }
   document.addEventListener('click', e => { const r = e.target.closest('[data-rec]'); if (!r) return; e.stopPropagation(); vib(6); openWizardThread(r.dataset.rec); }, true);
@@ -2983,7 +3086,7 @@
   orbWrap.addEventListener('pointermove', e => {
     if (!G || e.pointerId !== G.pointerId) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
     // A hold that starts travelling right after it fired was really a swipe (slow frame ate the moves).
-    if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && Math.hypot(G.dx, G.dy) > 34 && !(G.dy < -20 && Math.abs(G.dx) < 100)) {
+    if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && (Math.hypot(G.dx, G.dy) > 34 || (G.dy > 16 && G.dy > Math.abs(G.dx) * 1.4)) && !(G.dy < -20 && Math.abs(G.dx) < 100)) {
       cancelVoice(true); G.mode = 'pending';
     }
     if (G.mode === 'hold') {
@@ -3003,7 +3106,8 @@
     // Swipes work in every voice state: recording or sending never locks navigation.
     if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14 && G.corner) { clearTimeout(G.hold); G.mode = 'still'; }
     if (G.mode === 'still') return; // the corner orb only talks: a slid finger cancels, it never swipes the shell
-    if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14) {
+    // A downward slide commits sooner (10 px): the orb sits near the bottom of the glass, so there is little room below it.
+    if (G.mode === 'pending' && (Math.hypot(G.dx, G.dy) > 14 || (G.dy > 10 && G.dy > Math.abs(G.dx) * 1.4))) {
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
     }
     if (G.mode === 'h' && !sheet) {
@@ -3011,17 +3115,16 @@
       placeTrack(dx * 1.1, false);
       orbWrap.dataset.dir = Math.abs(G.dx) > 50 ? (G.dx < 0 ? (idx < desks.length - 1 ? `${clip(deskName(idx + 1), 16)} →` : atPickerEnd() ? '' : 'New desk →') : (idx > 0 ? `← ${clip(deskName(idx - 1), 16)}` : '')) : '';
     } else if (G.mode === 'v') {
-      if (!sheet) {
+      if (!sheet && G.dy < 0) {
         const p = Math.min(1, Math.abs(G.dy) / 240);
-        const el = G.dy < 0 ? launcher : inboxEl, other = G.dy < 0 ? inboxEl : launcher;
-        other.style.transform = ''; other.style.opacity = '';
-        el.classList.add('dragging');
-        if (G.dy < 0 && !el._rendered) { renderLauncher(''); el._rendered = true; }
-        if (G.dy > 0 && !el._rendered) { renderInbox(); el._rendered = true; }
-        el.style.transform = G.dy < 0 ? `translateY(calc(${(1 - p) * 100}% + ${(1 - p) * 160}px))` : `translateY(calc(${-(1 - p) * 100}% - ${(1 - p) * 60}px))`;
-        el.style.opacity = String(Math.min(1, p * 1.6));
-      }
-      orbWrap.dataset.dir = Math.abs(G.dy) > 40 ? (sheet ? 'Close' : G.dy < 0 ? '↑ Apps' : '↓ Inbox') : '';
+        launcher.classList.add('dragging');
+        if (!launcher._rendered) { renderLauncher(''); launcher._rendered = true; }
+        launcher.style.transform = `translateY(calc(${(1 - p) * 100}% + ${(1 - p) * 160}px))`;
+        launcher.style.opacity = String(Math.min(1, p * 1.6));
+      } else if (!sheet) { launcher.style.transform = ''; launcher.style.opacity = ''; }
+      // Down: the bar follows the finger a little, then hides (distraction-free). Little room below the orb, so short.
+      if (!sheet && V.state === 'idle') $('#dock').style.transform = G.dy > 0 ? `translateY(${Math.min(G.dy, 40) * .5}px)` : '';
+      orbWrap.dataset.dir = sheet ? (Math.abs(G.dy) > 40 ? 'Close' : '') : G.dy < -40 ? '↑ Apps' : G.dy > 12 && V.state === 'idle' ? '↓ Hide' : '';
     }
   });
   function endGesture(e, cancelled) {
@@ -3054,17 +3157,20 @@
       return finishVoice();
     } else if (g.mode === 'h') {
       if (sheet) return;
-      if (cancelled) return placeTrack(0, true);
+      if (cancelled || g.dy < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
       const v = g.dx / vt;
       if (g.dx < -60 || v < -.5) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); } else if (g.dx > 60 || v > .5) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); } else placeTrack(0, true);
     } else if (g.mode === 'v') {
       [launcher, inboxEl].forEach(el => el.classList.remove('dragging'));
-      launcher._rendered = inboxEl._rendered = false;
-      if (sheet) { if ((sheet === 'launcher' && g.dy > 40) || (sheet === 'inbox' && g.dy < -40) || (sheet === 'settings' && Math.abs(g.dy) > 40)) closeSheets(); else if (Math.abs(g.dy) > 40) openSheet(g.dy < 0 ? 'launcher' : 'inbox'); return; }
+      launcher._rendered = inboxEl._rendered = false; $('#dock').style.transform = '';
+      if (sheet) { if ((sheet === 'launcher' && g.dy > 40) || (sheet === 'inbox' && g.dy < -40) || (sheet === 'settings' && Math.abs(g.dy) > 40)) closeSheets(); else if (g.dy < -40) openSheet('launcher'); return; }
       const v = g.dy / vt;
       if (g.dy < -70 || v < -.55) openSheet('launcher');
-      else if (g.dy > 70 || v > .55) openSheet('inbox');
-      else { [launcher, inboxEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; }); }
+      else if (!cancelled && V.state === 'idle' && (g.dy > 18 || (g.dy > 8 && v > .3))) setZen(true);
+      else { launcher.style.transform = ''; launcher.style.opacity = ''; }
+    } else if (g.mode === 'still') {
+      // The full-screen Chats corner orb only talks, but a clear downward slide hides it too.
+      if (!cancelled && V.state === 'idle' && g.dy > 18 && g.dy > Math.abs(g.dx)) setZen(true);
     }
   }
   orbWrap.addEventListener('pointerup', e => endGesture(e, false));
@@ -3077,6 +3183,52 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) endGesture(null, true); });
   orbWrap.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (V.state === 'idle') startOrbVoice(); else finishVoice(); } });
   orbWrap.tabIndex = 0;
+
+  /* Distraction-free, forgiving start (James, 18 Oct 2026): the swipe down may begin a little above the orb. Passive
+   * touch watch over the strip above the orb: taps and scrolls there behave exactly as before; only a clear, mostly
+   * vertical drag down of ~26 px hides the bars. Touch events (not pointer) so a list that starts scrolling under
+   * the finger does not cancel the watch. */
+  let ZA = null;
+  document.addEventListener('touchstart', e => {
+    ZA = null;
+    if (zen || sheet || G || e.touches.length !== 1 || V.state !== 'idle') return;
+    if (device.classList.contains('immersive') && !device.classList.contains('orb-corner')) return;
+    if (e.target.closest && e.target.closest('#orbWrap, #zenEdge, #immEdge')) return;
+    const t = e.touches[0], r = orbWrap.getBoundingClientRect(); if (!r.width) return;
+    if (t.clientX < r.left - 48 || t.clientX > r.right + 48 || t.clientY < r.top - 72 || t.clientY > r.top + 6) return;
+    ZA = { x: t.clientX, y: t.clientY };
+  }, { capture: true, passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!ZA || e.touches.length !== 1) { ZA = null; return; }
+    const t = e.touches[0], dx = t.clientX - ZA.x, dy = t.clientY - ZA.y;
+    if (dy < -12 || Math.abs(dx) > 44) { ZA = null; return; }
+    if (dy > 26 && dy > Math.abs(dx) * 1.4) { ZA = null; setZen(true); }
+  }, { capture: true, passive: true });
+  ['touchend', 'touchcancel'].forEach(t => document.addEventListener(t, () => { ZA = null; }, { capture: true, passive: true }));
+
+  /* Bottom edge while distraction-free: swipe up anywhere along it to bring the bars back. A real >=24 px target so
+   * touch adjustment never hands the swipe to a composer above it (see immEdge). */
+  const zenEdge = document.createElement('div'); zenEdge.id = 'zenEdge'; zenEdge.className = 'zen-edge';
+  zenEdge.innerHTML = '<i></i>'; zenEdge.setAttribute('aria-label', 'Swipe up to show the orb'); device.appendChild(zenEdge);
+  zenEdge.addEventListener('click', e => e.preventDefault());
+  zenEdge.addEventListener('touchmove', e => { if (ZE && e.cancelable) e.preventDefault(); }, { passive: false });
+  let ZE = null;
+  zenEdge.addEventListener('pointerdown', e => {
+    if (!zen) return; e.preventDefault(); try { zenEdge.setPointerCapture(e.pointerId); } catch (_) {}
+    ZE = { y: e.clientY, t: performance.now(), id: e.pointerId, dy: 0 };
+  });
+  zenEdge.addEventListener('pointermove', e => {
+    if (!ZE || e.pointerId !== ZE.id) return; ZE.dy = Math.min(0, e.clientY - ZE.y);
+    zenEdge.classList.toggle('pull', -ZE.dy > 10);
+    if (-ZE.dy > 22 && zen) { ZE = null; zenEdge.classList.remove('pull'); setZen(false); } // reveal as soon as the intent is clear
+  });
+  const zenEnd = e => {
+    if (!ZE || e.pointerId !== ZE.id) return; const s = ZE; ZE = null; zenEdge.classList.remove('pull');
+    const v = s.dy / ((performance.now() - s.t) || 1);
+    if (e.type !== 'pointercancel' && s.dy < -8 && v < -.3) setZen(false);
+  };
+  zenEdge.addEventListener('pointerup', zenEnd); zenEdge.addEventListener('pointercancel', zenEnd);
+  setZen(store.get('zen', false), true);
 
   /* ---------------- Back never leaves Wizard OS ----------------
    * Android Back is an in-app back gesture, one step at a time:
@@ -3113,6 +3265,7 @@
     if (closeReviewCoach()) return 'review-coach';
     if (menuFor) { closeMenu(); return 'menu'; }
     if (sheet) { closeSheets(); return 'sheet'; }
+    if (window.WosSkinFrame?.back()) return 'skin-controls';
     const d = desks[idx], f = W[d.focus];
     if (f && CHATS.isHosted(f.id)) return CHATS.threadBack(f);
     if (f) {
@@ -3137,6 +3290,7 @@
       if (f.bound && W[f.bound] && deskOf(f.bound) >= 0) { goDesk(deskOf(f.bound)); return 'bound-back'; }
       if (f.from) { closeWin(f.id); return 'review-close'; } // a link's desk: Back closes it and lands where it came from
     }
+    if (zen) { setZen(false); return 'zen'; }
     if (idx !== HOME) { goDesk(HOME); return 'home'; }
     return null;
   }
@@ -3234,6 +3388,7 @@
     cmdExample: () => (findApp('calendar') ? 'Open Calendar' : 'Open Day in review'),
     noMic: () => NOMIC,
     closeSheets: () => closeSheets(),
+    setZen: on => setZen(on),
     dismissVoice: () => { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(1200); },
     prepare: () => { if (V.state !== 'idle') cancelVoice(true); closeMenu(); closeOverview(); closeSheets(true); const d = desks[idx]; if (d.full && d.focus) setFull(d.focus, false); },
     say: (t, kind) => runUtterance(t, kind || 'auto'),

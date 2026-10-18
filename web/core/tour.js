@@ -4,7 +4,7 @@
  *
  *   1 Talk     tap the orb, say hello, tap again: a real message to the Wizard (a real first thread)
  *   2 Command  hold the orb, say "Open Calendar", let go: the app opens on the desk next door
- *   3 Inbox    swipe the orb down: the real inbox; Back closes it
+ *   3 Hide     swipe the orb down: the bars hide (distraction-free); swipe up from the bottom brings them back
  *   4 Done     "Need this again? Hold the orb, say help."
  *
  * No mic (denied, or none here): the shell's own "tap a line" chips appear and count. Two empty takes in a row:
@@ -31,7 +31,7 @@
     null,
     { title: 'Talk', copy: () => typed ? 'Type “hello” and send it to your Wizard.' : 'Tap the orb and say hello. Tap again to send.' },
     { title: 'Command', copy: () => typed ? `Tap the orb’s command: “${cmd()}”.` : `Hold the orb and say “${cmd()}”. Let go when you’re done.` },
-    { title: 'Inbox', copy: () => 'Swipe the orb down to see your inbox.' },
+    { title: 'Hide', copy: () => 'Swipe the orb down to hide everything but your screen.' },
     { title: 'Done', copy: () => 'Need this again? Hold the orb and say “help”.' },
   ];
 
@@ -86,7 +86,7 @@
     if (n < 4) requestAnimationFrame(() => { if (step === n) spot('orb'); });
     if (n === 4) {
       H.goHome(); spot('closed');
-      $('.tr-stage', el).innerHTML = `<div class="tr-glyphs">${glyph('tap', 'Tap', 'talk')}${glyph('hold', 'Hold', 'command')}${glyph('down', 'Swipe ↓', 'inbox')}</div>
+      $('.tr-stage', el).innerHTML = `<div class="tr-glyphs">${glyph('tap', 'Tap', 'talk')}${glyph('hold', 'Hold', 'command')}${glyph('down', 'Swipe ↓', 'hide')}</div>
         ${typed ? '<div class="tr-mic">Turn on the microphone in your phone’s settings to talk instead of type.</div>' : ''}<div class="tr-tapon">Tap anywhere to start</div>`;
     }
     if (n === 1 && typed) later(() => el.querySelector('.tr-type input')?.focus(), 120);
@@ -120,8 +120,8 @@
       if (type === 'sent') { busy = false; return nudge(`That went to your Wizard as a message. Hold the orb for a command.`, 3200); }
     }
     if (step === 3) {
-      if (type === 'sheet' && d.which === 'inbox') { inbox = true; spot('open'); setCopy('Replies land here. Now press Back.', sub(3)); return; }
-      if (type === 'sheet-closed' && d.which === 'inbox' && inbox) { inbox = false; return later(() => go(4), 250); }
+      if (type === 'zen' && d.on) { inbox = true; spot('closed'); setCopy('Nothing in the way. Swipe up from the bottom edge to bring it back.', sub(3)); return; }
+      if (type === 'zen' && !d.on && inbox) { inbox = false; return later(() => go(4), 250); }
     }
     // Wrong gesture: undo what the shell did and steer back to the beat.
     if (type === 'sheet' && d.which === 'launcher') { H.closeSheets(); return nudge(step === 3 ? 'Down, not up.' : 'That’s every app. We’ll come back to it.'); }
@@ -130,7 +130,7 @@
 
   const active = () => !!(el && step > 0);
   // While the tour runs, only the orb, the voice controls and the tour itself take taps.
-  const allowed = t => !!(t.closest && t.closest('.tour, #orbWrap, #voice, .arc, #txChips, .help-sheet, #dock, #inbox'));
+  const allowed = t => !!(t.closest && t.closest('.tour, #orbWrap, #voice, .arc, #txChips, .help-sheet, #dock, #inbox, #zenEdge'));
   window.addEventListener('pointerdown', e => { if (active() && !allowed(e.target)) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
   window.addEventListener('click', e => { if (active() && !allowed(e.target)) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
 
@@ -151,14 +151,14 @@
     const e0 = el; el = null; setTimeout(() => e0.remove(), 300);
     if (how === 'skip') H.toast('?', 'Say “help” any time to see the gestures', 2600);
   }
-  /* Back: one step back. In beat 3 with the inbox open, Back closes it: that is the success. */
+  /* Back: one step back. In beat 3 with the bars hidden, Back brings them back: that is the success. */
   function back() {
     if (helpEl) { closeHelp(); return 'help'; }
     if (!active()) return '';
     if (el.classList.contains('tr-live')) return ''; // recording: Back navigates as always, the tour stays
     if (step === 1) { finish('skip'); return 'tour-skip'; }
     if (step === 2) { go(1); return 'tour-step'; }
-    if (step === 3) { if (inbox) { H.closeSheets(); return 'tour-step'; } go(2); return 'tour-step'; }
+    if (step === 3) { if (inbox) { H.setZen?.(false); return 'tour-step'; } go(2); return 'tour-step'; }
     finish('done'); return 'tour-done';
   }
 
@@ -166,7 +166,7 @@
   const HELP = [
     { k: 'tap', a: 'Tap the orb', b: 'Talk to your Wizard. Tap again to send.', say: ['What did we ship this week?'] },
     { k: 'hold', a: 'Hold the orb', b: 'A command for the phone. It opens on the desk next door.', say: () => [cmd(), 'Show me last week', 'Next desk'] },
-    { k: 'down', a: 'Swipe the orb', b: '↓ Inbox · ↑ every app · ← → between desks.' },
+    { k: 'down', a: 'Swipe the orb', b: '↓ hide the bars (swipe up from the bottom to bring them back) · ↑ every app · ← → between desks.' },
     { k: 'filter', a: 'In Chats', b: 'Tap the filter button in search, or hold the orb and say “filter by unread” or “search budget”.' },
     { k: 'dots', a: 'Dots under the orb', b: 'Tap to jump to a desk. Long-press to see them all.' },
     { k: 'back', a: 'Back', b: 'Always one step back. It never closes Wizard.' },
