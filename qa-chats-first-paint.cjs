@@ -54,6 +54,9 @@ async function run(b, { seen }) {
   await p.evaluate(() => __wos.openApp(window.WizCore.apps('mobile').APPS.find(a => a.id === 'wizard')));
   const wid = await p.waitForFunction(() => Object.values(__wos.wins).find(w => w.app === 'chats' && !w.agent)?.id || '', null, { timeout: 10000 }).then(h => h.jsonValue());
   const rowsSel = `[data-chats="${wid}"] .ch-list .ch-row[data-chopen]`;
+  // While nothing is listed yet (#95): placeholder rows shaped like real ones, never the boxed "Connecting to Wizard…" text.
+  const wait = await p.evaluate(s => ({ rows: document.querySelectorAll(s + ' .ch-row[data-chopen]').length, skel: document.querySelectorAll(s + ' .ch-skel .ch-skel-row').length, box: /Connecting to/.test(document.querySelector(s)?.innerText || '') }), `[data-chats="${wid}"]`);
+  if (!seen) await p.screenshot({ path: path.join(process.env.QA_OUT || '/home/telos/.hermes/cache/scratch', 'chats-skeleton-firstrun.png') });
   await p.waitForSelector(rowsSel, { timeout: 30000 });
   const tRows = Date.now() - t0, pagesAtRows = log.length;
   await p.waitForFunction(() => !!WizLive.fullAt, null, { timeout: 30000 });
@@ -64,7 +67,7 @@ async function run(b, { seen }) {
   const shot = path.join(process.env.QA_OUT || '/home/telos/.hermes/cache/scratch', `chats-first-paint-${seen ? 'seen' : 'firstrun'}.png`);
   await p.screenshot({ path: shot });
   await ctx.close();
-  return { tRows, tWalk, pagesAtRows, listed, priv, writes, errs, shot };
+  return { tRows, tWalk, pagesAtRows, listed, priv, writes, errs, shot, wait };
 }
 
 (async () => {
@@ -81,6 +84,7 @@ async function run(b, { seen }) {
   const f = await run(b, { seen: false });
   console.log('first-run', JSON.stringify(f));
   ok(f.listed === N && f.pagesAtRows >= 5, 'first run anywhere: waits for the whole list before painting', f.pagesAtRows);
+  ok(f.wait.rows === 0 && f.wait.skel >= 3 && !f.wait.box, 'while listing: placeholder rows, no "Connecting to Wizard…" box', f.wait);
   ok(f.writes === 1, 'first run anywhere: one read-state write', f.writes);
   ok(f.errs.length === 0, 'first run: no page errors', f.errs);
   console.log(`${pass}/${pass + fail} passed`);

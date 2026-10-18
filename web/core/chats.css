@@ -483,6 +483,24 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-bell.needs b { background: var(--amber, #ffbe55); }
 .ch-bell:active { background: rgba(205, 190, 255, .12); }
 
+/* Loading placeholders (list rows + thread bubbles): same geometry as real content, skin tokens only. */
+.ch-skel { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; animation: ch-fade .25s ease-out; }
+.ch-skel-row { display: flex; gap: 11px; padding: 10px 8px; align-items: flex-start; }
+.ch-skel-row .bd { flex: 1; display: flex; flex-direction: column; gap: 8px; padding-top: 3px; }
+.ch-sk { display: block; height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--line) 0%, var(--line-2) 50%, var(--line) 100%), var(--line); background-size: 200% 100%; animation: ch-sk 1.6s ease-in-out infinite; }
+.ch-sk.sm { height: 10px; opacity: .7; }
+.ch-sk.av { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 12px; }
+.ch-skel.thread { gap: 14px; padding: 8px 4px; }
+.ch-skel.thread .ch-skel-a { margin-bottom: 14px; }
+.ch-skel.thread .bub { height: 38px; border-radius: 18px; align-self: flex-end; }
+.ch-skel-a { display: flex; flex-direction: column; gap: 9px; }
+.ch-skel-row:nth-child(2) .ch-sk, .ch-skel-a:nth-of-type(2) .ch-sk { animation-delay: .12s; }
+.ch-skel-row:nth-child(3) .ch-sk { animation-delay: .24s; }
+.ch-skel-row:nth-child(4) .ch-sk { animation-delay: .36s; }
+.ch-skel-row:nth-child(5) .ch-sk { animation-delay: .48s; }
+@keyframes ch-sk { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .ch-sk { animation: none; } }
+
 /* Unsent voice takes at the top of the Chats list (replaces the old notifications panel's Unsent group). */
 .ch-unsent { display: flex; align-items: center; gap: 10px; width: 100%; margin: 4px 0 8px; padding: 10px 12px; border-radius: 14px; text-align: left;
   background: rgba(143, 99, 255, .12); border: 1px solid rgba(185, 155, 255, .35); color: inherit; font: inherit; }
