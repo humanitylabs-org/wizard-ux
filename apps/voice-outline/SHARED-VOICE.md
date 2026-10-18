@@ -20,7 +20,9 @@ Direct tinfoil-js connections on Thales produced TLS bad-record/illegal-paramete
 errors during acceptance, so they are not the deployed route.
 The Nemotron implementation remains available explicitly as local-nemotron.
 
-Runtime config supplies shared_provider_module and shared_provider_env. The
+Keep the reverse tunnel on the same loopback port as the attestation proxy;
+otherwise its Host validation returns HTTP 400. Runtime config supplies
+shared_proxy_url, shared_provider_module and shared_provider_env. The
 existing installed module has SHA256
 16d6dbcecef7f4440e14e86e630acd684a49369b6e202b45628ef96be2b4732b,
 identical to meeting-recorder commit 79b34c2e95d4d1cfdefdddad73efc160fd2ad842,
