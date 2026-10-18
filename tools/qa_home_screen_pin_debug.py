@@ -94,7 +94,11 @@ try:
     if not check('Wisdom icon on the Android home screen', icon is not None, icon): raise AssertionError('no pinned icon')
     emu.sx('input tap %d %d' % icon)
     check('icon opens Wisdom as its own app (AppSessionActivity)', wait(lambda: '.AppSessionActivity' in emu.top(), 30), emu.top())
-    time.sleep(7); cap('p06-pinned-wisdom')
+    time.sleep(7)
+    # Android shows a one-time "Viewing full screen / Got it" hint over a new immersive task; it hides the page from
+    # the accessibility tree (r1: Wisdom home rendered underneath). Dismiss it the way a person would.
+    if emu.tap_text(r'^(Got it|GOT IT)$'): time.sleep(2)
+    cap('p06-pinned-wisdom')
     xml = emu.ui(); text = ' '.join(labels(xml))
     check('pinned app shows Wisdom content', bool(re.search(r'Currently reading|Suggested|Browse all|collection|Wisdom', text)), text[:300])
     check('pinned app has no Wizard orb/dock', not any(s.startswith('Wizard orb.') for s in labels(xml)))
