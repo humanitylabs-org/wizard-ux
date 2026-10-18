@@ -1,7 +1,8 @@
 /* Wizard OS — home shell prototype */
 (() => {
   'use strict';
-  if (document.documentElement.dataset.leaving) return; // core/shell.js is switching to the other shell
+  if (document.documentElement.dataset.leaving || window.WizHomeScreenPolicy?.mode) return; // single-app sessions never initialize desks
+
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1762,6 +1763,7 @@
     const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
     closeSheets(); setTimeout(() => openApp(a), 120);
   }
+  window.WizHomeScreenApps?.attach(launcher, id => APP[id]);
   launcher.addEventListener('click', e => {
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
     const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }
@@ -2787,6 +2789,12 @@
       return { id, mode: 'auto', kind: w.thread ? 'chat thread' : 'agent chats', thread: w.thread || '', agent: a.agent, agentLabel: a.name, private: a.private,
         name: a.private ? `${a.name} chats (private agent)` : w.thread ? `${a.name} thread “${winTitle(w)}”` : `${a.name} chats` };
     }
+    // Unified Chats: a private agent's thread open in the main Chats is named like its own Chats, never by title.
+    if (w.app === 'chats' && w.thread && LIVE?.isPrivate?.(w.thread)) { const ag = window.WosAgents?.get(LIVE.agentOf(w.thread)) || { id: LIVE.agentOf(w.thread), label: 'Private' };
+      return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, agent: ag.id, agentLabel: ag.label, private: true, name: `${ag.label} thread (private agent)` }; }
+    // A new chat on a Private model in the main Chats: what is said here goes to that agent (never the router).
+    if (mainChats(w) && w.thread === '__new__') { const nm = CHATS.ch?.(id)?.newModel, AGx = window.WosAgents, ag = nm?.agent && AGx?.isOther(nm.agent) ? AGx.get(nm.agent) : null;
+      if (ag && AGx.isPrivate(ag)) return { id, mode: 'auto', kind: 'chat thread', thread: '__new__', agent: ag.id, agentLabel: ag.label, private: true, name: `New ${ag.label} chat (private agent)` }; }
     if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) return { id, mode: 'auto', kind: 'chat thread', thread: w.thread, name: w.thread === '__new__' ? 'New chat' : `Chats thread “${winTitle(w)}”` };
     if (w.app === 'frame' && w.from && w.from.sid) return { id, mode: '', kind: 'review', review: true, thread: w.from.sid, threadTitle: w.from.title || '', name: `Review of ${winTitle(w)}`, url: frameHref(id) || w.url };
     if (w.app === 'frame') return { id, mode: '', kind: 'app', name: winApp(w).name, url: frameHref(id) || winApp(w).url };
@@ -2806,7 +2814,8 @@
     // already the conversation, so it is not repeated.
     const screen = view && view.kind !== 'chat thread' && !view.private ? (window.WizScreen?.read(winEl(fid)) || '') : '';
     // A private agent's window is named, never read: its thread titles stay with that agent.
-    const nameOf = x => agentWin(W[x]) && agentApp(W[x]).private ? `${agentApp(W[x]).name} chats (private agent)` : winTitle(W[x]);
+    const nameOf = x => agentWin(W[x]) && agentApp(W[x]).private ? `${agentApp(W[x]).name} chats (private agent)`
+      : W[x]?.app === 'chats' && W[x].thread && LIVE?.isPrivate?.(W[x].thread) ? 'A private agent’s thread' : winTitle(W[x]);
     const capability = window.WizAppServices?.voiceInput;
     const app = APP[W[fid]?.appId];
     const conversation = CHATS.isHosted(fid) ? null : capability ? capability.pin(winEl(fid)?.querySelector('iframe'), app?.id)
@@ -3260,6 +3269,7 @@
     return result || 'notReady';
   }
   function backStep(skipHosted) {
+    if (window.WizHomeScreenApps?.back()) return 'pin-sheet';
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
