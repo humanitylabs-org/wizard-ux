@@ -28,7 +28,17 @@ const CT = f => f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/ht
 function mizelServer() {
   const S = { meetings: new Map(), creates: 0, webChunks: [], nativeChunks: [], stops: [], notesPuts: 0, n: 0 };
   S.meeting = id => S.meetings.get(id);
-  S.view = m => ({ ...m, audio: { tracks: [{ source: 'me', chunks: m.chunks.length }] }, segments: m.segments.slice() });
+  // audio.tracks counts every stored chunk per source (native uploads + page uploads), as the real service does.
+  S.view = m => { const c = { me: m.chunks.length }; for (const w of S.webChunks.filter(x => x.id === m.id)) c[w.source] = (c[w.source] || 0) + 1;
+    const { pcm, ...rest } = m; return { ...rest, audio: { tracks: Object.entries(c).map(([source, chunks]) => ({ source, chunks })) }, segments: m.segments.slice() }; };
+  const wavData = buf => { for (let at = 12; at + 8 <= buf.length;) { const id = buf.toString('ascii', at, at + 4), n = buf.readUInt32LE(at + 4); if (id === 'data') return buf.subarray(at + 8, at + 8 + n); at += 8 + n + (n % 2); } return Buffer.alloc(0); };
+  S.wav = m => { // the meeting's mixed 16 kHz mono PCM, from the page uploads
+    const parts = m.pcm || []; const end = Math.max(0, ...parts.map(x => Math.round(x.startMs * 16) + x.data.length / 2));
+    const acc = new Int32Array(end); for (const x of parts) { const o = Math.round(x.startMs * 16); for (let i = 0; i < x.data.length / 2; i++) acc[o + i] += x.data.readInt16LE(i * 2); }
+    const out = Buffer.alloc(44 + end * 2); out.write('RIFF'); out.writeUInt32LE(36 + end * 2, 4); out.write('WAVEfmt ', 8); out.writeUInt32LE(16, 16); out.writeUInt16LE(1, 20); out.writeUInt16LE(1, 22);
+    out.writeUInt32LE(16000, 24); out.writeUInt32LE(32000, 28); out.writeUInt16LE(2, 32); out.writeUInt16LE(16, 34); out.write('data', 36); out.writeUInt32LE(end * 2, 40);
+    for (let i = 0; i < end; i++) out.writeInt16LE(Math.max(-32768, Math.min(32767, acc[i])), 44 + i * 2); return out; };
+  S.wavData = wavData;
   S.handle = (q, u) => {
     const p = u.pathname.replace(/^\/mizel-live\//, ''), method = q.method();
     const json = (o, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(o) });
@@ -53,9 +63,14 @@ function mizelServer() {
       }
       if (sub === 'segments') { const after = u.searchParams.get('after'); const i = after ? mt.segments.findIndex(s => s.id === after) + 1 : 0; return json({ segments: mt.segments.slice(i), transcribe_pending: 0 }); }
       if (sub === 'chunks' && method === 'POST') {
-        S.webChunks.push({ id: mt.id, source: u.searchParams.get('source'), seq: Number(u.searchParams.get('seq')), bytes: (q.postDataBuffer() || Buffer.alloc(0)).length });
+        const body = q.postDataBuffer() || Buffer.alloc(0), source = u.searchParams.get('source'), seq = Number(u.searchParams.get('seq'));
+        if (S.webChunks.some(c => c.id === mt.id && c.source === source && c.seq === seq)) return json({ stored: true, duplicate: true });
+        S.webChunks.push({ id: mt.id, source, seq, bytes: body.length });
+        (mt.pcm ||= []).push({ startMs: Number(u.searchParams.get('start_ms')) || 0, data: wavData(body) });
+        mt.duration_ms = Math.max(mt.duration_ms || 0, ...mt.pcm.map(x => x.startMs + x.data.length / 32));
         mt.status = 'recording'; return json({ stored: true });
       }
+      if (sub === 'audio.wav') return { status: 200, contentType: 'audio/wav', body: S.wav(mt) };
       if (sub === 'stop' && method === 'POST') { S.stops.push({ id: mt.id, by: 'web', body: q.postData() || '' }); mt.status = 'ready'; return json(S.view(mt)); }
       return json({ asks: [], events: [], segments: [] });
     }
@@ -107,7 +122,7 @@ function nativeRecorder(S) {
     if (c.cmd === 'stop') {
       if (!N.recording) return reply(false, 'not_recording');
       N.tick(); upload(true); N.recording = false; N.stops++;
-      const mt = S.meeting(N.meetingId); if (mt) { mt.status = 'ready'; S.stops.push({ id: mt.id, by: 'native', final_seq: { me: mt.chunks.length - 1 } }); }
+      const mt = S.meeting(N.meetingId); if (mt) { mt.status = 'ready'; mt.duration_ms = Math.round(N.mediaMs); S.stops.push({ id: mt.id, by: 'native', final_seq: { me: mt.chunks.length - 1 } }); }
       for (const p2 of N.ports.values()) p2.pcm = null;
       push({ type: 'state', ...state() }); return reply(true);
     }
@@ -131,7 +146,7 @@ async function phase(b, { native, label }) {
   const S = mizelServer(), N = native ? nativeRecorder(S) : null, V = { ver: 1 }, live = [];
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone'], serviceWorkers: 'block',
     userAgent: 'Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36' });
-  const foreign = [], writes = [];
+  const foreign = [], writes = []; let docLoads = 0;
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
     if (u.origin !== ORIGIN) { foreign.push(u.href); return r.abort(); }
@@ -139,6 +154,7 @@ async function phase(b, { native, label }) {
     const file = (root, rel) => { const f = path.join(root, rel || 'index.html'); return f.startsWith(root) && fs.existsSync(f) && fs.statSync(f).isFile() ? f : null; };
     if (u.pathname.startsWith('/mizel-live/')) { const f = file(MIZEL, u.pathname.slice('/mizel-live/'.length)); return f ? r.fulfill({ status: 200, contentType: CT(f), body: fs.readFileSync(f) }) : r.fulfill({ status: 404, body: '' }); }
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
+    if (m && q.resourceType() === 'document' && q.frame() === q.frame().page()?.mainFrame()) docLoads++;
     if (m && ['GET', 'HEAD'].includes(q.method()) && !m[1].startsWith('api/')) {
       if (m[1] === 'ux-version.txt') return r.fulfill({ status: 200, contentType: 'text/plain', body: (0xabc0000 + V.ver).toString(16) + '\n' });
       if (m[1] === 'ux-changes.json') return r.fulfill({ status: 404, body: '' });
@@ -170,9 +186,8 @@ async function phase(b, { native, label }) {
   }
   await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('meetings.systemAudio', '0'); } catch (_) {} });
   const p = await ctx.newPage(), errs = [];
-  let navs = 0; p.on('framenavigated', f => { if (f === p.mainFrame()) navs++; });
   p.on('pageerror', e => errs.push(String(e)));
-  return { S, N, V, live, ctx, p, errs, foreign, writes, navs: () => navs, label };
+  return { S, N, V, live, ctx, p, errs, foreign, writes, navs: () => docLoads, label };
 }
 const mizel = p => p.frames().find(f => /\/mizel-live\//.test(f.url()));
 async function bootShell(P) {
