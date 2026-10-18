@@ -33,11 +33,11 @@ try{
  await app.locator('#new').click();await page.keyboard.press('Escape');
  await app.locator('#live').click();await app.waitForFunction(()=>document.querySelector('#live').textContent.includes('Recording'),null,{timeout:15000});
  receipt.capture=await app.evaluate(()=>WizardApp.capture.current());
- await app.waitForFunction(()=>[...document.querySelectorAll('.draft')].some(e=>e.textContent.length>15),null,{timeout:20000});
+ await app.waitForFunction(()=>[...document.querySelectorAll('.live-target .draft')].some(e=>e.querySelector('small')?.textContent==='Draft'&&[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim().length>15),null,{timeout:30000});
  receipt.beforeStop=await app.locator('.draft').allTextContents();check('real words visible before Stop',receipt.beforeStop.some(s=>s.length>15));
  await page.screenshot({path:out+'/in-shell-live.png',fullPage:true});
  const first=await app.locator('.live-target').getAttribute('data-id');await app.locator('#new').click();const second=await app.locator('.live-target').getAttribute('data-id');receipt.targets={first,second};
- await app.waitForFunction(id=>document.querySelector(`[data-id="${id}"] .draft`)?.textContent.length>15,second,{timeout:20000});
+ await app.waitForFunction(id=>[...document.querySelectorAll(`[data-id="${id}"] .draft`)].some(e=>e.querySelector('small')?.textContent==='Draft'&&[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim().length>15),second,{timeout:30000});
  await app.locator('#live').click();await app.waitForFunction(()=>document.querySelector('#live').textContent.includes('Go Live'),null,{timeout:40000});await app.waitForFunction(()=>document.querySelector('#save').textContent==='Saved');
  receipt.after={document:await get('api/document'),speech:await get('api/speech'),audio:await get('api/audio')};
  for(const id of [first,second]){const u=receipt.after.speech.utterances.find(u=>u.target===id&&u.status==='final');check('final persisted on targeted bullet '+id,!!u&&receipt.after.document.document.nodes.find(n=>n.id===id)?.text===u.text&&u.text.length>5)}
