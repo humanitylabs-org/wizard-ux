@@ -42,7 +42,11 @@ function mizelServer() {
   S.handle = (q, u) => {
     const p = u.pathname.replace(/^\/mizel-live\//, ''), method = q.method();
     const json = (o, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(o) });
-    if (p === 'orb-events') return json({ events: [] });
+    if (p === 'orb-events') { // the orb handoff journal (core/orb-handoff.js) syncs here; Mizel reads it back on save
+      S.events ||= new Map();
+      if (method === 'PUT') { const row = JSON.parse(q.postData() || '{}'); S.events.set(row.id, row); return json({ event: row }); }
+      return json({ events: [...S.events.values()].filter(e => e.meetingId === u.searchParams.get('meetingId')) });
+    }
     if (p === 'api/meetings' && method === 'GET') return json({ meetings: [...S.meetings.values()].map(S.view) });
     if (p === 'api/calendar') return json({ events: [] });
     if (p === 'api/meetings' && method === 'POST') {
@@ -262,12 +266,13 @@ const markPage = P => P.p.evaluate(() => { window.__qaMark = 1; });
     /* B. an orb microphone loan blocks Reload outright (never armed) */
     await raiseUpdate(P);
     await p.evaluate(() => { window.WizardOSDevice = { recActive: () => 'null', recHandoffVersion: () => 1, recStartBorrowed: () => 'qa-voice', recHandoffBegin: (id, mid) => JSON.stringify({ id, meetingId: mid, status: 'paused', open: true }), recHandoffEnd: id => JSON.stringify({ id, open: false, status: 'recording', pausedByHandoff: true }) }; });
-    const loan = await p.evaluate(() => window.WizAppCapture.beginVoiceBorrow('qaborrow0001').then(() => true, e => String(e && e.message)));
+    const loan = await p.evaluate(() => window.WosOrbHandoff.begin().then(l => { window.__qaLoan = l; return true; }, e => String(e && e.message)));
     await markPage(P); await p.locator('#dvWeb [data-web="go"]').click(); await sleep(400);
     const loanToast = await p.evaluate(() => document.body.innerText.includes('Finish the voice message first'));
     await sleep(2500);
     ok(loan === true && !(await reloaded(P)) && !(await p.evaluate(() => window.WizWebUpdate.armed)) && loanToast, 'loan: Reload refused and not armed while the orb borrows the meeting microphone', JSON.stringify({ loan, loanToast }));
-    await p.evaluate(() => window.WizAppCapture.endVoiceBorrow('qaborrow0001', { status: 'cancelled' }));
+    await p.evaluate(() => window.WosOrbHandoff.end(window.__qaLoan, { status: 'cancelled' }));
+    await p.evaluate(() => window.WosOrbHandoff.sync());
     await p.evaluate(() => { delete window.WizardOSDevice; });
     ok(await p.evaluate(() => window.WizWebUpdate.plan().ok), 'loan: after the loan ends the meeting is reload-safe again');
     // Stop after the reload saves normally.
