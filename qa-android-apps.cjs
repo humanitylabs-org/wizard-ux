@@ -38,7 +38,7 @@ const FAKE_PORT = (apps) => {
 };
 
 async function boot(b, { bridge = true } = {}) {
-  const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, userAgent: 'Mozilla/5.0 (Linux; Android 16; SM-S938B Build/BP4A.251205.006; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/154.0.0.0 Mobile Safari/537.36' });
   const writes = [];
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
@@ -60,6 +60,7 @@ async function boot(b, { bridge = true } = {}) {
       if (q.method() !== 'GET') writes.push(m[1] + ' ' + (q.postData() || ''));
       if (m[1] === 'api/queue') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: QUEUE }) });
       if (m[1] === 'api/updates') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: UPDATES }) });
+      if (m[1] === 'api/inventory' && q.method() === 'POST') { try { __lastInvNode = JSON.parse(q.postData() || '{}'); } catch (e) { /* */ } }
       if (m[1] === 'api/inventory') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(q.method() === 'GET' ? { at: 1791600000, apps: APPS } : { ok: true }) });
       return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
     }
@@ -82,6 +83,7 @@ async function boot(b, { bridge = true } = {}) {
   await p.waitForTimeout(1500);
   return { ctx, p, errs, writes };
 }
+let __lastInvNode = null;
 const frame = p => p.frames().find(f => /\/android-apps\//.test(f.url()));
 const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(SHOTS, n + '.png') }); };
 const calls = p => p.evaluate(() => (window.__portCalls || []).map(c => ({ method: c.method, params: c.params })));
@@ -98,7 +100,7 @@ const shellState = p => p.evaluate(() => ({ app: (__wos.wins[__wos.desks[__wos.i
     await f.waitForSelector('#installed .row', { timeout: 8000 }).catch(() => {});
     const rows = await f.$$eval('#installed .row', r => r.map(e => e.innerText.replace(/\s+/g, ' ')));
     ok(rows.length === 2, 'installed list renders (Play and System hidden by default)', JSON.stringify(rows));
-    ok(rows.some(t => /Telegram.*Other stores/.test(t)) && rows.some(t => /Aegis.*Wizard/.test(t)), 'source badges: Other stores / Wizard', JSON.stringify(rows));
+    ok(rows.some(t => /Telegram.*Obtainium/.test(t)) && rows.some(t => /Aegis.*Wizard/.test(t)), 'source badges name the store (Obtainium) / Wizard', JSON.stringify(rows));
     ok(!rows.some(t => /Settings|Slack/.test(t)), 'Play and System apps hidden by default');
     const chips = await f.$$eval('#chips .chip', r => r.map(e => e.innerText.replace(/\s+/g, ' ') + (e.classList.contains('on') ? '*' : '')));
     ok(chips.join('|') === 'Wizard 1*|Other stores 1*|Play 1|System 1', 'source chips with counts, Play/System off', JSON.stringify(chips));
@@ -146,6 +148,10 @@ const shellState = p => p.evaluate(() => ({ app: (__wos.wins[__wos.desks[__wos.i
     c = await calls(p);
     ok(c.some(x => x.method === 'install' && x.params.package === 'com.beemdevelopment.aegis' && x.params.sha256 === 'ef'.repeat(32)), 'Update → install with the pinned update');
     ok(writes.some(w => /^api\/inventory/.test(w)), 'view posts the inventory to the server', JSON.stringify(writes));
+    const devId = await f.evaluate(() => localStorage.getItem('aa.device'));
+    ok(/^[A-Za-z0-9_-]{6,64}$/.test(devId || ''), 'phone has a stable device id', devId);
+    const inv = __lastInvNode;
+    ok(inv && inv.id === devId && inv.model === 'Galaxy S25 Ultra (SM-S938B)', 'inventory is sent with this phone\'s id + model (Galaxy S25 Ultra)', JSON.stringify(inv && { id: inv.id, model: inv.model }));
     // Row menu + Back (Slack is a Play app: show Play first)
     await f.click('[data-src="Play"]'); await p.waitForTimeout(150);
     await f.click('[data-menu="com.Slack"]'); await p.waitForTimeout(250);
