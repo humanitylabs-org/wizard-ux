@@ -130,6 +130,11 @@ class Fake(http.server.BaseHTTPRequestHandler):
         if u == '/reports/wizard-os/wizard-os-qanext.apk':
             ST['apk_gets'] += 1
             return self._send(200, NEXT.read_bytes(), 'application/vnd.android.package-archive')
+        # Since 0.9.10 every send seals a confirmed model route (outbox.js refuses one without it); serve the
+        # same synthetic catalogue as qa_orb_integrated / qa-playwright-thales.
+        if u == '/wizard/hermes/api/model/options':
+            return self._json(200, {'model': 'qa-model', 'provider': 'qa-provider', 'providers': [
+                {'slug': 'qa-provider', 'name': 'Synthetic QA provider', 'authenticated': True, 'is_current': True, 'models': ['qa-model']}]})
         if u == '/wizard/hermes/api/sessions': return self._json(200, {'data': self._sessions(), 'has_more': False})
         m = re.match(r'^/wizard/hermes/api/sessions/([^/]+)/messages$', u)
         if m:
