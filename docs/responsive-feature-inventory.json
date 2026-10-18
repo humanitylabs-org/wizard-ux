@@ -100,6 +100,11 @@
       "shell": "phone",
       "classification": "preview",
       "reason": "Opt-in Live Mode motion styles."
+    },
+    "core/swipe-strip.js": {
+      "shell": "phone",
+      "classification": "touch-only",
+      "reason": "Finger swipe between chat list, thread and the desk a thread opened; desktop has no swipe and uses windows/side panels."
     }
   },
   "sharedAssets": [
