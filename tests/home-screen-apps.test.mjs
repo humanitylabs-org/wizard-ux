@@ -171,4 +171,6 @@ test('pinned app keeps Android status bar and navigation buttons; content starts
   vm.runInContext(read('core/single-app-session.js'),ctx);
   assert.deepEqual(calls,[false],'never asks Android to hide its bars');
   assert.equal(typeof window.__wosTop,'function'); window.__wosTop(40);
+  const java=fs.readFileSync(root+'android/app/src/main/java/ai/wizards/os/AppSessionActivity.java','utf8');
+  assert.doesNotMatch(java,/applyImmersive\(true\)/); assert.match(java,/super\.applyImmersive\(false\)/);
 });
