@@ -89,7 +89,7 @@
       if(force||Date.now()-S.devicesAt>=(S.panel&&S.tab==='server'?14000:60000))jobs.push(read('/api/system/devices',controller.signal).then(j=>{if(!Array.isArray(j?.devices))throw new Error('Unavailable');S.devices=j;S.devicesAt=Date.now();S.devicesError='';}).catch(e=>{if(active())S.devicesError='Unavailable';}));
       if(force||Date.now()-S.healthAt>=(S.panel&&S.tab==='health'?14000:60000))jobs.push(read('/api/system/health',controller.signal).then(j=>{if(typeof j?.available!=='boolean')throw new Error('Unavailable');S.health=j;S.healthAt=Date.now();S.healthError='';}).catch(e=>{if(active())S.healthError='Unavailable';}));
       if(force||Date.now()-S.aiAt>=60000)jobs.push(read('/wizard/ai-usage',controller.signal).then(j=>{S.ai=window.WosUsage.normalize(j);S.aiAt=Date.now();S.aiError='';window.WosUsage.snap=S.ai;window.WosUsage.at=S.aiAt;window.WosUsage.error='';}).catch(e=>{if(active()){S.aiError='Unavailable';window.WosUsage.error='Latest AI usage unavailable';}}));
-      await Promise.all(jobs);if(active())paint();
+      await Promise.all(jobs.map(j=>j.then(()=>{if(active())paint();})));/* paint as each reading lands: a slow AI read must not hold back a failing health check */
     })().finally(()=>{clearTimeout(timeout);S.busy=null;S.controller=null;schedule();});return S.busy;
   }
   function schedule(){clearTimeout(S.timer);S.timer=null;if(active())S.timer=setTimeout(()=>{S.timer=null;update();},15000);}
