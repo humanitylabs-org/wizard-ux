@@ -7,7 +7,7 @@ const require=createRequire(import.meta.url),{chromium}=require(process.env.PLAY
 const origin=process.env.WIZARD_ORIGIN,out=process.env.EVIDENCE_DIR,wav=process.env.QA_SPEECH;
 assert(origin&&out&&wav);mkdirSync(out,{recursive:true});
 const base=origin+'/voice-outline-streaming/',entry=origin+'/wizard-os-home/?open=outline-streaming-demo';
-const receipt={entry,kind:'actual-Wizard-shell-shared-microphone-real-Nemotron',checks:[],events:[],errors:[],audio:[]};
+const receipt={entry,kind:'actual-Wizard-shell-shared-microphone-shared-Mizel-Tinfoil',checks:[],events:[],errors:[],audio:[]};
 let browser,page,app;
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const check=(name,value)=>{assert(value,name);receipt.checks.push(name)};
@@ -29,7 +29,7 @@ try{
  check('canonical app identity, hosted shared PCM',receipt.ready.ready.hosted&&receipt.ready.ready.appId==='outline-streaming-demo'&&receipt.ready.capabilities.pcm);
  receipt.windows=await page.evaluate(()=>Object.values(__wos.wins).map(w=>({appId:w.appId,url:w.url,title:w.title})));
  receipt.before={document:await get('api/document'),speech:await get('api/speech'),audio:await get('api/audio')};
- receipt.health=await get('healthz');check('actual local model ready and no fallback',receipt.health.liveReady&&receipt.health.provider==='local-sherpa-cpu'&&receipt.health.fallback===null);
+ receipt.health=await get('healthz');check('shared Wizard Tinfoil ready and no fallback',receipt.health.liveReady&&receipt.health.provider==='wizard-shared-tinfoil'&&receipt.health.fallback===null);
  await app.locator('#new').click();await page.keyboard.press('Escape');
  await app.locator('#live').click();await app.waitForFunction(()=>document.querySelector('#live').textContent.includes('Recording'),null,{timeout:15000});
  receipt.capture=await app.evaluate(()=>WizardApp.capture.current());
@@ -49,7 +49,7 @@ try{
  receipt.idle=await page.evaluate(()=>({capture:WizAppCapture.getState(),voice:__wos.voice}));
  check('ordinary voice path no longer blocked by capture',!receipt.idle.capture.hold&&!receipt.idle.capture.recording&&receipt.idle.voice==='idle');
  if(receipt.nativeABI){receipt.nativeABI.aacStarts=await page.evaluate(()=>window.__qaAACCalls);check('explicit PCM never invoked mock AAC recorder',receipt.nativeABI.aacStarts===0);await page.evaluate(()=>delete window.WizardOSDevice)}
- check('real PCM sent and replacement events received',receipt.pcmBytes>0&&receipt.events.some(e=>e.direction==='received'&&e.type==='delta'&&e.replace===true));
+ check('real PCM sent and shared provider live deltas received',receipt.pcmBytes>0&&receipt.events.some(e=>e.direction==='received'&&e.type==='delta'&&e.text.length>0));
  await page.screenshot({path:out+'/in-shell-final.png',fullPage:true});
  await page.reload();await attach();check('in-shell reload preserves exact finals',JSON.stringify((await get('api/document')).document)===JSON.stringify(receipt.after.document.document));
  await app.locator('#menu').click();await page.goBack();await page.waitForTimeout(300);check('menu Back stays in shell',new URL(page.url()).pathname==='/wizard-os-home/'&&await app.locator('#sheet').isVisible()===false);

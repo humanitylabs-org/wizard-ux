@@ -11,6 +11,10 @@ if(config.local){
  $('provider-note').textContent='Private trial · Wizard’s shared microphone → local Nemotron on the Mac. Raw words, no cloud transcription or rewriting. Keep this tab open. Start a new bullet before 9 minutes 50 seconds per thought; takes stop at 15 minutes. Audio is retained until verified.';
  $('trial-note').hidden=false;$('trial-note').textContent='Parakeet is withheld: its buffered trial omitted the ending of a long note on both hosts. Nemotron kept the tested ending and Apple reference, but can miss words (including an opening “Do”). Review the original audio; this is not a perfect-accuracy claim. Your installed Outline, Orb and daily voice provider are unchanged.';
 }
+if(config.shared){
+ document.title='Outline · Voice trial';document.querySelector('h1').textContent='Outline · Voice trial';document.querySelector('.eyebrow').textContent='Wizard voice';
+ $('provider-note').textContent='Wizard’s shared microphone and orb ownership → the same attested Tinfoil live-words provider as Mizel. Original audio is kept and verified separately from live words. Keep this view open while recording.';
+}
 function remember(){
  const state=clone({doc,rev,ops,selected,drafts:ledger.items,seq,undo,redo});
  localWrites=localWrites.catch(()=>{}).then(()=>new Promise((resolve,reject)=>{if(!db)return reject(new Error('Local recovery unavailable'));const tx=db.transaction('recovery','readwrite');tx.objectStore('recovery').put(state,'outline');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);}));
@@ -93,7 +97,7 @@ async function startLive(){
  if(starting||stopping)return;starting=true;$('live').disabled=true;$('live').textContent='Starting…';let prepared;
  try{
   if(!W.capture.capabilities({kind:'outline',pcm:true}).pcm){
-   if(config.local&&!W.hosted){
+   if((config.local||config.shared)&&!W.hosted){
     note('This link is not connected to Wizard’s shared microphone. ');
     const entry=document.createElement('a');entry.href='/wizard-os-home/?open=outline-streaming-demo';entry.target='_top';entry.textContent='Open Outline voice trial in Wizard';$('notice').append(entry);
     return;
@@ -102,13 +106,15 @@ async function startLive(){
   }
   prepared=W.capture.prepare({kind:'outline',pcm:true});
   if((await W.capture.pending()).length)throw new Error('Retained audio needs recovery first. Open the menu → Recover.');
-  const health=await request('./healthz');if(!health.liveReady)throw new Error(config.local?'Local Nemotron is unavailable. No fallback is enabled; try again when the Mac is ready.':'Tinfoil is not configured on this preview.');
+  note('Connecting to Wizard voice…');
+  const health=await request('./healthz');if(!health.liveReady)throw new Error(config.local?'Local Nemotron is unavailable. No fallback is enabled; try again when the Mac is ready.':'Shared Wizard live voice is unavailable. No alternate speech provider is enabled.');
   socket=new WebSocket(new URL('./api/live',location.href).href.replace(/^http/,'ws'));socket.binaryType='arraybuffer';
   await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Live connection timed out')),12000);socket.onopen=()=>{clearTimeout(timer);resolve();};socket.onerror=()=>{clearTimeout(timer);reject(new Error('Live connection failed'));};});
   socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='delta'||m.type==='final'){ledger.event(m);if(m.type==='final')settle();else{remember();render();}}else if(m.type==='error'){note('Live words unavailable: '+m.reason+'. Audio remains retained.');if(m.id&&ledger.items[m.id]&&ledger.items[m.id].status!=='final')ledger.items[m.id].status='unconfirmed';settle();if(session&&!paused&&(!m.id||m.id===current?.id))pauseLive();}};
   socket.onclose=()=>{if(session&&!stopping){note('Connection lost. Recording paused; stop to save retained audio.');pauseLive();}};
   editing=null;
-  session=await W.capture.start({kind:'outline',pcm:true,mime:'audio/wav',chunkMs:5000,maxMs:15*60*1000,maxBytes:32*1024*1024,preparedId:prepared.id,meta:{app:config.local?'outline-streaming-demo':'voice-outline'},audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  note('Opening Wizard’s microphone — allow microphone access if prompted.');
+  session=await W.capture.start({kind:'outline',pcm:true,mime:'audio/wav',chunkMs:5000,maxMs:15*60*1000,maxBytes:32*1024*1024,preparedId:prepared.id,meta:{app:config.appId||(config.local?'outline-streaming-demo':'voice-outline')},...(config.local?{audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}:{})});
   startedAt=Date.now();paused=false;stopObserved=false;begin();const take=session.id;
   offs.push(session.onPcm(f=>{if(!current||paused)return;if(socket.readyState!==1||socket.bufferedAmount>640000){note('Live network is behind. Paused; audio retained.');pauseLive();return;}socket.send(f.pcm);}),session.onChunk(c=>upload(take,c)),session.onWarn(w=>note(String(w?.message||w))),session.onState(st=>{if(stoppedByCore())stopLive();}));
   liveTimer=setInterval(liveUI,1000);note('Listening to the marked bullet. New bullet or Child starts the next thought.');liveUI();render();

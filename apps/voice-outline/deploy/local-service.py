@@ -19,12 +19,21 @@ env = {'PATH': '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin',
 if role == 'web':
     env.update(PORT=str(config['web_port']), BIND='127.0.0.1',
                OUTLINE_DATA=str(root/config.get('data', 'data')),
-               OUTLINE_PROVIDER='local-nemotron',
+               OUTLINE_PROVIDER=config.get('provider', 'wizard-shared'),
                OUTLINE_LOCAL_WS=f"ws://127.0.0.1:{config['adapter_port']}",
                OUTLINE_ADAPTER_SHA=config['adapter_sha'], SOURCE_SHA=config['source_sha'],
                WIZARD_CORE_DIR=config['core'],
                WIZARD_TRUSTED_HOSTS=','.join(config['hosts']),
                WIZARD_TRUSTED_ORIGINS=','.join(config['origins']))
+    if env['OUTLINE_PROVIDER'] == 'wizard-shared':
+        # Reuse the exact attested provider module and credential already installed
+        # for Wizard voice. Never copy a key into source or choose another model.
+        env['TINFOIL_PROVIDER_MODULE'] = config['shared_provider_module']
+        for line in Path(config['shared_provider_env']).read_text().splitlines():
+            if line.startswith('TINFOIL_API_KEY='):
+                env['TINFOIL_API_KEY'] = line.split('=', 1)[1].strip().strip("\"'")
+        if not env.get('TINFOIL_API_KEY'):
+            raise SystemExit('Shared Wizard voice credential is unavailable')
     os.chdir(config['source'])
     os.execve(config['node'], [config['node'], 'server.mjs'], env)
 elif role == 'adapter':
