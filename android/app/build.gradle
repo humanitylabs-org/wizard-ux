@@ -18,8 +18,8 @@ android {
         targetSdk 35
         versionCode 56
         versionName '0.9.32'
-        // Owner-specific default is injected at build time, not committed in shared source.
-        buildConfigField 'String', 'PHOTOS_SERVER', '"' + (project.findProperty('photosServer') ?: '') + '"'
+        // Default photo server sits beside ORIGIN/HOME_URL (same tailnet); -PphotosServer=... overrides it.
+        buildConfigField 'String', 'PHOTOS_SERVER', '"' + (project.findProperty('photosServer') ?: 'https://thales.tailc0f369.ts.net:2283') + '"'
         buildConfigField 'String', 'HOME_URL', '"https://wizard.tailc0f369.ts.net/wizard-os-home/"'
         buildConfigField 'String', 'ORIGIN', '"https://wizard.tailc0f369.ts.net"'
         // The one certificate (SHA-256) an in-app update must be signed with: the Wizard OS release key.
