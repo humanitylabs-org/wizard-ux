@@ -19,7 +19,8 @@ import java.nio.file.Files;
  * That page hands what it can read to WizardOSNative.carryOut(json); the app saves it to files/carry.json and
  * opens the shell on the new origin, whose first script (core/carry-in.js) asks carryIn() for it, writes what
  * is missing, and calls carryDone(), which deletes the file. If the old name cannot be reached the app goes
- * straight home and tries again on a later launch, at most MAX_TRIES times.
+ * straight home and tries again on a later launch, at most MAX_TRIES times. A fresh install (never updated)
+ * has nothing on the old name, so it never contacts it and records the carry as done.
  */
 final class Carry {
     static final String PAGE = "/wizard-os-home/carry.html";
@@ -46,7 +47,20 @@ final class Carry {
     /** Should this launch open the carry page before the shell? */
     static boolean pending(Context c) {
         SharedPreferences p = prefs(c);
-        return source(c) != null && !p.getBoolean("done", false) && p.getInt("tries", 0) < MAX_TRIES;
+        if (p.getBoolean("done", false) || p.getInt("tries", 0) >= MAX_TRIES) return false;
+        // A new install has no state at the retired origin. Persist this decision so its next update does not
+        // turn a fresh post-migration install into a legacy-transfer candidate. (Same rule in QA builds, so the
+        // emulator harness exercises the exact production decision.)
+        try {
+            android.content.pm.PackageInfo info = c.getPackageManager().getPackageInfo(c.getPackageName(), 0);
+            if (!LegacyCarryPolicy.upgradedInstall(info.firstInstallTime, info.lastUpdateTime)) {
+                finished(c);
+                return false;
+            }
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            return false;
+        }
+        return source(c) != null;
     }
 
     static String pageUrl(Context c) { return source(c) + PAGE; }
