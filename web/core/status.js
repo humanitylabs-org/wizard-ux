@@ -2,7 +2,7 @@
  *
  *   Connection  "Offline — …" / "Reconnecting…" / "Back online" (2 s), from the browser's online state and
  *               from whether the last Wizard read worked (WizLive.error === 'offline').
- *   Critical    "N critical issues need attention · Open Inbox" for threads Wizard marked critical
+ *   Critical    "N critical issues need attention · View" (opens Chats on the phone) for threads Wizard marked critical
  *               (attention_level === 'critical'), except ones already shown as errors and the thread in front.
  *   Fatal       "Wizard needs attention · <message> · Reload": the shell failed to start (an uncaught error and
  *               no shell API a few seconds after load), or a caller hands one over with WizCore.status.fatal().
@@ -91,8 +91,8 @@
     const crit = criticals(), sig = crit.map(s => s.id).sort().join(',');
     if (crit.length && sig !== critHidden && !H.inboxOpen?.()) {
       const n = crit.length;
-      const detail = `Open Inbox to resolve ${n === 1 ? 'a critical issue' : 'critical issues'}.`;
-      parts.push(`<div class="wx-banner crit" role="alert" data-wxcritbox><button class="wx-crit" data-wxcrit title="${esc(detail)}" aria-label="${n} critical ${n === 1 ? 'issue needs' : 'issues need'} attention. ${esc(detail)}"><span class="wx-i">!</span><span class="wx-m">${n} critical ${n === 1 ? 'issue needs' : 'issues need'} attention<small> · ${esc(detail)}</small></span><span class="wx-go" aria-hidden="true">Inbox ›</span></button><button class="wx-x" data-wxcrit-x aria-label="Hide until something changes">×</button></div>`);
+      const detail = `Tap to see ${n === 1 ? 'the critical issue' : 'the critical issues'}.`;
+      parts.push(`<div class="wx-banner crit" role="alert" data-wxcritbox><button class="wx-crit" data-wxcrit title="${esc(detail)}" aria-label="${n} critical ${n === 1 ? 'issue needs' : 'issues need'} attention. ${esc(detail)}"><span class="wx-i">!</span><span class="wx-m">${n} critical ${n === 1 ? 'issue needs' : 'issues need'} attention<small> · ${esc(detail)}</small></span><span class="wx-go" aria-hidden="true">View ›</span></button><button class="wx-x" data-wxcrit-x aria-label="Hide until something changes">×</button></div>`);
     }
     const html = parts.join('');
     if (html === lastHtml && document.getElementById('wxBanners')) return;

@@ -156,6 +156,7 @@
     visible: () => desks[idx].wins,
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
+    openUnsent: () => openSettings(true),
     newChatHint: 'Type below, or tap the orb and talk.',
     // The composer's mic (#13): the orb's own recorder, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
@@ -1084,6 +1085,18 @@
     }
     syncDesks(); save();
   }
+  /* Notifications = the Chats list itself: unfiltered, out of any thread, scrolled to the top (Working, Ready). */
+  function openChatsList() {
+    closeSheets(true);
+    let here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0);
+    if (!here) { openApp(APP.wizard); here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0); }
+    if (!here) return;
+    const t = deskOf(here); if (t !== idx) goDesk(t, true);
+    focusWin(here); const w = W[here], d = desks[t]; if (d.full && d.focus !== here) setFull(d.focus, false);
+    const c = CHATS.ch(here); c.subject = ''; c.q = ''; c.sheet = false; c.fromCard = false; c.coach = false; c.filterFrom = null;
+    if (!CHATS.setFilter(w, '')) CHATS.renderChats(w);
+    requestAnimationFrame(() => { const sc = winEl(here)?.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; });
+  }
   /* Home's Unread and Working cards: the Chats window, filtered to just those threads. Back clears the filter
    * and returns to the desk the card was tapped on. */
   function openChatsFiltered(f, opts = {}) {
@@ -1211,6 +1224,7 @@
     refreshHome(); renderMoons();
     desks.forEach((d, i) => { if (!d.wins.length && !d.home) { const g = secOf(i)?.querySelector('.glance'); if (g) g.innerHTML = renderEmpty(i); } });
     for (const id of Object.keys(W)) { const w = W[id]; if ((w.app === 'chats' || CHATS.isHosted(id)) && w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el) renderThread(w, el); } }
+    for (const id of Object.keys(W)) { const w = W[id]; if (w.app === 'chats' && !w.thread) { const el = track.querySelector(`[data-chats="${id}"]`); if (el && el.querySelector('.ch-list')) CHATS.renderChatList(w, el); } }
     // Tell Android how many app messages are stuck, so it can say so in a notification while the app is closed.
     const failed = OUTBOX ? OUTBOX.unsent().filter(x => x.state === 'failed') : [];
     const sig = failed.map(x => x.id).join(',');
@@ -1664,6 +1678,10 @@
   let sheet = null;
   const sheetOpen = () => !!sheet;
   function openSheet(which, q) {
+    // The pull-down notifications panel is retired (James, 18 Oct 2026): every way in (the Inbox tile, "open
+    // inbox"/"notifications", ?view=inbox, the critical banner, the arrow key) opens Chats, whose Working and Ready
+    // sections hold the same threads and which can stay open on a desk.
+    if (which === 'inbox') return openChatsList();
     closeSheets(true); closeMenu();
     sheet = which; device.classList.add('sheet-open'); tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
@@ -1772,7 +1790,7 @@
       .sort((p, q) => (Date.parse(q.activityAt || q.updatedAt) || 0) - (Date.parse(p.activityAt || p.updatedAt) || 0)).slice(0, 10);
     const items = rows.map(r => { const st = recState(r); const t = r.title.replace(/^\s*\u{1F399}\uFE0F?\s*/u, '');
       return `<button class="rec-row ${st.k}${LIVE.isNew(r) ? ' new' : ''}" data-rec="${esc(r.id)}" title="${esc(st.t)}"><span class="rt">${esc(ago(r.activityAt || r.updatedAt))}</span><span class="rn">${esc(t)}</span><span class="rs" aria-label="${esc(st.t)}">${st.g}</span></button>`; }).join('');
-    return `<div class="rec-h"><b>◉ Recordings</b><span>${rows.length ? rows.length + ' latest' : ''}</span></div><div class="rec-list">${items || '<div class="rec-empty">New recordings land here and in the shade.</div>'}</div>`;
+    return `<div class="rec-h"><b>◉ Recordings</b><span>${rows.length ? rows.length + ' latest' : ''}</span></div><div class="rec-list">${items || '<div class="rec-empty">New recordings land here and in Chats.</div>'}</div>`;
   }
   function refreshRecStrips() { const h = recStripHtml(); document.querySelectorAll('.rec-strip').forEach(el => { if (el.innerHTML !== h) el.innerHTML = h; }); }
   document.addEventListener('click', e => { const r = e.target.closest('[data-rec]'); if (!r) return; e.stopPropagation(); vib(6); openWizardThread(r.dataset.rec); }, true);
