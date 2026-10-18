@@ -68,6 +68,8 @@
       G.lock = Math.abs(dx) > Math.abs(dy) * 1.3 ? 'h' : 'v';
       if (G.lock === 'v') { G = null; return; }
       try { (e.target.setPointerCapture ? e.target : document.body).setPointerCapture(e.pointerId); } catch (_) {}
+      // Tell the page's own gestures (row long-press / row swipe) that this touch is ours now.
+      G.synth = true; try { e.target.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: e.pointerId, pointerType: e.pointerType })); } catch (_) {} G.synth = false;
     }
     e.preventDefault(); e.stopPropagation();
     G.v = (e.clientX - G.lx) / Math.max(1, now - G.lt); G.lx = e.clientX; G.lt = now;
@@ -82,7 +84,7 @@
   }
   function reset(el) { if (!el) return; el.classList.remove('ss-move', 'ss-anim'); el.style.transform = ''; el.style.opacity = ''; }
   function end(e) {
-    if (!G || e.pointerId !== G.id) return; const g = G; G = null;
+    if (!G || e.pointerId !== G.id || G.synth) return; const g = G; G = null;
     if (g.lock !== 'h') return;
     blockClick = Date.now() + 350;
     const s = S(), dx = e.clientX - g.x, far = Math.abs(dx) > GO || Math.abs(g.v) > VGO;
