@@ -355,6 +355,15 @@
     if (step > 0 && idx === desks.length - 1) return newDesk();
     goDesk(idx + step);
   }
+  /* iPhone: a quick swipe home along the bottom edge also reaches the dock and flips a desk just as the app
+   * goes away, so it reopens one desk over. A desk change in the last moment before the page is hidden was
+   * that swipe, not a choice: put the desk back. */
+  let lastMove = null;
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden || !lastMove || Date.now() - lastMove.at > 900) return;
+    const back = desks.findIndex(d => d.id === lastMove.from); lastMove = null;
+    if (back >= 0 && back !== idx) { idx = back; placeTrack(0, false); renderDots(); save(); }
+  });
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
@@ -362,6 +371,7 @@
     const from = desks[idx], to = desks[n];
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to; idx = n;
+    if (moved) lastMove = { from: from && from.id, at: Date.now() };
     if (moved) window.WosResources?.back();
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
@@ -412,6 +422,7 @@
   let DS = null, dockSwiped = 0;
   $('#dock').addEventListener('pointerdown', e => {
     if (e.target.closest('#orbWrap, #scrub') || sheet) return;
+    if (e.pointerType === 'touch' && e.clientY > innerHeight - 22) return; // iOS home-indicator strip: the system's swipe
     DS = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, h: false };
   });
   $('#dock').addEventListener('pointermove', e => {
