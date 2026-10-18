@@ -163,6 +163,13 @@ def main():
         import socket
         with socket.socket() as free:
             free.bind(('127.0.0.1',0)); devtools=free.getsockname()[1]
+        # `am instrument` kills the app process when the test ends; relaunch the real shell before driving its WebView.
+        em.sx('svc wifi enable'); em.sx('svc data enable')
+        for port in (2286,2290): run([ADB,'-s',em.S,'reverse',f'tcp:{port}',f'tcp:{port}'],capture_output=True)
+        em.sx('input keyevent KEYCODE_WAKEUP'); em.sx('wm dismiss-keyguard')
+        em.sx(f'am start -W -n {em.pkg}/ai.wizards.os.MainActivity')
+        assert wait(lambda: '.MainActivity' in em.top(),30), 'Wizard shell did not relaunch after instrumentation'
+        em.shot(out,'shell-relaunched')
         page=Page(em,devtools)
         try:
             page.ev("window.__wosHandoff({action:'settings'})")
