@@ -47,7 +47,7 @@ def main():
                 'ports': ['127.0.0.1:2286:2283'], 'volumes': ['media:/data'],
                 'environment': {'DB_HOSTNAME': 'database', 'DB_USERNAME': 'postgres', 'DB_PASSWORD': db_password,
                     'DB_DATABASE_NAME': 'immich', 'REDIS_HOSTNAME': 'redis'},
-                'depends_on': ['database', 'redis'], 'restart': 'no'},
+                'depends_on': {'database': {'condition': 'service_healthy'}, 'redis': {'condition': 'service_started'}}, 'restart': 'on-failure:5'},
             'database': {'image': 'ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23',
                 'environment': {'POSTGRES_PASSWORD': db_password, 'POSTGRES_USER': 'postgres', 'POSTGRES_DB': 'immich', 'POSTGRES_INITDB_ARGS': '--data-checksums'},
                 'volumes': ['database:/var/lib/postgresql/data'], 'shm_size': '128mb', 'restart': 'no'},
@@ -80,7 +80,7 @@ def main():
         # Never inherit production Compose env/configuration. Named volumes belong only to this project.
         started = True
         with (out / 'compose-up.log').open('w') as log: dc('up', '-d', stdout=log, stderr=subprocess.STDOUT, timeout=600)
-        deadline = time.monotonic() + 240
+        deadline = time.monotonic() + 420
         while time.monotonic() < deadline:
             try:
                 version = api('/server/version')
