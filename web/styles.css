@@ -822,3 +822,47 @@ body {
 .home .constellation .now-card .pip.pulse::after { display: none; }
 .home .constellation .now-card .k { font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--ink-2); }
 .home .constellation .now-card .n { font-size: 16px; font-weight: 500; color: var(--ink); padding-left: 4px; }
+
+/* ================= Distraction-free (James, 18 Oct 2026) =================
+ * A short swipe down on the orb (or just above it) hides the bottom bar and every window's title bar. Same layout,
+ * no system bars toggled: the tiles grow into the space through their existing inset transition and the title bar
+ * slides up out of its window, so the change is one smooth motion. A faint handle marks the bottom edge; swipe up
+ * there (or Back) to bring the bars back. A live voice take shows the bar again until it ends. */
+.wbar { transition: height 340ms var(--ease), flex-basis 340ms var(--ease), min-height 340ms var(--ease), opacity 220ms, border-color 220ms; }
+.win { transition: border-color 220ms, box-shadow 220ms, opacity 280ms, transform 380ms var(--ease), border-radius 340ms var(--ease), padding 340ms var(--ease); }
+/* Collapse the bar by height (skins size it 34-44 px), so no sliver of it is left above the app. */
+.device.zen .wbar { height: 0 !important; min-height: 0 !important; flex-basis: 0 !important; overflow: hidden; border-bottom-color: transparent; opacity: 0; pointer-events: none; }
+.device.zen .win { padding-top: 0 !important; }
+/* The app takes the whole viewport; the handle floats over it on a transparent strip. */
+.device.zen .tiles { top: calc(var(--sb) + var(--safe-t) + 4px); bottom: 0; }
+.device.zen .tiles[data-n="1"], .device.zen .tiles.has-full { left: 0; right: 0; top: 0; bottom: 0; }
+.device.zen .tiles[data-n="1"] .win, .device.zen .tiles.has-full .win.full { border-radius: 0; border-color: transparent; box-shadow: none; }
+.device.zen .desk { padding-bottom: var(--safe-b); }
+.device.zen .dock { transform: translateY(110%); opacity: 0; pointer-events: none; }
+.device.zen #scrub, .device.zen .desk-label { opacity: 0 !important; pointer-events: none; }
+.device.zen[data-voice]:not([data-voice="idle"]) .dock { transform: none; opacity: 1; pointer-events: auto; }
+/* full-screen Chats: the corner orb hides too, and the composer takes its column back */
+.device.zen.orb-corner.immersive .tiles.has-full { top: 0; bottom: 0; }
+.device.zen.orb-corner .win.full .ch-compose { padding-right: 10px; }
+.device.zen.orb-corner .win.full .ch-latest { right: 12px; }
+.zen-edge { position: absolute; left: 0; right: 0; bottom: 0; height: calc(24px + var(--safe-b)); z-index: 59; display: none; touch-action: none; cursor: grab; -webkit-tap-highlight-color: transparent; }
+.device.zen .zen-edge { display: block; }
+.device.zen.immersive:not(.orb-corner) .zen-edge { display: none; }
+.device.zen[data-voice]:not([data-voice="idle"]) .zen-edge { display: none; }
+.zen-edge i { position: absolute; left: 50%; bottom: calc(10px + var(--safe-b)); width: 44px; height: 4px; margin-left: -22px; border-radius: 99px;
+  background: rgba(205, 190, 255, .55); box-shadow: 0 0 0 1px rgba(0, 0, 0, .28), 0 1px 6px rgba(0, 0, 0, .35); transition: width 220ms var(--spring), margin-left 220ms var(--spring), background 300ms, box-shadow 300ms; }
+.device.zen-tip .zen-edge i, .zen-edge.pull i { width: 96px; margin-left: -48px; background: rgba(205, 190, 255, .7); box-shadow: 0 0 10px rgba(143, 99, 255, .5); }
+.device.zen .imm-edge i { opacity: 0 !important; } /* one handle at a time: the distraction-free one wins */
+/* Voice "Sending…" status lives in the dock, on the orb's top edge, like the voice destination label (Miguel,
+ * 18 Oct): never over list rows or sort chips, never takes a tap, so another session stays one tap away. */
+.device:not(.orb-corner) .voice .transcript.brief:not(.tip) {
+  bottom: calc(var(--safe-b) + var(--dock-h) - 18px); z-index: 150; height: 18px; max-width: calc(100% - 24px);
+  padding: 0 7px 0 3px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--bg, rgba(8, 5, 18, .94));
+  box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; pointer-events: none !important;
+  display: flex; align-items: center; transform: translate(-50%, 4px) scale(.96);
+}
+.device:not(.orb-corner) .voice.tx .transcript.brief:not(.tip) { transform: translate(-50%, 0); }
+.device:not(.orb-corner) .transcript.brief:not(.tip) .tx-route { font-size: 10px; line-height: 16px; gap: 4px; font-weight: 650; }
+.device:not(.orb-corner) .transcript.brief:not(.tip) .tx-route b { width: 12px; height: 12px; font-size: 8px; background: none !important; }
+/* While that label shows, the voice destination label (same spot) steps aside. */
+.device:has(.voice.tx .transcript.brief:not(.tip)) > #voiceDestination { visibility: hidden; }

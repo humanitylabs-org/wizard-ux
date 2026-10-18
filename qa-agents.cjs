@@ -60,7 +60,7 @@ async function phone(b) {
   ok(await f.locator('#agName').count() === 1 && (await f.locator('#agName').inputValue()) === 'Private', 'phone: Back in step 2 returns to step 1 with the name kept');
   await f.locator('[data-next]').click(); await wait(300);
   await f.locator('.ag-choice[data-pick="provider"][data-v="tinfoil"]').click(); await wait(200);
-  ok(await f.locator('.ag-chip[data-v="glm-5-3"][aria-checked="true"]').count() === 1, 'phone: Tinfoil picks its only model, GLM 5.3');
+  ok(await f.locator('.ag-chip[data-v="glm-5-3"][aria-checked="true"]').count() === 1, 'phone: Tinfoil preselects its default model, GLM 5.3');
   ok(/No fallback/.test(await f.locator('.ag').innerText()), 'phone: Tinfoil says no fallback');
   await shot(p, 'phone-03-new-provider');
   await f.locator('[data-next]').click(); await wait(300);
@@ -163,7 +163,8 @@ async function phone(b) {
   const mainWin = await p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats' && !w.agent)?.id || '');
   const mainStrip = await p.locator(`.win[data-win="${mainWin}"] [data-agent-titlebar]`).innerText().catch(() => '');
   ok(/Atlas/.test(mainStrip) && !/Private/.test(mainStrip), 'phone: main Chats header names the main agent once several exist', mainStrip);
-  ok(!(await p.locator(`[data-chats="${mainWin}"] .ch-list`).innerText()).includes('Recap my private recording'), 'phone: main Chats list has no private thread');
+  // Unified Chats (18 Oct 2026): the owner's main Chats lists the private agent's threads too, each with the lock.
+  ok(await p.locator(`[data-chats="${mainWin}"] .ch-list .ch-row.private`, { hasText: 'Recap my private recording' }).locator('.ch-plock').count() === 1, 'phone: main Chats (unified) lists the private thread with a lock');
   await shot(p, 'phone-13-main-chats');
   // System links to Agents (its own app, opened beside System).
   await p.evaluate(() => __wos.openApp(window.WizCore.apps('mobile').APPS.find(a => a.id === 'system'))); await wait(1500);
@@ -172,7 +173,8 @@ async function phone(b) {
   ok(await p.evaluate(() => __wos.wins[__wos.desks[__wos.idx].focus]?.appId === 'agents'), 'phone: System → Agents opens the Agents app');
   await shot(p, 'phone-14-system-link');
   // ---- App → agent binding ("Sends its work to"; default = main agent; stopped bound agent shows clearly) ----
-  await bindingPhone(p, created);
+  // A failure in the binding section is reported on its own; the desktop half still runs.
+  try { await bindingPhone(p, created); } catch (e) { ok(false, 'phone binding section threw', e.message); }
   ok(errs.length === 0, 'phone: no page errors', errs.slice(0, 5).join(' | '));
   await c.close();
   return created;

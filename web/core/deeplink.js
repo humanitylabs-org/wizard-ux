@@ -76,7 +76,7 @@
     consume() { const d = parse(location.href); strip(); if (d) run(d); return d; },
     /* A link clicked inside the app. True when it was ours and is now open in-app. src = the tapped link, so
      * an app it opens knows where it came from (Back closes it and lands there again). */
-    route(href, src) { let u; try { u = new URL(href, location.href); } catch (e) { return false; } if (!isOwn(u)) return false; const d = parse(u.href); if (!d) return false; run((u.pathname === '/' || u.pathname === '/wizard/') && d.session ? { session: d.session } : d, src); return true; },
+    route(href, src) { let u; try { u = new URL(href, location.href); } catch (e) { return false; } if (!isOwn(u)) return false; const d = parse(u.href); if (!d) return !/[?&](session|view|video|open|agent)=/.test(u.search); /* a plain link to this shell: we are already here, never open Wizard inside Wizard */ run((u.pathname === '/' || u.pathname === '/wizard/') && d.session ? { session: d.session } : d, src); return true; },
     get log() { return window.__deeplinkLog || []; },
   };
 })();

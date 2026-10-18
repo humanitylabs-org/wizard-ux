@@ -39,6 +39,8 @@
         if (n.nodeType === 1) {
           if (SKIP.has(n.tagName.toUpperCase())) return NodeFilter.FILTER_REJECT;
           if (n.closest && n.closest('[aria-hidden="true"],[hidden],[inert]')) return NodeFilter.FILTER_REJECT;
+          // A private agent's thread rows/headers (unified Chats) never enter another agent's context.
+          if (n.hasAttribute && n.hasAttribute('data-wiz-private')) return NodeFilter.FILTER_REJECT;
           return NodeFilter.FILTER_ACCEPT;
         }
         return /\S/.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
