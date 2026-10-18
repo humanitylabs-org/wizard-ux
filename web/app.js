@@ -359,11 +359,13 @@
    * goes away, so it reopens one desk over. A desk change in the last moment before the page is hidden was
    * that swipe, not a choice: put the desk back. */
   let lastMove = null;
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden || !lastMove || Date.now() - lastMove.at > 900) return;
+  const undoLastMove = () => {
+    if (!lastMove || Date.now() - lastMove.at > 1500) return;
     const back = desks.findIndex(d => d.id === lastMove.from); lastMove = null;
     if (back >= 0 && back !== idx) { idx = back; placeTrack(0, false); renderDots(); save(); }
-  });
+  };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) undoLastMove(); });
+  addEventListener('pagehide', undoLastMove);
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
@@ -437,6 +439,7 @@
     if (!s.h) return;
     const dx = e.clientX - s.x, v = dx / ((performance.now() - s.t) || 1);
     dockSwiped = Date.now();
+    if (e.clientY - s.y < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
     if (e.type !== 'pointercancel' && (dx < -60 || v < -.5)) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); }
     else if (e.type !== 'pointercancel' && (dx > 60 || v > .5)) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); }
     else placeTrack(0, true);
@@ -3109,7 +3112,7 @@
       return finishVoice();
     } else if (g.mode === 'h') {
       if (sheet) return;
-      if (cancelled) return placeTrack(0, true);
+      if (cancelled || g.dy < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
       const v = g.dx / vt;
       if (g.dx < -60 || v < -.5) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); } else if (g.dx > 60 || v > .5) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); } else placeTrack(0, true);
     } else if (g.mode === 'v') {
