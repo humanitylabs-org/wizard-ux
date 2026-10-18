@@ -186,9 +186,7 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
                 // A main-frame hop to the retired private.wizard001.com lands on the same page under this Wizard's own name.
-                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying && !ai.wizards.os.device.AppState.legacyFallback) { go(Origin.toHome(u.toString())); return true; }
-                // Under the safety net the tailnet name is unreachable: its links open the same page on the old name.
-                if (req.isForMainFrame() && Origin.isHome(u) && ai.wizards.os.device.AppState.legacyFallback) { go(Origin.toLegacy(u.toString())); return true; }
+                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying) { go(Origin.toHome(u.toString())); return true; }
                 if (carrying && Carry.isPage(MainActivity.this, u.toString())) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
                 if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
                 if (!req.isForMainFrame()) return false; // hosted app frames stay inside their window
@@ -201,13 +199,7 @@ public class MainActivity extends Activity {
                 // A load replaced by a newer one (Try again over a hanging attempt) is not a failure of the new one.
                 if (req.isForMainFrame() && err.getErrorCode() == ERROR_UNKNOWN && String.valueOf(err.getDescription()).contains("ERR_ABORTED")) return;
                 if (req.isForMainFrame() && carrying) { endCarry("unreachable"); return; } // old name gone: just go home
-                // Safety net: the tailnet name unreachable from this phone → same page on the old name for this run.
-                // (A failing old-name page is not isHome, so this cannot loop; both failing ends on the offline page.)
-                if (req.isForMainFrame() && Origin.isHome(req.getUrl()) && ai.wizards.os.device.AppState.useLegacy(MainActivity.this)) {
-                    mainFailed = true;
-                    go(Origin.toLegacy(req.getUrl().toString()));
-                    return;
-                }
+                // Unreachable: stay on this Wizard's own name and show the Retry screen (never the retired name).
                 if (req.isForMainFrame()) { mainFailed = true; showOffline(String.valueOf(err.getDescription())); }
             }
 
@@ -337,9 +329,9 @@ public class MainActivity extends Activity {
         return ai.wizards.os.device.AppState.homeUrl(this); // HOME_URL; QA builds may point at a fake Wizard
     }
 
-    /** An in-app link on whichever name this run uses (the tailnet name, or the old one under the safety net). */
+    /** An in-app link, always on this Wizard's own name (old-name links are translated, never followed). */
     static String inAppUrl(String url) {
-        return ai.wizards.os.device.AppState.legacyFallback ? Origin.toLegacy(url) : Origin.toHome(url);
+        return Origin.toHome(url);
     }
 
     /* ---------------- Carry: move local state off the retired private.wizard001.com (see Carry) ---------------- */
@@ -513,7 +505,6 @@ public class MainActivity extends Activity {
     private void showOffline(String why) {
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
-        ai.wizards.os.device.AppState.legacyFallback = false; // Try again goes to the tailnet name first again
         if (reach == null) return;
         ReachPolicy.Why w = ReachScreen.why(this);
         reach.offline(w, why, ReachScreen.tailscaleInstalled(this));
@@ -526,7 +517,6 @@ public class MainActivity extends Activity {
     void retryReach() {
         if (web == null || reach == null) return;
         reach.trying();
-        ai.wizards.os.device.AppState.legacyFallback = false;
         String u = wantUrl;
         if (!isWeb(u) || Carry.isPage(this, u)) u = ai.wizards.os.device.AppState.homeUrl(this);
         else if (Origin.isLegacy(Uri.parse(u))) u = Origin.toHome(u);
