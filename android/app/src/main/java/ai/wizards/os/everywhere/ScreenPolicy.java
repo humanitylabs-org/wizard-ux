@@ -25,12 +25,102 @@ public final class ScreenPolicy {
         public final String text;
         public final int x, y, w, h;
         public final boolean label;
+        /** Its words in order (0.9.21), or null. {@code exact}: every word carries where Android drew it. */
+        public final List<Word> words;
+        public final boolean exact;
 
-        public Block(String text, int x, int y, int w, int h, boolean label) {
+        public Block(String text, int x, int y, int w, int h, boolean label) { this(text, x, y, w, h, label, null, false); }
+
+        public Block(String text, int x, int y, int w, int h, boolean label, List<Word> words, boolean exact) {
             this.text = text; this.x = x; this.y = y; this.w = w; this.h = h; this.label = label;
+            this.words = words; this.exact = exact;
         }
 
         int area() { return Math.max(0, w) * Math.max(0, h); }
+    }
+
+    /**
+     * One selectable word (Google-style free selection, 0.9.21): its text, what follows it before the next word
+     * ("", " " or "\n") and, when the app reports character positions, its box on screen (else w = h = 0).
+     */
+    public static final class Word {
+        public String t;
+        public String sp = "";
+        public int x, y, w, h;
+
+        Word(String t) { this.t = t; }
+
+        boolean placed() { return w > 0 && h > 0; }
+    }
+
+    /**
+     * Split text into words the way a text selection snaps: whitespace separates, punctuation sticks to its word,
+     * and scripts without spaces (Thai, Japanese, Chinese) split at dictionary word breaks. {@code rects[i]} is
+     * character i's {left, top, right, bottom} on screen (null when unknown or not drawn); with rects, a word's box
+     * is its characters on the line of its first drawn character, and words with no drawn character are dropped
+     * (scrolled out of view). Without rects every word is kept, unplaced.
+     */
+    public static List<Word> words(String text, float[][] rects) {
+        List<Word> out = new ArrayList<>();
+        if (text == null || text.isEmpty()) return out;
+        java.text.BreakIterator it = java.text.BreakIterator.getWordInstance();
+        it.setText(text);
+        List<int[]> spans = new ArrayList<>();
+        int s = it.first();
+        for (int e = it.next(); e != java.text.BreakIterator.DONE; s = e, e = it.next()) {
+            String seg = text.substring(s, e);
+            if (seg.trim().isEmpty()) {
+                if (!out.isEmpty()) {
+                    Word last = out.get(out.size() - 1);
+                    last.sp = seg.indexOf('\n') >= 0 || "\n".equals(last.sp) ? "\n" : " ";
+                }
+                continue;
+            }
+            if (!out.isEmpty()) {
+                Word last = out.get(out.size() - 1);
+                boolean lastPunct = !hasWordChar(last.t);
+                int endCp = last.t.codePointBefore(last.t.length());
+                int ty = Character.getType(endCp);
+                boolean lastEndsPunct = !Character.isLetterOrDigit(endCp) && ty != Character.NON_SPACING_MARK
+                        && ty != Character.COMBINING_SPACING_MARK && ty != Character.ENCLOSING_MARK; // Thai tone marks are letters here
+                // "Hello," / "(hello" / "4,471.00" / "don't" / "well-known": punctuation joins the word it touches.
+                if (last.sp.isEmpty() && (!hasWordChar(seg) || lastPunct || lastEndsPunct)) {
+                    last.t += seg;
+                    spans.get(spans.size() - 1)[1] = e;
+                    continue;
+                }
+            }
+            out.add(new Word(seg));
+            spans.add(new int[]{s, e});
+        }
+        if (rects == null) return out;
+        List<Word> placed = new ArrayList<>();
+        for (int k = 0; k < out.size(); k++) {
+            Word wd = out.get(k);
+            int[] sp = spans.get(k);
+            float l = Float.MAX_VALUE, t = Float.MAX_VALUE, r = -Float.MAX_VALUE, b = -Float.MAX_VALUE;
+            float lineTop = 0, lineBot = 0;
+            boolean any = false;
+            for (int i = sp[0]; i < sp[1] && i < rects.length; i++) {
+                float[] c = rects[i];
+                if (c == null || c[2] - c[0] <= 0 && c[3] - c[1] <= 0) continue;
+                float mid = (c[1] + c[3]) / 2;
+                if (!any) { lineTop = c[1]; lineBot = c[3]; }
+                else if (mid < lineTop || mid > lineBot) continue; // wrapped onto the next line: keep the first
+                any = true;
+                l = Math.min(l, c[0]); t = Math.min(t, c[1]); r = Math.max(r, c[2]); b = Math.max(b, c[3]);
+            }
+            if (!any) {
+                // A word that isn't drawn: its separator moves to the word before so the text still reads right.
+                if (!placed.isEmpty() && wd.sp.length() > placed.get(placed.size() - 1).sp.length())
+                    placed.get(placed.size() - 1).sp = wd.sp;
+                continue;
+            }
+            wd.x = Math.round(l); wd.y = Math.round(t);
+            wd.w = Math.max(1, Math.round(r - l)); wd.h = Math.max(1, Math.round(b - t));
+            placed.add(wd);
+        }
+        return placed;
     }
 
     static String norm(String s) {
@@ -61,13 +151,22 @@ public final class ScreenPolicy {
             int x1 = Math.max(0, b.x), y1 = Math.max(0, b.y);
             int x2 = Math.min(screenW, b.x + b.w), y2 = Math.min(screenH, b.y + b.h);
             if (x2 - x1 < 4 || y2 - y1 < 4) continue;
-            Block c = new Block(t, x1, y1, x2 - x1, y2 - y1, b.label);
+            List<Word> ws = b.words;
+            if (ws != null && b.exact) { // words scrolled or clipped off the screen can't be picked
+                ws = new ArrayList<>();
+                for (Word wd : b.words)
+                    if (wd.x + wd.w > 0 && wd.y + wd.h > 0 && wd.x < screenW && wd.y < screenH) ws.add(wd);
+                if (ws.isEmpty()) continue;
+            }
+            Block c = new Block(t, x1, y1, x2 - x1, y2 - y1, b.label, ws, b.exact);
             boolean dup = false;
             for (int i = 0; i < out.size(); i++) {
                 Block o = out.get(i);
                 if (overlap(o, c) < 0.6f) continue;
                 if (o.text.equals(c.text)) {
-                    if (c.area() < o.area()) out.set(i, c); // keep the tighter box
+                    // keep the one that knows where its words are, then the tighter box
+                    boolean better = c.exact != o.exact ? c.exact : c.area() < o.area();
+                    if (better) out.set(i, c);
                     dup = true; break;
                 }
                 // A label that only repeats words already on screen inside it (a list row described by its texts).
@@ -111,8 +210,19 @@ public final class ScreenPolicy {
     public static JSONArray toJson(List<Block> blocks) {
         JSONArray a = new JSONArray();
         try {
-            for (Block b : blocks)
-                a.put(new JSONObject().put("t", b.text).put("x", b.x).put("y", b.y).put("w", b.w).put("h", b.h).put("l", b.label));
+            for (Block b : blocks) {
+                JSONObject o = new JSONObject().put("t", b.text).put("x", b.x).put("y", b.y).put("w", b.w).put("h", b.h).put("l", b.label);
+                if (b.words != null && !b.words.isEmpty()) {
+                    JSONArray ws = new JSONArray();
+                    for (Word wd : b.words) {
+                        JSONArray w = new JSONArray().put(wd.t).put(wd.sp);
+                        if (b.exact && wd.placed()) w.put(wd.x).put(wd.y).put(wd.w).put(wd.h);
+                        ws.put(w);
+                    }
+                    o.put("wd", ws).put("ex", b.exact);
+                }
+                a.put(o);
+            }
         } catch (JSONException ignored) { }
         return a;
     }

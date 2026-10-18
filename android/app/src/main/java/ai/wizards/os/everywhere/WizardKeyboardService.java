@@ -335,6 +335,16 @@ public class WizardKeyboardService extends AccessibilityService {
         return text;
     }
 
+    /** Package of the app whose text field has the cursor (or of the active window), "" when unknown. */
+    public String targetPackage() {
+        try {
+            AccessibilityNodeInfo n = findEditable();
+            CharSequence p = n == null ? null : n.getPackageName();
+            if (p == null) { AccessibilityNodeInfo root = getRootInActiveWindow(); p = root == null ? null : root.getPackageName(); }
+            return p == null ? "" : p.toString();
+        } catch (Exception e) { return ""; }
+    }
+
     private AccessibilityNodeInfo findEditable() {
         AccessibilityNodeInfo root = getRootInActiveWindow();
         AccessibilityNodeInfo f = root == null ? null : root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
@@ -371,6 +381,8 @@ public class WizardKeyboardService extends AccessibilityService {
     public java.util.List<ScreenPolicy.Block> screenText() {
         java.util.List<ScreenPolicy.Block> out = new java.util.ArrayList<>();
         int[] budget = {6000};
+        charDeadline = SystemClock.uptimeMillis() + 1500; // where each word sits: at most ~1.5 s of lookups
+        java.util.Arrays.fill(charStats, 0);
         try {
             List<AccessibilityWindowInfo> ws = getWindows();
             boolean any = false;
@@ -385,6 +397,8 @@ public class WizardKeyboardService extends AccessibilityService {
             }
             if (!any) { AccessibilityNodeInfo r = getRootInActiveWindow(); if (r != null && !ownPackage(r)) walk(r, out, budget, 0); }
         } catch (Exception e) { Log.w(TAG, "screen text failed", e); }
+        Log.i(TAG, "screen char positions: ok=" + charStats[0] + " noKey=" + charStats[1] + " refused=" + charStats[2]
+                + " empty=" + charStats[3] + " late=" + charStats[4] + " long=" + charStats[5]);
         return out;
     }
 
@@ -398,10 +412,58 @@ public class WizardKeyboardService extends AccessibilityService {
         if (text != null && text.length() > 0) {
             Rect b = new Rect();
             n.getBoundsInScreen(b);
-            if (b.width() > 0 && b.height() > 0)
-                out.add(new ScreenPolicy.Block(text.toString(), b.left, b.top, b.width(), b.height(), label));
+            if (b.width() > 0 && b.height() > 0) {
+                String t = text.toString();
+                java.util.List<ScreenPolicy.Word> words = null;
+                boolean exact = false;
+                if (!label) {
+                    float[][] rects = charRects(n, t.length());
+                    words = ScreenPolicy.words(t, rects);
+                    exact = rects != null;
+                }
+                out.add(new ScreenPolicy.Block(t, b.left, b.top, b.width(), b.height(), label, words, exact));
+            }
         }
         for (int i = 0; i < n.getChildCount(); i++) walk(n.getChild(i), out, budget, depth + 1);
+    }
+
+    private long charDeadline;
+    /** ok, no key, refresh refused, no rects, past the deadline, too long: why words were or weren't placed. */
+    private final int[] charStats = new int[6];
+
+    /**
+     * Where Android drew each character of this node's text, in screen pixels (the same data TalkBack uses), so a
+     * selection can start and end inside a line the way Google's does. Null when the app doesn't report it, the text
+     * is long, or the lookup budget for this screen is spent; the page then lays the words out itself.
+     */
+    @SuppressWarnings("deprecation") // Bundle.getParcelableArray(String): the typed variant is API 33+, minSdk is 28
+    private float[][] charRects(AccessibilityNodeInfo n, int len) {
+        if (len <= 0) return null;
+        if (len > 3000) { charStats[5]++; return null; }
+        if (SystemClock.uptimeMillis() > charDeadline) { charStats[4]++; return null; }
+        try {
+            List<String> extra = n.getAvailableExtraData();
+            if (extra == null || !extra.contains(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY)) { charStats[1]++; return null; }
+            android.os.Bundle a = new android.os.Bundle();
+            a.putInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_START_INDEX, 0);
+            a.putInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_LENGTH, len);
+            if (!n.refreshWithExtraData(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY, a)) { charStats[2]++; return null; }
+            android.os.Parcelable[] ps = n.getExtras().getParcelableArray(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY);
+            if (ps == null) { charStats[3]++; return null; }
+            float[][] r = new float[len][];
+            boolean any = false;
+            for (int i = 0; i < Math.min(len, ps.length); i++) {
+                if (!(ps[i] instanceof android.graphics.RectF)) continue;
+                android.graphics.RectF f = (android.graphics.RectF) ps[i];
+                if (f.width() <= 0 && f.height() <= 0) continue;
+                r[i] = new float[]{f.left, f.top, f.right, f.bottom};
+                any = true;
+            }
+            charStats[any ? 0 : 3]++;
+            return any ? r : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /* ------------------------------------------------------------------ screenshots */

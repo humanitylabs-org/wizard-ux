@@ -56,7 +56,7 @@
     return p.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  function mount({ parent, mode = 'sheet', onKeep, onChange } = {}) {
+  function mount({ parent, mode = 'sheet', onKeep, onChange, allowURL = () => true } = {}) {
     const el = document.createElement('section');
     el.className = `linksheet ${mode}`; el.setAttribute('aria-label', 'Link'); el.hidden = true;
     el.innerHTML = `<div class="ls-scrim" data-ls="close"></div><div class="ls-panel"><header class="ls-bar">
@@ -82,6 +82,7 @@
       el.querySelector('.ls-back').hidden = stack.length < 2;
     }
     function load(url) {
+      if (!allowURL(abs(url))) { close(); return; }
       el.classList.add('loading');
       try { frame.contentWindow.location.replace(url); } catch (e) { frame.src = url; }
     }
@@ -99,6 +100,7 @@
     }
     function go(href, base, doc) {
       const u = abs(href, base); if (!u) return false;
+      if (!allowURL(u)) return true; // consumed, never navigate a forbidden shell/task
       if (inApp(u) && isImage(u) && viewImage(u, doc)) return true;
       if (!inApp(u)) { external(u); return true; }
       if (cur() && cur().url === u.href) { show(); return true; }
@@ -116,6 +118,7 @@
       el.classList.remove('loading');
       let win, doc; try { win = frame.contentWindow; doc = frame.contentDocument; } catch (e) { return; }
       if (!doc || doc.location.href === 'about:blank') return;
+      if (!allowURL(abs(doc.location.href))) { close(); return; }
       // A bare image reached the frame anyway (redirect, no file extension): show it in the viewer instead.
       if (/^image\//.test(doc.contentType || '') && window.WosChat && window.WosChat.viewer) {
         const img = abs(doc.location.href);

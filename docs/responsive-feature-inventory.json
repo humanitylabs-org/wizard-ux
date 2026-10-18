@@ -100,6 +100,26 @@
       "shell": "phone",
       "classification": "preview",
       "reason": "Opt-in Live Mode motion styles."
+    },
+    "core/home-screen-policy.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android launcher-shortcut task policy; desktop has no home-screen pinning."
+    },
+    "core/home-screen-apps.css": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android Add to home screen sheet styling; native ShortcutManager only."
+    },
+    "core/home-screen-apps.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android Add to home screen via ShortcutManager pin request; no desktop equivalent."
+    },
+    "core/single-app-session.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
     }
   },
   "sharedAssets": [
@@ -414,7 +434,10 @@
       "note": "Direct entrypoint import"
     },
     "core/skin-frame.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared validated skin frame foundations, loaded before skin composition"
     },
     "core/settings.js": {
@@ -547,6 +570,24 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/home-screen-policy.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Android pinned app-only task policy (home-screen shortcut sessions)"
+    },
+    "core/home-screen-apps.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
+    },
+    "core/single-app-session.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Pinned home-screen app task: one app full screen with its own Back history"
     }
   }
 }

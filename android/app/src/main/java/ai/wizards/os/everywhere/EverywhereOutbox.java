@@ -83,6 +83,8 @@ public final class EverywhereOutbox {
     public static final class Item {
         public String id, state = "waiting", text = "", error = "", sessionId, audioPath = "", body = "", runId = "";
         public String source = SRC_EVERYWHERE;
+        /** The Mizel meeting interruption this take borrowed the mic from ("" when none): its transcript marker. */
+        public String meetingEvent = "";
         public long createdAt, nextAt, sentAt;
         /** Side button only: the phone was locked when this was spoken. */
         public boolean locked;
@@ -99,7 +101,8 @@ public final class EverywhereOutbox {
                     .put("sessionId", sessionId).put("audioPath", audioPath).put("body", body).put("runId", runId)
                     .put("createdAt", createdAt).put("nextAt", nextAt).put("sentAt", sentAt).put("attempts", attempts)
                     .put("sessionReady", sessionReady).put("audioFile", audioFile == null ? JSONObject.NULL : audioFile)
-                    .put("source", source).put("shots", shots).put("shotFiles", shotFiles).put("locked", locked);
+                    .put("source", source).put("shots", shots).put("shotFiles", shotFiles).put("locked", locked)
+                    .put("meetingEvent", meetingEvent);
         }
 
         static Item from(JSONObject o) {
@@ -111,6 +114,7 @@ public final class EverywhereOutbox {
             it.sessionReady = o.optBoolean("sessionReady"); it.audioFile = o.optJSONObject("audioFile");
             it.source = o.optString("source", SRC_EVERYWHERE);
             it.locked = o.optBoolean("locked");
+            it.meetingEvent = o.optString("meetingEvent");
             JSONArray a = o.optJSONArray("shots"); if (a != null) it.shots = a;
             JSONArray f = o.optJSONArray("shotFiles"); if (f != null) it.shotFiles = f;
             return it;
@@ -214,9 +218,20 @@ public final class EverywhereOutbox {
     }
 
     public Item enqueueRecording(File recording, String source, List<byte[]> screenshots, boolean locked) throws IOException {
+        return enqueueRecording(recording, source, screenshots, locked, null, null);
+    }
+
+    /** New take id for {@code source}; a borrower names its take before recording so the meeting loan can bind it. */
+    public static String newId(String source) {
+        return (SRC_DICTATION.equals(source) ? "wos-dict-" : SRC_SIDE.equals(source) ? "wos-side-" : "wos-ev-") + UUID.randomUUID();
+    }
+
+    /** Same, keeping a take id chosen at record time and the meeting interruption it belongs to. */
+    public Item enqueueRecording(File recording, String source, List<byte[]> screenshots, boolean locked, String id, String meetingEvent) throws IOException {
         Item it = new Item();
         it.locked = locked;
-        it.id = (SRC_DICTATION.equals(source) ? "wos-dict-" : SRC_SIDE.equals(source) ? "wos-side-" : "wos-ev-") + UUID.randomUUID();
+        it.id = id != null && id.matches("wos-(dict|side|ev)-[A-Za-z0-9-]{8,64}") && !items.containsKey(id) ? id : newId(source);
+        it.meetingEvent = meetingEvent == null ? "" : meetingEvent;
         it.source = source == null ? SRC_EVERYWHERE : source;
         if (screenshots != null && !it.dictation()) {
             int n = 0;
@@ -354,6 +369,7 @@ public final class EverywhereOutbox {
         Log.i(TAG, "attempt " + it.attempts + " failed (" + status + "): " + msg + (gaveUp ? " → not sent" : " → retrying"));
         changed();
         if (gaveUp) {
+            meetingNote(it, "event", "failed", "error", it.error);
             if (app != null) EverywhereService.notifyFailed(app, this, it);
             for (Listener l : snapshot()) l.onFailed(it);
         }
@@ -369,12 +385,14 @@ public final class EverywhereOutbox {
             catch (IOException e) { throw asHttp(e); }
             if (t.text.isEmpty()) {
                 synchronized (this) { it.state = "empty"; it.error = "No speech in that recording"; items.remove(it.id); save(); }
+                meetingNote(it, "event", "failed", "error", "No speech in that recording");
                 //noinspection ResultOfMethodCallIgnored
                 audio.delete();
                 changed();
                 return;
             }
             synchronized (this) { it.text = t.text; save(); }
+            meetingNote(it, "text", t.text);
             final String heard = t.text;
             main.post(() -> { for (Listener l : snapshot()) l.onWords(it, heard); });
             changed();
@@ -393,6 +411,7 @@ public final class EverywhereOutbox {
                     save();
                 }
                 Log.i(TAG, "usual " + usual + " from " + it.source + " " + it.id);
+                meetingNote(it, "event", "local", "text", it.text);
                 final Context a = app;
                 main.post(() -> { changed(); for (Listener l : snapshot()) l.onSent(it); ai.wizards.os.usuals.UsualsVoice.start(a, usual); });
                 return;
@@ -401,6 +420,8 @@ public final class EverywhereOutbox {
         // Dictation stops here: the words go into the text field, nothing goes to Wizard.
         if (it.dictation()) {
             final String words = it.text;
+            // The meeting marker records what was said even if no field takes it (the listener refines typed/copied).
+            meetingNote(it, "event", "local", "kind", "dictation", "text", DictationCleanup.cleanTranscriptForInsertion(words));
             // Keep the item pending through main-thread insertion/clipboard recovery. Removing it on the
             // I/O thread allowed a queued tap to start a second take before the first words were inserted.
             main.post(() -> {
@@ -473,6 +494,8 @@ public final class EverywhereOutbox {
             save();
         }
         Log.i(TAG, "sent " + it.id + " run=" + it.runId + " attempts=" + it.attempts);
+        meetingNote(it, "event", "sent", "threadId", it.sessionId, "runId", it.runId, "deliveryKey", it.id,
+                "audioFileId", it.audioFile == null ? null : it.audioFile.optString("id", null), "text", it.text);
         main.post(() -> { changed(); for (Listener l : snapshot()) l.onSent(it); });
         if (!it.runId.isEmpty()) watchReply(it);
     }
@@ -553,6 +576,12 @@ public final class EverywhereOutbox {
         String m = String.valueOf(e.getMessage());
         java.util.regex.Matcher x = java.util.regex.Pattern.compile("returned (\\d{3})").matcher(m);
         return new HttpError(x.find() ? Integer.parseInt(x.group(1)) : 0, "Couldn’t reach Wizard voice");
+    }
+
+    /** Notes on the Mizel meeting marker for a take that borrowed the meeting's mic (no-op otherwise). */
+    void meetingNote(Item it, Object... kv) {
+        if (app == null || it == null || it.meetingEvent == null || it.meetingEvent.isEmpty()) return;
+        ai.wizards.os.mizel.MeetingLoans.note(app, it.meetingEvent, ai.wizards.os.mizel.MeetingLoans.obj(kv));
     }
 
     /* ------------------------------------------------------------------ util */

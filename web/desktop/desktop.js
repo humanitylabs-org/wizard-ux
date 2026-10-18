@@ -178,12 +178,15 @@
   }
   function viewContext(id, how = 'typing') {
     // A private agent's window is named, never read: its thread titles stay with that agent.
-    const priv = x => agentWin(x) && agentApp(x).private;
-    const w = homeOpen && !id ? null : W[id || ws[cur].focus], others = homeOpen ? [] : ws[cur].wins.filter(x => x !== w?.id).map(x => priv(W[x]) ? `${agentApp(W[x]).name} chats (private agent)` : winTitle(W[x]));
+    // Unified Chats: a private agent's thread open in the main Chats is named like its own Chats, never by title.
+    const privThread = x => !!(x && x.app === 'chats' && x.thread && LIVE?.isPrivate?.(x.thread));
+    const priv = x => (agentWin(x) && agentApp(x).private) || privThread(x);
+    const privName = x => privThread(x) && !agentWin(x) ? 'A private agent’s thread' : `${agentApp(x).name} chats (private agent)`;
+    const w = homeOpen && !id ? null : W[id || ws[cur].focus], others = homeOpen ? [] : ws[cur].wins.filter(x => x !== w?.id).map(x => priv(W[x]) ? privName(W[x]) : winTitle(W[x]));
     const a = appOf(w);
     return [
       `[Wizard OS context] ${window.WizConfig.owner() || 'The user'} sent this by ${how} from Wizard UX on their desktop (workspace ${homeOpen ? 1 : C.workspaceNav.slot(cur)}).`,
-      w ? `Window in front: ${priv(w) ? `${a.name} chats (private agent)` : winTitle(w)}${a?.url ? ` (${a.url})` : ''}.` : homeOpen ? 'Home screen in front.' : 'No window was open.',
+      w ? `Window in front: ${priv(w) ? privName(w) : winTitle(w)}${a?.url ? ` (${a.url})` : ''}.` : homeOpen ? 'Home screen in front.' : 'No window was open.',
       (s => s ? `Visible on screen: ${s}` : '')(w && w.app !== 'chats' ? (window.WizScreen?.read(winEl(w.id)) || '') : ''),
       others.length ? `Also open on this workspace: ${others.join(', ')}.` : '',
       'When they say "this", "here", or "it", they likely mean that window. Use this as background only.',
@@ -566,8 +569,10 @@
   function closeCurrent() { const f = focused(); if (f) { closeWin(f.id); return 'app'; } return closeDesktop() ? 'desktop' : 'root'; }
 
   /* ---------------- top bar ---------------- */
+  addEventListener('wizard:app-counts', () => paintBar());
   function paintBar() {
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
+    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0);
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
     $('#logo').innerHTML = C.workspaceNav.icon({ home: true }, W, appOf);
     $('#wsList').innerHTML = ws.map((d, i) => {
