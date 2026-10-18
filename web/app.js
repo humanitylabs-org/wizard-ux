@@ -3236,7 +3236,8 @@
     if (e.type !== 'pointercancel' && s.dy < -8 && v < -.3) setZen(false);
   };
   zenEdge.addEventListener('pointerup', zenEnd); zenEdge.addEventListener('pointercancel', zenEnd);
-  setZen(store.get('zen', false), true);
+  // Every load starts with the orb and bars showing (James, 18 Oct); distraction-free is a per-session choice.
+  store.set('zen', false);
 
   /* ---------------- Back never leaves Wizard OS ----------------
    * Android Back is an in-app back gesture, one step at a time:

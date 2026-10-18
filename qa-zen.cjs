@@ -133,12 +133,11 @@ const maxStep = async p => { await p.waitForTimeout(2200); return p.evaluate(() 
   s = await state(p);
   ok(s.sheet === 'launcher', 'swipe up on the orb still opens Apps', String(s.sheet));
   await p.evaluate(() => __wos.closeSheets()); await p.waitForTimeout(500);
-  // 6. Distraction-free survives a reload.
+  // 6. A reload always starts with the orb showing (James, 18 Oct: it was starting hidden).
   await swipe(p, ox, oy, oy + 24, 2); await p.waitForTimeout(400);
   await p.reload({ waitUntil: 'load' });
   await p.waitForFunction(() => window.__wos && window.__wos.live && window.__wos.live.ok, null, { timeout: 30000 }); await p.waitForTimeout(800);
-  ok(await zenOn(p), 'distraction-free survives a reload');
-  await p.evaluate(() => __wos.onBack()); await p.waitForTimeout(400);
+  ok(!(await zenOn(p)) && (await state(p)).orbVis, 'orb shows again after a reload');
   // 7. Home desk too.
   await p.evaluate(() => __wos.goDesk(0, true)); await p.waitForTimeout(700);
   s = await state(p);
