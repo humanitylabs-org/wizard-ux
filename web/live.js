@@ -163,7 +163,7 @@
    * Battery (14 Oct 2026): the list is ordered by last activity, so any thread that changes
    * rises to page 1. The between-walk poll used to re-read ~6 pages (~1 MB) every 15 s;
    * one page carries the same news. The full walk still catches edits that don't bump activity. */
-  async function fetchSessions(full, agent = '') {
+  async function fetchSessions(full, agent = '', onFirst = null) {
     const out = []; let snapshot = '';
     for (let offset = 0; offset < 5000; ) {
       const q = `limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`;
@@ -175,6 +175,10 @@
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
       if (!more || !rows.length) return { sessions: out, complete: true };
       if (!full) return { sessions: out, complete: false };
+      // First paint (18 Oct 2026): the boot walk is ~9 sequential pages (~1.4 MB) and grows with history; Chats
+      // waited on all of it behind "Connecting to Wizard…". Page 1 already holds every recent thread, so the
+      // caller paints it while the rest of the walk continues.
+      if (onFirst && offset === rows.length) await onFirst({ sessions: out.slice(), complete: false });
     }
     return { sessions: out, complete: true };
   }
@@ -398,7 +402,8 @@
         try {
           const started = Date.now();
           const full = !this.fullAt || Date.now() - this.fullAt > FULL_EVERY;
-          const [got, deferred, remote] = await Promise.all([fetchSessions(full), fetchDispositions(), fetchSeen().catch(() => null)]);
+          const side = Promise.all([fetchDispositions(), fetchSeen().catch(() => null)]);
+          const apply = (got, deferred, remote) => {
           // The main list holds the main agent's threads only, even if a server ever lists another agent's here.
           let sessions = got.sessions.filter(s => !otherAgent(s.agent));
           window.WosModels?.reconcile(sessions);
@@ -421,6 +426,15 @@
           }
           this.seen = merged; writeLocal(merged);
           this.ok = true; this.error = ''; this.at = Date.now();
+          };
+          // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
+          // A first run anywhere (no read state on device or server) waits for the whole list, which it marks read.
+          const early = !this.ok && full ? async page => { const [d, r] = await side; if (!merge(readLocal(), merge(this.seen, r))) return; apply(page, d, r); this.emit(); } : null;
+          const got = await fetchSessions(full, '', early);
+          const [deferred, remote] = await side;
+          apply(got, deferred, remote);
+          // Other agents' threads merge in after the main list is on screen; one slow agent never holds Chats.
+          this.emit();
           await this.refreshAgents(deferred);
         } catch (e) { this.error = e.status === 403 ? 'access' : 'offline'; }
         finally { this.loading = null; this.emit(); }
