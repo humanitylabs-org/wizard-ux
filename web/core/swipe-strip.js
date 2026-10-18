@@ -19,11 +19,15 @@
 
   function focusWin() { const s = S(); if (!s) return null; const d = s.desks[s.idx]; return d && s.wins[d.focus] ? { id: d.focus, w: s.wins[d.focus] } : null; }
   function nextDeskUsable() { const s = S(); const d = s.desks[s.idx + 1]; return !!(d && d.wins && d.wins.length); }
+  let lastSig = '';
   function remember() {
     const s = S(); if (!s) return;
+    // Keep the edge peeks in step with list ⇄ thread changes (the shell only re-checks them on desk moves).
+    const f = focusWin(), sig = s.idx + ':' + (f ? f.id + ':' + (f.w.thread || '') : '');
+    if (sig !== lastSig) { lastSig = sig; try { s.syncPeek && s.syncPeek(); } catch (_) {} }
     for (const [id, w] of Object.entries(s.wins)) if (w.app === 'chats' && w.thread && w.thread !== '__new__' && lastThread[id] !== w.thread) { lastThread[id] = w.thread; saveLast(); }
   }
-  setInterval(remember, 700);
+  setInterval(remember, 250);
 
   // Edge strips on desks opened from a thread (frames can't hand their touches to the shell).
   function addEdges() {
@@ -37,7 +41,7 @@
   }
   setInterval(addEdges, 600);
   const css = document.createElement('style');
-  css.textContent = `.ss-edge{position:absolute;left:0;top:0;bottom:0;width:${EDGE}px;z-index:30;touch-action:none}
+  css.textContent = `html,body,#track,.desk{touch-action:pan-y}#track .desk.bound-peek,#track .desk.bound-chat-peek{touch-action:none}.ss-edge{position:absolute;left:0;top:0;bottom:0;width:${EDGE}px;z-index:30;touch-action:none}
   .ss-move{will-change:transform}.ss-anim{transition:transform 240ms cubic-bezier(.2,.8,.2,1),opacity 240ms}`;
   document.head.appendChild(css);
 
@@ -45,19 +49,32 @@
   const blocker = e => { if (Date.now() < blockClick) { e.stopImmediatePropagation(); e.preventDefault(); } };
   window.addEventListener('click', blocker, true);
 
+  const LOG = []; const log = m => { LOG.push(m); if (LOG.length > 40) LOG.shift(); };
   function begin(e) {
+  log('down ' + e.pointerType + ' ' + Math.round(e.clientX) + ' ' + (e.target.className || e.target.tagName));
     const s = S(); if (!s || e.button > 0 || s.sheet || (s.links && s.links.isOpen && s.links.isOpen())) return;
     if (e.target.closest('input, textarea, select, [contenteditable], .mviewer, .ms-track, #dock, #orbWrap, .sheet, .overview')) return;
     // A neighbour desk peeking in at the edge (bound view or tapped link): touching it drags toward it, a tap goes there.
     const peekDesk = e.target.closest('#track .desk.bound-chat-peek, #track .desk.bound-peek');
+    const f0 = focusWin();
+    if (peekDesk && f0 && f0.w.app === 'chats' && !f0.w.thread) {
+      // In the list the peek is stale for a moment; the right edge still means "back into the last thread".
+      G = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), lx: e.clientX, lt: performance.now(), v: 0, kind: 'list', wid: f0.id, w: f0.w, el: document.querySelector(`#track .win[data-win="${f0.id}"] [data-chats]`), lock: null, act: null };
+      e.preventDefault(); e.stopImmediatePropagation(); return;
+    }
     if (peekDesk) {
       const toward = peekDesk.classList.contains('bound-peek') ? 1 : -1;
       G = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), lx: e.clientX, lt: performance.now(), v: 0, kind: toward > 0 ? 'peek-next' : 'back-desk', peek: toward, el: null, lock: 'h', act: null };
       e.preventDefault(); e.stopImmediatePropagation(); try { document.body.setPointerCapture(e.pointerId); } catch (_) {} return;
     }
-    const winEl = e.target.closest('#track .win[data-win]'); if (!winEl) return;
+    let winEl = e.target.closest('#track .win[data-win]');
+    if (!winEl) { // the edge strip of the screen can land on the page root (a peek leaves a gap): use the window in front
+      const fw = focusWin(), el = fw && document.querySelector(`#track .win[data-win="${fw.id}"]`), r0 = el && el.getBoundingClientRect();
+      if (r0 && e.clientX >= r0.left - 8 && e.clientX <= r0.right + 40 && e.clientY >= r0.top && e.clientY <= r0.bottom) winEl = el;
+    }
+    if (!winEl) return;
     const f = focusWin(); if (!f || f.id !== winEl.dataset.win) return;
-    const r = winEl.getBoundingClientRect(), x = e.clientX - r.left;
+    const r = winEl.getBoundingClientRect(), x = Math.min(e.clientX, r.right - 1) - r.left;
     const edgeStrip = e.target.classList.contains('ss-edge');
     let kind = null;
     if (edgeStrip) kind = 'back-desk';
@@ -92,6 +109,7 @@
   }
   function reset(el) { if (!el) return; el.classList.remove('ss-move', 'ss-anim'); el.style.transform = ''; el.style.opacity = ''; }
   function end(e) {
+    if (G) log('end ' + e.type + ' kind=' + G.kind + ' act=' + G.act + ' lock=' + G.lock + ' synth=' + !!G.synth);
     if (!G || e.pointerId !== G.id || G.synth) return; const g = G; G = null;
     if (g.lock !== 'h') return;
     blockClick = Date.now() + 350;
@@ -118,5 +136,5 @@
   document.addEventListener('pointermove', move, { capture: true, passive: false });
   document.addEventListener('pointerup', end, true);
   document.addEventListener('pointercancel', end, true);
-  window.WosSwipeStrip = { lastThread, get active() { return G; } };
+  window.WosSwipeStrip = { LOG, lastThread, get active() { return G; } };
 })();
