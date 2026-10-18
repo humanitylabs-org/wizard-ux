@@ -1413,7 +1413,8 @@ window.WizCore.chats = function createChats(H) {
         .catch(err=>{ hc.disabled=false; hc.textContent=hc.dataset.preview ? 'Try Continue · example only' : 'Continue'; toast('!',''+err.message,2600); });
       return true;
     }
-    const dismiss = e.target.closest('[data-obdismiss]'); if (dismiss) {
+    // Errors-section voice rows own their Dismiss (confirm → delete); a failed note is not a hideable bubble.
+    const dismiss = !e.target.closest('[data-errob]') && e.target.closest('[data-obdismiss]'); if (dismiss) {
       const sent = OUTBOX.get(dismiss.dataset.obdismiss)?.state === 'sent';
       Promise.resolve(OUTBOX.dismissBubble(dismiss.dataset.obdismiss)).then(ok => {
         H.toast(ok ? '✓' : '!', ok ? (sent ? 'Sent bubble dismissed · message stays in this chat' : 'Bubble dismissed · recording kept in Unsent messages') : 'Could not save dismissal · original kept', 2400);
