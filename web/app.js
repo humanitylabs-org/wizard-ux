@@ -1,7 +1,8 @@
 /* Wizard OS — home shell prototype */
 (() => {
   'use strict';
-  if (document.documentElement.dataset.leaving) return; // core/shell.js is switching to the other shell
+  if (document.documentElement.dataset.leaving || window.WizHomeScreenPolicy?.mode) return; // single-app sessions never initialize desks
+
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1725,6 +1726,7 @@
     const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
     closeSheets(); setTimeout(() => openApp(a), 120);
   }
+  window.WizHomeScreenApps?.attach(launcher, id => APP[id]);
   launcher.addEventListener('click', e => {
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
     const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }
@@ -3162,6 +3164,7 @@
     return result || 'notReady';
   }
   function backStep(skipHosted) {
+    if (window.WizHomeScreenApps?.back()) return 'pin-sheet';
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
     { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows

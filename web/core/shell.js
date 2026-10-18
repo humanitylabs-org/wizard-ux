@@ -13,7 +13,8 @@
 (() => {
   'use strict';
   const KEY = 'wux.shell';
-  const q = new URLSearchParams(location.search).get('shell');
+  const single = window.WizHomeScreenPolicy?.mode;
+  const q = single ? null : new URLSearchParams(location.search).get('shell');
   try {
     if (q === 'phone' || q === 'desktop') localStorage.setItem(KEY, q);
     else if (q === 'auto') localStorage.removeItem(KEY);
@@ -25,7 +26,7 @@
   const mq = s => { try { return matchMedia(s).matches; } catch (e) { return false; } };
   const touchFirst = mq('(pointer: coarse)') && !mq('(any-pointer: fine)') && !mq('(hover: hover)');
   const mobileUA = /Android.+Mobile|iPhone|iPod|Mobile Safari/i.test(ua);
-  const want = forced || (android ? 'phone' : mac ? 'desktop' : (touchFirst || mobileUA) ? 'phone' : 'desktop');
+  const want = single ? 'phone' : forced || (android ? 'phone' : mac ? 'desktop' : (touchFirst || mobileUA) ? 'phone' : 'desktop');
   const here = document.documentElement.dataset.shell || 'phone';
   window.WIZ_SHELL = want;
   if (want !== here) {
