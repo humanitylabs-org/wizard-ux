@@ -51,7 +51,21 @@
   window.addEventListener('click', blocker, true);
 
   const LOG = []; const log = m => { LOG.push(m); if (LOG.length > 40) LOG.shift(); };
+  /* Keep each thread's reading position across swipes: re-rendering a thread on return (or the desk slide)
+   * used to nudge it up. Remember where the thread was when a swipe starts, and put it back after the move. */
+  const place = {};
+  function msgsOf(wid) { return document.querySelector(`#track .win[data-win="${wid}"] .ch-msgs`); }
+  function rememberPlace() {
+    const s = S(); if (!s) return;
+    for (const [id, w] of Object.entries(s.wins)) if (w.app === 'chats' && w.thread) { const m = msgsOf(id); if (m && m.scrollHeight) place[id + ':' + w.thread] = { bottom: m.scrollHeight - m.scrollTop - m.clientHeight, top: m.scrollTop }; }
+  }
+  function restorePlace() {
+    const s = S(); if (!s) return;
+    const put = () => { for (const [id, w] of Object.entries(s.wins)) { const p = w.app === 'chats' && w.thread && place[id + ':' + w.thread], m = p && msgsOf(id); if (m) { const want = p.bottom < 80 ? m.scrollHeight - m.clientHeight : Math.max(0, m.scrollHeight - m.clientHeight - p.bottom); if (Math.abs(m.scrollTop - want) > 2) m.scrollTop = want; } } };
+    put(); requestAnimationFrame(put); [120, 300, 600, 1000].forEach(t => setTimeout(put, t));
+  }
   function begin(e) {
+  rememberPlace();
   log('down ' + e.pointerType + ' ' + Math.round(e.clientX) + ' ' + (e.target.className || e.target.tagName));
     const s = S(); if (!s || e.button > 0 || s.sheet || (s.links && s.links.isOpen && s.links.isOpen())) return;
     if (e.target.closest('input, textarea, select, [contenteditable], .mviewer, .ms-track, #dock, #orbWrap, .sheet, .overview')) return;
@@ -114,6 +128,7 @@
     if (!G || e.pointerId !== G.id || G.synth) return; const g = G; G = null;
     if (g.lock !== 'h') return;
     blockClick = Date.now() + 350;
+    restorePlace();
     const s = S(), dx = e.clientX - g.x, far = Math.abs(dx) > GO || Math.abs(g.v) > VGO;
     if (g.peek && e.type !== 'pointercancel' && Math.abs(dx) < 8) { if (s.placeTrack) s.placeTrack(0, true); s.goDesk(s.idx + g.peek); return; } // tap on a peek
     const fire = e.type !== 'pointercancel' && far && g.act && ((dx < 0) === (g.act === 'to-next' || g.act === 'to-thread'));
@@ -127,6 +142,7 @@
   function slideBack(el) { if (!el || !el.style.transform) return; el.classList.add('ss-anim'); el.style.transform = 'translate3d(0,0,0)'; el.style.opacity = '1'; setTimeout(() => reset(el), 260); }
   function slideOut(el, dir, then) { el.classList.add('ss-anim'); el.style.transform = `translate3d(${dir * 100}%,0,0)`; el.style.opacity = '.4'; setTimeout(() => { reset(el); then(); }, 200); }
   function slideIn(wid, from) {
+    restorePlace();
     requestAnimationFrame(() => {
       const el = document.querySelector(`#track .win[data-win="${wid}"] [data-chats]`); if (!el) return;
       el.classList.add('ss-move'); el.style.transform = `translate3d(${from * 30}%,0,0)`; el.style.opacity = '.4';
