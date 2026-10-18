@@ -45,7 +45,7 @@ public class BackupE2eTest {
         try(ParcelFileDescriptor p=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);
             InputStream in=new ParcelFileDescriptor.AutoCloseInputStream(p)) { return new String(in.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8); }
     }
-    private void record(String key,Object value) throws Exception { receipt.put(key,value); Files.writeString(new File(evidence,"receipt.json").toPath(),receipt.toString(2)); }
+    private void record(String key,Object value) throws Exception { receipt.put(key,value); writeText(new File(evidence,"receipt.json"),receipt.toString(2)); }
     private void startScreen() { c.startActivity(new Intent(c,PhotosActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
     private void foreground(String component) throws Exception {
         waitFor("foreground "+component,20,()-> {
@@ -53,12 +53,20 @@ public class BackupE2eTest {
             return false;
         });
     }
+    private static String readText(File f) throws Exception { return new String(Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8); }
+    private static void writeText(File f,String t) throws Exception { Files.write(f.toPath(), t.getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
+    // API 28-safe GPS EXIF (ExifInterface.setLatLong needs API 29+).
+    private static String dms(double v) { v=Math.abs(v); int d=(int)v; double m=(v-d)*60; int mi=(int)m; long s=Math.round((m-mi)*60*10000); return d+"/1,"+mi+"/1,"+s+"/10000"; }
+    private static void setGps(ExifInterface e,double lat,double lon) {
+        e.setAttribute(ExifInterface.TAG_GPS_LATITUDE,dms(lat)); e.setAttribute(ExifInterface.TAG_GPS_LATITUDE_REF,lat>=0?"N":"S");
+        e.setAttribute(ExifInterface.TAG_GPS_LONGITUDE,dms(lon)); e.setAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF,lon>=0?"E":"W");
+    }
     private byte[] image(int i) throws Exception {
         File f=new File(c.getCacheDir(),"generated.jpg"); Bitmap b=Bitmap.createBitmap(80,64,Bitmap.Config.ARGB_8888);
         b.eraseColor(Color.rgb((i*37)%256,(i*71)%256,(i*19)%256));
         try(OutputStream out=new FileOutputStream(f)) { assertTrue(b.compress(Bitmap.CompressFormat.JPEG,92,out)); } b.recycle();
         ExifInterface exif=new ExifInterface(f);
-        if(i<4) exif.setLatLong(37.42+i/1000.0,-122.08-i/1000.0);
+        if(i<4) setGps(exif,37.42+i/1000.0,-122.08-i/1000.0);
         exif.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION,"Generated Wizard backup fixture "+i); exif.saveAttributes();
         return Files.readAllBytes(f.toPath());
     }
@@ -82,13 +90,13 @@ public class BackupE2eTest {
         c=InstrumentationRegistry.getInstrumentation().getTargetContext(); device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
         settings=new BackupSettings(c); evidence=new File(c.getFilesDir(),"photos-e2e"); assertTrue(evidence.mkdirs()||evidence.isDirectory());
         // The runner transfers this only to a brand-new disposable emulator's app-private files.
-        JSONObject fixture=new JSONObject(Files.readString(new File(c.getFilesDir(),"photos-test.json").toPath()));
+        JSONObject fixture=new JSONObject(readText(new File(c.getFilesDir(),"photos-test.json")));
         String server=BackupPolicy.server(fixture.getString("server"),true); assertEquals("http://localhost:2286",server);
-        Files.writeString(new File(c.getFilesDir(),"qa_home.txt").toPath(),"http://localhost:2290");
+        writeText(new File(c.getFilesDir(),"qa_home.txt"),"http://localhost:2290");
         record("privacy","generated fixtures; disposable server; emulator only");
         try {
             new PhotoAuth(c).apiKey(server,fixture.getString("key"));
-            record("encrypted_key",!Files.readString(new File(c.getApplicationInfo().dataDir,"shared_prefs/photos_backup.xml").toPath()).contains(fixture.getString("key")));
+            record("encrypted_key",!readText(new File(c.getApplicationInfo().dataDir,"shared_prefs/photos_backup.xml")).contains(fixture.getString("key")));
             assertFalse(new PhotoLibrary(c).readable());
             settings.prefs.edit().putBoolean("enabled",true).putBoolean("charge",false).commit(); settings.change();
             BackupScheduler.schedule(c); BackupScheduler.enqueue(c);
