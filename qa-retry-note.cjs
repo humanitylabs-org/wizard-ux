@@ -109,11 +109,14 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
   const p = await ctx.newPage(); p.setDefaultTimeout(15000);
   const errs = []; p.on('pageerror', e => errs.push(String(e)));
   await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
-  const win = () => p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats' && !x.agent); return w ? { id: w.id, thread: w.thread } : null; });
+  let cur = '';
+  // The Chats window showing the thread under test (Wizard can hold more than one Chats window).
+  const win = () => p.evaluate(id => { const ws = Object.values(__wos.wins).filter(x => x.app === 'chats'); const w = ws.find(x => x.thread === id) || ws.find(x => !x.agent); return w ? { id: w.id, thread: w.thread } : null; }, cur);
   const S = async sel => `[data-chats="${(await win()).id}"] ${sel}`;
   async function openThread(id) {
+    cur = id;
     await p.evaluate(id => __wos.openWizardThread(id), id);
-    await p.waitForFunction(id => { const w = Object.values(__wos.wins).find(x => x.app === 'chats' && !x.agent); return w?.thread === id && document.querySelector(`[data-chats="${w.id}"] .ch-fail`); }, id, { timeout: 20000 }).catch(() => {});
+    await p.waitForFunction(id => { const w = Object.values(__wos.wins).find(x => x.app === 'chats' && x.thread === id); return w && document.querySelector(`[data-chats="${w.id}"] .ch-fail`); }, id, { timeout: 20000 }).catch(() => {});
     await sleep(400);
   }
   const panel = async () => p.evaluate(sel => { const f = document.querySelector(sel); return f && [...f.querySelectorAll('button')].map(b => `${b.textContent.trim()}:${b.disabled ? 'off' : 'on'}`).join('|'); }, await S('.ch-fail'));
@@ -151,7 +154,9 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
   await p.screenshot({ path: `${OUT}/note-after-model-change.png` });
   await tap(await S('.ch-fail [data-chretry]'));
   r = await until(() => runsTo('qa_pw_fail_note', n0)[0]);
-  ok(r && r.input === 'Retry' && r.model === pick.value, 'Retry sends "Retry" on the newly picked model', r && { input: r.input, model: r.model, want: pick.value });
+  // The compact composer menu orders models its own way: the model the thread was set to is the one posted.
+  const want = mw ? JSON.parse(mw.body).model : pick.value;
+  ok(r && r.input === 'Retry' && r.model === want && want !== 'claude-opus-5-5', 'Retry sends "Retry" on the newly picked model', r && { input: r.input, model: r.model, want });
   ok(r && /follow-through note/.test(r.instructions || ''), 'Retry tells the agent to carry out the last request again', r && (r.instructions || '').slice(0, 200));
 
   // 4. Note after an older typed request: never resend the stale words.
