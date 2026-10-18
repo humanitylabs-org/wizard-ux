@@ -211,7 +211,8 @@ def run(pg, sx, sh, top, check, save, shot, PKG, ST, LOCK, FAKE, mz, open_host, 
     b = wait_for(bubble, 10); sx('logcat -c')
     if b: tap(b)
     time.sleep(2)
-    st_tap = tap_note_action('Recording meeting', 'Stop', 'loan-03-stop-during-loan')
+    # During the loan the meeting's notification reads "Meeting paused · …" (Resume is refused while lent; Stop wins).
+    st_tap = tap_note_action('Recording meeting|Meeting paused', 'Stop', 'loan-03-stop-during-loan')
     got = wait_for(lambda: ST['stops'].get(E), 40, 1)
     with LOCK: n_at_stop = len(ST['chunks'].get(E, {}))
     b = wait_for(bubble, 6)
@@ -223,6 +224,7 @@ def run(pg, sx, sh, top, check, save, shot, PKG, ST, LOCK, FAKE, mz, open_host, 
           {'stop': got and got['body'], 'chunks_at_stop': n_at_stop, 'after': n_after, 'loan': mlog('returned')})
     ev = wait_for(lambda: event(E, lambda e: e['status'] in ('queued', 'sent')), 40)
     check(G, 'stopped: the orb take itself is kept and sent (no silent loss)', ev is not None, events(E))
+    if not ST['stops'].get(E): stop_meeting(E)   # keep the rest of the run meaningful
 
     # ------------------------------------------------ side button gets the same contract
     F = 'qa_loan_side'

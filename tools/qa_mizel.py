@@ -718,7 +718,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         else:
             check('owner', 'Everywhere orb take borrows the mic while a meeting records', False, 'floating orb never appeared')
         # Stop from the notification while the app is in the background (real tap on the Stop action).
-        st_tap = tap_note_action('Recording meeting', 'Stop', '07b-shade-stop')
+        st_tap = tap_note_action('Recording meeting|Meeting paused', 'Stop', '07b-shade-stop')   # paused while lent to the orb
         got = wait_for(lambda: ST['stops'].get(C), 40)
         check('owner', 'notification Stop action ends the meeting (reason user)', st_tap and got and got['body'].get('reason') == 'user', {'tapped': st_tap})
         if not got: mz(pg, 'stop'); wait_for(lambda: ST['stops'].get(C), 40)   # keep the rest of the run meaningful
