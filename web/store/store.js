@@ -1,6 +1,6 @@
 /* Wizard App Store: an app-discovery app that runs in its own Wizard window (or on its own).
  * Listings merge configured catalogs; installation identity joins WAM, canonical shell and Runtipi reads.
- * Standard Get uses this Wizard's App Manager; pinned private/channel changes stay agent-mediated. Back: detail → list → Store root,
+ * Get and explicit release changes use this Wizard's owner-authorized App Manager. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
 import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp} from './store-status.js';
 (() => {
@@ -114,12 +114,12 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   }
   function action(a, cls = '') {
     const state=status(a);
+    if (S.busy.has(a.id)) return `<span class="get have ${cls}" aria-live="polite">Installing…</span>`;
     if(state==='conflict') return '<span class="get have">Resolve conflict</span>';
     if(state==='unknown') return '<span class="get have" aria-label="Status unavailable">Status unavailable</span>';
     if(state==='switch' || state==='update') return `<button class="get ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
     if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
-    if (S.busy.has(a.id)) return `<span class="get have ${cls}" aria-live="polite">Installing…</span>`;
     return `<button class="get ${cls}" data-get="${esc(key(a))}">Get</button>`;
   }
   const row = base => {const a=selected(base); return `<div class="row" data-app="${esc(key(a))}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b>${badge(base)}<small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;};
@@ -173,7 +173,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
       ${needs}${powers}${gives}
       ${a.release_notes ? `<section class="d-sec"><h3>Release notes</h3><p>${esc(a.release_notes)}</p></section>` : ''}
-      ${a.private ? `<section class="d-sec"><h3>Agent-mediated installation</h3><p>Requires your own repository and release access. ${esc(installRequest(a))}</p></section>` : ''}
+      ${a.private ? '<section class="d-sec"><h3>Private release</h3><p>The App Manager uses this Wizard’s existing repository and release access. Your selected source and exact commit are checked before installation.</p></section>' : ''}
       <section class="d-sec"><h3>Information</h3><dl class="info">${info}</dl>${a.url && /^https:\/\/github\.com\//.test(a.url) ? `<a class="src" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">View source on GitHub ↗</a>` : ''}</section>`;
     window.scrollTo(0, 0);
   }
@@ -211,27 +211,23 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
     requestAnimationFrame(() => window.scrollTo(0, y));
   }
 
-  let toastT = 0, lastInstallRequest = '';
-  function installRequest(a) {
-    const verb=status(a)==='switch'?'Switch release for':status(a)==='update'?'Update':isInstalled(a)?'Selected release for':'Install';
-    if(a.channel==='alpha') return `${verb} ${a.name} from ${a.source_name}: source ${a.source}, app ${a.id}, repository ${a.repo}, commit ${a.commit}, version ${a.version}. Use wizard-alpha install --source ${a.source} --app ${a.id} --commit ${a.commit}${isInstalled(a)?' --update':''}. Preserve existing data. Verify the authenticated view opens before reporting success.`;
-    if(a.private) return `${verb} ${a.name} using owner-private source, repository ${a.repo}, exact commit ${a.commit}, version ${a.version}. Do not substitute the Alpha release.`;
-    return `${verb} ${a.name} from Standard, repository ${a.repo}, version ${a.version}${a.commit?`, commit ${a.commit}`:''}. Do not substitute an Alpha release.`;
-  }
+  let toastT = 0;
   function toast(html, duration=3600) { const t = $('toast'); t.innerHTML = html; t.hidden = false; requestAnimationFrame(() => t.classList.add('on')); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { if(!t.classList.contains('on')) t.hidden = true; }, 250); }, duration); }
 
-  // Get: the App Manager installs it (owner only, on this Wizard's private address). The browser sends only the id.
+  // Identifiers select a server-authorized release, never a browser-supplied install URL or ref.
   const INSTALL = DATA.replace(/store-data\/$/, 'store-install/');
-  function askAgent(a) { lastInstallRequest=installRequest(a); toast(`<b>Ask your agent</b><span>${esc(lastInstallRequest)}</span><button class="get" data-copy-install>Copy request</button>`,15000); }
+
   async function install(a) {
-    if (!a || S.busy.has(a.id) || status(a)!=='get') return;
+    if (!a || S.busy.has(a.id) || !['get','update','switch'].includes(status(a))) return;
+    const operation = status(a)==='get'?'install':status(a);
+    const selection = {source:a.source,repo:a.repo,commit:a.commit,operation};
     S.busy.add(a.id); refresh();
     const say = (m, ok) => toast(`<b>${esc(a.name)}${ok ? ' is ready' : ' wasn’t installed'}</b><span>${esc(m)}</span>`);
     try {
       const r = await fetch(INSTALL + encodeURIComponent(a.id), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: '{}' });
+        headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(selection) });
       let j = await r.json().catch(() => ({}));
-      if (r.status === 404 && !j.error) { S.busy.delete(a.id); refresh(); askAgent(a); return; }   // no App Manager install here: agent request
+      if (r.status === 404 && !j.error) throw new Error('This Wizard’s App Manager needs updating before Store installs are available.');
       if (r.status === 403 || r.status === 404) throw new Error(j.error || 'Not allowed.');
       if (!r.ok && r.status !== 202) throw new Error(j.error || `Install failed (${r.status}).`);
       for (let i = 0; j.state === 'installing' && i < 360; i++) {
@@ -239,10 +235,12 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
         const s = await fetch(INSTALL + encodeURIComponent(a.id), { credentials: 'same-origin', cache: 'no-store' });
         j = await s.json().catch(() => ({ state: 'installing' }));
       }
-      if (j.state !== 'installed') throw new Error(j.error || 'It didn’t finish. Ask your agent to check the App Manager.');
+      if (j.state !== 'installed') throw new Error(j.error || 'The App Manager did not finish. Refresh to check its status.');
+      if (!j.selection || ['source','repo','commit','operation'].some(k=>j.selection[k]!==selection[k])) throw new Error('The App Manager returned a different release. Refresh before retrying.');
       try { if (framed) parent.postMessage({ type: 'wizard:apps-changed', id: a.id }, location.origin); } catch (_) {}
       await load(true);
-      if(!isInstalled(a)) throw new Error('Installation finished, but its registered status is not available yet. Refresh to check.');
+      const actual=S.installed.get(key(a));
+      if(!actual || actual.conflict || actual.repo!==a.repo || actual.commit!==a.commit) throw new Error('Installation finished, but the selected release is not registered yet. Refresh to check.');
       say('Find it in your apps.', true);
     } catch (err) { say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); refresh(); }
@@ -253,10 +251,8 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
     const g = e.target.closest('[data-get]');
     if (g) { e.stopPropagation(); const base=find(g.dataset.get); if(!base) return; const a=selected(base), state=status(a);
       if(!['get','switch','update'].includes(state)) return;
-      // Only an uninstalled Standard release may use the ID-only manager API.
-      if(state==='get' && !a.private && a.channel!=='alpha' && !a.commit) { install(a); return; }
-      askAgent(a); return; }
-    if(e.target.closest('[data-copy-install]')) { if(!navigator.clipboard?.writeText) {toast('<b>Select the request in app details to copy it.</b>');return;} navigator.clipboard.writeText(lastInstallRequest).then(()=>toast('<b>Request copied</b>')).catch(()=>toast('<b>Select the request in app details to copy it.</b>')); return; }
+      install(a); return; }
+
     const o = e.target.closest('[data-open]');
     if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
     const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);
