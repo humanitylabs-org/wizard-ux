@@ -56,25 +56,6 @@ android {
             minifyEnabled false
             if (wosSigningReady) signingConfig signingConfigs.release
         }
-        audiopreview {
-            initWith release
-            applicationIdSuffix '.musicpreview'
-            versionNameSuffix '-music-preview'
-            debuggable true
-            matchingFallbacks = ['release']
-            buildConfigField 'String', 'ORIGIN', '"https://music-background.staging.wizard001.com"'
-            buildConfigField 'String', 'HOME_URL', '"https://music-background.staging.wizard001.com/wizard-os-home/?open=wizard-music"'
-            resValue 'string', 'app_name', 'Wizard Audio Preview'
-        }
-        preview {
-            initWith release
-            applicationIdSuffix '.preview'
-            versionNameSuffix '-preview'
-            resValue 'string', 'app_name', 'Wizard Preview'
-            buildConfigField 'String', 'HOME_URL', '"https://orb-controls.staging.wizard001.com/wizard-os-home/?open=chats"'
-            buildConfigField 'String', 'ORIGIN', '"https://orb-controls.staging.wizard001.com"'
-            matchingFallbacks = ['release']
-        }
         // QA fixture for the in-app update test only (built with :app:assembleQanext next to assembleDebug):
         // the QA app again, same debug key, but a far higher version, so the updater has a real newer APK to verify.
         qanext {

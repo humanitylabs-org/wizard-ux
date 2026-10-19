@@ -40,6 +40,22 @@
   const C = {
     get raw() { return B; },
     get live() { return live; },
+    // Only canonical -> sibling preview is folded. Daily -> preview and preview ->
+    // other preview remain external. Resolve lazily: bootstrap arrives after scripts.
+    localURL(href, base = location.href) {
+      const u = new URL(href, base);
+      let canonical; try { canonical = new URL(B.settings?.network?.base_url); } catch (_) { return u; }
+      if (location.protocol === 'https:' && canonical.protocol === 'https:' &&
+          location.hostname === canonical.hostname && location.port !== canonical.port &&
+          u.origin === canonical.origin && !u.username && !u.password) {
+        return new URL(u.pathname + u.search + u.hash, location.origin);
+      }
+      return u;
+    },
+    isPreview() {
+      try { const c = new URL(B.settings?.network?.base_url); return location.protocol === 'https:' && c.protocol === 'https:' && location.hostname === c.hostname && location.port !== c.port; }
+      catch (_) { return false; }
+    },
     agent() { return (B.settings?.agent?.name || 'Wizard').trim() || 'Wizard'; },
     // Match the configured spoken name literally, with a boundary (never a name prefix).
     stripAddress(text) {
