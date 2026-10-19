@@ -2138,6 +2138,8 @@
     const f = { name: 'Screenshot', mime: 'image/png', uploading: true };
     files.push(f); renderVoiceFiles();
     const op = { files, abort: new AbortController() }; V.screenOp = op; f.abort = op.abort;
+    // Tracked from the reservation: a Send during capture takes it as pending and the shot follows the message.
+    const st = window.WizUploads?.pending?.track(f, null);
     const screen = $('#arcScreen'); screen.disabled = true; screen.classList.add('busy');
     const conceal = () => {
       if (V.screenOp !== op || op.abort.signal.aborted) return () => {};
@@ -2147,17 +2149,20 @@
     try {
       // The capture adapter conceals chrome only at actual sampling, after the desktop picker returns.
       const file = await window.WosScreenCapture.capture({ signal: op.abort.signal, conceal });
-      if (!sameTake(files) || !files.includes(f) || V.screenOp !== op) return;
+      if (!f.handedOff && (!sameTake(files) || !files.includes(f) || V.screenOp !== op)) { st?.fail(new Error('Screenshot cancelled')); return; }
       Object.assign(f, { name: file.name, mime: file.type, bytes: file.size });
       await uploadVoiceFile(file, files, f);
       if (sameTake(files) && f.id) toast('▣', 'Screenshot attached', 1800);
     } catch (e) {
+      st?.fail(e);
       const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
       if (sameTake(files)) { renderVoiceFiles(); toast('!', e.message || 'Screen capture failed · not attached', 3200); }
     } finally { releaseScreenOperation(op); }
   });
-  // Files that finished uploading, in the shape the outbox sends as wizard_file_ids.
-  const takeFiles = () => V.files.filter(f => f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes }));
+  // The take's files in the shape the outbox sends as wizard_file_ids. One still uploading goes as a pending
+  // placeholder (WizUploads.pending) that the outbox swaps for its receipt before delivery.
+  const PEND = window.WizUploads?.pending;
+  const takeFiles = () => V.files.map(f => PEND ? PEND.ref(f) : (f.id && !f.uploading ? { id: f.id, name: f.name, mime: f.mime, bytes: f.bytes } : null)).filter(f => f && f.id);
   function txShow(text, label, cls, icon) {
     tx.className = 'transcript ' + (cls || '');
     window.WizBrand.paint($('#txRouteIcon'), icon || '✦');
@@ -2513,13 +2518,12 @@
     V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
     if (V.target != null || V.replyTo || V.kind === 'command') V.snap.conversation = null; // only explicit gestures override
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
-    if (V.files.some(f => f.error)) { toast('!', 'Attachment not uploaded · tap Attach to retry the original file', 2600); return; }
-    if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
+    // Files still uploading (or failed with their bytes here) never hold the send: they ride as placeholders and the
+    // outbox finishes them behind the message (James, 19 Oct 2026: "Send the message and process it in the background").
     // Text, photos and voice go as ONE message (legacy H4; James, 10 Oct 2026: "when I paste a link in the text
     // box and I send you a voice note … they should both be sent together"). The composer of the thread this take
     // goes into is taken now, at the tap, and rides with the recording (chats.js takeComposer).
     const sealAt = sealTarget();
-    if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
     try {
       const pin = sealAt || (V.snap.view?.thread ? { wid: V.snap.view.id, sid: V.snap.view.thread } : null);
       if (!V.snap.conversation) {
@@ -2663,7 +2667,7 @@
       sessionId: sid && sid !== '__new__' ? sid : '',
       steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '',
       meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
-      files: [...V.files, ...(snap.seal?.files || [])].filter(f => f?.id),
+      files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
     V.custodyCapture = null;
     snap.custodyId = it.id; snap.audio = audio;
