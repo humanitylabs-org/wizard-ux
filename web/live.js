@@ -854,6 +854,81 @@
     return t;
   };
   L.releaseSend = t => { if (t && TAPS.get(t.sid) === t) { TAPS.delete(t.sid); resync(); } };
+
+  /* ---- thread open speed (18 Oct 2026, Miguel: "whenever I click on any session it just is extremely snappy") ----
+   * 1. Thread cache: every history read is kept on this device (IndexedDB, newest 40 threads), so a thread
+   *    paints at once from its last copy while the fresh read lands and replaces it. Server rows only; private
+   *    agents' threads are never stored.
+   * 2. Preload: after each live list read, Errors/Working/Ready threads whose revision changed are read in the
+   *    background, one at a time, never while hidden, on Data Saver, or from the cached list. Never archived threads.
+   * 3. Warm: pointing at (desktop) or touching a row starts its read; the open joins that same request. */
+  const TC_DB = 'wos-thread-cache', TC_MAX = 40, TC_BYTES = 2.5e6;
+  const TC = new Map(), INFLIGHT = new Map();
+  const revOf = s => s ? [s.messageCount, s.lastAssistantAt, s.lastUserAt, s.activityAt, s.status].join('|') : '';
+  const keepable = id => !!id && !L.agentOf(id) && !(L.isPrivate && L.isPrivate(id));
+  let tcDb = null;
+  const tcOpen = () => tcDb || (tcDb = new Promise(res => {
+    try { const r = indexedDB.open(TC_DB, 1); r.onupgradeneeded = () => r.result.createObjectStore('t', { keyPath: 'id' }); r.onsuccess = () => res(r.result); r.onerror = () => res(null); r.onblocked = () => res(null); }
+    catch (e) { res(null); }
+  }));
+  const tcReady = (async () => {
+    const db = await tcOpen(); if (!db) return;
+    await new Promise(res => {
+      try { const q = db.transaction('t').objectStore('t').getAll(); q.onsuccess = () => { for (const v of q.result || []) if (v && v.id && Array.isArray(v.rows) && !TC.has(v.id)) TC.set(v.id, v); res(); }; q.onerror = () => res(); }
+      catch (e) { res(); }
+    });
+  })();
+  async function tcPut(id, rows, rev) {
+    if (!keepable(id) || !Array.isArray(rows)) return;
+    let n = 0; try { n = JSON.stringify(rows).length; } catch (e) { return; }
+    if (n > TC_BYTES) return;
+    const v = { id, rows, rev, at: Date.now() }; TC.set(id, v);
+    const evict = [...TC.values()].sort((a, b) => b.at - a.at).slice(TC_MAX).map(x => x.id);
+    for (const k of evict) TC.delete(k);
+    const db = await tcOpen(); if (!db) return;
+    try { const st = db.transaction('t', 'readwrite').objectStore('t'); st.put(v); for (const k of evict) st.delete(k); } catch (e) {}
+  }
+  const fetchMessages = L.messages;
+  // A background read (warm/preload) can be joined by one thread open; an open never joins another open's read,
+  // so A -> B -> A always starts a new, independent read generation.
+  const startRead = (id, claimed) => {
+    const rev = revOf(L.session(id));
+    const p = fetchMessages.call(L, id).then(rows => { tcPut(id, rows, rev); return rows; });
+    const e = { p, claimed }; INFLIGHT.set(id, e); const done = () => { if (INFLIGHT.get(id) === e) INFLIGHT.delete(id); }; p.then(done, done);
+    return p;
+  };
+  L.messages = function (id) {
+    const e = INFLIGHT.get(id); if (e && !e.claimed) { e.claimed = true; return e.p; }
+    return startRead(id, true);
+  };
+  const bgRead = id => { const e = INFLIGHT.get(id); return e ? e.p : startRead(id, false); };
+  L.cachedMessages = id => (keepable(id) && TC.get(id)?.rows) || null;
+  const saving = () => !!navigator.connection?.saveData;
+  L.warm = id => {
+    const s = L.session(id); if (!s || s.archived || s.optimistic || saving() || INFLIGHT.has(id) || !keepable(id)) return;
+    const c = TC.get(id); if (c && c.rev === revOf(s) && !WORKING.has(s.status)) return;
+    bgRead(id).catch(() => {});
+  };
+  let pfBusy = false;
+  async function preload() {
+    if (pfBusy || document.hidden || !L.ok || L.cached || L.error || saving()) return;
+    pfBusy = true;
+    try {
+      await tcReady;
+      const g = groupWork(L.sessions);
+      const want = [...(g.errors || []), ...(g.working || []), ...(g.ready || [])].filter(s => !s.archived && !s.hidden && !s.optimistic && !s.synthetic && keepable(s.id)).slice(0, 16);
+      for (const s of want) {
+        if (document.hidden || !L.session(s.id)) continue;
+        const c = TC.get(s.id);
+        if (c && c.rev === revOf(s)) continue;
+        if (c && WORKING.has(s.status) && Date.now() - c.at < 60000) continue;
+        try { await bgRead(s.id); } catch (e) {}
+        await new Promise(r => setTimeout(r, 120));
+      }
+    } finally { pfBusy = false; }
+  }
+  const baseRefresh = L.refresh;
+  L.refresh = function (...a) { const p = baseRefresh.apply(this, a); Promise.resolve(p).then(() => setTimeout(preload, 400), () => {}); return p; };
   window.WizLive = L;
   window.__wizLiveInternals = { hasNew, recordFor, merge, fingerprint, normalize };
 })();
