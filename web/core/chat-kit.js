@@ -58,24 +58,16 @@
     }
     return { text: visible.join('').replace(/\n{3,}/g, '\n\n').trim(), attachments };
   }
-  /* This Wizard's own addresses. Links into it are written as paths ("/cinequeue/") so they open on whatever
-   * address this device reached Wizard through (localhost on the Mac, the tailnet name on a phone). Absolute
-   * links to this box's other names (the current host, or a retired custom domain listed in the bootstrap's
-   * network.aliases) are folded back to paths, so old messages keep opening in place after a rename. */
-  const LEGACY_HOME_HOSTS = ['private.wizard001.com'];
-  function homeHosts() {
-    const out = new Set([location.hostname, ...LEGACY_HOME_HOSTS]);
-    try { for (const h of (window.WizConfig?.raw?.network?.aliases || [])) if (typeof h === 'string' && h) out.add(h.toLowerCase()); } catch (e) {}
-    return out;
-  }
-  // Absolute https link to this Wizard → '/path?query#hash'; anything else unchanged.
+  // Same-origin and canonical links in a sibling preview become paths. Different
+  // ports remain distinct origins; never turn another preview into a private frame.
+  const localURL = href => window.WizConfig?.localURL ? window.WizConfig.localURL(href) : new URL(href, location.href);
   function homePath(href) {
     const s = String(href || '').trim();
     if (!/^https:\/\//i.test(s)) return s;
-    let u; try { u = new URL(s); } catch (e) { return s; }
-    return homeHosts().has(u.hostname.toLowerCase()) && (!u.port || u.port === location.port) ? u.pathname + u.search + u.hash : s;
+    try { const u = localURL(s); return u.origin === location.origin ? u.pathname + u.search + u.hash : s; }
+    catch (_) { return s; }
   }
-  const isHomeUrl = u => !!u && (u.origin === location.origin || (u.protocol === 'https:' && homeHosts().has(u.hostname.toLowerCase())));
+  const isHomeUrl = u => { try { return !!u && localURL(u.href).origin === location.origin; } catch (_) { return false; } };
   const SAFE_IMG = /^(data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+$|\/(?![\/\\]))/i; // inline data, or a path on this Wizard
   // Inline image parts: OpenAI image_url / input_image, Anthropic base64 image, legacy image_urls.
   function imagesOf(m, content) {
