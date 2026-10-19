@@ -1440,8 +1440,9 @@ window.WizCore.chats = function createChats(H) {
     // Chrome, 1-2 s in the phone's WebView. The reply's thread is held under Working from the same frame
     // (live.js holdSend, the orb's path) until its outbox item takes over. qa-send-leave-timing.cjs guards this.
     const instructions = opts.instructions || viewContext(wid, how);
+    // Hold before navigation can paint a list (also covers desktop / hosted replies).
+    const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
     const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
-    const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     // Saved on the phone; the outbox delivers it (and retries) from here.
     let it;
