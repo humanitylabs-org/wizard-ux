@@ -55,6 +55,15 @@ try{
   assert.equal((await doc()).nodes.length,before-1);assert.equal(await editing(),'c','caret moves to previous line');
   await page.locator('#undo').tap();await saved();assert.equal((await doc()).nodes.length,before);
  });
+ await check('no trail of empty bullets: leaving an empty bullet removes it',async()=>{
+  const empties=async()=>(await doc()).nodes.filter(x=>!x.text).length;
+  await page.locator('[data-id="a"] .text').tap();await saved();assert.equal(await empties(),0,'the empty line left behind is gone');
+  await page.keyboard.press('End');await page.locator('#new').tap();await page.locator('#new').tap();await page.locator('#new').tap();await saved();
+  assert.equal(await empties(),1,'repeated Enter leaves one empty line, under the cursor');
+  assert.equal(await page.locator('.bullet .text.empty').count()+await page.locator('textarea.editor').count(),1);
+  await page.locator('[data-id="b"] .text').tap();await saved();assert.equal(await empties(),0);
+  await page.locator('#undo').tap();await saved();assert.equal(await empties(),0,'Undo does not bring blank lines back');
+ });
  await check('tapping a parent dot folds and unfolds its sub-bullets',async()=>{
   await page.keyboard.press('Escape');await page.locator('[data-id="b"] .dot').tap();await saved();
   assert.equal(await page.locator('[data-id="c"]').count(),0);assert.equal(await page.locator('[data-id="b"] .dot.folded').count(),1);

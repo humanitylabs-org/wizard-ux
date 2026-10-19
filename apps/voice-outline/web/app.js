@@ -39,7 +39,11 @@ async function save(){
  finally{saving=false;}
 }
 function canDictate(){return !!session&&!paused&&!stopping&&!session.getInfo().inputStopped;}
-function select(id,{edit=false}={}){if(editing&&editing!==id)editing=null;selected=id;const typing=edit&&canDictate();if(typing)void setPaused(true);else if(session&&!paused&&current?.target!==id)boundary();if(edit){detachDraft(id);editing=id;}remember();render();if(edit)focusEditor();}
+// An empty bullet you leave behind disappears (no trail of blank bullets below the cursor).
+function tidy(id){const n=doc.nodes.find(x=>x.id===id);if(!n||n.text||id===selected||doc.nodes.length<=1||doc.nodes.some(x=>x.parent===id)||Object.values(ledger.items).some(s=>s.target===id&&!doc.applied.includes('speech-'+s.id))||current?.target===id)return;
+ const top=undo.at(-1);if(top?.back?.kind==='delete'&&top.back.target===id)undo.pop();operation({kind:'delete',target:id},{history:false,renderView:false});}
+function sweep(){for(const n of [...doc.nodes])tidy(n.id);}
+function select(id,{edit=false}={}){if(editing&&editing!==id)editing=null;const left=selected;selected=id;if(left!==id)sweep();const typing=edit&&canDictate();if(typing)void setPaused(true);else if(session&&!paused&&current?.target!==id)boundary();if(edit){detachDraft(id);editing=id;}remember();render();if(edit)focusEditor();}
 function focusEditor(){const el=$('tree').querySelector('textarea');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);resize(el);}}
 function resize(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}
 function newBullet(child=false){
@@ -106,7 +110,7 @@ function begin(){if(!socket||socket.readyState!==1||!session||paused||stopping)r
 function boundary(){if(current){socket?.send(JSON.stringify({type:'end',id:current.id}));current=null;}begin();}
 function settle(){
  const items=Object.values(ledger.items).sort((a,b)=>a.seq-b.seq);
- for(const s of items){if(s.status==='draft')break;if(s.status==='final'&&!doc.applied.includes('speech-'+s.id))operation({speechId:s.id,kind:'voice',target:s.target,parent:s.parent,text:s.text},{history:!!s.text||!doc.nodes.some(n=>n.id===s.target)});}
+ for(const s of items){if(s.status==='draft')break;if(s.status==='final'&&!doc.applied.includes('speech-'+s.id)){operation({speechId:s.id,kind:'voice',target:s.target,parent:s.parent,text:s.text},{history:!!s.text||!doc.nodes.some(n=>n.id===s.target)});tidy(s.target);}}
  remember();render();if(!items.some(s=>s.status==='draft'))finalWait?.();
 }
 function acceptDraft(id){const s=ledger.items[id];if(!s||s.status!=='unconfirmed'||!s.text.trim())return;s.status='final';editingDraft=null;settle();flash('Accepted text. Original audio is unchanged.');}
@@ -187,7 +191,7 @@ async function load(){
   const local=await new Promise((resolve,reject)=>{const req=db.transaction('recovery').objectStore('recovery').get('outline');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
   if(local){({doc,rev,ops,selected,seq}=local);undo=local.undo||[];redo=local.redo||[];for(const item of [...undo,...redo]){delete item.forward.id;delete item.forward.speechId;}ledger=new SpeechLedger(local.drafts||{});for(const s of Object.values(ledger.items))if(s.status==='draft')s.status='unconfirmed';}
   try{const remote=await request('./api/document');remoteRead=true;rev=remote.rev;doc=remote.document;for(const op of ops)apply(doc,op);const speech=await request('./api/speech');for(const s of speech.utterances){if(!doc.applied.includes('speech-'+s.id)){ledger.event({...s,type:s.status==='final'?'final':'delta'});if(s.status!=='final')ledger.items[s.id].status='unconfirmed';}}}catch(e){note('Offline recovery. Changes stay on this device until the server returns.');}
-  if(!doc.nodes.some(n=>n.id===selected))selected=doc.nodes[0].id;settle();render();await remember();if(ops.length)await save();else saveState(remoteRead?'Saved':'On this device only');
+  if(!doc.nodes.some(n=>n.id===selected))selected=doc.nodes[0].id;settle();sweep();render();await remember();if(ops.length)await save();else saveState(remoteRead?'Saved':'On this device only');
   await hostReady;
   const existing=W.capture.current();
   if(existing&&existing.phase!=='starting'){
