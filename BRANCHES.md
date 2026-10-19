@@ -1,6 +1,6 @@
 # Wizard UX — feature branches
 
-Each feature lives on its own branch so it can be read, reviewed, and merged on its own. `daily` merges all of them and is what James runs on his phone. `master` is the web shell baseline the feature branches start from.
+Each feature lives on its own branch so it can be read, reviewed, and merged on its own. Feature branches start from `main` and merge into `main` by PR; `main` is what James runs. (Until 19 Oct 2026 `main` was named `daily`; older rows that say `daily` mean `main`.)
 
 | Branch | What it adds | Files | Verified |
 |---|---|---|---|
