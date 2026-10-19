@@ -27,10 +27,10 @@
   const NATIVE = !!window.WizardOSNative || /WizardOS-Android\//.test(navigator.userAgent || '');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  // A preview of this shell on a sibling host (desks.wizard001.com) treats links to the canonical private
-  // origin as its own, so a thread's private.wizard001.com/… link opens inside the preview it was tapped in.
-  const CANON = 'private.wizard001.com', SIBLING = location.hostname !== CANON && (/\.wizard001\.com$/.test(location.hostname) || location.hostname === '127.0.0.1');
-  function abs(href, base) { try { const u = new URL(href, base || location.href); if (SIBLING && u.hostname === CANON && u.protocol === 'https:') return new URL(u.pathname + u.search + u.hash, location.origin); return u; } catch (e) { return null; } }
+  function abs(href, base) {
+    try { return window.WizConfig?.localURL ? window.WizConfig.localURL(href, base || location.href) : new URL(href, base || location.href); }
+    catch (_) { return null; }
+  }
   function inApp(u) { return !!u && (u.protocol === 'https:' || u.protocol === 'http:') && u.origin === ORIGIN; }
   function external(u) {
     // Android app: a main-frame navigation to another origin is handed to the system browser natively.
