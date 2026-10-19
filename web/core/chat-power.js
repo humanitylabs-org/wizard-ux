@@ -153,18 +153,19 @@ window.WosChatPower = function chatPower(A) {
     const at = cur?.model ? opts.findIndex(o => o && o.value === cur.model) : -1;
     return { opts, at };
   }
-  // Selected slot shows the full version: claude-opus-5-5 → Opus 5.5, gpt-6.1-sol → GPT 6.1 Sol.
-  function fullName(id, n) {
-    const v = String(id).replace(/\[.*\]$/, '');
-    let m = v.match(/^claude-([a-z]+)-(\d+)(?:[-.](\d{1,2}))?(?:-\d{8})?$/i); if (m) return `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}${m[3] ? '.' + m[3] : ''}`;
-    m = v.match(/^gpt-([\d.]+)-([a-z]+)$/i); if (m) return `GPT ${m[1]} ${m[2][0].toUpperCase()}${m[2].slice(1)}`;
-    return n;
+  // Versions come from the actual selectable id, never a display-name guess or a pinned catalogue.
+  function switchVersion(id) {
+    const v = String(id || '').replace(/\[.*\]$/, '');
+    let m = v.match(/^claude-[a-z]+-(\d+)(?:[-.](\d{1,2}))?(?:-\d{8})?$/i);
+    if (m) return m[1] + (m[2] ? '.' + m[2] : '');
+    m = v.match(/^gpt-([\d.]+)-[a-z]+(?:-900k)?$/i);
+    return m ? m[1] : '';
   }
   function modelSwitch(w, s) {
     if (!M || agentOfWin(w, s)) return modelChip(w, s);
     const { opts, at } = switchOpts(w, s);
     const label = at < 0 ? (s ? M.short(threadModel(s).model, threadModel(s).provider) || 'Model' : 'Default') : '';
-    return `<div class="ms" data-mswid="${esc(w.id)}" style="--ms-i:${at < 0 ? 1 : at}"><div class="ms-track${at < 0 ? ' off' : ''}" role="radiogroup" aria-label="Model">${SW_NAMES.map((n, i) => `<button type="button" role="radio" class="ms-o${i === at ? ' on' : ''}" data-msi="${i}" aria-checked="${i === at}"${opts[i] ? '' : ' disabled'}>${i === at && opts[i] ? esc(fullName(opts[i].value, n)) : n}</button>`).join('')}<i class="ms-thumb" aria-hidden="true"></i></div><button type="button" class="ms-more" data-chmodel aria-label="All models${label ? ` · now ${esc(label)}` : ''}">${label ? `<small>${esc(label)}</small>` : ''}⋯</button></div>`;
+    return `<div class="ms" data-mswid="${esc(w.id)}" style="--ms-i:${at < 0 ? 1 : at}"><div class="ms-track${at < 0 ? ' off' : ''}" role="radiogroup" aria-label="Model">${SW_NAMES.map((n, i) => `<button type="button" role="radio" class="ms-o${i === at ? ' on' : ''}" data-msi="${i}" aria-checked="${i === at}"${opts[i] ? '' : ' disabled'}><span class="ms-name">${n}</span> <small class="ms-version">${esc(switchVersion(opts[i]?.value))}</small></button>`).join('')}<i class="ms-thumb" aria-hidden="true"></i></div><button type="button" class="ms-more" data-chmodel aria-label="All models${label ? ` · now ${esc(label)}` : ''}">${label ? `<small>${esc(label)}</small>` : ''}⋯</button></div>`;
   }
   async function switchTo(wid, i) {
     const w = H.win(wid); if (!w?.thread) return;
