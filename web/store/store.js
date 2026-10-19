@@ -2,7 +2,7 @@
  * Listings merge configured catalogs; installation identity joins WAM, canonical shell and Runtipi reads.
  * Get and explicit release changes use this Wizard's owner-authorized App Manager. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
-import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp} from './store-status.js';
+import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason} from './store-status.js';
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -28,7 +28,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map() };
+  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map() };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
@@ -79,6 +79,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
     S.apps = (Array.isArray(idx.value.apps) ? idx.value.apps : []).map(clean).filter(Boolean).filter(isUserApp).sort(compareApps);
     S.installed.clear();
     const snapshot=registry.status==='fulfilled' ? registry.value : {wam:[],shell:[],complete:false};
+    S.architecture=['amd64','arm64'].includes(snapshot.architecture) ? snapshot.architecture : '';
     const runtipi=inst.status==='fulfilled' && Array.isArray(inst.value.installed) ? inst.value.installed : [];
     S.complete=snapshot.complete===true && Array.isArray(snapshot.wam) && Array.isArray(snapshot.shell) && inst.status==='fulfilled' && Array.isArray(inst.value.installed);
     for (const a of S.apps) {
@@ -117,6 +118,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
     if (S.busy.has(a.id)) return `<span class="get have ${cls}" aria-live="polite">Installing…</span>`;
     if(state==='conflict') return '<span class="get have">Resolve conflict</span>';
     if(state==='unknown') return '<span class="get have" aria-label="Status unavailable">Status unavailable</span>';
+    if(['get','switch','update'].includes(state) && architectureReason(a,S.architecture)) return `<span class="get have ${cls}" title="${esc(architectureReason(a,S.architecture))}">${S.architecture ? 'Not compatible' : 'Compatibility unavailable'}</span>`;
     if(state==='switch' || state==='update') return `<button class="get ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
     if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
@@ -171,6 +173,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
       ${base.conflict?'<section class="d-sec"><p class="d-note">This app ID belongs to different repositories across sources. Installation is blocked here; ask your agent to resolve the source conflict without overwriting an installed app.</p></section>':''}
       <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc((a.version || '—').split(/[-+]/)[0])}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
+      ${architectureReason(a,S.architecture) ? `<section class="d-sec"><p class="d-note" role="status">${esc(architectureReason(a,S.architecture))}</p></section>` : ''}
       ${needs}${powers}${gives}
       ${a.release_notes ? `<section class="d-sec"><h3>Release notes</h3><p>${esc(a.release_notes)}</p></section>` : ''}
       ${a.private ? '<section class="d-sec"><h3>Private release</h3><p>The App Manager uses this Wizard’s existing repository and release access. Your selected source and exact commit are checked before installation.</p></section>' : ''}
@@ -218,7 +221,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   const INSTALL = DATA.replace(/store-data\/$/, 'store-install/');
 
   async function install(a) {
-    if (!a || S.busy.has(a.id) || !['get','update','switch'].includes(status(a))) return;
+    if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || !['get','update','switch'].includes(status(a))) return;
     const operation = status(a)==='get'?'install':status(a);
     const selection = {source:a.source,repo:a.repo,commit:a.commit,operation};
     S.busy.add(a.id); refresh();
