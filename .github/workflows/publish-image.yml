@@ -2,9 +2,9 @@ name: Publish public image
 
 on:
   push:
-    branches: [daily]
+    branches: [main]
   pull_request:
-    branches: [daily]
+    branches: [main]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -44,7 +44,7 @@ jobs:
     # No PR payload or noncanonical branch ever reaches the self-hosted worker.
     if: >-
       github.repository == 'humanitylabs-org/wizard-ux' &&
-      github.ref == 'refs/heads/daily' &&
+      github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: [self-hosted, macOS, ARM64, wizard-ghcr-wizard-ux]
     timeout-minutes: 100
@@ -68,7 +68,7 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: >-
           python3 scripts/ci/ghcr_image.py publish
-          --image "$IMAGE" --sha "$GITHUB_SHA" --branch daily
+          --image "$IMAGE" --sha "$GITHUB_SHA" --branch main
           --release "$RELEASE_TAG" --confirm "$CONFIRM_TAG" --expected-sha "$EXPECTED_SHA"
 
   anonymous-pull:
