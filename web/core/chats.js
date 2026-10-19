@@ -962,7 +962,7 @@ window.WizCore.chats = function createChats(H) {
     const privTag = !winAgent(w) && TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
     const working = !!s && WORKING_ST.has(s.status);
     const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : s?.status === 'unknown' ? 'Needs recovery · needs your acknowledgement' : s?.status === 'stopping' ? 'Stopping…' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${agentName(TAG)}` : `${agentName(TAG)} is working`)) : s?.status === 'waiting_for_approval' ? 'Waiting for your response' : s?.deferred && !s.archived ? 'Deferred' : s?.archived ? 'Archived' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
-    const turns = c.loadedFor === w.thread ? c.turns || [] : null;
+    const turns = c.loadedFor === w.thread || c.cachedFor === w.thread ? c.turns || [] : null;
     c.media = []; c.texts = [];
     let msgs;
     const pend = pendingFor(w);
@@ -1091,8 +1091,11 @@ window.WizCore.chats = function createChats(H) {
       lift();
     }, true);
     root.addEventListener('pointercancel', e => { if (e.pointerType !== 'touch') lift(); }, true);
+    // Speed: pointing at (desktop) or touching a row starts its history read; the open joins that request.
+    root.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse') return; const row = e.target.closest?.('.ch-list [data-chopen]'); if (row && row !== root._warmRow) { root._warmRow = row; clearTimeout(root._warmT); root._warmT = setTimeout(() => LIVE.warm?.(row.dataset.chopen), 90); } });
     root.addEventListener('pointerdown', e => {
       const row = e.target.closest('.ch-list [data-chopen]'); if (!row || e.button > 0) return;
+      LIVE.warm?.(row.dataset.chopen);
       const wid = idOf(row);
       lp = { row, wid, sid: row.dataset.chopen, x: e.clientX, y: e.clientY, dx: 0, t: setTimeout(() => { if (!lp) return; lpUntil = Date.now() + 700; openRowSheet(lp.wid, lp.sid); lp = null; }, 480) };
     });
@@ -1169,6 +1172,17 @@ window.WizCore.chats = function createChats(H) {
     const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
+    // Speed: a thread not yet read this page paints its last on-device copy at once (no skeleton);
+    // the read below still runs and replaces it.
+    if (c.loadedFor !== sid && c.cachedFor !== sid && LIVE.cachedMessages) {
+      const cached = LIVE.cachedMessages(sid);
+      if (cached && cached.length) {
+        try {
+          Object.assign(c, { turns: toTurns(cached), cachedFor: sid, err: '' }); // loadedFor stays for the server read
+          const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el);
+        } catch (e) {}
+      }
+    }
     if (fresh && !force) {
       // Reopening a cached quiet transcript still refreshes rename/retry metadata,
       // once per navigation, without throwing away its 60-second history cache.
@@ -1193,7 +1207,7 @@ window.WizCore.chats = function createChats(H) {
       const turns = toTurns(rows);
       const sig = JSON.stringify(turns.slice(-3));
       let changed = c.loadedFor !== w.thread || sig !== c.sig;
-      Object.assign(c, { turns, loadedFor: w.thread, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav });
+      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav });
       // A sent message has landed once a recent user turn in the thread matches it.
       const sent = OUTBOX ? OUTBOX.forThread(w.thread).filter(p => p.state === 'sent') : [];
       if (sent.length) {
@@ -1222,7 +1236,7 @@ window.WizCore.chats = function createChats(H) {
     if (!w.thread) { const place = listPlace(elOf(wid)); if (place) ch(wid).listPlace = place; }
     if (w.thread) saveDraft(wid);
     closeRowSheet();
-    const c = ch(wid); c.approval = null;
+    const c = ch(wid); c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
     c.readNav = (c.readNav || 0) + 1;
     if (w.thread !== sid) H.threadShown?.(wid, null); // close the old preview immediately, even while the new thread loads
     if (opts.via === 'link' && w.thread && w.thread !== '__new__' && w.thread !== sid) c.trail = (c.trail || []).concat(w.thread).slice(-20);
