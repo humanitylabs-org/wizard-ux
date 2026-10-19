@@ -129,7 +129,7 @@
       if (M.loading) return M.loading;
       if (!force && M.ready && Date.now() - M.at < 5 * 60e3) return Promise.resolve(M.options);
       // The app owns the upstream key. Hermes' local bearer is not proof that a key is saved.
-      const connection = fetch('/wizard-tinfoil/api/connection', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(4000) })
+      const connection = fetch('/wizard-tinfoil/api/status', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(4000) })
         .then(r => r.ok ? r.json() : null).catch(() => null);
       M.loading = fetch('/wizard/hermes/api/model/options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw new Error(`Models unavailable (${r.status})`); return r.json(); })

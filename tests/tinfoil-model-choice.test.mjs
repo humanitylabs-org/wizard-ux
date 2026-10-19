@@ -15,7 +15,7 @@ function harness({ registered = true, stored = true, ackProvider = 'custom', req
   const window = {};
   const ctx = vm.createContext({ window, AbortSignal, localStorage: { getItem: () => null }, fetch: async (url, init) => {
     calls.push({ url, init });
-    if (url === '/wizard-tinfoil/api/connection') {
+    if (url === '/wizard-tinfoil/api/status') {
       if (unavailable) throw new Error('unavailable');
       return { ok: true, json: async () => ({ provider: 'tinfoil', credentialStored: stored, credentialVerified: false, status: stored ? 'pending' : 'not_connected' }) };
     }
