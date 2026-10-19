@@ -696,3 +696,8 @@ html[data-shell="desktop"] .ch-dbar + .ch-compose { border-top: 0; }
 .ch-sync.off { color: var(--ink-2); }
 .ch-spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-2, rgba(255,255,255,.18)); border-top-color: var(--ink-2, currentColor); animation: ch-attspin .8s linear infinite; flex: none; }
 @media (prefers-reduced-motion: reduce) { .ch-spin { animation-duration: 2.4s; } }
+/* Test port (phone): Defer / Done sit on the model-switch row as compact icon buttons. */
+html:not([data-shell="desktop"]) .ch-bbar .ch-tacts { margin: 0; gap: 4px; flex: 0 0 auto; }
+html:not([data-shell="desktop"]) .ch-bbar .ch-tacts button { height: 36px; width: 40px; padding: 0; justify-content: center; border-radius: 18px; }
+html:not([data-shell="desktop"]) .ch-bbar .ch-tacts button span { display: none; }
+html:not([data-shell="desktop"]) .ch-bbar .ms { min-width: 0; }
