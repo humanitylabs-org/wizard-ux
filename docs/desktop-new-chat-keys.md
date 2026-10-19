@@ -34,13 +34,13 @@ Browser suite (Thales):
 PLAYWRIGHT_PATH="$HOME/workspace/wizard-mobile-link-candidate/node_modules/playwright" \
 QA_CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 QA_LIVE=1 QA_OUT="$PWD/evidence/staging" \
-node candidate/qa-new-chat-keys.cjs 'https://chat-keys.staging.wizard001.com/wizard-os-home/?open=chats'
+node candidate/qa-new-chat-keys.cjs "${QA_ORIGIN:?Set an isolated tailnet preview origin}/wizard-os-home/?open=chats"
 ```
 
 Native: build the QA-only event injector with `tools/qa-native-new-chat-injector.py` on Thales, then run `qa-native-new-chat-keys.py`. It uses the existing QA notifier and refuses to disturb another running Wizard.app.
 
 ## Release boundary
 
-Preview: https://chat-keys.staging.wizard001.com/wizard-os-home/?open=chats
+Historical preview: `/wizard-os-home/?open=chats` on the retired custom domain. New runs require an isolated tailnet `QA_ORIGIN`.
 
 **Staged only.** Candidate was built from daily `9983350`. No live assets, daily/main branch, native release download or upstream remote has been changed. James's approval is required for feature promotion. Promotion changes only desktop web assets, requires no native-app update and keeps phone code unchanged; reload the Wizard desktop to load it. Preserve any subsequently advanced daily source and rerun the targeted gates against the integrated exact revision.

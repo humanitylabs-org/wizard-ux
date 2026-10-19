@@ -295,7 +295,6 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .krow .kk i { font-style: normal; font-size: 11.5px; color: var(--ink-3); }
 .keys kbd { color: var(--ink); background: color-mix(in oklab, var(--ink) 8%, transparent); border: 1px solid var(--line-2); border-bottom-width: 1px; font-size: 12px; padding: 2px 7px; }
 .keys-card { background: color-mix(in oklab, var(--bg) 97%, var(--ink) 3%); }
-html[data-skin="landscapes"] .keys-card { background: #0d1210; }
 .krow .kk i { color: var(--ink-2); }
 .keys-body h4 { color: var(--ink-2); }
 .keys kbd { font: 600 12.5px/18px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: .01em; }

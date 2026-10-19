@@ -22,6 +22,7 @@ const path=require('node:path');
   let installed=operation==='install'?[]:[old], requests=[],unsafe=[];
   await page.route('**/*',async route=>{
    const req=route.request(),url=new URL(req.url());
+   if(url.pathname.endsWith('/store/store-status.js') && candidate) return route.fulfill({contentType:'text/javascript',body:fs.readFileSync(path.join(path.dirname(candidate),'store-status.js'),'utf8')});
    if(url.pathname.endsWith('/store/store.js') && (scenario.startsWith('control')||candidate)) return route.fulfill({contentType:'text/javascript',body:scenario.startsWith('control')?control:fs.readFileSync(candidate,'utf8')});
    if(url.pathname.includes('/store-install/')) {
     if(req.method()==='POST') requests.push(req.postDataJSON());

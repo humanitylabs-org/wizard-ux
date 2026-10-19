@@ -18,7 +18,7 @@ vm.createContext(ctx);
 vm.runInContext(src, ctx);
 const { md } = ctx.WosChat;
 
-const U = 'https://agents-mvp.staging.wizard001.com/';
+const U = 'https://preview.example/';
 const linked = (html, url = U) => html.includes(`<a href="${url}"`);
 const cases = {
   plain: `Open ${U} now`,

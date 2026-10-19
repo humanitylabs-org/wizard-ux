@@ -35,14 +35,15 @@ New cross-platform UX belongs in `web/core/`. Register it once, and both shells 
 - **Claiming parity:** an import test alone never proves universal parity. Whether a feature is reachable, whether its actions work, and native-specific limits all need runtime evidence. A screenshot-only or mocked-API-only pass does not count.
 - **Concurrent work:** when integrating, preserve voice-custody work that is in flight on other branches.
 
-### Skins: build your own look (James, 18 Oct 2026)
+### Skins: your look and your UX live in your own skin (James, 18–19 Oct 2026)
 
-- **James's skins:** Nebula (the default), Grove, Tide, Ember and Signal, together with the base shell look in `web/core/base.css` (palette and body font).
-- **Your own look:** collaborators ship UX features and fixes as usual. A different look, palette, font or card style goes into a new skin of your own: a `SKINS` entry in `web/core/skins.js` plus `html[data-skin="<yours>"]` rules. Obsidian and Landscapes are working examples.
+- **James's skins:** Nebula (the default), Grove, Tide, Ember and Signal, together with the base shell look in `web/core/base.css` (palette and body font). They define the default shell.
+- **Your own look and behaviour:** taste goes into a skin of your own, never into the default shell and never as a Settings toggle. A skin is a `SKINS` entry in `web/core/skins.js` (tokens, orb, background) plus its own folder `web/skins/<dir>/` with `skin.css` and an optional `skin.js` (gestures, small layout tweaks) that only load for people who pick that skin. The skin API, lint rules and a worked example are in `web/skins/README.md`. Obsidian and Landscapes are working examples.
+- **Merging:** a PR that only touches your own skin (your `SKINS` entry and `web/skins/<yours>/`) is yours to self-merge once checks pass; it needs no `needs: james review`. A new hook in the skin API is a small core PR that Archimedes reviews. Bring James only "make this the default for everyone", with a preview he can use.
 - **What stays as it is:** James's five skins and the shared base. Scope fonts to your own skin, rather than to `body`, `.win` or controls.
-- **The guard:** `tests/owner-skins-guard.test.mjs` fingerprints James's skins. It fails on any change to them, and on any shell-wide font rule. `tests/fixtures/owner-skins.json` changes only with James's explicit approval, named in the commit message.
+- **The guards:** `tests/owner-skins-guard.test.mjs` fingerprints James's skins and fails on any change to them and on any shell-wide font rule. `tests/fixtures/owner-skins.json` changes only with James's explicit approval, named in the commit message. `tests/skin-packages.test.mjs` keeps skin packages in their lane: James's skins load nothing extra, skin CSS stays scoped, skin scripts use only the skin API.
 
-<!-- wizard-os-team-rules v1 (19 Oct 2026). Same text in every Wizard OS repo; the canonical copy is humanitylabs-org/wizard-os AGENTS.md. Change it there first, then copy the block to every repo in one round of PRs. -->
+<!-- wizard-os-team-rules v2 (19 Oct 2026). Same text in every Wizard OS repo; the canonical copy is humanitylabs-org/wizard-os AGENTS.md. Change it there first, then copy the block to every repo in one round of PRs. -->
 ## Wizard OS team rules (identical in every repo)
 
 Wizard OS is built by James, Jan and Miguel together with their agents. Archimedes commits as `defleur-agents` and Oscar as `oscarhenrycollins`. Every repo belongs to Wizard OS as a whole, and no repo belongs to one person. Make the change that is best for the whole system, and build on each other's work.
@@ -77,7 +78,7 @@ Wizard OS is built by James, Jan and Miguel together with their agents. Archimed
   |---|---|---|---|
   | Bug fix | `tier: recommended fix` | `Recommended fix:` | Something is broken and this makes it work. It must land. |
   | Improvement | `tier: strong suggestion` | `Strong suggestion:` | A clearly better behaviour or a new capability. Feel free to drop it. |
-  | Personal preference | `tier: opinionated` | `Opinionated — feel free to drop:` | Taste: look, layout, wording, or how you like to work. |
+  | Personal preference | `tier: opinionated` | `Opinionated — feel free to drop:` | Taste: look, layout, gestures, wording, or how you like to work. In the shell it belongs in your own skin (below). |
   | Maintenance | `tier: maintenance` | `Maintenance:` | Docs, releases, CI, tests or refactors with no change in behaviour. |
 
   Optional labels:
@@ -108,7 +109,8 @@ Wizard OS is built by James, Jan and Miguel together with their agents. Archimed
 - **What each tier means for merging:**
   - **Recommended fixes and maintenance** merge on those conditions.
   - **Strong suggestions** merge on them too, unless they change something James sees or uses every day. In that case add `needs: james review` and wait.
-  - **Opinionated changes** always carry `needs: james review` and wait for James.
+  - **Opinionated changes** to the shell's look or UX go into your own skin: wizard-ux `web/skins/<yours>/` plus your `SKINS` entry (see wizard-ux `web/skins/README.md`). A PR that only touches your own skin merges on the conditions above. Never add a Settings toggle or core code for one person's taste.
+  - **Making something the default for everyone** (any opinionated change outside your own skin) carries `needs: james review` and waits for James. Bring it once you have used it in your skin, with a preview he can try.
   - **`preview only`** PRs never merge.
 - **Use "Create a merge commit"**, then delete the branch.
 - **After merging anything that publishes or deploys,** confirm that the workflow run on `main` succeeded.
