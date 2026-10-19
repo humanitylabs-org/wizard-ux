@@ -43,6 +43,7 @@ export function inverse(d,op){
  if(op.kind==='voice'&&n)return {kind:'text',target:n.id,text:n.text,before:n.text+(n.text&&op.text?' ':'')+op.text};
  if(op.kind==='fold'&&n)return {kind:'fold',target:n.id,folded:n.folded};
  if(op.kind==='move'&&n){const sib=d.nodes.filter(x=>x.parent===n.parent);return {kind:'move',target:n.id,parent:n.parent,after:sib[sib.indexOf(n)-1]?.id||null,before:sib[sib.indexOf(n)+1]?.id||null};}
+ if(op.kind==='delete'&&n&&!d.nodes.some(x=>x.parent===n.id)){const sib=d.nodes.filter(x=>x.parent===n.parent),prev=sib[sib.indexOf(n)-1];return {kind:'insert',node:clone(n),after:prev?.id||null};}
  if(op.kind==='title')return {kind:'title',text:d.title};
  return null;
 }

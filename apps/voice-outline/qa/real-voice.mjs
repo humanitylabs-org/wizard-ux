@@ -12,8 +12,8 @@ async function check(name,fn){await fn();receipt.checks.push(name);}
 try{
  await page.goto(base);await page.waitForFunction(()=>document.querySelector('#save').textContent==='Saved');
  await check('actual shared capture and client loaded',async()=>{if(!await page.evaluate(()=>!!WizardApp.capture&&!!WizAppCapture))throw Error('Missing shared capture');});
- await page.locator('#title').fill('Room for ideas');await page.locator('.text').first().click();await page.locator('textarea').fill('A garden for unfinished thoughts');await page.locator('#child').click();await page.locator('textarea').fill('Give each idea a little room');await page.keyboard.press('Escape');
- await page.locator('#new').click();await page.locator('textarea').fill('Let the useful connections emerge');await page.keyboard.press('Escape');await page.locator('#child').click();await page.locator('textarea').fill('Keep the next step close');await page.keyboard.press('Escape');
+ await page.locator('#title').fill('Room for ideas');await page.locator('.text').first().click();await page.locator('textarea').fill('A garden for unfinished thoughts');await page.locator('#new').click();await page.locator('#indent').click();await page.locator('textarea').fill('Give each idea a little room');await page.keyboard.press('Escape');
+ await page.locator('#new').click();await page.locator('textarea').fill('Let the useful connections emerge');await page.keyboard.press('Escape');await page.locator('#new').click();await page.locator('#indent').click();await page.locator('textarea').fill('Keep the next step close');await page.keyboard.press('Escape');
  await page.waitForFunction(()=>document.querySelector('#save').textContent==='Saved');
  await page.screenshot({path:out+'/phone-editor.png',fullPage:true});
  await page.locator('#new').click();await page.keyboard.press('Escape');
@@ -23,7 +23,7 @@ try{
  await page.screenshot({path:out+'/phone-live.png',fullPage:true});
  await page.waitForTimeout(5000); // Exercise a sustained thought, not only the provider's first token.
  const firstTarget=await page.locator('.live-target').getAttribute('data-id');
- await page.locator('#child').click();const secondTarget=await page.locator('.live-target').getAttribute('data-id');if(firstTarget===secondTarget)throw Error('Did not retarget next thought');
+ await page.locator('#new').click();await page.locator('#indent').click();const secondTarget=await page.locator('.live-target').getAttribute('data-id');if(firstTarget===secondTarget)throw Error('Did not retarget next thought');
  await page.waitForTimeout(9000);
  await check('menu Back keeps app and recording',async()=>{await page.locator('#menu').click();await page.goBack();await page.waitForTimeout(120);if(await page.locator('#sheet').isVisible())throw Error('Sheet stayed');if(!await page.locator('#live').textContent().then(s=>s.includes('Recording')))throw Error('Recording stopped by Back');});
  await check('root Back retains live recording and app',async()=>{await page.locator('#canvas').click({position:{x:3,y:3}});await page.goBack();await page.waitForTimeout(150);assert.equal(new URL(page.url()).origin,new URL(base).origin);assert((await page.locator('#live').textContent()).includes('Recording'));assert.equal(await page.evaluate(()=>WizardApp.capture.current()?.phase!=='recording'),false);});

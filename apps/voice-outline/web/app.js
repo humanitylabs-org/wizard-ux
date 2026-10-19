@@ -2,17 +2,19 @@ import {uid,clone,apply,depth,visible,moveOperation,inverse,markdown,SpeechLedge
 const $=id=>document.getElementById(id), W=window.WizardApp;
 let doc={title:'Untitled outline',nodes:[{id:'first-bullet',parent:null,text:'',folded:false}],applied:[]},rev=0,ops=[],selected='first-bullet',editing=null,editingDraft=null,undo=[],redo=[],ledger=new SpeechLedger(),saving=false,saveTimer,db,localWrites=Promise.resolve(),hold;
 let session=null,socket=null,current=null,seq=0,starting=false,stopping=false,stopObserved=false,paused=false,offs=[],uploadChain=Promise.resolve(),uploadError=null,acked=new Set(),finalWait,liveTimer,startedAt=0;
-const note=t=>{$('notice').textContent=t;};
+let noticeTimer;const note=t=>{clearTimeout(noticeTimer);$('notice').textContent=t;};
+const flash=t=>{note(t);noticeTimer=setTimeout(()=>{$('notice').textContent='';},3500);};
+const saveState=t=>{$('save').textContent=t;$('save').classList.toggle('ok',t==='Saved'||t==='Saving…');};
 const request=async(path,options={})=>{const r=await fetch(path,{cache:'no-store',...options});const value=await r.json();if(!r.ok)throw Object.assign(new Error(value.error||'Request failed'),{status:r.status,value});return value;};
 const put=value=>({method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(value)});
 const config=await request('./api/config');
 if(config.local){
- document.title='Outline · Local trial';document.querySelector('h1').textContent='Outline · Nemotron trial';document.querySelector('.eyebrow').textContent='Local Mac CPU · no cloud';
+ document.title='Outline · Local trial';
  $('provider-note').textContent='Private trial · Wizard’s shared microphone → local Nemotron on the Mac. Raw words, no cloud transcription or rewriting. Keep this tab open. Start a new bullet before 9 minutes 50 seconds per thought; takes stop at 15 minutes. Audio is retained until verified.';
  $('trial-note').hidden=false;$('trial-note').textContent='Parakeet is withheld: its buffered trial omitted the ending of a long note on both hosts. Nemotron kept the tested ending and Apple reference, but can miss words (including an opening “Do”). Review the original audio; this is not a perfect-accuracy claim. Your installed Outline, Orb and daily voice provider are unchanged.';
 }
 if(config.shared){
- document.title='Outline · Voice trial';document.querySelector('h1').textContent='Outline · Voice trial';document.querySelector('.eyebrow').textContent='Wizard voice';
+ document.title='Outline · Voice trial';
  $('provider-note').textContent='Wizard’s shared microphone and orb ownership → the same attested Tinfoil live-words provider as Mizel. Original audio is kept and verified separately from live words. Keep this view open while recording.';
 }
 function remember(){
@@ -20,7 +22,7 @@ function remember(){
  localWrites=localWrites.catch(()=>{}).then(()=>new Promise((resolve,reject)=>{if(!db)return reject(new Error('Local recovery unavailable'));const tx=db.transaction('recovery','readwrite');tx.objectStore('recovery').put(state,'outline');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);}));
  localWrites.catch(()=>{note('Local recovery failed. Keep this tab open and retry saving.');});return localWrites;
 }
-function changed(){hold||=(W.update.hold('Outline has unsaved changes'));$('save').textContent='Saving…';remember();clearTimeout(saveTimer);saveTimer=setTimeout(save,350);}
+function changed(){hold||=(W.update.hold('Outline has unsaved changes'));saveState('Saving…');remember();clearTimeout(saveTimer);saveTimer=setTimeout(save,350);}
 function operation(part,{history=true,renderView=true}={}){const op={...part,id:part.id||uid()},inv=inverse(doc,op);if(!apply(doc,op))return;if(history&&inv){const {id,speechId,...forward}=part;undo.push({forward,back:inv});redo=[];}ops.push(op);changed();if(renderView)render();}
 async function save(){
  if(saving)return;saving=true;
@@ -32,15 +34,31 @@ async function save(){
   if(check.rev!==response.rev||JSON.stringify(check.document)!==JSON.stringify(snapshot))throw new Error('Save readback changed; retry safely');
   rev=response.rev;ops.splice(0,count);for(const [id,s] of Object.entries(ledger.items))if(s.status==='final'&&doc.applied.includes('speech-'+id))delete ledger.items[id];await remember();
  }
- $('save').textContent='Saved';hold?.release();hold=null;
- }catch(e){$('save').textContent=navigator.onLine?'Save failed · retry':'On this device only';note('Your edits remain on this device. '+e.message);}
+ saveState('Saved');hold?.release();hold=null;
+ }catch(e){saveState(navigator.onLine?'Save failed · retry':'On this device only');note('Your edits remain on this device. '+e.message);}
  finally{saving=false;}
 }
 function select(id,{edit=false}={}){if(editing&&editing!==id)editing=null;selected=id;if(session&&current?.target!==id)boundary();if(edit){detachDraft(id);editing=id;}remember();render();if(edit)focusEditor();}
 function focusEditor(){const el=$('tree').querySelector('textarea');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);resize(el);}}
 function resize(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}
-function newBullet(child=false){const n=doc.nodes.find(n=>n.id===selected)||doc.nodes.at(-1),id=uid();if(child&&n.folded)operation({kind:'fold',target:n.id,folded:false});operation({kind:'insert',node:{id,parent:child?n.id:n.parent,text:'',folded:false},after:child?null:n.id});select(id,{edit:!session});document.querySelector(`[data-id="${id}"]`)?.scrollIntoView({block:'nearest'});}
-function move(direction){const op=moveOperation(doc,selected,direction);if(op)operation(op);else note(direction>0?'No previous sibling to indent beneath.':'Already at the outer level.');}
+function newBullet(child=false){
+ const n=doc.nodes.find(n=>n.id===selected)||doc.nodes.at(-1),id=uid(),ed=editing===n.id?$('tree').querySelector('textarea.editor'):null,kids=doc.nodes.some(x=>x.parent===n.id);
+ // Obsidian-style Enter: an empty indented line steps out; Enter mid-line splits it; Enter on an open parent starts its first child.
+ if(ed&&!child&&!n.text&&n.parent&&!kids){move(-1);return;}
+ let tail='';if(ed&&!child){const at=ed.selectionStart??n.text.length;if(at<n.text.length){tail=n.text.slice(at);operation({kind:'text',target:n.id,before:n.text,text:n.text.slice(0,at)},{renderView:false});}}
+ const first=child||(ed&&kids&&!n.folded);
+ if(child&&n.folded)operation({kind:'fold',target:n.id,folded:false});
+ operation({kind:'insert',node:{id,parent:first?n.id:n.parent,text:tail,folded:false},after:first?null:n.id});
+ select(id,{edit:!session});if(tail)$('tree').querySelector('textarea.editor')?.setSelectionRange(0,0);
+ document.querySelector(`[data-id="${id}"]`)?.scrollIntoView({block:'nearest'});
+}
+function removeEmpty(){
+ const n=doc.nodes.find(n=>n.id===editing);
+ if(!n||n.text||doc.nodes.some(x=>x.parent===n.id)||(session&&current?.target===n.id)||Object.values(ledger.items).some(s=>s.target===n.id&&!doc.applied.includes('speech-'+s.id)))return false;
+ const shown=visible(doc),prev=shown[shown.findIndex(x=>x.id===n.id)-1];if(!prev)return false;
+ operation({kind:'delete',target:n.id});select(prev.id,{edit:true});return true;
+}
+function move(direction){const op=moveOperation(doc,selected,direction);if(op)operation(op);else flash(direction>0?'Nothing above to indent under.':'Already at the outer level.');}
 function fold(){const n=doc.nodes.find(n=>n.id===selected);if(n)operation({kind:'fold',target:n.id,folded:!n.folded});}
 function historyStep(forward){const from=forward?redo:undo,to=forward?undo:redo,item=from.pop();if(!item)return;operation(forward?item.forward:item.back,{history:false});to.push(item);remember();render();}
 function recoverMissingSpeech(){
@@ -59,27 +77,25 @@ function render(){
  if(document.activeElement!==$('title'))$('title').value=doc.title;
  const shown=visible(doc);for(const n of shown){
   const level=depth(doc,n),row=document.createElement('div');row.className='bullet'+(n.id===selected?' selected':'')+(session&&current?.target===n.id?' live-target':'');row.dataset.id=n.id;row.style.setProperty('--depth',level);row.setAttribute('role','treeitem');row.setAttribute('aria-level',String(level+1));row.setAttribute('aria-selected',String(n.id===selected));
-  for(let i=0;i<level;i++){const guide=document.createElement('i');guide.className='branch-guide';guide.style.setProperty('--guide',i);row.append(guide);}
-  const children=doc.nodes.some(x=>x.parent===n.id),dot=document.createElement('button');dot.className='dot'+(n.folded?' folded':'');dot.textContent=children?(n.folded?'⊙':'▾'):'•';dot.setAttribute('aria-label',children?(n.folded?'Unfold branch':'Fold branch'):'Select bullet');if(children)row.setAttribute('aria-expanded',String(!n.folded));
+  const children=doc.nodes.some(x=>x.parent===n.id),dot=document.createElement('button');dot.className='dot'+(children&&n.folded?' folded':'');dot.setAttribute('aria-label',children?(n.folded?'Unfold branch':'Fold branch'):'Select bullet');if(children)row.setAttribute('aria-expanded',String(!n.folded));
   dot.onclick=()=>{if(dot.dataset.swiped){delete dot.dataset.swiped;return;}select(n.id);if(children)fold();};
   let touch;
   dot.addEventListener('pointerdown',e=>{touch={x:e.clientX,y:e.clientY};dot.setPointerCapture(e.pointerId);});
   dot.addEventListener('pointerup',e=>{if(!touch)return;const dx=e.clientX-touch.x,dy=e.clientY-touch.y;touch=null;if(Math.abs(dx)>=48&&Math.abs(dy)<Math.abs(dx)*.577){dot.dataset.swiped='1';selected=n.id;move(dx>0?1:-1);}});
   row.append(dot);const content=document.createElement('div');content.className='bullet-content';
   if(editing===n.id){const input=document.createElement('textarea');input.className='editor';input.setAttribute('aria-label','Edit bullet');input.value=n.text;input.rows=1;input.oninput=()=>{operation({kind:'text',target:n.id,before:doc.nodes.find(x=>x.id===n.id).text,text:input.value},{renderView:false});resize(input);};input.onkeydown=keys;content.append(input);queueMicrotask(()=>resize(input));}
-  else{const text=document.createElement('div');text.className='text'+(!n.text?' empty':'');text.textContent=n.text;text.tabIndex=0;text.setAttribute('role','textbox');text.setAttribute('aria-label',n.text||'Empty bullet');text.onclick=()=>select(n.id,{edit:true});text.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();select(n.id,{edit:true});}};content.append(text);}
+  else{const text=document.createElement('div');text.className='text'+(!n.text?' empty':'')+(doc.nodes.length===1?' only':'');text.textContent=n.text;text.tabIndex=0;text.setAttribute('role','textbox');text.setAttribute('aria-label',n.text||'Empty bullet');text.onclick=()=>select(n.id,{edit:true});text.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();select(n.id,{edit:true});}};content.append(text);}
   const drafts=Object.values(ledger.items).filter(s=>s.target===n.id&&!doc.applied.includes('speech-'+s.id));
-  for(const s of drafts){const draft=document.createElement('div');draft.className='draft';draft.dataset.utterance=s.id;const label=document.createElement('small');label.textContent=s.status==='draft'?'Draft':s.status==='final'?'Waiting for earlier speech':s.text?'Unconfirmed speech · retained text':'Unconfirmed speech · no transcript';draft.append(label);
+  for(const s of drafts){const draft=document.createElement('div');draft.className='draft';draft.dataset.utterance=s.id;const label=document.createElement('small');label.textContent=s.status==='draft'?'':s.status==='final'?'Waiting for earlier speech':s.text?'Unconfirmed speech · retained text':'Unconfirmed speech · no transcript';draft.append(label);
    if(editingDraft===s.id){const input=document.createElement('textarea');input.className='draft-editor';input.setAttribute('aria-label','Edit unconfirmed speech');input.value=s.text;input.oninput=()=>{s.text=input.value;s.edited=true;remember();draft.querySelector('[data-accept]').disabled=!s.text.trim();};draft.append(input);}
    else draft.append(document.createTextNode(s.text|| (s.status==='draft'?'Listening…':'No words were returned. Review the original recording in the menu.')));
    if(s.status==='unconfirmed'){const actions=document.createElement('div');actions.className='draft-actions';const accept=document.createElement('button');accept.textContent='Accept';accept.dataset.accept=s.id;accept.disabled=!s.text.trim();accept.onclick=()=>acceptDraft(s.id);const edit=document.createElement('button');edit.textContent=editingDraft===s.id?'Done editing':'Edit';edit.onclick=()=>{editingDraft=editingDraft===s.id?null:s.id;render();$('tree').querySelector('.draft-editor')?.focus();};actions.append(accept,edit);draft.append(actions);}content.append(draft);}
   row.append(content);tree.append(row);
  }
- $('canvas').scrollTop=scroll;$('undo').disabled=!undo.length;$('redo').disabled=!redo.length;$('done').hidden=!editing;
- document.querySelector('.hint').hidden=doc.nodes.some(n=>n.text)||doc.nodes.length>1;
+ $('canvas').scrollTop=scroll;$('undo').disabled=!undo.length;$('redo').disabled=!redo.length;
  if(focused&&(editing||editingDraft)){const e=tree.querySelector(draftFocused?'.draft-editor':'.editor');e?.focus({preventScroll:true});e?.setSelectionRange(position,position);}
 }
-function keys(e){if(e.isComposing)return;if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();newBullet();}else if(e.key==='Tab'){e.preventDefault();move(e.shiftKey?-1:1);}else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();historyStep(e.shiftKey);}else if(e.key==='Escape'&&editing){e.preventDefault();e.stopPropagation();editing=null;render();}}
+function keys(e){if(e.isComposing)return;if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();newBullet();}else if(e.key==='Backspace'&&editing&&e.target.classList?.contains('editor')&&!e.target.value&&removeEmpty()){e.preventDefault();}else if(e.key==='Tab'){e.preventDefault();move(e.shiftKey?-1:1);}else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();historyStep(e.shiftKey);}else if(e.key==='Escape'&&editing){e.preventDefault();e.stopPropagation();editing=null;render();}}
 function detachDraft(id){if(!Object.values(ledger.items).some(s=>s.target===id&&!doc.applied.includes('speech-'+s.id)))return;const n=doc.nodes.find(n=>n.id===id),newId=uid();operation({kind:'insert',node:{id:newId,parent:n?.parent||null,text:'',folded:false},after:id});ledger.detach(id,newId,doc.applied);if(current?.target===id)current.target=newId;note('The ongoing speech is beside this bullet so typing cannot overwrite it.');remember();}
 function begin(){if(!socket||socket.readyState!==1||!session||paused||stopping)return;const s=ledger.begin(uid(),selected,++seq);s.parent=doc.nodes.find(n=>n.id===selected)?.parent||null;current=s;socket.send(JSON.stringify({type:'begin',id:s.id,target:s.target,seq:s.seq}));remember();render();}
 function boundary(){if(current){socket?.send(JSON.stringify({type:'end',id:current.id}));current=null;}begin();}
@@ -88,13 +104,13 @@ function settle(){
  for(const s of items){if(s.status==='draft')break;if(s.status==='final'&&!doc.applied.includes('speech-'+s.id))operation({speechId:s.id,kind:'voice',target:s.target,parent:s.parent,text:s.text});}
  remember();render();if(!items.some(s=>s.status==='draft'))finalWait?.();
 }
-function acceptDraft(id){const s=ledger.items[id];if(!s||s.status!=='unconfirmed'||!s.text.trim())return;s.status='final';editingDraft=null;settle();note('Accepted text. Original audio is unchanged.');}
+function acceptDraft(id){const s=ledger.items[id];if(!s||s.status!=='unconfirmed'||!s.text.trim())return;s.status='final';editingDraft=null;settle();flash('Accepted text. Original audio is unchanged.');}
 async function digest(blob){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('');}
 function upload(take,c){const key=take+':'+c.seq;if(acked.has(key))return;uploadChain=uploadChain.catch(()=>{}).then(async()=>{const hash=await digest(c.blob),url=`./api/audio/${encodeURIComponent(take)}/${c.seq}`;await request(url,{method:'PUT',body:c.blob});const r=await request(url);if(r.hash!==hash||r.bytes!==c.blob.size)throw new Error('Audio readback mismatch');acked.add(key);}).catch(e=>{uploadError=e;note('Audio retained by Wizard. '+e.message);});}
-async function archive(result){uploadError=null;for(const c of result.streamChunks||[])upload(result.id,c);await uploadChain;if(uploadError)throw uploadError;if(!result.streamChunks?.length&&result.blob?.size>44)throw new Error('Capture chunk metadata unavailable; retained');await W.capture.ack(result.id);note('Audio saved and verified.');}
+async function archive(result){uploadError=null;for(const c of result.streamChunks||[])upload(result.id,c);await uploadChain;if(uploadError)throw uploadError;if(!result.streamChunks?.length&&result.blob?.size>44)throw new Error('Capture chunk metadata unavailable; retained');await W.capture.ack(result.id);flash('Audio saved and verified.');}
 async function recover(){try{const pending=await W.capture.pending();for(const result of pending)await archive(result);await save();note(pending.length?'Retained audio saved and verified. No new transcript was recovered; review unconfirmed speech or original recordings.':'No retained audio waiting. Unconfirmed speech still needs review.');}catch(e){note('Recovery pending: '+e.message);}}
 async function startLive(){
- if(starting||stopping)return;starting=true;$('live').disabled=true;$('live').textContent='Starting…';let prepared;
+ if(starting||stopping)return;starting=true;$('live').disabled=true;$('live-status').textContent='…';let prepared;
  try{
   if(!W.capture.capabilities({kind:'outline',pcm:true}).pcm){
    if((config.local||config.shared)&&!W.hosted){
@@ -117,12 +133,19 @@ async function startLive(){
   session=await W.capture.start({kind:'outline',pcm:true,mime:'audio/wav',chunkMs:5000,maxMs:15*60*1000,maxBytes:32*1024*1024,preparedId:prepared.id,meta:{app:config.appId||(config.local?'outline-streaming-demo':'voice-outline')},...(config.local?{audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}:{})});
   startedAt=Date.now();paused=false;stopObserved=false;begin();const take=session.id;
   offs.push(session.onPcm(f=>{if(!current||paused)return;if(socket.readyState!==1||socket.bufferedAmount>640000){note('Live network is behind. Paused; audio retained.');pauseLive();return;}socket.send(f.pcm);}),session.onChunk(c=>upload(take,c)),session.onWarn(w=>note(String(w?.message||w))),session.onState(st=>{if(stoppedByCore())stopLive();}));
-  liveTimer=setInterval(liveUI,1000);note('Listening to the marked bullet. New bullet or Child starts the next thought.');liveUI();render();
+  liveTimer=setInterval(liveUI,1000);flash('Listening. Enter starts the next bullet.');liveUI();render();
  }catch(e){note(e.message);socket?.close();socket=null;if(session)await stopLive();}
  finally{prepared?.release();starting=false;$('live').disabled=false;liveUI();}
 }
 function stoppedByCore(){return session?.getInfo().inputStopped&&!stopping&&!stopObserved;}
-function liveUI(){if(stoppedByCore())void stopLive();const ended=session?.getInfo().inputStopped;$('live').classList.toggle('active',!!session&&!ended);$('live').textContent=session?(ended?'Save pending':'◉ '+(paused?'Paused':'Recording')):'◉ Go Live';$('live-status').textContent=session?(ended?'Microphone off · tap to retry save':`${Math.floor((Date.now()-startedAt)/60000)}:${String(Math.floor((Date.now()-startedAt)/1000)%60).padStart(2,'0')} · Tap to stop`):'Your words, not a rewrite.';}
+function liveUI(){
+ if(stoppedByCore())void stopLive();
+ const ended=session?.getInfo().inputStopped,b=$('live'),state=session?(ended?'pending':paused?'paused':'recording'):'idle',secs=Math.floor((Date.now()-startedAt)/1000);
+ b.dataset.state=state;b.classList.toggle('active',state==='recording');
+ $('live-label').textContent={idle:'Go Live',recording:'Recording',paused:'Paused',pending:'Save pending'}[state];
+ $('live-status').textContent=state==='recording'?`${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`:state==='paused'?'Paused':state==='pending'?'Retry save':'';
+ b.setAttribute('aria-label',{idle:'Dictate',recording:'Stop dictation',paused:'Stop dictation',pending:'Retry saving dictation'}[state]);
+}
 async function pauseLive(){if(!session||stopping)return;try{if(paused){if(socket?.readyState!==1)throw new Error('Connection closed. Stop & save, then start Live again.');await session.resume();paused=false;begin();}else{await session.pause();paused=true;if(current){socket?.send(JSON.stringify({type:'end',id:current.id}));current=null;}}liveUI();render();}catch(e){note(e.message);}}
 async function stopLive(){
  if(!session||stopping)return;stopping=true;stopObserved=true;$('live').disabled=true;const s=session;
@@ -131,7 +154,7 @@ async function stopLive(){
   await archive(result);
   if(Object.values(ledger.items).some(s=>s.status==='draft'))await new Promise(resolve=>{const timer=setTimeout(resolve,35000);finalWait=()=>{clearTimeout(timer);resolve();};});
   for(const item of Object.values(ledger.items))if(item.status==='draft')item.status='unconfirmed';settle();await save();
-  socket?.close();socket=null;session=null;for(const off of offs.splice(0))off();clearInterval(liveTimer);note('Stopped. '+(Object.values(ledger.items).some(s=>s.status==='unconfirmed')?'Unconfirmed speech is retained as a draft.':'Words and audio saved.'));
+  socket?.close();socket=null;session=null;for(const off of offs.splice(0))off();clearInterval(liveTimer);(Object.values(ledger.items).some(s=>s.status==='unconfirmed')?note:flash)('Stopped. '+(Object.values(ledger.items).some(s=>s.status==='unconfirmed')?'Unconfirmed speech is retained as a draft.':'Words and audio saved.'));
  }catch(e){note('Stop/save needs retry. Audio retained: '+e.message);}
  finally{stopping=false;finalWait=null;$('live').disabled=false;liveUI();render();}
 }
@@ -141,18 +164,20 @@ function closeSheet(){if(!$('sheet').open)return false;$('sheet').close();sheetB
 $('menu').onclick=()=>{$('sheet').showModal();void recordings();sheetBack=W.back.push(()=>closeSheet());};$('close-sheet').onclick=closeSheet;$('sheet').addEventListener('cancel',e=>{e.preventDefault();closeSheet();});
 W.back.register({canGoBack:()=>editing!==null||editingDraft!==null,back:()=>{if(editingDraft!==null){editingDraft=null;render();return true;}editing=null;render();return true;}});
 W.theme.onChange(()=>{});W.ready({name:'Outline'});
-$('done').onclick=()=>{editing=null;render();};
-$('new').onclick=()=>newBullet();$('child').onclick=()=>newBullet(true);$('outdent').onclick=()=>move(-1);$('indent').onclick=()=>{closeSheet();move(1);};$('fold').onclick=fold;$('undo').onclick=()=>historyStep(false);$('redo').onclick=()=>historyStep(true);$('save').onclick=save;
+$('new').onclick=()=>newBullet();$('outdent').onclick=()=>move(-1);$('indent').onclick=()=>move(1);
+// Toolbar taps keep the line being edited focused, so the phone keyboard stays up.
+for(const b of document.querySelectorAll('.toolbar button'))b.addEventListener('mousedown',e=>e.preventDefault());
+$('notice').onclick=e=>{if(e.target.tagName!=='A')note('');};$('undo').onclick=()=>historyStep(false);$('redo').onclick=()=>historyStep(true);$('save').onclick=save;
 $('title').oninput=()=>operation({kind:'title',text:$('title').value},{renderView:false});
-$('live').onclick=()=>session?stopLive():startLive();$('stop').onclick=()=>{closeSheet();stopLive();};$('pause').onclick=()=>{closeSheet();pauseLive();};$('recover').onclick=()=>{closeSheet();recover();};$('share').onclick=async()=>{const result=await W.share.text({title:doc.title,text:markdown(doc)});note(result==='copied'?'Outline copied.':result==='shared'?'Outline shared.':result==='cancelled'?'Share cancelled.':'Sharing is unavailable here.');};
-addEventListener('online',()=>save());document.addEventListener('keydown',e=>{if(e.target.tagName!=='TEXTAREA')keys(e);});
+$('live').onclick=()=>session?stopLive():startLive();$('stop').onclick=()=>{closeSheet();stopLive();};$('pause').onclick=()=>{closeSheet();pauseLive();};$('recover').onclick=()=>{closeSheet();recover();};$('share').onclick=async()=>{const result=await W.share.text({title:doc.title,text:markdown(doc)});flash(result==='copied'?'Outline copied.':result==='shared'?'Outline shared.':result==='cancelled'?'Share cancelled.':'Sharing is unavailable here.');};
+addEventListener('online',()=>save());document.addEventListener('keydown',e=>{if(e.target.id==='title'){if(e.key==='Enter'){e.preventDefault();select(visible(doc)[0].id,{edit:!session});}return;}if(e.target.tagName!=='TEXTAREA')keys(e);});
 async function load(){
  let remoteRead=false;
  try{db=await new Promise((resolve,reject)=>{const req=indexedDB.open(config.recovery,1);req.onupgradeneeded=()=>req.result.createObjectStore('recovery');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
   const local=await new Promise((resolve,reject)=>{const req=db.transaction('recovery').objectStore('recovery').get('outline');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
   if(local){({doc,rev,ops,selected,seq}=local);undo=local.undo||[];redo=local.redo||[];for(const item of [...undo,...redo]){delete item.forward.id;delete item.forward.speechId;}ledger=new SpeechLedger(local.drafts||{});for(const s of Object.values(ledger.items))if(s.status==='draft')s.status='unconfirmed';}
   try{const remote=await request('./api/document');remoteRead=true;rev=remote.rev;doc=remote.document;for(const op of ops)apply(doc,op);const speech=await request('./api/speech');for(const s of speech.utterances){if(!doc.applied.includes('speech-'+s.id)){ledger.event({...s,type:s.status==='final'?'final':'delta'});if(s.status!=='final')ledger.items[s.id].status='unconfirmed';}}}catch(e){note('Offline recovery. Changes stay on this device until the server returns.');}
-  if(!doc.nodes.some(n=>n.id===selected))selected=doc.nodes[0].id;settle();render();await remember();if(ops.length)await save();else $('save').textContent=remoteRead?'Saved':'On this device only';
+  if(!doc.nodes.some(n=>n.id===selected))selected=doc.nodes[0].id;settle();render();await remember();if(ops.length)await save();else saveState(remoteRead?'Saved':'On this device only');
   const existing=W.capture.current();
   if(existing&&existing.phase!=='starting'){
    session=await W.capture.start({kind:'outline',pcm:true,resumeId:existing.id});startedAt=Date.now()-(session.getInfo().durationMs||0);paused=!!session.getInfo().paused;stopObserved=false;
