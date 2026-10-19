@@ -1338,8 +1338,19 @@ window.WizCore.chats = function createChats(H) {
       const nav = ch(wid).readNav;
       return { restore() { if (W[wid] === w && ch(wid).readNav === nav && !hosted.has(wid) && entry.frame.isConnected) openHosted(wid, entry.frame, sid); } };
     }
-    if (!w || !sid || w.thread !== sid || !(isNew || PHONE())) return false;
+    if (!w || !sid || w.thread !== sid) return false;
     const c = ch(wid), trail = [...(c.trail || [])];
+    // Opinionated (desktop): send and go, like the phone, but land in a fresh New chat with the cursor in
+    // the composer, so the next thought can start right away; the sent thread runs under Working.
+    if (!PHONE()) {
+      openNewDraft(wid, '');
+      const nav = c.readNav;
+      requestAnimationFrame(() => { if (W[wid] === w && w.thread === '__new__' && c.readNav === nav) elOf(wid)?.querySelector('.ch-compose textarea')?.focus(); });
+      return { restore() {
+        if (W[wid] !== w || w.thread !== '__new__' || c.readNav !== nav) return;
+        c.trail = trail; openChat(wid, sid, { keepTrail: true });
+      } };
+    }
     if (!isNew && trail.length) threadBack(w);
     else { c.readNav = (c.readNav || 0) + 1; c.trail = []; w.thread = null; save(); c.loadedFor = ''; c.draftFor = ''; }
     const destination = w.thread, nav = c.readNav;
