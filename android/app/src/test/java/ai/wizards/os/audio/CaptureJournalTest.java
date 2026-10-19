@@ -253,7 +253,6 @@ public class CaptureJournalTest {
         // Metadata / screenshots only (not an exception for a whole class or arbitrary variable names).
         allow(allowed, "recording/RecordingStore.java", "meta(id).delete()");
         allow(allowed, "everywhere/EverywhereOutbox.java", "File(it.shots.optString(i)).delete()");
-        allow(allowed, "Carry.java", "tmp.delete()", "file(c).delete()"); // carry JSON
         allow(allowed, "mizel/MizelStore.java", "f.delete()"); // guarded non-audio metadata/empty directories
         // Shared/imported attachments are not native recorder output; their own delivery custody is unchanged.
         allow(allowed, "share/ShareStore.java", "f.delete()", "d.delete()");

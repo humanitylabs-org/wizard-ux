@@ -51,11 +51,6 @@
       "classification": "native",
       "reason": "Origin-scoped Android Media3 transport through wizardAudioPort; hosted Music retains shared browser playback without this native port."
     },
-    "core/carry-in.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android origin migration custody handoff; not desktop storage migration."
-    },
     "device.js": {
       "shell": "phone",
       "classification": "native",
@@ -298,16 +293,6 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/carry-in.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/carry-out.js": {
-      "loadedBy": [],
-      "note": "Support/client/export module; not directly mounted by either shell"
-    },
     "core/chat-errors.js": {
       "loadedBy": [
         "phone",
@@ -404,7 +389,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
+      "note": "Direct entrypoint import; Settings \u2192 Microphone shows only where WizardOSDevice.micPolicy exists"
     },
     "core/music-voice.js": {
       "loadedBy": [

@@ -24,7 +24,7 @@ import java.util.List;
  * once every chunk up to final_seq is acknowledged, asks finished meetings whether they are ready and prunes local
  * audio a day after that. Files stay on the phone until the server acknowledges them; failures back off 2 s … 2 min
  * and never give up. Network calls follow the Everywhere outbox: plain HTTPS to the private origin with an Origin
- * header, no cookies or tokens (private.wizard001.com is reachable only over James's tailnet).
+ * header, no cookies or tokens (the Wizard origin is reachable only over James's tailnet).
  */
 public final class MizelUploader {
     private static MizelUploader instance;

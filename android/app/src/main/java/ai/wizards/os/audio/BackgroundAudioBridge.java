@@ -25,7 +25,6 @@ public final class BackgroundAudioBridge {
         BackgroundAudioBridge b=new BackgroundAudioBridge(a,w);
         Set<String> origins=new HashSet<>(); origins.add(AppState.primaryOrigin(a));
         if(ai.wizards.os.BuildConfig.DEBUG) origins.add(AppState.origin(a));
-        if(AppState.primaryOrigin(a).equals(ai.wizards.os.BuildConfig.ORIGIN) && ai.wizards.os.BuildConfig.ORIGIN.equals("https://wizard.tailc0f369.ts.net")) origins.add(AppState.LEGACY_ORIGIN);
         WebViewCompat.addWebMessageListener(w,"wizardAudioPort",origins,b::message); return b;
     }
     public void detach() { detached=true; if(controller!=null) MediaController.releaseFuture(controller); controller=null; }

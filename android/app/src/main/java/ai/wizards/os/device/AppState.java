@@ -40,9 +40,6 @@ public final class AppState {
         return origin(c) + "/wizard-os-home/" + (BuildConfig.APPLICATION_ID.endsWith(".musicpreview") ? "?open=wizard-music" : "");
     }
 
-    /** The retired name. The same Wizard still answers on it while the move settles. */
-    public static final String LEGACY_ORIGIN = "https://private.wizard001.com";
-
     /** Native HTTP stays on the configured origin, including when its connection fails (no retired-name fallback). */
     public static String live(String origin) {
         return origin;
