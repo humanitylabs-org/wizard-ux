@@ -53,7 +53,7 @@
 
   /* ---------------- apps ---------------- */
   // The registry lives in core/apps.js (shared with the desktop shell); the phone gets its own list.
-  const { APPS, APP, findApp, appByName, quickSearch, searchUrl } = window.WizCore.apps('mobile');
+  const { APPS, APP, findApp, appAt, appByName, quickSearch, searchUrl } = window.WizCore.apps('mobile');
   const audioFrames = new WeakSet();
   window.WizBackgroundAudio?.init(() => APP, f => { const id=f.closest('.win')?.dataset.win; return audioFrames.has(f) && W[id]?.appId === 'wizard-music' && deskOf(id) >= 0; });
   const norm = window.WizCore.norm;
@@ -846,7 +846,7 @@
     if (LINKS || !window.WizLinks) return;
     LINKS = window.WizLinks.mount({
       parent: device, mode: 'sheet',
-      onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a); else openWin({ app: 'frame', url, title }); },
+      onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a); else { const o = appAt(url); openWin({ app: 'frame', url, title: o ? o.name : title, ...(o ? { appId: o.id } : {}) }); } },
       onChange: on => { device.classList.toggle('link-open', on); if (on) { closeSheets(true); armBack(); } },
     });
     // Phone (James, 10 Oct 2026): a tapped link opens on its own desk beside this one (see openLinkDesk).
@@ -876,7 +876,8 @@
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
     const from = fromOf(srcId);
     window.__ovLog = (window.__ovLog || []).concat('link:' + rel).slice(-30);
-    return !!openWin({ app: 'frame', appId: 'link', url: rel, title: linkTitle(u), from });
+    const owner = appAt(rel); // a page inside an installed app opens as that app, with its services
+    return !!openWin({ app: 'frame', appId: owner ? owner.id : 'link', url: rel, title: owner ? owner.name : linkTitle(u), from });
   }
   /* ---------------- bound views ----------------
    * James, 12 Oct 2026: "as soon as I open the thread, I'm reading your response, but there's a view bound to it."
@@ -888,7 +889,7 @@
    * thread) closes the bound view; opening the thread again, or a new reply with a new link, binds again.
    * Binding = the first in-app link in the latest reply (an agent-declared view can replace this later). */
   var boundOff = {}, boundBusy = false;
-  const boundTarget = el => window.WosBoundView.target(el, { findApp, APP, linkTitle });
+  const boundTarget = el => window.WosBoundView.target(el, { findApp, APP, linkTitle, appAt });
   const boundOf = wid => Object.values(W).find(x => x.bound === wid && deskOf(x.id) >= 0) || null;
   // Automatic bound-view disposal is navigation, not the user's Music Close action.
   function unbind(wid) { const b = boundOf(wid); if (b) closeWin(b.id, true, true); }
