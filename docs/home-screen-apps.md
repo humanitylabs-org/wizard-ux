@@ -19,7 +19,7 @@ Sessions do not take ownership of Wizard's global voice/recorder/updater callbac
 ## Candidate release boundaries
 
 - Default production package/version/origin remain `ai.wizards.os`, `0.9.12` / 36, `https://wizard.tailc0f369.ts.net`.
-- Preview: `ai.wizards.os.preview`, code 1001, `0.9.12-homescreen.1-preview`; compiled ordinary-launch home/origin `https://home-screen-apps.staging.wizard001.com/wizard-os-home/`.
+- Preview: `ai.wizards.os.preview`, code 1001, `0.9.12-homescreen.1-preview`; its ordinary-launch home was `/wizard-os-home/` on the retired custom domain.
 - Preview updater does not read/install the production feed; preview cannot fall back to the production legacy origin.
 - Music production37 and Shared Services38 remain outside this branch; no merge, live service/feed write, publication or physical-phone install.
 

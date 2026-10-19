@@ -27,7 +27,7 @@ test('reject invalid identifiers without normalizing or routing them',()=>{
  }
 });
 test('external and protocol-relative origins are never internal threads',()=>{
- for(const host of ['https://outside.example','//outside.example','https://private.wizard001.com','https://wizard.example:444']) for(const path of ['/', '/wizard/', '/wizard-os-home/']) {
+ for(const host of ['https://outside.example','//outside.example','https://retired.example','https://wizard.example:444']) for(const path of ['/', '/wizard/', '/wizard-os-home/']) {
   const href=host+path+'?session=qa_thread';
   const html=md(`[external](${href})`);
   assert.doesNotMatch(html,/data-session/);assert.match(html,/target="_blank"/);

@@ -10,7 +10,7 @@ WEB_DIR  the worktree's web/ (served as /wizard-os-home/ by the fake Wizard)
 
 Nothing can reach the real Wizard: the app is pointed (debug-only files/qa_home.txt + qa_origin.txt) at a fake
 Wizard on this Mac, reached from the emulator as http://localhost:PORT through `adb reverse`; the emulator runs
-with a dead DNS server so private.wizard001.com cannot even resolve; and the WebView's resource log is checked
+with a dead DNS server so the retired custom domain cannot even resolve; and the WebView's resource log is checked
 for any wizard001 request at the end.
 
 Checks
