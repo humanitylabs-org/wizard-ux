@@ -14,6 +14,7 @@
   const S = () => window.__wos;
   const EDGE = 26, LOCK = 10, GO = 70, VGO = 0.45;
   const lastThread = {};
+  let lastSig = ''; // preview-only fix: undeclared in #122, threw every 700 ms
   try { Object.assign(lastThread, JSON.parse(localStorage.getItem('wos.swipe.last') || '{}')); } catch (e) {}
   const saveLast = () => { try { localStorage.setItem('wos.swipe.last', JSON.stringify(lastThread)); } catch (e) {} };
 
