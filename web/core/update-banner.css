@@ -18,6 +18,8 @@
 .dv-um.two b { white-space: normal; font-weight: 650; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; } /* a long thread name wraps once rather than being cut */
 .dv-update button.dv-wt { flex: none; padding: 5px 9px; border: 1px solid var(--line-2); color: var(--ink-2); font-weight: 600; font-size: 12px; }
 .dv-update.web .dv-wtop > button[data-web="go"] { flex: none; padding: 7px 12px; }
+/* Reload tapped during a recording that cannot survive it: waiting, tap again to cancel. */
+.dv-update.web .dv-wtop > button[data-web="go"].armed { background: transparent; border: 1px solid var(--violet); color: var(--ink); font-weight: 600; font-size: 12px; white-space: nowrap; }
 .dv-wl { display: flex; flex-direction: column; margin-top: 8px; max-height: 46vh; overflow-y: auto; border-top: 1px solid var(--line); }
 .dv-update .dv-wr { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; text-align: left; padding: 9px 4px; border-radius: 0; background: transparent; color: var(--ink); font-weight: 400; border-bottom: 1px solid var(--line); }
 .dv-wr:last-child { border-bottom: 0; }
@@ -44,3 +46,19 @@
 #dvWeb[data-shell="desktop"] button:hover { filter: brightness(1.15); }
 #dvWeb[data-shell="desktop"] .dv-wr:hover { background: rgba(205, 190, 255, .07); }
 #dvWeb[data-shell="desktop"] button:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
+
+/* Per-app "<App> updated · Reload" (core/app-versions.js): a small pill at the top of the app's own window, over
+ * the app, on both shells. Narrow so it never covers the app's controls for long or blocks swipes elsewhere. */
+.app-upd-host { position: relative; }
+.app-upd { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 8px;
+  max-width: calc(100% - 20px); padding: 5px 5px 5px 13px; border-radius: 99px; font-size: 13px; color: var(--ink, #f4f0ff);
+  background: rgba(14, 8, 34, .92); border: 1px solid var(--line-2, rgba(255,255,255,.16)); box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); animation: app-upd-in .22s ease-out; }
+.win.full .app-upd, #singleApp .app-upd { top: calc(var(--safe-t, 0px) + 8px); }
+.app-upd-m { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2, #d9d2f0); }
+.app-upd-m b { font-weight: 650; color: var(--ink, #fff); }
+.app-upd button { flex: none; border: 0; cursor: pointer; font: inherit; }
+.app-upd button[data-go] { padding: 6px 13px; border-radius: 99px; background: var(--violet, #8f63ff); color: #fff; font-weight: 700; font-size: 12.5px; }
+.app-upd button[data-go].armed { background: transparent; border: 1px solid var(--violet, #8f63ff); color: var(--ink, #fff); font-weight: 600; }
+.app-upd button.app-upd-x { width: 26px; height: 26px; border-radius: 99px; background: transparent; color: var(--ink-3, #a79fc4); font-size: 16px; line-height: 1; }
+@keyframes app-upd-in { from { opacity: 0; transform: translate(-50%, -6px); } }

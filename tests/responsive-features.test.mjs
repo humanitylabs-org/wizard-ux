@@ -9,7 +9,8 @@ const inventory = JSON.parse(read('docs/responsive-feature-inventory.json'));
 test('both entrypoints load shared feature surface, skin engine and CSS exactly once and in dependency order', () => {
   for (const file of ['index.html', 'desktop.html']) {
     const assets = assetList(read('web/' + file));
-    for (const asset of ['core/settings.js', 'core/settings.css', 'core/skins.js', 'core/skins.css', 'core/scenery.js', 'core/cancelled.js']) assert.equal(assets.filter(x => x === asset).length, 1, file + ': ' + asset);
+    for (const asset of ['core/settings.js', 'core/settings.css', 'core/skin-frame.js', 'core/skin-frame.css', 'core/skins.js', 'core/skins.css', 'core/scenery.js', 'core/cancelled.js']) assert.equal(assets.filter(x => x === asset).length, 1, file + ': ' + asset);
+    assert.ok(assets.indexOf('core/skin-frame.js') < assets.indexOf('core/skins.js'));
     assert.ok(assets.indexOf('core/scenery.js') < assets.indexOf('core/skins.js'));
     assert.ok(assets.indexOf('core/settings.js') < assets.indexOf(file === 'index.html' ? 'app.js' : 'desktop/desktop.js'));
     // data.js and summaries.js are owner-generated runtime payloads, not committed modules.
@@ -91,10 +92,23 @@ test('desktop Cancel retains a long take including its final chunk, never a shor
     AudioContext: class { createMediaStreamSource() { return { connect() {} }; } createAnalyser() { return {}; } close() {} },
     WosCancelled: { keepWeb: (blob, ms, _retained, _text, source) => saved.push({ blob, ms, source }) } };
   sandbox.window = sandbox; vm.runInNewContext(read('web/core/voice.js'), sandbox);
-  const v = sandbox.WizCore.voice(); await v.start(); rec.ondataavailable({ data: new Blob(['earlier']) }); now = 16000; v.cancel();
+  const v = sandbox.WizCore.voice(); await v.start(); rec.ondataavailable({ data: new Blob(['earlier']) }); now = 20000; v.cancel();
   assert.equal(v.state, 'idle'); await v.start(); stops.shift()();
   assert.equal(saved.length, 1); assert.equal(await saved[0].blob.text(), 'earlierfinal'); assert.equal(saved[0].source, 'desktop');
   now += 1000; v.cancel(); stops.shift()(); assert.equal(saved.length, 1); assert.equal(stopped, 2);
+});
+
+test('desktop Cancel under 20 s deletes the take from custody instead of holding it for recovery', async () => {
+  let now = 0, rec; const held = [], removed = [];
+  class Recorder { static isTypeSupported() { return true; } constructor(_s, o) { this.mimeType = o.mimeType; rec = this; } start() { this.state = 'recording'; } stop() { this.state = 'inactive'; this.onstop?.(); } }
+  const sandbox = { Blob, crypto: globalThis.crypto, performance: { now: () => now }, navigator: { userAgent: 'Desktop', mediaDevices: { enumerateDevices: async () => [], getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } }, requestAnimationFrame: () => 1, cancelAnimationFrame() {}, MediaRecorder: Recorder,
+    AudioContext: class { createMediaStreamSource() { return { connect() {} }; } createAnalyser() { return {}; } close() {} },
+    WosCancelled: { KEEP_FROM_MS: 20000, keepWeb: () => held.push('kept') },
+    WosOutbox: { capture: () => Promise.resolve(), get: () => null, transition: (id, st) => held.push(st), remove: id => { removed.push(id); return Promise.resolve(true); } } };
+  sandbox.window = sandbox; vm.runInNewContext(read('web/core/voice.js'), sandbox);
+  const v = sandbox.WizCore.voice(); await v.start(); rec.ondataavailable({ data: new Blob(['quick']) }); now = 19000;
+  assert.equal(v.cancel(), false); await new Promise(r => setTimeout(r, 0));
+  assert.deepEqual(held, []); assert.equal(removed.length, 1);
 });
 
 

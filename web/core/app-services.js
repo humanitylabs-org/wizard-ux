@@ -37,16 +37,16 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
-  function attach(frame, { appId, path, openThread, isVisible } = {}) {
+  function attach(frame, { appId, path, openThread, isVisible, readingStorage } = {}) {
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
     const st = { frame, appId, url, openThread, isVisible, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
-    const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); };
+    const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); };
     frames.set(frame, st); frame.addEventListener('load', load);
-    const detachReading = window.WizAppReadingPosition?.attach(frame, { appId, authorize: () => valid(st) });
+    const detachReading = window.WizAppReadingPosition?.attach(frame, { appId, authorize: () => valid(st), ...(readingStorage ? { storage: readingStorage } : {}) });
     const detachServices = st.detach;
     st.detach = () => { detachReading?.(); detachServices(); };
     // App scripts can run before the frame load event. Attach when mounting, not only on load.
@@ -319,10 +319,63 @@
         !!anchor.dataset.wizardNativeThread && u.searchParams.get('session') === anchor.dataset.wizardNativeThread;
     } catch (_) { return false; }
   }
+  /* Reload plan for the "Update ready" banner. A native meeting keeps recording through a shell reload (see
+   * WizAppCapture.reloadCheck); its app's capture holds ("… recording", "… capture …") are then not a reason
+   * to wait, because the app reattaches to the same meeting after load. Every other hold still blocks:
+   * kind 'capture' (a recording that would stop or a save after Stop) or 'work' (unsaved app state). */
+  const CAPTURE_HOLD = /record|captur/i;
+  function reloadPlan() {
+    reconcile();
+    let cap;
+    try { cap = window.WizAppCapture?.reloadCheck?.(); } catch (_) { cap = { safe: false, reason: 'capture' }; }
+    if (!cap) { const s = window.WizAppCapture?.getState?.(); cap = s && (s.hold || s.active || s.recording) ? { safe: false, reason: 'capture' } : { safe: true, keeps: null }; }
+    const keeps = cap.safe ? cap.keeps || null : null, blocking = [];
+    if (!cap.safe) blocking.push({ appId: null, kind: 'capture', reason: cap.reason || 'capture' });
+    for (const st of frames.values()) for (const reason of st.holds.values()) {
+      const capture = CAPTURE_HOLD.test(reason);
+      if (capture && keeps && st.appId === keeps.appId) continue;
+      blocking.push({ appId: st.appId, kind: capture ? 'capture' : 'work', reason });
+    }
+    return { ok: !blocking.length, keeps, blocking, recording: blocking.some(b => b.kind === 'capture') };
+  }
+  // Right before location.reload() with a kept meeting: let capture writes land, then take the kept app's
+  // frames out. Its own leave guard (a beforeunload prompt meant for a standalone tab) would otherwise stop the
+  // reload; removing a frame fires no beforeunload. The recorder and its journal live outside the frame.
+  async function prepareReload(plan) {
+    if (!plan?.keeps) return;
+    try { await window.WizAppCapture?.prepareReload?.(); } catch (_) {}
+    for (const st of [...frames.values()]) if (st.appId === plan.keeps.appId) {
+      // Come back to the same place in the app (the meeting being recorded): frames keep only path + query.
+      try { const l = st.frame.contentWindow.location; if (valid(st) && l.hash && l.hash !== '#' && l.hash !== '#/') sessionStorage.setItem(RETURN_KEY, JSON.stringify({ appId: st.appId, path: l.pathname + l.search, hash: l.hash.slice(0, 512), at: Date.now() })); } catch (_) {}
+      try { st.detach(); st.frame.remove(); } catch (_) {}
+    }
+  }
+  // Per-app update check (core/app-versions.js): attached same-origin app frames, whether each is on screen, and
+  // what would be lost by reloading it. A frame with no isVisible host (single-app session) is the whole page.
+  function updateFrames() {
+    reconcile();
+    return [...frames.values()].filter(st => valid(st)).map(st => {
+      let visible = true; try { if (st.isVisible) visible = st.isVisible() === true; } catch (_) { visible = false; }
+      return Object.freeze({ frame: st.frame, appId: st.appId, visible, holds: [...st.holds.values()], suspect: !!st.suspect });
+    });
+  }
+  // One-shot, after a reload that kept a recording: put the kept app's frame back on the route it showed.
+  const RETURN_KEY = 'wos.reload-return.v1';
+  function restoreReturn(st) {
+    let r; try { r = JSON.parse(sessionStorage.getItem(RETURN_KEY) || 'null'); } catch (_) { r = null; }
+    if (!r || r.appId !== st.appId) return;
+    try {
+      const w = st.frame.contentWindow, here = w.location;
+      if (Date.now() - r.at > 10 * 60e3) { sessionStorage.removeItem(RETURN_KEY); return; }
+      if (!valid(st) || here.href === 'about:blank' || here.pathname + here.search !== r.path) return; // not loaded yet
+      sessionStorage.removeItem(RETURN_KEY);
+      if (!here.hash || here.hash === '#' || here.hash === '#/') here.hash = r.hash;
+    } catch (_) {}
+  }
   window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack, ownsThreadLink,
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
-    update: Object.freeze({ busy, announce, available: () => available }),
+    update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload, frames: updateFrames }),
     inspect: () => { reconcile(); return [...frames.values()].map(st => ({ appId: st.appId, path: st.url.pathname, ready: !!st.doc, holds: [...st.holds.values()], suspect: !!st.suspect })); },
   });
 })();

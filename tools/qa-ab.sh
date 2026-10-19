@@ -1,10 +1,21 @@
 #!/bin/bash
-# Run a QA suite against the baseline (live daily web dir) and this worktree, side by side.
+# Run one suite against baseline and candidate, sequentially to avoid Chrome contention.
 # Usage: tools/qa-ab.sh <suite.cjs> [extra args]
-cd "$(dirname "$0")/.."
+# Self-contained suites can use QA_BASE_WEB_DIR / QA_CANDIDATE_WEB_DIR instead of qa-origins.
+cd "$(dirname "$0")/.." || exit 2
 S=$1; shift
-mkdir -p /tmp/qa-base /tmp/qa-desk
-QA_OUT=/tmp/qa-base timeout 280 node "$S" http://127.0.0.1:9382/wizard-os-home/ "$@" > "/tmp/$S.base.txt" 2>&1 &
-QA_OUT=/tmp/qa-desk timeout 280 node "$S" http://127.0.0.1:9381/wizard-os-home/ "$@" > "/tmp/$S.desk.txt" 2>&1
-wait
-for k in base desk; do echo "== $k: $(grep -c '^PASS' /tmp/$S.$k.txt) pass, $(grep -c '^FAIL' /tmp/$S.$k.txt) fail"; grep -E '^FAIL|Error|rror:' "/tmp/$S.$k.txt" | head -12; done
+OUT=${QA_AB_OUT:-${TMPDIR:-/tmp}/qa-ab}
+mkdir -p "$OUT/base" "$OUT/desk"
+runner=()
+if command -v timeout >/dev/null; then runner=(timeout 280)
+elif command -v gtimeout >/dev/null; then runner=(gtimeout 280)
+fi
+status=0
+for k in base desk; do
+  port=9382; web=${QA_BASE_WEB_DIR:-${QA_WEB_DIR:-}}
+  if [ "$k" = desk ]; then port=9381; web=${QA_CANDIDATE_WEB_DIR:-${QA_WEB_DIR:-}}; fi
+  QA_WEB_DIR="$web" QA_OUT="$OUT/$k" "${runner[@]}" node "$S" "http://127.0.0.1:$port/wizard-os-home/" "$@" > "$OUT/$S.$k.txt" 2>&1 || status=1
+  printf '== %s: %s pass, %s fail\n' "$k" "$(grep -c '^PASS' "$OUT/$S.$k.txt")" "$(grep -c '^FAIL' "$OUT/$S.$k.txt")"
+  grep -E '^FAIL|Error|rror:' "$OUT/$S.$k.txt" || true
+done
+exit "$status"

@@ -20,6 +20,17 @@
   const link = (a, b) => { if (!nodes.has(a) || !nodes.has(b)) return; (links.get(a) || links.set(a, new Set()).get(a)).add(b); (links.get(b) || links.set(b, new Set()).get(b)).add(a); };
   const ago = iso => { const t = Date.parse(iso); if (!Number.isFinite(t)) return ''; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
 
+  // Discover independently: a failed overview must not hide an installed maintenance tool.
+  let supervisorAvailable = false;
+  async function loadMaintenance() {
+    try {
+      const r = await fetch('/wizard/v1/apps', { credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok) throw new Error(r.status);
+      supervisorAvailable = (await r.json()).apps?.some(a => a.id === 'wizard-supervisor' && a.url) === true;
+    } catch (_) { supervisorAvailable = false; }
+    $('maintenance').hidden = !supervisorAvailable;
+  }
+
   async function load() {
     try {
       const r = await fetch('../store-data/system/v1/overview', { credentials: 'same-origin', cache: 'no-store' });
@@ -126,19 +137,20 @@
   function sections() {
     const dot = s => `<i class="dot d-${s}"></i>`;
     const agents = D.agents.map(a => `<div class="item ${a.main ? 'hero' : ''}"><span class="av" style="--c:${a.main ? '#ff5ccf' : '#7d74a3'}">${esc(a.name.charAt(0).toUpperCase())}</span><span class="tx"><b>${esc(a.name)}</b><small>${esc(a.main ? 'Your main agent' : a.kind)} · ${esc(a.model || '—')}</small></span>${dot(a.status === 'running' ? 'ok' : 'idle')}</div>`).join('');
-    const apps = D.apps.map(a => `<div class="item"><span class="av" style="--c:${a.kind === 'Agent tool' ? '#3fe0ff' : '#8f63ff'}">${esc(a.name.charAt(0))}</span><span class="tx"><b>${esc(a.name)}</b><small>${esc(a.kind)}${a.summary ? ` · ${esc(a.summary)}` : ''}</small></span><span class="st">${dot(a.status === 'running' || a.status === 'connected' ? 'ok' : a.status === 'stopped' ? 'off' : 'warn')}${esc(a.status === 'connected' ? 'On' : a.status.charAt(0).toUpperCase() + a.status.slice(1))}</span></div>`).join('');
+    const apps = D.apps.map(a => `<div class="item"><span class="av" style="--c:${a.kind === 'Agent tool' ? '#3fe0ff' : '#8f63ff'}">${esc(a.name.charAt(0))}</span><span class="tx"><b>${esc(a.name)}</b><small>${esc(a.kind)}${a.summary ? ` · ${esc(a.summary)}` : ''}</small></span><span class="st">${dot(a.status === 'running' || a.status === 'connected' ? 'ok' : a.status === 'stopped' ? 'off' : 'warn')}${esc(a.status === 'running' ? 'Backend running' : a.status === 'connected' ? 'On' : a.status.charAt(0).toUpperCase() + a.status.slice(1))}</span></div>`).join('');
     const groups = {}; for (const c of D.connections) (groups[c.group] = groups[c.group] || []).push(c);
     const conns = Object.entries(groups).sort((x, y) => (y[0] === 'AI account') - (x[0] === 'AI account')).map(([g, list]) => `<h4>${esc(g)}</h4><div class="chips">${list.map(c => `<span class="chip">${dot(c.status === 'connected' ? 'ok' : 'warn')}${esc(c.name)}${c.detail ? `<small>${esc(c.detail)}</small>` : ''}</span>`).join('')}</div>`).join('');
     const rs = [...D.routines].sort((a, b) => (b.status === 'error') - (a.status === 'error')).slice(0, showAll ? undefined : Math.max(8, D.routines.filter(r => r.status === 'error').length));
     const routines = rs.map(r => `<div class="item r ${r.status === 'error' ? 'bad' : ''}"><span class="tx"><b>${esc(r.name)}</b><small>${esc(r.when)}${r.lastRun ? ` · ran ${esc(ago(r.lastRun))}` : ''}</small></span><span class="st">${dot(r.status === 'error' ? 'bad' : r.status === 'ok' ? 'ok' : 'idle')}${r.status === 'error' ? 'Failed' : r.status === 'ok' ? 'OK' : 'New'}</span></div>`).join('');
     $('sections').innerHTML = `
       <section class="sec" id="s-agents"><h2>Agents</h2><div class="list">${agents}</div></section>${routesHtml()}
-      <section class="sec" id="s-apps"><h2>Agent apps &amp; tools</h2><p class="hint">Installed apps and tools your agents can use. They have no screen of their own.</p><div class="list">${apps}</div></section>
+      <section class="sec" id="s-apps"><h2>Agent apps &amp; tools</h2><p class="hint">Installed apps and tools your agents can use; some also have a screen. “Backend running” is the reported backend lifecycle status, not whether a screen is open, work is active, or the backend is healthy.</p><div class="list">${apps}</div></section>
       <section class="sec" id="s-conns"><h2>Connections</h2><p class="hint">Accounts and keys your agents use. Keys never leave your Wizard.</p>${conns}</section>
       <section class="sec" id="s-routines"><h2>Routines</h2><p class="hint">What your agents do on their own, on a schedule.</p><div class="list">${routines}</div>${!showAll && D.routines.length > rs.length ? `<button class="more-btn" data-all>Show all ${D.routines.length}</button>` : ''}</section>`;
   }
 
   document.addEventListener('click', e => {
+    if (e.target.closest('[data-supervisor]') && supervisorAvailable) { if (framed) parent.postMessage({ type: 'wizard:open-app', id: 'wizard-supervisor' }, location.origin); else location.href = '../?open=wizard-supervisor'; return; }
     const n = e.target.closest('[data-node]'); if (n) { focusNode(sel === n.dataset.node ? null : n.dataset.node); return; }
     if (e.target.closest('[data-all]')) { showAll = true; sections(); return; }
     const rt = e.target.closest('[data-route]'); if (rt) { if (framed) parent.postMessage({ type: 'wizard:app-route', id: rt.dataset.route }, location.origin); else location.href = '../agents/index.html'; return; }
@@ -160,5 +172,6 @@
     addEventListener('popstate', () => { back(); history.pushState({ sys: 'guard' }, ''); });
   }
   window.__system = { state: () => ({ loaded: !!D, nodes: nodes.size, selected: sel, counts: D && { agents: D.agents.length, apps: D.apps.length, conns: D.connections.length, routines: D.routines.length } }) };
+  loadMaintenance();
   load();
 })();

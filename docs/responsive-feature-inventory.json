@@ -100,6 +100,26 @@
       "shell": "phone",
       "classification": "preview",
       "reason": "Opt-in Live Mode motion styles."
+    },
+    "core/home-screen-policy.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android launcher-shortcut task policy; desktop has no home-screen pinning."
+    },
+    "core/home-screen-apps.css": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android Add to home screen sheet styling; native ShortcutManager only."
+    },
+    "core/home-screen-apps.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android Add to home screen via ShortcutManager pin request; no desktop equivalent."
+    },
+    "core/single-app-session.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
     }
   },
   "sharedAssets": [
@@ -110,6 +130,7 @@
     "core/app-route.css",
     "core/app-route.js",
     "core/app-services.js",
+    "core/app-versions.js",
     "core/appearance-host.css",
     "core/appearance-host.js",
     "core/apps.js",
@@ -138,7 +159,9 @@
     "core/focused-field.js",
     "core/links.css",
     "core/links.js",
+    "core/mic.js",
     "core/music-voice.js",
+    "core/notif-bell.js",
     "core/polish.css",
     "core/resources.css",
     "core/resources.js",
@@ -152,6 +175,8 @@
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
+    "core/skin-frame.css",
+    "core/skin-frame.js",
     "core/skins.css",
     "core/skins.js",
     "core/status.js",
@@ -225,6 +250,13 @@
       "note": "Direct entrypoint import"
     },
     "core/app-services.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/app-versions.js": {
       "loadedBy": [
         "phone",
         "desktop"
@@ -367,6 +399,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/mic.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
+    },
     "core/music-voice.js": {
       "loadedBy": [
         "phone",
@@ -408,6 +447,13 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/skin-frame.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared validated skin frame foundations, loaded before skin composition"
     },
     "core/settings.js": {
       "loadedBy": [
@@ -532,6 +578,31 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/notif-bell.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/home-screen-policy.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Android pinned app-only task policy (home-screen shortcut sessions)"
+    },
+    "core/home-screen-apps.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
+    },
+    "core/single-app-session.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Pinned home-screen app task: one app full screen with its own Back history"
     }
   }
 }

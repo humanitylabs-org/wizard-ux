@@ -1,6 +1,6 @@
 /* Wizard OS · cancelled recordings (James, 11 Oct 2026)
  *
- * An X tapped by accident must not throw away a long message. Any take cancelled after 15 s or more is kept on
+ * An X tapped by accident must not throw away a long message. Any take cancelled after 20 s or more is kept on
  * this phone for a week (newest 10): Settings → Cancelled recordings lists them with "Transcribe & copy", which
  * runs it through Wizard Voice and puts the words on the clipboard (and shows them, selectable). A quick cancel
  * is still just gone.
@@ -17,7 +17,7 @@
  */
 (() => {
   'use strict';
-  const KEEP_FROM_MS = 15000, MAX_KEPT = 10, MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+  const KEEP_FROM_MS = 20000, MAX_KEPT = 10, MAX_AGE_MS = 7 * 24 * 3600 * 1000;
   const DB = 'wos-cancelled', STORE = 'takes', TX_KEY = 'wos.cancelled.text';
   const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.cancelledList === 'function' ? d : null; };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -131,7 +131,7 @@
     try {
       const blob = blobOf(t); if (!blob || blob.size < 1000) throw new Error('The recording is empty');
       const prompt = window.WizConfig.voicePrompt?.() || '';
-      const j = t.custody ? await window.WosOutbox.transcribeDictation(id) : await window.WosOutbox.bounded(signal => window.WizConfig.transcribe(blob, { prompt, language: 'en', signal }));
+      const j = t.custody ? await window.WosOutbox.transcribeDictation(id) : await window.WosOutbox.bounded(signal => window.WizConfig.transcribe(blob, { prompt, language: 'en', signal }), window.WosOutbox.TRANSCRIBE_TIMEOUT_MS);
       const text = String(j.text || '').trim();
       if (!text) throw new Error('No speech found in it');
       texts[id] = text; saveTexts(); open.add(id);
@@ -164,7 +164,7 @@
   function html() {
     const l = all();
     return `<div class="st-group" data-cancelled><h4>Recovered &amp; cancelled recordings <span>${l.length || ''}</span></h4>
-      ${l.length ? l.map(row).join('') : '<div class="st-empty">Nothing here. Cancel a recording after 15 seconds or more and it waits here, ready to transcribe.</div>'}
+      ${l.length ? l.map(row).join('') : '<div class="st-empty">Nothing here. Cancel a recording after 20 seconds or more and it waits here, ready to transcribe.</div>'}
       <p class="st-note">Interrupted and retained recordings stay until deleted. Older cancelled recordings may expire after a week (the newest ${MAX_KEPT}). Transcribe &amp; copy never sends to an agent.</p></div>`;
   }
   function repaint() {

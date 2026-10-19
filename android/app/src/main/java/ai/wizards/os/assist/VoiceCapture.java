@@ -46,7 +46,8 @@ final class VoiceCapture {
         default void onPaused(boolean paused) { }
     }
 
-    private static VoiceCapture instance;
+    private static volatile VoiceCapture instance;
+    static boolean captureAlive() { VoiceCapture c = instance; return c != null && (c.listening || c.loan != null); }
 
     static synchronized VoiceCapture get(Context c) {
         if (instance == null) instance = new VoiceCapture(c.getApplicationContext());
@@ -62,7 +63,7 @@ final class VoiceCapture {
     private File recording;
     private File qaAudio;
     private SilenceDetector detector;
-    private boolean listening;
+    private volatile boolean listening;
     private boolean sending;
     private boolean paused;
     private final android.app.KeyguardManager keyguard;
@@ -183,34 +184,41 @@ final class VoiceCapture {
             emitError("mic", "Open Wizard OS once and allow the microphone.");
             return;
         }
-        if (!ai.wizards.os.MicOwner.tryAcquire(ai.wizards.os.MicOwner.SIDE)) { // one mic owner: a meeting may be recording
-            String why = ai.wizards.os.MicOwner.reason(ai.wizards.os.MicOwner.SIDE);
-            Log.i(TAG, "start refused: mic held by " + ai.wizards.os.MicOwner.holder());
+        // One mic owner. A recording meeting lends it (pauses, flushed) and gets it back once this take is kept.
+        String take = EverywhereOutbox.newId(EverywhereOutbox.SRC_SIDE);
+        ai.wizards.os.mizel.MicLoan l = ai.wizards.os.mizel.MeetingLoans.acquire(app, ai.wizards.os.MicOwner.SIDE, "side", "ask", take, "");
+        if (l == null) {
+            String why = ai.wizards.os.mizel.MicLoan.refusal();
+            Log.i(TAG, "start refused: mic held by " + ai.wizards.os.MicOwner.holder() + " · " + why);
             android.widget.Toast.makeText(app, why, android.widget.Toast.LENGTH_LONG).show();
             emitError("mic", why);
             return;
         }
+        loan = l; takeId = take; meetingEvent = l.borrowed ? l.eventId : "";
+        if (l.borrowed) Log.i(TAG, "meeting paused for " + l.eventId);
         try {
             // ADTS on internal storage: what was said survives the process dying mid-take (see recoverOrphans)
             recording = new File(takesDir(app), "side-" + System.currentTimeMillis() + ".aac");
-            MediaRecorder r = Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(app) : new MediaRecorder();
-            r.setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION);
-            r.setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS);
-            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-            r.setAudioChannels(1);
-            r.setAudioSamplingRate(32000);
-            r.setAudioEncodingBitRate(64000);
-            r.setOutputFile(recording.getAbsolutePath());
-            preferBuiltInMic(r);
-            r.prepare();
-            r.start();
+            final File file = recording;
+            // The phone's mic, never a Bluetooth speaker's: MicRoute refuses a take Android puts elsewhere.
+            MediaRecorder r = ai.wizards.os.audio.MicRoute.start(app,
+                    () -> Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(app) : new MediaRecorder(),
+                    (m, src) -> {
+                        m.setAudioSource(src);
+                        m.setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS);
+                        m.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+                        m.setAudioChannels(1);
+                        m.setAudioSamplingRate(32000);
+                        m.setAudioEncodingBitRate(64000);
+                        m.setOutputFile(file.getAbsolutePath());
+                    });
             recorder = r;
         } catch (Exception e) {
             dropRecorder();
             if (qa == null) {
-                ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.SIDE);
+                endLoan("start_failed", "cancelled", "The microphone did not start");
                 Log.w(TAG, "recorder failed", e);
-                emitError("mic", "The microphone is busy. Try again in a moment.");
+                emitError("mic", ai.wizards.os.audio.MicRoute.why(e, "The microphone is busy. Try again in a moment."));
                 return;
             }
             Log.i(TAG, "qa: no emulator mic, using qa_audio");
@@ -225,15 +233,6 @@ final class VoiceCapture {
         if (autoSendMs > 0) main.postDelayed(qaSend = () -> { if (paused) main.postDelayed(qaSend, 500); else send("qa"); }, autoSendMs);
     }
 
-    private void preferBuiltInMic(MediaRecorder r) {
-        AudioManager am = (AudioManager) app.getSystemService(Context.AUDIO_SERVICE);
-        for (AudioDeviceInfo d : am.getDevices(AudioManager.GET_DEVICES_INPUTS)) {
-            if (d.getType() == AudioDeviceInfo.TYPE_BUILTIN_MIC) {
-                r.setPreferredDevice(d);
-                return;
-            }
-        }
-    }
 
     private final Runnable meter = new Runnable() {
         @Override
@@ -285,6 +284,7 @@ final class VoiceCapture {
             r.release();
         }
         ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.SIDE);
+        final String take = takeId, event = meetingEvent;
         final File qa = qaAudio;
         final File audio = qa != null ? qa : recording;
         if (qa != null && recording != null) //noinspection ResultOfMethodCallIgnored
@@ -293,6 +293,7 @@ final class VoiceCapture {
         if ((!ok && qa == null) || audio == null || !audio.isFile() || audio.length() < 512) {
             if (audio != null && qa == null) //noinspection ResultOfMethodCallIgnored
                 audio.delete();
+            endLoan("empty", "cancelled", "Nothing was recorded");
             if (view != null) view.onNothing();
             return;
         }
@@ -302,8 +303,12 @@ final class VoiceCapture {
         // No draft, no confirm: holding the side button and talking is sending.
         final EverywhereOutbox.Item it;
         try {
-            it = outbox().enqueueRecording(audio, EverywhereOutbox.SRC_SIDE, shots.isEmpty() ? null : new ArrayList<>(shots), locked);
+            if (!event.isEmpty()) ai.wizards.os.mizel.MeetingLoans.note(app, event, ai.wizards.os.mizel.MeetingLoans.obj(
+                    "event", "queued", "voiceTakeId", take, "deliveryKey", take));
+            it = outbox().enqueueRecording(audio, EverywhereOutbox.SRC_SIDE, shots.isEmpty() ? null : new ArrayList<>(shots), locked, take, event);
+            endLoan("stopped", null, null);
         } catch (Exception e) {
+            endLoan("save_failed", "failed", "The recording could not be saved on the phone");
             Log.e(TAG, "could not keep the recording", e);
             emitError("net", "Couldn’t save that recording on the phone.");
             return;
@@ -421,12 +426,29 @@ final class VoiceCapture {
         main.removeCallbacks(meter);
         if (qaSend != null) main.removeCallbacks(qaSend);
         dropRecorder();
-        ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.SIDE);
+        endLoan("cancelled", "cancelled", null);
         if (recording != null) {
             //noinspection ResultOfMethodCallIgnored
             recording.delete();
             recording = null;
         }
+    }
+
+    /* ---------------------------------------------------------------- meeting microphone loan */
+
+    private volatile ai.wizards.os.mizel.MicLoan loan;
+    private String takeId;
+    private String meetingEvent = "";
+
+    /** Give the mic back (to the meeting when it lent it) and, for a borrowed take, set its transcript marker. */
+    private void endLoan(String outcome, String status, String why) {
+        ai.wizards.os.mizel.MicLoan l = loan;
+        String event = meetingEvent;
+        loan = null; takeId = null; meetingEvent = "";
+        if (l == null) { ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.SIDE); return; }
+        ai.wizards.os.mizel.MeetingLoans.release(app, l, outcome);
+        if (!event.isEmpty() && status != null)
+            ai.wizards.os.mizel.MeetingLoans.note(app, event, ai.wizards.os.mizel.MeetingLoans.obj("event", status, "error", why));
     }
 
     private void dropRecorder() {

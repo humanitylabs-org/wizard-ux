@@ -53,7 +53,27 @@ test('URLs with underscores and query strings survive intact', () => {
   assert.ok(md(`see ${url}`).includes(`<a href="${url.replace(/&/g, '&amp;')}"`), md(`see ${url}`));
 });
 
+test('a URL ending in an underscore keeps it in the link', () => {
+  const url = 'https://oscarvps.example.ts.net:8445/2nZynT3XWhyUlafOJHWo1-ulljLGCVs_';
+  for (const text of [url, `Open:\n${url}\n`, `Yours: ${url}`, `see ${url}.`, `**${url}**`]) {
+    assert.ok(md(text).includes(`<a href="${url}"`), md(text));
+  }
+});
+
+test('underscore emphasis around a URL ending in an underscore stays outside the link', () => {
+  const url = 'https://x.example/token_';
+  const html = md(`see _${url}_`);
+  assert.ok(html.includes(`<a href="${url}"`) && html.includes('<em>'), html);
+});
+
 test('URLs inside inline code stay code', () => {
   const html = md('`https://x.example/`');
   assert.ok(html.includes('<code>https://x.example/</code>') && !html.includes('<a '), html);
+});
+
+test('a linked image never renders as the word "undefined"', () => {
+  const html = md('Preview: [![preview](https://x.example/a.jpg)](https://x.example/full)');
+  assert.ok(!html.includes('undefined'), html);
+  assert.ok(html.includes('href="https://x.example/full"'), html);
+  assert.ok(html.includes('[Image: preview]'), html);
 });

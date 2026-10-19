@@ -13,6 +13,38 @@ import java.util.Arrays;
 import java.util.HashSet;
 
 public class UpdatePolicyTest {
+    @Test public void tappedMusicInstalls() {
+        assertEquals(UpdatePolicy.Step.INSTALL, UpdatePolicy.next(true, true, true, true, UpdatePolicy.Hold.MUSIC, true, true));
+    }
+    @Test public void tappedBareMicInstalls() {
+        assertEquals(UpdatePolicy.Step.INSTALL, UpdatePolicy.next(true, true, true, true, UpdatePolicy.Hold.MIC, true, true));
+    }
+    @Test public void tappedTakeStillDefers() {
+        assertEquals(UpdatePolicy.Step.DEFER, UpdatePolicy.next(true, true, true, true, UpdatePolicy.Hold.TAKE, true, true));
+    }
+    @Test public void unattendedMusicDefers() {
+        assertEquals(UpdatePolicy.Step.DEFER, UpdatePolicy.next(true, true, true, false, UpdatePolicy.Hold.MUSIC, true, false));
+    }
+    @Test public void unattendedMicDefers() {
+        assertEquals(UpdatePolicy.Step.DEFER, UpdatePolicy.next(true, true, true, false, UpdatePolicy.Hold.MIC, true, false));
+    }
+    @Test public void deadOwnerClaimIsIgnored() {
+        assertEquals(UpdatePolicy.Hold.NONE, UpdatePolicy.hold(false, true, false, false, false));
+        assertEquals(UpdatePolicy.Step.INSTALL, UpdatePolicy.next(true, true, true, false,
+                UpdatePolicy.hold(false, true, false, false, false), true, false));
+        assertEquals(UpdatePolicy.Hold.MIC, UpdatePolicy.hold(false, true, false, false, true));
+    }
+    @Test public void liveOwnerProtectsPausedTakeWithoutAppOps() {
+        assertEquals(UpdatePolicy.Hold.TAKE, UpdatePolicy.hold(false, true, true, false, false));
+    }
+    @Test public void genuineTakeWinsOverMusicAndMic() {
+        assertEquals(UpdatePolicy.Hold.TAKE, UpdatePolicy.hold(true, false, false, true, true));
+        assertEquals(UpdatePolicy.Hold.MUSIC, UpdatePolicy.hold(false, false, false, true, true));
+        assertEquals("take", UpdatePolicy.Hold.TAKE.reason);
+        assertEquals("music", UpdatePolicy.Hold.MUSIC.reason);
+        assertEquals("mic", UpdatePolicy.Hold.MIC.reason);
+    }
+
     static final String FEED = "https://private.wizard001.com/reports/wizard-os/latest.json";
     static final String SHA = "864663a75a0dd19a134da46fea51931571d1fb03e7e50b0c05d089344039d771";
 

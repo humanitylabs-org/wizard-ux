@@ -3,6 +3,10 @@
  * the same resource modules; hosted apps never own a root guard or install worker. */
 (() => {
   'use strict';
+  // Runs before frontend scripts, including iframe refresh/recreation. The native
+  // document-start hook is an additional fence, not the sole ordering guarantee.
+  // Ordinary workspace/standalone clients are unchanged: the policy is session-only.
+  try { if (parent !== window && parent.WizHomeScreenPolicy?.mode) parent.WizHomeScreenPolicy.installPresentationStorage(window); } catch (_) {}
   if (window.WizardApp) return;
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
   let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
@@ -85,8 +89,11 @@
     history.pushState = wrappedPush; history.replaceState = wrappedReplace;
     const pop = e => { const mark = e.state?.__wizardApp; if (mark?.id === id) index = mark.index; else index = 0; pending = false; };
     addEventListener('popstate', pop);
-    const unregister = register({ canGoBack: () => !pending && !isRoot() && index > 0,
-      back: () => { if (pending || isRoot() || index <= 0) return false; pending = true; history.back(); return true; } });
+    // A traversal already admitted by this adapter still owns Back until its
+    // popstate arrives. Reporting root while it is pending lets a rapid second
+    // hardware callback collapse fullscreen or send the shell Home.
+    const unregister = register({ canGoBack: () => pending || (!isRoot() && index > 0),
+      back: () => { if (pending) return true; if (isRoot() || index <= 0) return false; pending = true; history.back(); return true; } });
     return () => { unregister(); removeEventListener('popstate', pop); if (history.pushState === wrappedPush) history.pushState = priorPush; if (history.replaceState === wrappedReplace) history.replaceState = priorReplace; if (standaloneIsRoot === isRoot) standaloneIsRoot = null; };
   }
   const listen = (set, fn, value) => { if (typeof fn !== 'function') throw new TypeError('Subscriber must be a function'); set.add(fn); if (value) fn(value); return () => set.delete(fn); };

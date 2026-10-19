@@ -315,12 +315,13 @@ final class ScreenMode {
         return s;
     }
 
-    private void translate(String id, String itemsJson) {
+    private void translate(String id, String itemsJson, String to) {
+        final String target = to == null || !to.matches("[A-Za-z ]{2,30}") ? "English" : to;
         io.execute(() -> {
             String reply;
             try {
                 JSONArray items = new JSONArray(itemsJson);
-                JSONObject body = new JSONObject().put("items", items).put("to", "English");
+                JSONObject body = new JSONObject().put("items", items).put("to", target);
                 JSONObject r = new JSONObject(post("/wizard-search/api/translate", body.toString().getBytes(StandardCharsets.UTF_8), "application/json"));
                 reply = r.toString();
                 Log.i(TAG, "screen translate items=" + items.length() + " ms=" + r.optInt("ms"));
@@ -392,7 +393,7 @@ final class ScreenMode {
         @JavascriptInterface public void search(String q, float frac) { main.post(() -> showSearch(String.valueOf(q), frac)); }
         @JavascriptInterface public void sheet(float frac) { main.post(() -> { if (search != null && searchFrac > 0) showSearch(searchQuery(), frac); }); }
         @JavascriptInterface public void closeSearch() { main.post(ScreenMode.this::hideSearch); }
-        @JavascriptInterface public void translate(String id, String items) { ScreenMode.this.translate(String.valueOf(id), String.valueOf(items)); }
+        @JavascriptInterface public void translate(String id, String items, String to) { ScreenMode.this.translate(String.valueOf(id), String.valueOf(items), to); }
         @JavascriptInterface public void picture(String id) { ScreenMode.this.picture(String.valueOf(id)); }
         @JavascriptInterface public void ask(String t) { main.post(() -> ScreenMode.this.ask(String.valueOf(t))); }
         @JavascriptInterface public String shot() { byte[] b = shot; return b == null ? "" : Base64.encodeToString(b, Base64.NO_WRAP); }

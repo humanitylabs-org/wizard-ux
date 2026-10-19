@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   tag-existing:
-    if: github.repository == 'humanitylabs-org/wizard-ux' && github.ref == 'refs/heads/daily'
+    if: github.repository == 'humanitylabs-org/wizard-ux' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

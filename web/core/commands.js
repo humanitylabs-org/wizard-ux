@@ -35,6 +35,9 @@
     }
     // The music search spell ("music search Home Tides") wins everywhere, even over the Chats list's "search …".
     { const ms = window.WosMusic?.available() && window.WosMusic.parse(t, false, false); if (ms && ms.op === 'search') return { action: 'music', cmd: ms }; }
+    // The strong quick-search spells ("ask AI …", "image search …", "find images of …") win everywhere too: on the
+    // Chats list a held "find images of cats" used to filter the list instead of opening Search.
+    { const q0 = quickSearch(t); if (q0?.strong) return { action: 'quick_search', query: q0.query, tab: q0.tab }; }
     { const cv = chatsVoice(t, snap || sendSnap(), kind); if (cv) return cv; }
     // Food spells (James, 12 Oct): "order food" / "order grab" / "order lunch" open Grab for a new order; "order kra pao"
     // or "order my usual kra pao" runs a saved one; "food" on its own opens the Food app. All on the phone, nothing to Wizard.
@@ -97,7 +100,10 @@
  }
  function execute(c, text, H) {
    const a = c.action;
-   if (a === 'music') return window.WosMusic?.run(c.cmd) || false;
+   if (a === 'music') return window.WosMusic?.run(c.cmd, H.musicDone) || false;
+   // Router vocabulary (server ROUTER_SYSTEM): play_music and search had no handler, so they silently failed.
+   if (a === 'play_music') return window.WosMusic?.run({ op: 'play', said: 'play ' + String(c.query || '').trim() }, H.musicDone) || false;
+   if (a === 'search' && c.query) return H.search(c.query, c.tab);
    if (a === 'usual') return window.WosUsuals?.run(c.id) || false;
    if (/direction|navigat|route/.test(a)) { H.maps('dir', c.destination || c.query || text); return true; }
    if (/maps_search|map/.test(a)) { H.maps('search', c.query || text); return true; }
@@ -117,5 +123,11 @@
    if (/open|launch|app/.test(a)) { const app = H.findApp(c.app || c.target); return app ? !!H.openApp(app) : false; }
    return H.layout(c, text);
  }
- window.WosCommands = { create, execute };
+ // These handlers finish synchronous shell navigation before returning. Music,
+ // purchases, searches and app voice handoffs may only acknowledge acceptance.
+ function completedLocally(c, ok) {
+   return !!ok && !c?.then_agent && ['open_app','open','launch','app','open_view','view','show',
+     'chats_filter','chats_search','desk','clear_desk','close_window','fullscreen','move_window'].includes(c?.action);
+ }
+ window.WosCommands = { create, execute, completedLocally };
 })();

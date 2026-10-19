@@ -25,6 +25,7 @@
       const p = pending.get(m.id); if (!p) return;
       pending.delete(m.id); clearTimeout(p.timer);
       if (m.ok && m.result) window.WizBackgroundAudio.lastState = m.result;
+      if (p.complete) { p.complete(m); return; }
       reply(p, {ok:!!m.ok,result:m.result,error:m.error});
     };
   }
@@ -40,5 +41,22 @@
     try { pt.postMessage(JSON.stringify({...d.params,id,v:1,appId:'wizard-music',method:d.method})); }
     catch (_) { pending.delete(id); clearTimeout(p.timer); reply(p,{ok:false,error:'Audio unavailable'}); }
   });
-  window.WizBackgroundAudio = {init:(fn, grant) => {registry=fn;admit=grant;}, frameOk, canAttach:win => !!port() && frameOk(win), lastState:null};
+  // Explicit window/desk close belongs to the shell, not the departing iframe.
+  // pagehide/detach also happen on reload: those must keep background playback.
+  function closeApp(appId) {
+    const pt = port();
+    if (appId !== 'wizard-music' || !pt) return Promise.resolve();
+    listen(pt);
+    const send = (method, params = {}) => new Promise((resolve, reject) => {
+      const id = 'audio-' + (++seq);
+      const timer = setTimeout(() => { pending.delete(id); reject(new Error('Music close timed out')); }, 20000);
+      pending.set(id, {timer, complete:m => m.ok ? resolve(m.result || {}) : reject(new Error(m.error || 'Music close failed'))});
+      try { pt.postMessage(JSON.stringify({...params,id,v:1,appId:'wizard-music',method})); }
+      catch (error) { pending.delete(id); clearTimeout(timer); reject(error); }
+    });
+    // Keep queue and position, but clear play intention so reopening stays paused.
+    const sessionId = window.WizBackgroundAudio.lastState?.sessionId;
+    return sessionId ? send('pause', {sessionId}) : send('state').then(state => send('pause', {sessionId:state.sessionId}));
+  }
+  window.WizBackgroundAudio = {init:(fn, grant) => {registry=fn;admit=grant;}, frameOk, canAttach:win => !!port() && frameOk(win), closeApp, lastState:null};
 })();

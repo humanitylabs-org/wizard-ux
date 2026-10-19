@@ -13,10 +13,13 @@ android {
 
     defaultConfig {
         applicationId 'ai.wizards.os'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         minSdk 28
         targetSdk 35
-        versionCode 44
-        versionName '0.9.20'
+        versionCode 56
+        versionName '0.9.32'
+        // Default photo server sits beside ORIGIN/HOME_URL (same tailnet); -PphotosServer=... overrides it.
+        buildConfigField 'String', 'PHOTOS_SERVER', '"' + (project.findProperty('photosServer') ?: 'https://thales.tailc0f369.ts.net:2283') + '"'
         buildConfigField 'String', 'HOME_URL', '"https://wizard.tailc0f369.ts.net/wizard-os-home/"'
         buildConfigField 'String', 'ORIGIN', '"https://wizard.tailc0f369.ts.net"'
         // The one certificate (SHA-256) an in-app update must be signed with: the Wizard OS release key.
@@ -118,9 +121,14 @@ androidComponents {
 dependencies {
     // window.wizardMizelPort: WebViewCompat.addWebMessageListener (origin-scoped page ⇄ native port).
     implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.work:work-runtime:2.10.1'
+    implementation 'androidx.browser:browser:1.8.0'
     implementation 'androidx.media3:media3-exoplayer:1.7.1'
     implementation 'androidx.media3:media3-session:1.7.1'
     testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.3.0'
     // org.json is an Android stub on the JVM; the real one lets the Mizel journal/protocol tests run off-device.
     testImplementation 'org.json:json:20240303'
 }

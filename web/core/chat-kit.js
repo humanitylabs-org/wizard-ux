@@ -225,11 +225,23 @@
     s = s.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, (_, _t, code) => put(`<code>${esc(code.replace(/^ ([\s\S]*) $/, '$1'))}</code>`));
     if (!noLinks) {
       s = s.replace(/!\[([^\]\n]*)\]\(\s*<?([^\s)>]+)>?(?:\s+"[^"]*")?\s*\)/g, (_, alt, url) => put(PRIVATE_MEDIA.test(url) ? linkHtml(url, esc(alt ? `[Image: ${alt}]` : '[Image]')) : `<span class="md-img">${esc(alt ? `[Image: ${alt}]` : '[Image]')}</span>`));
-      s = s.replace(/\[((?:[^\[\]\n]|\[[^\]\n]*\])+)\]\(\s*<?([^\s)>]+?(?:\([^\s)]*\)[^\s)>]*)?)>?(?:\s+"[^"]*")?\s*\)/g, (_, text, url) => put(linkHtml(url, inline(text, true))));
+      s = s.replace(/\[((?:[^\[\]\n]|\[[^\]\n]*\])+)\]\(\s*<?([^\s)>]+?(?:\([^\s)]*\)[^\s)>]*)?)>?(?:\s+"[^"]*")?\s*\)/g, (_, text, url) => {
+        // Link text can hold this pass's placeholders (e.g. a linked image `[![alt](img)](url)`). Park them under a
+        // marker the nested pass never restores, or its own empty table turns them into the word "undefined".
+        const inner = inline(text.replace(/\u0001(\d+)\u0002/g, '\u0003$1\u0004'), true).replace(/\u0003(\d+)\u0004/g, '\u0001$1\u0002');
+        return put(linkHtml(url, inner));
+      });
       s = s.replace(/<((?:https?:\/\/|mailto:)[^\s>]+)>/g, (_, u) => put(linkHtml(u, esc(u))));
       // Every bare URL becomes a link, whatever wraps it (**bold**, _italic_, ~~del~~, [brackets], "Link:url").
-      // Emphasis markers and closing punctuation at the end stay outside the link.
-      s = s.replace(/(^|[^A-Za-z0-9/.@=&%+-])(https?:\/\/[^\s<>"'*\u0001\u0002]*[^\s<>"'*_~.,;:!?)\]’”\u0001\u0002])/g, (_, pre, u) => pre + put(linkHtml(u, esc(u))));
+      // Emphasis markers and closing punctuation at the end stay outside the link. A trailing underscore is
+      // part of the URL (tokens often end in one) unless an underscore opened emphasis right before the URL.
+      s = s.replace(/(^|[^A-Za-z0-9/.@=&%+-])(https?:\/\/[^\s<>"'*\u0001\u0002]*[^\s<>"'*~.,;:!?)\]’”\u0001\u0002])/g, (_, pre, u, at, all) => {
+        // Strip only as many trailing underscores as opened emphasis immediately before the URL.
+        const open = (all.slice(0, at + pre.length).match(/_+$/) || [''])[0].length;
+        const close = Math.min(open, (u.match(/_+$/) || [''])[0].length);
+        const tail = u.slice(u.length - close); u = u.slice(0, u.length - close);
+        return pre + put(linkHtml(u, esc(u))) + tail;
+      });
       s = s.replace(SESSION_REF, (m, id) => put(sessionHtml(id, esc(m))));
     }
     let h = esc(s)
@@ -472,10 +484,12 @@
     const status = typeof value === 'object' && value ? value.status || value.outcome : value;
     return ['shared', 'copied', 'cancelled', 'unsupported'].includes(status) ? status : 'unsupported';
   };
-  async function nativeShare(invoke) {
+  async function nativeShare(invoke, { voidAs = 'unsupported' } = {}) {
     let timer;
     try {
       const result = invoke(); // immediate, while transient user activation is live
+      // A void return means an older bridge handed the intent to Android without a receipt (0.9.22 shareFile).
+      if (result === undefined && voidAs !== 'unsupported') return voidAs;
       return shareOutcome(await Promise.race([Promise.resolve(result), new Promise(resolve => { timer = setTimeout(() => resolve('unsupported'), 15000); })]));
     } catch (e) { return e?.name === 'AbortError' ? 'cancelled' : 'unsupported'; }
     finally { clearTimeout(timer); }
@@ -516,7 +530,9 @@
     if (extFor(type) && !/\.[a-z0-9]{2,5}$/i.test(name)) name += extFor(type); // a search title has no extension
     return new File([blob], name, { type });
   }
-  async function shareFile(item, { title } = {}) {
+  // Apps keep the receipt contract ('opened' is not a receipt); the media viewer uses shareFileOpen directly.
+  async function shareFile(item, opts) { const r = await shareFileOpen(item, opts); return r === 'opened' ? 'unsupported' : r; }
+  async function shareFileOpen(item, { title } = {}) {
     let file;
     const isBlob = value => value && ['[object Blob]', '[object File]'].includes(Object.prototype.toString.call(value));
     try { file = isBlob(item) ? item : await asFile(item); } catch (_) { return 'unsupported'; }
@@ -524,7 +540,7 @@
     const n = native(), name = file.name || 'wizard-file';
     if (n && typeof n.shareFile === 'function') {
       let bytes; try { bytes = await b64(file); } catch (_) { return 'unsupported'; }
-      return nativeShare(() => n.shareFile(bytes, name, file.type));
+      return nativeShare(() => n.shareFile(bytes, name, file.type), { voidAs: 'opened' });
     }
     try {
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
@@ -550,7 +566,7 @@
     if (appDownloads() && !(n && typeof n.saveFile === 'function') && !/^(blob|data):/i.test(href)) { download(href, item.name); return 'downloading'; }
     const file = await asFile(item);
     if (n && typeof n.saveFile === 'function') { n.saveFile(await b64(file), file.name, file.type); return 'saved'; }
-    if (n) { const r = await shareFile(item); return r === 'unsupported' ? 'unsupported' : r; } // old app: the share sheet saves
+    if (n) { const r = await shareFileOpen(item); return r === 'opened' ? 'shared' : r; } // old app: the share sheet saves
     const u = URL.createObjectURL(file); const a = document.createElement('a'); a.href = u; a.download = file.name; a.rel = 'noopener';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 60000);
     return 'saved';
@@ -645,20 +661,26 @@
     try { navigator.vibrate?.(12); } catch (e) {}
     return true;
   }
-  const save = it => saveFile(it).then(r => r === 'downloading' ? null : K.notify(r === 'unsupported' ? '!' : '⤓', r === 'saved' ? 'Saved' : r === 'shared' ? 'Choose where to save' : r === 'cancelled' ? 'Not saved' : 'Saving isn’t available here')).catch(() => K.notify('!', 'Couldn’t save this file'));
-  const share = async it => {
+  // Big files take a moment to fetch: answer the tap at once, and ignore repeat taps while one is in flight.
+  const busy = new Set();
+  const heavy = it => it.kind === 'video' || it.kind === 'audio' || (it.bytes || 0) > 2 * 1048576;
+  const once = (key, it, fn) => { if (busy.has(key + it.url)) return; busy.add(key + it.url); return Promise.resolve(fn()).finally(() => busy.delete(key + it.url)); };
+  const save = it => once('save', it, () => saveFile(it).then(r => r === 'downloading' ? K.notify('⤓', 'Saving to Downloads') : K.notify(r === 'unsupported' ? '!' : '⤓', r === 'saved' ? 'Saved' : r === 'shared' ? 'Choose where to save' : r === 'cancelled' ? 'Not saved' : 'Saving isn’t available here')).catch(() => K.notify('!', 'Couldn’t save this file')));
+  const share = it => once('share', it, async () => {
     try {
-      let result = await shareFile(it);
+      if (heavy(it) && native()) K.notify('↗', 'Preparing to share…');
+      let result = await shareFileOpen(it);
       // An old native bridge may already have opened the file chooser without an
       // outcome receipt. Never open a second text chooser or claim Shared then.
       if (result === 'unsupported' && typeof native()?.shareFile !== 'function') {
         result = await sharePayload({ url: new URL(it.url, location.href).href, title: it.name });
       }
       if (result === 'shared') K.notify('↗', 'Shared');
+      else if (result === 'opened') K.notify('↗', 'Share sheet opened');
       else if (result === 'copied') K.notify('⧉', 'Link copied');
       else if (result === 'unsupported') K.notify('!', 'Sharing unavailable or not confirmed');
     } catch (_) { K.notify('!', 'Couldn’t share this file'); }
-  };
+  });
   function reset() { V.s = 1; V.x = 0; V.y = 0; paint(); }
   function paint() {
     const img = V.el?.querySelector('.mv-stage img'); if (!img) return;

@@ -57,7 +57,8 @@ public class RecorderService extends Service {
     private static volatile String source = "";
     private static volatile String borrowEvent;
     private static volatile Listener listener;
-    private static RecorderService live;
+    private static volatile RecorderService live;
+    public static boolean serviceAlive() { return live != null; }
 
     public interface Listener { void onRecorderEvent(String type, String id); }
 
@@ -233,21 +234,24 @@ public class RecorderService extends Service {
             startCanned(qa, out);
         } else {
             try {
-                MediaRecorder r = Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(this) : legacyRecorder();
-                r.setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION);
-                r.setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS);
-                r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-                r.setAudioChannels(1);
-                r.setAudioSamplingRate(44100);
-                r.setAudioEncodingBitRate(64000);
-                r.setOutputFile(out.getAbsolutePath());
-                r.prepare();
-                r.start();
+                // The phone's mic, never a Bluetooth speaker's: MicRoute refuses a take Android puts elsewhere.
+                MediaRecorder r = ai.wizards.os.audio.MicRoute.start(this,
+                        () -> Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(this) : legacyRecorder(),
+                        (m, src) -> {
+                            m.setAudioSource(src);
+                            m.setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS);
+                            m.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+                            m.setAudioChannels(1);
+                            m.setAudioSamplingRate(44100);
+                            m.setAudioEncodingBitRate(64000);
+                            m.setOutputFile(out.getAbsolutePath());
+                        });
                 rec = r;
                 source = "mic";
+                RecordingStore.get(this).set(id, "route", ai.wizards.os.audio.MicRoute.routed(r));
             } catch (Exception e) {
                 Log.w(TAG, "recorder failed: " + e);
-                RecordingStore.get(this).set(id, "error", String.valueOf(e.getMessage()));
+                RecordingStore.get(this).set(id, "error", ai.wizards.os.audio.MicRoute.why(e, String.valueOf(e.getMessage())));
                 finishTake("failed", "error");
                 RecordingStore.get(this).delete(id);
                 Listener l = listener;

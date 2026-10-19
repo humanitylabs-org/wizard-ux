@@ -10,6 +10,20 @@ import java.util.Set;
 public final class UpdatePolicy {
     private UpdatePolicy() {}
 
+    /** Recording identity, not merely a microphone permission/op. Take wins over all other holds. */
+    public enum Hold {
+        NONE(""), TAKE("take"), MUSIC("music"), MIC("mic");
+        public final String reason;
+        Hold(String reason) { this.reason = reason; }
+    }
+
+    /** A dead owner's leftover claim is not a take; do not release it here (could race a new claim). */
+    public static Hold hold(boolean take, boolean holderPresent, boolean ownerAlive, boolean music, boolean mic) {
+        if (take || (holderPresent && ownerAlive)) return Hold.TAKE;
+        if (music) return Hold.MUSIC;
+        return mic ? Hold.MIC : Hold.NONE;
+    }
+
     public static final class Release {
         public final int versionCode;
         public final String versionName, url, sha256, notes, app, signer;
@@ -110,10 +124,16 @@ public final class UpdatePolicy {
      */
     public static Step next(boolean newer, boolean verified, boolean unmetered, boolean front, boolean recording,
                             boolean silentOk, boolean tapped) {
+        return next(newer, verified, unmetered, front, recording ? Hold.TAKE : Hold.NONE, silentOk, tapped);
+    }
+
+    public static Step next(boolean newer, boolean verified, boolean unmetered, boolean front,
+                            Hold hold, boolean silentOk, boolean tapped) {
         if (!newer) return Step.NONE;
         if (!verified) return (unmetered || tapped) ? Step.DOWNLOAD : Step.OFFER;
-        if (recording) return Step.DEFER;
+        if (hold == Hold.TAKE) return Step.DEFER; // a tap never kills a genuine take
         if (tapped) return Step.INSTALL;               // permission is asked for in place, with James looking
+        if (hold != Hold.NONE) return Step.DEFER; // unattended installs wait for music / mic too
         if (front) return Step.BANNER;                 // never restart the app under James's fingers
         if (!silentOk) return Step.WAIT_PERMISSION;    // a background commit would only raise Android's dialog later
         return Step.INSTALL;

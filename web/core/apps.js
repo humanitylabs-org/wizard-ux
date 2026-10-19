@@ -38,6 +38,8 @@
     const hasHistory = !!(window.WIZ_DATA && Array.isArray(window.WIZ_DATA.threads) && window.WIZ_DATA.threads.length);
     return list.filter(a => {
       if (a.kind === 'view' && a.view !== 'inbox' && !hasHistory) return false;
+      // Phone: no Inbox tile; notifications are the Chats list ("open inbox" still opens Chats).
+      if (shell !== 'desktop' && a.view === 'inbox') return false;
       if (a.id === 'side-button' && !nativeSide) return false;
       if (a.id === 'usuals' && !(window.WizardOSNative && typeof window.WizardOSNative.usuals === 'function')) return false;
       if (shell === 'desktop') return a.kind !== 'native' && !(a.kind === 'view' && a.view !== 'inbox');
@@ -65,7 +67,7 @@
   const toTile = (a, trusted = false) => ({
     id: String(a.id), kind: 'wizard', name: String(a.name || a.id), icon: a.icon || String(a.name || a.id).trim().charAt(0).toUpperCase(),
     g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id), url: a.url || '', desc: a.desc || '',
-    ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '',
+    ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '', system: a.system === true,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
@@ -130,6 +132,11 @@
       for (const a of APPS) {
         const n = norm(a.name);
         let s = n === q ? 100 : n.startsWith(q) ? 80 : n.includes(q) ? 60 : q.includes(n) && n.length > 3 ? 50 : 0;
+        // One spoken word that shares a long stem with a name word ("meditation" → Meditate). Shorter names win ties.
+        if (!s && !q.includes(' ')) for (const w of n.split(' ')) {
+          let k = 0; while (k < w.length && k < q.length && w[k] === q[k]) k++;
+          if (k >= 6 && k >= 0.75 * Math.min(w.length, q.length)) s = Math.max(s, 55 - n.length / 100);
+        }
         if (s > bs) { bs = s; best = a; }
       }
       return bs >= 50 ? best : null;
@@ -161,15 +168,21 @@
     }
     return { APPS, APP, findApp, appByName, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
   }
-  /* "image search capybaras", "pictures of eames chairs", "search why is the sky blue", "quick search …".
+  /* "ask AI is milk bad for gout", "image search capybaras", "find images of eames chairs", "search why is the sky blue", "quick search …".
    * Returns { query, tab: 'images' | 'all' } or null. Thread/app searches ("search my chats for …") stay with the shell. */
   function parseQuickSearch(text) {
     let s = window.WizConfig.stripAddress(text).replace(/[.!?,\s]+$/, '').replace(/,?\s+please$/i, '');
+    // Speech-to-text punctuates the spell itself ("Search: is milk bad for gout?", "Ask AI, what's …"): a colon,
+    // comma or dash inside the first three words is just a pause.
+    s = s.replace(/^((?:\S+\s+){0,2}?\S+?)\s*[:,;\u2013\u2014-]\s+/, '$1 ');
+    // "ask AI …" (James, 18 Oct 2026): the unmistakable spell for a quick question to the Search app, anywhere.
+    let m = s.match(/^ask\s+(?:the\s+|an?\s+)?(?:a\.?\s?i\.?|ai)(?:\s+(?:about|for))?[\s:,.!?]+(.+)$/i);
+    if (m) return { query: m[1].trim(), tab: 'all', strong: true };
     const IMG = '(?:image|images|picture|pictures|photo|photos|pic|pics)';
-    let m = s.match(new RegExp(`^${IMG}\\s*search(?:\\s+(?:for|of))?\\s+(.+)$`, 'i'))
+    m = s.match(new RegExp(`^${IMG}\\s*search(?:\\s+(?:for|of))?\\s+(.+)$`, 'i'))
       || s.match(new RegExp(`^search\\s+(?:for\\s+)?${IMG}\\s+(?:of|for)\\s+(.+)$`, 'i'))
       || s.match(new RegExp(`^search\\s+${IMG}\\s+(.+)$`, 'i'))
-      || s.match(new RegExp(`^(?:show me|find|find me|get me|pull up)\\s+(?:some\\s+)?${IMG}\\s+of\\s+(.+)$`, 'i'))
+      || s.match(new RegExp(`^(?:show me|find|find me|get me|pull up|search for)\\s+(?:some\\s+)?${IMG}\\s+(?:of\\s+|for\\s+)?(.+)$`, 'i'))
       || s.match(new RegExp(`^${IMG}\\s+of\\s+(.+)$`, 'i'));
     if (m) return { query: m[1].trim(), tab: 'images', strong: true };
     if (/^search\s+(?:in\s+)?(?:my|the)\s+(?:chats?|threads?|inbox|apps?|files|notes|messages)\b/i.test(s)) return null;
@@ -181,5 +194,7 @@
     if (m) return { query: m[1].trim(), tab: 'all', strong: false };
     return null;
   }
+  // Maintenance stays addressable by deep link/voice, but is not an ordinary Apps entry.
+  window.WizCore.isMaintenanceApp = a => a?.id === 'wizard-supervisor';
   window.WizCore.apps = registry;
 })();

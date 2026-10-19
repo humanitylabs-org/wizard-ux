@@ -11,13 +11,13 @@ import ai.wizards.os.BuildConfig;
 
 /** Small process-wide facts the native features share (kept out of MainActivity so branches merge cleanly). */
 public final class AppState {
-    private static volatile boolean front;
+    private static final java.util.Set<Object> visible = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
 
     private AppState() {}
 
     /** Wizard OS is on screen (MainActivity started). Reply notifications only fire while it is not. */
-    public static boolean front() { return front; }
-    public static void setFront(boolean on) { front = on; }
+    public static synchronized boolean front() { return !visible.isEmpty(); }
+    public static synchronized void setFront(Object owner, boolean on) { if (on) visible.add(owner); else visible.remove(owner); }
 
     /**
      * Where native HTTP goes. Release: the private Wizard origin. Debug (QA) builds only: files/qa_home.txt may
@@ -26,7 +26,7 @@ public final class AppState {
      */
     public static String origin(Context c) {
         String qa = qaOrigin(c);
-        return qa != null ? qa : legacyFallback ? LEGACY_ORIGIN : BuildConfig.ORIGIN;
+        return qa != null ? qa : BuildConfig.ORIGIN;
     }
 
     /** This Wizard's own address (or the QA fake), ignoring any fallback: where carried state must land. */
@@ -43,24 +43,9 @@ public final class AppState {
     /** The retired name. The same Wizard still answers on it while the move settles. */
     public static final String LEGACY_ORIGIN = "https://private.wizard001.com";
 
-    /**
-     * Safety net for the move to the tailnet name: set for this process when the tailnet name cannot be reached
-     * (e.g. the phone's Private DNS bypasses MagicDNS) but the old name might be. The shell and the update feed
-     * then use the old name until the app restarts, so the app keeps working and can still receive a fix.
-     */
-    public static volatile boolean legacyFallback;
-
-    /** Native HTTP to {@code origin}, on the old name while the safety net is on (QA fakes are never rewritten). */
+    /** Native HTTP stays on the configured origin, including when its connection fails (no retired-name fallback). */
     public static String live(String origin) {
-        return legacyFallback && BuildConfig.ORIGIN.equals(origin) ? LEGACY_ORIGIN : origin;
-    }
-
-    /** Switch this process to the old name once. False for QA fakes or when it is already in use. */
-    public static boolean useLegacy(Context c) {
-        if (!BuildConfig.ORIGIN.equals("https://wizard.tailc0f369.ts.net") || qaOrigin(c) != null || legacyFallback) return false;
-        legacyFallback = true;
-        android.util.Log.w("WizardOS", "tailnet name unreachable; using " + LEGACY_ORIGIN + " for this run");
-        return true;
+        return origin;
     }
 
     static String qaOrigin(Context c) {

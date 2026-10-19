@@ -72,6 +72,7 @@ public class MeetingRecorderService extends Service {
     private static volatile MeetingBorrow borrow;
 
     public static Live live() { return live; }
+    public static boolean serviceAlive() { return instance != null; }
 
     /** Bridge thread waits for actual pause/flush/release, never just a posted intent. */
     public static String beginBorrow(String eventId, String meetingId) {
@@ -132,8 +133,60 @@ public class MeetingRecorderService extends Service {
         return o;
     }
     private boolean saveBorrow(MeetingBorrow b, String status) {
-        return getSharedPreferences("meeting-handoffs-v1", MODE_PRIVATE).edit()
-            .putString(b.eventId, borrowJson(b, status).toString()).commit();
+        return writeReceipt(this, b.eventId, borrowJson(b, status));
+    }
+
+    /* Loan receipts ("meeting-handoffs-v1", one JSON string per interruption). The loan's own fields come from
+     * borrowJson; a native borrower adds what the meeting transcript shows (source, kind, words, thread) with
+     * annotate(). Every write bumps "rev"; native rows are posted to the meeting by MeetingEventSync until the
+     * server confirms that revision ("acked"). One store, no parallel journal. */
+    public static final String RECEIPTS = "meeting-handoffs-v1";
+    private static final Object RECEIPT_LOCK = new Object();
+
+    /** Merge {@code patch} into the stored receipt (JSONObject.NULL deletes a key) and bump its revision. */
+    public static boolean writeReceipt(Context c, String eventId, org.json.JSONObject patch) {
+        if (c == null || eventId == null || eventId.isEmpty()) return false;
+        boolean ok, sync;
+        synchronized (RECEIPT_LOCK) {
+            android.content.SharedPreferences p = c.getSharedPreferences(RECEIPTS, MODE_PRIVATE);
+            org.json.JSONObject cur = readReceipt(p, eventId);
+            org.json.JSONObject next = MeetingEventProjection.merge(cur, patch);
+            try { next.put("rev", cur.optLong("rev", 0) + 1); } catch (org.json.JSONException ignored) { }
+            ok = p.edit().putString(eventId, next.toString()).commit();
+            sync = ok && next.has("source");
+        }
+        if (sync) MeetingEventSync.kick(c);
+        return ok;
+    }
+
+    /** A native borrower's notes for the transcript marker (words typed, thread, failure, ...). */
+    public static boolean annotate(Context c, String eventId, org.json.JSONObject patch) {
+        return writeReceipt(c, eventId, patch);
+    }
+
+    /** The server has this revision: remember it without bumping the revision. */
+    static void markAcked(Context c, String eventId, long rev) {
+        synchronized (RECEIPT_LOCK) {
+            android.content.SharedPreferences p = c.getSharedPreferences(RECEIPTS, MODE_PRIVATE);
+            org.json.JSONObject cur = readReceipt(p, eventId);
+            if (cur.optLong("rev", 0) != rev) return; // changed meanwhile: the next pass posts the newer one
+            try { cur.put("acked", rev); } catch (org.json.JSONException ignored) { }
+            p.edit().putString(eventId, cur.toString()).commit();
+        }
+    }
+
+    static java.util.List<org.json.JSONObject> receipts(Context c) {
+        java.util.List<org.json.JSONObject> out = new java.util.ArrayList<>();
+        synchronized (RECEIPT_LOCK) {
+            android.content.SharedPreferences p = c.getSharedPreferences(RECEIPTS, MODE_PRIVATE);
+            for (String k : p.getAll().keySet()) out.add(readReceipt(p, k));
+        }
+        return out;
+    }
+
+    private static org.json.JSONObject readReceipt(android.content.SharedPreferences p, String eventId) {
+        try { Object v = p.getAll().get(eventId); return v instanceof String ? new org.json.JSONObject((String) v) : new org.json.JSONObject(); }
+        catch (org.json.JSONException e) { return new org.json.JSONObject(); }
     }
     private static String onMain(java.util.concurrent.Callable<String> work) {
         if (Looper.myLooper() == Looper.getMainLooper()) { try { return work.call(); } catch (Exception e) { return "null"; } }
@@ -498,10 +551,10 @@ public class MeetingRecorderService extends Service {
                 try {
                     AudioRecord r = new AudioRecord(src, Wav.RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size);
                     if (r.getState() != AudioRecord.STATE_INITIALIZED) { r.release(); continue; }
-                    r.startRecording();
-                    if (r.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) { r.release(); continue; }
+                    // The phone's mic, never a Bluetooth speaker's: a source Android routes elsewhere is dropped.
+                    if (!ai.wizards.os.audio.MicRoute.startOnBuiltIn(MeetingRecorderService.this, r)) continue;
                     rec = r;
-                    Log.i(TAG, "AudioRecord open source=" + src + " buffer=" + size);
+                    Log.i(TAG, "AudioRecord open source=" + src + " buffer=" + size + " via " + ai.wizards.os.audio.MicRoute.routed(r));
                     return true;
                 } catch (SecurityException | IllegalStateException | IllegalArgumentException e) {
                     Log.w(TAG, "AudioRecord source " + src + " failed", e);

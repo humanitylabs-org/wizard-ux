@@ -12,7 +12,11 @@ import { withPrivateCatalog } from './store-private-catalog.mjs';
 export const PREFIX = '/wizard-os-home/store-data/';
 const APPS = process.env.WIZARD_STORE_APPS_JSON || join(homedir(), '.wizard-os/apps.json');
 const ENV = process.env.WIZARD_STORE_RUNTIPI_ENV || join(homedir(), 'runtipi/.env');
-const SERVICE = 'http://127.0.0.1:8923';
+// The Agent Service this box runs. Alongside installs use another loopback port (e.g. 8798); only loopback http is accepted.
+export function serviceOrigin(v = process.env.WIZARD_STORE_SERVICE_ORIGIN) {
+  return typeof v === 'string' && /^http:\/\/(127\.0\.0\.1|localhost):\d{1,5}$/.test(v) ? v : 'http://127.0.0.1:8923';
+}
+const SERVICE = serviceOrigin();
 const LOGO_HOST = /^https:\/\/raw\.githubusercontent\.com\/[\w.-]+\/[\w.-]+\/[0-9a-f]{7,40}\/[\w./-]{1,120}\.(png|jpe?g|webp|gif|svg)$/i;
 // Every emitted value is rebuilt from a validated scalar: an allowed key holding an object never leaks through.
 const str = (v, max, re) => typeof v === 'string' && v.length <= max && (!re || re.test(v)) ? v : undefined;
@@ -52,7 +56,7 @@ export function shellMetadata(doc) {
     status:str(a.status,24,/^[a-z_-]+$/), system:a.system === true,
   }));
 }
-export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview } = {}) {
+export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview, service = SERVICE } = {}) {
   // Installed list straight from Runtipi, reduced to validated scalars (used by the Store and the System overview).
   const installedList = async () => {
     const auth=readRuntipi();
@@ -60,7 +64,7 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCa
     if (!r.ok) throw new Error('app_data_unavailable');
     return installedMetadata(await r.json());
   };
-  const serviceJson = async (p) => { const r=await fetchImpl(SERVICE+p,{redirect:'error',signal:AbortSignal.timeout(8000)}); if (!r.ok) throw new Error('service'); return JSON.parse((await readCapped(r,2*1024*1024)).toString('utf8')); };
+  const serviceJson = async (p) => { const r=await fetchImpl(service+p,{redirect:'error',signal:AbortSignal.timeout(8000)}); if (!r.ok) throw new Error('service'); return JSON.parse((await readCapped(r,2*1024*1024)).toString('utf8')); };
   const getOverview = overview || (async () => buildOverview(await gatherSources({ fetchJson: serviceJson, readInstalled: installedList })));
   let ovCache = null;
   const logos = new Map();

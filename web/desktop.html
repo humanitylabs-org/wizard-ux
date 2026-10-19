@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <script src="core/shell.js"></script>
   <script src="core/scenery.js"></script>
+  <script src="core/skin-frame.js"></script>
   <script src="core/skins.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
@@ -30,27 +31,28 @@
   <link rel="stylesheet" href="core/sigils.css">
   <link rel="stylesheet" href="core/app-route.css">
   <link rel="stylesheet" href="core/skins.css">
+  <link rel="stylesheet" href="core/skin-frame.css">
 </head>
 <body>
   <header id="bar" class="bar">
     <div class="bar-l">
-      <button id="logo" class="logo" title="Home (⌥1 / Alt+1)" aria-label="Home" aria-keyshortcuts="Alt+1" aria-current="false"><span class="desktop-home-icon" style="--c:#C9BEFF"><i class="sgi sg-home" aria-hidden="true"></i></span></button>
+      <button id="logo" class="logo" title="Home (⌥1)" aria-label="Home" aria-keyshortcuts="Alt+1" aria-current="false"><span class="desktop-home-icon" style="--c:#C9BEFF"><i class="sgi sg-home" aria-hidden="true"></i></span></button>
       <nav id="wsList" class="ws-list" aria-label="Workspaces"></nav>
     </div>
     <div class="bar-c">
       <button id="clock" class="clock" title="Home"></button>
-      <div id="voicePill" class="voice-pill" hidden>
-        <i class="rec-dot"></i><span id="voiceTime">0:00</span><span class="lvl"><b id="voiceLvl"></b></span>
-        <span id="voiceText">Listening</span><kbd id="voiceKey">Right ⌘</kbd><small id="voiceAct">send</small><button id="voiceCancel" type="button">Cancel</button><div class="voice-extras"><button id="voicePause" type="button">Pause</button><button id="voiceSend" type="button">Finish</button><button id="voiceAttach" type="button">Attach</button><button id="voiceScreenshot" type="button">Screenshot</button></div><input id="voiceFileInput" type="file" multiple hidden><div id="voiceFiles"></div>
+      <div id="voicePill" class="voice-pill" role="status" aria-label="Recording" hidden>
+        <i class="rec-dot"></i><span id="voiceTime">0:00</span><span class="lvl"><b id="voiceLvl"></b></span><span id="voiceText">Listening</span><button id="voiceCancel" type="button" aria-label="Cancel recording" title="Cancel">✕</button>
+        <div class="voice-tray"><span class="voice-hint"><kbd id="voiceKey">Right ⌘</kbd><small id="voiceAct">send</small></span><div class="voice-extras"><button id="voicePause" type="button">Pause</button><button id="voiceSend" type="button">Finish</button><button id="voiceAttach" type="button">Attach</button><button id="voiceScreenshot" type="button">Screenshot</button></div><div id="voiceFiles"></div></div><input id="voiceFileInput" type="file" multiple hidden>
       </div>
     </div>
     <div class="bar-r">
-      <button id="searchBtn" class="mic" title="Search and launch (⌘K) · Open an app (⌘O)" aria-label="Search and launch"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button>
-      <button id="micBtn" class="mic" title="Talk to Wizard (tap Right ⌘)" aria-label="Talk to Wizard"><svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg></button>
-      <button id="commandBtn" class="keys-btn" title="Speak a local command" aria-label="Speak a local command">⚡</button><button id="dictateBtn" class="keys-btn" title="Dictate into the focused field" aria-label="Dictate into the focused field">✎</button>
-      <button id="status" class="status" title="Inbox (⌥I)" aria-label="Inbox"></button>
-      <button id="settingsBtn" class="keys-btn" aria-label="Settings" title="Settings (⌘, / Ctrl+,)">⚙</button>
-      <button id="keysBtn" class="keys-btn" title="Keyboard shortcuts (⌥/)">⌥/</button>
+      <button id="searchBtn" class="mic" title="Search apps, chats and commands (⌥Space)" aria-label="Search and launch"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button>
+      <button id="micBtn" class="mic" title="Talk about what's on screen (Right ⌘)" aria-label="Talk to Wizard"><svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg></button>
+      <button id="commandBtn" class="mic" title="Speak a command like “open calendar”; stays on this box" aria-label="Speak a local command"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></button><button id="dictateBtn" class="mic" title="Dictate text into the field you're typing in" aria-label="Dictate into the focused field"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4ZM13.5 6.5l4 4"/></svg></button>
+      <button id="status" class="status" title="Ready and working chats · opens the Inbox (⌥I)" aria-label="Inbox"></button>
+      <button id="settingsBtn" class="mic" aria-label="Settings" title="Settings (⌥,)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button>
+      <button id="keysBtn" class="keys-btn" title="All keyboard shortcuts (⌥/)">⌥/</button>
     </div>
   </header>
 
@@ -67,7 +69,7 @@
         <input id="palInput" placeholder="Open an app, find a thread, or ask Wizard…" data-agent-placeholder spellcheck="false" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="palList" aria-autocomplete="list" aria-label="Search apps, threads and commands"></label>
       <div id="palList" class="pal-list" role="listbox"></div>
       <div class="pal-foot" data-for="all"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>⇧↵</kbd> new window</span><span><kbd>⌘↵</kbd> ask <b data-agent-name>Wizard</b></span><span><kbd>Esc</kbd> close</span></div>
-      <div class="pal-foot" data-for="apps"><span><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>⇧↵</kbd> new window</span><span><kbd>⌘K</kbd> search everything</span><span><kbd>Esc</kbd> close</span></div>
+      <div class="pal-foot" data-for="apps"><span><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>⇧↵</kbd> new window</span><span><kbd>⌥Space</kbd> search everything</span><span><kbd>Esc</kbd> close</span></div>
     </div>
   </div>
 
@@ -90,6 +92,7 @@
   <script src="core/app-capture.js"></script>
   <script src="core/app-reading-position.js"></script>
   <script src="core/app-services.js"></script>
+  <script src="core/app-versions.js"></script>
   <script src="core/agents.js"></script>
   <script src="core/app-route.js"></script>
   <script src="core/web-update.js"></script>
@@ -105,12 +108,14 @@
   <script src="core/chat-power.js"></script>
   <script src="core/chat-search.js"></script>
   <script src="core/uploads.js"></script>
+  <script src="core/notif-bell.js"></script>
   <script src="core/chats.js"></script>
   <script src="core/deeplink.js"></script>
   <script src="core/video-desks.js"></script>
   <script src="core/voice-status.js"></script>
   <script src="core/settings.js"></script>
   <script src="core/cancelled.js"></script>
+  <script src="core/mic.js"></script>
   <script src="core/screen-text.js"></script>
   <script src="core/links.js"></script>
   <script src="core/voice.js"></script>

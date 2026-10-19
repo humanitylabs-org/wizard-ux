@@ -2,12 +2,15 @@
 <html lang="en" data-shell="phone">
 <head>
   <meta charset="utf-8">
+  <script src="core/home-screen-policy.js"></script>
+  <link rel="stylesheet" href="core/home-screen-apps.css">
   <script src="core/carry-in.js"></script>
   <script src="core/shell.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#05030c">
   <script src="core/scenery.js"></script>
+  <script src="core/skin-frame.js"></script>
   <script src="core/skins.js"></script>
   <meta name="mobile-web-app-capable" content="yes">
   <title>Wizard OS</title>
@@ -38,6 +41,7 @@
   <link rel="stylesheet" href="core/desks.css">
   <link rel="stylesheet" href="core/tour.css">
   <link rel="stylesheet" href="core/skins.css">
+  <link rel="stylesheet" href="core/skin-frame.css">
 </head>
 <body>
   <div id="device" class="device">
@@ -82,7 +86,7 @@
         <div class="orb-ring"></div>
         <div class="orb-shock"></div>
         <div id="moons" class="moons"></div>
-        <canvas id="orb" class="orb" width="220" height="220" aria-label="Wizard orb. Tap to talk, hold for a command, swipe up for apps, down for inbox, sideways for desks." role="button" tabindex="0"></canvas>
+        <canvas id="orb" class="orb" width="220" height="220" aria-label="Wizard orb. Tap to talk, hold for a command, swipe up for apps, down to hide the bars, sideways for desks." role="button" tabindex="0"></canvas>
         <img id="orbFallback" class="orb-fallback" src="robert-thread-orb.png" alt="" hidden>
         <span id="timer" class="timer">0:00</span>
         <span id="dictationStatus" class="dictation-status" role="status" aria-live="polite"></span>
@@ -131,6 +135,7 @@
   <script src="core/app-capture.js"></script>
   <script src="core/app-reading-position.js"></script>
   <script src="core/app-services.js"></script>
+  <script src="core/app-versions.js"></script>
   <script src="data.js"></script>
   <script src="summaries.js"></script>
   <script src="core/agents.js"></script>
@@ -148,12 +153,14 @@
   <script src="core/chat-power.js"></script>
   <script src="core/chat-search.js"></script>
   <script src="core/uploads.js"></script>
+  <script src="core/notif-bell.js"></script>
   <script src="core/chats.js"></script>
   <script src="core/deeplink.js"></script>
   <script src="core/video-desks.js"></script>
   <script src="core/voice-status.js"></script>
   <script src="core/settings.js"></script>
   <script src="core/cancelled.js"></script>
+  <script src="core/mic.js"></script>
   <script src="core/screen-text.js"></script>
   <script src="core/screen-capture.js"></script>
   <script src="core/sel-menu.js"></script>
@@ -171,6 +178,8 @@
   <script src="core/features.js"></script>
   <script src="core/capture-tools.js"></script>
   <script src="core/bound-view.js"></script>
+  <script src="core/home-screen-apps.js"></script>
+  <script src="core/single-app-session.js"></script>
   <script src="app.js"></script>
   <script src="core/web-update.js"></script>
   <script src="device.js"></script>

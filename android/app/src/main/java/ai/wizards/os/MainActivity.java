@@ -107,6 +107,18 @@ public class MainActivity extends Activity {
                 });
     }
 
+    /** Main-frame settings navigation only; no media or credential bridge. */
+    private void installPhotosPort(WebView target) {
+        if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER)) return;
+        java.util.Set<String> origins = java.util.Collections.singleton(ai.wizards.os.device.AppState.primaryOrigin(this));
+        androidx.webkit.WebViewCompat.addWebMessageListener(target, "wizardPhotosPort", origins,
+                (view, message, sourceOrigin, isMainFrame, reply) -> {
+                    if (!isMainFrame || web != target || sourceOrigin == null || !origins.contains(sourceOrigin.toString())) return;
+                    if (message != null && "open".equals(message.getData()))
+                        startActivity(new Intent(this, ai.wizards.os.photos.PhotosActivity.class));
+                });
+    }
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -140,14 +152,17 @@ public class MainActivity extends Activity {
         reach = new ReachScreen(this, root, this::retryReach, this::openTailscale);
         watchNetwork();
         if (state != null) web.restoreState(state);
-        if (web.getUrl() == null) go(startUrl(getIntent()));
+        if (this instanceof AppSessionActivity && web.getUrl() != null && !((AppSessionActivity)this).acceptsUrl(web.getUrl())) web.clearHistory();
+        if (web.getUrl() == null || (this instanceof AppSessionActivity && !((AppSessionActivity)this).acceptsUrl(web.getUrl()))) go(startUrl(getIntent()));
         installBack();
-        ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(cmd -> main.post(() -> {
+        if (!(this instanceof AppSessionActivity)) ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(cmd -> main.post(() -> {
             if (web != null) web.evaluateJavascript("(window.__wosVoiceCmd && window.__wosVoiceCmd(" + Handoff.quote(cmd) + "))", null);
         }));
-        if (ACTION_ACCESSIBILITY.equals(getIntent().getAction())) { getIntent().setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); }
-        queueHandoff(getIntent());
-        device.onIntent(getIntent());
+        if (!(this instanceof AppSessionActivity)) {
+            if (ACTION_ACCESSIBILITY.equals(getIntent().getAction())) { getIntent().setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); }
+            queueHandoff(getIntent());
+            device.onIntent(getIntent());
+        }
     }
 
     private void buildWebView() {
@@ -168,7 +183,15 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
         web.addJavascriptInterface(new Bridge(), "WizardOSNative");
+        if (this instanceof AppSessionActivity && androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            androidx.webkit.WebViewCompat.addDocumentStartJavaScript(web,
+                "if(window!==top){try{top.WizHomeScreenPolicy?.installPresentationStorage(window)}catch(_){}}",
+                java.util.Collections.singleton(HomeScreenShortcuts.origin(this)));
+        }
         installScreenPort(web);
+        if (!(this instanceof AppSessionActivity)) HomeScreenShortcuts.attach(this, web);
+        installPhotosPort(web);
+        ai.wizards.os.photos.BackupScheduler.schedule(this);
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         web.addJavascriptInterface(device, "WizardOSDevice");
         if (mizel != null) mizel.detach();
@@ -185,10 +208,21 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
+                if (req.isForMainFrame() && MainActivity.this instanceof AppSessionActivity && !((AppSessionActivity)MainActivity.this).acceptsUrl(u.toString())) {
+                    // Explicit public http(s) links retain the system-browser utility.
+                    // Same-box, shell, custom-scheme and gestureless hops are never forwarded.
+                    if (req.hasGesture() && ("https".equals(u.getScheme()) || "http".equals(u.getScheme()))
+                            && !HomeScreenShortcuts.origin(MainActivity.this).equals(u.getScheme() + "://" + u.getEncodedAuthority())
+                            && !Origin.isPrivate(u) && u.getPath() != null && !Origin.isShellPath(u.getPath())) {
+                        openOutside(u); return true;
+                    }
+                    // Never route a rejected task navigation through ACTION_VIEW: a same-box
+                    // shell/deep link can resolve back to MainActivity and mutate Wizard desks.
+                    Toast.makeText(MainActivity.this,"Use Android Home to switch apps",Toast.LENGTH_SHORT).show();
+                    return true;
+                }
                 // A main-frame hop to the retired private.wizard001.com lands on the same page under this Wizard's own name.
-                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying && !ai.wizards.os.device.AppState.legacyFallback) { go(Origin.toHome(u.toString())); return true; }
-                // Under the safety net the tailnet name is unreachable: its links open the same page on the old name.
-                if (req.isForMainFrame() && Origin.isHome(u) && ai.wizards.os.device.AppState.legacyFallback) { go(Origin.toLegacy(u.toString())); return true; }
+                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying) { go(Origin.toHome(u.toString())); return true; }
                 if (carrying && Carry.isPage(MainActivity.this, u.toString())) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
                 if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
                 if (!req.isForMainFrame()) return false; // hosted app frames stay inside their window
@@ -201,13 +235,7 @@ public class MainActivity extends Activity {
                 // A load replaced by a newer one (Try again over a hanging attempt) is not a failure of the new one.
                 if (req.isForMainFrame() && err.getErrorCode() == ERROR_UNKNOWN && String.valueOf(err.getDescription()).contains("ERR_ABORTED")) return;
                 if (req.isForMainFrame() && carrying) { endCarry("unreachable"); return; } // old name gone: just go home
-                // Safety net: the tailnet name unreachable from this phone → same page on the old name for this run.
-                // (A failing old-name page is not isHome, so this cannot loop; both failing ends on the offline page.)
-                if (req.isForMainFrame() && Origin.isHome(req.getUrl()) && ai.wizards.os.device.AppState.useLegacy(MainActivity.this)) {
-                    mainFailed = true;
-                    go(Origin.toLegacy(req.getUrl().toString()));
-                    return;
-                }
+                // Unreachable: stay on this Wizard's own name and show the Retry screen (never the retired name).
                 if (req.isForMainFrame()) { mainFailed = true; showOffline(String.valueOf(err.getDescription())); }
             }
 
@@ -221,6 +249,9 @@ public class MainActivity extends Activity {
 
             @Override
             public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
+                if (req.isForMainFrame() && MainActivity.this instanceof AppSessionActivity && !((AppSessionActivity)MainActivity.this).acceptsUrl(req.getUrl().toString())) {
+                    return new android.webkit.WebResourceResponse("text/html","UTF-8",new java.io.ByteArrayInputStream("<!doctype html><h2>App session unavailable</h2><p>Use Android Home to return to Wizard.</p>".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                }
                 // Reloads and anything else not started by go() or a link: watch it too (not reached when a service
                 // worker answers the page, hence go() and shouldOverrideUrlLoading). Never intercepts anything.
                 if (req.isForMainFrame()) {
@@ -264,7 +295,7 @@ public class MainActivity extends Activity {
                 root.removeView(web);
                 web.destroy();
                 buildWebView();
-                go(BuildConfig.HOME_URL);
+                go(MainActivity.this instanceof AppSessionActivity ? startUrl(getIntent()) : BuildConfig.HOME_URL);
                 return true;
             }
         });
@@ -312,6 +343,7 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("(window.__wosNativeBack ? window.__wosNativeBack() : 'nojs')", result -> {
             String r = result == null ? "" : result.replace("\"", "");
             if (!r.equals("nojs") && !r.isEmpty() && !r.equals("null")) return; // the shell handled it
+            if (this instanceof AppSessionActivity) return; // not-yet-loaded sessions consume Back too
             // The shell is not loaded (or is a page off the shell): step back in the WebView, else go home.
             String url = web.getUrl();
             if (web.canGoBack()) web.goBack();
@@ -337,9 +369,9 @@ public class MainActivity extends Activity {
         return ai.wizards.os.device.AppState.homeUrl(this); // HOME_URL; QA builds may point at a fake Wizard
     }
 
-    /** An in-app link on whichever name this run uses (the tailnet name, or the old one under the safety net). */
+    /** An in-app link, always on this Wizard's own name (old-name links are translated, never followed). */
     static String inAppUrl(String url) {
-        return ai.wizards.os.device.AppState.legacyFallback ? Origin.toLegacy(url) : Origin.toHome(url);
+        return Origin.toHome(url);
     }
 
     /* ---------------- Carry: move local state off the retired private.wizard001.com (see Carry) ---------------- */
@@ -364,6 +396,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        if (this instanceof AppSessionActivity) return; // document root owns resume; no workspace handoff/navigation
         setIntent(intent);
         Uri data = intent.getData();
         if (data != null && Origin.isInApp(data)) {
@@ -513,7 +546,6 @@ public class MainActivity extends Activity {
     private void showOffline(String why) {
         main.removeCallbacks(reachMark);
         main.removeCallbacks(reachGiveUp);
-        ai.wizards.os.device.AppState.legacyFallback = false; // Try again goes to the tailnet name first again
         if (reach == null) return;
         ReachPolicy.Why w = ReachScreen.why(this);
         reach.offline(w, why, ReachScreen.tailscaleInstalled(this));
@@ -526,7 +558,6 @@ public class MainActivity extends Activity {
     void retryReach() {
         if (web == null || reach == null) return;
         reach.trying();
-        ai.wizards.os.device.AppState.legacyFallback = false;
         String u = wantUrl;
         if (!isWeb(u) || Carry.isPage(this, u)) u = ai.wizards.os.device.AppState.homeUrl(this);
         else if (Origin.isLegacy(Uri.parse(u))) u = Origin.toHome(u);
@@ -636,17 +667,17 @@ public class MainActivity extends Activity {
     @Override
     protected void onStart() {
         super.onStart();
-        current = new java.lang.ref.WeakReference<>(this);
-        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, true); // the floating button hides while Wizard OS is open
-        ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
+        if (!(this instanceof AppSessionActivity)) current = new java.lang.ref.WeakReference<>(this);
         device.onStart();
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
+        ai.wizards.os.everywhere.EverywhereOutbox.get(this).pump();
         ai.wizards.os.mizel.MeetingRecorderService.recover(this); // a meeting cut off by a process death is closed and uploaded
     }
 
     @Override
     protected void onStop() {
         device.onStop();
-        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, false); // …and comes back when James leaves
+        ai.wizards.os.everywhere.EverywhereService.setAppInFront(this, ai.wizards.os.device.AppState.front());
         super.onStop();
     }
 
@@ -706,6 +737,7 @@ public class MainActivity extends Activity {
         super.onResume();
         web.onResume();
         ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
+        ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
         resumed = true;
         if (reach != null && reach.isOffline()) main.postDelayed(this::retryReach, 300); // back from Tailscale: try now
         if (mizel != null) mizel.setPcmForeground(true);
@@ -759,6 +791,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
         if (mizel != null) mizel.setPcmForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).
         if (!ai.wizards.os.everywhere.EverywhereService.appIsRecording()) web.onPause();
@@ -889,8 +922,10 @@ public class MainActivity extends Activity {
         if (device != null) device.onDestroy();
         main.removeCallbacks(reachMark); main.removeCallbacks(reachGiveUp); main.removeCallbacks(reachRetry); main.removeCallbacks(netSettled);
         if (netWatch != null) { try { getSystemService(android.net.ConnectivityManager.class).unregisterNetworkCallback(netWatch); } catch (RuntimeException ignored) {} netWatch = null; }
-        ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(null);
-        if (ai.wizards.os.everywhere.EverywhereService.appIsRecording()) ai.wizards.os.everywhere.EverywhereService.appVoiceState(this, "idle", 0);
+        if (!(this instanceof AppSessionActivity)) {
+            ai.wizards.os.everywhere.EverywhereService.setAppVoiceRemote(null);
+            if (ai.wizards.os.everywhere.EverywhereService.appIsRecording()) ai.wizards.os.everywhere.EverywhereService.appVoiceState(this, "idle", 0);
+        }
         if (mizel != null) { mizel.detach(); mizel = null; }
         if (apps != null) { apps.detach(); apps = null; }
         if (audio != null) { audio.detach(); audio = null; }
