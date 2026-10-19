@@ -1,5 +1,7 @@
 package ai.wizards.os.everywhere;
 
+import ai.wizards.os.audio.CaptureJournal;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Notification;
@@ -1070,10 +1072,16 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             Toast.makeText(this, "Android blocked the microphone. Open Wizard OS and try again.", Toast.LENGTH_LONG).show();
             return;
         }
+        CaptureJournal.get(this); // Adopt legacy files before creating this take's file.
         File qa = qaAudio(); // debug builds on the emulator (no microphone): a staged recording, used once
-        if (qa != null) recording = qa;
+        if (qa != null) {
+            recording = qa;
+            CaptureJournal.get(this).register(takeId, "everywhere", "note", recording, System.currentTimeMillis());
+        }
         else try {
-            recording = new File(getCacheDir(), "everywhere-" + SystemClock.elapsedRealtime() + ".m4a");
+            File takes = new File(getFilesDir(), "everywhere-takes");
+            if (!takes.isDirectory() && !takes.mkdirs()) throw new java.io.IOException("Cannot keep recording");
+            recording = new File(takes, "everywhere-" + SystemClock.elapsedRealtime() + ".m4a");
             final File file = recording;
             // The phone's mic, never a Bluetooth speaker's: MicRoute refuses a take Android puts elsewhere.
             MediaRecorder r = ai.wizards.os.audio.MicRoute.start(this,
@@ -1089,6 +1097,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
                         m.setOnErrorListener((mr, what, extra) -> main.post(() -> micLost(mr, what)));
                     });
             recorder = r;
+            CaptureJournal.get(this).register(takeId, "everywhere", "note", recording, System.currentTimeMillis());
             Log.i(TAG, "recording via " + ai.wizards.os.audio.MicRoute.routed(r));
         } catch (Exception e) {
             Log.w(TAG, "recorder failed", e);
@@ -1175,7 +1184,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         // A long take cancelled by accident is kept (Settings → Cancelled recordings); a quick one is just gone.
         long ms = SystemClock.elapsedRealtime() - startedAt;
         dropRecorder(); // closes the file so it is playable
-        boolean kept = !dictating && recording != null && ai.wizards.os.recording.CancelledTakes.keep(this, recording, ms, "everywhere", "audio/mp4");
+        boolean kept = recording != null && CaptureJournal.get(this).cancel(recording, "everywhere", ms);
+        recording = null;
         discard();
         buzz(14);
         toast(kept ? "Cancelled · kept in Wizard OS Settings for a week" : "Discarded");
@@ -1229,6 +1239,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         }
         ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.EVERYWHERE);
         final String take = takeId, event = meetingEvent;
+        if (take != null) CaptureJournal.get(this).stopped(take);
         takeId = null; meetingEvent = "";
         File f = recording;
         recording = null;
@@ -1239,7 +1250,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         startForegroundSafe(false);
         if (!ok || f == null || !f.isFile() || f.length() < 512) {
             if (f != null) //noinspection ResultOfMethodCallIgnored
-                f.delete();
+                CaptureJournal.get(this).releaseIfEmpty(f, "everywhere");
             endLoan("empty", event, "cancelled", "Nothing was recorded");
             toast("Didn’t catch anything");
             dictating = false;
@@ -1274,7 +1285,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         takeId = null; meetingEvent = "";
         endLoan("cancelled", event, "cancelled", null);
         if (recording != null) //noinspection ResultOfMethodCallIgnored
-            recording.delete();
+            CaptureJournal.get(this).releaseIfEmpty(recording, "everywhere");
         recording = null;
         shots.clear();
         if (lp != null) setExpanded(false);

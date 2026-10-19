@@ -163,7 +163,8 @@ public final class MizelUploader {
                         code = o.optInt("__code");
                         status = o.optString("status", null);
                     } catch (IOException e) { code = 0; }
-                    boolean ready = "ready".equals(status) || code == 404 || code == 410;
+                    // Gone/refused is not a server receipt and must never authorize pruning.
+                    boolean ready = code >= 200 && code < 300 && "ready".equals(status);
                     store.statusChecked(id, now, ready);
                     if (ready) Log.i(MizelHub.TAG, "meeting " + id + " is " + (code == 404 ? "gone" : "ready") + "; local audio kept " + MizelConfig.keepAfterReadyMs(app) + " ms more");
                     else due = now + every;

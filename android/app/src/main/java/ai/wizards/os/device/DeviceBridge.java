@@ -1,5 +1,7 @@
 package ai.wizards.os.device;
 
+import ai.wizards.os.audio.CaptureJournal;
+
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
@@ -213,7 +215,11 @@ public final class DeviceBridge implements RecorderService.Listener {
     @JavascriptInterface
     public String recRead(String id, int offset) { return readChunk(RecordingStore.get(activity).audio(id), offset); }
 
-    /** The page has the take safe (handled, or saved in the durable outbox): delete it and end the service's hold. */
+    /** Read-only native custody status; excludes paths and private receipt payloads. */
+    @JavascriptInterface
+    public String captureJournal() { return CaptureJournal.get(activity).status(); }
+
+    /** The page has the take safe in its durable outbox: release native custody (WEB_OUTBOX_CUSTODY), end the hold. */
     @JavascriptInterface
     public void recDone(String id) {
         RecordingStore.get(activity).delete(id);
