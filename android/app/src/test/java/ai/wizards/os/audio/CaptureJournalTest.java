@@ -246,8 +246,8 @@ public class CaptureJournalTest {
     }
 
     @Test public void sourceGuardAllowsOnlyReviewedNonRecordingDeletes() throws Exception {
-        Path base = Path.of("src/main/java");
-        if (!Files.isDirectory(base)) base = Path.of("app/src/main/java");
+        Path base = java.nio.file.Paths.get("src/main/java");
+        if (!Files.isDirectory(base)) base = java.nio.file.Paths.get("app/src/main/java");
         assertTrue("Run from Android project/app directory", Files.isDirectory(base));
         Map<String, List<String>> allowed = new HashMap<>();
         // Metadata / screenshots only (not an exception for a whole class or arbitrary variable names).
@@ -269,7 +269,7 @@ public class CaptureJournalTest {
             for (Path file : (Iterable<Path>) paths.filter(p -> p.toString().endsWith(".java"))::iterator) {
                 String name = root.relativize(file).toString().replace(File.separatorChar, '/').replaceFirst("^ai/wizards/os/", "");
                 if (name.equals("audio/CaptureJournal.java") || name.equals("recording/CancelledTakes.java")) continue;
-                String text = Files.readString(file);
+                String text = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
                 assertFalse(name + " bypasses File.delete guard", text.matches("(?s).*Files\\s*\\.\\s*delete(IfExists)?\\s*\\(.*"));
                 assertEquals(name, allowed.getOrDefault(name, Collections.emptyList()), deletes(text));
                 if (name.equals("mizel/MizelStore.java")) {
