@@ -278,3 +278,11 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .bar-r .general-voice { min-height: 26px; height: 26px; padding: 0 12px; border-radius: 7px; font-size: 13px; line-height: 1; }
 #commandBtn svg { stroke-linejoin: round; } #keysBtn { line-height: 26px; }
 .bar-r .status .st.unread, .bar-r .status .st.working, .bar-r .status .st.needs { width: 9px; height: 9px; }
+/* Opinionated: top-left Home/desk marks enlarged to the same visual size as the top-right icons */
+.bar-l { gap: 4px; }
+.bar-l .logo { width: 32px; height: 28px; }
+.bar-l .ws { min-width: 36px; height: 28px; }
+#bar .logo .dsg, #bar .ws .dsg:not(.empty) { width: 27px; height: 27px; }
+#bar .ws .dsg .sgi.sgl { font-size: 19px; }
+#bar .ws-add { font-size: 24px; font-weight: 400; color: var(--ink-2); }
+#settingsBtn svg { width: 18px; height: 18px; }
