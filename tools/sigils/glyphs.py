@@ -285,6 +285,49 @@ def g_home():
     door = P("M218 404 V320 A38 38 0 0 1 294 320 V404 Z")
     return D(U(body, stroke(body, 24)), door)
 
+# Installed Wizard apps that still showed a letter (Oct 2026).
+@glyph('bell', 'A bell with its rim band cut out: your Wizard tells you when something is done.')
+def g_bell():
+    body = P("M256 84 C318 84 360 132 360 196 V272 C360 308 380 334 412 356 V376 H100 V356 C132 334 152 308 152 272 V196 C152 132 194 84 256 84 Z")
+    knob = circle(256, 82, 26)
+    clapper = circle(256, 404, 38)
+    return D(U(body, knob, clapper), rrect(80, 340, 352, 22, 0))
+
+@glyph('coffee', 'A steaming coffee cup with its rim band cut out: your morning briefing.')
+def g_coffee():
+    cup = P("M104 228 H364 V292 C364 362 310 412 234 412 C158 412 104 362 104 292 Z")
+    handle = stroke(circle(372, 290, 46), 30)
+    steam = U(stroke("M196 196 C172 166 220 142 196 104", 32), stroke("M276 196 C252 166 300 142 276 104", 32))
+    return D(U(cup, handle, steam), rrect(104, 254, 260, 22, 0))
+
+@glyph('globe', 'A globe with its meridian and latitudes cut out: the shared browser.')
+def g_globe():
+    disc = circle(256, 256, 156)
+    cuts = U(stroke(P("M256 100 C196 160 196 352 256 412 C316 352 316 160 256 100 Z"), 22),
+             rrect(96, 245, 320, 22, 0), I(rrect(96, 170, 320, 20, 0), disc), I(rrect(96, 322, 320, 20, 0), disc))
+    return D(disc, cuts)
+
+@glyph('wave', 'A sound wave turning into a line of text: speech to text.')
+def g_wave():
+    bars = U(*[rrect(x - 17, 256 - h / 2, 34, h, 17) for x, h in ((116, 96), (180, 196), (244, 280), (308, 168), (372, 92))])
+    return bars
+
+@glyph('hub', 'One centre with three spokes to its apps: the service that routes your Wizard.')
+def g_hub():
+    pts = [(256 + 150 * math.sin(math.radians(a)), 256 - 150 * math.cos(math.radians(a))) for a in (0, 120, 240)]
+    nodes = U(*[circle(x, y, 54) for x, y in pts])
+    spokes = U(*[stroke(f"M256 256 L{x} {y}", 48) for x, y in pts])
+    return D(U(nodes, spokes, circle(256, 256, 70)), circle(256, 256, 28))
+
+@glyph('spark', 'A four-point spark cut out of a disc: an AI subscription plugged in.')
+def g_spark():
+    return D(circle(256, 256, 156), spark(256, 256, 112, 0.14))
+
+@glyph('burst', 'A burst of rays round an open centre: an AI subscription plugged in.')
+def g_burst():
+    rays = U(*[R(rrect(234, 84 + (i % 2) * 22, 44, 150 - (i % 2) * 22, 22), i * 360 / 8, 256, 256) for i in range(8)])
+    return D(U(rays, circle(256, 256, 76)), circle(256, 256, 30))
+
 @glyph('letter', 'Placeholder ring for apps without a sigil yet.')
 def g_letter():
     return D(circle(256, 256, 156), circle(256, 256, 120))
