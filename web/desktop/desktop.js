@@ -1026,7 +1026,7 @@
    * kept as a voice note, retried if the network drops. */
   const pill = $('#voicePill'), mic = $('#micBtn');
   document.body.appendChild(pill); // Fixed capture controls must not be clipped by the narrow toolbar scroller.
-  new ResizeObserver(() => { document.documentElement.style.setProperty('--voice-h', pill.hidden ? '0px' : Math.ceil(pill.getBoundingClientRect().height + 16) + 'px'); layout(); }).observe(pill);
+  const glow = document.createElement('div'); glow.id = 'voiceGlow'; glow.setAttribute('aria-hidden', 'true'); document.body.appendChild(glow); // edge light; never resizes the stage
   let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false;
   const VOICE = C.voice({
     onState: st => {
@@ -1035,6 +1035,7 @@
       $('#voicePause').disabled = !['listen','paused'].includes(st);
       $('#voiceAttach').disabled = $('#voiceScreenshot').disabled = vMode === 'dictate' || commandTake || !['listen','paused'].includes(st);
       pill.hidden = st === 'idle'; pill.classList.toggle('think', st === 'think'); mic.classList.toggle('on', st !== 'idle');
+      const rootCls = document.documentElement.classList; rootCls.toggle('voice-on', st !== 'idle'); rootCls.toggle('voice-paused', st === 'paused'); rootCls.toggle('voice-think', st === 'think'); if (st === 'idle') glow.style.setProperty('--vglow-lvl', '0');
       CHATS.PW?.paintMic(['listen','paused'].includes(st) && !!vReply, vReply?.sid || '');
       $('#clock').hidden = st !== 'idle';
       pill.classList.toggle('dict', vMode === 'dictate');
@@ -1046,7 +1047,7 @@
       clearInterval(vTimer);
       if (st === 'listen') vTimer = setInterval(() => { const s = Math.floor(VOICE.elapsed() / 1000); $('#voiceTime').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }, 250);
     },
-    onLevel: l => { $('#voiceLvl').style.width = Math.round(l * 100) + '%'; },
+    onLevel: l => { $('#voiceLvl').style.width = Math.round(l * 100) + '%'; glow.style.setProperty('--vglow-lvl', Math.min(1, l * 1.6).toFixed(2)); },
   });
   function paintVoiceFiles() {
     const root=$('#voiceFiles'); if (!root) return;
