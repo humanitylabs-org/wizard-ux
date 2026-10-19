@@ -988,17 +988,17 @@
 
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
-    ['Launch', [[`${MOD}1`, 'Home'], [`${CMD}O`, 'Open an app (the app selector)'], [`${CMD}K  or  ${MOD}Space`, `Search apps, threads, commands; or ask ${window.WizConfig.agent()}`], [`${CMD}N  or  ${MOD}Enter`, 'New chat'], [`${CMD}⇧N  or  ${MOD}⇧V`, 'New voice chat (press again to send)'], [`${MOD}I`, 'Inbox'], ['Right ⌘ (tap)', `Talk to ${window.WizConfig.agent()} (tap again to send; Cancel discards)`], ['Right ⌥ (paused)', 'Wizard PWA dictation is paused; your system voice tool keeps this key']]],
-    ['Desktops', [[`${CMD}T  or  ${MOD}T`, 'New desktop, with the app selector open'], [`${CMD}⇧[  ${CMD}⇧]  or  Ctrl+Tab`, 'Previous / next desktop'], [`${CMD}W  or  ${MOD}W`, 'Close focused app; press again on empty desktop to close it']]],
-    ['Desktop shortcuts', [[`${MOD}1`, 'Home'], [`${MOD}2 … ${MOD}9`, 'Go to the matching app icon; next slot adds a desktop'], [`⇧${MOD}2 … 9`, 'Send window to the matching desktop (Home stays empty)'], [`${MOD}[  ${MOD}]`, 'Previous / next workspace'], [`${MOD}Tab`, 'Back to the last workspace']]],
-    ['Windows', [[`${CMD}← ↑ → ↓`, 'Focus app in this desktop'], [`${MOD}H J K L`, 'Focus app (browser alternative)'], [`⇧${MOD}← →`, 'Swap window'], [`${CMD}F  or  ${MOD}F`, 'Full screen'], [`⌘W / ${MOD}W`, 'Close app']]],
-    ['Chats', [[`${MOD}↑  ${MOD}↓`, 'Previous / next selected chat'], [`${CMD}Enter`, 'Send'], ['Enter', 'New line'], ['Esc', 'Back to the thread list'], ['↑ ↓  or  j k', 'Previous / next chat (in the list)'], [`⇧${MOD}J  ⇧${MOD}K`, 'Next / previous chat (anywhere)'], ['/', 'Search chats and messages'], [`${MOD},`, 'Settings']]],
-    ['Wizard for Mac (works in any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to a bound app'], ['Right ⌘', 'Talk to Wizard from anywhere'], ['Right ⌥', 'Dictate into any app']]],
+    ['Open and find', [[`${CMD}K  ${MOD}Space`, 'Search everything'], [`${CMD}O`, 'Open an app'], [`${MOD}1`, 'Home'], [`${MOD}I`, 'Inbox'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
+    ['Talk and chat', [[`${CMD}N  ${MOD}Enter`, 'New chat'], [`${CMD}⇧N  ${MOD}⇧V`, 'New voice chat (again to send)'], ['Right ⌘', `Talk to ${window.WizConfig.agent()} (tap again to send)`], [`${CMD}Enter`, 'Send'], ['Esc', 'Back to the list'], ['/', 'Search chats']]],
+    ['Desktops', [[`${CMD}T  ${MOD}T`, 'New desktop'], [`${MOD}2 … ${MOD}9`, 'Go to desktop'], [`⇧${MOD}2 … 9`, 'Send window to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}Tab`, 'Last desktop']]],
+    ['Windows', [[`${MOD}H J K L  ${CMD}← ↑ → ↓`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${CMD}F  ${MOD}F`, 'Full screen'], [`${CMD}W  ${MOD}W`, 'Close app']]],
+    ['Chat list', [['↑ ↓  j k', 'Move in the list'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], [`⇧${MOD}K  ⇧${MOD}J`, 'Previous / next chat anywhere']]],
+    ['Wizard for Mac (any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to an app'], ['Right ⌘', 'Talk from anywhere'], ['Right ⌥', 'Dictate into any app']]],
   ];
   const keysEl = $('#keys');
   const nativeDesktop = !!window.webkit?.messageHandlers?.wizardNative;
-  $('#keys .keys-head small').textContent = nativeDesktop ? 'Wizard owns ⌘N, ⌘T and ⌘W. Desktops open on demand.' : 'Browser owns ⌘N/T/W. Use ⌥Enter (chat), ⌥T (desktop), ⌥W (close), ⌥⇧V (new voice).';
-  $('#keysBody').innerHTML = KEYS.map(([h, rows]) => `<h4>${h}</h4>` + rows.map(([k, d]) => `<div class="krow"><span>${esc(d)}</span><span>${k.split(/\s{2,}/).map(x => `<kbd>${esc(x)}</kbd>`).join(' or ')}</span></div>`).join('')).join('');
+  $('#keys .keys-head small').textContent = nativeDesktop ? 'Wizard owns ⌘N, ⌘T and ⌘W. Desktops open on demand.' : `In a browser tab, ${CMD}N, ${CMD}T and ${CMD}W belong to the browser, so use the ${MOD} versions.`;
+  $('#keysBody').innerHTML = KEYS.map(([h, rows]) => `<section class="kgrp"><h4>${h}</h4>` + rows.map(([k, d]) => `<div class="krow"><span>${esc(d)}</span><span class="kk">${k.split(/\s{2,}/).map(x => `<kbd>${esc(x)}</kbd>`).join('<i>or</i>')}</span></div>`).join('') + '</section>').join('');
   function toggleKeys(on) { keysEl.hidden = on == null ? !keysEl.hidden : !on; if (!keysEl.hidden) window.WosResources?.back(); }
   keysEl.addEventListener('click', e => { if (e.target === keysEl || e.target.closest('[data-close]')) toggleKeys(false); });
 
@@ -1056,7 +1056,7 @@
   }
   const generalVoice = document.createElement('button');
   generalVoice.id = 'generalVoice'; generalVoice.className = 'general-voice';
-  const paintGeneralVoice = () => { generalVoice.textContent = 'Record for ' + window.WizConfig.agent(); generalVoice.setAttribute('aria-label', generalVoice.textContent); };
+  const paintGeneralVoice = () => { const l = 'New voice chat with ' + window.WizConfig.agent() + ' (starts fresh, shares nothing from this screen)'; generalVoice.className = 'mic general-voice-ic'; generalVoice.innerHTML = '<svg viewBox="0 0 24 24"><path d="M10 13a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v4a3 3 0 0 0 3 3Zm-5.5-3a5.5 5.5 0 0 0 11 0M10 15.5V19M19 4v6M16 7h6"/></svg>'; generalVoice.setAttribute('aria-label', l); generalVoice.title = l; };
   paintGeneralVoice(); window.addEventListener('wizard:config', paintGeneralVoice);
   mic.insertAdjacentElement('afterend', generalVoice);
   generalVoice.addEventListener('click', () => talkNew('Tap to send'));

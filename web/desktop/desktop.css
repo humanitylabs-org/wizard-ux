@@ -286,3 +286,28 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 #bar .ws .dsg .sgi.sgl { font-size: 19px; }
 #bar .ws-add { font-size: 24px; font-weight: 400; color: var(--ink-2); }
 #settingsBtn svg { width: 18px; height: 18px; }
+
+/* Opinionated: desk badges stay inside the screen */
+#bar .ws .dsg .dbg { top: 0; right: -8px; }
+/* Opinionated: "Record for Wizard" is an icon like the rest of the bar */
+.bar-r .general-voice-ic { border: 0; background: none; min-height: 0; padding: 0; border-radius: 7px; }
+/* Opinionated: keys sheet readable on every skin (follows skin tokens) */
+.keys { background: color-mix(in oklab, var(--bg) 55%, transparent); backdrop-filter: blur(6px); }
+.keys-card { width: min(860px, calc(100vw - 40px)); max-height: 84vh; background: var(--bg); color: var(--ink); border: 1px solid var(--line-2); box-shadow: 0 24px 80px rgba(0,0,0,.45); padding: 0 0 16px; }
+.keys-head { align-items: center; padding: 16px 16px 12px 22px; }
+.keys-head b { font-size: 17px; color: var(--ink); }
+.keys-head small { font-size: 12.5px; color: var(--ink-2); }
+.keys-head .x { color: var(--ink-2); }
+.keys-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px 28px; padding: 14px 22px 0; }
+.keys-body .kgrp { min-width: 0; }
+.keys-body h4 { margin: 0 0 6px; font-size: 12px; font-weight: 650; letter-spacing: 0; text-transform: none; color: var(--ink-3); }
+.krow { align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; color: var(--ink); }
+.krow:last-child { border-bottom: 0; }
+.krow .kk { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.krow .kk i { font-style: normal; font-size: 11.5px; color: var(--ink-3); }
+.keys kbd { color: var(--ink); background: color-mix(in oklab, var(--ink) 8%, transparent); border: 1px solid var(--line-2); border-bottom-width: 1px; font-size: 12px; padding: 2px 7px; }
+.keys-card { background: color-mix(in oklab, var(--bg) 97%, var(--ink) 3%); }
+html[data-skin="landscapes"] .keys-card { background: #0d1210; }
+.krow .kk i { color: var(--ink-2); }
+.keys-body h4 { color: var(--ink-2); }
+.keys kbd { font: 600 12.5px/18px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: .01em; }
