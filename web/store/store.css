@@ -106,7 +106,7 @@ h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
 .src { display: inline-block; margin-top: 14px; font-size: 14px; font-weight: 600; text-decoration: none; }
 
 /* toast */
-.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); transform: translate(-50%, 20px); opacity: 0; z-index: 9;
+.toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 12px); transform: translate(-50%, -20px); opacity: 0; z-index: 9;
   width: min(92vw, 420px); padding: 14px 16px; border-radius: 16px; background: rgba(28, 19, 58, .94); border: 1px solid var(--line-2); box-shadow: 0 20px 40px rgba(0, 0, 0, .5);
   backdrop-filter: blur(16px); transition: transform .25s var(--ease), opacity .25s; display: grid; gap: 3px; font-size: 14px; }
 .toast.on { transform: translate(-50%, 0); opacity: 1; }
