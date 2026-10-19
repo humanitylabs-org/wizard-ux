@@ -70,3 +70,10 @@ test('URLs inside inline code stay code', () => {
   const html = md('`https://x.example/`');
   assert.ok(html.includes('<code>https://x.example/</code>') && !html.includes('<a '), html);
 });
+
+test('a linked image never renders as the word "undefined"', () => {
+  const html = md('Preview: [![preview](https://x.example/a.jpg)](https://x.example/full)');
+  assert.ok(!html.includes('undefined'), html);
+  assert.ok(html.includes('href="https://x.example/full"'), html);
+  assert.ok(html.includes('[Image: preview]'), html);
+});

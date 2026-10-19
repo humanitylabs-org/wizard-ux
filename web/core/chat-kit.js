@@ -225,7 +225,12 @@
     s = s.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, (_, _t, code) => put(`<code>${esc(code.replace(/^ ([\s\S]*) $/, '$1'))}</code>`));
     if (!noLinks) {
       s = s.replace(/!\[([^\]\n]*)\]\(\s*<?([^\s)>]+)>?(?:\s+"[^"]*")?\s*\)/g, (_, alt, url) => put(PRIVATE_MEDIA.test(url) ? linkHtml(url, esc(alt ? `[Image: ${alt}]` : '[Image]')) : `<span class="md-img">${esc(alt ? `[Image: ${alt}]` : '[Image]')}</span>`));
-      s = s.replace(/\[((?:[^\[\]\n]|\[[^\]\n]*\])+)\]\(\s*<?([^\s)>]+?(?:\([^\s)]*\)[^\s)>]*)?)>?(?:\s+"[^"]*")?\s*\)/g, (_, text, url) => put(linkHtml(url, inline(text, true))));
+      s = s.replace(/\[((?:[^\[\]\n]|\[[^\]\n]*\])+)\]\(\s*<?([^\s)>]+?(?:\([^\s)]*\)[^\s)>]*)?)>?(?:\s+"[^"]*")?\s*\)/g, (_, text, url) => {
+        // Link text can hold this pass's placeholders (e.g. a linked image `[![alt](img)](url)`). Park them under a
+        // marker the nested pass never restores, or its own empty table turns them into the word "undefined".
+        const inner = inline(text.replace(/\u0001(\d+)\u0002/g, '\u0003$1\u0004'), true).replace(/\u0003(\d+)\u0004/g, '\u0001$1\u0002');
+        return put(linkHtml(url, inner));
+      });
       s = s.replace(/<((?:https?:\/\/|mailto:)[^\s>]+)>/g, (_, u) => put(linkHtml(u, esc(u))));
       // Every bare URL becomes a link, whatever wraps it (**bold**, _italic_, ~~del~~, [brackets], "Link:url").
       // Emphasis markers and closing punctuation at the end stay outside the link. A trailing underscore is
