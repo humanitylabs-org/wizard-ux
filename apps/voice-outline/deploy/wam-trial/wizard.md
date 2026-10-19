@@ -1,11 +1,11 @@
 ---
 wizard: 0.2
 id: outline-streaming-demo
-name: Outline (voice trial)
+name: Outline
 type: service
 category: app
-version: 0.1.1
-summary: Isolated local Nemotron voice trial, using Wizard shared capture and a managed private runtime connection.
+version: 0.2.0
+summary: A minimal notes-style nested outline you can type into or dictate into, with durable recovery.
 license: GPL-3.0-only
 source: https://github.com/humanitylabs-org/wizard-ux
 runtime:
@@ -24,28 +24,16 @@ skill: skill/SKILL.md
 view:
   path: /
   port: 8799
-provides: [local-voice-trial]
+provides: [outlining, live-dictation]
 system: false
 uses: []
 needs: [mic]
 health: /healthz
 ---
 
-# Outline (voice trial)
+# Outline
 
-Owner-private connection package for the existing Outline local-streaming runtime.
-The implementation is in `apps/voice-outline` at the same source revision.
-This is not a standalone redistributable inference appliance. The owner provisions
-and supervises the private upstream separately. No cloud credentials or fallback.
-
-WAM owns the connection container and its start/stop/uninstall lifecycle. Stopping
-or uninstalling this package disconnects the trial; it does NOT stop the separately
-managed Mac web/inference services or delete their notes/recordings. `/healthz`
-reports upstream and model readiness, not just the connection process.
-
-The upstream URL must refer to the owner's private trusted runtime, never a public
-inference endpoint. This host uses an explicit owner-local networking override to
-reach its existing loopback SSH tunnel. The distributed recipe remains isolated.
-
-Open `/wizard-os-home/?open=outline-streaming-demo` inside Wizard. Raw unregistered
-frames cannot use shared capture. Existing Outline and daily voice are untouched.
+James's one Outline app: a minimal, Obsidian-like nested outline you can type or
+dictate into through Wizard's shared microphone. The implementation is in
+`apps/voice-outline` at the same source revision; this package connects Wizard to
+the owner-supervised runtime on Thales. No cloud credentials or fallback in source.

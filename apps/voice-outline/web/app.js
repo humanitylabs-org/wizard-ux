@@ -125,7 +125,7 @@ async function startLive(){
   if(!W.capture.capabilities({kind:'outline',pcm:true}).pcm){
    if((config.local||config.shared)&&!W.hosted){
     note('This link is not connected to Wizard’s shared microphone. ');
-    const entry=document.createElement('a');entry.href='/wizard-os-home/?open=outline-streaming-demo';entry.target='_top';entry.textContent='Open Outline voice trial in Wizard';$('notice').append(entry);
+    const entry=document.createElement('a');entry.href='/wizard-os-home/?open=outline-streaming-demo';entry.target='_top';entry.textContent='Open Outline in Wizard';$('notice').append(entry);
     return;
    }
    throw new Error('This recorder does not support live PCM. No recording or meeting was started.');
