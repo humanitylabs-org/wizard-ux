@@ -18,7 +18,20 @@ import java.util.Map;
 
 /** Native custody, not another upload queue. Nothing is deleted until the server has it or you discarded it. */
 public final class CaptureJournal {
-    public enum Reason { SERVER_RECEIPT, USER_DISCARD, MEETING_PRUNE_AFTER_READY, SUPERSEDED_COPY }
+    /**
+     * The only reasons recording audio may leave the phone's custody. Anything else is kept in Cancelled recordings.
+     *  SERVER_RECEIPT            Wizard accepted the upload (file id receipt recorded first).
+     *  WEB_OUTBOX_CUSTODY        the in-app web outbox saved the take (it keeps the bytes until its own server receipt).
+     *  DELIVERED_ON_PHONE        the owner already got the result here: dictated words typed in, a local action ran.
+     *  NOTHING_RECORDED          under {@link #NOTHING_BYTES}: a failed start or a header-only file, no speech to lose.
+     *  USER_DISCARD              an explicit short Cancel, as {@link CancelPolicy} allows.
+     *  USER_DELETE               the owner tapped Delete on that recording (Settings → Not sent).
+     *  MEETING_PRUNE_AFTER_READY a meeting chunk acknowledged by the server, a day after the meeting was ready.
+     *  SUPERSEDED_COPY           a byte-verified duplicate now held elsewhere under the same id.
+     */
+    public enum Reason { SERVER_RECEIPT, WEB_OUTBOX_CUSTODY, DELIVERED_ON_PHONE, NOTHING_RECORDED, USER_DISCARD, USER_DELETE, MEETING_PRUNE_AFTER_READY, SUPERSEDED_COPY }
+    /** ≈0.25 s at the recorders' 64 kbit/s AAC (same floor as TakeRecovery.MIN_BYTES): below it nothing was said. */
+    public static final long NOTHING_BYTES = 2048;
     private static final Map<String, CaptureJournal> INSTANCES = new LinkedHashMap<>();
     private final File root, index;
     private final Map<String, JSONObject> entries = new LinkedHashMap<>();
@@ -81,7 +94,13 @@ public final class CaptureJournal {
     private void commit(JSONObject e) {
         put(e, "updatedAt", System.currentTimeMillis());
         JSONArray all = new JSONArray();
-        for (JSONObject old : entries.values()) if (!old.optString("id").equals(e.optString("id"))) all.put(old);
+        java.util.List<String> spent = new java.util.ArrayList<>();
+        for (JSONObject old : entries.values()) {
+            if (old.optString("id").equals(e.optString("id"))) continue;
+            // A finished entry whose audio no longer exists holds nothing; drop it so the index stays small.
+            if (terminal(old.optString("state")) && !new File(old.optString("path")).exists()) { spent.add(old.optString("id")); continue; }
+            all.put(old);
+        }
         all.put(e);
         File tmp = new File(root, "capture-journal.json.tmp");
         try {
@@ -91,6 +110,7 @@ public final class CaptureJournal {
             }
             if (!tmp.renameTo(index)) throw new IOException("Cannot commit capture journal");
         } catch (IOException ex) { throw new UncheckedIOException(ex); }
+        for (String id : spent) entries.remove(id);
         entries.put(e.optString("id"), e);
     }
 
@@ -191,9 +211,14 @@ public final class CaptureJournal {
         boolean prune = reason == Reason.MEETING_PRUNE_AFTER_READY && delivered
                 && "meeting_chunk".equals(old.optString("kind")) && old.optLong("readyAt") > 0
                 && System.currentTimeMillis() - old.optLong("readyAt") >= old.optLong("keepMs", Long.MAX_VALUE);
-        if (!(reason == Reason.SERVER_RECEIPT && delivered) && !discard && !prune) return keep(old);
+        String st = old.optString("state");
+        boolean onPhone = (reason == Reason.DELIVERED_ON_PHONE && ("stopped".equals(st) || "handed".equals(st)))
+                || (reason == Reason.WEB_OUTBOX_CUSTODY && "handed".equals(st) && "web-outbox".equals(old.optString("owner")));
+        boolean gone = reason == Reason.NOTHING_RECORDED && !"recording".equals(st) && audio.length() < NOTHING_BYTES
+                || reason == Reason.USER_DELETE && !"recording".equals(st);
+        if (!(reason == Reason.SERVER_RECEIPT && delivered) && !discard && !prune && !onPhone && !gone) return keep(old);
         JSONObject e = copy(old);
-        put(e, "state", discard ? "discarded" : "delivered"); put(e, "bytes", audio.length());
+        put(e, "state", discard || gone ? "discarded" : "delivered"); put(e, "bytes", audio.length());
         put(e, "releaseReason", reason.name()); commit(e);
         return !audio.exists() || audio.delete();
     }
@@ -215,6 +240,11 @@ public final class CaptureJournal {
         // Both copies already have durable metadata. Keep the original too if verification fails.
         if (audio.equals(kept)) return true;
         return sameBytes(audio, kept) && (!audio.exists() || audio.delete());
+    }
+
+    /** For empty/failed takes: nothing said → released; anything longer → kept in Cancelled recordings. */
+    public synchronized boolean releaseIfEmpty(File file, String src) {
+        return releaseFile(file, src, file != null && file.length() < NOTHING_BYTES ? Reason.NOTHING_RECORDED : null);
     }
 
     public synchronized boolean releaseFile(File file, String src, Reason reason) {

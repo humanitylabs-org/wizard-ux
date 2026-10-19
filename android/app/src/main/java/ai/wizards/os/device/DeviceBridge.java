@@ -219,7 +219,7 @@ public final class DeviceBridge implements RecorderService.Listener {
     @JavascriptInterface
     public String captureJournal() { return CaptureJournal.get(activity).status(); }
 
-    /** Web custody is not a server receipt. Keep the original, then end the service's hold. */
+    /** The page has the take safe in its durable outbox: release native custody (WEB_OUTBOX_CUSTODY), end the hold. */
     @JavascriptInterface
     public void recDone(String id) {
         RecordingStore.get(activity).delete(id);

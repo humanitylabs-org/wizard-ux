@@ -306,7 +306,7 @@ public final class EverywhereOutbox {
             Item it = items.remove(id);
             if (it == null) return;
             if (!it.audioPath.isEmpty()) //noinspection ResultOfMethodCallIgnored
-                custody.release(it.id, null); // Queue Delete has no measured short-cancel decision: keep the original.
+                custody.release(it.id, CaptureJournal.Reason.USER_DELETE); // the owner tapped Delete on this unsent message
             deleteShots(it);
             save();
         }
@@ -411,7 +411,7 @@ public final class EverywhereOutbox {
                 synchronized (this) {
                     it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
                     if (audio != null) //noinspection ResultOfMethodCallIgnored
-                        custody.release(it.id, null); // A local action is not a server receipt.
+                        custody.release(it.id, CaptureJournal.Reason.DELIVERED_ON_PHONE); // the local action ran
                     it.audioPath = "";
                     deleteShots(it);
                     items.remove(it.id);
@@ -438,7 +438,7 @@ public final class EverywhereOutbox {
                     synchronized (EverywhereOutbox.this) {
                         it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
                         if (audio != null) //noinspection ResultOfMethodCallIgnored
-                            custody.release(it.id, null); // Typed words are not a server audio receipt.
+                            custody.release(it.id, CaptureJournal.Reason.DELIVERED_ON_PHONE); // the words were typed in
                         it.audioPath = "";
                         items.remove(it.id);
                         save();

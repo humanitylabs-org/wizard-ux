@@ -82,8 +82,16 @@ public final class RecordingStore {
     }
 
     public synchronized void delete(String id) {
-        // recDone only proves web custody, not a server receipt: keep the original in Cancelled recordings.
-        if (audio(id).isFile() && !custody.releaseFile(audio(id), "app", null)) return;
+        // recDone: the web outbox saved it (it keeps the bytes until Wizard's receipt). A take never handed to the
+        // web outbox is released only if nothing was recorded; otherwise it is kept in Cancelled recordings.
+        File a = audio(id);
+        if (a.isFile()) {
+            String cid = custody.adopt(a, "app");
+            JSONObject e = custody.entry(cid);
+            CaptureJournal.Reason why = e != null && "handed".equals(e.optString("state")) && "web-outbox".equals(e.optString("owner"))
+                    ? CaptureJournal.Reason.WEB_OUTBOX_CUSTODY : a.length() < CaptureJournal.NOTHING_BYTES ? CaptureJournal.Reason.NOTHING_RECORDED : null;
+            if (!custody.release(cid, why)) return;
+        }
         claimedHere.remove(id);
         //noinspection ResultOfMethodCallIgnored
         meta(id).delete();
@@ -101,7 +109,7 @@ public final class RecordingStore {
             File a = audio(id);
             if (o == null) continue;
             if (!a.isFile() || a.length() < 600) { // nothing usable was captured
-                // Startup recovery never removes even a short/torn take. The journal keeps it discoverable.
+                if (System.currentTimeMillis() - o.optLong("startedAt") > 60_000) delete(id); // NOTHING_RECORDED
                 continue;
             }
             try {

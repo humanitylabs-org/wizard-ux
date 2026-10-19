@@ -1,6 +1,6 @@
 /* Wizard OS carry, NEW side: the first script of the shell (before core/shell.js).
  *
- * After the Android app moves from private.wizard001.com to this Wizard's tailnet name, it holds what the
+ * After the Android app moves from the former custom origin to this Wizard's tailnet name, it holds what the
  * old origin handed over (core/carry-out.js) until this page takes it. localStorage keys are written only
  * where this origin has nothing yet, so a second run (or a newer value) never overwrites anything.
  * Unsent messages go to window.WosCarry; outbox.js stores them at load and then calls done(), which

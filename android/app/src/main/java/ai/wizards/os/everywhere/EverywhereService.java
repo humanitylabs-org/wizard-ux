@@ -1188,7 +1188,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         recording = null;
         discard();
         buzz(14);
-        toast(kept ? "Cancelled · kept in Wizard OS Settings" : "Discarded");
+        toast(kept ? "Cancelled · kept in Wizard OS Settings for a week" : "Discarded");
     }
 
     /** Screen: hide the orb, capture what is behind it, attach it to this message (up to four). */
@@ -1250,7 +1250,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         startForegroundSafe(false);
         if (!ok || f == null || !f.isFile() || f.length() < 512) {
             if (f != null) //noinspection ResultOfMethodCallIgnored
-                CaptureJournal.get(this).releaseFile(f, "everywhere", null);
+                CaptureJournal.get(this).releaseIfEmpty(f, "everywhere");
             endLoan("empty", event, "cancelled", "Nothing was recorded");
             toast("Didn’t catch anything");
             dictating = false;
@@ -1285,7 +1285,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         takeId = null; meetingEvent = "";
         endLoan("cancelled", event, "cancelled", null);
         if (recording != null) //noinspection ResultOfMethodCallIgnored
-            CaptureJournal.get(this).releaseFile(recording, "everywhere", null);
+            CaptureJournal.get(this).releaseIfEmpty(recording, "everywhere");
         recording = null;
         shots.clear();
         if (lp != null) setExpanded(false);

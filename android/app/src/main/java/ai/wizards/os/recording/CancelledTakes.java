@@ -24,7 +24,7 @@ import java.util.List;
  * Transcribe &amp; copy puts the words on the clipboard, Delete removes them. A short cancel is still just gone.
  *
  * Files: files/cancelled/&lt;id&gt;.&lt;ext&gt; + &lt;id&gt;.json ({id, at, ms, source, mime, bytes}). Only this phone has them;
- * kept until explicit Delete. Age/count alone is not permission to destroy an owner's recording.
+ * the newest {@link CancelPolicy#MAX_KEPT} are kept, none longer than {@link CancelPolicy#MAX_AGE_MS} (James's rule).
  */
 public final class CancelledTakes {
     static final String TAG = "WizardOSCancelled";
@@ -51,7 +51,7 @@ public final class CancelledTakes {
         return ai.wizards.os.audio.CaptureJournal.at(filesDir).releaseFile(audio, source, null);
     }
 
-    /** Journal-owned keeps have no age/count expiry: only explicit Delete may remove the last copy. */
+    /** A recording CaptureJournal could not release; listed with Cancelled recordings under the same expiry. */
     public static File keepCustody(File filesDir, JSONObject entry, File audio) throws IOException {
         String id = "journal-" + java.util.Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(entry.optString("id").getBytes(StandardCharsets.UTF_8));
@@ -122,8 +122,11 @@ public final class CancelledTakes {
     }
 
     static void prune(Context c) {
-        // No automatic expiry: neither a week nor a full list proves the server has the recording.
-        // Explicit Settings → Delete remains the owner's decision (including pre-journal keeps).
+        List<JSONObject> l = list(c);
+        long now = System.currentTimeMillis();
+        long[] ats = new long[l.size()];
+        for (int i = 0; i < l.size(); i++) ats[i] = l.get(i).optLong("at");
+        for (int i : CancelPolicy.drop(ats, now)) delete(c, l.get(i).optString("id"));
     }
 
     /** For logs and QA. */

@@ -111,7 +111,7 @@ final class VoiceCapture {
         for (File f : fs) {
             if (f.equals(live) || !f.getName().endsWith(".aac")) continue;
             if (!TakeRecovery.worthSending(f.length())) { //noinspection ResultOfMethodCallIgnored
-                CaptureJournal.get(c).adopt(f, "side"); continue; } // Boot never deletes audio.
+                CaptureJournal.get(c).releaseIfEmpty(f, "side"); continue; } // under 2 KB: nothing was said
             try {
                 long bytes = f.length();
                 EverywhereOutbox.get(c).enqueueRecording(f, EverywhereOutbox.SRC_SIDE, null, false);
@@ -297,7 +297,7 @@ final class VoiceCapture {
         recording = null;
         if ((!ok && qa == null) || audio == null || !audio.isFile() || audio.length() < 512) {
             if (audio != null && qa == null) //noinspection ResultOfMethodCallIgnored
-                CaptureJournal.get(app).releaseFile(audio, "side", null);
+                CaptureJournal.get(app).releaseIfEmpty(audio, "side");
             endLoan("empty", "cancelled", "Nothing was recorded");
             if (view != null) view.onNothing();
             return;
@@ -435,7 +435,7 @@ final class VoiceCapture {
         endLoan("cancelled", "cancelled", null);
         if (recording != null) {
             //noinspection ResultOfMethodCallIgnored
-            CaptureJournal.get(app).releaseFile(recording, "side", null);
+            CaptureJournal.get(app).releaseIfEmpty(recording, "side");
             recording = null;
         }
     }

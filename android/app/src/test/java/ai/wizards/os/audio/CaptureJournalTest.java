@@ -279,4 +279,44 @@ public class CaptureJournalTest {
             }
         }
     }
+
+    // Owner-visible behaviour kept from 0.9.30 (19 Oct 2026 review): these were deletes with a real reason.
+    @Test public void webOutboxCustodyReleasesOnlyAHandedAppTake() throws Exception {
+        File root = tmp.newFolder(), f = audio(root, "take.aac"); CaptureJournal j = journal(root, f);
+        j.stopped("take");
+        assertTrue(j.release("take", CaptureJournal.Reason.WEB_OUTBOX_CUSTODY));
+        assertEquals("kept", j.entry("take").getString("state")); // never handed: kept
+        File g = audio(root, "take2.aac"); j.register("t2", "app", "note", g, 1); j.hand("t2", "web-outbox");
+        assertTrue(j.release("t2", CaptureJournal.Reason.WEB_OUTBOX_CUSTODY));
+        assertFalse(g.exists());
+    }
+
+    @Test public void deliveredOnPhoneAndOwnerDeleteRelease() throws Exception {
+        File root = tmp.newFolder(), f = audio(root, "take.aac"); CaptureJournal j = journal(root, f);
+        j.hand("take", "everywhere-outbox");
+        assertTrue(j.release("take", CaptureJournal.Reason.DELIVERED_ON_PHONE)); assertFalse(f.exists());
+        File g = audio(root, "g.aac"); j.register("g", "everywhere", "note", g, 1); j.hand("g", "everywhere-outbox");
+        assertTrue(j.release("g", CaptureJournal.Reason.USER_DELETE)); assertFalse(g.exists());
+        File live = audio(root, "live.aac"); j.register("live", "side", "note", live, 1);
+        j.release("live", CaptureJournal.Reason.USER_DELETE);
+        assertTrue("a take still recording is never deleted", new File(j.entry("live").getString("path")).isFile());
+    }
+
+    @Test public void nothingRecordedReleasesOnlyTinyFiles() throws Exception {
+        File root = tmp.newFolder(), tiny = new File(root, "tiny.aac"), real = audio(root, "real.aac");
+        Files.write(tiny.toPath(), new byte[100]);
+        CaptureJournal j = new CaptureJournal(root);
+        assertTrue(j.releaseIfEmpty(tiny, "side")); assertFalse(tiny.exists());
+        byte[] bytes = Files.readAllBytes(real.toPath());
+        assertTrue(j.releaseIfEmpty(real, "side")); assertFalse(real.exists());
+        kept(j, j.idFor(new File(j.entry("real").getString("path"))), bytes);
+    }
+
+    @Test public void finishedEntriesWithoutAudioAreCompacted() throws Exception {
+        File root = tmp.newFolder(), f = audio(root, "take.aac"); CaptureJournal j = journal(root, f);
+        j.hand("take", "everywhere-outbox"); j.release("take", CaptureJournal.Reason.DELIVERED_ON_PHONE);
+        j.register("next", "app", "note", audio(root, "next.aac"), 2);
+        assertNull(new CaptureJournal(root).entry("take"));
+        assertNotNull(new CaptureJournal(root).entry("next"));
+    }
 }
