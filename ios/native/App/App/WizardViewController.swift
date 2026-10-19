@@ -88,11 +88,35 @@ final class WizardViewController: CAPBridgeViewController {
             web.uiDelegate = gate
         }
 
+        injectPluginProxies(into: web)
+
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
         ) { [weak self] _ in
             self?.webView?.evaluateJavaScript("window.dispatchEvent(new Event('wos-native-resume'))")
         }
+    }
+
+    /// Capacitor's injected bridge only has the low-level `Capacitor.nativePromise`; `Capacitor.registerPlugin` and the
+    /// `Capacitor.Plugins.*` proxies come from @capacitor/core, which a Capacitor app normally bundles into its own JS.
+    /// The Wizard's pages are remote and don't, so inject core (`www/capacitor-core.js`, copied from node_modules by the
+    /// `capacitor:copy:before` hook) into every main-frame page after the bridge, and register a proxy for each native
+    /// plugin. The Wizard's pages can then call e.g. `Capacitor.Plugins.Share.share({...})`.
+    private func injectPluginProxies(into web: WKWebView) {
+        guard let path = Bundle.main.path(forResource: "capacitor-core", ofType: "js", inDirectory: "public"),
+              let core = try? String(contentsOfFile: path, encoding: .utf8) else {
+            CAPLog.print("⚡️  Wizard: public/capacitor-core.js missing; Capacitor.Plugins will be empty (run npx cap sync ios)")
+            return
+        }
+        let register = """
+        ;(function () {
+          var C = window.Capacitor;
+          if (!C || typeof C.registerPlugin !== 'function') return;
+          (C.PluginHeaders || []).forEach(function (h) { if (!C.Plugins[h.name]) C.registerPlugin(h.name); });
+        })();
+        """
+        web.configuration.userContentController.addUserScript(
+            WKUserScript(source: core + register, injectionTime: .atDocumentStart, forMainFrameOnly: true))
     }
 
     deinit {

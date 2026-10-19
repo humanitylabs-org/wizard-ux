@@ -49,8 +49,11 @@
   <script>
     (async () => {
       const $ = id => document.getElementById(id);
-      const shell = window.Capacitor && window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin('WizardShell') : null;
-      if (!shell) { $('err').textContent = 'This page only works inside the Wizard app.'; return; }
+      // Call the native plugin through the bridge Capacitor always injects (no @capacitor/core needed on this page).
+      const C = window.Capacitor;
+      if (!C || typeof C.nativePromise !== 'function') { $('err').textContent = 'This page only works inside the Wizard app.'; return; }
+      const call = (method, options) => C.nativePromise('WizardShell', method, options || {});
+      const shell = { info: () => call('info'), connect: o => call('connect', o), retry: () => call('retry') };
       const info = await shell.info().catch(() => ({}));
       if (info.address) {
         // An address is set but we ended up here: the Wizard didn't answer.

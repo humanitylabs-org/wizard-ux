@@ -5,7 +5,8 @@
   "scripts": {
     "sync": "cap sync ios",
     "open": "cap open ios",
-    "sim": "cap run ios"
+    "sim": "cap run ios",
+    "capacitor:copy:before": "cp node_modules/@capacitor/core/dist/capacitor.js www/capacitor-core.js"
   },
   "private": true,
   "dependencies": {
