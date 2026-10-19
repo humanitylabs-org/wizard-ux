@@ -312,8 +312,8 @@ html[data-skin="landscapes"] .keys-card { background: #0d1210; }
 #voiceGlow { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; opacity: 0; transition: opacity .35s ease, --vglow-lvl .12s linear; }
 #voiceGlow::before, #voiceGlow::after { content: ''; position: absolute; inset: 0; border-style: solid; border-color: transparent;
   border-image: conic-gradient(from var(--vglow-a), #ff5ccf, #b45cff, #3fe0ff, #8f63ff, #ff7ab8, #ff5ccf) 1; animation: vgspin 6s linear infinite; }
-#voiceGlow::before { border-width: 2px; opacity: .9; }
-#voiceGlow::after { border-width: 14px; filter: blur(16px); opacity: calc(.32 + var(--vglow-lvl) * .68); }
+#voiceGlow::before { border-width: 3px; }
+#voiceGlow::after { border-width: 18px; filter: blur(18px); opacity: calc(.5 + var(--vglow-lvl) * .5); }
 html.voice-on #voiceGlow { opacity: 1; }
 html.voice-paused #voiceGlow { opacity: .4; }
 html.voice-paused #voiceGlow::before, html.voice-paused #voiceGlow::after { animation-play-state: paused; }
