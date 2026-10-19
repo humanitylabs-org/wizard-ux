@@ -328,6 +328,11 @@ def g_burst():
     rays = U(*[R(rrect(234, 84 + (i % 2) * 22, 44, 150 - (i % 2) * 22, 22), i * 360 / 8, 256, 256) for i in range(8)])
     return D(U(rays, circle(256, 256, 76)), circle(256, 256, 30))
 
+@glyph('shield', 'A shield with a keyhole cut out: private AI, sealed in an enclave.')
+def g_shield():
+    shield = P("M256 72 L404 124 V236 C404 330 344 404 256 440 C168 404 108 330 108 236 V124 Z")
+    return D(shield, circle(256, 228, 40), P("M240 244 L272 244 L288 336 L224 336 Z"))
+
 @glyph('gauge', 'A dial with its needle cut out: how your box is doing.')
 def g_gauge():
     dial = P("M96 330 A160 160 0 0 1 416 330 L416 352 C416 370 402 384 384 384 H128 C110 384 96 370 96 352 Z")
