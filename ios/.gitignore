@@ -1,0 +1,10 @@
+node_modules/
+build/
+fastlane/.env
+fastlane/report.xml
+fastlane/README.md
+fastlane/test_output/
+*.p8
+www/capacitor-core.js
+# Xcode SwiftPM state (Package.swift pins capacitor-swift-pm exactly)
+native/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
