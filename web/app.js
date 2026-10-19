@@ -386,6 +386,7 @@
     if (!silent) announce(`<b>${esc(deskName(idx))}</b>`);
     markVisibleThreadsSeen();
     window.WosResources?.sync();
+    window.WosSkinHost?.changed();
   }
   function announce(html) {
     const L = $('#deskLabel'); L.innerHTML = html; L.classList.add('show'); document.body.classList.add('labeling');
@@ -433,6 +434,7 @@
   $('#dock').addEventListener('pointermove', e => {
     if (!DS || e.pointerId !== DS.id) return;
     const dx = e.clientX - DS.x, dy = e.clientY - DS.y;
+    if (!DS.h && window.WosSkinHost?.claimed(e.pointerId)) { DS = null; return; } // a skin gesture owns this finger
     if (!DS.h) { if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return; DS.h = true; endDotHold(); try { $('#dock').setPointerCapture(e.pointerId); } catch (_) {} }
     let d = dx; if ((idx === 0 && d > 0) || (atPickerEnd() && d < 0)) d *= .28;
     placeTrack(d * 1.1, false);
@@ -704,6 +706,7 @@
   function focusWin(id) {
     const i = deskOf(id); if (i < 0 || desks[i].focus === id) return;
     desks[i].focus = id; applyLayout(i); save();
+    window.WosSkinHost?.changed();
   }
   let fullAt = 0;
   /* Immersive full screen (James, 9 Oct): a full-screen window owns the whole display. Its title bar,
@@ -3609,4 +3612,19 @@
     toast,
   });
   window.WizCore.deeplink?.consume();
+  /* Skin packages (core/skin-host.js): the only shell surface a skin script can drive. Each call goes through
+   * the shell's own functions, so the Back contract and desk rules hold for every skin. */
+  const skinChatsWin = () => { const f = desks[idx]?.focus; if (W[f]?.app === 'chats') return W[f]; const id = desks[idx]?.wins.find(x => W[x]?.app === 'chats'); return id ? W[id] : null; };
+  window.WosSkinHost?.attach({
+    route() { const w = skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx }; },
+    back: () => backStep(),
+    openList: () => openChatsList(),
+    openThread: id => openWizardThread(id),
+    goDesk: i => goDesk(i),
+    deskCount: () => desks.length,
+    root() { const w = skinChatsWin(); return w ? track.querySelector(`[data-chats="${w.id}"]`) : null; },
+    dock: () => $('#dock'),
+    locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
+    toast: text => toast('◇', text, 2400),
+  });
 })();
