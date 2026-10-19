@@ -858,18 +858,17 @@
   };
   L.releaseSend = t => { if (t && TAPS.get(t.sid) === t) { TAPS.delete(t.sid); resync(); } };
 
-  /* ---- speed (18 Oct 2026, Miguel: "whenever I click on any session it just is extremely snappy") ----
+  /* ---- thread open speed (18 Oct 2026, Miguel: "whenever I click on any session it just is extremely snappy") ----
    * 1. Thread cache: every history read is kept on this device (IndexedDB, newest 40 threads), so a thread
-   *    paints at once from its last copy while the fresh read lands and replaces it. Server rows only: optimistic
-   *    sends never enter it, and private agents' threads are never stored.
-   * 2. Preload: after each list read, Errors/Working/Ready threads whose revision changed are read in the
-   *    background, one at a time, never while hidden or on Data Saver. Archived threads are never preloaded.
-   * 3. Hover warm: on desktop, pointing at a row starts its read, and the click joins that same request.
-   * 4. List cache: the last list paints at boot (marked stale) instead of skeleton rows; the live read replaces it. */
+   *    paints at once from its last copy while the fresh read lands and replaces it. Server rows only; private
+   *    agents' threads are never stored.
+   * 2. Preload: after each live list read, Errors/Working/Ready threads whose revision changed are read in the
+   *    background, one at a time, never while hidden, on Data Saver, or from the cached list. Never archived threads.
+   * 3. Warm: pointing at (desktop) or touching a row starts its read; the open joins that same request. */
   const TC_DB = 'wos-thread-cache', TC_MAX = 40, TC_BYTES = 2.5e6;
-  const TC = new Map(); // id -> { id, rows, rev, at }
-  const INFLIGHT = new Map(); // id -> history read in progress (hover, preload and click share it)
+  const TC = new Map(), INFLIGHT = new Map();
   const revOf = s => s ? [s.messageCount, s.lastAssistantAt, s.lastUserAt, s.activityAt, s.status].join('|') : '';
+  const keepable = id => !!id && !L.agentOf(id) && !(L.isPrivate && L.isPrivate(id));
   let tcDb = null;
   const tcOpen = () => tcDb || (tcDb = new Promise(res => {
     try { const r = indexedDB.open(TC_DB, 1); r.onupgradeneeded = () => r.result.createObjectStore('t', { keyPath: 'id' }); r.onsuccess = () => res(r.result); r.onerror = () => res(null); r.onblocked = () => res(null); }
@@ -883,7 +882,7 @@
     });
   })();
   async function tcPut(id, rows, rev) {
-    if (!id || L.agentOf(id) || !Array.isArray(rows)) return;
+    if (!keepable(id) || !Array.isArray(rows)) return;
     let n = 0; try { n = JSON.stringify(rows).length; } catch (e) { return; }
     if (n > TC_BYTES) return;
     const v = { id, rows, rev, at: Date.now() }; TC.set(id, v);
@@ -893,37 +892,41 @@
     try { const st = db.transaction('t', 'readwrite').objectStore('t'); st.put(v); for (const k of evict) st.delete(k); } catch (e) {}
   }
   const fetchMessages = L.messages;
-  L.messages = function (id) {
-    const live = INFLIGHT.get(id); if (live) return live;
-    const rev = revOf(this.session(id));
-    const p = fetchMessages.call(this, id).then(rows => { tcPut(id, rows, rev); return rows; });
-    INFLIGHT.set(id, p); const done = () => { if (INFLIGHT.get(id) === p) INFLIGHT.delete(id); }; p.then(done, done);
+  // A background read (warm/preload) can be joined by one thread open; an open never joins another open's read,
+  // so A -> B -> A always starts a new, independent read generation.
+  const startRead = (id, claimed) => {
+    const rev = revOf(L.session(id));
+    const p = fetchMessages.call(L, id).then(rows => { tcPut(id, rows, rev); return rows; });
+    const e = { p, claimed }; INFLIGHT.set(id, e); const done = () => { if (INFLIGHT.get(id) === e) INFLIGHT.delete(id); }; p.then(done, done);
     return p;
   };
-  // The last server copy of a thread's rows, or null. Callers still read the network; this only paints first.
-  L.cachedMessages = id => (id && !L.agentOf(id) && TC.get(id)?.rows) || null;
+  L.messages = function (id) {
+    const e = INFLIGHT.get(id); if (e && !e.claimed) { e.claimed = true; return e.p; }
+    return startRead(id, true);
+  };
+  const bgRead = id => { const e = INFLIGHT.get(id); return e ? e.p : startRead(id, false); };
+  L.cachedMessages = id => (keepable(id) && TC.get(id)?.rows) || null;
   L.cacheReady = tcReady;
   const saving = () => !!navigator.connection?.saveData;
-  // Start a thread's read early (desktop hover) when its cached copy is missing or behind.
   L.warm = id => {
-    const s = L.session(id); if (!s || s.archived || s.optimistic || saving() || INFLIGHT.has(id)) return;
+    const s = L.session(id); if (!s || s.archived || s.optimistic || saving() || INFLIGHT.has(id) || !keepable(id)) return;
     const c = TC.get(id); if (c && c.rev === revOf(s) && !WORKING.has(s.status)) return;
-    L.messages(id).catch(() => {});
+    bgRead(id).catch(() => {});
   };
   let pfBusy = false;
   async function preload() {
-    if (pfBusy || document.hidden || !L.ok || L.stale || saving()) return;
+    if (pfBusy || document.hidden || !L.ok || L.cached || L.error || saving()) return;
     pfBusy = true;
     try {
       await tcReady;
       const g = groupWork(L.sessions);
-      const want = [...g.errors, ...g.working, ...g.ready].filter(s => !s.archived && !s.hidden && !s.optimistic && !s.synthetic).slice(0, 16);
+      const want = [...(g.errors || []), ...(g.working || []), ...(g.ready || [])].filter(s => !s.archived && !s.hidden && !s.optimistic && !s.synthetic && keepable(s.id)).slice(0, 16);
       for (const s of want) {
         if (document.hidden || !L.session(s.id)) continue;
         const c = TC.get(s.id);
         if (c && c.rev === revOf(s)) continue;
-        if (c && WORKING.has(s.status) && Date.now() - c.at < 60000) continue; // a running thread changes every poll
-        try { await L.messages(s.id); } catch (e) {}
+        if (c && WORKING.has(s.status) && Date.now() - c.at < 60000) continue;
+        try { await bgRead(s.id); } catch (e) {}
         await new Promise(r => setTimeout(r, 120));
       }
     } finally { pfBusy = false; }
