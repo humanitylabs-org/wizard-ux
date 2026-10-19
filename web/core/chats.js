@@ -1243,18 +1243,6 @@ window.WizCore.chats = function createChats(H) {
       if (c.loadedFor === w.thread && hk !== c.hk) { c.hk = hk; const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el); }
       return;
     }
-    // Speed: a thread opened for the first time this page paints its last on-device copy at once (no skeleton);
-    // the read below still runs and replaces it. Pending sends and errors keep their own paths.
-    if (c.loadedFor !== sid && LIVE.cachedMessages) {
-      const cached = LIVE.cachedMessages(sid);
-      if (cached && cached.length) {
-        try {
-          const turns = toTurns(cached);
-          Object.assign(c, { turns, loadedFor: sid, at: 0, err: '', sig: '', readRevision: '' });
-          const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el);
-        } catch (e) {}
-      }
-    }
     // Every read owns a captured thread AND navigation generation. A -> B -> A is a new read;
     // an old completion must neither publish into it nor release its loading lock.
     const read = { sid, nav }; c.loading = read;
