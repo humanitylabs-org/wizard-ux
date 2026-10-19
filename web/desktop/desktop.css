@@ -266,3 +266,15 @@ html.splitting, html.splitting * { cursor: col-resize !important; user-select: n
 .exit-full span { font-size: 12px; }
 .exit-full:hover, .exit-full:focus-visible { opacity: 1; color: var(--ink); }
 .exit-full[hidden] { display: none; }
+
+/* Opinionated: top-right bar controls match the top-left icons (21px glyphs, 26px-tall hit areas, one pill height) */
+.bar-r { gap: 4px; }
+.bar-r .mic, .bar-r .keys-btn, .bar-r .status { height: 26px; }
+.bar-r .mic { width: 30px; }
+.bar-r .mic svg { width: 20px; height: 20px; stroke-width: 1.8; }
+#keysBtn { font-size: 13px; color: var(--ink-2); }
+.bar-r .status { font-size: 14px; gap: 12px; }
+.bar-r .status .st { width: 9px; height: 9px; }
+.bar-r .general-voice { min-height: 26px; height: 26px; padding: 0 12px; border-radius: 7px; font-size: 13px; line-height: 1; }
+#commandBtn svg { stroke-linejoin: round; } #keysBtn { line-height: 26px; }
+.bar-r .status .st.unread, .bar-r .status .st.working, .bar-r .status .st.needs { width: 9px; height: 9px; }
