@@ -350,6 +350,15 @@
       try { st.detach(); st.frame.remove(); } catch (_) {}
     }
   }
+  // Per-app update check (core/app-versions.js): attached same-origin app frames, whether each is on screen, and
+  // what would be lost by reloading it. A frame with no isVisible host (single-app session) is the whole page.
+  function updateFrames() {
+    reconcile();
+    return [...frames.values()].filter(st => valid(st)).map(st => {
+      let visible = true; try { if (st.isVisible) visible = st.isVisible() === true; } catch (_) { visible = false; }
+      return Object.freeze({ frame: st.frame, appId: st.appId, visible, holds: [...st.holds.values()], suspect: !!st.suspect });
+    });
+  }
   // One-shot, after a reload that kept a recording: put the kept app's frame back on the route it showed.
   const RETURN_KEY = 'wos.reload-return.v1';
   function restoreReturn(st) {
@@ -366,7 +375,7 @@
   window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack, ownsThreadLink,
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
-    update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload }),
+    update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload, frames: updateFrames }),
     inspect: () => { reconcile(); return [...frames.values()].map(st => ({ appId: st.appId, path: st.url.pathname, ready: !!st.doc, holds: [...st.holds.values()], suspect: !!st.suspect })); },
   });
 })();

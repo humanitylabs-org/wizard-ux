@@ -41,9 +41,9 @@
     </div>
     <div class="bar-c">
       <button id="clock" class="clock" title="Home"></button>
-      <div id="voicePill" class="voice-pill" hidden>
-        <i class="rec-dot"></i><span id="voiceTime">0:00</span><span class="lvl"><b id="voiceLvl"></b></span>
-        <span id="voiceText">Listening</span><kbd id="voiceKey">Right ⌘</kbd><small id="voiceAct">send</small><button id="voiceCancel" type="button">Cancel</button><div class="voice-extras"><button id="voicePause" type="button">Pause</button><button id="voiceSend" type="button">Finish</button><button id="voiceAttach" type="button">Attach</button><button id="voiceScreenshot" type="button">Screenshot</button></div><input id="voiceFileInput" type="file" multiple hidden><div id="voiceFiles"></div>
+      <div id="voicePill" class="voice-pill" role="status" aria-label="Recording" hidden>
+        <i class="rec-dot"></i><span id="voiceTime">0:00</span><span class="lvl"><b id="voiceLvl"></b></span><span id="voiceText">Listening</span><button id="voiceCancel" type="button" aria-label="Cancel recording" title="Cancel">✕</button>
+        <div class="voice-tray"><span class="voice-hint"><kbd id="voiceKey">Right ⌘</kbd><small id="voiceAct">send</small></span><div class="voice-extras"><button id="voicePause" type="button">Pause</button><button id="voiceSend" type="button">Finish</button><button id="voiceAttach" type="button">Attach</button><button id="voiceScreenshot" type="button">Screenshot</button></div><div id="voiceFiles"></div></div><input id="voiceFileInput" type="file" multiple hidden>
       </div>
     </div>
     <div class="bar-r">
@@ -92,6 +92,7 @@
   <script src="core/app-capture.js"></script>
   <script src="core/app-reading-position.js"></script>
   <script src="core/app-services.js"></script>
+  <script src="core/app-versions.js"></script>
   <script src="core/agents.js"></script>
   <script src="core/app-route.js"></script>
   <script src="core/web-update.js"></script>
