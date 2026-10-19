@@ -32,7 +32,8 @@
   const CLAUDE_ORDER = ['fable', 'opus', 'sonnet', 'haiku'];
   const GPT_ORDER = ['astra', 'sol', 'terra', 'luna', 'codex-spark'];
   // The models closest to the thumb in the compact model menu (James 18 Oct 2026). Everything else is one tap away.
-  const PRIMARY = [{ family: 'claude:opus', name: 'Opus' }, { family: 'gpt:astra', name: 'Astra' }, { family: 'gpt:sol', name: 'Sol' }];
+  const PRIMARY = [{ family: 'claude:opus', name: 'Opus' }, { family: 'gpt:astra', name: 'Astra' }, { family: 'gpt:sol', name: 'Sol' }, { family: 'tinfoil', name: 'Tinfoil' }];
+  const isTinfoil = provider => provider === 'wizard-tinfoil' || provider === 'custom:wizard-tinfoil';
   const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
 
   const claudeFamily = (model, provider) => (!provider || CLAUDE_PROVIDERS.has(provider)) ? /^claude-(fable|opus|sonnet|haiku)(?:-|$)/i.exec(model)?.[1].toLowerCase() : undefined;
@@ -52,7 +53,7 @@
     if (/^gpt-[\d.]+$/.test(base)) return 'gpt:plain';
     return undefined;
   }
-  const family = (model, provider) => { const c = provider && CLAUDE_PROVIDERS.has(provider) ? claudeFamily(model, provider) : undefined; return c ? `claude:${c}` : gptFamily(model, provider); };
+  const family = (model, provider) => { if (isTinfoil(provider)) return 'tinfoil'; const c = provider && CLAUDE_PROVIDERS.has(provider) ? claudeFamily(model, provider) : undefined; return c ? `claude:${c}` : gptFamily(model, provider); };
   const generation = m => Number(/^gpt-([\d.]+)/i.exec(m)?.[1] ?? 0);
   const versionKey = m => m.replace(/\[.*$/, '').replace(/-900k$/i, '').replace(/-\d{8}$/, '');
   const longTwin = m => /-900k$/i.test(m);
@@ -65,7 +66,7 @@
     const provider = providers.find(p => str(p.slug) === curProvider) || providers.find(p => p.is_current === true) || providers.find(p => p.authenticated === true && arr(p.models).length > 0);
     if (provider) {
       const pslug = str(provider.slug), pname = str(provider.name) || pslug, defProvider = curProvider || pslug;
-      const visible = [provider, ...providers.filter(p => str(p.slug) !== pslug && SUBSCRIPTIONS.includes(str(p.slug)) && p.authenticated === true)];
+      const visible = [provider, ...providers.filter(p => str(p.slug) !== pslug && (SUBSCRIPTIONS.includes(str(p.slug)) || p.is_user_defined === true) && p.authenticated === true)];
       const options = visible.flatMap(vp => {
         const slug = str(vp.slug), name = str(vp.name) || slug;
         return arr(vp.models).map(v => {
@@ -120,24 +121,29 @@
   }
 
   const M = {
-    options: [], providers: [], selections: new Map(), pending: new Map(), ready: false, error: '', at: 0, loading: null,
+    options: [], providers: [], tinfoil: null, selections: new Map(), pending: new Map(), ready: false, error: '', at: 0, loading: null,
     load(force) {
       if (M.loading) return M.loading;
       if (!force && M.ready && Date.now() - M.at < 5 * 60e3) return Promise.resolve(M.options);
+      // The app owns the upstream key. Hermes' local bearer is not proof that a key is saved.
+      const connection = fetch('/wizard-tinfoil/api/connection', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(4000) })
+        .then(r => r.ok ? r.json() : null).catch(() => null);
       M.loading = fetch('/wizard/hermes/api/model/options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw new Error(`Models unavailable (${r.status})`); return r.json(); })
-        .then(j => { M.providers = arr(obj(j).providers); M.options = normalize(j); M.ready = true; M.error = ''; M.at = Date.now(); return M.options; })
+        .then(async j => { M.tinfoil = await connection; M.providers = arr(obj(j).providers); M.options = normalize(j).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); return M.options; })
         .catch(e => { M.error = String(e.message || e); return M.options; })
         .finally(() => { M.loading = null; });
       return M.loading;
     },
     normalize, visibleChoices, PRIMARY, family,
+    tinfoilReady() { return M.tinfoil?.provider === 'tinfoil' && M.tinfoil?.credentialStored === true; },
     defaultOption() { return M.options.find(o => o.isGlobalDefault) || null; },
     find(model, provider) { if (!model) return null; return M.options.find(o => o.value === model && (!provider || o.provider === provider)) || null; },
     visible(model, provider) { return visibleChoices(M.options, model, provider); },
     name(model, provider) { const o = M.find(model, provider); return o ? o.name : model ? (claudeName(model, provider || 'anthropic') || friendly(model)) : ''; },
     short(model, provider) {
       if (!model) return '';
+      if (isTinfoil(provider)) return 'Tinfoil';
       const f = claudeFamily(model, provider || (/^claude-/.test(model) ? 'anthropic' : ''));
       if (f) return cap(f);
       const o = M.find(model, provider);
@@ -232,6 +238,7 @@
       if (provider === 'tinfoil') provider = 'custom:tinfoil-operator';
       if (provider && M.providers.some(p => p.slug === provider && p.is_user_defined)) provider = 'custom:' + provider;
       if (!provider) throw new Error('Model provider unavailable · choose the model again');
+      if (isTinfoil(provider) && !M.tinfoilReady()) throw new Error('Set up Tinfoil in its connection app before choosing it');
       return { model: route.model, provider };
     },
     setThreadModel(sid, o) {
@@ -244,7 +251,7 @@
         if (!r.ok) throw Object.assign(new Error(`Model not changed (${r.status})`), { status: r.status });
         const ack = await r.json();
         // An agent's own Hermes names its provider its own way (e.g. custom); the model is what must match.
-        if (ack.runtime?.model_lock !== 'accepted' || ack.runtime?.model !== route.model || (!ag && ack.runtime?.provider !== route.provider))
+        if (ack.runtime?.model_lock !== 'accepted' || ack.runtime?.model !== route.model || (!ag && !M.matchesRuntime(ack.runtime, route)))
           throw new Error('Wizard did not confirm the selected model');
         M.selections.set(sid, { model: route.model, provider: route.provider, version: Number(ack.runtime.selection_version) || 0 });
         return { model: route.model, provider: route.provider };
@@ -302,7 +309,10 @@
       const list = [], row = (o, cls = '') => { const i = list.push(o) - 1; const p = cls.includes('priv');
         return `<button type="button" class="mrow${cls}${isCur(o) ? ' on' : ''}" data-mpick="${i}"${p ? ` data-mprivate="${esc(o.agent)}"` : ''} aria-pressed="${isCur(o)}"><span class="mn"><b>${p ? lock : ''}${esc(label(o, p))}</b></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; };
       const sec = (label, rows, cls = '') => rows ? `<div class="mpop-sec${cls}" role="group" aria-label="${esc(label)}"><div class="msheet-gh">${cls.includes('priv') ? lock : ''}<span>${esc(label)}</span></div>${rows}</div>` : '';
-      const mainRows = primary.map(o => row(o)).join('');
+      const setupRow = `<button type="button" class="mrow" disabled aria-disabled="true" title="Set up Tinfoil in its connection app"><span class="mn"><b>Tinfoil</b></span></button><a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>`;
+      // A same-Hermes route, never a Private agent or a new history. No model id is guessed.
+      const mainRows = primary.map(o => !own && isTinfoil(o.provider) && !M.tinfoilReady() ? setupRow : row(o)).join('')
+        + (!own && !primary.some(o => isTinfoil(o.provider)) ? setupRow : '');
       const privRows = privList.map(o => row(o, ' priv')).join('');
       const moreRows = rest.map(o => row(o)).join('');
       const moreBtn = !own && M.ready && !all && vis.some(o => !primary.includes(o)) ? `<button type="button" class="mrow more" data-mall>More models</button>` : '';
