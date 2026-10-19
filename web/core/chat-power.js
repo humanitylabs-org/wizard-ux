@@ -178,9 +178,9 @@ window.WosChatPower = function chatPower(A) {
     modelsAsked = true;
     M.load().then(() => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } }); // background: waits for a selection
   }
-  async function pickModel(o) {
-    const sh = sheet; if (!sh || sh.type !== 'model') return;
-    const c = ch(sh.wid), w = H.win(sh.wid); closeSheet();
+  async function pickModel(o, direct) {
+    const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model')) return;
+    const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     // A Private model picked in a standard thread: a new private chat continues this conversation (quoted context);

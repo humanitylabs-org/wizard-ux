@@ -840,7 +840,7 @@ html:not([data-shell="desktop"]) .imm-edge i { bottom: 3px; }
 .home .constellation .now-card .k { font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--ink-2); }
 .home .constellation .now-card .n { font-size: 16px; font-weight: 500; color: var(--ink); padding-left: 4px; }
 
-/* ================= Distraction-free (James, 18 Oct 2026) ==========
+/* ================= Distraction-free (James, 18 Oct 2026) =================
  * A short swipe down on the orb (or just above it) hides the bottom bar and every window's title bar. Same layout,
  * no system bars toggled: the tiles grow into the space through their existing inset transition and the title bar
  * slides up out of its window, so the change is one smooth motion. A faint handle marks the bottom edge; swipe up

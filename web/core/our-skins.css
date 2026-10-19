@@ -36,3 +36,30 @@ html[data-skin="landscapes"] select { font-family: var(--font-text); }
 :is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) .ch-sec-h span { font-family: var(--font-text); }
 :is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) :is(.now-card, .side-card, .ch-fcard, .pal-card) { border-radius: var(--r-card); }
 :is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) :is(.ch-rdy-bar button, .ch-chip, .ch-fopt) { border-radius: 999px; }
+
+/* Obsidian Light: hard-coded light-on-dark pieces (dock marks, app names, voice controls, transcript, timer) flip to ink on paper. */
+html[data-skin="obsidian-light"] :is(.lapp .nm, .pal-app .nm) { color: var(--ink-2); }
+html[data-skin="obsidian-light"] .dsg { --c: #1a1a1a; opacity: .85; }
+html[data-skin="obsidian-light"] .dsg .sgi { filter: grayscale(1) brightness(.35); }
+html[data-skin="obsidian-light"] .dsg.empty { border-color: rgba(0, 0, 0, .35); }
+html[data-skin="obsidian-light"] .ddot.dplus .dsg { opacity: .7; }
+html[data-skin="obsidian-light"] :is(.dsg .dn, .dsg .dbg, .arc-count) { background: #000; color: #fff; }
+html[data-skin="obsidian-light"] .arc { background: rgba(255, 255, 255, .86); border-color: rgba(0, 0, 0, .18); color: #111; box-shadow: 0 8px 24px rgba(0, 0, 0, .14); }
+html[data-skin="obsidian-light"] :is(.arc-left, .arc-right) { color: #111; }
+html[data-skin="obsidian-light"] .arc-right.has { background: #000; border-color: #000; color: #fff; }
+html[data-skin="obsidian-light"] .arc:active { background: rgba(0, 0, 0, .1); }
+html[data-skin="obsidian-light"] .arc small { color: var(--ink-2); }
+html[data-skin="obsidian-light"] .device[data-voice="paused"] .arc-mid { background: rgba(0, 0, 0, .08); border-color: rgba(0, 0, 0, .4); color: #111; }
+html[data-skin="obsidian-light"] .transcript { background: rgba(255, 255, 255, .92); border-color: rgba(0, 0, 0, .14); color: var(--ink); box-shadow: 0 16px 44px rgba(0, 0, 0, .16); }
+html[data-skin="obsidian-light"] .timer { background: rgba(255, 255, 255, .95); border-color: rgba(0, 0, 0, .2); color: #111; }
+html[data-skin="obsidian-light"] :is(.tx-route, .transcript.brief .tx-route) { color: #111; }
+html[data-skin="obsidian-light"] .tx-route b { background: rgba(0, 0, 0, .08); color: #111; }
+html[data-skin="obsidian-light"] .tx-chips button { background: rgba(0, 0, 0, .05); }
+html[data-skin="obsidian-light"] .device:not(.orb-corner) .voice .arc { background: rgba(255, 255, 255, .92); border-color: rgba(0, 0, 0, .2); color: #111; }
+html[data-skin="obsidian-light"] .device:not(.orb-corner) .voice .arc-right.has { background: #000; color: #fff; }
+html[data-skin="obsidian-light"] .ddot.dplus svg { stroke: #111; }
+html[data-skin="obsidian-light"] .ddot.dplus .dsg { opacity: .8; }
+html[data-skin="obsidian-light"] .lapp .ic.sgt { color: #222; }
+html[data-skin="obsidian-light"] :is(.orb-ring) { border-color: rgba(0, 0, 0, .18); }
+html[data-skin="obsidian-light"] .sheet { border-color: rgba(0, 0, 0, .12); }
+html[data-skin="obsidian-light"] .sheet-grip { background: rgba(0, 0, 0, .22); }
