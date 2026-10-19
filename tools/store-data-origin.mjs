@@ -2,7 +2,7 @@
 // No Service lifecycle edits. Fixed source paths; Runtipi credential never leaves this process.
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, machine } from 'node:os';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
@@ -86,7 +86,8 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCa
           Promise.resolve().then(() => wamMetadata(readWam())),
           serviceJson('/wizard/v1/apps').then(shellMetadata),
         ]);
-        send(200,{wam:wam.status==='fulfilled'?wam.value:[], shell:shell.status==='fulfilled'?shell.value:[],
+        send(200,{architecture:({x86_64:'amd64',aarch64:'arm64',arm64:'arm64'})[machine()] || '',
+          wam:wam.status==='fulfilled'?wam.value:[], shell:shell.status==='fulfilled'?shell.value:[],
           complete:wam.status==='fulfilled' && shell.status==='fulfilled',
           unavailable:[...(wam.status==='rejected'?['wam']:[]),...(shell.status==='rejected'?['shell']:[])]}); return;
       }
