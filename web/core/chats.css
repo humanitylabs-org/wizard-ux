@@ -701,3 +701,6 @@ html:not([data-shell="desktop"]) .ch-bbar .ch-tacts { margin: 0; gap: 4px; flex:
 html:not([data-shell="desktop"]) .ch-bbar .ch-tacts button { height: 36px; width: 40px; padding: 0; justify-content: center; border-radius: 18px; }
 html:not([data-shell="desktop"]) .ch-bbar .ch-tacts button span { display: none; }
 html:not([data-shell="desktop"]) .ch-bbar .ms { min-width: 0; }
+/* Test port: the selected slot carries the full version (GPT 6.1 Sol); give it room, never wrap. */
+.ms-track .ms-o { white-space: nowrap; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; }
+.ms-track .ms-o.on { font-size: 12.5px; }
