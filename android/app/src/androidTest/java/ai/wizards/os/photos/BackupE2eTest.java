@@ -95,7 +95,20 @@ public class BackupE2eTest {
         writeText(new File(c.getFilesDir(),"qa_home.txt"),"http://localhost:2290");
         record("privacy","generated fixtures; disposable server; emulator only");
         try {
+            // Owner path: on a fresh install the backup switch itself starts Wizard Sign-in (no dead-end message, no address to type).
+            settings.prefs.edit().putString("status","Connect your photo server first").commit();
+            startScreen(); foreground(".photos.PhotosActivity");
+            assertTrue(device.wait(Until.hasObject(By.text("Back up photos")),15000));
+            assertFalse("stale 0.9.32 message cleared",device.hasObject(By.text(java.util.regex.Pattern.compile(".*Connect your photo server first.*",java.util.regex.Pattern.DOTALL))));
+            device.findObject(By.text("Back up photos")).click();
+            waitFor("switch starts sign-in",30,()-> { try { return BuildConfig.PHOTOS_SERVER.equals(settings.secret("oauth").getString("server")); } catch(Exception e) { return false; } });
+            assertTrue(settings.prefs.getBoolean("enable_after_signin",false)); assertFalse(settings.enabled());
+            record("switch_starts_signin","pass: switch → Wizard Sign-in for "+BuildConfig.PHOTOS_SERVER+" · status '"+settings.prefs.getString("status","")+"'");
             new PhotoAuth(c).apiKey(server,fixture.getString("key"));
+            // Same account binding as the OAuth return: completing sign-in turns backup on by itself.
+            assertTrue("backup on after sign-in",settings.enabled()); assertFalse(settings.prefs.contains("enable_after_signin"));
+            record("enable_after_signin","pass: sign-in completion turned backup on");
+            settings.prefs.edit().putBoolean("enabled",false).commit(); BackupScheduler.cancel(c);
             record("encrypted_key",!readText(new File(c.getApplicationInfo().dataDir,"shared_prefs/photos_backup.xml")).contains(fixture.getString("key")));
             assertFalse(new PhotoLibrary(c).readable());
             settings.prefs.edit().putBoolean("enabled",true).putBoolean("charge",false).commit(); settings.change();
