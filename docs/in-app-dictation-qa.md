@@ -75,7 +75,7 @@ Final expanded suite on Thales:
 - Repaired candidate: **95 passed, 0 failed**, exit 0. Evidence: `evidence/recovery-final-{reviewed,candidate}.{json,log,exit}`. Covers kind-bearing native recreation, failed first/later/truncated/looping audio read, claimed-file discovery after page reload, repaired explicit retry, explicit Delete, native persistence outage, actual IndexedDB write failure and successful browser save/reload.
 - Voice seal 45/0, held commands 29/0, awake 11/0 remain unchanged in `review-fixed-regression-ab.json`; immersive remains the same 26/1 baseline fixture gap.
 
-Functional human preview: https://in-app-dictation.staging.wizard001.com/wizard-os-home/?shell=phone&open=iching
+Historical functional preview: `/wizard-os-home/?shell=phone&open=iching` on the retired custom domain.
 
 The parent opened that exact HTTPS deep link on Thales at phone dimensions and used the actual registered I Ching, the user's approval audio as Chromium's fake microphone input, the real browser MediaRecorder, and the selected system STT endpoint. **11 checks passed:** blue orb focus, recording, START-selection insertion, editable unsubmitted question, exactly one real STT request, zero agent/app writes, true-fullscreen keyboard-sized orb hit testing, Back staying in Wizard and zero page errors. This proves the real hosted app/provider integration, not physical-handset capture. The functional preview permits only POST `/wizard/voice/transcribe`; all app/agent mutations return 403.
 

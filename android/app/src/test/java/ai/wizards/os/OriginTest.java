@@ -20,7 +20,7 @@ public class OriginTest {
     public void privateOriginOnly() {
         assertTrue(Origin.isPrivate("https", HOME, -1));
         assertTrue(Origin.isPrivate("https", HOME, 443));
-        assertFalse(Origin.isPrivate("https", "private.wizard001.com", -1)); // retired name: no longer honoured
+        assertFalse(Origin.isPrivate("https", "retired.example", -1)); // retired name: no longer honoured
         assertFalse(Origin.isPrivate("http", HOME, -1));
         assertFalse(Origin.isPrivate("https", HOME + ".evil.test", -1));
         assertFalse(Origin.isPrivate("https", "evil-" + HOME, -1));

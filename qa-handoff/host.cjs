@@ -13,7 +13,7 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
 (async()=>{
  const {OrbEvents}=await import(process.env.MIZEL_ADOPTION+'/orb-events.mjs');
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const fixture=fs.readFileSync(path.join(root,'qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replace('?.slice(0, 500)','').replaceAll('https://private.wizard001.com','http://127.0.0.1:'+server.address().port);
+ const fixture=fs.readFileSync(path.join(root,'qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replace('?.slice(0, 500)','').replaceAll('https://wizard.tailc0f369.ts.net','http://127.0.0.1:'+server.address().port);
  ({boot,app,select,tap,contexts}=new Function('require','__dirname','process',fixture+'\nreturn {boot,app,select,tap,contexts};')((name)=>name==='playwright-core'?{chromium}:require(name),root,process));
  browser=await chromium.launch({executablePath:process.env.CHROMIUM,headless:true,args:['--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  let f=await boot(browser,false),p=f.p;await tones(p);const store=new OrbEvents(path.join(evidence,'events.json'));

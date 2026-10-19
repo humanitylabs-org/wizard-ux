@@ -26,7 +26,7 @@ The candidate integrates daily e7a4ec7, including other owners' microphone recov
 
 ## Evidence — Thales only
 
-Exact served staging origin: https://desktop-keys.staging.wizard001.com/wizard-os-home/desktop.html
+Historical staging entry: `/wizard-os-home/desktop.html` on the retired custom domain.
 
 - On-demand desktop lifecycle and added navigation keys: 40 passed.
 - New-chat/new-voice regression: 26 passed.

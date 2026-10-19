@@ -30,7 +30,8 @@ if not apk.resolve().is_relative_to(P(build['job']) / 'source'):
 if hashlib.sha256(apk.read_bytes()).hexdigest() != a['sha256']:
     raise SystemExit('Exact artifact SHA mismatch')
 checks=[]
-origin='https://home-screen-apps.staging.wizard001.com'
+origin=os.environ.get('QA_ORIGIN', '').rstrip('/')
+if not origin: raise SystemExit('QA_ORIGIN is required: select an isolated tailnet preview')
 incomplete=['signed WebView exact inner URL/iframe-refresh and per-instance storage readback (debug companion required)',
             'camera/IME/sigil pixel acceptance and selection/share/capture device interactions',
             'invalid-native-intent and network/Tailscale recovery device gates',
