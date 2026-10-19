@@ -2588,7 +2588,7 @@
     // A long take cancelled by accident is kept (Settings → Cancelled recordings, James 11 Oct); a quick one is gone.
     // Native takes are kept by the app's recorder on recCancel (0.9.5+); the page keeps the ones it recorded itself.
     const heldMs = voiceElapsed();
-    const long = !V.sim && heldMs >= (window.WosCancelled?.KEEP_FROM_MS || 15000);
+    const long = !V.sim && heldMs >= (window.WosCancelled?.KEEP_FROM_MS || 20000);
     const nativeKeeps = !!V.native && typeof DEV()?.cancelledList === 'function';
     if (V.native) { try { if (!nativeTakeAppOwned(V.native)) DEV().recCancel(V.native); } catch (e) {} V.native = null; }
     const rec = V.rec, mime = V.mime || rec?.mimeType || 'audio/webm';
