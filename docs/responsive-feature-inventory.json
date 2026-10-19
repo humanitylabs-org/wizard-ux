@@ -172,6 +172,7 @@
     "core/sigils.js",
     "core/skin-frame.css",
     "core/skin-frame.js",
+    "core/skin-host.js",
     "core/skins.css",
     "core/skins.js",
     "core/status.js",
@@ -439,6 +440,13 @@
         "desktop"
       ],
       "note": "Shared validated skin frame foundations, loaded before skin composition"
+    },
+    "core/skin-host.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin packages: loads only the active skin's own folder (web/skins/<dir>/) and gives its script a small API; desktop gets stylesheets"
     },
     "core/settings.js": {
       "loadedBy": [
