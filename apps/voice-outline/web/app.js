@@ -115,6 +115,7 @@ function upload(take,c){const key=take+':'+c.seq;if(acked.has(key))return;upload
 async function archive(result){uploadError=null;for(const c of result.streamChunks||[])upload(result.id,c);await uploadChain;if(uploadError)throw uploadError;if(!result.streamChunks?.length&&result.blob?.size>44)throw new Error('Capture chunk metadata unavailable; retained');await W.capture.ack(result.id);flash('Audio saved and verified.');}
 async function recover(){try{const pending=await W.capture.pending();for(const result of pending)await archive(result);await save();note(pending.length?'Retained audio saved and verified. No new transcript was recovered; review unconfirmed speech or original recordings.':'No retained audio waiting. Unconfirmed speech still needs review.');}catch(e){note('Recovery pending: '+e.message);}}
 async function startLive(){
+ await hostReady;
  if(starting||stopping)return;starting=true;$('live').disabled=true;$('live-status').textContent='…';let prepared;
  try{
   if(!W.capture.capabilities({kind:'outline',pcm:true}).pcm){
@@ -170,7 +171,9 @@ let sheetBack;
 function closeSheet(){if(!$('sheet').open)return false;$('sheet').close();sheetBack?.release();sheetBack=null;return true;}
 $('menu').onclick=()=>{$('sheet').showModal();void recordings();sheetBack=W.back.push(()=>closeSheet());};$('close-sheet').onclick=closeSheet;$('sheet').addEventListener('cancel',e=>{e.preventDefault();closeSheet();});
 W.back.register({canGoBack:()=>editing!==null||editingDraft!==null,back:()=>{if(editingDraft!==null){editingDraft=null;render();return true;}editing=null;render();return true;}});
-W.theme.onChange(()=>{});W.ready({name:'Outline'});
+W.theme.onChange(()=>{});
+// In a desktop window the host connection can arrive after this script runs; capture calls wait for it.
+const hostReady=Promise.resolve().then(()=>W.ready({name:'Outline'})).catch(()=>null);
 $('new').onclick=()=>newBullet();$('outdent').onclick=()=>move(-1);$('indent').onclick=()=>move(1);
 // Toolbar taps keep the line being edited focused, so the phone keyboard stays up.
 for(const b of document.querySelectorAll('.toolbar button'))b.addEventListener('mousedown',e=>e.preventDefault());
@@ -185,6 +188,7 @@ async function load(){
   if(local){({doc,rev,ops,selected,seq}=local);undo=local.undo||[];redo=local.redo||[];for(const item of [...undo,...redo]){delete item.forward.id;delete item.forward.speechId;}ledger=new SpeechLedger(local.drafts||{});for(const s of Object.values(ledger.items))if(s.status==='draft')s.status='unconfirmed';}
   try{const remote=await request('./api/document');remoteRead=true;rev=remote.rev;doc=remote.document;for(const op of ops)apply(doc,op);const speech=await request('./api/speech');for(const s of speech.utterances){if(!doc.applied.includes('speech-'+s.id)){ledger.event({...s,type:s.status==='final'?'final':'delta'});if(s.status!=='final')ledger.items[s.id].status='unconfirmed';}}}catch(e){note('Offline recovery. Changes stay on this device until the server returns.');}
   if(!doc.nodes.some(n=>n.id===selected))selected=doc.nodes[0].id;settle();render();await remember();if(ops.length)await save();else saveState(remoteRead?'Saved':'On this device only');
+  await hostReady;
   const existing=W.capture.current();
   if(existing&&existing.phase!=='starting'){
    session=await W.capture.start({kind:'outline',pcm:true,resumeId:existing.id});startedAt=Date.now()-(session.getInfo().durationMs||0);paused=!!session.getInfo().paused;stopObserved=false;
