@@ -1493,7 +1493,7 @@
       if (sid) return openThread(decodeURIComponent(sid));
       if (/^\/?apps\/?$/.test(path) || /^\/?search\/?$/.test(path)) return openPalette();
       if (/^\/?inbox\/?$/.test(path)) return openInbox();
-      if (d.app) return openApp(findApp(d.app) || APP[d.app]);
+      if (d.app) return openApp(APP[d.app] || findApp(d.app));
       if (/^\/wizard\/?(\?.*)?$/.test(path)) return openApp(APP.wizard);
       const base = String(path).replace(/[#?].*$/, '');
       const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === base);
