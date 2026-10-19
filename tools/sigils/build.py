@@ -70,6 +70,7 @@ HOUSE = {
     'side-button':   ('side',     300, 0.07),
     'maps':          ('pin',      114, None),
     'app-store':     ('apps',     284, None),
+    'system':        ('gauge',    200, 0.07),
     'notifications': ('bell',     70,  None),
     'morning-report':('coffee',   46,  None),
     'wizard-calendar':('calendar', 8,  None),

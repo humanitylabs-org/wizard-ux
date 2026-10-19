@@ -328,6 +328,13 @@ def g_burst():
     rays = U(*[R(rrect(234, 84 + (i % 2) * 22, 44, 150 - (i % 2) * 22, 22), i * 360 / 8, 256, 256) for i in range(8)])
     return D(U(rays, circle(256, 256, 76)), circle(256, 256, 30))
 
+@glyph('gauge', 'A dial with its needle cut out: how your box is doing.')
+def g_gauge():
+    dial = P("M96 330 A160 160 0 0 1 416 330 L416 352 C416 370 402 384 384 384 H128 C110 384 96 370 96 352 Z")
+    needle = U(stroke("M256 330 L330 222", 34), circle(256, 330, 34))
+    ticks = U(*[R(rrect(248, 186, 16, 40, 8), a, 256, 330) for a in (-60, -30, 0, 30, 60)])
+    return D(dial, needle, ticks)
+
 @glyph('letter', 'Placeholder ring for apps without a sigil yet.')
 def g_letter():
     return D(circle(256, 256, 156), circle(256, 256, 120))
