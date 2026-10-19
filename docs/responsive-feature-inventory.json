@@ -182,6 +182,7 @@
     "core/sigils.js",
     "core/skin-frame.css",
     "core/skin-frame.js",
+    "core/our-skins.css",
     "core/skins.css",
     "core/skins.js",
     "core/status.js",

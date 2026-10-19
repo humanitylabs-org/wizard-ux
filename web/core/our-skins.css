@@ -1,0 +1,38 @@
+/* Miguel's skins (Obsidian, Obsidian Light, Landscapes): WizardOS brand type and shapes, scoped to these skins only.
+ * James's skins keep the base look (owner-skins guard). Fonts self-hosted under web/brand/fonts. */
+@font-face { font-family: 'WOS Sora'; src: url(/wizard-os-home/brand/fonts/sora-var.woff2) format('woff2'); font-weight: 100 800; font-display: swap; }
+@font-face { font-family: 'WOS Inter'; src: url(/wizard-os-home/brand/fonts/inter-var-latin.woff2) format('woff2'); font-weight: 100 900; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) {
+  --font-text: 'WOS Inter', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: 'WOS Sora', 'WOS Inter', ui-sans-serif, system-ui, sans-serif;
+  --r-card: 22px;
+}
+html[data-skin="obsidian"] body,
+html[data-skin="obsidian"] .device,
+html[data-skin="obsidian"] .win,
+html[data-skin="obsidian"] button,
+html[data-skin="obsidian"] input,
+html[data-skin="obsidian"] textarea,
+html[data-skin="obsidian"] select,
+html[data-skin="obsidian-light"] body,
+html[data-skin="obsidian-light"] .device,
+html[data-skin="obsidian-light"] .win,
+html[data-skin="obsidian-light"] button,
+html[data-skin="obsidian-light"] input,
+html[data-skin="obsidian-light"] textarea,
+html[data-skin="obsidian-light"] select,
+html[data-skin="landscapes"] body,
+html[data-skin="landscapes"] .device,
+html[data-skin="landscapes"] .win,
+html[data-skin="landscapes"] button,
+html[data-skin="landscapes"] input,
+html[data-skin="landscapes"] textarea,
+html[data-skin="landscapes"] select { font-family: var(--font-text); }
+:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) body { letter-spacing: -.005em; }
+:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) :is(.ch-head .ti b, .wbar .t, .wbar b, .st-group h4, .sheet-title, .launcher h3, .inbox h3, .ch-fh b, .pal-card h3, .dv-title, .desk-label) {
+  font-family: var(--font-display); font-weight: 600; letter-spacing: -.02em; }
+:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) :is(.ch-sec-h, .sec-title, .ch-fcard h5, .home-date) { font-weight: 500; letter-spacing: .18em; }
+:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) .ch-sec-h span { font-family: var(--font-text); }
+:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) :is(.now-card, .side-card, .ch-fcard, .pal-card) { border-radius: var(--r-card); }
+:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) :is(.ch-rdy-bar button, .ch-chip, .ch-fopt) { border-radius: 999px; }
