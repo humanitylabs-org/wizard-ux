@@ -1591,6 +1591,8 @@
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
+  // Closed means closed: an app with no window left on any desktop stops its microphone (take saved for recovery).
+  window.WizAppServices?.trackOpenApps?.(() => ws.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   window.WizAppServices?.guardBack(() => {
     const did = escStep(); log('back:' + (did || 'root'));
     if (!did) toast('⌂', 'You’re home · Back never leaves Wizard', 1400);

@@ -1357,6 +1357,8 @@
     tick();
     f.addEventListener('load', () => { n = 0; tick(); });
   }
+  // Closed means closed: an app with no window left on any desk stops its microphone (take saved for recovery).
+  window.WizAppServices?.trackOpenApps?.(() => desks.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
