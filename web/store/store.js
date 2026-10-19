@@ -114,12 +114,12 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   }
   function action(a, cls = '') {
     const state=status(a);
-    if(state==='conflict') return '<span class="get have">Resolve conflict</span>';
-    if(state==='unknown') return '<span class="get have" aria-label="Status unavailable">Status unavailable</span>';
-    if(state==='switch' || state==='update') return `<button class="get ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
+    if(state==='conflict') return `<span class="get warn ${cls}">Resolve conflict</span>`;
+    if(state==='unknown') return `<span class="get wait ${cls}" aria-label="Status unavailable">Status unavailable</span>`;
+    if(state==='switch' || state==='update') return `<button class="get upd ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
     if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
-    if (S.busy.has(a.id)) return `<span class="get have ${cls}" aria-live="polite">Installing…</span>`;
+    if (S.busy.has(a.id)) return `<span class="get wait ${cls}" aria-live="polite">Installing…</span>`;
     return `<button class="get ${cls}" data-get="${esc(key(a))}">Get</button>`;
   }
   const row = base => {const a=selected(base); return `<div class="row" data-app="${esc(key(a))}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b>${badge(base)}<small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;};

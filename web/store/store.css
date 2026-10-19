@@ -66,6 +66,13 @@ h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.02em; }
 .get.light { color: #fff; background: rgba(255, 255, 255, .22); backdrop-filter: blur(8px); }
 .get.big { height: 34px; min-width: 96px; font-size: 15px; color: #fff; background: var(--violet); margin-top: 10px; }
 .get.big.have { background: rgba(79, 240, 176, .14); color: var(--green); }
+/* One colour per meaning: violet = Get, green = on this box (solid Open, quiet Installed),
+   amber = needs attention (Update, conflict), grey = waiting or unknown. */
+.get.open, .get.big.open { color: #04140d; background: var(--green); }
+.get.upd, .get.big.upd { color: #1a1000; background: var(--amber); }
+.get.warn, .get.big.warn { color: var(--amber); background: rgba(255, 190, 85, .12); font-size: 12.5px; }
+.get.wait, .get.big.wait { color: var(--ink-2); background: rgba(185, 176, 216, .1); font-size: 12.5px; }
+.row .get.warn, .row .get.wait { max-width: 110px; white-space: normal; text-align: center; height: auto; min-height: 30px; }
 
 /* list layer */
 .layer { padding: 4px 20px 24px; animation: rise .28s var(--ease); }
