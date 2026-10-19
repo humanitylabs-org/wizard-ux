@@ -11,7 +11,7 @@
     catch (_) { return null; }
   }
   // What the latest reply in this painted thread points at: { key, app } or { key, url, title }, else null.
-  function target(el, { findApp, APP, linkTitle }) {
+  function target(el, { findApp, APP, linkTitle, appAt }) {
     const all = el.querySelectorAll('.ch-msgs .msg.a'), last = all[all.length - 1]; if (!last) return null;
     const rk = all.length + ':' + last.textContent.length; // which reply this is (a new reply reloads the same view)
     for (const a of last.querySelectorAll('.bub a[href]')) {
@@ -26,6 +26,8 @@
         continue; // ?session= / ?view= links are this shell's own screens, not a view to review
       }
       const rel = u.pathname + u.search + u.hash;
+      const owner = appAt && appAt(rel);
+      if (owner) return { key: 'url:' + rel, win: { app: 'frame', appId: owner.id, url: rel, title: owner.name }, rk };
       return { key: 'url:' + rel, win: { app: 'frame', appId: 'link', url: rel, title: linkTitle(u) }, rk };
     }
     return null;

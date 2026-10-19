@@ -26,7 +26,7 @@
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const LIVE = window.WizLive;
   const OUTBOX = window.WosOutbox || null;
-  const { APPS, APP, findApp, appByName, searchApps, quickSearch, searchUrl } = C.apps('desktop');
+  const { APPS, APP, findApp, appAt, appByName, searchApps, quickSearch, searchUrl } = C.apps('desktop');
   const store = C.store('wux.desk.');
   const freshDesk = () => ({ id: 'd' + uid(), wins: [], focus: null, mono: false });
   const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -93,7 +93,7 @@
     voiceInto: () => (['listen','paused'].includes(VOICE.state) && vMode === 'talk' ? (vReply?.sid || (vTarget && W[vTarget]?.thread) || '') : ''),
     finishVoice: () => talk('send'),
     // A private-origin link in a message opens as a window on this workspace; the shell never navigates away.
-    openLink: (url, title) => !!newWin({ app: 'frame', appId: 'link', url, title }),
+    openLink: (url, title) => { const a = appAt(url); return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }); },
     changed: () => { for (const id of Object.keys(W)) if (W[id].app === 'chats') syncChatsPane(id); },
   });
 
@@ -144,7 +144,7 @@
   let boundManager;
   function threadShown(wid,el) {
     if (wid.endsWith('::list')) return;
-    boundManager ||= window.WosBoundView.create({ windows:()=>Object.values(W),win:id=>W[id],findApp,APP,linkTitle:u=>u.pathname.split('/').filter(Boolean).pop()||'Page',title:winTitle,
+    boundManager ||= window.WosBoundView.create({ windows:()=>Object.values(W),win:id=>W[id],findApp,appAt,APP,linkTitle:u=>u.pathname.split('/').filter(Boolean).pop()||'Page',title:winTitle,
       visible:id=>!homeOpen&&wsOf(id)===cur, close:id=>closeWin(id,true),
       open:(obj,origin)=>{const focus=ws[cur].focus;newWin(obj,{ws:wsOf(origin)});if(W[focus])focusWin(focus,{scroll:false});},
       reload:id=>{save();const f=winEl(id)?.querySelector('iframe');if(f)f.src=f.src;}
@@ -1519,8 +1519,17 @@
   // In-app browser (core/links.js): links tapped in Wizard open in a right-half pane.
   const LINKS = window.WizLinks ? window.WizLinks.mount({
     parent: document.body, mode: 'pane',
-    onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a, { fresh: false }); else newWin({ app: 'frame', url, title }); },
+    onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a, { fresh: false }); else { const o = appAt(url); newWin({ app: 'frame', url, title: o ? o.name : title, ...(o ? { appId: o.id } : {}) }); } },
   }) : null;
+  // A link to a page inside an installed app opens as that app's window (its services: shared microphone,
+  // Back, theme), not in the plain link pane (James, 19 Oct 2026: Outline said "not connected to Wizard").
+  if (LINKS) LINKS.route = href => {
+    let u; try { u = new URL(href, location.href); } catch (e) { return false; }
+    const a = u.origin === location.origin && appAt(u.href); if (!a) return false;
+    const rel = u.pathname + u.search + u.hash, same = new URL(a.url, location.href);
+    if (same.pathname + same.search === u.pathname + u.search) { openApp(a, { fresh: false }); return true; }
+    newWin({ app: 'frame', appId: a.id, url: rel, title: a.name }); return true;
+  };
   if (LINKS) window.WizLinks.intercept(document.body, LINKS);
   LIVE?.refresh();
   /* Deep links (core/deeplink.js): ?session= opens the thread in a Chats window, ?view= a screen, ?video= the player.

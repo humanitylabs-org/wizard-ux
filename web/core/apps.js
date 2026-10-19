@@ -166,7 +166,22 @@
       u.searchParams.set('q', query); if (tab === 'images') u.searchParams.set('tab', 'images');
       return u.pathname + u.search;
     }
-    return { APPS, APP, findApp, appByName, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
+    // A same-origin page that lives inside an installed Wizard app (its URL or below it) belongs to that app,
+    // so a chat link to it opens the app with its services (shared microphone, Back, theme), not a bare page.
+    function appAt(path) {
+      let p; try { p = new URL(path, location.href); } catch (_) { return null; }
+      if (p.origin !== location.origin) return null;
+      let best = null, bl = 0;
+      for (const a of APPS) {
+        if (a.kind !== 'wizard' || !a.url) continue;
+        let u; try { u = new URL(a.url, location.href); } catch (_) { continue; }
+        if (u.origin !== p.origin || u.pathname.length <= 1) continue;
+        const base = u.pathname.endsWith('/') ? u.pathname : u.pathname + '/';
+        if ((p.pathname === u.pathname || p.pathname.startsWith(base)) && u.pathname.length > bl) { best = a; bl = u.pathname.length; }
+      }
+      return best;
+    }
+    return { APPS, APP, findApp, appAt, appByName, searchApps, searchApp, searchUrl, quickSearch: text => searchApp() ? parseQuickSearch(text) : null };
   }
   /* "ask AI is milk bad for gout", "image search capybaras", "find images of eames chairs", "search why is the sky blue", "quick search …".
    * Returns { query, tab: 'images' | 'all' } or null. Thread/app searches ("search my chats for …") stay with the shell. */
