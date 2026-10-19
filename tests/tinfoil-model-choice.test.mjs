@@ -30,7 +30,7 @@ const menu = M => M.popHtml({ mode: 'new', cur: { model: 'claude-opus-5-5', prov
 
 test('non-current custom endpoint remains available without changing the global default', async () => {
   const { M } = harness(); await M.load();
-  assert.equal(M.find('exact/catalog-model', 'wizard-tinfoil').value, 'exact/catalog-model');
+  assert.equal(M.find('exact/catalog-model', 'custom:wizard-tinfoil').value, 'exact/catalog-model');
   assert.equal(M.find('not-available'), null);
   assert.equal(M.defaultOption().value, 'claude-opus-5-5');
   assert.equal(M.defaultOption().provider, 'anthropic');
@@ -65,6 +65,9 @@ test('same session switches to the exact custom route, accepts canonical custom 
   assert.equal(writes[0].url, '/wizard/hermes/api/sessions/existing%2Fsession/model');
   assert.deepEqual(JSON.parse(writes[0].init.body), { model: 'exact/catalog-model', provider: 'custom:wizard-tinfoil', require_model_lock: true });
   assert.equal(M.snapshot('existing/session').provider, 'custom:wizard-tinfoil');
+  const selected = M.popHtml({ mode: 'thread', cur: route });
+  assert.match(selected.html, /aria-pressed="true"><span class="mn"><b>Tinfoil<\/b>/);
+  assert.equal(selected.list.filter(o => o.provider === 'custom:wizard-tinfoil').length, 1);
   assert.equal(M.defaultOption().value, 'claude-opus-5-5');
   assert.ok(!calls.some(c => /runs|completions|\/agents/.test(c.url)));
 });

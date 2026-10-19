@@ -63,24 +63,27 @@
     const root = obj(payload);
     const providers = arr(root.providers).map(obj);
     const curProvider = str(root.provider), curModel = str(root.model);
-    const provider = providers.find(p => str(p.slug) === curProvider) || providers.find(p => p.is_current === true) || providers.find(p => p.authenticated === true && arr(p.models).length > 0);
+    const provider = providers.find(p => str(p.slug) === curProvider || (p.is_user_defined === true && `custom:${str(p.slug)}` === curProvider)) || providers.find(p => p.is_current === true) || providers.find(p => p.authenticated === true && arr(p.models).length > 0);
     if (provider) {
-      const pslug = str(provider.slug), pname = str(provider.name) || pslug, defProvider = curProvider || pslug;
+      const pslug = str(provider.slug), pname = str(provider.name) || pslug;
+      const currentSlug = provider.is_user_defined === true && !pslug.startsWith('custom:') ? `custom:${pslug}` : pslug;
+      const defProvider = !curProvider || curProvider === pslug ? currentSlug : curProvider;
       const visible = [provider, ...providers.filter(p => str(p.slug) !== pslug && (SUBSCRIPTIONS.includes(str(p.slug)) || p.is_user_defined === true) && p.authenticated === true)];
       const options = visible.flatMap(vp => {
         const slug = str(vp.slug), name = str(vp.name) || slug;
+        const route = vp.is_user_defined === true && !slug.startsWith('custom:') ? `custom:${slug}` : slug;
         return arr(vp.models).map(v => {
           const it = obj(v), model = typeof v === 'string' ? v : str(it.value, it.id, it.model);
           if (!model) return null;
-          return { value: model, provider: slug, isGlobalDefault: model === curModel && slug === defProvider,
+          return { value: model, provider: route, isGlobalDefault: model === curModel && (slug === defProvider || route === defProvider),
             name: claudeName(model, slug) || str(it.name, it.display_name, it.label) || friendly(model),
             description: routeLabel(slug) || str(it.description) || name };
         }).filter(Boolean);
       });
       const unique = [...new Map(options.map(o => [JSON.stringify([o.provider, o.value]), o])).values()];
       // The configured route is authoritative even when a static catalogue lags.
-      if (curModel && pslug === defProvider && !unique.some(o => o.value === curModel && o.provider === defProvider))
-        unique.unshift({ value: curModel, provider: pslug, isGlobalDefault: true, name: claudeName(curModel, pslug) || friendly(curModel), description: pname });
+      if (curModel && currentSlug === defProvider && !unique.some(o => o.value === curModel && o.provider === defProvider))
+        unique.unshift({ value: curModel, provider: currentSlug, isGlobalDefault: true, name: claudeName(curModel, pslug) || friendly(curModel), description: pname });
       return curModel ? unique.sort((a, b) => Number(!!b.isGlobalDefault) - Number(!!a.isGlobalDefault)) : unique;
     }
     const raw = Array.isArray(payload) ? payload : arr(root.options).length ? arr(root.options) : arr(root.models);
@@ -288,7 +291,7 @@
         + privList.map((o, k) => { const i = main.length + k; return `<button type="button" class="mrow priv${isCur(o) ? ' on' : ''}" data-mpick="${i}" data-mprivate="${esc(o.agent)}" aria-pressed="${isCur(o)}"><span class="mn"><b>${lock}${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; }).join('')
         + `<p class="msheet-gn">${esc(privNote)}</p></div>` : '';
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
-        <div class="msheet-list">${rows}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
+        <div class="msheet-list">${rows}${!own && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
     },
     /* The compact model menu opened from the label in the message box: a small card over the right side.
