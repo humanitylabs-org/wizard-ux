@@ -130,6 +130,7 @@
     "core/app-route.css",
     "core/app-route.js",
     "core/app-services.js",
+    "core/app-versions.js",
     "core/appearance-host.css",
     "core/appearance-host.js",
     "core/apps.js",
@@ -249,6 +250,13 @@
       "note": "Direct entrypoint import"
     },
     "core/app-services.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/app-versions.js": {
       "loadedBy": [
         "phone",
         "desktop"
