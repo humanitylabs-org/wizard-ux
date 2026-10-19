@@ -986,11 +986,30 @@
   C.voiceStatus?.onChange(() => renderSettings());
   OUTBOX?.onChange(() => renderSettings());
 
+
+  /* Top-bar hover tips: a short line under every bar control, shown right away (native titles wait ~1s). */
+  (() => {
+    const bar = $('#bar'); if (!bar) return;
+    const tip = document.createElement('div'); tip.className = 'bar-tip'; tip.setAttribute('role', 'tooltip'); tip.hidden = true; document.body.appendChild(tip);
+    let on = null;
+    const hide = () => { if (on?.dataset.tip != null) { on.title = on.dataset.tip; delete on.dataset.tip; } on = null; tip.hidden = true; };
+    bar.addEventListener('pointerover', e => {
+      const el = e.target.closest('#bar button[title], #bar button[aria-label], #bar [data-tip]');
+      if (el === on) return; hide(); if (!el || el.id === 'clock') return;
+      const text = el.dataset.tip || el.title || el.getAttribute('aria-label'); if (!text) return;
+      on = el; if (el.title) { el.dataset.tip = el.title; el.removeAttribute('title'); }
+      tip.textContent = text; tip.hidden = false;
+      const r = el.getBoundingClientRect(), w = tip.offsetWidth;
+      tip.style.top = (r.bottom + 6) + 'px';
+      tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+    });
+    bar.addEventListener('pointerleave', hide); bar.addEventListener('pointerdown', hide);
+  })();
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
     ['Open and find', [[`${CMD}K  ${MOD}Space`, 'Search everything'], [`${CMD}O`, 'Open an app'], [`${MOD}1`, 'Home'], [`${MOD}I`, 'Inbox'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
     ['Talk and chat', [[`${CMD}N  ${MOD}Enter`, 'New chat'], [`${CMD}⇧N  ${MOD}⇧V`, 'New voice chat (again to send)'], ['Right ⌘', `Talk to ${window.WizConfig.agent()} (tap again to send)`], [`${CMD}Enter`, 'Send'], ['Esc', 'Back to the list'], ['/', 'Search chats']]],
-    ['Desktops', [[`${CMD}T  ${MOD}T`, 'New desktop'], [`${MOD}2 … ${MOD}9`, 'Go to desktop'], [`⇧${MOD}2 … 9`, 'Send window to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}Tab`, 'Last desktop']]],
+    ['Desktops', [[`${CMD}T  ${MOD}T`, 'New desktop'], [`${MOD}2 … ${MOD}9`, 'Go to desktop'], [`⇧${MOD}2 … 9`, 'Send window to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}\``, 'Last desktop']]],
     ['Windows', [[`${MOD}H J K L  ${CMD}← ↑ → ↓`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${CMD}F  ${MOD}F`, 'Full screen'], [`${CMD}W  ${MOD}W`, 'Close app']]],
     ['Chat list', [['↑ ↓  j k', 'Move in the list'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], [`⇧${MOD}K  ⇧${MOD}J`, 'Previous / next chat anywhere']]],
     ['Wizard for Mac (any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to an app'], ['Right ⌘', 'Talk from anywhere'], ['Right ⌥', 'Dictate into any app']]],
@@ -1056,7 +1075,7 @@
   }
   const generalVoice = document.createElement('button');
   generalVoice.id = 'generalVoice'; generalVoice.className = 'general-voice';
-  const paintGeneralVoice = () => { const l = 'New voice chat with ' + window.WizConfig.agent() + ' (starts fresh, shares nothing from this screen)'; generalVoice.className = 'mic general-voice-ic'; generalVoice.innerHTML = '<svg viewBox="0 0 24 24"><path d="M10 13a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v4a3 3 0 0 0 3 3Zm-5.5-3a5.5 5.5 0 0 0 11 0M10 15.5V19M19 4v6M16 7h6"/></svg>'; generalVoice.setAttribute('aria-label', l); generalVoice.title = l; };
+  const paintGeneralVoice = () => { const l = 'New voice chat; shares nothing from this screen'; generalVoice.className = 'mic general-voice-ic'; generalVoice.innerHTML = '<svg viewBox="0 0 24 24"><path d="M10 13a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v4a3 3 0 0 0 3 3Zm-5.5-3a5.5 5.5 0 0 0 11 0M10 15.5V19M19 4v6M16 7h6"/></svg>'; generalVoice.setAttribute('aria-label', l); generalVoice.title = l; };
   paintGeneralVoice(); window.addEventListener('wizard:config', paintGeneralVoice);
   mic.insertAdjacentElement('afterend', generalVoice);
   generalVoice.addEventListener('click', () => talkNew('Tap to send'));
@@ -1420,7 +1439,7 @@
     if (code === 'Comma') return hit(() => (setEl.hidden ? openSettings() : closeSettings()));
     if (code === 'BracketLeft') return hit(() => { lastWs = cur; goWs((cur - 1 + ws.length) % ws.length); });
     if (code === 'BracketRight') return hit(() => { lastWs = cur; goWs((cur + 1) % ws.length); });
-    if (code === 'Tab') return hit(() => { const t = lastWs; lastWs = cur; goWs(t); });
+    if (code === 'Tab' || code === 'Backquote') return hit(() => { const t = lastWs; lastWs = cur; goWs(t); });
     const dir = { ArrowLeft: [-1, 0], KeyH: [-1, 0], ArrowRight: [1, 0], KeyL: [1, 0], ArrowUp: [0, -1], KeyK: [0, -1], ArrowDown: [0, 1], KeyJ: [0, 1] }[code];
     // ⌥ arrows are word/paragraph jumps while typing on a Mac: leave them to the text field (⌥HJKL still move focus).
     if (dir && /^Arrow/.test(code) && typing(e.target)) return;
