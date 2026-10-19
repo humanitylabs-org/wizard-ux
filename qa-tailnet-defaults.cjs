@@ -1,4 +1,4 @@
-// Keep outbound QA defaults on the stock tailnet origin; alias/carry fixtures remain deliberate.
+// Keep outbound QA defaults on the stock tailnet origin; the retired name appears only in negative checks.
 const fs = require('fs'), path = require('path');
 let pass=0,fail=0;
 function ok(v,n) { console.log((v?'PASS ':'FAIL ')+n); v?pass++:fail++; }
@@ -15,6 +15,4 @@ for (const name of ['qa_android_apps.py','qa_image_save_device.py','qa_silent_up
 }
 const parity=fs.readFileSync(path.join(__dirname,'tools/qa_native_parity.py'),'utf8');
 ok(parity.includes('ping -c 1 -W 2 wizard.tailc0f369.ts.net'),'native parity reachability probe uses new host');
-ok(fs.readFileSync(path.join(__dirname,'qa-relative-links.cjs'),'utf8').includes('https://'+old+'/'),'old-link compatibility fixtures retained');
-ok(fs.readFileSync(path.join(__dirname,'tools/qa_carry.py'),'utf8').includes(old),'origin-migration fixtures retained');
 console.log(`${pass} passed, ${fail} failed`);process.exit(fail?1:0);

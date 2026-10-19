@@ -280,21 +280,6 @@
       "note": "Current remainder implementation; both-shell acceptance is recorded in the accompanying receipt."
     },
     {
-      "id": "routing.origin-carry",
-      "capability": "Origin migration carry-in for drafts/read state/voice outbox",
-      "scope": "migration-conditional",
-      "status": "migration-conditional",
-      "baseline_status": "platform-gated",
-      "sources": [
-        "web/index.html:5",
-        "web/core/carry-in.js",
-        "web/desktop.html",
-        "BRANCHES.md:119"
-      ],
-      "acceptance": "If desktop migration is supported, carry payload before shell redirect, maintain audio and draft IDs, consume once; otherwise state unsupported explicitly.",
-      "note": "Android origin migration/carry-in is conditional on the native app migration bridge. Desktop did not move origins; no fake migration control was added."
-    },
-    {
       "id": "chat.sections",
       "capability": "Work sections, paging and workday grouping",
       "scope": "browser-common",
@@ -961,7 +946,6 @@
     "shared-implemented": 14,
     "inherited-shared": 41,
     "capability-adapter": 9,
-    "migration-conditional": 1,
     "excluded-preview": 1
   },
   "legacy_crosswalk": [

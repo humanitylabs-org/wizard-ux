@@ -221,12 +221,6 @@
         for (const x of JSON.parse(localStorage.getItem(LS) || '[]')) { const it = items.get(x.id); if (it && (quarantine.has(it.id) || !(await put(it)).durable)) migrated = false; }
         if (migrated) { try { localStorage.removeItem(LS); } catch (_) {} }
       } catch (_) { recovered = false; for (const id of recoveredIds) quarantine.add(id); }
-      const C = window.WosCarry;
-      if (C && Array.isArray(C.outbox)) {
-        let safe = true;
-        for (const x of C.outbox) { if (!items.has(x.id)) recover(decode(x), false); const it = items.get(x.id); if (!(await put(it)).durable) safe = false; }
-        if (safe) { window.WosCarry = null; try { C.done(); } catch (_) {} }
-      }
       // Only this version's explicit completion receipt qualifies. Old generic
       // 'handled' labels also covered pending music/app work, so keep those.
       for (const it of [...items.values()]) {
