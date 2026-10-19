@@ -154,7 +154,8 @@ test('a stored package skin injects only its own stylesheet, before first paint,
   assert.match(P.links[0].href, /\/wizard-os-home\/skins\/landscapes\/skin\.css$/);
   assert.equal(P.links[0].attrs.blocking, 'render');
   P.host.attach(P.adapter); await settle();
-  assert.equal(P.imported.length, 0, 'a CSS-only package runs no script');
+  // Landscapes now carries a script (swipe-back): it may load only its own skin.js, never another package's.
+  assert.ok(P.imported.every(u => /\/skins\/landscapes\/skin\.js$/.test(u)), 'a package loads only its own script');
 });
 
 test('previewing skins in the picker never runs a skin script', async () => {
