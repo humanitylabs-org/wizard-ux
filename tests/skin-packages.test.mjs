@@ -149,12 +149,12 @@ test('Nebula (stored) loads no skin files at all', async () => {
 });
 
 test('a stored package skin injects only its own stylesheet, before first paint, in the skins.css slot', async () => {
-  const P = page({ stored: 'obsidian' });
+  const P = page({ stored: 'landscapes' });
   assert.equal(P.links.length, 1, 'stylesheet inserted while <head> is parsing');
-  assert.match(P.links[0].href, /\/wizard-os-home\/skins\/obsidian\/skin\.css$/);
+  assert.match(P.links[0].href, /\/wizard-os-home\/skins\/landscapes\/skin\.css$/);
   assert.equal(P.links[0].attrs.blocking, 'render');
   P.host.attach(P.adapter); await settle();
-  assert.equal(P.imported.length, 0, 'Obsidian has no script yet');
+  assert.equal(P.imported.length, 0, 'a CSS-only package runs no script');
 });
 
 test('previewing skins in the picker never runs a skin script', async () => {
