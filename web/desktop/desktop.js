@@ -81,8 +81,8 @@
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
     openUnsent: () => openSettings('unsent'),
-    newChatHint: `Type below and press ${CMD}Enter, or press ${MOD}⇧V for a new voice chat.`,
-    newChatKeys: [{ keys: [CMD.replace('+', ''), 'Enter'], label: 'send' }, { keys: [MOD.replace('+', ''), '⇧', 'V'], label: 'new voice chat' }],
+    newChatHint: `Type below and press Enter, or press ${MOD}V for a new voice chat.`,
+    newChatKeys: [{ keys: ['Enter'], label: 'send' }, { keys: [MOD.replace('+', ''), 'V'], label: 'new voice chat' }],
     threadShown: (wid, el) => threadShown(wid, el),
     dictationField: () => vMode === 'dictate' && (VOICE.state !== 'idle' || dictationFinishing) ? dictTarget?.el : null,
     owner: id => String(id).replace(/::list$/, ''),
@@ -365,8 +365,8 @@
     const a = appOf(w);
     return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
       ${window.WosBoundView.badge(w)}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
-      <button data-wact="mono" title="Full screen (${CMD}F / ${MOD}F)" aria-label="Full screen">⤢</button>
-      <button data-wact="close" title="Close app (⌘W / ${MOD}W)" aria-label="Close window">✕</button></div>
+      <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
+      <button data-wact="close" title="Close app (${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
   }
   function bodyHtml(w) {
@@ -580,7 +580,7 @@
       const hot = d.wins.some(id => { const w = W[id]; if (w?.app !== 'chats' || !w.thread) return false; const s = LIVE?.session(w.thread); return s && LIVE.isNew(s); });
       const names = d.wins.map(id => winTitle(W[id])).join(', ');
       return `<button class="ws${!homeOpen && i === cur ? ' cur' : ''}${d.wins.length ? ' used' : ''}${hot ? ' hot' : ''}" data-ws="${i}" aria-label="${esc(names || 'Empty desktop')} · Desktop ${C.workspaceNav.slot(i)}" aria-current="${!homeOpen && i === cur ? 'page' : 'false'}"${C.workspaceNav.slot(i) <= 9 ? ` aria-keyshortcuts="Alt+${C.workspaceNav.slot(i)}"` : ''} title="${esc(names || 'Empty desktop')}${C.workspaceNav.slot(i) <= 9 ? ` (${MOD}${C.workspaceNav.slot(i)})` : ''}">${C.workspaceNav.icon(d, W, appOf)}</button>`;
-    }).join('') + `<button class="ws ws-add" data-newdesk aria-label="New desktop" title="New desktop (${CMD}T / ${MOD}T${C.workspaceNav.slot(ws.length) <= 9 ? ` / ${MOD}${C.workspaceNav.slot(ws.length)}` : ''})">+</button>`;
+    }).join('') + `<button class="ws ws-add" data-newdesk aria-label="New desktop" title="New desktop (${MOD}T${C.workspaceNav.slot(ws.length) <= 9 ? ` / ${MOD}${C.workspaceNav.slot(ws.length)}` : ''})">+</button>`;
     const st = $('#status');
     if (!LIVE?.ok) st.innerHTML = `<span class="off">${LIVE?.error === 'access' ? 'Sign in to Wizard' : 'Connecting…'}</span>`;
     else st.innerHTML = `${L.needs.length ? `<span title="Needs you"><i class="st needs"></i>${L.needs.length}</span>` : ''}<span title="Unread"><i class="st unread"></i>${L.ready.length}</span>${L.working.length ? `<span title="Working"><i class="st working"></i>${L.working.length}</span>` : ''}`;
@@ -634,7 +634,7 @@
       ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
       <h3 class="home-resources-title">Resources</h3>${window.WosResources?.home() || ''}
       <div class="home-apps">${quick.map(a => `<button class="app-chip" data-app="${a.id}">${ico('i', '', a)}${esc(a.name)}</button>`).join('')}</div>
-      <div class="home-keys"><span><kbd>${MOD}1</kbd> Home</span><span><kbd>${CMD}O</kbd> open an app</span><span><kbd>${CMD}K</kbd> search and launch</span><span><kbd>${MOD}Enter</kbd> new chat</span><span><kbd>${MOD}⇧V</kbd> new voice chat</span><span><kbd>${CMD}T</kbd> / <kbd>${MOD}T</kbd> new desktop</span><span><kbd>${MOD}/</kbd> all keys</span></div>
+      <div class="home-keys"><span><kbd>${MOD}1</kbd> Home</span><span><kbd>${MOD}O</kbd> open an app</span><span><kbd>${MOD}Space</kbd> search</span><span><kbd>${MOD}N</kbd> new chat</span><span><kbd>${MOD}V</kbd> new voice chat</span><span><kbd>${MOD}T</kbd> new desktop</span><span><kbd>${MOD}/</kbd> all keys</span></div>
     </div>`;
   }
   stage.addEventListener('click', e => {
@@ -719,22 +719,22 @@
   function commands() {
     return [
       { kind: 'cmd', name: 'Home', icon: '⌂', keys: `${MOD}1`, run: () => goHome() },
-      { kind: 'cmd', name: 'Open an app', icon: '▦', keys: `${CMD}O`, run: () => openPicker() },
+      { kind: 'cmd', name: 'Open an app', icon: '▦', keys: `${MOD}O`, run: () => openPicker() },
       ...(window.WosResources ? [{ kind: 'cmd', name: 'Resources', icon: '◔', run: () => { goHome(); $('#desktopHome [data-res-open="server"]')?.click(); } }] : []),
       { kind: 'cmd', name: 'Get apps', icon: '+', run: () => openApp(APP['app-store']) },
       { kind: 'cmd', name: 'Your system', icon: '◈', run: () => openApp(APP.system) },
-      { kind: 'cmd', name: 'New desktop', icon: '+', keys: `${CMD}T / ${MOD}T`, run: () => newDesktop() },
-      { kind: 'cmd', name: 'Next desktop', icon: '→', keys: `${CMD}⇧]`, run: () => goWs((cur + 1) % ws.length) },
-      { kind: 'cmd', name: 'Previous desktop', icon: '←', keys: `${CMD}⇧[`, run: () => goWs((cur - 1 + ws.length) % ws.length) },
-      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${CMD}N / ${MOD}Enter`, run: () => newChat({ fresh: true }) },
-      { kind: 'cmd', name: 'New voice chat', icon: '🎙', keys: `${CMD}⇧N / ${MOD}⇧V`, run: () => talkNew() },
+      { kind: 'cmd', name: 'New desktop', icon: '+', keys: `${MOD}T`, run: () => newDesktop() },
+      { kind: 'cmd', name: 'Next desktop', icon: '→', keys: `${MOD}]`, run: () => goWs((cur + 1) % ws.length) },
+      { kind: 'cmd', name: 'Previous desktop', icon: '←', keys: `${MOD}[`, run: () => goWs((cur - 1 + ws.length) % ws.length) },
+      { kind: 'cmd', name: 'New chat', icon: '✎', keys: `${MOD}N`, run: () => newChat({ fresh: true }) },
+      { kind: 'cmd', name: 'New voice chat', icon: '🎙', keys: `${MOD}V`, run: () => talkNew() },
       { kind: 'cmd', name: `Talk to ${window.WizConfig.agent()}`, icon: '🎙', keys: 'Right ⌘', run: () => talk() },
       { kind: 'cmd', name: 'Dictate', icon: '✎', keys: 'Right ⌥', run: () => dictate() },
       { kind: 'cmd', name: 'Inbox', icon: '⬇', keys: `${MOD}I`, run: () => openInbox() },
       ...(window.WosFiles ? [{ kind: 'cmd', name: 'Files', icon: '▤', run: () => openFiles() }] : []),
       ...(window.WosUsage ? [{ kind: 'cmd', name: 'AI usage', icon: '◔', run: () => openUsage() }] : []),
-      { kind: 'cmd', name: 'Close app / empty desktop', icon: '✕', keys: `${CMD}W / ${MOD}W`, run: () => closeCurrent() },
-      { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${CMD}F / ${MOD}F`, run: () => toggleMono() },
+      { kind: 'cmd', name: 'Close app / empty desktop', icon: '✕', keys: `${MOD}W`, run: () => closeCurrent() },
+      { kind: 'cmd', name: 'Full screen', icon: '⤢', keys: `${MOD}F`, run: () => toggleMono() },
       { kind: 'cmd', name: 'Keyboard shortcuts', icon: '⌨', keys: `${MOD}/`, run: () => toggleKeys(true) },
       { kind: 'cmd', name: 'Settings', icon: '⚙', keys: `${MOD},`, run: () => openSettings() },
       { kind: 'cmd', name: 'Use the phone layout here', icon: '📱', run: () => { location.href = './?shell=phone'; } },
@@ -1007,16 +1007,15 @@
   })();
   /* ---------------- keys sheet ---------------- */
   const KEYS = [
-    ['Open and find', [[`${CMD}K  ${MOD}Space`, 'Search everything'], [`${CMD}O`, 'Open an app'], [`${MOD}1`, 'Home'], [`${MOD}I`, 'Inbox'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
-    ['Talk and chat', [[`${CMD}N  ${MOD}Enter`, 'New chat'], [`${CMD}⇧N  ${MOD}⇧V`, 'New voice chat (again to send)'], ['Right ⌘', `Talk to ${window.WizConfig.agent()} (tap again to send)`], [`${CMD}Enter`, 'Send'], ['Esc', 'Back to the list'], ['/', 'Search chats']]],
-    ['Desktops', [[`${CMD}T  ${MOD}T`, 'New desktop'], [`${MOD}2 … ${MOD}9`, 'Go to desktop'], [`⇧${MOD}2 … 9`, 'Send window to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}\``, 'Last desktop']]],
-    ['Windows', [[`${MOD}H J K L  ${CMD}← ↑ → ↓`, 'Focus window'], [`⇧${MOD}← →`, 'Swap window'], [`${CMD}F  ${MOD}F`, 'Full screen'], [`${CMD}W  ${MOD}W`, 'Close app']]],
-    ['Chat list', [['↑ ↓  j k', 'Move in the list'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], [`⇧${MOD}K  ⇧${MOD}J`, 'Previous / next chat anywhere']]],
-    ['Wizard for Mac (any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to an app'], ['Right ⌘', 'Talk from anywhere'], ['Right ⌥', 'Dictate into any app']]],
+    ['Open and find', [[`${MOD}Space`, 'Search everything'], [`${MOD}O`, 'Open an app'], [`${MOD}1`, 'Home'], [`${MOD}I`, 'Inbox'], [`${MOD},`, 'Settings'], [`${MOD}/`, 'This list']]],
+    ['Chat', [[`${MOD}N`, 'New chat'], [`${MOD}V`, 'New voice chat (again to send)'], ['Enter', 'Send (⇧Enter for a new line)'], [`${MOD}↑  ${MOD}↓`, 'Previous / next chat'], ['Esc', 'Back'], ['/', 'Search chats']]],
+    ['Desktops', [[`${MOD}T`, 'New desktop'], [`${MOD}2 … 9`, 'Go to desktop'], [`${MOD}[  ${MOD}]`, 'Previous / next desktop'], [`${MOD}\``, 'Last desktop'], [`${MOD}⇧2 … 9`, 'Send window to desktop']]],
+    ['Windows', [[`${MOD}← ↑ → ↓`, 'Focus window (or H J K L)'], [`${MOD}⇧← →`, 'Swap window'], [`${MOD}F`, 'Full screen'], [`${MOD}W`, 'Close app']]],
+    ['Wizard for Mac (any app)', [['Caps Lock', 'Search and launch'], ['Caps Lock + letter', 'Jump to an app'], ['Right ⌘', 'Talk to Wizard'], ['Right ⌥', 'Dictate into any app']]],
   ];
   const keysEl = $('#keys');
   const nativeDesktop = !!window.webkit?.messageHandlers?.wizardNative;
-  $('#keys .keys-head small').textContent = nativeDesktop ? 'Wizard owns ⌘N, ⌘T and ⌘W. Desktops open on demand.' : `In a browser tab, ${CMD}N, ${CMD}T and ${CMD}W belong to the browser, so use the ${MOD} versions.`;
+  $('#keys .keys-head small').textContent = IS_MAC ? 'Every Wizard key is ⌥ (Option) plus one key, so nothing clashes with macOS, the browser or Omarchy.' : 'Every Wizard key is Alt plus one key, so nothing clashes with the browser or Omarchy (Super).';
   $('#keysBody').innerHTML = KEYS.map(([h, rows]) => `<section class="kgrp"><h4>${h}</h4>` + rows.map(([k, d]) => `<div class="krow"><span>${esc(d)}</span><span class="kk">${k.split(/\s{2,}/).map(x => `<kbd>${esc(x)}</kbd>`).join('<i>or</i>')}</span></div>`).join('') + '</section>').join('');
   function toggleKeys(on) { keysEl.hidden = on == null ? !keysEl.hidden : !on; if (!keysEl.hidden) window.WosResources?.back(); }
   keysEl.addEventListener('click', e => { if (e.target === keysEl || e.target.closest('[data-close]')) toggleKeys(false); });
@@ -1028,7 +1027,7 @@
   const pill = $('#voicePill'), mic = $('#micBtn');
   document.body.appendChild(pill); // Fixed capture controls must not be clipped by the narrow toolbar scroller.
   new ResizeObserver(() => { document.documentElement.style.setProperty('--voice-h', pill.hidden ? '0px' : Math.ceil(pill.getBoundingClientRect().height + 16) + 'px'); layout(); }).observe(pill);
-  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${CMD}⇧N`, vContext = '', vRoute = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false;
+  let vTarget = null, vConversation = null, vTimer = 0, vMode = 'talk', dTarget = null, vReply = null, vNewChat = false, vNewKey = `${MOD}V`, vContext = '', vRoute = null, vSnapshot = null, vFeedback = null, vFiles = null, commandTake = false, strictReply = false;
   const VOICE = C.voice({
     onState: st => {
       window.WosCaptureTools.awake(st !== 'idle');
@@ -1067,7 +1066,7 @@
 
   // A separate chord always starts a new thread, even with an existing thread focused.
   // Never retarget an in-flight reply/dictation or discard it when the new-voice chord is pressed.
-  function talkNew(key = `${CMD}⇧N`) {
+  function talkNew(key = `${MOD}V`) {
     if (VOICE.state === 'idle') return talk('start', true, key);
     if (['listen','paused'].includes(VOICE.state) && vMode === 'talk' && vNewChat) return talk('send');
     toast('🎙', 'Finish the current recording before starting a new voice chat', 2400);
@@ -1075,7 +1074,7 @@
   }
   const generalVoice = document.createElement('button');
   generalVoice.id = 'generalVoice'; generalVoice.className = 'general-voice';
-  const paintGeneralVoice = () => { const l = 'New voice chat; shares nothing from this screen'; generalVoice.className = 'mic general-voice-ic'; generalVoice.innerHTML = '<svg viewBox="0 0 24 24"><path d="M10 13a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v4a3 3 0 0 0 3 3Zm-5.5-3a5.5 5.5 0 0 0 11 0M10 15.5V19M19 4v6M16 7h6"/></svg>'; generalVoice.setAttribute('aria-label', l); generalVoice.title = l; };
+  const paintGeneralVoice = () => { const l = 'New voice chat; shares nothing from this screen (⌥V)'; generalVoice.className = 'mic general-voice-ic'; generalVoice.innerHTML = '<svg viewBox="0 0 24 24"><path d="M10 13a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v4a3 3 0 0 0 3 3Zm-5.5-3a5.5 5.5 0 0 0 11 0M10 15.5V19M19 4v6M16 7h6"/></svg>'; generalVoice.setAttribute('aria-label', l); generalVoice.title = l; };
   paintGeneralVoice(); window.addEventListener('wizard:config', paintGeneralVoice);
   mic.insertAdjacentElement('afterend', generalVoice);
   generalVoice.addEventListener('click', () => talkNew('Tap to send'));
@@ -1084,7 +1083,7 @@
     try { await Promise.race([window.WosModels.load(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Models unavailable · recording has not started')), 8000); })]); }
     finally { clearTimeout(timer); }
   }
-  async function talk(action = 'toggle', forceNew = false, newKey = `${CMD}⇧N`) {
+  async function talk(action = 'toggle', forceNew = false, newKey = `${MOD}V`) {
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (action === 'cancel') { commandTake = false; if (VOICE.state !== 'idle') { vFiles?.close();vReply = null; VOICE.cancel(); toast('✕', 'Cancelled', 1000); } return 'none'; }
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
@@ -1352,40 +1351,26 @@
     }
     return '';
   }
+  const NATIVE_MENU = !!window.webkit?.messageHandlers?.wizardNative;
   function onKey(e, fromFrame = false) {
     const k = e.key, code = e.code, alt = e.altKey && !e.metaKey && !e.ctrlKey, shift = e.shiftKey;
     const digit = /^Digit([1-9])$/.exec(code);
     const hit = fn => { e.preventDefault(); e.stopPropagation(); fn(); };
-    if (code === 'Comma' && !shift && (alt || ((e.metaKey || e.ctrlKey) && !e.altKey))) return hit(() => setEl.hidden ? openSettings() : closeSettings());
+    // One base key for everything: ⌥ (Option / Alt). macOS and browsers own ⌘ and Ctrl, Omarchy owns Super.
+    // Inside the Wizard Mac app only, its own menu items (⌘N, ⌘T, ⌘W, ⌘,) forward here with their usual Mac meaning.
+    const menu = NATIVE_MENU && e.metaKey && !e.ctrlKey && !e.altKey && !shift;
+    if (code === 'Comma' && !shift && (alt || menu)) return hit(() => setEl.hidden ? openSettings() : closeSettings());
     // Home is the first icon (⌥1); app desktops follow left to right (⌥2…9).
-    // Handle this before palette/Settings ownership, just like the Home button.
     if (alt && !shift && code === 'Digit1') return hit(() => { if (!e.repeat) goHome(); });
-    // The native Mac menu forwards ⌘W here instead of closing its NSWindow. Always consume at
-    // the desktop root too; closing the last internal app leaves an empty workspace.
-    if ((e.metaKey || e.ctrlKey) && !(e.metaKey && e.ctrlKey) && !e.altKey && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
-    if (((e.metaKey || e.ctrlKey) && !(e.metaKey && e.ctrlKey) && !e.altKey) || alt) {
-      if (code === 'KeyT' && !shift) return hit(() => { if (!e.repeat) { closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
-      if ((e.metaKey || e.ctrlKey) && shift && (code === 'BracketLeft' || code === 'BracketRight')) return hit(() => goWs((cur + (code === 'BracketRight' ? 1 : -1) + ws.length) % ws.length));
-    }
-    if (e.ctrlKey && !e.metaKey && !e.altKey && code === 'Tab') return hit(() => goWs((cur + (shift ? -1 : 1) + ws.length) % ws.length));
-    if (e.metaKey && !e.ctrlKey && !e.altKey && !shift) {
-      const direction = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[code];
-      if (direction) return hit(() => dirFocus(...direction));
-      if (code === 'KeyF') return hit(() => { if (!e.repeat) toggleMono(); });
-    }
+    if ((menu || alt) && !shift && code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
+    if ((menu || alt) && !shift && code === 'KeyT') return hit(() => { if (!e.repeat) { closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); newDesktop(); } });
     if (alt && !shift && (code === 'ArrowUp' || code === 'ArrowDown') && focused()?.app === 'chats') return hit(() => stepThread(focused().id, code === 'ArrowDown' ? 1 : -1));
-    // Native ⌘N / Ctrl+N: fresh composer; ⇧ adds new-chat voice. Browser-safe voice: ⌥⇧V.
-    // Browser-owned ⌘N/⌘⇧N can stay with the browser; ⌥Enter/⌥⇧V reach Wizard in tabs.
-    if (((e.metaKey || e.ctrlKey) && !(e.metaKey && e.ctrlKey) && !e.altKey && code === 'KeyN') || (alt && shift && code === 'KeyV')) return hit(() => {
-      if (e.repeat) return;
-      closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage();
-      if (shift) talkNew(alt ? `${MOD}⇧V` : `${CMD}⇧N`); else newChat({ fresh: true });
-    });
-    // ⌘K / Ctrl+K, ⌥Space: palette, from anywhere (even while typing). From the app selector it widens to everything.
-    if ((e.metaKey || e.ctrlKey) && !e.altKey && (k === 'k' || k === 'K')) return hit(() => palToggle('all'));
-    if (alt && code === 'Space') return hit(() => palToggle('all'));
-    // ⌘O / Ctrl+O: the app selector, from anywhere; the browser's Open File never shows.
-    if ((e.metaKey || e.ctrlKey) && !(e.metaKey && e.ctrlKey) && !e.altKey && !shift && code === 'KeyO') return hit(() => { if (!e.repeat) palToggle('apps'); });
+    // ⌥N new chat; ⌥V new voice chat (⌥V again sends).
+    if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); newChat({ fresh: true }); });
+    if (alt && !shift && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); closeInbox(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
+    // ⌥Space search everything, ⌥O open an app: from anywhere, even while typing.
+    if (alt && !shift && code === 'Space') return hit(() => palToggle('all'));
+    if (alt && !shift && code === 'KeyO') return hit(() => { if (!e.repeat) palToggle('apps'); });
     // Link pane: ⌘Enter keeps it as a window, ⌘⇧Enter opens it in the browser.
     if (LINKS && LINKS.isOpen() && (e.metaKey || e.ctrlKey) && k === 'Enter') return hit(() => LINKS.el.querySelector(shift ? '[data-ls="out"]' : '[data-ls="keep"]')?.click());
     if (k === 'Escape' && LINKS && LINKS.isOpen() && fromFrame) { const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } return; }
@@ -1393,7 +1378,7 @@
     if (!pal.hidden) {
       // ⌘K's palette owns the keyboard while open. The app selector lets the window manager's ⌥ chords
       // through (⌥Enter, ⌥2…9, ⌥[ ], ⌥W…), stepping aside first, so a fresh desktop never traps them.
-      if (palMode !== 'apps' || !alt || !/^(Digit[2-9]|Enter|Key[IWFHJKL]|Slash|Comma|Bracket(Left|Right)|Tab)$/.test(code)) return;
+      if (palMode !== 'apps' || !alt || !/^(Digit[2-9]|Key[IWFHJKLNTV]|Slash|Comma|Bracket(Left|Right)|Backquote)$/.test(code)) return;
       closePalette({ restore: false });
       queueMicrotask(() => { const a = document.activeElement; if (!a || a === document.body || !a.getClientRects().length) restFocus(); });
     }
@@ -1408,8 +1393,6 @@
         if (k === '/' && !typing(e.target)) return hit(() => { const s = winEl(f.id)?.querySelector('[data-chsearch]'); if (s) { s.focus(); s.select(); } });
         if (k === 'Enter' && inSearch) { const r = listRows(f.id)[0]; if (r) return hit(() => { stepThread(f.id, 1); focusInside(f.id); }); }
       }
-      // ⌥⇧J / ⌥⇧K: next / previous chat from anywhere in the Chats window, even mid-sentence.
-      if (f?.app === 'chats' && e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && (code === 'KeyJ' || code === 'KeyK')) return hit(() => stepThread(f.id, code === 'KeyJ' ? 1 : -1));
     }
     if (!e.altKey || e.metaKey || e.ctrlKey) {
       // Inbox navigation without modifiers.
@@ -1431,7 +1414,6 @@
       else if (target.kind === 'new') newDesktop();
       else { lastWs = cur; goWs(target.index); }
     });
-    if (code === 'Enter') return hit(() => newChat({ fresh: shift }));
     if (code === 'KeyI') return hit(() => toggleInbox());
     if (code === 'KeyW') return hit(() => { if (!e.repeat) closeCurrent(); });
     if (code === 'KeyF') return hit(() => { if (!e.repeat) toggleMono(); });
@@ -1439,7 +1421,7 @@
     if (code === 'Comma') return hit(() => (setEl.hidden ? openSettings() : closeSettings()));
     if (code === 'BracketLeft') return hit(() => { lastWs = cur; goWs((cur - 1 + ws.length) % ws.length); });
     if (code === 'BracketRight') return hit(() => { lastWs = cur; goWs((cur + 1) % ws.length); });
-    if (code === 'Tab' || code === 'Backquote') return hit(() => { const t = lastWs; lastWs = cur; goWs(t); });
+    if (code === 'Backquote') return hit(() => { const t = lastWs; lastWs = cur; goWs(t); });
     const dir = { ArrowLeft: [-1, 0], KeyH: [-1, 0], ArrowRight: [1, 0], KeyL: [1, 0], ArrowUp: [0, -1], KeyK: [0, -1], ArrowDown: [0, 1], KeyJ: [0, 1] }[code];
     // ⌥ arrows are word/paragraph jumps while typing on a Mac: leave them to the text field (⌥HJKL still move focus).
     if (dir && /^Arrow/.test(code) && typing(e.target)) return;
