@@ -1,7 +1,6 @@
 package ai.wizards.os.recording;
 
 import android.content.Context;
-import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -12,7 +11,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -26,7 +24,7 @@ import java.util.List;
  * Transcribe &amp; copy puts the words on the clipboard, Delete removes them. A short cancel is still just gone.
  *
  * Files: files/cancelled/&lt;id&gt;.&lt;ext&gt; + &lt;id&gt;.json ({id, at, ms, source, mime, bytes}). Only this phone has them;
- * the newest {@link CancelPolicy#MAX_KEPT} are kept, none longer than {@link CancelPolicy#MAX_AGE_MS}.
+ * kept until explicit Delete. Age/count alone is not permission to destroy an owner's recording.
  */
 public final class CancelledTakes {
     static final String TAG = "WizardOSCancelled";
@@ -39,55 +37,49 @@ public final class CancelledTakes {
         return d;
     }
 
-    /**
-     * Keep a cancelled take if it is long enough. Moves (or copies) audio into the cancelled folder; the caller may
-     * delete its own copy afterwards either way. Returns true when kept. Never throws.
-     */
+    /** Compatibility entry point; CaptureJournal owns the explicit short-cancel decision and bytes. */
     public static boolean keep(Context c, File audio, long ms, String source, String mime) {
-        return keep(c, audio, ms, source, mime, false);
+        return audio != null && audio.isFile() && ai.wizards.os.audio.CaptureJournal.get(c).cancel(audio, source, ms);
     }
 
-    /**
-     * A take speech-to-text heard nothing in (18 Oct 2026): kept whatever its length, so a quiet or misrouted
-     * recording is never deleted. It is listed with the cancelled ones and can be transcribed again from Settings.
-     */
+    /** Unheard is never a receipt, regardless of duration or size. */
     public static boolean keepUnheard(Context c, File audio, String source, String mime) {
-        long ms = audio == null ? 0 : audio.length() / 8; // ≈ duration at the recorders' 64 kbit/s AAC
-        return keep(c, audio, ms, source, mime, true);
+        return keepUnheard(c.getFilesDir(), audio, source);
     }
 
-    private static boolean keep(Context c, File audio, long ms, String source, String mime, boolean always) {
+    public static boolean keepUnheard(File filesDir, File audio, String source) {
+        return ai.wizards.os.audio.CaptureJournal.at(filesDir).releaseFile(audio, source, null);
+    }
+
+    /** Journal-owned keeps have no age/count expiry: only explicit Delete may remove the last copy. */
+    public static File keepCustody(File filesDir, JSONObject entry, File audio) throws IOException {
+        String id = "journal-" + java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(entry.optString("id").getBytes(StandardCharsets.UTF_8));
+        File d = new File(filesDir, "cancelled");
+        if (!d.isDirectory() && !d.mkdirs()) throw new IOException("Cannot create cancelled recordings");
+        String name = audio.getName();
+        String ext = name.endsWith(".wav.tmp") ? ".wav" : name.substring(name.lastIndexOf('.'));
+        File out = new File(d, id + ext);
+        // Copy, never rename: a failed journal/metadata write must leave the original discoverable.
+        if (!audio.equals(out)) {
+            try (InputStream in = new FileInputStream(audio); FileOutputStream w = new FileOutputStream(out)) {
+                byte[] buf = new byte[65536]; for (int n; (n = in.read(buf)) != -1;) w.write(buf, 0, n);
+                w.getFD().sync();
+            }
+        }
         try {
-            if (audio == null || !audio.isFile()) return false;
-            if (!always && !CancelPolicy.keep(ms, audio.length())) { Log.i(TAG, "not kept ms=" + ms + " bytes=" + audio.length()); return false; }
-            long now = System.currentTimeMillis();
-            String id = "c" + now + "-" + (source == null ? "orb" : source.replaceAll("[^a-z]", ""));
-            String name = audio.getName();
-            String ext = name.contains(".") ? name.substring(name.lastIndexOf('.')).toLowerCase(java.util.Locale.ROOT) : ".m4a";
-            File d = dir(c), out = new File(d, id + ext);
-            if (!audio.renameTo(out)) copy(audio, out);
-            JSONObject o = new JSONObject()
-                    .put("id", id).put("at", now).put("ms", ms).put("source", source == null ? "orb" : source)
-                    .put("mime", mime == null || mime.isEmpty() ? (".aac".equals(ext) ? "audio/aac" : "audio/mp4") : mime)
-                    .put("file", out.getName()).put("bytes", out.length());
+            JSONObject meta = new JSONObject().put("id", id).put("captureId", entry.optString("id"))
+                    .put("at", System.currentTimeMillis()).put("ms", entry.optLong("discardMs"))
+                    .put("source", entry.optString("source")).put("file", out.getName()).put("bytes", out.length())
+                    .put("mime", ".wav".equals(ext) ? "audio/wav" : ".aac".equals(ext) ? "audio/aac" : "audio/mp4")
+                    .put("custody", true);
             File tmp = new File(d, id + ".json.tmp");
-            try (OutputStream w = new FileOutputStream(tmp)) { w.write(o.toString().getBytes(StandardCharsets.UTF_8)); }
-            //noinspection ResultOfMethodCallIgnored
-            tmp.renameTo(new File(d, id + ".json"));
-            Log.i(TAG, "kept " + id + " ms=" + ms + " bytes=" + out.length() + " from " + source);
-            prune(c);
-            return true;
-        } catch (Exception e) {
-            Log.w(TAG, "keep failed", e);
-            return false;
-        }
-    }
-
-    private static void copy(File from, File to) throws IOException {
-        try (InputStream in = new FileInputStream(from); OutputStream out = new FileOutputStream(to)) {
-            byte[] b = new byte[65536];
-            for (int n; (n = in.read(b)) > 0; ) out.write(b, 0, n);
-        }
+            try (FileOutputStream w = new FileOutputStream(tmp)) {
+                w.write(meta.toString().getBytes(StandardCharsets.UTF_8)); w.getFD().sync();
+            }
+            if (!tmp.renameTo(new File(d, id + ".json"))) throw new IOException("Cannot commit kept recording");
+        } catch (JSONException ex) { throw new IOException(ex); }
+        return out;
     }
 
     /** Newest first. */
@@ -130,11 +122,8 @@ public final class CancelledTakes {
     }
 
     static void prune(Context c) {
-        List<JSONObject> l = list(c);
-        long now = System.currentTimeMillis();
-        long[] ats = new long[l.size()];
-        for (int i = 0; i < l.size(); i++) ats[i] = l.get(i).optLong("at");
-        for (int i : CancelPolicy.drop(ats, now)) delete(c, l.get(i).optString("id"));
+        // No automatic expiry: neither a week nor a full list proves the server has the recording.
+        // Explicit Settings → Delete remains the owner's decision (including pre-journal keeps).
     }
 
     /** For logs and QA. */

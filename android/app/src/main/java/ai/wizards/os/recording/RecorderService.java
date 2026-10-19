@@ -1,5 +1,7 @@
 package ai.wizards.os.recording;
 
+import ai.wizards.os.audio.CaptureJournal;
+
 import org.json.JSONObject;
 import android.Manifest;
 import android.app.Notification;
@@ -216,7 +218,7 @@ public class RecorderService extends Service {
                     // A meeting-linked loan keeps its original even when short/cancelled.
                     // Normal recovery/explicit acknowledgement owns eventual deletion.
                     if (m != null && m.has("meetingHandoffId")) break;
-                    CancelledTakes.keep(this, st.audio(take), m == null ? 0 : m.optLong("ms"), "app", RecordingStore.MIME);
+                    CaptureJournal.get(this).cancel(st.audio(take), "app", m == null ? 0 : m.optLong("ms"));
                     st.delete(take);
                 }
                 break;
@@ -231,6 +233,7 @@ public class RecorderService extends Service {
         File out = RecordingStore.get(this).audio(id);
         File qa = new File(getFilesDir(), "qa_mic.aac");
         if (BuildConfig.DEBUG && qa.isFile()) {
+            CaptureJournal.get(this).register(id, "app", "note", out, System.currentTimeMillis());
             startCanned(qa, out);
         } else {
             try {
@@ -247,6 +250,7 @@ public class RecorderService extends Service {
                             m.setOutputFile(out.getAbsolutePath());
                         });
                 rec = r;
+                CaptureJournal.get(this).register(id, "app", "note", out, System.currentTimeMillis());
                 source = "mic";
                 RecordingStore.get(this).set(id, "route", ai.wizards.os.audio.MicRoute.routed(r));
             } catch (Exception e) {
@@ -319,6 +323,7 @@ public class RecorderService extends Service {
             st.set(id, "stoppedAt", System.currentTimeMillis());
             st.set(id, "via", via);
             st.set(id, "state", state);
+            CaptureJournal.get(this).stopped(id);
         }
         activeId = null; stopWanted = null; paused = false; level = 0;
         ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);

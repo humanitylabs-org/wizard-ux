@@ -1,5 +1,7 @@
 package ai.wizards.os.recording;
 
+import ai.wizards.os.audio.CaptureJournal;
+
 import android.content.Context;
 
 import org.json.JSONArray;
@@ -19,17 +21,18 @@ import java.util.UUID;
 
 /**
  * Orb recordings on disk: files/recordings/<id>.aac (AAC ADTS, so a take cut short by an app kill still
- * plays up to the last frame) plus <id>.json with its state. A take is deleted only after the web shell
- * says it has it safely (transcribed and handled, or saved in the durable outbox).
+ * plays up to the last frame) plus <id>.json with its state. CaptureJournal owns the bytes: recDone
+ * retires this adapter's metadata, but without a server receipt the native original is kept.
  *
  * States: recording → stopped (by the notification's Send, or the service died: "interrupted") → claimed
- * (the web shell took it with recStop) → deleted (recDone). Anything not claimed in this process is
+ * (the web shell took it with recStop) → kept by CaptureJournal (recDone). Anything not claimed in this process is
  * recoverable on the next start.
  */
 public final class RecordingStore {
     public static final String MIME = "audio/aac";
     private static RecordingStore instance;
     private final File dir;
+    private final CaptureJournal custody;
     /** Takes the web shell claimed in THIS process; a claim left by a dead process is recoverable again. */
     private final Set<String> claimedHere = new HashSet<>();
 
@@ -40,6 +43,7 @@ public final class RecordingStore {
 
     RecordingStore(File dir) {
         this.dir = dir;
+        custody = CaptureJournal.at(dir.getParentFile());
         //noinspection ResultOfMethodCallIgnored
         dir.mkdirs();
     }
@@ -71,14 +75,16 @@ public final class RecordingStore {
     }
 
     public synchronized void claim(String id) {
+        custody.adopt(audio(id), "app");
+        custody.hand(id, "web-outbox");
         claimedHere.add(id);
         set(id, "state", "claimed");
     }
 
     public synchronized void delete(String id) {
+        // recDone only proves web custody, not a server receipt: keep the original in Cancelled recordings.
+        if (audio(id).isFile() && !custody.releaseFile(audio(id), "app", null)) return;
         claimedHere.remove(id);
-        //noinspection ResultOfMethodCallIgnored
-        audio(id).delete();
         //noinspection ResultOfMethodCallIgnored
         meta(id).delete();
     }
@@ -95,7 +101,7 @@ public final class RecordingStore {
             File a = audio(id);
             if (o == null) continue;
             if (!a.isFile() || a.length() < 600) { // nothing usable was captured
-                if (System.currentTimeMillis() - o.optLong("startedAt") > 60_000) delete(id);
+                // Startup recovery never removes even a short/torn take. The journal keeps it discoverable.
                 continue;
             }
             try {

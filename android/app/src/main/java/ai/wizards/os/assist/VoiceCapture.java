@@ -1,5 +1,7 @@
 package ai.wizards.os.assist;
 
+import ai.wizards.os.audio.CaptureJournal;
+
 import ai.wizards.os.BuildConfig;
 import ai.wizards.os.R;
 
@@ -85,7 +87,7 @@ final class VoiceCapture {
      * Side-button takes record straight into files/side-takes/ as AAC ADTS: every frame on disk is playable on its
      * own, so if the process dies mid-take (an app update, Android reclaiming memory, a crash) everything said up to
      * that moment survives. On the next start the orphan is handed to the outbox and sent like any other take.
-     * Cancel and "nothing heard" delete the file, so only real, unfinished takes are recovered.
+     * Only explicit short cancel may discard bytes; unheard/failed takes stay recoverable in native custody.
      */
     static File takesDir(Context c) {
         File d = new File(c.getFilesDir(), "side-takes");
@@ -109,7 +111,7 @@ final class VoiceCapture {
         for (File f : fs) {
             if (f.equals(live) || !f.getName().endsWith(".aac")) continue;
             if (!TakeRecovery.worthSending(f.length())) { //noinspection ResultOfMethodCallIgnored
-                f.delete(); continue; }
+                CaptureJournal.get(c).adopt(f, "side"); continue; } // Boot never deletes audio.
             try {
                 long bytes = f.length();
                 EverywhereOutbox.get(c).enqueueRecording(f, EverywhereOutbox.SRC_SIDE, null, false);
@@ -197,6 +199,7 @@ final class VoiceCapture {
         loan = l; takeId = take; meetingEvent = l.borrowed ? l.eventId : "";
         if (l.borrowed) Log.i(TAG, "meeting paused for " + l.eventId);
         try {
+            CaptureJournal.get(app); // Adopt legacy files before creating this take's file.
             // ADTS on internal storage: what was said survives the process dying mid-take (see recoverOrphans)
             recording = new File(takesDir(app), "side-" + System.currentTimeMillis() + ".aac");
             final File file = recording;
@@ -213,6 +216,7 @@ final class VoiceCapture {
                         m.setOutputFile(file.getAbsolutePath());
                     });
             recorder = r;
+            CaptureJournal.get(app).register(takeId, "side", "note", recording, System.currentTimeMillis());
         } catch (Exception e) {
             dropRecorder();
             if (qa == null) {
@@ -285,14 +289,15 @@ final class VoiceCapture {
         }
         ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.SIDE);
         final String take = takeId, event = meetingEvent;
+        if (take != null) CaptureJournal.get(app).stopped(take);
         final File qa = qaAudio;
         final File audio = qa != null ? qa : recording;
         if (qa != null && recording != null) //noinspection ResultOfMethodCallIgnored
-            recording.delete(); // QA stand-in audio was used; the emulator's own file is not a take to recover
+            CaptureJournal.get(app).releaseFile(recording, "side", null); // QA replacement is not proof of identical bytes.
         recording = null;
         if ((!ok && qa == null) || audio == null || !audio.isFile() || audio.length() < 512) {
             if (audio != null && qa == null) //noinspection ResultOfMethodCallIgnored
-                audio.delete();
+                CaptureJournal.get(app).releaseFile(audio, "side", null);
             endLoan("empty", "cancelled", "Nothing was recorded");
             if (view != null) view.onNothing();
             return;
@@ -412,7 +417,8 @@ final class VoiceCapture {
         if (listening && recording != null && qaAudio == null) {
             long ms = SystemClock.elapsedRealtime() - startedAt;
             dropRecorder(); // closes the file
-            kept = ai.wizards.os.recording.CancelledTakes.keep(app, recording, ms, "side", "audio/aac");
+            kept = CaptureJournal.get(app).cancel(recording, "side", ms);
+            recording = null;
         }
         discard();
         return kept;
@@ -429,7 +435,7 @@ final class VoiceCapture {
         endLoan("cancelled", "cancelled", null);
         if (recording != null) {
             //noinspection ResultOfMethodCallIgnored
-            recording.delete();
+            CaptureJournal.get(app).releaseFile(recording, "side", null);
             recording = null;
         }
     }
@@ -483,7 +489,7 @@ final class VoiceCapture {
         if (!f.isFile()) return null;
         File used = new File(c.getFilesDir(), "qa_used.m4a");
         //noinspection ResultOfMethodCallIgnored
-        used.delete();
+        if (used.exists() && !CaptureJournal.get(c).releaseFile(used, "side", null)) return null;
         return f.renameTo(used) ? used : null;
     }
 

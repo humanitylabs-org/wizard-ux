@@ -1,5 +1,7 @@
 package ai.wizards.os.everywhere;
 
+import ai.wizards.os.audio.CaptureJournal;
+
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
@@ -146,6 +148,7 @@ public final class EverywhereOutbox {
     }
 
     private final File dir, audioDir, file;
+    private final CaptureJournal custody;
     private final String origin;
     private final Map<String, Item> items = new LinkedHashMap<>();
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -161,6 +164,7 @@ public final class EverywhereOutbox {
 
     EverywhereOutbox(File dir, String origin) {
         this.dir = dir; this.origin = origin;
+        this.custody = CaptureJournal.at(dir.getParentFile());
         this.audioDir = new File(dir, "audio");
         this.file = new File(dir, "outbox.json");
         //noinspection ResultOfMethodCallIgnored
@@ -230,7 +234,11 @@ public final class EverywhereOutbox {
     public Item enqueueRecording(File recording, String source, List<byte[]> screenshots, boolean locked, String id, String meetingEvent) throws IOException {
         Item it = new Item();
         it.locked = locked;
-        it.id = id != null && id.matches("wos-(dict|side|ev)-[A-Za-z0-9-]{8,64}") && !items.containsKey(id) ? id : newId(source);
+        String registered = custody.idFor(recording);
+        it.id = registered != null ? registered : id != null ? id : newId(source);
+        if (items.containsKey(it.id)) throw new IOException("Take already queued");
+        custody.register(it.id, source, "note", recording, System.currentTimeMillis());
+        custody.stopped(it.id);
         it.meetingEvent = meetingEvent == null ? "" : meetingEvent;
         it.source = source == null ? SRC_EVERYWHERE : source;
         if (screenshots != null && !it.dictation()) {
@@ -245,13 +253,8 @@ public final class EverywhereOutbox {
         it.createdAt = System.currentTimeMillis();
         it.sessionId = "wizard_" + it.createdAt + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         File kept = new File(audioDir, it.id + ai.wizards.os.assist.TakeRecovery.ext(recording.getName()));
-        if (!recording.renameTo(kept)) {
-            try (InputStream in = new FileInputStream(recording); FileOutputStream out = new FileOutputStream(kept)) {
-                copy(in, out); out.getFD().sync();
-            }
-            //noinspection ResultOfMethodCallIgnored
-            recording.delete();
-        }
+        custody.transfer(it.id, kept); // SUPERSEDED_COPY: verified, fsynced duplicate; same take id.
+        custody.hand(it.id, "everywhere-outbox");
         it.audioPath = kept.getAbsolutePath();
         synchronized (this) { items.put(it.id, it); save(); }
         changed();
@@ -303,7 +306,7 @@ public final class EverywhereOutbox {
             Item it = items.remove(id);
             if (it == null) return;
             if (!it.audioPath.isEmpty()) //noinspection ResultOfMethodCallIgnored
-                new File(it.audioPath).delete();
+                custody.release(it.id, null); // Queue Delete has no measured short-cancel decision: keep the original.
             deleteShots(it);
             save();
         }
@@ -385,13 +388,13 @@ public final class EverywhereOutbox {
             catch (IOException e) { throw asHttp(e); }
             if (t.text.isEmpty()) {
                 // Never delete an unheard take: a quiet or misrouted recording stays in Settings → Cancelled recordings.
-                boolean kept = app != null && ai.wizards.os.recording.CancelledTakes.keepUnheard(app, audio, it.source, "");
+                boolean kept = ai.wizards.os.recording.CancelledTakes.keepUnheard(dir.getParentFile(), audio, it.source);
+                // Compatibility entry point delegates to CaptureJournal.release(null): unheard is not a receipt.
                 String why = kept ? "No words heard · recording kept in Settings → Cancelled recordings" : "No speech in that recording";
                 synchronized (this) { it.state = "empty"; it.error = why; items.remove(it.id); save(); }
                 meetingNote(it, "event", "failed", "error", why);
                 Log.i(TAG, "no words in " + it.id + (kept ? " · kept" : " · not kept"));
-                //noinspection ResultOfMethodCallIgnored
-                if (!kept) audio.delete();
+                // A failed keep leaves the journal and original intact for recovery.
                 changed();
                 return;
             }
@@ -408,7 +411,7 @@ public final class EverywhereOutbox {
                 synchronized (this) {
                     it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
                     if (audio != null) //noinspection ResultOfMethodCallIgnored
-                        audio.delete();
+                        custody.release(it.id, null); // A local action is not a server receipt.
                     it.audioPath = "";
                     deleteShots(it);
                     items.remove(it.id);
@@ -435,7 +438,7 @@ public final class EverywhereOutbox {
                     synchronized (EverywhereOutbox.this) {
                         it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
                         if (audio != null) //noinspection ResultOfMethodCallIgnored
-                            audio.delete();
+                            custody.release(it.id, null); // Typed words are not a server audio receipt.
                         it.audioPath = "";
                         items.remove(it.id);
                         save();
@@ -490,8 +493,10 @@ public final class EverywhereOutbox {
         synchronized (this) {
             it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
             it.runId = run.optString("run_id", run.optString("id", ""));
-            if (!it.audioPath.isEmpty()) //noinspection ResultOfMethodCallIgnored
-                new File(it.audioPath).delete(); // the server has it now (voice note + transcript)
+            if (!it.audioPath.isEmpty() && it.audioFile != null && !it.audioFile.optString("id").isEmpty()) {
+                custody.received(it.id, "wizard-file:" + it.audioFile.optString("id"));
+                custody.release(it.id, CaptureJournal.Reason.SERVER_RECEIPT);
+            }
             it.audioPath = "";
             deleteShots(it);
             pruneSent();

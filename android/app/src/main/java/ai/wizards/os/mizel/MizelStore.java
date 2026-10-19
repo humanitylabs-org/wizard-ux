@@ -1,5 +1,7 @@
 package ai.wizards.os.mizel;
 
+import ai.wizards.os.audio.CaptureJournal;
+
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
@@ -30,12 +32,14 @@ import java.util.regex.Pattern;
 public final class MizelStore {
     private static final Pattern CHUNK = Pattern.compile("(\\d{6})\\.wav(\\.tmp)?");
     private final File root;
+    private final CaptureJournal custody;
     private final Map<String, MizelJournal> journals = new LinkedHashMap<>();
     public interface Log { void log(String msg); }
     private Log log = m -> { };
 
     public MizelStore(File root) {
         this.root = root;
+        this.custody = CaptureJournal.at(root.getParentFile());
         //noinspection ResultOfMethodCallIgnored
         root.mkdirs();
         load();
@@ -137,7 +141,7 @@ public final class MizelStore {
         j.recording = false; j.paused = false;
         if (j.nextSeq == 0 && j.stopReason == null && j.pending.isEmpty()) {
             journals.remove(id);
-            deleteTree(meetingDir(id));
+            deleteTree(meetingDir(id), null); // Start failure is not an explicit discard.
             return;
         }
         save(j);
@@ -161,6 +165,7 @@ public final class MizelStore {
     public synchronized MizelJournal.Chunk chunkDone(String id, int seq, long samples, long now) {
         MizelJournal j = journals.get(id);
         if (j == null || seq != j.nextSeq) { log.log("chunkDone out of order " + id + " seq=" + seq); return null; }
+        trackChunk(id, seq, chunkFile(id, seq));
         MizelJournal.Chunk c = new MizelJournal.Chunk();
         c.seq = seq;
         c.startMs = j.mediaSamples * 1000L / Wav.RATE;
@@ -214,8 +219,7 @@ public final class MizelStore {
             if (!m.matches()) continue;
             int seq = Integer.parseInt(m.group(1));
             if (seq < j.nextSeq) {
-                if (m.group(2) != null) //noinspection ResultOfMethodCallIgnored
-                    f.delete(); // a stale temp for a chunk that was already completed
+                // Even a stale temporary file stays in place on boot; the custody journal adopted it.
                 continue;
             }
             found.add(new int[]{seq, m.group(2) != null ? 1 : 0});
@@ -228,20 +232,18 @@ public final class MizelStore {
             try {
                 if (f[1] == 1) {
                     File tmp = tmpFile(id, seq);
-                    if (done.isFile()) { //noinspection ResultOfMethodCallIgnored
-                        tmp.delete(); continue; }
+                    if (done.isFile()) continue; // Preserve duplicate evidence on boot.
                     long data;
                     try (RandomAccessFile r = new RandomAccessFile(tmp, "rw")) { data = Wav.fixHeader(r); r.getFD().sync(); }
-                    if (data <= 0) { //noinspection ResultOfMethodCallIgnored
-                        tmp.delete(); continue; }
+                    if (data <= 0) continue; // Torn/empty chunks stay recoverable; no boot deletions.
                     if (!tmp.renameTo(done)) throw new IOException("rename failed");
                 }
                 if (seq < j.nextSeq || j.chunk(seq) != null) continue;
                 long data;
                 try (RandomAccessFile r = new RandomAccessFile(done, "rw")) { data = Wav.fixHeader(r); }
-                if (data <= 0) { //noinspection ResultOfMethodCallIgnored
-                    done.delete(); continue; }
+                if (data <= 0) continue; // No receipt or explicit discard.
                 if (seq != j.nextSeq) log.log("recover " + id + ": gap before seq " + seq + " (expected " + j.nextSeq + ")");
+                trackChunk(id, seq, done);
                 MizelJournal.Chunk c = new MizelJournal.Chunk();
                 c.seq = seq;
                 c.startMs = j.mediaSamples * 1000L / Wav.RATE;
@@ -274,6 +276,8 @@ public final class MizelStore {
         if (j == null) return;
         MizelJournal.Chunk c = j.chunk(seq);
         if (c == null) return;
+        trackChunk(id, seq, chunkFile(id, seq));
+        custody.received(CaptureJournal.chunkId(id, seq), "mizel-chunk:" + id + "/" + seq);
         j.pending.remove(c);
         j.acked++;
         j.lastAckedSeq = Math.max(j.lastAckedSeq, seq);
@@ -335,6 +339,11 @@ public final class MizelStore {
         if (j == null) return;
         j.statusCheckedAt = now;
         if (ready && j.readyAt == 0) j.readyAt = now;
+        // Only actual per-chunk acknowledgements can acquire a prune deadline.
+        if (ready) for (File f : files(meDir(id))) {
+            String captureId = custody.idFor(f);
+            if (captureId != null) custody.ready(captureId, j.readyAt, MizelPolicy.KEEP_AFTER_READY_MS);
+        }
         save(j);
     }
 
@@ -347,7 +356,7 @@ public final class MizelStore {
             if (j.recording || !j.pending.isEmpty()) continue;
             if (!MizelPolicy.prunable(j.stopSent, j.readyAt, now, keepMs)) continue;
             journals.remove(j.meetingId);
-            deleteTree(meetingDir(j.meetingId));
+            deleteTree(meetingDir(j.meetingId), CaptureJournal.Reason.MEETING_PRUNE_AFTER_READY);
             gone.add(j.meetingId);
         }
         return gone;
@@ -360,9 +369,23 @@ public final class MizelStore {
 
     /* ------------------------------------------------------------------ util */
 
-    static void deleteTree(File f) {
-        File[] kids = f.listFiles();
-        if (kids != null) for (File k : kids) deleteTree(k);
+    private void trackChunk(String id, int seq, File file) {
+        String captureId = CaptureJournal.chunkId(id, seq);
+        JSONObject e = custody.entry(captureId);
+        if (e == null) custody.register(captureId, "meeting", "meeting_chunk", file, file.lastModified());
+        else if (!file.getAbsolutePath().equals(e.optString("path"))) custody.moved(captureId, file);
+        custody.hand(captureId, "mizel-uploader");
+    }
+
+    private static File[] files(File d) { File[] fs = d.listFiles(); return fs == null ? new File[0] : fs; }
+
+    private void deleteTree(File f, CaptureJournal.Reason reason) {
+        if (CaptureJournal.isAudio(f)) {
+            custody.releaseFile(f, "meeting", reason);
+            return;
+        }
+        for (File k : files(f)) deleteTree(k, reason);
+        // Non-audio only: meeting JSON metadata and empty directories; audio always goes through custody above.
         //noinspection ResultOfMethodCallIgnored
         f.delete();
     }

@@ -1,5 +1,7 @@
 package ai.wizards.os.mizel;
 
+import ai.wizards.os.audio.CaptureJournal;
+
 import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -554,9 +556,16 @@ public class MeetingRecorderService extends Service {
                     // The phone's mic, never a Bluetooth speaker's: a source Android routes elsewhere is dropped.
                     if (!ai.wizards.os.audio.MicRoute.startOnBuiltIn(MeetingRecorderService.this, r)) continue;
                     rec = r;
+                    int next = store.currentSeq(l.meetingId);
+                    CaptureJournal.get(MeetingRecorderService.this).register(CaptureJournal.chunkId(l.meetingId, next),
+                            "meeting", "meeting_chunk", store.tmpFile(l.meetingId, next), System.currentTimeMillis());
                     Log.i(TAG, "AudioRecord open source=" + src + " buffer=" + size + " via " + ai.wizards.os.audio.MicRoute.routed(r));
                     return true;
                 } catch (SecurityException | IllegalStateException | IllegalArgumentException e) {
+                    if (rec != null) {
+                        try { rec.stop(); } catch (IllegalStateException ignored) { }
+                        rec.release(); rec = null;
+                    }
                     Log.w(TAG, "AudioRecord source " + src + " failed", e);
                 }
             }
@@ -646,6 +655,8 @@ public class MeetingRecorderService extends Service {
             File tmp = store.tmpFile(l.meetingId, seq);
             //noinspection ResultOfMethodCallIgnored
             tmp.getParentFile().mkdirs();
+            CaptureJournal.get(MeetingRecorderService.this).register(CaptureJournal.chunkId(l.meetingId, seq),
+                    "meeting", "meeting_chunk", tmp, System.currentTimeMillis());
             out = new RandomAccessFile(tmp, "rw");
             out.setLength(0);
             out.write(Wav.header(0)); // placeholder; a dead process leaves a fixable file behind
@@ -659,8 +670,12 @@ public class MeetingRecorderService extends Service {
             long samples = chunkSamples;
             chunkSamples = 0;
             File tmp = store.tmpFile(l.meetingId, seq);
-            if (samples == 0) { f.close(); //noinspection ResultOfMethodCallIgnored
-                tmp.delete(); return; }
+            if (samples == 0) {
+                f.close();
+                // No receipt/discard. Leave this placeholder in place, recoverable, rather than deleting on failure.
+                CaptureJournal.get(MeetingRecorderService.this).stopped(CaptureJournal.chunkId(l.meetingId, seq));
+                return;
+            }
             f.seek(0);
             f.write(Wav.header(samples * Wav.BYTES_PER_SAMPLE));
             f.getFD().sync();
