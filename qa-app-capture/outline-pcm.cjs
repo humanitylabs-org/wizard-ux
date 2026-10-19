@@ -11,7 +11,7 @@ const files = ['web/core/app-capture.js', 'web/core/app-services.js', 'web/core/
 const receipts = [], blocked = [], errors = [];
 const scripts = new Map(files.filter(f => f.startsWith('web/')).map(f => ['/' + f.slice(4), fs.readFileSync(path.join(root, f))]));
 scripts.set('/boot.js', `window.WizCore={apps:()=>({APPS:[{id:'voice-outline',url:'/outline/'}]})};`);
-scripts.set('/mount.js', `const f=document.querySelector('iframe');WizAppServices.attach(f,{appId:'voice-outline',path:'/outline/'});f.src='/outline/';`);
+scripts.set('/mount.js', `const f=document.querySelector('iframe');window.openApps=['voice-outline'];WizAppServices.trackOpenApps?.(()=>window.openApps);window.detachOutline=WizAppServices.attach(f,{appId:'voice-outline',path:'/outline/'});f.src='/outline/';`);
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; connect-src 'self'; media-src 'self' blob:; frame-src 'self'");
   if (scripts.has(req.url)) { res.setHeader('Content-Type', 'text/javascript'); return res.end(scripts.get(req.url)); }
@@ -220,6 +220,30 @@ async function rejectStart(p) {
       assert.equal(await rejectStart(p), 'pcm_unavailable');
       assert.equal(await p.evaluate(() => WizAppCapture.getState().hold), false);
       assert.deepEqual(await p.evaluate(() => [deviceCalls, meetingCalls]), [[], []]);
+    });
+    // Closed means closed (James, 19 Oct 2026): a frame leaving while its window stays open keeps recording.
+    await test('open-app-frame-detach-keeps-recording', async f => {
+      const { p, frame } = f;
+      await begin(f); await frame().waitForFunction(() => chunks.length >= 1);
+      await p.evaluate(() => detachOutline());
+      await p.waitForTimeout(300);
+      assert.equal(await p.evaluate(() => WizAppCapture.getState().active), true);
+      await p.evaluate(() => WizAppServices.appsClosed?.(['voice-outline']));
+      await p.waitForTimeout(300);
+      assert.equal(await p.evaluate(() => WizAppCapture.getState().active), true);
+      await p.evaluate(async id => (await WizAppCapture.resume('voice-outline', id)).stop(), await p.evaluate(() => WizAppCapture.getState().id));
+    });
+    // ...and closing the app's last window stops its microphone at once, keeping the take for recovery.
+    await test('closing-app-window-stops-its-mic-and-keeps-the-take', async f => {
+      const { p, frame } = f;
+      await begin(f); await frame().waitForFunction(() => chunks.length >= 1);
+      const id = await frame().evaluate(() => session.id);
+      assert.equal(await p.evaluate(async () => { try { await WizCore.voice().start(); return 'started'; } catch (e) { return e.code; } }), 'busy');
+      await p.evaluate(() => { window.openApps = []; detachOutline(); document.querySelector('iframe').remove(); });
+      await p.waitForFunction(() => !WizAppCapture.getState().active && !WizAppCapture.getState().hold, null, { timeout: 8000 });
+      const pending = await p.evaluate(async () => (await WizAppCapture.pending('voice-outline')).map(r => ({ id: r.id, bytes: r.blob.size, mime: r.mime })));
+      assert.equal(pending.length, 1); assert.equal(pending[0].id, id); assert.equal(pending[0].mime, 'audio/wav'); assert.ok(pending[0].bytes > 44, 'take kept');
+      assert.equal(await p.evaluate(async () => { const v = WizCore.voice(); try { const ok = await v.start(); v.cancel?.(); return ok === false ? 'refused' : 'started'; } catch (e) { return e.code || e.message; } }), 'started');
     });
     assert.deepEqual(errors, []); assert.deepEqual(blocked, []);
   } finally {

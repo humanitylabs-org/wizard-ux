@@ -53,7 +53,7 @@
 
   /* ---------------- apps ---------------- */
   // The registry lives in core/apps.js (shared with the desktop shell); the phone gets its own list.
-  const { APPS, APP, findApp, appByName, quickSearch, searchUrl } = window.WizCore.apps('mobile');
+  const { APPS, APP, findApp, appAt, appByName, quickSearch, searchUrl } = window.WizCore.apps('mobile');
   const audioFrames = new WeakSet();
   window.WizBackgroundAudio?.init(() => APP, f => { const id=f.closest('.win')?.dataset.win; return audioFrames.has(f) && W[id]?.appId === 'wizard-music' && deskOf(id) >= 0; });
   const norm = window.WizCore.norm;
@@ -849,7 +849,7 @@
     if (LINKS || !window.WizLinks) return;
     LINKS = window.WizLinks.mount({
       parent: device, mode: 'sheet',
-      onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a); else openWin({ app: 'frame', url, title }); },
+      onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a); else { const o = appAt(url); openWin({ app: 'frame', url, title: o ? o.name : title, ...(o ? { appId: o.id } : {}) }); } },
       onChange: on => { device.classList.toggle('link-open', on); if (on) { closeSheets(true); armBack(); } },
     });
     // Phone (James, 10 Oct 2026): a tapped link opens on its own desk beside this one (see openLinkDesk).
@@ -879,7 +879,8 @@
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
     const from = fromOf(srcId);
     window.__ovLog = (window.__ovLog || []).concat('link:' + rel).slice(-30);
-    return !!openWin({ app: 'frame', appId: 'link', url: rel, title: linkTitle(u), from });
+    const owner = appAt(rel); // a page inside an installed app opens as that app, with its services
+    return !!openWin({ app: 'frame', appId: owner ? owner.id : 'link', url: rel, title: owner ? owner.name : linkTitle(u), from });
   }
   /* ---------------- bound views ----------------
    * James, 12 Oct 2026: "as soon as I open the thread, I'm reading your response, but there's a view bound to it."
@@ -891,7 +892,7 @@
    * thread) closes the bound view; opening the thread again, or a new reply with a new link, binds again.
    * Binding = the first in-app link in the latest reply (an agent-declared view can replace this later). */
   var boundOff = {}, boundBusy = false;
-  const boundTarget = el => window.WosBoundView.target(el, { findApp, APP, linkTitle });
+  const boundTarget = el => window.WosBoundView.target(el, { findApp, APP, linkTitle, appAt });
   const boundOf = wid => Object.values(W).find(x => x.bound === wid && deskOf(x.id) >= 0) || null;
   // Automatic bound-view disposal is navigation, not the user's Music Close action.
   function unbind(wid) { const b = boundOf(wid); if (b) closeWin(b.id, true, true); }
@@ -945,7 +946,7 @@
     const w = W[id]; if (!w || !w.from) return;
     if (!w.bound) return pinWin(id); // a manually opened review becomes its own app desk
     const href = frameHref(id) || w.url || '';
-    const a = w.appId && w.appId !== 'link' ? (findApp(w.appId) || APP[w.appId]) : null;
+    const a = w.appId && w.appId !== 'link' ? (APP[w.appId] || findApp(w.appId)) : null;
     if (w.app === 'usuals') { const here = Object.keys(W).find(k => W[k].app === 'usuals' && !W[k].bound && deskOf(k) >= 0); if (here) goDesk(deskOf(here)); else openWin({ app: 'usuals' }); }
     else if (a) {
       const here = Object.keys(W).find(k => W[k].app === 'frame' && W[k].appId === a.id && !W[k].from && deskOf(k) >= 0);
@@ -1359,6 +1360,8 @@
     tick();
     f.addEventListener('load', () => { n = 0; tick(); });
   }
+  // Closed means closed: an app with no window left on any desk stops its microphone (take saved for recovery).
+  window.WizAppServices?.trackOpenApps?.(() => desks.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
@@ -3515,7 +3518,7 @@
       const sid = d.thread || (String(path).match(/[?&]session=([^&#]+)/) || [])[1];
       if (sid) { openWizardThread(decodeURIComponent(sid)); return; }
       if (/^\/?apps\/?$/.test(path)) { openSheet('launcher'); return; }
-      const a = d.app ? findApp(d.app) || APP[d.app] : /^\/wizard\/?$/.test(path) ? APP.wizard : APPS.find(x => x.url && path && x.url.replace(/[#?].*$/, '') === String(path).replace(/[#?].*$/, ''));
+      const a = d.app ? APP[d.app] || findApp(d.app) : /^\/wizard\/?$/.test(path) ? APP.wizard : APPS.find(x => x.url && path && x.url.replace(/[#?].*$/, '') === String(path).replace(/[#?].*$/, ''));
       if (a) openApp(a); else if (path) toast('◇', `No app for ${path}`, 1800);
     },
     dictation(text) {
