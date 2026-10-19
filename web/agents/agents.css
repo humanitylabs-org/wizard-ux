@@ -141,7 +141,7 @@ html:not(.wz-hosted) body { background: radial-gradient(100% 50% at 100% -10%, r
 .ag-sheet .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
 @media (min-width: 720px) { .ag-sheet { align-items: center; } .ag-sheet .card { border-radius: 22px; border-bottom: 1px solid var(--c-border); } }
 
-.ag-toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 90px); transform: translateX(-50%); z-index: 30; max-width: calc(100% - 32px);
+.ag-toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 12px); transform: translateX(-50%); z-index: 30; max-width: calc(100% - 32px);
   padding: 10px 16px; border-radius: 14px; background: #221a3d; color: #f3efff; font-size: 13.5px; font-weight: 600; box-shadow: 0 12px 30px -10px rgba(0, 0, 0, .7); }
 .ag-toast.bad { background: #3d1622; }
 .ag-err { padding: 16px; border-radius: 16px; border: 1px solid rgba(255, 107, 134, .35); background: rgba(255, 107, 134, .08); color: var(--c-text); font-size: 14px; }
