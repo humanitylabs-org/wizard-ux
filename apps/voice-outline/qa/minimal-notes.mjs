@@ -3,12 +3,16 @@ import {createRequire} from 'node:module';import {writeFileSync,mkdirSync} from 
 const {chromium}=createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE||'playwright');
 const base=process.env.OUTLINE_URL||'http://127.0.0.1:18890',out=process.env.EVIDENCE_DIR||'./evidence';mkdirSync(out,{recursive:true});
 const receipt={kind:'minimal-notes-ux',checks:[],errors:[]};const check=async(name,fn)=>{await fn();receipt.checks.push(name);};
-const browser=await chromium.launch({headless:true});
-const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,colorScheme:'dark'}),page=await context.newPage();page.on('pageerror',e=>receipt.errors.push(e.message));
+const browser=await chromium.launch({headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
+const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,colorScheme:'dark',permissions:['microphone']}),page=await context.newPage();page.on('pageerror',e=>receipt.errors.push(e.message));
 const req=async(p,opt)=>{const r=await fetch(base+p,opt);return r.json();};
 const saved=()=>page.waitForFunction(()=>document.querySelector('#save').textContent==='Saved');
 const doc=()=>req('/api/document').then(r=>r.document);
 const editing=()=>page.evaluate(()=>document.activeElement?.classList.contains('editor')?document.activeElement.closest('.bullet').dataset.id:null);
+let wire;const begun=[];
+await page.route('**/healthz',r=>r.fulfill({json:{ok:true,liveReady:true}}));
+await page.routeWebSocket('**/api/live',ws=>{wire=ws;ws.onMessage(d=>{if(typeof d==='string'){const m=JSON.parse(d);if(m.type==='begin')begun.push(m);}});});
+const until=async fn=>{for(let i=0;i<200;i++){if(await fn())return;await page.waitForTimeout(50);}throw Error('Bounded wait expired');};
 try{
  const {rev}=await req('/api/document');
  await req('/api/document',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({rev,document:{title:'Shopping list',nodes:[{id:'a',parent:null,text:'Testing. Does this work yet?',folded:false},{id:'b',parent:null,text:'Okay, so this does work.',folded:false},{id:'c',parent:'b',text:'A nested detail',folded:false}],applied:[]}})});
@@ -60,6 +64,26 @@ try{
   await page.locator('[data-id="b"] .text').tap();assert.equal(await editing(),'b');
   await page.goBack();await page.waitForTimeout(200);assert.equal(new URL(page.url()).origin,new URL(base).origin);
   assert.equal(await page.locator('textarea.editor').count(),0);assert(await page.locator('#tree').isVisible());
+ });
+ await check('live words appear on the bullet line itself, not a line below',async()=>{
+  await page.locator('[data-id="c"] .text').tap();await page.keyboard.press('End');await page.locator('#new').tap();await page.keyboard.press('Escape');
+  await page.locator('#live').tap();await until(()=>begun.length===1);const u=begun[0];
+  wire.send(JSON.stringify({...u,type:'delta',text:'spoken words'}));await page.waitForSelector(`[data-utterance="${u.id}"]`);
+  const g=await page.evaluate(id=>{const d=document.querySelector(`[data-utterance="${id}"]`),dot=d.closest('.bullet').querySelector('.dot');const a=d.getClientRects()[0],b=dot.getBoundingClientRect();return {draft:a.top,dot:b.top,h:d.closest('.bullet').getBoundingClientRect().height};},u.id);
+  assert(Math.abs(g.draft-g.dot)<6,JSON.stringify(g));assert(g.h<=30,JSON.stringify(g));
+  await page.screenshot({path:out+'/minimal-live-inline.png'});
+  wire.send(JSON.stringify({...u,type:'final',text:'spoken words'}));await saved();
+ });
+ await check('tapping text pauses dictation and keeps the keyboard; mic resumes and drops it',async()=>{
+  await page.locator('[data-id="a"] .text').tap();await until(async()=>await page.locator('#live').getAttribute('data-state')==='paused');
+  assert.equal(await editing(),'a');assert.equal(await page.locator('#live').getAttribute('aria-label'),'Resume dictation');
+  await page.keyboard.type(' typed');await page.waitForTimeout(400);assert.equal(await editing(),'a','late events keep the caret');
+  await page.locator('#new').tap();assert(await editing(),'Enter keeps typing mode while paused');
+  const n=begun.length;await page.locator('#live').tap();await until(()=>begun.length===n+1);
+  assert.equal(await page.locator('#live').getAttribute('data-state'),'recording');assert.equal(await page.locator('textarea.editor').count(),0);
+  assert.equal(await page.evaluate(()=>document.activeElement?.tagName),'BODY');
+  await page.locator('#live').tap();await until(async()=>await page.locator('#live').getAttribute('data-state')==='idle'||(wire.send(JSON.stringify({...begun.at(-1),type:'final',text:''})),false));
+  assert((await doc()).nodes.find(x=>x.id==='a').text.endsWith(' typed'));
  });
  await page.screenshot({path:out+'/minimal-phone-after.png'});
  assert.deepEqual(receipt.errors,[]);receipt.ok=true;

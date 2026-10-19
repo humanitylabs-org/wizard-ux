@@ -59,3 +59,8 @@ dialog p{font-size:12px;line-height:1.6;color:var(--ink-3)}
 @media(max-width:420px){.bullet{padding-left:calc(var(--depth)*20px)}.note-head{padding-left:16px}.wz-scroll{padding-right:12px;padding-left:8px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}.live-target .dot::before{animation:none}}
 .draft small:empty{display:none}
+.text.inline{display:inline;min-height:0}
+.text.inline~.draft{display:inline}
+.text.inline:not(.empty)~.draft{margin-left:.3em}
+.text.inline~.draft .draft-actions,.text.inline~.draft .draft-editor{margin-top:6px}
+.text.inline.empty{display:inline-block;min-width:4px;height:25.5px;vertical-align:top}

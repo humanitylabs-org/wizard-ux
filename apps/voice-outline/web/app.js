@@ -38,7 +38,8 @@ async function save(){
  }catch(e){saveState(navigator.onLine?'Save failed · retry':'On this device only');note('Your edits remain on this device. '+e.message);}
  finally{saving=false;}
 }
-function select(id,{edit=false}={}){if(editing&&editing!==id)editing=null;selected=id;if(session&&current?.target!==id)boundary();if(edit){detachDraft(id);editing=id;}remember();render();if(edit)focusEditor();}
+function canDictate(){return !!session&&!paused&&!stopping&&!session.getInfo().inputStopped;}
+function select(id,{edit=false}={}){if(editing&&editing!==id)editing=null;selected=id;const typing=edit&&canDictate();if(typing)void setPaused(true);else if(session&&!paused&&current?.target!==id)boundary();if(edit){detachDraft(id);editing=id;}remember();render();if(edit)focusEditor();}
 function focusEditor(){const el=$('tree').querySelector('textarea');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);resize(el);}}
 function resize(el){el.style.height='auto';el.style.height=el.scrollHeight+'px';}
 function newBullet(child=false){
@@ -49,7 +50,7 @@ function newBullet(child=false){
  const first=child||(ed&&kids&&!n.folded);
  if(child&&n.folded)operation({kind:'fold',target:n.id,folded:false});
  operation({kind:'insert',node:{id,parent:first?n.id:n.parent,text:tail,folded:false},after:first?null:n.id});
- select(id,{edit:!session});if(tail)$('tree').querySelector('textarea.editor')?.setSelectionRange(0,0);
+ select(id,{edit:!session||paused});if(tail)$('tree').querySelector('textarea.editor')?.setSelectionRange(0,0);
  document.querySelector(`[data-id="${id}"]`)?.scrollIntoView({block:'nearest'});
 }
 function removeEmpty(){
@@ -73,7 +74,7 @@ function recoverMissingSpeech(){
 function render(){
  recoverMissingSpeech();
  const draftFocused=document.activeElement?.classList.contains('draft-editor');const focused=document.activeElement?.tagName==='TEXTAREA',position=focused?document.activeElement.selectionStart:null;
- const scroll=$('canvas').scrollTop;const tree=$('tree');tree.replaceChildren();
+ const scroll=$('canvas').scrollTop;const tree=$('tree'),ae=document.activeElement,keep=ae?.classList?.contains('editor')?[ae.selectionStart,ae.selectionEnd]:null;tree.replaceChildren();
  if(document.activeElement!==$('title'))$('title').value=doc.title;
  const shown=visible(doc);for(const n of shown){
   const level=depth(doc,n),row=document.createElement('div');row.className='bullet'+(n.id===selected?' selected':'')+(session&&current?.target===n.id?' live-target':'');row.dataset.id=n.id;row.style.setProperty('--depth',level);row.setAttribute('role','treeitem');row.setAttribute('aria-level',String(level+1));row.setAttribute('aria-selected',String(n.id===selected));
@@ -84,14 +85,18 @@ function render(){
   dot.addEventListener('pointerup',e=>{if(!touch)return;const dx=e.clientX-touch.x,dy=e.clientY-touch.y;touch=null;if(Math.abs(dx)>=48&&Math.abs(dy)<Math.abs(dx)*.577){dot.dataset.swiped='1';selected=n.id;move(dx>0?1:-1);}});
   row.append(dot);const content=document.createElement('div');content.className='bullet-content';
   if(editing===n.id){const input=document.createElement('textarea');input.className='editor';input.setAttribute('aria-label','Edit bullet');input.value=n.text;input.rows=1;input.oninput=()=>{operation({kind:'text',target:n.id,before:doc.nodes.find(x=>x.id===n.id).text,text:input.value},{renderView:false});resize(input);};input.onkeydown=keys;content.append(input);queueMicrotask(()=>resize(input));}
-  else{const text=document.createElement('div');text.className='text'+(!n.text?' empty':'')+(doc.nodes.length===1?' only':'');text.textContent=n.text;text.tabIndex=0;text.setAttribute('role','textbox');text.setAttribute('aria-label',n.text||'Empty bullet');text.onclick=()=>select(n.id,{edit:true});text.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();select(n.id,{edit:true});}};content.append(text);}
+  const pending=Object.values(ledger.items).some(s=>s.target===n.id&&!doc.applied.includes('speech-'+s.id));
+  if(editing!==n.id){const text=document.createElement('div');text.className='text'+(!n.text?' empty':'')+(doc.nodes.length===1&&!pending?' only':'')+(pending?' inline':'');text.textContent=n.text;text.tabIndex=0;text.setAttribute('role','textbox');text.setAttribute('aria-label',n.text||'Empty bullet');text.onclick=()=>select(n.id,{edit:true});text.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();select(n.id,{edit:true});}};content.append(text);}
   const drafts=Object.values(ledger.items).filter(s=>s.target===n.id&&!doc.applied.includes('speech-'+s.id));
   for(const s of drafts){const draft=document.createElement('div');draft.className='draft';draft.dataset.utterance=s.id;const label=document.createElement('small');label.textContent=s.status==='draft'?'':s.status==='final'?'Waiting for earlier speech':s.text?'Unconfirmed speech · retained text':'Unconfirmed speech · no transcript';draft.append(label);
    if(editingDraft===s.id){const input=document.createElement('textarea');input.className='draft-editor';input.setAttribute('aria-label','Edit unconfirmed speech');input.value=s.text;input.oninput=()=>{s.text=input.value;s.edited=true;remember();draft.querySelector('[data-accept]').disabled=!s.text.trim();};draft.append(input);}
    else draft.append(document.createTextNode(s.text|| (s.status==='draft'?'Listening…':'No words were returned. Review the original recording in the menu.')));
    if(s.status==='unconfirmed'){const actions=document.createElement('div');actions.className='draft-actions';const accept=document.createElement('button');accept.textContent='Accept';accept.dataset.accept=s.id;accept.disabled=!s.text.trim();accept.onclick=()=>acceptDraft(s.id);const edit=document.createElement('button');edit.textContent=editingDraft===s.id?'Done editing':'Edit';edit.onclick=()=>{editingDraft=editingDraft===s.id?null:s.id;render();$('tree').querySelector('.draft-editor')?.focus();};actions.append(accept,edit);draft.append(actions);}content.append(draft);}
+  // Live words share the line with the bullet text, so tapping anywhere on that line starts typing.
+  if(pending&&editing!==n.id)content.addEventListener('click',e=>{if(!e.target.closest('button,textarea,.text'))select(n.id,{edit:true});});
   row.append(content);tree.append(row);
  }
+ if(keep){const el=tree.querySelector('textarea.editor');if(el){el.focus({preventScroll:true});el.setSelectionRange(...keep);}}
  $('canvas').scrollTop=scroll;$('undo').disabled=!undo.length;$('redo').disabled=!redo.length;
  if(focused&&(editing||editingDraft)){const e=tree.querySelector(draftFocused?'.draft-editor':'.editor');e?.focus({preventScroll:true});e?.setSelectionRange(position,position);}
 }
@@ -101,7 +106,7 @@ function begin(){if(!socket||socket.readyState!==1||!session||paused||stopping)r
 function boundary(){if(current){socket?.send(JSON.stringify({type:'end',id:current.id}));current=null;}begin();}
 function settle(){
  const items=Object.values(ledger.items).sort((a,b)=>a.seq-b.seq);
- for(const s of items){if(s.status==='draft')break;if(s.status==='final'&&!doc.applied.includes('speech-'+s.id))operation({speechId:s.id,kind:'voice',target:s.target,parent:s.parent,text:s.text});}
+ for(const s of items){if(s.status==='draft')break;if(s.status==='final'&&!doc.applied.includes('speech-'+s.id))operation({speechId:s.id,kind:'voice',target:s.target,parent:s.parent,text:s.text},{history:!!s.text||!doc.nodes.some(n=>n.id===s.target)});}
  remember();render();if(!items.some(s=>s.status==='draft'))finalWait?.();
 }
 function acceptDraft(id){const s=ledger.items[id];if(!s||s.status!=='unconfirmed'||!s.text.trim())return;s.status='final';editingDraft=null;settle();flash('Accepted text. Original audio is unchanged.');}
@@ -142,10 +147,12 @@ function liveUI(){
  if(stoppedByCore())void stopLive();
  const ended=session?.getInfo().inputStopped,b=$('live'),state=session?(ended?'pending':paused?'paused':'recording'):'idle',secs=Math.floor((Date.now()-startedAt)/1000);
  b.dataset.state=state;b.classList.toggle('active',state==='recording');
- $('live-label').textContent={idle:'Go Live',recording:'Recording',paused:'Paused',pending:'Save pending'}[state];
- $('live-status').textContent=state==='recording'?`${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`:state==='paused'?'Paused':state==='pending'?'Retry save':'';
- b.setAttribute('aria-label',{idle:'Dictate',recording:'Stop dictation',paused:'Stop dictation',pending:'Retry saving dictation'}[state]);
+ $('live-label').textContent={idle:'Go Live',recording:'Recording',paused:'Resume',pending:'Save pending'}[state];
+ $('live-status').textContent=state==='recording'?`${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`:state==='paused'?'Resume':state==='pending'?'Retry save':'';
+ b.setAttribute('aria-label',{idle:'Dictate',recording:'Stop dictation',paused:'Resume dictation',pending:'Retry saving dictation'}[state]);
 }
+async function setPaused(want){if(!session||stopping||paused===want)return;await pauseLive();if(want&&paused)flash('Dictation paused while you type. Tap the mic to resume.');}
+function resumeVoice(){editing=null;editingDraft=null;document.activeElement?.blur?.();render();void setPaused(false);}
 async function pauseLive(){if(!session||stopping)return;try{if(paused){if(socket?.readyState!==1)throw new Error('Connection closed. Stop & save, then start Live again.');await session.resume();paused=false;begin();}else{await session.pause();paused=true;if(current){socket?.send(JSON.stringify({type:'end',id:current.id}));current=null;}}liveUI();render();}catch(e){note(e.message);}}
 async function stopLive(){
  if(!session||stopping)return;stopping=true;stopObserved=true;$('live').disabled=true;const s=session;
@@ -169,8 +176,8 @@ $('new').onclick=()=>newBullet();$('outdent').onclick=()=>move(-1);$('indent').o
 for(const b of document.querySelectorAll('.toolbar button'))b.addEventListener('mousedown',e=>e.preventDefault());
 $('notice').onclick=e=>{if(e.target.tagName!=='A')note('');};$('undo').onclick=()=>historyStep(false);$('redo').onclick=()=>historyStep(true);$('save').onclick=save;
 $('title').oninput=()=>operation({kind:'title',text:$('title').value},{renderView:false});
-$('live').onclick=()=>session?stopLive():startLive();$('stop').onclick=()=>{closeSheet();stopLive();};$('pause').onclick=()=>{closeSheet();pauseLive();};$('recover').onclick=()=>{closeSheet();recover();};$('share').onclick=async()=>{const result=await W.share.text({title:doc.title,text:markdown(doc)});flash(result==='copied'?'Outline copied.':result==='shared'?'Outline shared.':result==='cancelled'?'Share cancelled.':'Sharing is unavailable here.');};
-addEventListener('online',()=>save());document.addEventListener('keydown',e=>{if(e.target.id==='title'){if(e.key==='Enter'){e.preventDefault();select(visible(doc)[0].id,{edit:!session});}return;}if(e.target.tagName!=='TEXTAREA')keys(e);});
+$('live').onclick=()=>!session?startLive():paused&&!session.getInfo().inputStopped?resumeVoice():stopLive();$('stop').onclick=()=>{closeSheet();stopLive();};$('pause').onclick=()=>{closeSheet();pauseLive();};$('recover').onclick=()=>{closeSheet();recover();};$('share').onclick=async()=>{const result=await W.share.text({title:doc.title,text:markdown(doc)});flash(result==='copied'?'Outline copied.':result==='shared'?'Outline shared.':result==='cancelled'?'Share cancelled.':'Sharing is unavailable here.');};
+addEventListener('online',()=>save());document.addEventListener('keydown',e=>{if(e.target.id==='title'){if(e.key==='Enter'){e.preventDefault();select(visible(doc)[0].id,{edit:!session||paused});}return;}if(e.target.tagName!=='TEXTAREA')keys(e);});
 async function load(){
  let remoteRead=false;
  try{db=await new Promise((resolve,reject)=>{const req=indexedDB.open(config.recovery,1);req.onupgradeneeded=()=>req.result.createObjectStore('recovery');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});
