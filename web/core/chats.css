@@ -7,7 +7,7 @@
 .chats { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .ch-list, .ch-thread { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .ch-top { flex: 0 0 auto; display: flex; gap: 8px; padding: 10px 10px 6px; }
-.ch-search { flex: 1; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 12px; background: rgba(205, 190, 255, .06); border: 1px solid var(--line); }
+.ch-search { min-width: 0; flex: 1; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 12px; background: rgba(205, 190, 255, .06); border: 1px solid var(--line); }
 .ch-search svg { width: 15px; height: 15px; flex: 0 0 auto; fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; }
 .ch-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 15px; }
 .ch-search input::placeholder { color: var(--ink-3); }
@@ -561,3 +561,22 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-sync.off { color: var(--ink-2); }
 .ch-spin { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-2, rgba(255,255,255,.18)); border-top-color: var(--ink-2, currentColor); animation: ch-attspin .8s linear infinite; flex: none; }
 @media (prefers-reduced-motion: reduce) { .ch-spin { animation-duration: 2.4s; } }
+
+/* New chat greeting: Miguel's skins only. Default skins keep the boxed .nc-classic. */
+.ch-newchat { display: none; }
+:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) .ch-empty.nc-classic { display: none; }
+:is(html[data-skin="obsidian"], html[data-skin="obsidian-light"], html[data-skin="landscapes"]) .ch-newchat { margin: auto; padding: 28px 16px 36px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; max-width: 440px; animation: ncIn .32s ease-out both; }
+.ch-newchat .nc-mark { width: 64px; height: 64px; margin-bottom: 10px; border-radius: 22px; display: grid; place-items: center; --c: #fff;
+  background: radial-gradient(120% 120% at 30% 20%, color-mix(in oklab, var(--agc, var(--violet-2, #b9a6ff)) 70%, #fff 10%), color-mix(in oklab, var(--agc, #8f63ff) 85%, #000 25%));
+  box-shadow: 0 10px 34px color-mix(in oklab, var(--agc, #8f63ff) 45%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+html[data-skin^="obsidian"] .ch-newchat .nc-mark { background: radial-gradient(120% 120% at 30% 20%, #3a3a3a, #0c0c0c); box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18); }
+.ch-newchat .nc-mark .sgi { width: 64%; height: 64%; background: #fff !important; opacity: 1; }
+.ch-newchat .nc-hi { color: var(--ink); font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
+.ch-newchat .nc-sub { color: var(--ink-2); font-size: 15px; }
+.ch-newchat .nc-keys { margin-top: 14px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; color: var(--ink-3); font-size: 12px; }
+.ch-newchat .nc-key { display: inline-flex; align-items: center; gap: 3px; }
+.ch-newchat .nc-key small { margin-left: 4px; font-size: 12px; }
+.ch-newchat .nc-key kbd { display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 6px; font: 600 11px/17px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-2); background: color-mix(in oklab, var(--ink) 8%, transparent); border: 1px solid var(--line-2, var(--line)); border-bottom-width: 2px; }
+.ch-newchat .nc-tip { font-size: 13px; }
+@keyframes ncIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ch-newchat { animation: none; } }
