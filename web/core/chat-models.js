@@ -116,9 +116,7 @@
       return CLAUDE_ORDER.length + GPT_ORDER.length + 1;
     };
     // Routes outside the known families (another provider's catalogue) stay behind "More models".
-    // Opinionated: only Opus, Astra and Sol up front; Fable, Sonnet, Haiku, Terra, Luna live under More models.
-    const PRIMARY = new Set(['claude:opus', 'gpt:astra', 'gpt:sol']);
-    return models.filter(m => { const f = family(m.value, m.provider); return f ? winners.get(f) === m && (PRIMARY.has(f) || selected(m)) : selected(m); }).sort((a, b) => rank(a) - rank(b));
+    return models.filter(m => { const f = family(m.value, m.provider); return f ? winners.get(f) === m : m.isGlobalDefault || selected(m); }).sort((a, b) => rank(a) - rank(b));
   }
 
   const M = {

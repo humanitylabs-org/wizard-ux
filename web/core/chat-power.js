@@ -178,10 +178,10 @@ window.WosChatPower = function chatPower(A) {
     modelsAsked = true;
     M.load().then(() => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } }); // background: waits for a selection
   }
-  async function pickModel(o, direct) {
-    const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model')) return;
-    const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
-    if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
+  async function pickModel(o) {
+    const sh = sheet; if (!sh || sh.type !== 'model') return;
+    const c = ch(sh.wid), w = H.win(sh.wid); closeSheet();
+    if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     // A Private model picked in a standard thread: a new private chat continues this conversation (quoted context);
     // this thread is left exactly as it is. Private → standard is never offered (a private thread lists only its own).
@@ -456,6 +456,6 @@ window.WosChatPower = function chatPower(A) {
   }
   const opened = (wid, sid) => { const c = ch(wid); c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
-  return { position, latestBtn, filesBtn, workHtml, modelChip, modelSwitch, ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  return { position, latestBtn, filesBtn, workHtml, modelChip, modelLabel, ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };

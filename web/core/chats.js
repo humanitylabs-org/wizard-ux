@@ -80,7 +80,12 @@ window.WizCore.chats = function createChats(H) {
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
   // Same sections, order and day boundaries as Wizard's Work view.
   // Deferred threads live at the bottom of Ready with a Deferred status (live.js groupWork), not in a section.
-  const SECTIONS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['archive', 'Archive']];
+  const agoText = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+  // Two chat-list layouts (18 Oct 2026). By day (default): Ready is today, then Yesterday and Past week.
+  // By status (Miguel's): Working, Ready, Archive only, kept short by auto-archive. Chosen in the Filter sheet.
+  const SECTIONS_DAY = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['yesterday', 'Yesterday'], ['pastWeek', 'Past week'], ['archive', 'Archive']];
+  const SECTIONS_STATUS = [['errors', 'Errors'], ['working', 'Working'], ['ready', 'Ready'], ['archive', 'Archive']];
+  const byStatus = () => LIVE.chatLayout === 'status';
   const SEC_OPEN_KEY = 'wos.chats.sections.v1';
   /* Filters (James + Claude Fable, 11 Oct 2026): a filter is a chip inside the search field. One status chip and
    * one subject chip at most; chips and search text combine (AND). Three ways in: the funnel button at the end
@@ -203,6 +208,10 @@ window.WizCore.chats = function createChats(H) {
   function skelThread() {
     return `<div class="ch-skel thread" role="status" aria-label="Loading thread…"><i class="ch-sk bub u" style="width:52%"></i><span class="ch-skel-a"><i class="ch-sk" style="width:92%"></i><i class="ch-sk" style="width:84%"></i><i class="ch-sk" style="width:58%"></i></span><i class="ch-sk bub u" style="width:36%"></i><span class="ch-skel-a"><i class="ch-sk" style="width:88%"></i><i class="ch-sk" style="width:64%"></i></span></div>`;
   }
+  // Unified Chats: in the owner's main list, a private agent's row wears the lock. data-wiz-private keeps its words out
+  // of the screen text sent as context with a message to another agent (core/screen-text.js).
+  let rowListAgent = '';
+  const privRow = s => !rowListAgent && !!LIVE.isPrivate?.(s.id);
   function chatRow(s, snip) {
     const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = ['waiting_for_approval', 'unknown'].includes(s.status) || s.status === 'failed' || s.status === 'interrupted';
     // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Your call, then its one line.
@@ -375,7 +384,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
 
-  // Opinionated: Compact list (titles only, no previews), chosen in the Filter sheet, remembered per device.
+  // Opinionated: Compact list (titles only, no previews), chosen in the Filter sheet, cached per device and persisted by Agent Service.
   const COMPACT_KEY = 'wos.chats.compact.v1';
   const compactOn = () => { try { return localStorage.getItem(COMPACT_KEY) === '1'; } catch (e) { return false; } };
   function filterSheet(c) {
@@ -383,6 +392,7 @@ window.WizCore.chats = function createChats(H) {
     const sj = subjects();
     return `<div class="ch-fsheet" data-chfsheet><div class="ch-fcard" role="dialog" aria-label="Filter chats"><div class="ch-fh"><b>Filter</b>${c.filter || c.subject ? '<button type="button" data-chfclear>Clear</button>' : ''}</div>
       <h5>Status</h5><div class="ch-fopts">${Object.entries(STATUS).map(([k, f]) => opt('status', k, f.label, c.filter === k)).join('')}</div>
+      <h5>Layout</h5><div class="ch-fopts">${[['day', 'By day'], ['status', 'By status']].map(([v, l]) => { const on = (byStatus() ? 'status' : 'day') === v; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chlayout="${v}">${l}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}</div>
       <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button></div>
       ${sj.length ? `<h5>Subject</h5><div class="ch-fopts">${sj.map(k => opt('subject', k, k, c.subject === k)).join('')}</div>` : ''}</div></div>`;
   }
@@ -474,11 +484,13 @@ window.WizCore.chats = function createChats(H) {
       if (!list.length && !extra.n && (k === 'errors' || n || filtered)) return '';
       // While searching, every section with a hit opens so nothing is buried.
       const open = n || filtered ? true : secOpen[k];
-      const newN = 0; // Opinionated: no subtotal badges; the Ready count and icon colours say it
-      const waitN = false ? list.filter(s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you')).length : 0;
+      const newN = k === 'ready' && !byStatus() ? list.filter(s => LIVE.isNew(s) && !waitsOn(s)).length : 0;
+      const waitN = !byStatus() && (k === 'ready' || k === 'yesterday' || k === 'pastWeek') ? list.filter(s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && attOf(s)?.state === 'needs_you')).length : 0;
+      const windowMeta = AGID ? LIVE.windows?.[AGID] : Object.values(LIVE.windows || {}).length ? {archiveTotal:Object.values(LIVE.windows).reduce((n,x)=>n+(x.archiveTotal||0),0)} : null;
+      const archiveNote = k === 'archive' && !n && !filtered && windowMeta ? `<span class="ch-none">Newest ${list.length} of ${windowMeta.archiveTotal} · search to find older chats</span>` : '';
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered ? archSel() : ''}${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
+        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? morningCard() : ''}${list.length || extra.n ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : k === 'ready' && !n ? readyBody(shown, s => chatRow(s, null)) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}</div>` : ''}</section>`;
     }).join('');
     if (bs && LST.ok) body += BS.footer(bs);
     const place = listPlace(el) || c.listPlace;
@@ -486,7 +498,9 @@ window.WizCore.chats = function createChats(H) {
     const inp0 = el.querySelector('[data-chsearch]'), had = inp0 && document.activeElement === inp0, sel = had ? [inp0.selectionStart, inp0.selectionEnd] : null;
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
     const fab = `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
-    const html = `<div class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}<div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
+    // Opened on the stored snapshot: say so, with a spinner, until the first fresh read lands (live.js SNAP_KEY).
+    const sync = LST.cached ? `<div class="ch-sync${LST.error ? ' off' : ''}" role="status">${LST.error ? '' : '<i class="ch-spin" aria-hidden="true"></i>'}<span>${LST.error === 'access' ? 'Sign in to update' : LST.error ? 'Can’t reach Wizard' : 'Updating…'}${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span></div>` : '';
+    const html = `<div class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}${sync}<div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -960,7 +974,8 @@ window.WizCore.chats = function createChats(H) {
     c.media = []; c.texts = [];
     let msgs;
     const pend = pendingFor(w);
-    if (isNew && !pend.length) msgs = newChatHtml(TAG);
+    const carry = isNew && c.carry && TAG ? `<div class="ch-carry" role="note"><b>${AGS()?.lock?.() || ''}Continues “${esc(clip(c.carry.title, 60))}” privately</b><span>Your first message takes the last ${c.carry.n === 1 ? 'message' : `${c.carry.n} messages`} with it as quoted context. That thread stays as it is.</span><button type="button" data-chcarryx>Don’t include</button></div>` : '';
+    if (isNew && !pend.length) msgs = newChatHtml(TAG) + carry;
     else if (!turns && !isNew && !pend.length) msgs = c.err ? `<div class="ch-empty">${esc(c.err)}</div>` : skelThread();
     else {
       const all = turns || [];
@@ -1000,12 +1015,13 @@ window.WizCore.chats = function createChats(H) {
     const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd];
     const canStop = working && !!s?.runId && s.status !== 'stopping';
     PW?.ensureModels();
-    // Opinionated (desktop): the model switch lives in a row right above the composer (left), Defer / Done on its right.
+    // The model lives in the message box, bottom-right (James 18 Oct 2026); the header keeps the whole width for the title.
+    const mlabel = PW?.modelLabel ? PW.modelLabel(w, s) : '';
+    const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const DESK = document.documentElement.dataset.shell === 'desktop';
-    const chip = PW ? (DESK && PW.modelSwitch ? '' : PW.modelChip(w, s)) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts0 = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
-    const tacts = DESK && PW?.modelSwitch ? '' : tacts0;
+    const tacts = tacts0; // James's model label (#146) replaced our desktop switch row
     const dbar = DESK && PW?.modelSwitch ? `<div class="ch-dbar">${s !== undefined ? PW.modelSwitch(w, s) : '<span></span>'}${tacts0}</div>` : '';
     clearReading(w.id);
     // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
@@ -1014,8 +1030,8 @@ window.WizCore.chats = function createChats(H) {
     el.innerHTML = `<div class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}${privTag}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
-      ${dbar}${document.documentElement.dataset.shell !== 'desktop' ? `<div class="ch-bbar"><button type="button" class="ch-back2" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${PW && s !== undefined ? PW.modelSwitch(w, s) : ''}</div>` : ''}
-      <form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
+      ${document.documentElement.dataset.shell !== 'desktop' ? `<div class="ch-bbar"><button type="button" class="ch-back2" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button></div>` : ''}
+      <form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     for (const detail of el.querySelectorAll('[data-run-original]')) detail.open = openContexts.has(detail.dataset.runOriginal);
     if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
@@ -1198,7 +1214,20 @@ window.WizCore.chats = function createChats(H) {
     const fresh = c.loadedFor === w.thread && Date.now() - c.at < age && (!quiet || c.readRevision === revision);
     // Status changes (Stopping…, Deferred, Archived) re-render the header even between message reads.
     const hk = s ? [s.status, !!s.archived, !!s.deferred, s.runId].join('|') : '';
-    if (fresh && !force) { if (c.loadedFor === w.thread && hk !== c.hk) { c.hk = hk; const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el); } return; }
+    if (fresh && !force) {
+      // Reopening a cached quiet transcript still refreshes rename/retry metadata,
+      // once per navigation, without throwing away its 60-second history cache.
+      if (s?.listVersion === 1 && c.detailNav !== nav && c.detailLoadingNav !== nav) {
+        c.detailLoadingNav=nav;
+        try {
+          await LIVE.sessionInfo(sid);
+          if (W[w.id] === w && w.thread === sid && c.readNav === nav) { c.detailNav=nav; const el=elOf(w.id); if(el) renderLive(w,el); }
+        } catch (_) { /* retry itself fails closed until full detail can be fetched */ }
+        finally { if(c.detailLoadingNav===nav) c.detailLoadingNav=null; }
+      }
+      if (c.loadedFor === w.thread && hk !== c.hk) { c.hk = hk; const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el); }
+      return;
+    }
     // Speed: a thread opened for the first time this page paints its last on-device copy at once (no skeleton);
     // the read below still runs and replaces it. Pending sends and errors keep their own paths.
     if (c.loadedFor !== sid && LIVE.cachedMessages) {
@@ -1544,6 +1573,7 @@ window.WizCore.chats = function createChats(H) {
     const cx = e.target.closest('[data-chchipx]'); if (cx) { const c = ch(id); if (cx.dataset.chchipx === 'subject') c.subject = ''; else { c.filter = ''; c.filterFrom = null; } c.coach = false; c.lastChip = c.filter ? 'status' : c.subject ? 'subject' : ''; rerenderList(w); return true; }
     if (e.target.closest('[data-chfbtn]')) { const c = ch(id); c.sheet = !c.sheet; c.focus = false; rerenderList(w); return true; }
     if (e.target.closest('[data-chfclear]')) { const c = ch(id); c.sheet = false; c.coach = false; clearAll(w); return true; }
+    const lay = e.target.closest('[data-chlayout]'); if (lay) { LIVE.chatLayout = lay.dataset.chlayout; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     if (e.target.closest('[data-chcompact]')) { const on = !compactOn(); try { localStorage.setItem(COMPACT_KEY, on ? '1' : '0'); } catch (err) {} LIVE.putPrefs?.({ compact: on }); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     const fo = e.target.closest('[data-chfopt]'); if (fo) { const c = ch(id), [k, ...r] = fo.dataset.chfopt.split(':'), key = r.join(':'); c.sheet = false; c.coach = false;
       if (k === 'status') { c.filter = c.filter === key ? '' : key; c.filterFrom = null; } else c.subject = c.subject === key ? '' : key;
@@ -1557,7 +1587,7 @@ window.WizCore.chats = function createChats(H) {
     if (sm) { const shown = [...(sm.closest('[data-sec]') || document).querySelectorAll('[data-subjmove="up"]')].map(b => b.dataset.subjkey);
       if (!sm.disabled && moveSubject(sm.dataset.subjkey, sm.dataset.subjmove, shown)) for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const rg = e.target.closest('[data-rdyorder]');
-    if (rg) { const o = rg.dataset.rdyorder; if (o === 'newest' && (readyOrder === 'newest' || readyOrder === 'oldest')) readyOrder = readyOrder === 'newest' ? 'oldest' : 'newest'; else if (READY_ORDERS.includes(o)) readyOrder = o; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
+    if (rg) { const o = rg.dataset.rdyorder; if (o === 'newest' && (readyOrder === 'newest' || readyOrder === 'oldest')) readyOrder = readyOrder === 'newest' ? 'oldest' : 'newest'; else if (READY_ORDERS.includes(o)) readyOrder = o; try { localStorage.setItem(READY_ORDER_KEY, readyOrder); } catch (err) {} LIVE.putPrefs?.({ readyOrder }); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return true; }
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
@@ -1638,7 +1668,6 @@ window.WizCore.chats = function createChats(H) {
       if (e.target.matches('[data-clarify-answer]')) { const c = ch(idOf(e.target)); if (c.approval?.kind === 'clarify') c.approval.answer = e.target.value; }
       if (e.target.matches('.ch-compose textarea')) { growTa(e.target); const id = idOf(e.target); ch(id).draft = e.target.value; saveDraft(id); syncSend(e.target.form, ch(id)); }
     });
-    window.addEventListener('wos:prefs', () => { for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } });
     root.addEventListener('change', e => {
       if (e.target.matches('[data-archafter]')) { LIVE.archiveAfterDays = +e.target.value; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } }
     });
