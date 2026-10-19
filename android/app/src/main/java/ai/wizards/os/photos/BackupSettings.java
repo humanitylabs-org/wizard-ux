@@ -58,9 +58,17 @@ public final class BackupSettings {
         secret("credentials", new JSONObject().put("server", server).put("key", key).put("user", user));
         prefs.edit().putString("server", server).putBoolean("initial_done", false).putLong("last_sync", 0)
                 .putInt("done", 0).putInt("total", 0).putString("status", "Connected · choose albums and enable backup").commit();
+        // The owner tapped the backup switch before signing in: finish what they asked for.
+        if (prefs.getBoolean("enable_after_signin", false)) {
+            prefs.edit().remove("enable_after_signin").putBoolean("enabled", true).putString("status", "Signed in · backup is on").commit();
+            change();
+        }
+    }
+    public boolean connected() {
+        try { return secret("credentials").has("key"); } catch (Exception e) { return false; }
     }
     public void disconnect() {
-        prefs.edit().putBoolean("enabled", false).remove("credentials").remove("oauth").putBoolean("initial_done", false)
+        prefs.edit().putBoolean("enabled", false).remove("credentials").remove("oauth").remove("enable_after_signin").putBoolean("initial_done", false)
                 .putLong("last_sync", 0).putInt("done", 0).putInt("total", 0).putString("status", "Disconnected · server originals kept").commit();
         change(); BackupScheduler.cancel(context);
     }
