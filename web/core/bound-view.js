@@ -47,7 +47,9 @@
        const t = target(el, H); if (!t) { if (b) H.close(b.id); return; }
        if (b && b.bkey === t.key) { if (b.brk !== t.rk && !H.visible(b.id)) { b.brk = t.rk; H.reload(b.id); } return; }
        if (off.get(wid) === sid + '|' + t.key || !H.visible(wid)) return;
-       if (b) { if (H.visible(b.id)) return; H.close(b.id); }
+       // A view James is looking at stays put for the reply it came from; a NEW reply that links somewhere else
+       // replaces it (desktop shows it side by side, so it is always visible — James, 19 Oct 2026).
+       if (b) { if (H.visible(b.id) && b.brk === t.rk) return; H.close(b.id); }
        H.open({ ...t.win, from: Object.freeze({ ...H.from?.(wid), win: wid, sid, title: H.title(w), agent: w.agent || '' }), bound: wid, bsid: sid, bkey: t.key, brk: t.rk }, wid);
      } finally { busy = false; H.changed?.(); }
    }
