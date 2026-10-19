@@ -142,15 +142,17 @@ window.WosChatPower = function chatPower(A) {
     return chip.replace('class="ch-model', 'class="ch-mlabel ch-model').replace(/<i aria-hidden="true">▾<\/i>/, '');
   }
   /* Opinionated (phone): a three-position slide switch (Opus · Astra · Sol) at the bottom, drag or tap; ⋯ opens every model. */
-  const SW_NAMES = ['Opus', 'Astra', 'Sol'];
+  const SW_NAMES = ['Opus', 'Astra', 'Sol', 'Tinfoil'];
   function switchOpts(w, s) {
     const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
     const vis = M && M.ready ? M.visible(cur?.model || '', cur?.provider || '') : [];
     // Match by family in the model id (newest first), so e.g. gpt-6.1-sol still fills the Sol slot.
     const RX = [/opus/i, /astra/i, /-sol(-|$)/i], all = M && M.ready ? M.options.filter(o => !/-900k$/i.test(o.value)) : [];
     const newest = l => l.slice().sort((x, y) => y.value.localeCompare(x.value, 'en', { numeric: true }))[0] || null;
-    const opts = RX.map(rx => vis.find(o => rx.test(o.value)) || newest(all.filter(o => rx.test(o.value))));
-    const at = cur?.model ? opts.findIndex(o => o && o.value === cur.model) : -1;
+    const standard = o => M.family(o.value, o.provider) !== 'tinfoil';
+    const opts = RX.map(rx => vis.find(o => standard(o) && rx.test(o.value)) || newest(all.filter(o => standard(o) && rx.test(o.value))));
+    opts.push(M?.tinfoilReady?.() ? vis.find(o => M.family(o.value, o.provider) === 'tinfoil') || null : null);
+    const at = cur?.model ? opts.findIndex(o => o && o.value === cur.model && (!cur.provider || o.provider === cur.provider)) : -1;
     return { opts, at };
   }
   // Versions come from the actual selectable id, never a display-name guess or a pinned catalogue.
@@ -176,8 +178,8 @@ window.WosChatPower = function chatPower(A) {
   (() => { // drag the thumb, or tap a position
     let drag = null;
     document.addEventListener('pointerdown', e => { const tr = e.target.closest?.('.ms-track'); if (!tr) return; const r = tr.getBoundingClientRect(); drag = { tr, r, wid: tr.parentElement.dataset.mswid, moved: false, x0: e.clientX }; tr.setPointerCapture?.(e.pointerId); });
-    document.addEventListener('pointermove', e => { if (!drag) return; if (Math.abs(e.clientX - drag.x0) > 6) drag.moved = true; if (!drag.moved) return; const f = Math.max(0, Math.min(1, (e.clientX - drag.r.left) / drag.r.width)); drag.tr.parentElement.style.setProperty('--ms-i', (f * 3 - .5).toFixed(3)); drag.tr.classList.add('dragging'); });
-    const end = e => { if (!drag) return; const d = drag; drag = null; d.tr.classList.remove('dragging'); const f = Math.max(0, Math.min(.999, (e.clientX - d.r.left) / d.r.width)); const i = Math.floor(f * 3); d.tr.parentElement.style.setProperty('--ms-i', i); switchTo(d.wid, i); };
+    document.addEventListener('pointermove', e => { if (!drag) return; if (Math.abs(e.clientX - drag.x0) > 6) drag.moved = true; if (!drag.moved) return; const f = Math.max(0, Math.min(1, (e.clientX - drag.r.left) / drag.r.width)); drag.tr.parentElement.style.setProperty('--ms-i', (f * SW_NAMES.length - .5).toFixed(3)); drag.tr.classList.add('dragging'); });
+    const end = e => { if (!drag) return; const d = drag; drag = null; d.tr.classList.remove('dragging'); const f = Math.max(0, Math.min(.999, (e.clientX - d.r.left) / d.r.width)); const i = Math.floor(f * SW_NAMES.length); const w = H.win(d.wid); if (!w?.thread) return; const state = switchOpts(w, LIVE.session(w.thread)); if (state.opts[i]) { d.tr.parentElement.style.setProperty('--ms-i', i); switchTo(d.wid, i); } else d.tr.parentElement.style.setProperty('--ms-i', state.at < 0 ? 1 : state.at); };
     document.addEventListener('pointerup', end); document.addEventListener('pointercancel', () => { if (drag) { drag.tr.classList.remove('dragging'); drag = null; } });
   })();
   let modelsAsked = false;
