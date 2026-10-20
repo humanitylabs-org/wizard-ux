@@ -86,15 +86,46 @@
     if (!el.closest('[data-ub-all]')) return false;
     retryAll(ctx); return true;
   } });
+  /* My skin (core/my-skin.js): the owner's own CSS on top of the picked skin, kept in Files outside the shell. */
+  const mySkinSub = base => {
+    const M = window.WosMySkin, st = M && M.state;
+    if (!M) return '';
+    if (st.off) return `Off for this visit · on top of ${base}`;
+    if (st.info && st.info.unavailable) return `Not on this box yet · ${base} as made`;
+    return st.empty ? `Empty · ${base} exactly as made` : `On top of ${base}`;
+  };
+  function mySkinRow(base) {
+    if (!window.WosMySkin) return '';
+    return `<div class="st-row static my-skin-row"><span class="st-ic">✎</span><span class="st-tx"><b>My skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button><button type="button" class="ghost" data-myskin="reset">Reset</button></span></div>`;
+  }
+  async function mySkinAction(ctx, what) {
+    const M = window.WosMySkin; if (!M) return;
+    if (what === 'edit') {
+      const url = `/files/files/${M.FILE.split('/').map(encodeURIComponent).join('/')}`;
+      const opened = window.WizCanOpen?.('files') && ctx.openLink ? ctx.openLink(url, 'My skin') : false;
+      if (!opened) ctx.toast?.('✎', 'Ask your agent: "change my skin so …"', 2600);
+      return;
+    }
+    if (what === 'reset') {
+      if (M.state.empty) { ctx.toast?.('✓', 'My skin is already empty', 1600); return; }
+      try { await M.reset(); ctx.toast?.('✓', 'My skin emptied · your skin as its author made it', 2200); }
+      catch (e) { ctx.toast?.('!', 'Could not reset My skin right now', 2400); }
+      for (const m of mounts) m.render();
+    }
+  }
   register({ id: 'look', aliases: ['skin'], html() {
     const S = window.WosSkin; if (!S) return '';
     const cur = S.current, nm = S.list.find(k => k.id === cur)?.name || '';
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(nm)} · tap to wear</small></span></div><div class="sk-sw" role="group" aria-label="Skin">${S.list.map(k => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`).join('')}</div></div></div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(nm)} · tap to wear</small></span></div><div class="sk-sw" role="group" aria-label="Skin">${S.list.map(k => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`).join('')}</div></div>${mySkinRow(nm)}</div>`;
   }, act(ctx, el) {
+    const my = el.closest('[data-myskin]');
+    if (my) { mySkinAction(ctx, my.dataset.myskin); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     const S = window.WosSkin, now = S.set(b.dataset.skinpick);
     ctx.root.querySelectorAll('[data-skinpick]').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.skinpick === now)));
-    ctx.root.querySelector('[data-skinname]').textContent = `${S.list.find(k => k.id === now)?.name || ''} · tap to wear`;
+    const nm = S.list.find(k => k.id === now)?.name || '';
+    ctx.root.querySelector('[data-skinname]').textContent = `${nm} · tap to wear`;
+    const sub = ctx.root.querySelector('[data-myskinsub]'); if (sub) sub.textContent = mySkinSub(nm);
     ctx.haptic?.(8); return true;
   } });
   // Phone only: desktop always keeps framed windows. One switch, on by default; skin JSON import stays for designers.
@@ -221,5 +252,6 @@
     const at = controls.indexOf(document.activeElement);
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
+  window.WosMySkin?.on(() => { for (const m of mounts) { const sub = m.context?.root?.querySelector?.('[data-myskinsub]'); if (sub) { const S = window.WosSkin; sub.textContent = mySkinSub(S?.list.find(k => k.id === S.current)?.name || ''); } } });
   window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, trap, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(({ id, aliases }) => ({ id, aliases: aliases || [] })); } };
 })();

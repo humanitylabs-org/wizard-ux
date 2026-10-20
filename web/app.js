@@ -1183,6 +1183,7 @@
     openThread: id => { closeSheets(true); openWizardThread(id); },
     editUnsent,
     restoreReply: id => { closeSheets(true); return recoverParkedReply(id); },
+    openLink: (url, title) => { closeSheets(true); return openLinkDesk(url, null); },
     openSub: id => {
       if (id === 'files') { settingsReturn = id; openFilesScreen(); }
       if (id === 'help') { settingsReturn = id; closeSheets(true); window.WosTour?.openHelp(); }
