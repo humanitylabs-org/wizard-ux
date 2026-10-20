@@ -9,7 +9,7 @@
  *     last 45 s; otherwise frozen on the last frame (James, 12 Oct: no battery drain when not viewed).
  *   - the orb's colour, through a CSS filter; orb.js stays byte-identical with the Android copy
  * Nebula is the original look and sets nothing. Choice persists per device in localStorage 'wos.skin'
- * (box-level theme.json sync comes later). Eight skins: Nebula, Grove, Tide, Ember, Signal, Dark, Light, Landscapes (Paper retired 12 Oct).
+ * (box-level theme.json sync comes later). Nine skins: Nebula, Grove, Tide, Ember, Signal, Novairecito, Dark, Light, Landscapes (Paper retired 12 Oct).
  * API: WosSkin.list, .current, .set(id), .preview(pos), .commit(i), .index(id), .pkgOf(id).
  * Collaborator skins keep their look and behaviour in web/skins/<dir>/ (see web/skins/README.md), declared with pkg. */
 (() => {
@@ -38,6 +38,10 @@
       t: T({ bg: '#000000', ink: '#d8ffd8', 'ink-2': '#8fc79a', 'ink-3': '#4f8a5a', line: 'rgba(57,255,140,.16)', 'line-2': 'rgba(57,255,140,.32)', glass: 'rgba(0,10,4,.62)', 'glass-2': 'rgba(0,20,8,.76)',
         violet: '#39ff8c', 'violet-2': '#ffbe55', pink: '#5ad1ff', cyan: '#5ad1ff', amber: '#ffbe55', green: '#39ff8c', red: '#ff5f56',
         'sk-time-a': '#e6ffe6', 'sk-time-b': '#39ff8c', 'sk-dock': 'rgba(0,0,0,.96)', 'sk-dock-line': 'rgba(57,255,140,.18)', 'sk-ddot': 'rgba(57,255,140,.5)', 'sk-tour': 'rgba(0,8,3,.88)', 'sk-dim': 'rgba(0,0,0,.76)', 'sk-win': 'rgba(0,10,4,.86)' }) },
+    { id: 'novairecito', pkg: { css: true, dir: 'novairecito' }, name: 'Novairecito', who: 'Noir focus with Wizard violet. The boss’s quiet command deck.', orb: [0, 1.12, .96],
+      t: T({ bg: '#05030a', ink: '#f4f0ff', 'ink-2': '#c2b8da', 'ink-3': '#81769a', line: 'rgba(197,174,255,.14)', 'line-2': 'rgba(197,174,255,.28)', glass: 'rgba(13,9,24,.66)', 'glass-2': 'rgba(22,14,40,.82)',
+        violet: '#946cff', 'violet-2': '#c3aaff', pink: '#d96fc7', cyan: '#75cfe8', amber: '#d8ad63', green: '#70d4a2', red: '#ef718a',
+        'sk-time-a': '#ffffff', 'sk-time-b': '#a98bff', 'sk-dock': 'rgba(6,4,12,.96)', 'sk-dock-line': 'rgba(197,174,255,.12)', 'sk-ddot': 'rgba(197,174,255,.5)', 'sk-tour': 'rgba(8,5,16,.86)', 'sk-dim': 'rgba(2,1,6,.78)', 'sk-win': 'rgba(9,6,18,.9)' }) },
     { id: 'obsidian', pkg: { css: true, js: true, when: 'touch', dir: 'obsidian' }, name: 'Dark', who: 'Miguel’s dark skin. Black, white and nothing else.', orb: [0, 0, 1.15],
       t: T({ bg: '#000000', ink: '#f7f7f7', 'ink-2': '#c4c4c4', 'ink-3': '#8a8a8a', line: 'rgba(255,255,255,.12)', 'line-2': 'rgba(255,255,255,.26)', glass: 'rgba(20,20,20,.62)', 'glass-2': 'rgba(24,24,24,.86)',
         violet: '#ffffff', 'violet-2': '#e8e8e8', pink: '#bdbdbd', cyan: '#d6d6d6', amber: '#e6b15c', green: '#9fd8a8', red: '#ff6b6b',
@@ -186,6 +190,21 @@
           }
         }
       }
+    },
+    // Novairecito: the existing night-sky language, pared back into a noir violet command deck.
+    // It keeps the shell geometry untouched and uses only two inexpensive gradients over a solid field.
+    novairecito: {
+      init() {},
+      draw(c, s, t, dt, W, H) {
+        c.fillStyle = '#05030a'; c.fillRect(0, 0, W, H);
+        const x = W * (.28 + .04 * Math.sin(t * .05)), y = H * (.18 + .03 * Math.cos(t * .04));
+        const glow = c.createRadialGradient(x, y, 0, x, y, Math.max(W, H) * .72);
+        glow.addColorStop(0, 'rgba(148,108,255,.16)'); glow.addColorStop(.46, 'rgba(79,48,145,.06)'); glow.addColorStop(1, 'rgba(5,3,10,0)');
+        c.fillStyle = glow; c.fillRect(0, 0, W, H);
+        const edge = c.createLinearGradient(0, 0, W, H);
+        edge.addColorStop(0, 'rgba(255,255,255,.018)'); edge.addColorStop(.55, 'rgba(255,255,255,0)'); edge.addColorStop(1, 'rgba(0,0,0,.24)');
+        c.fillStyle = edge; c.fillRect(0, 0, W, H);
+      },
     },
     // Obsidian: still film grain plus one slow, soft light drifting across. Pre-rendered noise tiles, so a frame is
     // two drawImage calls and a gradient; frozen by the scenery gate whenever Home is not live.
