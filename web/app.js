@@ -2067,7 +2067,7 @@
     if (savedGeneral && !V.snap?.meetingEventId) { V.kind = 'general'; V.snap = { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(a.id) }; }
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
-    txPill(a.paused ? '⏸' : '✦', kind === 'dictation' ? 'Dictation kept · tap orb to transcribe & copy' : a.paused ? 'Paused · recording kept · tap orb to send' : 'Still recording · tap orb to send', kind === 'dictation' ? 'dictation' : 'agent'); txHide(2600);
+    txPill(a.paused ? '⏸' : '✦', kind === 'dictation' ? 'Dictation kept · tap orb to transcribe & copy' : a.paused ? 'Paused · recording kept · tap orb to resume' : 'Still recording · tap orb to send', kind === 'dictation' ? 'dictation' : 'agent'); txHide(2600);
     V.raf = requestAnimationFrame(tick);
     return true;
   }
@@ -2087,7 +2087,7 @@
   };
   let NOMIC = false;
   function setVoice(s) {
-    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s });
+    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s }); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
     $('#arcPause small').textContent=s==='paused'?'Resume':'Pause';$('#arcPause').setAttribute('aria-label',s==='paused'?'Resume recording':'Pause recording');
     CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
     reportVoice(s);
@@ -2263,7 +2263,7 @@
     cancelAnimationFrame(V.raf);clearTimeout(txHideT);setVoice('paused');renderVoiceFiles();tick();
     $('#arcPause small').textContent='Resume';$('#arcPause').setAttribute('aria-label','Resume paused reply');
     txPill('⏸','Reply paused · '+(LIVE.session(V.replyTo.sid)?.title||V.replyTo.sid),'agent',V.snap?.route?.model||'');
-    $('#orbWrap').setAttribute('aria-label','Send paused reply to '+V.replyTo.sid);
+    $('#orbWrap').setAttribute('aria-label','Resume paused reply to '+V.replyTo.sid);
     return true;
   }
   async function recoverParkedReply(id) {
@@ -2444,7 +2444,7 @@
     if (V.state !== 'paused') V.acc += performance.now() - V.t0;
     if (V.native) pauseNativeTake(true);
     try { if (V.rec?.state === 'recording') V.rec.pause(); } catch (_) {}
-    setVoice('paused'); txPill('⏸', 'Paused · recording kept · tap orb to send', 'agent');
+    setVoice('paused'); txPill('⏸', 'Paused · recording kept · tap orb to resume', 'agent');
   }
   function finishDictation() {
     // Stop is solely an insertion boundary: no model route, composer seal, navigation or outbox.
@@ -2768,7 +2768,7 @@
       }
       V.stopAsked = false; V.sendAsked = false;   // after a mic interruption: carry on with a fresh part
       V.t0 = performance.now(); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6);
-      openRec().catch(() => { V.acc += performance.now() - V.t0; setVoice('paused'); toast('⏸', 'The mic is busy · tap the orb to send what you have'); });
+      openRec().catch(() => { V.acc += performance.now() - V.t0; V.resumeBlocked = true; setVoice('paused'); toast('⏸', 'The mic is busy · tap the orb to send what you have'); });
     }
     else if (V.state === 'paused') { V.stopAsked = false; V.sendAsked = false; V.t0 = performance.now(); try { window.WosCaptureTools.setPaused(V.rec,false); } catch (e) {} if (V.native) pauseNativeTake(false); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
   });
@@ -3179,7 +3179,14 @@
       if(V.admitting){V.admitSend=true;return;}
       if(V.state==='paused'&&V.replyTo&&FIELDS.refresh())return startVoice('dictation');
       if (V.state === 'idle') return startOrbVoice();
-      if (V.state === 'listen' || V.state === 'paused') { shock(); return finishVoice(); }
+      // James 20 Oct: a tap on a paused take resumes it and never sends. Send is the next tap, once it records again.
+      // Only a take that cannot resume (mic held by another recording, or the last resume found the mic busy) still sends.
+      if (V.state === 'paused') {
+        // Dictation keeps its own contract: a tap on a paused dictation transcribes into the sealed field (nothing is sent).
+        if (V.kind === 'dictation' || V.resumeBlocked || (window.WizAppCapture?.getState?.().recording && !V.meetingLoan)) { shock(); return finishVoice(); }
+        return $('#arcPause').click();
+      }
+      if (V.state === 'listen') { shock(); return finishVoice(); }
       return; // sending: a tap on the orb does nothing until the take is handed off
     } else if (g.mode === 'hold') {
       if(g.refused)return; // a refused hold always consumes its release; never sends a reply

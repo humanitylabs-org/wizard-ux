@@ -199,7 +199,7 @@ const W = window.W = {
   },
   level(v){S.level=+v||0;O.setLevel(S.paused?0:Math.min(1,S.level*1.4))},
   onPaused(p){S.paused=!!p;orbMode(p?'paused':'listen');setTop(p?'paused':'listening');
-    hint.show(p?'paused · tap Pause to carry on':'talk · tap the orb or stop talking to send','listen',0,true)},
+    hint.show(p?'paused · tap the orb to carry on':'talk · tap the orb or stop talking to send','listen',0,true)},
   onSending(via){
     S.state='think';mode='gather';glow=1;chips(false);setTop('');S.paused=false;
     orbMode('think');O.setLevel(0);
@@ -290,7 +290,7 @@ const W = window.W = {
 };
 
 /* ---------- gestures ---------- */
-$('orbHit').addEventListener('click',()=>{if(S.state==='listen'){N.send()}else if(inCorner()&&S.state!=='think'){N.listen()}});
+$('orbHit').addEventListener('click',()=>{if(S.state==='listen'&&S.paused){N.pause()}else if(S.state==='listen'){N.send()}else if(inCorner()&&S.state!=='think'){N.listen()}});
 $('bub').addEventListener('click',e=>{e.stopPropagation();if(S.state==='card')W.openWizard();else if(S.state!=='think')N.close()});
 $('cancelC').addEventListener('click',e=>{e.stopPropagation();N.cancel();W.onNothing();hint.show('cancelled','c',0,true)});
 $('pauseC').addEventListener('click',e=>{e.stopPropagation();N.pause&&N.pause()});
