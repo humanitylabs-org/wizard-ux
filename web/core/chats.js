@@ -784,7 +784,8 @@ window.WizCore.chats = function createChats(H) {
   function openEmojiSheet(wid, key, label) {
     const el = track.querySelector(`[data-chats="${wid}"]`); if (!el || !key) return;
     closeRowSheet();
-    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Choose topic emoji"><div class="ch-sheet-b ch-emoji-sheet"><div class="ch-sheet-t">${esc(label || 'Choose emoji')}</div><div class="ch-emoji-grid">${TOPIC.choices.map(emoji => `<button type="button" data-chtopicemoji="${emoji}" aria-label="Use ${emoji}">${emoji}</button>`).join('')}</div></div></div>`);
+    const categoryHtml = TOPIC.categories.map(category => `<section class="ch-emoji-category"><h3>${esc(category.label)}</h3><div class="ch-emoji-grid">${category.emoji.map(emoji => `<button type="button" data-chtopicemoji="${emoji}" aria-label="Use ${emoji}">${emoji}</button>`).join('')}</div></section>`).join('');
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Choose topic emoji"><div class="ch-sheet-b ch-emoji-sheet"><div class="ch-sheet-t">${esc(label || 'Choose emoji')}</div><div class="ch-emoji-scroll">${categoryHtml}</div></div></div>`);
     rowSheet = { wid, key, emoji: true }; vib(8);
   }
   /* Rename (long-press a thread, or tap the title inside it). James's name locks the thread: the agent keeps it. */

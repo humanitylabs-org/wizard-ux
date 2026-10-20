@@ -35,3 +35,11 @@ test('draft rows use their durable draft key and can open the same picker', () =
   assert.match(chats, /openEmojiSheet/);
   assert.match(chats, /data-rsemo/);
 });
+
+test('emoji picker renders category headings in a bounded independently scrollable region', () => {
+  assert.match(chats, /TOPIC\.categories\.map/);
+  assert.match(chats, /class="ch-emoji-category"/);
+  assert.match(chats, /class="ch-emoji-scroll"/);
+  assert.match(css, /\.ch-emoji-sheet\s*\{[^}]*max-height:[^}]*display:\s*flex[^}]*flex-direction:\s*column/s);
+  assert.match(css, /\.ch-emoji-scroll\s*\{[^}]*overflow-y:\s*auto[^}]*overscroll-behavior:\s*contain[^}]*touch-action:\s*pan-y/s);
+});
