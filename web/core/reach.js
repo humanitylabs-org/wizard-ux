@@ -60,7 +60,10 @@
       if (Date.now() - failureAt >= 15000) { failureAt = Date.now(); diagnose(); }
       return cached || pending;
     },
+    // Troubleshooter is an ordinary built-in app: open it in a shell window like any other app. Leaving the shell
+    // for the bare page is only the last resort, when the shell can't open windows at all.
     open() {
+      try { if (window.WizOpenApp?.('troubleshooter')) return; } catch (e) {}
       if (document.documentElement.dataset.shell === 'desktop') window.open('/troubleshoot/', '_blank', 'noopener');
       else location.assign('/troubleshoot/');
     },
