@@ -23,6 +23,27 @@ Declare the package on your skin's entry in `web/core/skins.js`:
 
 James's skins (Nebula, Grove, Tide, Ember, Signal) have no package and load nothing from here.
 
+## My skin (every owner's own layer)
+
+Every box also has one personal skin, **My skin**: plain CSS the owner (or their agent) writes, layered on top of
+whichever skin is picked. It starts empty, and empty means the picked skin exactly as its author made it.
+
+- **Where it lives:** `Skins/My skin.css` in the owner's Files (Runtipi `media/` on a box), outside this image.
+  Shell, skin and Agent Service updates never touch it. The Agent Service creates the commented, empty file at
+  start and serves it at `GET /wizard/v1/my-skin` (text/css, at most 64 KB, sanitised: no `@import`, no URL to
+  another origin, no script hooks); `PUT` (text/css) and `DELETE` (reset) are owner-only and same-origin.
+- **How it loads:** `web/core/my-skin.js` puts it in one `<style>` at the very end of `<head>` on phone and
+  desktop, after `core/skins.css`, the skin package's `skin.css` and `skin-frame.css`. Same specificity wins later
+  in the cascade, so its rules sit on top of every skin. The last good copy is cached for the first frame.
+- **Targeting:** `html[data-skin] …` for every skin, `html[data-skin="grove"] …` for one.
+- **Safety:** CSS only (no script). A box without the route (404), an error or a non-CSS answer shows the base
+  skin; a bad rule only drops that rule. `?myskin=off` skips the layer for one load.
+- **Settings › Look:** a "My skin" row says what it sits on, with Edit (opens the file in Files) and Reset.
+- **Agents:** asked to "change my skin", an agent edits My skin only, never a skin in this folder
+  (Agent Service run instructions and skill say so).
+
+My skin is not a skin package: it never needs a PR, and it never changes anyone else's Wizard.
+
 ## What you can change without asking anyone
 
 A change that only touches your own folder (and your own entry in `skins.js`) goes in through the normal
