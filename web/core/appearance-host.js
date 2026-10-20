@@ -60,7 +60,10 @@
     } };
     return tokensCache;
   }
-  const presentation = f => f.closest('.device.immersive .win.full, body.desktop-fullscreen .win.full') ? 'immersive' : 'window';
+  // Distraction-free (swipe down on the orb) hides the title bar of a sole or full-screen window, so the host presents
+  // that window edge to edge too: apps hide their own in-app headers the same way they do in full screen (James, 20 Oct).
+  const IMMERSIVE = '.device.immersive .win.full, body.desktop-fullscreen .win.full, .device.zen .tiles[data-n="1"] .win, .device.zen .tiles.has-full .win.full';
+  const presentation = f => f.closest(IMMERSIVE) ? 'immersive' : 'window';
   function context(f) { const t = tokens(); return { version: VERSION, revision, skin: t.skin, colorScheme: t.colorScheme, presentation: presentation(f), tokens: t.tokens }; }
 
   function send(f, force) {
@@ -109,7 +112,7 @@
     const root = document.documentElement;
     new MutationObserver(() => queue(true)).observe(root, { attributes: true, attributeFilter: ['style', 'class', 'data-skin'] });
     // Full screen / immersive changes the presentation: watch window classes only while themed frames exist.
-    new MutationObserver(() => queue(false)).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    new MutationObserver(() => queue(false)).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'data-n'] });
     try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => queue(true)); } catch (e) {}
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
