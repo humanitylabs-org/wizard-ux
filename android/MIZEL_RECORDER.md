@@ -7,6 +7,8 @@ Source: `android/app/src/main/java/ai/wizards/os/mizel/` · `MicOwner.java` · Q
 
 ## Page ⇄ native protocol (`window.wizardMizelPort`)
 
+All example hosts below are synthetic. In the app the origin is the persisted owner selection (`AppState.origin` / `MizelConfig.origin`), not a compiled host.
+
 Installed with AndroidX `WebViewCompat.addWebMessageListener(web, "wizardMizelPort", {"https://box.example.ts.net"}, …)`.
 
 - Present in **every frame whose origin is exactly `https://box.example.ts.net`** — the Wizard OS shell, its

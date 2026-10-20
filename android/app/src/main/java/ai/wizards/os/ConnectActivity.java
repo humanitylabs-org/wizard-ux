@@ -26,6 +26,7 @@ public final class ConnectActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN | android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         // Appearance v1 standalone dark fallback; settings passes the current shell's validated colour tokens.
         int base = colour("base", Color.rgb(15, 14, 20));
         ink = colour("ink", ink); accent = colour("accent", accent);
@@ -104,7 +105,7 @@ public final class ConnectActivity extends Activity {
         // App-session document tasks from the old box must not keep privileged bridges alive after a switch.
         android.app.ActivityManager am = getSystemService(android.app.ActivityManager.class);
         if (am != null) for (android.app.ActivityManager.AppTask task : am.getAppTasks()) {
-            if (task.getTaskInfo().taskId != getTaskId()) task.finishAndRemoveTask();
+            if (task.getTaskInfo().id != getTaskId()) task.finishAndRemoveTask();
         }
         startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK)); finish();
     }
