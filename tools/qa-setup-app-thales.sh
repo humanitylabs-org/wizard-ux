@@ -9,8 +9,8 @@ if [ "${1:-}" = "--remote" ]; then
   mkdir -p "$TMPDIR" out/shots
   DEPS=${QA_DEPS:-/Volumes/ThalesMedia/QA/phone-setup/deps}
   mkdir -p "$DEPS"
-  if [ ! -d "$DEPS/node_modules/jsqr" ] || [ ! -d "$DEPS/node_modules/playwright" ]; then
-    npm install --prefix "$DEPS" --no-audit --no-fund playwright@1.58.2 jsqr@1.4.0
+  if [ ! -d "$DEPS/node_modules/jsqr" ] || [ "$(node -p "try { require('$DEPS/node_modules/playwright/package.json').version } catch { '' }")" != "1.64.1" ]; then
+    npm install --prefix "$DEPS" --no-audit --no-fund playwright@1.64.1 jsqr@1.4.0
   fi
   export QA_PLAYWRIGHT="$DEPS/node_modules/playwright" QA_JSQR="$DEPS/node_modules/jsqr"
   export QA_SHOTS="$PWD/out/shots" QA_RECEIPT="$PWD/out/qa-setup-app.json"
