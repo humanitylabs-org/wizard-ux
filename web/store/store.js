@@ -3,6 +3,8 @@
  * Get and explicit release changes use this Wizard's owner-authorized App Manager. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
 import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason} from './store-status.js';
+import {routerNeeds, routerApprove, routerRows, hasNeeds, pending, nice} from './store-router.js';
+import {adoptAppearance} from './store-appearance.js';
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -28,7 +30,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map() };
+  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set() };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
@@ -175,18 +177,73 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
       ${architectureReason(a,S.architecture) ? `<section class="d-sec"><p class="d-note" role="status">${esc(architectureReason(a,S.architecture))}</p></section>` : ''}
       ${needs}${powers}${gives}
+      ${modelsSection(a)}
       ${a.release_notes ? `<section class="d-sec"><h3>Release notes</h3><p>${esc(a.release_notes)}</p></section>` : ''}
       ${a.private ? '<section class="d-sec"><h3>Private release</h3><p>The App Manager uses this Wizard’s existing repository and release access. Your selected source and exact commit are checked before installation.</p></section>' : ''}
       <section class="d-sec"><h3>Information</h3><dl class="info">${info}</dl>${a.url && /^https:\/\/github\.com\//.test(a.url) ? `<a class="src" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">View source on GitHub ↗</a>` : ''}</section>`;
     window.scrollTo(0, 0);
   }
 
-  /* ---------------- navigation stack: discover → list/search → detail ---------------- */
+  /* ---------------- Connection Router: install sheet and "Models and connections" ---------------- */
+  // Keyed by the installed registry id (what the Router knows); refetched when stale, after approvals and on return.
+  const routerId = a => S.installed.get(key(a))?.id || a.id;
+  const rctx = () => ({ esc, storeApps: S.apps, busy: S.mcBusy });
+  function needsFor(id, force) {
+    const c = S.router.get(id);
+    if (c?.loading || (!force && c && Date.now() - c.at < 15000)) return c;
+    const entry = { ...(c || {}), loading: true, at: Date.now() }; S.router.set(id, entry);
+    routerNeeds(id).then(r => { S.router.set(id, { ...r, at: Date.now() }); refresh(); });
+    return entry;
+  }
+  function modelsSection(a) {
+    if (!isInstalled(a)) return '';
+    const c = needsFor(routerId(a));
+    if (!c?.data) return '';
+    if (!hasNeeds(c.data)) return '';
+    return `<section class="d-sec mc" data-mc-app="${esc(routerId(a))}"><h3>Models and connections</h3>
+      <p class="d-note">What each feature was tested on and what runs it here. Models change only when you approve.</p>
+      <div class="mc-list">${routerRows(routerId(a), c.data, rctx())}</div></section>`;
+  }
+  function showSheet(k) {
+    const base = find(k); if (!base) return; const a = selected(base), id = routerId(a), c = S.router.get(id);
+    const left = pending(c?.data);
+    $('sheet').innerHTML = `<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${esc(a.name)} is installed</h2>
+      <p>${left ? `${left} feature${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} a model` : 'Every feature has a model'}</p></div></div>
+      <p class="mc-lede">Each feature was tested on one model. Connect that provider, or approve a swap to a model this Wizard already has.</p>
+      <div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? routerRows(id, c.data, rctx()) : '<p class="empty">Checking connections…</p>'}</div>
+      <div class="mc-done"><button type="button" class="get big" data-back>${left ? 'Decide later' : 'Done'}</button></div>`;
+  }
+  async function approve(btn) {
+    const app = btn.closest('[data-mc-app]')?.dataset.mcApp, feature = btn.dataset.mcApprove;
+    if (!app || !feature || S.mcBusy.has(app + '/' + feature)) return;
+    S.mcBusy.add(app + '/' + feature); refresh();
+    try {
+      await routerApprove({ app, feature, provider: btn.dataset.mcProvider, model: btn.dataset.mcModel });
+      const r = await routerNeeds(app); S.router.set(app, { ...r, at: Date.now() });
+      toast(`<b>${esc(btn.dataset.mcModel)} approved</b><span>Runs ${esc(nice(feature))} from now on.</span>`);
+    } catch (err) { toast(`<b>Nothing changed</b><span>${esc(err.message || 'Approval failed.')}</span>`); }
+    finally { S.mcBusy.delete(app + '/' + feature); refresh(); }
+  }
+  function connect(btn) {
+    const id = btn.dataset.mcConnect;
+    if (!id) return openKind('connections');
+    if (btn.dataset.mcInstalled === '1') {
+      if (framed) parent.postMessage({ type: 'wizard:open-app', id }, location.origin); else toast('<b>Open it from your apps.</b>');
+      return;
+    }
+    const target = S.apps.find(x => x.id === id); if (target) openApp(key(target));
+  }
+  // Coming back from a provider's connection app: re-read what the Router sees.
+  const recheck = () => { if (document.hidden) return; const t = S.stack.at(-1); if (!t || !['sheet', 'detail'].includes(t.t)) return;
+    const b = find(t.arg); if (b && (t.t === 'sheet' || isInstalled(selected(b)))) needsFor(routerId(selected(b)), true); };
+  document.addEventListener('visibilitychange', recheck); addEventListener('focus', recheck);
+
+  /* ---------------- navigation stack: discover → list/search → detail → install sheet ---------------- */
   const scrolls = [];
   const top = () => S.stack[S.stack.length - 1]?.t;
   function render() {
     const t = top();
-    $('discover').hidden = !!t; $('results').hidden = !(t === 'list' || t === 'search'); $('detail').hidden = t !== 'detail';
+    $('discover').hidden = !!t; $('results').hidden = !(t === 'list' || t === 'search'); $('detail').hidden = t !== 'detail'; $('sheet').hidden = t !== 'sheet';
   }
   function push(t, arg) { scrolls.push(window.scrollY); S.stack.push({ t, arg }); render(); }
   function pop() {
@@ -194,7 +251,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
     const was = S.stack.pop(); render();
     if (was.t === 'search') { $('q').value = ''; S.q = ''; }
     const under = S.stack[S.stack.length - 1];
-    if (under?.t === 'detail') showDetail(under.arg); else if (under?.t === 'list') openKind(under.arg, true);
+    if (under?.t === 'detail') showDetail(under.arg); else if (under?.t === 'list') openKind(under.arg, true); else if (under?.t === 'sheet') showSheet(under.arg);
     const y = scrolls.pop() || 0; requestAnimationFrame(() => window.scrollTo(0, y));
     return true;
   }
@@ -210,7 +267,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   function refresh() {
     const t = S.stack[S.stack.length - 1], y = window.scrollY;
     paint();
-    if (t?.t === 'detail') showDetail(t.arg); else if (t?.t === 'list') openKind(t.arg, true); else if (t?.t === 'search') search(S.q);
+    if (t?.t === 'detail') showDetail(t.arg); else if (t?.t === 'list') openKind(t.arg, true); else if (t?.t === 'search') search(S.q); else if (t?.t === 'sheet') showSheet(t.arg);
     requestAnimationFrame(() => window.scrollTo(0, y));
   }
 
@@ -244,7 +301,10 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
       await load(true);
       const actual=S.installed.get(key(a));
       if(!actual || actual.conflict || actual.repo!==a.repo || actual.commit!==a.commit) throw new Error('Installation finished, but the selected release is not registered yet. Refresh to check.');
-      say('Find it in your apps.', true);
+      // The Router reads the app's declaration once it is registered; any model needs open the install sheet.
+      const id = routerId(a), need = await routerNeeds(id); S.router.set(id, { ...need, at: Date.now() });
+      if (hasNeeds(need.data)) { if (top() !== 'sheet') push('sheet', key(a)); showSheet(key(a)); window.scrollTo(0, 0); }
+      else say('Find it in your apps.', true);
     } catch (err) { say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); refresh(); }
   }
@@ -256,6 +316,8 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
       if(!['get','switch','update'].includes(state)) return;
       install(a); return; }
 
+    const ap = e.target.closest('[data-mc-approve]'); if (ap) { e.stopPropagation(); approve(ap); return; }
+    const cn = e.target.closest('[data-mc-connect]'); if (cn) { e.stopPropagation(); connect(cn); return; }
     const o = e.target.closest('[data-open]');
     if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
     const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);
@@ -290,5 +352,6 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   // Broken or missing logos fall back to the gradient letter (inline onerror is blocked by CSP).
   document.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.remove(); }, true);
   window.__store = { state: () => ({ layers: S.stack.map(x => x.t), apps: S.apps.length, installed: [...S.installed.keys()], q: S.q }) };
+  adoptAppearance('App Store');
   paint(); load();
 })();
