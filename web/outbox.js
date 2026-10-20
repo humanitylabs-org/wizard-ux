@@ -194,6 +194,13 @@
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
     if (it.steerDispatch === 'started' && it.state !== 'sent') { it.state = 'unconfirmed'; it.error = unconfirmed; }
     if (it.state === 'sending') it.state = 'waiting';
+    // Older builds exhausted durable retries. Revive only identifiable transport
+    // failures with delivery authority; an ambiguous steer remains unconfirmed.
+    if (it.state === 'failed' && eligible(it, ['failed']) &&
+        (/Couldn[’']t reach Wizard|Wizard was unavailable|Request timed out|HTTP (408|425|429)\b/.test(it.error || '') ||
+         [408, 425, 429].includes(it.errorStatus) || it.errorStatus >= 500)) {
+      it.state = 'waiting'; it.nextAt = 0;
+    }
     if (it.state === 'processing' || it.state === 'preparing') { it.state = it.intent === 'command' ? 'held' : 'failed'; it.error = it.intent === 'command' ? 'Interrupted command · original recording kept; not queued to an agent' : 'Interrupted before sending · recording kept. Retry sends to its original destination.'; }
     it.durable = durable;
     const old = items.get(it.id);
@@ -416,9 +423,9 @@
     it.state = 'sending'; await put(it);
     try { await deliver(it); }
     catch (e) {
-      it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.lastAttemptAt = now();
-      // RAM-only submissions keep retrying for as long as this tab is alive.
-      if (transient(e) && (!it.durable || it.attempts < AUTO_TRIES)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
+      it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.errorStatus = e.status || 0; it.lastAttemptAt = now();
+      // Never silently abandon a transient failure, even with durable custody.
+      if (transient(e)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
       else { it.state = 'failed'; it.nextAt = 0; }
       await put(it);
     }

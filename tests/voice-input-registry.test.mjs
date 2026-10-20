@@ -14,3 +14,16 @@ test('cache cannot self-grant; network catalog projects strict voice declaration
  respond({ok:true,json:async()=>({apps:entries})});await window.WizCore.appsLoaded();
  assert.equal(registry.APP.editor.receives_voice_input,true);assert.equal(registry.APP.string.receives_voice_input,false);assert.equal(registry.APP.plain.receives_voice_input,false);
 });
+test('Troubleshooter stays a normal launchable app offline in both shells with all open-app aliases',async()=>{
+ const window={WizCore:{norm:s=>String(s).toLowerCase()},dispatchEvent(){},localStorage:{getItem:()=>null,setItem(){}}};
+ const ctx={window,CustomEvent:class{},URL,location:new URL('https://wizard.example/'),fetch:async()=>{throw Error('catalog unavailable');},AbortSignal,setTimeout,clearTimeout,setInterval(){},addEventListener(){},document:{addEventListener(){},visibilityState:'visible'},localStorage:window.localStorage};
+ vm.runInNewContext(source,ctx);await window.WizCore.appsLoaded();
+ for(const shell of ['mobile','desktop']){
+  const R=window.WizCore.apps(shell),app=R.APP.troubleshooter;
+  assert.equal(app.name,'Troubleshooter');assert.equal(app.kind,'wizard');assert.equal(app.url,'/troubleshoot/');
+  assert.equal(window.WizCore.isMaintenanceApp(app),false);assert(R.searchApps('Troubleshooter').includes(app));
+  for(const alias of ['troubleshooter','troubleshooting','troubleshoot','fix wizard']){
+   assert.equal(R.findApp(alias).id,app.id);assert.equal(R.appByName('open '+alias).id,app.id);
+  }
+ }
+});
