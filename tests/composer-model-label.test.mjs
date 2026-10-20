@@ -22,7 +22,7 @@ const order = html => [...html.matchAll(/<span>([^<]+)<\/span><\/div>|<b>(?:<svg
 test('compact menu reads bottom-up from the thumb: Opus, Astra, Sol last, Private agent above, More models on top', () => {
   const M = models();
   const { html, list } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: false, priv });
-  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Opus', 'Astra', 'Sol']);
+  assert.deepEqual(order(html), ['More models', '## Private agent', 'GLM 5.3', '## Models', 'Opus', 'Astra', 'Sol', 'Tinfoil']);
   assert.match(html, /class="ch-sheet ch-mpop"/);
   assert.equal(list.length, 4); // every row maps to a pickable option
 });
@@ -39,7 +39,7 @@ test('More models expands to the other families once each, above the primary thr
   const M = models();
   const { html } = M.popHtml({ mode: 'thread', cur: { model: 'claude-opus-5-5', provider: 'anthropic' }, all: true, priv: [] });
   const o = order(html);
-  assert.deepEqual(o.slice(-3), ['Opus', 'Astra', 'Sol']);
+  assert.deepEqual(o.slice(-4), ['Opus', 'Astra', 'Sol', 'Tinfoil']);
   assert.ok(o.includes('Fable') || o.includes('Claude Fable'));
   assert.equal(o.filter(x => /Opus/.test(x)).length, 1);
 });
