@@ -43,9 +43,9 @@ function runtime(saved = {}) {
 
 test('Sepia is a selectable, persisted warm-light skin without changing the existing skin order', () => {
   const { context, store, props, documentElement } = runtime();
-  const before = ['nebula', 'grove', 'tide', 'ember', 'signal', 'obsidian', 'obsidian-light'];
-  assert.deepEqual([...context.WosSkin.list.slice(0, 7).map(s => s.id)], before);
-  assert.deepEqual([...context.WosSkin.list.slice(7).map(s => s.id)], ['sepia', 'landscapes']);
+  const before = ['nebula', 'grove', 'tide', 'ember', 'signal', 'novairecito', 'obsidian', 'obsidian-light'];
+  assert.deepEqual([...context.WosSkin.list.slice(0, 8).map(s => s.id)], before);
+  assert.deepEqual([...context.WosSkin.list.slice(8).map(s => s.id)], ['sepia', 'landscapes']);
 
   assert.equal(context.WosSkin.set('sepia'), 'sepia');
   assert.equal(context.WosSkin.current, 'sepia');
