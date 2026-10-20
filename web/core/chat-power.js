@@ -221,6 +221,14 @@ window.WosChatPower = function chatPower(A) {
     } catch (e) { toast('!', 'Couldn’t queue the retry', 2400); return false; }
     finally { if (c) c.retrying = ''; rerenderAll(); }
   }
+  const RECONNECT_APPS = new Set(['wizard-claude', 'wizard-chatgpt']);
+  function openReconnect(appId, installed) {
+    if (!RECONNECT_APPS.has(appId)) return false;
+    if (installed && window.WizOpenApp?.(appId)) return true;
+    if (H.openLink?.(`/wizard-os-home/store/index.html?app=${encodeURIComponent(appId)}`, 'App Store')) return true;
+    toast('!', 'Open the App Store to reconnect', 2400);
+    return false;
+  }
   async function dismissThread(sid) {
     const ok = await E?.dismissFailure(sid);
     toast(ok ? '✓' : '!', ok ? 'Dismissed · history kept' : 'Couldn’t dismiss · try again', ok ? 1400 : 2600);
@@ -235,7 +243,8 @@ window.WosChatPower = function chatPower(A) {
   function errorRow(s, rowHtml) {
     if (!E) return rowHtml;
     const busy = E.busy.get(s.id);
-    return `<div class="ch-err" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b"><button type="button" data-errretry="${esc(s.id)}" ${busy ? 'disabled' : ''}>Retry</button><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
+    const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-installed="${s.reconnect.installed ? '1' : '0'}">${s.reconnect.installed ? 'Open' : 'Get'} ${esc(s.reconnect.name)}</button>` : '';
+    return `<div class="ch-err" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b">${rc}<button type="button"${rc ? ' class="ghost"' : ''} data-errretry="${esc(s.id)}" ${busy ? 'disabled' : ''}>Retry</button><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
   }
   function errorsExtra() {
     if (!E) return { n: 0, html: '' };
@@ -392,6 +401,8 @@ window.WosChatPower = function chatPower(A) {
       Promise.resolve(r).then(st => { if (st === 'busy') toast('…', 'Finishing the last recording', 1400); });
       return true;
     }
+    // Failed thread panel. Signed out: open the provider's connection app in this shell, or the Store on it.
+    const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0'); return true; }
     // Failed thread panel
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }
     if (t.closest('[data-chretrymodel]') && w?.thread) { openModels(id, 'retry'); if (sheet) sheet.mode = 'retry'; paint(id, A.elOf(id)); return true; }
