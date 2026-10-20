@@ -727,7 +727,8 @@ window.WizCore.chats = function createChats(H) {
     const inArchive = s.archived || LIVE.workGroups([s]).archive.length > 0;
     if (s.deferred && !s.archived) return ['restore', 'done'];
     if (inArchive) return ['restore'];
-    if (turns && !turns.some(t => t.a || t.media.length)) return [];
+    // A run James stopped (or one that died) before any answer still needs a way out: Done files it.
+    if (turns && !turns.some(t => t.a || t.media.length)) return ['cancelled', 'failed', 'interrupted'].includes(s.status) ? ['done'] : [];
     return ['defer', 'done'];
   }
   const ACT = {
