@@ -53,7 +53,7 @@
 
   /* ---------------- apps ---------------- */
   // The registry lives in core/apps.js (shared with the desktop shell); the phone gets its own list.
-  const { APPS, APP, findApp, appByName, quickSearch, searchUrl } = window.WizCore.apps('mobile');
+  const { APPS, APP, findApp, appAt, appByName, quickSearch, searchUrl } = window.WizCore.apps('mobile');
   const audioFrames = new WeakSet();
   window.WizBackgroundAudio?.init(() => APP, f => { const id=f.closest('.win')?.dataset.win; return audioFrames.has(f) && W[id]?.appId === 'wizard-music' && deskOf(id) >= 0; });
   const norm = window.WizCore.norm;
@@ -386,6 +386,7 @@
     if (!silent) announce(`<b>${esc(deskName(idx))}</b>`);
     markVisibleThreadsSeen();
     window.WosResources?.sync();
+    window.WosSkinHost?.changed();
   }
   function announce(html) {
     const L = $('#deskLabel'); L.innerHTML = html; L.classList.add('show'); document.body.classList.add('labeling');
@@ -433,6 +434,7 @@
   $('#dock').addEventListener('pointermove', e => {
     if (!DS || e.pointerId !== DS.id) return;
     const dx = e.clientX - DS.x, dy = e.clientY - DS.y;
+    if (!DS.h && window.WosSkinHost?.claimed(e.pointerId)) { DS = null; return; } // a skin gesture owns this finger
     if (!DS.h) { if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return; DS.h = true; endDotHold(); try { $('#dock').setPointerCapture(e.pointerId); } catch (_) {} }
     let d = dx; if ((idx === 0 && d > 0) || (atPickerEnd() && d < 0)) d *= .28;
     placeTrack(d * 1.1, false);
@@ -704,6 +706,7 @@
   function focusWin(id) {
     const i = deskOf(id); if (i < 0 || desks[i].focus === id) return;
     desks[i].focus = id; applyLayout(i); save();
+    window.WosSkinHost?.changed();
   }
   let fullAt = 0;
   /* Immersive full screen (James, 9 Oct): a full-screen window owns the whole display. Its title bar,
@@ -846,7 +849,7 @@
     if (LINKS || !window.WizLinks) return;
     LINKS = window.WizLinks.mount({
       parent: device, mode: 'sheet',
-      onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a); else openWin({ app: 'frame', url, title }); },
+      onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a); else { const o = appAt(url); openWin({ app: 'frame', url, title: o ? o.name : title, ...(o ? { appId: o.id } : {}) }); } },
       onChange: on => { device.classList.toggle('link-open', on); if (on) { closeSheets(true); armBack(); } },
     });
     // Phone (James, 10 Oct 2026): a tapped link opens on its own desk beside this one (see openLinkDesk).
@@ -876,7 +879,8 @@
     const open = Object.values(W).find(w => w.from && w.url === rel); if (open) { goDesk(deskOf(open.id)); return true; }
     const from = fromOf(srcId);
     window.__ovLog = (window.__ovLog || []).concat('link:' + rel).slice(-30);
-    return !!openWin({ app: 'frame', appId: 'link', url: rel, title: linkTitle(u), from });
+    const owner = appAt(rel); // a page inside an installed app opens as that app, with its services
+    return !!openWin({ app: 'frame', appId: owner ? owner.id : 'link', url: rel, title: owner ? owner.name : linkTitle(u), from });
   }
   /* ---------------- bound views ----------------
    * James, 12 Oct 2026: "as soon as I open the thread, I'm reading your response, but there's a view bound to it."
@@ -888,7 +892,7 @@
    * thread) closes the bound view; opening the thread again, or a new reply with a new link, binds again.
    * Binding = the first in-app link in the latest reply (an agent-declared view can replace this later). */
   var boundOff = {}, boundBusy = false;
-  const boundTarget = el => window.WosBoundView.target(el, { findApp, APP, linkTitle });
+  const boundTarget = el => window.WosBoundView.target(el, { findApp, APP, linkTitle, appAt });
   const boundOf = wid => Object.values(W).find(x => x.bound === wid && deskOf(x.id) >= 0) || null;
   // Automatic bound-view disposal is navigation, not the user's Music Close action.
   function unbind(wid) { const b = boundOf(wid); if (b) closeWin(b.id, true, true); }
@@ -942,7 +946,7 @@
     const w = W[id]; if (!w || !w.from) return;
     if (!w.bound) return pinWin(id); // a manually opened review becomes its own app desk
     const href = frameHref(id) || w.url || '';
-    const a = w.appId && w.appId !== 'link' ? (findApp(w.appId) || APP[w.appId]) : null;
+    const a = w.appId && w.appId !== 'link' ? (APP[w.appId] || findApp(w.appId)) : null;
     if (w.app === 'usuals') { const here = Object.keys(W).find(k => W[k].app === 'usuals' && !W[k].bound && deskOf(k) >= 0); if (here) goDesk(deskOf(here)); else openWin({ app: 'usuals' }); }
     else if (a) {
       const here = Object.keys(W).find(k => W[k].app === 'frame' && W[k].appId === a.id && !W[k].from && deskOf(k) >= 0);
@@ -1356,6 +1360,8 @@
     tick();
     f.addEventListener('load', () => { n = 0; tick(); });
   }
+  // Closed means closed: an app with no window left on any desk stops its microphone (take saved for recovery).
+  window.WizAppServices?.trackOpenApps?.(() => desks.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
@@ -2138,6 +2144,8 @@
     const f = { name: 'Screenshot', mime: 'image/png', uploading: true };
     files.push(f); renderVoiceFiles();
     const op = { files, abort: new AbortController() }; V.screenOp = op; f.abort = op.abort;
+    // Tracked from the reservation: a Send during capture takes it as pending and the shot follows the message.
+    const st = window.WizUploads?.pending?.track(f, null);
     const screen = $('#arcScreen'); screen.disabled = true; screen.classList.add('busy');
     const conceal = () => {
       if (V.screenOp !== op || op.abort.signal.aborted) return () => {};
@@ -2147,17 +2155,20 @@
     try {
       // The capture adapter conceals chrome only at actual sampling, after the desktop picker returns.
       const file = await window.WosScreenCapture.capture({ signal: op.abort.signal, conceal });
-      if (!sameTake(files) || !files.includes(f) || V.screenOp !== op) return;
+      if (!f.handedOff && (!sameTake(files) || !files.includes(f) || V.screenOp !== op)) { st?.fail(new Error('Screenshot cancelled')); return; }
       Object.assign(f, { name: file.name, mime: file.type, bytes: file.size });
       await uploadVoiceFile(file, files, f);
       if (sameTake(files) && f.id) toast('▣', 'Screenshot attached', 1800);
     } catch (e) {
+      st?.fail(e);
       const i = files.indexOf(f); if (i >= 0) files.splice(i, 1);
       if (sameTake(files)) { renderVoiceFiles(); toast('!', e.message || 'Screen capture failed · not attached', 3200); }
     } finally { releaseScreenOperation(op); }
   });
-  // Files that finished uploading, in the shape the outbox sends as wizard_file_ids.
-  const takeFiles = () => V.files.filter(f => f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes }));
+  // The take's files in the shape the outbox sends as wizard_file_ids. One still uploading goes as a pending
+  // placeholder (WizUploads.pending) that the outbox swaps for its receipt before delivery.
+  const PEND = window.WizUploads?.pending;
+  const takeFiles = () => V.files.map(f => PEND ? PEND.ref(f) : (f.id && !f.uploading ? { id: f.id, name: f.name, mime: f.mime, bytes: f.bytes } : null)).filter(f => f && f.id);
   function txShow(text, label, cls, icon) {
     tx.className = 'transcript ' + (cls || '');
     window.WizBrand.paint($('#txRouteIcon'), icon || '✦');
@@ -2513,13 +2524,12 @@
     V.snap = V.snap || sendSnap(); // pinned when the take started; browsing since can't move it
     if (V.target != null || V.replyTo || V.kind === 'command') V.snap.conversation = null; // only explicit gestures override
     if (V.sim) { if (V.kind === 'command') cancelVoice(true); else toast('✦', 'No mic here · nothing recorded'); return; }
-    if (V.files.some(f => f.error)) { toast('!', 'Attachment not uploaded · tap Attach to retry the original file', 2600); return; }
-    if (V.files.some(f => f.uploading)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
+    // Files still uploading (or failed with their bytes here) never hold the send: they ride as placeholders and the
+    // outbox finishes them behind the message (James, 19 Oct 2026: "Send the message and process it in the background").
     // Text, photos and voice go as ONE message (legacy H4; James, 10 Oct 2026: "when I paste a link in the text
     // box and I send you a voice note … they should both be sent together"). The composer of the thread this take
     // goes into is taken now, at the tap, and rides with the recording (chats.js takeComposer).
     const sealAt = sealTarget();
-    if (sealAt && CHATS.composerBusy(sealAt.wid, sealAt.sid)) { toast('…', 'Still uploading · tap again when it finishes', 2000); return; }
     try {
       const pin = sealAt || (V.snap.view?.thread ? { wid: V.snap.view.id, sid: V.snap.view.thread } : null);
       if (!V.snap.conversation) {
@@ -2588,7 +2598,7 @@
     // A long take cancelled by accident is kept (Settings → Cancelled recordings, James 11 Oct); a quick one is gone.
     // Native takes are kept by the app's recorder on recCancel (0.9.5+); the page keeps the ones it recorded itself.
     const heldMs = voiceElapsed();
-    const long = !V.sim && heldMs >= (window.WosCancelled?.KEEP_FROM_MS || 15000);
+    const long = !V.sim && heldMs >= (window.WosCancelled?.KEEP_FROM_MS || 20000);
     const nativeKeeps = !!V.native && typeof DEV()?.cancelledList === 'function';
     if (V.native) { try { if (!nativeTakeAppOwned(V.native)) DEV().recCancel(V.native); } catch (e) {} V.native = null; }
     const rec = V.rec, mime = V.mime || rec?.mimeType || 'audio/webm';
@@ -2663,7 +2673,7 @@
       sessionId: sid && sid !== '__new__' ? sid : '',
       steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '',
       meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
-      files: [...V.files, ...(snap.seal?.files || [])].filter(f => f?.id),
+      files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
     V.custodyCapture = null;
     snap.custodyId = it.id; snap.audio = audio;
@@ -3508,7 +3518,7 @@
       const sid = d.thread || (String(path).match(/[?&]session=([^&#]+)/) || [])[1];
       if (sid) { openWizardThread(decodeURIComponent(sid)); return; }
       if (/^\/?apps\/?$/.test(path)) { openSheet('launcher'); return; }
-      const a = d.app ? findApp(d.app) || APP[d.app] : /^\/wizard\/?$/.test(path) ? APP.wizard : APPS.find(x => x.url && path && x.url.replace(/[#?].*$/, '') === String(path).replace(/[#?].*$/, ''));
+      const a = d.app ? APP[d.app] || findApp(d.app) : /^\/wizard\/?$/.test(path) ? APP.wizard : APPS.find(x => x.url && path && x.url.replace(/[#?].*$/, '') === String(path).replace(/[#?].*$/, ''));
       if (a) openApp(a); else if (path) toast('◇', `No app for ${path}`, 1800);
     },
     dictation(text) {
@@ -3602,4 +3612,19 @@
     toast,
   });
   window.WizCore.deeplink?.consume();
+  /* Skin packages (core/skin-host.js): the only shell surface a skin script can drive. Each call goes through
+   * the shell's own functions, so the Back contract and desk rules hold for every skin. */
+  const skinChatsWin = () => { const f = desks[idx]?.focus; if (W[f]?.app === 'chats') return W[f]; const id = desks[idx]?.wins.find(x => W[x]?.app === 'chats'); return id ? W[id] : null; };
+  window.WosSkinHost?.attach({
+    route() { const w = skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx }; },
+    back: () => backStep(),
+    openList: () => openChatsList(),
+    openThread: id => openWizardThread(id),
+    goDesk: i => goDesk(i),
+    deskCount: () => desks.length,
+    root() { const w = skinChatsWin(); return w ? track.querySelector(`[data-chats="${w.id}"]`) : null; },
+    dock: () => $('#dock'),
+    locked: pointerId => !!(DS && DS.id === pointerId && DS.h),
+    toast: text => toast('◇', text, 2400),
+  });
 })();

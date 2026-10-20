@@ -2,7 +2,7 @@ name: Responsive feature contracts
 on:
   pull_request:
   push:
-    branches: [daily]
+    branches: [main]
 jobs:
   shared-features:
     runs-on: ubuntu-latest

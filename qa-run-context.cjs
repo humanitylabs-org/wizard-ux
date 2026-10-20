@@ -60,6 +60,7 @@ const session = id => ({id,title:'Run context · '+id,source:'wizard-mobile',sta
   ok(await p.locator('[data-run-original]').last().evaluate(e=>e.open),`${desktop}: refresh preserves disclosure`);
   ok(!await p.locator('.msg.u').filter({hasText:'Mizel'}).count(),`${desktop}: incoming note never attributed to user`);
   ok(await p.evaluate(()=>{const c=document.querySelector('[data-run-context]');return Boolean(c?.nextElementSibling?.matches('.msg.a'))}),`${desktop}: answer follows context`);
+  ok(await card.locator('.rc-excerpt').evaluate(e=>getComputedStyle(e).userSelect==='text'&&getComputedStyle(e.closest('.rc-body')).userSelect==='text'),`${desktop}: context text is selectable for copy`);
   await detail.locator('summary').click();
   await card.scrollIntoViewIfNeeded();
   await p.screenshot({path:path.join(out,desktop?'desktop.png':'phone.png')});

@@ -1,18 +1,24 @@
-// Read-only browse adapter. Gateway owner routes ONLY this prefix through the existing authenticated gate.
+// Browse adapter. Gateway owner routes ONLY this prefix through the existing authenticated gate. Read-only except one
+// fixed owner call: approving a Connection Router model choice (store-router-owner.mjs).
 // No Service lifecycle edits. Fixed source paths; Runtipi credential never leaves this process.
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, machine } from 'node:os';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { createIndexProxy, readCapped, readWizardApps } from './store-index-views.mjs';
 import { buildOverview, gatherSources } from './system-overview.mjs';
 import { withPrivateCatalog } from './store-private-catalog.mjs';
+import { createRouterOwnerRoutes } from './store-router-owner.mjs';
 export const PREFIX = '/wizard-os-home/store-data/';
 const APPS = process.env.WIZARD_STORE_APPS_JSON || join(homedir(), '.wizard-os/apps.json');
 const ENV = process.env.WIZARD_STORE_RUNTIPI_ENV || join(homedir(), 'runtipi/.env');
-const SERVICE = 'http://127.0.0.1:8923';
+// The Agent Service this box runs. Alongside installs use another loopback port (e.g. 8798); only loopback http is accepted.
+export function serviceOrigin(v = process.env.WIZARD_STORE_SERVICE_ORIGIN) {
+  return typeof v === 'string' && /^http:\/\/(127\.0\.0\.1|localhost):\d{1,5}$/.test(v) ? v : 'http://127.0.0.1:8923';
+}
+const SERVICE = serviceOrigin();
 const LOGO_HOST = /^https:\/\/raw\.githubusercontent\.com\/[\w.-]+\/[\w.-]+\/[0-9a-f]{7,40}\/[\w./-]{1,120}\.(png|jpe?g|webp|gif|svg)$/i;
 // Every emitted value is rebuilt from a validated scalar: an allowed key holding an object never leaks through.
 const str = (v, max, re) => typeof v === 'string' && v.length <= max && (!re || re.test(v)) ? v : undefined;
@@ -52,7 +58,7 @@ export function shellMetadata(doc) {
     status:str(a.status,24,/^[a-z_-]+$/), system:a.system === true,
   }));
 }
-export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview } = {}) {
+export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCatalog(createIndexProxy()), readApps = () => readWizardApps(APPS), readWam = () => JSON.parse(readFileSync(APPS,'utf8')), readRuntipi = runtipi, overview, service = SERVICE, routerOwner = createRouterOwnerRoutes() } = {}) {
   // Installed list straight from Runtipi, reduced to validated scalars (used by the Store and the System overview).
   const installedList = async () => {
     const auth=readRuntipi();
@@ -60,7 +66,7 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCa
     if (!r.ok) throw new Error('app_data_unavailable');
     return installedMetadata(await r.json());
   };
-  const serviceJson = async (p) => { const r=await fetchImpl(SERVICE+p,{redirect:'error',signal:AbortSignal.timeout(8000)}); if (!r.ok) throw new Error('service'); return JSON.parse((await readCapped(r,2*1024*1024)).toString('utf8')); };
+  const serviceJson = async (p) => { const r=await fetchImpl(service+p,{redirect:'error',signal:AbortSignal.timeout(8000)}); if (!r.ok) throw new Error('service'); return JSON.parse((await readCapped(r,2*1024*1024)).toString('utf8')); };
   const getOverview = overview || (async () => buildOverview(await gatherSources({ fetchJson: serviceJson, readInstalled: installedList })));
   let ovCache = null;
   const logos = new Map();
@@ -69,20 +75,23 @@ export function createStoreDataRoutes({ fetchImpl = fetch, index = withPrivateCa
       const body = Buffer.isBuffer(data) ? data : Buffer.from(JSON.stringify(data));
       res.writeHead(status, {'Content-Type':type,'Content-Length':body.length,'Cache-Control':type.startsWith('image/')?'private, max-age=3600':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}); res.end(req.method === 'HEAD' ? undefined : body);
     };
-    if (!['GET','HEAD'].includes(req.method)) { send(405,{error:'read_only'}); return; }
+    const routerWrite = req.method === 'POST' && req.url.split('?')[0] === PREFIX + 'router/v1/approve';
+    if (!['GET','HEAD'].includes(req.method) && !routerWrite) { send(405,{error:'read_only'}); return; }
     try {
       const raw = req.url.split('?')[0]; let decoded; try { decoded=decodeURIComponent(raw); } catch (_) { send(400,{error:'invalid_path'}); return; }
       if (decoded.includes('\\') || decoded.split('/').some(s => s === '..' || s === '.') || /%2f|%5c|%25/i.test(raw)) { send(400,{error:'invalid_path'}); return; }
       const u=new URL(req.url,'http://localhost');
       if (!u.pathname.startsWith(PREFIX)) { send(404,{error:'not_found'}); return; }
       const path=u.pathname.slice(PREFIX.length);
+      if (await routerOwner(req, res, path, u, send)) return;
       if (path === 'wizard/v1/installed-apps') {
         if (u.search) { send(400,{error:'invalid_query'}); return; }
         const [wam,shell] = await Promise.allSettled([
           Promise.resolve().then(() => wamMetadata(readWam())),
           serviceJson('/wizard/v1/apps').then(shellMetadata),
         ]);
-        send(200,{wam:wam.status==='fulfilled'?wam.value:[], shell:shell.status==='fulfilled'?shell.value:[],
+        send(200,{architecture:({x86_64:'amd64',aarch64:'arm64',arm64:'arm64'})[machine()] || '',
+          wam:wam.status==='fulfilled'?wam.value:[], shell:shell.status==='fulfilled'?shell.value:[],
           complete:wam.status==='fulfilled' && shell.status==='fulfilled',
           unavailable:[...(wam.status==='rejected'?['wam']:[]),...(shell.status==='rejected'?['shell']:[])]}); return;
       }

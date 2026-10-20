@@ -1,5 +1,7 @@
 package ai.wizards.os.everywhere;
 
+import ai.wizards.os.audio.CaptureJournal;
+
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Notification;
@@ -20,7 +22,7 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
-import android.media.MediaRecorder;
+import ai.wizards.os.audio.NoteRecorder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -128,8 +130,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     };
     private Boolean orbAsleep;
     private EverywhereOutbox outbox;
-    private MediaRecorder recorder;
-    private File recording;
+    private NoteRecorder.Take recorder;
+    private boolean stagedAudio;
     private boolean listening, paused, dictating;
     private long startedAt;
     private int size, ctl, fan, margin;
@@ -1070,26 +1072,17 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             Toast.makeText(this, "Android blocked the microphone. Open Wizard OS and try again.", Toast.LENGTH_LONG).show();
             return;
         }
-        File qa = qaAudio(); // debug builds on the emulator (no microphone): a staged recording, used once
-        if (qa != null) recording = qa;
-        else try {
-            recording = new File(getCacheDir(), "everywhere-" + SystemClock.elapsedRealtime() + ".m4a");
-            final File file = recording;
-            // The phone's mic, never a Bluetooth speaker's: MicRoute refuses a take Android puts elsewhere.
-            MediaRecorder r = ai.wizards.os.audio.MicRoute.start(this,
-                    () -> Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(this) : new MediaRecorder(),
-                    (m, src) -> {
-                        m.setAudioSource(src);
-                        m.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-                        m.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-                        m.setAudioChannels(1);
-                        m.setAudioSamplingRate(32000);
-                        m.setAudioEncodingBitRate(64000);
-                        m.setOutputFile(file.getAbsolutePath());
-                        m.setOnErrorListener((mr, what, extra) -> main.post(() -> micLost(mr, what)));
-                    });
-            recorder = r;
-            Log.i(TAG, "recording via " + ai.wizards.os.audio.MicRoute.routed(r));
+        try {
+            // Resolve the journal before moving the staged file so legacy adoption cannot steal its identity.
+            CaptureJournal.get(this);
+            File qa = qaAudio(); // debug builds on the emulator: staged audio, used once
+            stagedAudio = qa != null;
+            NoteRecorder.Reservation reservation = NoteRecorder.reserve(ai.wizards.os.MicOwner.EVERYWHERE, l::releaseMic);
+            if (qa != null) recorder = NoteRecorder.staged(this, reservation, takeId, "everywhere", qa);
+            else recorder = NoteRecorder.start(this, reservation, takeId, "everywhere",
+                    new File(getFilesDir(), "everywhere-takes"),
+                    (lost, what) -> main.post(() -> micLost(lost, what)));
+            Log.i(TAG, "recording via " + recorder.routed());
         } catch (Exception e) {
             Log.w(TAG, "recorder failed", e);
             dropRecorder();
@@ -1107,7 +1100,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         setExpanded(true);
         pushState();
         main.post(meter);
-        if (recorder == null) main.postDelayed(qaAutoFinish, QA_FINISH_MS); // QA canned audio
+        if (stagedAudio) main.postDelayed(qaAutoFinish, QA_FINISH_MS); // QA canned audio
     }
 
     /** QA builds: the staged recording finishes by itself after QA_FINISH_MS of not being paused. */
@@ -1138,12 +1131,10 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private static final long QA_FINISH_MS = 4000;
 
     /** Android took the microphone away mid-take: keep what was recorded, pause, and let a tap send it. */
-    private void micLost(MediaRecorder mr, int what) {
+    private void micLost(NoteRecorder.Take mr, int what) {
         if (!listening || mr != recorder) return;
         Log.w(TAG, "microphone lost (" + what + "): recording kept, paused");
-        try { mr.stop(); } catch (RuntimeException ignored) { }
-        mr.release();
-        recorder = null;
+        // NoteRecorder already closed the hardware and released its mic reservation; retain the take for Send/Cancel.
         micLost = true;
         paused = true;
         // What was recorded is kept; the meeting gets its microphone back now rather than when this is sent.
@@ -1162,7 +1153,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         } else {
             if (recorder != null) try { recorder.resume(); } catch (IllegalStateException e) { Log.w(TAG, "resume failed", e); return; }
             paused = false;
-            if (recorder == null) { main.removeCallbacks(qaAutoFinish); main.postDelayed(qaAutoFinish, QA_FINISH_MS); } // QA: the full wait again after carrying on
+            if (stagedAudio) { main.removeCallbacks(qaAutoFinish); main.postDelayed(qaAutoFinish, QA_FINISH_MS); } // QA: the full wait again after carrying on
         }
         Log.i(TAG, paused ? "paused" : "resumed");
         buzz(10);
@@ -1174,8 +1165,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         Log.i(TAG, "cancelled");
         // A long take cancelled by accident is kept (Settings → Cancelled recordings); a quick one is just gone.
         long ms = SystemClock.elapsedRealtime() - startedAt;
-        dropRecorder(); // closes the file so it is playable
-        boolean kept = !dictating && recording != null && ai.wizards.os.recording.CancelledTakes.keep(this, recording, ms, "everywhere", "audio/mp4");
+        boolean kept = recorder != null && recorder.cancel(ms);
+        recorder = null;
         discard();
         buzz(14);
         toast(kept ? "Cancelled · kept in Wizard OS Settings for a week" : "Discarded");
@@ -1220,26 +1211,17 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         listening = false; paused = false; micLost = false;
         main.removeCallbacks(meter);
         main.removeCallbacks(qaAutoFinish);
-        boolean ok = true;
-        MediaRecorder r = recorder;
+        NoteRecorder.Take r = recorder;
         recorder = null;
-        if (r != null) {
-            try { r.stop(); } catch (RuntimeException e) { ok = false; }
-            r.release();
-        }
-        ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.EVERYWHERE);
+        File f = r == null ? null : r.stop();
         final String take = takeId, event = meetingEvent;
         takeId = null; meetingEvent = "";
-        File f = recording;
-        recording = null;
         final boolean dict = dictating;
         List<byte[]> attach = new ArrayList<>(shots);
         shots.clear();
         setExpanded(false);
         startForegroundSafe(false);
-        if (!ok || f == null || !f.isFile() || f.length() < 512) {
-            if (f != null) //noinspection ResultOfMethodCallIgnored
-                f.delete();
+        if (f == null) {
             endLoan("empty", event, "cancelled", "Nothing was recorded");
             toast("Didn’t catch anything");
             dictating = false;
@@ -1273,9 +1255,6 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
         String event = meetingEvent;
         takeId = null; meetingEvent = "";
         endLoan("cancelled", event, "cancelled", null);
-        if (recording != null) //noinspection ResultOfMethodCallIgnored
-            recording.delete();
-        recording = null;
         shots.clear();
         if (lp != null) setExpanded(false);
         startForegroundSafe(false);
@@ -1293,7 +1272,7 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private void returnLoan(String outcome) {
         ai.wizards.os.mizel.MicLoan l = loan;
         loan = null;
-        if (l == null) { ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.EVERYWHERE); return; }
+        if (l == null) return;
         ai.wizards.os.mizel.MeetingLoans.release(this, l, outcome);
     }
 
@@ -1314,9 +1293,9 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     private void dropRecorder() {
         if (recorder == null) return;
-        try { recorder.stop(); } catch (RuntimeException ignored) { }
-        recorder.release();
+        NoteRecorder.Take take = recorder;
         recorder = null;
+        take.abandon();
     }
 
     /** Debug builds only: files/qa_next.m4a stands in for the emulator's missing microphone; used once. */

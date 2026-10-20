@@ -48,7 +48,7 @@
     frames.set(frame, st); frame.addEventListener('load', load);
     const detachReading = window.WizAppReadingPosition?.attach(frame, { appId, authorize: () => valid(st), ...(readingStorage ? { storage: readingStorage } : {}) });
     const detachServices = st.detach;
-    st.detach = () => { detachReading?.(); detachServices(); };
+    st.detach = () => { detachReading?.(); detachServices(); queueSweep(); };
     // App scripts can run before the frame load event. Attach when mounting, not only on load.
     try { frame.contentWindow.WizardApp?.ready?.(); } catch (_) {}
     cleanupLegacy(st).catch(() => {});
@@ -350,6 +350,15 @@
       try { st.detach(); st.frame.remove(); } catch (_) {}
     }
   }
+  // Per-app update check (core/app-versions.js): attached same-origin app frames, whether each is on screen, and
+  // what would be lost by reloading it. A frame with no isVisible host (single-app session) is the whole page.
+  function updateFrames() {
+    reconcile();
+    return [...frames.values()].filter(st => valid(st)).map(st => {
+      let visible = true; try { if (st.isVisible) visible = st.isVisible() === true; } catch (_) { visible = false; }
+      return Object.freeze({ frame: st.frame, appId: st.appId, visible, holds: [...st.holds.values()], suspect: !!st.suspect });
+    });
+  }
   // One-shot, after a reload that kept a recording: put the kept app's frame back on the route it showed.
   const RETURN_KEY = 'wos.reload-return.v1';
   function restoreReturn(st) {
@@ -363,10 +372,33 @@
       if (!here.hash || here.hash === '#' || here.hash === '#/') here.hash = r.hash;
     } catch (_) {}
   }
-  window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack, ownsThreadLink,
+  /* Closed means closed (James, 19 Oct 2026). Each shell reports the app ids that still have a window after a
+   * close; any app outside that set loses its microphone at once (its take is saved for recovery, never
+   * discarded). Hidden desks, Back and frame reloads keep the window, so they never reach this. */
+  function appsClosed(openIds) {
+    const open = new Set([...(openIds || [])].filter(Boolean)), cap = window.WizAppCapture;
+    if (!cap?.closeApp) return [];
+    reconcile(); // a still-mounted frame of the app (any surface) also counts as open
+    for (const f of frames.values()) if (f.frame.isConnected) open.add(f.appId);
+    const st = cap.getState?.() || {}, owners = new Set();
+    if (st.active && st.appId) owners.add(st.appId);
+    const stopped = [];
+    for (const appId of owners) if (!open.has(appId)) {
+      try { stopped.push(cap.closeApp(appId).catch(() => null)); } catch (_) {}
+    }
+    return stopped;
+  }
+  // The shell registers its window model once; every frame detach (a window closing) then re-checks it.
+  let openProvider = null, sweepTimer = 0;
+  function trackOpenApps(fn) { openProvider = typeof fn === 'function' ? fn : null; }
+  function queueSweep() {
+    if (!openProvider || sweepTimer) return;
+    sweepTimer = setTimeout(() => { sweepTimer = 0; try { appsClosed(openProvider()); } catch (_) {} }, 0);
+  }
+  window.WizAppServices = Object.freeze({ version: VERSION, attach, connect, back, guardBack, ownsThreadLink, appsClosed, trackOpenApps,
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
-    update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload }),
+    update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload, frames: updateFrames }),
     inspect: () => { reconcile(); return [...frames.values()].map(st => ({ appId: st.appId, path: st.url.pathname, ready: !!st.doc, holds: [...st.holds.values()], suspect: !!st.suspect })); },
   });
 })();

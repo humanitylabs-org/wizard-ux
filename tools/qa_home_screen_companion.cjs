@@ -3,6 +3,7 @@
  * backend mutations, pin-success mocks, or physical devices. Signed UI proof stays separate.
  */
 'use strict';
+if (!process.env.QA_ORIGIN) throw new Error('QA_ORIGIN is required: select an isolated tailnet preview');
 const fs=require('fs'),path=require('path'),cp=require('child_process'),crypto=require('crypto');
 const {chromium}=require('/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
 if(!process.cwd().startsWith('/Volumes/ThalesMedia/')||process.platform!=='darwin')throw Error('THALES_ONLY');
@@ -16,7 +17,7 @@ const adb=(...a)=>cp.execFileSync('/opt/homebrew/share/android-commandlinetools/
 const shell=s=>adb('shell',s),pause=ms=>new Promise(r=>setTimeout(r,ms));
 const check=(name,pass,detail,gate)=>{checks.push({name,pass:!!pass,detail,gate});console.log(pass?'PASS':'FAIL',name,detail||'');if(!pass&&process.env.QA_SOFT!=='1')throw Error(name);};
 const key=k=>shell('input keyevent '+k),top=()=>shell('dumpsys activity activities').split('\n').find(l=>l.includes('topResumedActivity'));
-const origin='https://home-screen-apps.staging.wizard001.com';
+const origin=new URL(process.env.QA_ORIGIN).origin;
 const uri=id=>'wizard-homeapp://'+pkg+'/homeapp-'+crypto.createHash('sha256').update(origin+'\n'+id).digest('hex')+'?app='+id;
 const launch=id=>shell('am start -W -n '+pkg+'/ai.wizards.os.AppSessionActivity -a android.intent.action.VIEW -f 0x10080000 -d '+JSON.stringify(uri(id)));
 const mainLaunch=()=>shell('am start -W -n '+pkg+'/ai.wizards.os.MainActivity -a android.intent.action.MAIN -c android.intent.category.LAUNCHER');

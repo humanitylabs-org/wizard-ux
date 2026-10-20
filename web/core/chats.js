@@ -502,13 +502,14 @@ window.WizCore.chats = function createChats(H) {
     const fab = `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
     // Opened on the stored snapshot: say so, with a spinner, until the first fresh read lands (live.js SNAP_KEY).
     const sync = LST.cached ? `<div class="ch-sync${LST.error ? ' off' : ''}" role="status">${LST.error ? '' : '<i class="ch-spin" aria-hidden="true"></i>'}<span>${LST.error === 'access' ? 'Sign in to update' : LST.error ? 'Can’t reach Wizard' : 'Updating…'}${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span></div>` : '';
-    const html = `<div class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}${sync}<div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
+    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}${sync}<div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
     clearReading(w.id); el.innerHTML = html; c.listHTML = html; c.listRoot = el.firstElementChild;
     restoreListPlace(el.querySelector('.ch-scroll'), place);
     PW?.paint(w.id, el);
+    window.WosSkinHost?.rendered('list', el);
     if (had) { const inp = el.querySelector('[data-chsearch]'); inp.focus(); try { inp.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
   }
   function toggleSection(w, k) {
@@ -521,6 +522,9 @@ window.WizCore.chats = function createChats(H) {
    * chunked, any size, resumes after a dropped network or a Wizard restart, progress on the chip. A box without
    * capabilities.resumable_uploads keeps the old one-shot POST /wizard/files/upload (its own 64 MB limit). */
   const MAX_FILES = 8, OLD_ROUTE_MAX = 64 * 1024 * 1024;
+  const PEND = window.WizUploads?.pending || null;
+  // A placeholder for a file still uploading (sent before it finished) shows its local thumbnail until it lands.
+  const pendRef = f => { const r = PEND ? PEND.ref(f) : (f && f.id && !f.uploading ? fileRef(f) : null); if (r && PEND?.isPending(r.id) && f.preview) PREVIEW[r.id] = f.preview; return r; };
   const fileKind = f => /^audio\//.test(f.mime || '') || /^wizard-voice-/.test(f.name || '') ? 'voice' : /^image\//.test(f.mime || '') ? 'image' : 'file';
   const fsize = b => b >= 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b + ' B';
   const fileUrl = id => `/wizard/files/${encodeURIComponent(id)}/content`;
@@ -547,7 +551,7 @@ window.WizCore.chats = function createChats(H) {
   // A multi-pick stages every file at once (each shows immediately), then they upload side by side.
   // Progress paints into the chip in place (no tray re-render per tick); removing a chip cancels its upload.
   const pct = f => f.total ? Math.floor(100 * (f.sent || 0) / f.total) : 0;
-  const upLabel = f => f.upState === 'reconnecting' ? `Reconnecting · ${pct(f)}%` : f.upState === 'finishing' ? 'Finishing…' : f.total > 0 ? `${pct(f)}% · ${fsize(f.total)}` : 'Uploading…';
+  const upLabel = f => f.upState === 'reconnecting' ? (f.sent ? `Reconnecting · ${pct(f)}%` : 'Waiting for Wizard…') : f.upState === 'finishing' ? 'Finishing…' : f.total > 0 ? `${pct(f)}% · ${fsize(f.total)}` : 'Uploading…';
   function paintUpload(wid, f) {
     const el = track.querySelector(`[data-chats="${wid}"] [data-attkey="${CSS.escape(f.key)}"]`); if (!el) return;
     el.style.setProperty('--up', pct(f) + '%');
@@ -572,8 +576,11 @@ window.WizCore.chats = function createChats(H) {
         const t = performance.now(); if (t - painted < 120 && state === 'uploading' && sent < total) return;
         painted = t; paintUpload(wid, local);
       };
-      try { Object.assign(local, await uploadFile(file, { signal: abort.signal, onProgress }), { uploading: false }); if (local.preview) PREVIEW[local.id] = local.preview; }
-      catch (e) { c.files = c.files.filter(x => x !== local); if (!abort.signal.aborted) toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
+      // Sending never waits for this: a send while it runs takes a placeholder (WizUploads.pending) and the outbox
+      // collects the receipt from here, or re-uploads the kept bytes if this upload dies.
+      const settle = PEND ? PEND.track(local, file) : null;
+      try { const f = await uploadFile(file, { signal: abort.signal, onProgress }); Object.assign(local, f, { uploading: false }); settle?.ok(f); if (local.preview) PREVIEW[local.id] = local.preview; }
+      catch (e) { settle?.fail(e); c.files = c.files.filter(x => x !== local); if (!abort.signal.aborted && !local.handedOff) toast('!', e.user ? e.message : 'Upload failed · not attached', 3200); }
       finally { UPLOAD_ABORT.delete(local.key); }
       refreshCompose(wid);
     }));
@@ -599,9 +606,7 @@ window.WizCore.chats = function createChats(H) {
     const c = ch(wid), old = form.querySelector('.ch-tray');
     const html = attachTray(c);
     if (old) old.outerHTML = html || ''; else if (html) form.insertAdjacentHTML('afterbegin', html);
-    const busy = (c.files || []).some(f => f.uploading);
-    form.querySelector('[type=submit]').disabled = busy;
-    syncSend(form, c);
+    syncSend(form, c); // Send stays live while files upload: they go with the message and finish behind it
   }
   const MIC_SVG = '<svg viewBox="0 0 24 24"><path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 0 0-8 0v4a4 4 0 0 0 4 4Zm-7-4a7 7 0 0 0 14 0M12 18v4"/></svg>';
   const CLIP_SVG = '<svg viewBox="0 0 24 24"><path d="m9.5 17.5 7.7-7.7a3 3 0 0 0-4.2-4.2l-8 8a5 5 0 0 0 7.1 7.1l8-8"/></svg>';
@@ -645,7 +650,7 @@ window.WizCore.chats = function createChats(H) {
   }
   // Local thumbnails for files uploaded from this phone, so a just-sent photo shows before Wizard has it.
   const PREVIEW = {};
-  const mediaOfFile = f => ({ id: f.id, name: f.name, mime: f.mime || '', bytes: f.bytes || 0, kind: /^image\//.test(f.mime || '') ? 'image' : /^video\//.test(f.mime || '') ? 'video' : /^audio\//.test(f.mime || '') ? 'audio' : 'file', url: f.id ? fileUrl(f.id) : '', thumb: PREVIEW[f.id] || '' });
+  const mediaOfFile = f => ({ id: f.id, name: f.name, mime: f.mime || '', bytes: f.bytes || 0, kind: /^image\//.test(f.mime || '') ? 'image' : /^video\//.test(f.mime || '') ? 'video' : /^audio\//.test(f.mime || '') ? 'audio' : 'file', url: f.id && !PEND?.isPending(f.id) ? fileUrl(f.id) : '', thumb: PREVIEW[f.id] || '' });
   // Every photo/file in the open thread gets an index into c.media; tapping it opens the in-app viewer.
   function mediaBtn(c, m) {
     const k = c.media.push(m) - 1;
@@ -663,7 +668,7 @@ window.WizCore.chats = function createChats(H) {
     const voice = files.filter(f => fileKind(f) === 'voice');
     const list = files.filter(f => fileKind(f) !== 'voice').map(mediaOfFile).filter(m => m.url || m.thumb)
       .concat((images || []).map((u, i) => ({ id: 'img' + i, name: 'Photo', mime: 'image/*', kind: 'image', url: u })));
-    const unnamed = files.filter(f => fileKind(f) !== 'voice' && !f.id).map(f => `<span class="fchip">${CLIP_SVG} ${esc(f.name)}</span>`).join('');
+    const unnamed = files.filter(f => fileKind(f) !== 'voice' && (!f.id || (PEND?.isPending(f.id) && !PREVIEW[f.id]))).map(f => `<span class="fchip">${CLIP_SVG} ${esc(f.name)}</span>`).join('');
     return (voice.length ? `<div class="fchips">${voice.map(fileChip).join('')}</div>` : '') + mediaBlock(c, list) + (unnamed ? `<div class="fchips">${unnamed}</div>` : '');
   }
   function fileChip(f) {
@@ -691,8 +696,10 @@ window.WizCore.chats = function createChats(H) {
       : '<p class="rc-unavailable">The message that started this run isn’t available in this history.</p>';
     return `<section class="msg runcontext" data-run-context><div class="laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(later.at)}</div><div class="rc-body">${body}</div></section>`;
   }
-  function turnHtml(c, tn, last, working, helperStatus) {
+  function turnHtml(c, tn, last, working, helperStatus, reconnect) {
     let h = '';
+    // A provider sign-out has its own panel (Open Claude / Open ChatGPT) in place of Hermes' generic failed-turn notice.
+    if (last && reconnect && tn.a?.failed) tn = { ...tn, a: null };
     if (tn.u) h += `<div class="msg u"><div class="bub">${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += runContextHtml(tn.later);
@@ -722,7 +729,8 @@ window.WizCore.chats = function createChats(H) {
     const inArchive = s.archived || LIVE.workGroups([s]).archive.length > 0;
     if (s.deferred && !s.archived) return ['restore', 'done'];
     if (inArchive) return ['restore'];
-    if (turns && !turns.some(t => t.a || t.media.length)) return [];
+    // A run James stopped (or one that died) before any answer still needs a way out: Done files it.
+    if (turns && !turns.some(t => t.a || t.media.length)) return ['cancelled', 'failed', 'interrupted'].includes(s.status) ? ['done'] : [];
     return ['defer', 'done'];
   }
   const ACT = {
@@ -994,10 +1002,10 @@ window.WizCore.chats = function createChats(H) {
           const at = turnAt(tn), dk = KIT.time.dayKey(at);
           const div = dk && dk !== day ? `<div class="ch-day"><span>${esc(KIT.time.day(at))}</span></div>` : '';
           if (dk) day = dk;
-          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus);
+          return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus, s?.reconnect);
         }).join('')
         + rns.splice(0).map(rnHtml).join('')
-        + (s?.safeError ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : '')
+        + (s?.safeError && !s?.reconnect ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : '')
         + approvalHtml(c, s)
         + pend.map(p => pendingHtml(p, c)).join('')
         + (pend.some(p => ['queued', 'sending', 'waiting'].includes(p.state)) && !working ? `<details class="steps live"><summary><i class="dots"><b></b><b></b><b></b></i> ${pend.some(p => p.state === 'waiting') ? 'Waiting for Wizard · will retry' : 'Sending'}</summary></details>` : '');
@@ -1018,7 +1026,9 @@ window.WizCore.chats = function createChats(H) {
     const canStop = working && !!s?.runId && s.status !== 'stopping';
     PW?.ensureModels();
     // The model lives in the message box, bottom-right (James 18 Oct 2026); the header keeps the whole width for the title.
-    const mlabel = PW?.modelLabel ? PW.modelLabel(w, s) : '';
+    // Miguel's skins (Dark, Light, Landscapes): a slide switch row above the composer replaces the in-box label.
+    const msw = PW?.modelSwitch && s !== undefined ? PW.modelSwitch(w, s) : '';
+    const mlabel = PW?.modelLabel && !msw ? PW.modelLabel(w, s) : '';
     const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
     const tacts = acts.length && turns && !pend.length ? `<div class="ch-tacts">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${ACT[a].label}</span></button>`).join('')}</div>` : '';
@@ -1026,10 +1036,10 @@ window.WizCore.chats = function createChats(H) {
     // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
     const keepImgs = keepLoadedImages(el);
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
-    el.innerHTML = `<div class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
+    el.innerHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(winTitle(w))}</b>`}${privTag}</div>${chip}</div>
       <div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
-      <form class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send" ${(c.files || []).some(f => f.uploading) ? 'disabled' : ''}><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
+      ${msw ? `<div class="ch-swrow">${msw}</div>` : ''}<form data-part="composer" class="ch-compose${hasContent(draft) ? ' has-text' : ''}" data-chform>${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     for (const detail of el.querySelectorAll('[data-run-original]')) detail.open = openContexts.has(detail.dataset.runOriginal);
     if (keepTa) { const fresh = el.querySelector('.ch-compose textarea'); keepTa.placeholder = fresh.placeholder; fresh.replaceWith(keepTa); }
@@ -1050,6 +1060,7 @@ window.WizCore.chats = function createChats(H) {
     PW?.paint(w.id, el);
     // The shell may bind the view this thread's latest reply links (phone: bound views beside the thread).
     if (!isNew && turns) H.threadShown?.(w.id, el);
+    window.WosSkinHost?.rendered('thread', el);
   }
   /* ---- drafts: one per thread (and one for a new chat), kept across reloads ---- */
   // An agent's new chat keeps its own slot ('agentnew:<id>'), so it never shows in (or takes) the main Drafts.
@@ -1154,6 +1165,8 @@ window.WizCore.chats = function createChats(H) {
       const label = p.steered ? `${CHECK_SVG}${p.steerQueued ? 'Added to the queued request' : `Delivered · ${agent} sees it next step`}` : 'Sent';
       return `<span class="pst ok">${label}</span><button type="button" class="pbtn ghost" data-obdismiss="${esc(p.id)}">Dismiss</button>`;
     }
+    const upl = (p.files || []).filter(f => PEND?.isPending(f.id)).length;
+    if (upl) return `<span class="pst">${upl === 1 ? 'Uploading attachment…' : `Uploading ${upl} attachments…`}</span>`;
     return `<span class="pst">${p.steerRunId && !p.attempts ? 'Steering…' : 'Sending…'}</span>`;
   }
   function pendingHtml(p, c) {
@@ -1334,6 +1347,16 @@ window.WizCore.chats = function createChats(H) {
   // A photo or file in that composer is still uploading: the voice send waits for it, like a typed send.
   const composerBusy = (wid, sid) => peekComposer(wid, sid).all.some(f => f && f.uploading);
   function restoreInto(wid, sid, text, files) {
+    // A placeholder for a file that was still uploading goes back as its receipt once that upload settles
+    // (dropped if it failed or this page no longer holds it).
+    const waits = (files || []).filter(f => PEND?.isPending(f?.id));
+    if (waits.length) {
+      Promise.all(waits.map(f => PEND.rowOf(f.id)?.upDone?.then(r => r, () => null) || null)).then(got => {
+        const done = files.map(f => { const i = waits.indexOf(f); return i < 0 ? f : got[i]?.id ? fileRef(got[i]) : null; }).filter(Boolean);
+        restoreInto(wid, sid, text, done);
+      });
+      return;
+    }
     const now = peekComposer(wid, sid);
     const back = { text: [String(text || '').trim(), now.text.trim()].filter(Boolean).join('\n'), files: [...files, ...now.all.filter(f => !files.some(x => x.id === f.id))].slice(0, 8) };
     if (now.here) { setDraft(wid, back.text, back.files); renderChats(W[wid]); } else KIT.drafts.set(composerKey(sid), back.text, back.files);
@@ -1342,9 +1365,11 @@ window.WizCore.chats = function createChats(H) {
   function takeComposer(wid, sid) {
     if (!sid) return NO_SEAL;
     const P = peekComposer(wid, sid), dkey = composerKey(sid);
-    const text = P.text.trim(), files = P.all.filter(f => f && f.id && !f.uploading).map(fileRef);
+    // A file still uploading is taken too (a pending placeholder): the message never waits for it.
+    const taken = P.all.map(f => [f, pendRef(f)]).filter(([, r]) => r && r.id);
+    const text = P.text.trim(), files = taken.map(([, r]) => r);
     if (!text && !files.length) return NO_SEAL;
-    const rest = P.all.filter(f => f && f.uploading); // never taken half-uploaded: it stays for the next message
+    const rest = P.all.filter(f => f && !taken.some(([x]) => x === f)); // only a row with nothing to send stays
     if (P.here) {
       P.c.draft = ''; P.c.files = rest;
       if (P.ta) { P.ta.value = ''; growTa(P.ta); syncSend(P.ta.form, P.c); }
@@ -1385,7 +1410,8 @@ window.WizCore.chats = function createChats(H) {
     const voice = 'seal' in opts; // a voice send: the composer goes only as taken at the tap, never the live tray
     const sealed = opts.seal === true ? takeComposer(wid, sid) : opts.seal || null;
     const tray = here && !voice ? (c.files || []) : [];
-    const files = [...(opts.files || []), ...(sealed ? sealed.files : []), ...tray].filter(f => f && f.id && !f.uploading).filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
+    // Files still uploading go too, as placeholders the outbox fills in before delivery (never a "wait" gate).
+    const files = [...(opts.files || []), ...(sealed ? sealed.files : []), ...tray.map(pendRef)].filter(f => f && f.id && !f.uploading).filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
     // A recording not yet transcribed carries the typed words beside it (the outbox puts them before the
     // transcript); anything already in words is joined now.
     let typed = sealed ? sealed.text : '';
@@ -1396,7 +1422,6 @@ window.WizCore.chats = function createChats(H) {
     const carryText = sid === '__new__' && here && c.carry?.text ? c.carry.text : '';
     if (carryText) { if (later) typed = joinWords(typed, carryText); else if (text || files.length) text = `${text}\n\n${carryText}`.trim(); }
     if (!text && !files.length && !audio) { sealed?.putBack(); return; }
-    if (tray.some(f => f.uploading)) { toast('…', 'Still uploading · send when it finishes', 2000); return; }
     const isNew = sid === '__new__';
     const s = isNew ? null : LIVE.session(sid);
     const steerRunId = s && WORKING_ST.has(s.status) && s.runId ? s.runId : '';
@@ -1419,8 +1444,9 @@ window.WizCore.chats = function createChats(H) {
     // Chrome, 1-2 s in the phone's WebView. The reply's thread is held under Working from the same frame
     // (live.js holdSend, the orb's path) until its outbox item takes over. qa-send-leave-timing.cjs guards this.
     const instructions = opts.instructions || viewContext(wid, how);
+    // Hold before navigation can paint a list (also covers desktop / hosted replies).
+    const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
     const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
-    const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     // Saved on the phone; the outbox delivers it (and retries) from here.
     let it;
@@ -1612,8 +1638,7 @@ window.WizCore.chats = function createChats(H) {
       const text = ta.value; const c = ch(id);
       // A voice take into this thread is recording: Send finishes it, and the words and files here go with it.
       const into = H.voiceInto?.(); if (into && into === H.win(id)?.thread && H.finishVoice) { H.finishVoice(); return; }
-      if (!text.trim() && !(c.files || []).some(f => f.id)) return;
-      if ((c.files || []).some(f => f.uploading)) { H.toast('…', 'Still uploading · send when it finishes', 2000); return; }
+      if (!text.trim() && !(c.files || []).some(f => f.id || f.uploading)) return;
       ta.value = ''; syncSend(f, c); sendChat(id, text);
     });
     root.addEventListener('focusin', e => {

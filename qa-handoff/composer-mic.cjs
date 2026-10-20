@@ -16,7 +16,7 @@ async function test(name,fn){try{await fn();checks.push({name,passed:true});cons
 async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];navigator.mediaDevices.getUserMedia=async()=>{const ctx=new AudioContext(),o=ctx.createOscillator(),d=ctx.createMediaStreamDestination();o.frequency.value=tone;o.connect(d);o.start();await ctx.resume();graphs.push({ctx,o,stream:d.stream});return d.stream;};});}
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const fixture=fs.readFileSync(path.join(__dirname,'..','qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replace('?.slice(0, 500)','').replaceAll('https://private.wizard001.com','http://127.0.0.1:'+server.address().port);
+ const fixture=fs.readFileSync(path.join(__dirname,'..','qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replace('?.slice(0, 500)','').replaceAll('https://wizard.tailc0f369.ts.net','http://127.0.0.1:'+server.address().port);
  ({boot,select,tap,contexts}=new Function('require','__dirname','process',fixture+'\nreturn {boot,select,tap,contexts};')((name)=>name==='playwright-core'?{chromium}:require(name),root,process));
  browser=await chromium.launch({executablePath:process.env.CHROMIUM,headless:true,args:['--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  const f=await boot(browser,false),p=f.p;await tones(p);const events=[];

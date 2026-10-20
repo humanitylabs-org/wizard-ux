@@ -158,6 +158,8 @@ def main():
         assert 'FATAL EXCEPTION' not in crash
         acceptance=json.loads((out/'receipt.json').read_text()); result['acceptance']=acceptance; save()
         assert acceptance.get('status')=='pass' and 'OK (1 test)' in test
+        for k in ('switch_starts_signin','enable_after_signin'):
+            assert str(acceptance.get(k,'')).startswith('pass'), (k, acceptance.get(k))
         # Native child-only QA is not enough: tap the shared registration in the actual candidate shell.
         from qa_aa_lib import Page, wait
         import socket

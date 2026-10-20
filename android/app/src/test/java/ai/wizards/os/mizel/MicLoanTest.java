@@ -70,6 +70,18 @@ public class MicLoanTest {
     }
 
     @Test
+    public void noteEngineCanReleaseHardwareBeforeReturningTheMeeting() {
+        FakeMeeting m = new FakeMeeting().start();
+        MicLoan l = MicLoan.acquire(m, MicOwner.EVERYWHERE, "take", "note-event");
+        l.releaseMic(); l.releaseMic();
+        assertNull(MicOwner.holder());
+        assertTrue("the controller still owns the meeting loan", m.paused);
+        assertEquals("recording", l.release(m, "stopped"));
+        assertEquals(MicOwner.MEETING, MicOwner.holder());
+        assertEquals(1, m.ends.size());
+    }
+
+    @Test
     public void sideButtonGetsTheSameContract() {
         FakeMeeting m = new FakeMeeting().start();
         MicLoan l = MicLoan.acquire(m, MicOwner.SIDE, "wos-side-1", "orb-event-side");

@@ -12,9 +12,9 @@ Unread and Working directly below time/status; remove Home Yesterday bar while p
 - Shared Usage null-percent correction is staged here; `.rs-sheet .us-*` overrides resolve a Usuals class collision without changing Settings.
 
 ## Preview and evidence
-- Exact entry: https://home-resources.staging.wizard001.com/wizard-os-home/?review=home
+- Historical entry: `/wizard-os-home/?review=home` on the retired custom domain.
 - `wizard-stage-home-resources` qa-origin :9504 + enabled `wizard-stage-home-resources-front` :9571; staging router uses front. All writes denied. Front returns only allowlisted numeric stats; token never enters browser.
-- Run on Thales: `NODE_PATH=$HOME/workspace/wizard-mobile-link-candidate/node_modules /opt/homebrew/bin/node qa-home-resources.cjs https://home-resources.staging.wizard001.com/wizard-os-home/?review=home`
+- Run on Thales: `NODE_PATH=$HOME/workspace/wizard-mobile-link-candidate/node_modules /opt/homebrew/bin/node qa-home-resources.cjs "${QA_ORIGIN:?Set an isolated tailnet preview origin}/wizard-os-home/?review=home"`.
 - The stage-only `?review=home` bootstrap opens Home directly and skips practice onboarding; verified with fresh browser storage and with a different desk previously saved. It leaves daily onboarding unchanged.
 - Final: **45/45**, zero page errors and zero user/agent writes. Responsive 360×740, 390×844, 412×892; full dashboard labels/bars, browser Back and native adapter Back, error fixtures, all-unavailable-200 fixture, off-desk cached render, timer suspension, keyboard focus and actual accessibility tree.
 - Earlier focused Home-only suite before widget: old tree fails 3 layout checks; after patch 9/9. It is intentionally a layout-only negative-control test and its blank-space threshold does not apply after adding the widget.

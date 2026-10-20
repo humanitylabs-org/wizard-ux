@@ -83,9 +83,6 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="wizard.tailc0f369.ts.net" android:pathPrefix="/wizard-os-home/" />
                 <data android:scheme="https" android:host="wizard.tailc0f369.ts.net" android:pathPrefix="/mizel-live/" />
-                <!-- Retired name, still honoured: old links and notifications land on the same page under the tailnet name. -->
-                <data android:scheme="https" android:host="private.wizard001.com" android:pathPrefix="/wizard-os-home/" />
-                <data android:scheme="https" android:host="private.wizard001.com" android:pathPrefix="/mizel-live/" />
             </intent-filter>
         </activity>
 

@@ -133,7 +133,8 @@ window.WosChatPower = function chatPower(A) {
     const priv = !!ag && AG?.isPrivate(ag);
     const full = cur?.model ? (ag ? AG.modelName(ag, cur.model) : M.name(cur.model, cur.provider)) : 'default';
     const label = cur?.model ? (ag ? full : M.short(cur.model, cur.provider)) : M.ready ? 'Default model' : 'Model';
-    return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv ? AG.lock() : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
+    const secure = !ag && !!cur?.provider && !!M.ours?.() && !!M.isPrivateRoute?.(cur.provider);
+    return `<button type="button" class="ch-model${ag ? ' agent' : ''}${priv || secure ? ' private' : ''}" data-chmodel aria-label="Model: ${esc(full)}${priv ? ', private' : ''}. Change model" title="${esc(cur?.model || '')}">${priv || secure ? (AG?.lock?.() || '') : ''}${esc(label)}<i aria-hidden="true">▾</i></button>`;
   }
   /* The model label inside the message box, bottom-right (James 18 Oct: just the name, small, white; no bubble).
    * Tapping it opens the compact model menu over the right side, just above it. */
@@ -141,15 +142,61 @@ window.WosChatPower = function chatPower(A) {
     const chip = modelChip(w, s); if (!chip) return '';
     return chip.replace('class="ch-model', 'class="ch-mlabel ch-model').replace(/<i aria-hidden="true">▾<\/i>/, '');
   }
+  /* Miguel's skins only (Dark, Light, Landscapes; M.ours()): a four-position slide switch (Opus · Astra · Sol · the
+   * private Tinfoil model) above the composer, drag or tap; ⋯ opens every model. James's skins keep the model label. */
+  const SW_NAMES = ['Opus', 'Astra', 'Sol', '']; // slot 4: the private model's own name (privateName), in the privacy colour
+  function switchOpts(w, s) {
+    const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
+    const vis = M && M.ready ? M.visible(cur?.model || '', cur?.provider || '') : [];
+    // Match by family in the model id (newest first), so e.g. gpt-6.1-sol still fills the Sol slot.
+    const RX = [/opus/i, /astra/i, /-sol(-|$)/i], all = M && M.ready ? M.options.filter(o => !/-900k$/i.test(o.value)) : [];
+    const newest = l => l.slice().sort((x, y) => y.value.localeCompare(x.value, 'en', { numeric: true }))[0] || null;
+    const standard = o => M.family(o.value, o.provider) !== 'tinfoil';
+    const opts = RX.map(rx => vis.find(o => standard(o) && rx.test(o.value)) || newest(all.filter(o => standard(o) && rx.test(o.value))));
+    opts.push(M?.tinfoilReady?.() ? vis.find(o => M.family(o.value, o.provider) === 'tinfoil') || null : null);
+    const at = cur?.model ? opts.findIndex(o => o && o.value === cur.model && (!cur.provider || o.provider === cur.provider)) : -1;
+    return { opts, at };
+  }
+  // Versions come from the actual selectable id, never a display-name guess or a pinned catalogue.
+  function switchVersion(id) {
+    const v = String(id || '').replace(/\[.*\]$/, '');
+    let m = v.match(/^claude-[a-z]+-(\d+)(?:[-.](\d{1,2}))?(?:-\d{8})?$/i);
+    if (m) return m[1] + (m[2] ? '.' + m[2] : '');
+    m = v.match(/^gpt-([\d.]+)-[a-z]+(?:-900k)?$/i);
+    return m ? m[1] : '';
+  }
+  function modelSwitch(w, s) {
+    if (!M || agentOfWin(w, s)) return modelChip(w, s);
+    const { opts, at } = switchOpts(w, s);
+    const label = at < 0 ? (s ? M.short(threadModel(s).model, threadModel(s).provider) || 'Model' : 'Default') : '';
+    const pv = M.privateName ? M.privateName(opts[3]?.value) : { name: '', version: '' };
+    const nameAt = i => i === 3 ? (opts[3] ? pv.name : 'Private') : SW_NAMES[i];
+    const verAt = i => i === 3 ? pv.version : switchVersion(opts[i]?.value);
+    return `<div class="ms${at === 3 ? ' secure-on' : ''}" data-mswid="${esc(w.id)}" style="--ms-i:${at < 0 ? 1 : at}"><div class="ms-track${at < 0 ? ' off' : ''}" role="radiogroup" aria-label="Model">${SW_NAMES.map((n, i) => `<button type="button" role="radio" class="ms-o${i === 3 ? ' secure' : ''}${i === at ? ' on' : ''}" data-msi="${i}" aria-checked="${i === at}"${opts[i] ? '' : ' disabled'}${i === 3 ? ` aria-label="${esc([nameAt(3), verAt(3)].filter(Boolean).join(' '))}, private"` : ''}><span class="ms-name">${esc(nameAt(i))}</span> <small class="ms-version">${i === 3 && window.WosAgents?.lock ? window.WosAgents.lock() : ''}${esc(verAt(i))}</small></button>`).join('')}<i class="ms-thumb" aria-hidden="true"></i></div><button type="button" class="ms-more" data-chmodel aria-label="All models${label ? ` · now ${esc(label)}` : ''}">${label ? `<small>${esc(label)}</small>` : ''}⋯</button></div>`;
+  }
+  async function switchTo(wid, i) {
+    const w = H.win(wid); if (!w?.thread) return;
+    const s = w.thread === '__new__' ? null : LIVE.session(w.thread);
+    const o = switchOpts(w, s).opts[i]; if (!o) return;
+    await pickModel(o, { wid, sid: w.thread, mode: w.thread === '__new__' ? 'new' : 'thread' });
+  }
+  (() => { // drag the thumb, or tap a position
+    let drag = null;
+    document.addEventListener('pointerdown', e => { const tr = e.target.closest?.('.ms-track'); if (!tr) return; const r = tr.getBoundingClientRect(); drag = { tr, r, wid: tr.parentElement.dataset.mswid, moved: false, x0: e.clientX }; tr.setPointerCapture?.(e.pointerId); });
+    document.addEventListener('pointermove', e => { if (!drag) return; if (Math.abs(e.clientX - drag.x0) > 6) drag.moved = true; if (!drag.moved) return; const f = Math.max(0, Math.min(1, (e.clientX - drag.r.left) / drag.r.width)); drag.tr.parentElement.style.setProperty('--ms-i', (f * SW_NAMES.length - .5).toFixed(3)); drag.tr.classList.add('dragging'); });
+    const end = e => { if (!drag) return; const d = drag; drag = null; d.tr.classList.remove('dragging'); const f = Math.max(0, Math.min(.999, (e.clientX - d.r.left) / d.r.width)); const i = Math.floor(f * SW_NAMES.length); const w = H.win(d.wid); if (!w?.thread) return; const state = switchOpts(w, LIVE.session(w.thread)); if (state.opts[i]) { d.tr.parentElement.style.setProperty('--ms-i', i); switchTo(d.wid, i); } else d.tr.parentElement.style.setProperty('--ms-i', state.at < 0 ? 1 : state.at); };
+    document.addEventListener('pointerup', end); document.addEventListener('pointercancel', () => { if (drag) { drag.tr.classList.remove('dragging'); drag = null; } });
+  })();
+
   let modelsAsked = false;
   function ensureModels() {
     if (!M || modelsAsked) return;
     modelsAsked = true;
     M.load().then(() => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } }); // background: waits for a selection
   }
-  async function pickModel(o) {
-    const sh = sheet; if (!sh || sh.type !== 'model') return;
-    const c = ch(sh.wid), w = H.win(sh.wid); closeSheet();
+  async function pickModel(o, direct) {
+    const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model')) return;
+    const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     // A Private model picked in a standard thread: a new private chat continues this conversation (quoted context);
@@ -221,6 +268,14 @@ window.WosChatPower = function chatPower(A) {
     } catch (e) { toast('!', 'Couldn’t queue the retry', 2400); return false; }
     finally { if (c) c.retrying = ''; rerenderAll(); }
   }
+  const RECONNECT_APPS = new Set(['wizard-claude', 'wizard-chatgpt']);
+  function openReconnect(appId, installed) {
+    if (!RECONNECT_APPS.has(appId)) return false;
+    if (installed && window.WizOpenApp?.(appId)) return true;
+    if (H.openLink?.(`/wizard-os-home/store/index.html?app=${encodeURIComponent(appId)}`, 'App Store')) return true;
+    toast('!', 'Open the App Store to reconnect', 2400);
+    return false;
+  }
   async function dismissThread(sid) {
     const ok = await E?.dismissFailure(sid);
     toast(ok ? '✓' : '!', ok ? 'Dismissed · history kept' : 'Couldn’t dismiss · try again', ok ? 1400 : 2600);
@@ -235,7 +290,8 @@ window.WosChatPower = function chatPower(A) {
   function errorRow(s, rowHtml) {
     if (!E) return rowHtml;
     const busy = E.busy.get(s.id);
-    return `<div class="ch-err" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b"><button type="button" data-errretry="${esc(s.id)}" ${busy ? 'disabled' : ''}>Retry</button><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
+    const rc = s.reconnect ? `<button type="button" data-chreconnect="${esc(s.reconnect.appId)}" data-installed="${s.reconnect.installed ? '1' : '0'}">${s.reconnect.installed ? 'Open' : 'Get'} ${esc(s.reconnect.name)}</button>` : '';
+    return `<div class="ch-err" data-errsid="${esc(s.id)}">${rowHtml}<div class="ch-err-b">${rc}<button type="button"${rc ? ' class="ghost"' : ''} data-errretry="${esc(s.id)}" ${busy ? 'disabled' : ''}>Retry</button><button type="button" class="ghost" data-errdismiss="${esc(s.id)}" ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></div>`;
   }
   function errorsExtra() {
     if (!E) return { n: 0, html: '' };
@@ -281,8 +337,8 @@ window.WosChatPower = function chatPower(A) {
     const instructions = H.viewContext(wid, 'a voice reply recorded in this thread');
     // Send and go: a voice reply steps back one level like a typed send (chats.js), on
     // the tap, not after the recording has been written to the phone's storage (a blob commit can take seconds).
+    const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
     const left = w && A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
-    const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
     if (w) A.renderChats(w);
     let it;
     try {
@@ -392,6 +448,8 @@ window.WosChatPower = function chatPower(A) {
       Promise.resolve(r).then(st => { if (st === 'busy') toast('…', 'Finishing the last recording', 1400); });
       return true;
     }
+    // Failed thread panel. Signed out: open the provider's connection app in this shell, or the Store on it.
+    const rc = t.closest('[data-chreconnect]'); if (rc) { openReconnect(rc.dataset.chreconnect, rc.dataset.installed !== '0'); return true; }
     // Failed thread panel
     if (t.closest('[data-chretry]') && w?.thread) { retryThread(id, w.thread); return true; }
     if (t.closest('[data-chretrymodel]') && w?.thread) { openModels(id, 'retry'); if (sheet) sheet.mode = 'retry'; paint(id, A.elOf(id)); return true; }
@@ -425,6 +483,6 @@ window.WosChatPower = function chatPower(A) {
   }
   const opened = (wid, sid) => { const c = ch(wid); c.posFor = ''; c.follow = false; if (sid !== '__new__') c.newModel = null; if (sheet && A.owner(sheet.pane) === wid && sheet.type === 'model') closeSheet(); };
   const holds = id => !!sheet && sheet.pane === id;
-  return { position, latestBtn, filesBtn, workHtml, modelChip, modelLabel, ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
+  return { position, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
     paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };

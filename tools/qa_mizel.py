@@ -10,7 +10,7 @@ A fake meetings server on the Mac (reached from the emulator as 10.0.2.2) implem
 so no test audio reaches James's real Mizel. The debug build is pointed there by files/qa_origin.txt and given
 short timers by files/qa_mizel.json (both debug-only hooks).
 
-Pages that use window.wizardMizelPort are served on the real origin https://private.wizard001.com by CDP
+Pages that use window.wizardMizelPort are served on the real origin https://wizard.tailc0f369.ts.net by CDP
 Fetch interception (/mizel-qa/*, /mizel-live/*), as is a foreign origin https://example.org (iframe).
 
 Checks
@@ -542,7 +542,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         R0 = pg.ev("JSON.stringify({hasPort: R.hasPort, frames: R.frames})")
         save('bridge-frames.json', R0); R0 = json.loads(R0)
         shot('02-qa-host')
-        check('bridge', 'QA page on https://private.wizard001.com (main frame) has wizardMizelPort', R0['hasPort'] == 'object', R0['hasPort'])
+        check('bridge', 'QA page on the Wizard origin (main frame) has wizardMizelPort', R0['hasPort'] == 'object', R0['hasPort'])
         check('bridge', 'same-origin iframe has wizardMizelPort and gets replies', R0['frames'].get('same', {}).get('port') == 'object' and 'same-reply' in R0['frames'], R0['frames'].get('same-reply'))
         fo = R0['frames'].get('foreign', {})
         check('bridge', 'foreign-origin iframe (https://example.org) has NO wizardMizelPort and cannot reach the parent\'s', fo.get('port') == 'undefined' and str(fo.get('parentPort', '')).startswith('blocked'), fo)

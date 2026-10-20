@@ -1,8 +1,10 @@
 /* Wizard App Store: an app-discovery app that runs in its own Wizard window (or on its own).
  * Listings merge configured catalogs; installation identity joins WAM, canonical shell and Runtipi reads.
- * Standard Get uses this Wizard's App Manager; pinned private/channel changes stay agent-mediated. Back: detail → list → Store root,
+ * Get and explicit release changes use this Wizard's owner-authorized App Manager. Back: detail → list → Store root,
  * through the shell's canonical hook (window.__wizardCloseOverlay); standalone it guards its own history. */
-import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp} from './store-status.js';
+import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp, architectureReason} from './store-status.js';
+import {routerNeeds, routerApprove, routerRows, hasNeeds, pending, nice} from './store-router.js';
+import {adoptAppearance} from './store-appearance.js';
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -28,12 +30,12 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
-  const S = { apps: [], installed: new Map(), complete:false, busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map() };
+  const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set() };
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
   const badge = a => (a.alpha_badge ? '<span class="alpha-badge">Alpha</span>' : '') + (a.conflict ? '<span class="conflict-badge">Source conflict</span>' : '');
-  if (/\.staging\.wizard001\.com$/.test(location.hostname)) $('preview').hidden = false;
+  try { const config = parent.WizConfig || window.WizConfig; const mark = () => { $('preview').hidden = !config?.isPreview?.(); }; mark(); config?.ready?.then(mark); } catch (_) {}
   try { const skin = parent.document.documentElement.dataset.skin; if (skin) document.documentElement.dataset.skin = skin; } catch (_) {}
 
   /* ---------------- data ---------------- */
@@ -79,6 +81,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
     S.apps = (Array.isArray(idx.value.apps) ? idx.value.apps : []).map(clean).filter(Boolean).filter(isUserApp).sort(compareApps);
     S.installed.clear();
     const snapshot=registry.status==='fulfilled' ? registry.value : {wam:[],shell:[],complete:false};
+    S.architecture=['amd64','arm64'].includes(snapshot.architecture) ? snapshot.architecture : '';
     const runtipi=inst.status==='fulfilled' && Array.isArray(inst.value.installed) ? inst.value.installed : [];
     S.complete=snapshot.complete===true && Array.isArray(snapshot.wam) && Array.isArray(snapshot.shell) && inst.status==='fulfilled' && Array.isArray(inst.value.installed);
     for (const a of S.apps) {
@@ -114,12 +117,13 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   }
   function action(a, cls = '') {
     const state=status(a);
+    if (S.busy.has(a.id)) return `<span class="get have ${cls}" aria-live="polite">Installing…</span>`;
     if(state==='conflict') return '<span class="get have">Resolve conflict</span>';
     if(state==='unknown') return '<span class="get have" aria-label="Status unavailable">Status unavailable</span>';
+    if(['get','switch','update'].includes(state) && architectureReason(a,S.architecture)) return `<span class="get have ${cls}" title="${esc(architectureReason(a,S.architecture))}">${S.architecture ? 'Not compatible' : 'Compatibility unavailable'}</span>`;
     if(state==='switch' || state==='update') return `<button class="get ${cls}" data-get="${esc(key(a))}">${state==='update'?'Update':'Switch release'}</button>`;
     if (isInstalled(a) && canOpen(a)) return `<button class="get open ${cls}" data-open="${esc(openId(a))}">Open</button>`;
     if (isInstalled(a)) return `<span class="get have ${cls}" aria-label="Installed">✓ Installed</span>`;
-    if (S.busy.has(a.id)) return `<span class="get have ${cls}" aria-live="polite">Installing…</span>`;
     return `<button class="get ${cls}" data-get="${esc(key(a))}">Get</button>`;
   }
   const row = base => {const a=selected(base); return `<div class="row" data-app="${esc(key(a))}" role="button" tabindex="0">${icon(a)}<span class="tx"><b>${esc(a.name)}</b>${badge(base)}<small>${esc(kindOf(a).one)} · ${esc(a.summary)}</small></span>${action(a)}</div>`;};
@@ -171,19 +175,75 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
       ${base.conflict?'<section class="d-sec"><p class="d-note">This app ID belongs to different repositories across sources. Installation is blocked here; ask your agent to resolve the source conflict without overwriting an installed app.</p></section>':''}
       <div class="d-stats"><div><b>${esc(k.one)}</b><small>Kind</small></div><div><b>${a.installs > 0 ? a.installs : 'New'}</b><small>Installs</small></div><div><b>${esc((a.version || '—').split(/[-+]/)[0])}</b><small>Version</small></div><div><b>${(a.tags || [])[0] ? esc(cap(a.tags[0])) : '—'}</b><small>Topic</small></div></div>
       <section class="d-sec d-lead"><p class="d-sum">${esc(a.summary)}</p><p class="d-how">${esc(how)}</p></section>
+      ${architectureReason(a,S.architecture) ? `<section class="d-sec"><p class="d-note" role="status">${esc(architectureReason(a,S.architecture))}</p></section>` : ''}
       ${needs}${powers}${gives}
+      ${modelsSection(a)}
       ${a.release_notes ? `<section class="d-sec"><h3>Release notes</h3><p>${esc(a.release_notes)}</p></section>` : ''}
-      ${a.private ? `<section class="d-sec"><h3>Agent-mediated installation</h3><p>Requires your own repository and release access. ${esc(installRequest(a))}</p></section>` : ''}
+      ${a.private ? '<section class="d-sec"><h3>Private release</h3><p>The App Manager uses this Wizard’s existing repository and release access. Your selected source and exact commit are checked before installation.</p></section>' : ''}
       <section class="d-sec"><h3>Information</h3><dl class="info">${info}</dl>${a.url && /^https:\/\/github\.com\//.test(a.url) ? `<a class="src" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">View source on GitHub ↗</a>` : ''}</section>`;
     window.scrollTo(0, 0);
   }
 
-  /* ---------------- navigation stack: discover → list/search → detail ---------------- */
+  /* ---------------- Connection Router: install sheet and "Models and connections" ---------------- */
+  // Keyed by the installed registry id (what the Router knows); refetched when stale, after approvals and on return.
+  const routerId = a => S.installed.get(key(a))?.id || a.id;
+  const rctx = () => ({ esc, storeApps: S.apps, busy: S.mcBusy });
+  function needsFor(id, force) {
+    const c = S.router.get(id);
+    if (c?.loading || (!force && c && Date.now() - c.at < 15000)) return c;
+    const entry = { ...(c || {}), loading: true, at: Date.now() }; S.router.set(id, entry);
+    routerNeeds(id).then(r => { S.router.set(id, { ...r, at: Date.now() }); refresh(); });
+    return entry;
+  }
+  function modelsSection(a) {
+    if (!isInstalled(a)) return '';
+    const c = needsFor(routerId(a));
+    if (!c?.data) return '';
+    if (!hasNeeds(c.data)) return '';
+    return `<section class="d-sec mc" data-mc-app="${esc(routerId(a))}"><h3>Models and connections</h3>
+      <p class="d-note">What each feature was tested on and what runs it here. Models change only when you approve.</p>
+      <div class="mc-list">${routerRows(routerId(a), c.data, rctx())}</div></section>`;
+  }
+  function showSheet(k) {
+    const base = find(k); if (!base) return; const a = selected(base), id = routerId(a), c = S.router.get(id);
+    const left = pending(c?.data);
+    $('sheet').innerHTML = `<div class="list-head"><button class="back" data-back aria-label="Back">‹</button><div><h2>${esc(a.name)} is installed</h2>
+      <p>${left ? `${left} feature${left === 1 ? '' : 's'} need${left === 1 ? 's' : ''} a model` : 'Every feature has a model'}</p></div></div>
+      <p class="mc-lede">Each feature was tested on one model. Connect that provider, or approve a swap to a model this Wizard already has.</p>
+      <div class="mc-list" data-mc-app="${esc(id)}">${c?.data ? routerRows(id, c.data, rctx()) : '<p class="empty">Checking connections…</p>'}</div>
+      <div class="mc-done"><button type="button" class="get big" data-back>${left ? 'Decide later' : 'Done'}</button></div>`;
+  }
+  async function approve(btn) {
+    const app = btn.closest('[data-mc-app]')?.dataset.mcApp, feature = btn.dataset.mcApprove;
+    if (!app || !feature || S.mcBusy.has(app + '/' + feature)) return;
+    S.mcBusy.add(app + '/' + feature); refresh();
+    try {
+      await routerApprove({ app, feature, provider: btn.dataset.mcProvider, model: btn.dataset.mcModel });
+      const r = await routerNeeds(app); S.router.set(app, { ...r, at: Date.now() });
+      toast(`<b>${esc(btn.dataset.mcModel)} approved</b><span>Runs ${esc(nice(feature))} from now on.</span>`);
+    } catch (err) { toast(`<b>Nothing changed</b><span>${esc(err.message || 'Approval failed.')}</span>`); }
+    finally { S.mcBusy.delete(app + '/' + feature); refresh(); }
+  }
+  function connect(btn) {
+    const id = btn.dataset.mcConnect;
+    if (!id) return openKind('connections');
+    if (btn.dataset.mcInstalled === '1') {
+      if (framed) parent.postMessage({ type: 'wizard:open-app', id }, location.origin); else toast('<b>Open it from your apps.</b>');
+      return;
+    }
+    const target = S.apps.find(x => x.id === id); if (target) openApp(key(target));
+  }
+  // Coming back from a provider's connection app: re-read what the Router sees.
+  const recheck = () => { if (document.hidden) return; const t = S.stack.at(-1); if (!t || !['sheet', 'detail'].includes(t.t)) return;
+    const b = find(t.arg); if (b && (t.t === 'sheet' || isInstalled(selected(b)))) needsFor(routerId(selected(b)), true); };
+  document.addEventListener('visibilitychange', recheck); addEventListener('focus', recheck);
+
+  /* ---------------- navigation stack: discover → list/search → detail → install sheet ---------------- */
   const scrolls = [];
   const top = () => S.stack[S.stack.length - 1]?.t;
   function render() {
     const t = top();
-    $('discover').hidden = !!t; $('results').hidden = !(t === 'list' || t === 'search'); $('detail').hidden = t !== 'detail';
+    $('discover').hidden = !!t; $('results').hidden = !(t === 'list' || t === 'search'); $('detail').hidden = t !== 'detail'; $('sheet').hidden = t !== 'sheet';
   }
   function push(t, arg) { scrolls.push(window.scrollY); S.stack.push({ t, arg }); render(); }
   function pop() {
@@ -191,7 +251,7 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
     const was = S.stack.pop(); render();
     if (was.t === 'search') { $('q').value = ''; S.q = ''; }
     const under = S.stack[S.stack.length - 1];
-    if (under?.t === 'detail') showDetail(under.arg); else if (under?.t === 'list') openKind(under.arg, true);
+    if (under?.t === 'detail') showDetail(under.arg); else if (under?.t === 'list') openKind(under.arg, true); else if (under?.t === 'sheet') showSheet(under.arg);
     const y = scrolls.pop() || 0; requestAnimationFrame(() => window.scrollTo(0, y));
     return true;
   }
@@ -207,31 +267,27 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   function refresh() {
     const t = S.stack[S.stack.length - 1], y = window.scrollY;
     paint();
-    if (t?.t === 'detail') showDetail(t.arg); else if (t?.t === 'list') openKind(t.arg, true); else if (t?.t === 'search') search(S.q);
+    if (t?.t === 'detail') showDetail(t.arg); else if (t?.t === 'list') openKind(t.arg, true); else if (t?.t === 'search') search(S.q); else if (t?.t === 'sheet') showSheet(t.arg);
     requestAnimationFrame(() => window.scrollTo(0, y));
   }
 
-  let toastT = 0, lastInstallRequest = '';
-  function installRequest(a) {
-    const verb=status(a)==='switch'?'Switch release for':status(a)==='update'?'Update':isInstalled(a)?'Selected release for':'Install';
-    if(a.channel==='alpha') return `${verb} ${a.name} from ${a.source_name}: source ${a.source}, app ${a.id}, repository ${a.repo}, commit ${a.commit}, version ${a.version}. Use wizard-alpha install --source ${a.source} --app ${a.id} --commit ${a.commit}${isInstalled(a)?' --update':''}. Preserve existing data. Verify the authenticated view opens before reporting success.`;
-    if(a.private) return `${verb} ${a.name} using owner-private source, repository ${a.repo}, exact commit ${a.commit}, version ${a.version}. Do not substitute the Alpha release.`;
-    return `${verb} ${a.name} from Standard, repository ${a.repo}, version ${a.version}${a.commit?`, commit ${a.commit}`:''}. Do not substitute an Alpha release.`;
-  }
+  let toastT = 0;
   function toast(html, duration=3600) { const t = $('toast'); t.innerHTML = html; t.hidden = false; requestAnimationFrame(() => t.classList.add('on')); clearTimeout(toastT); toastT = setTimeout(() => { t.classList.remove('on'); setTimeout(() => { if(!t.classList.contains('on')) t.hidden = true; }, 250); }, duration); }
 
-  // Get: the App Manager installs it (owner only, on this Wizard's private address). The browser sends only the id.
+  // Identifiers select a server-authorized release, never a browser-supplied install URL or ref.
   const INSTALL = DATA.replace(/store-data\/$/, 'store-install/');
-  function askAgent(a) { lastInstallRequest=installRequest(a); toast(`<b>Ask your agent</b><span>${esc(lastInstallRequest)}</span><button class="get" data-copy-install>Copy request</button>`,15000); }
+
   async function install(a) {
-    if (!a || S.busy.has(a.id) || status(a)!=='get') return;
+    if (!a || architectureReason(a,S.architecture) || S.busy.has(a.id) || !['get','update','switch'].includes(status(a))) return;
+    const operation = status(a)==='get'?'install':status(a);
+    const selection = {source:a.source,repo:a.repo,commit:a.commit,operation};
     S.busy.add(a.id); refresh();
     const say = (m, ok) => toast(`<b>${esc(a.name)}${ok ? ' is ready' : ' wasn’t installed'}</b><span>${esc(m)}</span>`);
     try {
       const r = await fetch(INSTALL + encodeURIComponent(a.id), { method: 'POST', credentials: 'same-origin', cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: '{}' });
+        headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify(selection) });
       let j = await r.json().catch(() => ({}));
-      if (r.status === 404 && !j.error) { S.busy.delete(a.id); refresh(); askAgent(a); return; }   // no App Manager install here: agent request
+      if (r.status === 404 && !j.error) throw new Error('This Wizard’s App Manager needs updating before Store installs are available.');
       if (r.status === 403 || r.status === 404) throw new Error(j.error || 'Not allowed.');
       if (!r.ok && r.status !== 202) throw new Error(j.error || `Install failed (${r.status}).`);
       for (let i = 0; j.state === 'installing' && i < 360; i++) {
@@ -239,11 +295,16 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
         const s = await fetch(INSTALL + encodeURIComponent(a.id), { credentials: 'same-origin', cache: 'no-store' });
         j = await s.json().catch(() => ({ state: 'installing' }));
       }
-      if (j.state !== 'installed') throw new Error(j.error || 'It didn’t finish. Ask your agent to check the App Manager.');
+      if (j.state !== 'installed') throw new Error(j.error || 'The App Manager did not finish. Refresh to check its status.');
+      if (!j.selection || ['source','repo','commit','operation'].some(k=>j.selection[k]!==selection[k])) throw new Error('The App Manager returned a different release. Refresh before retrying.');
       try { if (framed) parent.postMessage({ type: 'wizard:apps-changed', id: a.id }, location.origin); } catch (_) {}
       await load(true);
-      if(!isInstalled(a)) throw new Error('Installation finished, but its registered status is not available yet. Refresh to check.');
-      say('Find it in your apps.', true);
+      const actual=S.installed.get(key(a));
+      if(!actual || actual.conflict || actual.repo!==a.repo || actual.commit!==a.commit) throw new Error('Installation finished, but the selected release is not registered yet. Refresh to check.');
+      // The Router reads the app's declaration once it is registered; any model needs open the install sheet.
+      const id = routerId(a), need = await routerNeeds(id); S.router.set(id, { ...need, at: Date.now() });
+      if (hasNeeds(need.data)) { if (top() !== 'sheet') push('sheet', key(a)); showSheet(key(a)); window.scrollTo(0, 0); }
+      else say('Find it in your apps.', true);
     } catch (err) { say(err.message || 'Install failed.'); }
     finally { S.busy.delete(a.id); refresh(); }
   }
@@ -253,10 +314,10 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
     const g = e.target.closest('[data-get]');
     if (g) { e.stopPropagation(); const base=find(g.dataset.get); if(!base) return; const a=selected(base), state=status(a);
       if(!['get','switch','update'].includes(state)) return;
-      // Only an uninstalled Standard release may use the ID-only manager API.
-      if(state==='get' && !a.private && a.channel!=='alpha' && !a.commit) { install(a); return; }
-      askAgent(a); return; }
-    if(e.target.closest('[data-copy-install]')) { if(!navigator.clipboard?.writeText) {toast('<b>Select the request in app details to copy it.</b>');return;} navigator.clipboard.writeText(lastInstallRequest).then(()=>toast('<b>Request copied</b>')).catch(()=>toast('<b>Select the request in app details to copy it.</b>')); return; }
+      install(a); return; }
+
+    const ap = e.target.closest('[data-mc-approve]'); if (ap) { e.stopPropagation(); approve(ap); return; }
+    const cn = e.target.closest('[data-mc-connect]'); if (cn) { e.stopPropagation(); connect(cn); return; }
     const o = e.target.closest('[data-open]');
     if (o) { e.stopPropagation(); if (framed) parent.postMessage({ type: 'wizard:open-app', id: o.dataset.open }, location.origin); else toast('<b>Open it from your apps.</b>'); return; }
     const k = e.target.closest('[data-kind]'); if (k) return openKind(k.dataset.kind);
@@ -291,5 +352,6 @@ import {resolveInstalled, releaseState, preferredRelease, compareApps, isUserApp
   // Broken or missing logos fall back to the gradient letter (inline onerror is blocked by CSP).
   document.addEventListener('error', e => { if (e.target.tagName === 'IMG') e.target.remove(); }, true);
   window.__store = { state: () => ({ layers: S.stack.map(x => x.t), apps: S.apps.length, installed: [...S.installed.keys()], q: S.q }) };
+  adoptAppearance('App Store');
   paint(); load();
 })();

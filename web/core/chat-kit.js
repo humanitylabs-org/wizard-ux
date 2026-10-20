@@ -58,24 +58,16 @@
     }
     return { text: visible.join('').replace(/\n{3,}/g, '\n\n').trim(), attachments };
   }
-  /* This Wizard's own addresses. Links into it are written as paths ("/cinequeue/") so they open on whatever
-   * address this device reached Wizard through (localhost on the Mac, the tailnet name on a phone). Absolute
-   * links to this box's other names (the current host, or a retired custom domain listed in the bootstrap's
-   * network.aliases) are folded back to paths, so old messages keep opening in place after a rename. */
-  const LEGACY_HOME_HOSTS = ['private.wizard001.com'];
-  function homeHosts() {
-    const out = new Set([location.hostname, ...LEGACY_HOME_HOSTS]);
-    try { for (const h of (window.WizConfig?.raw?.network?.aliases || [])) if (typeof h === 'string' && h) out.add(h.toLowerCase()); } catch (e) {}
-    return out;
-  }
-  // Absolute https link to this Wizard → '/path?query#hash'; anything else unchanged.
+  // Same-origin and canonical links in a sibling preview become paths. Different
+  // ports remain distinct origins; never turn another preview into a private frame.
+  const localURL = href => window.WizConfig?.localURL ? window.WizConfig.localURL(href) : new URL(href, location.href);
   function homePath(href) {
     const s = String(href || '').trim();
     if (!/^https:\/\//i.test(s)) return s;
-    let u; try { u = new URL(s); } catch (e) { return s; }
-    return homeHosts().has(u.hostname.toLowerCase()) && (!u.port || u.port === location.port) ? u.pathname + u.search + u.hash : s;
+    try { const u = localURL(s); return u.origin === location.origin ? u.pathname + u.search + u.hash : s; }
+    catch (_) { return s; }
   }
-  const isHomeUrl = u => !!u && (u.origin === location.origin || (u.protocol === 'https:' && homeHosts().has(u.hostname.toLowerCase())));
+  const isHomeUrl = u => { try { return !!u && localURL(u.href).origin === location.origin; } catch (_) { return false; } };
   const SAFE_IMG = /^(data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+$|\/(?![\/\\]))/i; // inline data, or a path on this Wizard
   // Inline image parts: OpenAI image_url / input_image, Anthropic base64 image, legacy image_urls.
   function imagesOf(m, content) {
@@ -180,6 +172,8 @@
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
         if (cur.a) cur.notes.push(cur.a.text);
         cur.a = { text: t, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length) };
+        // Hermes' own "Your request was not processed" boundary row (display_kind failed_turn), not the model's words.
+        if (kind === 'failed_turn') cur.a.failed = true;
       } else if (cur) { if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; } cur.steps++; noteWork(cur, m, at); }
     }
     return out;
@@ -225,7 +219,12 @@
     s = s.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, (_, _t, code) => put(`<code>${esc(code.replace(/^ ([\s\S]*) $/, '$1'))}</code>`));
     if (!noLinks) {
       s = s.replace(/!\[([^\]\n]*)\]\(\s*<?([^\s)>]+)>?(?:\s+"[^"]*")?\s*\)/g, (_, alt, url) => put(PRIVATE_MEDIA.test(url) ? linkHtml(url, esc(alt ? `[Image: ${alt}]` : '[Image]')) : `<span class="md-img">${esc(alt ? `[Image: ${alt}]` : '[Image]')}</span>`));
-      s = s.replace(/\[((?:[^\[\]\n]|\[[^\]\n]*\])+)\]\(\s*<?([^\s)>]+?(?:\([^\s)]*\)[^\s)>]*)?)>?(?:\s+"[^"]*")?\s*\)/g, (_, text, url) => put(linkHtml(url, inline(text, true))));
+      s = s.replace(/\[((?:[^\[\]\n]|\[[^\]\n]*\])+)\]\(\s*<?([^\s)>]+?(?:\([^\s)]*\)[^\s)>]*)?)>?(?:\s+"[^"]*")?\s*\)/g, (_, text, url) => {
+        // Link text can hold this pass's placeholders (e.g. a linked image `[![alt](img)](url)`). Park them under a
+        // marker the nested pass never restores, or its own empty table turns them into the word "undefined".
+        const inner = inline(text.replace(/\u0001(\d+)\u0002/g, '\u0003$1\u0004'), true).replace(/\u0003(\d+)\u0004/g, '\u0001$1\u0002');
+        return put(linkHtml(url, inner));
+      });
       s = s.replace(/<((?:https?:\/\/|mailto:)[^\s>]+)>/g, (_, u) => put(linkHtml(u, esc(u))));
       // Every bare URL becomes a link, whatever wraps it (**bold**, _italic_, ~~del~~, [brackets], "Link:url").
       // Emphasis markers and closing punctuation at the end stay outside the link. A trailing underscore is

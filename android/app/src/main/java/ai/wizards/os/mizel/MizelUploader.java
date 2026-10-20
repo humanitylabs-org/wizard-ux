@@ -24,7 +24,7 @@ import java.util.List;
  * once every chunk up to final_seq is acknowledged, asks finished meetings whether they are ready and prunes local
  * audio a day after that. Files stay on the phone until the server acknowledges them; failures back off 2 s … 2 min
  * and never give up. Network calls follow the Everywhere outbox: plain HTTPS to the private origin with an Origin
- * header, no cookies or tokens (private.wizard001.com is reachable only over James's tailnet).
+ * header, no cookies or tokens (the Wizard origin is reachable only over James's tailnet).
  */
 public final class MizelUploader {
     private static MizelUploader instance;
@@ -163,7 +163,8 @@ public final class MizelUploader {
                         code = o.optInt("__code");
                         status = o.optString("status", null);
                     } catch (IOException e) { code = 0; }
-                    boolean ready = "ready".equals(status) || code == 404 || code == 410;
+                    // Gone/refused is not a server receipt and must never authorize pruning.
+                    boolean ready = code >= 200 && code < 300 && "ready".equals(status);
                     store.statusChecked(id, now, ready);
                     if (ready) Log.i(MizelHub.TAG, "meeting " + id + " is " + (code == 404 ? "gone" : "ready") + "; local audio kept " + MizelConfig.keepAfterReadyMs(app) + " ms more");
                     else due = now + every;

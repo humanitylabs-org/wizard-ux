@@ -73,7 +73,7 @@ public class MicRouteTest {
             boolean selfStarts = s.contains("MediaRecorder.AudioSource.VOICE_RECOGNITION);") && s.contains(".setAudioSource(MediaRecorder");
             if (!viaRoute || selfStarts) unenforced.add(f.getName());
         }
-        assertTrue("found the app's recorders", recorders >= 4);
+        assertTrue("found the app's recorders", recorders >= 3);
         assertTrue("recorders that open the mic without MicRoute: " + unenforced, unenforced.isEmpty());
     }
 

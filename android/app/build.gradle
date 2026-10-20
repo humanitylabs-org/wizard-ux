@@ -16,8 +16,8 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         minSdk 28
         targetSdk 35
-        versionCode 56
-        versionName '0.9.32'
+        versionCode 59
+        versionName '0.9.35'
         // Default photo server sits beside ORIGIN/HOME_URL (same tailnet); -PphotosServer=... overrides it.
         buildConfigField 'String', 'PHOTOS_SERVER', '"' + (project.findProperty('photosServer') ?: 'https://thales.tailc0f369.ts.net:2283') + '"'
         buildConfigField 'String', 'HOME_URL', '"https://wizard.tailc0f369.ts.net/wizard-os-home/"'
@@ -55,25 +55,6 @@ android {
         release {
             minifyEnabled false
             if (wosSigningReady) signingConfig signingConfigs.release
-        }
-        audiopreview {
-            initWith release
-            applicationIdSuffix '.musicpreview'
-            versionNameSuffix '-music-preview'
-            debuggable true
-            matchingFallbacks = ['release']
-            buildConfigField 'String', 'ORIGIN', '"https://music-background.staging.wizard001.com"'
-            buildConfigField 'String', 'HOME_URL', '"https://music-background.staging.wizard001.com/wizard-os-home/?open=wizard-music"'
-            resValue 'string', 'app_name', 'Wizard Audio Preview'
-        }
-        preview {
-            initWith release
-            applicationIdSuffix '.preview'
-            versionNameSuffix '-preview'
-            resValue 'string', 'app_name', 'Wizard Preview'
-            buildConfigField 'String', 'HOME_URL', '"https://orb-controls.staging.wizard001.com/wizard-os-home/?open=chats"'
-            buildConfigField 'String', 'ORIGIN', '"https://orb-controls.staging.wizard001.com"'
-            matchingFallbacks = ['release']
         }
         // QA fixture for the in-app update test only (built with :app:assembleQanext next to assembleDebug):
         // the QA app again, same debug key, but a far higher version, so the updater has a real newer APK to verify.

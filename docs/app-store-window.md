@@ -2,8 +2,8 @@
 
 ## Entry and scope
 
-- Private phone: `https://store-window.staging.wizard001.com/wizard-os-home/?shell=phone&view=apps` → My Apps → Get apps.
-- Private desktop: `https://store-window.staging.wizard001.com/wizard-os-home/desktop.html` → actual Cmd-K → Get apps.
+- Private phone: `${QA_ORIGIN}/wizard-os-home/?shell=phone&view=apps` → My Apps → Get apps. Set `QA_ORIGIN` to an isolated tailnet preview; the original custom domain is retired.
+- Private desktop: `${QA_ORIGIN}/wizard-os-home/desktop.html` → actual Cmd-K → Get apps.
 - Direct normal app: `?open=app-store`; `?view=store` aliases the same normal app.
 - Portable document: `/wizard-os-home/store/index.html` (directory root also works through the private front).
 
