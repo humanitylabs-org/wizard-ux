@@ -61,6 +61,15 @@
   const str = v => (typeof v === 'string' && v ? v : '');
   const httpUrl = v => { const s = str(v); try { const u = new URL(s); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch (e) { return ''; } };
 
+  // The native Connect screen consumes an origin, never credentials or an arbitrary deep link.
+  function connectPayload(value) {
+    try {
+      const u = new URL(value);
+      if (u.protocol !== 'https:' || u.username || u.password || u.pathname !== '/' || u.search || u.hash) return '';
+      return 'wizard://connect?origin=' + encodeURIComponent(u.origin);
+    } catch (e) { return ''; }
+  }
+
   /* ---------------- data ---------------- */
   async function loadList() {
     const r = await api('GET', API);
@@ -238,14 +247,14 @@
     return step(2, phones.length ? 'done' : 'todo', T, '', `<div class="split"><div>${found}${lead}<p class="muted">Scan with your phone’s camera.</p></div>${qr(inst)}</div>${urlRow(inst)}`);
   }
   function step3(d) {
-    const T = 'Open Wizard on your phone', wiz = httpUrl(d.wizard_url);
+    const T = 'Open Wizard on your phone', payload = connectPayload(d.wizard_url), wiz = payload ? httpUrl(d.wizard_url) : '';
     if (!(d.step === 'serving' || d.step === 'phone_seen') || !wiz) return step(3, 'locked', T, '<p>Your Wizard’s address appears here after step 1.</p>', '', 'locked');
     const seen = d.step === 'phone_seen', err = seen && str(d.error) ? `<p class="err">${esc(d.error)}</p>` : '';
     const text = seen ? '<p>Your phone is connected. Add Wizard to your home screen.</p><p class="muted">Safari: Share, then Add to Home Screen. Chrome: the menu, then Add to Home screen.</p>'
       : phoneLayout ? '<p>Open this address in your phone’s browser.</p><p class="muted">This turns green once your phone connects.</p>'
       : '<p>Scan with your phone, then open the link.</p><p class="muted">This turns green once your phone connects.</p>';
     if (phoneLayout) return step(3, seen ? 'done' : 'todo', T, text + err, `<div class="act">${out('primary', wiz, 'Open Wizard at this address')}</div>${urlRow(wiz)}`);
-    return step(3, seen ? 'done' : 'todo', T, '', `<div class="split"><div>${text}${err}</div>${qr(wiz)}</div>${urlRow(wiz)}`);
+    return step(3, seen ? 'done' : 'todo', T, '', `<div class="split"><div>${text}${err}</div>${qr(payload)}</div>${urlRow(wiz)}`);
   }
 
   let lastPhoneHtml = '', lastGlyphs = {}, scrolledTo3 = false;

@@ -8,12 +8,12 @@
 //   every live skin with transparent canvas like Chats, the disconnect menu + sheet, no private strings, no window.open.
 // Usage: node tools/fake-setup-api.cjs 9473 & node qa-setup-app.cjs [http://127.0.0.1:9473/wizard-os-home/]
 //   env: QA_SHOTS=<dir> for screenshots, QA_JSQR=<path to jsqr module>.
-let pw; try { pw = require('/home/telos/node_modules/playwright'); } catch (e) { pw = require('playwright-core'); }
+let pw; try { pw = require(process.env.QA_PLAYWRIGHT || 'playwright'); } catch (e) { pw = require('playwright-core'); }
 const jsQR = require(process.env.QA_JSQR || 'jsqr');
 const fs = require('fs'), path = require('path');
 const BASE = process.argv[2] || 'http://127.0.0.1:9473/wizard-os-home/';
 const ORIGIN = new URL(BASE).origin;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/setup-app';
+const SHOTS = process.env.QA_SHOTS || path.join(process.env.TMPDIR || process.cwd(), 'setup-app-shots');
 fs.mkdirSync(SHOTS, { recursive: true });
 let pass = 0, fail = 0; const results = [];
 const ok = (c, n, x = '') => { results.push({ ok: !!c, name: n }); if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, typeof x === 'string' ? x : JSON.stringify(x)); } };
@@ -352,7 +352,7 @@ const setupWin = p => p.evaluate(() => { const w = Object.values(__wos.wins).fin
     console.log('shot', await shot(p, 'desktop-02-off'));
     await fake({ phone: { step: 'serving' } }); await waitStep(f, 'serving', '[data-step="3"] .qr');
     const q3 = f.locator('[data-step="3"] .qr');
-    ok(await decodeQR(p, b, q3) === URLS.wiz, 'step 3 QR decodes to wizard_url (rendered pixels)');
+    ok(await decodeQR(p, b, q3) === 'wizard://connect?origin=' + encodeURIComponent(new URL(URLS.wiz).origin), 'step 3 QR decodes to the native Connect URI (rendered pixels)');
     ok(await f.evaluate(() => document.querySelector('[data-step="3"] .url .u').textContent) === 'wizard.tail1234.ts.net', 'URL shown as copyable text under the QR');
     await f.locator('[data-step="3"] [data-act="copy"]').click(); await sleep(300);
     ok(await f.evaluate(() => navigator.clipboard.readText()) === URLS.wiz && await txt(f, '#toast') === 'Copied', 'desktop Copy button copies the full address');

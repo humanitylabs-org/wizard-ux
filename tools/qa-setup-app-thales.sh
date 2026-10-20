@@ -1,35 +1,34 @@
 #!/bin/bash
-# Run qa-setup-app.cjs on Thales under the shared worker lock against a frozen snapshot of this worktree.
-# Usage (control host, repo root): tools/qa-setup-app-thales.sh <label>
-#   remote side: tools/qa-setup-app-thales.sh --remote <sha> <dirty> <label>   (inside the snapshot)
+# Browser-only QA on Thales: no Android/VM worker lock.
+# Usage: tools/qa-setup-app-thales.sh [label]
 set -euo pipefail
 if [ "${1:-}" = "--remote" ]; then
-  SHA=$2 DIRTY=$3 LABEL=$4
   export PATH=/opt/homebrew/bin:$PATH
   cd "$(dirname "$0")/.."
-  DEPS=$HOME/workspace/wos-setup-app/deps
-  [ -d "$DEPS/node_modules/jsqr" ] || (mkdir -p "$DEPS" && cd "$DEPS" && npm init -y >/dev/null && npm i --no-audit --no-fund jsqr@1.4.0 >/dev/null)
-  export PW=$HOME/workspace/wizard-mobile-link-candidate/node_modules/playwright
-  rm -rf out; mkdir -p out/shots
-  echo "host=$(hostname) sha=$SHA dirty=$DIRTY label=$LABEL node=$(node -v) playwright=$(node -p "require('$PW/package.json').version") jsqr=$(node -p "require('$DEPS/node_modules/jsqr/package.json').version") snapshot=$PWD started=$(date -u +%FT%TZ)" > out/receipt.txt
-  set +e
-  lockf -k /Volumes/ThalesMedia/AndroidBuilds/worker.lock bash -c '
-    node tools/fake-setup-api.cjs 9473 web > out/fake.log 2>&1 & FP=$!
-    sleep 1
-    QA_SHOTS=out/shots QA_RECEIPT=out/qa-setup-app.json QA_JSQR='"$DEPS"'/node_modules/jsqr \
-      node -r ./qa-thales-loader.cjs qa-setup-app.cjs http://127.0.0.1:9473/wizard-os-home/ > out/qa-setup-app.log 2>&1
-    RC=$?; kill $FP; exit $RC'
-  RC=$?
-  echo "lock=/Volumes/ThalesMedia/AndroidBuilds/worker.lock (lockf -k) exit=$RC finished=$(date -u +%FT%TZ)" >> out/receipt.txt
-  tail -2 out/qa-setup-app.log
-  exit 0
+  export TMPDIR=/Volumes/ThalesMedia/tmp/phone-setup
+  mkdir -p "$TMPDIR" out/shots
+  DEPS=${QA_DEPS:-/Volumes/ThalesMedia/QA/phone-setup/deps}
+  mkdir -p "$DEPS"
+  if [ ! -d "$DEPS/node_modules/jsqr" ] || [ ! -d "$DEPS/node_modules/playwright" ]; then
+    npm install --prefix "$DEPS" --no-audit --no-fund playwright@1.58.2 jsqr@1.4.0
+  fi
+  export QA_PLAYWRIGHT="$DEPS/node_modules/playwright" QA_JSQR="$DEPS/node_modules/jsqr"
+  export QA_SHOTS="$PWD/out/shots" QA_RECEIPT="$PWD/out/qa-setup-app.json"
+  PORT=${QA_PORT:-19473}
+  node tools/fake-setup-api.cjs "$PORT" web >out/fake.log 2>&1 & FP=$!
+  trap 'kill "$FP" 2>/dev/null || true; wait "$FP" 2>/dev/null || true' EXIT
+  for i in {1..40}; do
+    if curl -fsS "http://127.0.0.1:$PORT/__fake/state" >/dev/null; then break; fi
+    sleep .1
+  done
+  node qa-setup-app.cjs "http://127.0.0.1:$PORT/wizard-os-home/" >out/qa-setup-app.log 2>&1
+  exit
 fi
 LABEL=${1:-run}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SHA=$(git -C "$ROOT" rev-parse HEAD)
-DIRTY=$(git -C "$ROOT" status --porcelain | wc -l | tr -d ' ')
-SNAP="workspace/wos-setup-app/snap-${SHA:0:12}-$LABEL"
-ssh thales "mkdir -p ~/$SNAP"
-rsync -a --delete --exclude .git --exclude android --exclude out "$ROOT/" "thales:$SNAP/"
-ssh thales "bash ~/$SNAP/tools/qa-setup-app-thales.sh --remote $SHA $DIRTY $LABEL"
-echo "snapshot: thales:~/$SNAP"
+SNAP="/Volumes/ThalesMedia/QA/phone-setup/ux-${SHA:0:12}-$LABEL"
+ssh thales "mkdir -p '$SNAP'"
+rsync -a --delete --exclude .git --exclude android --exclude node_modules --exclude out "$ROOT/" "thales:$SNAP/"
+ssh thales "bash '$SNAP/tools/qa-setup-app-thales.sh' --remote"
+printf 'snapshot: thales:%s\n' "$SNAP"
