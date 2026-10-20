@@ -29,6 +29,6 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SHA=$(git -C "$ROOT" rev-parse HEAD)
 SNAP="/Volumes/ThalesMedia/QA/phone-setup/ux-${SHA:0:12}-$LABEL"
 ssh thales "mkdir -p '$SNAP'"
-rsync -a --delete --exclude .git --exclude android --exclude node_modules --exclude out "$ROOT/" "thales:$SNAP/"
+rsync -a --delete --exclude .git --exclude android/.gradle --exclude android/app/build --exclude node_modules --exclude out "$ROOT/" "thales:$SNAP/"
 ssh thales "bash '$SNAP/tools/qa-setup-app-thales.sh' --remote"
 printf 'snapshot: thales:%s\n' "$SNAP"
