@@ -1144,9 +1144,15 @@ window.WizCore.chats = function createChats(H) {
     });
   }
   /* ---- durable outbox: every message is saved on the phone before it is sent ---- */
+  /* New chat always opens blank (James, 20 Oct 2026: "New chat should always go to a brand new chat. It should
+   * never go to some existing thread that's trying to get sent"). A new chat shows only the sends made from THIS
+   * open of it: each fresh open stamps c.newAt, and an older unsent new-chat message stays in the Chats list's
+   * send pill (with its Retry/Edit) instead of reappearing here. qa-new-chat-blank.cjs guards this. */
   function pendingFor(w) {
     if (!OUTBOX || !w.thread) return [];
-    return OUTBOX.forThread(w.thread === '__new__' ? '' : w.thread, w.thread === '__new__' ? w.id : '');
+    if (w.thread !== '__new__') return OUTBOX.forThread(w.thread, '');
+    const c = ch(w.id); if (!c.newAt) c.newAt = Date.now(); // a restored window: everything older is not this chat's
+    return OUTBOX.forThread('', w.id).filter(it => (it.createdAt || 0) >= c.newAt);
   }
   function pendingState(p) {
     if (OUTBOX?.quarantined(p.id)) return '<span class="pst wait">Waiting for device storage verification · not sending</span>';
@@ -1261,6 +1267,7 @@ window.WizCore.chats = function createChats(H) {
     if (opts.via === 'link' && w.thread && w.thread !== '__new__' && w.thread !== sid) c.trail = (c.trail || []).concat(w.thread).slice(-20);
     else if (!opts.keepTrail) c.trail = [];
     PW?.opened(wid, sid);
+    if (sid === '__new__' && w.thread !== '__new__') c.newAt = Date.now(); // a fresh new chat: nothing older shows in it
     w.thread = sid; save(); loadDraft(w);
     if (sid !== '__new__') LIVE.markSeen(sid);
     renderChats(w); applyLayout(deskOf(wid));
