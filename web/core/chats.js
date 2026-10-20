@@ -387,6 +387,27 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
     openChat(wid, '__new__');
   }
+  // App context enters the existing unsent draft lifecycle, never session/run APIs.
+  function openContextDraft(wid, key, text) {
+    const w = W[wid]; if (!w || winAgent(w)) throw new Error('Main Chats unavailable');
+    if (w.thread) saveDraft(wid);
+    const all = KIT.drafts.all(), receiptKey = 'wos.app-context.receipts.v1';
+    const receipts = JSON.parse(localStorage.getItem(receiptKey) || '{}');
+    let slot = Object.keys(all).find(k => all[k]?.sourceKey === key);
+    if (!slot) {
+      // A sent/discarded draft is never silently recreated, including after reload.
+      if (receipts[key]) throw new Error('This notification draft was already opened. Find it in Chats or start a new chat there.');
+      if (Object.keys(receipts).length >= 1000) throw new Error('Context draft limit reached');
+      slot = 'new:' + crypto.randomUUID();
+      receipts[key] = slot;
+      localStorage.setItem(receiptKey, JSON.stringify(receipts));
+      all[slot] = { text, files: [], at: Date.now(), sourceKey: key };
+      localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all));
+    }
+    openNewDraft(wid, slot);
+    if (KIT.drafts.all().new?.sourceKey !== key) throw new Error('Could not open the saved context draft');
+    return Object.freeze({ kind: 'unsent-draft', id: receipts[key], sent: false });
+  }
   function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
 
   // Opinionated: Compact list (titles only, no previews), chosen in the Filter sheet, cached per device and persisted by Agent Service.
@@ -1726,5 +1747,5 @@ window.WizCore.chats = function createChats(H) {
   });
   return { openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setSubject, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST,
-    KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, newDrafts };
+    KIT, threadAct, openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

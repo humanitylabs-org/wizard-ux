@@ -379,7 +379,7 @@
       const fs = (files || []).filter(f => f && f.id && !f.uploading).map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })).slice(0, 8);
       text = String(text || '');
       if (!text.trim() && !fs.length) delete all[k];
-      else all[k] = { text: text.slice(0, 64000), files: fs, at: Date.now() };
+      else all[k] = { ...(all[k]?.sourceKey ? { sourceKey: all[k].sourceKey } : {}), text: text.slice(0, 64000), files: fs, at: Date.now() };
       const keys = Object.keys(all).sort((a, b) => (all[b].at || 0) - (all[a].at || 0));
       for (const x of keys.slice(200)) delete all[x];
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(all)); } catch (e) { /* a draft must never block typing */ }
