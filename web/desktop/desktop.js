@@ -264,6 +264,7 @@
   // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
+  window.WizAppOpen = id => Object.values(W).some(w => w && w.appId === id);
   window.WizOpenApp = id => { const x = hostedOpenable(id); return x ? openApp(x) : false; };
   // Only the App Store and System windows may ask; the sender is checked by its actual frame, not by anything it says.
   addEventListener('message', e => {
@@ -572,6 +573,7 @@
   /* ---------------- top bar ---------------- */
   addEventListener('wizard:app-counts', () => paintBar());
   function paintBar() {
+    window.WosBell?.paint();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     C.workspaceNav.setCount(APP.wizard?.id || 'wizard', LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0);
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');

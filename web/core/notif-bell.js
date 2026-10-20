@@ -1,6 +1,8 @@
-/* Notifications unread count from the installed Notifications app (same origin, /notifications/api/count).
- * The count shows as the app's badge on its dock/bar mark (workspaceNav.setCount), so the Chats panel carries
- * no separate bell. html() stays for any skin that wants a bell; the shell no longer renders it. */
+/* Notifications bell on the Chats panel: a small bell beside search with the unread count from the installed
+ * Notifications app (same origin, /notifications/api/count). Tapping it opens Notifications as an ordinary app
+ * window, so it sits on a desk you can swipe to. Hidden entirely when no Notifications app is installed, and
+ * hidden while a Notifications window is open: its desk mark already carries the same count as a badge, so the
+ * owner sees one or the other, never both. Shells expose WizAppOpen(id) and call WosBell.paint() on window changes. */
 (() => {
   'use strict';
   const S = { unread: 0, needs: 0, ok: false, at: 0 };
@@ -8,6 +10,7 @@
   const installed = () => !!(window.WizCanOpen && window.WizCanOpen('notifications'));
   function html() {
     if (!installed()) return '';
+    if (typeof window.WizAppOpen === 'function' && window.WizAppOpen('notifications')) return '<button type="button" class="ch-bell" data-chbell hidden aria-hidden="true" tabindex="-1"></button>';
     const n = S.unread, lbl = n ? `Notifications, ${n} unread` : 'Notifications';
     return `<button type="button" class="ch-bell${S.needs ? ' needs' : ''}" data-chbell aria-label="${lbl}">${BELL}${n ? `<b>${n > 99 ? '99+' : n}</b>` : ''}</button>`;
   }
@@ -44,5 +47,5 @@
   addEventListener('wizard:apps', () => { refresh(); paint(); });
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   setTimeout(refresh, 800);
-  window.WosBell = { html, refresh, get state() { return { ...S }; } };
+  window.WosBell = { html, refresh, paint, get state() { return { ...S }; } };
 })();
