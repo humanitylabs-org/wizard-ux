@@ -87,6 +87,7 @@ def main():
             adb_run('install', '-r', qa_apk); adb_run('install', '-r', test_apk)
             text = shell('am', 'instrument', '-w', '-e', 'class', 'ai.wizards.os.ConnectE2eTest', 'ai.wizards.os.qa.test/androidx.test.runner.AndroidJUnitRunner')
             (out / 'instrumentation.txt').write_text(text)
+            (out / 'instrumentation-logcat.txt').write_text(run([adb, '-s', serial, 'logcat', '-d', '-v', 'threadtime'], capture_output=True, text=True, errors='replace').stdout)
             check('Connect UI instrumentation', 'OK (1 test)' in text and 'FAILURES' not in text, text[-3000:])
             try: adb_run('pull', '/sdcard/Android/data/ai.wizards.os.qa/files', out / 'instrumentation-shots')
             except subprocess.CalledProcessError: (out / 'instrumentation-shots.missing').write_text('no screenshots to pull\n')
