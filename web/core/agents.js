@@ -186,8 +186,17 @@
       return `<div class="ch-agent${priv ? ' private' : ''} ${where}" style="--ag:${A.colour(a)}" data-chagent="${esc(a.id)}" role="note" aria-label="${esc(`You are talking to ${a.label}${priv ? ', a private agent' : ''}`)}">`
         + `${A.sigil(a, 'ag-sig')}<span class="ag-t"><b>${esc(a.label)}</b><small>${esc(sub)}</small></span>${priv ? `<span class="ag-priv">${A.lock()}<span>Private</span></span>` : ''}</div>`;
     },
+    providerId(id) { return ({ tinfoil: 'wizard-tinfoil', local: 'wizard-local-model' })[id] || id; },
+    provider(id) { return (A.options?.providers || []).find(p => A.providerId(p.id) === A.providerId(id)) || null; },
+    privacyPromise(p) {
+      const kind = p?.kind || p?.private_inference?.kind;
+      if (kind === 'attested-relay') return `Encrypted on this box; ${A.cleanProvider(p.label || p.id)} can’t read it`;
+      // The local provider currently reports no machine label. Do not imply it runs on this box.
+      if (kind === 'local') return 'Runs on a machine you own';
+      return 'Private provider · no fallback';
+    },
     providerLabel(id) {
-      const p = (A.options?.providers || []).find(x => x.id === id);
+      const p = A.provider(id);
       if (id === 'host') return 'Your Wizard’s setup'; // the main agent runs the host Hermes configuration
       return A.cleanProvider(p?.label || (id === 'tinfoil' ? 'Tinfoil' : String(id || '')));
     },
@@ -221,7 +230,7 @@
     },
     modelName(a, model) {
       if (!model) return '';
-      const p = (A.options?.providers || []).find(x => x.id === a?.model?.provider);
+      const p = A.provider(a?.model?.provider);
       const m = (p?.models || []).map(v => typeof v === 'string' ? { id: v } : v || {}).find(v => (v.id || v.value || v.model) === model);
       if (m?.label || m?.name) return m.label || m.name;
       if (window.WosModels?.find?.(model)) return window.WosModels.name(model);
@@ -231,7 +240,10 @@
     modelOptions(a) {
       if (!a?.model) return [];
       const allowed = Array.isArray(a.model.allowed_models) && a.model.allowed_models.length ? a.model.allowed_models : [a.model.model].filter(Boolean);
-      return allowed.map(m => ({ value: m, provider: a.model.provider, agent: a.id, name: A.modelName(a, m), description: A.providerLabel(a.model.provider) + (a.model.fallback === false ? ' · no fallback' : ''), isGlobalDefault: m === a.model.model }));
+      const p = A.provider(a.model.provider);
+      // Sealed choices are the intersection of the agent policy and its installed provider's advertised models.
+      const offered = A.isPrivate(a) ? allowed.filter(id => p?.available !== false && p?.models?.some(m => (typeof m === 'string' ? m : m.id) === id)) : allowed;
+      return offered.map(m => ({ value: m, provider: a.model.provider, agent: a.id, name: A.modelName(a, m), description: A.providerLabel(a.model.provider) + (a.model.fallback === false ? ' · no fallback' : ''), isGlobalDefault: m === a.model.model }));
     },
     allows(a, model) { return A.modelOptions(a).some(o => o.value === model); },
     route(a, model) {

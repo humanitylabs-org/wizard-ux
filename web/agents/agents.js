@@ -34,7 +34,7 @@
     const model = m => typeof m === 'string' ? { id: m, label: AG.friendly(m) } : m && (m.id || m.value) ? { id: String(m.id || m.value), label: String(m.label || m.name || AG.friendly(m.id || m.value)) } : null;
     return {
       harnesses: list(o.harnesses, h => h && h.id ? { id: String(h.id), label: String(h.label || h.id), description: String(h.description || '') } : null),
-      providers: list(o.providers, p => p && p.id ? { id: String(p.id), label: AG.cleanProvider(String(p.label || p.id)), confidential: p.confidential === true, description: String(p.description || ''), models: list(p.models, model) } : null),
+      providers: list(o.providers, p => p && p.id ? { id: String(p.id), label: AG.cleanProvider(String(p.label || p.id)), confidential: p.confidential === true, description: String(p.description || ''), kind: p.kind || p.private_inference?.kind || '', available: p.available !== false, models: list(p.models, model) } : null),
       presets: list(o.presets, p => typeof p === 'string' ? { id: p, label: p[0].toUpperCase() + p.slice(1), description: '', permissions: null } : p && p.id ? { id: String(p.id), label: String(p.label || p.id), description: String(p.description || p.summary || ''), permissions: p.permissions && typeof p.permissions === 'object' ? p.permissions : null, requires_confidential: p.requires_confidential === true || p.privacy === 'private' || p.id === 'private' } : null),
       wizard_apps: list(o.wizard_apps, a => a && a.id ? { id: String(a.id), label: String(a.label || a.name || a.id), description: String(a.description || a.summary || a.desc || ''), icon: a.icon || '', colors: a.colors || [] } : null),
       // kind: 'tool' | 'connector' when the server says so; otherwise every agent app is just an agent app.
@@ -43,7 +43,7 @@
       other_agents: Array.isArray(o.other_agents) && o.other_agents.length ? list(o.other_agents, x => typeof x === 'string' ? { id: x, label: OTHERS[x] || AG.friendly(x) } : x && x.id ? { id: String(x.id), label: String(x.label || OTHERS[x.id] || x.id) } : null) : [{ id: 'none', label: 'None' }],
     };
   }
-  const provider = id => options().providers.find(p => p.id === id) || null;
+  const provider = id => options().providers.find(p => AG.providerId(p.id) === AG.providerId(id)) || null;
   const harness = id => options().harnesses.find(h => h.id === id) || { id, label: id === 'hermes' ? 'Hermes' : AG.friendly(id) };
   const preset = id => options().presets.find(p => p.id === id) || { id, label: id ? id[0].toUpperCase() + id.slice(1) : 'Custom', description: '' };
   async function api(path, init = {}) {
@@ -78,6 +78,7 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && back()) { e.preventDefault(); e.stopPropagation(); } });
 
   /* ---------------- bits ---------------- */
+  const colour = () => 'var(--c-accent)';
   const sigil = (a, cls = 'ag-sig') => AG.sigil(a, cls);
   const statusHtml = a => `<span class="st ${esc(a.status)}"><i></i>${esc({ running: 'Running', stopped: 'Stopped', starting: 'Starting…', error: 'Error' }[a.status] || a.status)}</span>`;
   const privBadge = a => a.privacy === 'private' ? `<span class="ag-badge priv">${LOCK}Private</span>` : `<span class="ag-badge">Standard</span>`;
@@ -100,7 +101,7 @@
     if (!AG.ready) body = '<div class="ag-loading">Loading agents…</div>';
     else if (!AG.available && !agents.length) body = `<div class="ag-err"><b>Agents aren’t on this Wizard yet.</b><br>The Agent Service here doesn’t offer agents. Your main agent keeps working as usual in Chats.</div>`;
     else if (AG.error && !agents.length) body = `<div class="ag-err">${esc(AG.error)} · <button type="button" class="ag-link" data-reload>Try again</button></div>`;
-    else body = `<div class="ag-list">${agents.map(a => `<button type="button" class="ag-row" data-open="${esc(a.id)}" style="--ag:${AG.colour(a)}">${sigil(a)}
+    else body = `<div class="ag-list">${agents.map(a => `<button type="button" class="ag-row" data-open="${esc(a.id)}" style="--ag:${colour(a)}">${sigil(a)}
         <span class="tx"><b>${esc(a.label)}</b><small>${esc(harness(a.harness).label)} · ${esc(providerLine(a) || 'No model')}</small>
         <span class="ag-badges">${privBadge(a)}${a.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}${statusHtml(a)}${waiting(a)}</span></span>${CHEV}</button>`).join('')}</div>`;
     return `<header class="ag-top"><h1>Agents</h1></header>
@@ -120,7 +121,7 @@
   function routeRow(b, { agentPage } = {}) {
     const t = b.target;
     return `<div class="ag-route${b.held ? ' held' : ''}" data-route-row="${esc(b.app_id)}"><span class="tx"><b>${esc(b.label)}</b>${b.purpose ? `<small>${esc(b.purpose)}</small>` : ''}</span>
-      <button type="button" class="ag-routebtn" data-route="${esc(b.app_id)}" aria-label="${esc(b.label)} sends its work to ${esc(t ? t.label : 'no agent')}. Change" style="--ag:${t ? AG.colour(t) : '#ff6b86'}">
+      <button type="button" class="ag-routebtn" data-route="${esc(b.app_id)}" aria-label="${esc(b.label)} sends its work to ${esc(t ? t.label : 'no agent')}. Change" style="--ag:${colour(t)}">
         ${agentPage ? '' : '<span class="lbl">Sends its work to</span>'}${t ? sigil(t, 'ag-sig xs') : ''}<b>${esc(t ? t.label : 'No agent')}</b>${t && t.privacy === 'private' ? LOCK : ''}<svg class="dd" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
       ${b.held ? `<p class="ag-note bad" data-held="${esc(b.app_id)}">${esc(heldLine(b, t ? t.label : ''))}</p>` : ''}</div>`;
   }
@@ -178,15 +179,16 @@
         ${o.harnesses.map(h => choice('harness', h.id, d.harness === h.id, h.label, h.description || 'Runs the agent: its tools, memory and skills, in its own container.')).join('')}`;
     } else if (step === 1) {
       const p = provider(d.provider);
-      body = `<p class="ag-lede">Where ${esc(d.label || 'this agent')}’s thinking runs. A confidential provider can’t read what it processes.</p>
-        ${o.providers.map(x => choice('provider', x.id, d.provider === x.id, x.label, x.description || (x.confidential ? 'Confidential: encrypted, attested hardware' : 'Public model provider'), x.confidential ? `<span class="ag-badge priv" style="--ag:hsl(160 72% 62%)">${LOCK}Confidential</span>` : '')).join('')}
+      body = `<p class="ag-lede">Where ${esc(d.label || 'this agent')}’s thinking runs. Private providers keep inference inside your private boundary.</p>
+        ${o.providers.map(x => choice('provider', x.id, d.provider === x.id, x.label, x.confidential ? AG.privacyPromise(x) + (x.available ? '' : ' · Unavailable') : x.description || 'Public model provider', x.confidential ? `<span class="ag-badge priv" style="--ag:var(--c-accent)">${LOCK}Confidential</span>` : '')).join('')}
+        ${!o.providers.some(x => x.confidential) ? '<p class="ag-note"><a class="ag-link" href="../store/index.html?q=private" data-store>Install a private provider</a></p>' : ''}
         ${p ? `<div class="ag-sec">Model</div><div class="ag-models" role="radiogroup" aria-label="Model">${p.models.map(m => `<button type="button" class="ag-chip" role="radio" aria-checked="${d.model === m.id}" data-pick="model" data-v="${esc(m.id)}">${esc(m.label)}</button>`).join('') || '<span class="ag-empty-line">This provider has no models yet.</span>'}</div>
           <p class="ag-note">${p.confidential ? 'No fallback: if this model is down, the agent waits. It never switches to a public provider.' : 'Your Wizard may fall back to another model if this one is down.'}</p>` : ''}`;
     } else {
       if (!d.preset) applyPreset(d, provider(d.provider)?.confidential ? 'private' : 'standard');
       const presets = o.presets.length ? o.presets : [{ id: 'private', label: 'Private', description: '' }, { id: 'standard', label: 'Standard', description: '' }];
       body = `<p class="ag-lede">Start from a preset, then adjust. You can change these any time.</p>
-        ${presets.map(p => choice('preset', p.id, d.preset === p.id, p.label, p.description || (p.id === 'private' ? 'Nothing leaves your Wizard: no outside tools, its own folder only, no apps.' : 'Hermes defaults. Add the apps you want.'), p.id === 'private' ? `<span class="ag-badge priv" style="--ag:hsl(160 72% 62%)">${LOCK}</span>` : '')).join('')}
+        ${presets.map(p => choice('preset', p.id, d.preset === p.id, p.label, p.description || (p.id === 'private' ? 'Nothing leaves your Wizard: no outside tools, its own folder only, no apps.' : 'Hermes defaults. Add the apps you want.'), p.id === 'private' ? `<span class="ag-badge priv" style="--ag:var(--c-accent)">${LOCK}</span>` : '')).join('')}
         ${privateBlocked(d) ? `<p class="ag-note bad">Private needs a confidential model provider. Go back and pick ${esc(o.providers.filter(p => p.confidential).map(p => p.label).join(' or ') || 'a confidential provider')}.</p>` : ''}
         ${permsHtml(d.perms, { privacy: d.preset === 'private' ? 'private' : 'standard', editable: true, draft: true })}`;
     }
@@ -251,7 +253,7 @@
     const running = a.status === 'running' || a.status === 'starting';
     const allowed = a.model.allowed_models.length ? a.model.allowed_models : [a.model.model].filter(Boolean);
     return `<header class="ag-top">${BACK}<h1 class="sm">Agent</h1></header>
-      <section class="ag-hero" style="--ag:${AG.colour(a)}">${sigil(a, 'ag-sig lg')}<span class="tx"><b>${esc(a.label)}</b>
+      <section class="ag-hero" style="--ag:${colour(a)}">${sigil(a, 'ag-sig lg')}<span class="tx"><b>${esc(a.label)}</b>
         <span class="ag-badges">${privBadge(a)}${a.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}${statusHtml(a)}</span></span>
         ${editable ? `<button type="button" class="ag-back" data-rename aria-label="Rename ${esc(a.label)}"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg></button>` : ''}</section>
       ${a.status === 'error' && a.status_detail ? `<p class="ag-note bad">${esc(a.status_detail)}</p>` : ''}
@@ -265,7 +267,7 @@
         <div class="ag-kv"><span>Allowed in chats</span><b>${esc(allowed.map(m => AG.modelName(a, m)).join(', ') || '—')}</b></div>
         <div class="ag-kv"><span>Fallback</span><b>${a.model.fallback ? 'On' : 'Off'}</b></div>
         ${editable && (p?.models?.length || 0) > 1 ? '<button type="button" class="ag-add" data-model>Change model</button>' : ''}
-        ${a.privacy === 'private' ? '<p class="ag-note">A private agent keeps a confidential provider with no fallback. Its chats can only use the models above.</p>' : ''}</div>
+        ${a.privacy === 'private' ? `<p class="ag-note" data-privacy-promise>${esc(AG.privacyPromise(p))}</p><p class="ag-note">No fallback. Its chats can only use the models above.</p>` : ''}</div>
       <div class="ag-sec">Permissions<small>Preset: ${esc(preset(a.permissions.preset).label)}</small></div>
       ${editable ? '' : '<p class="ag-note">The main agent runs your Wizard’s own setup. Its other permissions are managed there; pick its apps here.</p>'}
       ${permsHtml(a.permissions, { privacy: a.privacy, editable, appsEditable: true })}`;
@@ -326,7 +328,7 @@
       const busy = S.saving.has('route:' + sh.app);
       inner = `<h2>${esc(b ? b.label : sh.app)}</h2><p class="ag-note">${esc(b?.purpose || 'Work from this app goes to one agent.')}</p>
         <div class="ag-label" style="margin-top:14px">Sends its work to</div>
-        <div role="radiogroup" aria-label="Sends its work to">${AG.list.map(x => `<button type="button" class="ag-choice" role="radio" aria-checked="${b?.agent === x.id}" data-routepick="${esc(x.id)}" style="--ag:${AG.colour(x)}" ${busy ? 'disabled' : ''}>${sigil(x, 'ag-sig sm')}<span class="tx"><b>${esc(x.label)}${x.privacy === 'private' ? `<span class="ag-badge priv">${LOCK}Private</span>` : ''}${x.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}</b><small>${statusHtml(x)}</small></span><span class="rd"></span></button>`).join('')}</div>
+        <div role="radiogroup" aria-label="Sends its work to">${AG.list.map(x => `<button type="button" class="ag-choice" role="radio" aria-checked="${b?.agent === x.id}" data-routepick="${esc(x.id)}" style="--ag:${colour(x)}" ${busy ? 'disabled' : ''}>${sigil(x, 'ag-sig sm')}<span class="tx"><b>${esc(x.label)}${x.privacy === 'private' ? `<span class="ag-badge priv">${LOCK}Private</span>` : ''}${x.is_default ? '<span class="ag-badge main">Main agent</span>' : ''}</b><small>${statusHtml(x)}</small></span><span class="rd"></span></button>`).join('')}</div>
         ${b?.held ? `<p class="ag-note bad">${esc(heldLine(b, b.target ? b.target.label : ''))}</p>` : ''}
         <p class="ag-note">${b?.is_default ? 'Default: your main agent. ' : ''}The app never picks an agent itself.</p>
         <div class="acts" style="grid-template-columns:1fr"><button type="button" class="ag-btn ghost" data-sheetclose>Close</button></div>`;
@@ -356,8 +358,9 @@
     if (e.key === 'Enter' && e.target.id === 'agRename') root.querySelector('[data-renameok]')?.click();
   });
   root.addEventListener('click', e => {
-    const t = e.target.closest('button, [data-sheetbg]'); if (!t) return;
+    const t = e.target.closest('button, [data-sheetbg], [data-store]'); if (!t) return;
     const d = t.dataset;
+    if ('store' in d && parent !== window) { e.preventDefault(); parent.postMessage({ type: 'wizard:open-app', id: 'app-store', search: 'private' }, ORIGIN); return; }
     if ('sheetbg' in d) { if (e.target === t) closeSheet(); return; }
     if ('back' in d) { back(); return; }
     if ('sheetclose' in d) { closeSheet(); return; }
@@ -371,7 +374,7 @@
     if (d.pick && S.view.name === 'new') {
       const dr = S.draft;
       if (d.pick === 'harness') dr.harness = d.v;
-      if (d.pick === 'provider' && dr.provider !== d.v) { dr.provider = d.v; const p = provider(d.v); dr.model = p?.models.length === 1 || p?.confidential ? p.models[0]?.id || '' : ''; /* Tinfoil: its default (first) model, still changeable */ if (dr.wantPrivate) applyPreset(dr, 'private'); else dr.preset = ''; /* asked for a private agent: a public provider stays blocked, never silently Standard */ }
+      if (d.pick === 'provider' && dr.provider !== d.v) { dr.provider = d.v; const p = provider(d.v); dr.model = p?.models.length === 1 || p?.confidential ? p.models[0]?.id || '' : ''; /* Private provider: its first advertised model, still changeable. */ if (dr.wantPrivate) applyPreset(dr, 'private'); else dr.preset = ''; /* asked for a private agent: a public provider stays blocked, never silently Standard */ }
       if (d.pick === 'model') dr.model = d.v;
       if (d.pick === 'preset') { dr.wantPrivate = d.v === 'private'; applyPreset(dr, d.v); } /* an explicit preset choice replaces the Set up private agent intent */
       render(); return;
