@@ -93,6 +93,20 @@ for (const status of ['completed', 'failed', 'cancelled', 'interrupted', 'expire
     f.api.retry(it.id); await f.api.pump(); assert.equal(f.calls.filter(x => x.method === 'POST').length, 2);
   });
 }
+// Hermes forgets a finished run after a while; its steer then answers 404 run_not_found (owner's Tea music
+// thread, 20 Oct 2026). The run read still proves it terminal here, so the message continues the thread.
+const forgotten = { steerStatus: 404, rejection: { error: { code: 'run_not_found', message: `Run not found: ${runId}` } } };
+test('a steer to a run Hermes already forgot continues the same session exactly once', async t => {
+  const f = await fixture(t, forgotten); const it = await settled(f.api, (await f.enqueue()).id);
+  assert.equal(it.state, 'sent', it.error);
+  assert.equal(f.admitted.size, 1);
+  assert.equal(JSON.parse(f.calls.find(x => x.path === '/wizard/hermes/v1/runs').body).session_id, sessionId);
+});
+test('a forgotten-run steer never falls back while the run still reads as working', async t => {
+  const f = await fixture(t, { ...forgotten, runStatus: 'running' }); const it = await f.enqueue();
+  assert.equal((await settled(f.api, it.id)).state, 'failed');
+  assert.equal(f.admitted.size, 0);
+});
 test('lost continuation receipt retries its frozen admission, never the rejected steer', async t => {
   const f = await fixture(t, { loseAdmission: true }); const it = await f.enqueue();
   assert.equal((await settled(f.api, it.id)).state, 'waiting');
