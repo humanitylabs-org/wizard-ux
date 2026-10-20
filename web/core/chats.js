@@ -1012,7 +1012,7 @@ window.WizCore.chats = function createChats(H) {
     const pend = pendingFor(w);
     const carry = isNew && c.carry && TAG ? `<div class="ch-carry" role="note"><b>${AGS()?.lock?.() || ''}Continues “${esc(clip(c.carry.title, 60))}” privately</b><span>Your first message takes the last ${c.carry.n === 1 ? 'message' : `${c.carry.n} messages`} with it as quoted context. That thread stays as it is.</span><button type="button" data-chcarryx>Don’t include</button></div>` : '';
     if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
-    else if (!turns && !isNew && !pend.length) msgs = c.err ? `<div class="ch-empty">${esc(c.err)}</div>` : skelThread();
+    else if (!turns && !isNew && !pend.length) msgs = c.err && (c.failN > 1 || c.err !== 'Couldn’t load this thread') ? threadErrHtml(c) : skelThread();
     else {
       const all = turns || [];
       if (c.showFor !== w.thread) { c.show = PAGE; c.showFor = w.thread; }
@@ -1207,6 +1207,17 @@ window.WizCore.chats = function createChats(H) {
     const words = p.text || p.typed || ''; // a voice note not yet transcribed shows the typed words riding with it
     return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}" data-ob="${esc(p.id)}"><div class="bub">${voice}${userMedia(c || { media: [] }, files, [])}${words ? md(words) : ''}</div><div class="pmeta">${pendingState(p)}</div></div>`;
   }
+  // Failed thread reads retry by themselves: 1 s, 2 s, 4 s, 8 s, then every 15 s while the thread stays open.
+  function retryRead(w, sid, nav, n) {
+    const c = ch(w.id); clearTimeout(c.retryT);
+    c.retryT = setTimeout(() => { if (W[w.id] === w && w.thread === sid && c.readNav === nav && c.loadedFor !== sid && !c.loading) loadThread(w, true); }, Math.min(15000, 1000 * 2 ** (n - 1)));
+  }
+  function threadErrHtml(c) {
+    if (c.err !== 'Couldn’t load this thread') return `<div class="ch-empty">${esc(c.err)}</div>`;
+    const r = c.errStatus ? null : reach();
+    const why = c.errStatus ? `Wizard answered with an error (HTTP ${c.errStatus}).` : !r || ['checking', 'send'].includes(r.layer) ? 'The connection to Wizard dropped while reading it.' : r.message;
+    return `<div class="ch-empty ch-readerr" role="status"><b>Couldn’t load this thread</b><br>${esc(why)} Retrying automatically.<br><button type="button" class="pbtn" data-chretry>Retry now</button>${r && !['checking', 'send'].includes(r.layer) ? ' ' + troubleshoot : ''}</div>`;
+  }
   function renderChats(w) {
     const el = track.querySelector(`[data-chats="${w.id}"]`); if (!el) return;
     if (w.thread) { renderThread(w, el); loadThread(w); } else renderChatList(w, el);
@@ -1262,7 +1273,7 @@ window.WizCore.chats = function createChats(H) {
       const turns = toTurns(rows);
       const sig = JSON.stringify(turns.slice(-3));
       let changed = c.loadedFor !== w.thread || sig !== c.sig;
-      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav });
+      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       const sent = OUTBOX ? OUTBOX.forThread(w.thread).filter(p => p.state === 'sent') : [];
       if (sent.length) {
@@ -1279,7 +1290,17 @@ window.WizCore.chats = function createChats(H) {
       const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId].join('|') : '';
       if (hk2 !== c.hk) { c.hk = hk2; changed = true; }
       if (changed) { const el = track.querySelector(`[data-chats="${w.id}"]`); if (el && current()) renderLive(w, el); }
-    } catch (e) { if (current()) { c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now(); } }
+    } catch (e) {
+      if (current()) {
+        // A failed read is a moment, not a verdict (James, 21 Oct 2026: a 130-message thread showed a bare
+        // "Couldn’t load this thread" after one dropped read). Retry on our own with a short backoff, name the
+        // broken link in plain words, and give a Retry now tap. Sign-in (403) still needs the owner.
+        c.failN = (c.failFor === sid ? c.failN || 0 : 0) + 1; c.failFor = sid; c.errStatus = e.status || 0;
+        c.err = e.status === 403 ? 'Wizard sign-in needed' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now();
+        if (e.status !== 403) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
+        renderThreadLive(w);
+      }
+    }
     finally { if (c.loading === read) c.loading = false; }
   }
   /* Thread trail: a thread opened from a link inside another thread remembers where it came from, so Back,
@@ -1292,6 +1313,7 @@ window.WizCore.chats = function createChats(H) {
     if (w.thread) saveDraft(wid);
     closeRowSheet();
     const c = ch(wid); c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
+    c.err = ''; c.failN = 0; clearTimeout(c.retryT); // a read error belongs to the thread that failed, never the next one opened
     c.readNav = (c.readNav || 0) + 1;
     if (w.thread !== sid) H.threadShown?.(wid, null); // close the old preview immediately, even while the new thread loads
     if (opts.via === 'link' && w.thread && w.thread !== '__new__' && w.thread !== sid) c.trail = (c.trail || []).concat(w.thread).slice(-20);
@@ -1591,6 +1613,7 @@ window.WizCore.chats = function createChats(H) {
     if (justPressed() && e.target.closest('[data-chopen]')) return true; // a long-press/swipe just opened the actions sheet
     const o = e.target.closest('[data-chopen]'); if (o) { openChat(id, o.dataset.chopen); return true; }
     if (e.target.closest('[data-chback]')) { threadBack(w); return true; }
+    if (e.target.closest('[data-chretry]')) { const c = ch(id); clearTimeout(c.retryT); c.failN = 1; renderThreadLive(w); loadThread(w, true); return true; }
     if (e.target.closest('[data-chcarryx]')) { ch(id).carry = null; renderThreadNow(w); return true; }
     if (e.target.closest('[data-chnew]')) { const c = ch(id), text = (c.q || '').trim(); c.q = ''; c.focus = false; window.WizCore.chatSearch?.cancel(id); const o = owner(id); openNewDraft(o, '');
       if (text) { setDraft(o, text, []); setTimeout(() => { const ta = elOf(o)?.querySelector('.ch-compose textarea'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 60); } return true; }
