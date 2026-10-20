@@ -314,10 +314,10 @@ const setupWin = p => p.evaluate(() => { const w = Object.values(__wos.wins).fin
     await f.locator('[data-act="menu"]').tap();
     await f.locator('[data-act="ask-reset"]').tap();
     for (const id of skins) {
-      await p.evaluate(() => __wos.goHome());
+      await p.evaluate(() => __wos.goDesk(0));
       await p.locator('[data-act="settings"]').tap();
       await p.locator(`[data-skinpick="${id}"]`).tap();
-      await p.evaluate(() => __wos.backStep());
+      await p.evaluate(() => window.__wosNativeBack());
       await p.evaluate(() => __wos.openApp(WizCore.apps("mobile").APP.setup));
       await f.waitForFunction(s => document.documentElement.dataset.skin === s, id, { timeout: 5000 }).catch(() => {});
       await sleep(500);
