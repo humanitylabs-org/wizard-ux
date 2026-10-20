@@ -281,8 +281,8 @@ window.WosChatPower = function chatPower(A) {
     const instructions = H.viewContext(wid, 'a voice reply recorded in this thread');
     // Send and go: a voice reply steps back one level like a typed send (chats.js), on
     // the tap, not after the recording has been written to the phone's storage (a blob commit can take seconds).
+    const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
     const left = w && A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
-    const hold = left && !isNew ? LIVE.holdSend?.(sid) || null : null;
     if (w) A.renderChats(w);
     let it;
     try {

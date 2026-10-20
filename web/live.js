@@ -79,6 +79,7 @@
       runId: String(item.wizard_run_id || ''),
       // The idempotency key of the newest run Wizard knows for this thread (= the outbox item id for our sends).
       lastRunKey: String(item.wizard_last_run_idempotency_key || ''),
+      lastRunStatus: ALIASES[item.wizard_last_run_status] || String(item.wizard_last_run_status || ''),
       preview, previewRole: latest?.role === 'assistant' ? 'assistant' : latest?.role === 'user' ? 'user' : undefined,
       previewAt: latestAt,
       requestAt: userAt || lastUserAt,
@@ -343,16 +344,18 @@
    * and into working… I don't want to see the thread I just replied to in my feed and then have a UX update") ----
    * Every reply / new chat in the outbox holds its thread in Working, with a status that follows the message:
    * Sending… (leaving the phone) → Offline · will retry (Wizard unreachable) → Starting… (Wizard accepted it)
-   * → Working (Wizard lists the run). The hold outlives stale list reads and releases to Wizard's own truth as soon
-   * as Wizard reports this run (its idempotency key = the outbox item id); 2 min after acceptance it releases anyway.
+   * → Working (Wizard lists the run). The hold outlives stale list reads and releases to Wizard's own truth when
+   * this run settles (its idempotency key = the outbox item id); 2 min after acceptance it releases anyway.
    * A message that truly can't be sent puts the thread back where it was (the pill keeps Retry/Edit). */
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
   const PEND_MAX = 2 * 60e3;
-  // Released only on Wizard's own word for THIS message (run idempotency key = outbox item id): no clock comparisons.
-  // (or Wizard lists the very run it accepted for it, as working).
+  // Admission is not completion: the newest receipt can arrive with an older thread status.
+  // Keep the bounded hold through active acknowledgement, so a late stale poll cannot undo it.
   const confirmed = (s, p) => {
     const st = s.orig ? s.orig.status : s.status, run = s.orig ? s.orig.runId : s.runId;
-    return (!!p.key && s.lastRunKey === p.key) || (!!p.runId && run === p.runId && WORKING.has(st));
+    const sameKey = !!p.key && s.lastRunKey === p.key;
+    if ((sameKey || (!!p.runId && run === p.runId)) && WORKING.has(st)) p.acknowledged = true;
+    return sameKey && !WORKING.has(st) && !WORKING.has(s.lastRunStatus);
   };
   /* The send tap itself (James, 10 Oct 2026: "the thread I just exited moving to working immediately… It should just
    * automatically disappear" from Ready). An orb send reaches the outbox only after transcription and routing (seconds,
@@ -374,7 +377,7 @@
       s.assignedAt = at; s.requestAt = at;
     }
     // What the row says: Sending… → (Offline · will retry) → Starting… → (Wizard reports the run) Working.
-    s.pend = p.state === 'sent' ? 'starting' : p.state;
+    s.pend = p.acknowledged ? '' : p.state === 'sent' ? 'starting' : p.state;
     s.pendText = p.text; // shown in the row; s.preview stays Wizard's so read-state fingerprints are untouched
   }
   function unPend(s) {
@@ -398,7 +401,7 @@
       if (RELEASED.has(it.id) || (it.state === 'sent' && !known && Date.now() - (it.sentAt || 0) > PEND_MAX)) { if (known?.key === it.id) PEND.delete(sid); continue; } // already settled
       const text = String(it.text || it.typed || '').replace(/\s+/g, ' ').trim() || (it.audio || it.audioFile ? '🎙 Voice note' : (it.files || []).length ? '📎 Attachment' : '');
       if (it.agent && otherAgent(it.agent)) AGENT_OF.set(sid, it.agent);
-      PEND.set(sid, { key: it.id, kind: it.kind, text, at: it.createdAt, state: it.state === 'sent' ? 'sent' : it.state === 'waiting' ? 'waiting' : 'sending', sentAt: it.sentAt || 0, runId: it.runId || '', agent: it.agent && otherAgent(it.agent) ? it.agent : '' });
+      PEND.set(sid, { acknowledged: known?.key === it.id && known.acknowledged, key: it.id, kind: it.kind, text, at: it.createdAt, state: it.state === 'sent' ? 'sent' : it.state === 'waiting' ? 'waiting' : 'sending', sentAt: it.sentAt || 0, runId: it.runId || '', agent: it.agent && otherAgent(it.agent) ? it.agent : '' });
     }
     // An orb send still being transcribed/routed: Working from the send tap (outranks an older message's state).
     for (const [sid, t] of TAPS) {
