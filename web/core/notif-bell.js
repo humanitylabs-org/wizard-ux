@@ -1,6 +1,6 @@
-/* Notifications bell on the Chats panel: a small bell beside search with the unread count from the installed
- * Notifications app (same origin, /notifications/api/count). Tapping it opens Notifications as an ordinary app
- * window, so it sits on a desk you can swipe to. Hidden entirely when no Notifications app is installed. */
+/* Notifications unread count from the installed Notifications app (same origin, /notifications/api/count).
+ * The count shows as the app's badge on its dock/bar mark (workspaceNav.setCount), so the Chats panel carries
+ * no separate bell. html() stays for any skin that wants a bell; the shell no longer renders it. */
 (() => {
   'use strict';
   const S = { unread: 0, needs: 0, ok: false, at: 0 };
