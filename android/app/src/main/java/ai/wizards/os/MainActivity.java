@@ -291,7 +291,7 @@ public class MainActivity extends Activity {
                 root.removeView(web);
                 web.destroy();
                 buildWebView();
-                go(MainActivity.this instanceof AppSessionActivity ? startUrl(getIntent()) : ai.wizards.os.device.AppState.homeUrl(this));
+                go(MainActivity.this instanceof AppSessionActivity ? startUrl(getIntent()) : ai.wizards.os.device.AppState.homeUrl(MainActivity.this));
                 return true;
             }
         });
