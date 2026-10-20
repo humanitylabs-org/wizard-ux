@@ -414,12 +414,34 @@ class Suite:
                    and 'side button' in body.get('instructions', '') and bool(body.get('wizard_file_ids')),
                    {'sending': sending, 'delivered': delivered, 'runs_delta': len(self.state['runs']) - n, 'body': body})
 
+    def section(self, fn):
+        # One failed section is recorded and the suite moves on, so a single harness or app fault
+        # never hides the remaining checks. Evidence of the failing moment is kept per section.
+        try:
+            fn()
+        except Exception:
+            err = traceback.format_exc()
+            ident = self.current_check or fn.__name__
+            if not any(c['id'] == ident for c in self.checks):
+                self.checks.append({'id': ident, 'status': 'FAIL', 'detail': err})
+            try:
+                tag = 'fail-' + fn.__name__
+                (self.out / (tag + '-ui.xml')).write_text(self.sx('uiautomator dump /dev/tty') or '')
+                self.begin(tag)
+            except Exception:
+                pass
+            for step in (lambda: self.control('cancel'), lambda: self.sx('input keyevent KEYCODE_HOME')):
+                try:
+                    step()
+                except Exception:
+                    pass
+            time.sleep(3)
+            self.current_check = None
+
     def run(self):
         self.setup()
-        self.floating_take()
-        self.carried_take()
-        self.dictation()
-        self.assist_take()
+        for fn in (self.floating_take, self.carried_take, self.dictation, self.assist_take):
+            self.section(fn)
         self.save()
         crash = self.sx('logcat -d -b crash')
         (self.out / 'crash.txt').write_text(crash)

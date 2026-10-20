@@ -21,7 +21,17 @@ import static org.junit.Assert.*;
 public class ConnectE2eTest {
     private final Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
     private final UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
-    private void visible(String text) { assertNotNull(text, device.wait(Until.findObject(By.text(text)), 15000)); }
+    private void visible(String text) {
+        if (device.wait(Until.findObject(By.text(text)), 15000) != null) return;
+        // Keep the failing screen and its UI tree as evidence before failing.
+        shot("fail-" + text.replaceAll("[^A-Za-z0-9]+", "-"));
+        try { device.dumpWindowHierarchy(new File(c.getExternalFilesDir(null), "fail-hierarchy.xml")); } catch (Exception ignored) {}
+        fail(text + " not visible; ConnectActivity status=" + statusText() + " origin=" + ServerSettings.origin(c) + " top=" + device.getCurrentPackageName());
+    }
+    private String statusText() {
+        androidx.test.uiautomator.UiObject2 o = device.findObject(By.textContains("Wizard"));
+        return o == null ? "?" : o.getText();
+    }
     private void foreground() { assertEquals(c.getPackageName(), device.getCurrentPackageName()); }
     private void start(Class<?> activity) { c.startActivity(new Intent(c, activity).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
     private void shot(String name) { device.takeScreenshot(new File(c.getExternalFilesDir(null), name + ".png")); }
