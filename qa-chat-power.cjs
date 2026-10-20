@@ -399,6 +399,17 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     await p.screenshot({ path: `${OUT}/phone-08-latest-button.png` });
     const saved = await p.evaluate(k => JSON.parse(localStorage.getItem(k) || '{}').qa_pw_long || null, RP);
     ok(saved && Math.abs(saved.scrollTop - mid) < 4 && saved.messageId, '#18 phone: the reading place is saved (legacy key, per thread)', { saved, mid });
+    // Update reload (James, 20 Oct: "an update reloads me to the very top of the chat"). The shell boots with the
+    // thread already open before it has a size; the place must land once it does. Reload straight after the scroll
+    // also proves the place is flushed before the page goes (inside the 200 ms save debounce).
+    const mid2 = await p.evaluate(sel => { const nb = document.querySelector(sel); nb.scrollTop = Math.round(nb.scrollHeight * 0.33); nb.dispatchEvent(new Event('scroll')); return nb.scrollTop; }, await S('.ch-msgs'));
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await until(async () => p.evaluate(() => { const nb = [...document.querySelectorAll('.ch-msgs')].find(e => e.clientHeight); return !!nb && nb.scrollTop > 0; }), 15000);
+    await sleep(1500);
+    const afterReload = await p.evaluate(() => { const nb = [...document.querySelectorAll('.ch-msgs')].find(e => e.clientHeight); return nb ? Math.round(nb.scrollTop) : -1; });
+    ok(Math.abs(afterReload - mid2) < 30, '#18 phone: a reload with the thread open returns to the same place (never the top)', { afterReload, mid2 });
+    await p.evaluate(sel => { const nb = document.querySelector(sel); nb.scrollTop = Math.round(nb.scrollHeight * 0.4); nb.dispatchEvent(new Event('scroll')); }, await S('.ch-msgs'));
+    await sleep(600);
     await back();
     await openThread('qa_pw_long');
     for (let k = 0; k < 2; k++) { await p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); __wos.renderChats(w); }); await sleep(120); }

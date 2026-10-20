@@ -55,16 +55,35 @@ window.WosChatPower = function chatPower(A) {
     const b = el.querySelector('[data-chlatest]'); if (!b || !nb) return;
     b.hidden = bottomGap(nb) < 160;
   }
+  // Threads already placed in this page. The first placement after a page load is a restore (a reload, an
+  // update, the app coming back): the saved place wins even in a Working thread, as long as it is for the same reply.
+  const placedThisPage = new Set();
   /* Called by renderThread after the new DOM is in. Returns true when it placed the scroll itself. */
   function position(w, el, nb, o) {
     const c = ch(w.id), sid = w.thread;
     if (o.keep || !nb) return false;
+    if (c.placeWait) { c.placeWait.disconnect(); c.placeWait = null; }
     if (sid === '__new__' || !o.turns) { toBottom(nb); return true; }
     c.lid = latestId(o.turns);
     if (c.posFor !== sid) {
+      // No layout yet (the shell boots after a reload with the thread already open; desktop renders before it
+      // reveals its pane): every scrollTop clamps to 0, and marking the thread placed kept it at the top for good
+      // (James, 20 Oct: "an update reloads me to the very top of the chat"). Place it once the list has a size.
+      if (!nb.clientHeight) {
+        if (typeof ResizeObserver === 'function') {
+          const ro = c.placeWait = new ResizeObserver(() => {
+            if (!nb.clientHeight) return;
+            ro.disconnect(); if (c.placeWait === ro) c.placeWait = null;
+            if (nb.isConnected && el.querySelector('.ch-msgs') === nb && w.thread === sid && c.posFor !== sid) position(w, el, nb, o);
+          });
+          ro.observe(nb);
+        }
+        return true;
+      }
       c.posFor = sid;
+      const restore = !placedThisPage.has(sid); placedThisPage.add(sid);
       const saved = RP.read(sid), reply = lastReply(nb);
-      if (o.working) { c.follow = true; toBottom(nb); }
+      if (o.working && !(restore && saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
       else if (saved && c.lid && saved.messageId === c.lid) {
         // Back where you were: anchored to the latest reply, so layout changes don't shift it.
         if (saved.atBottom) toBottom(nb);
@@ -85,7 +104,7 @@ window.WosChatPower = function chatPower(A) {
     paintLatest(el, nb);
     return true;
   }
-  let saveT = 0;
+  let saveT = 0, savePending = null;
   function onScroll(nb) {
     const el = nb.closest('[data-chats]'); if (!el) return;
     const id = el.dataset.chats, w = H.win(id); if (!w || !w.thread || w.thread === '__new__') return;
@@ -93,12 +112,19 @@ window.WosChatPower = function chatPower(A) {
     c.follow = bottomGap(nb) < 80;
     paintLatest(el, nb);
     clearTimeout(saveT);
-    saveT = setTimeout(() => {
-      if (!c.lid || c.posFor !== w.thread) return;
+    savePending = () => {
+      savePending = null;
+      if (!c.lid || c.posFor !== w.thread || !nb.isConnected) return;
       const reply = lastReply(nb);
       RP.save({ sessionId: w.thread, messageId: c.lid, anchorOffset: reply ? relTop(nb, reply) : 0, scrollTop: Math.max(0, Math.round(nb.scrollTop)), savedAt: Date.now(), atBottom: bottomGap(nb) < 80, following: !!c.follow });
-    }, 200);
+    };
+    saveT = setTimeout(savePending, 200);
   }
+  // A reload (Update ready · Reload) or the app going away inside the 200 ms debounce must still keep the place.
+  const flushPlace = () => { clearTimeout(saveT); savePending?.(); };
+  addEventListener('pagehide', flushPlace);
+  addEventListener('beforeunload', flushPlace);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushPlace(); });
   // Pick from what's already in Wizard Files (#23), next to the paperclip.
   const filesBtn = () => (F ? `<button type="button" class="ch-fromfiles" data-chfiles aria-label="Attach from Wizard Files" title="From Wizard Files">${FOLDER_SVG}</button>` : '');
   const latestBtn = () => '<button type="button" class="ch-latest" data-chlatest hidden aria-label="Jump to the latest message">↓ Latest</button>';
