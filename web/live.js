@@ -404,7 +404,11 @@
       if (OB.quarantined?.(it.id) || ['failed', 'empty', 'held', 'unconfirmed'].includes(it.state) || (it.state === 'sent' && it.steered)) continue;
       const cur = latest.get(it.sessionId); if (!cur || it.createdAt > cur.createdAt) latest.set(it.sessionId, it);
     }
-    for (const [sid, p] of PEND) if (!latest.has(sid)) PEND.delete(sid); // deleted / taken back to edit
+    // Deleted / taken back to edit. A message Wizard already accepted keeps its hold when its outbox item goes:
+    // an open thread pane (desktop) retires the item as soon as the words land in the transcript, seconds before
+    // the list reports the run, and dropping the hold then flashed the thread back into Ready with Done
+    // (James, 20 Oct 2026). That hold still ends on Wizard's own truth (confirmed) or PEND_MAX.
+    for (const [sid, p] of PEND) if (!latest.has(sid) && !(p.state === 'sent' && !String(p.key).startsWith('tap:'))) PEND.delete(sid);
     for (const [sid, it] of latest) {
       const known = PEND.get(sid);
       if (RELEASED.has(it.id) || (it.state === 'sent' && !known && Date.now() - (it.sentAt || 0) > PEND_MAX)) { if (known?.key === it.id) PEND.delete(sid); continue; } // already settled
