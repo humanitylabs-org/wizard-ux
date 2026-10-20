@@ -152,6 +152,10 @@ html.wz-hosted .release-label select { background: var(--wz-surface-raised, #211
   max-width: 100%; white-space: normal; text-align: center; line-height: 1.2; }
 .mc-btn.alt { color: var(--violet-2); background: transparent; border: 1px solid var(--line-2, var(--line)); }
 html[data-color-scheme="light"] .mc-btn.alt { color: var(--ink); }
+/* Appearance v1 carries no status colours; the dark-tuned amber/green/red wash out on light skins. */
+html[data-color-scheme="light"] .mc-warn, html[data-color-scheme="light"] .mc-state.needs { color: #8a5a00; }
+html[data-color-scheme="light"] .mc-state.ready { color: #0f6e38; background: rgba(15, 122, 62, .12); }
+html[data-color-scheme="light"] .mc-state.off { color: #b3261e; background: rgba(198, 40, 40, .1); }
 .mc-btn:active { transform: scale(.97); }
 .mc-wait { font-size: 13px; color: var(--ink-3); padding: 10px 0; }
 .mc-done { display: flex; justify-content: flex-end; margin-top: 18px; }
