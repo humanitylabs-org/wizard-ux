@@ -37,9 +37,22 @@ test('draft rows use their durable draft key and can open the same picker', () =
 });
 
 test('emoji picker renders category headings in a bounded independently scrollable region', () => {
-  assert.match(chats, /TOPIC\.categories\.map/);
+  assert.match(chats, /emojiCategoryHtml\(TOPIC\.categories\)/);
   assert.match(chats, /class="ch-emoji-category"/);
   assert.match(chats, /class="ch-emoji-scroll"/);
   assert.match(css, /\.ch-emoji-sheet\s*\{[^}]*max-height:[^}]*display:\s*flex[^}]*flex-direction:\s*column/s);
   assert.match(css, /\.ch-emoji-scroll\s*\{[^}]*overflow-y:\s*auto[^}]*overscroll-behavior:\s*contain[^}]*touch-action:\s*pan-y/s);
+});
+
+test('emoji picker has an accessible non-autofocused search, clear action, and empty result', () => {
+  assert.match(chats, /type="search"[^>]*data-chemosearch[^>]*aria-label="Search emojis"/);
+  assert.doesNotMatch(chats, /data-chemosearch[^>]*autofocus/);
+  assert.match(chats, /data-chemoclear/);
+  assert.match(chats, /No emojis found/);
+  assert.match(chats, /TOPIC\.search/);
+  assert.match(css, /\.ch-emoji-search/);
+});
+
+test('typing in emoji search is isolated from global chat keyboard shortcuts', () => {
+  assert.match(chats, /matches\('\[data-chemosearch\]'\)[^}]*stopPropagation/);
 });
