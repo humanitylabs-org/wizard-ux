@@ -83,3 +83,80 @@ html[data-skin^="obsidian"] .mrow.secure .ag-lock { width: 12px; height: 12px; f
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-swrow .ms { flex: 0 1 340px; }
 html[data-skin="obsidian-light"] .ms { --secure: hsl(282 70% 44%); --secure-on: #ffffff; }
 html[data-skin="obsidian-light"] .ch-model.private { color: hsl(282 70% 44%); }
+
+/* Miguel's layout (ported from his test port, 20 Oct 2026): phone list order, edge-to-edge apps, quiet composer,
+ * lower dock, desktop list order and slim header. Scoped to this skin; James's skins keep the stock layout. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-scroll { display: flex; flex-direction: column-reverse; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec { display: flex; flex-direction: column-reverse; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec-b { display: flex; flex-direction: column-reverse; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec + .ch-sec { border-top: 0; border-bottom: 1px solid var(--line); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-scroll { padding-bottom: 8px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: 8px; }
+html[data-skin^="obsidian"] .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread { display: flex; flex-direction: column; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose:not(.has-text) .ch-mic:not(.on) { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--ink) 6%, var(--bg)); border-radius: 12px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"]:not(.open) .ch-sec-h { min-height: 34px; padding-top: 6px; padding-bottom: 6px; opacity: .8; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-scroll { flex-direction: column; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec { order: 1; flex-direction: column; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec:not([data-sec="ready"]) .ch-sec-b { flex-direction: column; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { order: 0; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { order: 2; margin-top: auto; flex-direction: column-reverse; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec + .ch-sec { border-bottom: 0; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { border-top: 1px solid var(--line); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-head { padding-left: 14px; }
+html[data-skin^="obsidian"] #device.orb-lift { --corner-b: 9px; }
+html[data-skin^="obsidian"] #device.orb-corner .win.full .ch-compose:not(.has-text) { padding-right: calc(var(--corner-orb) + var(--corner-r) + 8px); }
+html[data-skin^="obsidian"] #device.orb-corner .win.full .ch-compose.has-text { padding-right: 10px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-head { padding: 4px 10px 4px 14px; border-bottom: 0; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-head .ti, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-head .ti .ti-b { min-height: 26px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-head .ti b { font-size: 14.5px; font-weight: 650; color: var(--ink-2); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .win.full .wbar { height: 28px; border-bottom: 0; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-tacts button { border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-latest { bottom: auto; top: auto; right: 50%; transform: translateX(50%); bottom: 140px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-fab { right: calc(var(--corner-r) + var(--corner-orb) + 10px); bottom: calc(var(--safe-b) + var(--corner-b)); width: 44px; height: 44px; border-radius: 22px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose textarea { border-color: transparent; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose .ch-attach { background: none; border: 0; color: var(--ink-2); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose .ch-attach svg { stroke: var(--ink-2); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-thread > .ch-head { background: var(--bg); position: relative; z-index: 2; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-compose { border-top: 0; padding-bottom: calc(10px + var(--safe-b, 0px)); }
+html[data-skin^="obsidian"] #device.orb-corner { --corner-r: 16px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { flex-direction: column; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: calc(var(--safe-b, 0px) + var(--corner-b)); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-rdy-bar { min-height: var(--corner-orb); align-items: center; padding-right: calc(var(--corner-r) + 2 * var(--corner-orb) + 18px); margin: 0; }
+html[data-skin^="obsidian"] .ch-compose button.ch-attach { background: none !important; border: 0 !important; box-shadow: none !important; }
+html[data-skin^="obsidian"] .ch-compose button.ch-attach svg { stroke: var(--ink-2) !important; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-list .ch-rdy-bar { padding-right: 120px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .ch-fab { width: 44px; height: 44px; border-radius: 22px; }
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-list .ch-scroll { display: flex; flex-direction: column; }
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-list .ch-sec[data-sec="archive"] { order: -2; }
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-list .ch-sec[data-sec="working"] { order: -1; }
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-list .ch-sec[data-sec="ready"] { order: 0; }
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-list .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-compose button.ch-mic:not(.on) { border: 0 !important; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--ink) 70%, transparent), color-mix(in srgb, var(--violet) 55%, var(--bg)) 55%, var(--bg) 100%) !important; box-shadow: 0 0 0 1px var(--line-2), 0 0 14px color-mix(in srgb, var(--violet) 35%, transparent) !important; }
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-compose button.ch-mic:not(.on) svg { opacity: 0; }
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-head { padding: 3px 10px 3px 4px; min-height: 0; }
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-head .ti b { font-size: 14px; }
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-head .ch-back { width: 30px; height: 30px; }
+html[data-skin^="obsidian"] { --ch-priv: hsl(282 88% 74%); }
+html[data-skin^="obsidian"] { --safe-b-low: calc(var(--safe-b) * .45); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock { height: calc(var(--dock-h) + var(--safe-b-low)); padding-bottom: calc(6px + var(--safe-b-low)); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-compose { padding-bottom: calc(8px + var(--safe-b-low)) !important; }
+html[data-skin^="obsidian"] .dock .orb-wrap { z-index: 3; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .scrub { bottom: max(0px, calc(var(--safe-b-low) - 10px)); height: 12px; z-index: 1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.immersive .tiles.has-full { bottom: 0; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-compose { padding-bottom: calc(4px + var(--safe-b-low)) !important; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) #device.orb-corner { --corner-b: 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .imm-edge { height: calc(12px + var(--safe-b-low)); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .imm-edge i { bottom: 3px; }
+html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) { left: 0; right: 0; top: calc(var(--sb) + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b-low, var(--safe-b)) - 4px); --gap: 2px; gap: 2px; }
+html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .win { border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; }
+html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .win.solo { border-top: 0; border-bottom: 0; border-radius: 0 0 22px 22px; }
+html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .win.focus { box-shadow: inset 0 0 0 1px rgba(185, 155, 255, .5); }
+html[data-skin^="obsidian"][data-shell="phone"] .win .wb[data-wact="full"] { display: none; }
+html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .win.solo.app-chats > .wbar { display: none; }
+html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .win.solo { border-radius: 0; }
+html[data-skin^="obsidian"][data-shell="phone"] .tiles:not(.has-full) .ch-compose { padding-bottom: 4px !important; padding-top: 6px; gap: 6px; }
+html[data-skin^="obsidian"] .ch-rdy-bar button { white-space: nowrap; flex: 0 0 auto; }
