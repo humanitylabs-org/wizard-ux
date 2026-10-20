@@ -76,3 +76,20 @@ test('choices from later categories persist through the existing storage key', (
   const second = fixture({ 'wos.chats.topicEmoji.v1': first.values.get('wos.chats.topicEmoji.v1') });
   assert.equal(second.api.get('thread:later', 'Anything'), later);
 });
+
+test('search is case-insensitive, trims whitespace, and matches emoji names and synonyms', () => {
+  const { api } = fixture();
+  const emoji = query => api.search(query).flatMap(category => category.emoji);
+  assert.ok(emoji('  TRAIN  ').includes('🚆'));
+  assert.ok(emoji('plane').includes('✈️'));
+  assert.ok(emoji('happy').includes('😀'));
+  assert.ok(emoji('money').includes('💰'));
+  assert.ok(!emoji('money').includes('🎯'), 'category labels must not make unrelated emoji match');
+  assert.ok(emoji('computer').includes('💻'));
+});
+
+test('empty search restores every category and an unknown term returns no categories', () => {
+  const { api } = fixture();
+  assert.deepEqual(JSON.parse(JSON.stringify(api.search('  '))), JSON.parse(JSON.stringify(api.categories)));
+  assert.deepEqual(JSON.parse(JSON.stringify(api.search('definitely-not-an-emoji'))), []);
+});
