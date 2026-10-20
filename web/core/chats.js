@@ -378,7 +378,7 @@ window.WizCore.chats = function createChats(H) {
   function openNewDraft(wid, resume) {
     const w = W[wid]; if (!w) return;
     if (w.thread) saveDraft(wid);
-    const c = ch(wid); c.draft = ''; c.files = []; c.draftFor = '';
+    const c = ch(wid); c.draft = ''; c.files = []; c.draftFor = ''; c.newModel = null;
     w.thread = null; // so openChat doesn't save the old slot over the rotated one
     if (!winAgent(w) && !rotateNew(resume || '')) { toast('!', 'Couldn’t open that draft · it’s still saved', 2200); }
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
