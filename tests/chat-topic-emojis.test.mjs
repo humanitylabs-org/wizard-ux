@@ -55,3 +55,24 @@ test('palette contains the Telegram-reference topics and general choices', () =>
   }
   assert.equal(new Set(api.choices).size, api.choices.length);
 });
+
+test('palette exposes a broad categorized set without duplicate choices', () => {
+  const { api } = fixture();
+  assert.ok(api.categories.length >= 8, `expected at least 8 categories, got ${api.categories.length}`);
+  assert.ok(api.choices.length >= 150, `expected at least 150 choices, got ${api.choices.length}`);
+  assert.equal(new Set(api.choices).size, api.choices.length);
+  for (const category of api.categories) {
+    assert.ok(category.label.trim().length > 0);
+    assert.ok(category.emoji.length >= 8, `${category.label} is too sparse`);
+    for (const emoji of category.emoji) assert.ok(api.choices.includes(emoji));
+  }
+});
+
+test('choices from later categories persist through the existing storage key', () => {
+  const first = fixture();
+  const later = first.api.categories.at(-1).emoji.at(-1);
+  assert.ok(later);
+  assert.equal(first.api.set('thread:later', later), true);
+  const second = fixture({ 'wos.chats.topicEmoji.v1': first.values.get('wos.chats.topicEmoji.v1') });
+  assert.equal(second.api.get('thread:later', 'Anything'), later);
+});
