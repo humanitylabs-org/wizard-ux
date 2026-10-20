@@ -97,6 +97,11 @@ html[data-layout="desktop"] h1 { font-size: 26px; font-weight: 800; }
 .url .copy { flex: none; min-height: 40px; padding: 0 10px; border-radius: 10px; color: var(--ac); font-size: 15px; font-weight: 600; }
 html[data-layout="phone"] .url { cursor: pointer; }
 
+/* Signal uses square edges and monospace labels, not colour alone. */
+html[data-skin="signal"] { --setup-r: 2px; }
+html[data-skin="signal"] :is(h1, h2, .eyebrow, .btn, .url, .menu) { font-family: var(--wz-mono, monospace); }
+html[data-skin="signal"] :is(.item, .btn, .url, .menu, .sheet, .qr) { border-radius: 2px; }
+
 /* Overflow menu, disconnect sheet, toast: the shell's sheet material */
 .scrim { position: fixed; inset: 0; background: color-mix(in srgb, var(--wz-base, #05030c) 45%, transparent); z-index: 10; }
 .menu { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 52px); right: max(12px, calc((100vw - 480px) / 2)); z-index: 11; min-width: 230px; padding: 6px; border-radius: 14px; background: var(--ov); border: 1px solid var(--bd); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: 0 12px 30px rgba(0, 0, 0, .35); }

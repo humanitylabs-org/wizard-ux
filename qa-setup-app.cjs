@@ -310,8 +310,15 @@ const setupWin = p => p.evaluate(() => { const w = Object.values(__wos.wins).fin
     await f.locator('[data-act="open-phone"]').tap(); await waitStep(f, 'serving');
     const skins = await p.evaluate(() => WosSkin.list.map(s => s.id));
     ok(['nebula', 'grove', 'tide', 'ember', 'signal'].every(s => skins.includes(s)), 'live skin registry has Nebula, Grove, Tide, Ember, Signal', skins);
+    await f.evaluate(() => { window.__qaIdentity = "setup-skin-document"; });
+    await f.locator('[data-act="menu"]').tap();
+    await f.locator('[data-act="disconnect"]').tap();
     for (const id of skins) {
-      await p.evaluate(s => WosSkin.set(s), id);
+      await p.evaluate(() => __wos.goHome());
+      await p.locator('[data-act="settings"]').tap();
+      await p.locator(`[data-skinpick="${id}"]`).tap();
+      await p.evaluate(() => __wos.backStep());
+      await p.evaluate(() => __wos.openApp(WizCore.apps("mobile").APP.setup));
       await f.waitForFunction(s => document.documentElement.dataset.skin === s, id, { timeout: 5000 }).catch(() => {});
       await sleep(500);
       const r = await p.evaluate(() => {
@@ -323,6 +330,7 @@ const setupWin = p => p.evaluate(() => { const w = Object.values(__wos.wins).fin
       });
       const T0 = 'rgba(0, 0, 0, 0)';
       ok(r.skin === id && r.themed && r.htmlBg === T0 && r.bodyBg === T0 && r.frameBg === T0 && r.winBg === r.chatsBg, `${id}: themed, transparent canvas, same window material as Chats`, r);
+      ok(await f.evaluate(() => window.__qaIdentity === 'setup-skin-document' && !document.getElementById('sheet').hidden), `${id}: app document and open disconnect dialog survive the visible skin control`);
       console.log('shot', await shot(p, `phone-skin-${id}`));
     }
     await p.evaluate(() => WosSkin.set('nebula'));
@@ -359,6 +367,12 @@ const setupWin = p => p.evaluate(() => { const w = Object.values(__wos.wins).fin
     console.log('shot', await shot(p, 'desktop-03-serving'));
     await fake({ phone: { step: 'phone_seen' } }); await waitStep(f, 'phone_seen');
     console.log('shot', await shot(p, 'desktop-04-phone-seen'));
+    for (const id of ['nebula', 'signal']) {
+      await p.evaluate(s => WosSkin.set(s), id);
+      await f.waitForFunction(s => document.documentElement.dataset.skin === s, id);
+      ok(await f.evaluate(() => getComputedStyle(document.body).backgroundColor === 'rgba(0, 0, 0, 0)'), `desktop ${id}: hosted canvas remains transparent`);
+      console.log('shot', await shot(p, `desktop-skin-${id}`));
+    }
     // Esc / Back: phone screen → checklist; at the checklist the window stays.
     await f.locator('#phone h1').click(); await p.keyboard.press('Escape'); await sleep(400);
     ok((await fs_(f)).screen === 'list' && await p.evaluate(() => Object.values(__wux.wins).some(w => w.appId === 'setup')), 'desktop Esc: phone screen → checklist, window still open');
