@@ -172,6 +172,8 @@
         if (kind === 'commentary') { cur.notes.push(t); cur.steps++; continue; }
         if (cur.a) cur.notes.push(cur.a.text);
         cur.a = { text: t, at, final: !(Array.isArray(m.tool_calls) && m.tool_calls.length) };
+        // Hermes' own "Your request was not processed" boundary row (display_kind failed_turn), not the model's words.
+        if (kind === 'failed_turn') cur.a.failed = true;
       } else if (cur) { if (later(cur, at)) { const prev = cur; newTurn(null); cur.at = at; cur.later = { at, after: prev.a.at }; } cur.steps++; noteWork(cur, m, at); }
     }
     return out;
