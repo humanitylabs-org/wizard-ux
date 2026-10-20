@@ -1,7 +1,7 @@
 // MIZEL brand intro for Miguel's skins (Dark, Light, Landscapes). Plays once when someone picks one of them:
 // a warp-in, the five letters slam down, the screen shakes on impact, a shockwave rings out, then the overlay
 // irises closed onto the new skin. Same choreography for all three; only the palette follows the skin.
-// Tap anywhere to skip. Reduced-motion users get a calm fade with no shake or vibration.
+// Plays in full for everyone: no skip, no reduced-motion variant (Miguel's call).
 // Web Animations only (no timers or raw listeners), so it stays inside the skin-package lint.
 
 const PALETTE = {
@@ -11,7 +11,7 @@ const PALETTE = {
 };
 
 const CSS = `
-.mz-intro{position:fixed;inset:0;z-index:2147483000;overflow:hidden;background:var(--mz-bg);color:var(--mz-ink);cursor:pointer;
+.mz-intro{position:fixed;inset:0;z-index:2147483000;overflow:hidden;background:var(--mz-bg);color:var(--mz-ink);
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none;
   font-family:'WOS Sora',var(--font-display,ui-sans-serif),system-ui,-apple-system,"Segoe UI",sans-serif}
 .mz-stage{position:absolute;inset:-28px;display:grid;place-items:center}
@@ -36,7 +36,6 @@ export function playIntro({ id, listen } = {}) {
   if (typeof document === 'undefined' || !document.body) return { stop() {}, done: Promise.resolve() };
   const skin = id || document.documentElement.dataset.skin || 'obsidian';
   const P = PALETTE[skin] || PALETTE.obsidian;
-  const calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   let style = document.getElementById('mz-intro-style');
   if (!style) { style = el('style'); style.id = 'mz-intro-style'; style.textContent = CSS; document.head.appendChild(style); }
@@ -57,12 +56,7 @@ export function playIntro({ id, listen } = {}) {
   let hold, finished = false, resolveDone;
   const done = new Promise(r => { resolveDone = r; });
 
-  if (calm) {
-    run(root, [{ opacity: 0 }, { opacity: 1 }], { duration: 220 });
-    letters.forEach(s => run(s, [{ opacity: 0 }, { opacity: 1, filter: glow }], { delay: 120, duration: 360 }));
-    [eyebrow, rule, name].forEach(n => run(n, [{ opacity: 0, transform: 'none' }, { opacity: 1, transform: 'none' }], { delay: 220, duration: 360 }));
-    hold = run(root, [{ opacity: 1 }, { opacity: 1 }], { duration: 1300 });
-  } else {
+  {
     const IMPACT = 780, HOLD = IMPACT + 1350;
     run(root, [{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
     // warp in: rays rush toward the centre
@@ -93,15 +87,13 @@ export function playIntro({ id, listen } = {}) {
   const exit = () => {
     if (leaving || finished) return; leaving = true;
     anims.forEach(a => { try { if (a !== hold) a.finish(); } catch (_) {} });
-    const out = calm
-      ? run(root, [{ opacity: 1 }, { opacity: 0 }], { duration: 320, easing: 'ease-in' })
-      : (run(core, [{ transform: 'scale(1)', opacity: 1, filter: 'blur(0)' }, { transform: 'scale(2.7)', opacity: 0, filter: 'blur(10px)' }], { duration: 420, easing: 'cubic-bezier(.6,0,.9,.4)' }),
+    const out = (run(core, [{ transform: 'scale(1)', opacity: 1, filter: 'blur(0)' }, { transform: 'scale(2.7)', opacity: 0, filter: 'blur(10px)' }], { duration: 420, easing: 'cubic-bezier(.6,0,.9,.4)' }),
          run(root, [{ clipPath: 'circle(150% at 50% 50%)' }, { clipPath: 'circle(0% at 50% 50%)' }], { duration: 580, easing: 'cubic-bezier(.7,0,.84,0)' }));
-    if (!calm) { const dev = document.getElementById('device'); if (dev) dev.animate([{ scale: '1.05', filter: 'brightness(1.35)' }, { scale: '1', filter: 'brightness(1)' }], { delay: 380, duration: 560, easing: 'cubic-bezier(.2,.9,.25,1)' }); }
+    { const dev = document.getElementById('device'); if (dev) dev.animate([{ scale: '1.05', filter: 'brightness(1.35)' }, { scale: '1', filter: 'brightness(1)' }], { delay: 380, duration: 560, easing: 'cubic-bezier(.2,.9,.25,1)' }); }
     out.finished.then(cleanup, cleanup);
   };
   hold.finished.then(exit, () => {});
-  // Tap anywhere to skip. Some shells swallow pointerdown on touch, so listen for touch and click too.
-  if (typeof listen === 'function') for (const type of ['pointerdown', 'touchstart', 'click']) listen(root, type, e => { e.stopPropagation(); exit(); }, { passive: true });
-  return { stop: cleanup, skip: exit, done };
+  // No skip: taps on the overlay are swallowed so the intro always plays through.
+  if (typeof listen === 'function') for (const type of ['pointerdown', 'touchstart', 'click']) listen(root, type, e => { e.stopPropagation(); }, { passive: true });
+  return { stop: cleanup, done };
 }
