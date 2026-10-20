@@ -2,7 +2,19 @@
 (() => {
   'use strict';
   const KEY = 'wos.chats.topicEmoji.v1';
-  const choices = Object.freeze(['💬', '💻', '🏹', '🚆', '📝', '🎬', '📦', '📈', '💪', '🎧', '📚', '🧠', '✈️', '🏠', '⚡', '🔬']);
+  const categories = Object.freeze([
+    { label: 'Work & chat', emoji: ['💬', '🗨️', '📣', '📢', '📧', '📨', '📮', '📝', '📋', '📌', '📍', '✅', '☑️', '🗓️', '📅', '⏰', '⌛', '🔔', '🤝', '👥'] },
+    { label: 'Ideas & learning', emoji: ['🧠', '💡', '📚', '📖', '🔬', '🔭', '🧪', '🧬', '🎓', '✏️', '🖊️', '📐', '📊', '🧩', '🗺️', '🔎', '❓', '❗', '🧭', '🏛️'] },
+    { label: 'Business & money', emoji: ['📈', '📉', '💹', '💰', '💵', '💳', '🪙', '🏦', '🏢', '💼', '🧾', '🛒', '🏷️', '📦', '🚚', '⚖️', '🔐', '🗝️', '🎯', '🏆'] },
+    { label: 'Tech & tools', emoji: ['💻', '🖥️', '⌨️', '🖱️', '📱', '☎️', '📡', '🛰️', '🤖', '⚙️', '🛠️', '🔧', '🔨', '🪛', '🔩', '🔌', '🔋', '💾', '💿', '🧰'] },
+    { label: 'Media & creative', emoji: ['🎬', '🎥', '📸', '🖼️', '🎨', '🖌️', '🎭', '🎤', '🎧', '🎵', '🎹', '🎸', '🥁', '📻', '📺', '📰', '✍️', '🏹', '✨', '🪄'] },
+    { label: 'Travel & places', emoji: ['✈️', '🚆', '🚄', '🚗', '🚌', '🏍️', '🚲', '🚢', '⛵', '🚀', '🧳', '🏠', '🏡', '🏨', '🏕️', '🏖️', '🏔️', '🌆', '🌍', '🌴'] },
+    { label: 'People & wellbeing', emoji: ['😀', '😊', '😂', '🤔', '😎', '🥳', '❤️', '🫶', '🙏', '👋', '👍', '👏', '💪', '🏃', '🏋️', '🧘', '🩺', '💊', '😴', '🛌'] },
+    { label: 'Nature & food', emoji: ['☀️', '🌙', '⭐', '⚡', '🔥', '💧', '🌊', '🌈', '🌱', '🌳', '🌸', '🍎', '🥑', '🥗', '🍜', '🍕', '☕', '🍵', '🍷', '🥂'] },
+    { label: 'Projects & objects', emoji: ['🚧', '🏗️', '🧱', '🪵', '🧲', '🧯', '🗃️', '🗄️', '📁', '📎', '✂️', '📏', '🔖', '🧷', '🪜', '🔦', '🎁', '🛡️', '🔒', '🔓'] },
+    { label: 'Fun & milestones', emoji: ['🎉', '🎊', '🎂', '🎈', '🎆', '🎇', '🥇', '🏅', '🎖️', '🕹️', '🎲', '♟️', '⚽', '🏀', '🎾', '⛳', '🎟️', '🍿', '🚩', '🏁'] },
+  ].map(category => Object.freeze({ label: category.label, emoji: Object.freeze(category.emoji) })));
+  const choices = Object.freeze(categories.flatMap(category => category.emoji));
   const allowed = new Set(choices);
   const rules = [
     [/(?:\bdev\b|develop|code|coding|software|github|bug|build|deploy|server|hermes|wizard\s*os)/i, '💻'],
@@ -33,6 +45,7 @@
     return allowed.has(fallback) ? fallback : '💬';
   };
   window.WosTopicEmoji = Object.freeze({
+    categories,
     choices,
     infer,
     get(key, text, fallback = '💬') { return selected[String(key || '')] || infer(text, fallback); },
