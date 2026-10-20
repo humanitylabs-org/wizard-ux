@@ -145,6 +145,13 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-pill .pbtn.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
 .ch-pill.fail { color: var(--amber); border-color: rgba(255, 190, 85, .45); }
 .ch-pill.wait { color: var(--ink-2); }
+.ch-pill.wait:has([data-chtroubleshoot]) { flex-wrap: wrap; white-space: normal; padding: 5px 8px; border-radius: 18px; background: var(--wz-base, var(--bg)); border-color: var(--wz-border, var(--line-2)); }
+.ch-pill.wait:has([data-chtroubleshoot]) .pl { flex-basis: 100%; }
+.ch-pill.wait:has([data-chtroubleshoot]) .pl > span { overflow: visible; }
+.ch-sync.off { flex-wrap: wrap; }
+.ch-sync [data-chtroubleshoot] { min-height: 44px; padding: 4px 10px; border-radius: 99px; font: inherit; }
+[data-chtroubleshoot] { color: var(--wz-text, var(--ink)); background: var(--wz-surface, var(--glass)); border: 1px solid var(--wz-border, var(--line-2)); }
+
 .ch-pill.sent { gap: 6px; padding: 0 14px 0 12px; color: #8fe3b5; pointer-events: none; animation: ch-pill-out 1.5s ease-in forwards; }
 .ch-pill.sent svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 @keyframes ch-pill-in { from { opacity: 0; transform: translate(-50%, 8px); } }

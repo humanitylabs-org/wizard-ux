@@ -60,7 +60,7 @@ html[data-skin-frame] .device.immersive .win.full,
 html[data-skin-frame] body.desktop-fullscreen .win.full { border: 0; border-radius: 0; padding: 0; }
 html[data-skin-frame] .device.immersive .win.full > .wbar,
 html[data-skin-frame] body.desktop-fullscreen .win.full > .wbar { display: none; }
-html[data-skin-frame="borderless"] .device.wx-on .tiles { top: 44px; }
+html[data-skin-frame="borderless"] .device.wx-on .tiles { top: var(--wx-banner-height, 44px); }
 /* Shared Settings is the sole comparison/import surface; no preview furniture. */
 .sf-section { padding: 10px 12px; }
 .sf-section p { font-size: 12px; color: var(--ink-3); line-height: 1.5; }

@@ -806,7 +806,7 @@ body {
 .home-system:active { transform: scale(.94); }
 .home-tools button:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
 @media (hover: hover) { .home-system:hover { color: var(--ink); border-color: var(--violet-2); } }
-.device.wx-on .home-tools { top: calc(var(--sb) + var(--safe-t) + 42px); }
+.device.wx-on .home-tools { top: calc(var(--sb) + var(--safe-t) + var(--wx-banner-height, 42px)); }
 .device.wx-on .home-tools .gear { top: auto; }
 /* Opinionated: Home shows Ready / Working as two small side-by-side counters; the line under the clock is gone. */
 .home .home-line:empty { display: none; }
