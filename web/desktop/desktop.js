@@ -1592,6 +1592,21 @@
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
+  /* Skin packages (core/skin-host.js) on desktop: the same narrow adapter the phone shell hands over, so a skin
+   * declared when: 'always' runs its script here too. James's skins declare no package and load nothing. */
+  const skinChatsWin = () => { const f = focused(); return f && f.app === 'chats' ? f : (ws[cur].wins.map(id => W[id]).find(x => x && x.app === 'chats') || null); };
+  window.WosSkinHost?.attach({
+    route() { const w = homeOpen ? null : skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: cur }; },
+    back: () => !!escStep(),
+    openList: () => { const w = skinChatsWin(); if (w) { CHATS.openChat(w.id, null); syncChatsPane(w.id); } },
+    openThread: id => openThread(id),
+    goDesk: i => goWs(i),
+    deskCount: () => ws.length,
+    root() { const w = skinChatsWin(); return w ? document.querySelector(`[data-chats="${w.id}"]`) : null; },
+    dock: () => null,
+    locked: () => false,
+    toast: text => toast('◇', text, 2400),
+  });
   // Closed means closed: an app with no window left on any desktop stops its microphone (take saved for recovery).
   window.WizAppServices?.trackOpenApps?.(() => ws.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   window.WizAppServices?.guardBack(() => {

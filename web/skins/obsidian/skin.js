@@ -3,7 +3,10 @@
 // Back goes through the shell's own Back step (api.nav.back): linked thread -> parent, thread -> list; never exits.
 import { playIntro } from './intro.js';
 
+import { setupBehaviour } from './behaviour.js';
+
 export default function setup(api) {
+  const behaviour = setupBehaviour(api);
   // MIZEL intro (web/skins/obsidian/intro.js): plays when this skin is picked, not when the app simply reopens on it.
   // 'live' is set while this skin is the chosen one and cleared only when the owner switches away.
   let intro = null;
@@ -53,5 +56,5 @@ export default function setup(api) {
   ensure();
   api.on('render', ensure);
   api.on('route', ensure);
-  return reason => { if (sw) reset(sw.th); sw = null; intro?.stop(); if (reason === 'switch') api.storage.set('live', false); };
+  return reason => { behaviour(); if (sw) reset(sw.th); sw = null; intro?.stop(); if (reason === 'switch') api.storage.set('live', false); };
 }
