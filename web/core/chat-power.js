@@ -83,32 +83,53 @@ window.WosChatPower = function chatPower(A) {
       c.posFor = sid;
       const restore = !placedThisPage.has(sid); placedThisPage.add(sid);
       const saved = RP.read(sid), reply = lastReply(nb);
+      let apply = null;
       if (o.working && !(restore && saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
       else if (saved && c.lid && saved.messageId === c.lid) {
         // Back where you were: anchored to the latest reply, so layout changes don't shift it.
-        if (saved.atBottom) toBottom(nb);
-        else nb.scrollTop = reply && isFinite(saved.anchorOffset) ? nb.scrollTop + relTop(nb, reply) - saved.anchorOffset : saved.scrollTop;
+        apply = saved.atBottom ? toBottom : box => { const r = lastReply(box); box.scrollTop = r && isFinite(saved.anchorOffset) ? box.scrollTop + relTop(box, r) - saved.anchorOffset : saved.scrollTop; };
         c.follow = !!saved.atBottom;
       } else if (reply) {
         // A fresh reply: open at its first line, not the end of it.
-        nb.scrollTop = Math.max(0, nb.scrollTop + relTop(nb, reply) - 8);
-        c.follow = bottomGap(nb) < 80;
+        apply = box => { const r = lastReply(box); if (r) box.scrollTop = Math.max(0, box.scrollTop + relTop(box, r) - 8); };
         c.atStart = sid;
       } else { c.follow = true; toBottom(nb); }
+      if (apply) { apply(nb); if (!saved || saved.messageId !== c.lid) c.follow = bottomGap(nb) < 80; settle(c, nb, apply); }
       paintLatest(el, nb);
       return true;
     }
-    // Later renders: a thread that follows stays on the bottom; otherwise the reading place holds.
-    if (c.follow || (o.working && o.atBottom)) toBottom(nb);
+    // Later renders: a place still settling is placed again; a thread that follows stays on the bottom; otherwise the reading place holds.
+    if (settling(c)) { const s = c.settle; s.apply(nb); settle(c, nb, s.apply, s.until); }
+    else if (c.follow || (o.working && o.atBottom)) toBottom(nb);
     else if (o.boxTop != null) nb.scrollTop = o.boxTop; // read before the old list was replaced (a detached box reads 0)
     paintLatest(el, nb);
     return true;
   }
+  /* A place lands while the layout is still moving: after a reload the desktop pane slides in narrow and short
+   * (James, 20 Oct: the reload put him back at the wrong place), photos land, live repaints replace the list.
+   * Until the reader touches the list or SETTLE_MS pass, place it again on every size change, photo load and
+   * repaint, and hold the save so a mid-slide clamp never overwrites the good place. */
+  const SETTLE_MS = 3000;
+  function settle(c, nb, apply, until) {
+    endSettle(c);
+    const s = c.settle = { nb, apply, until: until || Date.now() + SETTLE_MS };
+    const stop = () => endSettle(c, s), again = () => { if (settling(c) && c.settle === s) apply(nb); else stop(); };
+    // Any touch in the thread (the list, ↓ Latest, the composer) hands the place back to the reader.
+    const evs = ['wheel', 'touchstart', 'pointerdown', 'keydown'], host = nb.closest('[data-chats]') || nb;
+    evs.forEach(e => host.addEventListener(e, stop, { passive: true }));
+    nb.addEventListener('load', again, true);
+    if (typeof ResizeObserver === 'function') { s.ro = new ResizeObserver(again); s.ro.observe(nb); }
+    s.off = () => { evs.forEach(e => host.removeEventListener(e, stop)); nb.removeEventListener('load', again, true); s.ro?.disconnect(); };
+    s.t = setTimeout(stop, Math.max(0, s.until - Date.now()));
+  }
+  function endSettle(c, s) { const cur = c.settle; if (!cur || (s && cur !== s)) return; c.settle = null; cur.off?.(); clearTimeout(cur.t); }
+  const settling = c => !!(c.settle && Date.now() < c.settle.until);
   let saveT = 0, savePending = null;
   function onScroll(nb) {
     const el = nb.closest('[data-chats]'); if (!el) return;
     const id = el.dataset.chats, w = H.win(id); if (!w || !w.thread || w.thread === '__new__') return;
     const c = ch(id);
+    if (settling(c) && c.settle.nb === nb) { paintLatest(el, nb); return; } // our own placement, not the reader
     c.follow = bottomGap(nb) < 80;
     paintLatest(el, nb);
     clearTimeout(saveT);
