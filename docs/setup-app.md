@@ -1,6 +1,6 @@
 # Setup app — "Use Wizard on your phone"
 
-System app `setup` (title **Setup**), listed beside Chats. Contract: `phone-setup-tailscale/CONTRACT.md` → "Setup app".
+System app `setup` (title **Setup**), listed beside Chats. Contract: wizard-os `spec/PHONE_SETUP.md` → "Setup app".
 Design: Claude Fable, two rounds on 14 Oct 2026 (layout, copy, every state, first-run order). Archimedes built it as
 specified; the only deliberate deviation is the deep-link launch rule below.
 
@@ -11,7 +11,7 @@ specified; the only deliberate deviation is the deep-link launch rule below.
      opens outside Wizard; "Open the sign-in page" is always a real link as the fallback. `https` shows
      "Turn on secure addresses" (`https_enable_url`). Green at `serving` with the device name.
   2. Get Tailscale on your phone → QR of `install_url` (desktop) / "Get Tailscale" link (phone layout) + address row.
-  3. Open Wizard on your phone → unlocked at `serving`; QR of `wizard_url` (desktop) / link (phone layout) + address
+  3. Open Wizard on your phone → unlocked at `serving`; QR of `wizard://connect?origin=<percent-encoded HTTPS origin from wizard_url>` (desktop) / HTTPS link (phone layout) + address
      row with Copy. Green at `phone_seen`: "Your phone is connected. Add Wizard to your home screen."
 - Every state of `GET /wizard/v1/setup/phone` is handled: `unavailable`, `off`, `signin`, `https`, `serving`,
   `phone_seen`, `error` alongside any step, and API failures (network/5xx banner, 401/403, 404).
@@ -21,6 +21,8 @@ specified; the only deliberate deviation is the deep-link launch rule below.
   and the layer itself. One immediate fetch on return/focus.
 - QR codes are drawn locally on a white 168 px tile from the vendored MIT `qrcode-generator` 2.0.4
   (`web/setup/vendor/`, provenance in `web/setup/provenance.json`). No address leaves the device.
+  Connection origins reject non-HTTPS schemes, credentials, paths, queries and fragments. Android Connect also
+  accepts a plain HTTPS origin; displayed/copyable browser addresses always stay HTTPS.
 - Look: Appearance v1 tokens only (`--wz-*`), transparent canvas on the shell's window material like Chats, dark by
   default. Two colours of its own: `--setup-ok` and `--setup-warn` (step glyphs only).
 - Owner name only from settings (`WizConfig.owner()` / bootstrap `owner.name`); no name → no name in the copy.
@@ -70,7 +72,12 @@ Dependencies on the base: `core/app-client.js` (WizardApp v1 Back/appearance), `
 
 ## QA
 `node tools/fake-setup-api.cjs 9473 & node qa-setup-app.cjs http://127.0.0.1:9473/wizard-os-home/`
-(`QA_JSQR` = path to `jsqr`; on Thales use `tools/qa-setup-app-thales.sh <label>`, which runs under
-`lockf -k /Volumes/ThalesMedia/AndroidBuilds/worker.lock` against a frozen snapshot and writes `out/receipt.txt`,
-`out/qa-setup-app.{log,json}` and `out/shots/`). `--walk` on the fake server walks a started sign-in through every
+(`QA_JSQR` = path to `jsqr`, `QA_PLAYWRIGHT` = Playwright module path; on Thales use
+`tools/qa-setup-app-thales.sh <label>`). The runner stages a frozen source snapshot below
+`/Volumes/ThalesMedia/QA/phone-setup`, runs browser-only QA without the Android/VM worker lock,
+and writes `out/qa-setup-app.{log,json}` and `out/shots/`. Source-only Android files are copied for
+the portable `npm test` inventory checks; no Gradle/build tasks run. The browser suite uses a mobile
+UA + touch context and a desktop context, exercises the visible Skin controls, preserves an open
+disconnect dialog and document identity across every installed skin, and decodes rendered QR pixels.
+ `--walk` on the fake server walks a started sign-in through every
 step by itself for demos.
