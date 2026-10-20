@@ -115,3 +115,18 @@ html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win.solo
 html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win.solo { border-radius: 0; }
 html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .ch-compose { padding-bottom: 4px !important; padding-top: 6px; gap: 6px; }
 html[data-skin="landscapes"] .ch-rdy-bar button { white-space: nowrap; flex: 0 0 auto; }
+
+/* Miguel's behaviour pieces (behaviour.js): big dock Back, Defer/Done on the switch row, top-centre toasts. */
+html[data-skin="landscapes"] .mz-dock-back { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; z-index: 4; color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: transform 160ms ease, background 160ms; }
+html[data-skin="landscapes"] .mz-dock-back svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+html[data-skin="landscapes"] .mz-dock-back:active { transform: translateY(-50%) scale(.92); }
+html[data-skin="landscapes"] .mz-dock-back[hidden] { display: none; }
+html[data-skin="landscapes"] .dock.mz-back-on #dotsL { visibility: hidden; }
+html[data-skin="landscapes"] .ch-swrow { gap: 6px; }
+html[data-skin="landscapes"] .ch-swrow .ch-tacts { margin: 0; gap: 4px; flex: 0 0 auto; display: flex; }
+html[data-skin="landscapes"] .ch-swrow .ch-tacts button { height: 36px; width: 40px; padding: 0; justify-content: center; border-radius: 18px; border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+html[data-skin="landscapes"] .ch-swrow .ch-tacts button span { display: none; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow .ch-tacts button { width: auto; padding: 0 12px; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow .ch-tacts button span { display: inline; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow { justify-content: space-between; }
+html[data-skin="landscapes"] .toast { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); }
