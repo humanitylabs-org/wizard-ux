@@ -368,7 +368,9 @@
         it.steerDispatch = rejected ? 'rejected' : 'started';
         await put(it); // crash before reconciliation must never replay ambiguity
         let terminal = false;
-        if (e.status === 409 && e.code === 'run_not_accepting_steer') {
+        // Hermes forgets a finished run after a while and answers 404 run_not_found; the run lookup below
+        // still proves it terminal in this thread, so the message becomes a same-thread turn instead of failing.
+        if ((e.status === 409 && e.code === 'run_not_accepting_steer') || (e.status === 404 && e.code === 'run_not_found')) {
           try {
             const r = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerTarget)}` + aq);
             const run = await r.json();
