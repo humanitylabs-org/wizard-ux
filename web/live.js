@@ -44,6 +44,13 @@
     .replace(/\[(?:Browser dogfooding|System note)[^\]]*\][\s\S]*$/m, ' ')
     .replace(/[#*_`>]+/g, ' ').replace(/\s+/g, ' ').trim();
 
+  // Only the two connection apps Wizard knows; anything else in the field is ignored.
+  const RECONNECT = { claude: ['wizard-claude', 'Claude'], chatgpt: ['wizard-chatgpt', 'ChatGPT'] };
+  function reconnectOf(v) {
+    const app = v && typeof v === 'object' && v.kind === 'provider_signed_out' ? RECONNECT[v.provider] : null;
+    if (!app || v.app_id !== app[0]) return null;
+    return { provider: v.provider, appId: app[0], name: app[1], installed: v.installed !== false };
+  }
   const ATTN = new Set(['needs_you', 'check', 'done', 'fyi']);
   function attentionOf(v) {
     if (!v || typeof v !== 'object' || !ATTN.has(v.state)) return null;
@@ -51,7 +58,7 @@
     return { state: v.state, ask, subject: String(v.subject || '').replace(/\s+/g, ' ').trim().slice(0, 40) };
   }
   function normalize(item) {
-    if (item.listVersion === 1) return { safeError:'', critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runtime: 'direct', request: '', renames: [], detailNeeded: true };
+    if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runtime: 'direct', request: '', renames: [], detailNeeded: true };
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
     const status = ALIASES[raw] || raw || undefined;
@@ -71,6 +78,8 @@
       source: item.source || '',
       status,
       safeError: typeof item.wizard_safe_error === 'string' ? item.wizard_safe_error : '',
+      // The AI provider's sign-in expired (Agent Service provider-reconnect.mjs): the connection app that fixes it.
+      reconnect: reconnectOf(item.wizard_reconnect),
       archived: !!item.archived, hidden: !!item.hidden,
       messageCount: Number.isSafeInteger(item.message_count) ? item.message_count : undefined,
       lastUserAt, lastAssistantAt,
