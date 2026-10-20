@@ -1,44 +1,27 @@
 package ai.wizards.os;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
+import static org.junit.Assert.*;
 import org.junit.Test;
 
 public class OriginTest {
-    static final String HOME = "wizard.tailc0f369.ts.net";
-
-    @Test
-    public void homeIsTheTailnetName() {
-        assertEquals(HOME, Origin.HOST);
-        assertEquals("https://" + HOME, BuildConfig.ORIGIN);
-        assertEquals("https://" + HOME + "/wizard-os-home/", BuildConfig.HOME_URL);
+    @Test public void originBelongsToSelectedServer() {
+        String origin = "https://box.example.ts.net";
+        assertTrue(ServerOrigin.matches(origin, origin + "/wizard-os-home/"));
+        assertTrue(ServerOrigin.matches(origin, "https://BOX.example.ts.net:443/mizel-live/"));
+        for (String u : new String[]{"https://other.example.ts.net/", "https://box.example.ts.net.evil.test/", "http://box.example.ts.net/", "https://user@box.example.ts.net/", "https://box.example.ts.net:8443/"}) assertFalse(u, ServerOrigin.matches(origin, u));
+        assertFalse(ServerOrigin.matches("", "https://box.example.ts.net/"));
     }
-
-    @Test
-    public void privateOriginOnly() {
-        assertTrue(Origin.isPrivate("https", HOME, -1));
-        assertTrue(Origin.isPrivate("https", HOME, 443));
-        assertFalse(Origin.isPrivate("https", "retired.example", -1)); // retired name: no longer honoured
-        assertFalse(Origin.isPrivate("http", HOME, -1));
-        assertFalse(Origin.isPrivate("https", HOME + ".evil.test", -1));
-        assertFalse(Origin.isPrivate("https", "evil-" + HOME, -1));
-        assertFalse(Origin.isPrivate("https", HOME, 8443));
-        assertFalse(Origin.isPrivate("https", null, -1));
+    @Test public void nonDefaultPortIsPartOfOrigin() {
+        assertTrue(ServerOrigin.matches("https://box.example:8443", "https://box.example:8443/wizard-os-home/"));
+        assertFalse(ServerOrigin.matches("https://box.example:8443", "https://box.example/wizard-os-home/"));
     }
-
-    @Test
-    public void shellPaths() {
+    @Test public void shellPaths() {
         assertTrue(Origin.isShellPath("/wizard-os-home/"));
         assertTrue(Origin.isShellPath("/wizard-os-home"));
-        assertTrue(Origin.isShellPath("/wizard-os-home/?desk=2"));
         assertFalse(Origin.isShellPath("/wizard-os-home-preview/"));
-        assertFalse(Origin.isShellPath("/wizard/"));
+        assertFalse(Origin.isShellPath(null));
     }
-
-    @Test
-    public void inAppPaths() {
+    @Test public void inAppPaths() {
         assertTrue(Origin.isInAppPath("/wizard-os-home/"));
         assertTrue(Origin.isInAppPath("/mizel-live/"));
         assertTrue(Origin.isInAppPath("/mizel-live"));

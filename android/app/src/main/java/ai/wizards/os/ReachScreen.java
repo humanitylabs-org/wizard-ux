@@ -68,6 +68,9 @@ final class ReachScreen {
         col.addView(body, lp(dp(10)));
         col.addView(retry, lp(dp(26)));
         col.addView(tailscale, lp(dp(12)));
+        TextView server = pill("Change Wizard", false);
+        server.setOnClickListener(v -> a.startActivity(new android.content.Intent(a, ConnectActivity.class)));
+        col.addView(server, lp(dp(12)));
         col.addView(status, lp(dp(18)));
         col.addView(detail, lp(dp(6)));
         view.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -149,7 +152,7 @@ final class ReachScreen {
 
     static ReachPolicy.Why why(Context c) {
         boolean[] n = net(c);
-        return ReachPolicy.why(n[0], n[1]);
+        return ReachPolicy.why(n[0], n[1], ServerOrigin.needsTailscale(ai.wizards.os.device.AppState.origin(c)));
     }
 
     static boolean tailscaleInstalled(Context c) {

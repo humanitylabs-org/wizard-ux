@@ -42,7 +42,6 @@ import ai.wizards.os.assist.Transcriber;
  */
 public final class EverywhereOutbox {
     static final String TAG = "WizardEverywhere";
-    public static final String DEFAULT_ORIGIN = ai.wizards.os.BuildConfig.ORIGIN;
 
     /** Dictation goes to STT bare, like Archimedes Anywhere: a context prompt can leak into typed text. */
     static final String DICTATION_PROMPT = "";
@@ -62,13 +61,14 @@ public final class EverywhereOutbox {
 
     /** Debug (QA) builds only: files/qa_origin.txt points the outbox at a fake Wizard on the emulator host. */
     static String qaOrigin(Context c) {
-        if (!ai.wizards.os.BuildConfig.DEBUG) return DEFAULT_ORIGIN;
+        String configured = ai.wizards.os.device.AppState.origin(c);
+        if (!ai.wizards.os.BuildConfig.DEBUG) return configured;
         File f = new File(c.getFilesDir(), "qa_origin.txt");
-        if (!f.isFile()) return DEFAULT_ORIGIN;
+        if (!f.isFile()) return configured;
         try {
             String o = new String(readAll(new FileInputStream(f)), StandardCharsets.UTF_8).trim();
-            return o.matches("http://10\\.0\\.2\\.2:\\d+") ? o : DEFAULT_ORIGIN;
-        } catch (IOException e) { return DEFAULT_ORIGIN; }
+            return o.matches("http://10\\.0\\.2\\.2:\\d+") ? o : configured;
+        } catch (IOException e) { return configured; }
     }
 
     public interface Listener {
@@ -144,12 +144,13 @@ public final class EverywhereOutbox {
             instance.app = c.getApplicationContext();
             ai.wizards.os.device.WizardIdentity.refresh(instance.app);
         }
+        if (instance.unsent().isEmpty()) instance.origin = qaOrigin(c);
         return instance;
     }
 
     private final File dir, audioDir, file;
     private final CaptureJournal custody;
-    private final String origin;
+    private volatile String origin;
     private final Map<String, Item> items = new LinkedHashMap<>();
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());

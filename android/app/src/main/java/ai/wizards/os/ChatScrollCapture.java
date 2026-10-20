@@ -53,7 +53,7 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
         Uri u = Uri.parse(web.getUrl() == null ? "" : web.getUrl());
         return !script.isEmpty() && web.isAttachedToWindow() && web.isShown() &&
             (activity.getWindow().getAttributes().flags & android.view.WindowManager.LayoutParams.FLAG_SECURE) == 0 &&
-            (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(activity, u));
+            (Origin.isPrivate(activity, u) || ai.wizards.os.device.AppState.isQaPage(activity, u));
     }
 
     private final class Pending {
