@@ -56,3 +56,30 @@ html[data-skin="obsidian-light"] .sgi { filter: grayscale(1) brightness(.35); }
 :is(html[data-skin="obsidian"], html[data-skin="obsidian-light"]) .ch-empty.nc-classic { display: none; }
 :is(html[data-skin="obsidian"], html[data-skin="obsidian-light"]) .ch-newchat { margin: auto; padding: 28px 16px 36px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; max-width: 440px; animation: ncIn .32s ease-out both; }
 html[data-skin^="obsidian"] .ch-newchat .nc-mark { background: radial-gradient(120% 120% at 30% 20%, #3a3a3a, #0c0c0c); box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18); }
+/* Model switch (Miguel's skins): four slots above the composer, Opus · Astra · Sol · the private Tinfoil model.
+ * The private slot shows its model id (Kimi K3) in private-browsing purple with a small lock, never a provider name. */
+html[data-skin^="obsidian"] .ch-swrow { flex: 0 0 auto; display: flex; align-items: center; padding: 4px 10px 0; }
+html[data-skin^="obsidian"] .ms { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; --ms-i: 1; --secure: hsl(282 88% 74%); --secure-on: #1d0630; }
+html[data-skin^="obsidian"] .ms-track { position: relative; flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); height: 38px; border-radius: 19px; background: color-mix(in srgb, var(--ink) 7%, transparent); touch-action: none; user-select: none; -webkit-user-select: none; }
+html[data-skin^="obsidian"] .ms-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 4); border-radius: 16px; background: var(--ink); transform: translateX(calc(var(--ms-i) * 100%)); transition: transform 220ms cubic-bezier(.2, .9, .25, 1); pointer-events: none; }
+html[data-skin^="obsidian"] .ms-track.dragging .ms-thumb { transition: none; }
+html[data-skin^="obsidian"] .ms-track.off .ms-thumb { opacity: 0; }
+html[data-skin^="obsidian"] .ms-o { position: relative; z-index: 1; min-width: 0; padding: 0 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; white-space: nowrap; font-size: 13px; font-weight: 700; line-height: 1.1; color: var(--ink-2); transition: color 200ms; }
+html[data-skin^="obsidian"] .ms-o.on { color: var(--bg); }
+html[data-skin^="obsidian"] .ms-o:disabled { opacity: .35; }
+html[data-skin^="obsidian"] .ms-version { font-size: 10px; font-weight: 500; line-height: 1.1; opacity: .65; }
+html[data-skin^="obsidian"] .ms-version:empty { display: none; }
+html[data-skin^="obsidian"] .ms-o.secure { color: var(--secure); }
+html[data-skin^="obsidian"] .ms-o.secure .ms-version { display: inline-flex; align-items: center; gap: 2px; opacity: .9; }
+html[data-skin^="obsidian"] .ms-o.secure .ag-lock { width: 9px; height: 9px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+html[data-skin^="obsidian"] .ms-o.secure.on { color: var(--secure-on); }
+html[data-skin^="obsidian"] .ms.secure-on .ms-thumb { background: var(--secure); box-shadow: 0 0 14px color-mix(in srgb, var(--secure) 45%, transparent); }
+html[data-skin^="obsidian"] .ms-more { flex: 0 0 auto; height: 38px; min-width: 36px; padding: 0 8px; border: 0; background: none; border-radius: 12px; color: var(--ink-2); font-weight: 800; display: flex; align-items: center; gap: 6px; }
+html[data-skin^="obsidian"] .ms-more small { font-size: 11.5px; font-weight: 650; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-skin^="obsidian"] .ch-swrow + .ch-compose { border-top: 0; }
+html[data-skin^="obsidian"] .ch-model.private, html[data-skin^="obsidian"] .mrow.secure .mn b { color: var(--secure, hsl(282 88% 74%)); }
+html[data-skin^="obsidian"] .mrow.secure .mn b { display: inline-flex; align-items: center; gap: 6px; }
+html[data-skin^="obsidian"] .mrow.secure .ag-lock { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+html[data-skin^="obsidian"][data-shell="desktop"] .ch-swrow .ms { flex: 0 1 340px; }
+html[data-skin="obsidian-light"] .ms { --secure: hsl(282 70% 44%); --secure-on: #ffffff; }
+html[data-skin="obsidian-light"] .ch-model.private { color: hsl(282 70% 44%); }
