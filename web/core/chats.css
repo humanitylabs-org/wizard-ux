@@ -359,6 +359,18 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-row .emo.sti .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(90, 220, 255, .22); border-top-color: var(--cyan); animation: sti-spin .9s linear infinite; }
 @keyframes sti-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ch-row .emo.sti .spin { animation-duration: 3s; } }
+.ch-topic-mark { position: relative; flex: 0 0 auto; width: 44px; height: 38px; }
+.ch-topic-emoji { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; line-height: 1; background: rgba(205, 190, 255, .07); }
+.ch-row .emo.sti.ch-topic-status, .ch-topic-status.draft-status { position: absolute; right: 0; bottom: -1px; width: 17px; height: 17px; min-width: 0; border-radius: 6px; border: 1px solid var(--bg); z-index: 1; }
+.ch-row .emo.sti.ch-topic-status svg { width: 11px; height: 11px; }
+.ch-row .emo.sti.ch-topic-status .spin { width: 10px; height: 10px; border-width: 1.5px; }
+.ch-row .emo.sti.ch-topic-status .dot { width: 4px; height: 4px; }
+.ch-topic-status.draft-status { display: grid; place-items: center; font-size: 11px; color: var(--amber); background: var(--bg); box-shadow: inset 0 0 0 1px var(--line-2); }
+.ch-emoji-sheet { padding-bottom: 16px; }
+.ch-emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; padding: 4px 10px; }
+.ch-sheet-b .ch-emoji-grid button { display: grid; place-items: center; min-width: 0; padding: 8px 4px; border-radius: 11px; font-size: 23px; line-height: 1; background: rgba(205, 190, 255, .06); border: 1px solid var(--line); }
+.ch-sheet-b .ch-emoji-grid button:active, .ch-sheet-b .ch-emoji-grid button:focus-visible { background: rgba(143, 99, 255, .2); border-color: var(--violet-2); }
+.ch-sheet-emoji { width: 24px; text-align: center; font-size: 18px; }
 .ch-row .emo.sti .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); opacity: .55; }
 /* Read state is the only thing that sets weight: unread = bold white title + brighter preview + violet time; read = plain. */
 .ch-row .tp b, .ch-row.att-needs .tp b, .ch-row.att-check .tp b { color: var(--ink-2); font-weight: 500; }
