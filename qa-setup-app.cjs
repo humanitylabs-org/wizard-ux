@@ -312,7 +312,7 @@ const setupWin = p => p.evaluate(() => { const w = Object.values(__wos.wins).fin
     ok(['nebula', 'grove', 'tide', 'ember', 'signal'].every(s => skins.includes(s)), 'live skin registry has Nebula, Grove, Tide, Ember, Signal', skins);
     await f.evaluate(() => { window.__qaIdentity = "setup-skin-document"; });
     await f.locator('[data-act="menu"]').tap();
-    await f.locator('[data-act="disconnect"]').tap();
+    await f.locator('[data-act="ask-reset"]').tap();
     for (const id of skins) {
       await p.evaluate(() => __wos.goHome());
       await p.locator('[data-act="settings"]').tap();
