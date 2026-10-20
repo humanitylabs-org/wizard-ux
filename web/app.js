@@ -3182,7 +3182,8 @@
       // James 20 Oct: a tap on a paused take resumes it and never sends. Send is the next tap, once it records again.
       // Only a take that cannot resume (mic held by another recording, or the last resume found the mic busy) still sends.
       if (V.state === 'paused') {
-        if (V.resumeBlocked || (window.WizAppCapture?.getState?.().recording && !V.meetingLoan)) { shock(); return finishVoice(); }
+        // Dictation keeps its own contract: a tap on a paused dictation transcribes into the sealed field (nothing is sent).
+        if (V.kind === 'dictation' || V.resumeBlocked || (window.WizAppCapture?.getState?.().recording && !V.meetingLoan)) { shock(); return finishVoice(); }
         return $('#arcPause').click();
       }
       if (V.state === 'listen') { shock(); return finishVoice(); }
