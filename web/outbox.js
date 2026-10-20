@@ -231,12 +231,16 @@
     })().finally(() => { if (!recovered) ready = null; });
     return ready;
   }
-  class HttpError extends Error { constructor(status, msg) { super(msg || 'HTTP ' + status); this.status = status; } }
+  class HttpError extends Error { constructor(status, msg, code = '') { super(msg || 'HTTP ' + status); this.status = status; this.code = code; } }
   async function call(path, init = {}) {
     let r;
     try { r = await fetch(path, { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(45000), ...init }); }
     catch (_) { throw new HttpError(0, 'Couldn’t reach Wizard'); }
-    if (!r.ok) { let m = ''; try { m = (await r.json()).error || ''; } catch (_) {} throw new HttpError(r.status, typeof m === 'string' ? m : m.message || ''); }
+    if (!r.ok) {
+      let error = '';
+      try { error = (await r.json()).error || ''; } catch (_) {}
+      throw new HttpError(r.status, typeof error === 'string' ? error : error.message || '', typeof error === 'object' ? error.code || '' : '');
+    }
     return r;
   }
   const transient = e => !e.status || [408, 425, 429].includes(e.status) || e.status >= 500;
@@ -333,6 +337,16 @@
     const input = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
     // Freeze an exact-run steer separately from new-run admission. This endpoint has NO
     // durable idempotency ledger: persist intent before dispatch and never replay ambiguity.
+    // A terminal-run rejection proves the steer was not accepted. On explicit Retry only,
+    // convert that frozen message to normal admission; all other steer failures retain their
+    // exact target so auth errors and ambiguous transport failures cannot create duplicates.
+    const staleSteerRejected = it.steerDispatch === 'rejected' &&
+      (it.steerRejectCode === 'run_not_accepting_steer' || /^Run is not currently accepting steer input:/.test(String(it.error || '')));
+    if (it.steerRunId && staleSteerRejected) {
+      it.steerRunId = '';
+      delete it.steerTarget; delete it.steerBody; delete it.steerDispatch; delete it.steerRejectCode;
+      await put(it);
+    }
     if (it.steerRunId) {
       if (it.steerDispatch === 'started') { it.state = 'unconfirmed'; it.error = unconfirmed; await put(it); return; }
       if (!it.steerBody) {
@@ -357,7 +371,7 @@
         // Explicit client rejection is retryable against the SAME run. Timeout/server/JSON
         // failure is ambiguous, not evidence of rejection, and cannot fall back to admission.
         if (e.status >= 400 && e.status < 500 && e.status !== 408) {
-          it.steerDispatch = 'rejected'; it.state = 'failed'; it.error = reason(e);
+          it.steerDispatch = 'rejected'; it.steerRejectCode = e.code || ''; it.state = 'failed'; it.error = reason(e);
         } else { it.state = 'unconfirmed'; it.error = unconfirmed; }
         it.attempts = (it.attempts || 0) + 1; it.lastAttemptAt = now();
         it.nextAt = 0; await put(it); return;
