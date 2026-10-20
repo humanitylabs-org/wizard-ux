@@ -847,11 +847,19 @@ window.WizCore.chats = function createChats(H) {
       ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
     rowSheet = { wid, sid }; vib(10);
   }
+  const emojiCategoryHtml = categories => categories.map(category => `<section class="ch-emoji-category"><h3>${esc(category.label)}</h3><div class="ch-emoji-grid">${category.emoji.map(emoji => `<button type="button" data-chtopicemoji="${emoji}" aria-label="Use ${emoji}">${emoji}</button>`).join('')}</div></section>`).join('');
+  function renderEmojiSearch(sheet, query) {
+    const results = TOPIC.search(query), scroll = sheet?.querySelector('[data-chemoresults]'), clear = sheet?.querySelector('[data-chemoclear]');
+    if (!scroll) return;
+    scroll.innerHTML = results.length ? emojiCategoryHtml(results) : '<p class="ch-emoji-empty" role="status">No emojis found. Try another word.</p>';
+    scroll.scrollTop = 0;
+    if (clear) clear.hidden = !String(query || '').trim();
+  }
   function openEmojiSheet(wid, key, label) {
     const el = track.querySelector(`[data-chats="${wid}"]`); if (!el || !key) return;
     closeRowSheet();
-    const categoryHtml = TOPIC.categories.map(category => `<section class="ch-emoji-category"><h3>${esc(category.label)}</h3><div class="ch-emoji-grid">${category.emoji.map(emoji => `<button type="button" data-chtopicemoji="${emoji}" aria-label="Use ${emoji}">${emoji}</button>`).join('')}</div></section>`).join('');
-    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Choose topic emoji"><div class="ch-sheet-b ch-emoji-sheet"><div class="ch-sheet-t">${esc(label || 'Choose emoji')}</div><div class="ch-emoji-scroll">${categoryHtml}</div></div></div>`);
+    const categoryHtml = emojiCategoryHtml(TOPIC.categories);
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Choose topic emoji"><div class="ch-sheet-b ch-emoji-sheet"><div class="ch-sheet-t">${esc(label || 'Choose emoji')}</div><label class="ch-emoji-search"><span aria-hidden="true">⌕</span><input type="search" data-chemosearch aria-label="Search emojis" placeholder="Search emojis" autocomplete="off" autocapitalize="none" spellcheck="false"><button type="button" data-chemoclear aria-label="Clear emoji search" hidden>×</button></label><div class="ch-emoji-scroll" data-chemoresults>${categoryHtml}</div></div></div>`);
     rowSheet = { wid, key, emoji: true }; vib(8);
   }
   /* Rename (long-press a thread, or tap the title inside it). James's name locks the thread: the agent keeps it. */
@@ -1709,6 +1717,7 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
     const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); threadAct(rw, sid, rsa.dataset.rsact); return true; }
+    if (e.target.closest('[data-chemoclear]') && rowSheet?.emoji) { const sheet = e.target.closest('.ch-emoji-sheet'), input = sheet?.querySelector('[data-chemosearch]'); if (input) { input.value = ''; renderEmojiSearch(sheet, ''); input.focus(); } return true; }
     const emoji = e.target.closest('[data-chtopicemoji]'); if (emoji && rowSheet?.emoji) { const { key } = rowSheet; if (TOPIC.set(key, emoji.dataset.chtopicemoji)) { closeRowSheet(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); } toast(emoji.dataset.chtopicemoji, 'Topic emoji saved', 1400); } return true; }
     if (e.target.closest('[data-rsemo]') && rowSheet?.sid) { const { wid: rw, sid } = rowSheet, s = LIVE.session(sid); openEmojiSheet(rw, `thread:${sid}`, s?.title || 'Choose emoji'); return true; }
     if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
@@ -1779,6 +1788,7 @@ window.WizCore.chats = function createChats(H) {
       setTimeout(() => { const el = elOf(id), inp = el?.querySelector('[data-chsearch]'); if (!c.focus || (inp && document.activeElement === inp)) return; c.focus = false; if (!c.q && el?.querySelector('.ch-sug')) renderChatList(H.win(id), el); }, 260);
     });
     root.addEventListener('input', e => {
+      if (e.target.matches('[data-chemosearch]')) renderEmojiSearch(e.target.closest('.ch-emoji-sheet'), e.target.value);
       if (e.target.matches('[data-chsearch]')) {
         const id = idOf(e.target); ch(id).q = e.target.value; ch(id).coach = false; const el = elOf(id);
         if (el?.querySelector('.ch-scroll')) { renderChatList(H.win(id), el); const inp = el.querySelector('[data-chsearch]'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
@@ -1790,6 +1800,7 @@ window.WizCore.chats = function createChats(H) {
       if (e.target.matches('[data-archafter]')) { LIVE.archiveAfterDays = +e.target.value; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } }
     });
     root.addEventListener('keydown', e => {
+      if (e.target.matches('[data-chemosearch]')) { e.stopPropagation(); if (e.key === 'Escape' && e.target.value) { e.preventDefault(); e.target.value = ''; renderEmojiSearch(e.target.closest('.ch-emoji-sheet'), ''); } return; }
       // Opinionated: with a hardware keyboard, Enter sends and Shift+Enter is a new line (touch keyboards keep Enter = new line).
       if (e.target.matches('.ch-compose textarea') && e.key === 'Enter' && !e.isComposing && !e.shiftKey && (e.metaKey || e.ctrlKey || !matchMedia('(pointer: coarse)').matches)) { e.preventDefault(); e.target.form.requestSubmit(); }
     });
