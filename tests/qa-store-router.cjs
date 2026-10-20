@@ -10,14 +10,20 @@ const app = (id, name, extra = {}) => ({ id, name, summary: name + ' summary', p
   repo: 'https://github.com/qa/' + id, source: 'standard', channel: 'standard', commit: C, releases: [], ...extra });
 const catalog = { apps: [app('wisdom', 'Wisdom'), app('wizard-claude', 'Wizard Claude', { provides: ['ai-connection'], category: 'Connections', type: 'service' }),
   app('wizard-chatgpt', 'Wizard ChatGPT', { provides: ['ai-connection'], category: 'Connections', type: 'service' })], sources: [], next_offset: null };
-const providers = (claude) => [
+const providers = (claude, opus) => [
   { id: 'wizard-chatgpt', name: 'Wizard ChatGPT', status: 'connected', error: null, fix_url: '/wizard-os-home/?open=wizard-chatgpt', models: [{ id: 'gpt-5.1', label: 'GPT-5.1', tier: 'frontier' }, { id: 'gpt-5.1-mini', label: 'GPT-5.1 mini', tier: 'standard' }] },
-  ...(claude ? [{ id: 'wizard-claude', name: 'Wizard Claude', status: 'connected', error: null, fix_url: '', models: [{ id: 'claude-sonnet-4.5', label: 'Sonnet', tier: 'standard' }] }] : [])];
+  ...(claude ? [{ id: 'wizard-claude', name: 'Wizard Claude', status: 'connected', error: null, fix_url: '', models: [{ id: 'claude-sonnet-4.5', label: 'Sonnet', tier: 'standard' }, ...(opus ? [{ id: 'claude-opus-4.1', label: 'Opus', tier: 'frontier' }] : [])] }] : [])];
 function needs(st) {
+  if (st.scenario === 'match') return { type: 'needs', app: 'wisdom', services: [], providers: providers(true, true), models: [
+    { feature: 'ask-ai', tier: 'standard', tested_on: 'claude-sonnet-4.5', swap: 'ask', status: 'ready', route: { provider: 'wizard-claude', model: 'claude-sonnet-4.5', tier: 'standard', chosen: 'match' }, offered: null, error: null },
+    { feature: 'chapter-authoring', tier: 'frontier', tested_on: 'claude-opus-4.1', swap: 'never', status: 'ready', route: { provider: 'wizard-claude', model: 'claude-opus-4.1', tier: 'frontier', chosen: 'match' }, offered: null, error: null }] };
+  if (st.scenario === 'none') return { type: 'needs', app: 'wisdom', services: [], providers: [], models: [
+    { feature: 'ask-ai', tier: 'standard', tested_on: 'claude-sonnet-4.5', swap: 'ask', status: 'needs_owner', route: null, offered: null, error: { code: 'needs_owner', message: 'Needs your choice.' } },
+    { feature: 'chapter-authoring', tier: 'frontier', tested_on: 'claude-opus-4.1', swap: 'never', status: 'blocked', route: null, offered: null, error: { code: 'blocked', message: 'Off until connected.' } }] };
   const ask = st.approved ? { feature: 'ask-ai', tier: 'standard', tested_on: 'claude-sonnet-4.5', swap: 'ask', status: 'ready', route: { provider: 'wizard-chatgpt', model: 'gpt-5.1-mini', tier: 'standard', chosen: 'owner-swap' }, offered: null, error: null }
     : { feature: 'ask-ai', tier: 'standard', tested_on: 'claude-sonnet-4.5', swap: 'ask', status: 'needs_owner', route: null, offered: { provider: 'wizard-chatgpt', model: 'gpt-5.1-mini', tier: 'standard', standing_in: false }, error: { code: 'needs_owner', message: 'Needs your choice.' } };
   return { type: 'needs', app: 'wisdom', models: [ask,
-    { feature: 'chapter-authoring', tier: 'frontier', tested_on: 'claude-opus-4.1', swap: 'never', status: 'off', route: null, offered: null, error: { code: 'off', message: 'Off until connected.' } }],
+    { feature: 'chapter-authoring', tier: 'frontier', tested_on: 'claude-opus-4.1', swap: 'never', status: 'blocked', route: null, offered: null, error: { code: 'blocked', message: 'Off until connected.' } }],
     services: [], providers: providers(false) };
 }
 
@@ -25,8 +31,8 @@ function needs(st) {
   const browser = await pw.chromium.launch({ headless: true, ...(process.env.QA_CHROME ? { executablePath: process.env.QA_CHROME } : {}) });
   let pass = 0, fail = 0; const ok = (c, m) => { if (c) { pass++; console.log('PASS', m); } else { fail++; console.log('FAIL', m); } };
   try {
-    for (const [w, h, mobile] of [[412, 892, true], [1280, 900, false]]) {
-      const st = { installed: false, approved: false, approvals: [], installs: 0, writes: [] };
+    for (const [w, h, mobile] of [[390, 844, true], [1280, 900, false]]) for (const scenario of ['swap', 'match', 'none']) {
+      const st = { scenario, installed: false, approved: false, approvals: [], installs: 0, writes: [] };
       const ctx = await browser.newContext({ viewport: { width: w, height: h }, ...(mobile ? { isMobile: true, hasTouch: true } : {}), serviceWorkers: 'block' });
       const errors = []; const json = (r, status, body) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
       await ctx.route('**/*', async r => {
@@ -56,7 +62,7 @@ function needs(st) {
         return r.fulfill({ status: 200, contentType: { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' }[ext] || 'application/octet-stream', body: fs.readFileSync(f) });
       });
       const pg = await ctx.newPage(); pg.on('pageerror', e => errors.push(e.message));
-      const tag = `[${w}]`, shot = async n => { if (out) { fs.mkdirSync(out, { recursive: true }); await pg.waitForTimeout(700); await pg.screenshot({ path: path.join(out, `${w}-${n}.png`) }); } };
+      const tag = `[${w} ${scenario}]`, shot = async n => { if (out) { fs.mkdirSync(out, { recursive: true }); await pg.waitForTimeout(700); await pg.screenshot({ path: path.join(out, `${w}-${scenario}-${n}.png`) }); } };
       await pg.goto(BASE + '?app=wisdom');
       await pg.locator('#detail [data-get]').first().waitFor({ timeout: 10000 });
       ok(await pg.locator('#detail .mc').count() === 0, `${tag} not installed: no Models and connections section`);
@@ -66,6 +72,25 @@ function needs(st) {
       const sheet = await pg.evaluate(() => ({ layers: window.__store.state().layers, title: document.querySelector('#sheet h2').textContent, sub: document.querySelector('#sheet .list-head p').textContent,
         rows: [...document.querySelectorAll('#sheet .mc-row')].map(r => ({ f: r.dataset.mcFeature, state: r.querySelector('.mc-state').textContent, text: r.innerText, btns: [...r.querySelectorAll('button')].map(b => b.textContent) })) }));
       ok(sheet.layers.at(-1) === 'sheet', `${tag} install opens the sheet layer`);
+      if (scenario !== 'swap') {
+        const [a1, c1] = ['ask-ai', 'chapter-authoring'].map(f => sheet.rows.find(r => r.f === f));
+        if (scenario === 'match') {
+          ok(/Every feature has a model/.test(sheet.sub) && a1?.state === 'Ready' && c1?.state === 'Ready', `${tag} matching: every feature Ready (${sheet.sub})`);
+          ok(/Using claude-sonnet-4\.5 via Claude/.test(a1?.text) && /Using claude-opus-4\.1 via Claude/.test(c1?.text) && a1.btns.length + c1.btns.length === 0, `${tag} matching: tested models in use, no swap or connect offered`);
+          ok(await pg.locator('#sheet .mc-done button').innerText() === 'Done', `${tag} matching: single Done action`);
+        } else {
+          ok(/2 features need a model/.test(sheet.sub) && a1?.state === 'Needs a provider' && a1.btns.length === 1 && a1.btns[0] === 'Connect Claude', `${tag} no provider: ask feature offers Connect Claude only`);
+          ok(c1?.state === 'Off until connected' && c1.btns.length === 1 && c1.btns[0] === 'Connect Claude' && !sheet.rows.some(r => r.btns.some(b => /swap/i.test(b))), `${tag} no provider: strict feature off, no swap anywhere`);
+        }
+        await shot('sheet');
+        await pg.locator('#sheet [data-back]').first().click();
+        await pg.locator('#detail .mc .mc-row').first().waitFor({ timeout: 5000 });
+        ok(await pg.evaluate(() => window.__store.state().layers.at(-1)) === 'detail', `${tag} Back returns to detail`);
+        await pg.locator('#detail .mc').scrollIntoViewIfNeeded(); await shot('detail');
+        ok(st.writes.length === 0 && st.approvals.length === 0, `${tag} no writes: ${st.writes.join(', ')}`);
+        ok(errors.length === 0, `${tag} no page errors: ${errors.join(' | ')}`);
+        await ctx.close(); continue;
+      }
       ok(/Wisdom is installed/.test(sheet.title) && /2 features need a model/.test(sheet.sub), `${tag} sheet title and count: ${sheet.sub}`);
       const ask = sheet.rows.find(r => r.f === 'ask-ai'), ch = sheet.rows.find(r => r.f === 'chapter-authoring');
       ok(ask && /claude-sonnet-4\.5/.test(ask.text) && ask.btns.includes('Connect Claude') && ask.btns.includes('Approve swap to gpt-5.1-mini'), `${tag} ask-ai: tested model, Connect Claude, named swap`);
