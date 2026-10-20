@@ -231,12 +231,12 @@
     })().finally(() => { if (!recovered) ready = null; });
     return ready;
   }
-  class HttpError extends Error { constructor(status, msg) { super(msg || 'HTTP ' + status); this.status = status; } }
+  class HttpError extends Error { constructor(status, msg, code = '') { super(msg || 'HTTP ' + status); this.status = status; this.code = code; } }
   async function call(path, init = {}) {
     let r;
     try { r = await fetch(path, { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(45000), ...init }); }
     catch (_) { throw new HttpError(0, 'Couldn’t reach Wizard'); }
-    if (!r.ok) { let m = ''; try { m = (await r.json()).error || ''; } catch (_) {} throw new HttpError(r.status, typeof m === 'string' ? m : m.message || ''); }
+    if (!r.ok) { let m = ''; try { m = (await r.json()).error || ''; } catch (_) {} throw new HttpError(r.status, typeof m === 'string' ? m : m.message || '', typeof m === 'object' ? m.code || '' : ''); }
     return r;
   }
   const transient = e => !e.status || [408, 425, 429].includes(e.status) || e.status >= 500;
@@ -354,15 +354,37 @@
         receipt = await r.json();
         if (receipt?.accepted !== true || ('run_id' in receipt && receipt.run_id !== it.steerTarget)) throw new Error('Invalid steer receipt');
       } catch (e) {
-        // Explicit client rejection is retryable against the SAME run. Timeout/server/JSON
-        // failure is ambiguous, not evidence of rejection, and cannot fall back to admission.
-        if (e.status >= 400 && e.status < 500 && e.status !== 408) {
-          it.steerDispatch = 'rejected'; it.state = 'failed'; it.error = reason(e);
-        } else { it.state = 'unconfirmed'; it.error = unconfirmed; }
-        it.attempts = (it.attempts || 0) + 1; it.lastAttemptAt = now();
-        it.nextAt = 0; await put(it); return;
+        // A typed rejection proves this dispatch was NOT accepted. Only a matching
+        // terminal run permits replacing the stale steer with a same-thread turn.
+        // Status alone (or missing transcript text) never proves non-acceptance.
+        const rejected = e.status >= 400 && e.status < 500 && e.status !== 408;
+        it.steerDispatch = rejected ? 'rejected' : 'started';
+        await put(it); // crash before reconciliation must never replay ambiguity
+        let terminal = false;
+        if (e.status === 409 && e.code === 'run_not_accepting_steer') {
+          try {
+            const r = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerTarget)}` + aq);
+            const run = await r.json();
+            terminal = (run.run_id || run.id) === it.steerTarget && run.session_id === it.sessionId &&
+              ['completed', 'failed', 'cancelled', 'interrupted', 'expired'].includes(run.status);
+          } catch (_) { /* unknown status: keep the rejected message for explicit Retry */ }
+        }
+        if (terminal) {
+          // Freeze from the dispatched envelope, not the current composer/route.
+          // Persist the handoff BEFORE admission; a lost receipt now replays only
+          // this byte-identical, idempotent new turn, never the rejected steer.
+          it.body = JSON.stringify({ ...frozen, session_id: it.sessionId,
+            ...(it.instructions ? { instructions: String(it.instructions).slice(0, 2000) } : {}) });
+          it.rejectedSteerRunId = it.steerTarget;
+          it.steerRunId = ''; delete it.steerBody; delete it.steerTarget;
+          await put(it);
+        } else {
+          it.state = rejected ? 'failed' : 'unconfirmed'; it.error = rejected ? reason(e) : unconfirmed;
+          it.attempts = (it.attempts || 0) + 1; it.lastAttemptAt = now();
+          it.nextAt = 0; await put(it); return;
+        }
       }
-      return done(it, { steered: true, steerQueued: receipt.status === 'queued', runId: it.steerTarget });
+      if (receipt) return done(it, { steered: true, steerQueued: receipt.status === 'queued', runId: it.steerTarget });
     }
     if (it.kind === 'new' && !it.sessionReady) {
       try { await call('/wizard/hermes/api/sessions' + aq, { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id: it.sessionId, model: it.model, provider: it.provider, ...(it.agent ? { agent: it.agent } : {}) }) }); }
