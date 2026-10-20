@@ -31,6 +31,12 @@ import {adoptAppearance} from './store-appearance.js';
   const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
   const S = { apps: [], installed: new Map(), complete:false, architecture:'', busy: new Set(), stack: [], q: '', loaded: false, error: '', sources: [], selections: new Map(), router: new Map(), mcBusy: new Set() };
+  let requestedSearch = new URLSearchParams(location.search).get('q')?.slice(0, 200) || '';
+  addEventListener('message', e => {
+    if (e.origin !== location.origin || e.source !== parent || e.data?.type !== 'wizard:store-search' || e.data.q !== 'private') return;
+    requestedSearch = e.data.q;
+    if (S.loaded) { $('q').value = requestedSearch; search(requestedSearch); }
+  });
   const key = a => `${a.id}|${a.repo || ''}`;
   const find = id => S.apps.find(a => key(a) === id) || S.apps.find(a => a.id === id);
   const selected = a => ({...a, ...preferredRelease(a,S.installed.get(key(a))), ...(a.releases || []).find(r => `${r.source}:${r.commit}` === S.selections.get(key(a))), releases:a.releases, conflict:a.conflict, alpha_badge:a.alpha_badge});
@@ -101,6 +107,8 @@ import {adoptAppearance} from './store-appearance.js';
       if(r) S.selections.set(key(a),`${r.source}:${r.commit}`);
       openApp(key(a));
     }
+    // Search deep links (e.g. Agents' empty private-provider state); no capability filter yet.
+    if (requestedSearch) { $('q').value = requestedSearch; search(requestedSearch); }
   }
   const isInstalled = a => !!S.installed.get(key(a)) && !S.installed.get(key(a)).conflict;
   const status = a => S.selections.get(key(a))==='unavailable' ? 'unknown' : releaseState(a,S.installed.get(key(a)),S.selections.has(key(a)),S.complete);

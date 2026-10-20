@@ -1,5 +1,4 @@
-// Miguel's skins (Dark, Light, Landscapes) carry his model UX: the four-slot switch and the private Tinfoil model.
-// James's skins keep the stock three-model menu and the in-box label, with no Tinfoil row (team rule: taste lives in your skin).
+// Skin-specific switch presentation must not advertise private inference on a main-agent history.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -16,17 +15,17 @@ function models(skin) {
     { slug: 'openai-codex', authenticated: true, models: ['gpt-6-astra', 'gpt-6.1-sol'] },
     { slug: 'wizard-tinfoil', is_user_defined: true, authenticated: true, models: ['kimi-k3'] },
   ] });
-  M.ready = true; M.tinfoil = { provider: 'tinfoil', credentialStored: true };
+  M.ready = true;
   return M;
 }
 const names = html => [...html.matchAll(/<b>(?:<svg[^>]*><\/svg>)?([^<]+)<\/b>/g)].map(m => m[1]);
 const cur = { model: 'claude-opus-5-5', provider: 'anthropic' };
 for (const skin of ['obsidian', 'obsidian-light', 'landscapes']) {
-  test(`${skin}: the private Tinfoil model is a fourth choice, named by its model id`, () => {
+  test(`${skin}: no same-chat Tinfoil choice or setup link`, () => {
     const M = models(skin);
     assert.equal(M.ours(), true);
-    assert.deepEqual(names(M.popHtml({ mode: 'thread', cur }).html), ['Opus', 'Astra', 'Sol', 'Kimi K3']);
-    assert.match(M.popHtml({ mode: 'thread', cur }).html, /class="mrow secure"/);
+    assert.deepEqual(names(M.popHtml({ mode: 'thread', cur }).html), ['Opus', 'Astra', 'Sol']);
+    assert.doesNotMatch(M.popHtml({ mode: 'thread', cur }).html, /Tinfoil|secure|Kimi/);
   });
 }
 for (const skin of ['nebula', 'grove', 'tide', 'ember', 'signal']) {

@@ -1036,6 +1036,11 @@
     if (!hostedOpenable(d.id)) await window.WizCore.refreshApps?.();
     if (!host.isConnected || W[host.dataset.win] !== w) return;
     const a = hostedOpenable(d.id); if (a) openApp(a);
+    if (a && d.id === 'app-store' && d.search === 'private') {
+      const f = [...document.querySelectorAll('iframe')].find(f => W[f.closest('[data-win]')?.dataset.win]?.appId === 'app-store');
+      const send = () => f?.contentWindow?.postMessage({ type: 'wizard:store-search', q: 'private' }, location.origin);
+      if (f) { send(); f.addEventListener('load', send, { once: true }); }
+    }
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
    * at that agent; System and Agents frames may ask for an app's sheet. */

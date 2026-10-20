@@ -161,3 +161,28 @@
 .ch-compose .ch-field.lab-row:focus-within { border-color: rgba(185, 155, 255, .6); }
 .ch-compose .ch-field.lab-row > textarea { flex: none; border: 0; background: transparent; border-radius: 20px 20px 0 0; padding-bottom: 2px; }
 .ch-compose .ch-field.lab-row > .ch-mlabel { bottom: 1px; height: 26px; }
+
+/* Appearance v1 for model controls. These run in the shell itself, not an app iframe:
+ * bridge its pre-Appearance token names only when the canonical --wz-* tokens are absent. */
+:is(.ch-model, .ch-msheet, .ch-mpop) {
+  --mp-base: var(--wz-base, var(--bg));
+  --mp-overlay: var(--wz-overlay, var(--glass-2));
+  --mp-text: var(--wz-text, var(--ink));
+  --mp-muted: var(--wz-text-muted, var(--ink-3));
+  --mp-border: var(--wz-border, var(--line-2));
+  --mp-accent: var(--wz-accent, var(--violet-2));
+  --mp-soft: var(--wz-accent-soft, color-mix(in srgb, var(--mp-accent) 16%, transparent));
+}
+html[data-skin] :is(.ch-msheet, .ch-mpop) { background: color-mix(in srgb, var(--mp-base) 28%, transparent); }
+html[data-skin] :is(.ch-msheet, .ch-mpop) .ch-sheet-b {
+  background: linear-gradient(var(--mp-overlay), var(--mp-overlay)), var(--mp-base);
+  border-color: var(--mp-border); color: var(--mp-text);
+  box-shadow: 0 14px 40px color-mix(in srgb, var(--mp-base) 55%, transparent);
+}
+html[data-skin] :is(.ch-msheet, .ch-mpop) :is(.mrow, .ch-sheet-t) { color: var(--mp-text); }
+html[data-skin] :is(.ch-msheet, .ch-mpop) .mrow:is(.on, :active) { background: var(--mp-soft); }
+html[data-skin] :is(.ch-msheet, .ch-mpop) :is(.msheet-gh, .mrow .mn small) { color: var(--mp-muted); }
+html[data-skin] :is(.ch-msheet, .ch-mpop) :is(.mck, .mrow.more, .priv .msheet-gh, .mrow.priv .ag-lock) { color: var(--mp-accent); }
+html[data-skin] :is(.ch-msheet, .ch-mpop) :is(.mpop-sec, .msheet-grp.priv) { border-color: var(--mp-border); }
+html[data-skin] .ch-model.private { color: var(--mp-accent); background: var(--mp-soft); }
+html[data-skin] .ch-compose .ch-field > .ch-mlabel.private { color: var(--mp-accent); background: none; }
