@@ -333,6 +333,10 @@ def g_shield():
     shield = P("M256 72 L404 124 V236 C404 330 344 404 256 440 C168 404 108 330 108 236 V124 Z")
     return D(shield, circle(256, 228, 40), P("M240 244 L272 244 L288 336 L224 336 Z"))
 
+@glyph('cloud', 'A plain cloud: your Cloudflare accounts (a generic cloud, not Cloudflare\'s mark).')
+def g_cloud():
+    return P("M166 220A70 70 0 1 0 166 360H348A78 78 0 0 0 348 204A96 96 0 0 0 166 220Z")
+
 @glyph('gauge', 'A dial with its needle cut out: how your box is doing.')
 def g_gauge():
     dial = P("M96 330 A160 160 0 0 1 416 330 L416 352 C416 370 402 384 384 384 H128 C110 384 96 370 96 352 Z")
