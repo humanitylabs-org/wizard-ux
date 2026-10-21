@@ -31,7 +31,7 @@
     for (const a of apps) {
       const waiting = busy.has(a.id), blocked = !a.installed && !a.selection;
       const label = waiting ? 'Installing…' : a.installed ? 'Open sign-in' : blocked ? 'Not available yet' : 'Install and sign in';
-      h += `<button class="row" data-recommended="${esc(a.id)}" ${waiting || blocked ? 'disabled' : ''}><span class="bd"><b>${esc(a.name)}</b><small>${esc(errors.get(a.id) || a.unavailable || a.summary)}</small></span><span class="end recommended-action">${label}</span></button>`;
+      h += `<button class="row" data-recommended="${esc(a.id)}" ${waiting || blocked ? 'disabled' : ''}><span class="bd"><b>${esc(a.name)}</b><small>${esc(errors.get(a.id) || (!a.installed && a.unavailable) || a.summary)}</small></span><span class="end recommended-action">${label}</span></button>`;
     }
     return h + '</div></section>';
   }

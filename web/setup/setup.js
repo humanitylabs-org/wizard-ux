@@ -39,6 +39,7 @@
   const S = {
     owner: '',
     list: { status: 'loading', data: null },
+    listVisible: false,
     firstRun: false, seenPosted: false, seenTries: 0,
     screen: 'list',
     phone: { status: 'loading', data: null, banner: false },
@@ -145,7 +146,7 @@
   }) : null;
   if (io) io.observe($('phone')); else inView = true;
   // The checklist refreshes whenever it comes back into view (Back from the phone screen, another desk, the tour).
-  const ioList = 'IntersectionObserver' in window ? new IntersectionObserver(es => { if (S.screen === 'list' && es.some(e => e.isIntersecting)) { renderList(); loadList(); } }) : null;
+  const ioList = 'IntersectionObserver' in window ? new IntersectionObserver(es => { S.listVisible = es.some(e => e.isIntersecting); if (S.screen === 'list' && S.listVisible) { renderList(); loadList(); } }) : null;
   if (ioList) ioList.observe($('list'));
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') { schedule(0); return; }
@@ -355,7 +356,7 @@
   $('scrim').addEventListener('click', () => { closeSheet(); closeMenu(); });
 
   /* ---------------- boot ---------------- */
-  window.WosRecommended?.init(renderList, () => S.screen === 'list' && !document.hidden);
+  window.WosRecommended?.init(renderList, () => S.screen === 'list' && !document.hidden && (!ioList || S.listVisible));
   try { WA?.ready({ name: 'Setup' }); } catch (e) {}
   renderList(); if (!ioList) loadList();
   // Owner name for the greeting: the shell's settings when hosted, else the bootstrap the shell reads.

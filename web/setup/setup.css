@@ -102,7 +102,7 @@ html[data-skin="signal"] { --setup-r: 2px; }
 .recommended { margin-top: 32px; }
 .recommended h2 { font-size: 18px; margin: 0 0 8px; color: var(--wz-text, #eeeaf4); }
 .recommended .intro { margin-bottom: 16px; }
-.recommended-action { font-size: 12px; text-align: right; max-width: 110px; flex-shrink: 0; color: var(--wz-accent, #ae96ef); }
+.recommended .row .recommended-action { font-size: 12px; text-align: right; max-width: 110px; flex-shrink: 0; color: var(--ac); }
 .recommended .row:disabled { cursor: default; opacity: .65; }
 @media (max-width: 420px) {
   .recommended .row { flex-wrap: wrap; }

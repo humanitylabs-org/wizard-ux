@@ -15,8 +15,9 @@ let browser;
   browser=await pw.chromium.launch({executablePath:process.env.QA_CHROME || undefined,headless:true});
   for(const mode of ['desktop','phone']) {
     await fetch(origin+'/__fake/reset',{method:'POST'});
-    const ctx=await browser.newContext({viewport:mode==='phone'?{width:390,height:844}:{width:1440,height:960},isMobile:mode==='phone',hasTouch:mode==='phone'});
-    let installed=false,posts=0,pulls=0,failed=false;
+    const ctx=await browser.newContext({viewport:mode==='phone'?{width:390,height:844}:{width:1440,height:960},isMobile:mode==='phone',hasTouch:mode==='phone',
+      ...(mode==='phone'?{deviceScaleFactor:2,userAgent:'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'}:{})});
+    let installed=false,posts=0,pulls=0;
     const sequence=[],errors=[];
     await ctx.addInitScript(mode=>{localStorage.setItem('wux.shell',mode);localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.v1','true');},mode);
     await ctx.route('**/*',async route=>{
@@ -36,7 +37,7 @@ let browser;
       }
       if(u.pathname==='/wizard-os-home/store-install/wizard-cloudflare') {
         if(req.method()==='POST') {posts++;assert.deepEqual(req.postDataJSON(),selection);assert.equal(req.headers()['x-wizard-store'],'1');return json({state:'installing'});}
-        if(failed)return json({state:'failed',error:'Download failed. Try again.'});
+
         installed=true;return json({state:'installed',selection});
       }
       if(u.pathname==='/wizard-cloudflare/') return route.fulfill({contentType:'text/html',body:'<!doctype html><html><body><h1>Cloudflare sign-in fixture</h1><button>Sign in to Cloudflare</button></body></html>'});
@@ -47,10 +48,15 @@ let browser;
     await page.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.src.includes('/setup/')));
     const f=page.frames().find(f=>f.url().includes('/setup/'));
     await f.locator('[data-recommended="wizard-cloudflare"]').waitFor();
+    assert.equal(await page.evaluate(()=>window.WizCanOpen('wizard-cloudflare')),false);
     await page.waitForFunction(()=>!!window.WosSkin);
     for(const skin of ['nebula','obsidian-light']) {
       await page.evaluate(s=>WosSkin.set(s),skin);
       await f.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
+      if(mode==='phone' && skin==='obsidian-light') {
+        await page.locator('.mz-intro').waitFor({state:'attached',timeout:5000});
+        await page.locator('.mz-intro').waitFor({state:'detached',timeout:10000});
+      }
       assert.equal(await f.locator('.recommended').count(),1);
       assert.equal(await f.locator('[data-recommended="wizard-connectors"]').isDisabled(),true);
       const surface=await f.evaluate(()=>({html:getComputedStyle(document.documentElement).backgroundColor,body:getComputedStyle(document.body).backgroundColor,
