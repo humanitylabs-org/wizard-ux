@@ -305,3 +305,92 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3)), #dotsR:has(> .ddot[data-goto]:nth-child(3))) > .dmore { display: none; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3))::before,
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR:has(> .ddot[data-goto]:nth-child(3))::after { content: ""; flex: 0 0 auto; width: 3px; height: 3px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 40%, transparent); }
+
+/* App kinds on New desk (Apps · Wizard apps · Connectors): the last group scrolls clear of the floating pill dock. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .new-desk.kinds { padding-bottom: calc(var(--pill-top, 90px) + 24px); }
+
+/* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .launcher { top: calc(30px + var(--safe-t)); bottom: calc(var(--pill-top, 90px) + 8px); }
+
+/* System apps (fill a Wizard OS parking spot): first in their group, with a second ring around the icon. */
+/* The Apps sheet's close X, top right (the orb also closes it, but nobody sees that). */
+html[data-skin^="obsidian"] .launcher .lclose { position: absolute; top: 8px; right: 10px; z-index: 3; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--ink) 10%, transparent); border: 1px solid var(--line-2); color: var(--ink); }
+html[data-skin^="obsidian"] .launcher .lclose svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+html[data-skin^="obsidian"] .launcher .launcher-body { padding-top: 34px; }
+
+/* Opinionated (Miguel's skins): Home resources as the most compact readout: two rows (Server, then AI accounts) of
+   small ring + label cells on one shared 3-column grid, no headings, warnings or freshness text; one settings gear.
+   resources.js renders .rs-dialed only for these skins. */
+html[data-skin^="obsidian"] [data-home-resources] { margin-top: 0; }
+html[data-skin^="obsidian"] .rs-dialed { padding: 10px 14px; }
+html[data-skin^="obsidian"] .rs-dials { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 6px; }
+html[data-skin^="obsidian"] .rs-dials + .rs-dials { margin-top: 8px; }
+html[data-skin^="obsidian"] .rs-dial { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; font-variant-numeric: tabular-nums; -webkit-tap-highlight-color: transparent; }
+html[data-skin^="obsidian"] .rs-rw { position: relative; flex: none; width: 30px; height: 30px; }
+html[data-skin^="obsidian"] .rs-rw svg { width: 30px; height: 30px; transform: rotate(-90deg); display: block; }
+html[data-skin^="obsidian"] .rs-dial circle { fill: none; stroke-width: 2.4; }
+html[data-skin^="obsidian"] .rs-ring { stroke: var(--line-2, var(--line)); }
+html[data-skin^="obsidian"] .rs-arc { stroke: var(--ink-2); stroke-linecap: round; transition: stroke-dasharray .5s ease; }
+html[data-skin^="obsidian"] .rs-rw b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10.5px; font-weight: 550; letter-spacing: -.02em; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-dial-off .rs-ring { stroke-dasharray: 2 3; }
+html[data-skin^="obsidian"] .rs-dl { min-width: 0; display: flex; flex-direction: column; font-size: 11.5px; line-height: 1.2; color: var(--wz-text-secondary, var(--ink-2)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-skin^="obsidian"] .rs-dl small { font-size: 10px; color: var(--wz-text, var(--ink)); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-2, var(--line)); }
+html[data-skin^="obsidian"] .rs-dial:active { opacity: .7; }
+html[data-skin^="obsidian"] .rs-dial:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; border-radius: 8px; }
+html[data-skin^="obsidian"] .rs-dial-empty { grid-column: 1 / -1; min-height: 30px; display: flex; align-items: center; font-size: 11.5px; color: var(--wz-text-muted, var(--ink-3)); }
+html[data-skin^="obsidian"] .home-tools .home-system { display: none; }
+
+/* Opinionated (Miguel's skins): Ready / Working as two squarish tiles: the count large at the top, the label with its
+   dot underneath. Same surface, radius and edges as the resources card below so Home reads as one set. Landscapes gets
+   a frosted dark panel so both stay legible over bright photos. */
+html[data-skin^="obsidian"] .home .constellation { gap: 10px; margin-bottom: 10px; }
+html[data-skin^="obsidian"] .home .constellation .now-card {
+  flex: 1 1 0; min-height: 0; height: 84px; padding: 12px 14px; border-radius: var(--wz-home-widget-radius, 20px);
+  display: grid; grid-template: "n n" 1fr "p k" auto / auto 1fr; align-items: center; column-gap: 7px; row-gap: 0; text-align: left;
+  background: var(--wz-home-widget-surface); border: 1px solid var(--wz-home-widget-border); box-shadow: none; }
+html[data-skin^="obsidian"] .home .constellation .now-card .n { grid-area: n; align-self: start; }
+html[data-skin^="obsidian"] .home .constellation .now-card .pip { grid-area: p; width: 6px; height: 6px; flex: none; margin: 0; }
+html[data-skin^="obsidian"] .home .constellation .now-card .meta { grid-area: k; display: block; }
+html[data-skin^="obsidian"] .home .constellation .now-card .k { font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .home .constellation .now-card .n { padding: 0; font-size: 30px; line-height: 1; font-weight: 420; letter-spacing: -.03em; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .home .constellation .now-card:active { transform: scale(.97); }
+  background: linear-gradient(180deg, rgba(22, 20, 30, .74), rgba(12, 11, 18, .82)); border-color: rgba(255, 255, 255, .12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); }
+/* Dark / Light: clean, modern surfaces (no grain): a flat raised card with a crisp hairline. */
+html[data-skin="obsidian"] :is(.home .constellation .now-card, .rs-dialed) { background: rgba(255, 255, 255, .045); border-color: rgba(255, 255, 255, .08); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin="obsidian-light"] :is(.home .constellation .now-card, .rs-dialed) { background: #ffffff; border-color: rgba(0, 0, 0, .07); box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 4px 16px rgba(0, 0, 0, .04); -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* Opinionated (Miguel's skins, 21 Oct): everything on Home centred and shrink-wrapped so the background shows as much
+   as possible. Date and clock centred; Ready / Working as two small centred tiles; resources as ONE centred row of tiny
+   ring dials (Server | AI) with the label under each ring. No panel is wider or taller than its content. */
+html[data-skin^="obsidian"] .home .home-top { text-align: center; padding-left: 0; padding-right: 0; }
+html[data-skin^="obsidian"] .home .home-attn { align-items: center; }
+html[data-skin^="obsidian"] .home .constellation { justify-content: center; gap: 8px; margin-bottom: 8px; }
+html[data-skin^="obsidian"] .home .constellation .now-card {
+  flex: 0 0 82px; width: 82px; min-width: 0; height: auto; padding: 8px 12px 7px; border-radius: 16px;
+  grid-template: "n n" auto "p k" auto / auto auto; justify-content: center; justify-items: center; row-gap: 3px; column-gap: 5px; }
+html[data-skin^="obsidian"] .home .constellation .now-card .n { align-self: center; font-size: 22px; }
+html[data-skin^="obsidian"] .home .constellation .now-card .k { font-size: 11px; }
+html[data-skin^="obsidian"] .home .constellation .now-card .pip { width: 5px; height: 5px; }
+html[data-skin^="obsidian"] [data-home-resources] { display: flex; justify-content: center; }
+html[data-skin^="obsidian"] .rs-dialed { display: flex; flex-wrap: nowrap; justify-content: center; align-items: flex-start; width: fit-content; max-width: 100%; padding: 8px 8px 7px; border-radius: 16px; }
+html[data-skin^="obsidian"] .rs-dials { display: flex; gap: 0; }
+html[data-skin^="obsidian"] .rs-dials + .rs-dials { margin: 0 0 0 6px; padding: 0 0 0 6px; border-left: 1px solid var(--line); }
+html[data-skin^="obsidian"] .rs-dial { flex-direction: column; gap: 3px; width: 42px; text-align: center; }
+html[data-skin^="obsidian"] .rs-rw, html[data-skin^="obsidian"] .rs-rw svg { width: 28px; height: 28px; }
+html[data-skin^="obsidian"] .rs-rw b { font-size: 10px; }
+html[data-skin^="obsidian"] .rs-dl { align-items: center; max-width: 42px; font-size: 9.5px; line-height: 1.15; }
+html[data-skin^="obsidian"] .rs-dl small { font-size: 9px; }
+html[data-skin^="obsidian"] .rs-arc { stroke: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .home-time { font-variant-numeric: normal; }
+/* System apps: one purple border (it replaces the tile's own colour border, never adds a second) and a purple tint. */
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .lapp.lapp-sys .ic { border: 2.5px solid #8f63ff; background: linear-gradient(160deg, rgba(143, 99, 255, .34), rgba(143, 99, 255, .14)), #0f0c17; box-shadow: 0 4px 14px rgba(143, 99, 255, .28); outline: none; }
+
+/* "For agents" (Wizard apps, Agents, Connectors): one quiet folded row under Apps. */
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag { margin: 14px 0 4px; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--line-2); color: var(--ink-2); font-size: 13.5px; font-weight: 600; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row small { color: var(--ink-3); font-size: 12.5px; font-weight: 500; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row svg { margin-left: auto; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag.open .fa-row svg { transform: rotate(180deg); }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag:not(.open) .fa-body { display: none; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag .fa-body { padding-top: 6px; }

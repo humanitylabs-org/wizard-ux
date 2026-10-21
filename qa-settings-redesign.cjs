@@ -39,13 +39,13 @@ const fixtureModule = fs.readFileSync(path.join(__dirname, 'web/core/chats-fixtu
    await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.done', '1'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (_) { /* Sandbox/opaque-origin hosted frames do not expose storage. */ } navigator.sendBeacon = () => false; });
    const p = await ctx.newPage(); p.on('pageerror', e => errors.push({ kind, error: String(e) }));
    const open = async view => { await p.evaluate(v => WizCore.deeplink.route('/wizard-os-home/?view=' + v), view); await nap(250); };
-   const tap = async selector => { const el = p.locator(selector + ':visible').first(); await el.scrollIntoViewIfNeeded(); if (phone) await el.tap(); else await el.click(); await nap(180); };
+   const tap = async selector => { for (let i = 0; ; i++) { try { const el = p.locator(selector + ':visible').first(); await el.scrollIntoViewIfNeeded({ timeout: 5000 }); if (phone) await el.tap({ timeout: 5000 }); else await el.click({ timeout: 5000 }); break; } catch (e) { if (i >= 2 || !/not attached|detached/i.test(String(e))) throw e; await nap(250); } } await nap(180); }; // Settings may re-render once when skin preview images load
    const shot = async name => { await p.locator('.mz-intro').waitFor({ state: 'detached' }); await p.screenshot({ path: path.join(OUT, `${kind}-${name}.png`) }); };
    await p.goto(BASE); await p.waitForFunction(() => WizLive?.ok && (window.__wos || window.__wux) && window.WosSettings && WosOutbox.recoveryComplete, null, { timeout: 60000 });
    await p.evaluate(() => WizCore.appsLoaded()); await p.evaluate(() => WizCore.voiceStatus.load());
    for (const skin of ['nebula', 'obsidian-light']) {
     await open('skin');
-    if (skin === 'obsidian-light') { await tap('[data-skinfamily="mizel"]'); await p.locator('.mz-intro').waitFor({ state: 'detached' }); await tap('[data-skinpick="obsidian-light"]'); }
+    if (skin === 'obsidian-light') { await tap('[data-skinpick="obsidian-light"]'); await p.locator('.mz-intro').waitFor({ state: 'detached' }); if (await p.evaluate(() => WosSkin.current) !== 'obsidian-light') await tap('[data-skinpick="obsidian-light"]'); }
     ok(await p.evaluate(s => WosSkin.current === s && document.querySelector('[data-skinpick][aria-pressed="true"]')?.dataset.skinpick === s, skin), `${kind} ${skin}: real picker wears the selected palette`);
     await shot(`${skin}-appearance`);
     const touch = await p.locator('#settingsBody').evaluate(e => [...e.querySelectorAll('button, summary')].filter(b => b.getClientRects().length && !b.closest('[hidden]')).map(b => ({ label: b.textContent.trim().slice(0, 50), width: Math.round(b.getBoundingClientRect().width * 1000) / 1000, height: Math.round(b.getBoundingClientRect().height * 1000) / 1000 })));
