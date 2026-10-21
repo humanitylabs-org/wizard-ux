@@ -8,6 +8,14 @@ Machine-specific paths and hosts come from env vars: `WIZARD_WORK_ROOT`, `WIZARD
 
 ## This repo
 
+### Portable mobile configuration
+
+Machine-specific paths and hosts come from environment/build settings: `WIZARD_ORIGIN` (Android's
+`wizardOrigin` Gradle property also works), and `photosServer` in private Gradle user properties.
+Never commit personal paths or tailnet hostnames. `npm test` runs the tracked-file mobile portability
+guard in `tests/portable-mobile-config.test.mjs`; Android and iOS configuration, sources, tests and docs
+are covered. See `android/README.md` and `ios/README.md` for local configuration.
+
 - **`main` is what James runs.** Until 19 Oct 2026 it was named `daily`. Older notes, `BRANCHES.md` rows and QA comments that say `daily` mean `main`.
 - **Checks:**
   - `npm test` must pass.

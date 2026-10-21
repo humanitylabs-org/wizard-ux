@@ -1,5 +1,6 @@
 # Wizard for iPhone (Capacitor). Run from ios/: `fastlane sim` or `fastlane beta`.
 # Settings come from ios/fastlane/.env (copy .env.example). The .p8 key file stays outside the repo.
+require 'shellwords'
 default_platform(:ios)
 
 PROJECT = "native/App/App.xcodeproj"
@@ -23,7 +24,7 @@ platform :ios do
   end
 
   def origin_arg
-    ENV["WIZARD_ORIGIN"].to_s.empty? ? "" : " WIZARD_ORIGIN=#{ENV['WIZARD_ORIGIN']}"
+    ENV["WIZARD_ORIGIN"].to_s.empty? ? "" : " #{Shellwords.escape("WIZARD_ORIGIN=#{ENV['WIZARD_ORIGIN']}")}"
   end
 
   desc "Install npm deps and copy web assets/config/plugins into the Xcode project"
@@ -40,7 +41,8 @@ platform :ios do
     Dir.chdir("..") do
       sh("xcodebuild", "-project", PROJECT, "-scheme", SCHEME,
          "-destination", "generic/platform=iOS Simulator", "-configuration", "Debug",
-         "-derivedDataPath", "build/DerivedData", "CODE_SIGNING_ALLOWED=NO", "build")
+         "-derivedDataPath", "build/DerivedData", "CODE_SIGNING_ALLOWED=NO",
+         "WIZARD_ORIGIN=#{ENV['WIZARD_ORIGIN']}", "build")
     end
   end
 
