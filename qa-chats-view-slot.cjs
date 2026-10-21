@@ -3,13 +3,13 @@
 const { chromium } = require(process.env.PW || require('path').join(require('os').homedir(), 'node_modules/playwright'));
 const fs = require('fs'), path = require('path');
 const BASE = process.argv[2] || 'http://127.0.0.1:19371/wizard-os-home/';
-const OUT = process.env.QA_SHOTS || path.join(require('os').homedir(), '.hermes/cache/scratch/chats-view-slot');
+const OUT = process.env.QA_SHOTS || path.join(require('os').homedir(), '.hermes/cache/scratch/chats-parity/qa-chats-view-slot');
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (v, label, detail = '') => { v ? pass++ : fail++; console.log(v ? 'PASS' : 'FAIL', label, detail); };
 const wait = ms => new Promise(r => setTimeout(r, ms));
 async function run(browser, phone) {
-  const context = await browser.newContext(phone ? { viewport: { width: 412, height: 892 }, hasTouch: true, isMobile: true, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36' } : { viewport: { width: 1800, height: 1000 } });
+  const context = await browser.newContext(phone ? { viewport: { width: 412, height: 892 }, hasTouch: true, isMobile: true, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36' } : { viewport: { width: 1440, height: 900 } });
   const writes = [], errors = [];
   await context.route('**/*', route => {
     if (route.request().method() === 'GET') return route.continue();
@@ -23,7 +23,7 @@ async function run(browser, phone) {
   }, phone);
   const page = await context.newPage(); page.on('pageerror', e => errors.push(String(e)));
   const url = new URL(BASE); url.searchParams.set('chatsview', 'fixture');
-  await page.goto(url.href); await page.waitForFunction(() => window.WizLive?.ok && (window.__wux || window.__wos) && window.WizChatsHost?.installed().length > 1);
+  await page.goto(url.href, { waitUntil:'domcontentloaded' }); await page.waitForFunction(() => window.WizLive?.ok && (window.__wux || window.__wos) && window.WizChatsHost?.installed().length > 1);
   await wait(1000);
   if (!phone) {
     await page.evaluate(() => {
@@ -98,7 +98,7 @@ async function registryOnly(browser) {
   });
   const page = await context.newPage(); page.on('pageerror', e => errors.push(String(e)));
   const url = new URL(BASE); url.searchParams.delete('chatsview');
-  await page.goto(url.href); await page.waitForFunction(() => window.__wux && WizChatsHost.defaultId() === 'chats-fixture');
+  await page.goto(url.href, { waitUntil:'domcontentloaded' }); await page.waitForFunction(() => window.__wux && WizChatsHost.defaultId() === 'chats-fixture');
   await page.evaluate(() => __wux.openApp(WizCore.apps('desktop').APP.wizard));
   await page.waitForSelector('[data-chats-fixture]');
   ok(await page.evaluate(() => !WizChatsHost.installed().some(a => a.id === 'chats-throws' || a.id === 'uninstalled-link')), 'registry: installed descriptor works without dev opt-in; owner links and dev providers are absent');
