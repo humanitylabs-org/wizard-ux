@@ -1307,8 +1307,8 @@
     desks.push(blank({})); syncDesks(); renderDots(); goDesk(desks.length - 1, true); announce('<b>New desk</b>');
   }
   /* Miguel's skins (Dark, Light, Landscapes): the launcher and New desk sort apps by what they are, with no Recent row.
-   * Apps = anything with a screen you use; Wizard apps = backend-only apps your agent uses (tap = its settings sheet);
-   * Connectors = sign-ins to another service (ChatGPT, Claude, Tinfoil, Cloudflare). James's skins keep his layout. */
+   * Same order as the App Store: Apps = anything with a screen you use; Wizard apps = backend-only apps your agent uses
+   * (tap = its settings sheet); Agents = agent chats + the Agents app; Connectors = sign-ins to another service. James's skins keep his layout. */
   const oursSkin = () => ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '');
   const CONNECTOR_IDS = new Set(['wizard-chatgpt', 'wizard-claude', 'wizard-tinfoil', 'wizard-cloudflare']);
   const isConnector = a => CONNECTOR_IDS.has(a.id) || /^(connect|sign in to)\b/i.test(a.desc || '');
@@ -1316,10 +1316,11 @@
     const byName = (x, y) => x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
     const mine = APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
     const conns = mine.filter(a => a.kind === 'wizard' && isConnector(a));
-    const chats = mine.filter(a => a.kind === 'chats'); // main Chats first, then agent chats, as registered
-    const apps = [...chats, ...mine.filter(a => a.kind !== 'chats' && !conns.includes(a)).sort(byName)];
+    // Agents: each agent's chats (main agent first, as registered) plus the Agents app that manages them.
+    const agents = [...mine.filter(a => a.kind === 'chats'), ...(APP.agents ? [APP.agents] : [])];
+    const apps = mine.filter(a => a.kind !== 'chats' && !conns.includes(a)).sort(byName);
     const back = (window.WizCore.backendApps?.() || []).filter(a => !APP[a.id]);
-    return { apps, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
+    return { apps, agents, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
   }
   const backTile = a => `<button class="lapp lapp-back" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
   const kindTile = a => a.url || a.kind !== 'wizard' ? appTile(a) : backTile(a);
@@ -1329,6 +1330,7 @@
     const G = {
       apps: `<div class="lgroup kg-apps"><h4>Apps</h4><div class="lgrid">${K.apps.map(appTile).join('')}${getApps}</div></div>`,
       wiz: K.wiz.length ? `<div class="lgroup kg-wiz"><h4>Wizard apps</h4><div class="lgrid">${K.wiz.map(backTile).join('')}</div></div>` : '',
+      agents: K.agents.length ? `<div class="lgroup kg-agents"><h4>Agents</h4><div class="lgrid">${K.agents.map(appTile).join('')}</div></div>` : '',
       conns: K.conns.length ? `<div class="lgroup kg-conns"><h4>Connectors</h4><div class="lgrid">${K.conns.map(kindTile).join('')}</div></div>` : '',
     };
     return order.map(k => G[k]).join('');
@@ -1336,7 +1338,7 @@
   function openAppInfo(el) { window.WosAppRoute?.open(el.dataset.appinfo, { name: el.dataset.name || '' }); }
   function renderEmpty(i) {
     const grp = (h, list) => list.length ? `<div class="lgroup"><h4>${h}</h4><div class="lgrid">${list.map(appTile).join('')}</div></div>` : '';
-    if (oursSkin()) { tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${kindGroups(['apps', 'wiz', 'conns'])}</div>`; }
+    if (oursSkin()) { tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${kindGroups(['apps', 'wiz', 'agents', 'conns'])}</div>`; }
     const wiz = APPS.filter(a => a.id !== 'agents' && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')), views = APPS.filter(a => a.kind === 'view');
     tileN = 0;
     return `<div class="desk-scroll new-desk"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${grp('Apps', wiz)}${grp('Views', views)}</div>`;
@@ -1814,7 +1816,7 @@
       const top = body.scrollTop; body.innerHTML = html; body.__lhtml = html;
       body.scrollTop = live ? top : body.scrollHeight;
     };
-    if (!q && oursSkin()) { paint(kindGroups(['apps', 'wiz', 'conns'])); if (!live) body.scrollTop = 0; return; } // same order as New desk, read from the top
+    if (!q && oursSkin()) { paint(kindGroups(['apps', 'wiz', 'agents', 'conns'])); if (!live) body.scrollTop = 0; return; } // same order as New desk, read from the top
     if (!q) {
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
