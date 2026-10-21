@@ -5,7 +5,7 @@ const BASE=process.argv[2]||'http://127.0.0.1:9743/wizard-os-home/',OUT=process.
 const SID='wizard_round2_private',KEY='agent/private/direct:'+SID;let pass=0;
 const ok=(v,n)=>{assert(v,n);pass++;console.log('PASS',n)};
 async function openChats(p,mobile,agent=''){
- await p.evaluate(({mobile,agent})=>{const H=mobile?__wos:__wux;if(agent){H.openAgentChats(WosAgents.get(agent));return;}if(mobile)H.openApp(WizCore.apps('mobile').APPS.find(a=>a.id==='wizard'));}, {mobile,agent});
+ await p.evaluate(({mobile,agent})=>{const H=mobile?__wos:__wux;if(agent){window.WizOpenAgentChats(agent);return;}if(mobile)H.openApp(WizCore.apps('mobile').APPS.find(a=>a.id==='wizard'));}, {mobile,agent});
  await p.waitForFunction(agent=>Object.values((window.__wos||window.__wux).wins).some(w=>w.app==='chats'&&(w.agent||'')===agent),agent);
  const wid=await p.evaluate(agent=>Object.values((window.__wos||window.__wux).wins).find(w=>w.app==='chats'&&(w.agent||'')===agent).id,agent);
  if(mobile){await p.evaluate(id=>__wos.goDesk(__wos.desks.findIndex(d=>d.wins.includes(id))),wid);await p.waitForTimeout(400)}
@@ -16,7 +16,7 @@ try{
  const pages=[];
  for(const mobile of [true,false]){
   const tag=mobile?'phone':'desktop',ctx=await b.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:900},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
-  await ctx.addInitScript(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.done','1');});
+  await ctx.addInitScript(()=>{try{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.done','1');}catch{}});
   const p=await ctx.newPage();pages.push({p,ctx,mobile});
   p.on('pageerror',e=>console.log('PAGEERROR',String(e)));
   await p.goto(BASE+(mobile?'':'desktop.html'));
@@ -29,7 +29,7 @@ try{
   ok(scoped.length===1&&scoped[0].id===SID,tag+': Private workspace content search is scoped');
   let {wid,pane}=await openChats(p,mobile);
   await pane.locator('[data-chsearch]').fill('cobaltwatermelon');await pane.locator(`[data-chopen="${SID}"]`).waitFor();
-  ok(await pane.locator(`[data-chopen="${SID}"] [data-g="lock"]`).count()>0,tag+': search result carries a lock');
+  ok(await pane.locator(`[data-chopen="${SID}"] .ag-lock`).count()>0,tag+': search result carries a lock');
   await p.screenshot({path:path.join(OUT,tag+'-private-content-search.png')});
   await pane.locator(`[data-chopen="${SID}"]`).click();await pane.locator('.ch-thread').waitFor();
   ok((await pane.innerText()).includes('forgotten cobaltwatermelon'),tag+': matched private conversation opens');
@@ -50,7 +50,7 @@ try{
  const receipt=await phone.evaluate(async key=>(await(await fetch('/wizard/thread-seen')).json()).state.threads[key],KEY);
  ok(receipt.agent_id==='private'&&receipt.session_id===SID&&!('content' in receipt),'server persists only qualified private receipt metadata');
  await desktop.evaluate(async()=>{await WizLive.refresh(true)});
- ok(await desktop.evaluate(id=>!WizLive.isNew(WizLive.session(id)),SID),'second independent browser context becomes read from server');
+ ok(await desktop.evaluate(({id,at})=>!WizLive.isNew(WizLive.session(id))&&WizLive.seenRecord(WizLive.session(id))?.seenAt===at,{id:SID,at:receipt.seenAt}),'second independent browser context becomes read from exact server receipt');
  const d=pages[1];await d.p.goto(BASE+'agents/');await d.p.locator('[data-open="private"]').click();
  const toggle=d.p.getByRole('switch',{name:'Read standard chats'});await toggle.waitFor();
  ok(await toggle.isEnabled()&&await toggle.getAttribute('aria-checked')==='true','Agents app exposes enabled read-only standard-chat permission');
