@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
+const dataSource = readFileSync(new URL('../web/core/chat-topic-emojis-data.js', import.meta.url), 'utf8');
 const source = readFileSync(new URL('../web/core/chat-topic-emojis.js', import.meta.url), 'utf8');
 
 function fixture(seed = {}) {
@@ -14,6 +15,7 @@ function fixture(seed = {}) {
   const context = { window: {}, localStorage: storage };
   context.window = context;
   vm.createContext(context);
+  vm.runInContext(dataSource, context);
   vm.runInContext(source, context);
   return { api: context.WosTopicEmoji, values };
 }
@@ -56,14 +58,16 @@ test('palette contains the Telegram-reference topics and general choices', () =>
   assert.equal(new Set(api.choices).size, api.choices.length);
 });
 
-test('palette exposes a broad categorized set without duplicate choices', () => {
+test('palette exposes the Unicode 16 base set in Telegram-style categories', () => {
   const { api } = fixture();
-  assert.ok(api.categories.length >= 8, `expected at least 8 categories, got ${api.categories.length}`);
-  assert.ok(api.choices.length >= 150, `expected at least 150 choices, got ${api.choices.length}`);
+  assert.deepEqual(
+    Array.from(api.categories, category => category.label),
+    ['Smileys & People', 'Animals & Nature', 'Food & Drink', 'Activity', 'Travel & Places', 'Objects', 'Symbols', 'Flags'],
+  );
+  assert.ok(api.choices.length >= 1900, `expected at least 1900 choices, got ${api.choices.length}`);
   assert.equal(new Set(api.choices).size, api.choices.length);
   for (const category of api.categories) {
-    assert.ok(category.label.trim().length > 0);
-    assert.ok(category.emoji.length >= 8, `${category.label} is too sparse`);
+    assert.ok(category.emoji.length >= 80, `${category.label} is too sparse`);
     for (const emoji of category.emoji) assert.ok(api.choices.includes(emoji));
   }
 });
@@ -77,15 +81,26 @@ test('choices from later categories persist through the existing storage key', (
   assert.equal(second.api.get('thread:later', 'Anything'), later);
 });
 
-test('search is case-insensitive, trims whitespace, and matches emoji names and synonyms', () => {
+test('search ranks fitness intents first without leaking money results', () => {
   const { api } = fixture();
   const emoji = query => api.search(query).flatMap(category => category.emoji);
-  assert.ok(emoji('  TRAIN  ').includes('🚆'));
-  assert.ok(emoji('plane').includes('✈️'));
-  assert.ok(emoji('happy').includes('😀'));
-  assert.ok(emoji('money').includes('💰'));
+  for (const query of ['workout', 'exercise', 'gym', 'sports', 'strong', 'muscle']) {
+    const results = emoji(query);
+    assert.equal(results[0], '💪', `${query} should rank flexed biceps first: ${results.slice(0, 8).join(' ')}`);
+    assert.ok(results.slice(0, 12).some(value => ['🏋️', '🏃', '🤸', '⛹️', '🤼', '⚽', '🏀'].includes(value)), `${query} should include a sport or fitness emoji near the top`);
+    assert.ok(!results.slice(0, 20).some(value => ['💰', '💵', '💸', '🤑', '💳'].includes(value)), `${query} leaked a money emoji`);
+  }
+});
+
+test('search ranks exact names before prefixes, keywords, and weaker matches', () => {
+  const { api } = fixture();
+  const emoji = query => api.search(query).flatMap(category => category.emoji);
+  assert.equal(emoji('train')[0], '🚆');
+  assert.equal(emoji('plane')[0], '✈️');
+  assert.ok(['😀', '😃', '😊'].includes(emoji('happy')[0]));
+  assert.equal(emoji('money')[0], '💰');
+  assert.equal(emoji('computer')[0], '💻');
   assert.ok(!emoji('money').includes('🎯'), 'category labels must not make unrelated emoji match');
-  assert.ok(emoji('computer').includes('💻'));
 });
 
 test('empty search restores every category and an unknown term returns no categories', () => {

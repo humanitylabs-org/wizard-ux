@@ -142,6 +142,7 @@
     "core/chat-power.css",
     "core/chat-power.js",
     "core/chat-search.js",
+    "core/chat-topic-emojis-data.js",
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
     "core/chats.css",
@@ -333,6 +334,13 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/chat-topic-emojis-data.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Vendored Emojibase Unicode 16 emoji names and search tags"
     },
     "core/chat-topic-emojis.js": {
       "loadedBy": [
