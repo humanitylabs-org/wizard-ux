@@ -103,7 +103,7 @@ async function phone(b) {
     const priv = M.privateOptions(), cur = { model: 'claude-opus-5-5', provider: 'anthropic' };
     const r = { base: rowsOf(M.sheetHtml({ mode: 'new', cur, all: true, priv: [] }).html),
       sheet: rowsOf(M.sheetHtml({ mode: 'new', cur, all: true, priv }).html), pop: rowsOf(M.popHtml({ mode: 'new', cur, all: true, priv }).html),
-      onMainGlm: rowsOf(M.sheetHtml({ mode: 'thread', cur: { model: 'glm-5-3', provider: 'wizard-tinfoil' }, all: true, priv }).html) };
+      onMainGlm: rowsOf(M.sheetHtml({ mode: 'thread', cur: { model: 'glm-5-3', provider: 'custom:wizard-tinfoil' }, all: true, priv }).html) };
     root.dataset.skin = was || ''; if (!was) delete root.dataset.skin; return r; });
   ok(tin.base.some(t => /glm/i.test(t)), 'fixture: without a private agent the main picker still offers its own Tinfoil GLM', JSON.stringify(tin.base));
   ok(!tin.sheet.some(t => /glm|deepseek|tinfoil/i.test(t)) && !tin.pop.some(t => /glm|deepseek|tinfoil/i.test(t)), 'phone: with a Private group, GLM/DeepSeek appear only there (no shared-Hermes Tinfoil row)', JSON.stringify(tin));
