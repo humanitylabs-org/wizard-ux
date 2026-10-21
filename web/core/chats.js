@@ -478,6 +478,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function renderChatList(w, el) {
     if (!el) return;
+    if (H.renderView?.(w, el, () => renderChatList(w, el), 'list')) return;
     if (window.__wosScrollCapture?.hold(el, null)) { ch(w.id).heldList = true; return; }
     ch(w.id).heldList = false;
     H.threadShown?.(w.id, null); // the list is showing: nothing is bound to this window
@@ -1047,6 +1048,7 @@ window.WizCore.chats = function createChats(H) {
     };
   }
   function renderThread(w, el, keep) {
+    if (H.renderView?.(w, el, () => renderThread(w, el, keep), 'thread')) return;
     if (window.__wosScrollCapture?.hold(el, draftKey(w))) { ch(w.id).held = true; return; }
     ch(w.id).held = false; // explicit actions/navigation may repaint immediately
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : LIVE.session(w.thread);
@@ -1329,6 +1331,7 @@ window.WizCore.chats = function createChats(H) {
   }
   function renderChats(w) {
     const el = track.querySelector(`[data-chats="${w.id}"]`); if (!el) return;
+
     if (w.thread) { renderThread(w, el); loadThread(w); } else renderChatList(w, el);
   }
   async function loadThread(w, force) {
