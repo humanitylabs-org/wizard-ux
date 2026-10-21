@@ -1126,9 +1126,9 @@ window.WizCore.chats = function createChats(H) {
     const hadFocus = el.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA';
     // Live status/model paints must not replace a sealed dictation target in this same composer.
     // Navigation to another thread still destroys it: never transfer a seal to the new draft.
-    // Same draft = same textarea: live repaints (new steps in a working thread) reuse the owner's field so the caret,
-    // selection, undo history and scroll stay put. James, 21 Oct 2026: typing at the bottom of a long reply in a working
-    // thread, every repaint threw the box back to the top. Navigation to another thread still gets a fresh field.
+    // Same draft = same textarea: live repaints (new steps in a working thread) reuse the owner's field so keyboard/IME
+    // dictation keeps its input connection and the caret, selection, undo history and scroll stay put. Navigation to
+    // another thread still gets a fresh field.
     const keepTa = oldTa && el.dataset.draftFor === dkey ? oldTa : null;
     const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd, keepTa.selectionDirection];
     const keepScroll = keepTa ? keepTa.scrollTop : 0;
