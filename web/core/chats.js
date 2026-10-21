@@ -823,13 +823,12 @@ window.WizCore.chats = function createChats(H) {
     const list = Array.from(categories || []);
     scroll.innerHTML = list.length ? '<span data-chemosentinel aria-hidden="true"></span>' : '<p class="ch-emoji-empty" role="status">No emojis found. Try another word.</p>';
     scroll.scrollTop = 0;
-    emojiRenderState.set(scroll, { categories: list, index: 0, queued: false });
+    emojiRenderState.set(scroll, { categories: list, index: 0 });
     appendEmojiCategory(scroll);
     scroll.onscroll = () => {
       const state = emojiRenderState.get(scroll);
-      if (!state || state.queued || state.index >= state.categories.length || scroll.scrollTop + scroll.clientHeight < scroll.scrollHeight - 320) return;
-      state.queued = true;
-      requestAnimationFrame(() => { state.queued = false; appendEmojiCategory(scroll); });
+      if (!state || state.index >= state.categories.length || scroll.scrollTop + scroll.clientHeight < scroll.scrollHeight - 320) return;
+      appendEmojiCategory(scroll);
     };
   }
   function renderEmojiSearch(sheet, query) {
