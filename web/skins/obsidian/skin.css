@@ -300,3 +300,5 @@ html[data-skin^="obsidian"] .ch-compose button.ch-reply-x:hover { color: var(--i
 html[data-skin^="obsidian"] .ch-reply-t b, html[data-skin^="obsidian"] .ch-rq b { font-weight: 600; color: var(--ink); letter-spacing: 0; }
 html[data-skin^="obsidian"] .ch-reply-t span, html[data-skin^="obsidian"] .ch-rq span { color: var(--ink-2); }
 html[data-skin^="obsidian"] .msg.u .bub .ch-rq { margin: 0 0 8px; padding: 0 0 0 10px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
+html[data-skin^="obsidian"] .ch-compose.has-reply { padding-top: 12px !important; }
+html[data-skin^="obsidian"] .ch-compose button.ch-reply-x { color: color-mix(in srgb, var(--ink) 78%, transparent); }
