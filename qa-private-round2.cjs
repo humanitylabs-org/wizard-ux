@@ -18,7 +18,11 @@ try{
   const tag=mobile?'phone':'desktop',ctx=await b.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:900},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
   await ctx.addInitScript(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.done','1');});
   const p=await ctx.newPage();pages.push({p,ctx,mobile});
-  await p.goto(BASE+(mobile?'':'desktop.html'));await p.waitForFunction(()=>WizLive.ok&&WizLive.agentSessions.private?.length);
+  p.on('pageerror',e=>console.log('PAGEERROR',String(e)));
+  await p.goto(BASE+(mobile?'':'desktop.html'));
+  try { await p.waitForFunction(()=>WizLive.ok&&WizLive.agentSessions.private?.length); }
+  catch(e){console.log('DIAGNOSTIC',await p.evaluate(()=>({live:window.WizLive&&{ok:WizLive.ok,error:WizLive.error,agentStatus:WizLive.agentStatus,sessions:WizLive.sessions},agents:window.WosAgents&&{list:WosAgents.list,error:WosAgents.error}})));await p.screenshot({path:path.join(OUT,tag+'-failure.png')});throw e;}
+
   const results=await p.evaluate(()=>WizLive.searchSessions('cobaltwatermelon'));
   ok(results.length===1&&results[0].agent==='private'&&results[0].id===SID,tag+': actual service FTS finds old private message, not title/preview');
   const scoped=await p.evaluate(()=>WizLive.searchSessions('cobaltwatermelon','private'));
