@@ -99,6 +99,9 @@
 .st-desktop .st-page { overflow-y: auto; min-width: 0; padding-right: 8px; }
 .st-desktop .st-page-head button { display: none; }
 .st-desktop .st-page-head { min-height: 48px; }
+/* Desktop: shortcuts sit in the narrow category column; list them evenly instead of wrapping. */
+.st-desktop .st-shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--wz-border); }
+.st-root[data-settings-root] .st-desktop .st-shortcuts button { min-width: 0; text-align: left; padding: 4px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 700px) {
   .st-desktop { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
 }
