@@ -80,6 +80,7 @@ try{
    await p.evaluate(s=>WosSkin.set(s),skin);await p.waitForTimeout(800);
    const appearance=await frame.evaluate(()=>({skin:document.documentElement.dataset.skin,bg:getComputedStyle(document.body).backgroundColor}));
    ok(appearance.skin===skin&&appearance.bg!=='rgb(255, 255, 255)',(mobile?'phone':'desktop')+': hosted Agents follows '+skin);
+   await frame.getByRole('switch',{name:'Read standard chats'}).scrollIntoViewIfNeeded();
    await p.screenshot({path:path.join(OUT,(mobile?'phone':'desktop')+'-agents-'+skin+'.png')});
   }
  }
