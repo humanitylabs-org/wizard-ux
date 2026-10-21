@@ -101,6 +101,8 @@
 .ch-sec.open .ch-sec-h i { transform: rotate(-135deg); }
 .ch-sec + .ch-sec { border-top: 1px solid var(--line); }
 .ch-sec[data-sec="errors"] .ch-sec-h { color: #ff8f8f; }
+.ch-sec[data-sec="pinned"] .ch-sec-h { color: var(--violet-2); }
+.ch-pin { display: inline-block; margin-left: 6px; color: var(--violet-2); font-size: 12px; font-weight: 700; vertical-align: 1px; }
 .ch-none { display: block; padding: 4px 10px 10px; font-size: 13px; color: var(--ink-3); }
 .ch-more { display: block; width: calc(100% - 16px); margin: 4px 8px 10px; padding: 9px; border-radius: 12px; font-size: 13px; font-weight: 700; color: var(--violet-2); background: rgba(205, 190, 255, .05); }
 /* Message attachments: voice notes look like a voice note, photos inline */

@@ -139,6 +139,7 @@
     "core/chat-errors.js",
     "core/chat-kit.js",
     "core/chat-models.js",
+    "core/chat-pins.js",
     "core/chat-power.css",
     "core/chat-power.js",
     "core/chat-search.js",
@@ -313,6 +314,13 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/chat-pins.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared device-local pin order for Chats threads"
     },
     "core/chat-models.js": {
       "loadedBy": [
