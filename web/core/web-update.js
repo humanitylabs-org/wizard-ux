@@ -13,7 +13,6 @@
   const url = p => new URL(p, BASE).href;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let H = null; // host
-  const OURS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
   function burst() {
     if (document.querySelector('.wos-burst')) return;
     const el = document.createElement('div'); el.className = 'wos-burst'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
@@ -134,9 +133,9 @@
   }
   async function go(why, p) {
     if (going) return false; going = true;
-    // Miguel's skins (Dark, Light, Landscapes): a tapped reload bursts across the screen and says Loading until
-    // the new build paints, so the tap visibly worked. James's skins are unchanged.
-    if (why === 'tap' && OURS.has(document.documentElement.dataset.skin || '')) { burst(); await new Promise(r => setTimeout(r, 900)); }
+    // A tapped reload bursts across the screen and says "Updating Wizard OS..." until the new build paints, so the
+    // tap visibly worked instead of the banner looking frozen (every skin).
+    if (why === 'tap') { burst(); await new Promise(r => setTimeout(r, 900)); }
     try { H?.beforeReload?.(); } catch (_) {}
     window.WizAppReadingPosition?.flush();
     if (p?.keeps) {

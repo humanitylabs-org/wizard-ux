@@ -4,7 +4,7 @@ const fs=require('fs'),path=require('path');
 const {chromium}=require(process.env.QA_PLAYWRIGHT||'playwright');
 const origin=process.argv[2]||'https://wizard.tailc0f369.ts.net';
 const out=process.env.QA_OUT||'quote-evidence';fs.mkdirSync(out,{recursive:true});
-const quote='Hello **Miguel**,\n\n- Update [App Manager](https://github.com/humanitylabs-org/wizard-app-manager/pull/34).\n- Keep the existing build running.';
+const quote='Hello **Miguel**,\n\n1. Ship it.\n2. Then check.\n\n- Update [App Manager](https://github.com/humanitylabs-org/wizard-app-manager/pull/34).\n- Keep the existing build running.';
 const markdown='Outside introduction.\n\n'+quote.split('\n').map(l=>'> '+l).join('\n')+'\n\nOutside conclusion.\n\n> Second quote.\n>\n> > Nested quote.\n\n```text\n> literal code\n```';
 let pass=0,fail=0;const ok=(v,label)=>{console.log(v?'PASS':'FAIL',label);v?pass++:fail++;};
 (async()=>{const browser=await chromium.launch({headless:true});try{for(const desktop of [false,true]){
@@ -34,6 +34,7 @@ let pass=0,fail=0;const ok=(v,label)=>{console.log(v?'PASS':'FAIL',label);v?pass
  await controls.first().click();await p.waitForTimeout(150);const c=await clip();
  ok(c.text.includes('Hello Miguel')&&!/Outside|Second quote|Copy|Share/.test(c.text),mode+' quote copy excludes surrounding response and controls');
  ok(c.html.includes('<strong>Miguel</strong>')&&c.html.includes('href="https://github.com/'),mode+' quote copy preserves formatting and links');
+ ok(/1\. Ship it\.\n2\. Then check\./.test(c.text)&&/1\. Ship it\..*2\. Then check\./s.test(c.html)&&/• Update/.test(c.text)&&/• Update/.test(c.html)&&!/<[ou]l[ >]/.test(c.html),mode+' quote copy keeps list markers as text in both flavours');
  ok(!/class=|style=|data-quote/.test(c.html),mode+' clean pasted HTML');
  await msg.locator('[data-quoteshare]').first().click();ok(await p.evaluate(q=>__shares.at(-1).text==='From Athena:\n\n'+q,quote),mode+' quote share configured attribution plus exact markdown');
  await controls.nth(1).click();await p.waitForTimeout(100);ok((await clip()).text==='Nested quote.',mode+' nested copy only nested quote');
