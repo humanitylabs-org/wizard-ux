@@ -301,4 +301,6 @@ html[data-skin^="obsidian"] .ch-reply-t b, html[data-skin^="obsidian"] .ch-rq b 
 html[data-skin^="obsidian"] .ch-reply-t span, html[data-skin^="obsidian"] .ch-rq span { color: var(--ink-2); }
 html[data-skin^="obsidian"] .msg.u .bub .ch-rq { margin: 0 0 8px; padding: 0 0 0 10px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
 html[data-skin^="obsidian"] .ch-compose.has-reply { padding-top: 12px !important; }
-html[data-skin^="obsidian"] .ch-compose button.ch-reply-x { color: color-mix(in srgb, var(--ink) 78%, transparent); }
+/* The skin's :is(.ch-compose button…) fill rule out-ranks a plain selector, so the × colour must win explicitly (Light drew it white on white). */
+html[data-skin^="obsidian"] .ch-compose button.ch-reply-x, html[data-skin^="obsidian"] .ch-compose button.ch-reply-x svg { color: color-mix(in srgb, var(--ink) 78%, transparent) !important; stroke: currentColor !important; }
+html[data-skin^="obsidian"] .ch-compose.has-reply .ch-reply { margin-bottom: 4px; }
