@@ -97,3 +97,14 @@ test('a refused write keeps the old state and tells the owner', async () => {
   assert.equal(U.state.mode, 'auto');
   assert.deepEqual(c.t.at(-1), ['!', 'only the box owner can install from the Store', 2600]);
 });
+
+test('an update cut short by a reboot says interrupted, retrying, and offers Update now again', async () => {
+  const { U } = await load(() => [200, { ...STATUS, installing: false, interrupted: true }]);
+  const h = U.html();
+  assert.match(h, /<b data-osu-title>Update interrupted · retrying<\/b><small>Wizard OS 0\.3\.15 → 0\.3\.16 · tries again tonight, or tap Update now/);
+  assert.match(h, /data-osu="apply"[^>]*>Update now</);
+  const ask = await load(() => [200, { ...STATUS, mode: 'ask', chosen: true, interrupted: true }]);
+  assert.match(ask.U.html(), /<b data-osu-title>Update interrupted<\/b><small>[^<]*tap Update now to try again/);
+  const old = await load(() => [200, { ...STATUS }]);              // an App Manager without the field: unchanged
+  assert.match(old.U.html(), /<b data-osu-title>Update available<\/b>/);
+});
