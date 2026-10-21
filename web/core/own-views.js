@@ -6,7 +6,9 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const own = a => a?.source === 'apps.json' && a.view?.mode === 'own' && a.view.url === `/wizard/views/${a.id}/`;
   const broken = new Map(), mounted = new WeakSet();
-  const apps = () => ['mobile', 'desktop'].flatMap(k => window.WizCore.apps(k).APPS);
+  // Each registry() call constructs a subscriber and emits wizard:apps. Cache the
+  // two projections before registering our listener; never construct one in it.
+  const apps = () => registries.flatMap(r => r.APPS);
   const app = id => apps().find(a => a.id === id);
   const frameUrl = (a, saved) => {
     if (own(a)) { if (broken.has(a.id)) { a.url = a.originalUrl; return a.originalUrl; } return saved?.startsWith(a.view.url) ? saved : a.view.url; }
@@ -14,6 +16,7 @@
   };
   const marker = a => own(a) ? `<button type="button" class="own-view-marker" data-own-original="${esc(a.id)}" title="Use original screen">Your version</button>` : '';
   if (typeof module !== 'undefined' && module.exports) { module.exports = { own, frameUrl, marker }; return; }
+  const registries = ['mobile', 'desktop'].map(k => window.WizCore.apps(k));
   const API = new URL('../store-install/_views/', document.currentScript.src).href;
   let selected = '', busy = false, note = '';
   const frames = id => [...document.querySelectorAll('iframe[data-own-app]')].filter(f => f.dataset.ownApp === id);
@@ -50,6 +53,19 @@
     f._ownTimer = timer;
   }
   const scan = () => document.querySelectorAll('iframe[data-own-app]').forEach(watch);
+  addEventListener('wizard:apps', () => {
+    for (const f of document.querySelectorAll('iframe[data-own-app]')) {
+      const a = app(f.dataset.ownApp); if (!a) continue;
+      const url = frameUrl(a, f.getAttribute('src'));
+      const host = f.closest('.win'), bar = host?.querySelector('.wbar');
+      const badge = bar?.querySelector('[data-own-original]');
+      if (own(a) && !badge) bar?.insertAdjacentHTML('beforeend', marker(a));
+      if (!own(a)) { badge?.remove(); host?.querySelector('.own-view-note')?.remove(); broken.delete(a.id); }
+      if (url !== f.getAttribute('src')) {
+        clearTimeout(f._ownTimer); delete f.dataset.ownReady; mounted.delete(f); f.src = url; watch(f);
+      }
+    }
+  });
   addEventListener('message', e => {
     if (e.origin !== location.origin || !['wizard:own-view:ready', 'wizard:own-view:error'].includes(e.data?.type)) return;
     const f = [...document.querySelectorAll('iframe[data-own-app]')].find(f => f.contentWindow === e.source);

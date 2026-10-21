@@ -66,12 +66,21 @@ const ok = (c, label) => { assert.ok(c, label); console.log('PASS', label); pass
       });
       await context.addInitScript(() => { if (parent === window) { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } });
       const page = await context.newPage(); page.on('pageerror', e => errors.push(String(e)));
-      await page.goto(origin + '/wizard-os-home/' + (phone ? '?shell=phone&open=original-app' : 'desktop.html?shell=desktop&open=original-app'));
-      await page.waitForFunction(s => !!window[s], shell); await page.evaluate(() => WizCore.appsLoaded());
+      await page.goto(origin + '/wizard-os-home/' + (phone ? '?shell=phone&open=original-app' : 'desktop.html?shell=desktop&open=original-app'), { waitUntil:'domcontentloaded', timeout:45000 });
+      await page.waitForFunction(s => !!window[s], shell).catch(async error => {
+        console.log('STARTUP', JSON.stringify({ errors, state:await page.evaluate(() => ({ ready:document.readyState, scripts:[...document.scripts].map(s => s.src), shell:document.documentElement.dataset.shell, body:document.body.innerText.slice(0,400) })) }));
+        await page.screenshot({ path:path.join(OUT, mode + '-startup-failure.png') }); throw error;
+      }); await page.evaluate(() => WizCore.appsLoaded());
       const frame = id => page.locator(`iframe[data-own-app="${id}"]`);
+      const tap = e => phone ? e.tap() : e.click();
+      const openFromLauncher = async id => {
+        await page.evaluate(() => WizCore.deeplink.route(location.pathname + '?view=apps'));
+        const tile = phone ? page.locator(`.lapp[data-app="${id}"]`).last() : page.locator('.pal-app').filter({ hasText:id });
+        await tile.waitFor({ state:'visible' }); await tap(tile);
+      };
       await frame('original-app').waitFor();
       ok(await frame('original-app').getAttribute('src') === '/qa-apps/original-app/', mode + ': deep link opens original URL');
-      await page.evaluate(({ shell, phone }) => window[shell].openApp(WizCore.apps(phone ? 'mobile' : 'desktop').APP['own-app']), { shell, phone });
+      await openFromLauncher('own-app');
       await frame('own-app').waitFor();
       await page.waitForFunction(() => document.querySelector('iframe[data-own-app="own-app"]')?.dataset.ownReady === 'true');
       ok(await frame('own-app').getAttribute('src') === '/wizard/views/own-app/', mode + ': own mode opens views URL');
@@ -82,17 +91,24 @@ const ok = (c, label) => { assert.ok(c, label); console.log('PASS', label); pass
       await ownFrame.locator('#draft').fill('Keep this unsent');
       const identity = await ownFrame.evaluate(() => { window.qaIdentity = 'same-document'; return window.qaIdentity; });
       for (const skin of ['nebula', 'obsidian-light']) {
-        await page.evaluate(s => WosSkin.set(s), skin);
+        await page.evaluate(() => WizCore.deeplink.route(location.pathname + '?view=skin'));
+        const familyId = await page.evaluate(s => WosSkin.familyOf(s), skin);
+        const family = page.locator(`[data-skinfamily="${familyId}"]`);
+        if (phone) await family.tap(); else await family.click();
+        const palette = page.locator(`[data-skinpick="${skin}"]`);
+        if (phone) await palette.tap(); else await palette.click();
+        const close = page.locator(phone ? '#settings [data-stclose]' : '#dsettings [data-close]');
+        if (phone) await close.tap(); else await close.click();
         await page.waitForFunction(s => document.querySelector('iframe[data-own-app="own-app"]')?.contentDocument?.documentElement.dataset.skin === s, skin);
-        const state = await ownFrame.evaluate(() => ({ skin:document.documentElement.dataset.skin, text:getComputedStyle(document.body).color, canvas:getComputedStyle(document.body).backgroundColor, identity:window.qaIdentity, draft:document.querySelector('#draft').value }));
-        ok(state.skin === skin && state.canvas === 'rgba(0, 0, 0, 0)' && state.identity === identity && state.draft === 'Keep this unsent', mode + ': Appearance v1 ' + skin + ' live, transparent, draft and document kept');
-        await page.waitForTimeout(1800); // skin reveal animation is not the app's painted state
+        await page.waitForTimeout(3500); // the skin package's branded intro must finish
+        const state = await ownFrame.evaluate(() => ({ skin:document.documentElement.dataset.skin, scheme:getComputedStyle(document.documentElement).colorScheme, text:getComputedStyle(document.body).color, canvas:getComputedStyle(document.body).backgroundColor, identity:window.qaIdentity, draft:document.querySelector('#draft').value }));
+        ok(state.skin === skin && state.scheme === (skin === 'obsidian-light' ? 'light' : 'dark') && state.canvas === 'rgba(0, 0, 0, 0)' && state.identity === identity && state.draft === 'Keep this unsent', mode + ': Appearance v1 ' + skin + ' live, transparent, draft and document kept');
         await page.screenshot({ path:path.join(OUT, `${mode}-${skin}.png`) });
       }
       await ownFrame.evaluate(() => { history.pushState({}, '', '#nested'); });
       await page.evaluate(() => history.back()); await page.waitForTimeout(300);
       ok((await frame('own-app').count()) === 1 && page.url().startsWith(origin + '/wizard-os-home/'), mode + ': browser Back from nested view never exits shell or closes app');
-      await marker.click();
+      await tap(marker);
       await page.locator('[data-own-confirm="own-app"]').waitFor({ state:'visible' });
       ok(writes.length === 0, mode + ': Use original routes to shell Settings confirmation without a write');
       await page.evaluate(() => { document.querySelector('[data-own-confirm="own-app"]').click(); window.postMessage({ type:'wizard:own-view:revert', app:'own-app' }, location.origin); });
@@ -100,15 +116,25 @@ const ok = (c, label) => { assert.ok(c, label); console.log('PASS', label); pass
       ok(writes.length === 0, mode + ': synthetic click and iframe-style message cannot revert');
       // Existing shell Back owns the Settings sheet.
       await page.evaluate(() => history.back()); await page.waitForTimeout(250);
-      await page.evaluate(({ shell, phone }) => window[shell].openApp(WizCore.apps(phone ? 'mobile' : 'desktop').APP['broken-app']), { shell, phone });
+      // Simulate the registry read after CLI revert; actual WAM revert + publication is
+      // exercised by its Python suite, while this browser lane remains GET-only.
+      const activeFile = path.join(scratch, 'views/own-app/view.json');
+      fs.writeFileSync(activeFile, JSON.stringify({ mode:'own', active:false, serving:'a'.repeat(64) }));
+      await page.evaluate(() => WizCore.refreshApps());
+      await page.waitForFunction(() => document.querySelector('iframe[data-own-app="own-app"]')?.getAttribute('src') === '/qa-apps/own-app/');
+      ok(await page.locator('[data-own-original="own-app"]').count() === 0, mode + ': registry-confirmed revert restores original and removes marker');
+      await openFromLauncher('broken-app');
       await page.waitForFunction(() => document.querySelector('iframe[data-own-app="broken-app"]')?.getAttribute('src') === '/qa-apps/broken-app/');
       const note = await page.locator('.own-view-note').last().textContent();
       ok(note.includes('missing.js') && note.includes('original screen'), mode + ': broken file named; original URL restored');
       await page.waitForTimeout(1200); // let the desk and original app finish painting
+      const fallback = await page.evaluate(() => { const f = document.querySelector('iframe[data-own-app="broken-app"]'), d = f.contentDocument; return { themed:f.closest('.win').classList.contains('wz-themed'), scheme:getComputedStyle(f).colorScheme, docScheme:f.contentWindow.getComputedStyle(d.documentElement).colorScheme }; });
+      ok(fallback.themed && fallback.scheme === fallback.docScheme, mode + ': original fallback keeps Appearance and matching canvas scheme');
       await page.screenshot({ path:path.join(OUT, `${mode}-broken.png`) });
       ok(writes.length === 0, mode + ': zero writes');
       ok(errors.length === 0, mode + ': no page errors ' + errors.join(' | '));
       await context.close();
+      fs.writeFileSync(path.join(scratch, 'views/own-app/view.json'), JSON.stringify({ mode:'own', active:true, serving:'a'.repeat(64) }));
     }
     console.log(`\n${passed} pass, 0 fail · candidate fixtures, no live install · shots ${OUT}`);
   } finally { if (browser) await browser.close(); server.kill(); }
