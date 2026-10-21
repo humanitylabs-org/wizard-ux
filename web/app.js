@@ -18,6 +18,7 @@
   // Desk strip (James, 10 Oct 2026): Home is pinned at the far left, Chats sits next to it, every new thing
   // opens on its own desk right beside the one in front, and a desk goes away when its last window closes.
   const HOME = 0;
+  var stDesk = null; // id of the desk an open Settings stays on while you look at other desks
 
   /* ---------------- dates ---------------- */
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -313,6 +314,7 @@
   function placeTrack(dx, anim) {
     track.classList.toggle('anim', !!anim);
     track.style.transform = `translate3d(calc(${-idx * 100}% + ${dx}px),0,0)`;
+    if (stDesk) rideSettings(dx, anim); // Settings stays on its desk and slides with it (James, 21 Oct 2026)
     $('.nebula').style.transform = `translate3d(${(-idx + 2) * -3 + dx * .01}%,0,0)`;
     window.WosScenery?.still('stars'); // scenery hook: star parallax follows the desk (one still frame; core/scenery.js)
   }
@@ -374,7 +376,9 @@
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
     const from = desks[idx], to = desks[n];
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
-    const moved = from !== to; idx = n;
+    const moved = from !== to;
+    if (moved && sheet === 'settings') liftSettings(from && from.id); // Settings stays open on the desk you leave
+    idx = n;
     if (moved) lastMove = { from: from && from.id, at: Date.now() };
     if (moved) window.WosResources?.back();
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
@@ -437,7 +441,7 @@
    * scrubber its own; everything else in the bar (dots, gaps, edges) is a desk swipe. */
   let DS = null, dockSwiped = 0;
   $('#dock').addEventListener('pointerdown', e => {
-    if (e.target.closest('#orbWrap, #scrub') || sheet) return;
+    if (e.target.closest('#orbWrap, #scrub') || (sheet && sheet !== 'settings')) return; // Settings never blocks a desk swipe
     if (e.pointerType === 'touch' && e.clientY > innerHeight - 22) return; // iOS home-indicator strip: the system's swipe
     DS = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, h: false };
   });
@@ -445,7 +449,7 @@
     if (!DS || e.pointerId !== DS.id) return;
     const dx = e.clientX - DS.x, dy = e.clientY - DS.y;
     if (!DS.h && window.WosSkinHost?.claimed(e.pointerId)) { DS = null; return; } // a skin gesture owns this finger
-    if (!DS.h) { if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return; DS.h = true; endDotHold(); try { $('#dock').setPointerCapture(e.pointerId); } catch (_) {} }
+    if (!DS.h) { if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return; DS.h = true; endDotHold(); if (sheet === 'settings') liftSettings(); try { $('#dock').setPointerCapture(e.pointerId); } catch (_) {} }
     let d = dx; if ((idx === 0 && d > 0) || (atPickerEnd() && d < 0)) d *= .28;
     placeTrack(d * 1.1, false);
   });
@@ -1696,26 +1700,56 @@
   const launcher = $('#launcher'), inboxEl = $('#inbox'), settingsEl = $('#settings');
   let sheet = null;
   const sheetOpen = () => !!sheet;
+  /* Settings belongs to a desk (James, 21 Oct 2026): "the settings menu can stay open on the home screen; it
+   * shouldn't block me from viewing my other desktops." A desk swipe (dock or orb) or a dot tap with Settings open
+   * lifts it onto the desk it was opened on: it slides with that desk, the other desks are live and unblurred, and
+   * landing back on that desk shows it again exactly as left (scroll kept). Opening Settings elsewhere moves it. */
+  function liftSettings(deskId) {
+    if (sheet !== 'settings') return;
+    stDesk = deskId || (desks[idx] && desks[idx].id); sheet = null;
+    device.classList.remove('sheet-open'); device.classList.add('st-parked');
+    settingsEl.inert = true; settingsEl.setAttribute('aria-hidden', 'true');
+    window.WosResources?.sync(); window.WosScenery?.update();
+  }
+  function dropParkedSettings() {
+    stDesk = null; device.classList.remove('st-parked');
+    settingsEl.inert = false; settingsEl.removeAttribute('aria-hidden');
+    settingsEl.style.transition = ''; settingsEl.style.transform = ''; settingsEl.style.opacity = '';
+  }
+  function rideSettings(dx, anim) {
+    const at = desks.findIndex(d => d.id === stDesk);
+    if (at < 0) { settingsEl.classList.remove('open'); dropParkedSettings(); return; } // its (empty) desk went away
+    const off = (at - idx) * (device.clientWidth || innerWidth) + dx;
+    settingsEl.style.transition = anim ? 'transform 520ms var(--ease)' : 'none';
+    settingsEl.style.transform = `translate3d(${off}px,0,0)`;
+    if (at === idx && !dx && !sheet) { // home again: Settings is the open sheet once more
+      dropParkedSettings(); if (anim) settingsEl.style.transition = 'transform 520ms var(--ease)';
+      sheet = 'settings'; device.classList.add('sheet-open');
+      window.WosResources?.sync(); window.WosScenery?.update();
+    }
+  }
   function openSheet(which, q) {
     // The pull-down notifications panel is retired (James, 18 Oct 2026): every way in (the Inbox tile, "open
     // inbox"/"notifications", ?view=inbox, the critical banner, the arrow key) opens Chats, whose Working and Ready
     // sections hold the same threads and which can stay open on a desk.
     if (which === 'inbox') return openChatsList();
     closeSheets(true); closeMenu();
+    if (which === 'settings' && stDesk) dropParkedSettings(); // Settings opened on this desk moves here
     sheet = which; device.classList.add('sheet-open'); tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
     if (which === 'launcher') { renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
     else if (which === 'settings') { settingsFocus = document.activeElement; renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; settingsView?.focus(); }
     else { renderInbox(); inboxEl.classList.add('open'); }
-    [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
+    [launcher, inboxEl, settingsEl].forEach(el => { if (el === settingsEl && stDesk) return; el.style.transform = ''; el.style.opacity = ''; });
     window.WosScenery?.update(); // scenery hook: a sheet over Home freezes the background
     vib(6);
   }
   function closeSheets(quiet) {
     if (!sheet && quiet) return;
     const was = sheet; sheet = null; if (was) tourEv('sheet-closed', { which: was }); device.classList.remove('sheet-open');
-    launcher.classList.remove('open'); inboxEl.classList.remove('open'); settingsEl.classList.remove('open');
-    [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
+    launcher.classList.remove('open'); inboxEl.classList.remove('open'); if (!stDesk) settingsEl.classList.remove('open');
+    [launcher, inboxEl, settingsEl].forEach(el => { if (el === settingsEl && stDesk) return; el.style.transform = ''; el.style.opacity = ''; });
+    if (was === 'settings') settingsEl.style.transition = '';
     $('#search').blur();
     if (was === 'settings' && settingsFocus?.isConnected) settingsFocus.focus({ preventScroll: true });
     window.WosResources?.sync();
@@ -3163,6 +3197,7 @@
     if (G.mode === 'pending' && (Math.hypot(G.dx, G.dy) > 14 || (G.dy > 10 && G.dy > Math.abs(G.dx) * 1.4))) {
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
     }
+    if (G.mode === 'h' && sheet === 'settings') liftSettings(); // swipe away from Settings: it stays on its desk
     if (G.mode === 'h' && !sheet) {
       let dx = G.dx; if ((idx === 0 && dx > 0) || (atPickerEnd() && dx < 0)) dx *= .28;
       placeTrack(dx * 1.1, false);
@@ -3216,7 +3251,7 @@
       V.target = g.aim;
       return finishVoice();
     } else if (g.mode === 'h') {
-      if (sheet) return;
+      if (sheet) return;  // launcher etc.; Settings was lifted onto its desk when the drag began
       if (cancelled || g.dy < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
       const v = g.dx / vt;
       if (g.dx < -60 || v < -.5) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); } else if (g.dx > 60 || v > .5) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); } else placeTrack(0, true);
