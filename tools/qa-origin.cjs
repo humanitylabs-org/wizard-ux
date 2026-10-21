@@ -6,8 +6,9 @@
 const http = require('http'), fs = require('fs'), path = require('path');
 const PORT = +(process.argv[2] || process.env.QA_ORIGIN_PORT || 9371);
 const WEB = path.resolve(process.argv[3] || process.env.QA_ORIGIN_WEB || path.join(__dirname, '..', 'web'));
-const FALLBACK = '/home/telos/apps/wizard-os-home/web'; // data.js / summaries.js are untracked build outputs
-const BACKEND = { host: '127.0.0.1', port: 8923 };
+const FALLBACK = process.env.WIZARD_UX_FALLBACK_WEB || WEB; // optional untracked data.js / summaries.js build outputs
+// Remote browser workers can tunnel the same read-only backend onto a different loopback port.
+const BACKEND = { host: '127.0.0.1', port: Number(process.env.QA_BACKEND_PORT || 8923) };
 const STATIC = { '127.0.0.1:9271': '/api/' }; // voice/router endpoints of the prototype server
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.md': 'text/markdown' };
 const CSP = "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
