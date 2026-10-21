@@ -63,7 +63,7 @@ let browser;
     // Existing nested Back still returns to Setup, never closes it.
     await f.locator('[data-act="open-phone"]').click();
     await f.waitForFunction(()=>__setup.state.screen==='phone');
-    await page.evaluate(()=>window.__wosNativeBack());
+    await page.evaluate(()=>history.back());
     await f.waitForFunction(()=>__setup.state.screen==='list');
     assert.equal(page.isClosed(),false);
     // Real shell must accept Setup as the sender and wait for registration before opening.
