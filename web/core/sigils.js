@@ -6,15 +6,21 @@
  *   WizSigil.named(glyph, color) → the same for a sigil that isn't an app (search, command rows)
  *
  * Which sigil an app gets: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
- * then the house set for the Wizard OS apps, then the app's initial on a colour picked from its id.
+ * then the house set for the Wizard OS apps, then the app's own same-origin icon file (`icon: "/path.svg"`) as a
+ * silhouette, then a disc with the app's initial cut out, on a colour picked from its id. Every mark is a mask
+ * in the same box, so a fallback is never bigger, squarer or more opaque than a designed sigil.
+ * Every app in the Wizard App Store gets a HOUSE entry: see tools/sigils/README.md.
  * Shapes and the tile style live in core/sigils.css.
  */
 (() => {
   'use strict';
-  const NAMES = new Set([...["android", "apps", "bag", "bell", "bolt", "burst", "calendar", "chats", "cine", "coffee", "console", "day", "eye", "files", "gauge", "globe", "home", "hub", "iching", "image", "inbox", "letter", "link", "mail", "meditate", "mic", "month", "music", "pin", "projects", "recall", "search", "secret", "side", "signal", "social", "spark", "track", "usuals", "wave", "week", "wisdom", "wizard"], 'hat', 'hat-private', 'agents']);
-  const HOUSE = {"calendar":["calendar","#FE98AB"],"mizel":["mic","#FE9C8C"],"shopping":["bag","#FFA15C"],"wisdom":["wisdom","#FEC25D"],"cinequeue":["cine","#E9CF06"],"trackhunt":["track","#ABE355"],"android-apps":["android","#50DA79"],"topics":["eye","#0ED8BB"],"messenger":["chats","#00D6CF"],"wizard-signal":["signal","#0AD3E3"],"meditation":["meditate","#12CFF6"],"files":["files","#56C8FE"],"wizard-search":["search","#81B7FF"],"projects":["projects","#A0AEFE"],"wizard":["hat","#C1AAFF"],"social":["social","#EF90FE"],"wizard-music":["music","#FF8FD3"],"iching":["iching","#E5C9A3"],"console":["console","#A9B6C4"],"legacy-wizard":["wizard","#BDB5D8"],"v-day":["day","#FF9F6D"],"v-week":["week","#D6A0FE"],"v-month":["month","#99B5E8"],"v-inbox":["inbox","#11DBA2"],"usuals":["usuals","#FE9E79"],"side-button":["side","#C1B1E1"],"maps":["pin","#CDDA2D"],"app-store":["apps","#ABA9FE"],"system":["gauge","#83C9CC"],"notifications":["bell","#FEC076"],"morning-report":["coffee","#FF9F71"],"wizard-calendar":["calendar","#FE98AB"],"secret-drop":["secret","#05D6CE"],"browser":["globe","#11CFF9"],"transcriber":["wave","#F98CF1"],"wizard-chatgpt":["spark","#06DC92"],"wizard-claude":["burst","#FF9C89"],"wizard-agent-service":["hub","#88B9EC"],"agents":["agents","#9BB1F5"]};
+  const NAMES = new Set([...["android", "apps", "bag", "bell", "bolt", "burst", "calendar", "chats", "cine", "clip", "cloud", "coffee", "console", "day", "eye", "files", "gauge", "globe", "home", "hub", "iching", "image", "inbox", "letter", "link", "mail", "meditate", "mic", "month", "music", "pin", "projects", "recall", "scope", "search", "secret", "shield", "side", "signal", "social", "spark", "track", "usuals", "wave", "week", "wisdom", "wizard", "wrench"], 'hat', 'hat-private', 'agents']);
+  const HOUSE = {"calendar":["calendar","#FE98AB"],"mizel":["mic","#FE9C8C"],"shopping":["bag","#FFA15C"],"wisdom":["wisdom","#FEC25D"],"cinequeue":["cine","#E9CF06"],"trackhunt":["track","#ABE355"],"android-apps":["android","#50DA79"],"topics":["eye","#0ED8BB"],"messenger":["chats","#00D6CF"],"wizard-signal":["signal","#0AD3E3"],"meditation":["meditate","#12CFF6"],"files":["files","#56C8FE"],"wizard-search":["search","#81B7FF"],"projects":["projects","#A0AEFE"],"wizard":["hat","#C1AAFF"],"social":["social","#EF90FE"],"wizard-music":["music","#FF8FD3"],"iching":["iching","#E5C9A3"],"console":["console","#A9B6C4"],"legacy-wizard":["wizard","#BDB5D8"],"v-day":["day","#FF9F6D"],"v-week":["week","#D6A0FE"],"v-month":["month","#99B5E8"],"v-inbox":["inbox","#11DBA2"],"usuals":["usuals","#FE9E79"],"side-button":["side","#C1B1E1"],"maps":["pin","#CDDA2D"],"app-store":["apps","#ABA9FE"],"system":["gauge","#83C9CC"],"notifications":["bell","#FEC076"],"morning-report":["coffee","#FF9F71"],"wizard-calendar":["calendar","#FE98AB"],"secret-drop":["secret","#05D6CE"],"browser":["globe","#11CFF9"],"transcriber":["wave","#F98CF1"],"wizard-chatgpt":["spark","#06DC92"],"wizard-claude":["burst","#FF9C89"],"wizard-agent-service":["hub","#88B9EC"],"wizard-tinfoil":["shield","#A1C0CF"],"wizard-cloudflare":["cloud","#FFA245"],"wizard-shopping":["bag","#FFA15C"],"sniper":["scope","#FB99B2"],"defleur-video":["clip","#94B1FF"],"troubleshooter":["wrench","#7CCCC2"],"wizard-ux":["wizard","#A9AEED"],"agents":["agents","#9BB1F5"]};
+  const BRAND = {"wizard-cloudflare":"cloudflare","wizard-claude":"claude","wizard-chatgpt":"chatgpt","wizard-tinfoil":"tinfoil","hermes-agent":"hermes","hermes-frontend-3":"hermes"};
   const FALLBACK = ["#FE9A9A", "#FFA332", "#D2D826", "#1DDC8D", "#07D4D6", "#4CCAFF", "#94B1FF", "#C7A8FE", "#FE8AEA"];
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
+  // An app's own icon file: same-origin path only (no tracking pixels, nothing that can break out of url('…')).
+  const ICON = /^\/(?!\/)[A-Za-z0-9._~\/-]+\.(?:svg|png|webp)$/;
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const pick = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return FALLBACK[h % FALLBACK.length]; };
 
@@ -24,12 +30,30 @@
     const col = Array.isArray(a.colors) && HEX.test(a.colors[0] || '') ? a.colors[0] : '';
     if (own) return { glyph: own, color: col || (HOUSE[a.id] || [])[1] || pick(a.id) };
     if (HOUSE[a.id]) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
-    return { glyph: '', color: col || pick(a.id || a.name), letter: String(a.name || a.id || '?').trim().charAt(0).toUpperCase() || '?' };
+    const img = typeof a.icon === 'string' && ICON.test(a.icon) ? a.icon : '';
+    return { glyph: '', color: col || pick(a.id || a.name), letter: String(a.name || a.id || '?').trim().charAt(0).toUpperCase() || '?', ...(img ? { img } : {}) };
   }
+  // Fallback marks are masks too, never painted text or an <img>: whatever a skin paints into `.sgi` (a gradient,
+  // its ink colour, a filter) lands only inside the shape, at the same box, so no app can show up as a square slab.
+  //   letter → a disc with the app's initial cut out of it (house style: one silhouette, one bite)
+  //   img    → the app's own same-origin icon file, used as the silhouette
+  const LETTER = ch => "url('data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><mask id="m"><rect width="512" height="512" fill="#fff"/><text x="256" y="256" dy=".35em" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-weight="800" font-size="196" fill="#000">${esc(ch)}</text></mask><circle cx="256" cy="256" r="164" mask="url(#m)"/></svg>`).replace(/'/g, '%27') + "')";
   function named(glyph, color) {
-    return NAMES.has(glyph) ? `<i class="sgi sg-${glyph}" aria-hidden="true"></i>` : `<i class="sgi sgl" aria-hidden="true">${esc(glyph || '?')}</i>`;
+    if (NAMES.has(glyph)) return `<i class="sgi sg-${glyph}" aria-hidden="true"></i>`;
+    const ch = String(glyph || '?');
+    return `<i class="sgi sgl" aria-hidden="true" style="--sg:${esc(LETTER(ch))}">${esc(ch)}</i>`;
   }
-  function html(a) { const s = of(a); return s.glyph ? named(s.glyph) : named(s.letter); }
+  // A real product (Cloudflare, Claude, ChatGPT…) also carries `sgb sgb-<mark>`: skins that show brand marks paint
+  // web/brand/apps/<mark>.svg in the same box; every other skin ignores the class and keeps the house glyph.
+  const brand = a => (Object.prototype.hasOwnProperty.call(BRAND, a.id) ? ` sgb sgb-${BRAND[a.id]}` : '');
+  function html(a) {
+    a = a || {};
+    const s = of(a), b = brand(a);
+    if (b) return (s.glyph ? named(s.glyph) : named(s.letter)).replace('class="sgi', `class="sgi${b}`);
+    if (s.glyph) return named(s.glyph);
+    if (s.img) return `<i class="sgi sgl sgimg" aria-hidden="true" style="--sg:url('${esc(s.img)}')">${esc(s.letter)}</i>`;
+    return named(s.letter);
+  }
   // A whole icon box: <tag class="cls sgt" style="--c:…">glyph extra</tag>. Apps from the registry carry
   // sgc/sgh already; anything else (a window's fallback, a command row) is worked out here.
   function box(tag, cls, a, extra = '') {
@@ -40,5 +64,5 @@
   // A sigil that isn't an app (search rows, the command row): glyph name + colour.
   function chip(tag, cls, glyph, color) { return `<${tag} class="${cls ? cls + ' ' : ''}sgt" style="--c:${color}">${named(glyph)}</${tag}>`; }
 
-  window.WizSigil = { of, html, named, box, chip, has: g => NAMES.has(g), house: HOUSE };
+  window.WizSigil = { of, html, named, box, chip, has: g => NAMES.has(g), house: HOUSE, brand: BRAND };
 })();

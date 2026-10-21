@@ -194,6 +194,13 @@
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
     if (it.steerDispatch === 'started' && it.state !== 'sent') { it.state = 'unconfirmed'; it.error = unconfirmed; }
     if (it.state === 'sending') it.state = 'waiting';
+    // Older builds exhausted durable retries. Revive only identifiable transport
+    // failures with delivery authority; an ambiguous steer remains unconfirmed.
+    if (it.state === 'failed' && eligible(it, ['failed']) &&
+        (/Couldn[’']t reach Wizard|Wizard was unavailable|Request timed out|HTTP (408|425|429)\b/.test(it.error || '') ||
+         [408, 425, 429].includes(it.errorStatus) || it.errorStatus >= 500)) {
+      it.state = 'waiting'; it.nextAt = 0;
+    }
     if (it.state === 'processing' || it.state === 'preparing') { it.state = it.intent === 'command' ? 'held' : 'failed'; it.error = it.intent === 'command' ? 'Interrupted command · original recording kept; not queued to an agent' : 'Interrupted before sending · recording kept. Retry sends to its original destination.'; }
     it.durable = durable;
     const old = items.get(it.id);
@@ -330,7 +337,8 @@
     const fileIds = [...new Set((it.files || []).map(f => f.id).filter(Boolean))];
     if (fileIds.length > 8) throw new HttpError(409, 'Too many attachments including the recording · originals kept');
     const aq = it.agent ? `?agent=${encodeURIComponent(it.agent)}` : '';
-    const input = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
+    const words = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
+    const input = it.reply && window.WosChat?.reply ? window.WosChat.reply.attach(words, it.reply) : words;
     // Freeze an exact-run steer separately from new-run admission. This endpoint has NO
     // durable idempotency ledger: persist intent before dispatch and never replay ambiguity.
     if (it.steerRunId) {
@@ -361,7 +369,9 @@
         it.steerDispatch = rejected ? 'rejected' : 'started';
         await put(it); // crash before reconciliation must never replay ambiguity
         let terminal = false;
-        if (e.status === 409 && e.code === 'run_not_accepting_steer') {
+        // Hermes forgets a finished run after a while and answers 404 run_not_found; the run lookup below
+        // still proves it terminal in this thread, so the message becomes a same-thread turn instead of failing.
+        if ((e.status === 409 && e.code === 'run_not_accepting_steer') || (e.status === 404 && e.code === 'run_not_found')) {
           try {
             const r = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerTarget)}` + aq);
             const run = await r.json();
@@ -416,9 +426,9 @@
     it.state = 'sending'; await put(it);
     try { await deliver(it); }
     catch (e) {
-      it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.lastAttemptAt = now();
-      // RAM-only submissions keep retrying for as long as this tab is alive.
-      if (transient(e) && (!it.durable || it.attempts < AUTO_TRIES)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
+      it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.errorStatus = e.status || 0; it.lastAttemptAt = now();
+      // Never silently abandon a transient failure, even with durable custody.
+      if (transient(e)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
       else { it.state = 'failed'; it.nextAt = 0; }
       await put(it);
     }
@@ -447,6 +457,7 @@
     }
     timer = setTimeout(pump, ms);
   }
+  const replyOf = o => window.WosChat?.reply?.clean(o?.reply) || null;
   const newSessionId = () => `wizard_${now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
   function make(o) {
     return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
@@ -454,7 +465,9 @@
       kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
-      pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false };
+      pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false,
+      // A Notifications Reply: the item, framed after his words only in the message that is delivered (deliver()).
+      ...(replyOf(o) ? { reply: replyOf(o) } : {}) };
   }
   function notice() {
     const troubled = [...items.values()].filter(it => !quarantine.has(it.id) && it.state !== 'sent' && (it.storageError || !it.durable));
@@ -602,7 +615,7 @@
         if (localCompletions.has(held.id) || held.localCompleted || held.state === 'sent' || held.body || held.steerBody || quarantine.has(held.id)) return held;
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
-        Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid,
+        Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),
           pendingBlobs: { ...(it.pendingBlobs || {}), ...keepPending(o.files) } });
       }
       // Only the delivery caller (including an explicit Send-to-agent choice) may

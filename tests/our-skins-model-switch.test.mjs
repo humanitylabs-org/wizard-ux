@@ -46,3 +46,9 @@ test('the switch row is gated on the skin in chat-power and chats', () => {
   for (const d of ['obsidian', 'landscapes']) assert.match(read(`web/skins/${d}/skin.css`), /\.ms-track/);
   assert.doesNotMatch(read('web/core/chats.css') + read('web/core/chat-power.css'), /\.ms-track|ch-swrow/);
 });
+
+test("Miguel's skins default the chat list to compact; an explicit Filter choice still wins", () => {
+  const cj = read('web/core/chats.js');
+  assert.match(cj, /const OUR_SKINS = \['obsidian', 'obsidian-light', 'landscapes'\];/);
+  assert.match(cj, /return v == null \? OUR_SKINS\.includes\(document\.documentElement\.dataset\.skin \|\| ''\) : v === '1';/);
+});

@@ -1018,7 +1018,10 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private void tap() {
         // Existing takes always retain Send. The pending-work lock controls admission of a NEW take.
         buzz(12);
-        if (carrying()) { remote("send"); return; }
+        // James 20 Oct 2026: a tap on a paused take resumes it and never sends; the next tap (recording) sends.
+        // A take whose mic was lost cannot resume, so its tap still sends what was kept.
+        if (carrying()) { remote("paused".equals(appVoice) ? "pause" : "send"); return; }
+        if (listening && paused && !micLost && !dictating) { togglePause(); return; }
         if (listening) { finish(); return; }
         if (processing()) { toast("Still processing your recording…"); return; }
         if (nativeTake()) {

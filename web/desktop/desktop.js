@@ -445,7 +445,7 @@
     if (!f) return;
     // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: sid => CHATS.openHosted(w.id, f, sid), isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: sid => CHATS.openHosted(w.id, f, sid), openContextDraft: (key, text) => { let cw = ws[cur].wins.map(id => W[id]).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
@@ -960,6 +960,7 @@
     helpSub: 'Keyboard shortcuts, desks and Back',
     openThread: id => { closeSettings(); openThread(id); },
     editUnsent: it => { closeSettings(); editUnsent(it); },
+    openLink: (url, title) => { closeSettings(); const a = appAt(url); return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }); },
     openSub: id => {
       closeSettings(); settingsReturn = id;
       if (id === 'files') openFiles();
@@ -1147,7 +1148,7 @@
     try { modelRoute = vRoute; if (!modelRoute) throw Error('Recording-start model unavailable · take kept'); }
     catch (e) { vReply = rp; toast('!', String(e.message || e), 2400); return 'busy'; }
     const t = sealAt ? CHATS.takeComposer(sealAt.wid, sealAt.sid) : null;
-    const sealed = t && (t.text || t.files.length) ? t : false;
+    const sealed = t && (t.text || t.files.length || t.reply) ? t : false;
     dictationFinishing = true;
     try {
     const r = await VOICE.finish({ transcribe: false });
@@ -1157,16 +1158,15 @@
     const extraFiles = (vFiles?.files || []).map(f=>window.WizUploads?.pending?.ref(f) || (f.id && !f.uploading ? {id:f.id,name:f.name,mime:f.mime,bytes:f.bytes} : null)).filter(f=>f&&f.id);
     if (vFeedback) { const staged=await OUTBOX.stage({kind:'reply',sessionId:vFeedback.thread,...vRoute,audio:r.blob,captureId:r.captureId,files:extraFiles}); const item=await window.WosBoundView.feedback(OUTBOX,{...vFeedback,route:vRoute,custodyId:staged.id},'',r.blob,extraFiles); if(!item){await OUTBOX.transition(staged.id,'held','Feedback unavailable · original kept');toast('!','Feedback kept for its original thread',2600);return 'retained';} toast('✦','Feedback kept · waiting to send',1800);return 'sent'; }
     let stagedId = null, transcript = '';
-    if (!strictReply && !forceNew && !vNewChat && !sealed?.text && !sealed?.files?.length && !extraFiles.length) {
+    if (!strictReply && !forceNew && !vNewChat && !sealed?.text && !sealed?.files?.length && !sealed?.reply && !extraFiles.length) {
       // The microphone journal remains until staging owns the final chunk and the frozen destination.
       {
         const staged = await OUTBOX.stage({kind:aimSid && aimSid!=='__new__'?'reply':'new',sessionId:aimSid==='__new__'?'':aimSid||'',steerRunId:rp?.steerRunId || '',...vRoute,audio:r.blob,captureId:r.captureId});
         stagedId=staged.id;
         if(staged.durable) {
           try { transcript=String((await window.WizConfig.transcribe(r.blob,{prompt:window.WizConfig.voicePrompt(),signal:AbortSignal.timeout(45000)})).text||'').trim(); } catch(_) {}
-          const cmd=transcript && LOCAL_COMMANDS.parse(transcript,vSnapshot,'auto');
-          const music=/^(music|play_music)$/.test(cmd?.action||''), sid0=stagedId;
-          if(cmd && executeCommand(cmd,transcript,vSnapshot,music?(done=>{if(done)OUTBOX.completeLocal(sid0);}):undefined)) { staged.text=transcript;if(window.WosCommands.completedLocally(cmd,true)) await OUTBOX.completeLocal(stagedId);else await OUTBOX.transition(stagedId,'held','Command accepted · completion unconfirmed; original recording kept');toast('⚡','Command handled on-device',1800);return 'local'; }
+          // Talk-key/tap takes are messages, even when the transcript resembles a command.
+          // Only commandVoice's explicit commandTake path above invokes the shared grammar.
         }
       }
     }
@@ -1174,7 +1174,7 @@
     if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
     if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles });
     else {
-      const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
+      const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', ...(sealed?.reply ? { reply: sealed.reply } : {}), files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
       sealed?.done?.(item);
     }
     toast('✦', 'Recording kept · waiting to send', 1400);
@@ -1566,6 +1566,7 @@
   C.deeplink.consume();
   window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && keysEl.hidden && ib.hidden && usageEl.hidden && !window.WosResources?.state?.panel });
   new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
+  window.WosSetupLaunch?.boot({ open: id => { const a = APP[id]; if (a) openApp(a); } }); // Setup opens itself on first run
   C.status?.attach({ openInbox, inboxOpen: () => !ib.hidden, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
@@ -1591,6 +1592,21 @@
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
     get voice() { return VOICE.state; }, get log() { return window.__wuxLog || []; },
   };
+  /* Skin packages (core/skin-host.js) on desktop: the same narrow adapter the phone shell hands over, so a skin
+   * declared when: 'always' runs its script here too. James's skins declare no package and load nothing. */
+  const skinChatsWin = () => { const f = focused(); return f && f.app === 'chats' ? f : (ws[cur].wins.map(id => W[id]).find(x => x && x.app === 'chats') || null); };
+  window.WosSkinHost?.attach({
+    route() { const w = homeOpen ? null : skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: cur }; },
+    back: () => !!escStep(),
+    openList: () => { const w = skinChatsWin(); if (w) { CHATS.openChat(w.id, null); syncChatsPane(w.id); } },
+    openThread: id => openThread(id),
+    goDesk: i => goWs(i),
+    deskCount: () => ws.length,
+    root() { const w = skinChatsWin(); return w ? document.querySelector(`[data-chats="${w.id}"]`) : null; },
+    dock: () => null,
+    locked: () => false,
+    toast: text => toast('◇', text, 2400),
+  });
   // Closed means closed: an app with no window left on any desktop stops its microphone (take saved for recovery).
   window.WizAppServices?.trackOpenApps?.(() => ws.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   window.WizAppServices?.guardBack(() => {

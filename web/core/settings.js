@@ -22,13 +22,13 @@
     const when = ctx.ago?.(new Date(it.createdAt).toISOString()) || '';
     const blocked = it.state === 'unconfirmed' || ctx.outbox?.quarantined?.(it.id);
     const held = it.state === 'held', audio = !!(it.audio || it.audioFile || it.hasAudio);
-    const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error || 'Could not confirm delivery · original kept') : it.state === 'empty' ? 'No speech detected · recording kept' : held ? esc(it.error || 'Kept on this device · no delivery intent confirmed; not queued') : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : ['sending', 'queued'].includes(it.state) ? 'Queued / sending · awaiting receipt' : `${esc(it.error || 'Waiting')} · retrying`;
+    const st = blocked ? esc(ctx.outbox?.quarantined?.(it.id) ? 'Waiting for device storage verification' : it.error || 'Could not confirm delivery · original kept') : it.state === 'empty' ? 'No speech detected · recording kept' : held ? esc(it.error || 'Kept on this device · no delivery intent confirmed; not queued') : it.state === 'failed' ? `<b class="fail">Not sent</b> · ${esc(it.error || '')}` : ['sending', 'queued'].includes(it.state) ? 'Queued / sending · awaiting receipt' : esc(window.WizReach?.failure().short || 'Checking connection · retrying');
     const src = it.origin === 'everywhere' ? 'Everywhere button' : it.source === 'orb' ? 'Orb' : 'Chat';
     const canRetry = it.origin === 'app' ? ctx.outbox?.canRetry(it) : !blocked && ['failed', 'waiting'].includes(it.state);
     const transcript = it.recoveryText || it.text || '';
     const recovery = it.origin === 'app' && it.audio && ['held', 'empty', 'failed', 'unconfirmed'].includes(it.state);
     const working = ctx.outbox?.transcribingRecording?.(it.id);
-    return `<div class="ub-row ${esc(it.state)}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}"><div class="ub-t"><span>${esc(transcript || it.typed || (audio ? 'Retained voice recording' : 'Retained message'))}</span></div><div class="ub-m">${src} · ${esc(when)} · ${st}</div>${it.recoveryError ? `<div class="ub-m">${esc(it.recoveryError)}</div>` : ''}<div class="ub-a">${it.parkedDraft && ctx.restoreReply ? '<button data-ub="restore-reply">Return to paused reply</button>' : ''}${canRetry ? `<button data-ub="retry">${it.state === 'empty' ? 'Retry speech & send' : 'Retry'}</button>` : ''}${recovery ? `<button data-ub="play">Play audio</button><button data-ub="download">Save audio</button>${!ctx.outbox?.quarantined?.(it.id) ? `<button data-ub="transcribe" ${working ? 'disabled' : ''}>${working ? 'Transcribing…' : 'Transcribe only'}</button>` : ''}` : ''}${transcript ? '<button data-ub="copy">Copy transcript</button>' : ''}${it.origin === 'app' && it.sessionId && ctx.live?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' && !audio && !blocked && !held && !it.body && !['sending', 'queued'].includes(it.state) ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
+    return `<div class="ub-row ${esc(it.state)}" data-ubid="${esc(it.id)}" data-uborigin="${it.origin}"><div class="ub-t"><span>${esc(transcript || it.typed || (audio ? 'Retained voice recording' : 'Retained message'))}</span></div><div class="ub-m">${src} · ${esc(when)} · ${st}</div>${it.recoveryError ? `<div class="ub-m">${esc(it.recoveryError)}</div>` : ''}<div class="ub-a">${it.state === 'waiting' ? '<button data-ub="troubleshoot">Open Troubleshooter</button>' : ''}${it.parkedDraft && ctx.restoreReply ? '<button data-ub="restore-reply">Return to paused reply</button>' : ''}${canRetry ? `<button data-ub="retry">${it.state === 'empty' ? 'Retry speech & send' : 'Retry'}</button>` : ''}${recovery ? `<button data-ub="play">Play audio</button><button data-ub="download">Save audio</button>${!ctx.outbox?.quarantined?.(it.id) ? `<button data-ub="transcribe" ${working ? 'disabled' : ''}>${working ? 'Transcribing…' : 'Transcribe only'}</button>` : ''}` : ''}${transcript ? '<button data-ub="copy">Copy transcript</button>' : ''}${it.origin === 'app' && it.sessionId && ctx.live?.session(it.sessionId) ? '<button data-ub="open">Open thread</button>' : ''}${it.origin === 'app' && !audio && !blocked && !held && !it.body && !['sending', 'queued'].includes(it.state) ? '<button data-ub="edit">Edit</button>' : ''}<button data-ub="delete" class="ghost">Delete</button></div></div>`;
   }
   function focusUnsent(id) {
     requestAnimationFrame(() => {
@@ -46,6 +46,7 @@
     setTimeout(() => ctx.render?.(), 300); return n;
   }
   function unsentAction(ctx, id, origin, action) {
+    if (action === 'troubleshoot') { window.WizReach?.open(); return; }
     if (origin === 'everywhere') {
       if (action === 'retry') native()?.retryUnsent?.(id);
       if (action === 'delete') native()?.deleteUnsent?.(id);
@@ -85,15 +86,68 @@
     if (!el.closest('[data-ub-all]')) return false;
     retryAll(ctx); return true;
   } });
+  /* My skin (core/my-skin.js): the owner's own CSS on top of the picked skin, kept in Files outside the shell. */
+  const mySkinSub = base => {
+    const M = window.WosMySkin, st = M && M.state;
+    if (!M) return '';
+    if (st.off) return `Off for this visit · on top of ${base}`;
+    if (st.info && st.info.unavailable) return `Not on this box yet · ${base} as made`;
+    return st.empty ? `Empty · ${base} exactly as made` : `On top of ${base}`;
+  };
+  function mySkinRow(base) {
+    if (!window.WosMySkin) return '';
+    return `<div class="st-row static my-skin-row"><span class="st-ic">✎</span><span class="st-tx"><b>My skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button><button type="button" class="ghost" data-myskin="reset">Reset</button></span></div>`;
+  }
+  async function mySkinAction(ctx, what) {
+    const M = window.WosMySkin; if (!M) return;
+    if (what === 'edit') {
+      const url = `/files/files/${M.FILE.split('/').map(encodeURIComponent).join('/')}`;
+      const opened = window.WizCanOpen?.('files') && ctx.openLink ? ctx.openLink(url, 'My skin') : false;
+      if (!opened) ctx.toast?.('✎', 'Ask your agent: "change my skin so …"', 2600);
+      return;
+    }
+    if (what === 'reset') {
+      if (M.state.empty) { ctx.toast?.('✓', 'My skin is already empty', 1600); return; }
+      try { await M.reset(); ctx.toast?.('✓', 'My skin emptied · your skin as its author made it', 2200); }
+      catch (e) { ctx.toast?.('!', 'Could not reset My skin right now', 2400); }
+      for (const m of mounts) m.render();
+    }
+  }
+  // Settings › Look (wizard-os spec/SKINS_AND_VIEWS.md §1): one card per skin, then that skin's palettes (Colours).
+  // Picking a skin puts on the palette last worn in it; picking a colour applies at once, in place.
+  const famOf = (S, id) => S.families?.find(f => f.id === S.familyOf?.(id)) || null;
+  const lookName = (S, id) => { const f = famOf(S, id), p = S.list.find(k => k.id === id)?.name || ''; return f ? `${f.name} · ${p}` : p; };
+  const palBtn = (k, cur) => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`;
+  function famBtn(S, f, cur) {
+    const on = f.id === S.familyOf(cur), pals = f.palettes.map(id => S.list.find(k => k.id === id)).filter(Boolean);
+    const dots = pals.slice(0, 5).map(k => `<i style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"></i>`).join('');
+    return `<button class="sk-famopt" data-skinfamily="${esc(f.id)}" aria-pressed="${on}" aria-label="${esc(f.name)} skin"><span class="sk-fdots" aria-hidden="true">${dots}</span><span class="sk-ftx"><b>${esc(f.name)}</b><small>${pals.length} ${pals.length === 1 ? 'colour' : 'colours'}</small></span></button>`;
+  }
+  function lookHtml(S) {
+    const cur = S.current, nm = S.list.find(k => k.id === cur)?.name || '', fams = S.families || [];
+    const f = famOf(S, cur), pals = f ? S.list.filter(k => f.palettes.includes(k.id)) : S.list;
+    const famRow = fams.length > 1 ? `<div class="sk-fam" role="group" aria-label="Skin">${fams.map(x => famBtn(S, x, cur)).join('')}</div>` : '';
+    const palRow = pals.length > 1 ? `${famRow ? '<div class="sk-sub">Colours</div>' : ''}<div class="sk-sw" role="group" aria-label="Colours">${pals.map(k => palBtn(k, cur)).join('')}</div>` : '';
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div>${famRow}${palRow}</div>${mySkinRow(nm)}</div>`;
+  }
   register({ id: 'look', aliases: ['skin'], html() {
     const S = window.WosSkin; if (!S) return '';
-    const cur = S.current, nm = S.list.find(k => k.id === cur)?.name || '';
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(nm)} · tap to wear</small></span></div><div class="sk-sw" role="group" aria-label="Skin">${S.list.map(k => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`).join('')}</div></div></div>`;
+    return lookHtml(S);
   }, act(ctx, el) {
+    const my = el.closest('[data-myskin]');
+    if (my) { mySkinAction(ctx, my.dataset.myskin); return true; }
+    const S = window.WosSkin;
+    const fb = el.closest('[data-skinfamily]');
+    if (fb) {
+      if (fb.getAttribute('aria-pressed') !== 'true') { S.setFamily(fb.dataset.skinfamily); for (const m of mounts) m.render(); }
+      ctx.haptic?.(8); return true;
+    }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
-    const S = window.WosSkin, now = S.set(b.dataset.skinpick);
+    const now = S.set(b.dataset.skinpick);
     ctx.root.querySelectorAll('[data-skinpick]').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.skinpick === now)));
-    ctx.root.querySelector('[data-skinname]').textContent = `${S.list.find(k => k.id === now)?.name || ''} · tap to wear`;
+    const nm = S.list.find(k => k.id === now)?.name || '';
+    ctx.root.querySelector('[data-skinname]').textContent = lookName(S, now);
+    const sub = ctx.root.querySelector('[data-myskinsub]'); if (sub) sub.textContent = mySkinSub(nm);
     ctx.haptic?.(8); return true;
   } });
   // Phone only: desktop always keeps framed windows. One switch, on by default; skin JSON import stays for designers.
@@ -198,10 +252,12 @@
       } finally { input.value = ''; }
     };
     const key = e => {
-      const b = e.target.closest('[data-skinpick]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-      e.preventDefault(); const buttons = [...root.querySelectorAll('[data-skinpick]')], at = buttons.indexOf(b);
+      const b = e.target.closest('[data-skinpick], [data-skinfamily]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const attr = b.hasAttribute('data-skinfamily') ? 'data-skinfamily' : 'data-skinpick';
+      e.preventDefault(); const buttons = [...root.querySelectorAll(`[${attr}]`)], at = buttons.indexOf(b);
       const n = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (at + (e.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
-      buttons[n].focus(); buttons[n].click();
+      const id = buttons[n].getAttribute(attr); buttons[n].focus(); buttons[n].click();
+      root.querySelector(`[${attr}="${id}"]`)?.focus(); // a skin change re-renders the group
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
     function destroy() { if (typeof unsubscribe === 'function') unsubscribe(); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
@@ -220,5 +276,6 @@
     const at = controls.indexOf(document.activeElement);
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
+  window.WosMySkin?.on(() => { for (const m of mounts) { const sub = m.context?.root?.querySelector?.('[data-myskinsub]'); if (sub) { const S = window.WosSkin; sub.textContent = mySkinSub(S?.list.find(k => k.id === S.current)?.name || ''); } } });
   window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, trap, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(({ id, aliases }) => ({ id, aliases: aliases || [] })); } };
 })();

@@ -18,6 +18,7 @@
   // Desk strip (James, 10 Oct 2026): Home is pinned at the far left, Chats sits next to it, every new thing
   // opens on its own desk right beside the one in front, and a desk goes away when its last window closes.
   const HOME = 0;
+  var stDesk = null; // id of the desk an open Settings stays on while you look at other desks
 
   /* ---------------- dates ---------------- */
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -232,7 +233,7 @@
     const a = winApp(w);
     const el = document.createElement('article');
     const rv = !!(w.from && w.from.sid);
-    el.className = `win app-${w.app}${w.appId === 'app-store' || w.appId === 'system' || w.appId === 'agents' ? ' store-window' : ''}${agentWin(w) ? ' agent-chats' : ''}${rv ? ' reviewing' : ''}${w.bound ? ' bound' : ''}`; el.dataset.win = w.id;
+    el.className = `win app-${w.app}${['app-store', 'system', 'agents', 'setup'].includes(w.appId) ? ' store-window' : ''}${agentWin(w) ? ' agent-chats' : ''}${rv ? ' reviewing' : ''}${w.bound ? ' bound' : ''}`; el.dataset.win = w.id;
     el.innerHTML = `<header class="wbar">${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'wic', 'wt') : `${ico('span', 'wic', a)}<span class="wt">${esc(winTitle(w))}</span>`}${window.WosBoundView.badge(w)}
       ${w.from ? '<button class="wb wpin wopen" data-wact="detach" aria-label="Open as an app on its own desk" title="Keep a copy open on its own desk"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span>Open app</span></button>' : ''}
       ${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}<button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
@@ -313,6 +314,7 @@
   function placeTrack(dx, anim) {
     track.classList.toggle('anim', !!anim);
     track.style.transform = `translate3d(calc(${-idx * 100}% + ${dx}px),0,0)`;
+    if (stDesk) rideSettings(dx, anim); // Settings stays on its desk and slides with it (James, 21 Oct 2026)
     $('.nebula').style.transform = `translate3d(${(-idx + 2) * -3 + dx * .01}%,0,0)`;
     window.WosScenery?.still('stars'); // scenery hook: star parallax follows the desk (one still frame; core/scenery.js)
   }
@@ -374,13 +376,16 @@
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
     const from = desks[idx], to = desks[n];
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
-    const moved = from !== to; idx = n;
+    const moved = from !== to;
+    if (moved && sheet === 'settings') liftSettings(from && from.id); // Settings stays open on the desk you leave
+    idx = n;
     if (moved) lastMove = { from: from && from.id, at: Date.now() };
     if (moved) window.WosResources?.back();
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
     placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip(); syncBound();
     window.WosScenery?.[idx === HOME ? 'poke' : 'update'](); // scenery hook: Home animates, any other desk freezes it
+    window.WosSetupLaunch?.desk(idx === HOME); // a first-run tour held back for Setup starts on the first return Home
     if (moved && LINKS && LINKS.isOpen()) LINKS.close(); // a link is a peek over this desk: moving desks dismisses it
     if (moved) vib(8);
     if (!silent) announce(`<b>${esc(deskName(idx))}</b>`);
@@ -397,8 +402,18 @@
   // that app's colour; Home is a house; an empty desk is a faint ring; a desk with several windows carries a
   // small count. The current desk is the orb. Each is a thumb-sized button, so one tap jumps there.
   const deskSigil = i => window.WizCore.workspaceNav.icon(desks[i], W, winApp);
+  /* The current desk's app icon, kept inside the orb (#orbApp, hidden). Skins may show it so the orb reads as sitting
+   * on top of the app in view; nothing changes unless a skin unhides it. */
+  let orbAppHtml = null;
+  function paintOrbApp() {
+    const wrap = $('#orbWrap'); if (!wrap || !desks[idx]) return;
+    let el = document.getElementById('orbApp');
+    if (!el) { el = document.createElement('span'); el.id = 'orbApp'; el.className = 'orb-app'; el.hidden = true; el.setAttribute('aria-hidden', 'true'); wrap.appendChild(el); }
+    const h = deskSigil(idx); if (h !== orbAppHtml) { orbAppHtml = h; el.innerHTML = h; }
+  }
   function renderDots() {
     if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
+    paintOrbApp();
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
     const L = []; for (let i = Math.max(0, idx - 3); i < idx; i++) L.push(i);
     const R = []; for (let i = idx + 1; i <= Math.min(desks.length - 1, idx + 3); i++) R.push(i);
@@ -427,7 +442,7 @@
    * scrubber its own; everything else in the bar (dots, gaps, edges) is a desk swipe. */
   let DS = null, dockSwiped = 0;
   $('#dock').addEventListener('pointerdown', e => {
-    if (e.target.closest('#orbWrap, #scrub') || sheet) return;
+    if (e.target.closest('#orbWrap, #scrub') || (sheet && sheet !== 'settings')) return; // Settings never blocks a desk swipe
     if (e.pointerType === 'touch' && e.clientY > innerHeight - 22) return; // iOS home-indicator strip: the system's swipe
     DS = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, h: false };
   });
@@ -435,7 +450,7 @@
     if (!DS || e.pointerId !== DS.id) return;
     const dx = e.clientX - DS.x, dy = e.clientY - DS.y;
     if (!DS.h && window.WosSkinHost?.claimed(e.pointerId)) { DS = null; return; } // a skin gesture owns this finger
-    if (!DS.h) { if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return; DS.h = true; endDotHold(); try { $('#dock').setPointerCapture(e.pointerId); } catch (_) {} }
+    if (!DS.h) { if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy)) return; DS.h = true; endDotHold(); if (sheet === 'settings') liftSettings(); try { $('#dock').setPointerCapture(e.pointerId); } catch (_) {} }
     let d = dx; if ((idx === 0 && d > 0) || (atPickerEnd() && d < 0)) d *= .28;
     placeTrack(d * 1.1, false);
   });
@@ -1183,6 +1198,7 @@
     openThread: id => { closeSheets(true); openWizardThread(id); },
     editUnsent,
     restoreReply: id => { closeSheets(true); return recoverParkedReply(id); },
+    openLink: (url, title) => { closeSheets(true); return openLinkDesk(url, null); },
     openSub: id => {
       if (id === 'files') { settingsReturn = id; openFilesScreen(); }
       if (id === 'help') { settingsReturn = id; closeSheets(true); window.WosTour?.openHelp(); }
@@ -1369,7 +1385,7 @@
       if(W[audioId]?.appId === 'wizard-music') audioFrames.add(f);
       // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
-      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: sid => CHATS.openHosted(w.id, f, sid), isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
+      if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, openThread: sid => CHATS.openHosted(w.id, f, sid), openContextDraft: (key, text) => { closeSheets(true); const cw = placeApp(mainChats, { app: 'chats', thread: null }, {}); if (!cw) throw new Error('Chats unavailable'); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); return receipt; }, isVisible: () => desks[idx].wins.includes(w.id) && (!desks[idx].full || desks[idx].focus === w.id) && !sheet && !menuFor && !CHATS.isHosted(w.id) });
       watchEarly(f);
       const wrap = f.closest('.frame-wrap');
       if (f.dataset.probe) { wrap.classList.add('coming'); f.removeAttribute('src'); probeFrame(f, f.dataset.probe); }
@@ -1685,26 +1701,56 @@
   const launcher = $('#launcher'), inboxEl = $('#inbox'), settingsEl = $('#settings');
   let sheet = null;
   const sheetOpen = () => !!sheet;
+  /* Settings belongs to a desk (James, 21 Oct 2026): "the settings menu can stay open on the home screen; it
+   * shouldn't block me from viewing my other desktops." A desk swipe (dock or orb) or a dot tap with Settings open
+   * lifts it onto the desk it was opened on: it slides with that desk, the other desks are live and unblurred, and
+   * landing back on that desk shows it again exactly as left (scroll kept). Opening Settings elsewhere moves it. */
+  function liftSettings(deskId) {
+    if (sheet !== 'settings') return;
+    stDesk = deskId || (desks[idx] && desks[idx].id); sheet = null;
+    device.classList.remove('sheet-open'); device.classList.add('st-parked');
+    settingsEl.inert = true; settingsEl.setAttribute('aria-hidden', 'true');
+    window.WosResources?.sync(); window.WosScenery?.update();
+  }
+  function dropParkedSettings() {
+    stDesk = null; device.classList.remove('st-parked');
+    settingsEl.inert = false; settingsEl.removeAttribute('aria-hidden');
+    settingsEl.style.transition = ''; settingsEl.style.transform = ''; settingsEl.style.opacity = '';
+  }
+  function rideSettings(dx, anim) {
+    const at = desks.findIndex(d => d.id === stDesk);
+    if (at < 0) { settingsEl.classList.remove('open'); dropParkedSettings(); return; } // its (empty) desk went away
+    const off = (at - idx) * (device.clientWidth || innerWidth) + dx;
+    settingsEl.style.transition = anim ? 'transform 520ms var(--ease)' : 'none';
+    settingsEl.style.transform = `translate3d(${off}px,0,0)`;
+    if (at === idx && !dx && !sheet) { // home again: Settings is the open sheet once more
+      dropParkedSettings(); if (anim) settingsEl.style.transition = 'transform 520ms var(--ease)';
+      sheet = 'settings'; device.classList.add('sheet-open');
+      window.WosResources?.sync(); window.WosScenery?.update();
+    }
+  }
   function openSheet(which, q) {
     // The pull-down notifications panel is retired (James, 18 Oct 2026): every way in (the Inbox tile, "open
     // inbox"/"notifications", ?view=inbox, the critical banner, the arrow key) opens Chats, whose Working and Ready
     // sections hold the same threads and which can stay open on a desk.
     if (which === 'inbox') return openChatsList();
     closeSheets(true); closeMenu();
+    if (which === 'settings' && stDesk) dropParkedSettings(); // Settings opened on this desk moves here
     sheet = which; device.classList.add('sheet-open'); tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
     if (which === 'launcher') { renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
     else if (which === 'settings') { settingsFocus = document.activeElement; renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; settingsView?.focus(); }
     else { renderInbox(); inboxEl.classList.add('open'); }
-    [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
+    [launcher, inboxEl, settingsEl].forEach(el => { if (el === settingsEl && stDesk) return; el.style.transform = ''; el.style.opacity = ''; });
     window.WosScenery?.update(); // scenery hook: a sheet over Home freezes the background
     vib(6);
   }
   function closeSheets(quiet) {
     if (!sheet && quiet) return;
     const was = sheet; sheet = null; if (was) tourEv('sheet-closed', { which: was }); device.classList.remove('sheet-open');
-    launcher.classList.remove('open'); inboxEl.classList.remove('open'); settingsEl.classList.remove('open');
-    [launcher, inboxEl, settingsEl].forEach(el => { el.style.transform = ''; el.style.opacity = ''; });
+    launcher.classList.remove('open'); inboxEl.classList.remove('open'); if (!stDesk) settingsEl.classList.remove('open');
+    [launcher, inboxEl, settingsEl].forEach(el => { if (el === settingsEl && stDesk) return; el.style.transform = ''; el.style.opacity = ''; });
+    if (was === 'settings') settingsEl.style.transition = '';
     $('#search').blur();
     if (was === 'settings' && settingsFocus?.isConnected) settingsFocus.focus({ preventScroll: true });
     window.WosResources?.sync();
@@ -1733,7 +1779,7 @@
     if (!q) {
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
-        <div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>
+        ${APPS.some(a => a.kind === 'view') ? `<div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>` : ''}
         <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
       return;
     }
@@ -2062,11 +2108,11 @@
     if (knownReply?.custodyId && (!draft || prior.state !== 'held' || !prior.durable)) return false;
     Object.assign(V, { native: a.id, kind, target: null, snap: window.WosOrbHandoff?.takeSnap(a.id)||null, seal: null, replyTo: knownReply, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
     V.parts=[];V.custodyCapture=null;V.nativeSegmentBase=0;V.meetingLoan=window.WosOrbHandoff?.forTake(a.id)||null;
-    if(draft)Object.assign(V,{parts:draft.parts||[prior.audio],custodyCapture:prior.id,snap:draft.snap,files:draft.files||[],nativeSegmentBase:draft.acc||0,acc:(draft.acc||0)+(Number(a.ms)||0),resumeNative:true,seal:{text:draft.typed||'',files:draft.sealFiles||[],done:()=>{},putBack:()=>{}}});
+    if(draft)Object.assign(V,{parts:draft.parts||[prior.audio],custodyCapture:prior.id,snap:draft.snap,files:draft.files||[],nativeSegmentBase:draft.acc||0,acc:(draft.acc||0)+(Number(a.ms)||0),resumeNative:true,seal:{text:draft.typed||'',files:draft.sealFiles||[],reply:draft.sealReply||null,done:()=>{},putBack:()=>{}}});
     if (savedGeneral && !V.snap?.meetingEventId) { V.kind = 'general'; V.snap = { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(a.id) }; }
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
-    txPill(a.paused ? '⏸' : '✦', kind === 'dictation' ? 'Dictation kept · tap orb to transcribe & copy' : a.paused ? 'Paused · recording kept · tap orb to send' : 'Still recording · tap orb to send', kind === 'dictation' ? 'dictation' : 'agent'); txHide(2600);
+    txPill(a.paused ? '⏸' : '✦', kind === 'dictation' ? 'Dictation kept · tap orb to transcribe & copy' : a.paused ? 'Paused · recording kept · tap orb to resume' : 'Still recording · tap orb to send', kind === 'dictation' ? 'dictation' : 'agent'); txHide(2600);
     V.raf = requestAnimationFrame(tick);
     return true;
   }
@@ -2086,7 +2132,7 @@
   };
   let NOMIC = false;
   function setVoice(s) {
-    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s });
+    V.state = s; device.dataset.voice = s; tourEv('voice', { state: s }); if (s === 'listen' || s === 'idle') V.resumeBlocked = false;
     $('#arcPause small').textContent=s==='paused'?'Resume':'Pause';$('#arcPause').setAttribute('aria-label',s==='paused'?'Resume recording':'Pause recording');
     CHATS.PW?.paintMic((s === 'listen' || s === 'paused') && !!V.replyTo, V.replyTo?.sid || '');
     reportVoice(s);
@@ -2243,8 +2289,8 @@
       if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const meta=JSON.parse(DEV().recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
       if(V.rec && V.rec.state!=='inactive')await new Promise(resolve=>{V.rec.onstop=resolve;V.rec.stop();});
       if(V.chunks.length)V.parts.push(new Blob(V.chunks,{type:V.mime}));V.chunks=[];stopStream();V.rec=null;
-      if(!V.seal){const seal=CHATS.takeComposer(V.replyTo.wid,V.replyTo.sid);V.seal=seal.text||seal.files.length?seal:null;}
-      const draft={replyTo:{...V.replyTo},snap:structuredClone(V.snap),acc:V.acc,files:V.files.map(f=>({...f})),typed:V.seal?.text||'',sealFiles:V.seal?.files||[],parts:V.parts.slice(),kind:V.kind,resumeNative:!!V.resumeNative};
+      if(!V.seal){const seal=CHATS.takeComposer(V.replyTo.wid,V.replyTo.sid);V.seal=seal.text||seal.files.length||seal.reply?seal:null;}
+      const draft={replyTo:{...V.replyTo},snap:structuredClone(V.snap),acc:V.acc,files:V.files.map(f=>({...f})),typed:V.seal?.text||'',sealFiles:V.seal?.files||[],sealReply:V.seal?.reply||null,parts:V.parts.slice(),kind:V.kind,resumeNative:!!V.resumeNative};
       const it=await OUTBOX.stage({captureId:V.custodyCapture,nativeId:parkedNativeId,audio:new Blob(V.parts,{type:V.parts[0]?.type}),kind:'reply',sessionId:V.replyTo.sid,...V.snap.route,parkedDraft:draft});
       await OUTBOX.transition(it.id,'held','Reply paused · return to resume or send');
       if(!it.durable)throw Error('Device save failed · reply retained here; microphone not borrowed');
@@ -2262,14 +2308,14 @@
     cancelAnimationFrame(V.raf);clearTimeout(txHideT);setVoice('paused');renderVoiceFiles();tick();
     $('#arcPause small').textContent='Resume';$('#arcPause').setAttribute('aria-label','Resume paused reply');
     txPill('⏸','Reply paused · '+(LIVE.session(V.replyTo.sid)?.title||V.replyTo.sid),'agent',V.snap?.route?.model||'');
-    $('#orbWrap').setAttribute('aria-label','Send paused reply to '+V.replyTo.sid);
+    $('#orbWrap').setAttribute('aria-label','Resume paused reply to '+V.replyTo.sid);
     return true;
   }
   async function recoverParkedReply(id) {
     if(V.state!=='idle'||parkedReply)return false;
     const item=OUTBOX.get(id),d=item?.parkedDraft;if(!d||!item.audio||item.state!=='held')return false;
     parkedReply={...V,...d,parts:d.parts||[item.audio],chunks:[],rec:null,native:null,custodyCapture:id,
-      seal:{text:d.typed||'',files:d.sealFiles||[],done:()=>{},putBack:()=>{}},target:null};
+      seal:{text:d.typed||'',files:d.sealFiles||[],reply:d.sealReply||null,done:()=>{},putBack:()=>{}},target:null};
     return restoreReply();
   }
   function recordReply(wid, sid) {
@@ -2443,7 +2489,7 @@
     if (V.state !== 'paused') V.acc += performance.now() - V.t0;
     if (V.native) pauseNativeTake(true);
     try { if (V.rec?.state === 'recording') V.rec.pause(); } catch (_) {}
-    setVoice('paused'); txPill('⏸', 'Paused · recording kept · tap orb to send', 'agent');
+    setVoice('paused'); txPill('⏸', 'Paused · recording kept · tap orb to resume', 'agent');
   }
   function finishDictation() {
     // Stop is solely an insertion boundary: no model route, composer seal, navigation or outbox.
@@ -2540,7 +2586,7 @@
         if (V.native) saveVoiceRoute(V.native, V.snap.route);
       }
     } catch (e) { toast('!', String(e.message || e), 2200); return; }
-    if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length ? t : null; }
+    if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length || t.reply ? t : null; }
     leaveOnSend(V.snap);
     if (V.native) {
       if (V.state !== 'paused') V.acc += performance.now() - V.t0;
@@ -2671,7 +2717,7 @@
     }
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '',
-      steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '',
+      steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
       meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
       files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
@@ -2767,7 +2813,7 @@
       }
       V.stopAsked = false; V.sendAsked = false;   // after a mic interruption: carry on with a fresh part
       V.t0 = performance.now(); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6);
-      openRec().catch(() => { V.acc += performance.now() - V.t0; setVoice('paused'); toast('⏸', 'The mic is busy · tap the orb to send what you have'); });
+      openRec().catch(() => { V.acc += performance.now() - V.t0; V.resumeBlocked = true; setVoice('paused'); toast('⏸', 'The mic is busy · tap the orb to send what you have'); });
     }
     else if (V.state === 'paused') { V.stopAsked = false; V.sendAsked = false; V.t0 = performance.now(); try { window.WosCaptureTools.setPaused(V.rec,false); } catch (e) {} if (V.native) pauseNativeTake(false); setVoice('listen'); V.raf = requestAnimationFrame(tick); vib(6); }
   });
@@ -2783,8 +2829,8 @@
 
   /* Typed or simulated utterance, same pipeline as voice */
   async function runUtterance(text, kind, typed) {
-    // "help" (tapped or held) opens the gestures sheet on the phone; it never goes to the agent.
-    if (window.WosTour?.isHelp(text) && (kind === 'command' || sendSnap().view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
+    // Help is a command only on explicit command/typed surfaces, never a tapped voice take.
+    if (!window.WosCommands.isMessageTake(kind, typed) && window.WosTour?.isHelp(text) && (kind === 'command' || sendSnap().view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
     clearTimeout(txHideT); V.kind = kind || 'auto';
     const snap = sendSnap();
     txShow('', typed ? 'Typed' : 'Heard', kind === 'command' ? 'command' : '', kind === 'command' ? '⚡' : '✦');
@@ -2796,7 +2842,7 @@
   /* ---------------- view-aware voice ----------------
    * The orb always knows which window is in front. A view can
    *  - capture: everything said with a tap goes to that view (hold still forces a command);
-   *  - auto: the fast router decides whether James is talking to the view or to Archimedes;
+   *  - auto: a tap goes to the open thread or to Archimedes, never through command routing;
    *  - say nothing: the utterance goes to Archimedes, who is told what was on screen.
    * Chats threads are auto. Framed apps require the installed receives_voice_input capability
    * and the shared WizardApp.voiceInput receiver; app-authored meta tags grant nothing. */
@@ -2884,13 +2930,13 @@
   }
 
   /* ---------------- routing ---------------- */
-  /* On the Chats list, a held orb (or a tap) can filter and search it (James + Claude Fable, 11 Oct):
+  /* On the Chats list, only a held orb can filter and search it:
    *   clear filter | all chats | show everything      → chips off
    *   filter [by] X | only X | show [me] [only] X [only] → chip X (status or subject), else search X
    *   search [for] X | find X                          → search text
    * A held orb with any other words on the list keeps doing what it always did (open apps, etc.). */
   const LOCAL_COMMANDS = window.WosCommands.create({ CHATS, APP, appByName, findApp, quickSearch, sendSnap });
-  const localParse = (text, snap, kind) => LOCAL_COMMANDS.parse(text, snap, kind);
+  const localParse = (text, snap, kind, typed = false) => LOCAL_COMMANDS.parse(text, snap, kind, typed);
   async function handleText(text, kind, typed, sttMs, target, snap) {
     const sttNote = sttMs ? ` · heard in ${sttMs} ms` : '';
     snap = snap || sendSnap();
@@ -2901,8 +2947,8 @@
       toast(it.state === 'sent' ? '✦' : '!', it.state === 'sent' ? 'Sent to ' + snap.conversation.label : it.error, 5000);
       return it;
     }
-    // A bare "help" opens the gestures sheet. Held: always. Tapped: unless a thread is open (there it's a reply).
-    if (window.WosTour?.isHelp(text) && (kind === 'command' || snap.view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
+    // A bare "help" is not special in a tapped voice message.
+    if (!window.WosCommands.isMessageTake(kind, typed) && window.WosTour?.isHelp(text) && (kind === 'command' || snap.view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
     const opts = target == null ? { snap } : { desk: target, snap };
     $('#txText').textContent = text;
     const v = snap.view;
@@ -2921,14 +2967,20 @@
     const seal = typed ? null : snap.seal || null;
     if (files.length || seal) {
       const nf = files.length + (seal ? seal.files.length : 0);
-      const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : ''].filter(Boolean).join(' + ');
+      const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : '', seal?.reply ? 'the notification' : ''].filter(Boolean).join(' + ');
       if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback waiting to send with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, snap.audio || null, files, snap.route, snap.custodyId); }
       if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Waiting to send with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', snap.audio || null, { custodyId: snap.custodyId, sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
       const all = [...files, ...(seal ? seal.files : [])].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
-      return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all }).then(item => { seal?.done(item); return item; });
+      return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all, reply: seal?.reply || null }).then(item => { seal?.done(item); return item; });
+    }
+    // Registered app delivery and composer custody above are not commands. All other tap takes
+    // use the normal message destination, without local parsing, cloud routing or no-match cards.
+    if (window.WosCommands.isMessageTake(kind, typed)) {
+      if (target == null && (v?.kind === 'chat thread' || v?.review || v?.mode === 'capture')) return toView(v, text, `To ${v.name}${sttNote}`, snap);
+      return toAgent(text, `To ${window.WizConfig.agent()}${sttNote}`, opts);
     }
     const t0 = performance.now();
-    const loc = localParse(text, snap, kind);
+    const loc = localParse(text, snap, kind, typed);
     if (loc) {
       const ms = Math.max(1, Math.round(performance.now() - t0));
       showRouted('command', `Command · on-device · ${ms} ms${sttNote}`);
@@ -3050,7 +3102,7 @@
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice', opts.snap);
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [] });
+    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [], ...(opts.reply ? { reply: opts.reply } : {}) });
     renderMoons(); refreshHome(); renderDots();
     return item;
   }
@@ -3152,6 +3204,7 @@
     if (G.mode === 'pending' && (Math.hypot(G.dx, G.dy) > 14 || (G.dy > 10 && G.dy > Math.abs(G.dx) * 1.4))) {
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
     }
+    if (G.mode === 'h' && sheet === 'settings') liftSettings(); // swipe away from Settings: it stays on its desk
     if (G.mode === 'h' && !sheet) {
       let dx = G.dx; if ((idx === 0 && dx > 0) || (atPickerEnd() && dx < 0)) dx *= .28;
       placeTrack(dx * 1.1, false);
@@ -3178,7 +3231,14 @@
       if(V.admitting){V.admitSend=true;return;}
       if(V.state==='paused'&&V.replyTo&&FIELDS.refresh())return startVoice('dictation');
       if (V.state === 'idle') return startOrbVoice();
-      if (V.state === 'listen' || V.state === 'paused') { shock(); return finishVoice(); }
+      // James 20 Oct: a tap on a paused take resumes it and never sends. Send is the next tap, once it records again.
+      // Only a take that cannot resume (mic held by another recording, or the last resume found the mic busy) still sends.
+      if (V.state === 'paused') {
+        // Dictation keeps its own contract: a tap on a paused dictation transcribes into the sealed field (nothing is sent).
+        if (V.kind === 'dictation' || V.resumeBlocked || (window.WizAppCapture?.getState?.().recording && !V.meetingLoan)) { shock(); return finishVoice(); }
+        return $('#arcPause').click();
+      }
+      if (V.state === 'listen') { shock(); return finishVoice(); }
       return; // sending: a tap on the orb does nothing until the take is handed off
     } else if (g.mode === 'hold') {
       if(g.refused)return; // a refused hold always consumes its release; never sends a reply
@@ -3198,7 +3258,7 @@
       V.target = g.aim;
       return finishVoice();
     } else if (g.mode === 'h') {
-      if (sheet) return;
+      if (sheet) return;  // launcher etc.; Settings was lifted onto its desk when the drag began
       if (cancelled || g.dy < -40) return placeTrack(0, true); // went up: the iPhone's swipe out, never a desk swipe
       const v = g.dx / vt;
       if (g.dx < -60 || v < -.5) { swipeDesk(1); tourEv('desk', { home: idx === HOME }); } else if (g.dx > 60 || v > .5) { swipeDesk(-1); tourEv('desk', { home: idx === HOME }); } else placeTrack(0, true);
@@ -3438,7 +3498,9 @@
     say: (t, kind) => runUtterance(t, kind || 'auto'),
   });
   const firstRun = !store.get('coached', false) && !window.WosTour?.done();
-  if (firstRun) setTimeout(() => { if (!(window.__deeplinkLog || []).length) window.WosTour?.start('first-run'); else window.WosTour?.mark(); }, 600);
+  // Setup (core/setup-launch.js) opens first on a box's first run; the tour then waits for the first return to Home.
+  if (window.WosSetupLaunch) window.WosSetupLaunch.boot({ firstRunTour: firstRun, open: id => { const a = APP[id]; if (a) openApp(a); }, tour: why => window.WosTour?.start(why), markTour: () => window.WosTour?.mark(), isHome: () => idx === HOME && !sheet && !document.hidden && !window.WosTour?.active });
+  else if (firstRun) setTimeout(() => { if (!(window.__deeplinkLog || []).length) window.WosTour?.start('first-run'); else window.WosTour?.mark(); }, 600);
   // Native shell (Wizard OS Android app): the app hands every hardware/gesture Back to the shell. A step that
   // undoes something returns its name; at the true root the shell stays put and says so. The app never exits
   // on Back (James's rule), so there is no "press again to exit" in native mode.

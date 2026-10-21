@@ -78,14 +78,15 @@ const server = http.createServer((req, res) => {
   const agentWrites = () => writes.filter(x => /\/runs|\/sessions|\/upload/.test(x));
   const spotifyOpen = () => p.evaluate(() => Object.values(window.__wos.wins).some(w => w.appId === 'spotify'));
 
-  // 1. "Open music" (held, and tapped) opens Wizard Music — never Spotify.
+  // 1. Held "Open music" opens Wizard Music; tapped words are messages.
   writes.length = 0; routes.length = 0;
   await hold('Open music.'); await sleep(900);
   ok(await musicWins() === 1 && !(await spotifyOpen()), 'held "Open music" opens Wizard Music, not Spotify', JSON.stringify(await p.evaluate(() => Object.values(window.__wos.wins).map(w => w.appId || w.app))));
   ok(routes.length === 0, '"Open music" resolved on the phone (no router call)', JSON.stringify(routes));
   await p.evaluate(() => { const id = Object.keys(window.__wos.wins).find(k => window.__wos.wins[k].appId === 'wizard-music'); window.__wos.closeWin(id); }); await sleep(500);
   await tap('open music'); await sleep(900);
-  ok(await musicWins() === 1 && !(await spotifyOpen()), 'tapped "open music" opens Wizard Music too');
+  ok(await musicWins() === 0 && !(await spotifyOpen()), 'tapped "open music" does not open a player');
+  await hold('open music'); await sleep(900);
   const fm = await frame();
   await fm.waitForSelector('.music-chip', { timeout: 60000 });
   if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'music-voice-open.png') });
@@ -164,25 +165,26 @@ const server = http.createServer((req, res) => {
   await hold('Music search Home Tides.'); t = await waitToast(/results? for “Home Tides”/, 60000);
   r = await results(f);
   ok(/results? for “Home Tides”/.test(t) && /^Tides · Home/.test((r.rows || [])[0] || '') && await musicWins() === 1, 'spell "Music search Home Tides" from Home searches the open player', JSON.stringify({ t, r }));
-  // With no player open, the spell (tapped) opens Wizard Music straight onto the results.
+  // With no player open, the HELD spell opens Wizard Music straight onto the results.
   await p.evaluate(() => { const id = Object.keys(window.__wos.wins).find(k => window.__wos.wins[k].appId === 'wizard-music'); window.__wos.closeWin(id); }); await sleep(600);
-  await tap('Open Wizard Music and search for Home Tides.'); t = await waitToast(/results? for “Home Tides”/, 60000);
+  await hold('Open Wizard Music and search for Home Tides.'); t = await waitToast(/results? for “Home Tides”/, 60000);
   const f2 = await frame(); r = await results(f2);
-  ok(await musicWins() === 1 && /^Tides · Home/.test((r.rows || [])[0] || ''), 'tapped "Open Wizard Music and search for Home Tides" opens Music on the results', JSON.stringify({ t, r }));
+  // Catalogue artist labels can hydrate after the search acknowledgement; guard the query and song title here.
+  ok(await musicWins() === 1 && /^Results for “Home Tides”$/.test(r.h) && /^Tides ·/.test((r.rows || [])[0] || ''), 'held "Open Wizard Music and search for Home Tides" opens Music on the results', JSON.stringify({ t, r }));
   // (Reopening Music may resume the last session by design; the search itself must not start a result.)
   const np3 = await nowPlaying(f2); const srcs = await f2.evaluate(() => window.__media.map(m => m.src).join(' '));
   ok(np3.title !== 'Tides' && !/1pHgLmKhu0Y|GnTA0XlE2n0/.test(srcs), 'search on a fresh player did not play a result', JSON.stringify({ np3, srcs: srcs.slice(0, 200) }));
   if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'music-voice-search-fresh.png') });
-  // Plain "search for X" away from Music stays the shell's quick search.
+  // Tapped "search for X" away from Music stays an agent message.
   await p.evaluate(() => window.__wos.goDesk(0)); await sleep(800);
   const s0 = await sends(); await tap('search for home tides'); await sleep(800);
   ok(await sends() === s0, 'plain "search for …" away from Music is not hijacked', String(await sends() - s0));
   await p.evaluate(() => window.__wos.closeSheets?.(true)); await sleep(300);
 
-  // 6. Chat stays chat: a tap with music-ish words that isn't a command still goes to the router/agent as before.
+  // 6. Chat stays chat: no router, even for music-ish words.
   routes.length = 0;
   await tap('remind me to pause the newsletter next week'); await sleep(800);
-  ok(routes.length === 1, 'tapped non-command sentence is not hijacked by music', JSON.stringify(routes.map(r => r.text)));
+  ok(routes.length === 0, 'tapped non-command sentence bypasses routing', JSON.stringify(routes.map(r => r.text)));
   await hold('pause'); await sleep(1500); // leave it quiet
 
   ok(!errs.length, 'no page errors', errs.join(' | '));

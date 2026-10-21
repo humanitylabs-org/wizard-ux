@@ -82,3 +82,23 @@ html:not([data-skin="nebula"]) .device { background: var(--bg); }
   box-shadow: inset 0 0 0 7px var(--sk-bg), inset 0 0 0 20px var(--sk-ac); }
 .sk-opt[aria-pressed="true"] .sk-dot::after { content: "✓"; position: absolute; right: -5px; bottom: -4px; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center;
   background: var(--violet-2); color: var(--bg); font-size: 10px; font-weight: 900; line-height: 1; }
+/* Skin cards (one per skin, its palettes as a dot strip), then the Colours row for the worn skin. */
+.sk-fam { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; margin: 0 0 10px; }
+.sk-famopt { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 10px; border-radius: 14px; border: 1px solid var(--line);
+  background: none; color: var(--ink-2); font: inherit; text-align: left; cursor: pointer; }
+.sk-famopt[aria-pressed="true"] { border-color: transparent; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ink) 60%, transparent); }
+.sk-famopt[aria-pressed="true"] .sk-ftx b::after { content: " ✓"; font-weight: 700; }
+.sk-fdots { display: flex; flex: none; }
+.sk-fdots i { width: 18px; height: 18px; border-radius: 50%; margin-left: -6px; background: var(--sk-bg); border: 1px solid rgba(255, 255, 255, .18);
+  box-shadow: inset 0 0 0 3px var(--sk-bg), inset 0 0 0 9px var(--sk-ac); }
+.sk-fdots i:first-child { margin-left: 0; }
+.sk-ftx { display: flex; flex-direction: column; min-width: 0; }
+.sk-ftx b { font-size: 14px; font-weight: 650; }
+.sk-ftx small { font-size: 12px; color: var(--ink-2); }
+.sk-sub { padding: 0 2px 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+/* My skin row (Settings › Look): Edit opens Skins/My skin.css in Files, Reset empties it. Skin tokens only. */
+.my-skin-row { margin: 8px 0 0; }
+.my-skin-row .ms-acts { display: flex; gap: 6px; flex: none; }
+.my-skin-row .ms-acts button { min-height: 36px; padding: 6px 14px; border-radius: 99px; background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); font-size: 13px; font-weight: 650; }
+.my-skin-row .ms-acts button.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }

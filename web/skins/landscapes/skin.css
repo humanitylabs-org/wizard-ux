@@ -38,3 +38,226 @@ html[data-skin="landscapes"] .ch-model.private, html[data-skin="landscapes"] .mr
 html[data-skin="landscapes"] .mrow.secure .mn b { display: inline-flex; align-items: center; gap: 6px; }
 html[data-skin="landscapes"] .mrow.secure .ag-lock { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow .ms { flex: 0 1 340px; }
+
+/* Miguel's layout (ported from his test port, 20 Oct 2026): phone list order, edge-to-edge apps, quiet composer,
+ * lower dock, desktop list order and slim header. Scoped to this skin; James's skins keep the stock layout. */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-scroll { display: flex; flex-direction: column-reverse; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec { display: flex; flex-direction: column-reverse; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec-b { display: flex; flex-direction: column-reverse; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec + .ch-sec { border-top: 0; border-bottom: 1px solid var(--line); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-scroll { padding-bottom: 8px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: 8px; }
+html[data-skin="landscapes"] .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-thread { display: flex; flex-direction: column; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose:not(.has-text) .ch-mic:not(.on) { display: none; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--ink) 6%, var(--bg)); border-radius: 12px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"]:not(.open) .ch-sec-h { min-height: 34px; padding-top: 6px; padding-bottom: 6px; opacity: .8; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-scroll { flex-direction: column; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec { order: 1; flex-direction: column; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec:not([data-sec="ready"]) .ch-sec-b { flex-direction: column; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="archive"] { order: 0; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { order: 2; margin-top: auto; flex-direction: column-reverse; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec + .ch-sec { border-bottom: 0; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { border-top: 1px solid var(--line); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-head { padding-left: 14px; }
+html[data-skin="landscapes"] #device.orb-lift { --corner-b: 9px; }
+html[data-skin="landscapes"] #device.orb-corner .win.full .ch-compose:not(.has-text) { padding-right: calc(var(--corner-orb) + var(--corner-r) + 8px); }
+html[data-skin="landscapes"] #device.orb-corner .win.full .ch-compose.has-text { padding-right: 10px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-head { padding: 4px 10px 4px 14px; border-bottom: 0; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-head .ti, html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-head .ti .ti-b { min-height: 26px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-head .ti b { font-size: 14.5px; font-weight: 650; color: var(--ink-2); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .win.full .wbar { height: 28px; border-bottom: 0; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-tacts button { border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-latest { bottom: auto; top: auto; right: 50%; transform: translateX(50%); bottom: 140px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-fab { right: calc(var(--corner-r) + var(--corner-orb) + 10px); bottom: calc(var(--safe-b) + var(--corner-b)); width: 44px; height: 44px; border-radius: 22px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose textarea { border-color: transparent; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose .ch-attach { background: none; border: 0; color: var(--ink-2); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose .ch-attach svg { stroke: var(--ink-2); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-thread > .ch-head { background: var(--bg); position: relative; z-index: 2; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-compose { border-top: 0; padding-bottom: calc(10px + var(--safe-b, 0px)); }
+html[data-skin="landscapes"] #device.orb-corner { --corner-r: 16px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-sec[data-sec="ready"] { flex-direction: column; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-scroll { padding-bottom: calc(var(--safe-b, 0px) + var(--corner-b)); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-list .ch-rdy-bar { min-height: var(--corner-orb); align-items: center; padding-right: calc(var(--corner-r) + 2 * var(--corner-orb) + 18px); margin: 0; }
+html[data-skin="landscapes"] .ch-compose button.ch-attach { background: none !important; border: 0 !important; box-shadow: none !important; }
+html[data-skin="landscapes"] .ch-compose button.ch-attach svg { stroke: var(--ink-2) !important; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-list .ch-rdy-bar { padding-right: 120px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .ch-fab { width: 44px; height: 44px; border-radius: 22px; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-list .ch-scroll { display: flex; flex-direction: column; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-list .ch-sec[data-sec="archive"] { order: -2; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-list .ch-sec[data-sec="working"] { order: -1; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-list .ch-sec[data-sec="ready"] { order: 0; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-list .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-compose button.ch-mic:not(.on) { border: 0 !important; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--ink) 70%, transparent), color-mix(in srgb, var(--violet) 55%, var(--bg)) 55%, var(--bg) 100%) !important; box-shadow: 0 0 0 1px var(--line-2), 0 0 14px color-mix(in srgb, var(--violet) 35%, transparent) !important; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-compose button.ch-mic:not(.on) svg { opacity: 0; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-head { padding: 3px 10px 3px 4px; min-height: 0; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-head .ti b { font-size: 14px; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-head .ch-back { width: 30px; height: 30px; }
+html[data-skin="landscapes"] { --ch-priv: hsl(282 88% 74%); }
+html[data-skin="landscapes"] { --safe-b-low: calc(var(--safe-b) * .45); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock { height: calc(var(--dock-h) + var(--safe-b-low)); padding-bottom: calc(6px + var(--safe-b-low)); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-compose { padding-bottom: calc(8px + var(--safe-b-low)) !important; }
+html[data-skin="landscapes"] .dock .orb-wrap { z-index: 3; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .scrub { bottom: max(0px, calc(var(--safe-b-low) - 10px)); height: 12px; z-index: 1; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.immersive .tiles.has-full { bottom: 0; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .win.full .ch-compose { padding-bottom: calc(4px + var(--safe-b-low)) !important; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) #device.orb-corner { --corner-b: 4px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .dock { bottom: calc(var(--safe-b-low) + var(--corner-b)); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .imm-edge { height: calc(12px + var(--safe-b-low)); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .imm-edge i { bottom: 3px; }
+html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) { left: 0; right: 0; top: calc(var(--sb) + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b-low, var(--safe-b)) - 4px); --gap: 2px; gap: 2px; }
+html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win { border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; }
+html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win.solo { border-top: 0; border-bottom: 0; border-radius: 0 0 22px 22px; }
+html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win.focus { box-shadow: inset 0 0 0 1px rgba(185, 155, 255, .5); }
+html[data-skin="landscapes"][data-shell="phone"] .win .wb[data-wact="full"] { display: none; }
+html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win.solo.app-chats > .wbar { display: none; }
+html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .win.solo { border-radius: 0; }
+html[data-skin="landscapes"][data-shell="phone"] .tiles:not(.has-full) .ch-compose { padding-bottom: 4px !important; padding-top: 6px; gap: 6px; }
+html[data-skin="landscapes"] .ch-rdy-bar button { white-space: nowrap; flex: 0 0 auto; }
+
+/* Miguel's behaviour pieces (behaviour.js): big dock Back, Defer/Done on the switch row, top-centre toasts. */
+html[data-skin="landscapes"] .mz-dock-back { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; z-index: 4; color: var(--ink); background: color-mix(in srgb, var(--ink) 9%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: transform 160ms ease, background 160ms; }
+html[data-skin="landscapes"] .mz-dock-back svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+html[data-skin="landscapes"] .mz-dock-back:active { transform: translateY(-50%) scale(.92); }
+html[data-skin="landscapes"] .mz-dock-back[hidden] { display: none; }
+html[data-skin="landscapes"] .dock.mz-back-on #dotsL { visibility: hidden; }
+html[data-skin="landscapes"] .ch-swrow { gap: 6px; }
+html[data-skin="landscapes"] .ch-swrow .ch-tacts { margin: 0; gap: 4px; flex: 0 0 auto; display: flex; }
+html[data-skin="landscapes"] .ch-swrow .ch-tacts button { height: 36px; width: 40px; padding: 0; justify-content: center; border-radius: 18px; border: 0; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+html[data-skin="landscapes"] .ch-swrow .ch-tacts button span { display: none; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow .ch-tacts button { width: auto; padding: 0 12px; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow .ch-tacts button span { display: inline; }
+html[data-skin="landscapes"][data-shell="desktop"] .ch-swrow { justify-content: space-between; }
+html[data-skin="landscapes"] .toast { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+/* Opinionated (phone, test port): floating pill bottom bar, like iOS tab bars (LINE, Slack, WhatsApp, Telegram).
+ * Same orb, desk icons, Back, scrubber and gestures; only the shape moves: an inset frosted capsule lifted off the
+ * screen edge so desk swipes start well above the iPhone home-indicator swipe zone. Corner orb (full screen) unchanged. */
+html[data-skin="landscapes"] { --pill-h: 66px; --pill-x: 12px; --pill-b: calc(var(--safe-b-low) + 8px); --pill-top: calc(var(--pill-b) + var(--pill-h)); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { left: var(--pill-x); right: var(--pill-x); bottom: var(--pill-b); height: var(--pill-h); padding: 0; gap: 18px; align-items: center; border-radius: calc(var(--pill-h) / 2); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); background: color-mix(in srgb, var(--bg) 62%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 8px 28px rgba(0, 0, 0, .28), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-wrap, html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { margin-top: 0; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub { bottom: 2px; height: 10px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub i { width: 30px; height: 3px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back) { left: 7px; width: 46px; height: 46px; transform: translateY(-50%); border-color: transparent; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back):active { transform: translateY(-50%) scale(.92); }
+html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) { bottom: calc(var(--pill-top) + 6px); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.immersive) .tiles.has-full { bottom: calc(var(--pill-top) + 6px); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) #device:not(.orb-corner) > :is(#voiceDestination, #generalVoice) { bottom: calc(var(--pill-top) - 9px); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub .sc-label { bottom: calc(var(--pill-h) + 4px); }
+/* Opinionated (phone): the "Wizard OS was updated · Reload" banner sits just above the bottom bar, in thumb reach,
+ * instead of under the status bar. Its thread list opens upward. Full-screen chats: above the corner orb. */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device .dv-update { top: auto; left: var(--pill-x, 10px); right: var(--pill-x, 10px); bottom: calc(var(--pill-top, calc(var(--dock-h) + var(--safe-b-low))) + 8px); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device.orb-corner .dv-update { bottom: calc(var(--safe-b-low) + var(--corner-b) + var(--corner-orb) + 10px); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device .dv-update.web { flex-direction: column-reverse; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device .dv-update .dv-wl { margin: 0 0 8px; border-top: 0; border-bottom: 1px solid var(--line); }
+/* Opinionated (phone, test port) round 2: content runs under the pill and fades out into the background (iOS style)
+ * instead of stopping in a hard edge above it; quieter pill; chat Back drawn as a hamburger (back to the list). */
+html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full):has(> .win.solo.app-chats) { bottom: 0; }
+html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats { border-radius: 0; }
+html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-thread { padding-bottom: calc(var(--pill-top) + 4px); }
+html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-msgs { -webkit-mask-image: linear-gradient(to top, transparent 0, #000 28px); mask-image: linear-gradient(to top, transparent 0, #000 28px); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { border-color: color-mix(in srgb, var(--ink) 7%, transparent); background: color-mix(in srgb, var(--bg) 78%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub:not(.on) i { opacity: 0; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-ring { opacity: .45; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back) { background: transparent; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back) svg { display: none; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back)::before { content: ""; width: 20px; height: 2px; border-radius: 2px; background: currentColor; box-shadow: 0 -6.5px 0 currentColor, 0 6.5px 0 currentColor; }
+html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-fab { bottom: calc(var(--pill-top) + 12px); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .moons { opacity: .55; }
+/* Fade: a soft scrim rises from the bottom edge behind the pill, so whatever sits above the bar melts into the
+ * background (iOS tab-bar look) instead of ending in a hard line. Hidden whenever the bar itself is hidden. */
+html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--pill-top) + 64px); z-index: 4; pointer-events: none; background: linear-gradient(to top, var(--bg) var(--pill-b), color-mix(in srgb, var(--bg) 92%, transparent) calc(var(--pill-top) - 20px), color-mix(in srgb, var(--bg) 55%, transparent) calc(var(--pill-top) + 22px), transparent 100%); }
+html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll { padding-bottom: calc(var(--pill-top) + 14px); }
+html[data-skin="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { height: calc(var(--pill-top) + 44px); background: linear-gradient(to top, color-mix(in srgb, var(--bg) 72%, transparent) 0, color-mix(in srgb, var(--bg) 45%, transparent) var(--pill-top), transparent 100%); }
+/* Opinionated (phone): just the orb. No ring, spinning arcs, orbit dots, halo or handle line; the count badge and the
+ * tap ripple stay. Gestures unchanged (the scrub strip still works, it just draws nothing at rest). */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock :is(.orb-ring, .moons, .orb-halo) { display: none; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .dock .scrub:not(.on) i { opacity: 0; }
+/* Opinionated (phone): bigger everything inside the pill. The orb grows to nearly the pill's height and carries the
+ * current app's icon inside its glass, so it reads as the orb sitting on top of whatever is in view. */
+html[data-skin="landscapes"] { --pill-h: 72px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 62px; gap: 20px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { width: auto; min-width: 0; flex: 1 1 0; gap: 16px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.left { padding-left: 14px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.right { padding-right: 14px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot { width: 34px; height: 34px; display: grid; place-items: center; border: 0; background: none; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { width: 32px; height: 32px; opacity: .9; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi.sgl { font-size: 23px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dplus .dsg svg { width: 30px; height: 30px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-badge { top: -2px; right: -4px; min-width: 20px; height: 20px; font-size: 12px; z-index: 3; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back) { left: 6px; width: 58px; height: 58px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back)::before { width: 26px; height: 2.6px; box-shadow: 0 -8.5px 0 currentColor, 0 8.5px 0 currentColor; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app:not(:empty) { display: grid; place-items: center; position: absolute; inset: 0; z-index: 2; pointer-events: none; mix-blend-mode: screen; opacity: .8; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg { width: 30px; height: 30px; opacity: 1; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg .sgi.sgl { font-size: 22px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app :is(.dn, .dbg) { display: none; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner):is([data-voice="listen"], [data-voice="paused"]) .dock .orb-app { opacity: 0; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { justify-content: space-evenly; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi { width: 88%; height: 88%; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 80%; mask-size: auto 80%; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app:not(:empty) { mix-blend-mode: normal; opacity: .92; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg { width: 36px; height: 36px; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi { width: 100%; height: 100%; background: var(--ink); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--bg) 80%, transparent)) drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 82%; mask-size: auto 82%; }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb { -webkit-mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%); mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%); }
+
+/* Miguel's skins (phone): app title bars as slim as the chat thread header, so apps keep the screen.
+ * Same 14.5px title as a chat thread, a 36px bar, and no extra gap under the status bar. */
+html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .win { padding-top: calc(var(--sb) + var(--safe-t)); --sf-head: calc(36px + var(--sb) + var(--safe-t)); }
+html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .win > .wbar { height: 36px; min-height: 36px; flex-basis: 36px; padding-right: calc(40px + var(--sf-padding, 16px)); }
+html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .wbar > :is(.wt, .t) { font-size: 14.5px; font-weight: 650; letter-spacing: -.01em; }
+html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .wbar > [data-wact="close"] { width: 36px; min-width: 36px; height: 36px; right: calc(var(--sf-padding, 16px) - 8px); }
+html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .wbar > [data-wact="close"] svg { width: 16px; height: 16px; }
+html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .wbar .wtool { height: 28px; min-width: 28px; }
+html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .wbar .wtool-pick { height: 28px; font-size: 12.5px; }
+html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .shield { top: 36px; }
+
+
+/* App selector, Miguel's look: names in full ink at a readable size, section titles one step brighter, Get apps
+ * drawn as a tile like its neighbours (hairline edge) instead of an unbordered box. */
+html[data-skin="landscapes"] .launcher .lapp .nm { color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1.22; letter-spacing: -.01em; max-width: 100%; padding: 0 1px; }
+html[data-skin="landscapes"] .launcher .lgroup h4 { color: var(--ink-2); font-size: 12px; letter-spacing: .1em; }
+html[data-skin="landscapes"] .launcher .lgroup h4 span { color: var(--ink-2); font-size: 12px; }
+html[data-skin="landscapes"] .launcher .lapp[data-app="app-store"] .ic { background: color-mix(in srgb, var(--ink) 7%, transparent); border: 1px solid var(--line-2); box-shadow: none; color: var(--ink); }
+html[data-skin="landscapes"] .launcher :is(.lapp .nm, .lgroup h4) { text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
+
+/* Reply to a notification (Miguel's look): one quiet quote line, no box. A hairline rule on the left, the title in ink,
+ * one or two lines in ink-2, and a bare × (44px target). The sent message shows the same quote above his words. */
+html[data-skin="landscapes"] .ch-compose .ch-reply { padding: 2px 0 0 12px; margin: 0 2px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
+html[data-skin="landscapes"] .ch-compose button.ch-reply-x { width: 44px; height: 44px; margin: -6px -4px -6px 0; background: none !important; border: 0 !important; box-shadow: none !important; color: var(--ink-2); font-size: 22px; font-weight: 300; }
+html[data-skin="landscapes"] .ch-compose button.ch-reply-x:hover { color: var(--ink); }
+html[data-skin="landscapes"] .ch-reply-t b, html[data-skin="landscapes"] .ch-rq b { font-weight: 600; color: var(--ink); letter-spacing: 0; }
+html[data-skin="landscapes"] .ch-reply-t span, html[data-skin="landscapes"] .ch-rq span { color: var(--ink-2); }
+html[data-skin="landscapes"] .msg.u .bub .ch-rq { margin: 0 0 8px; padding: 0 0 0 10px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
+html[data-skin="landscapes"] .ch-compose.has-reply { padding-top: 12px !important; }
+/* The skin's :is(.ch-compose button…) fill rule out-ranks a plain selector, so the × colour must win explicitly (Light drew it white on white). */
+html[data-skin="landscapes"] .ch-compose button.ch-reply-x, html[data-skin="landscapes"] .ch-compose button.ch-reply-x svg { color: color-mix(in srgb, var(--ink) 78%, transparent) !important; stroke: currentColor !important; }
+html[data-skin="landscapes"] .ch-compose.has-reply .ch-reply { margin-bottom: 4px; }
+/* Landscapes: the photo runs behind the reply line, so its preview is lighter and carries a soft shadow. */
+html[data-skin="landscapes"] :is(.ch-reply-t, .ch-rq) :is(b, span) { text-shadow: 0 1px 3px color-mix(in srgb, var(--bg) 80%, transparent); }
+html[data-skin="landscapes"] .ch-reply-t span { color: color-mix(in srgb, var(--ink) 86%, transparent); }
+
+/* Brand marks (Miguel's skins): real products wear their own logo, in their own colours, so the tile is a visual cue
+ * (see the Cloudflare cloud, go to Cloudflare). Same box and size as every sigil: the mark is still a mask, and the
+ * multi-colour ones also paint the logo file inside it. Sources: tools/sigils/README.md, "Brand marks". */
+html[data-skin="landscapes"] .sgi.sgb { filter: none !important; -webkit-mask: var(--sgb) center / contain no-repeat !important; mask: var(--sgb) center / contain no-repeat !important; }
+html[data-skin="landscapes"] .sgi.sgb-cloudflare { --sgb: url("/wizard-os-home/brand/apps/cloudflare.svg"); }
+html[data-skin="landscapes"] .sgi.sgb-claude { --sgb: url("/wizard-os-home/brand/apps/claude.svg"); }
+html[data-skin="landscapes"] .sgi.sgb-chatgpt { --sgb: url("/wizard-os-home/brand/apps/chatgpt.svg"); }
+html[data-skin="landscapes"] .sgi.sgb-tinfoil { --sgb: url("/wizard-os-home/brand/apps/tinfoil.svg"); }
+html[data-skin="landscapes"] .sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/apps/hermes.svg"); }
+html[data-skin="landscapes"] .sgi:is(.sgb-cloudflare, .sgb-claude) { background: var(--sgb) center / contain no-repeat !important; }
+html[data-skin="landscapes"] .sgi:is(.sgb-chatgpt, .sgb-tinfoil, .sgb-hermes) { background: var(--ink) !important; }
+
+/* Miguel 21 Oct: on bright photos the launcher, its tiles and the dock let too much scenery through. Keep the frost, raise the fill. */
+html[data-skin="landscapes"] .launcher { background: linear-gradient(180deg, rgba(24, 21, 34, .9), rgba(12, 10, 18, .92)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+html[data-skin="landscapes"] .launcher .lapp .ic.sgt { background-color: #0f0c17; border-color: color-mix(in oklab, var(--c) 55%, rgba(255, 255, 255, .14)); }
+html[data-skin="landscapes"] .launcher .lapp .ic.sgt .sgi { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)) brightness(1.12); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, var(--bg) 92%, transparent); }
+
+/* Miguel 21 Oct: the New desk app page sat straight on the photo; names vanished over snow and rocks. Same frosted panel as the launcher. */
+html[data-skin="landscapes"] .new-desk { height: auto; min-height: 0; align-self: start; margin: 10px; padding: 14px 12px 6px; border-radius: 24px; background: linear-gradient(180deg, rgba(24, 21, 34, .76), rgba(12, 10, 18, .82)); border: 1px solid rgba(255, 255, 255, .1); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 18px 40px rgba(0, 0, 0, .3); -webkit-backdrop-filter: blur(22px) saturate(1.25); backdrop-filter: blur(22px) saturate(1.25); }
+html[data-skin="landscapes"] .new-desk .nd-head span { color: var(--ink-2); }
+html[data-skin="landscapes"] .new-desk .lgroup h4 { color: var(--ink-2); }
+html[data-skin="landscapes"] .new-desk .lapp .nm { color: var(--ink); font-size: 12px; font-weight: 600; letter-spacing: -.01em; text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
+html[data-skin="landscapes"] .new-desk .lapp .ic.sgt { background-color: #0f0c17; border-color: color-mix(in oklab, var(--c) 55%, rgba(255, 255, 255, .14)); }

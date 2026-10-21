@@ -9,11 +9,15 @@
     // Its sigil is the house `agents` mark (two layered hats), never a single hat that could pass for one agent.
     { id: 'agents', kind: 'wizard', name: 'Agents', icon: 'secret', g: ['#4ff0b0', '#3fe0ff'], url: '/wizard-os-home/agents/index.html', desc: 'Your agents: harness, model provider, permissions and their own chats', system: true, sigil: { id: 'agents', name: 'Agents' } },
     { id: 'system', kind: 'wizard', name: 'System', icon: '◈', g: ['#3fe0ff', '#8f63ff'], url: '/wizard-os-home/system/index.html', desc: 'Your agents, agent apps, connections and routines' },
+    // Gateway-served recovery remains launchable even if the remote app catalog is down.
+    { id: 'troubleshooter', kind: 'wizard', name: 'Troubleshooter', icon: '⚒', g: ['var(--wz-accent, var(--violet-2))', 'var(--wz-text-secondary, var(--ink-2))'], url: '/troubleshoot/', desc: 'Fix Wizard · Check connection, sign-in and agent health' },
     // Wizard OS views
     { id: 'v-day', kind: 'view', name: 'Day in review', icon: '☀', g: ['#ff8a5c', '#ff5ccf'], view: 'day', desc: 'What we did yesterday, by project, person and call' },
     { id: 'v-week', kind: 'view', name: 'Week in review', icon: '◐', g: ['#8f63ff', '#ff5ccf'], view: 'week', desc: 'Seven days, one compression level up' },
     { id: 'v-month', kind: 'view', name: 'Month in review', icon: '◯', g: ['#3f6bff', '#8f63ff'], view: 'month', desc: 'The arc of the last four weeks' },
     { id: 'v-inbox', kind: 'view', name: 'Inbox', icon: '⬇', g: ['#ffbe55', '#ff6b86'], view: 'inbox', desc: 'Needs you, ready for review, working' },
+    // Setup: built-in system app (web/setup/), beside Chats. Opens by itself on first launch (core/setup-launch.js).
+    { id: 'setup', kind: 'wizard', name: 'Setup', icon: 'S', colors: ['#4ff0b0'], g: ['#4ff0b0', '#3fe0ff'], url: '/wizard-os-home/setup/index.html', desc: 'Get Wizard ready · use it on your phone' },
     // Chats: the one built-in Wizard app. Everything else comes from the box (GET /wizard/v1/apps).
     { id: 'wizard', kind: 'chats', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'], desc: 'Your threads with your Wizard' },
     // Android natives (real intents on Android Chrome)
@@ -123,7 +127,7 @@
   function findApp(q, exact) {
       q = norm(q).replace(/^(the|my) /, '').replace(/ (app|application|view)$/, '');
       if (!q) return null;
-      const alias = { wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', 'yesterday': 'v-day', 'day review': 'v-day', 'day in review': 'v-day', 'week review': 'v-week', 'month review': 'v-month', notifications: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'v-inbox', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel', usual: 'usuals', usuals: 'usuals', 'food app': 'usuals', 'my food': 'usuals', 'grab app': 'usuals', 'saved orders': 'usuals', eats: 'usuals', 'wizard eats': 'usuals', bites: 'usuals', 'wizard bites': 'usuals', 'wizard food': 'usuals', grab: 'usuals', 'my usuals': 'usuals', 'grab food': 'usuals', food: 'usuals', 'order food': 'usuals' };
+      const alias = { troubleshooter: 'troubleshooter', troubleshooting: 'troubleshooter', troubleshoot: 'troubleshooter', 'fix wizard': 'troubleshooter', wizard: 'wizard', chats: 'wizard', chat: 'wizard', threads: 'wizard', 'google maps': 'maps', map: 'maps', 'cine queue': 'cinequeue', movies: 'cinequeue', 'i ching': 'iching', 'yesterday': 'v-day', 'day review': 'v-day', 'day in review': 'v-day', 'week review': 'v-week', 'month review': 'v-month', notifications: 'v-inbox', 'side key': 'side-button', 'power button': 'side-button', 'side button assistant': 'side-button', inbox: 'v-inbox', terminal: 'console', music: 'spotify', reader: 'wisdom', 'wisdom reader': 'wisdom', 'wizard reader': 'wisdom', collections: 'wisdom', jobs: 'wisdom', 'steve jobs': 'wisdom', signal: 'wizard-signal', shop: 'shopping', meetings: 'mizel', 'meeting recorder': 'mizel', usual: 'usuals', usuals: 'usuals', 'food app': 'usuals', 'my food': 'usuals', 'grab app': 'usuals', 'saved orders': 'usuals', eats: 'usuals', 'wizard eats': 'usuals', bites: 'usuals', 'wizard bites': 'usuals', 'wizard food': 'usuals', grab: 'usuals', 'my usuals': 'usuals', 'grab food': 'usuals', food: 'usuals', 'order food': 'usuals' };
       // "Open music" is Wizard Music when this Wizard has it; Spotify only by name or as the fallback.
       if (/^(music|my music|the music|songs|music app|music player|wizard music)$/.test(q) && APP['wizard-music']) return APP['wizard-music'];
       if (alias[q] && APP[alias[q]]) return APP[alias[q]];

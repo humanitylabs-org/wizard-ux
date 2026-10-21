@@ -37,10 +37,10 @@ function client(origin, rows = new Map()) {
   ctx.window = ctx; vm.runInNewContext(source, ctx);
   return { api: ctx.WosOutbox, rows, close: () => { for (const t of timers) clearTimeout(t); } };
 }
-async function settled(api, id) {
+async function settled(api, id, minAttempts = 0) {
   for (let i = 0; i < 300; i++) {
     const it = api.get(id);
-    if (['sent', 'failed', 'unconfirmed', 'waiting'].includes(it?.state)) return it;
+    if (['sent', 'failed', 'unconfirmed', 'waiting'].includes(it?.state) && (it.attempts || 0) >= minAttempts) return it;
     await new Promise(r => setTimeout(r, 5));
   }
   throw new Error('Outbox did not settle');
@@ -63,6 +63,7 @@ async function fixture(t, options = {}) {
       return json(options.readStatus || 200, { run_id: options.otherRun || runId, session_id: options.otherSession || sessionId, status: options.runStatus || 'completed' });
     }
     if (req.url === '/wizard/hermes/v1/runs') {
+      if (options.admitStatus) return json(options.admitStatus, { error: 'QA request rejected' });
       const key = req.headers['idempotency-key'];
       if (admitted.has(key)) assert.equal(admitted.get(key), body, 'idempotent replay is byte-identical');
       admitted.set(key, body);
@@ -92,6 +93,20 @@ for (const status of ['completed', 'failed', 'cancelled', 'interrupted', 'expire
     f.api.retry(it.id); await f.api.pump(); assert.equal(f.calls.filter(x => x.method === 'POST').length, 2);
   });
 }
+// Hermes forgets a finished run after a while; its steer then answers 404 run_not_found (owner's Tea music
+// thread, 20 Oct 2026). The run read still proves it terminal here, so the message continues the thread.
+const forgotten = { steerStatus: 404, rejection: { error: { code: 'run_not_found', message: `Run not found: ${runId}` } } };
+test('a steer to a run Hermes already forgot continues the same session exactly once', async t => {
+  const f = await fixture(t, forgotten); const it = await settled(f.api, (await f.enqueue()).id);
+  assert.equal(it.state, 'sent', it.error);
+  assert.equal(f.admitted.size, 1);
+  assert.equal(JSON.parse(f.calls.find(x => x.path === '/wizard/hermes/v1/runs').body).session_id, sessionId);
+});
+test('a forgotten-run steer never falls back while the run still reads as working', async t => {
+  const f = await fixture(t, { ...forgotten, runStatus: 'running' }); const it = await f.enqueue();
+  assert.equal((await settled(f.api, it.id)).state, 'failed');
+  assert.equal(f.admitted.size, 0);
+});
 test('lost continuation receipt retries its frozen admission, never the rejected steer', async t => {
   const f = await fixture(t, { loseAdmission: true }); const it = await f.enqueue();
   assert.equal((await settled(f.api, it.id)).state, 'waiting');
@@ -133,6 +148,30 @@ for (const options of [
   const restored = client('http://unused', f.rows); t.after(restored.close);
   await restored.api.load(); assert.equal(restored.api.get(it.id).state, 'unconfirmed');
   assert.equal(restored.api.retry(it.id), false);
+});
+test('a legacy transient failed record with an ambiguous steer dispatch never revives', async t => {
+  const f = await fixture(t, { ambiguous: 'network' }); const it = await f.enqueue();
+  assert.equal((await settled(f.api, it.id)).state, 'unconfirmed'); f.close();
+  const row = f.rows.get(it.id); row.state = 'failed'; row.error = 'Couldn’t reach Wizard';
+  const restored = client(f.origin, f.rows); t.after(restored.close);
+  await restored.api.load(); await restored.api.pump();
+  assert.equal(restored.api.get(it.id).state, 'unconfirmed');
+  assert.equal(restored.api.retry(it.id), false);
+  assert.equal(f.calls.filter(x => x.path.includes('/steer')).length, 1);
+});
+for (const status of [408, 425, 429, 500, 503, 403, 413]) test(`ordinary admission HTTP ${status} retains correct retry policy past the old limit`, async t => {
+  const f = await fixture(t, { admitStatus: status });
+  const item = await f.api.enqueue({ kind: 'reply', sessionId, text: 'Same original message', model: 'test-model', provider: 'test-provider' });
+  const expected = status === 403 || status === 413 ? 'failed' : 'waiting';
+  const attempts = expected === 'waiting' ? 8 : 1;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const result = await settled(f.api, item.id, attempt); assert.equal(result.state, expected);
+    assert.equal(result.attempts, attempt);
+    if (attempt < attempts) { result.nextAt = 0; await f.api.pump(); }
+  }
+  assert.equal(f.calls.length, attempts);
+  assert.equal(new Set(f.calls.map(c => c.key)).size, 1);
+  assert.equal(new Set(f.calls.map(c => c.body)).size, 1);
 });
 for (const options of [
   { accepted: true }, { runStatus: 'running' }, { runStatus: 'queued' }, { runStatus: 'stopping' },

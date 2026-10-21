@@ -1,7 +1,19 @@
 // Landscapes (Miguel's skin): swipe right inside a thread to go back, same as Dark and Light (copy of web/skins/obsidian/skin.js).
 // Ported from wizard-ux #121 into the skin package, so it ships with Obsidian and touches no other skin.
 // Back goes through the shell's own Back step (api.nav.back): linked thread -> parent, thread -> list; never exits.
+import { playIntro } from '../obsidian/intro.js';
+
+import { setupBehaviour } from '../obsidian/behaviour.js';
+
 export default function setup(api) {
+  const behaviour = setupBehaviour(api);
+  // MIZEL intro (web/skins/obsidian/intro.js): plays when this skin is picked, not when the app simply reopens on it.
+  // 'live' is set while this skin is the chosen one and cleared only when the owner switches away.
+  let intro = null;
+  if (!api.storage.get('live')) {
+    api.storage.set('live', true);
+    intro = playIntro({ listen: api.listen });
+  }
   let sw = null;
   const thread = () => { const r = api.part('thread'); return r && r.querySelector('[data-part="thread"]'); };
   const skip = t => !t || !t.closest || t.closest('pre, table, [data-part="composer"], .ms-track, input, textarea, [contenteditable="true"]');
@@ -44,5 +56,5 @@ export default function setup(api) {
   ensure();
   api.on('render', ensure);
   api.on('route', ensure);
-  return () => { if (sw) reset(sw.th); sw = null; };
+  return reason => { behaviour(); if (sw) reset(sw.th); sw = null; intro?.stop(); if (reason === 'switch') api.storage.set('live', false); };
 }
