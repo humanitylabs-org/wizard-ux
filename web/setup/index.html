@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Setup</title>
+<link rel="stylesheet" href="../core/base.css">
+<link rel="stylesheet" href="setup.css">
+<script src="../core/app-client.js"></script>
+<script defer src="vendor/qrcode.js"></script>
+<script defer src="setup.js"></script>
+</head>
+<body>
+<main class="app" id="app" aria-live="polite">
+  <section class="screen" id="list" aria-label="Setup"></section>
+  <section class="screen" id="phone" aria-label="Use Wizard on your phone" hidden></section>
+</main>
+<div class="scrim" id="scrim" hidden></div>
+<div class="menu" id="menu" role="menu" hidden><button role="menuitem" data-act="ask-reset">Disconnect and start over…</button></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <h2 id="sheetTitle">Disconnect and start over?</h2>
+  <p>Wizard leaves your Tailscale network. Your phone won’t reach it until you set this up again.</p>
+  <button class="btn quiet" data-act="reset">Disconnect</button>
+  <button class="link" data-act="cancel-reset">Cancel</button>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
