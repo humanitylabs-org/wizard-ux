@@ -62,7 +62,7 @@ try{
   await p.goto(BASE+(mobile?'':'desktop.html'));await p.waitForFunction(()=>WosAgents.ready);
   await p.evaluate(mobile=>{const H=mobile?__wos:__wux;H.openApp(WizCore.apps(mobile?'mobile':'desktop').APPS.find(a=>a.id==='agents'));},mobile);
   await p.locator('iframe[src*="agents"]').first().waitFor({state:'attached'});
-  const frame=p.frames().find(f=>/\/agents\//.test(f.url()));await frame.locator('[data-open="private"]').click();
+  const frame=await(await p.locator('iframe[src*="agents"]').first().elementHandle()).contentFrame();await frame.waitForURL(/\/agents\//);await frame.locator('[data-open="private"]').click();
   for(const skin of ['nebula','grove']){
    await p.evaluate(s=>WosSkin.set(s),skin);await p.waitForTimeout(800);
    const appearance=await frame.evaluate(()=>({skin:document.documentElement.dataset.skin,bg:getComputedStyle(document.body).backgroundColor}));
