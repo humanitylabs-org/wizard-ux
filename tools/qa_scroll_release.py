@@ -63,7 +63,7 @@ def main():
         run('qa-path-config',[sys.executable,'-m','unittest','discover','-s',src/'tools','-p','test_qa_paths.py','-v'])
         run('signed-upgrade',[sys.executable,src/'tools/qa_upgrade.py',old_apk,signed])
         run('aosp-scroll-capture',[sys.executable,src/'tools/qa_scroll_capture.py',debug,out/'aosp'])
-        aosp=json.loads((out/'aosp/receipt.json').read_text());assert aosp['passed']==aosp['total'] and aosp['total']
+        aosp=json.loads((out/'aosp/receipt.json').read_text());checks=aosp.get('checks') or [];assert aosp.get('status')=='ok' and checks and all(c['ok'] for c in checks),aosp
         receipt['aosp_scroll_capture']=aosp
         run('native-scroll-proxy',[sys.executable,src/'tools/qa_scroll_proxy.py',debug,test,out/'proxy'])
         proxy=json.loads((out/'proxy/receipt.json').read_text());assert proxy['ok'];receipt['native_proxy']=proxy

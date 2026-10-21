@@ -13,9 +13,11 @@
     const d = hit?.closest?.(DOCK + ',' + SHELL_DOCK);
     return !!d && controls(e).includes(d);
   };
-  function bounds(e, reject=()=>null) {
+  function bounds(e, reject=()=>null, allowHidden=false) {
     if (!e?.isConnected) return reject('detached');
-    if (document.hidden) return reject('document-hidden');
+    // PixelCopy needs a live page. The scroll proxy does not: an OEM screenshot toolbar
+    // may pause the still-visible Activity, which marks the WebView page hidden.
+    if (document.hidden && !allowHidden) return reject('document-hidden');
     const r = e.getBoundingClientRect(), s = getComputedStyle(e);
     // PixelCopy uses window coordinates; scrollTop/client sizes are CSS layout units.
     // Translation is safe. Scaling, rotation, skew, perspective and browser zoom are not.
@@ -65,10 +67,10 @@
     return b;
   }
   let searchReason='no-chat-scrollers';
-  function candidate() {
+  function candidate(allowHidden=false) {
     const reasons=[],reject=reason=>{if(!reasons.includes(reason))reasons.push(reason);return null;};
     const found=[...document.querySelectorAll('[data-chats] .ch-msgs,[data-chats] .ch-scroll')]
-      .map(e=>({e,b:bounds(e,reject)})).filter(x=>x.b).sort((a,b)=>b.b.w*b.b.h-a.b.w*a.b.h)[0] || null;
+      .map(e=>({e,b:bounds(e,reject,allowHidden)})).filter(x=>x.b).sort((a,b)=>b.b.w*b.b.h-a.b.w*a.b.h)[0] || null;
     searchReason=found?'ok':reasons.join('|') || 'no-chat-scrollers';return found;
   }
   // Samsung Smart Capture sees a View, not overflow divs. Publish only changed,
@@ -78,7 +80,7 @@
   let resize=null;
   const port=window.wizardScrollPort;
   function proxyCandidate() {
-    const c=active?null:candidate();
+    const c=active?null:candidate(true);
     const identity=c ? location.href+'\n'+(c.e.closest('[data-chats]')?.dataset.draftFor || '') : '';
     if(c?.e!==proxyNode || identity!==proxyIdentity) {
       proxyNode=c?.e || null;proxyIdentity=identity;proxyKey=c?documentKey+(++serial):'';
@@ -98,7 +100,8 @@
   }
   function refreshProxy() {
     if(!port || timer || frame)return;
-    timer=setTimeout(()=>{timer=0;frame=requestAnimationFrame(pushProxy);},Math.max(0,100-(performance.now()-sentAt)));
+    // Hidden pages get no animation frames; push from the timer instead.
+    timer=setTimeout(()=>{timer=0;if(document.hidden)pushProxy();else frame=requestAnimationFrame(pushProxy);},Math.max(0,100-(performance.now()-sentAt)));
   }
   function proxyScroll(key,method,y) {
     const c=proxyCandidate();
