@@ -170,6 +170,7 @@
     "core/sel-menu.js",
     "core/settings.css",
     "core/settings.js",
+    "core/setup-launch.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
@@ -464,6 +465,10 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/setup-launch.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared first-run Setup admission; adapters supply only open/home callbacks."
     },
     "core/shell.js": {
       "loadedBy": [

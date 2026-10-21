@@ -1,0 +1,5 @@
+/* Sepia: Novaire's warm e-reader paper with soft dark ink. Visual only; geometry and behaviour stay stock. */
+html[data-skin="sepia"] { color-scheme: light; }
+html[data-skin="sepia"] .home-time { font-family: 'Sk Fraunces', Georgia, serif; font-weight: 300; letter-spacing: -.035em; text-shadow: 0 1px rgba(255, 252, 238, .55); }
+html[data-skin="sepia"] :is(.now-card, .side-card) { box-shadow: inset 0 1px 0 rgba(255, 252, 238, .5), 0 12px 36px rgba(83, 59, 31, .08); }
+html[data-skin="sepia"] .sk-dot { border-color: rgba(86, 65, 40, .28); }
