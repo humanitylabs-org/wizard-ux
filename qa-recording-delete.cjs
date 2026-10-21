@@ -15,7 +15,7 @@ let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function boot(b) {
+async function boot(b, { native = false } = {}) {
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
@@ -33,12 +33,31 @@ async function boot(b) {
     if (/^\/wizard\/hermes\/api\/sessions\/[^/]+\/messages/.test(u.pathname)) return json({ data: [] });
     if (u.pathname === '/wizard/thread-seen') return json({ state: { initializedAt: Date.now(), threads: {} } });
     if (u.pathname === '/wizard/thread-dispositions') return json({ state: {} });
+    if (u.pathname.endsWith('/api/transcribe')) { ctx.__tx = (ctx.__tx || 0) + 1; return json({ text: 'words from the phone', ms: 3 }); }
     if (u.pathname === '/wizard/hermes/v1/runs') { ctx.__runs = (ctx.__runs || 0) + 1; return json({ run_id: 'run_x', status: 'queued' }, 202); }
     return json({});
   });
   const p = await ctx.newPage();
   const errs = [];
   p.on('pageerror', e => errs.push(String(e)));
+  if (native) await p.addInitScript(() => {
+    // Android bridges (DeviceBridge.java shapes). Journal-kept takes carry "custody": true (CancelledTakes.keepCustody),
+    // ms 0 (no discard length) and source "app": the "0:00 · Orb" rows on James's phone.
+    const S = window.__dev = JSON.parse(sessionStorage.getItem('qa.dev') || 'null') || { calls: [], cancelled: Array.from({ length: 10 }, (_, i) => ({ id: 'journal-cmVjLXFh' + i, captureId: 'rec-qa' + i, at: Date.now() - 2 * 864e5 - i, ms: 0, source: 'app', file: 'journal-cmVjLXFh' + i + '.aac', mime: 'audio/aac', bytes: 9000, custody: true })) };
+    const persist = () => sessionStorage.setItem('qa.dev', JSON.stringify(S));
+    const b64 = n => btoa(String.fromCharCode(...Array.from({ length: n }, (_, i) => (i * 7) & 255)));
+    window.WizardOSNative = { platform: () => 'android:qa', sideButton: () => '{"mic":true,"assistant":true,"used":true,"samsung":false,"step":"done"}', unsent: () => '[]', everywhere: () => '{}', appUnsent() {}, haptic() {}, keepAwake() {}, appVoice() {} };
+    window.WizardOSDevice = {
+      version: () => 1, recStart: () => '', recPause() {}, recLevel: () => 0, recActive: () => 'null', recCancel() {},
+      recStop() { return 'null'; }, recClaim() { return 'null'; }, recRead() { return 'null'; }, recDone() {}, recPending: () => '[]',
+      cancelledList() { return JSON.stringify(S.cancelled); },
+      cancelledRead(id, off) { S.calls.push('read:' + id); persist(); return S.cancelled.some(t => t.id === id) ? JSON.stringify({ b64: b64(3000), next: -1, size: 3000 }) : 'null'; },
+      cancelledDelete(id) { S.calls.push('delete:' + id); S.cancelled = S.cancelled.filter(t => t.id !== id); persist(); },
+      clip(text) { S.clip = String(text); persist(); return true; },
+      shareMeta: () => 'null', watchRun() {}, replyNotes: () => '[]', clearThread: () => 0,
+      notifications: () => '{"allowed":true}', updateCheck() {}, updateInstall() {}, updateState: () => '{"state":"idle","installed":"0.9.36"}',
+    };
+  });
   await p.addInitScript(() => {
     try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.v1', 'true'); } catch (e) {}
     // qa.idb = 'down' (every open of the outbox store fails) | 'once' (only the first open fails) | unset (works).
@@ -160,6 +179,35 @@ const seed = (p, mode, extra = []) => p.evaluate(({ mode, extra }) => {
     ok((await group(w.p)).rows === 0, 'Full storage: nothing comes back after a reload');
     ok(w.errs.length === 0, 'No page errors (full storage)', w.errs.join(' | '));
     await w.ctx.close();
+    /* 4. The real phone case: ten takes the Android app kept itself ("custody": true in its metadata). */
+    const a = await boot(b, { native: true });
+    await open(a.p);
+    await a.p.evaluate(() => __wos.openSettings('cancelled')); await sleep(600);
+    g = await group(a.p);
+    ok(g && g.rows === 10 && /0:00 · Orb · 2 d ago/.test(g.text), 'Phone: ten 0:00 · Orb · 2 d ago rows listed', JSON.stringify(g).slice(0, 160));
+    await a.p.click('#settingsBody [data-cancelled] .cx-row:nth-of-type(1) [data-cx="copy"]');
+    await a.p.waitForFunction(() => /Copy again/.test(document.querySelector('#settingsBody [data-cancelled]')?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
+    let dev = await a.p.evaluate(() => __dev);
+    ok(dev.calls.some(c => c.startsWith('read:')) && dev.clip === 'words from the phone', 'Phone: Transcribe & copy reads the phone file', JSON.stringify(dev.calls) + ' ' + dev.clip);
+    await a.p.click('#settingsBody [data-cancelled] .cx-row:nth-of-type(1) [data-cx="delete"]'); await sleep(700);
+    dev = await a.p.evaluate(() => __dev);
+    ok(dev.calls.some(c => c.startsWith('delete:')) && dev.cancelled.length === 9, 'Phone: Delete removes the file on the phone', JSON.stringify(dev.calls));
+    ok((await group(a.p)).rows === 9 && /Deleted/.test(await toastText(a.p)), 'Phone: the row goes and the toast says Deleted');
+    await a.p.click('#settingsBody [data-cancelled] [data-cx-all="delete"]'); await sleep(300);
+    await a.p.click('#settingsBody [data-cancelled] [data-cx-all="delete"]'); await sleep(1200);
+    dev = await a.p.evaluate(() => __dev);
+    g = await group(a.p);
+    ok(dev.cancelled.length === 0 && g.rows === 0 && /Deleted 9/.test(await toastText(a.p)), 'Phone: Delete all clears the other nine', await toastText(a.p) + ' ' + dev.cancelled.length);
+    await open(a.p);
+    await a.p.evaluate(() => __wos.openSettings('cancelled')); await sleep(600);
+    ok((await group(a.p)).rows === 0, 'Phone: still empty after a reload');
+    // A phone that refuses to delete is reported, never shown as Deleted.
+    await a.p.evaluate(() => { __dev.cancelled = [{ id: 'journal-stuck', at: Date.now(), ms: 0, source: 'app', mime: 'audio/aac', bytes: 9000, custody: true }]; sessionStorage.setItem('qa.dev', JSON.stringify(__dev)); WizardOSDevice.cancelledDelete = () => {}; __wos.openSettings('cancelled'); });
+    await sleep(600); await a.p.evaluate(() => WosCancelled.repaint()); await sleep(300);
+    await a.p.click('#settingsBody [data-cancelled] .cx-row:nth-of-type(1) [data-cx="delete"]'); await sleep(600);
+    ok(/Couldn.t delete · the phone kept the file/.test(await toastText(a.p)), 'Phone: a delete the phone ignores says so', await toastText(a.p));
+    ok(a.errs.length === 0, 'No page errors (phone)', a.errs.join(' | '));
+    await a.ctx.close();
   } catch (e) { fail++; console.log('FAIL exception', e.stack || e); }
   await b.close();
   console.log(`${pass}/${pass + fail} passed`);
