@@ -43,7 +43,7 @@ async function run(b, mode) {
 
   await openLook();
   let L = await look();
-  ok(L && JSON.stringify(L.fams) === '["wizard","mizel"]' && L.famOn === 'wizard', `${mode}: Look shows Wizard and Mizel skins, Wizard worn`, JSON.stringify(L && { fams: L.fams, on: L.famOn }));
+  ok(L && L.fams[0] === 'wizard' && L.fams.includes('mizel') && L.famOn === 'wizard', `${mode}: Look shows Wizard first plus Mizel (other skins may follow), Wizard worn`, JSON.stringify(L && { fams: L.fams, on: L.famOn }));
   ok(L && JSON.stringify(L.pals) === JSON.stringify(WIZ) && L.palOn === 'nebula', `${mode}: Colours = the five Wizard palettes, Nebula on`, L && L.pals.join(','));
   ok(L && L.sizes.every(v => v >= 44), `${mode}: every skin card and colour is a ≥44 px target`, L && L.sizes.join(','));
   await p.screenshot({ path: `${SHOTS}/${mode}-1-wizard.png` });
