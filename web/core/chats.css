@@ -146,6 +146,8 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-pill .pbtn { position: relative; flex: 0 0 auto; height: 26px; padding: 0 11px; border-radius: 99px; background: rgba(143, 99, 255, .35); color: var(--ink); font-size: 12px; font-weight: 700; }
 .ch-pill .pbtn::after { content: ''; position: absolute; top: 50%; left: 50%; width: calc(100% + 12px); min-width: 44px; height: 44px; transform: translate(-50%, -50%); }
 .ch-pill .pbtn.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
+/* Dismiss is the pill's answer, so it wears the skin's accent (light purple on Nebula) with the canvas colour as ink. */
+.ch-pill .pbtn.ghost[data-obdismiss] { background: var(--violet-2); border: 0; color: var(--bg); }
 .ch-pill.fail { color: var(--amber); border-color: rgba(255, 190, 85, .45); }
 .ch-pill.wait { color: var(--ink-2); }
 /* Waiting with a Troubleshooter action: a small two-line card. Label on top, both buttons on one row beneath it,
@@ -593,3 +595,12 @@ html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open {
 .ch-newchat .nc-tip { font-size: 13px; }
 @keyframes ncIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ch-newchat { animation: none; } }
+
+/* Reply to a notification: a slim quote above the composer (× drops it) and the same quote above the sent words. */
+.ch-reply { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 0 0 10px; border-left: 2px solid var(--line-2); }
+.ch-reply-t, .ch-rq { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ch-reply-t { flex: 1; }
+.ch-reply-t b, .ch-rq b { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-reply-t span, .ch-rq span { font-size: 12.5px; line-height: 1.35; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ch-compose button.ch-reply-x { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; background: none; color: var(--ink-2); font-size: 22px; line-height: 1; box-shadow: none; }
+.ch-rq { margin: 0 0 6px; padding: 0 0 0 10px; border-left: 2px solid var(--line-2); }

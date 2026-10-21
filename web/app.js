@@ -1778,7 +1778,7 @@
     if (!q) {
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
-        <div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>
+        ${APPS.some(a => a.kind === 'view') ? `<div class="lgroup"><h4>Views <span>zoomable</span></h4><div class="lgrid">${APPS.filter(a => a.kind === 'view').map(appTile).join('')}</div></div>` : ''}
         <div class="lgroup"><h4>Wizard apps <span>${APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
       return;
     }
@@ -2107,7 +2107,7 @@
     if (knownReply?.custodyId && (!draft || prior.state !== 'held' || !prior.durable)) return false;
     Object.assign(V, { native: a.id, kind, target: null, snap: window.WosOrbHandoff?.takeSnap(a.id)||null, seal: null, replyTo: knownReply, chunks: [], acc: Number(a.ms) || 0, t0: performance.now(), sim: false, stopAsked: false, sendAsked: false, cancelled: false, an: null, files: [], pickPaused: false });
     V.parts=[];V.custodyCapture=null;V.nativeSegmentBase=0;V.meetingLoan=window.WosOrbHandoff?.forTake(a.id)||null;
-    if(draft)Object.assign(V,{parts:draft.parts||[prior.audio],custodyCapture:prior.id,snap:draft.snap,files:draft.files||[],nativeSegmentBase:draft.acc||0,acc:(draft.acc||0)+(Number(a.ms)||0),resumeNative:true,seal:{text:draft.typed||'',files:draft.sealFiles||[],done:()=>{},putBack:()=>{}}});
+    if(draft)Object.assign(V,{parts:draft.parts||[prior.audio],custodyCapture:prior.id,snap:draft.snap,files:draft.files||[],nativeSegmentBase:draft.acc||0,acc:(draft.acc||0)+(Number(a.ms)||0),resumeNative:true,seal:{text:draft.typed||'',files:draft.sealFiles||[],reply:draft.sealReply||null,done:()=>{},putBack:()=>{}}});
     if (savedGeneral && !V.snap?.meetingEventId) { V.kind = 'general'; V.snap = { ...generalVoiceSnap(), route: window.WosModels.voiceRoute(a.id) }; }
     renderVoiceFiles();
     setVoice(a.paused ? 'paused' : 'listen');
@@ -2288,8 +2288,8 @@
       if(V.native){const id=V.native;voiceRecovery(id,{kind:V.kind,ms:V.acc});const meta=JSON.parse(DEV().recStop(id)||'null');if(!meta?.id)throw Error('Native reply is still held');V.parts.push(nativeBlob(id,meta.bytes));V.native=null;V.resumeNative=true;parkedNativeId=id;}
       if(V.rec && V.rec.state!=='inactive')await new Promise(resolve=>{V.rec.onstop=resolve;V.rec.stop();});
       if(V.chunks.length)V.parts.push(new Blob(V.chunks,{type:V.mime}));V.chunks=[];stopStream();V.rec=null;
-      if(!V.seal){const seal=CHATS.takeComposer(V.replyTo.wid,V.replyTo.sid);V.seal=seal.text||seal.files.length?seal:null;}
-      const draft={replyTo:{...V.replyTo},snap:structuredClone(V.snap),acc:V.acc,files:V.files.map(f=>({...f})),typed:V.seal?.text||'',sealFiles:V.seal?.files||[],parts:V.parts.slice(),kind:V.kind,resumeNative:!!V.resumeNative};
+      if(!V.seal){const seal=CHATS.takeComposer(V.replyTo.wid,V.replyTo.sid);V.seal=seal.text||seal.files.length||seal.reply?seal:null;}
+      const draft={replyTo:{...V.replyTo},snap:structuredClone(V.snap),acc:V.acc,files:V.files.map(f=>({...f})),typed:V.seal?.text||'',sealFiles:V.seal?.files||[],sealReply:V.seal?.reply||null,parts:V.parts.slice(),kind:V.kind,resumeNative:!!V.resumeNative};
       const it=await OUTBOX.stage({captureId:V.custodyCapture,nativeId:parkedNativeId,audio:new Blob(V.parts,{type:V.parts[0]?.type}),kind:'reply',sessionId:V.replyTo.sid,...V.snap.route,parkedDraft:draft});
       await OUTBOX.transition(it.id,'held','Reply paused · return to resume or send');
       if(!it.durable)throw Error('Device save failed · reply retained here; microphone not borrowed');
@@ -2314,7 +2314,7 @@
     if(V.state!=='idle'||parkedReply)return false;
     const item=OUTBOX.get(id),d=item?.parkedDraft;if(!d||!item.audio||item.state!=='held')return false;
     parkedReply={...V,...d,parts:d.parts||[item.audio],chunks:[],rec:null,native:null,custodyCapture:id,
-      seal:{text:d.typed||'',files:d.sealFiles||[],done:()=>{},putBack:()=>{}},target:null};
+      seal:{text:d.typed||'',files:d.sealFiles||[],reply:d.sealReply||null,done:()=>{},putBack:()=>{}},target:null};
     return restoreReply();
   }
   function recordReply(wid, sid) {
@@ -2585,7 +2585,7 @@
         if (V.native) saveVoiceRoute(V.native, V.snap.route);
       }
     } catch (e) { toast('!', String(e.message || e), 2200); return; }
-    if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length ? t : null; }
+    if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length || t.reply ? t : null; }
     leaveOnSend(V.snap);
     if (V.native) {
       if (V.state !== 'paused') V.acc += performance.now() - V.t0;
@@ -2716,7 +2716,7 @@
     }
     const it = await OUTBOX.stage({ ...(snap.route || {}), kind: sid && sid !== '__new__' ? 'reply' : 'new',
       sessionId: sid && sid !== '__new__' ? sid : '',
-      steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '',
+      steerRunId: snap.meetingEventId ? '' : rt?.steerRunId ?? (CHATS.WORKING_ST.has(LIVE.session(sid)?.status) ? LIVE.session(sid)?.runId || '' : ''), audio, typed: snap.seal?.text || '', ...(snap.seal?.reply ? { reply: snap.seal.reply } : {}),
       meetingEventId:snap.meetingEventId,sealKey: snap.seal?.key, captureId: V.custodyCapture, nativeId: nid, intent: kind, agent: sv?.agent || '',
       files: [...takeFiles(), ...(snap.seal?.files || [])].filter(f => f?.id),
       instructions: viewContext(sv?.id, 'voice', snap), source: 'orb', wid: rt?.wid || sv?.id || '' });
@@ -2828,8 +2828,8 @@
 
   /* Typed or simulated utterance, same pipeline as voice */
   async function runUtterance(text, kind, typed) {
-    // "help" (tapped or held) opens the gestures sheet on the phone; it never goes to the agent.
-    if (window.WosTour?.isHelp(text) && (kind === 'command' || sendSnap().view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
+    // Help is a command only on explicit command/typed surfaces, never a tapped voice take.
+    if (!window.WosCommands.isMessageTake(kind, typed) && window.WosTour?.isHelp(text) && (kind === 'command' || sendSnap().view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
     clearTimeout(txHideT); V.kind = kind || 'auto';
     const snap = sendSnap();
     txShow('', typed ? 'Typed' : 'Heard', kind === 'command' ? 'command' : '', kind === 'command' ? '⚡' : '✦');
@@ -2841,7 +2841,7 @@
   /* ---------------- view-aware voice ----------------
    * The orb always knows which window is in front. A view can
    *  - capture: everything said with a tap goes to that view (hold still forces a command);
-   *  - auto: the fast router decides whether James is talking to the view or to Archimedes;
+   *  - auto: a tap goes to the open thread or to Archimedes, never through command routing;
    *  - say nothing: the utterance goes to Archimedes, who is told what was on screen.
    * Chats threads are auto. Framed apps require the installed receives_voice_input capability
    * and the shared WizardApp.voiceInput receiver; app-authored meta tags grant nothing. */
@@ -2929,13 +2929,13 @@
   }
 
   /* ---------------- routing ---------------- */
-  /* On the Chats list, a held orb (or a tap) can filter and search it (James + Claude Fable, 11 Oct):
+  /* On the Chats list, only a held orb can filter and search it:
    *   clear filter | all chats | show everything      → chips off
    *   filter [by] X | only X | show [me] [only] X [only] → chip X (status or subject), else search X
    *   search [for] X | find X                          → search text
    * A held orb with any other words on the list keeps doing what it always did (open apps, etc.). */
   const LOCAL_COMMANDS = window.WosCommands.create({ CHATS, APP, appByName, findApp, quickSearch, sendSnap });
-  const localParse = (text, snap, kind) => LOCAL_COMMANDS.parse(text, snap, kind);
+  const localParse = (text, snap, kind, typed = false) => LOCAL_COMMANDS.parse(text, snap, kind, typed);
   async function handleText(text, kind, typed, sttMs, target, snap) {
     const sttNote = sttMs ? ` · heard in ${sttMs} ms` : '';
     snap = snap || sendSnap();
@@ -2946,8 +2946,8 @@
       toast(it.state === 'sent' ? '✦' : '!', it.state === 'sent' ? 'Sent to ' + snap.conversation.label : it.error, 5000);
       return it;
     }
-    // A bare "help" opens the gestures sheet. Held: always. Tapped: unless a thread is open (there it's a reply).
-    if (window.WosTour?.isHelp(text) && (kind === 'command' || snap.view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
+    // A bare "help" is not special in a tapped voice message.
+    if (!window.WosCommands.isMessageTake(kind, typed) && window.WosTour?.isHelp(text) && (kind === 'command' || snap.view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
     const opts = target == null ? { snap } : { desk: target, snap };
     $('#txText').textContent = text;
     const v = snap.view;
@@ -2966,14 +2966,20 @@
     const seal = typed ? null : snap.seal || null;
     if (files.length || seal) {
       const nf = files.length + (seal ? seal.files.length : 0);
-      const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : ''].filter(Boolean).join(' + ');
+      const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : '', seal?.reply ? 'the notification' : ''].filter(Boolean).join(' + ');
       if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback waiting to send with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, snap.audio || null, files, snap.route, snap.custodyId); }
       if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Waiting to send with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', snap.audio || null, { custodyId: snap.custodyId, sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
       const all = [...files, ...(seal ? seal.files : [])].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
-      return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all }).then(item => { seal?.done(item); return item; });
+      return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all, reply: seal?.reply || null }).then(item => { seal?.done(item); return item; });
+    }
+    // Registered app delivery and composer custody above are not commands. All other tap takes
+    // use the normal message destination, without local parsing, cloud routing or no-match cards.
+    if (window.WosCommands.isMessageTake(kind, typed)) {
+      if (target == null && (v?.kind === 'chat thread' || v?.review || v?.mode === 'capture')) return toView(v, text, `To ${v.name}${sttNote}`, snap);
+      return toAgent(text, `To ${window.WizConfig.agent()}${sttNote}`, opts);
     }
     const t0 = performance.now();
-    const loc = localParse(text, snap, kind);
+    const loc = localParse(text, snap, kind, typed);
     if (loc) {
       const ms = Math.max(1, Math.round(performance.now() - t0));
       showRouted('command', `Command · on-device · ${ms} ms${sttNote}`);
@@ -3095,7 +3101,7 @@
     txHide(isPill() ? 1400 : 2600);
     const ctx = viewContext(desks[idx].focus, opts.how || 'voice', opts.snap);
     // Saved before it is sent: a dropped connection can delay this, never lose it.
-    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [] });
+    const item = await OUTBOX.enqueue({ sealKey: opts.snap?.seal?.key, custodyId: opts.snap?.custodyId, kind: 'new', text, typed: opts.typed || '', ...(opts.snap?.route || {}), instructions: ctx, audio: opts.audio || opts.snap?.audio || null, source: opts.source || 'orb', files: opts.files || [], ...(opts.reply ? { reply: opts.reply } : {}) });
     renderMoons(); refreshHome(); renderDots();
     return item;
   }
