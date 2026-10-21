@@ -809,19 +809,41 @@ window.WizCore.chats = function createChats(H) {
       ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
     rowSheet = { wid, sid }; vib(10);
   }
-  const emojiCategoryHtml = categories => categories.map(category => `<section class="ch-emoji-category"><h3>${esc(category.label)}</h3><div class="ch-emoji-grid">${category.emoji.map(emoji => `<button type="button" data-chtopicemoji="${emoji}" aria-label="Use ${emoji}">${emoji}</button>`).join('')}</div></section>`).join('');
+  const emojiCategoryHtml = category => `<section class="ch-emoji-category"><h3>${esc(category.label)}</h3><div class="ch-emoji-grid">${category.emoji.map(emoji => `<button type="button" data-chtopicemoji="${emoji}" aria-label="Use ${emoji}">${emoji}</button>`).join('')}</div></section>`;
+  const emojiRenderState = new WeakMap();
+  function appendEmojiCategory(scroll) {
+    const state = emojiRenderState.get(scroll); if (!state || state.index >= state.categories.length) return false;
+    const sentinel = scroll.querySelector('[data-chemosentinel]');
+    sentinel?.insertAdjacentHTML('beforebegin', emojiCategoryHtml(state.categories[state.index++]));
+    if (state.index >= state.categories.length) sentinel?.remove();
+    return true;
+  }
+  function startEmojiCategories(scroll, categories) {
+    if (!scroll) return;
+    const list = Array.from(categories || []);
+    scroll.innerHTML = list.length ? '<span data-chemosentinel aria-hidden="true"></span>' : '<p class="ch-emoji-empty" role="status">No emojis found. Try another word.</p>';
+    scroll.scrollTop = 0;
+    emojiRenderState.set(scroll, { categories: list, index: 0, queued: false });
+    appendEmojiCategory(scroll);
+    scroll.onscroll = () => {
+      const state = emojiRenderState.get(scroll);
+      if (!state || state.queued || state.index >= state.categories.length || scroll.scrollTop + scroll.clientHeight < scroll.scrollHeight - 320) return;
+      state.queued = true;
+      requestAnimationFrame(() => { state.queued = false; appendEmojiCategory(scroll); });
+    };
+  }
   function renderEmojiSearch(sheet, query) {
     const results = TOPIC.search(query), scroll = sheet?.querySelector('[data-chemoresults]'), clear = sheet?.querySelector('[data-chemoclear]');
     if (!scroll) return;
-    scroll.innerHTML = results.length ? emojiCategoryHtml(results) : '<p class="ch-emoji-empty" role="status">No emojis found. Try another word.</p>';
-    scroll.scrollTop = 0;
+    startEmojiCategories(scroll, results);
     if (clear) clear.hidden = !String(query || '').trim();
   }
   function openEmojiSheet(wid, key, label) {
     const el = track.querySelector(`[data-chats="${wid}"]`); if (!el || !key) return;
     closeRowSheet();
-    const categoryHtml = emojiCategoryHtml(TOPIC.categories);
-    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Choose topic emoji"><div class="ch-sheet-b ch-emoji-sheet"><div class="ch-sheet-t">${esc(label || 'Choose emoji')}</div><label class="ch-emoji-search"><span aria-hidden="true">⌕</span><input type="search" data-chemosearch aria-label="Search emojis" placeholder="Search emojis" autocomplete="off" autocapitalize="none" spellcheck="false"><button type="button" data-chemoclear aria-label="Clear emoji search" hidden>×</button></label><div class="ch-emoji-scroll" data-chemoresults>${categoryHtml}</div></div></div>`);
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Choose topic emoji"><div class="ch-sheet-b ch-emoji-sheet"><div class="ch-sheet-t">${esc(label || 'Choose emoji')}</div><label class="ch-emoji-search"><span aria-hidden="true">⌕</span><input type="search" data-chemosearch aria-label="Search emojis" placeholder="Search emojis" autocomplete="off" autocapitalize="none" spellcheck="false"><button type="button" data-chemoclear aria-label="Clear emoji search" hidden>×</button></label><div class="ch-emoji-scroll" data-chemoresults></div></div></div>`);
+    const scroll = el.querySelector('.ch-emoji-sheet [data-chemoresults]');
+    startEmojiCategories(scroll, TOPIC.categories);
     rowSheet = { wid, key, emoji: true }; vib(8);
   }
   /* Rename (long-press a thread, or tap the title inside it). James's name locks the thread: the agent keeps it. */

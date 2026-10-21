@@ -10,6 +10,8 @@ const css = read('web/core/chats.css');
 for (const page of ['web/index.html', 'web/desktop.html']) {
   test(`${page} loads topic emoji state before shared Chats`, () => {
     const html = read(page);
+    assert.ok(html.indexOf('core/chat-topic-emojis-data.js') > -1);
+    assert.ok(html.indexOf('core/chat-topic-emojis-data.js') < html.indexOf('core/chat-topic-emojis.js'));
     assert.ok(html.indexOf('core/chat-topic-emojis.js') > -1);
     assert.ok(html.indexOf('core/chat-topic-emojis.js') < html.indexOf('core/chats.js'));
   });
@@ -36,8 +38,10 @@ test('draft rows use their durable draft key and can open the same picker', () =
   assert.match(chats, /data-rsemo/);
 });
 
-test('emoji picker renders category headings in a bounded independently scrollable region', () => {
-  assert.match(chats, /emojiCategoryHtml\(TOPIC\.categories\)/);
+test('emoji picker renders categories lazily in a bounded independently scrollable region', () => {
+  assert.match(chats, /startEmojiCategories/);
+  assert.match(chats, /data-chemosentinel/);
+  assert.match(chats, /requestAnimationFrame/);
   assert.match(chats, /class="ch-emoji-category"/);
   assert.match(chats, /class="ch-emoji-scroll"/);
   assert.match(css, /\.ch-emoji-sheet\s*\{[^}]*max-height:[^}]*display:\s*flex[^}]*flex-direction:\s*column/s);
