@@ -275,3 +275,9 @@ html[data-skin="landscapes"] .sgi.sgb-tinfoil { --sgb: url("/wizard-os-home/bran
 html[data-skin="landscapes"] .sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/apps/hermes.svg"); }
 html[data-skin="landscapes"] .sgi:is(.sgb-cloudflare, .sgb-claude) { background: var(--sgb) center / contain no-repeat !important; }
 html[data-skin="landscapes"] .sgi:is(.sgb-chatgpt, .sgb-tinfoil, .sgb-hermes) { background: var(--ink) !important; }
+
+/* Miguel 21 Oct: on bright photos the launcher, its tiles and the dock let too much scenery through. Keep the frost, raise the fill. */
+html[data-skin="landscapes"] .launcher { background: linear-gradient(180deg, rgba(24, 21, 34, .9), rgba(12, 10, 18, .92)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+html[data-skin="landscapes"] .launcher .lapp .ic.sgt { background-color: #0f0c17; border-color: color-mix(in oklab, var(--c) 55%, rgba(255, 255, 255, .14)); }
+html[data-skin="landscapes"] .launcher .lapp .ic.sgt .sgi { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)) brightness(1.12); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, var(--bg) 92%, transparent); }
