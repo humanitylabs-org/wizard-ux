@@ -20,7 +20,7 @@
   const VIDEO_ID = /^[a-f0-9]{32}$/;
   const VIEWS = new Set(['home', 'inbox', 'work', 'chats', 'apps', 'store', 'system', 'agents', 'settings', 'files', 'day', 'week', 'month', 'usage', 'help', 'tour', 'skin']);
   const SECTIONS = new Set(['errors', 'working', 'ready', 'yesterday', 'pastWeek', 'deferred', 'archive', 'drafts']);
-  const KEYS = ['session', 'view', 'section', 'video', 'open', 'agent'];
+  const KEYS = ['session', 'view', 'section', 'video', 'open', 'agent', 'boomerang'];
   let H = null;
   const log = s => { window.__deeplinkLog = (window.__deeplinkLog || []).concat(s).slice(-30); };
 
@@ -28,6 +28,7 @@
     let u; try { u = new URL(href, location.href); } catch (e) { return null; }
     const q = u.searchParams, out = {};
     const sid = q.get('session') || ''; if (SESSION_ID.test(sid)) out.session = sid;
+    const boom = q.get('boomerang') || ''; if (out.session && SESSION_ID.test(boom)) out.boomerang = boom;
     const view = (q.get('view') || '').trim(); if (!out.session && (VIEWS.has(view) || window.WosFeatures?.has(view) || window.WosSettings?.features.some(f => f.aliases.includes(view)))) { out.view = view; const s = q.get('section') || ''; if (SECTIONS.has(s)) out.section = s === 'deferred' ? 'ready' : s; } // Deferred lives at the bottom of Ready
     const vid = (q.get('video') || '').trim().toLowerCase(); if (VIDEO_ID.test(vid)) out.video = vid;
     const open = (q.get('open') || '').trim(); if (!out.session && !out.view && (/^[a-z0-9-]{1,40}$/i.test(open) || /^agent:[a-z0-9][a-z0-9-]{0,40}$/.test(open))) out.open = open;
@@ -57,7 +58,7 @@
   }
   function run(d, src) {
     if (!d || !H) return false;
-    if (d.session) { log('session:' + d.session); H.thread(d.session); }
+    if (d.session) { log('session:' + d.session); H.thread(d.session); if (d.boomerang) void window.WosBoomerang?.consume(d.boomerang); }
     else if (d.view) { log('view:' + d.view); H.view(d.view, d.section || ''); }
     else if (d.open) { log('open:' + d.open); H.app?.(d.open, src || null); }
     else if (d.agent) { log('agent:' + d.agent); H.agent?.(d.agent); }
