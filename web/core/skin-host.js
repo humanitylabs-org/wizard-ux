@@ -28,6 +28,8 @@
   const requested = [];             // asset URLs requested (diagnostics + tests)
   let importer = url => import(url);
   let committedId = null, loadSeq = 0;
+  let personal = null, personalSeq = 0, packageReady = Promise.resolve();
+  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), on: { route: new Set(), render: new Set() }, errs: [], dead: false, teardown: null });
 
   const skinOf = id => (typeof window !== 'undefined' && window.WosSkin && window.WosSkin.pkgOf) ? window.WosSkin.pkgOf(id) : null;
   const dirOf = (id, pkg) => (pkg && pkg.dir) || id;
@@ -64,8 +66,8 @@
     try { console.warn(`[skin ${a.id}] ${where}:`, e); } catch (_) {}
     const now = Date.now(); a.errs = a.errs.filter(t => now - t < ERR_WINDOW); a.errs.push(now);
     if (a.errs.length >= ERR_LIMIT) {
-      disabled.add(a.id); unload('error');
-      try { shell && shell.toast(`${nameOf(a.id)} gestures turned off after an error`); } catch (_) {}
+      disabled.add(a.id); dispose(a, 'error');
+      try { shell && shell.toast(`${a.label || nameOf(a.id)} gestures turned off after an error`); } catch (_) {}
     }
   }
   const nameOf = id => ((typeof window !== 'undefined' && window.WosSkin?.list?.find(s => s.id === id)) || {}).name || id;
@@ -112,7 +114,7 @@
       },
       gesture: Object.freeze({
         // Claim a pointer before the shell's dock swipe locks direction. False once the shell owns it.
-        claim: pointerId => { if (shell && shell.locked && shell.locked(pointerId)) return false; claims.add(pointerId); return true; },
+        claim: pointerId => { if (shell && shell.locked && shell.locked(pointerId)) return false; claims.add(pointerId); a.claims.add(pointerId); return true; },
       }),
       toast: msg => { try { need().toast(String(msg).slice(0, 140)); } catch (e) { fault(a, 'toast', e); } },
       storage: Object.freeze({
@@ -125,11 +127,20 @@
 
   /* ---------- script lifecycle ---------- */
   function unload(reason) {
-    const a = active; if (!a) return; active = null; a.dead = true;
+    dispose(active, reason);
+  }
+  // Both layers share the API, guards and cleanup. Unloading one leaves the other alive.
+  function dispose(a, reason) {
+    if (!a) return;
+    if (active === a) active = null;
+    if (personal === a) personal = null;
+    a.dead = true;
     if (typeof a.teardown === 'function') { try { a.teardown(reason); } catch (e) { try { console.warn(`[skin ${a.id}] teardown:`, e); } catch (_) {} } }
     for (const off of [...a.offs]) { try { off(); } catch (_) {} }
     for (const h of [...a.frames]) { try { cancelAnimationFrame(h.id); } catch (_) {} }
-    a.offs.clear(); a.frames.clear(); a.on.route.clear(); a.on.render.clear(); claims.clear();
+    a.offs.clear(); a.frames.clear(); a.on.route.clear(); a.on.render.clear();
+    for (const id of a.claims) { if (!(active?.claims.has(id) || personal?.claims.has(id))) claims.delete(id); }
+    a.claims.clear();
   }
 
   async function load(id) {
@@ -145,7 +156,7 @@
     if (seq !== loadSeq || committedId !== id) return false; // switched again while loading
     const setup = mod && mod.default;
     if (typeof setup !== 'function') return false;
-    const a = { id, offs: new Set(), frames: new Set(), on: { route: new Set(), render: new Set() }, errs: [], dead: false, teardown: null };
+    const a = record(id, nameOf(id));
     active = a; lastRoute = '';
     try { a.teardown = setup(makeApi(a)); } catch (e) { fault(a, 'setup', e); if (a.dead) return false; }
     if (active === a) emitRoute();
@@ -153,30 +164,60 @@
   }
 
   function emit(type, payload) {
-    const a = active; if (!a) return;
-    for (const fn of [...a.on[type]]) fn(payload);
+    for (const a of [active, personal]) if (a) for (const fn of [...a.on[type]]) fn(payload);
   }
   function emitRoute() {
-    if (!active || !shell) return;
+    if ((!active && !personal) || !shell) return;
     const r = shell.route(), k = `${r.view}|${r.thread || ''}|${r.desk}`;
     if (k === lastRoute) return; lastRoute = k;
     emit('route', Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0 }));
+  }
+
+  /* My skin supplies hashed bytes, never a service URL. Check consent again after waiting for the
+   * package; generations cancel stale/revoked loads. Blob import executes only the verified bytes. */
+  async function loadPersonal(bytes, allowed) {
+    const seq = ++personalSeq;
+    dispose(personal, 'replace');
+    let pending; do { pending = packageReady; await pending; } while (pending !== packageReady);
+    if (seq !== personalSeq || !shell || disabled.has('my-skin') || !allowed()) return false;
+    const href = URL.createObjectURL(new Blob([bytes], { type: 'application/javascript' }));
+    let mod;
+    try { mod = await importer(href); }
+    catch (e) { try { console.warn('[Skins/My skin/skin.js] import failed:', e); } catch (_) {} return false; }
+    finally { URL.revokeObjectURL(href); }
+    if (seq !== personalSeq || !allowed() || typeof mod?.default !== 'function') return false;
+    const a = record('my-skin', 'Skins/My skin/skin.js'); personal = a;
+    try { a.teardown = mod.default(makeApi(a)); } catch (e) { fault(a, 'setup', e); }
+    lastRoute = ''; emitRoute();
+    return personal === a;
+  }
+  function release(id) { claims.delete(id); active?.claims.delete(id); personal?.claims.delete(id); }
+
+  // Same honest-code lint as packaged skins, plus no module dependencies: only this file is approved.
+  // This is a guardrail, not a sandbox for hostile JavaScript (owner code runs in the shell origin).
+  function scriptProblem(source) {
+    const src = source.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const banned = /\b(?:addEventListener|setTimeout|setInterval|requestAnimationFrame|XMLHttpRequest|__wos|localStorage|sessionStorage|innerHTML|outerHTML|WebSocket)\b|\b(?:fetch|eval)\s*\(|\bnew\s+Function\b|\bhistory\s*\.|\bdocument\s*\.\s*cookie|\bimport\b|\bexport\s+(?!default\b)[^;]*\bfrom\b/;
+    return banned.test(src) ? 'Use the skin hook API; imports are not allowed' : null;
   }
 
   const host = {
     /* core/skins.js: picker landed near a skin (preview or commit). Stylesheet only. */
     preview(id) { ensureCss(id); },
     /* core/skins.js: the owner picked a skin. Stylesheet plus (if any) its script. */
-    commit(id) { ensureCss(id); committedId = id; if (shell) load(id); },
+    commit(id) { ensureCss(id); committedId = id; if (shell) packageReady = load(id); },
     /* app.js: the shell is ready; hands over the narrow adapter skins are allowed to drive. */
-    attach(adapter) { shell = adapter; const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) load(id); },
+    attach(adapter) { shell = adapter; const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); },
+    loadPersonal, scriptProblem,
+    stopPersonal() { personalSeq++; dispose(personal, 'off'); },
+    get personalState() { return { ready: !!shell, active: !!personal, disabled: disabled.has('my-skin'), listeners: personal?.offs.size || 0, handlers: personal ? personal.on.route.size + personal.on.render.size : 0 }; },
     /* chats.js: a chats window repainted part ('thread' | 'list'). */
-    rendered(part, el) { if (!active) return; emit('render', Object.freeze({ part, el })); emitRoute(); },
+    rendered(part, el) { if (!active && !personal) return; emit('render', Object.freeze({ part, el })); emitRoute(); },
     /* app.js: desk or focus changed. */
     changed() { emitRoute(); },
     /* app.js dock swipe: true when a skin gesture owns this pointer. Cleared on pointerup/cancel. */
     claimed: pointerId => claims.has(pointerId),
-    release: pointerId => { claims.delete(pointerId); },
+    release,
     get state() { return { active: active ? active.id : null, listeners: active ? active.offs.size : 0, frames: active ? active.frames.size : 0, handlers: active ? active.on.route.size + active.on.render.size : 0, disabled: [...disabled], requested: [...requested], css: [...cssLinks.keys()] }; },
     _test: { setImporter(fn) { importer = fn; }, env, load, unload },
   };
@@ -185,7 +226,7 @@
     // The stored skin's stylesheet now, in <head>, so it paints with the first frame (no flash).
     const id = window.WosSkin && window.WosSkin.current;
     if (id) { ensureCss(id); committedId = id; }
-    if (isDoc) for (const pid of ['pointerup', 'pointercancel']) document.addEventListener(pid, e => claims.delete(e.pointerId), true);
+    if (isDoc) for (const pid of ['pointerup', 'pointercancel']) document.addEventListener(pid, e => release(e.pointerId), true);
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = host;
 })();
