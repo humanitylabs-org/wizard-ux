@@ -868,3 +868,16 @@ body {
 .device:not(.orb-corner) .transcript.brief:not(.tip) .tx-route b { width: 12px; height: 12px; font-size: 8px; background: none !important; }
 /* While that label shows, the voice destination label (same spot) steps aside. */
 .device:has(.voice.tx .transcript.brief:not(.tip)) > #voiceDestination { visibility: hidden; }
+
+/* Title-bar tools (WizardApp.titlebar.set): an app's own few controls ride its window bar so the app keeps the
+ * screen. Neutral, token-only styling; every skin inherits it. */
+.wbar > .wtools { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.wbar.has-tools > :is(.wt, .t) { flex: 1 1 auto; }
+.wtool { flex: none; height: 30px; min-width: 30px; padding: 0 8px; border: 0; border-radius: 9px; display: grid; place-items: center;
+  background: transparent; color: var(--ink-2); font: 600 13px/1 inherit; text-decoration: none; cursor: pointer; }
+.wtool-ic { padding: 0; }
+.wtool svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.wtool:disabled, .wtool[aria-disabled="true"] { opacity: .3; cursor: default; pointer-events: none; }
+.wtool-pick { flex: 0 1 auto; min-width: 0; max-width: 132px; height: 30px; padding: 0 6px; border: 0; border-radius: 9px; appearance: none; -webkit-appearance: none;
+  background: var(--glass-2, rgba(255,255,255,.06)); color: var(--ink); font: 600 13px/1 inherit; text-align: center; text-align-last: center; cursor: pointer; }
+@media (hover: hover) { .wtool:not(:disabled):hover { color: var(--ink); background: var(--glass-2, rgba(255,255,255,.08)); } }
