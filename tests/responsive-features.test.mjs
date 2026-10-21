@@ -60,6 +60,8 @@ test('a synthetic feature registered ONCE renders, routes and executes in BOTH m
   const { sandbox, roots } = harness(), actions = [], opened = [];
   const unregister = sandbox.WosSettings.register({ id: 'future-qa', aliases: ['future-qa-view'], html: () => '<button data-future-qa>Future shared feature</button>', act: ctx => { actions.push(ctx.shell); return true; } });
   for (const { root, view } of roots) {
+    view.focus('future-qa'); // ungrouped registrations remain reachable on About & updates
+    assert.equal(view.page, 'about');
     assert.match(root.innerHTML, /data-future-qa/);
     assert.equal(sandbox.WosSettings.route('future-qa-view', focus => opened.push(focus)), true);
     assert.equal(view.dispatch({ closest: selector => selector === '[data-settings-feature]' ? { dataset: { settingsFeature: 'future-qa' } } : null }), true);
@@ -70,7 +72,7 @@ test('a synthetic feature registered ONCE renders, routes and executes in BOTH m
 test('capability gating is bridge/OS based, never layout based', () => {
   const { sandbox, roots } = harness();
   assert.doesNotMatch(roots[0].root.innerHTML, /data-st="everywhere"/);
-  sandbox.navigator.userAgent = 'Android'; for (const { root, view } of roots) { view.render(); assert.match(root.innerHTML, /data-st="everywhere"[^>]*disabled/); }
+  sandbox.navigator.userAgent = 'Android'; for (const { root, view } of roots) { view.focus('assistant'); assert.equal(view.page, 'phone'); assert.match(root.innerHTML, /data-st="everywhere"[^>]*disabled/); }
 });
 test('editing a recording/in-flight message cannot delete its custody; text edits reach shell adapter unchanged', () => {
   const { sandbox } = harness(), edits = [], notices = [];
