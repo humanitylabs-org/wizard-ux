@@ -67,7 +67,7 @@ public class MainActivity extends Activity {
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private String pendingHandoff; // JSON handed to window.__wosHandoff once the shell is ready
     private int handoffTries;
-    private WebView web;
+    private SelectionWebView web;
     private FrameLayout root;
     private PermissionRequest pendingMic;
     private ValueCallback<Uri[]> pendingFiles;
