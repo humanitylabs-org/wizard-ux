@@ -175,3 +175,144 @@ html[data-skin^="obsidian"][data-shell="desktop"] .ch-swrow .ch-tacts button { w
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-swrow .ch-tacts button span { display: inline; }
 html[data-skin^="obsidian"][data-shell="desktop"] .ch-swrow { justify-content: space-between; }
 html[data-skin^="obsidian"] .toast { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+/* Opinionated (phone, test port): floating pill bottom bar, like iOS tab bars (LINE, Slack, WhatsApp, Telegram).
+ * Same orb, desk icons, Back, scrubber and gestures; only the shape moves: an inset frosted capsule lifted off the
+ * screen edge so desk swipes start well above the iPhone home-indicator swipe zone. Corner orb (full screen) unchanged. */
+html[data-skin^="obsidian"] { --pill-h: 66px; --pill-x: 12px; --pill-b: calc(var(--safe-b-low) + 8px); --pill-top: calc(var(--pill-b) + var(--pill-h)); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { left: var(--pill-x); right: var(--pill-x); bottom: var(--pill-b); height: var(--pill-h); padding: 0; gap: 18px; align-items: center; border-radius: calc(var(--pill-h) / 2); border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); background: color-mix(in srgb, var(--bg) 62%, transparent); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 8px 28px rgba(0, 0, 0, .28), inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-wrap, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { margin-top: 0; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub { bottom: 2px; height: 10px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub i { width: 30px; height: 3px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back) { left: 7px; width: 46px; height: 46px; transform: translateY(-50%); border-color: transparent; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back):active { transform: translateY(-50%) scale(.92); }
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) { bottom: calc(var(--pill-top) + 6px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.immersive) .tiles.has-full { bottom: calc(var(--pill-top) + 6px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) #device:not(.orb-corner) > :is(#voiceDestination, #generalVoice) { bottom: calc(var(--pill-top) - 9px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub .sc-label { bottom: calc(var(--pill-h) + 4px); }
+/* Opinionated (phone): the "Wizard OS was updated · Reload" banner sits just above the bottom bar, in thumb reach,
+ * instead of under the status bar. Its thread list opens upward. Full-screen chats: above the corner orb. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device .dv-update { top: auto; left: var(--pill-x, 10px); right: var(--pill-x, 10px); bottom: calc(var(--pill-top, calc(var(--dock-h) + var(--safe-b-low))) + 8px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device.orb-corner .dv-update { bottom: calc(var(--safe-b-low) + var(--corner-b) + var(--corner-orb) + 10px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device .dv-update.web { flex-direction: column-reverse; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device .dv-update .dv-wl { margin: 0 0 8px; border-top: 0; border-bottom: 1px solid var(--line); }
+/* Opinionated (phone, test port) round 2: content runs under the pill and fades out into the background (iOS style)
+ * instead of stopping in a hard edge above it; quieter pill; chat Back drawn as a hamburger (back to the list). */
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full):has(> .win.solo.app-chats) { bottom: 0; }
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats { border-radius: 0; }
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-thread { padding-bottom: calc(var(--pill-top) + 4px); }
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-msgs { -webkit-mask-image: linear-gradient(to top, transparent 0, #000 28px); mask-image: linear-gradient(to top, transparent 0, #000 28px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { border-color: color-mix(in srgb, var(--ink) 7%, transparent); background: color-mix(in srgb, var(--bg) 78%, transparent); box-shadow: 0 10px 30px rgba(0, 0, 0, .22); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .scrub:not(.on) i { opacity: 0; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-ring { opacity: .45; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back) { background: transparent; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back) svg { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.dock-back, .mz-dock-back)::before { content: ""; width: 20px; height: 2px; border-radius: 2px; background: currentColor; box-shadow: 0 -6.5px 0 currentColor, 0 6.5px 0 currentColor; }
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-fab { bottom: calc(var(--pill-top) + 12px); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .moons { opacity: .55; }
+/* Fade: a soft scrim rises from the bottom edge behind the pill, so whatever sits above the bar melts into the
+ * background (iOS tab-bar look) instead of ending in a hard line. Hidden whenever the bar itself is hidden. */
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--pill-top) + 64px); z-index: 4; pointer-events: none; background: linear-gradient(to top, var(--bg) var(--pill-b), color-mix(in srgb, var(--bg) 92%, transparent) calc(var(--pill-top) - 20px), color-mix(in srgb, var(--bg) 55%, transparent) calc(var(--pill-top) + 22px), transparent 100%); }
+html[data-skin^="obsidian"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats .ch-list .ch-scroll { padding-bottom: calc(var(--pill-top) + 14px); }
+/* Opinionated (phone): just the orb. No ring, spinning arcs, orbit dots, halo or handle line; the count badge and the
+ * tap ripple stay. Gestures unchanged (the scrub strip still works, it just draws nothing at rest). */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock :is(.orb-ring, .moons, .orb-halo) { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .dock .scrub:not(.on) i { opacity: 0; }
+/* Opinionated (phone): bigger everything inside the pill. The orb grows to nearly the pill's height and carries the
+ * current app's icon inside its glass, so it reads as the orb sitting on top of whatever is in view. */
+html[data-skin^="obsidian"] { --pill-h: 72px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 62px; gap: 20px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { width: auto; min-width: 0; flex: 1 1 0; gap: 16px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.left { padding-left: 14px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.right { padding-right: 14px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot { width: 34px; height: 34px; display: grid; place-items: center; border: 0; background: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { width: 32px; height: 32px; opacity: .9; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi.sgl { font-size: 23px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dplus .dsg svg { width: 30px; height: 30px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-badge { top: -2px; right: -4px; min-width: 20px; height: 20px; font-size: 12px; z-index: 3; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back) { left: 6px; width: 58px; height: 58px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock :is(.dock-back, .mz-dock-back)::before { width: 26px; height: 2.6px; box-shadow: 0 -8.5px 0 currentColor, 0 8.5px 0 currentColor; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app:not(:empty) { display: grid; place-items: center; position: absolute; inset: 0; z-index: 2; pointer-events: none; mix-blend-mode: screen; opacity: .8; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg { width: 30px; height: 30px; opacity: 1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg .sgi.sgl { font-size: 22px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app :is(.dn, .dbg) { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner):is([data-voice="listen"], [data-voice="paused"]) .dock .orb-app { opacity: 0; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { justify-content: space-evenly; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi { width: 88%; height: 88%; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 80%; mask-size: auto 80%; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app:not(:empty) { mix-blend-mode: normal; opacity: .92; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .dsg { width: 36px; height: 36px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi { width: 100%; height: 100%; background: var(--ink); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--bg) 80%, transparent)) drop-shadow(0 1px 2px rgba(0, 0, 0, .5)); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 82%; mask-size: auto 82%; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb { -webkit-mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%); mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%); }
+html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi { background: #fff; filter: drop-shadow(0 0 4px rgba(0, 0, 0, .55)); }
+
+/* Miguel's skins (phone): app title bars as slim as the chat thread header, so apps keep the screen.
+ * Same 14.5px title as a chat thread, a 36px bar, and no extra gap under the status bar. */
+html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .win { padding-top: calc(var(--sb) + var(--safe-t)); --sf-head: calc(36px + var(--sb) + var(--safe-t)); }
+html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .win > .wbar { height: 36px; min-height: 36px; flex-basis: 36px; padding-right: calc(40px + var(--sf-padding, 16px)); }
+html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar > :is(.wt, .t) { font-size: 14.5px; font-weight: 650; letter-spacing: -.01em; }
+html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar > [data-wact="close"] { width: 36px; min-width: 36px; height: 36px; right: calc(var(--sf-padding, 16px) - 8px); }
+html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar > [data-wact="close"] svg { width: 16px; height: 16px; }
+html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar .wtool { height: 28px; min-width: 28px; }
+html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar .wtool-pick { height: 28px; font-size: 12.5px; }
+html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .shield { top: 36px; }
+
+/* Miguel's skins: the "Update" tap explodes over the screen, then holds "Updating Wizard OS..." until the new build
+ * paints (core/web-update.js adds .wos-burst). Over the top on purpose. */
+html[data-skin^="obsidian"] .wos-burst { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; overflow: hidden; pointer-events: all;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--ink, #fff) 18%, transparent) 0, color-mix(in srgb, var(--bg, #000) 88%, transparent) 55%);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4); backdrop-filter: blur(14px) saturate(1.4); animation: wb-dim 380ms ease-out both; }
+html[data-skin^="obsidian"] .wos-burst > * { position: absolute; left: 50%; top: 50%; }
+html[data-skin^="obsidian"] .wos-burst .wb-flash { width: 10px; height: 10px; margin: -5px; border-radius: 50%; background: var(--ink, #fff);
+  box-shadow: 0 0 120px 70px var(--violet-2, var(--ink, #fff)); animation: wb-flash 700ms cubic-bezier(.15,.8,.2,1) both; }
+html[data-skin^="obsidian"] .wos-burst .wb-ring { width: 20px; height: 20px; margin: -10px; border-radius: 50%; border: 5px solid var(--ink, #fff); box-shadow: 0 0 30px var(--violet-2, var(--ink, #fff));
+  animation: wb-ring 900ms cubic-bezier(.12,.75,.25,1) both; }
+html[data-skin^="obsidian"] .wos-burst .wb-ring.two { border-color: var(--violet-2, var(--ink)); animation-delay: 120ms; border-width: 2px; }
+html[data-skin^="obsidian"] .wos-burst .wb-ring.three { animation-delay: 240ms; border-width: 1px; opacity: .7; }
+html[data-skin^="obsidian"] .wos-burst .wb-sparks i { position: absolute; width: var(--w, 4px); height: var(--h, 26px); margin: calc(var(--h, 26px) / -2) calc(var(--w, 4px) / -2); box-shadow: 0 0 10px var(--violet-2, var(--ink, #fff)); border-radius: 4px; background: linear-gradient(var(--ink, #fff), transparent);
+  transform: rotate(var(--a)) translateY(0); animation: wb-spark 820ms cubic-bezier(.1,.7,.2,1) var(--t) both; }
+html[data-skin^="obsidian"] .wos-burst .wb-core { width: 64px; height: 64px; margin: -32px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--ink, #fff) 25%, transparent);
+  border-top-color: var(--ink, #fff); animation: wb-in 260ms 160ms both, wb-spin 800ms linear 160ms infinite; }
+html[data-skin^="obsidian"] .wos-burst .wb-text { transform: translate(-50%, 54px); white-space: nowrap; font: 750 22px/1.2 inherit; letter-spacing: .01em; color: var(--ink, #fff);
+  text-shadow: 0 0 18px var(--violet-2, var(--ink, #fff)), 0 2px 10px color-mix(in srgb, var(--bg, #000) 70%, transparent); animation: wb-in 280ms 180ms both; }
+html[data-skin^="obsidian"] .wos-burst .wb-text em { font-style: normal; animation: wb-dot 1.1s infinite; }
+html[data-skin^="obsidian"] .wos-burst .wb-text em:nth-child(2) { animation-delay: .18s; } html[data-skin^="obsidian"] .wos-burst .wb-text em:nth-child(3) { animation-delay: .36s; }
+@keyframes wb-dim { from { opacity: 0; } to { opacity: 1; } }
+@keyframes wb-flash { 0% { transform: scale(0); opacity: 1; } 45% { transform: scale(24); opacity: .95; } 100% { transform: scale(60); opacity: 0; } }
+@keyframes wb-ring { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(90); opacity: 0; } }
+@keyframes wb-spark { 0% { transform: rotate(var(--a)) translateY(0) scaleY(.3); opacity: 1; } 70% { opacity: 1; } 100% { transform: rotate(var(--a)) translateY(calc(var(--d) * -1)) scaleY(1.6); opacity: 0; } }
+@keyframes wb-in { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
+@keyframes wb-spin { to { rotate: 360deg; } }
+@keyframes wb-dot { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+
+/* App selector, Miguel's look: names in full ink at a readable size, section titles one step brighter, Get apps
+ * drawn as a tile like its neighbours (hairline edge) instead of an unbordered box. */
+html[data-skin^="obsidian"] .launcher .lapp .nm { color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1.22; letter-spacing: -.01em; max-width: 100%; padding: 0 1px; }
+html[data-skin^="obsidian"] .launcher .lgroup h4 { color: var(--ink-2); font-size: 12px; letter-spacing: .1em; }
+html[data-skin^="obsidian"] .launcher .lgroup h4 span { color: var(--ink-2); font-size: 12px; }
+html[data-skin^="obsidian"] .launcher .lapp[data-app="app-store"] .ic { background: color-mix(in srgb, var(--ink) 7%, transparent); border: 1px solid var(--line-2); box-shadow: none; color: var(--ink); }
+
+/* Reply to a notification (Miguel's look): one quiet quote line, no box. A hairline rule on the left, the title in ink,
+ * one or two lines in ink-2, and a bare × (44px target). The sent message shows the same quote above his words. */
+html[data-skin^="obsidian"] .ch-compose .ch-reply { padding: 2px 0 0 12px; margin: 0 2px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
+html[data-skin^="obsidian"] .ch-compose button.ch-reply-x { width: 44px; height: 44px; margin: -6px -4px -6px 0; background: none !important; border: 0 !important; box-shadow: none !important; color: var(--ink-2); font-size: 22px; font-weight: 300; }
+html[data-skin^="obsidian"] .ch-compose button.ch-reply-x:hover { color: var(--ink); }
+html[data-skin^="obsidian"] .ch-reply-t b, html[data-skin^="obsidian"] .ch-rq b { font-weight: 600; color: var(--ink); letter-spacing: 0; }
+html[data-skin^="obsidian"] .ch-reply-t span, html[data-skin^="obsidian"] .ch-rq span { color: var(--ink-2); }
+html[data-skin^="obsidian"] .msg.u .bub .ch-rq { margin: 0 0 8px; padding: 0 0 0 10px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
+html[data-skin^="obsidian"] .ch-compose.has-reply { padding-top: 12px !important; }
+/* The skin's :is(.ch-compose button…) fill rule out-ranks a plain selector, so the × colour must win explicitly (Light drew it white on white). */
+html[data-skin^="obsidian"] .ch-compose button.ch-reply-x, html[data-skin^="obsidian"] .ch-compose button.ch-reply-x svg { color: color-mix(in srgb, var(--ink) 78%, transparent) !important; stroke: currentColor !important; }
+html[data-skin^="obsidian"] .ch-compose.has-reply .ch-reply { margin-bottom: 4px; }
+
+/* Brand marks (Miguel's skins): real products wear their own logo, in their own colours, so the tile is a visual cue
+ * (see the Cloudflare cloud, go to Cloudflare). Same box and size as every sigil: the mark is still a mask, and the
+ * multi-colour ones also paint the logo file inside it. Sources: tools/sigils/README.md, "Brand marks". */
+html[data-skin^="obsidian"] .sgi.sgb { filter: none !important; -webkit-mask: var(--sgb) center / contain no-repeat !important; mask: var(--sgb) center / contain no-repeat !important; }
+html[data-skin^="obsidian"] .sgi.sgb-cloudflare { --sgb: url("/wizard-os-home/brand/apps/cloudflare.svg"); }
+html[data-skin^="obsidian"] .sgi.sgb-claude { --sgb: url("/wizard-os-home/brand/apps/claude.svg"); }
+html[data-skin^="obsidian"] .sgi.sgb-chatgpt { --sgb: url("/wizard-os-home/brand/apps/chatgpt.svg"); }
+html[data-skin^="obsidian"] .sgi.sgb-tinfoil { --sgb: url("/wizard-os-home/brand/apps/tinfoil.svg"); }
+html[data-skin^="obsidian"] .sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/apps/hermes.svg"); }
+html[data-skin^="obsidian"] .sgi:is(.sgb-cloudflare, .sgb-claude) { background: var(--sgb) center / contain no-repeat !important; }
+html[data-skin^="obsidian"] .sgi:is(.sgb-chatgpt, .sgb-tinfoil, .sgb-hermes) { background: var(--ink) !important; }
