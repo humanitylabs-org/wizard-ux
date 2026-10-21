@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
   <title>Wizard</title>
-  <!-- Bundled with the app. Shown only when no Wizard address is set, or the Wizard can't be reached
-       (capacitor.config.json server.errorPath). Talks to the native WizardShell plugin. -->
+  <!-- Bundled with the app. Shown when no Wizard is set, when the Wizard can't be reached (capacitor.config.json
+       server.errorPath), for Change Wizard, and for a wizard://connect link. Talks to the native WizardShell plugin.
+       Rules (same as Android, android/CONNECT.md): a scanned code or link only fills in the address; nothing is saved
+       until the address opens a Wizard. With no Wizard set yet, a scanned code connects at once; with one set, the
+       owner confirms the switch. -->
   <style>
     :root { color-scheme: dark; --bg: #05030c; --fg: #f3effa; --muted: rgba(243, 239, 250, .62); --line: rgba(243, 239, 250, .16); --accent: #b79bff; }
     * { box-sizing: border-box; }
@@ -24,8 +27,12 @@
     button { flex: 1; font: inherit; font-weight: 600; border-radius: 12px; padding: 13px 16px; border: 1px solid var(--line);
       background: transparent; color: var(--fg); }
     button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+    button.link { flex: 0; border: 0; padding: 0; color: var(--accent); font-weight: 500; text-align: left; white-space: nowrap; }
     button:disabled { opacity: .5; }
+    .or { display: flex; align-items: center; gap: 12px; color: rgba(243, 239, 250, .38); font-size: 14px; }
+    .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
     .err { color: #ff9a9a; min-height: 1.4em; font-size: 15px; }
+    .status { color: var(--fg); min-height: 1.4em; font-size: 15px; }
     .meta { font-size: 13px; color: rgba(243, 239, 250, .38); }
     [hidden] { display: none !important; }
   </style>
@@ -33,16 +40,21 @@
 <body>
   <main>
     <h1 id="title">Connect to your Wizard</h1>
-    <p id="lead">Enter your Wizard's address.</p>
+    <p id="lead">On your computer, open Wizard → Setup → Use Wizard on your phone, then scan the QR code it shows.</p>
+    <button id="scan" type="button" class="primary">Scan QR code</button>
+    <div class="or" id="or">or enter the address</div>
     <form id="form" novalidate>
       <label for="address">Wizard address</label>
       <input id="address" type="text" inputmode="url" autocomplete="url" autocapitalize="none" autocorrect="off" spellcheck="false"
              placeholder="wizard.example.ts.net" enterkeyhint="go">
     </form>
+    <div class="status" id="status" role="status"></div>
     <div class="err" id="err" role="alert"></div>
+    <button id="settings" type="button" class="link" hidden>Open Settings to allow the camera</button>
     <div class="row">
+      <button id="back" type="button" hidden>Cancel</button>
       <button id="retry" type="button" hidden>Try again</button>
-      <button id="connect" type="submit" form="form" class="primary">Connect</button>
+      <button id="connect" type="submit" form="form">Connect</button>
     </div>
     <p class="meta" id="meta"></p>
   </main>
@@ -53,24 +65,80 @@
       const C = window.Capacitor;
       if (!C || typeof C.nativePromise !== 'function') { $('err').textContent = 'This page only works inside the Wizard app.'; return; }
       const call = (method, options) => C.nativePromise('WizardShell', method, options || {});
-      const shell = { info: () => call('info'), connect: o => call('connect', o), retry: () => call('retry') };
-      const info = await shell.info().catch(() => ({}));
-      if (info.address) {
-        // An address is set but we ended up here: the Wizard didn't answer.
+      const message = (e, fallback) => (e && e.message) || fallback;
+      const info = await call('info').catch(() => ({}));
+      const hasWizard = !!info.address;
+      let busy = false;
+      const setBusy = (on, text) => {
+        busy = on;
+        ['scan', 'connect', 'retry', 'back'].forEach(id => { $(id).disabled = on; });
+        $('status').textContent = on ? (text || '') : '';
+        if (on) $('err').textContent = '';
+      };
+      const fail = text => { setBusy(false); $('err').textContent = text; };
+
+      // Check the address opens a Wizard; native saves it and opens it. Nothing changes on failure.
+      const connect = async (address, host) => {
+        if (busy) return;
+        setBusy(true, `Connecting to ${host || address}…`);
+        try { await call('connect', { address }); }
+        catch (e) { fail(message(e, "That address didn't work.")); }
+      };
+      // A code or link: no Wizard yet → connect at once; a Wizard already set → ask first.
+      const offer = (origin, host) => {
+        $('address').value = host;
+        if (!hasWizard) { connect(origin, host); return; }
+        $('title').textContent = `Switch to ${host}?`;
+        $('lead').textContent = `This iPhone uses ${info.address} now. Switch to the Wizard at ${host}?`;
+        $('connect').textContent = 'Switch';
+        $('connect').classList.add('primary');
+        $('scan').classList.remove('primary');
+        $('back').hidden = false;
+        $('connect').focus();
+      };
+
+      if (info.changing) {
+        $('title').textContent = 'Change Wizard';
+        $('lead').textContent = `This iPhone uses ${info.address}. Scan the other Wizard's QR code, or enter its address.`;
+        $('back').hidden = false;
+      } else if (hasWizard) {
+        // A Wizard is set but we ended up here: it didn't answer.
         $('title').textContent = "Can't reach your Wizard";
-        $('lead').textContent = `${info.address} didn't answer. If your Wizard is on a private network, make sure Tailscale is on, then try again.`;
+        $('lead').textContent = `${info.address} didn't answer. If your Wizard is on a private network, make sure Tailscale is on, then try again. Or scan another Wizard's QR code.`;
         $('address').value = info.address;
         $('retry').hidden = false;
-        $('connect').textContent = 'Connect';
+        $('retry').classList.add('primary');
+        $('scan').classList.remove('primary');
       }
+      $('back').textContent = hasWizard ? `Back to ${info.address}` : 'Cancel';
       if (info.version) $('meta').textContent = `Wizard for iPhone ${info.version} (${info.build})`;
-      $('retry').addEventListener('click', () => { $('retry').disabled = true; shell.retry(); });
+      if (info.pendingError) $('err').textContent = info.pendingError;
+      if (info.pending) offer(info.pending, info.pendingHost);
+
+      $('scan').addEventListener('click', async () => {
+        if (busy) return;
+        $('err').textContent = ''; $('settings').hidden = true;
+        let text;
+        try { text = (await call('scan')).text; }
+        catch (e) {
+          if (e && e.code === 'cancelled') return;
+          if (e && e.code === 'denied') $('settings').hidden = false;
+          $('err').textContent = message(e, "Couldn't scan.");
+          return;
+        }
+        try { const { origin, host } = await call('parse', { text }); offer(origin, host); }
+        catch (e) { $('err').textContent = message(e, "This QR code isn't a Wizard address."); }
+      });
+      $('settings').addEventListener('click', () => call('openSettings'));
+      $('retry').addEventListener('click', () => { setBusy(true, `Trying ${info.address} again…`); call('retry'); });
+      $('back').addEventListener('click', () => { setBusy(true); call('cancelChange'); });
       $('form').addEventListener('submit', async e => {
         e.preventDefault();
-        $('err').textContent = '';
-        $('connect').disabled = true;
-        try { await shell.connect({ address: $('address').value }); }
-        catch (err) { $('err').textContent = (err && err.message) || "That address didn't work."; $('connect').disabled = false; }
+        if (busy) return;
+        try {
+          const { origin, host } = await call('parse', { text: $('address').value, typed: true });
+          connect(origin, host);
+        } catch (err) { $('err').textContent = message(err, "That isn't an https Wizard address."); }
       });
     })();
   </script>
