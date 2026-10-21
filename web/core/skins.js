@@ -52,6 +52,15 @@
         violet: '#7A5CFF', 'violet-2': '#A08CFF', pink: '#ff7ac8', cyan: '#6fd8ff', amber: '#ffbe55', green: '#62e6a8', red: '#ff6b86',
         'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(11,10,16,.62)', 'sk-dock-line': 'rgba(255,255,255,.10)', 'sk-ddot': 'rgba(255,255,255,.6)', 'sk-tour': 'rgba(11,10,16,.80)', 'sk-dim': 'rgba(11,10,16,.70)', 'sk-win': 'rgba(16,14,22,.72)' }) },
   ];
+  // Each skin's own display face (the one its Home clock wears; fonts self-hosted in skins.css), for the preview cards
+  // in the skin picker. Kept outside the entries so each skin definition stays as its author made it.
+  const FACES = {
+    nebula: { family: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif', weight: 600 },
+    grove: { family: '"Sk Fraunces", Georgia, serif', weight: 600 },
+    tide: { family: '"Sk Jost", ui-sans-serif, sans-serif', weight: 400 },
+    ember: { family: '"Sk Cormorant", Georgia, serif', weight: 500, style: 'italic' },
+    signal: { family: '"Sk Mono", ui-monospace, monospace', weight: 500 },
+  };
   const N = SKINS.length;
   const idxOf = id => Math.max(0, SKINS.findIndex(s => s.id === id));
   const stored = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
@@ -287,7 +296,7 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 
   window.WosSkin = {
-    list: SKINS.map(s => ({ id: s.id, name: s.name, who: s.who, bg: s.t.bg, accent: s.t.violet })),
+    list: SKINS.map(s => ({ id: s.id, name: s.name, who: s.who, bg: s.t.bg, accent: s.t.violet, face: FACES[s.id] || null, t: { ...s.t } })),
     get current() { return SKINS[Math.round(pos)].id; },
     get pos() { return pos; },
     get chosen() { return stored(); },

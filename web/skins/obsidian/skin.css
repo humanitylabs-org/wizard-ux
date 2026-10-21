@@ -245,3 +245,8 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi:is(.sg-hat, .sg-hat-private) { -webkit-mask-size: auto 82%; mask-size: auto 82%; }
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb { -webkit-mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%); mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%); }
 html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .orb-app .sgi { background: #fff; filter: drop-shadow(0 0 4px rgba(0, 0, 0, .55)); }
+
+/* Skin picker previews on Light: a darker check and hairlines that read on white paper. */
+html[data-skin="obsidian-light"] .st-root .skp-card[aria-pressed="true"]::after { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M5 9.4l2.6 2.6L13 6.6' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+html[data-skin="obsidian-light"] .st-root .skp-mini { box-shadow: 0 0 0 1px rgba(0,0,0,.13); }
+html[data-skin="obsidian-light"] .st-root .skp-mini[data-skp="obsidian-light"] { box-shadow: 0 0 0 1px rgba(0,0,0,.16), 0 4px 14px rgba(0,0,0,.06); }

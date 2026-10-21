@@ -113,10 +113,31 @@
       for (const m of mounts) m.render();
     }
   }
+  // Skin picker: a grid of small preview cards. Each card is a miniature of that skin (its background, a reply and a
+  // sent bubble, the dock with its orb) drawn in CSS from the skin's own tokens, with the name set in the skin's own
+  // face. Names stay hidden until those faces load (at most 2.5s), so they never flash the fallback font.
+  let facesP = null, facesReady = false;
+  const faceCss = f => f ? `font-family:${f.family};font-weight:${f.weight || 400};font-style:${f.style || 'normal'}` : '';
+  function loadFaces() {
+    if (facesP) return facesP;
+    const L = window.WosSkin?.list || [], F = typeof document !== 'undefined' && document.fonts;
+    if (!F || !F.load) { facesReady = true; return (facesP = Promise.resolve()); }
+    const all = Promise.all(L.filter(k => k.face).map(k => F.load(`${k.face.style || 'normal'} ${k.face.weight || 400} 15px ${k.face.family}`).catch(() => null)));
+    facesP = Promise.race([all, new Promise(r => setTimeout(r, 2500))]).then(() => {
+      facesReady = true;
+      for (const m of mounts) m.context?.root?.querySelectorAll?.('.skp-wait').forEach(n => n.classList.remove('skp-wait'));
+    });
+    return facesP;
+  }
+  const pvars = k => { const t = k.t || {}; return [['bg', t.bg || k.bg], ['ink', t.ink], ['ac', t.violet || k.accent], ['ac2', t['violet-2']], ['pk', t.pink], ['cy', t.cyan], ['dock', t['sk-dock']], ['dl', t['sk-dock-line']]]
+    .filter(([, v]) => v).map(([n, v]) => `--p-${n}:${esc(v)}`).join(';'); };
+  const mini = k => `<span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span>`;
+  const skinCard = (k, cur) => `<button type="button" class="skp-card" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}">${mini(k)}<span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
   register({ id: 'look', aliases: ['skin'], html() {
     const S = window.WosSkin; if (!S) return '';
     const cur = S.current, nm = S.list.find(k => k.id === cur)?.name || '';
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(nm)} · tap to wear</small></span></div><div class="sk-sw" role="group" aria-label="Skin">${S.list.map(k => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`).join('')}</div></div>${mySkinRow(nm)}</div>`;
+    loadFaces();
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(nm)} · tap to wear</small></span></div><div class="skp${facesReady ? '' : ' skp-wait'}" role="group" aria-label="Skin">${S.list.map(k => skinCard(k, cur)).join('')}</div></div>${mySkinRow(nm)}</div>`;
   }, act(ctx, el) {
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin); return true; }
