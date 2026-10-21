@@ -96,20 +96,20 @@
   };
   function mySkinRow(base) {
     if (!window.WosMySkin) return '';
-    return `<div class="st-row static my-skin-row"><span class="st-ic">✎</span><span class="st-tx"><b>My skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button><button type="button" class="ghost" data-myskin="reset">Reset</button></span></div>`;
+    return `<div class="st-row static my-skin-row"><span class="st-ic">✎</span><span class="st-tx"><b>My custom skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button><button type="button" class="ghost" data-myskin="reset">Reset</button></span></div>`;
   }
   async function mySkinAction(ctx, what) {
     const M = window.WosMySkin; if (!M) return;
     if (what === 'edit') {
       const url = `/files/files/${M.FILE.split('/').map(encodeURIComponent).join('/')}`;
-      const opened = window.WizCanOpen?.('files') && ctx.openLink ? ctx.openLink(url, 'My skin') : false;
+      const opened = window.WizCanOpen?.('files') && ctx.openLink ? ctx.openLink(url, 'My custom skin') : false;
       if (!opened) ctx.toast?.('✎', 'Ask your agent: "change my skin so …"', 2600);
       return;
     }
     if (what === 'reset') {
-      if (M.state.empty) { ctx.toast?.('✓', 'My skin is already empty', 1600); return; }
-      try { await M.reset(); ctx.toast?.('✓', 'My skin emptied · your skin as its author made it', 2200); }
-      catch (e) { ctx.toast?.('!', 'Could not reset My skin right now', 2400); }
+      if (M.state.empty) { ctx.toast?.('✓', 'My custom skin is already empty', 1600); return; }
+      try { await M.reset(); ctx.toast?.('✓', 'My custom skin emptied · your skin as its author made it', 2200); }
+      catch (e) { ctx.toast?.('!', 'Could not reset My custom skin right now', 2400); }
       for (const m of mounts) m.render();
     }
   }

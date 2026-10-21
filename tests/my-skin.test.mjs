@@ -104,7 +104,7 @@ test('My skin is CSS only, loads last in both shells, and is listed as a shared 
 
 test('Settings › Look offers My skin with Edit and Reset', () => {
   const s = read('web/core/settings.js');
-  assert.match(s, /<b>My skin<\/b>/);
+  assert.match(s, /<b>My custom skin<\/b>/);
   assert.match(s, /data-myskin="edit"/);
   assert.match(s, /data-myskin="reset"/);
   assert.match(s, /On top of \$\{base\}/);
