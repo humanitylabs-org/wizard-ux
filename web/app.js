@@ -1814,7 +1814,7 @@
       const top = body.scrollTop; body.innerHTML = html; body.__lhtml = html;
       body.scrollTop = live ? top : body.scrollHeight;
     };
-    if (!q && oursSkin()) { paint(kindGroups(['conns', 'wiz', 'apps'])); return; } // Apps sit nearest the thumb, right above search
+    if (!q && oursSkin()) { paint(kindGroups(['apps', 'wiz', 'conns'])); if (!live) body.scrollTop = 0; return; } // same order as New desk, read from the top
     if (!q) {
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>

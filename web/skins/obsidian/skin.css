@@ -308,3 +308,6 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)
 
 /* App kinds on New desk (Apps · Wizard apps · Connectors): the last group scrolls clear of the floating pill dock. */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .new-desk.kinds { padding-bottom: calc(var(--pill-top, 90px) + 24px); }
+
+/* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .launcher { top: calc(30px + var(--safe-t)); bottom: calc(var(--pill-top, 90px) + 8px); }
