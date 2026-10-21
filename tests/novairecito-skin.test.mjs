@@ -49,8 +49,10 @@ test('Novairecito is a visual-only package scoped to its own skin', () => {
   assert.match(js, /id: 'novairecito', pkg: \{ css: true, dir: 'novairecito' \}/);
   assert.doesNotMatch(js, /id: 'novairecito', pkg: \{[^}]*js:/);
   assert.match(css, /html\[data-skin="novairecito"\] \.ch-pin-toggle\[aria-pressed="true"\]/, 'selected pin styling stays in Novairecito');
-  assert.match(css, /color:\s*#ef4444/, 'selected pins use a recognizable red');
-  assert.match(css, /fill-opacity:\s*1/, 'selected pins are a solid silhouette');
+  assert.match(css, /color:\s*#7f1d1d/, 'selected pin bodies are visibly darker');
+  assert.match(css, /fill-opacity:\s*1/, 'selected pin bodies are a solid silhouette');
+  assert.match(css, /\.ch-pin-toggle\[aria-pressed="true"\]::after/, 'selected pins add an independent head accent');
+  assert.match(css, /background:\s*#ef4444/, 'selected pin heads use a recognizable red');
   for (const match of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{/g)) {
     assert.match(match[1].trim(), /^html\[data-skin="novairecito"\]/);
   }
