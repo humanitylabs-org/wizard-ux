@@ -1,103 +1,126 @@
-# Chats view slot — staged acceptance receipt
+# Chats view slot — completed parity receipt
 
-Status: **draft; do not merge or deploy**. The slot implementation and its new QA
-are exercised, but the existing full Chats browser regression gate is not green.
+Status: **behaviour parity proven; ready for review. No merge or deployment.**
 
-Base: `dfc2be4215a7b076ebc16d57192651255ee45ef9` (`origin/main` at branch creation).
-Product/browser evidence: `534f13a`; final slot QA including desktop browser Back:
-`7f49e19`. Later documentation-only commits do not change the exercised web bytes.
-Branch: `feature/chats-view-slot`.
+- Current main base: `bfca77a8fd2979ab6cd615d0df1bf4bd74d88a27`, including
+  My skin script, own screens, Novairecito, pull-to-refresh and private GLM routing.
+- Main repair: PR [#267](https://github.com/humanitylabs-org/wizard-ux/pull/267),
+  `fix/chats-qa-suites` at `5ae3f436d0d39db3f7881ffa2e9cbb5868346c06`.
+- Candidate exercised: `feature/chats-view-slot` at
+  `77dfe4a1ec5ca7367844b35f93e6d34eee82eb1c` (PR #256). Later receipt-only
+  commits do not change the exercised product or QA bytes.
 
-## Execution boundaries
+## Completed main / candidate gate
 
-- Fresh isolated worktree; no live shell edits or deployment.
-- `node tools/qa-origin.cjs PORT WORKTREE/web` on loopback. Reads proxy to the
-  live Agent Service; non-GET/HEAD backend requests are refused.
-- Browser execution on Thales with source, profiles and evidence on its external
-  data volume, without the Android/VM heavy-worker lock.
-- The new QA returns **403 for every non-GET**. Native Chats still attempts normal
-  PUT read receipts when opening a thread; all were intercepted. Both QA origins'
-  `/__qa/refused` counters stayed zero: none escaped the browser fence.
-- Registry-only admission is tested using an intercepted **candidate install
-  projection**, not a claim that an external provider was installed on the live
-  App Manager.
+Every command below completed, exited zero and reported zero failures. No timeout
+or skipped failing assertion is counted as a pass. All eight shared browser suites
+and their QA origin/upload helpers are byte-identical on main repair and candidate
+(`git diff` over those files is empty).
 
-## Before / after
+| Suite | Main + repair (#267) | Chats slot (#256) |
+| --- | ---: | ---: |
+| `qa-chat-basics.cjs` | 112 / 0 | 112 / 0 |
+| `qa-chats-parity.cjs` | 31 / 0 | 31 / 0 |
+| `qa-unified-chats.cjs` | 47 / 0 | 47 / 0 |
+| `qa-desktop.cjs` | 55 / 0 | 55 / 0 |
+| `qa-thread-back-race.cjs` | 19 / 0 | 19 / 0 |
+| `qa-skin-palettes.cjs` | 28 / 0 | 28 / 0 |
+| `qa-my-skin-script.cjs` | 34 / 0 | 34 / 0 |
+| `qa-own-views.cjs` | 26 / 0 | 26 / 0 |
+| `qa-chats-view-slot.cjs` | n/a | 22 / 0 |
+| `node --test tests/*.test.mjs` | 466 / 0 | 473 / 0 |
 
-Counts are **pass / fail**. `abort` means the script timed out after those
-assertions; it is not a full suite result.
+The seven candidate-only unit tests explain the unit-count difference. The
+owner-skins guard remains unchanged and passes. `git diff --check` is clean.
+No branch-only product difference needed a fix after importing the repairs.
+The slot suite now also uses the required 1440 × 900 desktop viewport.
 
-| Command / suite | Main | Candidate | Result |
-| --- | ---: | ---: | --- |
-| `node --test tests/*.test.mjs` | 436 / 0 | 443 / 0 | All unit tests; owner-skins guard unchanged |
-| `qa-chat-basics.cjs` | 90 / 5 + abort | 90 / 5 + abort | Photo/upload assertions fail; later composer timeout |
-| `qa-chats-parity.cjs` | 9 / 6 + abort | 9 / 6 + abort | Full-list/search and uploads assertions fail; attachment timeout |
-| `qa-unified-chats.cjs` | 4 / 7 | 4 / 7 | Suite expects seeded private-agent fixture, absent from live-read origin |
-| `qa-desktop.cjs` | 11 / 3 + abort | 11 / 3 + abort | Shell-asset classification/palette expectations fail, then hidden palette input |
-| `qa-thread-back-race.cjs` | 18 / 1 | 18 / 1 | Thread/Back cases pass; old suite's unguarded init-script storage access throws in sandboxed previews |
-| `qa-skin-palettes.cjs` | 28 / 0 | 28 / 0 | Same corrected QA script on both origins, waits for actual skin intro completion |
-| `qa-chats-view-slot.cjs` | n/a | 22 / 0 | New contract/slot runtime checks |
+## Before / after, without disguising incomplete runs
 
-The initial unmodified skin suite tapped again during the existing Mizel intro
-(main 23/5, candidate 21/7). Its sole change here is waiting for `.mz-intro` to
-finish, without disabling the intro, altering a palette or removing an assertion.
-The initial unified main run also hit a navigation timeout (1/3); paired repeat
-runs produced the 4/7 results above. Private raw logs retain both runs.
+These **earlier before counts** are the original staged receipt, not a claim that
+those partial runs were full results on today's main. Main has since advanced.
+`abort` means the previous script timed out after the listed assertions.
 
-## New QA receipt
+| Suite | Earlier main / earlier candidate | Completed main / completed candidate |
+| --- | --- | --- |
+| chat-basics | 90/5 + abort / 90/5 + abort | 112/0 / 112/0 |
+| chats-parity | 9/6 + abort / 9/6 + abort | 31/0 / 31/0 |
+| unified-chats | 4/7 / 4/7 | 47/0 / 47/0 |
+| desktop | 11/3 + abort / 11/3 + abort | 55/0 / 55/0 |
+| thread-back-race | 18/1 / 18/1 | 19/0 / 19/0 |
+| skin-palettes | 28/0 / 28/0 | 28/0 / 28/0 |
+| chats-view-slot | n/a / 22/0 | n/a / 22/0 |
+| my-skin-script | not previously run | 34/0 / 34/0 |
+| own-views | not previously run | 26/0 / 26/0 |
+| unit tests | 436/0 / 443/0 | 466/0 / 473/0 |
 
-`qa-chats-view-slot.cjs ORIGIN` verifies:
+## Stale tests versus one real defect
 
-- Standard Chats list and standard composer alongside a second installed view;
-  both refer to the same real Agent Service thread ids and can show the same thread.
-- Subject-list fixture on desktop, and phone slot default plus actual dock reopen.
-- Browser Back from fixture threads preserves the app/document on phone **and** desktop.
-- Named fallback for the throwing provider, with standard Chats still rendered.
-- Live Appearance token inheritance and visible views after skin intro on Nebula
-  and Mizel Light; no page errors.
-- External registry descriptor admission without development opt-in; owner links
-  and the throwing development fixture are absent in that mode.
-- Zero live writes; intercepted read receipts receive 403.
+See [CHATS-QA-SUITES.md](CHATS-QA-SUITES.md) for each repaired assumption and setup.
+The stale assumptions were the retired upload protocol, full-history initial list,
+fixed owner search/voice seeds, old desktop shortcuts/desktop numbering/app names,
+a missing private-agent fixture, unsafe QA storage access in sandboxed previews,
+Mizel intro timing, and expecting a composer immediately after send returns to list.
+Assertions still check the real current behaviour. The old unconditional
+`|| true` photo check and desktop `ok(true)` write claim were replaced by actual
+rendered-photo and proxy-counter assertions.
 
-Final output tail:
+The historical JPEG failure was **a real product bug**, not corrupt owner data.
+Direct decoding yielded 1080 × 1090, while the rendered lazy image began at zero
+width and never decoded. Shared `mediaBtn` now eagerly decodes already-local
+`data:image/` bytes; Wizard/remote images remain lazy. The original real JPEG
+browser assertion is retained, strengthened with a nonzero-width check, and
+passes. Five renderer unit cases guard that distinction. No owner palette,
+colour token or live state was changed.
+
+## Safety and execution evidence
+
+- Browser QA ran on Thales, outside the Android/VM worker lock, with source,
+  profiles, scratch and screenshots on its external data volume. Phone was
+  412 × 892 with touch; desktop was 1440 × 900.
+- `tools/qa-origin.cjs` served each exact worktree. Real Agent Service reads
+  crossed a loopback read-proxy tunnel; the origin independently refused writes.
+  Static assets were local to the browser host to avoid all-assets tunnel stalls.
+- All production mutations were intercepted or answered 403. Only in-memory
+  fixtures acknowledged simulated sends/uploads. Main origin, candidate origin
+  and upstream read proxy all reported `{"refused":0}` after the full runs:
+  no mutation escaped the browser fences.
+- Served `core/chats.js`, `core/chat-models.js`, `app.js` and
+  `desktop/desktop.js` bytes matched each staged worktree exactly.
+- The own-view suite used unmodified companion reader revision `d7d08d4` with
+  candidate fixtures, not a live app installation. The slot registry suite
+  likewise uses a candidate install projection, not an external installation.
+- Nebula and Mizel Light slot screenshots were visually inspected at the actual
+  1440 × 900 viewport: distinct readable lists, the same native thread/composer
+  in both windows, inherited colours, no newly clipped composer controls.
+  They remain private under the QA scratch directory; no conversation screenshots
+  or raw conversation logs are committed or attached to public PRs.
+
+## Actual final output tails
 
 ```text
-PASS phone: browser Back leaves the thread, app and document stay open
-PASS phone: throwing provider names itself and falls back
-PASS phone: fallback has standard Chats list
-PASS phone: zero live writes; all read receipts blocked with 403 PUT /wizard/thread-seen
-PASS phone: no page errors
+112 passed, 0 failed · intercepted writes: 36
+31 passed, 0 failed · intercepted writes: 16
+47 pass, 0 fail
+55 pass, 0 fail
+thread-back-race: 19 passed, 0 failed
+28 pass, 0 fail
+34 pass, 0 fail
+26 pass, 0 fail
 PASS registry: installed descriptor works without dev opt-in; owner links and dev providers are absent
 PASS registry: no rejected module loads or page errors
-
 22 pass, 0 fail
+# tests 473
+# pass 473
+# fail 0
+# cancelled 0
+# skipped 0
 ```
 
-## Private visual evidence
+## Scope remaining after this PR
 
-Screenshots are retained in the task's private scratch evidence directory, not
-committed or uploaded: real thread labels/content must not enter a public PR.
-Files: `desktop-side-by-side-nebula.png` and
-`desktop-side-by-side-obsidian-light.png`.
-
-Both were visually inspected after the skin intro completed: distinct lists,
-the same native thread/composer in both windows, legible inherited colours and
-no obvious clipped controls. This is browser evidence, not physical Android QA.
-
-## Remaining before release / next increment
-
-1. Restore isolated fixtures/assumptions for the existing browser suites and
-   rerun them end-to-end; equal partial baseline/candidate counts are not full
-   daily-surface parity certification. No production send/upload was attempted
-   to make an old suite pass.
-2. App Manager: add a multi-provider `chats` slot with the built-in fallback,
-   preserve/version/lint `provides` and `chats_view`, and project them plus the
-   owner-selected default through Agent Service `/v1/apps`. Add real
-   installation/uninstallation/default-selection acceptance and package integrity
-   pinning. No companion repository was modified in this increment.
-3. If publishing standard Chats as a separately installed package is required,
-   package its current renderer against the same host instead of forking state.
-   Fully custom thread rendering is optional; the example deliberately reuses the
-   daily thread/composer.
-4. Keep the PR draft until parity is proven. No merge, live shell deploy, APK or
-   VM image release is authorized by this receipt.
+Parity/readiness is no longer blocked. Real external provider installation,
+uninstallation/default selection, provenance/package integrity and the companion
+App Manager/Agent Service multi-provider slot are separate integration work,
+unchanged from the contract. No production send/upload, physical Android,
+release packaging, live deployment or merge is claimed or authorized.
