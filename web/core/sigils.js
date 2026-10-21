@@ -16,6 +16,7 @@
   'use strict';
   const NAMES = new Set([...["android", "apps", "bag", "bell", "bolt", "burst", "calendar", "chats", "cine", "clip", "cloud", "coffee", "console", "day", "eye", "files", "gauge", "globe", "home", "hub", "iching", "image", "inbox", "letter", "link", "mail", "meditate", "mic", "month", "music", "pin", "projects", "recall", "scope", "search", "secret", "shield", "side", "signal", "social", "spark", "track", "usuals", "wave", "week", "wisdom", "wizard", "wrench"], 'hat', 'hat-private', 'agents']);
   const HOUSE = {"calendar":["calendar","#FE98AB"],"mizel":["mic","#FE9C8C"],"shopping":["bag","#FFA15C"],"wisdom":["wisdom","#FEC25D"],"cinequeue":["cine","#E9CF06"],"trackhunt":["track","#ABE355"],"android-apps":["android","#50DA79"],"topics":["eye","#0ED8BB"],"messenger":["chats","#00D6CF"],"wizard-signal":["signal","#0AD3E3"],"meditation":["meditate","#12CFF6"],"files":["files","#56C8FE"],"wizard-search":["search","#81B7FF"],"projects":["projects","#A0AEFE"],"wizard":["hat","#C1AAFF"],"social":["social","#EF90FE"],"wizard-music":["music","#FF8FD3"],"iching":["iching","#E5C9A3"],"console":["console","#A9B6C4"],"legacy-wizard":["wizard","#BDB5D8"],"v-day":["day","#FF9F6D"],"v-week":["week","#D6A0FE"],"v-month":["month","#99B5E8"],"v-inbox":["inbox","#11DBA2"],"usuals":["usuals","#FE9E79"],"side-button":["side","#C1B1E1"],"maps":["pin","#CDDA2D"],"app-store":["apps","#ABA9FE"],"system":["gauge","#83C9CC"],"notifications":["bell","#FEC076"],"morning-report":["coffee","#FF9F71"],"wizard-calendar":["calendar","#FE98AB"],"secret-drop":["secret","#05D6CE"],"browser":["globe","#11CFF9"],"transcriber":["wave","#F98CF1"],"wizard-chatgpt":["spark","#06DC92"],"wizard-claude":["burst","#FF9C89"],"wizard-agent-service":["hub","#88B9EC"],"wizard-tinfoil":["shield","#A1C0CF"],"wizard-cloudflare":["cloud","#FFA245"],"wizard-shopping":["bag","#FFA15C"],"sniper":["scope","#FB99B2"],"defleur-video":["clip","#94B1FF"],"troubleshooter":["wrench","#7CCCC2"],"wizard-ux":["wizard","#A9AEED"],"agents":["agents","#9BB1F5"]};
+  const BRAND = {"wizard-cloudflare":"cloudflare","wizard-claude":"claude","wizard-chatgpt":"chatgpt","wizard-tinfoil":"tinfoil","hermes-agent":"hermes","hermes-frontend-3":"hermes"};
   const FALLBACK = ["#FE9A9A", "#FFA332", "#D2D826", "#1DDC8D", "#07D4D6", "#4CCAFF", "#94B1FF", "#C7A8FE", "#FE8AEA"];
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
   // An app's own icon file: same-origin path only (no tracking pixels, nothing that can break out of url('…')).
@@ -42,8 +43,13 @@
     const ch = String(glyph || '?');
     return `<i class="sgi sgl" aria-hidden="true" style="--sg:${esc(LETTER(ch))}">${esc(ch)}</i>`;
   }
+  // A real product (Cloudflare, Claude, ChatGPT…) also carries `sgb sgb-<mark>`: skins that show brand marks paint
+  // web/brand/apps/<mark>.svg in the same box; every other skin ignores the class and keeps the house glyph.
+  const brand = a => (Object.prototype.hasOwnProperty.call(BRAND, a.id) ? ` sgb sgb-${BRAND[a.id]}` : '');
   function html(a) {
-    const s = of(a);
+    a = a || {};
+    const s = of(a), b = brand(a);
+    if (b) return (s.glyph ? named(s.glyph) : named(s.letter)).replace('class="sgi', `class="sgi${b}`);
     if (s.glyph) return named(s.glyph);
     if (s.img) return `<i class="sgi sgl sgimg" aria-hidden="true" style="--sg:url('${esc(s.img)}')">${esc(s.letter)}</i>`;
     return named(s.letter);
@@ -58,5 +64,5 @@
   // A sigil that isn't an app (search rows, the command row): glyph name + colour.
   function chip(tag, cls, glyph, color) { return `<${tag} class="${cls ? cls + ' ' : ''}sgt" style="--c:${color}">${named(glyph)}</${tag}>`; }
 
-  window.WizSigil = { of, html, named, box, chip, has: g => NAMES.has(g), house: HOUSE };
+  window.WizSigil = { of, html, named, box, chip, has: g => NAMES.has(g), house: HOUSE, brand: BRAND };
 })();
