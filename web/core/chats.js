@@ -85,6 +85,7 @@ window.WizCore.chats = function createChats(H) {
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
   // Same sections, order and day boundaries as Wizard's Work view.
   // Deferred threads live at the bottom of Ready with a Deferred status (live.js groupWork), not in a section.
+  const STALE_LIST = 60000; // the list re-reads every 15 s; older than a minute means a read is failing or hung
   const agoText = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
   // Two chat-list layouts (18 Oct 2026). By day (default): Ready is today, then Yesterday and Past week.
   // By status (Miguel's): Working, Ready, Archive only, kept short by auto-archive. Chosen in the Filter sheet.
@@ -572,8 +573,17 @@ window.WizCore.chats = function createChats(H) {
     // New chat: a thumb-reach button bottom-right of the list (James: never make the thumb reach the top).
     const fab = `<button type="button" class="ch-fab" data-chnew data-chfab aria-label="${AGID ? esc(`New chat with ${agentName(AGID)}`) : 'New chat'}"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`;
     // Opened on the stored snapshot: say so, with a spinner, until the first fresh read lands (live.js SNAP_KEY).
-    const sync = LST.cached || LST.error ? `<div class="ch-sync${LST.error ? ' off' : ''}" role="status">${LST.error ? '' : '<i class="ch-spin" aria-hidden="true"></i>'}<span>${LST.error ? esc(reach().short) : 'Updating…'}${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span>${LST.error ? troubleshoot : ''}</div>` : '';
-    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}${sync}<div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
+    // Never let an old list pass for the latest (James, 21 Oct 2026): a failed or hung read, or a list older than a
+    // minute, says when it was last updated; a pull-to-refresh shows its own progress and an "Up to date" flash.
+    const lastAt = LST.at || LST.cachedAt || 0, age = lastAt ? Date.now() - lastAt : 0, since = lastAt ? `last updated ${agoText(lastAt)}` : '';
+    const spin = '<i class="ch-spin" aria-hidden="true"></i>';
+    const syncBar = (cls, inner, extra = '') => `<div class="ch-sync${cls ? ' ' + cls : ''}" role="status">${inner}${extra}</div>`;
+    const sync = c.ptrState === 'busy' ? syncBar('', `${spin}<span>Refreshing…${LST.error || age > STALE_LIST ? ` · ${esc(since)}` : ''}</span>`)
+      : LST.error ? syncBar('off', `<span><b>Not up to date</b>${since ? ` · ${esc(since)}` : ''} · ${esc(reach().short)}</span>`, troubleshoot)
+      : LST.cached ? syncBar('', `${spin}<span>Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span>`)
+      : LST.ok && age > STALE_LIST ? syncBar('stale', `${LST.loading ? spin : ''}<span><b>Not up to date</b> · ${esc(since)}${LST.loading ? ' · updating…' : ''}</span>`)
+      : c.ptrState === 'done' ? syncBar('ok', '<span>Up to date</span>') : '';
+    const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${AGID ? ` style="--agc:${AGS()?.colour(agentRec(AGID)) || ''}"` : ''}>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${c.sheet ? filterSheet(c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
     if (c.listHTML === html && c.listRoot === el.firstElementChild) { PW?.paint(w.id, el); return; }
@@ -1228,6 +1238,58 @@ window.WizCore.chats = function createChats(H) {
   }
   KIT.K.notify = (icon, text) => toast(icon, text, 1800);
   KIT.K.onChange = open => H.overlay?.(open);
+  /* Pull to refresh (James, 21 Oct 2026): at the top of a Chats list, drag down and let go to re-read the list now.
+   * Listeners stay passive so native scrolling, desk swipes and row swipes keep their ownership; the pull only engages
+   * on a clearly downward drag that starts with the list already at the top. The finger on the list holds list
+   * re-renders (readGuard), so the indicator can be painted directly while dragging. */
+  const PTR_GO = 48, PTR_MAX = 84;
+  let ptr = null;
+  function paintPull(p, d) {
+    const el = p.sc.parentElement?.querySelector(':scope > .ch-ptr'); if (!el) return;
+    el.classList.remove('out'); el.style.height = d + 'px';
+    const go = d >= PTR_GO; el.classList.toggle('go', go);
+    const tx = el.querySelector('span'); if (tx) tx.textContent = go ? 'Release to refresh' : 'Pull to refresh';
+  }
+  function endPull() {
+    const p = ptr; ptr = null; if (!p?.on) return;
+    const el = p.sc.parentElement?.querySelector(':scope > .ch-ptr');
+    if (el) { el.classList.add('out'); el.style.height = '0px'; el.classList.remove('go'); }
+    if (p.d >= PTR_GO) pullRefresh(p.wid);
+  }
+  function repaintList(wid) { const w = H.win(wid), el = elOf(wid); if (w && !w.thread && el && el.querySelector('.ch-list') && !holdList(wid)) renderChatList(w, el); }
+  function pullRefresh(wid) {
+    const c = ch(wid); if (!wid || c.ptrState === 'busy') return;
+    vib(10); clearTimeout(c.ptrT); c.ptrState = 'busy'; repaintList(wid);
+    const agent = winAgent(H.win(wid));
+    Promise.resolve(LIVE.refresh()).catch(() => {}).then(() => {
+      const st = LIVE.statusFor ? LIVE.statusFor(agent) : { error: LIVE.error };
+      c.ptrState = st.error ? '' : 'done'; repaintList(wid);
+      if (c.ptrState) c.ptrT = setTimeout(() => { c.ptrState = ''; repaintList(wid); }, 1600);
+    });
+  }
+  function bindPull(root) {
+    root.addEventListener('touchstart', e => {
+      ptr = null;
+      if (e.touches.length !== 1) return;
+      const sc = e.target.closest?.('.ch-list > .ch-scroll'); if (!sc || sc.scrollTop > 0) return;
+      if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const t = e.touches[0]; ptr = { sc, wid: idOf(sc), x: t.clientX, y: t.clientY, y0: 0, on: false, d: 0 };
+    }, { capture: true, passive: true });
+    root.addEventListener('touchmove', e => {
+      if (!ptr) return; const t = [...e.touches][0]; if (!t || e.touches.length !== 1) { endPull(); return; }
+      const dx = t.clientX - ptr.x, dy = t.clientY - ptr.y;
+      if (!ptr.on) {
+        if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { ptr = null; return; } // a desk or row swipe
+        if (dy < -6 || ptr.sc.scrollTop > 0) { ptr = null; return; } // scrolling the list
+        if (dy < 12 || dy < Math.abs(dx) * 1.5) return;
+        ptr.on = true; ptr.y0 = dy; if (lp) { clearTimeout(lp.t); lp.row.style.transform = ''; lp = null; }
+      }
+      ptr.d = Math.max(0, Math.min(PTR_MAX, (dy - ptr.y0) * 0.5));
+      paintPull(ptr, ptr.d);
+    }, { capture: true, passive: true });
+    root.addEventListener('touchend', endPull, { capture: true, passive: true });
+    root.addEventListener('touchcancel', () => { if (ptr) ptr.d = 0; endPull(); }, { capture: true, passive: true });
+  }
   /* Long-press or swipe left on a thread row → thread actions (listeners in bind()). */
   let lp = null, lpUntil = 0;
   // Long-press / swipe / right-click on rows, and paste-to-attach; bound to each shell's root in bind().
@@ -1922,7 +1984,7 @@ window.WizCore.chats = function createChats(H) {
       // Opinionated: with a hardware keyboard, Enter sends and Shift+Enter is a new line (touch keyboards keep Enter = new line).
       if (e.target.matches('.ch-compose textarea') && e.key === 'Enter' && !e.isComposing && !e.shiftKey && (e.metaKey || e.ctrlKey || !matchMedia('(pointer: coarse)').matches)) { e.preventDefault(); e.target.form.requestSubmit(); }
     });
-    bindGestures(root);
+    bindGestures(root); bindPull(root);
     PW?.bind(root);
   }
   /* Words from outside (dictation, a native shell) go in at the composer's cursor. */

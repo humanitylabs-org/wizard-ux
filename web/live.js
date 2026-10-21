@@ -176,6 +176,8 @@
    * rises to page 1. The between-walk poll used to re-read ~6 pages (~1 MB) every 15 s;
    * one page carries the same news. The full walk still catches edits that don't bump activity. */
   const LIST_SUPPORT = new Map(), DETAIL = new Map();
+  const LIST_DEADLINE = 30000;
+  const listSignal = () => typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(LIST_DEADLINE) } : {};
   async function fetchSessions(full, agent = '', onFirst = null) {
     const out = []; let snapshot = '', meta = null, resets = 0;
     const overrides = JSON.stringify(listOverrides(agent));
@@ -183,7 +185,8 @@
       const slim = LIST_SUPPORT.get(agent) !== false;
       const q = `${slim ? `view=list&window=archive-50&overrides=${encodeURIComponent(overrides)}&` : ''}limit=100&offset=${offset}&include_children=false${snapshot ? `&snapshot=${encodeURIComponent(snapshot)}` : ''}${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`;
       let p;
-      try { p = await (await req(`/wizard/hermes/api/sessions?${q}`)).json(); }
+      // A read that hangs must not leave Chats looking current: give up after LIST_DEADLINE and say so (offline).
+      try { p = await (await req(`/wizard/hermes/api/sessions?${q}`, listSignal())).json(); }
       catch (e) {
         if (slim && offset === 0 && [400,404].includes(e.status)) { LIST_SUPPORT.set(agent,false); continue; }
         if (offset > 0 && e.status === 409 && resets++ < 1) { offset=0; snapshot=''; out.length=0; continue; }
@@ -205,6 +208,7 @@
     throw new Error('Session window limit reached');
   }
   const FULL_EVERY = 3 * 60 * 1000;
+  const STALE_AFTER = 60 * 1000; // the list polls every 15 s, so a minute without a fresh read is worth saying
   /* ---- agents (Agents MVP): each non-default agent's threads are read from its own list (agent=<id>), always
    * through the owner's own Agent Service. Every thread/run call for such a thread names its agent, so a private
    * agent's #59 seal still refuses id-only reads from anything else.
@@ -524,6 +528,8 @@
       this.loading = (async () => {
         try {
           const started = Date.now();
+          // Coming back to a list that is already old (phone woke, slow server): repaint now so Chats says it is updating.
+          this.loadingAt = started; if (this.at && started - this.at > STALE_AFTER) this.emit();
           const full = !this.fullAt || Date.now() - this.fullAt > FULL_EVERY;
           const side = Promise.all([fetchDispositions(), fetchSeen().catch(() => null)]);
           const apply = (got, deferred, remote) => {
@@ -604,7 +610,7 @@
     },
     // A private agent's thread (by id): its rows carry the lock and its words never enter another agent's context.
     isPrivate(id) { const a = this.agentOf(id), A = AG(); return !!a && !!A && A.isPrivate(A.get(a)); },
-    statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error, cached: this.cached, cachedAt: this.cachedAt, loading: !!this.loading }; },
+    statusFor(agent = '') { return otherAgent(agent) ? (this.agentStatus[agent] || { ok: false, error: '' }) : { ok: this.ok, error: this.error, cached: this.cached, cachedAt: this.cachedAt, loading: !!this.loading, at: this.at || 0 }; },
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
     pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
