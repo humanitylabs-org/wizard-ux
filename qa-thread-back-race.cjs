@@ -1,10 +1,10 @@
 // James's rare thread Back regression. Run the real shell with delayed fixture reads;
 // run exact history bridge source with deferred traversal callbacks (no wall-clock sleeps).
 // All writes intercepted. Browser execution belongs on Thales.
-let pw; try { pw = require('playwright-core'); } catch (_) { pw = require('/home/telos/node_modules/playwright'); }
+let pw; try { pw = require('playwright-core'); } catch (_) { pw = require(process.env.PW || 'playwright'); }
 const { chromium } = pw, fs = require('fs'), path = require('path'), vm = require('vm');
 const WEB = process.env.QA_WEB_DIR || __dirname;
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_ = process.argv[2] || 'http://127.0.0.1:9440/wizard-os-home/';
 let pass=0, fail=0; const ok=(yes,label,data)=>{if(yes)pass++;else fail++;console.log(yes?'PASS':'FAIL',label,yes?'':JSON.stringify(data));};
 const source=fs.readFileSync(path.join(WEB,'web/app.js'),'utf8');
 function fn(name) { const start=source.indexOf('  function '+name+'('); let at=source.indexOf('{',start), depth=0, quote='',escape=false,line=false,block=false; for(let i=at;i<source.length;i++){const c=source[i],next=source[i+1];if(line){if(c==='\n')line=false;continue;}if(block){if(c==='*'&&next==='/'){block=false;i++;}continue;}if(quote){if(escape)escape=false;else if(c==='\\')escape=true;else if(c===quote)quote='';continue;}if(c==='/'&&next==='/'){line=true;i++;continue;}if(c==='/'&&next==='*'){block=true;i++;continue;}if(c==='"'||c==="'"||c==='`'){quote=c;continue;}if(c==='{')depth++;if(c==='}'&&!--depth)return source.slice(start,i+1);}throw Error('extract '+name); }
@@ -39,7 +39,7 @@ await ctx.route('**/*',async r=>{const q=r.request(),u=new URL(q.url());const js
  const mm=u.pathname.match(/^\/wizard\/hermes\/api\/sessions\/(qa_race_[abc])\/messages$/);if(mm){const sid=mm[1];requested.push(sid);if(sid==='qa_race_a'&&gateA)await new Promise(resolve=>pending.set(sid,resolve));return json({data:[{id:1,role:'user',content:'Read '+sid,timestamp:now-60,session_id:sid},{id:2,role:'assistant',content:'Transcript '+sid+(sid==='qa_race_c'?' [Preview](/qa-back-preview/)':''),timestamp:now-30,session_id:sid}],pagination:{limit:500,offset:0,returned:2}});}
  const sm=u.pathname.match(/^\/wizard\/hermes\/api\/sessions\/(qa_race_[abc])$/);if(sm)return json({session:sessions.find(x=>x.id===sm[1])});
  return r.continue();});
-const p=await ctx.newPage();p.on('pageerror',e=>errors.push(String(e)));await p.addInitScript(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.rvCoached','true');});
+const p=await ctx.newPage();p.on('pageerror',e=>errors.push(String(e)));await p.addInitScript(()=>{try{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.rvCoached','true');}catch(_){} });
 try {
  await p.goto(URL_,{waitUntil:'domcontentloaded'});await p.waitForFunction(()=>window.__wos?.live?.session('qa_race_a'),null,{timeout:45000});
  const state=()=>p.evaluate(()=>{const w=Object.values(__wos.wins).find(w=>w.app==='chats'),c=__wos.chatState(w.id);return {thread:w.thread,loading:!!c.loading,loadedFor:c.loadedFor,turns:JSON.stringify(c.turns),idx:__wos.idx,text:document.querySelector(`[data-chats="${w.id}"]`)?.textContent};});
