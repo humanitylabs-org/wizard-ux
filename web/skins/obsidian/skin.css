@@ -311,3 +311,6 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .new-desk.kinds { paddin
 
 /* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .launcher { top: calc(30px + var(--safe-t)); bottom: calc(var(--pill-top, 90px) + 8px); }
+
+/* System apps (fill a Wizard OS parking spot): first in their group, with a second ring around the icon. */
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .lapp-sys .ic { outline: 1.5px solid color-mix(in srgb, var(--ink) 55%, transparent); outline-offset: -5px; }

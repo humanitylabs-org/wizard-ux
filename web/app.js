@@ -1312,25 +1312,31 @@
   const oursSkin = () => ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '');
   const CONNECTOR_IDS = new Set(['wizard-chatgpt', 'wizard-claude', 'wizard-tinfoil', 'wizard-cloudflare']);
   const isConnector = a => CONNECTOR_IDS.has(a.id) || /^(connect|sign in to)\b/i.test(a.desc || '');
+  /* System apps: the defaults Wizard OS ships for its parking spots (wizard-os docs/SYSTEM_APPS.md): files,
+   * notifications, transcription, browser, secrets, the main agent and the AI connections. They lead their group
+   * and wear a ring that reads as "this fills a spot"; everything else follows alphabetically. */
+  const SYSTEM_IDS = new Set(['wizard', 'files', 'notifications', 'transcriber', 'browser', 'secret-drop', 'wizard-chatgpt', 'wizard-claude']);
+  const isSystem = a => SYSTEM_IDS.has(a.id) || a.system === true;
   function appKinds() {
-    const byName = (x, y) => x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
+    const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
     const mine = APPS.filter(a => !['app-store', 'system', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && ['wizard', 'chats', 'usuals', 'view'].includes(a.kind));
     const conns = mine.filter(a => a.kind === 'wizard' && isConnector(a));
     // Agents: each agent's chats (main agent first, as registered) plus the Agents app that manages them.
-    const agents = [...mine.filter(a => a.kind === 'chats'), ...(APP.agents ? [APP.agents] : [])];
+    const agents = [...mine.filter(a => a.kind === 'chats'), ...(APP.agents ? [APP.agents] : [])].sort((x, y) => isSystem(y) - isSystem(x));
     const apps = mine.filter(a => a.kind !== 'chats' && !conns.includes(a)).sort(byName);
     const back = (window.WizCore.backendApps?.() || []).filter(a => !APP[a.id]);
     return { apps, agents, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
   }
-  const backTile = a => `<button class="lapp lapp-back" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
-  const kindTile = a => a.url || a.kind !== 'wizard' ? appTile(a) : backTile(a);
+  const sysMark = html => html.replace('class="lapp', 'class="lapp lapp-sys').replace('<span class="nm">', '<span class="nm" title="System app">');
+  const backTile = a => `<button class="lapp lapp-back${isSystem(a) ? ' lapp-sys' : ''}" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
+  const kindTile = a => a.url || a.kind !== 'wizard' ? (isSystem(a) ? sysMark(appTile(a)) : appTile(a)) : backTile(a);
   const getApps = '<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button>';
   function kindGroups(order) {
     const K = appKinds();
     const G = {
-      apps: `<div class="lgroup kg-apps"><h4>Apps</h4><div class="lgrid">${K.apps.map(appTile).join('')}${getApps}</div></div>`,
+      apps: `<div class="lgroup kg-apps"><h4>Apps</h4><div class="lgrid">${K.apps.map(kindTile).join('')}${getApps}</div></div>`,
       wiz: K.wiz.length ? `<div class="lgroup kg-wiz"><h4>Wizard apps</h4><div class="lgrid">${K.wiz.map(backTile).join('')}</div></div>` : '',
-      agents: K.agents.length ? `<div class="lgroup kg-agents"><h4>Agents</h4><div class="lgrid">${K.agents.map(appTile).join('')}</div></div>` : '',
+      agents: K.agents.length ? `<div class="lgroup kg-agents"><h4>Agents</h4><div class="lgrid">${K.agents.map(kindTile).join('')}</div></div>` : '',
       conns: K.conns.length ? `<div class="lgroup kg-conns"><h4>Connectors</h4><div class="lgrid">${K.conns.map(kindTile).join('')}</div></div>` : '',
     };
     return order.map(k => G[k]).join('');
