@@ -1085,8 +1085,12 @@ window.WizCore.chats = function createChats(H) {
     const hadFocus = el.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA';
     // Live status/model paints must not replace a sealed dictation target in this same composer.
     // Navigation to another thread still destroys it: never transfer a seal to the new draft.
-    const keepTa = oldTa && oldTa === H.dictationField?.() && el.dataset.draftFor === dkey ? oldTa : null;
-    const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd];
+    // Same draft = same textarea: live repaints (new steps in a working thread) reuse the owner's field so the caret,
+    // selection, undo history and scroll stay put. James, 21 Oct 2026: typing at the bottom of a long reply in a working
+    // thread, every repaint threw the box back to the top. Navigation to another thread still gets a fresh field.
+    const keepTa = oldTa && el.dataset.draftFor === dkey ? oldTa : null;
+    const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd, keepTa.selectionDirection];
+    const keepScroll = keepTa ? keepTa.scrollTop : 0;
     const canStop = working && !!s?.runId && s.status !== 'stopping';
     const rpl = isNew && !TAG ? KIT.drafts.get(dkey).reply : null; // a Notifications Reply waiting in this New chat
     PW?.ensureModels();
@@ -1116,8 +1120,10 @@ window.WizCore.chats = function createChats(H) {
     else nb.scrollTop = atBottom ? nb.scrollHeight : (boxTop ?? nb.scrollHeight);
     // Photos load after layout: keep a thread that was at the bottom pinned to the bottom.
     if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
-    if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
+    if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus({ preventScroll: true }); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
     growTa(el.querySelector('textarea'));
+    // Re-attaching a field resets its scroll to the top; put the owner's view back where it was.
+    if (keepTa) keepTa.scrollTop = keepScroll;
     // Desktop renders before revealing its thread pane. Measure once it is visible,
     // retaining a usable first layout even before the user types or a live repaint runs.
     const field = el.querySelector('textarea');
@@ -1600,9 +1606,11 @@ window.WizCore.chats = function createChats(H) {
   }
   function growTa(ta) {
     if (!ta) return;
+    const top = ta.scrollTop; // collapsing to 'auto' to measure clamps the scroll; keep the owner's view
     ta.style.height = 'auto';
     if (ta.getClientRects().length && ta.clientWidth) ta.style.height = Math.min(Math.max(42, ta.scrollHeight + 2), 140) + 'px';
     fitLabel(ta);
+    if (ta.scrollTop !== top) ta.scrollTop = top;
   }
   // While a thread is on screen AND James is at that screen, new replies count as read (same rule as Wizard).
   // "At the screen" = the page was opened, brought to the front, touched, clicked, typed in or scrolled within

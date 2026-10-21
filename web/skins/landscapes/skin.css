@@ -212,33 +212,6 @@ html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .
 html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .wbar .wtool-pick { height: 28px; font-size: 12.5px; }
 html[data-skin="landscapes"][data-shell="phone"][data-skin-frame="borderless"] .shield { top: 36px; }
 
-/* Miguel's skins: the "Update" tap explodes over the screen, then holds "Updating Wizard OS..." until the new build
- * paints (core/web-update.js adds .wos-burst). Over the top on purpose. */
-html[data-skin="landscapes"] .wos-burst { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; overflow: hidden; pointer-events: all;
-  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--ink, #fff) 18%, transparent) 0, color-mix(in srgb, var(--bg, #000) 88%, transparent) 55%);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4); backdrop-filter: blur(14px) saturate(1.4); animation: wb-dim 380ms ease-out both; }
-html[data-skin="landscapes"] .wos-burst > * { position: absolute; left: 50%; top: 50%; }
-html[data-skin="landscapes"] .wos-burst .wb-flash { width: 10px; height: 10px; margin: -5px; border-radius: 50%; background: var(--ink, #fff);
-  box-shadow: 0 0 120px 70px var(--violet-2, var(--ink, #fff)); animation: wb-flash 700ms cubic-bezier(.15,.8,.2,1) both; }
-html[data-skin="landscapes"] .wos-burst .wb-ring { width: 20px; height: 20px; margin: -10px; border-radius: 50%; border: 5px solid var(--ink, #fff); box-shadow: 0 0 30px var(--violet-2, var(--ink, #fff));
-  animation: wb-ring 900ms cubic-bezier(.12,.75,.25,1) both; }
-html[data-skin="landscapes"] .wos-burst .wb-ring.two { border-color: var(--violet-2, var(--ink)); animation-delay: 120ms; border-width: 2px; }
-html[data-skin="landscapes"] .wos-burst .wb-ring.three { animation-delay: 240ms; border-width: 1px; opacity: .7; }
-html[data-skin="landscapes"] .wos-burst .wb-sparks i { position: absolute; width: var(--w, 4px); height: var(--h, 26px); margin: calc(var(--h, 26px) / -2) calc(var(--w, 4px) / -2); box-shadow: 0 0 10px var(--violet-2, var(--ink, #fff)); border-radius: 4px; background: linear-gradient(var(--ink, #fff), transparent);
-  transform: rotate(var(--a)) translateY(0); animation: wb-spark 820ms cubic-bezier(.1,.7,.2,1) var(--t) both; }
-html[data-skin="landscapes"] .wos-burst .wb-core { width: 64px; height: 64px; margin: -32px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--ink, #fff) 25%, transparent);
-  border-top-color: var(--ink, #fff); animation: wb-in 260ms 160ms both, wb-spin 800ms linear 160ms infinite; }
-html[data-skin="landscapes"] .wos-burst .wb-text { transform: translate(-50%, 54px); white-space: nowrap; font: 750 22px/1.2 inherit; letter-spacing: .01em; color: var(--ink, #fff);
-  text-shadow: 0 0 18px var(--violet-2, var(--ink, #fff)), 0 2px 10px color-mix(in srgb, var(--bg, #000) 70%, transparent); animation: wb-in 280ms 180ms both; }
-html[data-skin="landscapes"] .wos-burst .wb-text em { font-style: normal; animation: wb-dot 1.1s infinite; }
-html[data-skin="landscapes"] .wos-burst .wb-text em:nth-child(2) { animation-delay: .18s; } html[data-skin="landscapes"] .wos-burst .wb-text em:nth-child(3) { animation-delay: .36s; }
-@keyframes wb-dim { from { opacity: 0; } to { opacity: 1; } }
-@keyframes wb-flash { 0% { transform: scale(0); opacity: 1; } 45% { transform: scale(24); opacity: .95; } 100% { transform: scale(60); opacity: 0; } }
-@keyframes wb-ring { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(90); opacity: 0; } }
-@keyframes wb-spark { 0% { transform: rotate(var(--a)) translateY(0) scaleY(.3); opacity: 1; } 70% { opacity: 1; } 100% { transform: rotate(var(--a)) translateY(calc(var(--d) * -1)) scaleY(1.6); opacity: 0; } }
-@keyframes wb-in { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
-@keyframes wb-spin { to { rotate: 360deg; } }
-@keyframes wb-dot { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
 
 /* App selector, Miguel's look: names in full ink at a readable size, section titles one step brighter, Get apps
  * drawn as a tile like its neighbours (hairline edge) instead of an unbordered box. */
@@ -275,3 +248,16 @@ html[data-skin="landscapes"] .sgi.sgb-tinfoil { --sgb: url("/wizard-os-home/bran
 html[data-skin="landscapes"] .sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/apps/hermes.svg"); }
 html[data-skin="landscapes"] .sgi:is(.sgb-cloudflare, .sgb-claude) { background: var(--sgb) center / contain no-repeat !important; }
 html[data-skin="landscapes"] .sgi:is(.sgb-chatgpt, .sgb-tinfoil, .sgb-hermes) { background: var(--ink) !important; }
+
+/* Miguel 21 Oct: on bright photos the launcher, its tiles and the dock let too much scenery through. Keep the frost, raise the fill. */
+html[data-skin="landscapes"] .launcher { background: linear-gradient(180deg, rgba(24, 21, 34, .9), rgba(12, 10, 18, .92)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+html[data-skin="landscapes"] .launcher .lapp .ic.sgt { background-color: #0f0c17; border-color: color-mix(in oklab, var(--c) 55%, rgba(255, 255, 255, .14)); }
+html[data-skin="landscapes"] .launcher .lapp .ic.sgt .sgi { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)) brightness(1.12); }
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, var(--bg) 92%, transparent); }
+
+/* Miguel 21 Oct: the New desk app page sat straight on the photo; names vanished over snow and rocks. Same frosted panel as the launcher. */
+html[data-skin="landscapes"] .new-desk { height: auto; min-height: 0; align-self: start; margin: 10px; padding: 14px 12px 6px; border-radius: 24px; background: linear-gradient(180deg, rgba(24, 21, 34, .76), rgba(12, 10, 18, .82)); border: 1px solid rgba(255, 255, 255, .1); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 18px 40px rgba(0, 0, 0, .3); -webkit-backdrop-filter: blur(22px) saturate(1.25); backdrop-filter: blur(22px) saturate(1.25); }
+html[data-skin="landscapes"] .new-desk .nd-head span { color: var(--ink-2); }
+html[data-skin="landscapes"] .new-desk .lgroup h4 { color: var(--ink-2); }
+html[data-skin="landscapes"] .new-desk .lapp .nm { color: var(--ink); font-size: 12px; font-weight: 600; letter-spacing: -.01em; text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
+html[data-skin="landscapes"] .new-desk .lapp .ic.sgt { background-color: #0f0c17; border-color: color-mix(in oklab, var(--c) 55%, rgba(255, 255, 255, .14)); }
