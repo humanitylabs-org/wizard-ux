@@ -130,6 +130,8 @@
     "core/appearance-host.js",
     "core/apps.js",
     "core/base.css",
+    "core/boomerang.css",
+    "core/boomerang.js",
     "core/bound-view.js",
     "core/brand.css",
     "core/brand.js",
@@ -220,6 +222,13 @@
         "phone"
       ],
       "note": "Android-only background playback transport; no separate common Music renderer."
+    },
+    "core/boomerang.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared durable reminder UI and Agent Service client"
     },
     "core/app-capture.js": {
       "loadedBy": [
