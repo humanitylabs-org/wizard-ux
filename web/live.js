@@ -121,14 +121,14 @@
   function recordFor(s, seenAt) {
     const a = assistantAt(s);
     return { ...(typeof s.messageCount === 'number' ? { messageCount: s.messageCount } : {}), ...(s.status && s.status !== 'submitting' ? { status: s.status } : {}),
-      updatedAt: s.updatedAt, previewFingerprint: fingerprint(s.preview), ...(a ? { assistantActivityAt: a } : {}), seenAt };
+      updatedAt: s.updatedAt, previewFingerprint: s.agent && otherAgent(s.agent) ? 'private' : fingerprint(s.preview), ...(a ? { assistantActivityAt: a } : {}), seenAt };
   }
   function hasNew(s, state) {
     if (!state) return false;
     const r = state.threads[seenKeyOf(s)]; if (!r) return true;
     const cur = Date.parse(assistantAt(s) ?? ''), seenA = Date.parse(r.assistantActivityAt ?? '');
     const comparable = typeof s.messageCount === 'number' && typeof r.messageCount === 'number';
-    const previewChanged = !comparable && fingerprint(s.preview) !== r.previewFingerprint;
+    const previewChanged = !otherAgent(s.agent) && !comparable && fingerprint(s.preview) !== r.previewFingerprint;
     const countUp = comparable && s.messageCount > r.messageCount;
     const becameReady = !!s.status && s.status !== r.status && READY_OR_ATTENTION.has(s.status) && (!r.status || !READY_OR_ATTENTION.has(r.status));
     if (isFinite(cur)) return isFinite(seenA) ? cur > seenA : cur > r.seenAt;
@@ -608,7 +608,7 @@
       let migrated = false, state = merge(readLocal(),this.seen) || {initializedAt:Date.now(),threads:{}};
       for (const s of Object.values(this.agentSessions).flat()) {
         const old = AGENT_SEEN.threads[keyOf(s)];
-        if (old) { state.threads[seenKeyOf(s)] = later(state.threads[seenKeyOf(s)],old); delete AGENT_SEEN.threads[keyOf(s)]; migrated=true; }
+        if (old) { state.threads[seenKeyOf(s)] = {...later(state.threads[seenKeyOf(s)],old),previewFingerprint:'private'}; delete AGENT_SEEN.threads[keyOf(s)]; migrated=true; }
       }
       if (migrated) {
         this.seen=state;writeLocal(state);

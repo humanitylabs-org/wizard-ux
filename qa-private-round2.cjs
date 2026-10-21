@@ -48,7 +48,7 @@ try{
  await phone.evaluate(id=>WizLive.markSeen([id]),SID);
  await phone.waitForFunction(async key=>{const r=await fetch('/wizard/thread-seen');return !!(await r.json()).state?.threads?.[key]},KEY);
  const receipt=await phone.evaluate(async key=>(await(await fetch('/wizard/thread-seen')).json()).state.threads[key],KEY);
- ok(receipt.agent_id==='private'&&receipt.session_id===SID&&!('content' in receipt),'server persists only qualified private receipt metadata');
+ ok(receipt.agent_id==='private'&&receipt.session_id===SID&&receipt.previewFingerprint==='private'&&!('content' in receipt),'server persists only qualified private receipt metadata');
  await desktop.evaluate(async()=>{await WizLive.refresh(true)});
  ok(await desktop.evaluate(({id,at})=>!WizLive.isNew(WizLive.session(id))&&WizLive.seenRecord(WizLive.session(id))?.seenAt===at,{id:SID,at:receipt.seenAt}),'second independent browser context becomes read from exact server receipt');
  const d=pages[1];await d.p.goto(BASE+'agents/index.html');await d.p.locator('[data-open="private"]').click();
@@ -61,7 +61,7 @@ try{
  for(const {p,mobile} of pages){
   await p.goto(BASE+(mobile?'':'desktop.html'));await p.waitForFunction(()=>WosAgents.ready);
   await p.evaluate(mobile=>{const H=mobile?__wos:__wux;H.openApp(WizCore.apps(mobile?'mobile':'desktop').APPS.find(a=>a.id==='agents'));},mobile);
-  await p.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.contentDocument?.querySelector('[data-open="private"]')));
+  await p.locator('iframe[src*="agents"]').first().waitFor({state:'attached'});
   const frame=p.frames().find(f=>/\/agents\//.test(f.url()));await frame.locator('[data-open="private"]').click();
   for(const skin of ['nebula','grove']){
    await p.evaluate(s=>WosSkin.set(s),skin);await p.waitForTimeout(800);
