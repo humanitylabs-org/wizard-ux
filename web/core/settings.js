@@ -18,7 +18,7 @@
     { id: 'about', title: 'About & updates', icon: '◇' },
   ];
   const featurePages = { look: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', 'photos-backup': 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
-  const pageOf = f => PAGES.some(p => p.id === f?.page) ? f.page : featurePages[f?.id] || 'about';
+  const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
   const chatsHost = () => window.WizChatsHost;
   const chatsName = id => id === 'wizard-chats' ? 'Wizard Chats' : chatsHost()?.installed().find(a => a.id === id)?.name || id;
   const recovered = () => window.WosCancelled?.list?.() || [];

@@ -964,8 +964,8 @@
     openThread: id => { closeSettings(); openThread(id); },
     editUnsent: it => { closeSettings(); editUnsent(it); },
     openLink: (url, title) => { closeSettings(); const a = appAt(url); return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }); },
-    openStore: id => { closeSettings(); const a = APP['app-store']; if (a) openApp(id ? { ...a, url: '/wizard-os-home/store/index.html?app=' + encodeURIComponent(id) } : a); },
-    chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; CHATS.renderChats(w); syncChatsPane(w.id); } save(); },
+    openStore: id => { closeSettings(); newWin({ app: 'frame', appId: 'app-store', url: '/wizard-os-home/store/index.html' + (id ? '?app=' + encodeURIComponent(id) : '') }); },
+    chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; CHATS.renderChats(w); const list = winEl(w.id)?.querySelector(`[data-chats="${w.id}::list"]`); if (list) CHATS.renderChatList(listWin(w.id), list); syncChatsPane(w.id); } save(); },
     openSub: id => {
       closeSettings(); settingsReturn = id;
       if (id === 'files') openFiles();

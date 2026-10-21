@@ -63,7 +63,7 @@
   color: var(--wz-text);
 }
 .st-root { background: transparent; }
-.st-root button, .st-root summary { min-height: 48px; min-width: 48px; }
+.st-root[data-settings-root] button:not(.st-close), .st-root summary { min-height: 48px; min-width: 48px; }
 .st-root [hidden] { display: none !important; }
 .st-root .st-inner { max-inline-size: none; }
 .st-category { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 68px; padding: 8px 10px; border: 1px solid transparent; border-bottom-color: var(--wz-border); text-align: left; color: var(--wz-text); background: transparent; }
@@ -102,3 +102,5 @@
 @media (max-width: 700px) {
   .st-desktop { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
 }
+
+.st-title:focus, .st-page-head h3:focus { outline: none; }

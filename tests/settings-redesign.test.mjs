@@ -40,6 +40,7 @@ test('registry page, fallback and every historical alias route to their owning p
     assert.equal(h.s.WosSettings.route(alias, h.view.focus), true); assert.equal(h.view.page, page, alias);
   }
   assert.equal(h.s.WosSettings.route('unknown', h.view.focus), false);
+  assert.equal(h.s.WosSettings.pageOf({ id: 'look', page: 'typo' }), 'about', 'invalid explicit pages never silently use a legacy mapping');
   h.view.focus('unmapped'); assert.match(h.root.innerHTML, /Future/);
 });
 test('attention is conditional, counts real stores and routes each item; recovery subtitle deduplicates custody', () => {
