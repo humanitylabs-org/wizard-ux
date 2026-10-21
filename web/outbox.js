@@ -656,7 +656,7 @@
       // Re-check device storage first: a recovery that clears quarantine makes this an ordinary delete.
       if (quarantine.has(id) && !recovered) await load().catch(() => {});
       const it = items.get(id); removeErrors.delete(id);
-      if (!it) return true; // already gone
+      if (!it) { removeErrors.set(id, 'not a recording this page holds'); return false; } // never claim an unknown id
       // A recording with nothing left to deliver: a sent message's leftover audio, or a take with no delivery intent.
       const inert = it.state === 'sent' || (['capture', 'dictation'].includes(it.kind) && !it.deliveryRequested && !it.body && !it.steerBody && !it.steerDispatch);
       // Busy states only block while work is really running in this page; a state left over from an interrupted
