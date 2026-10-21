@@ -97,6 +97,9 @@
   }
   async function persist(it) {
     if (quarantine.has(it.id)) return it;
+    // A live recording rewrites its audio every second. Once it is safely stored, those rewrites change nothing
+    // anyone shows, so they must not repaint every open chat (the screen looked like it kept refreshing).
+    const quiet = it.state === 'capturing' && it.durable === true && !it.storageError;
     const copy = { ...it }; delete copy.durable; delete copy.storageError;
     try {
       await open(); await tx('readwrite', s => s.put(copy));
@@ -112,7 +115,8 @@
         it.durable = true;
       } catch (_) { /* Keep the entire item and Blob in RAM; the notice stays until custody is durable. */ }
     }
-    emit(); return it;
+    if (!(quiet && it.durable === true && !it.storageError)) emit();
+    return it;
   }
   const localCompletions = new Set();
   function put(it) {
