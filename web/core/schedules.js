@@ -94,7 +94,13 @@
     const s = state(ctx);
     return `<div class="st-group sc-group"><div class="st-actions">${button('new', 'New schedule', '', s.busy ? 'disabled' : '')}${button('import', 'Import from Hermes', '', s.busy ? 'disabled' : '')}</div>${error ? `<p class="sc-error" role="alert">${esc(error)}</p>${button('reload', 'Try again')}` : ''}${jobs?.length ? jobs.map(j => row(j, ctx)).join('') : '<p class="st-empty">No schedules yet.</p>'}${s.error && !s.sheet ? `<p class="sc-error" role="alert">${esc(s.error)}</p>` : ''}${sheetHtml(ctx)}</div>`;
   }
-  function focus(ctx, selector) { requestAnimationFrame(() => ctx.root?.querySelector(selector)?.focus({ preventScroll: true })); }
+  function focus(ctx, selector) { requestAnimationFrame(() => {
+    const target = ctx.root?.querySelector(selector), active = document.activeElement;
+    // A delayed initial focus must not steal the next keystroke from a field
+    // the owner has already reached (or a native keyboard has focused).
+    if (active && active !== target && active.closest?.('.sc-sheet')) return;
+    target?.focus({ preventScroll: true });
+  }); }
   function close(ctx) {
     const s = state(ctx); if (!s.sheet) return false;
     const opener = s.sheet.opener || 'new'; s.sheet = null; s.error = ''; ctx.render(); focus(ctx, `[data-sc="${opener}"]`); return true;
@@ -134,7 +140,9 @@
         const body = { name: d.name.trim(), when: { [d.kind]: d.kind === 'every' ? Number(timing) : timing }, prompt: d.prompt, thread: d.thread || null };
         // PATCH only edited fields: retain model, agent, skill, timezone and enabled.
         if (!d.id) Object.assign(body, { agent: 'main', enabled: true });
-        await request(d.id ? '/' + encodeURIComponent(d.id) : '', d.id ? 'PATCH' : 'POST', body);
+        const saved = await request(d.id ? '/' + encodeURIComponent(d.id) : '', d.id ? 'PATCH' : 'POST', body);
+        // If readback fails, retry edits this created job instead of POSTing a copy.
+        if (!d.id && saved.schedule?.id) d.id = saved.schedule.id;
         await readback(); if (s.sheet === sh) close(ctx);
       }); return true;
     }
@@ -152,6 +160,6 @@
   }
   window.WosSchedules = { load, whenText, get available() { return !unavailable && (!!jobs || !!error); } };
   window.WosSettings?.register({ id: 'schedules', page: 'schedules', aliases: ['schedules'], available: () => window.WosSchedules.available,
-    html, act, input, back: close, leave(ctx) { state(ctx).sheet = null; state(ctx).error = ''; } });
+    html, act, input, back: close, enter: load, deferRefresh: ctx => !!state(ctx).sheet, leave(ctx) { state(ctx).sheet = null; state(ctx).error = ''; } });
   load();
 })();

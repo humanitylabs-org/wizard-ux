@@ -11,6 +11,7 @@ export function schedulerFixture() {
     handle(path, method = 'GET', body = {}) {
       calls.push({ path, method, body });
       if (this.missing) return { status: 404, body: { error: 'Not found' } };
+      if (this.failReads && method === 'GET') return { status: 503, body: { error: 'Read unavailable' } };
       if (this.fail && method !== 'GET') return { status: 503, body: { error: this.fail } };
       const suffix = path.slice('/wizard/v1/schedules'.length);
       const out = (body, status = 200) => ({ status, body });

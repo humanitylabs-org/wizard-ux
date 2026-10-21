@@ -9,7 +9,8 @@
 .sc-chat button { color: var(--wz-accent); background: transparent; padding: 0; text-align: left; text-decoration: underline; overflow-wrap: anywhere; max-width: 100%; }
 .sc-last { color: var(--wz-text-muted); margin: 6px 0; font-size: 12px; }
 .sc-scrim { align-items: end; }
-.sc-sheet { width: min(520px, 100%); max-height: calc(100dvh - 40px); overflow-y: auto; overscroll-behavior: contain; }
+.sc-sheet { width: min(520px, 100%); max-height: 100%; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; }
+.sc-sheet > .st-actions { position: sticky; bottom: -20px; margin: 12px -20px -20px; padding: 12px 20px 20px; background: linear-gradient(var(--wz-overlay), var(--wz-overlay)), var(--wz-base); }
 .sc-sheet label { display: grid; gap: 6px; font-size: 14px; color: var(--wz-text-secondary); margin: 12px 0; }
 .sc-sheet input, .sc-sheet textarea, .sc-sheet select { min-width: 0; width: 100%; box-sizing: border-box; border: 1px solid var(--wz-border); border-radius: 10px; padding: 12px; background: var(--wz-surface); color: var(--wz-text); font: inherit; min-height: 48px; }
 .sc-sheet option { background: var(--wz-base); color: var(--wz-text); }

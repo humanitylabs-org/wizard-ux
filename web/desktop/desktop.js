@@ -1339,7 +1339,7 @@
     if (window.WosResources?.back()) return 'resources';
     if (closeUsage()) return 'usage';
     if (settingsReturn === 'files') { const nested = CHATS.closeOverlay(); if (nested) { returnToSettings(); return nested; } settingsReturn = ''; }
-    if (setEl && !setEl.hidden) { closeSettings(); return 'settings'; }
+    if (setEl && !setEl.hidden) { if (settingsView.back()) return 'settings-page'; closeSettings(); return 'settings'; }
     if (!ib.hidden) { closeInbox(); return 'inbox'; }
     const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
     if (window.WosSkinFrame?.back()) return 'skin-controls';
