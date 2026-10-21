@@ -289,3 +289,19 @@ html[data-skin^="obsidian"] .sgi.sgb-tinfoil { --sgb: url("/wizard-os-home/brand
 html[data-skin^="obsidian"] .sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/apps/hermes.svg"); }
 html[data-skin^="obsidian"] .sgi:is(.sgb-cloudflare, .sgb-claude) { background: var(--sgb) center / contain no-repeat !important; }
 html[data-skin^="obsidian"] .sgi:is(.sgb-chatgpt, .sgb-tinfoil, .sgb-hermes) { background: var(--ink) !important; }
+
+/* Dock fit (Miguel, 21 Oct): with many desks open, each side holds at most Home + two neighbours on the left and two
+ * neighbours + New on the right, so nothing squeezes under the orb or past the pill's ends. A dot marks hidden desks. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { gap: 12px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { gap: 8px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.left { padding-left: 8px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.right { padding-right: 8px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot { width: 32px; height: 32px; flex: 0 0 32px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { width: 30px; height: 30px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL > .ddot[data-goto]:not(.dhome):nth-last-child(n+3) { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR > .ddot[data-goto]:nth-child(n+3) { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL > .dhome { order: -1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR > .dplus { order: 1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3)), #dotsR:has(> .ddot[data-goto]:nth-child(3))) > .dmore { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3))::before,
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR:has(> .ddot[data-goto]:nth-child(3))::after { content: ""; flex: 0 0 auto; width: 3px; height: 3px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 40%, transparent); }
