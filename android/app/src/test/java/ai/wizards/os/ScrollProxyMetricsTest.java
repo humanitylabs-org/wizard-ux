@@ -17,6 +17,10 @@ public class ScrollProxyMetricsTest {
         ScrollProxyMetrics middle = ScrollProxyMetrics.from("sc-2", 2000, 100.5, 500, 2.625);
         assertEquals(264, middle.offset); assertTrue(middle.canScroll(1)); assertTrue(middle.canScroll(-1));
         assertEquals(0, ScrollProxyMetrics.from("sc-2", 2000, -25, 500, 2.625).offset);
+        // Browser-clamped fractional bottom (device-pixel boundary) still reports the end.
+        ScrollProxyMetrics clamped = ScrollProxyMetrics.from("sc-3", 3000, 2349.71, 650, 2.625);
+        org.junit.Assert.assertFalse(clamped.canScroll(1));
+        org.junit.Assert.assertTrue(clamped.canScroll(-1));
     }
     @Test public void rejectInvalidOrNonOverflowingMetrics() {
         assertNull(ScrollProxyMetrics.from("", 2000, 0, 500, 2));

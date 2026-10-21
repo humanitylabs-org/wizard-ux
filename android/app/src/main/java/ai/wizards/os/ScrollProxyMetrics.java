@@ -16,7 +16,12 @@ final class ScrollProxyMetrics {
             !Double.isFinite(dpr) || dpr <= 0 || dpr > 8 || client < 80 || height <= client + 2 ||
             height * dpr > Integer.MAX_VALUE) return null;
         int extent = (int)Math.round(client * dpr), range = (int)Math.round(height * dpr);
-        int offset = (int)Math.round(Math.max(0, Math.min(height - client, top)) * dpr);
+        // At fractional DPRs the browser clamps scrollTop to a device-pixel boundary just short
+        // of height-client; snap within one CSS px so the ends report "cannot scroll".
+        double css = Math.max(0, Math.min(height - client, top));
+        if (height - client - css <= 1) css = height - client;
+        else if (css <= 1) css = 0;
+        int offset = css == height - client ? range - extent : (int)Math.round(css * dpr);
         return new ScrollProxyMetrics(key, dpr, range, Math.min(range - extent, offset), extent);
     }
 
