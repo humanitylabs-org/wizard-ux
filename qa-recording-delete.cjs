@@ -43,6 +43,14 @@ async function boot(b) {
     try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.v1', 'true'); } catch (e) {}
     // qa.idb = 'down' (every open of the outbox store fails) | 'once' (only the first open fails) | unset (works).
     const mode = sessionStorage.getItem('qa.idb');
+    if (mode === 'nowrite') {
+      // Device storage reads fine but refuses every write (full disk / quota): puts fail, deletes still work.
+      const realPut = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function (...a) { if (this.name === 'items') throw new DOMException('QA: quota exceeded', 'QuotaExceededError'); return realPut.apply(this, a); };
+      const realSet = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (k, v) { if (String(k).startsWith('wos.outbox.')) throw new DOMException('QA: quota exceeded', 'QuotaExceededError'); return realSet.call(this, k, v); };
+      return;
+    }
     if (!mode) return;
     const real = indexedDB.open.bind(indexedDB);
     let failed = 0;
@@ -123,6 +131,35 @@ const seed = (p, mode, extra = []) => p.evaluate(({ mode, extra }) => {
     ok((await group(n.p)).rows === 2, 'Transient: the deleted take stays gone after reload; the other two remain');
     ok(n.errs.length === 0, 'No page errors (transient)', n.errs.join(' | '));
     await n.ctx.close();
+
+    /* 3. Storage that reads but refuses writes (full device): Delete erases instead; a stuck 'processing' take
+          from an interrupted transcription deletes too; Delete all clears the list in two taps. */
+    const w = await boot(b);
+    await w.p.goto(URL_, { waitUntil: 'load' });
+    await seed(w.p, '');
+    await open(w.p);  // storage works: takes migrate into IndexedDB
+    await w.p.evaluate(async () => { const it = WosOutbox.get('wos-qa-take-2'); it.kind = 'dictation'; it.state = 'processing'; });
+    await w.p.evaluate(() => sessionStorage.setItem('qa.idb', 'nowrite'));
+    await open(w.p);
+    await w.p.evaluate(async () => { const it = WosOutbox.get('wos-qa-take-2'); it.kind = 'dictation'; it.state = 'processing'; });
+    await w.p.evaluate(() => __wos.openSettings('cancelled')); await sleep(600);
+    g = await group(w.p);
+    ok(g && g.rows === 3 && /Delete all/.test(g.text), 'Full storage: three takes and a Delete all button', JSON.stringify(g));
+    if (process.env.QA_SHOT) { await w.p.evaluate(() => document.querySelector('#settingsBody [data-cx-all]')?.scrollIntoView({ block: 'center' })); await sleep(300); await w.p.screenshot({ path: process.env.QA_SHOT }); }
+    await w.p.click('#settingsBody [data-cancelled] .cx-row:nth-of-type(1) [data-cx="delete"]'); await sleep(900);
+    let tt = await toastText(w.p);
+    ok(!/Couldn|not saved/.test(tt) && (await group(w.p)).rows === 2, 'Full storage: Delete still removes the take', tt);
+    await w.p.click('#settingsBody [data-cancelled] [data-cx-all="delete"]'); await sleep(300);
+    ok((await group(w.p)).rows === 2 && /again/.test(await toastText(w.p)), 'Delete all asks for a second tap first', await toastText(w.p));
+    await w.p.click('#settingsBody [data-cancelled] [data-cx-all="delete"]'); await sleep(1500);
+    g = await group(w.p); tt = await toastText(w.p);
+    ok(g && g.rows === 0 && /Deleted 2/.test(tt), 'Delete all removes the rest, including the stuck processing take', tt + ' ' + JSON.stringify(g));
+    await w.p.evaluate(() => sessionStorage.removeItem('qa.idb'));
+    await open(w.p);
+    await w.p.evaluate(() => __wos.openSettings('cancelled')); await sleep(600);
+    ok((await group(w.p)).rows === 0, 'Full storage: nothing comes back after a reload');
+    ok(w.errs.length === 0, 'No page errors (full storage)', w.errs.join(' | '));
+    await w.ctx.close();
   } catch (e) { fail++; console.log('FAIL exception', e.stack || e); }
   await b.close();
   console.log(`${pass}/${pass + fail} passed`);
