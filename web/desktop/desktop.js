@@ -1165,9 +1165,8 @@
         stagedId=staged.id;
         if(staged.durable) {
           try { transcript=String((await window.WizConfig.transcribe(r.blob,{prompt:window.WizConfig.voicePrompt(),signal:AbortSignal.timeout(45000)})).text||'').trim(); } catch(_) {}
-          const cmd=transcript && LOCAL_COMMANDS.parse(transcript,vSnapshot,'auto');
-          const music=/^(music|play_music)$/.test(cmd?.action||''), sid0=stagedId;
-          if(cmd && executeCommand(cmd,transcript,vSnapshot,music?(done=>{if(done)OUTBOX.completeLocal(sid0);}):undefined)) { staged.text=transcript;if(window.WosCommands.completedLocally(cmd,true)) await OUTBOX.completeLocal(stagedId);else await OUTBOX.transition(stagedId,'held','Command accepted · completion unconfirmed; original recording kept');toast('⚡','Command handled on-device',1800);return 'local'; }
+          // Talk-key/tap takes are messages, even when the transcript resembles a command.
+          // Only commandVoice's explicit commandTake path above invokes the shared grammar.
         }
       }
     }

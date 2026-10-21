@@ -85,7 +85,7 @@ const foodWin = p => p.evaluate(() => { const el = document.querySelector('[data
   const NEW = ['Order grab', 'Order food.', 'Hey Wizard, order food please', 'I want to order lunch', 'order dinner from Grab', 'get me some food', 'order takeout'];
   for (const said of NEW) {
     const r0 = (await runs(p)).length, w0 = writes.length;
-    await p.evaluate(s => window.__wos.handleText(s, 'auto'), said); await sleep(500);
+    await p.evaluate(s => window.__wos.handleText(s, 'command'), said); await sleep(500);
     const r = await runs(p);
     ok(r.length === r0 + 1 && r[r.length - 1] === '+new' && writes.length === w0, `"${said}" opens Grab for a new order, nothing to Wizard`, JSON.stringify({ runs: r.slice(r0), writes: writes.slice(w0) }));
   }
@@ -93,12 +93,12 @@ const foodWin = p => p.evaluate(() => { const el = document.querySelector('[data
   { const r0 = (await runs(p)).length; await p.evaluate(() => window.__wos.handleText('order grab', 'command')); await sleep(500); const r = await runs(p); ok(r[r0] === '+new', '"order grab" on a held orb opens Grab too', JSON.stringify(r.slice(r0))); }
 
   // 3. A saved order still runs by name.
-  { const r0 = (await runs(p)).length; await p.evaluate(() => window.__wos.handleText('order my usual kra pao', 'auto')); await sleep(500); const r = await runs(p); ok(r[r0] === 'u1', '"order my usual kra pao" runs the saved order', JSON.stringify(r.slice(r0))); }
+  { const r0 = (await runs(p)).length; await p.evaluate(() => window.__wos.handleText('order my usual kra pao', 'command')); await sleep(500); const r = await runs(p); ok(r[r0] === 'u1', '"order my usual kra pao" runs the saved order', JSON.stringify(r.slice(r0))); }
 
   // 4. Ordinary talk about food is not a spell.
   for (const said of ['what food should I order tonight', 'the grab driver is late', 'order a taxi']) {
     const r0 = (await runs(p)).length;
-    await p.evaluate(s => window.__wos.handleText(s, 'auto'), said); await sleep(500);
+    await p.evaluate(s => window.__wos.handleText(s, 'command'), said); await sleep(500);
     const fw = await foodWin(p);
     ok((await runs(p)).length === r0 && !fw.open, `"${said}" starts nothing and opens nothing`, JSON.stringify(fw));
   }
