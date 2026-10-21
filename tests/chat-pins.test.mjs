@@ -72,6 +72,7 @@ test('both shells load pins before Chats and expose menu plus direct row control
   assert.match(chats, /aria-pressed=/, 'the pin control exposes pressed state');
   assert.match(chats, /Pin chat:|Unpin chat:/, 'the pin control has an action label');
   assert.match(chats, /class="ch-pin-svg"/, 'the control uses a recognizable SVG, not an emoji');
-  assert.match(css, /\.ch-pin-toggle:focus-visible/, 'keyboard focus reveals the control');
+  assert.match(css, /\.ch-pin-toggle \{[^}]*opacity: \.38/s, 'desktop rows keep a subtle visible pin target');
+  assert.match(css, /\.ch-pin-toggle:focus-visible/, 'keyboard focus emphasizes the control');
   assert.match(css, /pointer: coarse/, 'touch layouts keep the control discoverable');
 });
