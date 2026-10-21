@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from qa_paths import required_work_root
 
 SIGNER='3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
-OLD_SHA='ce4068f7dc6194d1bd3b505ede8a3229c0c554ecd165352fa5dedfe3d1eae4c0'
+OLD_SHA='eabed270090c9acc6ead4fb319f97d81ac3dbc9ba3e3d22bdd865879c1af9376'
 
 def digest(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
@@ -41,13 +41,15 @@ def main():
         assert result['status']=='ok' and result['source_revision']==revision
         assert result['source_manifest_sha256']==cfg['manifest_sha256']
         receipt[name]=result
-        totals=dict(tests=0,failures=0,errors=0,skipped=0);math_found=False
+        totals=dict(tests=0,failures=0,errors=0,skipped=0);math_found=False;ring_found=False
         for report in (job/'source/android/app/build/test-results').rglob('TEST-*.xml'):
             root=ET.parse(report).getroot()
             for k in totals:totals[k]+=int(root.attrib.get(k,0))
             if root.attrib.get('name')=='ai.wizards.os.ScrollProxyMetricsTest':
                 assert int(root.attrib['tests'])==3;math_found=True
-        assert totals['tests'] and not totals['failures'] and not totals['errors'] and math_found,totals
+            if root.attrib.get('name')=='ai.wizards.os.ScrollDiagnosticsRingTest':
+                assert int(root.attrib['tests'])==3;ring_found=True
+        assert totals['tests'] and not totals['failures'] and not totals['errors'] and math_found and ring_found,totals
         receipt[name+'_units']=totals;print('PASS '+name+' JUnit '+json.dumps(totals),flush=True)
         artifacts={}
         for a in result['artifacts']:
@@ -57,18 +59,18 @@ def main():
         assert receipt['old_sha256']==OLD_SHA,'previous published APK drift'
         release=build(release_job,'release-build');qa=build(qa_job,'qa-build')
         signed,meta=release['ai.wizards.os']
-        assert meta['aapt2']['version_name']=='0.9.37' and str(meta['aapt2']['version_code'])=='61'
+        assert meta['aapt2']['version_name']=='0.9.38' and str(meta['aapt2']['version_code'])=='62'
         assert meta['signer_sha256']==SIGNER
         debug,_=qa['ai.wizards.os.qa'];test,_=qa['ai.wizards.os.qa.test'];src=qa_job/'source'
         run('qa-path-config',[sys.executable,'-m','unittest','discover','-s',src/'tools','-p','test_qa_paths.py','-v'])
         run('signed-upgrade',[sys.executable,src/'tools/qa_upgrade.py',old_apk,signed])
         run('aosp-scroll-capture',[sys.executable,src/'tools/qa_scroll_capture.py',debug,out/'aosp'])
-        aosp=json.loads((out/'aosp/receipt.json').read_text());checks=aosp.get('checks') or [];assert aosp.get('status')=='ok' and checks and all(c['ok'] for c in checks),aosp
+        aosp=json.loads((out/'aosp/receipt.json').read_text());checks=aosp.get('checks') or [];assert aosp.get('status')=='ok' and len(checks)==28 and all(c['ok'] for c in checks),aosp
         receipt['aosp_scroll_capture']=aosp
         run('native-scroll-proxy',[sys.executable,src/'tools/qa_scroll_proxy.py',debug,test,out/'proxy'])
         proxy=json.loads((out/'proxy/receipt.json').read_text());assert proxy['ok'];receipt['native_proxy']=proxy
         receipt.update(ok=True,artifact=str(signed),sha256=meta['sha256'],signer=meta['signer_sha256'])
-        print('PASS Samsung scroll proxy Thales release gates '+json.dumps({'apk':str(signed),'sha256':meta['sha256'],'version':'0.9.37/61'}),flush=True)
+        print('PASS Samsung scroll proxy Thales release gates '+json.dumps({'apk':str(signed),'sha256':meta['sha256'],'version':'0.9.38/62'}),flush=True)
     finally:
         (out/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
 

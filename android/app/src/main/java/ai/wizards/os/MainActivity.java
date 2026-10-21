@@ -696,13 +696,19 @@ public class MainActivity extends Activity {
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
+        if(!hasFocus)ScrollCaptureDiagnostics.arm("window-focus-lost");
+        ScrollCaptureDiagnostics.record("Activity.onWindowFocusChanged",ScrollCaptureDiagnostics.fields("hasFocus",hasFocus));
+        if(web!=null) {web.recordProxyState();web.refreshScrollProxy();}
         super.onWindowFocusChanged(hasFocus);
+        if(hasFocus)ScrollCaptureDiagnostics.resumed(this);
         if (hasFocus && immersive) applyImmersive(true); // a dialog or the shade can bring the bars back
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        ScrollCaptureDiagnostics.record("Activity.onResume",ScrollCaptureDiagnostics.fields());
+        ScrollCaptureDiagnostics.resumed(this);
         web.onResume();
         ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
         ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
@@ -727,6 +733,16 @@ public class MainActivity extends Activity {
             sideSetupActive = false;
             if (SideButton.assistant(this)) Toast.makeText(this, "Side button is on. Hold it to talk.", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    @Override public void onTopResumedActivityChanged(boolean top) {
+        if(android.os.Build.VERSION.SDK_INT>=29)super.onTopResumedActivityChanged(top);
+        ScrollCaptureDiagnostics.record("Activity.onTopResumedActivityChanged",ScrollCaptureDiagnostics.fields("top",top));
+    }
+    @Override public void onConfigurationChanged(android.content.res.Configuration c) {
+        super.onConfigurationChanged(c);
+        ScrollCaptureDiagnostics.record("Activity.onConfigurationChanged",ScrollCaptureDiagnostics.fields(
+            "orientation",c.orientation,"widthDp",c.screenWidthDp,"heightDp",c.screenHeightDp,"densityDpi",c.densityDpi));
     }
 
     /* ---------------- Side button switch ----------------
@@ -759,6 +775,9 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        ScrollCaptureDiagnostics.arm("activity-pause");
+        ScrollCaptureDiagnostics.record("Activity.onPause",ScrollCaptureDiagnostics.fields());
+        if(web!=null)web.recordProxyState();
         if (this instanceof AppSessionActivity && web != null) web.evaluateJavascript("window.__wosSessionCheckpoint?.()", null);
         if (mizel != null) mizel.setPcmForeground(false);
         // Mid-recording the page must keep running in the background (the floating orb can send/pause/cancel it).

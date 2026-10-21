@@ -99,7 +99,7 @@
   function pushProxy() {
     timer=0;frame=0;sentAt=performance.now();
     const c=proxyCandidate(), b=c?.b;
-    const value=JSON.stringify(b ? {v:1,key:proxyKey,height:b.height,top:b.top,extent:b.h,dpr:b.dpr,vw:b.vw} : {v:1});
+    const value=JSON.stringify(b ? {v:1,key:proxyKey,height:b.height,top:b.top,extent:b.h,dpr:b.dpr,vw:b.vw,reason:'ok'} : {v:1,reason:active?'capture-active':searchReason});
     if(value!==last) { last=value;try {port?.postMessage(value);}catch(_){} }
   }
   function refreshProxy() {

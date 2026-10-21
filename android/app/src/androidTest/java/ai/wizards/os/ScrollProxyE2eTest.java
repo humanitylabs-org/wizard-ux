@@ -49,11 +49,13 @@ public class ScrollProxyE2eTest {
 
     @Test public void realNativeScrollProxyAndSecurity() throws Exception {
         assertTrue("QA build only",BuildConfig.DEBUG);
+        inst.getUiAutomation(); // connect Android's real accessibility service before Chromium starts
         activity=(MainActivity)inst.startActivitySync(new Intent(inst.getTargetContext(),MainActivity.class)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         web=ui(()->find(activity.getWindow().getDecorView()));assertNotNull(web);
         until(()->"true".equals(js("!!window.qaScrollProxyFixture&&!!window.__wosScrollCapture")));
         until(()->ui(()->web.canScrollVertically(1)));
+        ui(()->{ScrollCaptureDiagnostics.arm("qa-probe");web.canScrollVertically(1);return null;});
         assertFalse(ui(()->web.canScrollVertically(-1)));
         double dpr=Double.parseDouble(js("devicePixelRatio"));
         int height=(int)Math.round(Double.parseDouble(js("document.querySelector('.ch-msgs').scrollHeight"))*dpr);
@@ -74,6 +76,36 @@ public class ScrollProxyE2eTest {
         double unchangedTop=top();ui(()->{web.scrollBy(0,0);web.scrollBy(20,0);return null;});
         Thread.sleep(150);assertEquals(unchangedTop,top(),1);
         pass("zero and horizontal-only scrollBy never reset inner offset");
+        android.view.accessibility.AccessibilityNodeInfo host=ui(()->web.createAccessibilityNodeInfo());
+        assertTrue(host.isScrollable());
+        assertTrue((host.getActions() & 4096)!=0);
+        until(()->ui(()->web.getAccessibilityNodeProvider()!=null));
+        ui(()->{
+            ScrollAccessibilityProvider provider=(ScrollAccessibilityProvider)web.getAccessibilityNodeProvider();
+            android.view.accessibility.AccessibilityNodeInfo before=provider.delegate.createAccessibilityNodeInfo(-1);
+            android.view.accessibility.AccessibilityNodeInfo after=provider.createAccessibilityNodeInfo(-1);
+            assertNotNull(before);assertNotNull(after);
+            assertEquals(before.getChildCount(),after.getChildCount());
+            assertEquals(before.getClassName(),after.getClassName());
+            assertTrue(after.isScrollable());
+            assertEquals(before.isAccessibilityFocused(),after.isAccessibilityFocused());
+            return null;
+        });
+        double a11yTop=top();
+        assertTrue(ui(()->web.performAccessibilityAction(4096,null)));
+        until(()->top()>a11yTop+100);
+        pass("host accessibility scroll action moves inner scroller; Chromium provider retained");
+        org.json.JSONArray events=new org.json.JSONObject(ScrollCaptureDiagnostics.snapshot()[0]).getJSONArray("events");
+        boolean sawCan=false,sawBy=false;
+        for(int i=0;i<events.length();i++) {
+            String method=events.getJSONObject(i).getString("method");
+            sawCan|=method.equals("canScrollVertically");sawBy|=method.equals("scrollBy");
+        }
+        assertTrue(sawCan && sawBy);
+        ui(()->{activity.onPause();activity.onResume();return null;});
+        // The Python harness verifies the actual HTTP body and persisted readback, not a log line.
+        until(ScrollCaptureDiagnostics::hasDeliveredForQa);
+        pass("recorder includes native probes and resume schedules private diagnostic upload");
         ui(()->{web.scrollTo(0,Integer.MAX_VALUE);return null;});
         until(()->!ui(()->web.canScrollVertically(1)));
         assertTrue(ui(()->web.canScrollVertically(-1)));
@@ -92,11 +124,11 @@ public class ScrollProxyE2eTest {
         ui(()->{
             ChatScrollCapture capture=new ChatScrollCapture(activity,web);
             for(int i=0;i<55;i++)capture.onScrollCaptureSearch(new CancellationSignal(),r->assertTrue(r.isEmpty()));
-            assertEquals(48,ScrollCaptureDiagnostics.snapshot().length);
-            assertEquals("search empty: flag-secure",ScrollCaptureDiagnostics.snapshot()[47]);
+            assertTrue(ScrollCaptureDiagnostics.RING.size()<=400);
+            assertTrue(ScrollCaptureDiagnostics.snapshot()[0].contains("flag-secure"));
             activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);return null;
         });
-        pass("FLAG_SECURE blocks proxy and AOSP discovery; diagnostics ring capped at 48");
+        pass("FLAG_SECURE blocks proxy and AOSP discovery; diagnostics ring capped at 400");
         js("document.querySelector('.ch-msgs').style.height='650px';document.querySelector('.ch-msgs').innerHTML='<p>Short</p>';true");
         until(()->!ui(()->web.canScrollVertically(1))&&!ui(()->web.canScrollVertically(-1)));
         pass("non-overflowing inner scroller clears native proxy");
@@ -104,7 +136,7 @@ public class ScrollProxyE2eTest {
         ui(()->{new ChatScrollCapture(activity,web).onScrollCaptureSearch(new CancellationSignal(),r->{assertTrue(r.isEmpty());empty.countDown();});return null;});
         assertTrue(empty.await(5,TimeUnit.SECONDS));
         String[] reasons=ScrollCaptureDiagnostics.snapshot();
-        assertTrue(reasons[reasons.length-1].contains("js-not-overflowing"));
+        assertTrue(reasons[0].contains("js-not-overflowing"));
         pass("empty AOSP callback reports precise JS non-overflow reason");
         // Public/untrusted top-level origin cannot activate this native capability.
         ui(()->{web.loadDataWithBaseURL("https://scroll-proxy-untrusted.invalid/",

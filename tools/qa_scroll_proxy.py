@@ -16,6 +16,9 @@ from qa_aa_lib import Emu, BASE, ADB
 APK, TEST_APK, OUT = map(Path, sys.argv[1:4])
 OUT.mkdir(parents=True, exist_ok=True)
 PKG = 'ai.wizards.os.qa'
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+import scroll_diagnostics
+UPLOADS=[]
 FIXTURE = b'''<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <style>html,body{margin:0;overflow:hidden;background:#171020;color:#fff} .ch-msgs{position:absolute;top:50px;left:8px;right:8px;height:calc(100dvh - 140px);overflow-y:auto}p{height:96px}</style>
 <div data-chats="proxy" data-draft-for="proxy-fixture"><div class="ch-msgs"></div></div>
@@ -23,6 +26,24 @@ FIXTURE = b'''<!doctype html><meta name="viewport" content="width=device-width,i
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args): pass
+    def do_POST(self):
+        if self.path != scroll_diagnostics.PATH:
+            self.send_error(404);return
+        if self.headers.get('Origin') != f'http://localhost:{PORT}':
+            self.send_error(403);return
+        try:
+            n=int(self.headers.get('Content-Length','0'))
+            if not 0<n<=scroll_diagnostics.LIMIT:
+                self.send_error(413);return
+            body=self.rfile.read(n)
+            name=scroll_diagnostics.store(body,OUT/'diagnostics')
+            readback=(OUT/'diagnostics'/name).read_bytes()
+            assert readback==body
+            UPLOADS.append(json.loads(readback))
+        except Exception:
+            self.send_error(400);return
+        data=b'{"ok":true}'
+        self.send_response(201);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
     def do_GET(self):
         data = FIXTURE if self.path.startswith('/wizard-os-home/') else b'{}'
         self.send_response(200)
@@ -62,6 +83,13 @@ with lock:
         print(result, flush=True)
         print(log, flush=True)
         check('real native View proxy instrumentation', 'OK (1 test)' in result and 'FAILURES' not in result)
+        methods={e['method'] for u in UPLOADS for e in u['events']}
+        check('resume upload reached private-origin fake server and persisted exact bytes',bool(UPLOADS),len(UPLOADS))
+        check('uploaded record includes native probes and Activity resume',
+              {'canScrollVertically','scrollBy','Activity.onResume'}<=methods,sorted(methods))
+        check('uploaded diagnostics are capped and content-free',bool(UPLOADS) and all(
+            len(u['events'])<=400 and 'Proxy fixture row' not in json.dumps(u) and 'proxy-fixture' not in json.dumps(u)
+            for u in UPLOADS))
         # The native test intentionally visits a foreign page as its final negative case.
         # Fresh process returns to the fixture; hardware Back still cannot leave Wizard.
         em.sx(f'am force-stop {PKG}')

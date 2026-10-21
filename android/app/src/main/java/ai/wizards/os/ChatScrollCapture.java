@@ -109,6 +109,8 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
             Math.min(web.getHeight(), (int)Math.floor((b.optDouble("y")+b.optDouble("h"))*scale)));
     }
     @Override public void onScrollCaptureSearch(CancellationSignal signal, Consumer<Rect> ready) {
+        ScrollCaptureDiagnostics.arm("capture-callback");
+        ScrollCaptureDiagnostics.record("onScrollCaptureSearch",ScrollCaptureDiagnostics.fields());
         String rejected = ineligibleReason();
         if (rejected == null && id != null) rejected = "capture-active";
         if (rejected == null && restoring) rejected = "restoring";
@@ -128,10 +130,14 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
             Rect visible = new Rect();
             if (!web.getLocalVisibleRect(visible) || !visible.contains(bounds)) { p.fail("bounds-outside-local-visible-rect"); return; }
             if (!eligible()) { p.fail("eligibility-changed"); return; }
+            ScrollCaptureDiagnostics.record("search.result",ScrollCaptureDiagnostics.fields(
+                "left",bounds.left,"top",bounds.top,"right",bounds.right,"bottom",bounds.bottom));
             p.finish(() -> ready.accept(new Rect(bounds)));
         });
     }
     @Override public void onScrollCaptureStart(ScrollCaptureSession session, CancellationSignal signal, Runnable ready) {
+        ScrollCaptureDiagnostics.arm("capture-callback");
+        ScrollCaptureDiagnostics.record("onScrollCaptureStart",ScrollCaptureDiagnostics.fields());
         if (!eligible() || bounds == null || restoring) { ready.run(); return; }
         Pending p = new Pending(signal, ready);
         id = UUID.randomUUID().toString(); final String token = id;
@@ -145,6 +151,8 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
     }
     @Override public void onScrollCaptureImageRequest(ScrollCaptureSession session, CancellationSignal signal,
                                                       Rect request, Consumer<Rect> complete) {
+        ScrollCaptureDiagnostics.arm("capture-callback");
+        ScrollCaptureDiagnostics.record("onScrollCaptureImageRequest",ScrollCaptureDiagnostics.fields("left",request.left,"top",request.top,"right",request.right,"bottom",request.bottom,"cancelled",signal.isCanceled()));
         if (!eligible() || id == null || pending != null) { complete.accept(new Rect()); return; }
         Pending p = new Pending(signal, () -> complete.accept(new Rect()));
         final String token = id;
@@ -220,6 +228,8 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
     }
     void abort() { if (pending != null) pending.fail(); restore(null); }
     @Override public void onScrollCaptureEnd(Runnable ready) {
+        ScrollCaptureDiagnostics.arm("capture-callback");
+        ScrollCaptureDiagnostics.record("onScrollCaptureEnd",ScrollCaptureDiagnostics.fields());
         if (pending != null) pending.fail();
         restore(ready);
     }
