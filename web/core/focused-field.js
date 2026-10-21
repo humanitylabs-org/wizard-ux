@@ -96,7 +96,14 @@
       if (!plain && (!el.contains(seal.range.startContainer) || !el.contains(seal.range.endContainer))) return false;
       // Release the mutation guard before our own input, and use the target document's constructors.
       seal.release();
-      if (plain) el.setRangeText(String(text), seal.start, seal.end, 'end');
+      if (plain) {
+        // Spoken words land as words: a space against a neighbouring character (typing at the end of a URL or word).
+        const before = el.value.slice(0, seal.start).slice(-1), after = el.value.slice(seal.end, seal.end + 1);
+        let t = String(text);
+        if (before && !/\s/.test(before) && /^[^\s.,;:!?)]/.test(t)) t = ' ' + t;
+        if (after && !/\s/.test(after) && !/[\s(]$/.test(t)) t = t + ' ';
+        el.setRangeText(t, seal.start, seal.end, 'end');
+      }
       else {
         const r = seal.range; r.deleteContents();
         const node = seal.doc.createTextNode(String(text)); r.insertNode(node); r.setStartAfter(node); r.collapse(true);
