@@ -959,11 +959,13 @@
   document.body.appendChild(setEl);
   let settingsFocus = null, settingsReturn = '';
   const settingsView = window.WosSettings.mount($('#settingsBody'), {
-    outbox: OUTBOX, live: LIVE, ago, toast, visible: () => !setEl.hidden,
+    shell: 'desktop', outbox: OUTBOX, live: LIVE, ago, toast, visible: () => !setEl.hidden,
     helpSub: 'Keyboard shortcuts, desks and Back',
     openThread: id => { closeSettings(); openThread(id); },
     editUnsent: it => { closeSettings(); editUnsent(it); },
     openLink: (url, title) => { closeSettings(); const a = appAt(url); return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }); },
+    openStore: id => { closeSettings(); const a = APP['app-store']; if (a) openApp(id ? { ...a, url: '/wizard-os-home/store/index.html?app=' + encodeURIComponent(id) } : a); },
+    chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; CHATS.renderChats(w); syncChatsPane(w.id); } save(); },
     openSub: id => {
       closeSettings(); settingsReturn = id;
       if (id === 'files') openFiles();

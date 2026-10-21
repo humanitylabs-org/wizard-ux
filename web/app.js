@@ -1198,13 +1198,15 @@
   function unsentRow(it) { return window.WosSettings.unsentRow(it, settingsContext()); }
   let settingsView = null;
   const settingsContext = () => ({ outbox: OUTBOX, live: LIVE, ago, toast,
-    haptic: vib, visible: () => sheet === 'settings',
+    shell: 'phone', haptic: vib, visible: () => sheet === 'settings',
     helpSub: 'How the orb, desks and Back work · practice again',
     sideReady: () => SIDE?.step === 'press' || SIDE?.step === 'ready',
     changed: onUnsentChange,
     openThread: id => { closeSheets(true); openWizardThread(id); },
     editUnsent,
     restoreReply: id => { closeSheets(true); return recoverParkedReply(id); },
+    openStore: id => { closeSheets(true); const a = APP['app-store']; if (a) openApp(id ? { ...a, url: '/wizard-os-home/store/index.html?app=' + encodeURIComponent(id) } : a); },
+    chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; renderChats(w); } save(); },
     openLink: (url, title) => { closeSheets(true); return openLinkDesk(url, null); },
     openSub: id => {
       if (id === 'files') { settingsReturn = id; openFilesScreen(); }
@@ -3376,6 +3378,7 @@
     if (closeOverview()) return 'overview';
     if (closeReviewCoach()) return 'review-coach';
     if (menuFor) { closeMenu(); return 'menu'; }
+    if (sheet === 'settings' && settingsView?.back()) return 'settings-page';
     if (sheet) { closeSheets(); return 'sheet'; }
     if (window.WosSkinFrame?.back()) return 'skin-controls';
     const d = desks[idx], f = W[d.focus];

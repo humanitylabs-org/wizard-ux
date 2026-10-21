@@ -8,6 +8,49 @@
   const native = () => window.WizardOSNative;
   const android = () => !!native() || /Android/i.test(navigator.userAgent);
   const row = (id, icon, title, sub) => `<button class="st-row" data-st="${esc(id)}"><span class="st-ic">${icon}</span><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
+  const PAGES = [
+    { id: 'appearance', title: 'Appearance', icon: '◐' },
+    { id: 'chats', title: 'Chats & app screens', icon: '☷' },
+    { id: 'voice', title: 'Voice & typing', icon: '🎙' },
+    { id: 'phone', title: 'Phone', icon: '◉', available: android },
+    { id: 'recovery', title: 'Unsent & recovered', icon: '↺' },
+    { id: 'usage', title: 'AI usage', icon: '◴' },
+    { id: 'about', title: 'About & updates', icon: '◇' },
+  ];
+  const featurePages = { look: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', 'photos-backup': 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
+  const pageOf = f => PAGES.some(p => p.id === f?.page) ? f.page : featurePages[f?.id] || 'about';
+  const chatsHost = () => window.WizChatsHost;
+  const chatsName = id => id === 'wizard-chats' ? 'Wizard Chats' : chatsHost()?.installed().find(a => a.id === id)?.name || id;
+  const recovered = () => window.WosCancelled?.list?.() || [];
+  function attention(ctx) {
+    const items = [], n = unsentAll(ctx).length, r = recovered().length;
+    if (n) items.push({ title: `${n} ${n === 1 ? 'message' : 'messages'} not sent`, feature: 'unsent' });
+    if (r) items.push({ title: `${r} ${r === 1 ? 'recording' : 'recordings'} to recover`, feature: 'cancelled' });
+    if (window.WosUpdates?.state?.update_available || window.WizWebUpdate?.pending) items.push({ title: 'Update ready', feature: 'updates' });
+    if (window.WizCore.voiceStatus?.state?.ready === false) items.push({ title: 'Voice unavailable', feature: 'voice' });
+    if (ctx.live?.error === 'access') items.push({ title: 'Sign-in needed', feature: 'wizard' });
+    return items;
+  }
+  function subtitle(id, ctx) {
+    if (id === 'appearance') return window.WosSkin ? lookName(window.WosSkin, window.WosSkin.current) : 'Default skin';
+    if (id === 'chats') return 'Chats: ' + chatsName(chatsHost()?.defaultId() || 'wizard-chats');
+    if (id === 'voice') { const v = window.WizCore.voiceStatus?.state; return `${v ? v.ready ? 'Voice ready' : 'Voice unavailable' : 'Checking voice'} · Mic: ${window.WosMic?.summary?.() || 'default'}`; }
+    if (id === 'phone') { try { return JSON.parse(native()?.everywhere?.() || '{}').enabled ? 'Everywhere on' : 'Everywhere off'; } catch (_) { return 'Android controls'; } }
+    if (id === 'recovery') { const ids = new Set([...unsentAll(ctx), ...recovered()].map(x => x.id)); return ids.size ? `${ids.size} waiting` : 'Nothing waiting'; }
+    if (id === 'usage') return window.WosUsage?.snap?.providers?.map(p => p.limits?.length ? `${p.name} ${p.limits[0].usedPercent}%` : `${p.name}: unavailable`).join(' · ') || (window.WosUsage?.error ? 'Usage unavailable' : 'Checking usage');
+    return `${ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…'} · ${window.WosUpdates?.state?.update_available ? 'update ready' : window.WosUpdates?.state ? 'up to date' : 'check for updates'}`;
+  }
+  function recommendation() {
+    const S = window.WosSkin, f = S && famOf(S, S.current), id = f?.recommends?.chats;
+    if (!id || id === chatsHost()?.defaultId()) return null;
+    try { if (localStorage.getItem('wos.settings.chats.dismiss.' + f.id) === id) return null; } catch (_) {}
+    return { family: f.id, name: f.name, id, installed: !!chatsHost()?.installed().some(a => a.id === id) };
+  }
+  function suggestionHtml() {
+    const r = recommendation(); if (!r) return '';
+    const name = r.installed ? chatsName(r.id) : r.id === 'mizel-chats' ? 'Mizel Chats' : r.id;
+    return `<aside class="st-suggestion" data-chats-suggestion><b>${esc(r.name)} goes with ${esc(name)}</b><div class="st-actions"><button data-chats-suggest="${esc(r.id)}">${r.installed ? 'Use it' : 'Get it'}</button><button class="ghost" data-chats-dismiss="${esc(r.family)}">Not now</button></div></aside>`;
+  }
   function register(feature) {
     if (!feature.id || features.has(feature.id) || typeof feature.html !== 'function') throw new Error('Settings feature requires a unique id and html');
     features.set(feature.id, feature);
@@ -79,7 +122,7 @@
   }
   register({ id: 'unsent', aliases: ['unsent'], html(ctx) {
     const all = unsentAll(ctx);
-    return `<div class="st-group"><h4>Unsent & retained <span>${all.length || ''}</span></h4>${all.length ? all.map(it => unsentRow(it, ctx)).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">No messages awaiting delivery on this device.</div>'}<p class="st-note">Held recordings are not queued. Retry all sends eligible failed/waiting messages only; held commands and unconfirmed delivery stay kept.</p></div>`;
+    return `<div class="st-group"><h4>Unsent & retained <span>${all.length || ''}</span></h4>${all.length ? all.map(it => unsentRow(it, ctx)).join('') + (all.length > 1 ? '<button class="st-wide" data-ub-all="retry">Retry all</button>' : '') : '<div class="st-empty">No messages awaiting delivery on this device.</div>'}<details class="st-info"><summary aria-label="About retained messages">?</summary><p class="st-note">Held recordings are not queued. Retry all sends eligible failed/waiting messages only; held commands and unconfirmed delivery stay kept.</p></details></div>`;
   }, act(ctx, el) {
     const b = el.closest('[data-ub]');
     if (b) { const r = b.closest('[data-ubid]'); unsentAction(ctx, r.dataset.ubid, r.dataset.uborigin, b.dataset.ub); return true; }
@@ -132,7 +175,7 @@
     const f = famOf(S, cur), pals = f ? S.list.filter(k => f.palettes.includes(k.id)) : S.list;
     const famRow = fams.length > 1 ? `<div class="sk-fam" role="group" aria-label="Skin">${fams.map(x => famBtn(S, x, cur)).join('')}</div>` : '';
     const palRow = pals.length > 1 ? `${famRow ? '<div class="sk-sub">Colours</div>' : ''}<div class="sk-sw" role="group" aria-label="Colours">${pals.map(k => palBtn(k, cur)).join('')}</div>` : '';
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div>${famRow}${palRow}</div>${mySkinRow(nm)}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div>${famRow}${palRow}</div>${suggestionHtml()}${mySkinRow(nm)}</div>`;
   }
   register({ id: 'look', aliases: ['skin'], html() {
     const S = window.WosSkin; if (!S) return '';
@@ -152,13 +195,14 @@
     const nm = S.list.find(k => k.id === now)?.name || '';
     ctx.root.querySelector('[data-skinname]').textContent = lookName(S, now);
     const sub = ctx.root.querySelector('[data-myskinsub]'); if (sub) sub.textContent = mySkinSub(nm);
+    for (const m of mounts) m.render();
     ctx.haptic?.(8); return true;
   } });
   // Phone only: desktop always keeps framed windows. One switch, on by default; skin JSON import stays for designers.
   register({ id: 'skin-frame', available: () => !!window.WosSkin?.frameAdjustable, html() {
     const S = window.WosSkin; if (!S?.frame) return '';
     const on = S.frame.foundation === 'borderless';
-    return `<div class="st-group sf-section"><h4>Windows</h4><button class="st-row" data-skinborderless role="switch" aria-checked="${on}"><span class="st-ic">▢</span><span class="st-tx"><b>Borderless apps</b><small>${on ? 'On · apps fill the screen with a floating X' : 'Off · apps open in framed windows'}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></div>`;
+    return `<div class="st-group sf-section"><h4>Windows</h4><button class="st-row" data-skinborderless role="switch" aria-checked="${on}"><span class="st-ic">▢</span><span class="st-tx"><b>Borderless apps</b><small>${on ? 'On · apps fill the screen with a floating X' : 'Off · apps open in framed windows'}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button><details class="st-advanced"><summary>Advanced</summary><button class="sf-import" data-skinimport>Import skin JSON</button><input type="file" data-skinfile accept="application/json,.json" hidden><p data-skinimport-status role="status"></p></details></div>`;
   }, act(ctx, el) {
     if (el.closest('[data-skinimport]')) { ctx.root.querySelector('[data-skinfile]').click(); return true; }
     if (!el.closest('[data-skinborderless]')) return false;
@@ -189,7 +233,7 @@
   register({ id: 'selection', html: () => window.WosSelMenu?.html() || '', act: (ctx, el) => window.WosSelMenu?.act(el) });
   register({ id: 'wizard', html(ctx) {
     const status = ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
-    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${window.WizWebUpdate ? row('web-update', '↻', 'Check for updates', 'Updates both layouts · reload only when you choose') : ''}${row('help', '?', 'Gestures & help', ctx.helpSub)}${window.WosFiles ? row('files', '▤', 'Files', 'Everything in Wizard Files · preview, attach to a chat') : ''}</div>`;
+    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${window.WizWebUpdate ? row('web-update', '↻', 'Check for updates', 'Updates both layouts · reload only when you choose') : ''}${row('help', '?', 'Gestures & help', ctx.helpSub)}</div>`;
   }, act(ctx, el) { const st = el.closest('[data-st]')?.dataset.st; if (st === 'web-update') { window.WizWebUpdate?.check(); ctx.toast?.('↻', 'Checking for updates', 1400); return true; } if (!['files', 'help'].includes(st)) return false; ctx.openSub(st); return true; } });
   register({ id: 'usage', aliases: ['usage'], html: () => window.WosUsage?.html() || '', act(ctx, el) { if (!el.closest('[data-usage-refresh]')) return false; window.WosUsage?.load(true).then(ctx.paintUsage); ctx.paintUsage(); return true; } });
   // A shell chooses the composer; common code owns preservation before consuming an unsent record.
@@ -213,30 +257,93 @@
     }
     outbox.remove(item.id); return true;
   }
+  register({ id: 'chats-default', page: 'chats', aliases: ['chats-default'], html(ctx) {
+    const host = chatsHost(), apps = host?.installed() || [{ id: 'wizard-chats' }], current = host?.defaultId() || 'wizard-chats';
+    apps.sort((a, b) => (b.id === 'wizard-chats') - (a.id === 'wizard-chats'));
+    return `<div class="st-group"><h4>Default Chats</h4><div class="st-chats-options" role="radiogroup" aria-label="Default Chats">${apps.map(a => `<button class="st-row" role="radio" aria-checked="${a.id === current}" data-chats-choice="${esc(a.id)}" ${ctx.chatsBusy ? 'disabled' : ''}><span aria-hidden="true">${a.id === current ? '◉' : '○'}</span><span class="st-tx"><b>${esc(a.id === 'wizard-chats' ? 'Wizard Chats (built in)' : a.name)}</b></span></button>`).join('')}</div>${apps.length === 1 ? '<div class="st-store-hint">Install another Chats from the <button data-chats-store>Store</button> to switch</div>' : ''}${suggestionHtml()}</div>`;
+  } });
   function mount(root, adapter) {
     root.classList.add('st-root'); root.dataset.settingsRoot = '';
-    const ctx = { ...adapter, root }, api = { render, focus, destroy, dispatch, context: ctx };
-    let skinImportMessage = '';
+    const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };
+    let skinImportMessage = '', page = '', confirm = null;
+    const desktop = adapter.shell === 'desktop';
     ctx.render = render;
-    ctx.paintUsage = () => { const g = root.querySelector('[data-usage]'); if (g) g.outerHTML = window.WosUsage.html(); };
+    ctx.paintUsage = () => { const g = root.querySelector('[data-usage]'); if (g) g.outerHTML = window.WosUsage.html(); paintSubtitles(); };
+    function paintSubtitles() {
+      root.querySelectorAll?.('[data-st-subtitle]').forEach(el => { el.textContent = subtitle(el.dataset.stSubtitle, ctx); });
+    }
     function render() {
       if (adapter.visible && !adapter.visible()) return;
-      const top = root.scrollTop, active = root.contains(document.activeElement) ? document.activeElement : null;
+      const top = root.scrollTop, paneTop = root.querySelector('.st-page')?.scrollTop || 0, active = root.contains(document.activeElement) ? document.activeElement : null;
       const attrs = active ? [...active.attributes].filter(a => a.name.startsWith('data-')) : [];
       const record = active?.closest('[data-ubid]')?.dataset.ubid;
-      root.innerHTML = `<div class="st-inner"><h3 class="st-title" tabindex="-1">Settings</h3>${[...features.values()].filter(f => !f.available || f.available(ctx)).map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('')}</div>`;
+      const pages = PAGES.filter(p => !p.available || p.available(ctx)), selected = page || (desktop ? 'appearance' : '');
+      const heading = PAGES.find(p => p.id === selected)?.title || '';
+      const items = attention(ctx);
+      const attentionHtml = items.length ? `<div class="st-attention" aria-label="Needs attention"><h4>Needs attention</h4>${items.map(i => `<button data-st-attention="${esc(i.feature)}">${esc(i.title)}<span>›</span></button>`).join('')}</div>` : '';
+      const nav = pages.map(p => `<button class="st-category" data-st-page="${p.id}" aria-current="${p.id === selected ? 'page' : 'false'}"><span class="st-ic" aria-hidden="true">${p.icon}</span><span class="st-tx"><b>${p.title}</b><small data-st-subtitle="${p.id}">${esc(subtitle(p.id, ctx))}</small></span><span class="st-go" aria-hidden="true">›</span></button>`).join('');
+      const fs = [...features.values()].filter(f => pageOf(f) === selected && (!f.available || f.available(ctx)));
+      const content = fs.map(f => `<section data-settings-feature="${esc(f.id)}">${f.html(ctx)}</section>`).join('');
+      const footer = `<footer class="st-shortcuts">${window.WosFiles ? '<button data-st-shortcut="files" data-st="files">Files</button>' : ''}${(window.WosFeatures?.entries || []).filter(f => !f.available || f.available()).map(f => `<button data-st-shortcut="${esc(f.id)}">${esc(f.title || f.id)}</button>`).join('')}</footer>`;
+      root.dataset.settingsPage = page;
+      root.innerHTML = `<div class="st-inner ${desktop ? 'st-desktop' : 'st-phone'} ${page ? 'st-in-page' : ''}"><div class="st-index"><h3 class="st-title" tabindex="-1">Settings</h3>${attentionHtml}<nav aria-label="Settings categories">${nav}</nav>${footer}</div><div class="st-page" ${selected ? '' : 'hidden'}><header class="st-page-head"><button data-st-back aria-label="Back to Settings">‹</button><h3 tabindex="-1">${heading}</h3></header>${content}</div></div>${confirm ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="st-confirm-title"><h3 id="st-confirm-title">Use ${esc(chatsName(confirm.id))} for all your chats?</h3><p>You can switch back here any time.</p><div class="st-actions"><button data-chats-cancel ${ctx.chatsBusy ? 'disabled' : ''}>Cancel</button><button data-chats-confirm ${ctx.chatsBusy ? 'disabled' : ''}>${ctx.chatsBusy ? 'Switching…' : 'Use ' + esc(chatsName(confirm.id))}</button></div></section></div>` : ''}`;
       root.scrollTop = top;
+      const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = paneTop;
       const importStatus = root.querySelector('[data-skinimport-status]'); if (importStatus) importStatus.textContent = skinImportMessage;
       if (attrs.length) { const scope = record ? root.querySelector(`[data-ubid="${CSS.escape(record)}"]`) : root; const sel = attrs.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join(''); scope?.querySelector(sel)?.focus({ preventScroll: true }); }
       const U = window.WosUsage;
       if (U && !U.loading && (!U.snap || Date.now() - U.at > 60000)) U.load().then(ctx.paintUsage);
     }
     function focus(id) {
-      const g = root.querySelector(`[data-settings-feature="${CSS.escape(id || '')}"]`);
-      if (g) root.scrollTop += g.getBoundingClientRect().top - root.getBoundingClientRect().top - 8;
-      (g?.querySelector('button:not(:disabled)') || root.querySelector('.st-title'))?.focus({ preventScroll: true });
+      const f = features.get(id) || [...features.values()].find(f => f.aliases?.includes(id));
+      page = f ? pageOf(f) : featurePages[id] || (id === 'updates' ? 'about' : PAGES.some(p => p.id === id) ? id : '');
+      confirm = null; render(); root.scrollTop = 0;
+      const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = 0;
+      const g = id && root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`);
+      g?.scrollIntoView?.({ block: 'nearest' });
+      (g?.querySelector('button:not(:disabled)') || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
+    }
+    function back() {
+      if (confirm) { if (!ctx.chatsBusy) { confirm = null; render(); root.querySelector('[data-chats-choice][aria-checked="true"]')?.focus(); } return true; }
+      if (!page) return false;
+      const previous = page; focus(); root.querySelector(`[data-st-page="${previous}"]`)?.focus({ preventScroll: true }); return true;
+    }
+    function openStore(id) { ctx.openStore?.(id); }
+    function askChats(id) {
+      if (ctx.chatsBusy || id === chatsHost()?.defaultId() || !chatsHost()?.installed().some(a => a.id === id)) return;
+      confirm = { id }; render(); root.querySelector('[data-chats-cancel]')?.focus();
+    }
+    async function useChats() {
+      if (!confirm || ctx.chatsBusy) return;
+      const id = confirm.id; ctx.chatsBusy = true; render();
+      try {
+        const url = '/wizard-os-home/store-install/_slots/chats';
+        const response = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Wizard-Store': '1' }, body: JSON.stringify({ default: id }) });
+        if (!response.ok) { let message = 'Could not change Chats'; try { message = (await response.json()).error || message; } catch (_) {} throw Error(message); }
+        const check = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+        if (!check.ok || (await check.json()).default !== id) throw Error('The App Manager has not confirmed this Chats choice. Try again.');
+        await window.WizCore.refreshApps();
+        if (chatsHost()?.defaultId() !== id) throw Error('The app list has not confirmed this Chats choice. Try again.');
+        ctx.chatsChanged?.(id);
+        ctx.toast?.('✓', 'Using ' + chatsName(id), 2200);
+      } catch (error) { ctx.toast?.('!', String(error.message || error), 3200); }
+      finally { ctx.chatsBusy = false; confirm = null; render(); root.querySelector('[data-chats-choice][aria-checked="true"]')?.focus({ preventScroll: true }); }
     }
     function dispatch(el, event) {
+      if (el.closest('[data-chats-confirm]')) { useChats(); return true; }
+      if (el.closest('[data-chats-cancel]')) { back(); return true; }
+      if (confirm) return false;
+      const nav = el.closest('[data-st-page]'), att = el.closest('[data-st-attention]');
+      if (nav || att) { focus(nav ? nav.dataset.stPage : att.dataset.stAttention); return true; }
+      if (el.closest('[data-st-back]')) return back();
+      const shortcut = el.closest('[data-st-shortcut]');
+      if (shortcut) { const id = shortcut.dataset.stShortcut; if (id === 'files') ctx.openSub('files'); else window.WosFeatures?.open(id); return true; }
+      const choose = el.closest('[data-chats-choice]'); if (choose) { askChats(choose.dataset.chatsChoice); return true; }
+      if (el.closest('[data-chats-store]')) { openStore(); return true; }
+      const suggest = el.closest('[data-chats-suggest]');
+      if (suggest) { const r = recommendation(); if (r?.installed) askChats(r.id); else if (r) openStore(r.id); return true; }
+      const dismiss = el.closest('[data-chats-dismiss]');
+      if (dismiss) { const r = recommendation(); if (r) { try { localStorage.setItem('wos.settings.chats.dismiss.' + r.family, r.id); } catch (_) {} for (const m of mounts) m.render(); } return true; }
       const id = el.closest('[data-settings-feature]')?.dataset.settingsFeature, f = features.get(id);
       return !!f?.act?.(ctx, el, event);
     }
@@ -256,21 +363,34 @@
       } finally { input.value = ''; }
     };
     const key = e => {
+      if (confirm) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, root.querySelector('.st-confirm')); return; }
+      const category = e.target.closest('[data-st-page]');
+      if (category && ['ArrowUp', 'ArrowDown'].includes(e.key)) {
+        e.preventDefault(); const buttons = [...root.querySelectorAll('[data-st-page]')], at = buttons.indexOf(category), n = (at + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
+        const id = buttons[n].dataset.stPage; focus(id); root.querySelector(`[data-st-page="${id}"]`)?.focus(); return;
+      }
+      const radio = e.target.closest('[data-chats-choice]');
+      if (radio && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault(); const buttons = [...root.querySelectorAll('[data-chats-choice]')], at = buttons.indexOf(radio), delta = ['ArrowUp', 'ArrowLeft'].includes(e.key) ? -1 : 1;
+        buttons[(at + delta + buttons.length) % buttons.length].focus(); return;
+      }
       const b = e.target.closest('[data-skinpick], [data-skinfamily]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
       const attr = b.hasAttribute('data-skinfamily') ? 'data-skinfamily' : 'data-skinpick';
       e.preventDefault(); const buttons = [...root.querySelectorAll(`[${attr}]`)], at = buttons.indexOf(b);
       const n = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (at + (e.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
       const id = buttons[n].getAttribute(attr); buttons[n].focus(); buttons[n].click();
-      root.querySelector(`[${attr}="${id}"]`)?.focus(); // a skin change re-renders the group
+      root.querySelector(`[${attr}="${id}"]`)?.focus();
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
-    function destroy() { if (typeof unsubscribe === 'function') unsubscribe(); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    const appsChanged = () => render();
+    window.addEventListener?.('wizard:apps', appsChanged);
+    function destroy() { if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   function route(view, open) {
     if (view === 'settings') { open(); return true; }
     const f = [...features.values()].find(f => f.aliases?.includes(view));
-    if (!f) return false; open(f.id); return true;
+    if (!f && !features.has(view)) return false; open(f?.id || view); return true;
   }
   // Shared focus containment. Existing shell Back guards own history; never add a second guard here.
   function trap(event, panel) {
@@ -281,5 +401,5 @@
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
   window.WosMySkin?.on(() => { for (const m of mounts) m.render(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, trap, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(({ id, aliases }) => ({ id, aliases: aliases || [] })); } };
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();

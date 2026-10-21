@@ -164,10 +164,11 @@
   function html() {
     const l = all();
     return `<div class="st-group" data-cancelled><h4>Recovered &amp; cancelled recordings <span>${l.length || ''}</span></h4>
-      ${l.length ? l.map(row).join('') : '<div class="st-empty">Nothing here. Cancel a recording after 20 seconds or more and it waits here, ready to transcribe.</div>'}
-      <p class="st-note">Interrupted and retained recordings stay until deleted. Older cancelled recordings may expire after a week (the newest ${MAX_KEPT}). Transcribe &amp; copy never sends to an agent.</p></div>`;
+      ${l.length ? l.map(row).join('') : '<div class="st-empty">No recordings waiting.</div>'}
+      <details class="st-info"><summary aria-label="About recovered recordings">?</summary><p class="st-note">Interrupted and retained recordings stay until deleted. Older cancelled recordings may expire after a week (the newest ${MAX_KEPT}). Transcribe &amp; copy never sends to an agent.</p></details></div>`;
   }
   function repaint() {
+    window.WosSettings?.refresh();
     const g = document.querySelector('[data-settings-root] [data-cancelled]');
     if (g) g.outerHTML = html();
   }
