@@ -358,7 +358,9 @@ async function api(req, res, u) {
     return send(res, 409, { error: 'not supported in fixture', check: 'fixture' });
   }
   // ---- the main agent's other reads (fixture mode only) ----
-  if (p === '/wizard/hermes/api/model/options') return send(res, 200, { provider: 'anthropic', model: 'claude-opus-5-5', providers: [{ slug: 'anthropic', name: 'Claude', is_current: true, authenticated: true, models: ['claude-opus-5-5', 'claude-sonnet-5-5'] }] });
+  // The main agent also has its own Tinfoil route (as on a real box): Unified Chats must hide it beside the Private group.
+  if (p === '/wizard/hermes/api/model/options') return send(res, 200, { provider: 'anthropic', model: 'claude-opus-5-5', providers: [{ slug: 'anthropic', name: 'Claude', is_current: true, authenticated: true, models: ['claude-opus-5-5', 'claude-sonnet-5-5'] }, { slug: 'wizard-tinfoil', name: 'Tinfoil', is_current: false, authenticated: true, models: ['glm-5-3'] }] });
+  if (p === '/wizard-tinfoil/api/status') return send(res, 200, { provider: 'tinfoil', credentialStored: true });
   if (p === '/wizard/thread-seen') return send(res, 200, { state: m === 'PUT' ? body : null });
   if (p === '/wizard/thread-dispositions') return send(res, 200, { state: {} });
   if (p === '/wizard/v1/apps') return send(res, 200, { apps: [] });
