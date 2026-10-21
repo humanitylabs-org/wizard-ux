@@ -7,7 +7,8 @@ const read = path => readFileSync(path, 'utf8');
 
 // This PR owns mobile portability; repository-wide web/QA portability is a separate change.
 // Enumerate tracked files rather than silently skipping new source directories or file extensions.
-const forbidden = /\/Volumes\/ThalesMedia\/|\/home\/telos\/|(?:[\w-]+\.)?tailc0f369\.ts\.net|\bssh\s+thales\b/;
+// Split the private identifiers so this detector does not itself trip the repo-wide guard.
+const forbidden = new RegExp(['\\/Volumes\\/' + 'ThalesMedia\\/', '\\/home\\/' + 'telos\\/', '(?:[\\w-]+\\.)?' + 'tailc0f369' + '\\.ts\\.net', '\\bssh\\s+' + 'thales\\b'].join('|'));
 test('tracked Android and iOS files contain no personal paths or hosts', () => {
   const files = execFileSync('git', ['ls-files', '-z', '--', 'android/', 'ios/'], { encoding: 'utf8' })
     .split('\0').filter(Boolean);

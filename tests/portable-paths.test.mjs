@@ -11,8 +11,6 @@ const evidence = [
   /^qa\/receipts\/(chat-scroll-stability|phone-shell-scroll)\.md$/, // Dated QA records.
   /^docs\/qa\/microphone-lock-20261013\.md$/, // Dated QA receipt.
   /^docs\/responsive-remainder-verification\.json$/, // Immutable dated verification receipt.
-  // TODO(fix/portable-app-origin): native worker removes these after its independent migration.
-  /^android\//, /^ios\//,
 ];
 // Split the private identifiers so the detector does not itself introduce a source leak.
 const forbidden = [
