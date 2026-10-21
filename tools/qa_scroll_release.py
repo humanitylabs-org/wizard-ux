@@ -63,6 +63,7 @@ def main():
         assert meta['signer_sha256']==SIGNER
         debug,_=qa['ai.wizards.os.qa'];test,_=qa['ai.wizards.os.qa.test'];src=qa_job/'source'
         run('qa-path-config',[sys.executable,'-m','unittest','discover','-s',src/'tools','-p','test_qa_paths.py','-v'])
+        run('diagnostics-http',[sys.executable,'-m','unittest','discover','-s',src/'tools','-p','test_scroll_diagnostics.py','-v'])
         run('signed-upgrade',[sys.executable,src/'tools/qa_upgrade.py',old_apk,signed])
         run('aosp-scroll-capture',[sys.executable,src/'tools/qa_scroll_capture.py',debug,out/'aosp'])
         aosp=json.loads((out/'aosp/receipt.json').read_text());checks=aosp.get('checks') or [];assert aosp.get('status')=='ok' and len(checks)==28 and all(c['ok'] for c in checks),aosp

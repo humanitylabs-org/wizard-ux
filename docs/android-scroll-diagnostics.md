@@ -33,4 +33,6 @@ Keep all superclass/provider delegation. On the host node only, add scrollable a
 - `tools/qa_scroll_proxy.py`: fake private-origin server persists upload and reads exact bytes back, asserts recorded methods and content exclusion, retains Back x3/no-crash gates.
 - `tools/qa_scroll_release.py`: pinned previous 0.9.37 APK SHA, signed upgrade to 0.9.38/62, release + QA Gradle/JUnit/lint, diagnostics JUnit required in both builds, AOSP 28/28 pixel capture gates and native proxy/upload/Back gates. Prepared jobs only; no feed publication or merge.
 
+Live server verification: authenticated gateway POST returned **201**, and its named 0600 file was read back byte-for-byte. GET returned **405**, foreign-Origin POST **403**, unauthenticated loopback access **403**, and the existing shell still returned **200**. A real Thales request through normal Tailnet ingress also returned **405** on the append-only route. The loopback `--resolve` proof uses curl's PROXY client-IP option with this server's own verified Tailnet address because the gateway requires a Tailnet principal; it does not weaken the identity gate.
+
 Local verification: browser scroll contracts 38/38; Node suite 513/513; diagnostics HTTP tests 3/3; QA path tests 3/3. Android builds, JVM/Gradle tests and emulator tests must run on Thales; prepared jobs are not execution evidence.

@@ -12,7 +12,7 @@ final class ScrollCaptureDiagnostics {
     private static JSONObject session;
     private static volatile long armedUntil;
     private static long generation, delivered;
-    private static boolean uploading;
+    private static boolean uploading, retryRequested;
     static JSONObject fields(Object... kv) {
         JSONObject out = new JSONObject();
         try { for (int i=0;i<kv.length;i+=2) out.put((String)kv[i], kv[i+1]); }
@@ -86,14 +86,15 @@ final class ScrollCaptureDiagnostics {
         try{out.put("argumentCount",b.size());}catch(org.json.JSONException ignored){}
         return out;
     }
-    static synchronized boolean hasDeliveredForQa() { return delivered>0 && !uploading; }
+    static synchronized boolean hasDeliveredForQa() { return delivered>0 && delivered==generation && !uploading; }
     static void resumed(Context context) {
         Context c=context.getApplicationContext(); init(c);
         // Focus-only OEM overlays do not necessarily cause onResume; focus gain calls this too.
         MAIN.postDelayed(()->upload(c),750);
     }
     private static synchronized void upload(Context c) {
-        if(uploading || generation==delivered || session==null) return;
+        if(uploading){retryRequested=true;return;}
+        if(generation==delivered || session==null)return;
         String origin=ai.wizards.os.device.AppState.origin(c);
         android.net.Uri u=android.net.Uri.parse(origin);
         if(!Origin.isPrivate(u) && !(BuildConfig.DEBUG && ai.wizards.os.device.AppState.isQaOrigin(origin))) return;
@@ -116,7 +117,10 @@ final class ScrollCaptureDiagnostics {
             } catch(Exception ignored) { /* retain ring for the next resume/focus retry */ }
             finally {
                 if(conn!=null)conn.disconnect();
-                synchronized(ScrollCaptureDiagnostics.class){if(ok)delivered=sent;uploading=false;}
+                synchronized(ScrollCaptureDiagnostics.class){
+                    if(ok)delivered=sent;uploading=false;
+                    if(retryRequested){retryRequested=false;MAIN.postDelayed(()->upload(c),750);}
+                }
             }
         },"ScrollDiagnosticsUpload").start();
     }

@@ -22,14 +22,17 @@ final class ScrollDiagnosticsRing {
     synchronized long sequence() { return sequence; }
     synchronized int size() { return events.size(); }
     synchronized String json(JSONObject session) {
-        try {
-            JSONArray a = new JSONArray();
-            for (JSONObject e : events) a.put(e);
-            JSONObject out = new JSONObject().put("schema", 1).put("session", session).put("events", a);
-            // Bound UTF-8 bytes as well as count, keeping the newest probes.
-            while (out.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 240 * 1024 && a.length() > 0)
-                a.remove(0);
-            return out.toString();
-        } catch (org.json.JSONException impossible) { throw new IllegalArgumentException(impossible); }
+        String prefix="{\"schema\":1,\"session\":"+(session==null?"{}":session.toString())+",\"events\":[";
+        int remaining=240*1024-prefix.getBytes(java.nio.charset.StandardCharsets.UTF_8).length-2;
+        ArrayDeque<String> selected=new ArrayDeque<>();
+        // Walk newest first and serialize each event once (no quadratic UI-thread trimming).
+        java.util.Iterator<JSONObject> it=events.descendingIterator();
+        while(it.hasNext()) {
+            String e=it.next().toString();
+            int bytes=e.getBytes(java.nio.charset.StandardCharsets.UTF_8).length+(selected.isEmpty()?0:1);
+            if(bytes>remaining)break;
+            selected.addFirst(e);remaining-=bytes;
+        }
+        return prefix+String.join(",",selected)+"]}";
     }
 }
