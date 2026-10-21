@@ -1331,11 +1331,8 @@
   const backTile = a => `<button class="lapp lapp-back${isSystem(a) ? ' lapp-sys' : ''}" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
   const kindTile = a => a.url || a.kind !== 'wizard' ? (isSystem(a) ? sysMark(appTile(a)) : appTile(a)) : backTile(a);
   const getApps = '<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button>';
-  // System apps sit together in a framed "System" box at the start of their group, so they read as Wizard OS's own.
-  function sysSplit(list, tile) {
-    const sys = list.filter(isSystem), rest = list.filter(a => !isSystem(a));
-    return (sys.length ? `<div class="sysbox"><span class="sysl">System</span>${sys.map(tile).join('')}</div>` : '') + rest.map(tile).join('');
-  }
+  // System apps lead their group in the same grid; their purple tile (skin.css .lapp-sys) marks them, no label or box.
+  function sysSplit(list, tile) { return [...list.filter(isSystem), ...list.filter(a => !isSystem(a))].map(tile).join(''); }
   function kindGroups(order) {
     const K = appKinds();
     const G = {
