@@ -11,7 +11,7 @@
   const TRANSCRIBE_TIMEOUT_MS = 195000;
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
-  const conversationWork = new Map(), transcriptWork = new Map();
+  const conversationWork = new Map(), transcriptWork = new Map(), removeErrors = new Map();
   // One authority check for explicit retry and automatic delivery. Terminal/ambiguous
   // custody is not a queue. Empty speech requires a per-recording choice, never bulk.
   function eligible(it, states) {
@@ -655,18 +655,44 @@
     async remove(id) {
       // Re-check device storage first: a recovery that clears quarantine makes this an ordinary delete.
       if (quarantine.has(id) && !recovered) await load().catch(() => {});
-      const it = items.get(id); if (!it || ['sending', 'transcribing', 'processing'].includes(it.state)) return false;
+      const it = items.get(id); removeErrors.delete(id);
+      if (!it) return true; // already gone
+      // A recording with nothing left to deliver: a sent message's leftover audio, or a take with no delivery intent.
+      const inert = it.state === 'sent' || (['capture', 'dictation'].includes(it.kind) && !it.deliveryRequested && !it.body && !it.steerBody && !it.steerDispatch);
+      // Busy states only block while work is really running in this page; a state left over from an interrupted
+      // transcription or send (nothing running) must not make an inert take undeletable.
+      const active = transcriptWork.has(id) || conversationWork.has(id);
+      if (['sending', 'transcribing', 'processing'].includes(it.state) && (!inert || active)) { removeErrors.set(id, 'it is still being ' + (it.state === 'transcribing' ? 'transcribed' : 'sent')); return false; }
+      if (quarantine.has(id) && !inert) { removeErrors.set(id, 'device storage isn’t answering yet'); return false; }
       if (quarantine.has(id)) {
         // Quarantine stops a fallback copy from replaying or overwriting an unreadable primary receipt. The owner's
         // explicit Delete of a recording that never had delivery intent (cancelled/interrupted take, dictation) can
         // do neither: it writes a terminal tombstone, which wins over every other copy on every future recovery.
         // Messages with delivery intent stay quarantined until storage is verified (James, 21 Oct 2026: ten
         // recovered takes refused Delete with "Deletion not saved" while the phone's IndexedDB was unavailable).
-        if (!['capture', 'dictation'].includes(it.kind) || it.deliveryRequested || it.body || it.steerBody || it.steerDispatch) return false;
         quarantine.delete(id);
       }
-      await del(id); return !!items.get(id)?.durable;
+      try { await del(id); } catch (e) { removeErrors.set(id, String(e?.message || e)); }
+      if (items.get(id)?.durable && !items.get(id)?.storageError) return true;
+      if (!inert) { removeErrors.set(id, items.get(id)?.storageError || removeErrors.get(id) || 'device storage refused the write'); return !!items.get(id)?.durable; }
+      // Writes are failing (full or broken device storage, 21 Oct 2026: Delete still refused after the quarantine fix).
+      // Erase every stored copy instead: deleting frees space where a write cannot. The in-memory tombstone keeps the
+      // take from being re-imported this session; with no stored copy left, nothing can bring it back after a reload.
+      let erased = false;
+      try { await open(); await tx('readwrite', s => s.delete(id)); erased = true; } catch (e) { removeErrors.set(id, String(e?.message || e)); }
+      let fallbackClear = true;
+      try {
+        localStorage.removeItem(PREFIX + id);
+        const legacy = JSON.parse(localStorage.getItem(LS) || '[]');
+        if (legacy.some(x => x?.id === id)) localStorage.setItem(LS, JSON.stringify(legacy.filter(x => x?.id !== id)));
+      } catch (_) { fallbackClear = false; }
+      const marker = items.get(id); if (marker) await put(marker).catch(() => {}); // space was just freed: retry the tombstone
+      emit();
+      if ((erased && fallbackClear) || (items.get(id)?.durable && !items.get(id)?.storageError)) { removeErrors.delete(id); return true; }
+      if (!removeErrors.has(id)) removeErrors.set(id, items.get(id)?.storageError || 'device storage refused the delete');
+      return false;
     },
+    removeError(id) { return removeErrors.get(id) || ''; },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     onSent(fn) { sentHooks.add(fn); return () => sentHooks.delete(fn); },
     notice, paintNotice, pump, load, bounded, TRANSCRIBE_TIMEOUT_MS, _items: items, AUTO_TRIES, BACKOFF,
