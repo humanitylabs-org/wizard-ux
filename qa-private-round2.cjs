@@ -34,7 +34,7 @@ try{
   await pane.locator(`[data-chopen="${SID}"]`).click();await pane.locator('.ch-thread').waitFor();await pane.getByText('A forgotten cobaltwatermelon secret',{exact:false}).waitFor();
   ok((await pane.innerText()).includes('forgotten cobaltwatermelon'),tag+': matched private conversation opens');
   await p.evaluate(()=>window.__r2Document=document);
-  if(mobile)await p.evaluate(()=>__wosNativeBack());else await pane.locator('[data-chback]').click();
+  if(mobile)await p.evaluate(()=>__wosNativeBack());else {await p.evaluate(()=>history.back());await p.waitForTimeout(500);}
   await pane.locator(`[data-chopen="${SID}"]`).waitFor();
   ok(await p.evaluate(()=>document===__r2Document)&&await pane.locator('[data-chsearch]').inputValue()==='cobaltwatermelon',tag+': Back from result keeps app and results alive');
   const privateView=await openChats(p,mobile,'private');
