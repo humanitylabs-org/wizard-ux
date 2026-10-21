@@ -55,6 +55,18 @@ class ImageContract(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'WIZARD_WORK_ROOT'):
                 ci.publish(self.args())
 
+    def test_publish_accepts_dedicated_volume_without_work_root(self):
+        env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push', 'WIZARD_CI_ROOT': '/example/worker/ci'}
+        mounted = lambda p: str(p) in ('/', '/example/worker')
+        with patch.dict(os.environ, env, clear=True), patch.object(ci.os.path, 'ismount', mounted):
+            self.assertEqual(ci._volume_of('/example/worker/ci'), '/example/worker')
+            with self.assertRaises(KeyError):  # passes the volume guard; stops at the next required setting
+                ci.publish(self.args())
+
+    def test_system_disk_is_never_a_worker_volume(self):
+        with patch.object(ci.os.path, 'ismount', lambda p: str(p) == '/'):
+            self.assertIsNone(ci._volume_of('/example/worker/ci'))
+
     def test_publish_rejects_sibling_of_work_volume(self):
         with tempfile.TemporaryDirectory() as temp:
             env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push',
