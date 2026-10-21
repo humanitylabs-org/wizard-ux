@@ -32,7 +32,24 @@ test('every known Wizard App Store app has a designed sigil (no letter fallback)
 test('Cloudflare wears the warm cloud', () => {
   const S = sigil(), s = S.of({ id: 'wizard-cloudflare', name: 'Cloudflare (Testing)' });
   assert.equal(s.glyph, 'cloud');
-  assert.match(S.html({ id: 'wizard-cloudflare' }), /class="sgi sg-cloud"/);
+  assert.match(S.html({ id: 'wizard-cloudflare' }), /class="sgi sgb sgb-cloudflare sg-cloud"/);
+});
+
+test('real products carry their brand mark; a skin opts in, every other skin keeps the house glyph', () => {
+  const S = sigil();
+  const want = { 'wizard-cloudflare': 'cloudflare', 'wizard-claude': 'claude', 'wizard-chatgpt': 'chatgpt', 'wizard-tinfoil': 'tinfoil' };
+  for (const [id, mark] of Object.entries(want)) {
+    assert.equal(S.brand[id], mark);
+    assert.ok(fs.existsSync(root + `web/brand/apps/${mark}.svg`), `web/brand/apps/${mark}.svg`);
+    assert.match(S.html({ id }), new RegExp(`class="sgi sgb sgb-${mark} sg-${S.house[id][0]}"`));
+  }
+  // house apps (Files, Notifications…) never get a brand mark
+  for (const id of ['files', 'notifications', 'morning-report', 'calendar']) assert.doesNotMatch(S.html({ id }), /sgb/);
+  // every mark has a recorded source
+  const readme = read('tools/sigils/README.md');
+  for (const mark of new Set(Object.values(S.brand))) assert.match(readme, new RegExp(`\\| \x60${mark}\x60 \\|`), `README source row for ${mark}`);
+  // only skins that opt in style brand marks: James's skins (core/skins.css) stay on house glyphs
+  assert.doesNotMatch(read('web/core/skins.css'), /sgb/);
 });
 
 test('an app with no sigil gets a masked disc with its initial cut out, never painted text', () => {
@@ -71,8 +88,8 @@ test('the fallback CSS keeps the mask: no rule turns a letter mark back into a p
 
 test('the generated files are in sync with the template (rebuild with tools/sigils/build.py)', () => {
   const tpl = read('tools/sigils/sigils.template.js'), js = read('web/core/sigils.js');
-  const strip = s => s.replace(/\/\*NAMES\*\/|\/\*HOUSE\*\/|\/\*FALLBACK\*\//g, '');
-  for (const line of strip(tpl).split('\n').filter(l => l.trim() && !/NAMES|HOUSE|FALLBACK/.test(l)))
+  const strip = s => s.replace(/\/\*NAMES\*\/|\/\*HOUSE\*\/|\/\*BRAND\*\/|\/\*FALLBACK\*\//g, '');
+  for (const line of strip(tpl).split('\n').filter(l => l.trim() && !/NAMES|HOUSE|BRAND = |FALLBACK/.test(l)))
     assert.ok(js.includes(line), 'web/core/sigils.js is stale; rerun tools/sigils/build.py. Missing: ' + line.trim());
   const house = JSON.parse(js.match(/const HOUSE = (\{.*?\});/)[1]);
   const src = read('tools/sigils/build.py');

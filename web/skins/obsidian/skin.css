@@ -304,3 +304,15 @@ html[data-skin^="obsidian"] .ch-compose.has-reply { padding-top: 12px !important
 /* The skin's :is(.ch-compose button…) fill rule out-ranks a plain selector, so the × colour must win explicitly (Light drew it white on white). */
 html[data-skin^="obsidian"] .ch-compose button.ch-reply-x, html[data-skin^="obsidian"] .ch-compose button.ch-reply-x svg { color: color-mix(in srgb, var(--ink) 78%, transparent) !important; stroke: currentColor !important; }
 html[data-skin^="obsidian"] .ch-compose.has-reply .ch-reply { margin-bottom: 4px; }
+
+/* Brand marks (Miguel's skins): real products wear their own logo, in their own colours, so the tile is a visual cue
+ * (see the Cloudflare cloud, go to Cloudflare). Same box and size as every sigil: the mark is still a mask, and the
+ * multi-colour ones also paint the logo file inside it. Sources: tools/sigils/README.md, "Brand marks". */
+html[data-skin^="obsidian"] .sgi.sgb { filter: none !important; -webkit-mask: var(--sgb) center / contain no-repeat !important; mask: var(--sgb) center / contain no-repeat !important; }
+html[data-skin^="obsidian"] .sgi.sgb-cloudflare { --sgb: url("/wizard-os-home/brand/apps/cloudflare.svg"); }
+html[data-skin^="obsidian"] .sgi.sgb-claude { --sgb: url("/wizard-os-home/brand/apps/claude.svg"); }
+html[data-skin^="obsidian"] .sgi.sgb-chatgpt { --sgb: url("/wizard-os-home/brand/apps/chatgpt.svg"); }
+html[data-skin^="obsidian"] .sgi.sgb-tinfoil { --sgb: url("/wizard-os-home/brand/apps/tinfoil.svg"); }
+html[data-skin^="obsidian"] .sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/apps/hermes.svg"); }
+html[data-skin^="obsidian"] .sgi:is(.sgb-cloudflare, .sgb-claude) { background: var(--sgb) center / contain no-repeat !important; }
+html[data-skin^="obsidian"] .sgi:is(.sgb-chatgpt, .sgb-tinfoil, .sgb-hermes) { background: var(--ink) !important; }
