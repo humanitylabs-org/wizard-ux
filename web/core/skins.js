@@ -70,6 +70,16 @@
         violet: '#7A5CFF', 'violet-2': '#A08CFF', pink: '#ff7ac8', cyan: '#6fd8ff', amber: '#ffbe55', green: '#62e6a8', red: '#ff6b86',
         'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(11,10,16,.62)', 'sk-dock-line': 'rgba(255,255,255,.10)', 'sk-ddot': 'rgba(255,255,255,.6)', 'sk-tour': 'rgba(11,10,16,.80)', 'sk-dim': 'rgba(11,10,16,.70)', 'sk-win': 'rgba(16,14,22,.72)' }) },
   ];
+  // Each skin's own display face (the one its Home clock wears; fonts self-hosted in skins.css), for the preview cards
+  // in the skin picker. Kept outside the entries so each skin definition stays as its author made it.
+  const FACES = {
+    nebula: { family: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif', weight: 600 },
+    grove: { family: '"Sk Fraunces", Georgia, serif', weight: 600 },
+    tide: { family: '"Sk Jost", ui-sans-serif, sans-serif', weight: 400 },
+    ember: { family: '"Sk Cormorant", Georgia, serif', weight: 500, style: 'italic' },
+    signal: { family: '"Sk Mono", ui-monospace, monospace', weight: 500 },
+    sepia: { family: '"Sk Fraunces", Georgia, serif', weight: 600 },
+  };
   const FAMS = (() => { // resolved once: every skin entry gets .family, every family its palettes in SKINS order
     const out = [];
     for (const s of SKINS) {
@@ -355,7 +365,7 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 
   window.WosSkin = {
-    list: SKINS.map(s => ({ id: s.id, family: s.family, name: s.name, who: s.who, bg: s.t.bg, accent: s.t.violet })),
+    list: SKINS.map(s => ({ id: s.id, family: s.family, name: s.name, who: s.who, bg: s.t.bg, accent: s.t.violet, face: FACES[s.id] || null, t: { ...s.t } })),
     // Skins (families) with their palettes, in list order. Picking a skin puts on the palette last worn in it.
     families: FAMS,
     familyOf(id) { return (SKINS.find(s => s.id === id) || SKINS[0]).family; },
