@@ -15,9 +15,10 @@ test('app kinds are gated on our three skins only', () => {
   assert.match(app, /\$\{grp\('Apps', wiz\)\}\$\{grp\('Views', views\)\}/);
 });
 test('system apps lead each group', () => {
+  assert.match(app, /'setup'/);
   assert.match(app, /const byName = \(x, y\) => \(isSystem\(y\) - isSystem\(x\)\) \|\| x\.name\.localeCompare/);
 });
 test('kind styles live only in our skin packages', () => {
-  for (const f of ['obsidian', 'landscapes']) assert.match(css(f), /\.lapp-sys \.ic \{ outline/);
-  for (const f of ['nebula', 'grove', 'tide', 'ember', 'signal']) { try { assert.doesNotMatch(css(f), /lapp-sys|new-desk\.kinds/); } catch (e) { if (e.code !== 'ENOENT') throw e; } }
+  for (const f of ['obsidian', 'landscapes']) { assert.match(css(f), /\.lapp-sys \.ic \{ border: 3px solid #8f63ff/); assert.match(css(f), /\.launcher \.lclose/); }
+  for (const f of ['nebula', 'grove', 'tide', 'ember', 'signal']) { try { assert.doesNotMatch(css(f), /lapp-sys|lclose|new-desk\.kinds/); } catch (e) { if (e.code !== 'ENOENT') throw e; } }
 });
