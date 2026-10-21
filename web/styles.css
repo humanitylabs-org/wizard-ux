@@ -661,7 +661,7 @@ body {
 .settings.open { transform: none; opacity: 1; }
 .settings-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 14px 14px; scrollbar-width: none; touch-action: pan-y; overscroll-behavior: contain; }
 .settings-body::-webkit-scrollbar { display: none; }
-.st-close { position: absolute; top: 10px; right: 12px; width: 34px; height: 34px; border-radius: 50%; background: rgba(205, 190, 255, .08); color: var(--ink-2); font-size: 15px; }
+.st-close { position: absolute; z-index: 3; top: 10px; right: 12px; width: 34px; height: 34px; border-radius: 50%; background: rgba(205, 190, 255, .08); color: var(--ink-2); font-size: 15px; }
 /* Sent pill: after the orb sends, the transcript card collapses to one short line above the orb
    and fades (~1.2 s). Same quiet confirmation as the floating orb; the sent words stay in the thread. */
 .voice .transcript.brief {
