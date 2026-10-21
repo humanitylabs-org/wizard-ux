@@ -89,8 +89,13 @@ def publish(args):
             raise ValueError("only semantic versions or dated candidate tags are accepted")
     root = Path(os.environ["WIZARD_CI_ROOT"])
     work_root = os.environ.get('WIZARD_WORK_ROOT')
-    if not work_root or not root.resolve().is_relative_to(Path(work_root).expanduser().resolve()):
-        raise RuntimeError("set WIZARD_WORK_ROOT; build storage must be within that configured worker volume")
+    if work_root:
+        if not root.resolve().is_relative_to(Path(work_root).expanduser().resolve()):
+            raise RuntimeError("build storage must be within WIZARD_WORK_ROOT (the configured worker volume)")
+    elif os.stat(root).st_dev == os.stat("/").st_dev:
+        # The runner predates WIZARD_WORK_ROOT (#270): keep the old guarantee without a committed path,
+        # build storage must sit on its own volume, never the small system disk.
+        raise RuntimeError("set WIZARD_WORK_ROOT, or put WIZARD_CI_ROOT on the worker's separate build volume")
     lock_path = Path(os.environ["WIZARD_CI_WORKER_LOCK"])
     print("Waiting for shared heavy-worker lock", flush=True)
     with lock_path.open("a") as lock:
