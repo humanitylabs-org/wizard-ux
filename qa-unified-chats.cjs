@@ -95,6 +95,19 @@ async function phone(b) {
   ok(privRows.length === 2 && /GLM 5\.3/.test(privRows[0]) && /DeepSeek/.test(privRows[1]), 'phone: Private group lists the private agent’s models', JSON.stringify(privRows));
   const mainRows = await p.locator('.ch-psheet .mrow:not(.more):not(.priv)').allInnerTexts();
   ok(mainRows.some(t => /Opus/.test(t)), 'phone: the main agent’s models are still available beside the Private group', JSON.stringify(mainRows));
+  // James 18 Oct: choosing GLM or DeepSeek means the private agent. The main agent's own Tinfoil route never sits
+  // beside the Private group (it would put a locked GLM into the shared history); on skins that show Tinfoil too.
+  const tin = await p.evaluate(() => { const M = window.WosModels, root = document.documentElement, was = root.dataset.skin;
+    root.dataset.skin = 'obsidian';
+    const rowsOf = h => { const t = document.createElement('div'); t.innerHTML = h; return [...t.querySelectorAll('.mrow:not(.more):not(.priv)')].map(e => e.innerText.trim()); };
+    const priv = M.privateOptions(), cur = { model: 'claude-opus-5-5', provider: 'anthropic' };
+    const r = { base: rowsOf(M.sheetHtml({ mode: 'new', cur, all: true, priv: [] }).html),
+      sheet: rowsOf(M.sheetHtml({ mode: 'new', cur, all: true, priv }).html), pop: rowsOf(M.popHtml({ mode: 'new', cur, all: true, priv }).html),
+      onMainGlm: rowsOf(M.sheetHtml({ mode: 'thread', cur: { model: 'glm-5-3', provider: 'custom:wizard-tinfoil' }, all: true, priv }).html) };
+    root.dataset.skin = was || ''; if (!was) delete root.dataset.skin; return r; });
+  ok(tin.base.some(t => /glm/i.test(t)), 'fixture: without a private agent the main picker still offers its own Tinfoil GLM', JSON.stringify(tin.base));
+  ok(!tin.sheet.some(t => /glm|deepseek|tinfoil/i.test(t)) && !tin.pop.some(t => /glm|deepseek|tinfoil/i.test(t)), 'phone: with a Private group, GLM/DeepSeek appear only there (no shared-Hermes Tinfoil row)', JSON.stringify(tin));
+  ok(tin.onMainGlm.some(t => /glm/i.test(t)), 'phone: a thread already on the main Tinfoil route still shows its current model', JSON.stringify(tin.onMainGlm));
   await shot(p, 'phone-04-picker-private-group');
   await grp.locator('.mrow', { hasText: 'DeepSeek' }).click(); await wait(500);
   const chip = await p.locator(`[data-chats="${wid}"] [data-chmodel]`).evaluate(e => ({ t: e.innerText, priv: e.classList.contains('private'), lock: !!e.querySelector('.ag-lock') }));
