@@ -30,6 +30,7 @@ window.WizCore.chats = function createChats(H) {
   const { esc, clip, norm, ago, emoOf } = window.WizCore;
   const LIVE = window.WizLive;
   const OUTBOX = window.WosOutbox || null;
+  const BOOM = window.WosBoomerang;
   const reach = () => window.WizReach?.failure() || { short: 'Checking connection · retrying' };
   const troubleshoot = '<button type="button" class="pbtn" data-chtroubleshoot>Open Troubleshooter</button>';
   /* ---- shims: the original body's names, backed by the host ---- */
@@ -220,18 +221,18 @@ window.WizCore.chats = function createChats(H) {
   let rowListAgent = '';
   const privRow = s => !rowListAgent && !!LIVE.isPrivate?.(s.id);
   function chatRow(s, snip) {
-    const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), needs = ['waiting_for_approval', 'unknown'].includes(s.status) || s.status === 'failed' || s.status === 'interrupted';
+    const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), boomDue = !!BOOM?.dueFor(s.id).length, needs = boomDue || ['waiting_for_approval', 'unknown'].includes(s.status) || s.status === 'failed' || s.status === 'interrupted';
     // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Your call, then its one line.
     const def = deferredOf(s) && !working && !needs;
     const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi');
     // The row icon says what the thread wants from James (replaced the per-thread ✦ star, 10 Oct 2026).
     // Emphasis is read state only (bold = unread, like an inbox); the status never changes weight or fades a row.
-    const kind = working ? (s.pend === 'waiting' ? 'offline' : 'working') : s.status === 'failed' || s.status === 'interrupted' ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
+    const kind = working ? (s.pend === 'waiting' ? 'offline' : 'working') : boomDue ? 'needs' : s.status === 'failed' || s.status === 'interrupted' ? 'failed' : ['waiting_for_approval', 'unknown'].includes(s.status) ? 'approval' : def ? 'deferred' : at ? (at.state === 'needs_you' ? 'needs' : at.state) : 'none';
     // The icon's meaning in words, in the icon's colour, at the preview's own weight (James, 10 Oct 2026:
     // "most people won't know what those icons mean … same color as the icon … don't make it any brighter or bolder").
-    const lab = s.status === 'unknown' ? '<em class="att approval">Needs recovery:</em> ' : STI_LAB[kind] ? `<em class="att ${kind}">${STI_LAB[kind]}:</em> ` : '';
+    const lab = boomDue ? '<em class="att needs">Reminder:</em> ' : s.status === 'unknown' ? '<em class="att approval">Needs recovery:</em> ' : STI_LAB[kind] ? `<em class="att ${kind}">${STI_LAB[kind]}:</em> ` : '';
     const pv = working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
-      : needs ? lab + esc(clip(s.preview || '', 110))
+      : needs ? lab + esc(clip(boomDue ? BOOM.dueFor(s.id)[0]?.note || BOOM.dueFor(s.id)[0]?.context : s.preview || '', 110))
       : def ? lab + esc(clip(attOf(s)?.ask || s.preview || '', 140))
       : at ? lab + esc(clip(at.ask, 140))
       : esc(clip(s.preview || '', 110));
@@ -741,7 +742,7 @@ window.WizCore.chats = function createChats(H) {
     let h = '';
     // A provider sign-out has its own panel (Open Claude / Open ChatGPT) in place of Hermes' generic failed-turn notice.
     if (last && reconnect && tn.a?.failed) tn = { ...tn, a: null };
-    if (tn.u) h += `<div class="msg u"><div class="bub">${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
+    if (tn.u) h += `<div class="msg u" data-turn-at="${tn.u.at}"><div class="bub">${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta"><button type="button" data-boom-remind="${tn.u.at}" title="Remind me about this message">Remind</button>${timeTag(tn.u.at)}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += runContextHtml(tn.later);
     const live = last && working;
@@ -798,6 +799,7 @@ window.WizCore.chats = function createChats(H) {
     const s = LIVE.session(sid); if (!s || !ACT[a]) return;
     const w = W[wid];
     vib(8);
+    if (a === 'defer' && BOOM) { BOOM.open({ sessionId:sid, targetKind: 'thread', context:s.title, note:s.attention?.ask || '' }); return; }
     if (a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', 'Marked done'], defer: ['◷', 'Deferred · bottom of Ready'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
@@ -1072,6 +1074,8 @@ window.WizCore.chats = function createChats(H) {
     const working = !!s && WORKING_ST.has(s.status);
     const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : s?.status === 'unknown' ? 'Needs recovery · needs your acknowledgement' : s?.status === 'stopping' ? 'Stopping…' : working ? (window.WosWork?.helperLabel(s.helperStatus) || (s.waitingOn === 'helper' ? `A helper is finishing this for ${agentName(TAG)}` : `${agentName(TAG)} is working`)) : s?.status === 'waiting_for_approval' ? 'Waiting for your response' : s?.deferred && !s.archived ? 'Deferred' : s?.archived ? 'Archived' : s ? `Updated ${ago(s.lastAssistantAt || s.updatedAt)}` : '';
     const turns = c.loadedFor === w.thread || c.cachedFor === w.thread ? c.turns || [] : null;
+    const pendingBoom = s && BOOM?.pendingFor(s.id);
+    const focusBoom = pendingBoom || (s && BOOM?.openedFor(s.id));
     c.media = []; c.texts = [];
     let msgs;
     const pend = pendingFor(w);
@@ -1081,6 +1085,7 @@ window.WizCore.chats = function createChats(H) {
     else {
       const all = turns || [];
       if (c.showFor !== w.thread) { c.show = PAGE; c.showFor = w.thread; }
+      if (focusBoom?.anchor_at) c.show = all.length;
       const from = Math.max(0, all.length - c.show), shown = all.slice(from);
       let day = '';
       // Renames show where they happened ("Renamed from …"), so the old name still finds its place in the thread.
@@ -1096,6 +1101,7 @@ window.WizCore.chats = function createChats(H) {
           return rnBefore(at) + div + turnHtml(c, tn, k === arr.length - 1, working, s?.helperStatus, s?.reconnect);
         }).join('')
         + rns.splice(0).map(rnHtml).join('')
+        + (s && BOOM ? BOOM.banner(s.id) : '')
         + (s?.safeError && !s?.reconnect ? `<div class="appr" role="status"><b>Reply not sent</b><p>${esc(s.safeError)}</p></div>` : '')
         + approvalHtml(c, s)
         + pend.map(p => pendingHtml(p, c)).join('')
@@ -1145,8 +1151,12 @@ window.WizCore.chats = function createChats(H) {
     if (keep) nb.scrollTop = nb.scrollHeight - keep.h + keep.top;
     else if (PW && PW.position(w, el, nb, { keep, atBottom, box, boxTop, turns, working })) {} // reading position (#18)
     else nb.scrollTop = atBottom ? nb.scrollHeight : (boxTop ?? nb.scrollHeight);
+    if (focusBoom) {
+      const anchor = focusBoom.anchor_at ? nb.querySelector(`[data-turn-at="${Number(focusBoom.anchor_at)}"]`) : nb.querySelector(`[data-boom-id="${focusBoom.id}"]`);
+      if (anchor) { anchor.classList.add('boom-anchor'); if (pendingBoom) { anchor.scrollIntoView({ block:'center' }); void BOOM.opened(pendingBoom.id); } }
+    }
     // Photos load after layout: keep a thread that was at the bottom pinned to the bottom.
-    if (!keep && atBottom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
+    if (!keep && atBottom && !focusBoom) nb.querySelectorAll('img').forEach(im => { if (!im.complete) im.addEventListener('load', () => { if (nb.scrollHeight - nb.scrollTop - nb.clientHeight < 400) nb.scrollTop = nb.scrollHeight; }, { once: true }); });
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus(); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
     growTa(el.querySelector('textarea'));
     // Desktop renders before revealing its thread pane. Measure once it is visible,
@@ -1704,6 +1714,18 @@ window.WizCore.chats = function createChats(H) {
   function click(e, id) {
     if (e.target.closest('[data-chtroubleshoot]')) { window.WizReach?.open(); return true; }
     const w = H.win(id); if (!w) return false;
+    const remind = e.target.closest('[data-boom-remind]');
+    if (remind && BOOM && w.thread && w.thread !== '__new__') {
+      const at = Number(remind.dataset.boomRemind), turn = (ch(id).turns || []).find(t => t.u?.at === at);
+      BOOM.open({ sessionId:w.thread, targetKind: 'message', anchorAt:at, context:turn?.u?.text || LIVE.session(w.thread)?.title || 'Message' }); return true;
+    }
+    if (e.target.closest('[data-boom-id]') && BOOM) {
+      void BOOM.handle(e.target, reminder => {
+        openChat(id, reminder.session_id);
+        const c = ch(id); c.boomAnchor = Number(reminder.anchor_at) || 0;
+        setTimeout(() => { const node=elOf(id)?.querySelector(`[data-turn-at="${c.boomAnchor}"]`); if(node){node.classList.add('boom-anchor');node.scrollIntoView({block:'center'});} },120);
+      }); return true;
+    }
     const hc = e.target.closest('[data-helper-continue]');
     if (hc) {
       if (hc.disabled) return true; hc.disabled=true; hc.textContent='Resuming…';
@@ -1882,6 +1904,7 @@ window.WizCore.chats = function createChats(H) {
   const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent }) : null;
   restoreSealed();
   window.addEventListener('wos:chat-pins', () => { for (const id of Object.keys(CH)) { const w = W[id]; if (w && !w.thread && !holdList(id)) renderChats(w); } });
+  BOOM?.onChange(() => { for (const id of Object.keys(CH)) { const w=W[id]; if(w) renderChats(w); } });
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
   addEventListener('wizreachchange', () => {
