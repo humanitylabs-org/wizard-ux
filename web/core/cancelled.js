@@ -144,7 +144,7 @@
   }
   async function remove(id) {
     const t = all().find(x => x.id === id); if (!t) return;
-    if (t.custody) { const removed = await window.WosOutbox.remove(id); if (!removed) { toast('!', 'Deletion not saved · keep Wizard open', 2400); return; } }
+    if (t.custody) { const removed = await window.WosOutbox.remove(id); if (!removed) { toast('!', window.WosOutbox.quarantined?.(id) ? 'Kept · device storage isn’t answering yet; try again shortly' : 'Deletion not saved · keep Wizard open', 2600); return; } }
     else if (t.native) { try { DEV().cancelledDelete(id); } catch (e) {} } else await removeWeb(id);
     delete texts[id]; saveTexts(); open.delete(id);
     toast('✕', 'Deleted', 1200); repaint();

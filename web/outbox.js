@@ -652,7 +652,21 @@
     },
     get(id) { return items.get(id) || null; },
     landed(id) { const it = items.get(id); if (it?.state === 'sent') del(id); },
-    async remove(id) { const it = items.get(id); if (!it || quarantine.has(id) || ['sending', 'transcribing', 'processing'].includes(it.state)) return false; await del(id); return !!items.get(id)?.durable; },
+    async remove(id) {
+      // Re-check device storage first: a recovery that clears quarantine makes this an ordinary delete.
+      if (quarantine.has(id) && !recovered) await load().catch(() => {});
+      const it = items.get(id); if (!it || ['sending', 'transcribing', 'processing'].includes(it.state)) return false;
+      if (quarantine.has(id)) {
+        // Quarantine stops a fallback copy from replaying or overwriting an unreadable primary receipt. The owner's
+        // explicit Delete of a recording that never had delivery intent (cancelled/interrupted take, dictation) can
+        // do neither: it writes a terminal tombstone, which wins over every other copy on every future recovery.
+        // Messages with delivery intent stay quarantined until storage is verified (James, 21 Oct 2026: ten
+        // recovered takes refused Delete with "Deletion not saved" while the phone's IndexedDB was unavailable).
+        if (!['capture', 'dictation'].includes(it.kind) || it.deliveryRequested || it.body || it.steerBody || it.steerDispatch) return false;
+        quarantine.delete(id);
+      }
+      await del(id); return !!items.get(id)?.durable;
+    },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     onSent(fn) { sentHooks.add(fn); return () => sentHooks.delete(fn); },
     notice, paintNotice, pump, load, bounded, TRANSCRIBE_TIMEOUT_MS, _items: items, AUTO_TRIES, BACKOFF,
