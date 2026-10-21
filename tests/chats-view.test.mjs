@@ -58,6 +58,9 @@ test('provider receives same live authority, thread navigation and lifecycle cle
   h.core.forget('a'); assert.equal(unmounts, 1); assert.equal(h.callback, null); assert.equal(h.removed, 1);
 });
 test('fixture uses only the host API, including skin-package banned API rules', () => {
+  const h = harness();
   const text = fs.readFileSync(new URL('../web/core/chats-fixture-view.js', import.meta.url), 'utf8');
+  assert.doesNotThrow(() => h.api.lint(text));
   for (const token of ['addEventListener', 'setTimeout', 'setInterval', 'requestAnimationFrame', 'fetch(', 'XMLHttpRequest', '__wos', '__wux', 'localStorage', 'sessionStorage', 'innerHTML', 'outerHTML', 'history.', 'document.cookie', 'eval(', 'new Function', 'import(', 'WebSocket']) assert.ok(!text.includes(token), token);
+  for (const bad of ['fetch("/secret")', 'import x from "./child.js"', 'import ("/child.js")', 'window.__wos.reset()']) assert.throws(() => h.api.lint(bad), /banned|import/);
 });

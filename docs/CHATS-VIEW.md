@@ -94,8 +94,10 @@ launcher/picker entries. Desktop can open each in a separate tiled window.
 **Trust boundary:** this is approved installed code with shell-page privileges,
 not a JavaScript sandbox. Providers follow the skin-package banned-API rules
 (no fetch/storage/history/global listeners/eval/imports/shell internals); the
-example is linted by `tests/chats-view.test.mjs`. App Manager must validate/lint
-installed packages before forwarding these fields. Do not expose arbitrary owner
+example is linted by `tests/chats-view.test.mjs`; the loader also preflights module
+source before import. This is a strict string lint, not an execution sandbox or
+integrity seal (preflight and import are separate reads). App Manager must validate/lint
+and pin installed packages before forwarding these fields. Do not expose arbitrary owner
 links as `provides: [chats]`.
 
 Development only: `?chatsview=fixture` or `wos.chatsview.fixture=1` enables the

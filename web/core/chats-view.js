@@ -44,12 +44,23 @@
     if (!installed.has(id)) return Promise.reject(Error('Chats view is not installed'));
     if (!loads.has(id)) {
       const entry = installed.get(id);
-      loads.set(id, import(entry.module).then(m => {
+      loads.set(id, fetch(entry.module, { cache: 'no-store' }).then(async response => {
+        if (!response.ok) throw Error('Chats view could not be read');
+        lint(await response.text());
+        return import(entry.module);
+      }).then(m => {
         if (installed.get(id) !== entry || m.default?.id !== id) throw Error('Chats view registration changed');
         register(m.default); return providers.get(id);
       }));
     }
     return loads.get(id);
+  }
+  // Same deliberately strict package lint as skins; approved code, not a JS sandbox.
+  function lint(source) {
+    for (const token of ['addEventListener', 'setTimeout', 'setInterval', 'requestAnimationFrame', 'fetch(', 'XMLHttpRequest', '__wos', '__wux', 'localStorage', 'sessionStorage', 'innerHTML', 'outerHTML', 'history.', 'document.cookie', 'eval(', 'new Function', 'import(', 'WebSocket']) {
+      if (source.includes(token)) throw Error('Chats view uses a banned API: ' + token);
+    }
+    if (/\bimport\s*(?:[({*'\"]|[a-zA-Z_$])/.test(source)) throw Error('Chats views cannot import other modules');
   }
   function create(H) {
     const regions = new Map(), bypass = new Set(), failed = new Set();
@@ -66,6 +77,7 @@
       if (regions.get(r.key) !== r) return;
       const name = installed.get(r.id)?.name || r.id;
       failed.add(r.id); release(r.key); r.el.replaceChildren();
+      if (selected === r.id) selected = DEFAULT;
       H.toast('!', `${name} couldn’t open. Showing Chats instead.`, 6000);
       const w = H.win(owner(r.key)); if (w) { w.chatsProvider = DEFAULT; H.save(); }
       r.paint();
@@ -122,7 +134,7 @@
     core.views = Object.freeze({ providerFor, defaultId: () => selected, name: id => installed.get(id)?.name || 'Chats' });
     return core;
   }
-  window.WizChatsHost = Object.freeze({ contract: VERSION, register, configure, create, moduleURL,
+  window.WizChatsHost = Object.freeze({ contract: VERSION, register, configure, create, moduleURL, lint,
     defaultId: () => selected, installed: () => [...installed.values()].map(a => ({ ...a })),
     tiles: () => [...installed.values()].filter(a => a.id !== DEFAULT || installed.size > 1).map(a => ({ id: a.id, name: a.id === DEFAULT ? 'Chats (standard)' : a.name, kind: 'chats', chatsProvider: a.id, icon: '✦', g: ['var(--violet-2)', 'var(--violet-2)'], desc: 'Chats view · same conversations' })),
   });

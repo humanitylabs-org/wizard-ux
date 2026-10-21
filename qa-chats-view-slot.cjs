@@ -13,11 +13,13 @@ async function run(browser, phone) {
   const writes = [], errors = [];
   await context.route('**/*', route => {
     if (route.request().method() === 'GET') return route.continue();
-    writes.push(route.request().method()); return route.fulfill({ status: 403, contentType: 'application/json', body: '{"error":"qa refuses writes"}' });
+    writes.push(route.request().method() + ' ' + new URL(route.request().url()).pathname); return route.fulfill({ status: 403, contentType: 'application/json', body: '{"error":"qa refuses writes"}' });
   });
   await context.addInitScript(phone => {
-    localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.done', '1'); localStorage.setItem('wos.voiceTipSeen', 'true');
-    if (phone) localStorage.setItem('wos.chatsview.default', 'chats-fixture');
+    try {
+      localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.done', '1'); localStorage.setItem('wos.voiceTipSeen', 'true');
+      if (phone) localStorage.setItem('wos.chatsview.default', 'chats-fixture');
+    } catch (_) { /* sandboxed message previews have no storage origin */ }
   }, phone);
   const page = await context.newPage(); page.on('pageerror', e => errors.push(String(e)));
   const url = new URL(BASE); url.searchParams.set('chatsview', 'fixture');
@@ -26,8 +28,8 @@ async function run(browser, phone) {
   if (!phone) {
     await page.evaluate(() => {
       const app = WizCore.apps('desktop');
-      __wux.openApp(app.findApp('wizard-chats'));
-      __wux.openApp(app.findApp('chats-fixture'));
+      __wux.openApp(app.APP['wizard-chats']);
+      __wux.openApp(app.APP['chats-fixture']);
     });
     await page.waitForSelector('[data-chats-fixture]');
     const data = await page.evaluate(() => {
@@ -50,9 +52,9 @@ async function run(browser, phone) {
       ok(!!colour, `desktop: ${skin} inherits live Appearance tokens`);
       await page.screenshot({ path: path.join(OUT, `desktop-side-by-side-${skin}.png`) });
     }
-    await page.evaluate(() => __wux.openApp(WizCore.apps('desktop').findApp('chats-throws')));
+    await page.evaluate(() => __wux.openApp(WizCore.apps('desktop').APP['chats-throws']));
   } else {
-    const id = await page.evaluate(() => { __wos.openApp(WizCore.apps('mobile').findApp('wizard')); return Object.values(__wos.wins).find(w => w.chatsProvider === 'chats-fixture')?.id; });
+    const id = await page.evaluate(() => { __wos.openApp(WizCore.apps('mobile').APP.wizard); return Object.values(__wos.wins).find(w => w.chatsProvider === 'chats-fixture')?.id; });
     await page.waitForSelector('[data-chats-fixture]');
     ok(!!id, 'phone: Chats entry follows the slot default');
     const dock = await page.evaluate(id => { const desk = __wos.desks.findIndex(d => d.wins.includes(id)); __wos.goDesk(__wos.desks.findIndex(d => d.home), true); return desk; }, id);
@@ -62,12 +64,13 @@ async function run(browser, phone) {
     ok(await page.evaluate(id => !!__wos.wins[id]?.thread, id), 'phone: fixture opens the real thread');
     await page.evaluate(() => { window.__chatsDocument = document; history.back(); }); await wait(900);
     ok(await page.evaluate(id => document === window.__chatsDocument && __wos.wins[id] && !__wos.wins[id].thread, id), 'phone: browser Back leaves the thread, app and document stay open');
-    await page.evaluate(() => __wos.openApp(WizCore.apps('mobile').findApp('chats-throws')));
+    await page.evaluate(() => __wos.openApp(WizCore.apps('mobile').APP['chats-throws']));
   }
   await wait(700);
   ok((await page.locator('body').innerText()).includes('Broken Chats (fixture) couldn’t open. Showing Chats instead.'), `${phone ? 'phone' : 'desktop'}: throwing provider names itself and falls back`);
   ok(await page.locator('.ch-list').count() > 0, `${phone ? 'phone' : 'desktop'}: fallback has standard Chats list`);
-  ok(writes.length === 0, `${phone ? 'phone' : 'desktop'}: zero writes`, writes.join(','));
+  const refused = await page.evaluate(async () => (await (await fetch('/__qa/refused')).json()).refused);
+  ok(refused === 0 && writes.every(w => /^PUT \/wizard\/thread-seen$/.test(w)), `${phone ? 'phone' : 'desktop'}: zero live writes; all read receipts blocked with 403`, writes.join(','));
   ok(errors.length === 0, `${phone ? 'phone' : 'desktop'}: no page errors`, errors.join(' | '));
   await context.close();
 }
