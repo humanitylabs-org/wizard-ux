@@ -86,7 +86,7 @@
     if (!el.closest('[data-ub-all]')) return false;
     retryAll(ctx); return true;
   } });
-  /* My skin (core/my-skin.js): the owner's own CSS on top of the picked skin, kept in Files outside the shell. */
+  /* My skin: CSS plus an optional, per-version owner-approved hook module, kept in Files. */
   const mySkinSub = base => {
     const M = window.WosMySkin, st = M && M.state;
     if (!M) return '';
@@ -96,12 +96,16 @@
   };
   function mySkinRow(base) {
     if (!window.WosMySkin) return '';
-    return `<div class="st-row static my-skin-row"><span class="st-ic">✎</span><span class="st-tx"><b>My skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button><button type="button" class="ghost" data-myskin="reset">Reset</button></span></div>`;
+    const st = window.WosMySkin.state, js = st.script;
+    const script = js?.exists && !st.off ? `<div class="st-row static my-skin-row" data-myskin-script><span class="st-ic">⌘</span><span class="st-tx"><b>${js.approved ? 'My skin script on' : 'My skin script changed'}</b><small>Skins/My skin/skin.js · this device only</small></span><span class="ms-acts">${js.approved ? '<button type="button" class="ghost" data-myskin="off">Turn off</button>' : `<button type="button" data-myskin="on" data-myskin-hash="${esc(js.sha256 || '')}" ${js.valid ? '' : 'disabled'}>Turn on</button>`}</span></div>` : '';
+    return `<div class="st-row static my-skin-row"><span class="st-ic">✎</span><span class="st-tx"><b>My skin</b><small data-myskinsub>${esc(mySkinSub(base))}</small></span><span class="ms-acts"><button type="button" data-myskin="edit">Edit</button><button type="button" class="ghost" data-myskin="reset">Reset</button></span></div>${script}`;
   }
-  async function mySkinAction(ctx, what) {
+  async function mySkinAction(ctx, what, event) {
     const M = window.WosMySkin; if (!M) return;
+    if (what === 'on') { M.turnOn(event); return; }
+    if (what === 'off') { M.turnOff(); return; }
     if (what === 'edit') {
-      const url = `/files/files/${M.FILE.split('/').map(encodeURIComponent).join('/')}`;
+      const url = `/files/files/${(M.state.info?.path || M.FILE).split('/').map(encodeURIComponent).join('/')}`;
       const opened = window.WizCanOpen?.('files') && ctx.openLink ? ctx.openLink(url, 'My skin') : false;
       if (!opened) ctx.toast?.('✎', 'Ask your agent: "change my skin so …"', 2600);
       return;
@@ -133,9 +137,9 @@
   register({ id: 'look', aliases: ['skin'], html() {
     const S = window.WosSkin; if (!S) return '';
     return lookHtml(S);
-  }, act(ctx, el) {
+  }, act(ctx, el, event) {
     const my = el.closest('[data-myskin]');
-    if (my) { mySkinAction(ctx, my.dataset.myskin); return true; }
+    if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const S = window.WosSkin;
     const fb = el.closest('[data-skinfamily]');
     if (fb) {
@@ -232,11 +236,11 @@
       if (g) root.scrollTop += g.getBoundingClientRect().top - root.getBoundingClientRect().top - 8;
       (g?.querySelector('button:not(:disabled)') || root.querySelector('.st-title'))?.focus({ preventScroll: true });
     }
-    function dispatch(el) {
+    function dispatch(el, event) {
       const id = el.closest('[data-settings-feature]')?.dataset.settingsFeature, f = features.get(id);
-      return !!f?.act?.(ctx, el);
+      return !!f?.act?.(ctx, el, event);
     }
-    const click = e => dispatch(e.target);
+    const click = e => dispatch(e.target, e);
     const change = async e => {
       const input = e.target.closest('[data-skinfile]'); if (!input) return;
       const file = input.files?.[0]; if (!file) return;
@@ -276,6 +280,6 @@
     const at = controls.indexOf(document.activeElement);
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
-  window.WosMySkin?.on(() => { for (const m of mounts) { const sub = m.context?.root?.querySelector?.('[data-myskinsub]'); if (sub) { const S = window.WosSkin; sub.textContent = mySkinSub(S?.list.find(k => k.id === S.current)?.name || ''); } } });
+  window.WosMySkin?.on(() => { for (const m of mounts) m.render(); });
   window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, trap, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(({ id, aliases }) => ({ id, aliases: aliases || [] })); } };
 })();
