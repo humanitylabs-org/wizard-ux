@@ -159,6 +159,8 @@
     "core/my-skin.js",
     "core/notif-bell.js",
     "core/os-updates.js",
+    "core/own-views.css",
+    "core/own-views.js",
     "core/polish.css",
     "core/reach.js",
     "core/resources.css",
@@ -402,6 +404,10 @@
         "desktop"
       ],
       "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
+    },
+    "core/own-views.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
     },
     "core/music-voice.js": {
       "loadedBy": [
