@@ -6,7 +6,8 @@
  *
  * Same path as the Store's Get: `../store-install/_updates` is the App Manager's owner-only listener behind
  * Tailscale Serve (owner login, the shell's own Origin, JSON + X-Wizard-Store). No token reaches the browser.
- *   GET                       {mode, chosen, installed, latest, update_available, unpinned, checked, installing}
+ *   GET                       {mode, chosen, installed, latest, update_available, unpinned, checked, installing,
+ *                              interrupted (the last update was cut short, e.g. by a reboot; it is retried)}
  *   POST {"mode":"auto"|"ask"} the owner's choice (kept across installer reruns)
  *   POST {"action":"apply"}    start the update now
  * A box whose App Manager has no such route (older, or no Serve mount) shows nothing.
@@ -51,6 +52,10 @@
     if (s.installing) return ['Updating…', 'Takes 10–20 minutes · Wizard reconnects by itself'];
     if (s.unpinned) return ['Updated by hand', 'This Wizard isn’t on a release, so updates leave it alone'];
     const have = s.installed ? `Wizard OS ${s.installed}` : 'Wizard OS';
+    // The last update was cut short (the box restarted mid-update): the App Manager has cleared it so it can rerun.
+    if (s.interrupted && s.update_available) return s.mode === 'auto'
+      ? ['Update interrupted · retrying', `${have} → ${s.latest} · tries again tonight, or tap Update now`]
+      : ['Update interrupted', `${have} → ${s.latest} · tap Update now to try again`];
     if (s.update_available) return ['Update available', `${have} → ${s.latest}`];
     if (!s.checked) return [have, 'Couldn’t check for updates · trying again later'];
     return [have, 'Up to date'];
