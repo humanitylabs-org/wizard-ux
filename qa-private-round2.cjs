@@ -31,7 +31,7 @@ try{
   await pane.locator('[data-chsearch]').fill('cobaltwatermelon');await pane.locator(`[data-chopen="${SID}"]`).waitFor();
   ok(await pane.locator(`[data-chopen="${SID}"] .ag-lock`).count()>0,tag+': search result carries a lock');
   await p.screenshot({path:path.join(OUT,tag+'-private-content-search.png')});
-  await pane.locator(`[data-chopen="${SID}"]`).click();await pane.locator('.ch-thread').waitFor();
+  await pane.locator(`[data-chopen="${SID}"]`).click();await pane.locator('.ch-thread').waitFor();await pane.getByText('A forgotten cobaltwatermelon secret',{exact:false}).waitFor();
   ok((await pane.innerText()).includes('forgotten cobaltwatermelon'),tag+': matched private conversation opens');
   await p.evaluate(()=>window.__r2Document=document);
   if(mobile)await p.evaluate(()=>__wosNativeBack());else await pane.locator('[data-chback]').click();
