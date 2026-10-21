@@ -397,8 +397,18 @@
   // that app's colour; Home is a house; an empty desk is a faint ring; a desk with several windows carries a
   // small count. The current desk is the orb. Each is a thumb-sized button, so one tap jumps there.
   const deskSigil = i => window.WizCore.workspaceNav.icon(desks[i], W, winApp);
+  /* The current desk's app icon, kept inside the orb (#orbApp, hidden). Skins may show it so the orb reads as sitting
+   * on top of the app in view; nothing changes unless a skin unhides it. */
+  let orbAppHtml = null;
+  function paintOrbApp() {
+    const wrap = $('#orbWrap'); if (!wrap || !desks[idx]) return;
+    let el = document.getElementById('orbApp');
+    if (!el) { el = document.createElement('span'); el.id = 'orbApp'; el.className = 'orb-app'; el.hidden = true; el.setAttribute('aria-hidden', 'true'); wrap.appendChild(el); }
+    const h = deskSigil(idx); if (h !== orbAppHtml) { orbAppHtml = h; el.innerHTML = h; }
+  }
   function renderDots() {
     if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
+    paintOrbApp();
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
     const L = []; for (let i = Math.max(0, idx - 3); i < idx; i++) L.push(i);
     const R = []; for (let i = idx + 1; i <= Math.min(desks.length - 1, idx + 3); i++) R.push(i);
