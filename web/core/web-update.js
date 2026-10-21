@@ -13,6 +13,14 @@
   const url = p => new URL(p, BASE).href;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   let H = null; // host
+  const OURS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
+  function burst() {
+    if (document.querySelector('.wos-burst')) return;
+    const el = document.createElement('div'); el.className = 'wos-burst'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+    const sparks = Array.from({ length: 72 }, (_, i) => { const a = (i / 72) * 360 + (i * 7 % 5), d = 45 + (i * 37 % 40), w = 2 + (i % 4), h = 22 + (i * 13 % 40); return `<i style="--a:${a}deg;--d:${d}vmax;--t:${(i * 53 % 9) * 18}ms;--w:${w}px;--h:${h}px"></i>`; }).join('');
+    el.innerHTML = `<b class="wb-flash"></b><b class="wb-ring"></b><b class="wb-ring two"></b><b class="wb-ring three"></b><span class="wb-sparks">${sparks}</span><span class="wb-core"></span><span class="wb-text">Updating Wizard OS<em>.</em><em>.</em><em>.</em></span>`;
+    document.body.appendChild(el);
+  }
   const log = (...a) => { try { H?.log?.(...a); } catch (_) {} };
 
   /* What changed is read from ux-version.txt, rewritten by the repo's commit/merge/checkout hooks
@@ -126,6 +134,9 @@
   }
   async function go(why, p) {
     if (going) return false; going = true;
+    // Miguel's skins (Dark, Light, Landscapes): a tapped reload bursts across the screen and says Loading until
+    // the new build paints, so the tap visibly worked. James's skins are unchanged.
+    if (why === 'tap' && OURS.has(document.documentElement.dataset.skin || '')) { burst(); await new Promise(r => setTimeout(r, 900)); }
     try { H?.beforeReload?.(); } catch (_) {}
     window.WizAppReadingPosition?.flush();
     if (p?.keeps) {
