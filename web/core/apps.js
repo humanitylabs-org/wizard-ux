@@ -70,7 +70,11 @@
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const toTile = (a, trusted = false) => ({
     id: String(a.id), kind: 'wizard', name: String(a.name || a.id), icon: a.icon || String(a.name || a.id).trim().charAt(0).toUpperCase(),
-    g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id), url: a.url || '', desc: a.desc || '',
+    g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id),
+    originalUrl: a.url || '',
+    view: a.source === 'apps.json' && ['original', 'overlay', 'own'].includes(a.view?.mode) &&
+      (a.view.mode !== 'own' || a.view.url === `/wizard/views/${a.id}/`) ? a.view : { mode: 'original', url: a.url || '' },
+    url: a.source === 'apps.json' && a.view?.mode === 'own' && a.view.url === `/wizard/views/${a.id}/` ? a.view.url : a.url || '', desc: a.desc || '',
     ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '', system: a.system === true,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
@@ -91,6 +95,7 @@
     } catch (e) {}
   }
   const firstLoad = loadRemote();
+  window.WizCore.refreshApps = loadRemote;
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
   window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load()]);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
