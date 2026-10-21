@@ -49,24 +49,29 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
         web.setScrollCaptureCallback(this);
     }
 
-    private boolean eligible() {
+    private String ineligibleReason() {
+        if (script.isEmpty()) return "helper-unavailable";
+        if (!web.isAttachedToWindow()) return "view-detached";
+        if (!web.isShown()) return "view-hidden";
+        if ((activity.getWindow().getAttributes().flags & android.view.WindowManager.LayoutParams.FLAG_SECURE) != 0)
+            return "flag-secure";
         Uri u = Uri.parse(web.getUrl() == null ? "" : web.getUrl());
-        return !script.isEmpty() && web.isAttachedToWindow() && web.isShown() &&
-            (activity.getWindow().getAttributes().flags & android.view.WindowManager.LayoutParams.FLAG_SECURE) == 0 &&
-            (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(activity, u));
+        return Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(activity, u) ? null : "untrusted-origin";
     }
+    private boolean eligible() { return ineligibleReason() == null; }
 
     private final class Pending {
         final CancellationSignal signal;
         final Runnable failure;
-        final Runnable timeout = () -> fail();
+        final Runnable timeout = () -> fail("js-timeout-1800ms");
         boolean done;
+        boolean search;
         Pending(CancellationSignal signal, Runnable failure) {
             this.signal = signal; this.failure = failure;
-            if (pending != null) pending.fail();
+            if (pending != null) pending.fail("superseded");
             pending = this;
             main.postDelayed(timeout, 1800);
-            signal.setOnCancelListener(() -> main.post(this::fail));
+            signal.setOnCancelListener(() -> main.post(() -> fail("cancelled")));
         }
         boolean live() { return !done && !signal.isCanceled() && pending == this; }
         void finish(Runnable success) {
@@ -74,8 +79,10 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
             done = true; main.removeCallbacks(timeout); pending = null;
             signal.setOnCancelListener(null); success.run();
         }
-        void fail() {
+        void fail() { fail("capture-invalidated"); }
+        void fail(String reason) {
             if (done) return;
+            if (search) ScrollCaptureDiagnostics.empty(reason);
             done = true; main.removeCallbacks(timeout);
             if (pending == this) pending = null;
             signal.setOnCancelListener(null);
@@ -102,18 +109,25 @@ final class ChatScrollCapture implements ScrollCaptureCallback {
             Math.min(web.getHeight(), (int)Math.floor((b.optDouble("y")+b.optDouble("h"))*scale)));
     }
     @Override public void onScrollCaptureSearch(CancellationSignal signal, Consumer<Rect> ready) {
-        if (!eligible() || id != null || restoring) { ready.accept(new Rect()); return; }
-        Pending p = new Pending(signal, () -> ready.accept(new Rect()));
-        js(script + ";" + call("search", ""), b -> {
+        String rejected = ineligibleReason();
+        if (rejected == null && id != null) rejected = "capture-active";
+        if (rejected == null && restoring) rejected = "restoring";
+        if (rejected != null) { ScrollCaptureDiagnostics.empty(rejected); ready.accept(new Rect()); return; }
+        Pending p = new Pending(signal, () -> ready.accept(new Rect())); p.search = true;
+        js(script + ";(()=>{try{const c=window.__wosScrollCapture;return c.search()||{rejected:c.searchReason()};}catch(_){return {rejected:'exception'};}})()", b -> {
             if (!p.live()) return;
-            if (b == null || b.optDouble("vw") <= 0) { p.fail(); return; }
+            if (b == null) { p.fail("js-invalid-result-or-exception"); return; }
+            if (b.has("rejected")) { p.fail("js-" + b.optString("rejected")); return; }
+            if (b.optDouble("vw") <= 0) { p.fail("invalid-viewport"); return; }
             // innerWidth is integer-rounded on fractional-density phones. Using
             // width/innerWidth accumulates missing bands between capture tiles.
             scale = b.optDouble("dpr", 0);
-            if (scale <= 0 || Math.abs(web.getWidth() / scale - b.optDouble("vw")) > 2) { p.fail(); return; }
+            if (scale <= 0 || Math.abs(web.getWidth() / scale - b.optDouble("vw")) > 2) { p.fail("dpr-viewport-mismatch"); return; }
             bounds = rect(b);
-            Rect visible = new Rect(); web.getLocalVisibleRect(visible);
-            if (!visible.contains(bounds)) { p.fail(); return; }
+            if (bounds.isEmpty()) { p.fail("empty-mapped-bounds"); return; }
+            Rect visible = new Rect();
+            if (!web.getLocalVisibleRect(visible) || !visible.contains(bounds)) { p.fail("bounds-outside-local-visible-rect"); return; }
+            if (!eligible()) { p.fail("eligibility-changed"); return; }
             p.finish(() -> ready.accept(new Rect(bounds)));
         });
     }

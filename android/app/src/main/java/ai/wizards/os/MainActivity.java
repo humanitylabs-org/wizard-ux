@@ -258,6 +258,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).refreshScrollProxy();
                 // A commit (also a same-document hop). Never fires for a load that was abandoned or still hangs.
                 if (isWeb(url) && !mainFailed && sameHost(url, wantUrl) && reach != null && reach.isShowing() && !reach.isOffline()) landed();
             }
@@ -271,7 +272,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                if (view instanceof SelectionWebView) ((SelectionWebView)view).cancelScrollCapture();
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).scrollPageStarted();
                 pageUrl = url;
                 screenCaptureId = null;
                 setKeepAwake(false);
@@ -279,6 +280,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                if (view instanceof SelectionWebView) ((SelectionWebView)view).installScrollProxy();
                 topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
             }
 

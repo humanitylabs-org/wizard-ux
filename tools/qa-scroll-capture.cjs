@@ -16,7 +16,7 @@ function ok(mode, name, value, detail) { const row={mode,name,pass:!!value,detai
  const browser=await chromium.launch({headless:true,executablePath:process.env.QA_CHROME || undefined});
  try { for(const enabled of [false,true]) {
   const mode=enabled?'helper-on':'helper-off';
-  const ctx=await browser.newContext({viewport:{width:412,height:892},isMobile:true,hasTouch:true,serviceWorkers:'block'});
+  const ctx=await browser.newContext({viewport:{width:412,height:892},deviceScaleFactor:2.625,isMobile:true,hasTouch:true,serviceWorkers:'block'});
   await ctx.route('**/*',async r=>{
    const q=r.request(),u=new URL(q.url()),p=u.pathname;
    const json=x=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(x)});
@@ -41,14 +41,39 @@ function ok(mode, name, value, detail) { const row={mode,name,pass:!!value,detai
   await p.goto('http://scroll-capture.invalid/wizard-os-home/');
   await p.waitForFunction(()=>window.__wos?.live?.session('qa_sc_0'));
   await p.evaluate(()=>__wos.goDesk(1));await p.waitForTimeout(700);
-  if(enabled)await p.evaluate(helper);
+  if(enabled) {
+   await p.evaluate(()=>{window.qaMetrics=[];window.wizardScrollPort={postMessage(raw){qaMetrics.push({at:performance.now(),...JSON.parse(raw)});}};});
+   await p.evaluate(helper);
+  }
   await p.evaluate(()=>{window.qaOwner=()=>{const w=Object.values(__wos.wins).find(w=>w.app==='chats');return {w,el:document.querySelector(`[data-chats="${w.id}"]`)};};window.qaScroller=()=>qaOwner().el.querySelector('.ch-msgs,.ch-scroll');});
-  const open=async id=>{await p.evaluate(id=>__wos.openWizardThread(id),id);await p.waitForFunction(id=>qaOwner().w.thread===id&&qaOwner().el.querySelector('.ch-msgs .msg.a'),id);await p.waitForTimeout(400);};
+  const open=async id=>{await p.evaluate(id=>__wos.openWizardThread(id),id);await p.waitForFunction(id=>qaOwner().w.thread===id&&qaOwner().el.querySelector('.ch-msgs .msg.a'),id);await p.waitForTimeout(400);await p.evaluate(()=>qaScroller().dispatchEvent(new Event('wheel',{bubbles:true})));await p.waitForTimeout(400);};
   const begin=async id=>p.evaluate(id=>{const e=qaScroller();e.scrollTop=160;window.qaOld=e;window.qaSaved=e.scrollTop;const b=__wosScrollCapture.search();return {search:b,start:__wosScrollCapture.start(id)};},id);
   const paint=async()=>p.evaluate(()=>{const {w,el}=qaOwner();w.thread?__wos.chats.renderThread(w,el):__wos.chats.renderChatList(w,el);});
   try {
    ok(mode,'synthetic session list in actual Wizard UI',await p.locator('[data-chopen="qa_sc_0"]').count()>0);
    if(enabled){
+    await p.waitForFunction(()=>qaMetrics.at(-1)?.height>qaMetrics.at(-1)?.extent);
+    const initial=await p.evaluate(()=>{const b=__wosScrollCapture.search(),m=qaMetrics.at(-1);return {b,m};});
+    ok(mode,'proxy pushes CSS metrics and fractional DPR using AOSP candidate',initial.m.height===initial.b.height&&initial.m.extent===initial.b.h&&initial.m.top===initial.b.top&&initial.m.dpr===2.625,initial);
+    await p.waitForTimeout(500);const idle=await p.evaluate(()=>qaMetrics.length);await p.waitForTimeout(650);
+    ok(mode,'proxy has no unchanged idle messages',await p.evaluate(n=>qaMetrics.length===n,idle));
+    await p.evaluate(()=>__wosScrollCapture.resumeProxy());await p.waitForFunction(n=>qaMetrics.length===n+1,idle);
+    ok(mode,'native resume can request one fresh unchanged snapshot',await p.evaluate(n=>qaMetrics.length===n+1,idle));
+    const routeKey=await p.evaluate(()=>{const key=qaMetrics.at(-1).key;history.replaceState(history.state,'',location.pathname+'?qa-proxy-route=1');return key;});
+    await p.waitForFunction(key=>qaMetrics.at(-1).key&&qaMetrics.at(-1).key!==key,routeKey);
+    ok(mode,'same-document route invalidates native scroll token without DOM changes',await p.evaluate(key=>!__wosScrollCapture.proxyScroll(key,'to',0),routeKey));
+    const moved=await p.evaluate(()=>{const e=qaScroller(),m=qaMetrics.at(-1);e.scrollTop=200;const a=__wosScrollCapture.proxyScroll(m.key,'by',50),b=__wosScrollCapture.proxyScroll(m.key,'by',70);return {a,b,top:e.scrollTop,document:document.scrollingElement.scrollTop};});
+    ok(mode,'serial programmatic deltas move only inner scroller',moved.a&&moved.b&&moved.top===320&&moved.document===0,moved);
+    await p.waitForFunction(()=>qaMetrics.at(-1)?.top===320);
+    ok(mode,'passive scroll updates offset',await p.evaluate(()=>qaMetrics.at(-1).top===qaScroller().scrollTop));
+    await p.evaluate(()=>{__wosScrollCapture.proxyScroll(qaMetrics.at(-1).key,'to',1e9);});
+    await p.waitForFunction(()=>{const m=qaMetrics.at(-1);return m.height-m.extent-m.top<1;});
+    ok(mode,'bottom reports clamped terminal offset',await p.evaluate(()=>{const m=qaMetrics.at(-1);return Math.abs(m.height-m.extent-m.top)<1;}));
+    const throttle=await p.evaluate(async()=>{qaMetrics.length=0;const e=qaScroller();for(let i=0;i<45;i++){e.scrollTop=i*7;await new Promise(r=>setTimeout(r,8));}await new Promise(r=>setTimeout(r,200));return {count:qaMetrics.length,min:Math.min(...qaMetrics.slice(1).map((m,i)=>m.at-qaMetrics[i].at))};});
+    ok(mode,'metrics throttled to at most 10 Hz',throttle.count>=2&&throttle.count<=7&&throttle.min>=99,throttle);
+    const stale=await p.evaluate(()=>{const old=qaMetrics.at(-1).key;qaOwner().el.dataset.draftFor='proxy-new-identity';const e=qaScroller(),top=e.scrollTop;return {rejected:!__wosScrollCapture.proxyScroll(old,'to',0),unchanged:e.scrollTop===top};});
+    ok(mode,'stale thread identity cannot move replacement',stale.rejected&&stale.unchanged,stale);
+    await p.evaluate(()=>delete qaOwner().el.dataset.draftFor);
     const b=await begin('list');
     if(!b.start)b.diagnostic=await p.evaluate(()=>{const e=qaScroller(),r=e.getBoundingClientRect();return {rect:r.toJSON(),vh:innerHeight,vw:innerWidth,height:e.scrollHeight,client:e.clientHeight,parents:(()=>{let n=e,a=[];while(n){const s=getComputedStyle(n);a.push({cls:n.className,transform:s.transform,scale:s.scale,rotate:s.rotate,perspective:s.perspective,zoom:s.zoom});n=n.parentElement;}return a;})(),hits:[.1,.5,.9].flatMap(x=>[.1,.5,.9].map(y=>{const h=document.elementFromPoint(r.left+r.width*x,r.top+r.height*y);return {x,y,hit:h?.outerHTML.slice(0,200),inside:e.contains(h),dock:h?.closest('.ch-fab,.ch-pill,.ch-latest')?.className};}))};});
     ok(mode,'visible overflowing list discovered',!!b.start,b);
@@ -58,14 +83,15 @@ function ok(mode, name, value, detail) { const row={mode,name,pass:!!value,detai
     ok(mode,'list hold flushed and reading position restored',await p.evaluate(()=>qaScroller()!==qaOld&&Math.abs(qaScroller().scrollTop-qaSaved)<2));
     // Real phone layout puts the new-chat button over a sampled corner of the list.
     const dock=await p.evaluate(()=>{const {el}=qaOwner(),f=el.querySelector('.ch-fab'),e=qaScroller(),r=e.getBoundingClientRect();
-     Object.assign(f.style,{position:'fixed',left:(r.left+r.width*.9-27)+'px',top:(r.top+r.height*.9-27)+'px',right:'auto',bottom:'auto'});
+     Object.assign(f.style,{position:'absolute',left:'0',top:'0',right:'auto',bottom:'auto',pointerEvents:'auto',zIndex:'99999',transform:'none'});
+     const fr=f.getBoundingClientRect();f.style.left=(r.left+r.width*.9-fr.left-27)+'px';f.style.top=(r.top+r.height*.9-fr.top-27)+'px';
      const covered=!e.contains(document.elementFromPoint(r.left+r.width*.9,r.top+r.height*.9));
      const found=!!__wosScrollCapture.search(),started=!!__wosScrollCapture.start('dock'),hidden=getComputedStyle(f).visibility==='hidden';
      const ended=__wosScrollCapture.end('dock'),restored=getComputedStyle(f).visibility==='visible'&&!f.style.visibility;
-     Object.assign(f.style,{position:'',left:'',top:'',right:'',bottom:''});return {covered,found,started,hidden,ended,restored};});
+     Object.assign(f.style,{position:'',left:'',top:'',right:'',bottom:'',pointerEvents:'',zIndex:'',transform:''});return {covered,found,started,hidden,ended,restored};});
     ok(mode,'floating new-chat button over list: discovered, hidden while capturing, restored',dock.covered&&dock.found&&dock.started&&dock.hidden&&dock.ended&&dock.restored,dock);
     const voice=await p.evaluate(()=>{const g=document.querySelector('#generalVoice.general-voice'),old=g.getAttribute('style'),e=qaScroller(),r=e.getBoundingClientRect();
-      g.style.cssText=`position:fixed;left:${r.left+r.width*.5-50}px;top:${r.top+r.height*.5-20}px;width:100px;height:40px;visibility:visible!important;display:block!important;z-index:99999;`;
+      g.style.cssText=`position:fixed;left:${r.left+r.width*.5-50}px;top:${r.top+r.height*.5-20}px;width:100px;height:40px;visibility:visible!important;display:block!important;pointer-events:auto!important;transform:none!important;z-index:99999;`;
       const covered=g.contains(document.elementFromPoint(r.left+r.width*.5,r.top+r.height*.5)),found=!!__wosScrollCapture.search(),started=!!__wosScrollCapture.start('voice-label'),hidden=getComputedStyle(g).visibility==='hidden';
       const ended=__wosScrollCapture.end('voice-label'),restored=g.style.getPropertyValue('visibility')==='visible'&&g.style.getPropertyPriority('visibility')==='important';
       old===null?g.removeAttribute('style'):g.setAttribute('style',old);return {covered,found,started,hidden,ended,restored};});
@@ -78,7 +104,8 @@ function ok(mode, name, value, detail) { const row={mode,name,pass:!!value,detai
     await p.evaluate(()=>{__wosScrollCapture.move('thread',600);const c=__wos.chats.ch(qaOwner().w.id);window.qaTurns=c.turns;window.qaShape=JSON.stringify(c.turns[0]);});
     await paint();ok(mode,'same-thread repaint held during acquisition',await p.evaluate(()=>qaScroller()===qaOld&&!!__wosScrollCapture.check('thread')));
     await p.evaluate(()=>__wosScrollCapture.end('thread'));await p.waitForTimeout(500);
-    ok(mode,'thread hold flushed and reading position restored',await p.evaluate(()=>qaScroller()!==qaOld&&Math.abs(qaScroller().scrollTop-qaSaved)<2));
+    const restored=await p.evaluate(()=>({held:!!qaOwner().w._scrollCaptureHeld,same:qaScroller()===qaOld,top:qaScroller().scrollTop,saved:qaSaved}));
+    ok(mode,'thread hold flushed and reading position restored',!restored.held&&!restored.same&&Math.abs(restored.top-restored.saved)<2,restored);
     // Stream payload uses real shell turn cache and renderer, not a surrogate DOM.
     await begin('stream');
     const stream=await p.evaluate(()=>{const c=__wos.chats.ch(qaOwner().w.id);const t=c.turns.at(-1);if(!t.a?.text)return false;t.a.text+='\n\nQA_STREAM_MARKER';return true;});
@@ -100,7 +127,11 @@ function ok(mode, name, value, detail) { const row={mode,name,pass:!!value,detai
     await begin('timeout');await p.evaluate(()=>{setTimeout=qaNativeTimeout;__wosScrollCapture.move('timeout',650);qaDeadline();});
     ok(mode,'30s helper deadline restores and clears marker',await p.evaluate(()=>!__wosScrollCapture.check('timeout')&&qaOld.scrollTop===qaSaved&&!qaOld.dataset.wosScrollCapture));
     await p.evaluate(()=>{const o=document.createElement('div');o.id='qaCover';o.style='position:fixed;inset:0;z-index:2147483647;background:black';document.body.append(o);});
-    ok(mode,'occluded thread rejected',await p.evaluate(()=>__wosScrollCapture.search()===null));await p.evaluate(()=>document.getElementById('qaCover').remove());
+    ok(mode,'occluded thread rejected',await p.evaluate(()=>__wosScrollCapture.search()===null));
+    ok(mode,'empty JS discovery records the precise occlusion reason',await p.evaluate(()=>__wosScrollCapture.searchReason().includes('occluded')));
+    await p.waitForFunction(()=>!qaMetrics.at(-1).key);ok(mode,'occlusion clears native metrics',await p.evaluate(()=>!qaMetrics.at(-1).key));
+    await p.evaluate(()=>document.getElementById('qaCover').remove());
+    await p.waitForFunction(()=>!!qaMetrics.at(-1).key);
     await p.evaluate(()=>{qaScroller().style.transform='scale(.8)';});
     ok(mode,'scaled scroll surface rejected (pixel geometry must match)',await p.evaluate(()=>__wosScrollCapture.search()===null));await p.evaluate(()=>qaScroller().style.transform='');
     await p.evaluate(()=>{qaScroller().style.height='20px';qaScroller().style.flex='none';});
