@@ -21,12 +21,12 @@ test('the saved choice stays the palette id; the last palette per skin is rememb
   assert.match(s, /return ids\.includes\(v\) \? v : ids\[0\]/, 'a stale or foreign saved palette falls back to the skin\'s first');
 });
 
-test('Settings › Look shows skin cards, then only the worn skin\'s colours', () => {
+test('Settings › Look shows every colour as a preview card, grouped under its skin', () => {
   const s = read('web/core/settings.js');
-  assert.match(s, /data-skinfamily="\$\{esc\(f\.id\)\}"/);
-  assert.match(s, /S\.list\.filter\(k => f\.palettes\.includes\(k\.id\)\)/);
-  assert.match(s, /aria-label="Colours"/);
-  assert.match(s, /S\.setFamily\(fb\.dataset\.skinfamily\)/);
+  assert.match(s, /<div class="skp-fam">\$\{esc\(f\.name\)\}<\/div>/);
+  assert.match(s, /f\.palettes\.map\(id => S\.list\.find\(k => k\.id === id\)\)/);
+  assert.match(s, /aria-label="\$\{esc\(f\.name \|\| 'Skin'\)\} colours"/);
+  assert.match(s, /pals\.map\(k => skinCard\(k, cur\)\)/);
 });
 
 test('Appearance v1 adds the skin family without changing the palette field', () => {
