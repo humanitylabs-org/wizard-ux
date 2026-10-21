@@ -21,6 +21,7 @@
     if (a.source !== 'apps.json' || !Array.isArray(a.provides) || !a.provides.includes('chats') || a.chats_view?.contract !== VERSION) return null;
     try {
       const base = new URL(a.url, location.origin), u = new URL(a.chats_view.module, base);
+      if (/%(?:2f|5c|25)/i.test(u.pathname + base.pathname)) return null;
       const prefix = base.pathname.endsWith('/') ? base.pathname : base.pathname.slice(0, base.pathname.lastIndexOf('/') + 1);
       if (base.origin !== location.origin || u.origin !== location.origin || prefix === '/' || !u.pathname.startsWith(prefix) || !u.pathname.endsWith('.js') || u.search || u.hash || u.username || u.password) return null;
       return u.href;
@@ -32,7 +33,11 @@
     for (const a of snapshot.apps || []) {
       const module = moduleURL(a);
       if (!module || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(a.id) || keep.has(a.id)) continue;
-      keep.add(a.id); installed.set(a.id, { id: a.id, name: String(a.name || a.id), module });
+      keep.add(a.id);
+      const previous = installed.get(a.id), name = String(a.name || a.id);
+      if (!previous || previous.module !== module || previous.name !== name) {
+        providers.delete(a.id); loads.delete(a.id); installed.set(a.id, { id: a.id, name, module });
+      }
     }
     for (const id of installed.keys()) if (!keep.has(id)) { installed.delete(id); providers.delete(id); loads.delete(id); }
     const choice = snapshot.slots?.chats?.default || snapshot.parking?.find(r => r.slot === 'chats')?.active;
@@ -88,9 +93,9 @@
       let id = providerFor(ow); if (!installed.has(id) || failed.has(id)) id = DEFAULT;
       el.classList.toggle('chats-view', id !== DEFAULT);
       let r = regions.get(key);
-      if (r && (r.id !== id || r.el !== el)) { release(key); r = null; }
+      if (r && (r.id !== id || r.el !== el || r.entry !== installed.get(id))) { release(key); r = null; }
       if (!r) {
-        r = { key, id, el, paint, w, kind, offs: new Set(), instance: null }; regions.set(key, r);
+        r = { key, id, el, paint, w, kind, entry: installed.get(id), offs: new Set(), instance: null }; regions.set(key, r);
         const guard = fn => (...args) => { if (regions.get(key) !== r) return; try { return fn(...args); } catch (_) { fallback(r); } };
         const listen = (target, type, fn) => { const cb = guard(fn); target.addEventListener(type, cb); const off = () => target.removeEventListener(type, cb); r.offs.add(off); return off; };
         r.host = Object.freeze({

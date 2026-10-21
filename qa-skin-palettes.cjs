@@ -32,7 +32,8 @@ async function run(b, mode) {
   const tap = async sel => {
     const r = await p.evaluate(s => { const e = [...document.querySelectorAll(s)].find(n => n.getClientRects().length); if (!e) return null; e.scrollIntoView({ block: 'center' });
       const b = e.getBoundingClientRect(); const x = b.x + b.width / 2, y = b.y + b.height / 2; const h = document.elementFromPoint(x, y); return { x, y, hit: !!h && (h === e || e.contains(h)) }; }, sel);
-    if (!r) return null; if (phone) await p.touchscreen.tap(r.x, r.y); else await p.mouse.click(r.x, r.y); await p.waitForTimeout(900); return r;
+    if (!r) return null; if (phone) await p.touchscreen.tap(r.x, r.y); else await p.mouse.click(r.x, r.y); await p.waitForTimeout(900);
+    await p.waitForFunction(() => !document.querySelector('.mz-intro')); return r;
   };
   const look = () => p.evaluate(() => { const g = [...document.querySelectorAll('[data-stgroup="look"]')].find(n => n.getClientRects().length); if (!g) return null;
     const sz = e => { const r = e.getBoundingClientRect(); return Math.round(Math.min(r.width, r.height)); };

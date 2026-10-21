@@ -48,6 +48,8 @@ async function run(browser, phone) {
     ok(await page.evaluate(d => __wux.wins[d.standard].thread === d.sid && __wux.wins[d.fixture].thread === d.sid && !!document.querySelector(`[data-chats="${d.standard}"] .ch-compose`) && !!document.querySelector(`[data-chats="${d.fixture}"] .ch-compose`), data), 'desktop: same thread and standard composer in both providers');
     for (const skin of ['nebula', 'obsidian-light']) {
       await page.evaluate(skin => WosSkin.set(skin), skin); await wait(900);
+      await page.waitForFunction(() => !document.querySelector('.mz-intro'));
+      ok(await page.locator('[data-chats-fixture]').isVisible(), `desktop: ${skin} view stays visible after skin intro`);
       const colour = await page.evaluate(() => getComputedStyle(document.querySelector('.chats-view')).getPropertyValue('--wz-text').trim());
       ok(!!colour, `desktop: ${skin} inherits live Appearance tokens`);
       await page.screenshot({ path: path.join(OUT, `desktop-side-by-side-${skin}.png`) });
@@ -74,8 +76,34 @@ async function run(browser, phone) {
   ok(errors.length === 0, `${phone ? 'phone' : 'desktop'}: no page errors`, errors.join(' | '));
   await context.close();
 }
+async function registryOnly(browser) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const errors = [], escaped = [];
+  await context.route('**/*', async route => {
+    const q = route.request(), url = new URL(q.url());
+    if (q.method() !== 'GET') return route.fulfill({ status: 403, body: '{}' });
+    if (url.pathname === '/wizard/v1/apps') {
+      const response = await route.fetch(), snapshot = await response.json();
+      // Candidate install projection only; this is NOT a live App Manager installation.
+      snapshot.apps.push({ id: 'chats-fixture', name: 'Installed fixture', source: 'apps.json', url: '/wizard-os-home/core/', provides: ['chats'], chats_view: { contract: 'wizard.chats-view/1', module: 'chats-fixture-view.js' } });
+      snapshot.apps.push({ id: 'uninstalled-link', name: 'Not installed', source: 'owner', url: '/uninstalled/', provides: ['chats'], chats_view: { contract: 'wizard.chats-view/1', module: 'view.js' } });
+      snapshot.slots = { chats: { default: 'chats-fixture' } };
+      return route.fulfill({ response, json: snapshot });
+    }
+    if (url.pathname.startsWith('/uninstalled/')) escaped.push(url.pathname);
+    return route.continue();
+  });
+  const page = await context.newPage(); page.on('pageerror', e => errors.push(String(e)));
+  const url = new URL(BASE); url.searchParams.delete('chatsview');
+  await page.goto(url.href); await page.waitForFunction(() => window.__wux && WizChatsHost.defaultId() === 'chats-fixture');
+  await page.evaluate(() => __wux.openApp(WizCore.apps('desktop').APP.wizard));
+  await page.waitForSelector('[data-chats-fixture]');
+  ok(await page.evaluate(() => !WizChatsHost.installed().some(a => a.id === 'chats-throws' || a.id === 'uninstalled-link')), 'registry: installed descriptor works without dev opt-in; owner links and dev providers are absent');
+  ok(escaped.length === 0 && errors.length === 0, 'registry: no rejected module loads or page errors', errors.join(' | '));
+  await context.close();
+}
 (async () => {
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader'] });
-  try { await run(browser, false); await run(browser, true); } catch (e) { ok(false, 'QA crashed', e.stack); }
+  try { await run(browser, false); await run(browser, true); await registryOnly(browser); } catch (e) { ok(false, 'QA crashed', e.stack); }
   await browser.close(); console.log(`\n${pass} pass, ${fail} fail · shots ${OUT}`); process.exitCode = fail ? 1 : 0;
 })();
