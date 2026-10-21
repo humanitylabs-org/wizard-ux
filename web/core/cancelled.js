@@ -142,12 +142,33 @@
       toast('!', 'Couldn’t transcribe · tap to try again', 2200);
     } finally { busy.delete(id); repaint(); }
   }
-  async function remove(id) {
-    const t = all().find(x => x.id === id); if (!t) return;
-    if (t.custody) { const removed = await window.WosOutbox.remove(id); if (!removed) { toast('!', window.WosOutbox.quarantined?.(id) ? 'Kept · device storage isn’t answering yet; try again shortly' : 'Deletion not saved · keep Wizard open', 2600); return; } }
+  // One deletion; returns '' on success or the reason it failed. remove() and deleteAll() share it.
+  async function drop(t) {
+    const id = t.id;
+    if (t.custody) {
+      let removed = false, why = '';
+      try { removed = await window.WosOutbox.remove(id); } catch (e) { why = String(e?.message || e); }
+      if (!removed) return why || window.WosOutbox.removeError?.(id) || 'device storage refused it';
+    }
     else if (t.native) { try { DEV().cancelledDelete(id); } catch (e) {} } else await removeWeb(id);
     delete texts[id]; saveTexts(); open.delete(id);
+    return '';
+  }
+  async function remove(id) {
+    const t = all().find(x => x.id === id); if (!t) return;
+    const why = await drop(t);
+    // Say why, so a failure on the phone is diagnosable from one screenshot.
+    if (why) { toast('!', 'Couldn’t delete · ' + why.slice(0, 90), 4000); repaint(); return; }
     toast('✕', 'Deleted', 1200); repaint();
+  }
+  let confirmAll = 0;
+  async function deleteAll() {
+    if (Date.now() - confirmAll > 4000) { confirmAll = Date.now(); repaint(); toast('!', 'Tap Delete all again to delete every recording here', 4000); return; }
+    confirmAll = 0;
+    const list = all(); let failed = 0, why = '';
+    for (const t of list) { const w = await drop(t); if (w) { failed++; why = why || w; } }
+    repaint();
+    toast(failed ? '!' : '✕', failed ? `Deleted ${list.length - failed} · ${failed} couldn’t be deleted · ${why.slice(0, 70)}` : `Deleted ${list.length}`, failed ? 5000 : 1600);
   }
 
   const ago = at => { const m = Math.round((Date.now() - at) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
@@ -165,6 +186,7 @@
     const l = all();
     return `<div class="st-group" data-cancelled><h4>Recovered &amp; cancelled recordings <span>${l.length || ''}</span></h4>
       ${l.length ? l.map(row).join('') : '<div class="st-empty">No recordings waiting.</div>'}
+      ${l.length > 1 ? `<button class="st-wide ghost" data-cx-all="delete">${Date.now() - confirmAll < 4000 ? 'Tap again to delete all ' + l.length : 'Delete all'}</button>` : ''}
       <details class="st-info"><summary aria-label="About recovered recordings">?</summary><p class="st-note">Interrupted and retained recordings stay until deleted. Older cancelled recordings may expire after a week (the newest ${MAX_KEPT}). Transcribe &amp; copy never sends to an agent.</p></details></div>`;
   }
   function repaint() {
@@ -173,6 +195,7 @@
     if (g) g.outerHTML = html();
   }
   function act(el) {
+    if (el.closest('[data-cx-all="delete"]')) { deleteAll(); return true; }
     const b = el.closest('[data-cx]'); if (!b) return false;
     const id = b.closest('[data-cxid]')?.dataset.cxid; if (!id) return true;
     const a = b.dataset.cx;
@@ -188,5 +211,5 @@
   setInterval(() => { for (const id of sessionWeb.keys()) retrySave(id, true); }, 5000);
   window.WosOutbox?.onChange(repaint);
   loadWeb().then(repaint).catch(() => {});
-  window.WosCancelled = { KEEP_FROM_MS, keepWeb, retainWeb: (blob, ms, text = '') => keepWeb(blob, ms, true, text), html, act, repaint, list: all, transcribe, retrySave, _texts: texts };
+  window.WosCancelled = { KEEP_FROM_MS, keepWeb, retainWeb: (blob, ms, text = '') => keepWeb(blob, ms, true, text), html, act, repaint, list: all, deleteAll, transcribe, retrySave, _texts: texts };
 })();
