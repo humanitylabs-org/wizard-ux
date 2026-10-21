@@ -171,6 +171,7 @@
     "core/resources.css",
     "core/resources.js",
     "core/scenery.js",
+    "core/schedules.js",
     "core/screen-capture.js",
     "core/screen-text.js",
     "core/sel-menu.css",
@@ -424,6 +425,10 @@
         "desktop"
       ],
       "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
+    },
+    "core/schedules.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/os-updates.js": {
       "loadedBy": [

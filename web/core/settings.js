@@ -15,6 +15,7 @@
     { id: 'phone', title: 'Phone', icon: '◉', available: android },
     { id: 'recovery', title: 'Unsent & recovered', icon: '↺' },
     { id: 'usage', title: 'AI usage', icon: '◴' },
+    { id: 'schedules', title: 'Schedules', icon: '◷', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates', icon: '◇' },
   ];
   const featurePages = { look: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', 'photos-backup': 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
@@ -32,6 +33,7 @@
     return items;
   }
   function subtitle(id, ctx) {
+    if (id === 'schedules') return 'Prompts on a schedule';
     if (id === 'appearance') return window.WosSkin ? lookName(window.WosSkin, window.WosSkin.current) : 'Default skin';
     if (id === 'chats') return 'Chats: ' + chatsName(chatsHost()?.defaultId() || 'wizard-chats');
     if (id === 'voice') { const v = window.WizCore.voiceStatus?.state; return `${v ? v.ready ? 'Voice ready' : 'Voice unavailable' : 'Checking voice'} · Mic: ${window.WosMic?.summary?.() || 'default'}`; }
@@ -304,6 +306,7 @@
       const top = root.scrollTop, paneTop = root.querySelector('.st-page')?.scrollTop || 0, active = root.contains(document.activeElement) ? document.activeElement : null;
       const attrs = active ? [...active.attributes].filter(a => a.name.startsWith('data-')) : [];
       const record = active?.closest('[data-ubid]')?.dataset.ubid;
+      const selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
       const pages = PAGES.filter(p => !p.available || p.available(ctx)), selected = page || (desktop ? 'appearance' : '');
       const heading = PAGES.find(p => p.id === selected)?.title || '';
       const items = attention(ctx);
@@ -317,11 +320,12 @@
       root.scrollTop = top;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = paneTop;
       const importStatus = root.querySelector('[data-skinimport-status]'); if (importStatus) importStatus.textContent = skinImportMessage;
-      if (attrs.length) { const scope = record ? root.querySelector(`[data-ubid="${CSS.escape(record)}"]`) : root; const sel = attrs.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join(''); scope?.querySelector(sel)?.focus({ preventScroll: true }); }
+      if (attrs.length) { const scope = record ? root.querySelector(`[data-ubid="${CSS.escape(record)}"]`) : root; const sel = attrs.map(a => `[${a.name}="${CSS.escape(a.value)}"]`).join(''); const target = scope?.querySelector(sel); target?.focus({ preventScroll: true }); if (target && selection) target.setSelectionRange(...selection); }
       const U = window.WosUsage;
       if (U && !U.loading && (!U.snap || Date.now() - U.at > 60000)) U.load().then(ctx.paintUsage);
     }
     function focus(id) {
+      for (const f of features.values()) if (pageOf(f) === page) f.leave?.(ctx);
       const f = features.get(id) || [...features.values()].find(f => f.aliases?.includes(id));
       page = f ? pageOf(f) : featurePages[id] || (id === 'updates' ? 'about' : PAGES.some(p => p.id === id) ? id : '');
       confirm = null; render(); root.scrollTop = 0;
@@ -331,6 +335,7 @@
       (g?.querySelector('button:not(:disabled)') || root.querySelector(page ? '.st-page-head h3' : '.st-title'))?.focus({ preventScroll: true });
     }
     function back() {
+      for (const f of features.values()) if (pageOf(f) === page && f.back?.(ctx)) return true;
       if (confirm) { if (!ctx.chatsBusy) { confirm = null; render(); root.querySelector('[data-chats-choice][aria-checked="true"]')?.focus(); } return true; }
       if (!page) return false;
       const previous = page; focus(); root.querySelector(`[data-st-page="${previous}"]`)?.focus({ preventScroll: true }); return true;
@@ -375,7 +380,9 @@
       return !!f?.act?.(ctx, el, event);
     }
     const click = e => dispatch(e.target, e);
+    const featureInput = e => { const id = e.target.closest('[data-settings-feature]')?.dataset.settingsFeature; features.get(id)?.input?.(ctx, e.target); };
     const change = async e => {
+      featureInput(e);
       const input = e.target.closest('[data-skinfile]'); if (!input) return;
       const file = input.files?.[0]; if (!file) return;
       try {
@@ -390,6 +397,8 @@
       } finally { input.value = ''; }
     };
     const key = e => {
+      const dialog = root.querySelector('[data-settings-feature] [aria-modal="true"]');
+      if (dialog) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, dialog); return; }
       if (confirm) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, root.querySelector('.st-confirm')); return; }
       const category = e.target.closest('[data-st-page]');
       if (category && ['ArrowUp', 'ArrowDown'].includes(e.key)) {
@@ -411,8 +420,8 @@
     const unsubscribe = ctx.live?.onChange?.(() => render());
     const appsChanged = () => render();
     window.addEventListener?.('wizard:apps', appsChanged);
-    function destroy() { if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
-    root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
+    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   function route(view, open) {
     if (view === 'settings') { open(); return true; }
@@ -422,7 +431,7 @@
   // Shared focus containment. Existing shell Back guards own history; never add a second guard here.
   function trap(event, panel) {
     if (event.key !== 'Tab') return;
-    const controls = [...panel.querySelectorAll('button:not(:disabled), input, textarea, a[href], [tabindex="0"]')].filter(e => e.getClientRects().length);
+    const controls = [...panel.querySelectorAll('button:not(:disabled), input, textarea, select, a[href], [tabindex="0"]')].filter(e => e.getClientRects().length);
     if (!controls.length) return;
     const at = controls.indexOf(document.activeElement);
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
