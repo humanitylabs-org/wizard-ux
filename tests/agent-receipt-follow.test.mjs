@@ -26,7 +26,7 @@ test('accepted agent receipt is polled in its own scope and completion refreshes
   const OB = { _items: new Map(), load: async () => {}, onChange: () => {}, onSent: fn => { onSent = fn; } };
   const row = { id: 'thread', status: 'running', runId: 'run-quick' };
   const pending = new Map([['thread', { key: 'send-quick', runId: 'run-quick' }]]), released = new Set();
-  const L = { session: () => row, emit: () => emitted++, pinAgent: (...a) => pins.push(a), refreshAgents: async () => refreshed++ };
+  const L = { session: () => row, emit: () => emitted++, pinAgent: (...a) => pins.push(a), refreshAgents: async (_, agent) => { assert.equal(agent, 'quick'); refreshed++; } };
   const c = { PEND: pending, RELEASED: released, unPend: () => {}, window: { WosOutbox: OB }, L, PEND_MAX: 120000, document: { hidden: false }, Date,
     syncPending: () => false, otherAgent: id => id && id !== 'hermes', setTimeout: fn => timers.push(fn),
     req: async url => { calls.push(url); return { json: async () => ({ run_id: 'run-quick', session_id: 'thread', status }) }; } };

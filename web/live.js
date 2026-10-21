@@ -576,11 +576,11 @@
       return this.loading;
     },
     /* Each non-default agent's threads, from that agent (agent=<id>). One agent failing never hides another. */
-    async refreshAgents(deferred = this.deferred) {
+    async refreshAgents(deferred = this.deferred, only = '') {
       const A = AG(); if (!A) return;
       if (!A.ready) await A.load().catch(() => {});
-      const ids = A.others().map(a => a.id);
-      for (const k of Object.keys(this.agentSessions)) if (!ids.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
+      const known = A.others().map(a => a.id), ids = known.filter(id => !only || id === only);
+      for (const k of Object.keys(this.agentSessions)) if (!known.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
       await Promise.all(ids.map(async id => {
         try {
           const got = await fetchSessions(true, id);
@@ -883,7 +883,7 @@
             const run = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}?agent=${encodeURIComponent(it.agent)}`)).json();
             if (watches.get(sid) !== runId) return;
             if ((run.run_id || run.id) === runId && run.session_id === sid && ['completed','failed','cancelled','interrupted','expired'].includes(run.status)) {
-              await L.refreshAgents();
+              await L.refreshAgents(L.deferred, it.agent);
               if (watches.get(sid) !== runId) return;
               // Older services list raw profile sessions without run keys/status.
               // The exact terminal receipt still settles this send, never a newer one.
