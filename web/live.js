@@ -244,7 +244,10 @@
   const ARCH_KEY = 'wos.chats.archiveAfter.v1';
   // Chat-list layout: 'day' (Ready = today, then Yesterday, Past week; the default) or 'status' (Working / Ready / Archive).
   const LAYOUT_KEY = 'wos.chats.layout.v1';
-  const chatLayout = () => { try { return localStorage.getItem(LAYOUT_KEY) === 'status' ? 'status' : 'day'; } catch (e) { return 'day'; } };
+  // Miguel's skins (Dark, Light, Landscapes) always list by status: Working, Ready, Archive. No Yesterday or Past week.
+  const OUR_SKINS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
+  const oursSkin = () => { try { return OUR_SKINS.has(document.documentElement.dataset.skin || ''); } catch (e) { return false; } };
+  const chatLayout = () => { if (oursSkin()) return 'status'; try { return localStorage.getItem(LAYOUT_KEY) === 'status' ? 'status' : 'day'; } catch (e) { return 'day'; } };
   const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
   // Agent Service owns box-wide preferences. localStorage is only an offline cache.
   const PREFS_URL = '/wizard/v1/ui-preferences';
