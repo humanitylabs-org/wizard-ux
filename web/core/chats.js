@@ -1088,7 +1088,10 @@ window.WizCore.chats = function createChats(H) {
     const hadFocus = el.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA';
     // Live status/model paints must not replace a sealed dictation target in this same composer.
     // Navigation to another thread still destroys it: never transfer a seal to the new draft.
-    const keepTa = oldTa && oldTa === H.dictationField?.() && el.dataset.draftFor === dkey ? oldTa : null;
+    // Same rule for every repaint of the same draft: keep the live textarea node. A keyboard/IME dictation app
+    // (Wispr Flow, Gboard voice) holds an input connection to that exact node while it records and transcribes;
+    // replacing it mid-take drops the whole transcript silently (Novaire, 21 Oct 2026).
+    const keepTa = oldTa && el.dataset.draftFor === dkey && (oldTa === H.dictationField?.() || oldTa.isConnected) ? oldTa : null;
     const keepRange = keepTa && [keepTa.selectionStart, keepTa.selectionEnd];
     const canStop = working && !!s?.runId && s.status !== 'stopping';
     PW?.ensureModels();
