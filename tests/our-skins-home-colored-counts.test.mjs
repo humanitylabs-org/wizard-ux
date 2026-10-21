@@ -9,6 +9,7 @@ test('our skins colour Ready/Working text instead of the dot', () => {
     const css = read(`../web/skins/${f}/skin.css`);
     assert.match(css, new RegExp(p + ' \\.home \\.constellation \\.now-card \\.pip \\{ display: none; \\}'), f);
     assert.match(css, new RegExp(p + ' \\.home \\.constellation \\.now-card :is\\(\\.k, \\.n\\) \\{ color: var\\(--c\\); \\}'), f);
+    assert.match(css, new RegExp(p + ' \\.home \\.constellation \\.now-card \\{ grid-template: "n" auto "k" auto / auto; column-gap: 0; \\}'), f);
   }
 });
 

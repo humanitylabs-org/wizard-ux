@@ -401,3 +401,4 @@ html[data-skin^="obsidian"] :is(.home-date, .home-time) { display: none; }
 /* Home Ready/Working: colour the word and number instead of a dot (Miguel, 21 Oct). */
 html[data-skin^="obsidian"] .home .constellation .now-card .pip { display: none; }
 html[data-skin^="obsidian"] .home .constellation .now-card :is(.k, .n) { color: var(--c); }
+html[data-skin^="obsidian"] .home .constellation .now-card { grid-template: "n" auto "k" auto / auto; column-gap: 0; }
