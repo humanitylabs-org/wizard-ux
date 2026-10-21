@@ -559,15 +559,10 @@
             const ts = Date.now(); merged = { initializedAt: ts, threads: Object.fromEntries(sessions.slice(0, MAX).map(s => [keyOf(s), recordFor(s, ts)])) };
             putSeen(merged).catch(() => {});
           }
-          let migratedSeen = false;
-          for (const s of Object.values(this.agentSessions).flat()) {
-            const old = AGENT_SEEN.threads[keyOf(s)], key = seenKeyOf(s);
-            if (old) { merged.threads[key] = later(merged.threads[key],old); delete AGENT_SEEN.threads[keyOf(s)]; migratedSeen = true; }
-          }
           this.seen = merged; writeLocal(merged);
-          try { localStorage.setItem(AGENT_SEEN_KEY,JSON.stringify(AGENT_SEEN)); } catch {}
-          // Sync migrated marks as well as new ones; merge on the server is monotonic.
-          if (migratedSeen) putSeen(merged).catch(()=>{});
+          // Retry device-local reads after reconnect/reload; failed writes must not strand a private receipt.
+          if (Object.entries(merged.threads).some(([key,r])=>r.seenAt>(remote?.threads?.[key]?.seenAt || 0)))
+            putSeen(merged).then(r=>{this.seen=merge(this.seen,r);writeLocal(this.seen);this.emit();}).catch(()=>{});
           this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
           };
           // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
@@ -610,6 +605,16 @@
           this.agentStatus[id] = { ok: false, error: e.status === 403 ? 'access' : 'offline', at: Date.now() };
         }
       }));
+      let migrated = false, state = merge(readLocal(),this.seen) || {initializedAt:Date.now(),threads:{}};
+      for (const s of Object.values(this.agentSessions).flat()) {
+        const old = AGENT_SEEN.threads[keyOf(s)];
+        if (old) { state.threads[seenKeyOf(s)] = later(state.threads[seenKeyOf(s)],old); delete AGENT_SEEN.threads[keyOf(s)]; migrated=true; }
+      }
+      if (migrated) {
+        this.seen=state;writeLocal(state);
+        try { localStorage.setItem(AGENT_SEEN_KEY,JSON.stringify(AGENT_SEEN)); } catch {}
+        putSeen(state).then(r=>{this.seen=merge(this.seen,r);writeLocal(this.seen);this.emit();}).catch(()=>{});
+      }
     },
     // The threads of one agent; '' (or the default agent) = the unified list the owner's main Chats shows.
     sessionsFor(agent = '') { return otherAgent(agent) ? (this.agentSessions[agent] || []) : this.unified(); },

@@ -28,17 +28,17 @@ try{
   const scoped=await p.evaluate(()=>WizLive.searchSessions('cobaltwatermelon','private'));
   ok(scoped.length===1&&scoped[0].id===SID,tag+': Private workspace content search is scoped');
   let {wid,pane}=await openChats(p,mobile);
-  await pane.locator('[data-chsearch]').fill('cobaltwatermelon');await pane.locator(`[data-chopen="${SID}"]`).waitFor();
+  await pane.locator('[data-chsearch]').fill('cobaltwatermelon');await pane.locator(`[data-chopen="${SID}"]`).first().waitFor();
   ok(await pane.locator(`[data-chopen="${SID}"] .ag-lock`).count()>0,tag+': search result carries a lock');
   await p.screenshot({path:path.join(OUT,tag+'-private-content-search.png')});
-  await pane.locator(`[data-chopen="${SID}"]`).click();await pane.locator('.ch-thread').waitFor();await pane.getByText('A forgotten cobaltwatermelon secret',{exact:false}).waitFor();
+  await pane.locator(`[data-chopen="${SID}"]`).first().click();await pane.locator('.ch-thread').waitFor();await pane.getByText('A forgotten cobaltwatermelon secret',{exact:false}).waitFor();
   ok((await pane.innerText()).includes('forgotten cobaltwatermelon'),tag+': matched private conversation opens');
   await p.evaluate(()=>window.__r2Document=document);
   if(mobile)await p.evaluate(()=>__wosNativeBack());else {await p.evaluate(()=>history.back());await p.waitForTimeout(500);}
-  await pane.locator(`[data-chopen="${SID}"]`).waitFor();
+  await pane.locator(`[data-chopen="${SID}"]`).first().waitFor();
   ok(await p.evaluate(()=>document===__r2Document)&&await pane.locator('[data-chsearch]').inputValue()==='cobaltwatermelon',tag+': Back from result keeps app and results alive');
   const privateView=await openChats(p,mobile,'private');
-  await privateView.pane.locator('[data-chsearch]').fill('cobaltwatermelon');await privateView.pane.locator(`[data-chopen="${SID}"]`).waitFor();
+  await privateView.pane.locator('[data-chsearch]').fill('cobaltwatermelon');await privateView.pane.locator(`[data-chopen="${SID}"]`).first().waitFor();
   ok(true,tag+': separate Private workspace still searches');
  }
  const [phone,desktop]=pages.map(x=>x.p);
