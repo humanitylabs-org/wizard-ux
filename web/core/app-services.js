@@ -4,7 +4,7 @@
   'use strict';
   if (window.WizAppServices) return;
   const VERSION = 1, ORIGIN = location.origin, frames = new Map();
-  const OPS = new Set(['ready', 'share.text', 'share.file', 'capture.pending', 'capture.ack', 'update.hold', 'update.release']);
+  const OPS = new Set(['ready', 'share.text', 'share.file', 'capture.pending', 'capture.ack', 'update.hold', 'update.release', 'badge.set', 'titlebar.set']);
   let registry, available = null, serial = 0, rootArm = null;
   const uid = () => 'as-' + (++serial) + '-' + Math.random().toString(36).slice(2);
   const fault = message => new Error(message);
@@ -30,9 +30,10 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { if (st.tools) setTools(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
+      if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
       if (!st.frame.isConnected || !registered(st)) { st.detach(); continue; }
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
@@ -44,7 +45,7 @@
     const st = { frame, appId, url, openThread, openContextDraft, isVisible, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
-    st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); };
+    st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
     frames.set(frame, st); frame.addEventListener('load', load);
     const detachReading = window.WizAppReadingPosition?.attach(frame, { appId, authorize: () => valid(st), ...(readingStorage ? { storage: readingStorage } : {}) });
     const detachServices = st.detach;
@@ -54,6 +55,72 @@
     cleanupLegacy(st).catch(() => {});
     return st.detach;
   }
+  // App badge: an installed app's own unread count on its desk mark / bar badge (same slot Notifications uses).
+  // Keyed by the verified frame's app id, so an app can only badge itself; shell-owned counts are not writable.
+  const SHELL_COUNTS = new Set(['wizard', 'notifications']);
+  function setBadge(appId, n) {
+    if (SHELL_COUNTS.has(appId) || String(appId).startsWith('agent:')) throw fault('Badge unavailable');
+    n = Number(n); window.WizCore?.workspaceNav?.setCount(appId, Number.isFinite(n) ? Math.min(999, Math.max(0, Math.floor(n))) : 0);
+  }
+  /* Title-bar tools: a hosted app may put a few controls (older/newer, a picker, a same-app link) into its own
+   * window bar instead of drawing a toolbar of its own, so its content keeps the screen. The shell renders them
+   * from validated data (never app markup); taps go back to that verified document only. */
+  const TOOL_ICONS = { prev: 'm15 5-7 7 7 7', next: 'm9 5 7 7-7 7' };
+  const barOf = st => st.frame.closest('.win')?.querySelector(':scope > .wbar') || null;
+  function cleanTools(st, list) {
+    if (list == null) return null;
+    if (!Array.isArray(list) || list.length > 6) throw fault('Use up to 6 title-bar tools');
+    const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+    return list.map(x => {
+      if (!x || !/^[a-z0-9-]{1,32}$/.test(x.id || '') || !['button', 'select', 'link'].includes(x.kind)) throw fault('Invalid title-bar tool');
+      const o = { id: x.id, kind: x.kind, label: str(x.label, 60) || x.id, text: str(x.text, 16), icon: TOOL_ICONS[x.icon] ? x.icon : '', disabled: x.disabled === true };
+      if (x.kind === 'select') {
+        if (!Array.isArray(x.options) || x.options.length > 500) throw fault('Invalid picker options');
+        o.options = x.options.map(p => ({ value: str(p?.value, 64), label: str(p?.label, 60) })); o.value = str(x.value, 64);
+      }
+      if (x.kind === 'link') {
+        let u = null; try { u = new URL(String(x.href || ''), st.doc?.location?.href || st.url.href); } catch (_) {}
+        if (!u || !within(u, st.url)) throw fault('Title-bar links stay inside the app');
+        o.href = u.href;
+      }
+      return o;
+    });
+  }
+  function paintTools(st) {
+    const bar = barOf(st); if (!bar) return false;
+    let box = bar.querySelector(':scope > .wtools');
+    if (!st.tools?.length) { box?.remove(); bar.classList.remove('has-tools'); return true; }
+    if (!box) {
+      box = document.createElement('span'); box.className = 'wtools';
+      bar.insertBefore(box, [...bar.children].find(c => c.matches('button, .wb, .wpin, .wroute-slot')) || null);
+      const send = (id, value) => { try { if (valid(st, st.doc)) st.frame.contentWindow.postMessage({ type: 'wizard:app:tool', version: VERSION, id, value }, ORIGIN); } catch (_) {} };
+      // Own the gesture: a tap here is never a title-bar double tap, a drag or a window action.
+      for (const ev of ['pointerdown', 'dblclick']) box.addEventListener(ev, e => e.stopPropagation());
+      box.addEventListener('click', e => { e.stopPropagation(); const b = e.target.closest('button[data-tool]'); if (b && !b.disabled) send(b.dataset.tool); });
+      box.addEventListener('change', e => { const s = e.target.closest('select[data-tool]'); if (s) send(s.dataset.tool, s.value); });
+    }
+    const key = JSON.stringify(st.tools); if (box.dataset.key === key) return true;
+    box.dataset.key = key; box.replaceChildren();
+    for (const x of st.tools) {
+      let el;
+      if (x.kind === 'select') {
+        el = document.createElement('select'); el.className = 'wtool wtool-pick';
+        for (const p of x.options) { const op = document.createElement('option'); op.value = p.value; op.textContent = p.label; el.append(op); }
+        el.value = x.value;
+      } else {
+        el = document.createElement(x.kind === 'link' ? 'a' : 'button'); el.className = 'wtool';
+        if (x.kind === 'link') { el.href = x.href; el.target = '_blank'; el.rel = 'noopener'; } else el.type = 'button';
+        if (x.icon) { el.classList.add('wtool-ic'); el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${TOOL_ICONS[x.icon]}"/></svg>`; }
+        else el.textContent = x.text || x.label;
+        if (x.disabled) { if (x.kind === 'link') el.setAttribute('aria-disabled', 'true'); else el.disabled = true; }
+      }
+      el.dataset.tool = x.id; el.dataset.wact = 'tool'; el.setAttribute('aria-label', x.label); el.title = x.label;
+      box.append(el);
+    }
+    bar.classList.add('has-tools');
+    return true;
+  }
+  function setTools(st, list) { st.tools = cleanTools(st, list); return paintTools(st); }
   function connect(source, client) {
     const st = from(source); if (!valid(st)) return null;
     const doc = source.document;
@@ -104,6 +171,9 @@
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); return { version: VERSION, hosted: true, appId: st.appId }; },
+      badge: Object.freeze({ set(n) { check(); setBadge(st.appId, n); st.badged = true; return true; } }),
+      titlebar: Object.freeze({ set(list) { check(); return setTools(st, list); },
+        shown() { check(); const b = barOf(st)?.querySelector(':scope > .wtools'); return !!b && b.getClientRects().length > 0 && b.offsetHeight > 0; } }),
       view: Object.freeze({ isVisible() { check(); return !document.hidden && st.isVisible?.() === true; } }),
       nav: Object.freeze({ openContextDraft(data) {
         check();
@@ -209,6 +279,8 @@
       if (d.op === 'capture.pending') value = await svc.capture.pending();
       if (d.op === 'capture.ack') value = await svc.capture.ack(d.args?.id);
       if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
+      if (d.op === 'badge.set') value = svc.badge.set(d.args?.n);
+      if (d.op === 'titlebar.set') value = svc.titlebar.set(d.args?.tools);
       if (d.op === 'update.release') { st.messageHolds?.get(d.args?.id)?.release(); st.messageHolds?.delete(d.args?.id); value = true; }
       reply(value);
     } catch (err) { reply(null, String(err.message || err).slice(0, 200)); }

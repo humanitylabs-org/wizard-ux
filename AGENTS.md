@@ -43,6 +43,10 @@ New cross-platform UX belongs in `web/core/`. Register it once, and both shells 
 - **What stays as it is:** James's five skins and the shared base. Scope fonts to your own skin, rather than to `body`, `.win` or controls.
 - **The guards:** `tests/owner-skins-guard.test.mjs` fingerprints James's skins and fails on any change to them and on any shell-wide font rule. `tests/fixtures/owner-skins.json` changes only with James's explicit approval, named in the commit message. `tests/skin-packages.test.mjs` keeps skin packages in their lane: James's skins load nothing extra, skin CSS stays scoped, skin scripts use only the skin API.
 
+### App icons (sigils)
+
+- Every app in the Wizard App Store gets a designed sigil in the same PR that publishes it: a `HOUSE` entry in `tools/sigils/build.py` and its id in `STORE_APPS` in `tests/sigils-every-app.test.mjs`. CI fails without them. Unknown third-party apps fall back to their own icon file or a disc with their initial cut out, both drawn as masks in the same box, so a fallback never shows up as a square slab. How to add one: `tools/sigils/README.md`.
+
 <!-- wizard-os-team-rules v2 (19 Oct 2026). Same text in every Wizard OS repo; the canonical copy is humanitylabs-org/wizard-os AGENTS.md. Change it there first, then copy the block to every repo in one round of PRs. -->
 ## Wizard OS team rules (identical in every repo)
 
