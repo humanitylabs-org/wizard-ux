@@ -80,6 +80,13 @@ HOUSE = {
     'wizard-chatgpt':('spark',    160, None),
     'wizard-claude': ('burst',    32,  None),
     'wizard-agent-service': ('hub', 250, 0.09),
+    'wizard-tinfoil':('shield',   228, 0.04),
+    'wizard-cloudflare':('cloud', 62,  None),
+    'wizard-shopping':('bag',     55,  None),
+    'sniper':        ('scope',    4,   0.12),
+    'defleur-video': ('clip',     268, None),
+    'troubleshooter':('wrench',   186, 0.08),
+    'wizard-ux':     ('wizard',   280, 0.09),
     # Agents (the app): two layered hats drawn from brand masks in style.css; its tile glass is a quiet periwinkle,
     # neither the main agent's purple nor the private agent's green, so both hats read on it.
     'agents':        ('agents',   270, 0.10),
