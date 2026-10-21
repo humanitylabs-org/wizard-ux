@@ -10,13 +10,22 @@
  *   - the orb's colour, through a CSS filter; orb.js stays byte-identical with the Android copy
  * Nebula is the original look and sets nothing. Choice persists per device in localStorage 'wos.skin'
  * (box-level theme.json sync comes later). Eight skins: Nebula, Grove, Tide, Ember, Signal, Dark, Light, Landscapes (Paper retired 12 Oct).
- * API: WosSkin.list, .current, .set(id), .preview(pos), .commit(i), .index(id), .pkgOf(id).
+ * API: WosSkin.list, .current, .set(id), .preview(pos), .commit(i), .index(id), .pkgOf(id),
+ *      .families, .family, .familyOf(id), .lastIn(family), .setFamily(family) (skins and their palettes).
  * Collaborator skins keep their look and behaviour in web/skins/<dir>/ (see web/skins/README.md), declared with pkg. */
 (() => {
   'use strict';
   const KEY = 'wos.skin';
   const TAU = Math.PI * 2, rnd = (a, b) => a + Math.random() * (b - a);
   const T = (o) => o; // token table helper (readability)
+  // Skins and palettes (James, 21 Oct 2026; wizard-os spec/SKINS_AND_VIEWS.md). A skin is one look-and-feel; each entry
+  // below is one of its palettes (colour sets). The saved choice stays the palette id, so nothing migrates.
+  // A skin entry not listed here is a skin of its own with one palette (so a new collaborator skin needs no edit here).
+  const FAMILIES = [
+    { id: 'wizard', name: 'Wizard', who: 'The original Wizard look, in five moods.', palettes: ['nebula', 'grove', 'tide', 'ember', 'signal'] },
+    { id: 'mizel', name: 'Mizel', who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes'] },
+  ];
+  const LAST = 'wos.skin.last.';
   const SKINS = [
     { id: 'nebula', name: 'Nebula', who: 'For dreamers and late-night thinkers. The original.', orb: [0, 1, 1],
       t: T({ bg: '#05030c', ink: '#f3efff', 'ink-2': '#b9b0d8', 'ink-3': '#7d74a3', line: 'rgba(205,190,255,.13)', 'line-2': 'rgba(205,190,255,.24)', glass: 'rgba(18,12,38,.58)', 'glass-2': 'rgba(28,19,58,.72)',
@@ -52,6 +61,16 @@
         violet: '#7A5CFF', 'violet-2': '#A08CFF', pink: '#ff7ac8', cyan: '#6fd8ff', amber: '#ffbe55', green: '#62e6a8', red: '#ff6b86',
         'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(11,10,16,.62)', 'sk-dock-line': 'rgba(255,255,255,.10)', 'sk-ddot': 'rgba(255,255,255,.6)', 'sk-tour': 'rgba(11,10,16,.80)', 'sk-dim': 'rgba(11,10,16,.70)', 'sk-win': 'rgba(16,14,22,.72)' }) },
   ];
+  const FAMS = (() => { // resolved once: every skin entry gets .family, every family its palettes in SKINS order
+    const out = [];
+    for (const s of SKINS) {
+      let f = FAMILIES.find(x => x.palettes.includes(s.id)) || out.find(x => x.id === s.id);
+      if (!f) f = { id: s.id, name: s.name, who: s.who, palettes: [s.id] };
+      if (!out.includes(f)) out.push(f);
+      s.family = f.id;
+    }
+    return out.map(f => Object.freeze({ id: f.id, name: f.name, who: f.who, palettes: Object.freeze(SKINS.filter(s => s.family === f.id).map(s => s.id)) }));
+  })();
   const N = SKINS.length;
   const idxOf = id => Math.max(0, SKINS.findIndex(s => s.id === id));
   const stored = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
@@ -287,7 +306,13 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 
   window.WosSkin = {
-    list: SKINS.map(s => ({ id: s.id, name: s.name, who: s.who, bg: s.t.bg, accent: s.t.violet })),
+    list: SKINS.map(s => ({ id: s.id, family: s.family, name: s.name, who: s.who, bg: s.t.bg, accent: s.t.violet })),
+    // Skins (families) with their palettes, in list order. Picking a skin puts on the palette last worn in it.
+    families: FAMS,
+    familyOf(id) { return (SKINS.find(s => s.id === id) || SKINS[0]).family; },
+    get family() { return SKINS[Math.round(pos)].family; },
+    lastIn(fid) { const ids = SKINS.filter(s => s.family === fid).map(s => s.id); let v = null; try { v = localStorage.getItem(LAST + fid); } catch (e) {} return ids.includes(v) ? v : ids[0] || null; },
+    setFamily(fid) { const id = this.lastIn(fid); return id ? this.set(id) : this.current; },
     get current() { return SKINS[Math.round(pos)].id; },
     get pos() { return pos; },
     get chosen() { return stored(); },
@@ -295,7 +320,7 @@
     // Skin packages (core/skin-host.js): a collaborator skin's own folder web/skins/<dir>/ (skin.css, skin.js).
     pkgOf(id) { const s = SKINS.find(x => x.id === id); return s && s.pkg ? Object.freeze({ ...s.pkg }) : null; },
     preview(p) { paint(p); },
-    set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); } catch (e) {} window.WosSkinHost?.commit(SKINS[i].id); return SKINS[i].id; },
+    set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); localStorage.setItem(LAST + SKINS[i].family, SKINS[i].id); } catch (e) {} window.WosSkinHost?.commit(SKINS[i].id); return SKINS[i].id; },
     get frame() { return F ? F.frame(frameOf(SKINS[Math.round(pos)])) : { foundation: 'framed' }; },
     get frameAdjustable() { return PHONE; },
     get composition() { return { version: 1, extends: this.current, frame: this.frame }; },
