@@ -23,7 +23,7 @@
   // A skin entry not listed here is a skin of its own with one palette (so a new collaborator skin needs no edit here).
   const FAMILIES = [
     { id: 'wizard', name: 'Wizard', who: 'The original Wizard look, in five moods.', palettes: ['nebula', 'grove', 'tide', 'ember', 'signal'] },
-    { id: 'mizel', name: 'Mizel', who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes'] },
+    { id: 'mizel', name: 'Mizel', recommends: { chats: 'mizel-chats' }, who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes'] },
     { id: 'novairecito', name: 'Novairecito', who: 'Novaire’s skin: a noir violet command deck, or warm paper for long reads.', palettes: ['novairecito', 'sepia'] },
   ];
   const LAST = 'wos.skin.last.';
@@ -88,7 +88,7 @@
       if (!out.includes(f)) out.push(f);
       s.family = f.id;
     }
-    return out.map(f => Object.freeze({ id: f.id, name: f.name, who: f.who, palettes: Object.freeze(SKINS.filter(s => s.family === f.id).map(s => s.id)) }));
+    return out.map(f => Object.freeze({ id: f.id, name: f.name, who: f.who, ...(f.recommends ? { recommends: Object.freeze({ ...f.recommends }) } : {}), palettes: Object.freeze(SKINS.filter(s => s.family === f.id).map(s => s.id)) }));
   })();
   const N = SKINS.length;
   const idxOf = id => Math.max(0, SKINS.findIndex(s => s.id === id));

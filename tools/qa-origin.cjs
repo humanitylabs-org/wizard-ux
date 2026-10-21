@@ -9,12 +9,21 @@ const WEB = path.resolve(process.argv[3] || process.env.QA_ORIGIN_WEB || path.jo
 const FALLBACK = process.env.WIZARD_UX_FALLBACK_WEB || WEB; // optional untracked data.js / summaries.js build outputs
 // Remote browser workers can tunnel the same read-only backend onto a different loopback port.
 const BACKEND = { host: '127.0.0.1', port: Number(process.env.QA_BACKEND_PORT || 8923) };
+const APP_PREFIX = process.env.QA_READ_APP_PREFIX || '', APP_PORT = Number(process.env.QA_READ_APP_PORT || 0);
+if (APP_PORT && (!/^\/[a-z0-9-]+\/$/.test(APP_PREFIX) || !Number.isInteger(APP_PORT) || APP_PORT < 1 || APP_PORT > 65535)) throw Error('QA app reads need an app prefix and valid loopback port');
 const STATIC = { '127.0.0.1:9271': '/api/' }; // voice/router endpoints of the prototype server
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.md': 'text/markdown' };
 const CSP = "default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 let refused = 0;
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
+  if (!['GET', 'HEAD'].includes(req.method)) { refused++; res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"qa-origin refuses writes"}'); }
+  // Explicit opt-in for in-shell appearance tests of an installed app. Strip its
+  // gateway prefix, forward GET/HEAD only, never cookies or owner credentials.
+  if (APP_PORT && u.pathname.startsWith(APP_PREFIX)) {
+    const p = http.request({ host: '127.0.0.1', port: APP_PORT, method: req.method, path: '/' + u.pathname.slice(APP_PREFIX.length) + u.search }, r => { res.writeHead(r.statusCode, r.headers); r.pipe(res); });
+    p.on('error', () => { res.writeHead(502); res.end(); }); return p.end();
+  }
   if (u.pathname === '/__qa/refused') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ refused })); }
   if (u.pathname.startsWith('/wizard/')) {
     if (req.method !== 'GET' && req.method !== 'HEAD') { refused++; res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"qa-origin refuses writes"}'); }

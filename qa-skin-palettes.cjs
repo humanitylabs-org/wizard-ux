@@ -6,7 +6,7 @@
 //  4 tap Wizard → back on the Wizard palette last worn (Tide, picked before), not the first one
 //  5 tap Mizel again → Light (its last palette) comes back
 //  6 reload keeps Light and the Mizel card pressed; Appearance v1 context carries family=mizel
-//  7 every card and colour is a ≥44 px target; zero writes; no page errors
+//  7 every card and colour is a ≥48 px target; zero writes; no page errors
 // Usage: node qa-skin-palettes.cjs [origin=http://127.0.0.1:9391/wizard-os-home/]  QA_SHOTS=<dir>
 const pw = require('./tools/qa-playwright.cjs');
 const fs = require('fs');
@@ -46,7 +46,7 @@ async function run(b, mode) {
   let L = await look();
   ok(L && L.fams[0] === 'wizard' && L.fams.includes('mizel') && L.famOn === 'wizard', `${mode}: Look shows Wizard first plus Mizel (other skins may follow), Wizard worn`, JSON.stringify(L && { fams: L.fams, on: L.famOn }));
   ok(L && JSON.stringify(L.pals) === JSON.stringify(WIZ) && L.palOn === 'nebula', `${mode}: Colours = the five Wizard palettes, Nebula on`, L && L.pals.join(','));
-  ok(L && L.sizes.every(v => v >= 44), `${mode}: every skin card and colour is a ≥44 px target`, L && L.sizes.join(','));
+  ok(L && L.sizes.every(v => v >= 48), `${mode}: every skin card and colour is a ≥48 px target`, L && L.sizes.join(','));
   await p.screenshot({ path: `${SHOTS}/${mode}-1-wizard.png` });
   await tap('[data-skinpick="tide"]');
   L = await look(); ok(L.skin === 'tide' && L.name === 'Wizard · Tide', `${mode}: tap Tide → worn, label "Wizard · Tide"`, JSON.stringify({ skin: L.skin, name: L.name }));
