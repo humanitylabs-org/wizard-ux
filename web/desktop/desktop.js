@@ -1539,7 +1539,7 @@
   window.WosFeatures.install({review:openReview,maps:openMaps,command:localCommand,context:commandSnapshot,openFeature:(id,opts)=>{closeSettings();newWin({app:'feature',featureId:id,featureOptions:opts,title:window.WosFeatures.entries.find(f=>f.id===id)?.title});}});
   window.WosMusic.install({app:()=>APP['wizard-music'],findWin:()=>findWin(w=>w.app==='frame'&&w.appId==='wizard-music')?.id,openMusic:()=>{openApp(APP['wizard-music']);return findWin(w=>w.appId==='wizard-music')?.id;},frameOf:id=>winEl(id)?.querySelector('iframe'),toast});
   C.deeplink.handle({
-    thread: sid => openThread(sid),
+    thread: (sid, opts) => openThread(sid, opts),
     view(v, section) {
       if (v === 'home') return goHome();
       if (v === 'inbox') return openInbox();
