@@ -57,6 +57,19 @@ try{
  await toggle.click();await d.p.waitForFunction(()=>WosAgents.get('private')?.permissions.read_standard_chats===false);
  ok(await d.p.getByRole('switch',{name:'Read standard chats'}).getAttribute('aria-checked')==='false','owner toggle persists revocation');
  await d.p.getByRole('switch',{name:'Read standard chats'}).click();await d.p.waitForFunction(()=>WosAgents.get('private')?.permissions.read_standard_chats===true);
+ // Compatibility: an older live service lacks the new permission. Never send an unknown patch.
+ const legacy=await b.newContext({viewport:{width:390,height:844}});let legacyWrites=0;
+ await legacy.route('**/wizard/v1/agents**',async route=>{
+  if(route.request().method()!=='GET'){legacyWrites++;return route.continue();}
+  const response=await route.fetch(),body=await response.json();
+  const strip=o=>{if(o&&typeof o==='object'){if(o.permissions)delete o.permissions.read_standard_chats;for(const value of Object.values(o))strip(value);}};strip(body);
+  await route.fulfill({response,json:body});
+ });
+ const lp=await legacy.newPage();await lp.goto(BASE+'agents/index.html');await lp.locator('[data-open="private"]').click();
+ const unavailable=lp.getByRole('switch',{name:'Read standard chats'});await unavailable.waitFor();
+ ok(await unavailable.isDisabled(),'older-service permission is visibly unavailable, not an active broken toggle');
+ await unavailable.evaluate(el=>el.dispatchEvent(new MouseEvent('click',{bubbles:true})));await lp.waitForTimeout(150);
+ ok(legacyWrites===0,'older-service permission cannot send an unsupported write');await legacy.close();
  // Hosted appearance: keep Agents open while shell changes skins.
  for(const {p,mobile} of pages){
   await p.goto(BASE+(mobile?'':'desktop.html'));await p.waitForFunction(()=>WosAgents.ready);
