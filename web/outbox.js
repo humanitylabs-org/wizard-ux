@@ -337,7 +337,8 @@
     const fileIds = [...new Set((it.files || []).map(f => f.id).filter(Boolean))];
     if (fileIds.length > 8) throw new HttpError(409, 'Too many attachments including the recording · originals kept');
     const aq = it.agent ? `?agent=${encodeURIComponent(it.agent)}` : '';
-    const input = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
+    const words = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
+    const input = it.reply && window.WosChat?.reply ? window.WosChat.reply.attach(words, it.reply) : words;
     // Freeze an exact-run steer separately from new-run admission. This endpoint has NO
     // durable idempotency ledger: persist intent before dispatch and never replay ambiguity.
     if (it.steerRunId) {
@@ -456,6 +457,7 @@
     }
     timer = setTimeout(pump, ms);
   }
+  const replyOf = o => window.WosChat?.reply?.clean(o?.reply) || null;
   const newSessionId = () => `wizard_${now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
   function make(o) {
     return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
@@ -463,7 +465,9 @@
       kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
-      pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false };
+      pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false,
+      // A Notifications Reply: the item, framed after his words only in the message that is delivered (deliver()).
+      ...(replyOf(o) ? { reply: replyOf(o) } : {}) };
   }
   function notice() {
     const troubled = [...items.values()].filter(it => !quarantine.has(it.id) && it.state !== 'sent' && (it.storageError || !it.durable));
@@ -611,7 +615,7 @@
         if (localCompletions.has(held.id) || held.localCompleted || held.state === 'sent' || held.body || held.steerBody || quarantine.has(held.id)) return held;
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
-        Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid,
+        Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),
           pendingBlobs: { ...(it.pendingBlobs || {}), ...keepPending(o.files) } });
       }
       // Only the delivery caller (including an explicit Send-to-agent choice) may
