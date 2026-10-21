@@ -19,3 +19,10 @@ test('composer text paste is inserted from the event snapshot, not left to the b
   assert.match(body, /setRangeText\(text/, 'has a fallback insert');
   assert.ok(body.indexOf("getData('text/plain')") < body.lastIndexOf('e.preventDefault()'), 'file pastes still upload');
 });
+
+test('empty dictation paste recovers the take from the clipboard, never the restored old clipboard', () => {
+  assert.match(body, /navigator\.clipboard\.readText\(\)/, 'reads the clipboard after an empty paste');
+  assert.match(body, /t !== stale/, 'skips the clipboard that was there before the take');
+  assert.match(body, /Date\.now\(\) - t0 < 2500/, 'bounded retry window');
+  assert.match(src, /focusin[^\n]*ch-compose textarea[^\n]*clipBase/, 'baseline taken when the composer gains focus');
+});

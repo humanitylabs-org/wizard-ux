@@ -1207,6 +1207,12 @@ window.WizCore.chats = function createChats(H) {
     // Right-click (a mouse) opens the same sheet; a touch long-press already did.
     root.addEventListener('contextmenu', e => { const row = e.target.closest('.ch-list [data-chopen]'); if (!row) return; e.preventDefault(); if (!rowSheet && !lp) { lpUntil = Date.now() + 700; openRowSheet(idOf(row), row.dataset.chopen); } });
     /* Paste a photo or file into the composer: it uploads into the tray like the paperclip. */
+    // Clipboard text from before a dictation take (read when the composer gains focus) and the last take inserted:
+    // a restored old clipboard is never mistaken for the new take.
+    let clipSeen = '';
+    const clipBase = () => { if (document.hasFocus() && navigator.clipboard?.readText) navigator.clipboard.readText().then(t => { clipSeen = t || ''; }, () => {}); };
+    root.addEventListener('focusin', e => { if (e.target.matches?.('.ch-compose textarea')) clipBase(); });
+    addEventListener('focus', () => { if (document.activeElement?.matches?.('.ch-compose textarea')) clipBase(); });
     root.addEventListener('paste', e => {
       const ta = e.target.closest?.('.ch-compose textarea'); if (!ta) return;
       const files = [...(e.clipboardData?.items || [])].filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean);
@@ -1219,10 +1225,28 @@ window.WizCore.chats = function createChats(H) {
           // An empty paste is how a lost dictation take looks: the app restored the clipboard before Chrome read
           // it, so the words never reached the page. Let the browser try anyway; if nothing lands, say how to get
           // the take back instead of losing it silently (Novaire, 21 Oct 2026).
-          const before = ta.value;
-          setTimeout(() => { if (ta.isConnected && ta.value === before) toast('!', `Paste arrived empty · Wispr Flow: ${/Mac|iP(hone|ad)/.test(navigator.platform || navigator.userAgent) ? '⌃⌘V' : 'Alt+Shift+Z'} pastes the last take again`, 4200); }, 250);
+          // Long takes: Wispr sends ⌘V before the system clipboard holds the words, so the event is empty. Read the
+          // clipboard ourselves for a moment and insert the take when it lands (skipping what was there before).
+          const before = ta.value, sel = [ta.selectionStart ?? before.length, ta.selectionEnd ?? before.length];
+          const stale = clipSeen;
+          const warn = () => { if (ta.isConnected && ta.value === before) toast('!', `Paste arrived empty · Wispr Flow: ${/Mac|iP(hone|ad)/.test(navigator.platform || navigator.userAgent) ? '⌃⌘V' : 'Alt+Shift+Z'} pastes the last take again`, 4200); };
+          if (!navigator.clipboard?.readText) { setTimeout(warn, 250); return; }
+          e.preventDefault();
+          const t0 = Date.now();
+          const tryRead = () => navigator.clipboard.readText().then(t => {
+            if (t && t !== stale && ta.isConnected && ta.value === before) {
+              ta.focus(); ta.setSelectionRange(sel[0], sel[1]);
+              let ok = false; try { ok = document.execCommand('insertText', false, t); } catch (_) {}
+              if (!ok) { ta.setRangeText(t, sel[0], sel[1], 'end'); ta.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste', data: t })); }
+              clipSeen = t; return;
+            }
+            if (ta.value !== before) return;
+            if (Date.now() - t0 < 2500) setTimeout(tryRead, 60); else warn();
+          }, () => warn());
+          tryRead();
           return;
         }
+        clipSeen = text;
         e.preventDefault();
         if (document.activeElement !== ta) ta.focus();
         let ok = false; try { ok = document.execCommand('insertText', false, text); } catch (_) {}
