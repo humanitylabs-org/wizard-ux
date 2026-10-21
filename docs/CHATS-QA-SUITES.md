@@ -1,6 +1,7 @@
 # Chats regression QA repair
 
-Baseline: `origin/main` at `bfca77a8fd2979ab6cd615d0df1bf4bd74d88a27`.
+Baseline: `origin/main` at `68e353d7e0e46b575aca5006c395ac54dffb91bd`.
+Re-ran every listed gate after incorporating PR #266's desktop connection pill.
 Scope: isolated QA and one confirmed shared-renderer defect; no merge or deployment.
 
 ## Repaired assumptions (not disabled checks)
