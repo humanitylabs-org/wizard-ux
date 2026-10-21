@@ -49,3 +49,6 @@ test('due reminders are temporary pinned unread rows and opening them acknowledg
 test('native time picker accepts exact minutes',()=>{
  assert.match(read('web/core/boomerang.js'),/type="time"[^>]+step="60"/)
 })
+test('editing a reminder saves the edited note with its date and timezone',()=>{
+ assert.match(read('web/core/boomerang.js'),/const body=\{due_at,timezone,note:form\.note\.value\}/)
+})
