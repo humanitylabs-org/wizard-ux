@@ -18,7 +18,7 @@
 .ch-row-wrap { position: relative; }
 .ch-row { display: flex; gap: 11px; width: 100%; padding: 10px 42px 10px 8px; border-radius: 14px; text-align: left; align-items: flex-start; }
 .ch-row:active { background: rgba(205, 190, 255, .07); }
-.ch-pin-toggle { position: absolute; z-index: 1; right: 7px; top: 50%; width: 32px; height: 32px; margin-top: -16px; display: grid; place-items: center; border-radius: 10px; color: var(--ink-3); opacity: 0; transition: opacity .14s ease, color .14s ease, background .14s ease; }
+.ch-pin-toggle { position: absolute; z-index: 1; right: 7px; top: 50%; width: 32px; height: 32px; margin-top: -16px; display: grid; place-items: center; border-radius: 10px; color: var(--ink-3); opacity: .38; transition: opacity .14s ease, color .14s ease, background .14s ease; }
 .ch-pin-toggle::after { content: ''; position: absolute; inset: -6px; }
 .ch-pin-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .ch-row-wrap:hover .ch-pin-toggle, .ch-row-wrap:focus-within .ch-pin-toggle, .ch-pin-toggle:focus-visible, .ch-row-wrap.pinned .ch-pin-toggle { opacity: 1; }
