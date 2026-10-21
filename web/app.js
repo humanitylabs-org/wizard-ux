@@ -1205,7 +1205,7 @@
     openThread: id => { closeSheets(true); openWizardThread(id); },
     editUnsent,
     restoreReply: id => { closeSheets(true); return recoverParkedReply(id); },
-    openStore: id => { closeSheets(true); openLinkDesk('/wizard-os-home/store/index.html' + (id ? '?app=' + encodeURIComponent(id) : ''), null); },
+    openStore: id => { closeSheets(true); openWin({ app: 'frame', appId: 'app-store', url: '/wizard-os-home/store/index.html' + (id ? '?app=' + encodeURIComponent(id) : '') }); },
     chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; renderChats(w); } save(); },
     openLink: (url, title) => { closeSheets(true); return openLinkDesk(url, null); },
     openSub: id => {

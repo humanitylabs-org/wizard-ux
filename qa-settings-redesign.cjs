@@ -48,12 +48,12 @@ const fixtureModule = fs.readFileSync(path.join(__dirname, 'web/core/chats-fixtu
     if (skin === 'obsidian-light') { await tap('[data-skinfamily="mizel"]'); await p.locator('.mz-intro').waitFor({ state: 'detached' }); await tap('[data-skinpick="obsidian-light"]'); }
     ok(await p.evaluate(s => WosSkin.current === s && document.querySelector('[data-skinpick][aria-pressed="true"]')?.dataset.skinpick === s, skin), `${kind} ${skin}: real picker wears the selected palette`);
     await shot(`${skin}-appearance`);
-    const touch = await p.locator('#settingsBody').evaluate(e => [...e.querySelectorAll('button, summary')].filter(b => b.getClientRects().length && !b.closest('[hidden]')).map(b => ({ label: b.textContent.trim().slice(0, 50), width: b.getBoundingClientRect().width, height: b.getBoundingClientRect().height })));
+    const touch = await p.locator('#settingsBody').evaluate(e => [...e.querySelectorAll('button, summary')].filter(b => b.getClientRects().length && !b.closest('[hidden]')).map(b => ({ label: b.textContent.trim().slice(0, 50), width: Math.round(b.getBoundingClientRect().width * 1000) / 1000, height: Math.round(b.getBoundingClientRect().height * 1000) / 1000 })));
     ok(touch.every(b => b.width >= 48 && b.height >= 48), `${kind} ${skin}: all visible Appearance controls ≥48px`, touch.filter(b => b.width < 48 || b.height < 48));
     if (skin === 'obsidian-light') {
      ok(await p.locator('[data-chats-suggestion]:visible').count() === 1 && await p.locator('[data-chats-suggest]:visible').innerText() === 'Get it', `${kind}: uninstalled recommendation offers Get it`);
      await tap('[data-chats-suggest]');
-     ok(await p.locator('iframe[src*="store/index.html?app=mizel-chats"]').count() === 1, `${kind}: Get it opens exact Store app`);
+     ok(await p.locator('iframe[src*="store/index.html?app=mizel-chats"]').count() === 1 && await p.evaluate(() => Object.values((window.__wos || window.__wux).wins).some(w => w.appId === 'app-store' && w.url?.includes('?app=mizel-chats') && !w.from)), `${kind}: Get it opens exact Store app as a normal app window`);
     }
     await open('settings');
     const geometry = await p.locator('#settingsBody').evaluate(e => { const nav = e.querySelector('.st-index'), pane = e.querySelector('.st-page'); return { client: e.clientHeight, scroll: e.scrollHeight, index: nav.getBoundingClientRect().toJSON(), pane: pane.getBoundingClientRect().toJSON(), rows: [...e.querySelectorAll('.st-category')].map(b => ({ height: b.getBoundingClientRect().height, width: b.getBoundingClientRect().width })), text: nav.textContent }; });
