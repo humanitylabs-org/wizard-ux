@@ -1331,13 +1331,18 @@
   const backTile = a => `<button class="lapp lapp-back${isSystem(a) ? ' lapp-sys' : ''}" data-appinfo="${esc(a.id)}" data-name="${esc(a.name)}" style="--i:${tileN++}">${ico('span', 'ic', a)}<span class="nm">${esc(a.name)}</span></button>`;
   const kindTile = a => a.url || a.kind !== 'wizard' ? (isSystem(a) ? sysMark(appTile(a)) : appTile(a)) : backTile(a);
   const getApps = '<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button>';
+  // System apps sit together in a framed "System" box at the start of their group, so they read as Wizard OS's own.
+  function sysSplit(list, tile) {
+    const sys = list.filter(isSystem), rest = list.filter(a => !isSystem(a));
+    return (sys.length ? `<div class="sysbox"><span class="sysl">System</span>${sys.map(tile).join('')}</div>` : '') + rest.map(tile).join('');
+  }
   function kindGroups(order) {
     const K = appKinds();
     const G = {
-      apps: `<div class="lgroup kg-apps"><h4>Apps</h4><div class="lgrid">${K.apps.map(kindTile).join('')}${getApps}</div></div>`,
-      wiz: K.wiz.length ? `<div class="lgroup kg-wiz"><h4>Wizard apps</h4><div class="lgrid">${K.wiz.map(backTile).join('')}</div></div>` : '',
-      agents: K.agents.length ? `<div class="lgroup kg-agents"><h4>Agents</h4><div class="lgrid">${K.agents.map(kindTile).join('')}</div></div>` : '',
-      conns: K.conns.length ? `<div class="lgroup kg-conns"><h4>Connectors</h4><div class="lgrid">${K.conns.map(kindTile).join('')}</div></div>` : '',
+      apps: `<div class="lgroup kg-apps"><h4>Apps</h4><div class="lgrid">${sysSplit(K.apps, kindTile)}${getApps}</div></div>`,
+      wiz: K.wiz.length ? `<div class="lgroup kg-wiz"><h4>Wizard apps</h4><div class="lgrid">${sysSplit(K.wiz, backTile)}</div></div>` : '',
+      agents: K.agents.length ? `<div class="lgroup kg-agents"><h4>Agents</h4><div class="lgrid">${sysSplit(K.agents, kindTile)}</div></div>` : '',
+      conns: K.conns.length ? `<div class="lgroup kg-conns"><h4>Connectors</h4><div class="lgrid">${sysSplit(K.conns, kindTile)}</div></div>` : '',
     };
     return order.map(k => G[k]).join('');
   }
