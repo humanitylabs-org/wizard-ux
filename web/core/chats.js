@@ -78,6 +78,7 @@ window.WizCore.chats = function createChats(H) {
   const ch = id => (CH[id] = CH[id] || { q: '', turns: null, loadedFor: '', pending: [], at: 0 });
   // Parsing, Markdown, Bangkok time, drafts, copy/share and the media viewer live in chat-kit.js.
   const KIT = window.WosChat;
+  const TOPIC = window.WosTopicEmoji;
   const toTurns = KIT.parseRows, md = KIT.md;
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
   // Same sections, order and day boundaries as Wizard's Work view.
@@ -233,7 +234,9 @@ window.WizCore.chats = function createChats(H) {
       : at ? lab + esc(clip(at.ask, 140))
       : esc(clip(s.preview || '', 110));
     const priv = privRow(s), plock = priv ? `<i class="ch-plock" title="Private agent" aria-label="Private">${AGS()?.lock?.() || ''}</i>` : '';
-    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}><span class="emo sti ${kind}" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span>
+    const topic = TOPIC.get(`thread:${s.id}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '));
+    const mark = `<span class="ch-topic-mark" data-chpick="thread:${esc(s.id)}" title="Choose topic emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="emo sti ${kind} ch-topic-status" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span></span>`;
+    return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
       <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button>`;
   }
@@ -316,7 +319,8 @@ window.WizCore.chats = function createChats(H) {
     const t = d.text.trim().replace(/\s+/g, ' ');
     const what = t ? clip(t, 100) : `Unsent attachment${d.files.length === 1 ? '' : 's'}`;
     const files = d.files.length ? ` · ${d.files.length} file${d.files.length === 1 ? '' : 's'}` : '';
-    return `<div class="ch-draft${cur ? ' cur' : ''}"><button class="ch-row draft" data-chdraft="${esc(d.key)}"><span class="emo">✎</span>
+    const topic = TOPIC.get(`draft:${d.key}`, [d.text, ...d.files.map(f => f.name || '')].join(' '), '📝');
+    return `<div class="ch-draft${cur ? ' cur' : ''}"><button class="ch-row draft" data-chdraft="${esc(d.key)}"><span class="ch-topic-mark" data-chpick="draft:${esc(d.key)}" title="Choose draft emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="ch-topic-status draft-status" aria-label="Draft">✎</span></span>
       <span class="bd"><span class="tp"><b>${esc(what)}</b><time>${esc(ago(new Date(d.at).toISOString()))}</time></span>
       <span class="pv">Draft · saved on this device${files}</span></span></button><button class="ch-draft-x" data-chdraftx="${esc(d.key)}" aria-label="Discard draft" title="Discard draft">×</button></div>`;
   }
@@ -800,9 +804,25 @@ window.WizCore.chats = function createChats(H) {
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Thread actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(s.title)}</div>
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
+      <button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
     rowSheet = { wid, sid }; vib(10);
+  }
+  const emojiCategoryHtml = categories => categories.map(category => `<section class="ch-emoji-category"><h3>${esc(category.label)}</h3><div class="ch-emoji-grid">${category.emoji.map(emoji => `<button type="button" data-chtopicemoji="${emoji}" aria-label="Use ${emoji}">${emoji}</button>`).join('')}</div></section>`).join('');
+  function renderEmojiSearch(sheet, query) {
+    const results = TOPIC.search(query), scroll = sheet?.querySelector('[data-chemoresults]'), clear = sheet?.querySelector('[data-chemoclear]');
+    if (!scroll) return;
+    scroll.innerHTML = results.length ? emojiCategoryHtml(results) : '<p class="ch-emoji-empty" role="status">No emojis found. Try another word.</p>';
+    scroll.scrollTop = 0;
+    if (clear) clear.hidden = !String(query || '').trim();
+  }
+  function openEmojiSheet(wid, key, label) {
+    const el = track.querySelector(`[data-chats="${wid}"]`); if (!el || !key) return;
+    closeRowSheet();
+    const categoryHtml = emojiCategoryHtml(TOPIC.categories);
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Choose topic emoji"><div class="ch-sheet-b ch-emoji-sheet"><div class="ch-sheet-t">${esc(label || 'Choose emoji')}</div><label class="ch-emoji-search"><span aria-hidden="true">⌕</span><input type="search" data-chemosearch aria-label="Search emojis" placeholder="Search emojis" autocomplete="off" autocapitalize="none" spellcheck="false"><button type="button" data-chemoclear aria-label="Clear emoji search" hidden>×</button></label><div class="ch-emoji-scroll" data-chemoresults>${categoryHtml}</div></div></div>`);
+    rowSheet = { wid, key, emoji: true }; vib(8);
   }
   /* Rename (long-press a thread, or tap the title inside it). James's name locks the thread: the agent keeps it. */
   const RENAME_SVG = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>';
@@ -1611,6 +1631,7 @@ window.WizCore.chats = function createChats(H) {
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;
     if (justPressed() && e.target.closest('[data-chopen]')) return true; // a long-press/swipe just opened the actions sheet
+    const pick = e.target.closest('[data-chpick]'); if (pick) { const key = pick.dataset.chpick, sid = key.startsWith('thread:') ? key.slice(7) : '', s = sid && LIVE.session(sid); openEmojiSheet(id, key, s?.title || 'Draft emoji'); return true; }
     const o = e.target.closest('[data-chopen]'); if (o) { openChat(id, o.dataset.chopen); return true; }
     if (e.target.closest('[data-chback]')) { threadBack(w); return true; }
     if (e.target.closest('[data-chretry]')) { const c = ch(id); clearTimeout(c.retryT); c.failN = 1; renderThreadLive(w); loadThread(w, true); return true; }
@@ -1642,6 +1663,9 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
     const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid } = rowSheet; closeRowSheet(); threadAct(rw, sid, rsa.dataset.rsact); return true; }
+    if (e.target.closest('[data-chemoclear]') && rowSheet?.emoji) { const sheet = e.target.closest('.ch-emoji-sheet'), input = sheet?.querySelector('[data-chemosearch]'); if (input) { input.value = ''; renderEmojiSearch(sheet, ''); input.focus(); } return true; }
+    const emoji = e.target.closest('[data-chtopicemoji]'); if (emoji && rowSheet?.emoji) { const { key } = rowSheet; if (TOPIC.set(key, emoji.dataset.chtopicemoji)) { closeRowSheet(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); } toast(emoji.dataset.chtopicemoji, 'Topic emoji saved', 1400); } return true; }
+    if (e.target.closest('[data-rsemo]') && rowSheet?.sid) { const { wid: rw, sid } = rowSheet, s = LIVE.session(sid); openEmojiSheet(rw, `thread:${sid}`, s?.title || 'Choose emoji'); return true; }
     if (e.target.closest('[data-rsrename]') && rowSheet) { const { wid: rw, sid } = rowSheet; openRenameSheet(rw, sid); return true; }
     if (e.target.closest('[data-rncancel]') && rowSheet) { closeRowSheet(); return true; }
     if (e.target.closest('[data-chrename]') && w.thread && w.thread !== '__new__' && LIVE.session(w.thread)) { openRenameSheet(id, w.thread); return true; }
@@ -1710,6 +1734,7 @@ window.WizCore.chats = function createChats(H) {
       setTimeout(() => { const el = elOf(id), inp = el?.querySelector('[data-chsearch]'); if (!c.focus || (inp && document.activeElement === inp)) return; c.focus = false; if (!c.q && el?.querySelector('.ch-sug')) renderChatList(H.win(id), el); }, 260);
     });
     root.addEventListener('input', e => {
+      if (e.target.matches('[data-chemosearch]')) renderEmojiSearch(e.target.closest('.ch-emoji-sheet'), e.target.value);
       if (e.target.matches('[data-chsearch]')) {
         const id = idOf(e.target); ch(id).q = e.target.value; ch(id).coach = false; const el = elOf(id);
         if (el?.querySelector('.ch-scroll')) { renderChatList(H.win(id), el); const inp = el.querySelector('[data-chsearch]'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
@@ -1721,6 +1746,7 @@ window.WizCore.chats = function createChats(H) {
       if (e.target.matches('[data-archafter]')) { LIVE.archiveAfterDays = +e.target.value; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } }
     });
     root.addEventListener('keydown', e => {
+      if (e.target.matches('[data-chemosearch]')) { e.stopPropagation(); if (e.key === 'Escape' && e.target.value) { e.preventDefault(); e.target.value = ''; renderEmojiSearch(e.target.closest('.ch-emoji-sheet'), ''); } return; }
       // Opinionated: with a hardware keyboard, Enter sends and Shift+Enter is a new line (touch keyboards keep Enter = new line).
       if (e.target.matches('.ch-compose textarea') && e.key === 'Enter' && !e.isComposing && !e.shiftKey && (e.metaKey || e.ctrlKey || !matchMedia('(pointer: coarse)').matches)) { e.preventDefault(); e.target.form.requestSubmit(); }
     });

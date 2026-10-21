@@ -87,3 +87,9 @@ html:not([data-skin="nebula"]) .device { background: var(--bg); }
 .my-skin-row .ms-acts { display: flex; gap: 6px; flex: none; }
 .my-skin-row .ms-acts button { min-height: 36px; padding: 6px 14px; border-radius: 99px; background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); font-size: 13px; font-weight: 650; }
 .my-skin-row .ms-acts button.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
+
+/* Sepia: warm e-reader paper and soft dark ink. Typography is scoped to the skin; geometry stays untouched. */
+html[data-skin="sepia"] { color-scheme: light; }
+html[data-skin="sepia"] .home-time { font-family: 'Sk Fraunces', Georgia, serif; font-weight: 300; letter-spacing: -.035em; text-shadow: 0 1px rgba(255, 252, 238, .55); }
+html[data-skin="sepia"] :is(.now-card, .side-card) { box-shadow: inset 0 1px 0 rgba(255, 252, 238, .5), 0 12px 36px rgba(83, 59, 31, .08); }
+html[data-skin="sepia"] .sk-dot { border-color: rgba(86, 65, 40, .28); }

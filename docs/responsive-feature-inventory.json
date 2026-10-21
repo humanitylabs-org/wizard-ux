@@ -142,6 +142,7 @@
     "core/chat-power.css",
     "core/chat-power.js",
     "core/chat-search.js",
+    "core/chat-topic-emojis.js",
     "core/chat-work.js",
     "core/chats.css",
     "core/chats.js",
@@ -331,6 +332,13 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/chat-topic-emojis.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared Chats topic emoji inference and persisted selection"
     },
     "core/chat-work.js": {
       "loadedBy": [
