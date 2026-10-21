@@ -1450,8 +1450,8 @@
     // A thread opens in the Chats of the agent it is pinned to (main Chats for the main agent's threads).
     const ag = LIVE?.agentOf?.(id) || '';
     const mine = x => W[x] && W[x].app === 'chats' && (W[x].agent || '') === ag;
-    let wid = desks[idx].wins.find(mine);
-    if (!wid) { const d = desks.findIndex(dd => dd.wins.some(mine)); if (d >= 0) { wid = desks[d].wins.find(mine); goDesk(d, true); } }
+    let wid = opts.fresh ? '' : desks[idx].wins.find(mine);
+    if (!wid && !opts.fresh) { const d = desks.findIndex(dd => dd.wins.some(mine)); if (d >= 0) { wid = desks[d].wins.find(mine); goDesk(d, true); } }
     if (!wid) { const w = openWin({ app: 'chats', thread: null, ...(ag ? { agent: ag } : {}) }, opts); if (!w) return; wid = w.id; }
     focusWin(wid); openChat(wid, id);
   }
@@ -3476,7 +3476,7 @@
         if (!LIVE?.agentOf?.(id) && Object.values(LIVE?.agentStatus || {}).some(s => !s.ok)) {
           toast('◉', 'Could not locate that chat · reconnect and tap again'); return;
         }
-        openWizardThread(id); LIVE?.refresh();
+        openWizardThread(id, h.fresh ? { fresh: true } : {}); LIVE?.refresh();
       }).catch(() => { if (generation === threadHandoffGeneration) toast('◉', 'Could not locate that chat · reconnect and tap again'); });
       return true;
     }
@@ -3585,7 +3585,7 @@
   });
   window.WizCore.deeplink?.handle({
     // ?session= takes exactly the path the Android app's ACTION_THREAD intent takes.
-    thread: id => window.__wosHandoff({ action: 'thread', id }),
+    thread: (id, opts) => window.__wosHandoff({ action: 'thread', id, fresh: Boolean(opts?.fresh) }),
     view(v, section) {
       if (window.WosTour?.active && v !== 'tour') window.WosTour.finish('deeplink');
       if (v === 'tour') return window.WosTour?.start('link');

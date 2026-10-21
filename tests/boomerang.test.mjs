@@ -33,4 +33,7 @@ test('due reminder supports exact context, change, cancel and canonical deep-lin
  assert.match(js,/data-boom-open/);assert.match(js,/data-boom-change/);assert.match(js,/data-boom-cancel/)
  assert.match(js,/anchor_at/);assert.match(js,/acknowledge/);assert.match(js,/pendingFor/)
  assert.match(links,/boomerang/);assert.match(links,/WosBoomerang\?\.consume/)
+ assert.match(links,/fresh: Boolean\(d\.boomerang\)/)
+ assert.doesNotMatch(js,/boomerang-preview|wizard_boomerang_preview/)
+ assert.doesNotMatch(js,/openContext\?\.\(r\);await opened/)
 })

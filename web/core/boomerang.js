@@ -16,7 +16,11 @@
   function offsetAt(t,z){const p={};for(const x of new Intl.DateTimeFormat('en-CA',{timeZone:z,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(new Date(t)))p[x.type]=x.value;return Date.UTC(+p.year,+p.month-1,+p.day,+p.hour%24,+p.minute,+p.second)-Math.floor(t/1000)*1000}
   function wallToUtc(date,time){
     const [y,m,d]=date.split('-').map(Number),[h,min]=time.split(':').map(Number),z=zone();let guess=Date.UTC(y,m-1,d,h,min);
-    for(let i=0;i<4;i++)guess=Date.UTC(y,m-1,d,h,min)-offsetAt(guess,z);return new Date(guess).toISOString();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(time)||!Number.isFinite(guess))throw new Error('Choose a real date and time.');
+    for(let i=0;i<4;i++)guess=Date.UTC(y,m-1,d,h,min)-offsetAt(guess,z);
+    const check={};for(const x of new Intl.DateTimeFormat('en-CA',{timeZone:z,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(guess)))check[x.type]=x.value;
+    if(+check.year!==y||+check.month!==m||+check.day!==d||+check.hour!==h||+check.minute!==min)throw new Error('That local time does not exist in this timezone.');
+    return new Date(guess).toISOString();
   }
   function preset(kind){const n=new Date(),p=parts(n);let day=new Date(Date.UTC(p.y,p.m-1,p.d));if(kind==='tomorrow')day.setUTCDate(day.getUTCDate()+1);if(kind==='week')day.setUTCDate(day.getUTCDate()+7);return{date:`${day.getUTCFullYear()}-${pad(day.getUTCMonth()+1)}-${pad(day.getUTCDate())}`,time:kind==='today'?`${pad(Math.min(23,p.h+2))}:${pad(Math.ceil(p.min/15)*15%60)}`:'09:00'}}
   function close(){sheet?.remove();sheet=null}
@@ -35,7 +39,7 @@
   const openedFor=sessionId=>openedReminder?.session_id===sessionId?openedReminder:null;
   async function opened(id){if(id!==pendingId)return;openedReminder=reminders.find(r=>r.id===id)||openedReminder;pendingId='';await acknowledge(id)}
   function banner(sessionId){const due=dueFor(sessionId),next=nextFor(sessionId);if(!due.length&&!next)return'';const r=due[0]||next;return `<aside class="boom-banner ${due.length?'due':''}" data-boom-id="${esc(r.id)}"><span><b>${due.length?'Boomerang is back':'Reminder set'}</b><small>${esc(r.note||r.context||'Follow up')}</small><time>${new Date(r.due_at).toLocaleString([],{dateStyle:'medium',timeStyle:'short',timeZone:r.timezone})} · ${esc(r.timezone)}</time></span>${due.length?'<button type="button" data-boom-open>Open context</button>':''}<button type="button" data-boom-change>Change</button><button type="button" data-boom-cancel>Cancel</button></aside>`}
-  async function handle(target,openContext){const box=target.closest('[data-boom-id]'),id=box?.dataset.boomId,r=reminders.find(x=>x.id===id);if(!r)return false;if(target.closest('[data-boom-open]')){pendingId=id;openContext?.(r);await opened(id);return true}if(target.closest('[data-boom-change]')){open({sessionId:r.session_id,targetKind:r.target_kind,anchorAt:r.anchor_at,context:r.context,note:r.note},r);return true}if(target.closest('[data-boom-cancel]')){await cancel(id);return true}return false}
+  async function handle(target,openContext){const box=target.closest('[data-boom-id]'),id=box?.dataset.boomId,r=reminders.find(x=>x.id===id);if(!r)return false;if(target.closest('[data-boom-open]')){pendingId=id;openContext?.(r);return true}if(target.closest('[data-boom-change]')){open({sessionId:r.session_id,targetKind:r.target_kind,anchorAt:r.anchor_at,context:r.context,note:r.note},r);return true}if(target.closest('[data-boom-cancel]')){await cancel(id);return true}return false}
   function start(){if(poll)return;void refresh();poll=setInterval(refresh,15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh()})}
   window.WosBoomerang={start,refresh,open,close,banner,handle,dueFor,nextFor,forSession,consume,pendingFor,openedFor,opened,_wallToUtc:wallToUtc,onChange(fn){listeners.add(fn);return()=>listeners.delete(fn)}};start();
 })();
