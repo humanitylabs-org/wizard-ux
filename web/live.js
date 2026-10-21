@@ -581,11 +581,11 @@
       return this.loading;
     },
     /* Each non-default agent's threads, from that agent (agent=<id>). One agent failing never hides another. */
-    async refreshAgents(deferred = this.deferred) {
+    async refreshAgents(deferred = this.deferred, only = '') {
       const A = AG(); if (!A) return;
       if (!A.ready) await A.load().catch(() => {});
-      const ids = A.others().map(a => a.id);
-      for (const k of Object.keys(this.agentSessions)) if (!ids.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
+      const known = A.others().map(a => a.id), ids = known.filter(id => !only || id === only);
+      for (const k of Object.keys(this.agentSessions)) if (!known.includes(k)) { delete this.agentSessions[k]; delete this.agentStatus[k]; }
       await Promise.all(ids.map(async id => {
         try {
           const got = await fetchSessions(true, id);
@@ -750,7 +750,7 @@
     },
     rememberSearch(s) { if(s?.id) { if(otherAgent(s.agent)) AGENT_OF.set(s.id,s.agent); DETAIL.set(s.id,s); while(DETAIL.size>300) DETAIL.delete(DETAIL.keys().next().value); } },
     async sessionInfo(id) {
-      const agent = this.agentOf(id);
+      let agent = this.agentOf(id);
       let p;
       try { p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${aq(id,'&')}`)).json(); }
       catch(e) { if (![400,404].includes(e.status)) throw e; p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`)).json(); }
@@ -770,6 +770,9 @@
         }
       }
       const s = normalize(raw); if (!s) return null;
+      // A direct link can arrive before the scoped lists. Learn the authoritative
+      // server target before the first history read or reply; never overwrite a known scope.
+      if (!agent && otherAgent(s.agent) && s.id === id) { agent = s.agent; AGENT_OF.set(id, agent); }
       if (s.agent && (s.agent || 'hermes') !== (agent || 'hermes')) throw new Error('Thread scope changed');
       if (agent) s.agent = agent;
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
@@ -878,6 +881,44 @@
     const OB = window.WosOutbox; if (!OB || L._outbox) return; L._outbox = true;
     const sync = () => { if (syncPending(OB)) L.emit(); };
     OB.onChange(sync); OB.load().then(sync).catch(() => {});
+    // Separate-agent sessions are raw gateway rows, not the main agent's run
+    // queue. Follow the accepted receipt, rather than waiting 15 s for that list.
+    const watches = new Map();
+    const follow = it => {
+      if (!otherAgent(it.agent) || !it.runId || it.steered || !['new','reply'].includes(it.kind)) return;
+      const sid = it.sessionId, runId = it.runId;
+      if (watches.get(sid) === runId) return;
+      watches.set(sid, runId); L.pinAgent(sid, it.agent);
+      const tick = async () => {
+        if (watches.get(sid) !== runId) return;
+        try {
+          if (!document.hidden) {
+            const run = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}?agent=${encodeURIComponent(it.agent)}`)).json();
+            if (watches.get(sid) !== runId) return;
+            if ((run.run_id || run.id) === runId && run.session_id === sid && ['completed','failed','cancelled','interrupted','expired'].includes(run.status)) {
+              await L.refreshAgents(L.deferred, it.agent);
+              if (watches.get(sid) !== runId) return;
+              // Older services list raw profile sessions without run keys/status.
+              // The exact terminal receipt still settles this send, never a newer one.
+              const pending = PEND.get(sid);
+              if (!pending || (pending.runId === runId && pending.key === it.id)) {
+                if (pending) { RELEASED.add(pending.key); PEND.delete(sid); }
+                const s = L.session(sid);
+                if (s && (!s.runId || s.runId === runId || s.pend)) {
+                  unPend(s); Object.assign(s, { status: run.status, lastRunStatus: run.status, lastRunKey: it.id, runId: '' });
+                  if (run.updated_at) s.lastAssistantAt = iso(run.updated_at);
+                }
+              }
+              L.emit(); if (watches.get(sid) === runId) watches.delete(sid); return;
+            }
+          }
+        } catch (_) { /* uncertain reads keep following the same receipt, never resend */ }
+        setTimeout(tick, document.hidden ? 3000 : 500);
+      };
+      tick();
+    };
+    OB.onSent(follow);
+    OB.load().then(() => { for (const it of OB._items.values()) if (it.state === 'sent' && Date.now() - it.sentAt < PEND_MAX) follow(it); }).catch(() => {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox); else setTimeout(attachOutbox, 0);
   // A new or changed agent: read its threads now (not at the next poll), then repaint.
