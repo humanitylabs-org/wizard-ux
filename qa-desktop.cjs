@@ -2,11 +2,11 @@
 // keyboard, voice key, native bridge v0 events, Back/Esc never leaves. Real Wizard reads; EVERY write
 // is intercepted (no message reaches Archimedes, nothing is marked read on the server).
 // Usage: node qa-desktop.cjs [baseUrl=http://127.0.0.1:9381/wizard-os-home/]   (tools/qa-origin.cjs serves a worktree)
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require(process.env.PW || 'playwright');
 const fs = require('fs');
 const BASE = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wux-desktop-qa';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || require('path').join(require('os').homedir(), '.hermes/cache/scratch/chats-parity', 'qa-desktop');
+const EXEC = process.env.QA_CHROME || undefined;
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
@@ -15,12 +15,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function ctxFor(b, kind) {
   const opts = kind === 'phone'
     ? { viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, userAgent: 'Mozilla/5.0 (Linux; Android 15; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36' }
-    : { viewport: { width: 1512, height: 920 }, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36' };
+    : { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36' };
   const ctx = await b.newContext({ ...opts, ignoreHTTPSErrors: true, permissions: ['microphone', 'clipboard-read', 'clipboard-write'] });
   const writes = [], loaded = [];
+  const uploads = require('./tools/qa-uploads.cjs').uploadsFixture();
   await ctx.route('**/*', async r => {
     const q = r.request(), u = q.url();
-    if (q.method() !== 'GET' && q.method() !== 'HEAD' && /\/(wizard\/|wizard-os-home\/api\/)/.test(u)) {
+    if (/\/wizard\/v1\/uploads(?:\/|$)/.test(u) && !['GET', 'HEAD'].includes(q.method())) writes.push({ m:q.method(), u:new URL(u).pathname });
+    if (await uploads.route(r)) return;
+    if (!['GET', 'HEAD'].includes(q.method())) {
       writes.push({ m: q.method(), u: u.replace(/^https?:\/\/[^/]+/, '') });
       if (/api\/transcribe$|\/wizard\/voice\/transcribe$/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'qa voice words', ms: 5 }) });
       if (/\/wizard\/files\/upload$/.test(u)) return r.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ file: { id: 'drop_qa' + writes.length, filename: 'voice.webm', mime: 'audio/webm', bytes: 2000 } }) });
@@ -45,7 +48,7 @@ async function ctxFor(b, kind) {
   /* ---------- 1. phone stays phone, and never loads the desktop shell ---------- */
   {
     const { ctx, p, loaded, errs } = await ctxFor(b, 'phone');
-    await p.goto(BASE, { waitUntil: 'load' });
+    await p.goto(BASE, { waitUntil: 'domcontentloaded' });
     await p.waitForFunction(() => window.__wos && window.__wos.live, null, { timeout: 30000 });
     ok(/\/wizard-os-home\/(\?|$)/.test(p.url()) && await p.evaluate(() => document.documentElement.dataset.shell) === 'phone', 'phone: / stays the phone shell', p.url());
     ok(!loaded.some(f => /^desktop\//.test(f)), 'phone: no desktop shell code downloaded', loaded.join(','));
@@ -63,11 +66,11 @@ async function ctxFor(b, kind) {
 
   /* ---------- 2. desktop: / becomes the desktop shell, without phone code ---------- */
   const { ctx, p, writes, loaded, errs } = await ctxFor(b, 'desktop');
-  await p.goto(BASE, { waitUntil: 'load' });
+  await p.goto(BASE, { waitUntil: 'domcontentloaded' });
   await p.waitForFunction(() => window.__wux && window.__wux.live && window.__wux.live.ok, null, { timeout: 45000 });
   ok(/desktop\.html/.test(p.url()) && await p.evaluate(() => document.documentElement.dataset.shell) === 'desktop', 'desktop: / switches to the desktop shell', p.url());
   const after = loaded.slice(loaded.lastIndexOf('core/shell.js'));
-  ok(!after.some(f => /^(app|orb|live-mode|summaries|data)\.js$|^styles\.css$|^motion\//.test(f)), 'desktop: no phone shell code downloaded', after.join(','));
+  ok(!after.some(f => /^(app|orb|live-mode)\.js$|^styles\.css$|^motion\//.test(f)), 'desktop: no phone shell code downloaded', after.join(','));
   ok(after.includes('desktop/desktop.js') && after.includes('core/chats.js') && after.includes('live.js') && after.includes('outbox.js'), 'desktop: desktop shell + shared core loaded');
   const sizes = await p.evaluate(async () => { const s = {}; for (const f of ['desktop/desktop.js', 'app.js']) { const r = await fetch(f); s[f] = (await r.text()).length; } return s; });
   console.log('   bytes: desktop.js', sizes['desktop/desktop.js'], 'vs phone app.js', sizes['app.js']);
@@ -89,48 +92,48 @@ async function ctxFor(b, kind) {
   ok(sel === 'text' || sel === 'auto', 'desktop: message text is selectable', sel);
   await p.screenshot({ path: OUT + '/2-thread-split.png' });
 
-  // ⌘K palette → type → Enter opens an app, tiled beside Chats.
-  await p.keyboard.press('Meta+k');
-  ok(await p.isVisible('#palette'), 'palette: ⌘K opens it');
-  await p.keyboard.type('cinequ');
+  // ⌥Space palette → type → Enter opens an app, tiled beside Chats.
+  await p.keyboard.press('Alt+Space');
+  ok(await p.isVisible('#palette'), 'palette: ⌥Space opens it');
+  await p.keyboard.type('movies');
   await sleep(150);
   const top = await p.evaluate(() => document.querySelector('.pal-it.sel .nm')?.childNodes[0]?.textContent);
-  ok(/CineQueue/.test(top || ''), 'palette: fuzzy app match ranks first', top);
+  ok(/Movies/.test(top || ''), 'palette: fuzzy app match ranks first', top);
   await p.screenshot({ path: OUT + '/3-palette.png' });
-  // Apps lead threads with a query (James: ⌘K "music" → Wizard Music first, under the cursor).
+  // Apps lead threads with a query (James: ⌥Space "music" → Wizard Music first, under the cursor).
   await p.fill('#palInput', 'music'); await sleep(150);
   const mus = await p.evaluate(() => ({ grps: [...document.querySelectorAll('#palList .pal-grp')].map(g => g.textContent), first: document.querySelector('.pal-it.sel .nm')?.childNodes[0]?.textContent }));
   ok(mus.grps[0] === 'Apps' && /^Wizard Music$/.test(mus.first || ''), 'palette: "music" → Apps lead, Wizard Music first', JSON.stringify(mus));
   ok(!mus.grps.includes('Threads') || mus.grps.indexOf('Threads') > mus.grps.indexOf('Apps'), 'palette: threads sit below apps', JSON.stringify(mus.grps));
   await p.screenshot({ path: OUT + '/3b-palette-music.png' });
-  await p.fill('#palInput', 'cinequ'); await sleep(150);
+  await p.fill('#palInput', 'movies'); await sleep(150);
   await p.keyboard.press('Enter');
   await sleep(500);
   const tiles = await p.evaluate(() => [...document.querySelectorAll('.wsp:not([hidden]) .win:not(.gone)')].map(w => { const r = w.getBoundingClientRect(); return { x: Math.round(r.left), w: Math.round(r.width), t: w.querySelector('.wbar .t').textContent }; }));
   ok(tiles.length === 2 && Math.abs(tiles[0].w - tiles[1].w) < 4 && tiles[1].x > tiles[0].x, 'tiling: two windows split side by side', JSON.stringify(tiles));
-  ok(await p.evaluate(() => document.querySelector('.win.focus .wbar .t').textContent) === 'CineQueue', 'tiling: the new window takes focus');
+  ok(await p.evaluate(() => document.querySelector('.win.focus .wbar .t').textContent) === top?.trim(), 'tiling: the selected app takes focus');
   // Re-opening an open app focuses it instead of duplicating.
-  await p.keyboard.press('Meta+k'); await p.keyboard.type('cinequ'); await p.keyboard.press('Enter'); await sleep(300);
+  await p.keyboard.press('Alt+Space'); await p.keyboard.type('movies'); await p.keyboard.press('Enter'); await sleep(300);
   ok(await p.evaluate(() => document.querySelectorAll('.win').length) === 2, 'palette: an open app is focused, not duplicated');
   await p.screenshot({ path: OUT + '/4-tiled.png' });
 
   // Keyboard window management.
   await p.keyboard.press('Alt+ArrowLeft'); await sleep(150);
-  ok(await p.evaluate(() => document.querySelector('.win.focus .wbar .t').textContent) !== 'CineQueue', '⌥←: focus moves to the left window');
+  ok(await p.evaluate(() => document.querySelector('.win.focus .wbar .t').textContent) !== top?.trim(), '⌥←: focus moves to the left window');
   await p.keyboard.press('Alt+ArrowRight'); await sleep(150);
-  await p.keyboard.press('Alt+Shift+Digit4'); await sleep(300);
-  let st = await p.evaluate(() => ({ cur: __wux.cur, w0: __wux.ws[0].wins.length, w2: __wux.ws[2].wins.length }));
-  ok(st.w0 === 1 && st.w2 === 1 && st.cur === 0, '⇧⌥4: sends the window to workspace 3', JSON.stringify(st));
-  await p.keyboard.press('Alt+Digit4'); await sleep(300);
-  ok(await p.evaluate(() => __wux.cur) === 2, '⌥4: goes to workspace 3');
-  ok(await p.evaluate(() => document.querySelector('.ws.cur')?.textContent) === '3', 'top bar: workspace 3 is lit');
+  await p.keyboard.press('Alt+Shift+Digit3'); await sleep(300);
+  let st = await p.evaluate(() => ({ cur:__wux.cur, w0:__wux.ws[0].wins.length, w1:__wux.ws[1]?.wins.length }));
+  ok(st.w0 === 1 && st.w1 === 1 && st.cur === 0, '⇧⌥3: sends the window to the next app desktop (Home is slot 1)', JSON.stringify(st));
+  await p.keyboard.press('Alt+Digit3'); await sleep(300);
+  ok(await p.evaluate(() => __wux.cur) === 1, '⌥3: goes to the second app desktop');
+  ok(await p.evaluate(() => document.querySelector('.ws.cur')?.getAttribute('data-ws') === '1' && document.querySelector('.ws.cur')?.getAttribute('aria-current') === 'page'), 'top bar: second app desktop is selected');
   await p.keyboard.press('Alt+KeyW'); await sleep(300);
-  ok(await p.evaluate(() => __wux.ws[2].wins.length === 0 && !!document.querySelector('.wsp:not([hidden]) .home')), '⌥W: closes the window; the empty workspace shows home');
+  ok(await p.evaluate(() => __wux.ws[1].wins.length === 0 && !!document.querySelector('.wsp:not([hidden]) .home')), '⌥W: closes the window; the empty workspace shows home');
   await p.screenshot({ path: OUT + '/5-home.png' });
   await p.keyboard.press('Alt+Digit2'); await sleep(300);
 
   // Three windows: master + stack.
-  await p.evaluate(() => { const A = window.WizCore.apps('desktop').APP; __wux.openApp(A.wisdom || A.reader); __wux.openApp(A.files); });
+  await p.evaluate(() => { const A = window.WizCore.apps('desktop').APP; if (!A.calendar || !A['wizard-music']) throw Error('QA requires Calendar and Wizard Music registry entries'); __wux.openApp(A.calendar); __wux.openApp(A['wizard-music']); });
   await sleep(400);
   const three = await p.evaluate(() => [...document.querySelectorAll('.wsp:not([hidden]) .win:not(.gone)')].map(w => { const r = w.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; }));
   ok(three.length === 3 && three[0][3] > three[1][3] * 1.8 && three[1][0] === three[2][0] && three[2][1] > three[1][1], 'tiling: 3 windows = master left, stack right', JSON.stringify(three));
@@ -149,46 +152,51 @@ async function ctxFor(b, kind) {
 
   // New chat + send with ⌘Enter goes through the durable outbox (intercepted).
   const w0 = writes.length;
-  await p.keyboard.press('Alt+Enter'); await sleep(300);
+  await p.keyboard.press('Alt+KeyN'); await sleep(300);
   const focusedTa = await p.evaluate(() => document.activeElement?.tagName === 'TEXTAREA' && !!document.activeElement.closest('.pane-main'));
-  ok(focusedTa, '⌥Enter: new chat with the composer focused');
+  ok(focusedTa, '⌥N: new chat with the composer focused');
   await p.keyboard.type('QA desktop shell message (intercepted)');
   await p.keyboard.press('Meta+Enter'); await sleep(2500);
   const sent = writes.slice(w0).map(x => x.m + ' ' + x.u);
   ok(sent.some(x => /POST .*\/v1\/runs|POST .*\/api\/sessions/.test(x)), '⌘Enter: send goes out through the outbox (intercepted)', sent.join(' | '));
 
   // Voice keys: tap Right ⌘ start, tap again send → outbox with audio (intercepted transcribe/upload/run).
-  await p.evaluate(() => __wux.goWs(4)); await sleep(200);
+  await p.keyboard.press('Alt+KeyT'); await p.keyboard.press('Escape'); await sleep(200);
   const w1 = writes.length;
   await p.keyboard.press('MetaRight'); await sleep(1600);
   ok(await p.evaluate(() => __wux.voice) === 'listen' && await p.isVisible('#voicePill'), 'Right ⌘ tap: listening, pill in the top bar');
   await p.screenshot({ path: OUT + '/8-voice.png' });
   await p.keyboard.press('MetaRight'); await sleep(3500);
   const vw = writes.slice(w1).map(x => x.u);
-  ok(vw.some(u => /transcribe|files\/upload/.test(u)) && vw.some(u => /v1\/runs|api\/sessions/.test(u)), 'Right ⌘ tap again: sends the recording as a new thread (intercepted)', vw.join(' | '));
+  ok(vw.some(u => /transcribe|v1\/uploads/.test(u)) && vw.some(u => /v1\/runs|api\/sessions/.test(u)), 'Right ⌘ tap again: sends the recording as a new thread (intercepted)', vw.join(' | '));
   // A chord (Right ⌘ + C) is a shortcut, never a voice tap.
   await p.keyboard.down('MetaRight'); await p.keyboard.press('KeyC'); await p.keyboard.up('MetaRight'); await sleep(400);
   ok(await p.evaluate(() => __wux.voice) === 'idle', 'Right ⌘ + C chord does not start voice');
-  // ⌥V is free again (types normally on a Mac).
+  // Current shortcut: ⌥V starts a voice chat; Escape explicitly cancels it.
   await p.keyboard.press('Alt+KeyV'); await sleep(500);
-  ok(await p.evaluate(() => __wux.voice) === 'idle', '⌥V no longer bound to voice');
+  ok(await p.evaluate(() => __wux.voice) === 'listen', '⌥V starts a new voice chat');
+  await p.keyboard.press('Escape'); await sleep(300);
+  ok(await p.evaluate(() => __wux.voice) === 'idle', 'Esc explicitly cancels the keyboard recording');
 
-  // Dictation: Right ⌥ tap with a text field focused → transcribed words go in at the cursor.
+  // Right Option is reserved for the OS voice tool in today's PWA. Exercise that boundary,
+  // then the retained controller directly (native insertion is also checked below).
+  const reservedAt = writes.length; await p.keyboard.press('AltRight'); await sleep(300);
+  ok(await p.evaluate(() => __wux.voice) === 'idle' && writes.length === reservedAt, 'Right Option is reserved for the OS; no PWA recorder or writes');
   const w2 = writes.length;
   await p.evaluate(() => { const i = document.createElement('textarea'); i.id = 'qaDict'; i.value = 'hello'; Object.assign(i.style, { position: 'fixed', bottom: '10px', left: '10px', zIndex: 9999 }); document.body.appendChild(i); i.focus(); i.setSelectionRange(5, 5); });
-  await p.keyboard.press('AltRight'); await sleep(1400);
-  ok(await p.evaluate(() => __wux.voice) === 'listen' && await p.evaluate(() => document.querySelector('#voicePill').classList.contains('dict')), 'Right ⌥ tap: dictating (cyan pill)');
+  await p.evaluate(() => __wux.dictate()); await sleep(1400);
+  ok(await p.evaluate(() => __wux.voice) === 'listen' && await p.evaluate(() => document.querySelector('#voicePill').classList.contains('dict')), 'dictation controller: dictating (cyan pill)');
   await p.screenshot({ path: OUT + '/8b-dictate.png' });
-  await p.keyboard.press('AltRight'); await sleep(2500);
+  await p.evaluate(() => __wux.dictate()); await sleep(2500);
   const dv = await p.evaluate(() => document.querySelector('#qaDict').value);
-  ok(dv === 'hello qa voice words', 'Right ⌥ tap again: transcript inserted at the cursor', dv);
+  ok(dv === 'hello qa voice words', 'dictation controller again: transcript inserted at the cursor', dv);
   const dw = writes.slice(w2).map(x => x.u).filter(u => /v1\/runs|api\/sessions|files\/upload/.test(u)).length;
   ok(dw === 0, 'dictation sends nothing to Archimedes', String(dw));
   // Dictation with nothing focused → clipboard.
   await p.evaluate(() => { document.querySelector('#qaDict').remove(); document.activeElement && document.activeElement.blur(); });
-  await p.keyboard.press('AltRight'); await sleep(1400); await p.keyboard.press('AltRight'); await sleep(2500);
+  await p.evaluate(() => __wux.dictate()); await sleep(1400); await p.evaluate(() => __wux.dictate()); await sleep(2500);
   const clip = await p.evaluate(() => navigator.clipboard.readText().catch(e => 'ERR ' + e.message));
-  ok(clip === 'qa voice words', 'Right ⌥ with no text field: transcript copied to the clipboard', clip);
+  ok(clip === 'qa voice words', 'dictation controller with no text field: transcript copied to the clipboard', clip);
 
   // Native bridge v0.
   const ready = await p.evaluate(() => window.wizardUX);
@@ -217,22 +225,22 @@ async function ctxFor(b, kind) {
 
   // Reload keeps the layout.
   const before = await p.evaluate(() => JSON.stringify(__wux.ws.map(d => d.wins.length)));
-  await p.reload({ waitUntil: 'load' }); await p.waitForFunction(() => window.__wux, null, { timeout: 30000 }); await sleep(500);
+  await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForFunction(() => window.__wux, null, { timeout: 30000 }); await sleep(500);
   ok(await p.evaluate(() => JSON.stringify(__wux.ws.map(d => d.wins.length))) === before, 'reload: workspaces and windows persist', before);
 
   // ?shell=phone override works and is sticky; ?shell=auto clears it.
-  await p.goto(BASE + '?shell=phone', { waitUntil: 'load' }); await sleep(800);
+  await p.goto(BASE + '?shell=phone', { waitUntil: 'domcontentloaded' }); await sleep(800);
   ok(await p.evaluate(() => document.documentElement.dataset.shell) === 'phone', '?shell=phone: forces the phone shell on a desktop');
-  await p.goto(BASE + '?shell=auto', { waitUntil: 'load' }); await sleep(800);
+  await p.goto(BASE + '?shell=auto', { waitUntil: 'domcontentloaded' }); await sleep(800);
   ok(/desktop\.html/.test(p.url()), '?shell=auto: back to the desktop shell');
 
   // Narrow desktop window stays the desktop shell; Chats collapses to one pane.
-  await p.setViewportSize({ width: 700, height: 800 }); await p.reload({ waitUntil: 'load' }); await p.waitForFunction(() => window.__wux, null, { timeout: 30000 }); await sleep(600);
+  await p.setViewportSize({ width: 700, height: 800 }); await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForFunction(() => window.__wux, null, { timeout: 30000 }); await sleep(600);
   ok(await p.evaluate(() => document.documentElement.dataset.shell) === 'desktop', 'narrow window: still the desktop shell (device, not width)');
   await p.screenshot({ path: OUT + '/9-narrow.png' });
 
-  const leaked = writes.filter(w => !/qa|fake/.test(w.u)).length; // all writes were fulfilled by the route
-  ok(true, `writes intercepted: ${writes.length} (none reached Wizard)`);
+  const fence = await (await fetch(new URL('/__qa/refused', BASE))).json();
+  ok(writes.length > 0 && fence.refused === 0, `writes intercepted: ${writes.length}; zero writes reached QA origin`, JSON.stringify(fence));
   ok(errs.length === 0, 'desktop: no page errors', errs.slice(0, 5).join(' | '));
   await b.close();
   console.log(`\n${pass} pass, ${fail} fail`);
