@@ -2,12 +2,14 @@
 
 Status: **behaviour parity proven; ready for review. No merge or deployment.**
 
-- Current main base: `bfca77a8fd2979ab6cd615d0df1bf4bd74d88a27`, including
-  My skin script, own screens, Novairecito, pull-to-refresh and private GLM routing.
+- Current main base: `68e353d7e0e46b575aca5006c395ac54dffb91bd`, including
+  My skin script, own screens, Novairecito, pull-to-refresh, private GLM routing
+  and the desktop connection pill (#266). The complete gate was repeated after
+  the latter main update.
 - Main repair: PR [#267](https://github.com/humanitylabs-org/wizard-ux/pull/267),
-  `fix/chats-qa-suites` at `5ae3f436d0d39db3f7881ffa2e9cbb5868346c06`.
+  `fix/chats-qa-suites` at `22f304cee5cddc267b14266a9ad5a53a604d0def`.
 - Candidate exercised: `feature/chats-view-slot` at
-  `77dfe4a1ec5ca7367844b35f93e6d34eee82eb1c` (PR #256). Later receipt-only
+  `97ef8d7b5811e3e1b45a2689b90ad4c9b4f6aa96` (PR #256). Later receipt-only
   commits do not change the exercised product or QA bytes.
 
 ## Completed main / candidate gate
@@ -99,7 +101,7 @@ colour token or live state was changed.
 ## Actual final output tails
 
 ```text
-112 passed, 0 failed · intercepted writes: 36
+112 passed, 0 failed · intercepted writes: 35
 31 passed, 0 failed · intercepted writes: 16
 47 pass, 0 fail
 55 pass, 0 fail
