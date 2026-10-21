@@ -143,6 +143,8 @@
     "core/chat-power.js",
     "core/chat-search.js",
     "core/chat-work.js",
+    "core/chats-view.css",
+    "core/chats-view.js",
     "core/chats.css",
     "core/chats.js",
     "core/commands.js",
@@ -338,6 +340,14 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/chats-fixture-view.js": {
+      "loadedBy": [],
+      "note": "Dev-only Chats slot module, dynamically loaded only with explicit fixture opt-in"
+    },
+    "core/chats-view.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Versioned in-document Chats provider admission and lifecycle"
     },
     "core/chats.js": {
       "loadedBy": [

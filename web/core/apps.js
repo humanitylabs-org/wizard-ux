@@ -82,7 +82,9 @@
       if (!url) return;
       const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
       if (!r.ok) return;
-      const list = ((await r.json()).apps || []).filter(a => a && a.id && a.url && a.id !== 'wizard');
+      const snapshot = await r.json();
+      window.WizChatsHost?.configure(snapshot);
+      const list = (snapshot.apps || []).filter(a => a && a.id && a.url && a.id !== 'wizard');
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); } catch (e) {}
       REMOTE = list.map(a => toTile(a, true));
       listeners.forEach(fn => fn());
@@ -111,7 +113,8 @@
       const main = AG?.list.find(a => a.is_default);
       const agents = (AG?.list || []).filter(a => !a.is_default).map(agentTile);
       // Reserve the agent namespace even after deletion: a stale remote app must never impersonate it.
-      const merged = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
+      const views = window.WizChatsHost?.tiles() || [];
+      const merged = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...views, ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id) && !views.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
       const list = appsFor(shell, merged);
       // Every app wears its sigil (core/sigils.js): sgc = its one colour, sgh = the glyph markup.
       if (window.WizSigil) for (const a of list) if (!a.sgh) { const s = window.WizSigil.of(a.sigil || a); a.sgc = s.color; a.sgh = window.WizSigil.html(a.sigil || a); }
