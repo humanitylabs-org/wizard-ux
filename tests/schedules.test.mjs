@@ -6,7 +6,7 @@ import http from 'node:http';
 import { schedulerFixture } from './fixtures/scheduler.mjs';
 const read = f => fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 const settle = async f => { const until = Date.now() + 3000; while (!f()) { if (Date.now() > until) throw Error('Fixture did not settle'); await new Promise(r => setTimeout(r, 5)); } };
-async function harness(t, { missing = false, shell = 'phone' } = {}) {
+async function harness(t, { missing = false, shell = 'phone', timeZone = 'Europe/London', now = '2026-10-21T12:00:00Z' } = {}) {
   const fixture = schedulerFixture(); fixture.missing = missing;
   const server = http.createServer(async (req, res) => {
     let body = ''; for await (const c of req) body += c;
@@ -16,7 +16,8 @@ async function harness(t, { missing = false, shell = 'phone' } = {}) {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const origin = `http://127.0.0.1:${server.address().port}`, opened = [], notices = [];
   const s = { console, Map, Set, WeakMap, Date, String, CSS: { escape: String }, setTimeout, requestAnimationFrame: f => f(), document: { activeElement: null }, navigator: { userAgent: 'Fixture' }, location: { host: 'example.test' }, localStorage: { getItem: () => null }, fetch: (url, opts) => fetch(origin + url, opts) };
-  s.window = s; s.WizCore = {}; s.WizBrand = { html: 'W' };
+  s.Date = class extends Date { constructor(...args) { super(...(args.length ? args : [now])); } static now() { return Date.parse(now); } };
+  s.window = s; s.WizCore = {}; s.WizBrand = { html: 'W' }; s.WizConfig = { timeZone: () => timeZone };
   vm.runInNewContext(read('web/core/settings.js'), s);
   vm.runInNewContext(read('web/core/schedules.js'), s);
   const roots = [];
@@ -54,11 +55,34 @@ test('404 older Agent Service hides the category and body in both layouts', asyn
     assert.doesNotMatch(h.root.innerHTML, /data-st-page="schedules"|data-settings-feature="schedules"/);
   }
 });
-test('list shows name, English when, destination and honest unavailable history; chat opens exact thread', async t => {
+test('list shows name, English when, destination and last/next runs in owner timezone; chat opens exact thread', async t => {
   const h = await harness(t); h.view.focus('schedules');
-  for (const text of ['Morning brief', 'Every day 07:00', 'Every 5 min', 'Daily notes', 'New chat on first run', 'Last run · unavailable']) assert.ok(h.root.innerHTML.includes(text), text);
+  for (const text of ['Morning brief', 'Every day 07:00', 'Every 5 min', 'Daily notes', 'New chat on first run', 'Last run 07:00 · Posted', 'Last run · not yet', 'Next 07:00 tomorrow', 'Next · paused']) assert.ok(h.root.innerHTML.includes(text), text);
   assert.doesNotMatch(h.root.innerHTML, /Never run|Last run.*2026|proof|debug/);
   h.act('chat', 'morning'); assert.deepEqual(h.opened, ['chat-brief']);
+});
+test('all run outcomes, escaped short errors and older-service fields render honestly', async t => {
+  const h = await harness(t); h.view.focus('schedules');
+  for (const [outcome, error, expected] of [['silent', null, 'Silent'], ['failed', '<offline>', 'Failed: &lt;offline&gt;'], ['running', null, 'Running']]) {
+    Object.assign(h.fixture.jobs[0].lastRun, { outcome, error }); await h.s.WosSchedules.load();
+    assert.ok(h.root.innerHTML.includes('Last run 07:00 · ' + expected));
+    assert.doesNotMatch(h.root.innerHTML, /<offline>/);
+  }
+  delete h.fixture.jobs[0].lastRun; delete h.fixture.jobs[0].nextRun;
+  await h.s.WosSchedules.load();
+  assert.match(h.root.innerHTML, /Last run · unavailable/); assert.match(h.root.innerHTML, /Next · unavailable/);
+  h.fixture.jobs[0].lastRun = { outcome: 'posted', scheduledFor: 'bad' }; h.fixture.jobs[0].nextRun = 'bad';
+  await h.s.WosSchedules.load(); assert.match(h.root.innerHTML, /Last run · unavailable/); assert.match(h.root.innerHTML, /Next · unavailable/);
+});
+test('next labels use owner calendar days over midnight and DST, not job or device timezone', async t => {
+  for (const [timeZone, now, nextRun, label] of [
+    ['Asia/Bangkok', '2026-10-21T18:30:00Z', '2026-10-22T00:00:00Z', 'Next 07:00 today'],
+    ['America/New_York', '2026-10-31T04:30:00Z', '2026-11-01T12:00:00Z', 'Next 07:00 tomorrow'],
+    ['Europe/London', '2026-10-21T12:00:00Z', '2026-10-25T07:00:00Z', 'Next 07:00 25 Oct'],
+  ]) {
+    const h = await harness(t, { timeZone, now }); h.fixture.jobs[0].nextRun = nextRun;
+    await h.s.WosSchedules.load(); h.view.focus('schedules'); assert.ok(h.root.innerHTML.includes(label), label);
+  }
 });
 test('toggle PATCH changes only enabled and reads the list back', async t => {
   const h = await harness(t); h.view.focus('schedules'); h.act('toggle', 'morning');

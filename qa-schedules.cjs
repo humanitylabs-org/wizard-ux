@@ -13,10 +13,11 @@ function check(v, name, detail) { checks.push({ pass: !!v, name, detail }); asse
   try {
     for (const phone of [true, false]) {
       const kind = phone ? 'phone-390' : 'desktop', fixture = schedulerFixture();
-      const ctx = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 1000 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36' } : {}) });
+      const ctx = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 1000 }, isMobile: phone, hasTouch: phone, timezoneId: 'UTC', serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36' } : {}) });
       const synthetic = { id: 'chat-brief', title: 'Daily notes', created_at: '2026-10-21T06:00:00Z', updated_at: '2026-10-21T07:00:00Z', messages: [] };
       await ctx.route('**/*', async route => {
         const q = route.request(), u = new URL(q.url()), json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+        if (u.pathname === '/wizard/v1/bootstrap' && q.method() === 'GET') { const r = await route.fetch(); const body = await r.json(); body.settings.clock.timezone = 'Europe/London'; return route.fulfill({ response: r, json: body }); }
         if (u.pathname.startsWith('/wizard/v1/schedules')) { const d = fixture.handle(u.pathname, q.method(), q.postData() ? q.postDataJSON() : {}); return json(d.body, d.status); }
         if (!['GET', 'HEAD'].includes(q.method())) { writes.push({ kind, method: q.method(), path: u.pathname, forwarded: false }); return json({ error: 'QA refuses production writes' }, 403); }
         if (u.pathname === '/wizard/hermes/api/sessions') return json({ sessions: u.searchParams.has('agent') ? [] : [synthetic], has_more: false });
@@ -24,7 +25,7 @@ function check(v, name, detail) { checks.push({ pass: !!v, name, detail }); asse
         return route.continue();
       });
       await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.done', '1'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (_) { /* sandboxed child frames have no storage */ } navigator.sendBeacon = () => false; });
-      const p = await ctx.newPage(); p.on('pageerror', e => errors.push({ kind, error: String(e), stack: e.stack }));
+      const p = await ctx.newPage(); await p.clock.setFixedTime(new Date('2026-10-21T12:00:00Z')); p.on('pageerror', e => errors.push({ kind, error: String(e), stack: e.stack }));
       const open = view => p.evaluate(v => WizCore.deeplink.route('/wizard-os-home/?view=' + v), view);
       const tap = async selector => { for (let i = 0; ; i++) { try { const el = p.locator(selector + ':visible').first(); await el.scrollIntoViewIfNeeded(); if (phone) await el.tap(); else await el.click(); return; } catch (e) { if (i >= 2 || !/not attached|detached/i.test(String(e))) throw e; } } };
       const shot = async name => { await p.locator('.mz-intro').waitFor({ state: 'detached' }); const f = path.join(OUT, `${kind}-${name}.png`); await p.screenshot({ path: f }); screenshots.push(f); };
@@ -37,9 +38,22 @@ function check(v, name, detail) { checks.push({ pass: !!v, name, detail }); asse
         check(await p.locator(`[data-skinpick="${skin}"][aria-pressed="true"]`).count() === 1, kind + ': real picker ' + skin);
         await open('settings'); await tap('[data-st-page="schedules"]');
         await p.locator('[data-sc-row="morning"]').waitFor();
-        check(await p.locator('[data-settings-feature="schedules"]').innerText().then(t => ['Every day 07:00', 'Every 5 min', 'Daily notes', 'Last run · unavailable'].every(x => t.includes(x))), `${kind} ${skin}: scheduler list`);
+        check(await p.locator('[data-settings-feature="schedules"]').innerText().then(t => ['Every day 07:00', 'Every 5 min', 'Daily notes', 'Last run 07:00 · Posted', 'Next 07:00 tomorrow'].every(x => t.includes(x))), `${kind} ${skin}: scheduler list`);
         const geometry = await p.locator('[data-settings-feature="schedules"]').evaluate(e => ({ width: e.clientWidth, scroll: e.scrollWidth, buttons: [...e.querySelectorAll('button')].filter(b => b.getClientRects().length).map(b => ({ label: b.textContent, height: b.getBoundingClientRect().height })) }));
         check(geometry.scroll <= geometry.width && geometry.buttons.every(b => b.height >= 48), `${kind} ${skin}: fits and touch targets ≥48px`, geometry);
+        // Focus starts a background read; drain it before changing fixture state.
+        await p.evaluate(() => WosSchedules.load());
+        for (const [outcome, error, label] of [['silent', null, 'Silent'], ['failed', 'Run failed', 'Failed: Run failed'], ['running', null, 'Running']]) {
+          Object.assign(fixture.jobs[0].lastRun, { outcome, error }); await p.evaluate(async () => { await WosSchedules.load(); await WosSchedules.load(); });
+          await p.waitForFunction(label => [...document.querySelectorAll('.sc-last')].some(e => e.textContent.includes('Last run 07:00 · ' + label)), label);
+          check((await p.locator('.sc-last').first().innerText()).includes('Last run 07:00 · ' + label), `${kind} ${skin}: ${outcome} in owner timezone, not device UTC`);
+        }
+        const last = fixture.jobs[0].lastRun, next = fixture.jobs[0].nextRun;
+        delete fixture.jobs[0].lastRun; delete fixture.jobs[0].nextRun; await p.evaluate(() => WosSchedules.load());
+        await p.waitForFunction(() => document.querySelector('.sc-last')?.textContent.includes('Last run · unavailable'));
+        check((await p.locator('.sc-last').first().innerText()).includes('Last run · unavailable') && (await p.locator('.sc-last').first().innerText()).includes('Next · unavailable'), `${kind} ${skin}: older-service fallback`);
+        fixture.jobs[0].lastRun = { ...last, outcome: 'posted', error: null }; fixture.jobs[0].nextRun = next; await p.evaluate(() => WosSchedules.load());
+        await p.waitForFunction(() => document.querySelector('.sc-last')?.textContent.includes('Last run 07:00 · Posted'));
         await shot(skin + '-list');
         await tap('[data-sc="edit"][data-sc-id="morning"]'); await p.locator('[data-sc-field="name"]').fill('Retained schedule draft');
         await p.locator('[data-sc-field="prompt"]').fill('Do not lose this prompt'); await p.evaluate(() => WosSettings.refresh());
