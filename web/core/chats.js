@@ -1252,7 +1252,22 @@ window.WizCore.chats = function createChats(H) {
     root.addEventListener('paste', e => {
       const ta = e.target.closest?.('.ch-compose textarea'); if (!ta) return;
       const files = [...(e.clipboardData?.items || [])].filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean);
-      if (!files.length) return;
+      if (!files.length) {
+        // Text paste: insert from the event's own snapshot. Chrome otherwise re-reads the system clipboard after
+        // this event; dictation apps (Wispr Flow) restore the old clipboard right after ⌘V, so on a busy page the
+        // second read came back empty and a long take vanished (beforeinput fired, nothing inserted).
+        let text = ''; try { text = e.clipboardData?.getData('text/plain') || ''; } catch (_) {}
+        if (!text) return;
+        e.preventDefault();
+        if (document.activeElement !== ta) ta.focus();
+        let ok = false; try { ok = document.execCommand('insertText', false, text); } catch (_) {}
+        if (!ok) {
+          const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
+          ta.setRangeText(text, a, b, 'end');
+          ta.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste', data: text }));
+        }
+        return;
+      }
       e.preventDefault();
       const id = idOf(ta);
       const named = files.map((f, i) => f.name && f.name !== 'image.png' ? f : new File([f], `pasted-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}${files.length > 1 ? '-' + (i + 1) : ''}.${(f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: f.type }));
