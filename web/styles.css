@@ -322,7 +322,7 @@ body {
 .search input::-webkit-search-cancel-button { display: none; }
 
 .lgroup { margin: 10px 0 4px; }
-.lgroup h4 { margin: 0 4px 8px; font-size: 11px; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); display: flex; justify-content: space-between; align-items: center; }
+.lgroup h4 { margin: 0 4px 8px; font-size: 11px; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); display: flex; justify-content: space-between; align-items: center; }
 .lgroup h4 span { font-weight: 700; letter-spacing: .04em; text-transform: none; font-size: 11px; }
 .lgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 6px; }
 .lapp { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px 0; text-align: center; }
@@ -334,8 +334,8 @@ body {
 .lrow:active, .lrow.sel { background: rgba(205, 190, 255, .1); }
 .lrow .ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 18px; background: linear-gradient(145deg, var(--g1), var(--g2)); flex: 0 0 auto; }
 .lrow .nm { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; }
-.lrow .nm small { display: block; font-size: 12px; font-weight: 500; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lrow .kind { font-size: 10px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding: 3px 7px; border-radius: 7px; border: 1px solid var(--line); }
+.lrow .nm small { display: block; font-size: 12px; font-weight: 500; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow .kind { font-size: 10px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); padding: 3px 7px; border-radius: 7px; border: 1px solid var(--line); }
 .lrow .kind.cmd { color: var(--cyan); border-color: rgba(63, 224, 255, .35); }
 .lrow .kind.view { color: var(--violet-2); }
 .lrow .kind.native { color: var(--amber); border-color: rgba(255, 190, 85, .3); }
