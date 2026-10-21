@@ -86,7 +86,7 @@ const DECOR = () => document.getAnimations().filter(a => { const t = a.effect &&
 
   // ---------- Paper is gone ----------
   const list = await p.evaluate(() => WosSkin.list.map(s => s.id));
-  ok(JSON.stringify(list) === JSON.stringify(SKINS), 'WosSkin.list = five skins, no Paper', list.join(','));
+  ok(JSON.stringify(list.slice(0, 5)) === JSON.stringify(SKINS) && !list.includes('paper'), 'WosSkin.list starts with the five Wizard palettes, no Paper (Mizel palettes follow)', list.join(','));
   ok(await p.evaluate(() => document.documentElement.dataset.skin === 'nebula' && !document.documentElement.style.getPropertyValue('--ink')), 'default is Nebula with no inline tokens');
 
   // ---------- per skin ----------

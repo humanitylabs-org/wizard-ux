@@ -113,18 +113,40 @@
       for (const m of mounts) m.render();
     }
   }
+  // Settings › Look (wizard-os spec/SKINS_AND_VIEWS.md §1): one card per skin, then that skin's palettes (Colours).
+  // Picking a skin puts on the palette last worn in it; picking a colour applies at once, in place.
+  const famOf = (S, id) => S.families?.find(f => f.id === S.familyOf?.(id)) || null;
+  const lookName = (S, id) => { const f = famOf(S, id), p = S.list.find(k => k.id === id)?.name || ''; return f ? `${f.name} · ${p}` : p; };
+  const palBtn = (k, cur) => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`;
+  function famBtn(S, f, cur) {
+    const on = f.id === S.familyOf(cur), pals = f.palettes.map(id => S.list.find(k => k.id === id)).filter(Boolean);
+    const dots = pals.slice(0, 5).map(k => `<i style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"></i>`).join('');
+    return `<button class="sk-famopt" data-skinfamily="${esc(f.id)}" aria-pressed="${on}" aria-label="${esc(f.name)} skin"><span class="sk-fdots" aria-hidden="true">${dots}</span><span class="sk-ftx"><b>${esc(f.name)}</b><small>${pals.length} ${pals.length === 1 ? 'colour' : 'colours'}</small></span></button>`;
+  }
+  function lookHtml(S) {
+    const cur = S.current, nm = S.list.find(k => k.id === cur)?.name || '', fams = S.families || [];
+    const f = famOf(S, cur), pals = f ? S.list.filter(k => f.palettes.includes(k.id)) : S.list;
+    const famRow = fams.length > 1 ? `<div class="sk-fam" role="group" aria-label="Skin">${fams.map(x => famBtn(S, x, cur)).join('')}</div>` : '';
+    const palRow = pals.length > 1 ? `${famRow ? '<div class="sk-sub">Colours</div>' : ''}<div class="sk-sw" role="group" aria-label="Colours">${pals.map(k => palBtn(k, cur)).join('')}</div>` : '';
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div>${famRow}${palRow}</div>${mySkinRow(nm)}</div>`;
+  }
   register({ id: 'look', aliases: ['skin'], html() {
     const S = window.WosSkin; if (!S) return '';
-    const cur = S.current, nm = S.list.find(k => k.id === cur)?.name || '';
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(nm)} · tap to wear</small></span></div><div class="sk-sw" role="group" aria-label="Skin">${S.list.map(k => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`).join('')}</div></div>${mySkinRow(nm)}</div>`;
+    return lookHtml(S);
   }, act(ctx, el) {
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin); return true; }
+    const S = window.WosSkin;
+    const fb = el.closest('[data-skinfamily]');
+    if (fb) {
+      if (fb.getAttribute('aria-pressed') !== 'true') { S.setFamily(fb.dataset.skinfamily); for (const m of mounts) m.render(); }
+      ctx.haptic?.(8); return true;
+    }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
-    const S = window.WosSkin, now = S.set(b.dataset.skinpick);
+    const now = S.set(b.dataset.skinpick);
     ctx.root.querySelectorAll('[data-skinpick]').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.skinpick === now)));
     const nm = S.list.find(k => k.id === now)?.name || '';
-    ctx.root.querySelector('[data-skinname]').textContent = `${nm} · tap to wear`;
+    ctx.root.querySelector('[data-skinname]').textContent = lookName(S, now);
     const sub = ctx.root.querySelector('[data-myskinsub]'); if (sub) sub.textContent = mySkinSub(nm);
     ctx.haptic?.(8); return true;
   } });
@@ -230,10 +252,12 @@
       } finally { input.value = ''; }
     };
     const key = e => {
-      const b = e.target.closest('[data-skinpick]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-      e.preventDefault(); const buttons = [...root.querySelectorAll('[data-skinpick]')], at = buttons.indexOf(b);
+      const b = e.target.closest('[data-skinpick], [data-skinfamily]'); if (!b || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const attr = b.hasAttribute('data-skinfamily') ? 'data-skinfamily' : 'data-skinpick';
+      e.preventDefault(); const buttons = [...root.querySelectorAll(`[${attr}]`)], at = buttons.indexOf(b);
       const n = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : (at + (e.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
-      buttons[n].focus(); buttons[n].click();
+      const id = buttons[n].getAttribute(attr); buttons[n].focus(); buttons[n].click();
+      root.querySelector(`[${attr}="${id}"]`)?.focus(); // a skin change re-renders the group
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
     function destroy() { if (typeof unsubscribe === 'function') unsubscribe(); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
