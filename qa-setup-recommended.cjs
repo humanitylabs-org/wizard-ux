@@ -61,15 +61,21 @@ let browser;
     }
     assert.ok(pulls>=1);assert.ok(sequence.indexOf('seen')<sequence.indexOf('prefetch'));
     // Existing nested Back still returns to Setup, never closes it.
-    await f.locator('[data-act="open-phone"]').click();
-    await f.waitForFunction(()=>__setup.state.screen==='phone');
+    if(mode==='phone') await f.locator('[data-act="open-phone"]').tap();
+    else await f.locator('[data-act="open-phone"]').click();
+    await f.waitForFunction(()=>__setup.state.screen==='phone', null, {timeout:8000}).catch(async e=>{
+      console.error('open-phone debug',mode,await f.evaluate(()=>({state:__setup.state,visible:document.querySelector('#phone').hidden,log:window.__setupLog})));
+      await page.screenshot({path:path.join(shots,mode+'-back-debug.png')});throw e;
+    });
     await page.evaluate(()=>history.back());
     await f.waitForFunction(()=>__setup.state.screen==='list');
     assert.equal(page.isClosed(),false);
     // Real shell must accept Setup as the sender and wait for registration before opening.
-    await f.locator('[data-recommended="wizard-cloudflare"]').click();
+    if(mode==='phone') await f.locator('[data-recommended="wizard-cloudflare"]').tap();
+    else await f.locator('[data-recommended="wizard-cloudflare"]').click();
     await page.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.src.includes('/wizard-cloudflare/')),{},{timeout:15000});
-    const cf=page.frames().find(f=>f.url().includes('/wizard-cloudflare/'));
+    const cf=page.frameLocator('iframe[src*="/wizard-cloudflare/"]');
+    await cf.locator('h1').waitFor();
     assert.equal(await cf.locator('h1').textContent(),'Cloudflare sign-in fixture');
     assert.equal(posts,1);assert.deepEqual(errors,[]);
     reports.push({mode,installPosts:posts,prefetchRequests:pulls,sequence,signInOpened:true,backStayed:true,errors});
