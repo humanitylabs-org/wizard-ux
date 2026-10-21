@@ -883,7 +883,20 @@
             const run = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}?agent=${encodeURIComponent(it.agent)}`)).json();
             if (watches.get(sid) !== runId) return;
             if ((run.run_id || run.id) === runId && run.session_id === sid && ['completed','failed','cancelled','interrupted','expired'].includes(run.status)) {
-              await L.refreshAgents(); L.emit(); if (watches.get(sid) === runId) watches.delete(sid); return;
+              await L.refreshAgents();
+              if (watches.get(sid) !== runId) return;
+              // Older services list raw profile sessions without run keys/status.
+              // The exact terminal receipt still settles this send, never a newer one.
+              const pending = PEND.get(sid);
+              if (!pending || (pending.runId === runId && pending.key === it.id)) {
+                if (pending) { RELEASED.add(pending.key); PEND.delete(sid); }
+                const s = L.session(sid);
+                if (s && (!s.runId || s.runId === runId || s.pend)) {
+                  unPend(s); Object.assign(s, { status: run.status, lastRunStatus: run.status, lastRunKey: it.id, runId: '' });
+                  if (run.updated_at) s.lastAssistantAt = iso(run.updated_at);
+                }
+              }
+              L.emit(); if (watches.get(sid) === runId) watches.delete(sid); return;
             }
           }
         } catch (_) { /* uncertain reads keep following the same receipt, never resend */ }

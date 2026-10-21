@@ -24,19 +24,22 @@ test('accepted agent receipt is polled in its own scope and completion refreshes
   let onSent, refreshed = 0, emitted = 0, status = 'running';
   const timers = [], calls = [], pins = [];
   const OB = { _items: new Map(), load: async () => {}, onChange: () => {}, onSent: fn => { onSent = fn; } };
-  const L = { emit: () => emitted++, pinAgent: (...a) => pins.push(a), refreshAgents: async () => refreshed++ };
-  const c = { window: { WosOutbox: OB }, L, PEND_MAX: 120000, document: { hidden: false }, Date,
+  const row = { id: 'thread', status: 'running', runId: 'run-quick' };
+  const pending = new Map([['thread', { key: 'send-quick', runId: 'run-quick' }]]), released = new Set();
+  const L = { session: () => row, emit: () => emitted++, pinAgent: (...a) => pins.push(a), refreshAgents: async () => refreshed++ };
+  const c = { PEND: pending, RELEASED: released, unPend: () => {}, window: { WosOutbox: OB }, L, PEND_MAX: 120000, document: { hidden: false }, Date,
     syncPending: () => false, otherAgent: id => id && id !== 'hermes', setTimeout: fn => timers.push(fn),
     req: async url => { calls.push(url); return { json: async () => ({ run_id: 'run-quick', session_id: 'thread', status }) }; } };
   const body = src.slice(src.indexOf('  function attachOutbox() {'), src.indexOf("  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attachOutbox)"));
   vm.runInNewContext(body + '\nattachOutbox();', c);
-  onSent({ kind: 'new', agent: 'quick', sessionId: 'thread', runId: 'run-quick' });
+  onSent({ id: 'send-quick', kind: 'new', agent: 'quick', sessionId: 'thread', runId: 'run-quick' });
   await settle();
   assert.deepEqual(calls, ['/wizard/hermes/v1/runs/run-quick?agent=quick']);
   assert.deepEqual(pins, [['thread', 'quick']]);
   assert.equal(refreshed, 0);
   status = 'completed'; await timers.shift()();
   assert.equal(refreshed, 1); assert.equal(emitted, 1);
+  assert.equal(row.status, 'completed'); assert.equal(pending.size, 0); assert.ok(released.has('send-quick'));
   const count = calls.length;
   onSent({ kind: 'new', agent: '', sessionId: 'main', runId: 'main-run' }); await settle();
   assert.equal(calls.length, count, 'main run lifecycle is unchanged');
