@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
-from qa_paths import work_root
+from qa_paths import required_work_root
 
 SIGNER='3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
 OLD_SHA='ce4068f7dc6194d1bd3b505ede8a3229c0c554ecd165352fa5dedfe3d1eae4c0'
@@ -21,8 +21,11 @@ def main():
     release_job,qa_job,old_apk,out=map(Path,sys.argv[1:5]);revision=sys.argv[5]
     if sys.platform!='darwin' or not os.environ.get('WIZARD_HEAVY_LOCK_FD'):
         raise SystemExit('Use the durable Thales worker with its inherited lease')
+    root=required_work_root()
+    if not (os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT')) or not os.environ.get('JAVA_HOME'):
+        raise SystemExit('Set the worker ANDROID_HOME and JAVA_HOME for emulator QA')
     for p in (release_job,qa_job,old_apk,out):
-        if not p.resolve().is_relative_to(work_root()):raise SystemExit('Work must remain on ThalesMedia')
+        if not p.resolve().is_relative_to(root):raise SystemExit('Work must remain on the configured work volume')
     fd=int(os.environ['WIZARD_HEAVY_LOCK_FD']);out.mkdir(parents=True,exist_ok=False)
     receipt={'source_revision':revision,'ok':False,'steps':[],'old_sha256':digest(old_apk)}
     def run(name,argv):
@@ -57,6 +60,7 @@ def main():
         assert meta['aapt2']['version_name']=='0.9.37' and str(meta['aapt2']['version_code'])=='61'
         assert meta['signer_sha256']==SIGNER
         debug,_=qa['ai.wizards.os.qa'];test,_=qa['ai.wizards.os.qa.test'];src=qa_job/'source'
+        run('qa-path-config',[sys.executable,'-m','unittest','discover','-s',src/'tools','-p','test_qa_paths.py','-v'])
         run('signed-upgrade',[sys.executable,src/'tools/qa_upgrade.py',old_apk,signed])
         run('aosp-scroll-capture',[sys.executable,src/'tools/qa_scroll_capture.py',debug,out/'aosp'])
         aosp=json.loads((out/'aosp/receipt.json').read_text());assert aosp['passed']==aosp['total'] and aosp['total']

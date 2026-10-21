@@ -16,7 +16,6 @@ from qa_aa_lib import Emu, BASE, ADB
 APK, TEST_APK, OUT = map(Path, sys.argv[1:4])
 OUT.mkdir(parents=True, exist_ok=True)
 PKG = 'ai.wizards.os.qa'
-PORT = 18958
 FIXTURE = b'''<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <style>html,body{margin:0;overflow:hidden;background:#171020;color:#fff} .ch-msgs{position:absolute;top:50px;left:8px;right:8px;height:calc(100dvh - 140px);overflow-y:auto}p{height:96px}</style>
 <div data-chats="proxy" data-draft-for="proxy-fixture"><div class="ch-msgs"></div></div>
@@ -33,11 +32,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 if sys.platform != 'darwin': raise SystemExit('Run only on Thales/Mac mini')
-server = http.server.ThreadingHTTPServer(('127.0.0.1', PORT), Handler)
+server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+PORT = server.server_address[1]
 threading.Thread(target=server.serve_forever, daemon=True).start()
 inherited = os.environ.get('WIZARD_HEAVY_LOCK_FD')
 lock = os.fdopen(int(inherited), 'a', closefd=False) if inherited else (BASE/'worker.lock').open('a')
-em = Emu('scroll-proxy', 5692, PKG)
+em = Emu(OUT, 5692, PKG)
 checks = []
 def check(name, yes, detail=''):
     checks.append({'name': name, 'pass': bool(yes), 'detail': detail})
@@ -78,7 +78,7 @@ with lock:
     except Exception:
         check('runner', False, traceback.format_exc())
     finally:
-        em.stop();server.shutdown()
+        em.kill();server.shutdown()
         (OUT/'receipt.json').write_text(json.dumps({'ok':bool(checks) and all(c['pass'] for c in checks),
             'apk_sha256':hashlib.sha256(APK.read_bytes()).hexdigest(),
             'test_apk_sha256':hashlib.sha256(TEST_APK.read_bytes()).hexdigest(),
