@@ -277,3 +277,12 @@ html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3)), #dotsR:has(> .ddot[data-goto]:nth-child(3))) > .dmore { display: none; }
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3))::before,
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR:has(> .ddot[data-goto]:nth-child(3))::after { content: ""; flex: 0 0 auto; width: 3px; height: 3px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 40%, transparent); }
+
+/* App kinds on New desk (Apps · Wizard apps · Connectors): the panel stops above the pill dock and scrolls inside. */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .new-desk.kinds { height: calc(100% - 20px); max-height: none; overflow-y: auto; } /* the desk already stops above the pill dock: fill all of it */
+
+/* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
+html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .launcher { top: calc(30px + var(--safe-t)); bottom: calc(var(--pill-top, 90px) + 8px); }
+
+/* System apps (fill a Wizard OS parking spot): first in their group, with a second ring around the icon. */
+html[data-skin="landscapes"] :is(.launcher, .new-desk) .lapp-sys .ic { outline: 1.5px solid color-mix(in srgb, var(--ink) 55%, transparent); outline-offset: -5px; }
