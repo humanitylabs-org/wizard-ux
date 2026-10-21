@@ -281,3 +281,10 @@ html[data-skin="landscapes"] .launcher { background: linear-gradient(180deg, rgb
 html[data-skin="landscapes"] .launcher .lapp .ic.sgt { background-color: #0f0c17; border-color: color-mix(in oklab, var(--c) 55%, rgba(255, 255, 255, .14)); }
 html[data-skin="landscapes"] .launcher .lapp .ic.sgt .sgi { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .6)) brightness(1.12); }
 html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, var(--bg) 92%, transparent); }
+
+/* Miguel 21 Oct: the New desk app page sat straight on the photo; names vanished over snow and rocks. Same frosted panel as the launcher. */
+html[data-skin="landscapes"] .new-desk { height: auto; min-height: 0; align-self: start; margin: 10px; padding: 14px 12px 6px; border-radius: 24px; background: linear-gradient(180deg, rgba(24, 21, 34, .76), rgba(12, 10, 18, .82)); border: 1px solid rgba(255, 255, 255, .1); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 18px 40px rgba(0, 0, 0, .3); -webkit-backdrop-filter: blur(22px) saturate(1.25); backdrop-filter: blur(22px) saturate(1.25); }
+html[data-skin="landscapes"] .new-desk .nd-head span { color: var(--ink-2); }
+html[data-skin="landscapes"] .new-desk .lgroup h4 { color: var(--ink-2); }
+html[data-skin="landscapes"] .new-desk .lapp .nm { color: var(--ink); font-size: 12px; font-weight: 600; letter-spacing: -.01em; text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
+html[data-skin="landscapes"] .new-desk .lapp .ic.sgt { background-color: #0f0c17; border-color: color-mix(in oklab, var(--c) 55%, rgba(255, 255, 255, .14)); }
