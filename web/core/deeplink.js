@@ -58,7 +58,7 @@
   }
   function run(d, src) {
     if (!d || !H) return false;
-    if (d.session) { log('session:' + d.session); H.thread(d.session); if (d.boomerang) void window.WosBoomerang?.consume(d.boomerang); }
+    if (d.session) { log('session:' + d.session); H.thread(d.session, { fresh: Boolean(d.boomerang), boomerang: d.boomerang || '' }); if (d.boomerang) void window.WosBoomerang?.consume(d.boomerang); }
     else if (d.view) { log('view:' + d.view); H.view(d.view, d.section || ''); }
     else if (d.open) { log('open:' + d.open); H.app?.(d.open, src || null); }
     else if (d.agent) { log('agent:' + d.agent); H.agent?.(d.agent); }
