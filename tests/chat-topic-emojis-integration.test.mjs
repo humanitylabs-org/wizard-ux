@@ -41,7 +41,7 @@ test('draft rows use their durable draft key and can open the same picker', () =
 test('emoji picker renders categories lazily in a bounded independently scrollable region', () => {
   assert.match(chats, /startEmojiCategories/);
   assert.match(chats, /data-chemosentinel/);
-  assert.match(chats, /requestAnimationFrame/);
+  assert.match(chats, /scroll\.onscroll/);
   assert.match(chats, /class="ch-emoji-category"/);
   assert.match(chats, /class="ch-emoji-scroll"/);
   assert.match(css, /\.ch-emoji-sheet\s*\{[^}]*max-height:[^}]*display:\s*flex[^}]*flex-direction:\s*column/s);
