@@ -44,6 +44,7 @@ test('emoji picker renders categories lazily in a bounded independently scrollab
   assert.match(chats, /scroll\.onscroll/);
   assert.match(chats, /class="ch-emoji-category"/);
   assert.match(chats, /class="ch-emoji-scroll"/);
+  assert.match(css, /\.ch-emoji-category\s*\{[^}]*content-visibility:\s*auto/s);
   assert.match(css, /\.ch-emoji-sheet\s*\{[^}]*max-height:[^}]*display:\s*flex[^}]*flex-direction:\s*column/s);
   assert.match(css, /\.ch-emoji-scroll\s*\{[^}]*overflow-y:\s*auto[^}]*overscroll-behavior:\s*contain[^}]*touch-action:\s*pan-y/s);
 });
