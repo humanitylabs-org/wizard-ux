@@ -44,7 +44,8 @@ async function boot(b, desktop = false) {
   const errs = [];
   p.on('pageerror', e => { const st = String(e.stack || ''); if (/wizard-os-home\//.test(st) || !/https?:\/\//.test(st)) errs.push(String(e)); });
   await p.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
-  await p.goto(URL_ + (desktop ? 'desktop.html' : ''), { waitUntil: 'load' });
+  // Readiness is the shell API below, not third-party iframe load completion.
+  await p.goto(URL_ + (desktop ? 'desktop.html?shell=desktop' : '?shell=phone'), { waitUntil: 'commit' });
   if (desktop) { await p.waitForFunction(() => window.__wux && window.__wux.live?.sessions?.length > 2, null, { timeout: 30000 }); await p.waitForTimeout(800); return { ctx, p, writes, errs, R }; }
   await p.waitForFunction(() => window.__wos && window.__wos.live && window.__wos.live.ok && window.__wos.live.sessions.length > 2, null, { timeout: 30000 });
   await p.waitForTimeout(800);

@@ -186,6 +186,9 @@ const outboxN = p => p.evaluate(() => (window.__wos.outbox?.unsent?.() || []).le
   await p.evaluate(() => window.__wos.handleText('Ask AI how long do capybaras live', 'auto', false, 300, null)); await sleep(900);
   s = await sheetState(p);
   ok(!s.open && routes.length === 0 && (agentWrites(writes).length > 0 || await outboxN(p) > 0), 'tapped "Ask AI …" over an open thread → message, no Search or router', JSON.stringify({ s, writes }));
+  // Tap now starts an actual outbox send. Settle its failed-write fixture before the next independent command.
+  await sleep(2600);
+  await p.evaluate(async () => { for(const it of __wos.outbox.unsent()) await __wos.outbox.remove(it.id); });
   await closeSheet(p);
   // STT writes the spell with a colon ("Search: is milk bad for gout?"); that used to miss and go to the router.
   writes.length = 0; routes.length = 0;

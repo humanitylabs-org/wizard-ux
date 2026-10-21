@@ -169,7 +169,8 @@ const server = http.createServer((req, res) => {
   await p.evaluate(() => { const id = Object.keys(window.__wos.wins).find(k => window.__wos.wins[k].appId === 'wizard-music'); window.__wos.closeWin(id); }); await sleep(600);
   await hold('Open Wizard Music and search for Home Tides.'); t = await waitToast(/results? for “Home Tides”/, 60000);
   const f2 = await frame(); r = await results(f2);
-  ok(await musicWins() === 1 && /^Tides · Home/.test((r.rows || [])[0] || ''), 'held "Open Wizard Music and search for Home Tides" opens Music on the results', JSON.stringify({ t, r }));
+  // Catalogue artist labels can hydrate after the search acknowledgement; guard the query and song title here.
+  ok(await musicWins() === 1 && /^Results for “Home Tides”$/.test(r.h) && /^Tides ·/.test((r.rows || [])[0] || ''), 'held "Open Wizard Music and search for Home Tides" opens Music on the results', JSON.stringify({ t, r }));
   // (Reopening Music may resume the last session by design; the search itself must not start a result.)
   const np3 = await nowPlaying(f2); const srcs = await f2.evaluate(() => window.__media.map(m => m.src).join(' '));
   ok(np3.title !== 'Tides' && !/1pHgLmKhu0Y|GnTA0XlE2n0/.test(srcs), 'search on a fresh player did not play a result', JSON.stringify({ np3, srcs: srcs.slice(0, 200) }));
