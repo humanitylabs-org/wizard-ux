@@ -2,14 +2,14 @@
 
 Status: **behaviour parity proven; ready for review. No merge or deployment.**
 
-- Current main base: `68e353d7e0e46b575aca5006c395ac54dffb91bd`, including
-  My skin script, own screens, Novairecito, pull-to-refresh, private GLM routing
-  and the desktop connection pill (#266). The complete gate was repeated after
-  the latter main update.
+- Current main base: `00ffd23a8fce489f606a75a9c896a468720f52d3`, including
+  My skin script, own screens, Novairecito, pull-to-refresh, private GLM routing,
+  the desktop connection pill (#266), and update-channel picker (#268). The
+  complete gate was repeated after each main update.
 - Main repair: PR [#267](https://github.com/humanitylabs-org/wizard-ux/pull/267),
-  `fix/chats-qa-suites` at `22f304cee5cddc267b14266a9ad5a53a604d0def`.
+  `fix/chats-qa-suites` at `ec58c9871bcaaeebabd29355f2d0a2c4f301a55c`.
 - Candidate exercised: `feature/chats-view-slot` at
-  `97ef8d7b5811e3e1b45a2689b90ad4c9b4f6aa96` (PR #256). Later receipt-only
+  `5b8bd2b37b21d3224aed3d125c27fec562d07710` (PR #256). Later receipt-only
   commits do not change the exercised product or QA bytes.
 
 ## Completed main / candidate gate
@@ -30,7 +30,7 @@ and their QA origin/upload helpers are byte-identical on main repair and candida
 | `qa-my-skin-script.cjs` | 34 / 0 | 34 / 0 |
 | `qa-own-views.cjs` | 26 / 0 | 26 / 0 |
 | `qa-chats-view-slot.cjs` | n/a | 22 / 0 |
-| `node --test tests/*.test.mjs` | 466 / 0 | 473 / 0 |
+| `node --test tests/*.test.mjs` | 468 / 0 | 475 / 0 |
 
 The seven candidate-only unit tests explain the unit-count difference. The
 owner-skins guard remains unchanged and passes. `git diff --check` is clean.
@@ -54,7 +54,7 @@ those partial runs were full results on today's main. Main has since advanced.
 | chats-view-slot | n/a / 22/0 | n/a / 22/0 |
 | my-skin-script | not previously run | 34/0 / 34/0 |
 | own-views | not previously run | 26/0 / 26/0 |
-| unit tests | 436/0 / 443/0 | 466/0 / 473/0 |
+| unit tests | 436/0 / 443/0 | 468/0 / 475/0 |
 
 ## Stale tests versus one real defect
 
@@ -101,7 +101,7 @@ colour token or live state was changed.
 ## Actual final output tails
 
 ```text
-112 passed, 0 failed · intercepted writes: 35
+112 passed, 0 failed · intercepted writes: 36
 31 passed, 0 failed · intercepted writes: 16
 47 pass, 0 fail
 55 pass, 0 fail
@@ -112,8 +112,8 @@ thread-back-race: 19 passed, 0 failed
 PASS registry: installed descriptor works without dev opt-in; owner links and dev providers are absent
 PASS registry: no rejected module loads or page errors
 22 pass, 0 fail
-# tests 473
-# pass 473
+# tests 475
+# pass 475
 # fail 0
 # cancelled 0
 # skipped 0
