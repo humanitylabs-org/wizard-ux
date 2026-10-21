@@ -109,7 +109,7 @@ public class ScrollProxyE2eTest {
         // Public/untrusted top-level origin cannot activate this native capability.
         ui(()->{web.loadDataWithBaseURL("https://scroll-proxy-untrusted.invalid/",
             "<meta name='viewport' content='width=device-width'><div data-chats><div class='ch-msgs' style='height:500px;overflow:auto'><div style='height:4000px'>Untrusted</div></div></div>",
-            "text/html","UTF-8",null);return null;});
+            "text/html","UTF-8","https://scroll-proxy-untrusted.invalid/");return null;});
         until(()->ui(()->web.getUrl()!=null&&web.getUrl().contains("scroll-proxy-untrusted.invalid")));
         ui(()->{web.installScrollProxy();return null;});Thread.sleep(200);
         assertFalse("untrusted helper never injected","true".equals(js("!!window.__wosScrollCapture")));
