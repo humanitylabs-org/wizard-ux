@@ -44,11 +44,13 @@ test('one registration is loaded by both entrypoints; colours only use Appearanc
   const css = read('web/core/settings.css').split('/* Shared approved')[0];
   assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|var\(--(?!wz-)/i);
   assert.match(css, /background: transparent/);
+  assert.match(read('web/desktop/desktop.js'), /if \(settingsView.back\(\)\) return 'settings-page'; closeSettings\(\)/, 'desktop browser Back uses the shared nested Settings stack before closing');
 });
 test('404 older Agent Service hides the category and body in both layouts', async t => {
   for (const shell of ['phone', 'desktop']) {
     const h = await harness(t, { missing: true, shell });
     assert.equal(h.s.WosSchedules.available, false);
+    h.view.focus('schedules'); assert.equal(h.view.page, '', 'unsupported direct links return to Settings');
     assert.doesNotMatch(h.root.innerHTML, /data-st-page="schedules"|data-settings-feature="schedules"/);
   }
 });
@@ -97,7 +99,7 @@ test('create and edit fields are sent to fixture HTTP; PATCH retains non-editabl
 });
 test('failed saves keep the draft and escaped server error; live re-render and second mount do not lose/mix drafts', async t => {
   const h = await harness(t), second = h.mount(); h.view.focus('schedules'); second.view.focus('schedules'); h.act('new'); h.input('name', '<My draft>'); h.input('prompt', 'Keep this');
-  h.s.WosSettings.refresh(); assert.match(h.root.innerHTML, /&lt;My draft&gt;/); assert.doesNotMatch(second.root.innerHTML, /role="dialog"/);
+  const mounted = h.root.innerHTML; h.s.WosSettings.refresh(); assert.equal(h.root.innerHTML, mounted, 'background refresh never replaces the live form'); assert.doesNotMatch(second.root.innerHTML, /role="dialog"/);
   h.fixture.fail = '<offline>'; h.act('save'); await settle(() => h.root.innerHTML.includes('&lt;offline&gt;'));
   assert.match(h.root.innerHTML, /&lt;My draft&gt;/); assert.match(h.root.innerHTML, /Keep this/); assert.doesNotMatch(h.root.innerHTML, /<offline>/);
   h.fixture.fail = null; h.act('save'); await settle(() => !h.root.innerHTML.includes('role="dialog"'));
@@ -108,6 +110,23 @@ test('Delete requires confirm; Cancel and Back do not mutate', async t => {
   h.act('close'); assert.equal(h.fixture.jobs.length, 2); h.act('delete', 'morning'); h.view.back(); assert.equal(h.fixture.jobs.length, 2);
   h.act('delete', 'morning'); h.act('confirm-delete', 'morning'); await settle(() => !h.root.innerHTML.includes('data-sc-row="morning"'));
   assert.equal(h.fixture.calls.filter(c => c.method === 'DELETE').length, 1); assert.equal(h.fixture.calls.at(-1).method, 'GET');
+});
+test('a delayed sheet autofocus never steals focus from a field already reached', async t => {
+  const h = await harness(t), frames = []; h.s.requestAnimationFrame = f => frames.push(f);
+  h.view.focus('schedules'); h.act('edit', 'morning');
+  let stolen = 0; h.root.querySelector = sel => sel === '[data-sc-field="name"]' ? { focus: () => stolen++ } : null;
+  h.s.document.activeElement = { closest: sel => sel === '.sc-sheet' ? {} : null };
+  frames.forEach(f => f()); assert.equal(stolen, 0);
+});
+test('failed create readback keeps its returned id, so retry cannot create a second schedule', async t => {
+  const h = await harness(t); h.view.focus('schedules'); await h.s.WosSchedules.load();
+  h.act('new'); h.input('name', 'Keep the created id'); h.input('prompt', 'Fixture'); h.fixture.failReads = true; h.act('save');
+  await settle(() => h.root.innerHTML.includes('Saved request, but could not refresh schedules'));
+  assert.equal(h.fixture.jobs.filter(j => j.id === 'created').length, 1);
+  h.fixture.failReads = false; h.act('save'); await settle(() => !h.root.innerHTML.includes('role="dialog"'));
+  assert.equal(h.fixture.calls.filter(c => c.method === 'POST' && c.path === '/wizard/v1/schedules').length, 1);
+  assert.ok(h.fixture.calls.some(c => c.method === 'PATCH' && c.path.endsWith('/created')));
+  assert.equal(h.fixture.jobs.filter(j => j.id === 'created').length, 1);
 });
 test('invalid form sends no writes and permits correction', async t => {
   const h = await harness(t); h.view.focus('schedules'); h.act('new'); h.act('save');

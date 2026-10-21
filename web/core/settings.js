@@ -296,18 +296,23 @@
     const ctx = { ...adapter, root }, api = { render, focus, back, destroy, dispatch, context: ctx, get page() { return page; } };
     let skinImportMessage = '', page = '', confirm = null;
     const desktop = adapter.shell === 'desktop';
-    ctx.render = render;
+    ctx.render = () => render(true);
     ctx.paintUsage = () => { const g = root.querySelector('[data-usage]'); if (g) g.outerHTML = window.WosUsage.html(); paintSubtitles(); };
     function paintSubtitles() {
       root.querySelectorAll?.('[data-st-subtitle]').forEach(el => { el.textContent = subtitle(el.dataset.stSubtitle, ctx); });
     }
-    function render() {
+    function render(force = false) {
+      // Background polls must not replace an active form under a keystroke.
+      // Explicit feature actions render via ctx.render; skin changes use tokens.
+      if (force !== true && [...features.values()].some(f => pageOf(f) === page && f.deferRefresh?.(ctx))) return;
       if (adapter.visible && !adapter.visible()) return;
       const top = root.scrollTop, paneTop = root.querySelector('.st-page')?.scrollTop || 0, active = root.contains(document.activeElement) ? document.activeElement : null;
       const attrs = active ? [...active.attributes].filter(a => a.name.startsWith('data-')) : [];
       const record = active?.closest('[data-ubid]')?.dataset.ubid;
       const selection = active && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
-      const pages = PAGES.filter(p => !p.available || p.available(ctx)), selected = page || (desktop ? 'appearance' : '');
+      const pages = PAGES.filter(p => !p.available || p.available(ctx));
+      if (page && !pages.some(p => p.id === page)) page = '';
+      const selected = page || (desktop ? 'appearance' : '');
       const heading = PAGES.find(p => p.id === selected)?.title || '';
       const items = attention(ctx);
       const attentionHtml = items.length ? `<div class="st-attention" aria-label="Needs attention"><h4>Needs attention</h4>${items.map(i => `<button data-st-attention="${esc(i.feature)}">${esc(i.title)}<span>›</span></button>`).join('')}</div>` : '';
@@ -328,6 +333,7 @@
       for (const f of features.values()) if (pageOf(f) === page) f.leave?.(ctx);
       const f = features.get(id) || [...features.values()].find(f => f.aliases?.includes(id));
       page = f ? pageOf(f) : featurePages[id] || (id === 'updates' ? 'about' : PAGES.some(p => p.id === id) ? id : '');
+      for (const f of features.values()) if (pageOf(f) === page) f.enter?.(ctx);
       confirm = null; render(); root.scrollTop = 0;
       const pane = root.querySelector('.st-page'); if (pane) pane.scrollTop = 0;
       const g = id && root.querySelector(`[data-settings-feature="${CSS.escape(f?.id || id)}"]`);
