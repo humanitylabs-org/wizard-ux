@@ -39,3 +39,13 @@ test('due reminder supports exact context, change, cancel and canonical deep-lin
  assert.doesNotMatch(js,/boomerang-preview|wizard_boomerang_preview/)
  assert.doesNotMatch(js,/openContext\?\.\(r\);await opened/)
 })
+test('due reminders are temporary pinned unread rows and opening them acknowledges the reminder',()=>{
+ const chats=read('web/core/chats.js')
+ assert.match(chats,/isNew = LIVE\.isNew\(s\) \|\| boomDue/)
+ assert.match(chats,/const pinned = PIN\.has\(s\.id\) \|\| boomDue/)
+ assert.match(chats,/const duePinned = hit\.filter\(s => !s\.archived && BOOM\?\.dueFor\(s\.id\)\.length\)/)
+ assert.match(chats,/if \(dueBoom\) void BOOM\.consume\(dueBoom\.id\)/)
+})
+test('native time picker accepts exact minutes',()=>{
+ assert.match(read('web/core/boomerang.js'),/type="time"[^>]+step="60"/)
+})

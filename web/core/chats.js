@@ -222,7 +222,7 @@ window.WizCore.chats = function createChats(H) {
   let rowListAgent = '';
   const privRow = s => !rowListAgent && !!LIVE.isPrivate?.(s.id);
   function chatRow(s, snip) {
-    const isNew = LIVE.isNew(s), working = WORKING_ST.has(s.status), boomDue = !!BOOM?.dueFor(s.id).length, needs = boomDue || ['waiting_for_approval', 'unknown'].includes(s.status) || s.status === 'failed' || s.status === 'interrupted';
+    const boomDue = !!BOOM?.dueFor(s.id).length, isNew = LIVE.isNew(s) || boomDue, working = WORKING_ST.has(s.status), needs = boomDue || ['waiting_for_approval', 'unknown'].includes(s.status) || s.status === 'failed' || s.status === 'interrupted';
     // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Your call, then its one line.
     const def = deferredOf(s) && !working && !needs;
     const at = def ? null : attOf(s), A = at && ATT[at.state], quiet = !!at && (at.state === 'done' || at.state === 'fyi');
@@ -240,11 +240,11 @@ window.WizCore.chats = function createChats(H) {
     const priv = privRow(s), plock = priv ? `<i class="ch-plock" title="Private agent" aria-label="Private">${AGS()?.lock?.() || ''}</i>` : '';
     const topic = TOPIC.get(`thread:${s.id}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '));
     const mark = `<span class="ch-topic-mark" data-chpick="thread:${esc(s.id)}" title="Choose topic emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="emo sti ${kind} ch-topic-status" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span></span>`;
-    const pinned = PIN.has(s.id);
-    const pinAction = pinned ? 'Unpin chat: ' : 'Pin chat: ';
+    const pinned = PIN.has(s.id) || boomDue;
+    const pinAction = boomDue && !PIN.has(s.id) ? 'Pinned reminder until read: ' : pinned ? 'Unpin chat: ' : 'Pin chat: ';
     return `<div class="ch-row-wrap${pinned ? ' pinned' : ''}"><button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}"${pinned ? ' data-pinned="1"' : ''}${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
       <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button><button type="button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinAction}${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button></div>`;
+      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button><button type="button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinAction}${esc(s.title)}" aria-pressed="${pinned}" title="${boomDue && !PIN.has(s.id) ? 'Pinned until read' : pinned ? 'Unpin' : 'Pin'}"${boomDue && !PIN.has(s.id) ? ' disabled' : ''}>${PIN_SVG}</button></div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
    * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
@@ -511,10 +511,11 @@ window.WizCore.chats = function createChats(H) {
     const hit = titleHit.concat(all.filter(s => !seen.has(s.id) && snips.has(s.id)));
     const hitIds = new Set(hit.map(s=>s.id));
     for (const s of bs?.rows?.values() || []) if (!hitIds.has(s.id) && !s.hidden && (!F || (fids ? fids.has(s.id) : F.test(s))) && (!SJ || subjectOf(s) === SJ)) { hit.push(s); hitIds.add(s.id); }
-    // Pinned active chats get one stable section at the top. Archived pins remain in Archive,
-    // and search/filter still decide which rows are eligible before this partition.
-    const split = PIN.partition(hit, s => !s.archived);
-    const pinned = split.pinned, groups = LIVE.workGroups(split.rest);
+    // Due reminders temporarily join Pinned and stay bold until opened without changing saved pin choices.
+    const duePinned = hit.filter(s => !s.archived && BOOM?.dueFor(s.id).length);
+    const dueIds = new Set(duePinned.map(s => s.id));
+    const split = PIN.partition(hit.filter(s => !dueIds.has(s.id)), s => !s.archived);
+    const pinned = duePinned.concat(split.pinned), groups = LIVE.workGroups(split.rest);
     const hitCount = () => hit.length;
     const coachLine = () => c.coach ? '<span class="ch-coach">Filtered. Tap ✕ to see all chats.</span>' : '';
     const ownerId = owner(w.id), curThread = W[ownerId]?.thread;
@@ -1539,6 +1540,8 @@ window.WizCore.chats = function createChats(H) {
   function openChat(wid, sid, opts = {}) {
     window.WizCore.chatSearch?.cancel(wid);
     const w = W[wid]; if (!w) return;
+    const dueBoom = sid !== '__new__' ? BOOM?.dueFor(sid)?.[0] : null;
+    if (dueBoom) void BOOM.consume(dueBoom.id);
     if (!w.thread) { const place = listPlace(elOf(wid)); if (place) ch(wid).listPlace = place; }
     if (w.thread) saveDraft(wid);
     closeRowSheet();
