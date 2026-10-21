@@ -1210,7 +1210,14 @@ window.WizCore.chats = function createChats(H) {
         // this event; dictation apps (Wispr Flow) restore the old clipboard right after ⌘V, so on a busy page the
         // second read came back empty and a long take vanished (beforeinput fired, nothing inserted).
         let text = ''; try { text = e.clipboardData?.getData('text/plain') || ''; } catch (_) {}
-        if (!text) return;
+        if (!text) {
+          // An empty paste is how a lost dictation take looks: the app restored the clipboard before Chrome read
+          // it, so the words never reached the page. Let the browser try anyway; if nothing lands, say how to get
+          // the take back instead of losing it silently (Novaire, 21 Oct 2026).
+          const before = ta.value;
+          setTimeout(() => { if (ta.isConnected && ta.value === before) toast('!', `Paste arrived empty · Wispr Flow: ${/Mac|iP(hone|ad)/.test(navigator.platform || navigator.userAgent) ? '⌃⌘V' : 'Alt+Shift+Z'} pastes the last take again`, 4200); }, 250);
+          return;
+        }
         e.preventDefault();
         if (document.activeElement !== ta) ta.focus();
         let ok = false; try { ok = document.execCommand('insertText', false, text); } catch (_) {}
