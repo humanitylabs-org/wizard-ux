@@ -51,7 +51,7 @@ try{
  ok(receipt.agent_id==='private'&&receipt.session_id===SID&&!('content' in receipt),'server persists only qualified private receipt metadata');
  await desktop.evaluate(async()=>{await WizLive.refresh(true)});
  ok(await desktop.evaluate(({id,at})=>!WizLive.isNew(WizLive.session(id))&&WizLive.seenRecord(WizLive.session(id))?.seenAt===at,{id:SID,at:receipt.seenAt}),'second independent browser context becomes read from exact server receipt');
- const d=pages[1];await d.p.goto(BASE+'agents/');await d.p.locator('[data-open="private"]').click();
+ const d=pages[1];await d.p.goto(BASE+'agents/index.html');await d.p.locator('[data-open="private"]').click();
  const toggle=d.p.getByRole('switch',{name:'Read standard chats'});await toggle.waitFor();
  ok(await toggle.isEnabled()&&await toggle.getAttribute('aria-checked')==='true','Agents app exposes enabled read-only standard-chat permission');
  await toggle.click();await d.p.waitForFunction(()=>WosAgents.get('private')?.permissions.read_standard_chats===false);
