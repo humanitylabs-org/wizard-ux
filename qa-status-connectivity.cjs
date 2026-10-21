@@ -66,6 +66,22 @@ const origin = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-ho
         await page.waitForTimeout(150);
         const fit = await page.locator('[data-wxnet]').evaluate(el => { const r = el.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && el.scrollWidth <= el.clientWidth; });
         assert.ok(fit, `${phone ? 'phone' : 'desktop'} ${skin}: banner fits viewport`);
+        if (!phone) {
+          // Desktop: one line inside the top bar, clear of its icons, and windows keep their place.
+          const g = await page.evaluate(() => {
+            const b = document.querySelector('[data-wxnet]').getBoundingClientRect(), r = el => document.querySelector(el)?.getBoundingClientRect();
+            const kids = sel => [...document.querySelectorAll(sel + ' > *')].map(e => e.getBoundingClientRect()).filter(k => k.width && k.height);
+            const lk = kids('.bar-l'), rk = kids('.bar-r');
+            const L = lk.length ? { right: Math.max(...lk.map(k => k.right)) } : null, R = rk.length ? { left: Math.min(...rk.map(k => k.left)) } : null;
+            const S = r('.stage'), bar = r('.bar') || r('#bar');
+            const s = document.querySelector('[data-wxnet] .wx-s');
+            return { h: b.height, top: b.top, bottom: b.bottom, barBottom: bar?.bottom, clearL: !L || b.left >= L.right, clearR: !R || b.right <= R.left, stageTop: S?.top, barH: bar?.height, short: s && getComputedStyle(s).display !== 'none' ? s.textContent : '' };
+          });
+          assert.ok(g.h <= 30 && g.bottom <= g.barBottom + 1, `desktop ${skin}: pill stays in the top bar ${JSON.stringify(g)}`);
+          assert.ok(g.clearL && g.clearR, `desktop ${skin}: pill clears bar icons ${JSON.stringify(g)}`);
+          assert.ok(Math.abs(g.stageTop - g.barH) <= 1, `desktop ${skin}: windows are not pushed down ${JSON.stringify(g)}`);
+          assert.match(g.short, /Agent Service/);
+        }
         if (process.env.QA_OUT) { fs.mkdirSync(process.env.QA_OUT, { recursive: true }); await page.screenshot({ path: path.join(process.env.QA_OUT, `${phone ? 'phone' : 'desktop'}-${skin}.png`) }); }
       }
       // Recover without changing navigator.onLine or dispatching online.
@@ -85,14 +101,9 @@ const origin = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-ho
       failed = true;
       await page.evaluate(() => WizLive.refresh());
       await page.waitForFunction(() => !!document.querySelector('[data-wxtroubleshoot]'));
-      if (phone) {
-        await Promise.all([page.waitForURL('**/troubleshoot/'), page.locator('[data-wxtroubleshoot]').click()]);
-        assert.equal(await page.title(), 'Troubleshooter QA fixture');
-      } else {
-        const popupPromise = page.waitForEvent('popup'); await page.locator('[data-wxtroubleshoot]').click();
-        const popup = await popupPromise; await popup.waitForLoadState('domcontentloaded');
-        assert.equal(new URL(popup.url()).pathname, '/troubleshoot/'); await popup.close();
-      }
+      // Troubleshooter opens as an in-shell window on both shells (WizReach.open → WizOpenApp).
+      await page.locator('[data-wxtroubleshoot]').click();
+      await page.waitForFunction(() => [...document.querySelectorAll('iframe')].some(f => f.src.endsWith('/troubleshoot/') && f.contentDocument?.title === 'Troubleshooter QA fixture'));
       assert.deepEqual(errors, []);
       console.log(JSON.stringify({ shell, successfulReads, diagnosisReads, checks: ['stale-offline-at-boot','launchable-troubleshooter-app','offline-event-with-working-http','actual-outage','diagnosed-service-layer','retry-and-troubleshooter-controls','nebula-fit','signal-fit','recovery-without-online-event','server-outage-and-recovery','troubleshooter-navigation','no-page-errors'], overlay: !!process.env.QA_STATUS_FILE || !!process.env.QA_WEB_DIR }));
       await ctx.close();
