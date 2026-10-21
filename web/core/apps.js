@@ -101,6 +101,11 @@
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
   window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load()]);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
+  // A Store Get (or another same-origin Wizard window) says the box's apps changed: read the list again now, so
+  // the new app can be opened (Store "Open") without reloading the shell. Refetching is all it can trigger.
+  addEventListener('message', e => {
+    if (e.origin === location.origin && e.data && e.data.type === 'wizard:apps-changed') loadRemote();
+  });
 
   function registry(shell) {
     // One live array per shell, updated in place, so existing references stay valid.
