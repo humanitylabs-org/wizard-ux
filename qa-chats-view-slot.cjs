@@ -54,6 +54,9 @@ async function run(browser, phone) {
       ok(!!colour, `desktop: ${skin} inherits live Appearance tokens`);
       await page.screenshot({ path: path.join(OUT, `desktop-side-by-side-${skin}.png`) });
     }
+    await page.evaluate(id => { __wux.focusWin(id); window.__chatsDocument = document; history.back(); }, data.fixture);
+    await wait(900);
+    ok(await page.evaluate(id => document === window.__chatsDocument && __wux.wins[id] && !__wux.wins[id].thread, data.fixture), 'desktop: browser Back leaves fixture thread without closing the app');
     await page.evaluate(() => __wux.openApp(WizCore.apps('desktop').APP['chats-throws']));
   } else {
     const id = await page.evaluate(() => { __wos.openApp(WizCore.apps('mobile').APP.wizard); return Object.values(__wos.wins).find(w => w.chatsProvider === 'chats-fixture')?.id; });
