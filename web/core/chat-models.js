@@ -40,6 +40,10 @@
   const ours = () => typeof document !== 'undefined' && OURS.has(document.documentElement.dataset.skin || '');
   const primaryFamilies = () => ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
   const shown = list => ours() ? list : list.filter(o => !isTinfoil(o.provider));
+  /* Unified Chats: once a private agent offers models in the main picker, a confidential (Tinfoil) choice means the
+   * private agent. The main agent's own Tinfoil route is hidden there so a locked GLM never lands in the shared
+   * history; a thread already on it still shows its current model. */
+  const keepMainOption = (o, privList, isCur) => !privList.length || !isTinfoil(o.provider) || Boolean(isCur && isCur(o));
   const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
   /* Private (Tinfoil) routes show the model's own identifier, name + version like Opus 5.5: kimi-k3 → Kimi · K3,
    * glm-5-3 → GLM · 5.3, gpt-oss-120b → GPT OSS · 120B. The privacy colour, not a provider name, marks them private. */
@@ -299,10 +303,10 @@
     sheetHtml({ mode, cur, all, title, agent, priv }) {
       // An agent's chats: only that agent's allowed models. No "More models": the rest are not this agent's.
       const own = agent && !agent.missing ? window.WosAgents.modelOptions(agent) : null;
-      const main = own || (all ? M.options : M.visible(cur?.model || '', cur?.provider || ''));
       const privList = !own && Array.isArray(priv) ? priv : [];
-      const list = main.concat(privList);
       const isCur = o => cur && o.value === cur.model && (!cur.provider || o.provider === cur.provider) && (cur.agent || '') === (o.agent || '');
+      const main = own || (all ? M.options : M.visible(cur?.model || '', cur?.provider || '')).filter(o => keepMainOption(o, privList, isCur));
+      const list = main.concat(privList);
       const head = mode === 'retry' ? 'Retry with another model' : mode === 'new' ? 'Model for this new chat' : 'Model for this thread';
       const note = own ? `${agent.label} can only use ${own.length === 1 ? 'this model' : 'these models'}.${agent.privacy === 'private' ? ' Private: no other provider, no fallback.' : ''}`
         : mode === 'retry' ? 'Sends your last request again on the model you pick.' : mode === 'new' ? 'New chats start on your Wizard’s default.' : 'Replies in this thread use this model from now on.';
@@ -315,7 +319,7 @@
         + privList.map((o, k) => { const i = main.length + k; return `<button type="button" class="mrow priv${isCur(o) ? ' on' : ''}" data-mpick="${i}" data-mprivate="${esc(o.agent)}" aria-pressed="${isCur(o)}"><span class="mn"><b>${lock}${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; }).join('')
         + `<p class="msheet-gn">${esc(privNote)}</p></div>` : '';
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
-        <div class="msheet-list">${rows}${!own && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
+        <div class="msheet-list">${rows}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
     },
     /* The compact model menu opened from the label in the message box: a small card over the right side.
@@ -326,10 +330,10 @@
       const isCur = o => cur && o.value === cur.model && (!cur.provider || o.provider === cur.provider) && (cur.agent || '') === (o.agent || '');
       const lock = window.WosAgents?.lock?.() || '';
       const famOf = o => family(o.value, o.provider), up = primaryFamilies().map(p => p.family);
-      const vis = own ? [] : M.visible(cur?.model || '', cur?.provider || '');
+      const privList = !own && Array.isArray(priv) ? priv : [];
+      const vis = own ? [] : M.visible(cur?.model || '', cur?.provider || '').filter(o => keepMainOption(o, privList, isCur));
       const primary = own || up.map(f => vis.find(o => famOf(o) === f)).filter(Boolean).concat(vis.filter(o => isCur(o) && !up.includes(famOf(o))));
       const rest = own || !all ? [] : vis.filter(o => !primary.includes(o)); // the other families' newest models (Fable, Sonnet, Haiku, Terra, Luna)
-      const privList = !own && Array.isArray(priv) ? priv : [];
       const curPriv = privList.some(isCur);
       // Primary rows read Opus · Astra · Sol; everything else keeps its catalogue name (GLM 5.3, Fable 5.1…).
       const label = (o, p) => own || p ? o.name : isTinfoil(o.provider) ? M.short(o.value, o.provider) : PRIMARY.find(x => x.family === famOf(o))?.name || o.name || M.short(o.value, o.provider);
@@ -339,7 +343,7 @@
       const setupRow = `<button type="button" class="mrow" disabled aria-disabled="true" title="Set up Tinfoil in its connection app"><span class="mn"><b>Tinfoil</b></span></button><a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>`;
       // A same-Hermes route, never a Private agent or a new history. No model id is guessed.
       const mainRows = primary.map(o => !own && isTinfoil(o.provider) && !M.tinfoilReady() ? setupRow : row(o)).join('')
-        + (!own && ours() && !primary.some(o => isTinfoil(o.provider)) ? setupRow : '');
+        + (!own && !privList.length && ours() && !primary.some(o => isTinfoil(o.provider)) ? setupRow : '');
       const privRows = privList.map(o => row(o, ' priv')).join('');
       const moreRows = rest.map(o => row(o)).join('');
       const moreBtn = !own && M.ready && !all && vis.some(o => !primary.includes(o)) ? `<button type="button" class="mrow more" data-mall>More models</button>` : '';
