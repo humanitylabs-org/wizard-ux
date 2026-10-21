@@ -2784,8 +2784,8 @@
 
   /* Typed or simulated utterance, same pipeline as voice */
   async function runUtterance(text, kind, typed) {
-    // "help" (tapped or held) opens the gestures sheet on the phone; it never goes to the agent.
-    if (window.WosTour?.isHelp(text) && (kind === 'command' || sendSnap().view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
+    // Help is a command only on explicit command/typed surfaces, never a tapped voice take.
+    if (!window.WosCommands.isMessageTake(kind, typed) && window.WosTour?.isHelp(text) && (kind === 'command' || sendSnap().view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
     clearTimeout(txHideT); V.kind = kind || 'auto';
     const snap = sendSnap();
     txShow('', typed ? 'Typed' : 'Heard', kind === 'command' ? 'command' : '', kind === 'command' ? '⚡' : '✦');
@@ -2797,7 +2797,7 @@
   /* ---------------- view-aware voice ----------------
    * The orb always knows which window is in front. A view can
    *  - capture: everything said with a tap goes to that view (hold still forces a command);
-   *  - auto: the fast router decides whether James is talking to the view or to Archimedes;
+   *  - auto: a tap goes to the open thread or to Archimedes, never through command routing;
    *  - say nothing: the utterance goes to Archimedes, who is told what was on screen.
    * Chats threads are auto. Framed apps require the installed receives_voice_input capability
    * and the shared WizardApp.voiceInput receiver; app-authored meta tags grant nothing. */
@@ -2885,13 +2885,13 @@
   }
 
   /* ---------------- routing ---------------- */
-  /* On the Chats list, a held orb (or a tap) can filter and search it (James + Claude Fable, 11 Oct):
+  /* On the Chats list, only a held orb can filter and search it:
    *   clear filter | all chats | show everything      → chips off
    *   filter [by] X | only X | show [me] [only] X [only] → chip X (status or subject), else search X
    *   search [for] X | find X                          → search text
    * A held orb with any other words on the list keeps doing what it always did (open apps, etc.). */
   const LOCAL_COMMANDS = window.WosCommands.create({ CHATS, APP, appByName, findApp, quickSearch, sendSnap });
-  const localParse = (text, snap, kind) => LOCAL_COMMANDS.parse(text, snap, kind);
+  const localParse = (text, snap, kind, typed = false) => LOCAL_COMMANDS.parse(text, snap, kind, typed);
   async function handleText(text, kind, typed, sttMs, target, snap) {
     const sttNote = sttMs ? ` · heard in ${sttMs} ms` : '';
     snap = snap || sendSnap();
@@ -2902,8 +2902,8 @@
       toast(it.state === 'sent' ? '✦' : '!', it.state === 'sent' ? 'Sent to ' + snap.conversation.label : it.error, 5000);
       return it;
     }
-    // A bare "help" opens the gestures sheet. Held: always. Tapped: unless a thread is open (there it's a reply).
-    if (window.WosTour?.isHelp(text) && (kind === 'command' || snap.view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
+    // A bare "help" is not special in a tapped voice message.
+    if (!window.WosCommands.isMessageTake(kind, typed) && window.WosTour?.isHelp(text) && (kind === 'command' || snap.view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
     const opts = target == null ? { snap } : { desk: target, snap };
     $('#txText').textContent = text;
     const v = snap.view;
@@ -2928,8 +2928,14 @@
       const all = [...files, ...(seal ? seal.files : [])].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
       return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all }).then(item => { seal?.done(item); return item; });
     }
+    // Registered app delivery and composer custody above are not commands. All other tap takes
+    // use the normal message destination, without local parsing, cloud routing or no-match cards.
+    if (window.WosCommands.isMessageTake(kind, typed)) {
+      if (target == null && (v?.kind === 'chat thread' || v?.review || v?.mode === 'capture')) return toView(v, text, `To ${v.name}${sttNote}`, snap);
+      return toAgent(text, `To ${window.WizConfig.agent()}${sttNote}`, opts);
+    }
     const t0 = performance.now();
-    const loc = localParse(text, snap, kind);
+    const loc = localParse(text, snap, kind, typed);
     if (loc) {
       const ms = Math.max(1, Math.round(performance.now() - t0));
       showRouted('command', `Command · on-device · ${ms} ms${sttNote}`);

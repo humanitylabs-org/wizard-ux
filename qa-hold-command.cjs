@@ -173,7 +173,7 @@ const outboxN = p => p.evaluate(() => (window.__wos.outbox?.unsent?.() || []).le
   ok(s.open && /q=brutalist\+architecture/.test(s.url) && agentWrites(writes).length === 0, 'router "search" on a hold opens Wizard Search', JSON.stringify({ s, writes }));
   await closeSheet(p);
 
-  // 9. "Ask AI …" (James, 18 Oct 2026) is the quick-question spell for Wizard Search: held or tapped, anywhere.
+  // 9. "Ask AI …" is the quick-question spell only when HELD; a tap is always a message.
   for (const [t, q, where] of [['Ask AI is milk bad for gout?', 'is\\+milk\\+bad\\+for\\+gout', 'home'], ['Ask AI, what is the capital of Peru?', 'what\\+is\\+the\\+capital\\+of\\+Peru', 'home']]) {
     writes.length = 0; routes.length = 0;
     await hold(p, t); await sleep(900);
@@ -185,7 +185,7 @@ const outboxN = p => p.evaluate(() => (window.__wos.outbox?.unsent?.() || []).le
   writes.length = 0; routes.length = 0;
   await p.evaluate(() => window.__wos.handleText('Ask AI how long do capybaras live', 'auto', false, 300, null)); await sleep(900);
   s = await sheetState(p);
-  ok(s.open && /q=how\+long\+do\+capybaras\+live/.test(s.url) && agentWrites(writes).length === 0, 'tapped "Ask AI …" over an open thread → Search, nothing into the thread', JSON.stringify({ s, writes }));
+  ok(!s.open && routes.length === 0 && (agentWrites(writes).length > 0 || await outboxN(p) > 0), 'tapped "Ask AI …" over an open thread → message, no Search or router', JSON.stringify({ s, writes }));
   await closeSheet(p);
   // STT writes the spell with a colon ("Search: is milk bad for gout?"); that used to miss and go to the router.
   writes.length = 0; routes.length = 0;
