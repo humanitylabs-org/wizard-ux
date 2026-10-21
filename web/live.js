@@ -116,6 +116,7 @@
   const vis = v => (typeof v === 'string' ? v : '').replace(/\s+/gu, ' ').trim().slice(0, 80).toLocaleLowerCase();
   function fingerprint(v) { let h = 2166136261; for (const c of vis(v)) { h ^= c.codePointAt(0) ?? 0; h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   const keyOf = s => `${s.runtime}:${s.id}`;
+  const seenKeyOf = s => s.agent && s.agent !== 'hermes' ? `agent/${s.agent}/${keyOf(s)}` : keyOf(s);
   function assistantAt(s) { const v = s.lastAssistantAt ?? (s.previewRole === 'assistant' ? s.previewAt : undefined); return isFinite(Date.parse(v ?? '')) ? v : undefined; }
   function recordFor(s, seenAt) {
     const a = assistantAt(s);
@@ -124,7 +125,7 @@
   }
   function hasNew(s, state) {
     if (!state) return false;
-    const r = state.threads[keyOf(s)]; if (!r) return true;
+    const r = state.threads[seenKeyOf(s)]; if (!r) return true;
     const cur = Date.parse(assistantAt(s) ?? ''), seenA = Date.parse(r.assistantActivityAt ?? '');
     const comparable = typeof s.messageCount === 'number' && typeof r.messageCount === 'number';
     const previewChanged = !comparable && fingerprint(s.preview) !== r.previewFingerprint;
@@ -499,8 +500,9 @@
     onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     emit() { for (const fn of this.listeners) { try { fn(this); } catch (e) { console.error(e); } } },
     isNew(s) { return hasNew(s, this.seenOf(s)); },
-    // A non-default agent's read state stays on this device (never PUT to the main agent's thread-seen store).
-    seenOf(s) { return s && s.agent && otherAgent(s.agent) ? AGENT_SEEN : this.seen; },
+    // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
+    seenOf(s) { return this.seen; },
+    seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
     workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
     readyByPriority: byPriority,
     get archiveAfterDays() { return archiveAfterDays(); },
@@ -557,7 +559,15 @@
             const ts = Date.now(); merged = { initializedAt: ts, threads: Object.fromEntries(sessions.slice(0, MAX).map(s => [keyOf(s), recordFor(s, ts)])) };
             putSeen(merged).catch(() => {});
           }
+          let migratedSeen = false;
+          for (const s of Object.values(this.agentSessions).flat()) {
+            const old = AGENT_SEEN.threads[keyOf(s)], key = seenKeyOf(s);
+            if (old) { merged.threads[key] = later(merged.threads[key],old); delete AGENT_SEEN.threads[keyOf(s)]; migratedSeen = true; }
+          }
           this.seen = merged; writeLocal(merged);
+          try { localStorage.setItem(AGENT_SEEN_KEY,JSON.stringify(AGENT_SEEN)); } catch {}
+          // Sync migrated marks as well as new ones; merge on the server is monotonic.
+          if (migratedSeen) putSeen(merged).catch(()=>{});
           this.ok = true; this.error = ''; this.at = Date.now(); this.cached = false;
           };
           // Only a cold list paints early; a later full walk replaces a list that is already on screen in one go.
@@ -620,13 +630,11 @@
     markSeen(ids) {
       const all = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       const ts = Date.now();
-      const mine = all.filter(s => s.agent && otherAgent(s.agent));
-      if (mine.length) { for (const s of mine) AGENT_SEEN.threads[keyOf(s)] = recordFor(s, ts); try { localStorage.setItem(AGENT_SEEN_KEY, JSON.stringify(AGENT_SEEN)); } catch (e) {} this.emit(); }
-      const list = all.filter(s => !mine.includes(s));
+      const list = all;
       if (!list.length) return;
       let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
       const threads = { ...state.threads };
-      for (const s of list) threads[keyOf(s)] = recordFor(s, ts);
+      for (const s of list) threads[seenKeyOf(s)] = recordFor(s, ts);
       state = { ...state, threads };
       this.seen = state; writeLocal(state); this.emit();
       putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
