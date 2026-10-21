@@ -12,7 +12,9 @@ const body = src.slice(start, src.indexOf('addFiles(id, named);', start));
 test('composer text paste is inserted from the event snapshot, not left to the browser', () => {
   assert.ok(start > 0, 'composer paste handler exists');
   assert.match(body, /getData\('text\/plain'\)/, 'reads the event snapshot');
-  assert.match(body, /if \(!text\) return;/, 'empty text paste falls through to the browser');
+  assert.match(body, /if \(!text\) \{[\s\S]*?return;\s*\}/, 'empty text paste falls through to the browser');
+  assert.match(body, /ta\.value === before\) toast\(/, 'an empty paste that lands nothing tells the owner instead of failing silently');
+  assert.match(body, /⌃⌘V/, 'names the Mac re-paste shortcut');
   assert.match(body, /e\.preventDefault\(\);[\s\S]*execCommand\('insertText'/, 'cancels the default and inserts itself');
   assert.match(body, /setRangeText\(text/, 'has a fallback insert');
   assert.ok(body.indexOf("getData('text/plain')") < body.lastIndexOf('e.preventDefault()'), 'file pastes still upload');

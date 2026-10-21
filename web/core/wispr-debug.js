@@ -8,7 +8,25 @@
   try { if (q === '0') localStorage.removeItem('wos.wisprdebug'); else if (q !== null) localStorage.setItem('wos.wisprdebug', '1'); } catch (_) {}
   let on = q !== null && q !== '0';
   try { on = on || localStorage.getItem('wos.wisprdebug') === '1'; } catch (_) {}
-  if (!on) return;
+  if (!on) {
+    // Quiet mode (Novaire's lane only, until the Wispr bug is closed): one record per composer paste or per
+    // ⌘V that produced no paste event — clipboard length, how much landed, focus. Lengths only, never words.
+    const ship = r => fetch('wispr-log', { method: 'POST', body: JSON.stringify([Object.assign({ t: Date.now(), quiet: 1, ua: navigator.userAgent.slice(-40) }, r)]), keepalive: true }).catch(() => {});
+    let pendingV = null;
+    addEventListener('keydown', e => {
+      if (!(e.metaKey || e.ctrlKey) || e.code !== 'KeyV' || !e.target?.closest?.('.ch-compose')) return;
+      clearTimeout(pendingV); pendingV = setTimeout(() => ship({ k: 'cmdv-no-paste', trusted: e.isTrusted }), 400);
+    }, true);
+    addEventListener('paste', e => {
+      const el = e.target; if (!el?.closest?.('.ch-compose')) return;
+      clearTimeout(pendingV); pendingV = null;
+      let clip = -1; try { clip = (e.clipboardData?.getData('text/plain') || '').length; } catch (_) {}
+      const types = e.clipboardData ? [...e.clipboardData.types].join(',') : '';
+      const n0 = 'value' in el ? el.value.length : -1;
+      setTimeout(() => ship({ k: 'paste', clip, types, before: n0, after: 'value' in el ? el.value.length : -1, prevented: e.defaultPrevented, detached: !el.isConnected, focused: document.activeElement === el, visible: document.visibilityState }), 300);
+    }, true);
+    return;
+  }
   const lines = [], t0 = performance.now();
   let box = null;
   const who = el => {
