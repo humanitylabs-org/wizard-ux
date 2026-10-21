@@ -8,10 +8,10 @@
 //  6 reload keeps Light and the Mizel card pressed; Appearance v1 context carries family=mizel
 //  7 every card and colour is a ≥44 px target; zero writes; no page errors
 // Usage: node qa-skin-palettes.cjs [origin=http://127.0.0.1:9391/wizard-os-home/]  QA_SHOTS=<dir>
-let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
+let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('playwright'); }
 const fs = require('fs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9391/wizard-os-home/';
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/skin-palettes'; fs.mkdirSync(SHOTS, { recursive: true });
+const SHOTS = process.env.QA_SHOTS || require('path').join(require('os').homedir(), '.hermes/cache/scratch/chats-parity', 'qa-skin-palettes'); fs.mkdirSync(SHOTS, { recursive: true });
 const PHONE_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36';
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { c ? pass++ : fail++; console.log(c ? 'PASS' : 'FAIL', n, x); };
@@ -27,9 +27,10 @@ async function run(b, mode) {
     writes.push(q.method() + ' ' + new URL(q.url()).pathname); return r.fulfill({ status: 403, contentType: 'application/json', body: '{"error":"qa refuses writes"}' }); });
   await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); } catch (e) {} });
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e)));
-  await p.goto(URL_, { waitUntil: 'load' }); await p.waitForTimeout(3500);
+  await p.goto(URL_, { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(3500);
   const openLook = async () => { await p.evaluate(() => WizCore.deeplink.route(location.pathname + '?view=skin')); await p.waitForTimeout(1200); };
   const tap = async sel => {
+    await p.locator('.mz-intro').waitFor({ state: 'detached' });
     const r = await p.evaluate(s => { const e = [...document.querySelectorAll(s)].find(n => n.getClientRects().length); if (!e) return null; e.scrollIntoView({ block: 'center' });
       const b = e.getBoundingClientRect(); const x = b.x + b.width / 2, y = b.y + b.height / 2; const h = document.elementFromPoint(x, y); return { x, y, hit: !!h && (h === e || e.contains(h)) }; }, sel);
     if (!r) return null; if (phone) await p.touchscreen.tap(r.x, r.y); else await p.mouse.click(r.x, r.y); await p.waitForTimeout(900);
