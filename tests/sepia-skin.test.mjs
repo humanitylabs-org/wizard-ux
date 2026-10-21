@@ -45,7 +45,7 @@ test('Sepia is a selectable, persisted warm-light skin without changing the exis
   const { context, store, props, documentElement } = runtime();
   assert.deepEqual([...context.WosSkin.list.map(s => s.id)],
     ['nebula', 'grove', 'tide', 'ember', 'signal', 'novairecito', 'sepia', 'obsidian', 'obsidian-light', 'landscapes']);
-  assert.equal(context.WosSkin.familyOf('sepia'), 'sepia', 'Sepia is a skin of its own');
+  assert.equal(context.WosSkin.familyOf('sepia'), 'novairecito', 'Sepia is a colour of Novaire’s skin');
 
   assert.equal(context.WosSkin.set('sepia'), 'sepia');
   assert.equal(context.WosSkin.current, 'sepia');
