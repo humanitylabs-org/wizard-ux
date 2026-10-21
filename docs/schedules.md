@@ -17,7 +17,7 @@ closes the top sheet then returns to Settings; live skin changes retain the open
 ## API
 
 Targets `wizard-agent-service` PR #81, branch `feature/wizard-scheduler`,
-`d7fbcf2a895e00c157692a961dd64fd004de3150` and `wizard-os` PR #143.
+and `wizard-os` PR #143 (last/next-run additive contract).
 Requests use same-origin credentials and the documented `/wizard/v1/schedules` routes.
 Edit PATCH changes only name, when, prompt and thread. Agent, model, skill, timezone
 and enabled remain unchanged. New jobs use the main agent, the service's timezone,
@@ -25,10 +25,12 @@ and enabled true. A missing destination creates a named chat on the first run.
 Run-now says “Run requested”, never “completed”. Import preserves source Hermes jobs;
 imported copies stay paused. This screen does not enable the scheduler or turn off Hermes.
 
-**API limitation:** #81 exposes `nextAt`, `updatedAt` and the destination `thread`, but
-no last occurrence/admission/completion result. The list says “Last run · unavailable”
-rather than pretending that edits or chat activity are scheduled runs. Showing actual
-last-run time/result needs a companion Agent Service contract. Arbitrary cron stays
+The additive `lastRun` ledger projection renders “Last run 07:00 · Posted”,
+“Silent”, “Failed: <short safe error>” or “Running”. Null means “not yet”; missing
+fields on older services retain “unavailable”. Times use the owner's configured
+clock timezone, never the job's timezone or unrelated chat/edit activity. `nextRun`
+renders “Next 07:00 tomorrow” (today/date where appropriate); null means paused/none.
+Relative dates compare owner calendar days, including DST. Arbitrary cron stays
 exact as “Custom timing” rather than a potentially false English interpretation.
 
 ## Verification

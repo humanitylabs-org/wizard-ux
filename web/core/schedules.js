@@ -49,16 +49,41 @@
     // Keep unsupported expressions exact, not a guessed English interpretation.
     return `Custom timing · ${when?.cron || 'unavailable'}`;
   }
-  function dateText(v) { const d = new Date(v); return Number.isFinite(d.getTime()) ? d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Unavailable'; }
+  const zone = () => window.WizConfig?.timeZone?.() || undefined;
+  function dateText(v) { const d = new Date(v); return Number.isFinite(d.getTime()) ? d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short', timeZone: zone() }) : 'Unavailable'; }
+  function shortTime(v, relative = false) {
+    const d = new Date(v); if (!v || !Number.isFinite(d.getTime())) return '';
+    const timeZone = zone();
+    const time = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d);
+    if (!relative) return time;
+    // Compare owner-local calendar dates, not 24-hour durations (DST, midnight).
+    const day = value => {
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(value);
+      const p = Object.fromEntries(parts.map(p => [p.type, p.value]));
+      return Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day));
+    };
+    const delta = (day(d) - day(Date.now())) / 86400000;
+    const label = delta === 0 ? 'today' : delta === 1 ? 'tomorrow' : new Intl.DateTimeFormat('en-GB', { timeZone, day: 'numeric', month: 'short', ...(d.getUTCFullYear() !== new Date().getUTCFullYear() ? { year: 'numeric' } : {}) }).format(d);
+    return `${time} ${label}`;
+  }
   function lastText(j) {
-    // Service #81 does not expose occurrence history. Do not mistake updatedAt/nextAt
-    // or the destination chat's unrelated activity for a completed schedule run.
-    return 'Last run · unavailable';
+    const r = j.lastRun;
+    if (!Object.hasOwn(j, 'lastRun')) return 'Last run · unavailable';
+    if (!r) return 'Last run · not yet';
+    const labels = { posted: 'Posted', silent: 'Silent', failed: `Failed${r.error ? ': ' + r.error : ''}`, running: 'Running' };
+    const time = shortTime(r.startedAt || r.scheduledFor);
+    return labels[r.outcome] && time ? `Last run ${time} · ${labels[r.outcome]}` : 'Last run · unavailable';
+  }
+  function nextText(j) {
+    if (!Object.hasOwn(j, 'nextRun')) return 'Next · unavailable';
+    if (j.nextRun === null) return j.enabled ? 'Next · none' : 'Next · paused';
+    const time = shortTime(j.nextRun, true);
+    return time ? `Next ${time}` : 'Next · unavailable';
   }
   const button = (action, title, id = '', attrs = '') => `<button type="button" data-sc="${action}" data-sc-id="${esc(id)}" ${attrs}>${esc(title)}</button>`;
   function row(j, ctx) {
     const s = state(ctx), chat = ctx.live?.session?.(j.thread);
-    return `<article class="sc-row" data-sc-row="${esc(j.id)}"><div class="sc-head"><div class="st-tx"><b>${esc(j.name)}</b><small>${esc(whenText(j.when))}${j.timezone ? ` · ${esc(j.timezone)}` : ''}</small></div>${button('toggle', j.enabled ? 'On' : 'Off', j.id, `role="switch" aria-label="${esc(j.name)}" aria-checked="${!!j.enabled}" ${s.busy ? 'disabled' : ''}`)}</div><div class="sc-chat">${j.thread ? button('chat', chat?.title || `Schedules · ${j.name}`, j.id) : '<span>New chat on first run</span>'}</div><p class="sc-last">${esc(lastText(j))}</p><div class="st-actions">${button('run', 'Run now', j.id, s.busy ? 'disabled' : '')}${button('edit', 'Edit', j.id, s.busy ? 'disabled' : '')}${button('delete', 'Delete', j.id, s.busy ? 'disabled' : '')}</div></article>`;
+    return `<article class="sc-row" data-sc-row="${esc(j.id)}"><div class="sc-head"><div class="st-tx"><b>${esc(j.name)}</b><small>${esc(whenText(j.when))}${j.timezone ? ` · ${esc(j.timezone)}` : ''}</small></div>${button('toggle', j.enabled ? 'On' : 'Off', j.id, `role="switch" aria-label="${esc(j.name)}" aria-checked="${!!j.enabled}" ${s.busy ? 'disabled' : ''}`)}</div><div class="sc-chat">${j.thread ? button('chat', chat?.title || `Schedules · ${j.name}`, j.id) : '<span>New chat on first run</span>'}</div><p class="sc-last">${esc(lastText(j))}<br>${esc(nextText(j))}</p><div class="st-actions">${button('run', 'Run now', j.id, s.busy ? 'disabled' : '')}${button('edit', 'Edit', j.id, s.busy ? 'disabled' : '')}${button('delete', 'Delete', j.id, s.busy ? 'disabled' : '')}</div></article>`;
   }
   function draftFor(j = {}) {
     const w = j.when || { cron: '0 7 * * *' };
@@ -142,7 +167,7 @@
         if (!d.id) Object.assign(body, { agent: 'main', enabled: true });
         const saved = await request(d.id ? '/' + encodeURIComponent(d.id) : '', d.id ? 'PATCH' : 'POST', body);
         // If readback fails, retry edits this created job instead of POSTing a copy.
-        if (!d.id && saved.schedule?.id) d.id = saved.schedule.id;
+        if (!d.id && (saved.id || saved.schedule?.id)) d.id = saved.id || saved.schedule.id;
         await readback(); if (s.sheet === sh) close(ctx);
       }); return true;
     }
