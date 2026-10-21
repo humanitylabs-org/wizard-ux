@@ -189,7 +189,6 @@
     "core/views.js",
     "core/voice-status.js",
     "core/web-update.js",
-    "core/wispr-debug.js",
     "core/workspace-navigation.js",
     "data.js",
     "favicon.ico",
@@ -558,13 +557,6 @@
       "note": "Direct entrypoint import"
     },
     "core/web-update.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/wispr-debug.js": {
       "loadedBy": [
         "phone",
         "desktop"
