@@ -1,0 +1,32 @@
+{
+  "license": "MIT",
+  "upstream": "https://github.com/kazuhikoarase/qrcode-generator",
+  "package": "qrcode-generator@2.0.4 (npm)",
+  "source": "dist/qrcode.js",
+  "upstreamCommit": "83b7e8fe3fddd3b0368dbafd6ce56995bd25e3c8",
+  "authors": [
+    "Kazuhiko Arase"
+  ],
+  "changes": [
+    "None: byte-identical copy of the published dist file, loaded as a classic script (global `qrcode`)"
+  ],
+  "licenseSource": {
+    "commit": "83b7e8fe3fddd3b0368dbafd6ce56995bd25e3c8",
+    "path": "LICENSE",
+    "sha256": "3a850fa5f08101db6f40676c2786e10bd2cd5fff7b12ffdf1e0c434d4e49d90c",
+    "destination": "web/setup/vendor/LICENSE-qrcode-generator"
+  },
+  "copiedSources": [
+    {
+      "package": "qrcode-generator@2.0.4",
+      "tarball": "https://registry.npmjs.org/qrcode-generator/-/qrcode-generator-2.0.4.tgz",
+      "tarballSha256": "02e2e18a99a90b02dad940851f59b7c3c5fd1ab79cbdece8595cb06328878159",
+      "integrity": "sha512-mZSiP6RnbHl4xL2Ap5HfkjLnmxfKcPWpWe/c+5XxCuetEenqmNFf1FH/ftXPCtFG5/TDobjsjz6sSNL0Sr8Z9g==",
+      "path": "package/dist/qrcode.js",
+      "sha256": "79ec86f82856005b1c887905cfccfcfbec3821ca61c7fd5a952faa5f778f791c",
+      "destination": "web/setup/vendor/qrcode.js",
+      "retrieval": "npm pack qrcode-generator@2.0.4 && tar xzf qrcode-generator-2.0.4.tgz package/dist/qrcode.js"
+    }
+  ],
+  "note": "QR codes for the Setup app are generated locally in the browser; no URL is ever sent to a third-party QR service. The word 'QR Code' is a registered trademark of DENSO WAVE INCORPORATED."
+}
