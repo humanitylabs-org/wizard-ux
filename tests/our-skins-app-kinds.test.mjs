@@ -19,6 +19,6 @@ test('system apps lead each group', () => {
   assert.match(app, /const byName = \(x, y\) => \(isSystem\(y\) - isSystem\(x\)\) \|\| x\.name\.localeCompare/);
 });
 test('kind styles live only in our skin packages', () => {
-  for (const f of ['obsidian', 'landscapes']) { assert.match(css(f), /\.lapp\.lapp-sys \.ic \{ border: 2\.5px solid #8f63ff/); assert.match(css(f), /\.launcher \.lclose/); assert.doesNotMatch(css(f), /sysbox/); }
-  for (const f of ['nebula', 'grove', 'tide', 'ember', 'signal']) { try { assert.doesNotMatch(css(f), /lapp-sys|lclose|sysbox|new-desk\.kinds/); } catch (e) { if (e.code !== 'ENOENT') throw e; } }
+  for (const f of ['obsidian', 'landscapes']) { assert.match(css(f), /\.lapp\.lapp-sys \.ic \{ border: 2\.5px solid #8f63ff/); assert.match(css(f), /\.launcher \.lclose/); assert.doesNotMatch(css(f), /sysbox/); assert.match(css(f), /\.forag:not\(\.open\) \.fa-body \{ display: none/); }
+  for (const f of ['nebula', 'grove', 'tide', 'ember', 'signal']) { try { assert.doesNotMatch(css(f), /lapp-sys|lclose|sysbox|forag|new-desk\.kinds/); } catch (e) { if (e.code !== 'ENOENT') throw e; } }
 });

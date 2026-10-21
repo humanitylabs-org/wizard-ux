@@ -385,3 +385,12 @@ html[data-skin^="obsidian"] .rs-arc { stroke: var(--wz-text, var(--ink)); }
 html[data-skin^="obsidian"] .home-time { font-variant-numeric: normal; }
 /* System apps: one purple border (it replaces the tile's own colour border, never adds a second) and a purple tint. */
 html[data-skin^="obsidian"] :is(.launcher, .new-desk) .lapp.lapp-sys .ic { border: 2.5px solid #8f63ff; background: linear-gradient(160deg, rgba(143, 99, 255, .34), rgba(143, 99, 255, .14)), #0f0c17; box-shadow: 0 4px 14px rgba(143, 99, 255, .28); outline: none; }
+
+/* "For agents" (Wizard apps, Agents, Connectors): one quiet folded row under Apps. */
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag { margin: 14px 0 4px; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--line-2); color: var(--ink-2); font-size: 13.5px; font-weight: 600; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row small { color: var(--ink-3); font-size: 12.5px; font-weight: 500; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row svg { margin-left: auto; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag.open .fa-row svg { transform: rotate(180deg); }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag:not(.open) .fa-body { display: none; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag .fa-body { padding-top: 6px; }
