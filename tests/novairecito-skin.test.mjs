@@ -48,6 +48,9 @@ test('Novairecito is a visual-only package scoped to its own skin', () => {
   const css = read('web/skins/novairecito/skin.css');
   assert.match(js, /id: 'novairecito', pkg: \{ css: true, dir: 'novairecito' \}/);
   assert.doesNotMatch(js, /id: 'novairecito', pkg: \{[^}]*js:/);
+  assert.match(css, /html\[data-skin="novairecito"\] \.ch-pin-toggle\[aria-pressed="true"\]/, 'selected pin styling stays in Novairecito');
+  assert.match(css, /color:\s*#ef4444/, 'selected pins use a recognizable red');
+  assert.match(css, /fill-opacity:\s*1/, 'selected pins are a solid silhouette');
   for (const match of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{/g)) {
     assert.match(match[1].trim(), /^html\[data-skin="novairecito"\]/);
   }
