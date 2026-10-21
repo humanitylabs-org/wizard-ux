@@ -24,7 +24,10 @@
     }
     box.textContent = 'WISPR DEBUG · active: ' + who(document.activeElement) + '\n' + lines.slice(-28).join('\n');
   };
-  const add = s => { lines.push(((performance.now() - t0) / 1000).toFixed(2) + ' ' + s); if (lines.length > 200) lines.shift(); if (document.body) show(); };
+  let outq = [];
+  const add = s => { const l = ((performance.now() - t0) / 1000).toFixed(2) + ' ' + s; lines.push(l); outq.push({ t: Date.now(), k: l }); if (lines.length > 200) lines.shift(); if (document.body) show(); };
+  // Ship the log to the box (same origin, lengths only) so the owner never has to screenshot it.
+  setInterval(() => { if (!outq.length) return; const b = outq; outq = []; fetch('wispr-log', { method: 'POST', body: JSON.stringify(b), keepalive: true }).catch(() => { outq = b.concat(outq); }); }, 1500);
   const mods = e => (e.metaKey ? '⌘' : '') + (e.ctrlKey ? '⌃' : '') + (e.altKey ? '⌥' : '') + (e.shiftKey ? '⇧' : '');
   const describe = e => {
     let s = e.type + ' ' + who(e.target);
@@ -38,6 +41,7 @@
     addEventListener(type, e => {
       if ((type === 'keydown' || type === 'keyup') && !(e.metaKey || e.ctrlKey || /^(Meta|Control|Alt|Fn)/.test(e.key || ''))) return;
       const s = describe(e);
+      if (type === 'paste' && 'value' in e.target) { const el = e.target, n0 = el.value.length; setTimeout(() => add('  after paste: composer len ' + n0 + ' -> ' + el.value.length + (el.isConnected ? '' : ' (DETACHED)')), 120); }
       // Read cancellation after every WizardOS handler has run.
       setTimeout(() => add(s + (e.defaultPrevented ? '  ⛔ CANCELLED' : '')), 0);
     }, true);
