@@ -93,7 +93,11 @@
     repaint();
   }
 
-  function nativeList() { const d = DEV(); if (!d) return []; return (J(d.cancelledList()) || []).map(t => ({ ...t, native: true })); }
+  // The app's capture journal marks the recordings it kept with "custody": true (CancelledTakes.keepCustody). That
+  // means the PHONE holds them, not the page's outbox: keep it out of `custody`, which routes Delete and Transcribe
+  // to WosOutbox (James, 21 Oct 2026: ten "0:00 · Orb" journal takes answered Delete with "Deletion not saved",
+  // then with a "Deleted" that deleted nothing).
+  function nativeList() { const d = DEV(); if (!d) return []; return (J(d.cancelledList()) || []).map(t => ({ ...t, native: true, custody: false, journal: !!t.custody })); }
   function all() {
     const custody = (window.WosOutbox?.recordings() || []).filter(x => x.state !== 'capturing').map(x => ({ id: x.id, at: x.createdAt, source: 'web', ms: x.ms || 0, mime: x.audio.type, bytes: x.audio.size, custody: true, sessionOnly: !x.durable, conversation: x.kind === 'conversation', text: x.text, error: x.error, state: x.state }));
     const l = nativeList().concat(web.map(({ blob, ...t }) => t), custody);
@@ -151,6 +155,8 @@
       if (!removed) return why || window.WosOutbox.removeError?.(id) || 'device storage refused it';
     }
     else if (t.native) { try { DEV().cancelledDelete(id); } catch (e) {} } else await removeWeb(id);
+    // Never report a deletion that did not happen: the row must be gone from its own store.
+    if (all().some(x => x.id === id && x.native === !!t.native && x.custody === !!t.custody)) return t.native ? 'the phone kept the file' : 'it is still stored';
     delete texts[id]; saveTexts(); open.delete(id);
     return '';
   }
