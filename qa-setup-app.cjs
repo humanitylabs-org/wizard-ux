@@ -48,6 +48,18 @@ const fs_ = (f) => f.evaluate(() => ({ screen: __setup.state.screen, polling: __
 const txt = (f, sel) => f.evaluate(s => [...document.querySelectorAll(s)].filter(e => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden').map(e => e.textContent.trim()).join(' | '), sel);
 const glyphs = f => f.evaluate(() => [...document.querySelectorAll('#phone .step')].map(s => s.querySelector('.gl')?.dataset.g));
 async function waitStep(f, step, extra = '') { try { await f.waitForFunction(([s, e]) => __setup.state.phone.data?.step === s && !__setup.state.starting && (!e || !!document.querySelector(e)), [step, extra], { timeout: 8000 }); return true; } catch (e) { return false; } }
+async function pickSkin(page, id) {
+  // Settings now groups colour palettes under skin families. Single-colour families have no palette button.
+  // Exercise the current visible controls rather than bypassing them through WosSkin.set().
+  const family = await page.evaluate(s => WosSkin.familyOf?.(s), id);
+  if (family) {
+    const card = page.locator(`[data-skinfamily="${family}"]:visible`).first();
+    if (await card.count() && await card.getAttribute('aria-pressed') !== 'true') await card.click();
+  }
+  const palette = page.locator(`[data-skinpick="${id}"]:visible`).first();
+  if (await palette.count()) await palette.click();
+  else if (await page.evaluate(() => WosSkin.current) !== id) throw new Error(`No visible Settings control for ${id}`);
+}
 async function decodeQR(page, b, el) {
   const png = await el.screenshot();
   const tmp = await b.newPage();
@@ -316,7 +328,7 @@ const setupWin = p => p.evaluate(() => { const w = Object.values(__wos.wins).fin
     for (const id of skins) {
       await p.evaluate(() => __wos.goDesk(0));
       await p.locator('[data-act="settings"]').tap();
-      await p.locator(`[data-skinpick="${id}"]`).tap();
+      await pickSkin(p, id);
       await p.evaluate(() => window.__wosNativeBack());
       await p.evaluate(() => __wos.openApp(WizCore.apps("mobile").APP.setup));
       await f.waitForFunction(s => document.documentElement.dataset.skin === s, id, { timeout: 5000 }).catch(() => {});
