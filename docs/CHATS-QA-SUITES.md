@@ -1,7 +1,8 @@
 # Chats regression QA repair
 
-Baseline: `origin/main` at `68e353d7e0e46b575aca5006c395ac54dffb91bd`.
-Re-ran every listed gate after incorporating PR #266's desktop connection pill.
+Baseline: `origin/main` at `00ffd23a8fce489f606a75a9c896a468720f52d3`.
+Re-ran every listed gate after incorporating PR #266's desktop connection pill
+and PR #268's Stable/Latest update-channel picker.
 Scope: isolated QA and one confirmed shared-renderer defect; no merge or deployment.
 
 ## Repaired assumptions (not disabled checks)
@@ -84,7 +85,7 @@ in screenshots/logs remain private; none are committed or attached to a PR.
 | qa-skin-palettes | 28 / 0 |
 | qa-my-skin-script | 34 / 0 |
 | qa-own-views | 26 / 0 |
-| node --test tests/*.test.mjs | 466 / 0 |
+| node --test tests/*.test.mjs | 468 / 0 |
 
 All commands exited zero; none timed out. Owner-skins guard is included and
 unchanged. `git diff --check` is clean. No production send/upload, physical
