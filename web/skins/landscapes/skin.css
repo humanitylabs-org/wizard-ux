@@ -365,3 +365,6 @@ html[data-skin="landscapes"] :is(.launcher, .new-desk) .fa-row svg { margin-left
 html[data-skin="landscapes"] :is(.launcher, .new-desk) .forag.open .fa-row svg { transform: rotate(180deg); }
 html[data-skin="landscapes"] :is(.launcher, .new-desk) .forag:not(.open) .fa-body { display: none; }
 html[data-skin="landscapes"] :is(.launcher, .new-desk) .forag .fa-body { padding-top: 6px; }
+
+/* Home without date and clock (Miguel, 21 Oct): the device already shows the time. */
+html[data-skin="landscapes"] :is(.home-date, .home-time) { display: none; }
