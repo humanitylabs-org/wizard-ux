@@ -56,15 +56,22 @@ test('pins persist through reload and archived rows retain normal archive semant
   assert.equal(second.api.scope, 'device');
 });
 
-test('both shells load pins before Chats and the shared row action exposes pin/unpin', () => {
+test('both shells load pins before Chats and expose menu plus direct row controls', () => {
   for (const page of ['web/index.html', 'web/desktop.html']) {
     const html = read(page);
     assert.ok(html.indexOf('core/chat-pins.js') > -1, `${page} loads pin state`);
     assert.ok(html.indexOf('core/chat-pins.js') < html.indexOf('core/chats.js'), `${page} loads pin state first`);
   }
   const chats = read('web/core/chats.js');
+  const css = read('web/core/chats.css');
   assert.match(chats, /data-rspin/);
   assert.match(chats, /Unpin|Pin/);
   assert.match(chats, /data-sec="pinned"/);
   assert.match(chats, /PIN\.partition\(hit/);
+  assert.match(chats, /data-chpin=/, 'each sidebar row has a direct pin control');
+  assert.match(chats, /aria-pressed=/, 'the pin control exposes pressed state');
+  assert.match(chats, /Pin chat:|Unpin chat:/, 'the pin control has an action label');
+  assert.match(chats, /class="ch-pin-svg"/, 'the control uses a recognizable SVG, not an emoji');
+  assert.match(css, /\.ch-pin-toggle:focus-visible/, 'keyboard focus reveals the control');
+  assert.match(css, /pointer: coarse/, 'touch layouts keep the control discoverable');
 });

@@ -15,8 +15,18 @@
 .ch-new svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; }
 .ch-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; padding: 2px 6px 12px; }
 .ch-scroll::-webkit-scrollbar { display: none; }
-.ch-row { display: flex; gap: 11px; width: 100%; padding: 10px 8px; border-radius: 14px; text-align: left; align-items: flex-start; }
+.ch-row-wrap { position: relative; }
+.ch-row { display: flex; gap: 11px; width: 100%; padding: 10px 42px 10px 8px; border-radius: 14px; text-align: left; align-items: flex-start; }
 .ch-row:active { background: rgba(205, 190, 255, .07); }
+.ch-pin-toggle { position: absolute; z-index: 1; right: 7px; top: 50%; width: 32px; height: 32px; margin-top: -16px; display: grid; place-items: center; border-radius: 10px; color: var(--ink-3); opacity: 0; transition: opacity .14s ease, color .14s ease, background .14s ease; }
+.ch-pin-toggle::after { content: ''; position: absolute; inset: -6px; }
+.ch-pin-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.ch-row-wrap:hover .ch-pin-toggle, .ch-row-wrap:focus-within .ch-pin-toggle, .ch-pin-toggle:focus-visible, .ch-row-wrap.pinned .ch-pin-toggle { opacity: 1; }
+.ch-pin-toggle:hover, .ch-pin-toggle:focus-visible { color: var(--ink); background: rgba(205, 190, 255, .11); outline: none; }
+.ch-pin-toggle:focus-visible { box-shadow: 0 0 0 2px var(--violet-2); }
+.ch-pin-toggle[aria-pressed="true"] { color: var(--violet-2); }
+.ch-pin-toggle[aria-pressed="true"] svg { fill: currentColor; fill-opacity: .18; }
+@media (pointer: coarse) { .ch-pin-toggle { opacity: .72; } .ch-row-wrap.pinned .ch-pin-toggle { opacity: 1; } }
 .ch-row .emo { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-size: 18px; background: rgba(205, 190, 255, .07); }
 .ch-row .bd { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ch-row .tp { display: flex; gap: 8px; align-items: baseline; }
@@ -102,7 +112,6 @@
 .ch-sec + .ch-sec { border-top: 1px solid var(--line); }
 .ch-sec[data-sec="errors"] .ch-sec-h { color: #ff8f8f; }
 .ch-sec[data-sec="pinned"] .ch-sec-h { color: var(--violet-2); }
-.ch-pin { display: inline-block; margin-left: 6px; color: var(--violet-2); font-size: 12px; font-weight: 700; vertical-align: 1px; }
 .ch-none { display: block; padding: 4px 10px 10px; font-size: 13px; color: var(--ink-3); }
 .ch-more { display: block; width: calc(100% - 16px); margin: 4px 8px 10px; padding: 9px; border-radius: 12px; font-size: 13px; font-weight: 700; color: var(--violet-2); background: rgba(205, 190, 255, .05); }
 /* Message attachments: voice notes look like a voice note, photos inline */
