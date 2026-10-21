@@ -76,6 +76,8 @@
     if (r.kind === 'ok') {
       S.list = { status: 'ok', data: r.data };
       if (r.data.first_run === true) S.firstRun = true;
+      window.WosRecommended?.load();
+      if (r.data.first_run === false) window.WosRecommended?.prefetch();
     } else S.list = { status: r.kind, data: S.list.data };
     renderList();
     if (S.firstRun && !S.seenPosted) postSeen();
@@ -86,6 +88,7 @@
     const r = await api('POST', API + '/seen');
     log('seen:' + r.kind);
     if (r.kind !== 'ok') S.seenPosted = false; // one retry, on the next return to the page
+    else window.WosRecommended?.prefetch(); // after first Setup is recorded; WAM persists/resumes the pull-only job
   }
   let phoneSeq = 0;
   async function loadPhone() {
@@ -193,7 +196,7 @@
   function renderList() {
     const L = S.list, owner = ownerName();
     let h = '<h1>Setup</h1>';
-    if (S.firstRun) h += `<p class="greet">${owner ? `Hi ${esc(owner)}. ` : ''}One thing to set up for now.</p>`;
+    if (S.firstRun) h += `<p class="greet">${owner ? `Hi ${esc(owner)}. ` : ''}Make this Wizard yours.</p>`;
     if (L.status === 'denied') { $('list').innerHTML = h + '<div class="state"><p>Only Wizard’s owner can use Setup.</p></div>'; return; }
     if (L.status === 'missing') { $('list').innerHTML = h + '<div class="state"><p>This Wizard doesn’t have Setup yet.</p><p class="muted">Update Wizard, then come back.</p></div>'; return; }
     const item = (L.data?.items || []).find(i => i && i.id === 'phone') || { id: 'phone', title: 'Use Wizard on your phone', state: '' };
@@ -202,7 +205,8 @@
     const end = st === 'done' ? `<svg class="okmark" viewBox="0 0 24 24" aria-label="Done"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>` : st === 'in_progress' ? `<span class="dot" aria-label="In progress"></span>${CHEV}` : CHEV;
     h += `<div class="rows"><button class="row" data-act="open-phone" data-state="${esc(st)}"><span class="ic" aria-hidden="true">📱</span><span class="bd"><b>${esc(str(item.title) || 'Use Wizard on your phone')}</b><small>${line}</small></span><span class="end">${end}</span></button></div>`;
     if (L.status === 'neterr') h += '<button class="link" data-act="retry-list">Try again</button>';
-    h += `<p class="foot">${phoneLayout && tourPending() ? 'That’s everything for now. The 30-second tour starts when you go back to Home.' : 'That’s everything for now.'}</p>`;
+    if (L.status === 'ok') h += window.WosRecommended?.html() || '';
+    h += `<p class="foot">${phoneLayout && tourPending() ? 'The 30-second tour starts when you go back to Home.' : 'You can come back to Setup any time.'}</p>`;
     if (tourAvailable()) h += '<button class="link" data-act="tour">Show the 30-second tour</button>';
     $('list').innerHTML = h;
   }
@@ -351,6 +355,7 @@
   $('scrim').addEventListener('click', () => { closeSheet(); closeMenu(); });
 
   /* ---------------- boot ---------------- */
+  window.WosRecommended?.init(renderList, () => S.screen === 'list' && !document.hidden);
   try { WA?.ready({ name: 'Setup' }); } catch (e) {}
   renderList(); if (!ioList) loadList();
   // Owner name for the greeting: the shell's settings when hosted, else the bootstrap the shell reads.
