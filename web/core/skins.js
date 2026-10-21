@@ -70,6 +70,16 @@
         violet: '#7A5CFF', 'violet-2': '#A08CFF', pink: '#ff7ac8', cyan: '#6fd8ff', amber: '#ffbe55', green: '#62e6a8', red: '#ff6b86',
         'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(11,10,16,.62)', 'sk-dock-line': 'rgba(255,255,255,.10)', 'sk-ddot': 'rgba(255,255,255,.6)', 'sk-tour': 'rgba(11,10,16,.80)', 'sk-dim': 'rgba(11,10,16,.70)', 'sk-win': 'rgba(16,14,22,.72)' }) },
   ];
+  // Each skin's own display face (the one its Home clock wears; fonts self-hosted in skins.css), for the preview cards
+  // in the skin picker. Kept outside the entries so each skin definition stays as its author made it.
+  const FACES = {
+    nebula: { family: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif', weight: 600 },
+    grove: { family: '"Sk Fraunces", Georgia, serif', weight: 600 },
+    tide: { family: '"Sk Jost", ui-sans-serif, sans-serif', weight: 400 },
+    ember: { family: '"Sk Cormorant", Georgia, serif', weight: 500, style: 'italic' },
+    signal: { family: '"Sk Mono", ui-monospace, monospace', weight: 500 },
+    sepia: { family: '"Sk Fraunces", Georgia, serif', weight: 600 },
+  };
   const FAMS = (() => { // resolved once: every skin entry gets .family, every family its palettes in SKINS order
     const out = [];
     for (const s of SKINS) {
@@ -233,19 +243,21 @@
     // Obsidian: still film grain plus one slow, soft light drifting across. Pre-rendered noise tiles, so a frame is
     // two drawImage calls and a gradient; frozen by the scenery gate whenever Home is not live.
     obsidian: {
-      init(s, W, H) { this.prep(s, W, H, '#000000', 255); },
+      init(s, W, H) { this.prep(s, W, H, '#09090b', 255); },
       prep(s, W, H, base, ink) {
         s.base = base; s.ink = ink;
         s.tiles = [0, 1, 2].map(() => { const n = mk(160, 160), x = n.getContext('2d'), d = x.createImageData(160, 160);
           for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() < .5 ? 0 : 1; d.data[i] = d.data[i + 1] = d.data[i + 2] = ink; d.data[i + 3] = v ? (Math.random() * 22) | 0 : 0; }
           x.putImageData(d, 0, 0); return n; });
       },
+      // Opinionated (owner, 21 Oct): clean and modern, no film grain. A flat base with one very soft, near-still light
+      // from the top so the surface reads as depth, not texture.
       draw(c, s, t, dt, W, H) {
         c.fillStyle = s.base; c.fillRect(0, 0, W, H);
-        const lx = W * (.5 + .42 * Math.sin(t * .05)), ly = H * (.35 + .22 * Math.sin(t * .037 + 1.3)), R = Math.max(W, H) * .75;
-        const g = c.createRadialGradient(lx, ly, 0, lx, ly, R); g.addColorStop(0, `rgba(${s.ink},${s.ink},${s.ink},.07)`); g.addColorStop(1, `rgba(${s.ink},${s.ink},${s.ink},0)`);
+        const k = s.ink ? '255,255,255' : '40,36,60', a = s.ink ? .055 : .05;
+        const lx = W * (.5 + .12 * Math.sin(t * .02)), g = c.createRadialGradient(lx, -H * .1, 0, lx, -H * .1, Math.max(W, H) * .95);
+        g.addColorStop(0, `rgba(${k},${a})`); g.addColorStop(1, `rgba(${k},0)`);
         c.fillStyle = g; c.fillRect(0, 0, W, H);
-        c.fillStyle = c.createPattern(s.tiles[((t * 8) | 0) % 3], 'repeat'); c.fillRect(0, 0, W, H);
       },
     },
     'obsidian-light': { init(s, W, H) { BG.obsidian.prep(s, W, H, '#ffffff', 0); }, draw(c, s, t, dt, W, H) { BG.obsidian.draw(c, s, t, dt, W, H); } },
@@ -355,7 +367,7 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 
   window.WosSkin = {
-    list: SKINS.map(s => ({ id: s.id, family: s.family, name: s.name, who: s.who, bg: s.t.bg, accent: s.t.violet })),
+    list: SKINS.map(s => ({ id: s.id, family: s.family, name: s.name, who: s.who, bg: s.t.bg, accent: s.t.violet, face: FACES[s.id] || null, t: { ...s.t } })),
     // Skins (families) with their palettes, in list order. Picking a skin puts on the palette last worn in it.
     families: FAMS,
     familyOf(id) { return (SKINS.find(s => s.id === id) || SKINS[0]).family; },

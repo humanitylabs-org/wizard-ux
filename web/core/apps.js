@@ -80,6 +80,13 @@
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
+  // The Agent Service is Wizard itself, not an app the owner manages.
+  const BACK_KEY = 'wux.apps.backend.v1', BACK_HIDDEN = new Set(['wizard-agent-service']);
+  let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).map(a => toTile(a)); } catch (e) { return []; } })();
+  window.WizCore.backendApps = () => BACK.map(a => {
+    if (!a.sgh && window.WizSigil) { const g = window.WizSigil.of(a.sigil || a); a.sgc = g.color; a.sgh = window.WizSigil.html(a.sigil || a); }
+    return a;
+  });
   const listeners = new Set();
   async function loadRemote() {
     try {
@@ -90,9 +97,13 @@
       if (!r.ok) return;
       const snapshot = await r.json();
       window.WizChatsHost?.configure(snapshot);
-      const list = (snapshot.apps || []).filter(a => a && a.id && a.url && a.id !== 'wizard');
-      try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); } catch (e) {}
+      const all = (snapshot.apps || []).filter(a => a && a.id && a.id !== 'wizard');
+      const list = all.filter(a => a.url);
+      // Backend-only apps (no page of their own): listed only by skins that show them (Miguel's skins, app.js).
+      const back = all.filter(a => !a.url && !BACK_HIDDEN.has(a.id) && !window.WizCore.isMaintenanceApp?.(a));
+      try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); localStorage.setItem(BACK_KEY, JSON.stringify(back)); } catch (e) {}
       REMOTE = list.map(a => toTile(a, true));
+      BACK = back.map(a => toTile(a));
       listeners.forEach(fn => fn());
     } catch (e) {}
   }
@@ -101,6 +112,11 @@
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
   window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load()]);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
+  // A Store Get (or another same-origin Wizard window) says the box's apps changed: read the list again now, so
+  // the new app can be opened (Store "Open") without reloading the shell. Refetching is all it can trigger.
+  addEventListener('message', e => {
+    if (e.origin === location.origin && e.data && e.data.type === 'wizard:apps-changed') loadRemote();
+  });
 
   function registry(shell) {
     // One live array per shell, updated in place, so existing references stay valid.

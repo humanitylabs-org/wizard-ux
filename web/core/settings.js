@@ -164,18 +164,35 @@
   // Picking a skin puts on the palette last worn in it; picking a colour applies at once, in place.
   const famOf = (S, id) => S.families?.find(f => f.id === S.familyOf?.(id)) || null;
   const lookName = (S, id) => { const f = famOf(S, id), p = S.list.find(k => k.id === id)?.name || ''; return f ? `${f.name} · ${p}` : p; };
-  const palBtn = (k, cur) => `<button class="sk-opt" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}" style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"><span class="sk-dot"></span><span class="sk-nm">${esc(k.name)}</span></button>`;
-  function famBtn(S, f, cur) {
-    const on = f.id === S.familyOf(cur), pals = f.palettes.map(id => S.list.find(k => k.id === id)).filter(Boolean);
-    const dots = pals.slice(0, 5).map(k => `<i style="--sk-bg:${esc(k.bg)};--sk-ac:${esc(k.accent)}"></i>`).join('');
-    return `<button class="sk-famopt" data-skinfamily="${esc(f.id)}" aria-pressed="${on}" aria-label="${esc(f.name)} skin"><span class="sk-fdots" aria-hidden="true">${dots}</span><span class="sk-ftx"><b>${esc(f.name)}</b><small>${pals.length} ${pals.length === 1 ? 'colour' : 'colours'}</small></span></button>`;
+  // Skin picker: a grid of small preview cards, one per colour, grouped under its skin. Each card is a miniature of
+  // that look (its background, a reply and a sent bubble, the dock with its orb) drawn in CSS from its own tokens, with
+  // the name set in its own face. Names stay hidden until those faces load (at most 2.5s), so they never flash.
+  let facesP = null, facesReady = false;
+  const faceCss = f => f ? `font-family:${f.family};font-weight:${f.weight || 400};font-style:${f.style || 'normal'}` : '';
+  function loadFaces() {
+    if (facesP) return facesP;
+    const L = window.WosSkin?.list || [], F = typeof document !== 'undefined' && document.fonts;
+    if (!F || !F.load) { facesReady = true; return (facesP = Promise.resolve()); }
+    const all = Promise.all(L.filter(k => k.face).map(k => F.load(`${k.face.style || 'normal'} ${k.face.weight || 400} 15px ${k.face.family}`).catch(() => null)));
+    facesP = Promise.race([all, new Promise(r => setTimeout(r, 2500))]).then(() => {
+      facesReady = true;
+      for (const m of mounts) m.context?.root?.querySelectorAll?.('.skp-wait').forEach(n => n.classList.remove('skp-wait'));
+    });
+    return facesP;
   }
+  const pvars = k => { const t = k.t || {}; return [['bg', t.bg || k.bg], ['ink', t.ink], ['ac', t.violet || k.accent], ['ac2', t['violet-2']], ['pk', t.pink], ['cy', t.cyan], ['dock', t['sk-dock']], ['dl', t['sk-dock-line']]]
+    .filter(([, v]) => v).map(([n, v]) => `--p-${n}:${esc(v)}`).join(';'); };
+  const mini = k => `<span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span>`;
+  const skinCard = (k, cur) => `<button type="button" class="skp-card" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}">${mini(k)}<span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
   function lookHtml(S) {
-    const cur = S.current, nm = S.list.find(k => k.id === cur)?.name || '', fams = S.families || [];
-    const f = famOf(S, cur), pals = f ? S.list.filter(k => f.palettes.includes(k.id)) : S.list;
-    const famRow = fams.length > 1 ? `<div class="sk-fam" role="group" aria-label="Skin">${fams.map(x => famBtn(S, x, cur)).join('')}</div>` : '';
-    const palRow = pals.length > 1 ? `${famRow ? '<div class="sk-sub">Colours</div>' : ''}<div class="sk-sw" role="group" aria-label="Colours">${pals.map(k => palBtn(k, cur)).join('')}</div>` : '';
-    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div>${famRow}${palRow}</div>${suggestionHtml()}${mySkinRow(nm)}</div>`;
+    const cur = S.current, fams = S.families?.length ? S.families : [{ id: '', name: '', palettes: S.list.map(k => k.id) }];
+    loadFaces();
+    const groups = fams.map(f => {
+      const pals = f.palettes.map(id => S.list.find(k => k.id === id)).filter(Boolean); if (!pals.length) return '';
+      const head = fams.length > 1 ? `<div class="skp-fam">${esc(f.name)}</div>` : '';
+      return `${head}<div class="skp" role="group" aria-label="${esc(f.name || 'Skin')} colours">${pals.map(k => skinCard(k, cur)).join('')}</div>`;
+    }).join('');
+    return `<div class="st-group" data-stgroup="look"><h4>Look</h4><div class="st-row static sk-row"><div class="sk-head"><span class="st-ic">◐</span><span class="st-tx"><b>Skin</b><small data-skinname>${esc(lookName(S, cur))}</small></span></div><div class="skp-all${facesReady ? '' : ' skp-wait'}">${groups}</div></div>${suggestionHtml()}${mySkinRow(S.list.find(k => k.id === cur)?.name || '')}</div>`;
   }
   register({ id: 'look', aliases: ['skin'], html() {
     const S = window.WosSkin; if (!S) return '';
@@ -184,11 +201,6 @@
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const S = window.WosSkin;
-    const fb = el.closest('[data-skinfamily]');
-    if (fb) {
-      if (fb.getAttribute('aria-pressed') !== 'true') { S.setFamily(fb.dataset.skinfamily); for (const m of mounts) m.render(); }
-      ctx.haptic?.(8); return true;
-    }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     const now = S.set(b.dataset.skinpick);
     ctx.root.querySelectorAll('[data-skinpick]').forEach(n => n.setAttribute('aria-pressed', String(n.dataset.skinpick === now)));
