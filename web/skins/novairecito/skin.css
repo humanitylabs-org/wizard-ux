@@ -17,3 +17,15 @@ html[data-skin="novairecito"] .win.focus {
 html[data-skin="novairecito"] .sk-dot {
   border-color: rgba(197, 174, 255, .24);
 }
+
+html[data-skin="novairecito"] .ch-pin-toggle[aria-pressed="true"] {
+  color: #ef4444;
+  background: rgba(239, 68, 68, .1);
+  opacity: 1;
+}
+
+html[data-skin="novairecito"] .ch-pin-toggle[aria-pressed="true"] svg {
+  fill: currentColor;
+  fill-opacity: 1;
+  filter: drop-shadow(0 0 3px rgba(239, 68, 68, .45));
+}
