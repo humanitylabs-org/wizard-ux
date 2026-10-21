@@ -1,7 +1,7 @@
 name: Verify published image
 on:
   pull_request:
-    branches: [daily]
+    branches: [main]
     paths: [scripts/ci/**, .github/workflows/verify-public-image.yml]
   workflow_dispatch:
     inputs:

@@ -2,8 +2,8 @@
 
 ## Entry and scope
 
-- Private phone: `https://store-window.staging.wizard001.com/wizard-os-home/?shell=phone&view=apps` → My Apps → Get apps.
-- Private desktop: `https://store-window.staging.wizard001.com/wizard-os-home/desktop.html` → actual Cmd-K → Get apps.
+- Private phone: `${QA_ORIGIN}/wizard-os-home/?shell=phone&view=apps` → My Apps → Get apps. Set `QA_ORIGIN` to an isolated tailnet preview; the original custom domain is retired.
+- Private desktop: `${QA_ORIGIN}/wizard-os-home/desktop.html` → actual Cmd-K → Get apps.
 - Direct normal app: `?open=app-store`; `?view=store` aliases the same normal app.
 - Portable document: `/wizard-os-home/store/index.html` (directory root also works through the private front).
 
@@ -27,7 +27,7 @@ Allowed GET/HEAD suffixes:
 
 Unsafe methods get 405, unknown paths 404, raw/encoded traversal and encoded separators 400. The adapter does not proxy arbitrary URLs. Index upstream is fixed public `https://apps.aiwizards.com/v1`, with bounded query/cache rules. It has no install/start/stop/uninstall route.
 
-After independent review, parent may install a loopback browse-data unit from the reviewed exact SHA and route **only** the prefix through the existing authenticated private gateway. Example executable: `/home/telos/.local/bin/node <exact checkout>/tools/store-data-origin.mjs 9584`. Preserve the gate, route prefix and other mappings. Do not expose the adapter directly or restart/modify the Service. Production enablement belongs entirely to parent; this candidate did not change Caddy, daily/main, or any production service.
+After independent review, parent may install a loopback browse-data unit from the reviewed exact SHA and route **only** the prefix through the existing authenticated private gateway. Example executable: `$HOME/.local/bin/node <exact checkout>/tools/store-data-origin.mjs 9584`. Preserve the gate, route prefix and other mappings. Do not expose the adapter directly or restart/modify the Service. Production enablement belongs entirely to parent; this candidate did not change Caddy, daily/main, or any production service.
 
 ## Durable private preview only
 
@@ -40,12 +40,12 @@ Distinct enabled user units:
 
 ## Focused verification
 
-All browser and adapter tests execute on Thales using `/opt/homebrew/bin/node`, existing Playwright at `/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright`, under `/usr/bin/lockf -k /Volumes/ThalesMedia/AndroidBuilds/worker.lock`. `-k` retains the shared lock inode rather than deleting it on exit. No npm install, VPS browser/build fallback, new model/provider or lifecycle VM is required.
+All browser and adapter tests execute on Thales using `/opt/homebrew/bin/node`, existing Playwright at `$HOME/workspace/wizard-mobile-link-candidate/node_modules/playwright`, under `/usr/bin/lockf -k $WIZARD_WORK_ROOT/AndroidBuilds/worker.lock`. `-k` retains the shared lock inode rather than deleting it on exit. No npm install, VPS browser/build fallback, new model/provider or lifecycle VM is required.
 
 From an exact committed source snapshot on Thales:
 ```
 SOURCE_SHA=<full SHA> QA_OUT=<absolute evidence directory> \
-/usr/bin/lockf -k /Volumes/ThalesMedia/AndroidBuilds/worker.lock \
+/usr/bin/lockf -k $WIZARD_WORK_ROOT/AndroidBuilds/worker.lock \
 /bin/sh -c '/opt/homebrew/bin/node --test tests/store-data.test.mjs && /opt/homebrew/bin/node qa-store-system.cjs'
 ```
 

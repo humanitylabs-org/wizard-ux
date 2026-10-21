@@ -366,6 +366,8 @@
     if (nativeActive?.id || nativeOwner || unknownMeetingActive) throw fail('busy', 'An existing native recorder is held.', { appId: nativeOwner?.appId || 'native-recording' });
     if (!navigator.mediaDevices?.getUserMedia) throw fail('unsupported', 'Microphone capture is unavailable.');
     s.stream = await navigator.mediaDevices.getUserMedia({ audio: s.opts.audio ?? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    // On the Android app the browser recorder skips the native phone-mic guard; ask Android where it really listens.
+    if (await externalMic()) { s.stream.getTracks().forEach(t => t.stop()); s.stream = null; throw fail('external_mic', EXTERNAL_MIC); }
     s.stream.getAudioTracks().forEach(t => t.addEventListener('ended', () => { if (s.phase === 'starting') s.interrupted = true; else if (!s.inputStopped && !s.discard && active === s) void finish(s, true).catch(() => {}); }));
     const ctx = s.ctx, source = ctx?.createMediaStreamSource(s.stream), analyser = ctx?.createAnalyser();
     s.nodes = []; if (analyser) { analyser.fftSize = 512; source.connect(analyser); s.nodes.push(source, analyser); }
@@ -528,9 +530,13 @@
       const receipt=JSON.parse(W.WizardOSDevice.recHandoffEnd(eventId)||'null'); // stopped voice already returned the native lease
       if(receipt?.id!==eventId || receipt.open!==false)throw fail('handoff_unavailable','Native microphone return was not confirmed.');
       marker.pausedByHandoff=receipt.pausedByHandoff;marker.resumeStatus=receipt.status;await put(s.row);
-      s.borrow=null;s.phase=receipt.status==='recording'?'recording':'paused';changed();return {...marker};
+      s.borrow=null;s.phase=receipt.status==='recording'?'recording':'paused';changed();
+      if(s.closeRequested) void finish(s).catch(()=>{}); // its app was closed during the loan
+      return {...marker};
     }
     s.phase='paused'; s.borrow=null;
+    // App closed while the orb borrowed its mic: never reopen the microphone for a closed app; save the take.
+    if(s.closeRequested) { marker.resumeStatus='closed'; await put(s.row); changed(); void finish(s).catch(()=>{}); return {...marker}; }
     if(b.pausedByHandoff && !s.finishPromise) {
       try { await reopenBorrowedEngine(s); s.pausedTotal=(s.pausedTotal||0)+Date.now()-s.pausedAt; s.pausedAt=0; s.phase='recording'; marker.resumeStatus='recording'; }
       catch(e) { marker.resumeStatus='failed'; s.error=e; emit(s,'warn','Meeting remains paused: microphone could not resume.'); }
@@ -667,6 +673,18 @@
     rawMeetingBridge = { start: ({ meetingId }) => send('start', { meetingId }), stop: () => send('stop'), status: () => send('status'), pause: () => send('pause'), resume: () => send('resume'), pcm: (meetingId, enabled) => send('pcm', { meetingId, enabled }), onLevel: listen(levels), onState: listen(states), onPcm: listen(pcms) };
     return rawMeetingBridge;
   }
+  // James's contract (18 Oct 2026): Wizard records only from the phone's own mic, never a Bluetooth speaker's.
+  const EXTERNAL_MIC = "Android moved the microphone to a Bluetooth or external device. Wizard records only from the phone's own mic. Try again, or choose another mic in Settings → Microphone.";
+  async function externalMic() {
+    const d = W.WizardOSDevice; if (!d || typeof d.micRoute !== 'function') return false;
+    for (let i = 0; i < 4; i++) {
+      await new Promise(r => setTimeout(r, 120));
+      let v = 'unknown'; try { v = String(d.micRoute()); } catch (_) { return false; }
+      if (v === 'external') return true;
+      if (v !== 'unknown') return false;
+    }
+    return false;
+  }
   function adapter(opts, row) {
     if (configuredNative) return configuredNative;
     const b = attachedMeetingBridge || W.wizardNative?.meetings || ((opts.kind === 'meeting' || row?.native === 'wizard-meetings') ? nativeMeetingPort() : null);
@@ -781,6 +799,7 @@
       s.row.status = 'recording'; s.row.startedAt = opts.resumeId ? s.row.startedAt : Date.now(); await put(s.row);
       s.phase = s.nativeState?.paused ? 'paused' : 'recording';if(s.nativeState?.paused)s.pausedAt=Date.now(); s.writes = s.writes.then(() => drain(s)); changed();
       if (s.interrupted) void finish(s, true).catch(() => {});
+      else if (s.closeRequested) void finish(s).catch(() => {}); // its app closed while the mic was starting
       if (opts.maxMs) s.maxTimer = setTimeout(() => { void finish(s).catch(() => {}); }, Math.min(opts.maxMs, 2147483647));
       return session(s);
     } catch (e) {
@@ -822,10 +841,60 @@
   const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(DB_NAME + ':ownership') : null;
   if (channel) channel.onmessage = () => { rows().then(all => { ownedRows.clear(); for (const r of all) ownedRows.set(r.id,r); ownershipLoaded = true; changed(); }).catch(() => {}); };
   const ready = openDB().then(() => recover()).catch(e => { recoveryError = e; changed(); });
+  /* Closing an app closes it (James, 19 Oct 2026). The shell calls this when the last window of an app is
+   * closed: the app's microphone stops at once and its take is saved (status pending, never discarded), so
+   * the app offers it for recovery the next time it opens. Frame reloads, hidden desks and Back never call
+   * this; only an explicit close does. Host-only: apps cannot close another app's capture. */
+  function closeApp(appId) {
+    validate(appId, {});
+    for (const p of [...preparations.values()]) if (p.appId === appId) discardPrepared(appId, p.id);
+    const s = active;
+    if (!s || s.row.appId !== appId || s.discard || s.cancelPromise) return Promise.resolve(null);
+    s.closeRequested = true;
+    // Starting or lent to the orb: the start/loan return path finishes it, without reopening the mic.
+    if (s.phase === 'starting' || s.borrow) { changed(); return Promise.resolve({ id: s.row.id, deferred: true }); }
+    if (s.borrowWork) { // a loan is starting or ending: settle it first, then whichever path owns the boundary stops
+      const work = s.borrowWork;
+      return work.catch(() => {}).then(() => active === s && !s.borrow && !s.finishPromise ? finish(s) : null).then(() => ({ id: s.row.id, saved: true }));
+    }
+    return finish(s).then(() => ({ id: s.row.id, saved: true }));
+  }
+  /* Shell reload ("Update ready · Reload"). Only a native meeting recorder runs outside this page: the Android
+   * foreground service keeps recording and uploading, and the next page load re-adopts it (recoverLocked marks
+   * the row live, the app reattaches with resumeId). Every other recorder (browser mic, device AAC takes, a
+   * microphone loan to the orb, start/stop/save in flight, an unknown native owner) would lose audio, so it
+   * blocks. keeps names the meeting that survives; the shell uses it to let that app's capture holds through. */
+  function reloadCheck() {
+    const no = reason => ({ safe: false, reason, keeps: null });
+    if (preparations.size) return no('capture_starting');
+    if (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status))) return no('native_owner_uncertain');
+    try { if (JSON.parse(W.WizardOSDevice?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
+    // Only the Android app's meeting port (MeetingRecorderService) is known to record and upload on its own
+    // through a page reload. The Mac app's recorder and any bridge attached in-page wait for the end instead.
+    const survives = !attachedMeetingBridge && !W.wizardNative?.meetings && !!W.wizardMizelPort;
+    const isMeeting = r => survives && r?.native === 'wizard-meetings' && !!r.nativeId && r.kind === 'meeting';
+    const keep = r => ({ appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId });
+    const live = [...recoveryLive].map(id => ownedRows.get(id)).filter(Boolean);
+    if (active) {
+      const s = active;
+      const steady = isMeeting(s.row) && !!s.engine && ['recording', 'paused'].includes(s.phase) && !s.borrow && !s.borrowWork &&
+        !s.finishPromise && !s.error && !s.engineDetached && !s.interrupted && !s.discard;
+      if (!steady) return no(s.borrow || s.borrowWork ? 'microphone_loan' : 'capture');
+      if (live.some(r => r.id !== s.row.id)) return no('capture');
+      return { safe: true, reason: null, keeps: keep(s.row) };
+    }
+    if (live.length > 1 || live.some(r => !isMeeting(r))) return no('capture');
+    return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null };
+  }
+  // Last moment before the shell reloads with a kept native meeting: let queued backup-PCM writes land (bounded).
+  async function prepareReload() {
+    const s = active; if (!s) return;
+    await Promise.race([Promise.resolve(s.writes).catch(() => {}), new Promise(r => setTimeout(r, 1200))]);
+  }
   // Host-only adapter seam. Apps get only the frozen facade via app-services;
   // never expose configureNative through RPC or allow arbitrary bridge eval.
   W.WizAppCapture = Object.freeze({ version: 1, start, pending, ack, prepare, discardPrepared, capabilities, getState: state,
-    beginVoiceBorrow, endVoiceBorrow,
+    beginVoiceBorrow, endVoiceBorrow, reloadCheck, prepareReload, closeApp,
     current(appId) { validate(appId,{}); const r=active?.row.appId===appId ? active.row : [...recoveryLive].map(id=>ownedRows.get(id)).find(r=>r?.appId===appId);
       return r ? {id:r.id,meta:JSON.parse(JSON.stringify(r.meta)),phase:active?.row.id===r.id ? active.phase : 'recoverable'} : null; },
     configureNativeBridge(bridge) {
@@ -844,7 +913,8 @@
       return start(appId, { ...opts, resumeId: id });
     }
   });
-  // Visibility/Back/frame detach intentionally do nothing to the recorder. Before
+  // Visibility/Back/frame reloads intentionally do nothing to the recorder; only an explicit app close
+  // (closeApp, driven by the shell's window model) stops it. Before
   // shell unload request a last compressed chunk; durable prior chunks survive a
   // process kill. Web capture cannot physically continue through shell destruction.
   W.addEventListener('pagehide', () => { try { if (active?.rec?.state === 'recording') active.rec.requestData(); } catch (_) {} });

@@ -1,6 +1,6 @@
 /* Wizard OS · cancelled recordings (James, 11 Oct 2026)
  *
- * An X tapped by accident must not throw away a long message. Any take cancelled after 15 s or more is kept on
+ * An X tapped by accident must not throw away a long message. Any take cancelled after 20 s or more is kept on
  * this phone for a week (newest 10): Settings → Cancelled recordings lists them with "Transcribe & copy", which
  * runs it through Wizard Voice and puts the words on the clipboard (and shows them, selectable). A quick cancel
  * is still just gone.
@@ -17,7 +17,7 @@
  */
 (() => {
   'use strict';
-  const KEEP_FROM_MS = 15000, MAX_KEPT = 10, MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+  const KEEP_FROM_MS = 20000, MAX_KEPT = 10, MAX_AGE_MS = 7 * 24 * 3600 * 1000;
   const DB = 'wos-cancelled', STORE = 'takes', TX_KEY = 'wos.cancelled.text';
   const DEV = () => { const d = window.WizardOSDevice; return d && typeof d.cancelledList === 'function' ? d : null; };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -144,7 +144,7 @@
   }
   async function remove(id) {
     const t = all().find(x => x.id === id); if (!t) return;
-    if (t.custody) { const removed = await window.WosOutbox.remove(id); if (!removed) { toast('!', 'Deletion not saved · keep Wizard open', 2400); return; } }
+    if (t.custody) { const removed = await window.WosOutbox.remove(id); if (!removed) { toast('!', window.WosOutbox.quarantined?.(id) ? 'Kept · device storage isn’t answering yet; try again shortly' : 'Deletion not saved · keep Wizard open', 2600); return; } }
     else if (t.native) { try { DEV().cancelledDelete(id); } catch (e) {} } else await removeWeb(id);
     delete texts[id]; saveTexts(); open.delete(id);
     toast('✕', 'Deleted', 1200); repaint();
@@ -164,10 +164,11 @@
   function html() {
     const l = all();
     return `<div class="st-group" data-cancelled><h4>Recovered &amp; cancelled recordings <span>${l.length || ''}</span></h4>
-      ${l.length ? l.map(row).join('') : '<div class="st-empty">Nothing here. Cancel a recording after 15 seconds or more and it waits here, ready to transcribe.</div>'}
-      <p class="st-note">Interrupted and retained recordings stay until deleted. Older cancelled recordings may expire after a week (the newest ${MAX_KEPT}). Transcribe &amp; copy never sends to an agent.</p></div>`;
+      ${l.length ? l.map(row).join('') : '<div class="st-empty">No recordings waiting.</div>'}
+      <details class="st-info"><summary aria-label="About recovered recordings">?</summary><p class="st-note">Interrupted and retained recordings stay until deleted. Older cancelled recordings may expire after a week (the newest ${MAX_KEPT}). Transcribe &amp; copy never sends to an agent.</p></details></div>`;
   }
   function repaint() {
+    window.WosSettings?.refresh();
     const g = document.querySelector('[data-settings-root] [data-cancelled]');
     if (g) g.outerHTML = html();
   }

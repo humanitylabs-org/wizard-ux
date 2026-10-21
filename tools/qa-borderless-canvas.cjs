@@ -1,7 +1,7 @@
 // Borderless canvas acceptance (pixels, not box geometry): Wisdom library, the Critical Buddhism collection detail,
 // in-app Back, Chats and desktop. Read-only: every non-GET request is aborted.
 // QA_URL=https://… [QA_OUT=dir] [CAND_DIR=web dir to serve /wizard-os-home/ from, for a pre-deploy candidate] node tools/qa-borderless-canvas.cjs
-const {chromium}=require('playwright'),fs=require('fs'),path=require('path');
+const {chromium}=require('./qa-playwright.cjs'),fs=require('fs'),path=require('path');
 const BASE=process.env.QA_URL,OUT=process.env.QA_OUT||'qa-borderless-canvas',CAND=process.env.CAND_DIR;let fails=0;const res=[];
 const check=(name,ok,detail)=>{res.push({name,ok:!!ok,detail});if(!ok)fails++;console.log((ok?'PASS ':'FAIL ')+name+(ok?'':' '+JSON.stringify(detail)));};
 const near=(a,b,t=10)=>a&&b&&Math.abs(a[0]-b[0])<=t&&Math.abs(a[1]-b[1])<=t&&Math.abs(a[2]-b[2])<=t;

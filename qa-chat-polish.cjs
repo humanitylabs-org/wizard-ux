@@ -9,11 +9,11 @@
 //   #33 Drafts section for unsent new chats (rotate, reopen, discard, survives reload)
 // Usage: QA_WEB_DIR=<worktree> node qa-chat-polish.cjs   (self-contained: every request is routed, nothing leaves)
 // Negative control: QA_WEB_DIR=<release/parity-0.7 checkout> node qa-chat-polish.cjs must FAIL.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const ORIGIN = 'https://wizard.tailc0f369.ts.net', BASE = ORIGIN + '/wizard-os-home/';
+const ORIGIN = require('./tools/qa-paths.cjs').origin(), BASE = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/chat-polish';
+const SHOTS = process.env.QA_SHOTS || require('./tools/qa-paths.cjs').workPath('wizard-audit/shots/chat-polish');
 fs.mkdirSync(SHOTS, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, typeof extra === 'string' ? extra : JSON.stringify(extra)); } };
@@ -23,7 +23,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const NOW = Date.now(), MIN = 6e4;
 const VIDEO_ID = '0123456789abcdef0123456789abcdef';
 const W = {
-  writes: [], foreign: [], msgFetch: [], down: false, voice: 'ok', brokenApp: false,
+  writes: [], foreign: [], msgFetch: [], down: false, offline: false, voice: 'ok', brokenApp: false,
   threads: Array.from({ length: 45 }, (_, i) => ({ id: 'qa_t' + String(i).padStart(2, '0'), title: `Thread ${i}`, preview: `Preview line ${i}`, at: NOW - (i * 10 + 2) * MIN, status: 'completed', level: '' })),
 };
 W.threads[5].title = 'Quokka budget review';
@@ -50,6 +50,7 @@ async function context(b, { desktop = false } = {}) {
     : { viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
+    if (W.offline && (u.pathname.startsWith('/wizard/') || u.pathname.startsWith('/troubleshoot/'))) return r.abort('internetdisconnected');
     if (u.origin !== ORIGIN) { W.foreign.push(u.href); return r.abort(); }
     const json = (o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
     const sh = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
@@ -66,6 +67,7 @@ async function context(b, { desktop = false } = {}) {
     }
     if (u.pathname === '/wizard/v1/bootstrap') return json({ bootstrap: 1, api: 'wizard-agent-service/1', settings: { owner: { name: 'Robin', place: '' }, agent: { name: 'Merlin' }, clock: { timezone: 'UTC', day_starts_at: '06:00' }, voice: { language: 'en', vocabulary: [] } },
       capabilities: { voice: true, router: true, files: true, approvals: true, steer: true, markdown: true }, endpoints: { sessions: '/wizard/hermes/api/sessions', runs: '/wizard/hermes/v1/runs', transcribe: '/wizard/voice/transcribe', route: '/wizard/v1/route', upload: '/wizard/files/upload', apps: '/wizard/v1/apps' } });
+    if (u.pathname === '/wizard/v1/agents') return json({agents:[{id:'hermes',label:'Merlin',is_default:true,status:'running'}]});
     if (u.pathname === '/wizard/voice/status') return W.voice === 'ok' ? json({ ready: true, provider: 'tinfoil', name: 'Tinfoil', model: 'voxtral-small-24b', attested: true }) : json({ error: 'down' }, 503);
     if (u.pathname === '/wizard/hermes/api/sessions') {
       if (W.down) return json({ error: 'unavailable' }, 503);
@@ -120,12 +122,12 @@ const ours = p => p.url().startsWith(BASE);
     ok((await p.evaluate(() => window.__deeplinkLog || [])).includes('session:qa_t07'), '#28 it went through the shared deep-link path');
     // #32 title bar shows the thread's name
     const wt = await p.evaluate(id => document.querySelector(`.win[data-win="${id}"] .wbar .wt`)?.textContent, w?.id);
-    ok(wt === 'Thread 7', '#32 phone title bar shows the thread name', wt);
+    ok(wt === 'Merlin Main Agent' && await p.locator('.ch-head .ti-b b').first().innerText() === 'Thread 7', '#32 phone title bar identifies the agent and thread header shows the thread name', wt);
     await shot(p, 'phone-deeplink-thread');
     await back();
     ok((await chatsWin())?.thread === null && ours(p), '#28 Back from the deep-linked thread → Chats list, app still open');
     const wt2 = await p.evaluate(id => document.querySelector(`.win[data-win="${id}"] .wbar .wt`)?.textContent, w?.id);
-    ok(wt2 === 'Chats', '#32 title bar says Chats on the list', wt2);
+    ok(wt2 === 'Merlin Main Agent' && (await chatsWin()).thread === null, '#32 title bar keeps agent identity on the Chats list', wt2);
     await back();
     ok(await p.evaluate(() => __wos.idx === __wos.HOME) && ours(p), '#28 next Back → Home, app still open');
     await back();
@@ -142,7 +144,7 @@ const ours = p => p.url().startsWith(BASE);
   /* ---- #28 ?view= and ?video= (phone) ---- */
   try {
     await p.goto(BASE + '?view=inbox', { waitUntil: 'domcontentloaded' }); await p.waitForFunction(() => window.__wos?.live?.ok, null, { timeout: 20000 }).catch(() => {}); await sleep(600);
-    ok(await p.evaluate(() => __wos.sheet === 'inbox'), '#28 ?view=inbox opens the Inbox');
+    ok(await p.evaluate(() => (() => { const d = __wos.desks[__wos.idx], w = __wos.wins[d.focus]; return !__wos.sheet && w?.app === 'chats' && !w.thread; })()), '#28 ?view=inbox opens the Chats list (the notifications panel is retired)');
     await back();
     ok(await p.evaluate(() => __wos.sheet === null) && ours(p), '#28 Back closes the deep-linked Inbox, app stays');
     await p.goto(BASE + '?view=work&section=archive', { waitUntil: 'domcontentloaded' }); await p.waitForFunction(() => window.__wos?.live?.ok, null, { timeout: 20000 }).catch(() => {}); await sleep(900);
@@ -150,7 +152,8 @@ const ours = p => p.url().startsWith(BASE);
     ok(arch.focus && arch.open && arch.thread === null, '#28 ?view=work&section=archive opens Chats at the Archive section', arch);
     await p.goto(BASE + '?view=settings', { waitUntil: 'domcontentloaded' }); await sleep(1200);
     ok(await p.evaluate(() => __wos.sheet === 'settings'), '#28 ?view=settings opens Settings');
-    /* ---- #30 voice provider card ---- */
+    /* ---- #30 voice provider card on its new page ---- */
+    await p.locator('[data-st-page=voice]').click();
     await p.waitForFunction(() => document.querySelector('[data-voicecard="ready"]'), null, { timeout: 8000 }).catch(() => {});
     const card = await p.evaluate(() => { const c = document.querySelector('#settingsBody [data-voicecard]'); return c ? { state: c.dataset.voicecard, text: c.textContent, badge: !!c.querySelector('[data-voiceattested]') } : null; });
     ok(card?.state === 'ready' && /Tinfoil/.test(card.text) && /voxtral-small-24b/.test(card.text) && card.badge, '#30 Settings shows the transcription provider, model and attested badge', card);
@@ -160,7 +163,7 @@ const ours = p => p.url().startsWith(BASE);
     ok(!W.writes.some(w => /voice/.test(w)), '#30 the card is read-only (no writes to voice)');
     await back();
     W.voice = 'down';
-    await p.evaluate(() => window.WizCore.voiceStatus.load()); await p.evaluate(() => __wos.openSettings()); await sleep(400);
+    await p.evaluate(() => window.WizCore.voiceStatus.load()); await p.evaluate(() => __wos.openSettings('voice')); await sleep(400);
     const down = await p.evaluate(() => { const c = document.querySelector('#settingsBody [data-voicecard]'); return c ? { state: c.dataset.voicecard, text: c.textContent } : null; });
     ok(down?.state === 'down' && /Voice unavailable/.test(down.text), '#30 a failing status endpoint shows Voice unavailable', down);
     W.voice = 'ok'; await back();
@@ -216,9 +219,11 @@ const ours = p => p.url().startsWith(BASE);
     await p.click(`.win[data-win="${wid}"] [data-chbsmore]`).catch(() => {});
     await p.waitForFunction(id => document.querySelector(`.win[data-win="${id}"] .ch-row[data-chopen="qa_t40"]`), wid, { timeout: 20000 }).catch(() => {});
     ok(await p.evaluate(id => !!document.querySelector(`.win[data-win="${id}"] .ch-row[data-chopen="qa_t40"] mark`), wid), '#26 "Search older threads" finds a match further back');
-    const n1 = W.msgFetch.length;
+    await p.waitForFunction(() => Object.values(WizCore.chatSearch.stats.runs).every(r => !r.busy));
+    const n1 = await p.evaluate(() => WizCore.chatSearch.stats.fetches);
     await p.fill(sel, ''); await sleep(50); await p.fill(sel, 'zebracorn'); await sleep(900);
-    ok(W.msgFetch.length === n1, '#26 searching again reuses what was already read (no refetch)', { before: n1, after: W.msgFetch.length });
+    const n2 = await p.evaluate(() => WizCore.chatSearch.stats.fetches);
+    ok(n2 === n1, '#26 searching again reuses cached message bodies (no body-search refetch)', { before: n1, after: n2 });
     await p.click(`.win[data-win="${wid}"] .ch-row[data-chopen="qa_t03"]`); await sleep(500);
     ok((await chatsWin()).thread === 'qa_t03', '#26 tapping a body hit opens that thread');
     await back();
@@ -266,7 +271,7 @@ const ours = p => p.url().startsWith(BASE);
   try {
     await p.evaluate(() => { __wos.closeSheets(); __wos.goDesk(__wos.HOME); }); await sleep(1400);
     const cb = await p.evaluate(() => { const b = document.querySelector('[data-wxcritbox]'); return b ? b.textContent : null; });
-    ok(/1 critical issue needs attention/.test(cb || '') && /Open Inbox to resolve a critical issue/.test(cb || ''), '#31 banner: 1 critical issue (the failed one is left to Errors)', cb);
+    ok(/1 critical issue needs attention/.test(cb || '') && /Tap to see the critical issue/.test(cb || ''), '#31 banner: 1 critical issue (the failed one is left to Errors)', cb);
     await shot(p, 'phone-critical-banner');
     await p.evaluate(() => __wos.openWizardThread('qa_t00')); await sleep(1400);
     ok(await p.evaluate(() => !!document.querySelector('[data-wxcritbox]')), '#31 the banner stays across screens (inside another thread)');
@@ -274,9 +279,7 @@ const ours = p => p.url().startsWith(BASE);
     ok(await p.evaluate(() => !document.querySelector('[data-wxcritbox]')), '#31 hidden while that critical thread is in front');
     await back(); await sleep(1300);
     await p.click('[data-wxcrit]').catch(() => {}); await sleep(500);
-    ok(await p.evaluate(() => __wos.sheet === 'inbox'), '#31 tapping it opens the Inbox');
-    await sleep(1300);
-    ok(await p.evaluate(() => !document.querySelector('[data-wxcritbox]')), '#31 hidden while the Inbox is open');
+    ok(await p.evaluate(() => (() => { const d = __wos.desks[__wos.idx], w = __wos.wins[d.focus]; return !__wos.sheet && w?.app === 'chats' && !w.thread; })()), '#31 tapping it opens the Chats list');
     await back(); await sleep(1300);
     await p.click('[data-wxcrit-x]').catch(() => {}); await sleep(300);
     ok(await p.evaluate(() => !document.querySelector('[data-wxcritbox]')), '#31 × hides it');
@@ -288,11 +291,11 @@ const ours = p => p.url().startsWith(BASE);
 
   /* ---- #27 connection banner ---- */
   try {
-    await ctx.setOffline(true); await sleep(400);
+    W.offline = true; await ctx.setOffline(true); await sleep(400);
     let st = await p.evaluate(() => document.querySelector('[data-wxnet]')?.dataset.wxnet + '|' + document.querySelector('[data-wxnet]')?.textContent);
-    ok(/^offline\|.?Offline — your drafts and anything you send are safe/.test(st), '#27 offline banner', st);
+    ok(/^offline\|/.test(st) && /Your device is offline|No internet/.test(st), '#27 offline banner', st);
     await shot(p, 'phone-offline-banner');
-    await ctx.setOffline(false); await sleep(150);
+    W.offline = false; await ctx.setOffline(false); await sleep(150);
     st = await p.evaluate(() => window.__statusLog.slice(-3));
     ok(st.includes('net:reconnecting') || st.includes('net:restored'), '#27 coming back online reconnects first', st);
     await p.waitForFunction(() => document.querySelector('[data-wxnet="restored"]'), null, { timeout: 8000 }).catch(() => {});
@@ -338,7 +341,7 @@ const ours = p => p.url().startsWith(BASE);
     const f = await dfoc();
     ok(f?.app === 'chats' && f.thread === 'qa_t07', '#28 desktop: ?session= opens the thread in a Chats window', f);
     ok(await d.evaluate(() => document.title) === 'Thread 7 · Wizard', '#32 desktop: window title (document.title) is the thread name', await d.evaluate(() => document.title));
-    ok(await d.evaluate(id => document.querySelector(`.win[data-win="${id}"] .wbar .t`)?.textContent, f?.id) === 'Thread 7', '#32 desktop: Chats title bar is the thread name');
+    ok(await d.evaluate(id => document.querySelector(`.win[data-win="${id}"] .wbar [data-agent-titlebar] .t`)?.textContent, f?.id) === 'Merlin Main Agent' && await d.locator('.pane-main .ch-head .ti-b b').innerText() === 'Thread 7', '#32 desktop: title bar identifies agent; thread header names thread');
     // #29 side by side
     const g = await d.evaluate(id => { const el = document.querySelector(`.win[data-win="${id}"]`); const r = s => { const b = el.querySelector(s)?.getBoundingClientRect(); return b && { x: Math.round(b.x), w: Math.round(b.width), h: Math.round(b.height) }; }; return { list: r('.pane-list'), main: r('.pane-main'), split: r('[data-split]') }; }, f?.id);
     ok(g.list && g.main && g.list.w > 200 && g.main.w > 400 && g.main.x >= g.list.x + g.list.w - 4 && g.list.h > 300 && g.main.h > 300, '#29 list and thread side by side', g);
@@ -357,17 +360,20 @@ const ours = p => p.url().startsWith(BASE);
     ok(w3 === w2, '#29 the list width is kept across reloads', { w2, w3 });
     // keyboard through the list
     const f2 = await dfoc();
+    await d.evaluate(id => __wux.focusWin(id), f2.id); // cold reload lands on Home
     await d.focus(`.win[data-win="${f2.id}"] [data-chsearch]`);
     await d.keyboard.press('ArrowDown'); await sleep(300);
     const t1 = (await dfoc()).thread;
+    await d.focus(`.win[data-win="${f2.id}"] [data-chsearch]`);
     await d.keyboard.press('ArrowDown'); await sleep(300);
     const t2 = (await dfoc()).thread;
+    await d.focus(`.win[data-win="${f2.id}"] [data-chsearch]`);
     await d.keyboard.press('ArrowUp'); await sleep(300);
     const t3 = (await dfoc()).thread;
     ok(t1 && t2 && t1 !== t2 && t3 === t1, '#29 ↓/↑ walk the thread list and open each chat beside it', { t1, t2, t3 });
     await d.focus(`.win[data-win="${f2.id}"] .ch-compose textarea`).catch(() => {});
-    await d.keyboard.press('Alt+Shift+KeyJ'); await sleep(300);
-    ok((await dfoc()).thread === t2, '#29 ⌥⇧J moves to the next chat from the composer', await dfoc());
+    await d.keyboard.press('Alt+ArrowDown'); await sleep(300);
+    ok((await dfoc()).thread === t2, '#29 ⌥↓ moves to the next chat from the composer', await dfoc());
     await d.keyboard.press('Escape'); await sleep(200);
     await d.focus(`.win[data-win="${f2.id}"]`); await d.keyboard.press('/'); await sleep(150);
     ok(await d.evaluate(() => document.activeElement?.matches('[data-chsearch]')), '#29 / focuses the list search');
@@ -391,6 +397,8 @@ const ours = p => p.url().startsWith(BASE);
     ok(await d.evaluate(() => !document.querySelector('#inbox').hidden), '#31 desktop: it opens the Inbox drawer');
     await d.keyboard.press('Escape'); await sleep(200);
     await d.keyboard.press('Alt+Comma'); await sleep(900);
+    await d.locator('[data-st-page=voice]').click();
+    await d.waitForSelector('[data-voicecard="ready"]');
     const dc = await d.evaluate(() => { const c = document.querySelector('#dsettings:not([hidden]) [data-voicecard]'); return c ? { state: c.dataset.voicecard, text: c.textContent } : null; });
     ok(dc?.state === 'ready' && /Tinfoil/.test(dc.text) && /Attested/.test(dc.text), '#30 desktop: ⌥, Settings shows the voice provider card', dc);
     await shot(d, 'desktop-settings-voice-card');
@@ -402,10 +410,10 @@ const ours = p => p.url().startsWith(BASE);
     ok(ours(d) && (await dfoc())?.thread === null, '#28 desktop: browser Back from a thread → the list, page stays', { url: d.url(), f: await dfoc() });
     await d.goBack().catch(() => {}); await sleep(400);
     ok(ours(d) && await d.evaluate(() => !!window.__wux), '#28 desktop: Back at the root stays put');
-    await dctx.setOffline(true); await sleep(300);
+    W.offline = true; await dctx.setOffline(true); await sleep(300);
     ok(await d.evaluate(() => document.querySelector('[data-wxnet]')?.dataset.wxnet) === 'offline', '#27 desktop: offline banner');
     await shot(d, 'desktop-offline-banner');
-    await dctx.setOffline(false); await sleep(200);
+    W.offline = false; await dctx.setOffline(false); await sleep(200);
     // ?view= on desktop
     await d.goto(BASE + 'desktop.html?shell=desktop&view=inbox', { waitUntil: 'domcontentloaded' }); await sleep(1200);
     ok(await d.evaluate(() => !document.querySelector('#inbox').hidden), '#28 desktop: ?view=inbox opens the Inbox drawer');

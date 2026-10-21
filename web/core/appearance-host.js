@@ -60,8 +60,11 @@
     } };
     return tokensCache;
   }
-  const presentation = f => f.closest('.device.immersive .win.full, body.desktop-fullscreen .win.full') ? 'immersive' : 'window';
-  function context(f) { const t = tokens(); return { version: VERSION, revision, skin: t.skin, colorScheme: t.colorScheme, presentation: presentation(f), tokens: t.tokens }; }
+  // Distraction-free (swipe down on the orb) hides the title bar of a sole or full-screen window, so the host presents
+  // that window edge to edge too: apps hide their own in-app headers the same way they do in full screen (James, 20 Oct).
+  const IMMERSIVE = '.device.immersive .win.full, body.desktop-fullscreen .win.full, .device.zen .tiles[data-n="1"] .win, .device.zen .tiles.has-full .win.full';
+  const presentation = f => f.closest(IMMERSIVE) ? 'immersive' : 'window';
+  function context(f) { const t = tokens(); return { version: VERSION, revision, skin: t.skin, family: window.WosSkin?.familyOf?.(t.skin) || 'wizard', colorScheme: t.colorScheme, presentation: presentation(f), tokens: t.tokens }; }
 
   function send(f, force) {
     const st = frames.get(f); if (!st || !f.contentWindow) return;
@@ -103,13 +106,19 @@
     }
   });
   // A frame that navigated to a document that did not (re)announce itself loses the theme marker.
-  document.addEventListener('load', e => { const f = e.target; if (f && f.tagName === 'IFRAME' && frames.has(f)) { let doc = null; try { doc = f.contentDocument; } catch (er) {} if (doc !== frames.get(f).doc) forget(f); } }, true);
+  document.addEventListener('load', e => {
+    const f = e.target;
+    // Skin package CSS may arrive after data-skin changed. Its color-scheme must
+    // invalidate the cached context too, or light apps receive dark UA canvases.
+    if (f?.tagName === 'LINK' && f.rel === 'stylesheet') { queue(true); return; }
+    if (f && f.tagName === 'IFRAME' && frames.has(f)) { let doc = null; try { doc = f.contentDocument; } catch (er) {} if (doc !== frames.get(f).doc) forget(f); }
+  }, true);
 
   function mount() {
     const root = document.documentElement;
     new MutationObserver(() => queue(true)).observe(root, { attributes: true, attributeFilter: ['style', 'class', 'data-skin'] });
     // Full screen / immersive changes the presentation: watch window classes only while themed frames exist.
-    new MutationObserver(() => queue(false)).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    new MutationObserver(() => queue(false)).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'data-n'] });
     try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => queue(true)); } catch (e) {}
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();

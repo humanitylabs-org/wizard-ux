@@ -18,6 +18,8 @@
 .dv-um.two b { white-space: normal; font-weight: 650; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; } /* a long thread name wraps once rather than being cut */
 .dv-update button.dv-wt { flex: none; padding: 5px 9px; border: 1px solid var(--line-2); color: var(--ink-2); font-weight: 600; font-size: 12px; }
 .dv-update.web .dv-wtop > button[data-web="go"] { flex: none; padding: 7px 12px; }
+/* Reload tapped during a recording that cannot survive it: waiting, tap again to cancel. */
+.dv-update.web .dv-wtop > button[data-web="go"].armed { background: transparent; border: 1px solid var(--violet); color: var(--ink); font-weight: 600; font-size: 12px; white-space: nowrap; }
 .dv-wl { display: flex; flex-direction: column; margin-top: 8px; max-height: 46vh; overflow-y: auto; border-top: 1px solid var(--line); }
 .dv-update .dv-wr { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; text-align: left; padding: 9px 4px; border-radius: 0; background: transparent; color: var(--ink); font-weight: 400; border-bottom: 1px solid var(--line); }
 .dv-wr:last-child { border-bottom: 0; }
@@ -44,3 +46,47 @@
 #dvWeb[data-shell="desktop"] button:hover { filter: brightness(1.15); }
 #dvWeb[data-shell="desktop"] .dv-wr:hover { background: rgba(205, 190, 255, .07); }
 #dvWeb[data-shell="desktop"] button:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
+
+/* Per-app "<App> updated · Reload" (core/app-versions.js): a small pill at the top of the app's own window, over
+ * the app, on both shells. Narrow so it never covers the app's controls for long or blocks swipes elsewhere. */
+.app-upd-host { position: relative; }
+.app-upd { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 8px;
+  max-width: calc(100% - 20px); padding: 5px 5px 5px 13px; border-radius: 99px; font-size: 13px; color: var(--ink, #f4f0ff);
+  background: rgba(14, 8, 34, .92); border: 1px solid var(--line-2, rgba(255,255,255,.16)); box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); animation: app-upd-in .22s ease-out; }
+.win.full .app-upd, #singleApp .app-upd { top: calc(var(--safe-t, 0px) + 8px); }
+.app-upd-m { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2, #d9d2f0); }
+.app-upd-m b { font-weight: 650; color: var(--ink, #fff); }
+.app-upd button { flex: none; border: 0; cursor: pointer; font: inherit; }
+.app-upd button[data-go] { padding: 6px 13px; border-radius: 99px; background: var(--violet, #8f63ff); color: #fff; font-weight: 700; font-size: 12.5px; }
+.app-upd button[data-go].armed { background: transparent; border: 1px solid var(--violet, #8f63ff); color: var(--ink, #fff); font-weight: 600; }
+.app-upd button.app-upd-x { width: 26px; height: 26px; border-radius: 99px; background: transparent; color: var(--ink-3, #a79fc4); font-size: 16px; line-height: 1; }
+@keyframes app-upd-in { from { opacity: 0; transform: translate(-50%, -6px); } }
+
+/* Every skin: the "Update" tap explodes over the screen, then holds "Updating Wizard OS..." until the new build
+ * paints (core/web-update.js adds .wos-burst). Without it the tapped banner sits frozen until reload and looks broken. */
+.wos-burst { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; overflow: hidden; pointer-events: all;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--ink, #fff) 18%, transparent) 0, color-mix(in srgb, var(--bg, #000) 88%, transparent) 55%);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4); backdrop-filter: blur(14px) saturate(1.4); animation: wb-dim 380ms ease-out both; }
+.wos-burst > * { position: absolute; left: 50%; top: 50%; }
+.wos-burst .wb-flash { width: 10px; height: 10px; margin: -5px; border-radius: 50%; background: var(--ink, #fff);
+  box-shadow: 0 0 120px 70px var(--violet-2, var(--ink, #fff)); animation: wb-flash 700ms cubic-bezier(.15,.8,.2,1) both; }
+.wos-burst .wb-ring { width: 20px; height: 20px; margin: -10px; border-radius: 50%; border: 5px solid var(--ink, #fff); box-shadow: 0 0 30px var(--violet-2, var(--ink, #fff));
+  animation: wb-ring 900ms cubic-bezier(.12,.75,.25,1) both; }
+.wos-burst .wb-ring.two { border-color: var(--violet-2, var(--ink)); animation-delay: 120ms; border-width: 2px; }
+.wos-burst .wb-ring.three { animation-delay: 240ms; border-width: 1px; opacity: .7; }
+.wos-burst .wb-sparks i { position: absolute; width: var(--w, 4px); height: var(--h, 26px); margin: calc(var(--h, 26px) / -2) calc(var(--w, 4px) / -2); box-shadow: 0 0 10px var(--violet-2, var(--ink, #fff)); border-radius: 4px; background: linear-gradient(var(--ink, #fff), transparent);
+  transform: rotate(var(--a)) translateY(0); animation: wb-spark 820ms cubic-bezier(.1,.7,.2,1) var(--t) both; }
+.wos-burst .wb-core { width: 64px; height: 64px; margin: -32px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--ink, #fff) 25%, transparent);
+  border-top-color: var(--ink, #fff); animation: wb-in 260ms 160ms both, wb-spin 800ms linear 160ms infinite; }
+.wos-burst .wb-text { transform: translate(-50%, 54px); white-space: nowrap; font: 750 22px/1.2 inherit; letter-spacing: .01em; color: var(--ink, #fff);
+  text-shadow: 0 0 18px var(--violet-2, var(--ink, #fff)), 0 2px 10px color-mix(in srgb, var(--bg, #000) 70%, transparent); animation: wb-in 280ms 180ms both; }
+.wos-burst .wb-text em { font-style: normal; animation: wb-dot 1.1s infinite; }
+.wos-burst .wb-text em:nth-child(2) { animation-delay: .18s; } .wos-burst .wb-text em:nth-child(3) { animation-delay: .36s; }
+@keyframes wb-dim { from { opacity: 0; } to { opacity: 1; } }
+@keyframes wb-flash { 0% { transform: scale(0); opacity: 1; } 45% { transform: scale(24); opacity: .95; } 100% { transform: scale(60); opacity: 0; } }
+@keyframes wb-ring { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(90); opacity: 0; } }
+@keyframes wb-spark { 0% { transform: rotate(var(--a)) translateY(0) scaleY(.3); opacity: 1; } 70% { opacity: 1; } 100% { transform: rotate(var(--a)) translateY(calc(var(--d) * -1)) scaleY(1.6); opacity: 0; } }
+@keyframes wb-in { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
+@keyframes wb-spin { to { rotate: 360deg; } }
+@keyframes wb-dot { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }

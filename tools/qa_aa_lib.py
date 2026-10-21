@@ -1,21 +1,23 @@
 """Shared emulator + CDP helpers for tools/qa_android_apps.py (runs on Thales)."""
 import json, os, pathlib, re, socket, subprocess, time, urllib.request
+from qa_paths import work_root
+from qa_paths import android_sdk, java_home
 
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds')
-SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds'))
+SDK = android_sdk()
 ADB = str(SDK / 'platform-tools/adb')
 BT = sorted((SDK / 'build-tools').iterdir())[-1]
 
 
 class Emu:
-    def __init__(self, job, port, pkg):
-        self.job, self.port, self.pkg = job, port, pkg
+    def __init__(self, job, port, pkg, dns='10.0.2.250'):
+        self.job, self.port, self.pkg, self.dns = job, port, pkg, dns
         self.S = 'emulator-%d' % port
         self.env = os.environ.copy()
-        self.env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+        self.env.update(JAVA_HOME=java_home(),
                         ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-        self.env['PATH'] = self.env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + self.env['PATH']
+        self.env['PATH'] = self.env['JAVA_HOME'] + '/bin:' + self.env['PATH']
         (job / 'avd').mkdir(exist_ok=True)
         self.proc = None
 
@@ -29,7 +31,7 @@ class Emu:
         self.sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'aa', '-k',
                 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', self.job / 'dev', stdin='no\n')
         self.proc = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'aa', '-port', str(self.port), '-no-window', '-no-snapshot',
-                                      '-no-audio', '-gpu', 'swiftshader_indirect', '-dns-server', '10.0.2.250'],
+                                      '-no-audio', '-gpu', 'swiftshader_indirect', '-dns-server', self.dns],
                                      env=self.env, stdout=open(self.job / 'em.log', 'w'), stderr=subprocess.STDOUT)
         for _ in range(140):
             if self.sx('getprop sys.boot_completed').strip() == '1': break

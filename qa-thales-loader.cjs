@@ -1,16 +1,10 @@
-// Portable QA loader: existing suites retain historical module paths but run on Thales.
-const Module = require('module');
-const resolve = Module._resolveFilename;
-Module._resolveFilename = function (name, ...args) {
-  if (name === '/home/telos/node_modules/playwright' || (name === 'playwright-core' && !args[0]?.filename?.includes('/node_modules/'))) name = process.env.PW;
-  return resolve.call(this, name, ...args);
-};
+// Optional Chromium override and write fence; module resolution lives in tools/qa-playwright.cjs.
 if(process.env.QA_CHROME) {
-  const {chromium}=require(process.env.PW),launch=chromium.launch.bind(chromium);
+  const {chromium}=require('./tools/qa-playwright.cjs'),launch=chromium.launch.bind(chromium);
   chromium.launch=(...args)=>launch({...args[0],executablePath:args[0]?.executablePath||process.env.QA_CHROME},...args.slice(1));
 }
 if (process.env.QA_BLOCK_WRITES === '1') {
-  const { chromium } = require(process.env.PW);
+  const { chromium } = require('./tools/qa-playwright.cjs');
   const launch = chromium.launch.bind(chromium);
   chromium.launch = async (...args) => {
     if(process.env.QA_CHROME && !args[0]?.executablePath) args[0]={...args[0],executablePath:process.env.QA_CHROME};

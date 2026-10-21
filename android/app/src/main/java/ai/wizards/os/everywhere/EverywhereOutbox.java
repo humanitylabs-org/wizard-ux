@@ -1,5 +1,7 @@
 package ai.wizards.os.everywhere;
 
+import ai.wizards.os.audio.CaptureJournal;
+
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
@@ -83,6 +85,8 @@ public final class EverywhereOutbox {
     public static final class Item {
         public String id, state = "waiting", text = "", error = "", sessionId, audioPath = "", body = "", runId = "";
         public String source = SRC_EVERYWHERE;
+        /** The Mizel meeting interruption this take borrowed the mic from ("" when none): its transcript marker. */
+        public String meetingEvent = "";
         public long createdAt, nextAt, sentAt;
         /** Side button only: the phone was locked when this was spoken. */
         public boolean locked;
@@ -99,7 +103,8 @@ public final class EverywhereOutbox {
                     .put("sessionId", sessionId).put("audioPath", audioPath).put("body", body).put("runId", runId)
                     .put("createdAt", createdAt).put("nextAt", nextAt).put("sentAt", sentAt).put("attempts", attempts)
                     .put("sessionReady", sessionReady).put("audioFile", audioFile == null ? JSONObject.NULL : audioFile)
-                    .put("source", source).put("shots", shots).put("shotFiles", shotFiles).put("locked", locked);
+                    .put("source", source).put("shots", shots).put("shotFiles", shotFiles).put("locked", locked)
+                    .put("meetingEvent", meetingEvent);
         }
 
         static Item from(JSONObject o) {
@@ -111,6 +116,7 @@ public final class EverywhereOutbox {
             it.sessionReady = o.optBoolean("sessionReady"); it.audioFile = o.optJSONObject("audioFile");
             it.source = o.optString("source", SRC_EVERYWHERE);
             it.locked = o.optBoolean("locked");
+            it.meetingEvent = o.optString("meetingEvent");
             JSONArray a = o.optJSONArray("shots"); if (a != null) it.shots = a;
             JSONArray f = o.optJSONArray("shotFiles"); if (f != null) it.shotFiles = f;
             return it;
@@ -142,6 +148,7 @@ public final class EverywhereOutbox {
     }
 
     private final File dir, audioDir, file;
+    private final CaptureJournal custody;
     private final String origin;
     private final Map<String, Item> items = new LinkedHashMap<>();
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -157,6 +164,7 @@ public final class EverywhereOutbox {
 
     EverywhereOutbox(File dir, String origin) {
         this.dir = dir; this.origin = origin;
+        this.custody = CaptureJournal.at(dir.getParentFile());
         this.audioDir = new File(dir, "audio");
         this.file = new File(dir, "outbox.json");
         //noinspection ResultOfMethodCallIgnored
@@ -214,9 +222,24 @@ public final class EverywhereOutbox {
     }
 
     public Item enqueueRecording(File recording, String source, List<byte[]> screenshots, boolean locked) throws IOException {
+        return enqueueRecording(recording, source, screenshots, locked, null, null);
+    }
+
+    /** New take id for {@code source}; a borrower names its take before recording so the meeting loan can bind it. */
+    public static String newId(String source) {
+        return (SRC_DICTATION.equals(source) ? "wos-dict-" : SRC_SIDE.equals(source) ? "wos-side-" : "wos-ev-") + UUID.randomUUID();
+    }
+
+    /** Same, keeping a take id chosen at record time and the meeting interruption it belongs to. */
+    public Item enqueueRecording(File recording, String source, List<byte[]> screenshots, boolean locked, String id, String meetingEvent) throws IOException {
         Item it = new Item();
         it.locked = locked;
-        it.id = (SRC_DICTATION.equals(source) ? "wos-dict-" : SRC_SIDE.equals(source) ? "wos-side-" : "wos-ev-") + UUID.randomUUID();
+        String registered = custody.idFor(recording);
+        it.id = registered != null ? registered : id != null ? id : newId(source);
+        if (items.containsKey(it.id)) throw new IOException("Take already queued");
+        custody.register(it.id, source, "note", recording, System.currentTimeMillis());
+        custody.stopped(it.id);
+        it.meetingEvent = meetingEvent == null ? "" : meetingEvent;
         it.source = source == null ? SRC_EVERYWHERE : source;
         if (screenshots != null && !it.dictation()) {
             int n = 0;
@@ -230,13 +253,8 @@ public final class EverywhereOutbox {
         it.createdAt = System.currentTimeMillis();
         it.sessionId = "wizard_" + it.createdAt + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         File kept = new File(audioDir, it.id + ai.wizards.os.assist.TakeRecovery.ext(recording.getName()));
-        if (!recording.renameTo(kept)) {
-            try (InputStream in = new FileInputStream(recording); FileOutputStream out = new FileOutputStream(kept)) {
-                copy(in, out); out.getFD().sync();
-            }
-            //noinspection ResultOfMethodCallIgnored
-            recording.delete();
-        }
+        custody.transfer(it.id, kept); // SUPERSEDED_COPY: verified, fsynced duplicate; same take id.
+        custody.hand(it.id, "everywhere-outbox");
         it.audioPath = kept.getAbsolutePath();
         synchronized (this) { items.put(it.id, it); save(); }
         changed();
@@ -288,7 +306,7 @@ public final class EverywhereOutbox {
             Item it = items.remove(id);
             if (it == null) return;
             if (!it.audioPath.isEmpty()) //noinspection ResultOfMethodCallIgnored
-                new File(it.audioPath).delete();
+                custody.release(it.id, CaptureJournal.Reason.USER_DELETE); // the owner tapped Delete on this unsent message
             deleteShots(it);
             save();
         }
@@ -354,6 +372,7 @@ public final class EverywhereOutbox {
         Log.i(TAG, "attempt " + it.attempts + " failed (" + status + "): " + msg + (gaveUp ? " → not sent" : " → retrying"));
         changed();
         if (gaveUp) {
+            meetingNote(it, "event", "failed", "error", it.error);
             if (app != null) EverywhereService.notifyFailed(app, this, it);
             for (Listener l : snapshot()) l.onFailed(it);
         }
@@ -368,13 +387,19 @@ public final class EverywhereOutbox {
             try { t = Transcriber.transcribe(audio, ai.wizards.os.device.AppState.live(origin), it.dictation() ? DICTATION_PROMPT : ai.wizards.os.device.WizardIdentity.voicePrompt(ai.wizards.os.device.WizardIdentity.name(app))); }
             catch (IOException e) { throw asHttp(e); }
             if (t.text.isEmpty()) {
-                synchronized (this) { it.state = "empty"; it.error = "No speech in that recording"; items.remove(it.id); save(); }
-                //noinspection ResultOfMethodCallIgnored
-                audio.delete();
+                // Never delete an unheard take: a quiet or misrouted recording stays in Settings → Cancelled recordings.
+                boolean kept = ai.wizards.os.recording.CancelledTakes.keepUnheard(dir.getParentFile(), audio, it.source);
+                // Compatibility entry point delegates to CaptureJournal.release(null): unheard is not a receipt.
+                String why = kept ? "No words heard · recording kept in Settings → Cancelled recordings" : "No speech in that recording";
+                synchronized (this) { it.state = "empty"; it.error = why; items.remove(it.id); save(); }
+                meetingNote(it, "event", "failed", "error", why);
+                Log.i(TAG, "no words in " + it.id + (kept ? " · kept" : " · not kept"));
+                // A failed keep leaves the journal and original intact for recovery.
                 changed();
                 return;
             }
             synchronized (this) { it.text = t.text; save(); }
+            meetingNote(it, "text", t.text);
             final String heard = t.text;
             main.post(() -> { for (Listener l : snapshot()) l.onWords(it, heard); });
             changed();
@@ -386,13 +411,14 @@ public final class EverywhereOutbox {
                 synchronized (this) {
                     it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
                     if (audio != null) //noinspection ResultOfMethodCallIgnored
-                        audio.delete();
+                        custody.release(it.id, CaptureJournal.Reason.DELIVERED_ON_PHONE); // the local action ran
                     it.audioPath = "";
                     deleteShots(it);
                     items.remove(it.id);
                     save();
                 }
                 Log.i(TAG, "usual " + usual + " from " + it.source + " " + it.id);
+                meetingNote(it, "event", "local", "text", it.text);
                 final Context a = app;
                 main.post(() -> { changed(); for (Listener l : snapshot()) l.onSent(it); ai.wizards.os.usuals.UsualsVoice.start(a, usual); });
                 return;
@@ -401,6 +427,8 @@ public final class EverywhereOutbox {
         // Dictation stops here: the words go into the text field, nothing goes to Wizard.
         if (it.dictation()) {
             final String words = it.text;
+            // The meeting marker records what was said even if no field takes it (the listener refines typed/copied).
+            meetingNote(it, "event", "local", "kind", "dictation", "text", DictationCleanup.cleanTranscriptForInsertion(words));
             // Keep the item pending through main-thread insertion/clipboard recovery. Removing it on the
             // I/O thread allowed a queued tap to start a second take before the first words were inserted.
             main.post(() -> {
@@ -410,7 +438,7 @@ public final class EverywhereOutbox {
                     synchronized (EverywhereOutbox.this) {
                         it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
                         if (audio != null) //noinspection ResultOfMethodCallIgnored
-                            audio.delete();
+                            custody.release(it.id, CaptureJournal.Reason.DELIVERED_ON_PHONE); // the words were typed in
                         it.audioPath = "";
                         items.remove(it.id);
                         save();
@@ -465,14 +493,18 @@ public final class EverywhereOutbox {
         synchronized (this) {
             it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
             it.runId = run.optString("run_id", run.optString("id", ""));
-            if (!it.audioPath.isEmpty()) //noinspection ResultOfMethodCallIgnored
-                new File(it.audioPath).delete(); // the server has it now (voice note + transcript)
+            if (!it.audioPath.isEmpty() && it.audioFile != null && !it.audioFile.optString("id").isEmpty()) {
+                custody.received(it.id, "wizard-file:" + it.audioFile.optString("id"));
+                custody.release(it.id, CaptureJournal.Reason.SERVER_RECEIPT);
+            }
             it.audioPath = "";
             deleteShots(it);
             pruneSent();
             save();
         }
         Log.i(TAG, "sent " + it.id + " run=" + it.runId + " attempts=" + it.attempts);
+        meetingNote(it, "event", "sent", "threadId", it.sessionId, "runId", it.runId, "deliveryKey", it.id,
+                "audioFileId", it.audioFile == null ? null : it.audioFile.optString("id", null), "text", it.text);
         main.post(() -> { changed(); for (Listener l : snapshot()) l.onSent(it); });
         if (!it.runId.isEmpty()) watchReply(it);
     }
@@ -553,6 +585,12 @@ public final class EverywhereOutbox {
         String m = String.valueOf(e.getMessage());
         java.util.regex.Matcher x = java.util.regex.Pattern.compile("returned (\\d{3})").matcher(m);
         return new HttpError(x.find() ? Integer.parseInt(x.group(1)) : 0, "Couldn’t reach Wizard voice");
+    }
+
+    /** Notes on the Mizel meeting marker for a take that borrowed the meeting's mic (no-op otherwise). */
+    void meetingNote(Item it, Object... kv) {
+        if (app == null || it == null || it.meetingEvent == null || it.meetingEvent.isEmpty()) return;
+        ai.wizards.os.mizel.MeetingLoans.note(app, it.meetingEvent, ai.wizards.os.mizel.MeetingLoans.obj(kv));
     }
 
     /* ------------------------------------------------------------------ util */

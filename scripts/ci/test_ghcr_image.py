@@ -16,7 +16,7 @@ class ImageContract(unittest.TestCase):
     def args(self, **kwargs):
         data = dict(image='ghcr.io/humanitylabs-org/wizard-ux', sha=SHA, digest=DIGEST,
                     tag='sha-' + SHA, release='', confirm='', expected_sha='',
-                    branch='daily', retry_seconds=0)
+                    branch='main', retry_seconds=0)
         return argparse.Namespace(**(data | kwargs))
 
     def test_clean_environment_removes_all_credentials(self):
@@ -44,7 +44,7 @@ class ImageContract(unittest.TestCase):
             ci.platform_manifests(registry, DIGEST)
 
     def test_pull_request_never_publishes(self):
-        with patch.dict(os.environ, {'GITHUB_REF': 'refs/heads/daily', 'GITHUB_EVENT_NAME': 'pull_request'}):
+        with patch.dict(os.environ, {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'pull_request'}):
             with self.assertRaisesRegex(RuntimeError, 'trusted branch'):
                 ci.publish(self.args())
 
@@ -53,15 +53,42 @@ class ImageContract(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'trusted branch'):
                 ci.publish(self.args())
 
+    def test_publish_requires_configured_work_volume(self):
+        env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push',
+               'WIZARD_CI_ROOT': '/example/worker/ci'}
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, 'WIZARD_WORK_ROOT'):
+                ci.publish(self.args())
+
+    def test_publish_accepts_dedicated_volume_without_work_root(self):
+        env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push', 'WIZARD_CI_ROOT': '/example/worker/ci'}
+        mounted = lambda p: str(p) in ('/', '/example/worker')
+        with patch.dict(os.environ, env, clear=True), patch.object(ci.os.path, 'ismount', mounted):
+            self.assertEqual(ci._volume_of('/example/worker/ci'), '/example/worker')
+            with self.assertRaises(KeyError):  # passes the volume guard; stops at the next required setting
+                ci.publish(self.args())
+
+    def test_system_disk_is_never_a_worker_volume(self):
+        with patch.object(ci.os.path, 'ismount', lambda p: str(p) == '/'):
+            self.assertIsNone(ci._volume_of('/example/worker/ci'))
+
+    def test_publish_rejects_sibling_of_work_volume(self):
+        with tempfile.TemporaryDirectory() as temp:
+            env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push',
+                   'WIZARD_WORK_ROOT': temp + '/work', 'WIZARD_CI_ROOT': temp + '/work-sibling'}
+            with patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(RuntimeError, 'configured worker volume'):
+                    ci.publish(self.args())
+
     def test_release_requires_confirmation_and_exact_sha(self):
-        with patch.dict(os.environ, {'GITHUB_REF': 'refs/heads/daily', 'GITHUB_EVENT_NAME': 'workflow_dispatch'}):
+        with patch.dict(os.environ, {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'workflow_dispatch'}):
             for confirm, sha in [('', SHA), ('0.3.0', ''), ('other', SHA)]:
                 with self.subTest(confirm=confirm, sha=sha):
                     with self.assertRaisesRegex(RuntimeError, 'confirm'):
                         ci.publish(self.args(release='0.3.0', confirm=confirm, expected_sha=sha))
 
     def test_release_not_allowed_on_push(self):
-        with patch.dict(os.environ, {'GITHUB_REF': 'refs/heads/daily', 'GITHUB_EVENT_NAME': 'push'}):
+        with patch.dict(os.environ, {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push'}):
             with self.assertRaisesRegex(RuntimeError, 'confirm'):
                 ci.publish(self.args(release='0.3.0', confirm='0.3.0', expected_sha=SHA))
 
@@ -70,8 +97,8 @@ class ImageContract(unittest.TestCase):
     def test_existing_release_fails_without_login_or_overwrite(self, registry, docker):
         registry.return_value.manifest.return_value = (DIGEST, {})
         with tempfile.TemporaryDirectory() as temp:
-            env = {'GITHUB_REF': 'refs/heads/daily', 'GITHUB_EVENT_NAME': 'workflow_dispatch',
-                   'WIZARD_CI_ROOT': '/Volumes/ThalesMedia/Test',
+            env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'workflow_dispatch',
+                   'WIZARD_CI_ROOT': temp, 'WIZARD_WORK_ROOT': temp,
                    'WIZARD_CI_WORKER_LOCK': temp + '/worker.lock',
                    'GITHUB_ACTOR': 'test', 'GHCR_TOKEN': 'unit-test-only'}
             with patch.dict(os.environ, env), patch.object(ci.tempfile, 'TemporaryDirectory') as directory:

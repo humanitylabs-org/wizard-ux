@@ -1,8 +1,8 @@
 /* Synthetic capture seam proof; no credentials, production endpoints or model calls. */
 const fs=require('node:fs'), path=require('node:path'), http=require('node:http'), assert=require('node:assert/strict'), os=require('node:os');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {chromium}=require('../tools/qa-playwright.cjs');
 const root=path.resolve(__dirname,'..'), evidence=process.env.HANDOFF_EVIDENCE;
-if(!evidence?.startsWith('/Volumes/ThalesMedia/') || !os.hostname().startsWith('thales')) throw Error('Thales external evidence directory required');
+if(!require('../tools/qa-paths.cjs').inWorkRoot(evidence) || !process.env.WIZARD_WORK_ROOT) throw Error('Thales external evidence directory required');
 fs.mkdirSync(evidence,{recursive:true});
 const results=[]; let browser;
 const server=http.createServer((req,res)=>{

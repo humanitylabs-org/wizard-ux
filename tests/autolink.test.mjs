@@ -18,7 +18,7 @@ vm.createContext(ctx);
 vm.runInContext(src, ctx);
 const { md } = ctx.WosChat;
 
-const U = 'https://agents-mvp.staging.wizard001.com/';
+const U = 'https://preview.example/';
 const linked = (html, url = U) => html.includes(`<a href="${url}"`);
 const cases = {
   plain: `Open ${U} now`,
@@ -69,4 +69,11 @@ test('underscore emphasis around a URL ending in an underscore stays outside the
 test('URLs inside inline code stay code', () => {
   const html = md('`https://x.example/`');
   assert.ok(html.includes('<code>https://x.example/</code>') && !html.includes('<a '), html);
+});
+
+test('a linked image never renders as the word "undefined"', () => {
+  const html = md('Preview: [![preview](https://x.example/a.jpg)](https://x.example/full)');
+  assert.ok(!html.includes('undefined'), html);
+  assert.ok(html.includes('href="https://x.example/full"'), html);
+  assert.ok(html.includes('[Image: preview]'), html);
 });

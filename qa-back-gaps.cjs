@@ -1,6 +1,6 @@
 // Read-only bounded gap probes; all writes denied. Evidence remains private.
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const {chromium}=require(process.env.PW||'playwright');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const BASE=process.env.QA_ORIGIN,OUT=process.env.QA_OUT;
 if(!BASE||!OUT)throw Error('QA_ORIGIN and QA_OUT required');fs.mkdirSync(OUT,{recursive:true});
 (async()=>{const browser=await chromium.launch({executablePath:process.env.QA_CHROME});

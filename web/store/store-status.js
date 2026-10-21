@@ -1,6 +1,7 @@
 // Read-only identity/release decisions shared by Store rendering and contract tests.
 // A launcher is evidence of an installed app, NOT evidence of its release version.
 const HOST_ALIASES = {
+  'android-apps': {repo:'humanitylabs-org/android-apps', id:'android-apps', url:'/android-apps/'},
   'wizard-calendar': {repo:'humanitylabs-org/wizard-calendar', id:'calendar', url:'/wizard-calendar/'},
   'wizard-music': {repo:'humanitylabs-org/wizard-music', id:'wizard-music', url:'/wizard-music/'},
   'wizard-search': {repo:'humanitylabs-org/wizard-search', id:'wizard-search', url:'/wizard-search/'},
@@ -8,6 +9,12 @@ const HOST_ALIASES = {
 const repo = s => typeof s === 'string' ? s.toLowerCase() : '';
 const sameRepo = (a,b) => !!repo(a) && repo(a) === repo(b);
 const identity = (a,i) => (i.app_id || i.id) === a.id;
+export function architectureReason(a, architecture) {
+  const supported = a.architectures || [];
+  if (!supported.length) return '';
+  if (!architecture) return 'Compatibility unavailable. Refresh before installing.';
+  return supported.includes(architecture) ? '' : `This release runs on ${supported.join(' · ')}, not this Wizard (${architecture}). Choose a compatible release.`;
+}
 export const isUserApp = a => !['wizard-shell','wizard-ux'].includes(a.id) && a.category !== 'interface' && !(a.provides || []).includes('shell');
 const alphabetical = (a,b) => String(a || '').localeCompare(String(b || ''),'en');
 export const compareApps = (a,b) => Number(!!b.alpha_badge)-Number(!!a.alpha_badge) || alphabetical(a.name,b.name) || alphabetical(a.id,b.id) || alphabetical(a.repo,b.repo);

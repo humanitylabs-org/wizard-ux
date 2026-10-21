@@ -3,9 +3,9 @@
 // command shows choices and sends nothing until one is tapped; a router outage on a hold sends nothing.
 // A tap (not a hold) still reaches the agent / the open thread as before.
 // Usage: QA_WEB_DIR=<tree> node qa-hold-command.cjs. Every Hermes/Wizard write is refused and recorded.
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const ORIGIN = 'https://wizard.tailc0f369.ts.net', URL_ = ORIGIN + '/wizard-os-home/';
+const ORIGIN = require('./tools/qa-paths.cjs').origin(), URL_ = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;
@@ -23,7 +23,7 @@ async function boot(b) {
   const json = (r, o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
-    if (u.hostname !== 'wizard.tailc0f369.ts.net') {
+    if (u.hostname !== new URL(require('./tools/qa-paths.cjs').origin()).hostname) {
       // Image hosts the search page may touch directly (favicons): allow, they are read-only.
       return m === 'GET' ? r.continue() : r.abort();
     }
@@ -172,6 +172,64 @@ const outboxN = p => p.evaluate(() => (window.__wos.outbox?.unsent?.() || []).le
   s = await sheetState(p);
   ok(s.open && /q=brutalist\+architecture/.test(s.url) && agentWrites(writes).length === 0, 'router "search" on a hold opens Wizard Search', JSON.stringify({ s, writes }));
   await closeSheet(p);
+
+  // 9. "Ask AI …" is the quick-question spell only when HELD; a tap is always a message.
+  for (const [t, q, where] of [['Ask AI is milk bad for gout?', 'is\\+milk\\+bad\\+for\\+gout', 'home'], ['Ask AI, what is the capital of Peru?', 'what\\+is\\+the\\+capital\\+of\\+Peru', 'home']]) {
+    writes.length = 0; routes.length = 0;
+    await hold(p, t); await sleep(900);
+    s = await sheetState(p);
+    ok(s.open && new RegExp(`/wizard-search/\\?q=${q}(&|$)`).test(s.url) && routes.length === 0 && agentWrites(writes).length === 0, `held "${t}" on ${where} → Search on-device`, JSON.stringify({ s, routes, writes }));
+    await closeSheet(p);
+  }
+  await p.evaluate(() => window.__wos.openWizardThread('qa-0')); await sleep(1200);
+  writes.length = 0; routes.length = 0;
+  await p.evaluate(() => window.__wos.handleText('Ask AI how long do capybaras live', 'auto', false, 300, null)); await sleep(900);
+  s = await sheetState(p);
+  ok(!s.open && routes.length === 0 && (agentWrites(writes).length > 0 || await outboxN(p) > 0), 'tapped "Ask AI …" over an open thread → message, no Search or router', JSON.stringify({ s, writes }));
+  // Tap now starts an actual outbox send. Settle its failed-write fixture before the next independent command.
+  await sleep(2600);
+  await p.evaluate(async () => { for(const it of __wos.outbox.unsent()) await __wos.outbox.remove(it.id); });
+  await closeSheet(p);
+  // STT writes the spell with a colon. Re-establish the thread after the preceding tap's refused-send fixture.
+  await p.evaluate(() => __wos.openWizardThread('qa-0')); await sleep(900);
+  writes.length = 0; routes.length = 0;
+  await hold(p, 'Search: is milk bad for gout?'); await sleep(900);
+  s = await sheetState(p);
+  ok(s.open && /q=is\+milk\+bad\+for\+gout(&|$)/.test(s.url) && routes.length === 0, 'held "Search: …" (STT colon) → Search on-device', JSON.stringify({ s, routes }));
+  await closeSheet(p);
+  // On the Chats list "find images of …" opens image search (it used to filter the chat list).
+  await p.evaluate(() => window.__wos.onBack()); await sleep(800);
+  const onList = await p.evaluate(() => { const d = window.__wos.desks[window.__wos.idx], w = window.__wos.wins[d.focus]; return w && w.app === 'chats' && !w.thread; });
+  for (const [t, q] of [['find images of capybaras', 'capybaras'], ['Find images red pandas', 'red\\+pandas'], ['image search eames chair', 'eames\\+chair']]) {
+    writes.length = 0;
+    await hold(p, t); await sleep(900);
+    s = await sheetState(p);
+    ok(onList && s.open && new RegExp(`q=${q}&tab=images`).test(s.url), `held "${t}" on the Chats list → image search`, JSON.stringify({ onList, s }));
+    await closeSheet(p);
+  }
+  // A plain "search …" on the Chats list still searches the chats (unchanged).
+  await hold(p, 'search gout'); await sleep(700);
+  s = await sheetState(p);
+  ok(!s.open, 'plain "search gout" on the Chats list stays a chat search', JSON.stringify(s));
+  await p.evaluate(() => window.__wos.goDesk(window.__wos.HOME, true)); await sleep(500);
+
+  // 10. A long held take is a message, not a missed command: the card stays with Send until tapped, nothing auto-sent.
+  writes.length = 0; R.cmd = { route: 'agent', summary: 'x' };
+  const longText = "Need a quick command added. When I say search, it doesn't know I'm looking for the search app a lot of the time. So I think a better spell might be ask AI.";
+  const res = await p.evaluate(t => window.__wos.handleText(t, 'command', false, 300, null), longText); await sleep(900);
+  c = await card(p);
+  ok(res && res.outcome === 'held-message', 'long held take returns held-message (custody keeps it in Unsent)', JSON.stringify(res));
+  ok(c.chips.join() === 'agent' && /tap Send/i.test(c.label), 'long held take: Send is the only choice, card says tap Send', JSON.stringify(c));
+  await sleep(5500); x = await xs();
+  ok(x.up && (await card(p)).chips.length === 1, 'long held take card is still up after 6 s', JSON.stringify(x));
+  await p.locator('#txText').tap().catch(() => {}); await sleep(4500); x = await xs();
+  ok(x.up, 'touching the long card does not start the 4 s fade', JSON.stringify(x));
+  ok(agentWrites(writes).length === 0, 'long held take: nothing sent before Send', JSON.stringify(writes));
+  const obL = await outboxN(p);
+  await p.locator('#txChips [data-hold="agent"]').tap(); await sleep(2500);
+  ok(agentWrites(writes).length > 0 || (await outboxN(p)) > obL, 'tapping Send delivers the long take', JSON.stringify(writes));
+  await p.evaluate(() => { const o = window.__wos.outbox; for (const it of o.unsent()) o.remove(it.id); });
+  await sleep(2700);
 
   // 8. A tap (not a hold) still reaches the agent as before.
   writes.length = 0; R.cmd = { route: 'agent', summary: 'x' };

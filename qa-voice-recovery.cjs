@@ -1,3 +1,4 @@
+// Run via QA_RECOVERY_ONLY=1 QA_OUT=<private dir> node qa-voice-custody-callers.cjs (not directly).
 // Focused recovery regressions, imported by the real-shell custody harness. All writes intercepted.
 const path=require('node:path');
 module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
@@ -9,14 +10,16 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   },{state,extras,sid,model,provider});
   const failed=await add(),held=await add('held',{intent:'command'});
   await f.p.reload();await f.p.waitForFunction(()=>WosOutbox?.recoveryComplete&&(window.__wos||window.__wux)?.chats);
+  // Cold entry now lands on Home. Explicitly return to the retained Chats desk before real taps.
+  await f.p.evaluate(({wid,sid})=>{const A=window.__wos||window.__wux;A.chats.openChat(wid,sid);A.focusWin?.(wid);if(A.goDesk)A.goDesk(A.desks.findIndex(d=>d.wins.includes(wid)),true);},{wid:f.wid,sid});
   const settings=await f.p.evaluate(id=>WosSettings.unsentRow({...WosOutbox.get(id),origin:'app'},{outbox:WosOutbox,live:WizLive}),held);
   ok(settings.includes('Handled on this device')&&!settings.includes('words come when it sends')&&!settings.includes('data-ub="edit"')&&settings.includes('data-ub="transcribe"')&&settings.includes('data-ub="play"'),label+': held recovery exposes reason and non-delivery actions',settings);
   const recover=f.p.locator(`[data-chats="${f.wid}"] [data-obrecover="${held}"]`);
   await recover.click(); await sleep(200);
   ok(await f.p.locator(`#settingsBody [data-ubid="${held}"] [data-ub="transcribe"]`).isVisible(),label+': held bubble Recover opens selected recording controls');
   if(desktop)await f.p.evaluate(()=>__wux.closeSettings());else await f.p.locator('[data-stclose]:visible').click();
-  const newHeld=await add('held',{kind:'new',sessionId:'',wid:f.wid,intent:'command'});
-  await f.p.evaluate(wid=>(window.__wos||window.__wux).chats.openChat(wid,'__new__'),f.wid);await sleep(150);
+  await f.p.evaluate(wid=>(window.__wos||window.__wux).chats.openChat(wid,'__new__'),f.wid);
+  const newHeld=await add('held',{kind:'new',sessionId:'',wid:f.wid,intent:'command'});await sleep(150);
   await f.p.locator(`[data-chats="${f.wid}"] [data-obrecover="${newHeld}"]`).click();await sleep(150);
   ok(await f.p.locator(`#settingsBody [data-ubid="${newHeld}"] [data-ub="play"]`).isVisible(),label+': screenshot New chat held note has working recovery');
   if(desktop)await f.p.evaluate(()=>__wux.closeSettings());else await f.p.locator('[data-stclose]:visible').click();
@@ -29,8 +32,10 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   const retry=f.p.locator(`[data-chats="${f.wid}${desktop?'::list':''}"] .ch-pill [data-obretry="${failed}"]`);
   ok(await retry.count()===1,label+': retained failed audio retry discoverable with empty searched list');
   if(await retry.count()){
-   const hit=await retry.evaluate(el=>{const r=el.getBoundingClientRect();return {width:r.width,height:r.height,hit:el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))};});
-   ok(hit.height>=44&&hit.width>=44&&hit.hit,label+': real retry hit target >=44px',hit);
+   // The painted button can stay compact; measure actual hit testing, not just its visual box.
+   const hit=await retry.evaluate(el=>{const r=el.getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2;
+    return {width:r.width,height:r.height,hit:[[x,y],[x,y-21.9],[x,y+21.9],[x-21.9,y],[x+21.9,y]].every(([a,b])=>el.contains(document.elementFromPoint(a,b)))};});
+   ok(hit.hit,label+': real retry hit target >=44px',hit);
    await f.p.screenshot({path:path.join(out,label+'-recovery.png')});
   }
   // Explicit Retry all includes failed, but not the held command, and claims only real queueing.
@@ -79,7 +84,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   ok(await f.p.evaluate(id=>WosOutbox.get(id)?.state==='unconfirmed'&&!WosOutbox.retry(id),unknown),label+': unknown steering remains blocked after reload and reconnect');
   // Add a same-agent failure to an ambiguous list, then click the actual mixed pill.
   const next=await f.p.evaluate(async({sid,model,provider})=>{const x=await WosOutbox.stage({kind:'reply',sessionId:sid,model,provider,text:'next eligible',audio:new Blob(['next original'],{type:'audio/webm'})});await WosOutbox.transition(x.id,'failed','Not sent');return x.id;},{sid,model,provider});
-  f.state.listDown=true;await f.p.evaluate(async({wid,desktop})=>{await WizLive.refresh();WizLive.ok=false;WizLive.sessions=[];const A=window.__wos||window.__wux;A.chats.openChat(wid,null);A.focusWin?.(wid);A.chats.renderChats(desktop?{id:wid+'::list',thread:null}:A.wins[wid]);},{wid:f.wid,desktop});await sleep(250);
+  f.state.listDown=true;await f.p.evaluate(async({wid,desktop})=>{await WizLive.refresh();WizLive.ok=false;WizLive.sessions=[];const A=window.__wos||window.__wux;A.chats.openChat(wid,null);A.focusWin?.(wid);if(A.goDesk)A.goDesk(A.desks.findIndex(d=>d.wins.includes(wid)),true);A.chats.renderChats(desktop?{id:wid+'::list',thread:null}:A.wins[wid]);},{wid:f.wid,desktop});await sleep(250);
   const scope=`[data-chats="${f.wid}${desktop?'::list':''}"]`;
   const mixed=f.p.locator(scope+' [data-obretryall]');
   ok(await mixed.count()===1,label+': offline mixed ambiguous + failed exposes eligible retry',await f.p.evaluate(()=>WosOutbox.unsent().map(x=>({id:x.id,agent:x.agent,kind:x.kind,state:x.state,eligible:WosOutbox.canRetry(x)}))));

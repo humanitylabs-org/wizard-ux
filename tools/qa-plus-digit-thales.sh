@@ -1,8 +1,8 @@
 #!/bin/zsh
-# Thales-only A/B: baseline daily tree vs ⌥-digit plus-slot candidate.
-R=/Volumes/ThalesMedia/WizardUX/qa-plus-digit
-export PATH=/opt/homebrew/bin:$PATH
-export PLAYWRIGHT_PATH=/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright
+# Worker A/B: baseline tree vs option-digit plus-slot candidate.
+: "${WIZARD_WORK_ROOT:?Set WIZARD_WORK_ROOT to the worker work volume}"
+R="$WIZARD_WORK_ROOT/WizardUX/qa-plus-digit"
+# Install playwright/playwright-core in each checkout, or set QA_PLAYWRIGHT.
 for t in base cand; do
   echo "== $t"
   cd "$R/$t" || exit 2

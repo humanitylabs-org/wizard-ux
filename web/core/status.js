@@ -2,7 +2,7 @@
  *
  *   Connection  "Offline — …" / "Reconnecting…" / "Back online" (2 s), from the browser's online state and
  *               from whether the last Wizard read worked (WizLive.error === 'offline').
- *   Critical    "N critical issues need attention · Open Inbox" for threads Wizard marked critical
+ *   Critical    "N critical issues need attention · View" (opens Chats on the phone) for threads Wizard marked critical
  *               (attention_level === 'critical'), except ones already shown as errors and the thread in front.
  *   Fatal       "Wizard needs attention · <message> · Reload": the shell failed to start (an uncaught error and
  *               no shell API a few seconds after load), or a caller hands one over with WizCore.status.fatal().
@@ -37,6 +37,8 @@
     return el;
   }
   function onClick(e) {
+    if (e.target.closest('[data-wxtroubleshoot]')) { window.WizReach?.open(); return; }
+    if (e.target.closest('[data-wxretry]')) { window.WosOutbox?.retryAll(); LIVE()?.refresh(); return; }
     if (e.target.closest('[data-wxcrit-x]')) { critHidden = critSig(); log('critical:dismiss'); render(); return; }
     if (e.target.closest('[data-wxcrit]')) { log('critical:open'); H.openInbox?.(); render(); }
   }
@@ -62,7 +64,7 @@
     const L = LIVE(); if (!L) return;
     if (L.ok && !L.error && L.at > offlineReadAt) return setNet('online');
     if (navigator.onLine === false) return setNet('offline');
-    if (L.error === 'offline') { if (net !== 'offline' || navigator.onLine) setNet('reconnecting'); return; }
+    if (L.error) { if (net !== 'offline' || navigator.onLine) setNet('reconnecting'); return; }
   }
   addEventListener('offline', () => {
     const L = LIVE(); offlineReadAt = L?.at || 0;
@@ -85,19 +87,25 @@
   let lastHtml = '';
   function render() {
     const parts = [];
-    if (net === 'offline') parts.push(`<div class="wx-banner net offline" role="status" data-wxnet="offline"><span class="wx-i">⌁</span><span class="wx-m">Offline — your drafts and anything you send are safe</span></div>`);
-    else if (net === 'reconnecting') parts.push(`<div class="wx-banner net reconnecting" role="status" data-wxnet="reconnecting"><span class="wx-spin" aria-hidden="true"></span><span class="wx-m">Reconnecting…</span></div>`);
+    const waiting = window.WosOutbox?.unsent().some(it => it.state === 'waiting');
+    if (net === 'offline' || net === 'reconnecting' || waiting) {
+      const diagnosis = window.WizReach?.failure();
+      const full = diagnosis?.message || 'Checking the connection to Wizard. Messages are kept on this device while we retry.';
+      // Desktop shows one line in the top bar (short text, full message on hover); the phone shows the full card.
+      parts.push(`<div class="wx-banner net ${net === 'offline' ? 'offline' : 'reconnecting'}" role="status" title="${esc(full)}" data-wxnet="${net === 'offline' ? 'offline' : 'reconnecting'}"><span class="wx-spin" aria-hidden="true"></span><span class="wx-m">${esc(full)}</span><span class="wx-s">${esc(diagnosis?.short || 'Reconnecting to Wizard · retrying')}</span><span class="wx-actions"><button type="button" data-wxretry aria-label="Retry now">Retry<span class="wx-long"> now</span></button><button type="button" data-wxtroubleshoot aria-label="Open Troubleshooter"><span class="wx-long">Open </span>Troubleshooter</button></span></div>`);
+    }
     else if (net === 'restored') parts.push(`<div class="wx-banner net restored" role="status" data-wxnet="restored"><span class="wx-i">✓</span><span class="wx-m">Back online</span></div>`);
     const crit = criticals(), sig = crit.map(s => s.id).sort().join(',');
     if (crit.length && sig !== critHidden && !H.inboxOpen?.()) {
       const n = crit.length;
-      const detail = `Open Inbox to resolve ${n === 1 ? 'a critical issue' : 'critical issues'}.`;
-      parts.push(`<div class="wx-banner crit" role="alert" data-wxcritbox><button class="wx-crit" data-wxcrit title="${esc(detail)}" aria-label="${n} critical ${n === 1 ? 'issue needs' : 'issues need'} attention. ${esc(detail)}"><span class="wx-i">!</span><span class="wx-m">${n} critical ${n === 1 ? 'issue needs' : 'issues need'} attention<small> · ${esc(detail)}</small></span><span class="wx-go" aria-hidden="true">Inbox ›</span></button><button class="wx-x" data-wxcrit-x aria-label="Hide until something changes">×</button></div>`);
+      const detail = `Tap to see ${n === 1 ? 'the critical issue' : 'the critical issues'}.`;
+      parts.push(`<div class="wx-banner crit" role="alert" data-wxcritbox><button class="wx-crit" data-wxcrit title="${esc(detail)}" aria-label="${n} critical ${n === 1 ? 'issue needs' : 'issues need'} attention. ${esc(detail)}"><span class="wx-i">!</span><span class="wx-m">${n} critical ${n === 1 ? 'issue needs' : 'issues need'} attention<small> · ${esc(detail)}</small></span><span class="wx-go" aria-hidden="true">View ›</span></button><button class="wx-x" data-wxcrit-x aria-label="Hide until something changes">×</button></div>`);
     }
     const html = parts.join('');
     if (html === lastHtml && document.getElementById('wxBanners')) return;
     lastHtml = html;
     const el = box(); el.innerHTML = html; el.hidden = !html;
+    document.documentElement.style?.setProperty('--wx-banner-height', `${Math.ceil(el.getBoundingClientRect?.().height || 28) + 16}px`);
     document.getElementById('device')?.classList.toggle('wx-on', !!html);
     document.documentElement.classList.toggle('wx-banner-on', !!html);
   }
@@ -120,11 +128,13 @@
   function closeFatal() { const el = document.getElementById('wxFatal'); if (!el || el.hidden) return false; el.hidden = true; fatalOpen = false; log('fatal:close'); return true; }
 
   C.status = {
-    attach(h) { H = Object.assign({}, H, h || {}); fromLive(); render(); const L = LIVE(); if (L && !L.__wxStatus) { L.__wxStatus = true; L.onChange(() => { fromLive(); render(); }); } },
+    attach(h) { H = Object.assign({}, H, h || {}); fromLive(); render(); const L = LIVE(); if (L && !L.__wxStatus) { L.__wxStatus = true; L.onChange(() => { fromLive(); render(); }); } const O = window.WosOutbox; if (O && !O.__wxStatus) { O.__wxStatus = true; O.onChange(render); } },
     refresh() { fromLive(); render(); },
     fatal, back: () => (closeFatal() ? 'fatal' : ''),
     get state() { return { net, critical: criticals().map(s => s.id), fatal: fatalOpen ? fatalMsg : '' }; },
   };
   // Cheap catch-all for things with no event (the thread in front changed, the inbox opened or closed).
+  addEventListener('wizreachchange', render);
+  addEventListener('resize', () => { lastHtml = ''; render(); });
   setInterval(() => { if (!document.hidden && document.getElementById('wxBanners')) render(); }, 1200);
 })();

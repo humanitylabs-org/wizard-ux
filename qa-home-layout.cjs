@@ -1,7 +1,7 @@
 // Full-height Home layout (James, 12 Oct 2026): resources anchored near the dock, free height spread
 // between the time block, attention rows and resources, no big blank band at the bottom.
 // Usage: node qa-home-layout.cjs <home url> [webDirOverride]  (override serves the changed files from a local tree)
-let pw; try { pw = require('playwright'); } catch { pw = require('playwright-core'); }
+const pw = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const url = process.argv[2], dir = process.argv[3]; let pass = 0, fail = 0, writes = 0;
 const ok = (v, n, d) => { console.log(v ? 'PASS' : 'FAIL', n, d ? JSON.stringify(d) : ''); v ? pass++ : fail++; };

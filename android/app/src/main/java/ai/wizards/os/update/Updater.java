@@ -154,7 +154,6 @@ public final class Updater {
         io.execute(() -> {
             try {
                 String feed = feed(app);
-                // (Under the shell's safety net AppState.origin is the old name, so a fix can still arrive.)
                 JSONObject j = Http.json("GET", feed + "?t=" + System.currentTimeMillis(), AppState.origin(app), null, null);
                 UpdatePolicy.Release r = UpdatePolicy.parse(j, feed);
                 if (r == null) { set("error", "message", "The update feed is unreadable"); return; }
@@ -203,8 +202,8 @@ public final class Updater {
         boolean bad = r.sha256.equals(prefs(app).getString("rejected", ""));
         if (bad && !tapped && !ok) { set("error", "message", prefs(app).getString("rejectedWhy", "Update refused")); return; }
         boolean silent = silentPossible(app);
-        UpdatePolicy.Step step = UpdatePolicy.next(newer, ok, unmetered(app), AppState.front(), recording(app) || ai.wizards.os.audio.BackgroundAudioService.active(),
-                silent, tapped);
+        UpdatePolicy.Hold hold = hold(app);
+        UpdatePolicy.Step step = UpdatePolicy.next(newer, ok, unmetered(app), AppState.front(), hold, silent, tapped);
         Log.i(TAG, "step " + step + " (verified=" + ok + " front=" + AppState.front() + " silent=" + silent + " tapped=" + tapped + ")");
         switch (step) {
             case NONE: return;
@@ -215,7 +214,7 @@ public final class Updater {
                 return;
             case BANNER: set("ready"); return;
             case DEFER:
-                set("deferred");
+                set("deferred", "reason", hold.reason);
                 main.removeCallbacks(deferred);
                 main.postDelayed(deferred, 20_000);
                 return;
@@ -229,7 +228,7 @@ public final class Updater {
                 return;
             case INSTALL:
                 if (act != null && !app.getPackageManager().canRequestPackageInstalls()) { askPermission(act); return; }
-                commit(app, r, verified, tapped || AppState.front());
+                commit(app, r, verified, tapped || AppState.front(), tapped);
         }
     }
 
@@ -267,12 +266,36 @@ public final class Updater {
 
     /* ------------------------------------------------------------------ facts about the phone */
 
-    /** Any Wizard OS recording: native recorder, app orb, floating orb / side button (microphone op active). */
+    /** Legacy callers ask about recording/mic use, not music playback. */
     public static boolean recording(Context c) {
-        // A side-button / floating-orb / meeting take holds the one mic owner from start until send or cancel, paused
-        // included (a paused MediaRecorder is not an active RECORD_AUDIO op, so the AppOps check below misses it).
-        if (UpdatePolicy.takeLive(ai.wizards.os.recording.RecorderService.active() != null,
-                ai.wizards.os.everywhere.EverywhereService.appIsRecording(), ai.wizards.os.MicOwner.holder(), false)) return true;
+        UpdatePolicy.Hold h = hold(c);
+        return h == UpdatePolicy.Hold.TAKE || h == UpdatePolicy.Hold.MIC;
+    }
+
+    private static UpdatePolicy.Hold hold(Context c) {
+        String holder = ai.wizards.os.MicOwner.holder();
+        boolean alive = false;
+        if (ai.wizards.os.MicOwner.ORB.equals(holder)) alive = ai.wizards.os.recording.RecorderService.serviceAlive();
+        else if (ai.wizards.os.MicOwner.EVERYWHERE.equals(holder)) alive = ai.wizards.os.everywhere.EverywhereService.serviceAlive();
+        else if (ai.wizards.os.MicOwner.MEETING.equals(holder)) alive = ai.wizards.os.mizel.MeetingRecorderService.serviceAlive();
+        else if (ai.wizards.os.MicOwner.SIDE.equals(holder)) alive = ai.wizards.os.assist.TakeRecovery.captureAlive();
+        boolean take = ai.wizards.os.recording.RecorderService.active() != null
+                || ai.wizards.os.everywhere.EverywhereService.appIsRecording()
+                || ai.wizards.os.mizel.MeetingRecorderService.live() != null;
+        // Debug-only deterministic emulator holds. No override can hide an actual take.
+        if (BuildConfig.DEBUG) {
+            File fixture = new File(c.getFilesDir(), "qa_update_hold.txt");
+            try {
+                String value = new String(java.nio.file.Files.readAllBytes(fixture.toPath()), java.nio.charset.StandardCharsets.UTF_8).trim();
+                if ("music".equals(value)) return UpdatePolicy.hold(take, holder != null, alive, true, false);
+                if ("mic".equals(value)) return UpdatePolicy.hold(take, holder != null, alive, false, true);
+            } catch (IOException ignored) { }
+        }
+        return UpdatePolicy.hold(take, holder != null, alive,
+                ai.wizards.os.audio.BackgroundAudioService.active(), micActive(c));
+    }
+
+    private static boolean micActive(Context c) {
         if (Build.VERSION.SDK_INT >= 30) {
             try {
                 AppOpsManager ops = c.getSystemService(AppOpsManager.class);
@@ -417,7 +440,7 @@ public final class Updater {
      * the new version is in (James was in it).
      */
     @android.annotation.SuppressLint("ApplySharedPref") // must hit disk before Android kills us for the install
-    private static void commit(Context app, UpdatePolicy.Release r, File f, boolean relaunch) {
+    private static void commit(Context app, UpdatePolicy.Release r, File f, boolean relaunch, boolean tapped) {
         if (f == null || !f.isFile()) { verified = null; set("error", "message", "The download is gone · try again"); return; }
         set("installing");
         PackageInstaller pi = app.getPackageManager().getPackageInstaller();
@@ -451,6 +474,15 @@ public final class Updater {
                     //noinspection ResultOfMethodCallIgnored
                     f.delete();
                     set("error", "message", "The download changed after it was checked");
+                    return;
+                }
+                // Copying/hash verification takes time: a take may have begun since stepNow's first check.
+                UpdatePolicy.Hold currentHold = hold(app);
+                if (currentHold == UpdatePolicy.Hold.TAKE || (!tapped && currentHold != UpdatePolicy.Hold.NONE)) {
+                    s.abandon();
+                    set("deferred", "reason", currentHold.reason);
+                    main.removeCallbacks(deferred);
+                    main.postDelayed(deferred, 20_000);
                     return;
                 }
                 // commit(), not apply(): Android kills this process as soon as the new version is in.

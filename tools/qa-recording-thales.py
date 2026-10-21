@@ -12,8 +12,9 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+from qa_paths import work_root
 
-ROOT = Path('/Volumes/ThalesMedia/wizard-modular-shell-20261012/recording-qa')
+ROOT = Path(str(work_root() / 'wizard-modular-shell-20261012/recording-qa'))
 source = Path(sys.argv[1]).resolve()
 commit = sys.argv[2]
 if sys.platform != 'darwin' or not source.is_relative_to(ROOT):
@@ -27,18 +28,18 @@ manifest = {str(p.relative_to(source)): hashlib.sha256(p.read_bytes()).hexdigest
 for name in ('qa-recording-retention.cjs', 'tools/qa-recording-thales.py'):
     manifest[name] = hashlib.sha256((source / name).read_bytes()).hexdigest()
 (evidence / 'source-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-lock_path = '/Volumes/ThalesMedia/AndroidBuilds/worker.lock'
+lock_path = str(work_root() / 'AndroidBuilds/worker.lock')
 with open(lock_path, 'a') as lock:
     print('WAIT_SHARED_LOCK', time.time(), flush=True)
     fcntl.flock(lock, fcntl.LOCK_EX)
     started = time.time()
     print('LOCK_ACQUIRED', os.uname(), started, flush=True)
     with open(evidence / 'browser.log', 'w') as log:
-        run = subprocess.run(['/opt/homebrew/bin/node', str(source / 'qa-recording-retention.cjs'), str(source / 'web'), str(evidence)], stdout=log, stderr=subprocess.STDOUT)
+        run = subprocess.run(['node', str(source / 'qa-recording-retention.cjs'), str(source / 'web'), str(evidence)], stdout=log, stderr=subprocess.STDOUT)
     receipt = {'host': os.uname().nodename, 'machine': os.uname().machine,
                'source_commit': commit, 'source_directory': str(source),
                'lock': lock_path, 'started': started, 'finished': time.time(),
-               'exit': run.returncode, 'node': subprocess.check_output(['/opt/homebrew/bin/node', '--version'], text=True).strip()}
+               'exit': run.returncode, 'node': subprocess.check_output(['node', '--version'], text=True).strip()}
     result = evidence / 'results.json'
     if result.exists():
         rows = json.loads(result.read_text())['results']

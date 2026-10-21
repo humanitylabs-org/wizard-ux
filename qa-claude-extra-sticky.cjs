@@ -1,7 +1,7 @@
 // Claude extra-usage cell survives a failed/rate-limited Claude read (James's 14 Oct report: Home showed three ChatGPT
 // accounts and no Claude extra while Anthropic returned 429). Run on Thales against the live origin; read-only.
 // Usage: node qa-claude-extra-sticky.cjs <home url> [candidate resources.js]   (QA_OUT for screenshots)
-let pw;try{pw=require('playwright');}catch{pw=require('playwright-core');}
+const pw = require('./tools/qa-playwright.cjs');
 const fs=require('fs');const URL_=process.argv[2],CAND=process.argv[3],OUT=process.env.QA_OUT||process.cwd();
 let pass=0,fail=0;const ok=(v,n,x='')=>{console.log(v?'PASS':'FAIL',n,x);v?pass++:fail++;};
 const UA='Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/141.0.0.0 Mobile Safari/537.36';

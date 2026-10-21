@@ -4,18 +4,18 @@
 //   1. a message sent while Wizard is down is saved, shown as waiting, and delivered once Wizard is back;
 //   2. the retry reuses the same Idempotency-Key, session id and body bytes (no duplicate runs);
 //   3. a message survives a full page reload (app killed) and is delivered after it;
-//   4. after the automatic tries it shows "Not sent · Retry", and Retry delivers it;
+//   4. transient failures never exhaust retries; stale transient failures revive on reload;
 //   5. Settings opens from the gear on Home and on an empty desk, not over an open app, and lists unsent items;
 //   6. a voice recording whose transcription fails is kept and sent (transcribed) later;
 //   7. zero writes reach the real Wizard.
 // QA_WEB_DIR=<worktree> (default: this dir).
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
+const RESOLVE = process.env.QA_RESOLVE || '';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const OUT = process.env.QA_OUT || path.join(__dirname, 'qa-live');
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const EXEC = process.env.QA_CHROME || (process.env.QA_CHROME || undefined);
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -29,6 +29,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const leaked = [];
   await ctx.route('**/*', async r => {
     const q = r.request(), u = q.url();
+    if (u.endsWith('/troubleshoot/api/ping')) return r.fulfill({ json: { ok: true } });
+    if (u.endsWith('/troubleshoot/api/status')) return r.fulfill({ json: { overall: W.down ? 'degraded' : 'ok', checks: W.down ? [{ id: 'agent-service', label: 'Agent Service', ok: false, detail: 'Restarting' }] : [] } });
     const m = u.match(/\/wizard-os-home\/((?:desktop\/|core\/)?[a-z-]+\.(?:js|css|html)|)(\?|$)/);
     if (m && q.method() === 'GET') {
       const f = m[1] || 'index.html', p = path.join(WEB, 'web', f);
@@ -130,8 +132,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await p.evaluate(() => { const H = window.__wos.HOME; [...window.__wos.desks[H].wins].forEach(id => window.__wos.closeWin(id)); window.__wos.goDesk(H); });
   await sleep(400);
   ok(await p.evaluate(() => !!document.querySelector('.unsent-card') && !!document.querySelector('.gear .gear-n')), 'Home shows the unsent card and a badge on the gear');
-  await p.evaluate(() => window.__wos.openSheet('inbox')); await sleep(400);
-  ok(await p.isVisible('#inbox .ub-row'), 'Inbox shade lists it under Unsent (reachable over any app)');
+  await p.evaluate(() => window.__wos.openSettings(true)); await sleep(400);
+  ok(await p.isVisible('#settings .ub-row'), 'Unsent & retained lists the message in shared Settings');
   await p.screenshot({ path: path.join(OUT, 'outbox-inbox.png') });
   await p.evaluate(() => window.__wos.closeSheets());
   W.down = false;
@@ -139,24 +141,35 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await p.waitForFunction(() => !window.WosOutbox.unsent().some(x => x.text === 'QA survives a restart'), null, { timeout: 12000 });
   ok(W.runs.filter(r => r.body.includes('QA survives a restart')).length === 1, 'restart: delivered once after coming back online');
 
-  /* 4. Exhaust automatic tries → Not sent · Retry */
-  W.down = '502';
+  /* 4. Durable transport errors beyond the old AUTO_TRIES stay waiting. */
+  W.down = 'refuse';
   await p.evaluate(async () => { window.WosOutbox.AUTO_TRIES; const it = await window.WosOutbox.enqueue({ kind: 'new', text: 'QA gives up then retry', source: 'orb' }); window.__qaGive = it.id; });
   // fast-forward the backoff
   for (let k = 0; k < 16; k++) { await p.evaluate(() => { for (const it of window.WosOutbox._items.values()) if (it.state === 'waiting') it.nextAt = 0; window.WosOutbox.pump(); }); await sleep(250); }
-  await p.waitForFunction(() => window.WosOutbox.get(window.__qaGive)?.state === 'failed', null, { timeout: 8000 });
+  await p.waitForFunction(() => { const it = window.WosOutbox.get(window.__qaGive); return it?.state === 'waiting' && it.attempts >= 8; }, null, { timeout: 8000 });
   const g = await p.evaluate(() => window.WosOutbox.get(window.__qaGive));
-  ok(g.state === 'failed' && /unavailable \(502\)/.test(g.error), 'after automatic tries: Not sent with the reason', g.error);
+  ok(g.durable && g.state === 'waiting' && g.attempts >= 8, 'durable network errors beyond AUTO_TRIES stay waiting', g.error);
+  ok(g.nextAt - g.lastAttemptAt >= 119000 && g.nextAt - g.lastAttemptAt <= 120001, 'backoff caps at 120 seconds');
+  await p.evaluate(async () => {
+    const it = { ...WosOutbox.get(window.__qaGive), state: 'failed', error: 'Couldn’t reach Wizard', nextAt: 0 };
+    const db = await new Promise(resolve => { const r = indexedDB.open('wos-outbox', 1); r.onsuccess = () => resolve(r.result); });
+    await new Promise((resolve, reject) => { const tx = db.transaction('items', 'readwrite'); tx.objectStore('items').put(it); tx.oncomplete = resolve; tx.onerror = reject; }); db.close();
+    sessionStorage.setItem('qa-revive-id', it.id);
+  });
+  await p.reload({ waitUntil: 'load' });
+  await p.waitForFunction(() => window.WosOutbox?.get(sessionStorage.getItem('qa-revive-id'))?.state === 'waiting');
+  await p.evaluate(() => { window.__qaGive = sessionStorage.getItem('qa-revive-id'); });
+  ok(await p.evaluate(() => WosOutbox.get(window.__qaGive).state === 'waiting'), 'stale transient failed item revives on load');
   await p.evaluate(() => window.__wos.openSettings(true));
   await sleep(500);
-  ok(await p.isVisible('#settings.open') && await p.isVisible('.ub-row.failed'), 'Settings lists the unsent message');
+  ok(await p.isVisible('#settings.open') && await p.isVisible('.ub-row.waiting'), 'Settings lists the unsent message');
   await p.screenshot({ path: path.join(OUT, 'outbox-settings.png') });
   W.down = false;
-  await p.click('.ub-row.failed [data-ub="retry"]');
+  await p.click('.ub-row.waiting [data-ub="retry"]');
   await p.waitForFunction(() => !window.WosOutbox.get(window.__qaGive) || window.WosOutbox.get(window.__qaGive).state === 'sent', null, { timeout: 8000 });
   ok(W.runs.filter(r => r.body.includes('QA gives up then retry')).length === 1, 'Retry in Settings delivers it once');
   await sleep(400);
-  ok(await p.evaluate(() => /reached Wizard/.test(document.querySelector('#settingsBody').textContent)), 'Settings says everything reached Wizard');
+  ok(await p.evaluate(() => /No messages awaiting delivery/.test(document.querySelector('#settingsBody').textContent)), 'Settings says no messages await delivery');
   await p.evaluate(() => window.__wos.closeSheets());
 
   /* 6. Voice: transcription down → recording kept; later transcribed + attached + sent */

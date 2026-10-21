@@ -1,7 +1,7 @@
 // Run identical suites against immutable baseline and candidate assets; preserve exits and logs.
-// Execute ONLY on Thales. node tools/qa-dictation-ab.cjs /Volumes/ThalesMedia/wizard-ux/in-app-dictation
+// Execute ONLY on Thales. node tools/qa-dictation-ab.cjs $WIZARD_WORK_ROOT/wizard-ux/in-app-dictation
 const fs = require('fs'), path = require('path'), { spawnSync } = require('child_process');
-const root = process.argv[2]; if (!root?.startsWith('/Volumes/ThalesMedia/')) throw Error('Thales media path required');
+const root = process.argv[2]; if (!process.env.WIZARD_WORK_ROOT || !require('./qa-paths.cjs').inWorkRoot(root)) throw Error('Set WIZARD_WORK_ROOT and pass a suite directory within that worker volume');
 const evidence = path.join(root, 'evidence'); fs.mkdirSync(evidence, { recursive: true });
 const reports = [];
 for (const suite of ['qa-voice-seal.cjs', 'qa-hold-command.cjs', 'qa-immersive.cjs', 'qa-awake.cjs']) {

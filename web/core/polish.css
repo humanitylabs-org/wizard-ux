@@ -8,9 +8,9 @@
 .wx-banners { position: fixed; left: 8px; right: 8px; top: calc(var(--safe-t, env(safe-area-inset-top, 0px)) + 3px); z-index: 62; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
 .device > .wx-banners { position: absolute; top: calc(var(--sb, 0px) + var(--safe-t, 0px) + 6px); }
 /* Phone: while a banner shows, windows, Home and the gear make room for it (nothing is covered). */
-.device.wx-on .tiles { top: calc(var(--sb) + var(--safe-t) + 44px); }
-.device.wx-on .desk .glance { top: 34px; }
-.device.wx-on .gear { top: calc(var(--sb) + var(--safe-t) + 44px); }
+.device.wx-on .tiles { top: calc(var(--sb) + var(--safe-t) + var(--wx-banner-height, 44px)); }
+.device.wx-on .desk .glance { top: calc(var(--wx-banner-height, 44px) - 10px); }
+.device.wx-on .gear { top: calc(var(--sb) + var(--safe-t) + var(--wx-banner-height, 44px)); }
 html[data-shell="desktop"] .wx-banners { top: 3px; left: 25%; right: 25%; z-index: 35; }
 .wx-banners[hidden] { display: none; }
 .wx-banner { pointer-events: auto; max-width: 100%; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 99px; font-size: 12.5px; white-space: nowrap;
@@ -33,6 +33,26 @@ html[data-shell="desktop"] .wx-banners { top: 3px; left: 25%; right: 25%; z-inde
 .wx-banner .wx-x:hover { background: rgba(205, 190, 255, .08); }
 
 /* ---------- fatal card ---------- */
+/* Failure diagnosis stays readable, with real touch targets, in the existing banner. */
+.wx-banner.net:has(.wx-actions) { height: auto; padding: 8px 10px; flex-wrap: wrap; border-radius: 16px; white-space: normal; color: var(--wz-text, var(--ink)); background: var(--wz-base, var(--bg)); border-color: var(--wz-border, var(--line-2)); }
+.wx-banner.net:has(.wx-actions) .wx-m { flex: 1; overflow: visible; line-height: 1.35; }
+.wx-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; justify-content: flex-end; }
+.wx-actions button { min-height: 44px; padding: 4px 10px; border-radius: 99px; color: var(--wz-text, var(--ink)); background: var(--wz-surface, var(--glass)); border: 1px solid var(--wz-border, var(--line-2)); font: inherit; }
+
+/* Phone shows the full message; desktop shows the short line (full text on hover). */
+.wx-banner .wx-s { display: none; }
+
+/* Desktop: one compact pill in the top bar over the clock. It never grows past the bar and never pushes
+ * windows down; the Chats list carries the same status, so the bar pill only needs a glance + two taps. */
+html[data-shell="desktop"] .wx-banners { left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: min(560px, 46vw); }
+html[data-shell="desktop"] .wx-banner.net:has(.wx-actions) { height: 28px; padding: 0 3px 0 10px; flex-wrap: nowrap; white-space: nowrap; border-radius: 99px; gap: 8px; }
+html[data-shell="desktop"] .wx-banner.net .wx-m { display: none; }
+html[data-shell="desktop"] .wx-banner.net .wx-s { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 650; }
+html[data-shell="desktop"] .wx-actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }
+html[data-shell="desktop"] .wx-actions button { min-height: 0; height: 22px; padding: 0 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+html[data-shell="desktop"] .wx-actions button:hover { background: var(--wz-surface-hover, rgba(205, 190, 255, .14)); }
+html[data-shell="desktop"] .wx-actions .wx-long { display: none; }
+
 .wx-fatal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: rgba(3, 2, 8, .78); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .wx-fatal[hidden] { display: none; }
 .wx-fcard { width: min(400px, 100%); padding: 22px 20px 16px; border-radius: 22px; text-align: center; background: rgba(16, 10, 34, .98); border: 1px solid rgba(255, 107, 134, .45); color: var(--ink, #f3efff); font: 15px/1.45 system-ui, sans-serif; }

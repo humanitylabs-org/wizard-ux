@@ -3,9 +3,11 @@
 Uses existing suites plus their seam additions; never publishes or contacts prod backends.
 """
 import hashlib, http.server, json, os, pathlib, socketserver, subprocess, sys, threading
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from tools.qa_paths import work_root, required_work_root, android_sdk, java_home
 root=pathlib.Path(__file__).resolve().parent.parent
 evidence=pathlib.Path(os.environ['INTEGRATION_EVIDENCE']);evidence.mkdir(parents=True,exist_ok=True)
-if not pathlib.Path('/Volumes/ThalesMedia').exists():raise SystemExit('Thales execution required')
+required_work_root()
 env=os.environ.copy();env.update(QA_WEB_DIR=str(root),QA_BLOCK_WRITES='1',QA_CHROME=env['CHROMIUM'])
 receipt={'hostname':subprocess.check_output(['hostname'],text=True).strip(),'sourceSHA':env['SOURCE_SHA'],'sourceTree':env['SOURCE_TREE'],'commands':[],'productionWrites':0,'deployed':False}
 files=['web/core/app-capture.js','web/core/app-client.js','web/core/app-services.js','web/device.js','web/app.js','web/desktop/desktop.js','qa-app-capture/integration.cjs','tools/qa_shared_capture_native.py','adoptions/mizel-live/mizel-live.patch','adoptions/mizel-live/manifest.json','android/app/src/main/java/ai/wizards/os/recording/RecorderService.java','android/app/src/main/java/ai/wizards/os/mizel/MeetingRecorderService.java','android/app/src/main/java/ai/wizards/os/device/DeviceBridge.java']
@@ -45,8 +47,8 @@ try:
  run('chats-return-position',['node','-r','./qa-thales-loader.cjs','qa-chats-return-position.cjs',base])
  run('chats-return-position-full',['node','-r','./qa-thales-loader.cjs','qa-chats-return-position.cjs',base],{'QA_FULL':'1'})
  # Native sources unchanged, exact integration-built debug APK, test-only package on an isolated API35 guest.
- sdk='/opt/homebrew/share/android-commandlinetools';jdk='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home'
- nativeEnv={'JAVA_HOME':jdk,'ANDROID_HOME':sdk,'ANDROID_SDK_ROOT':sdk,'PATH':jdk+'/bin:/opt/homebrew/bin:'+env.get('PATH','')}
+ sdk=str(android_sdk());jdk=java_home()
+ nativeEnv={'JAVA_HOME':jdk,'ANDROID_HOME':sdk,'ANDROID_SDK_ROOT':sdk,'PATH':jdk+'/bin:'+env.get('PATH','')}
  (root/'android/local.properties').write_text('sdk.dir='+sdk+'\n')
  build=run('native-build',['./gradlew','--no-daemon',':app:assembleDebug',':app:testDebugUnitTest'],nativeEnv,root/'android')
  if not build:

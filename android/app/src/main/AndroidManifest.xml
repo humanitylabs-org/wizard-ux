@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Photos backup: originals only; Android 14 limited selection is handled explicitly. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Mizel recorder: retry uploads the moment the network returns; network-constrained upload job. -->
@@ -74,13 +81,31 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="wizard.tailc0f369.ts.net" android:pathPrefix="/wizard-os-home/" />
-                <data android:scheme="https" android:host="wizard.tailc0f369.ts.net" android:pathPrefix="/mizel-live/" />
-                <!-- Retired name, still honoured: old links and notifications land on the same page under the tailnet name. -->
-                <data android:scheme="https" android:host="private.wizard001.com" android:pathPrefix="/wizard-os-home/" />
-                <data android:scheme="https" android:host="private.wizard001.com" android:pathPrefix="/mizel-live/" />
+                <data android:scheme="https" android:host="${wizardDeepLinkHost}" android:pathPrefix="/wizard-os-home/" />
+                <data android:scheme="https" android:host="${wizardDeepLinkHost}" android:pathPrefix="/mizel-live/" />
             </intent-filter>
         </activity>
+
+        <!-- Each canonical box/app URI is one independent reusable document task. -->
+        <activity
+            android:name=".AppSessionActivity"
+            android:exported="true"
+            android:documentLaunchMode="intoExisting"
+            android:launchMode="standard"
+            android:taskAffinity="${applicationId}.homeapp"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density"
+            android:windowSoftInputMode="adjustResize"
+            android:screenOrientation="portrait" />
+        <receiver android:name=".HomeScreenShortcuts$PinConfirmed" android:exported="false" />
+        <activity android:name=".photos.PhotosActivity" android:exported="true" android:launchMode="singleTop" android:parentActivityName=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ai.wizards.os" android:host="photos" android:path="/oauth-callback" />
+            </intent-filter>
+        </activity>
+        <service android:name="androidx.work.impl.foreground.SystemForegroundService" android:foregroundServiceType="dataSync" tools:node="merge" />
 
         <!-- ===== Side-button assistant (feature/side-button-assistant) =====
              Hold the side button: locked phone = full Wizard over the real keyguard (showWhenLocked);

@@ -3,13 +3,15 @@
 confirm it is the same app (data kept), it starts, the shell loads, and nothing crashes. Always stops the emulator.
 usage: qa_upgrade.py OLD_APK NEW_APK"""
 import fcntl, hashlib, json, os, pathlib, re, subprocess, sys, time, uuid
+from qa_paths import work_root
+from qa_paths import android_sdk, java_home
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 old, new = P(sys.argv[1]), P(sys.argv[2]); PKG = 'ai.wizards.os'
 job = BASE / 'qa' / ('wos-upgrade-' + uuid.uuid4().hex[:8]); job.mkdir(parents=True)
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir()
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir()
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5694; S = f'emulator-{PORT}'
 res = []
 def check(n, ok, d=''):
@@ -27,8 +29,15 @@ _vn = re.search(r"versionName='([^']+)'", sh(bt / 'aapt2', 'dump', 'badging', ne
 WANT_VN = os.environ.get('WOS_NEW') or (_vn.group(1) if _vn else '')
 print('expect versionName', WANT_VN)
 em = None
-with (BASE / 'worker.lock').open('a') as lock:
-    fcntl.flock(lock, fcntl.LOCK_EX)
+# Under a wizard_heavy lease the caller already owns worker.lock through an inherited fd: reuse that same
+# open file description (a fresh fd would wait on our own ancestor forever). Standalone runs queue as before.
+_inherited = os.environ.get('WIZARD_HEAVY_LOCK_FD')
+_lockfile = os.fdopen(int(_inherited), 'a', closefd=False) if _inherited else (BASE / 'worker.lock').open('a')
+with _lockfile as lock:
+    if _inherited:
+        _want, _have = (BASE / 'worker.lock').stat(), os.fstat(lock.fileno())
+        if (_want.st_dev, _want.st_ino) != (_have.st_dev, _have.st_ino): raise SystemExit('inherited lock identity mismatch')
+    fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if _inherited else 0))
     try:
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'q', '-k', 'system-images;android-35;google_apis;arm64-v8a', '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
         em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'q', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'], env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT)

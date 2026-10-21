@@ -1,5 +1,7 @@
 package ai.wizards.os.device;
 
+import ai.wizards.os.audio.CaptureJournal;
+
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
@@ -50,8 +52,10 @@ public final class DeviceBridge implements RecorderService.Listener {
     public DeviceBridge(Activity activity, WebView web) {
         this.activity = activity;
         this.web = web;
-        RecorderService.setListener(this);
-        Updater.attach(activity, this);
+        if (!(activity instanceof ai.wizards.os.AppSessionActivity)) {
+            RecorderService.setListener(this);
+            Updater.attach(activity, this);
+        }
         new Thread(() -> ShareStore.get(activity).prune(), "wizard-share-prune").start();
     }
 
@@ -89,13 +93,13 @@ public final class DeviceBridge implements RecorderService.Listener {
         }
     };
 
-    public void onStart() { AppState.setFront(true); ReplyWatcher.appFront(activity); }
-    public void onStop() { AppState.setFront(false); ReplyWatcher.kick(activity); Updater.onStop(activity); }
-    public void onResume() { Updater.onResume(activity); WizardIdentity.refresh(activity); }
+    public void onStart() { AppState.setFront(activity,true); ReplyWatcher.appFront(activity); }
+    public void onStop() { AppState.setFront(activity,false); if (!AppState.front()) ReplyWatcher.kick(activity); if (!(activity instanceof ai.wizards.os.AppSessionActivity)) Updater.onStop(activity); }
+    public void onResume() { if (!(activity instanceof ai.wizards.os.AppSessionActivity)) Updater.onResume(activity); WizardIdentity.refresh(activity); }
     public void onDestroy() {
         // A take still running (app swiped away) carries on; its notification's Stop/Send take over from here.
-        RecorderService.setListener(null);
-        Updater.detach(activity);
+        AppState.setFront(activity,false);
+        if (!(activity instanceof ai.wizards.os.AppSessionActivity)) { RecorderService.setListener(null); Updater.detach(activity); }
     }
 
     /* ------------------------------------------------------------------ events to the page */
@@ -154,6 +158,24 @@ public final class DeviceBridge implements RecorderService.Listener {
     @JavascriptInterface
     public int recLevel() { return RecorderService.level(); }
 
+    /**
+     * The route of the page's own browser recording: "builtin", "external", "system" or "unknown". The page calls it
+     * right after getUserMedia and stops a take Android has put on a Bluetooth or external mic.
+     */
+    @JavascriptInterface
+    public String micRoute() { return ai.wizards.os.audio.MicRoute.browserVerdict(activity); }
+
+    /**
+     * Settings → Microphone: {"v":1,"policy":{…},"inputs":[{type,name,address}…]}. The policy shape is documented on
+     * {@link ai.wizards.os.audio.MicPolicy}; the page can offer new choices (per-device order) without a native update.
+     */
+    @JavascriptInterface
+    public String micPolicy() { return ai.wizards.os.audio.MicRoute.settingsJson(activity); }
+
+    /** Saves a microphone policy from Settings. Returns the policy actually stored (the default for bad input). */
+    @JavascriptInterface
+    public String setMicPolicy(String json) { return ai.wizards.os.audio.MicPolicy.save(activity, json).json(); }
+
     @JavascriptInterface
     public String recActive() {
         String id = RecorderService.active();
@@ -193,7 +215,11 @@ public final class DeviceBridge implements RecorderService.Listener {
     @JavascriptInterface
     public String recRead(String id, int offset) { return readChunk(RecordingStore.get(activity).audio(id), offset); }
 
-    /** The page has the take safe (handled, or saved in the durable outbox): delete it and end the service's hold. */
+    /** Read-only native custody status; excludes paths and private receipt payloads. */
+    @JavascriptInterface
+    public String captureJournal() { return CaptureJournal.get(activity).status(); }
+
+    /** The page has the take safe in its durable outbox: release native custody (WEB_OUTBOX_CUSTODY), end the hold. */
     @JavascriptInterface
     public void recDone(String id) {
         RecordingStore.get(activity).delete(id);

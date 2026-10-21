@@ -5,12 +5,13 @@
 //   QA_BIG=<path to a big file, e.g. 500 MB>  QA_DATA=<fixture data dir>  QA_OUT=<shots dir>  node qa-share-uploads.cjs
 //   QA_PLAYWRIGHT=<playwright module path>  QA_CHROME=<chrome binary, optional>  QA_PORT=9652
 //
-// Checks: progress on the chip while uploading · Send disabled until complete · the send carries the Wizard Files
-// id · killing the fixture mid-upload and restarting it resumes from the server's offset (no restart from 0) and
+// Checks: progress on the chip while uploading · Send stays live while uploading · a send mid-upload clears the
+// composer at once and the message arrives with the file once it lands · a hung upload create is retried (no
+// 0% forever) · the send carries the Wizard Files id · killing the fixture mid-upload and restarting it resumes from the server's offset (no restart from 0) and
 // the stored bytes match the source · removing a chip cancels its upload · a full Wizard (507) says “Not enough space
 // on your Wizard” and attaches nothing · a box without resumable_uploads uses the old POST /wizard/files/upload ·
 // Back from the thread keeps the app open.
-const { chromium } = require(process.env.QA_PLAYWRIGHT || '/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path'), crypto = require('crypto'), http = require('http');
 const { spawn } = require('child_process');
 const PORT = Number(process.env.QA_PORT || 9652);
@@ -89,7 +90,7 @@ async function waitRun(text, ms = 15000) {
     await sleep(350);
     const c1 = await chip(p, wid);
     ok(c1 && c1.up && /%/.test(c1.text), 'chip shows upload progress', c1);
-    ok(await sendDisabled(p, wid), 'Send is disabled while the file uploads');
+    ok(!(await sendDisabled(p, wid)), 'Send stays live while the file uploads');
     await p.screenshot({ path: path.join(OUT, '1-small-progress.png') });
     await p.waitForFunction(id => { const el = document.querySelector(`.win[data-win="${id}"] .ch-att`); return el && !el.classList.contains('up'); }, wid, { timeout: 20000 }).catch(() => {});
     ok(!(await sendDisabled(p, wid)), 'Send is enabled once the upload completes');
@@ -103,6 +104,53 @@ async function waitRun(text, ms = 15000) {
     await p.evaluate(() => history.back()); await sleep(600);
     ok(await p.evaluate(() => !!window.__wos && document.visibilityState === 'visible'), 'Back after send: the app is still open');
     ok(!errs.length, 'no page errors (small)', errs.join(' | '));
+    await ctx.close();
+  }
+  await stopFixture('SIGTERM');
+
+  // 1b. Send mid-upload (James, 19 Oct 2026): no "still uploading" gate. The composer clears at once, nothing is
+  // admitted half-attached, and the message arrives with the Wizard Files id after the upload lands.
+  fs.rmSync(path.join(DATA, 'fx'), { recursive: true, force: true });
+  await startFixture(['--chunk=1048576', '--throttle=1']);
+  {
+    const { ctx, p, errs, wid } = await boot(b);
+    await attach(p, wid, small); await sleep(900);
+    const c0 = await chip(p, wid);
+    ok(c0 && c0.up, 'mid-upload: chip still uploading at the send tap', c0);
+    const toasts = [];
+    await p.exposeFunction('__qaToast2', t => toasts.push(t));
+    await p.evaluate(() => new MutationObserver(() => { const t = document.body.innerText; if (/still uploading/i.test(t)) window.__qaToast2(t.match(/[^\n]*still uploading[^\n]*/i)[0]); }).observe(document.body, { subtree: true, childList: true, characterData: true }));
+    await typeAndSend(p, wid, 'QA send while uploading');
+    await sleep(500);
+    const after = await p.evaluate(id => ({ text: document.querySelector(`.win[data-win="${id}"] textarea`)?.value || '', chips: document.querySelectorAll(`.win[data-win="${id}"] .ch-compose .ch-att`).length }), wid);
+    ok(!toasts.length, 'mid-upload: no "still uploading" block', toasts);
+    ok(after.text === '' && after.chips === 0, 'mid-upload: composer cleared at once (message taken)', after);
+    await p.screenshot({ path: path.join(OUT, '1b-sent-while-uploading.png') });
+    const early = await get('/__fixture/state');
+    ok(!early.runs.some(r => (r.file_ids || []).some(id => String(id).startsWith('pending:'))), 'mid-upload: no placeholder id ever reaches the agent');
+    const { run, s: st } = await waitRun('QA send while uploading', 30000);
+    const u = st.uploads.filter(x => x.filename === 'qa-small.bin').pop();
+    ok(u && u.status === 'complete', 'mid-upload: the upload finished in the background', u);
+    ok(run && run.file_ids.includes(u?.file) && !run.missing.length, 'mid-upload: message delivered with the Wizard Files id', run);
+    ok(!errs.length, 'no page errors (send while uploading)', errs.join(' | '));
+    await ctx.close();
+  }
+  await stopFixture('SIGTERM');
+
+  // 1c. A stalled Wizard never answers the upload create (19 Oct 2026: chip sat at 0% forever). The client gives up
+  // on that call, retries, and the file lands.
+  fs.rmSync(path.join(DATA, 'fx'), { recursive: true, force: true });
+  await startFixture(['--chunk=1048576', '--hang-create=1']);
+  {
+    const { ctx, p, errs, wid } = await boot(b);
+    await attach(p, wid, small); await sleep(1500);
+    const c0 = await chip(p, wid);
+    ok(c0 && c0.up, 'hung create: chip waiting while the create hangs', c0);
+    await p.waitForFunction(id => { const el = document.querySelector(`.win[data-win="${id}"] .ch-att`); return el && !el.classList.contains('up'); }, wid, { timeout: 40000 }).catch(() => {});
+    const st = await get('/__fixture/state');
+    const u = st.uploads.filter(x => x.filename === 'qa-small.bin').pop();
+    ok(st.hungCreates === 1 && u && u.status === 'complete', 'hung create: retried and completed (no 0% forever)', { hung: st.hungCreates, u });
+    ok(!errs.length, 'no page errors (hung create)', errs.join(' | '));
     await ctx.close();
   }
   await stopFixture('SIGTERM');
@@ -147,7 +195,7 @@ async function waitRun(text, ms = 15000) {
     const cw = await chip(p, wid);
     await p.screenshot({ path: path.join(OUT, '3-big-wizard-down.png') });
     ok(cw && cw.up && /Reconnecting/.test(cw.text), 'chip says Reconnecting while the Wizard is down', cw);
-    ok(await sendDisabled(p, wid), 'Send stays disabled while down');
+    ok(!(await sendDisabled(p, wid)), 'Send stays live while the Wizard is down');
     await startFixture([`--throttle=${THROTTLE}`]);
     const sAfter = await get('/__fixture/state');
     const resumedFrom = sAfter.uploads.find(x => x.filename === path.basename(BIG))?.offset ?? -1;

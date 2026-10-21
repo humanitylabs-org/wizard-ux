@@ -6,12 +6,12 @@
 //   #21 every send the outbox delivers is handed to the native reply watcher (watchRun).
 //   #22 the native update banner shows/acts; the web hot-reload swaps in new code and keeps chat drafts.
 // Usage: QA_WEB_DIR=<worktree> node qa-device.cjs  (self-contained: every request is routed; nothing leaves the box)
-// Negative control: QA_WEB_DIR=/home/telos/apps/wizard-os-home node qa-device.cjs must FAIL.
-const { chromium } = require('/home/telos/node_modules/playwright');
+// Negative control: set QA_WEB_DIR to the pre-fix daily tree; the new updater assertions must FAIL.
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_ = (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const WEB = process.env.QA_WEB_DIR || __dirname;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/native-parity';
+const SHOTS = process.env.QA_SHOTS || process.env.QA_OUT || path.join(process.env.TMPDIR || require('os').tmpdir(), 'qa-device');
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -22,7 +22,7 @@ async function boot(b, { native = true } = {}) {
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone'] });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (u.hostname !== 'wizard.tailc0f369.ts.net') { W.foreign.push(u.href); return r.abort(); }
+    if (u.hostname !== new URL(require('./tools/qa-paths.cjs').origin()).hostname) { W.foreign.push(u.href); return r.abort(); }
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && (q.method() === 'GET' || q.method() === 'HEAD') && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = path.join(WEB, 'web', f);
@@ -115,7 +115,90 @@ const shot = async (p, n) => { fs.mkdirSync(SHOTS, { recursive: true }); await p
 async function tapOrb(p) { const o = await p.locator('#orbWrap').boundingBox(); await p.touchscreen.tap(o.x + o.width / 2, o.y + o.height / 2); await sleep(900); }
 
 (async () => {
-  const b = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+  const b = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+
+  /* ---- #22 deferred update: all routes intercepted, zero agent writes ---- */
+  {
+    const { ctx, p, errs } = await boot(b);
+    await open(p);
+    const writes0 = [W.runs.length, W.uploads.length, W.sessions.size, W.transcribes];
+    const apkRequests = [], apkNavigations = [], feeds = [];
+    // Observe every URL, not just our fixture APK path; only synthetic bytes can be downloaded.
+    ctx.on('request', r => {
+      if (/\.apk$/i.test(new URL(r.url()).pathname)) {
+        apkRequests.push(r.url());
+        if (r.isNavigationRequest()) apkNavigations.push(r.url());
+      }
+    });
+    await ctx.route('**/reports/wizard-os/latest.json', r => {
+      feeds.push(r.request().url());
+      return r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({versionCode:99,url:'wizard-os-fixture.apk'})});
+    });
+    await ctx.route(/\.apk(?:[?#]|$)/i, r => r.fulfill({status:200,contentType:'application/vnd.android.package-archive',headers:{'content-disposition':'attachment; filename="fixture.apk"'},body:'QA fixture only'}));
+    const state = reason => p.evaluate(reason => {
+      window.__dev.upd = {state:'deferred',version:'0.9.99',versionCode:99,...(reason === null ? {} : {reason})};
+      window.WosDevice.event('update', window.__dev.upd);
+    }, reason);
+    const count = async () => (await dev(p)).calls.filter(c => c === 'updateInstall').length;
+    const click = () => p.evaluate(() => document.querySelector('#dvUpdate [data-upd="go"]')?.click());
+    await state('music');
+    ok(/installs when music stops/.test(await p.locator('#dvUpdate').innerText()) && /Install now/.test(await p.locator('#dvUpdate').innerText()), 'deferred music explains hold and offers Install now');
+    let n = await count(); await click();
+    ok(await count() === n + 1, 'deferred music Install now calls native updateInstall');
+    await sleep(3200); ok(apkRequests.length === 0 && feeds.length === 0, 'reason-aware APK never fetches the feed or opens an APK');
+    await state('mic');
+    ok(/microphone in use/.test(await p.locator('#dvUpdate').innerText()), 'bare mic is not labelled a recording');
+    await p.evaluate(() => window.__wos.openSettings()); await sleep(300);
+    n = await count(); await p.evaluate(() => document.querySelector('[data-dvupd]')?.click());
+    ok(await count() === n + 1, 'deferred Settings row installs rather than checks');
+    await p.evaluate(() => window.__wos.closeSheets());
+    await state('take');
+    ok(/installs after this recording/.test(await p.locator('#dvUpdate').innerText()), 'take hold text preserved');
+    n = await count(); await click();
+    ok(await count() === n && /Tap again to stop the recording and update/.test(await p.locator('#dvUpdate').innerText()), 'take first tap arms confirmation without installing');
+    await click(); ok(await count() === n + 1, 'take second tap asks native installer (native keeps live-take fence)');
+    await click(); await sleep(4200); n = await count(); await click();
+    ok(await count() === n, 'take confirmation expires after four seconds');
+    await state(null);
+    // Old APK: native music is playing but no Wizard take is live. Model its media state without real audio.
+    await p.evaluate(() => {
+      const music = document.createElement('audio'); music.id = 'qa-playing-music';
+      Object.defineProperties(music, { paused: { value: false }, ended: { value: false } });
+      document.body.appendChild(music);
+    });
+    ok(await p.evaluate(() => !document.querySelector('#qa-playing-music').paused && !__dev.active && __wos.voice === 'idle' && !('reason' in __dev.upd)), 'legacy fixture has playing music, no reason and no live take');
+    n = await count(); await click();
+    ok(await count() === n + 1, 'legacy deferred Install now calls native updateInstall');
+    ok(/Installs by itself once music or recording stops/.test(await p.locator('#dvUpdate').innerText()), 'legacy deferred tap explains automatic install after music or recording');
+    await shot(p, '22-legacy-deferred');
+    await sleep(5500); // Longer than the removed three-second fallback, and the five-second acceptance window.
+    ok(apkRequests.length === 0 && apkNavigations.length === 0, 'legacy deferred: zero APK requests or navigations after 5.5 seconds', JSON.stringify({apkRequests, apkNavigations}));
+    ok(feeds.length === 0, 'legacy deferred: zero latest.json fetches after 5.5 seconds', JSON.stringify(feeds));
+    fs.writeFileSync(path.join(SHOTS, 'update-network.json'), JSON.stringify({web: WEB, waitMs:5500, apkRequests, apkNavigations, feeds}, null, 2));
+    // A legacy APK cannot honor the reason-aware stop-and-install confirmation either.
+    await p.evaluate(() => {
+      __dev.active = 'qa-legacy-take';
+      __dev.takes[__dev.active] = {id:__dev.active, state:'recording', startedAt:Date.now(), data:[]};
+    });
+    n = await count(); await click();
+    ok(await count() === n + 1, 'legacy live-take tap still calls native updateInstall');
+    ok(await p.evaluate(() => __dev.active === 'qa-legacy-take') && /Installs by itself once music or recording stops/.test(await p.locator('#dvUpdate').innerText()), 'legacy live take stays intact with truthful automatic-install text');
+    await p.evaluate(() => {
+      __dev.active = null; delete __dev.takes['qa-legacy-take'];
+      document.querySelector('#qa-playing-music').remove();
+      __dev.upd = {state:'ready',version:'0.9.99',versionCode:99};
+      WosDevice.event('update', __dev.upd);
+    });
+    n = await count(); await p.locator('#dvUpdate .dv-um').click();
+    ok(await count() === n + 1, 'ready-state banner tap calls native updateInstall');
+    ok(JSON.stringify(writes0) === JSON.stringify([W.runs.length,W.uploads.length,W.sessions.size,W.transcribes]), 'update scenarios produce zero agent writes');
+    ok(errs.length === 0, 'no page errors (deferred updater)', errs.join(' | '));
+    await shot(p, '22-deferred');
+    await ctx.close();
+  }
+  if (process.env.QA_DEVICE_UPDATES_ONLY) {
+    await b.close(); console.log(`RESULT ${pass} pass / ${fail} fail`); process.exit(fail ? 1 : 0);
+  }
 
   /* ---- #14 native recorder: tap → native take → tap → stop, transcribe, one run with the voice note path ---- */
   {

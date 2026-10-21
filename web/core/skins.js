@@ -9,13 +9,24 @@
  *     last 45 s; otherwise frozen on the last frame (James, 12 Oct: no battery drain when not viewed).
  *   - the orb's colour, through a CSS filter; orb.js stays byte-identical with the Android copy
  * Nebula is the original look and sets nothing. Choice persists per device in localStorage 'wos.skin'
- * (box-level theme.json sync comes later). Eight skins: Nebula, Grove, Tide, Ember, Signal, Obsidian, Obsidian Light, Landscapes (Paper retired 12 Oct).
- * API: WosSkin.list, .current, .set(id), .preview(pos), .commit(i), .index(id). */
+ * (box-level theme.json sync comes later). Ten skins: Nebula, Grove, Tide, Ember, Signal, Novairecito, Sepia, Dark, Light, Landscapes (Paper retired 12 Oct).
+ * API: WosSkin.list, .current, .set(id), .preview(pos), .commit(i), .index(id), .pkgOf(id),
+ *      .families, .family, .familyOf(id), .lastIn(family), .setFamily(family) (skins and their palettes).
+ * Collaborator skins keep their look and behaviour in web/skins/<dir>/ (see web/skins/README.md), declared with pkg. */
 (() => {
   'use strict';
   const KEY = 'wos.skin';
   const TAU = Math.PI * 2, rnd = (a, b) => a + Math.random() * (b - a);
   const T = (o) => o; // token table helper (readability)
+  // Skins and palettes (James, 21 Oct 2026; wizard-os spec/SKINS_AND_VIEWS.md). A skin is one look-and-feel; each entry
+  // below is one of its palettes (colour sets). The saved choice stays the palette id, so nothing migrates.
+  // A skin entry not listed here is a skin of its own with one palette (so a new collaborator skin needs no edit here).
+  const FAMILIES = [
+    { id: 'wizard', name: 'Wizard', who: 'The original Wizard look, in five moods.', palettes: ['nebula', 'grove', 'tide', 'ember', 'signal'] },
+    { id: 'mizel', name: 'Mizel', recommends: { chats: 'mizel-chats' }, who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes'] },
+    { id: 'novairecito', name: 'Novairecito', who: 'Novaire’s skin: a noir violet command deck, or warm paper for long reads.', palettes: ['novairecito', 'sepia'] },
+  ];
+  const LAST = 'wos.skin.last.';
   const SKINS = [
     { id: 'nebula', name: 'Nebula', who: 'For dreamers and late-night thinkers. The original.', orb: [0, 1, 1],
       t: T({ bg: '#05030c', ink: '#f3efff', 'ink-2': '#b9b0d8', 'ink-3': '#7d74a3', line: 'rgba(205,190,255,.13)', 'line-2': 'rgba(205,190,255,.24)', glass: 'rgba(18,12,38,.58)', 'glass-2': 'rgba(28,19,58,.72)',
@@ -37,20 +48,48 @@
       t: T({ bg: '#000000', ink: '#d8ffd8', 'ink-2': '#8fc79a', 'ink-3': '#4f8a5a', line: 'rgba(57,255,140,.16)', 'line-2': 'rgba(57,255,140,.32)', glass: 'rgba(0,10,4,.62)', 'glass-2': 'rgba(0,20,8,.76)',
         violet: '#39ff8c', 'violet-2': '#ffbe55', pink: '#5ad1ff', cyan: '#5ad1ff', amber: '#ffbe55', green: '#39ff8c', red: '#ff5f56',
         'sk-time-a': '#e6ffe6', 'sk-time-b': '#39ff8c', 'sk-dock': 'rgba(0,0,0,.96)', 'sk-dock-line': 'rgba(57,255,140,.18)', 'sk-ddot': 'rgba(57,255,140,.5)', 'sk-tour': 'rgba(0,8,3,.88)', 'sk-dim': 'rgba(0,0,0,.76)', 'sk-win': 'rgba(0,10,4,.86)' }) },
-    { id: 'obsidian', name: 'Obsidian', who: 'For minimalists. Black, white and nothing else.', orb: [0, 0, 1.15],
+    { id: 'novairecito', pkg: { css: true, dir: 'novairecito' }, name: 'Noir', who: 'Noir focus with Wizard violet. The boss’s quiet command deck.', orb: [0, 1.12, .96],
+      t: T({ bg: '#05030a', ink: '#f4f0ff', 'ink-2': '#c2b8da', 'ink-3': '#81769a', line: 'rgba(197,174,255,.14)', 'line-2': 'rgba(197,174,255,.28)', glass: 'rgba(13,9,24,.66)', 'glass-2': 'rgba(22,14,40,.82)',
+        violet: '#946cff', 'violet-2': '#c3aaff', pink: '#d96fc7', cyan: '#75cfe8', amber: '#d8ad63', green: '#70d4a2', red: '#ef718a',
+        'sk-time-a': '#ffffff', 'sk-time-b': '#a98bff', 'sk-dock': 'rgba(6,4,12,.96)', 'sk-dock-line': 'rgba(197,174,255,.12)', 'sk-ddot': 'rgba(197,174,255,.5)', 'sk-tour': 'rgba(8,5,16,.86)', 'sk-dim': 'rgba(2,1,6,.78)', 'sk-win': 'rgba(9,6,18,.9)' }) },
+    { id: 'sepia', pkg: { css: true, dir: 'sepia' }, name: 'Sepia', who: 'For long reads. Warm vintage paper with soft, readable ink.', orb: [18, .38, .82],
+      t: T({ bg: '#f3ead2', ink: '#332b22', 'ink-2': '#5f5243', 'ink-3': '#786651', line: 'rgba(86,65,40,.16)', 'line-2': 'rgba(86,65,40,.30)', glass: 'rgba(236,222,190,.76)', 'glass-2': 'rgba(247,239,219,.92)',
+        violet: '#76533d', 'violet-2': '#684733', pink: '#9a5c56', cyan: '#557878', amber: '#94691d', green: '#57704d', red: '#a34236',
+        'sk-time-a': '#3a3026', 'sk-time-b': '#735b43', 'sk-dock': 'rgba(238,225,197,.96)', 'sk-dock-line': 'rgba(86,65,40,.16)', 'sk-ddot': 'rgba(86,65,40,.52)', 'sk-tour': 'rgba(247,239,219,.94)', 'sk-dim': 'rgba(75,55,32,.24)', 'sk-win': 'rgba(247,239,219,.94)' }) },
+    { id: 'obsidian', pkg: { css: true, js: true, when: 'always', dir: 'obsidian' }, name: 'Dark', who: 'Miguel’s dark skin. Black, white and nothing else.', orb: [0, 0, 1.15],
       t: T({ bg: '#000000', ink: '#f7f7f7', 'ink-2': '#c4c4c4', 'ink-3': '#8a8a8a', line: 'rgba(255,255,255,.12)', 'line-2': 'rgba(255,255,255,.26)', glass: 'rgba(20,20,20,.62)', 'glass-2': 'rgba(24,24,24,.86)',
         violet: '#ffffff', 'violet-2': '#e8e8e8', pink: '#bdbdbd', cyan: '#d6d6d6', amber: '#e6b15c', green: '#9fd8a8', red: '#ff6b6b',
         'sk-time-a': '#ffffff', 'sk-time-b': '#9a9a9a', 'sk-dock': 'rgba(0,0,0,.96)', 'sk-dock-line': 'rgba(255,255,255,.12)', 'sk-ddot': 'rgba(255,255,255,.5)', 'sk-tour': 'rgba(10,10,10,.9)', 'sk-dim': 'rgba(0,0,0,.78)', 'sk-win': 'rgba(10,10,10,.9)' }) },
-    { id: 'obsidian-light', name: 'Obsidian Light', who: 'Obsidian in daylight. Ink on white paper.', orb: [0, 0, .55],
+    { id: 'obsidian-light', pkg: { css: true, js: true, when: 'always', dir: 'obsidian' }, name: 'Light', who: 'Miguel’s light skin. Ink on white paper.', orb: [0, 0, .55],
       t: T({ bg: '#ffffff', ink: '#000000', 'ink-2': '#2e2e2e', 'ink-3': '#6b6b6b', line: 'rgba(0,0,0,.14)', 'line-2': 'rgba(0,0,0,.32)', glass: 'rgba(244,244,244,.78)', 'glass-2': 'rgba(240,240,240,.94)',
         violet: '#000000', 'violet-2': '#1a1a1a', pink: '#555555', cyan: '#3a3a3a', amber: '#9a6400', green: '#0f7a3e', red: '#c62828',
         'sk-time-a': '#000000', 'sk-time-b': '#5a5a5a', 'sk-dock': 'rgba(255,255,255,.96)', 'sk-dock-line': 'rgba(0,0,0,.12)', 'sk-ddot': 'rgba(0,0,0,.5)', 'sk-tour': 'rgba(250,250,250,.94)', 'sk-dim': 'rgba(255,255,255,.72)', 'sk-win': 'rgba(255,255,255,.94)' }) },
     // Opinionated: Landscapes rotates the classic macOS landscape wallpapers (Mavericks → Golden Gate) behind frosted glass.
-    { id: 'landscapes', name: 'Landscapes', who: 'For wanderers. A new view of the world every minute.', orb: [0, 1, 1.05],
+    { id: 'landscapes', pkg: { css: true, js: true, when: 'always', dir: 'landscapes' }, name: 'Landscapes', who: 'Miguel’s photo skin. A new view of the world every minute.', orb: [0, 1, 1.05],
       t: T({ bg: '#0B0A10', ink: '#ffffff', 'ink-2': 'rgba(255,255,255,.80)', 'ink-3': 'rgba(255,255,255,.58)', line: 'rgba(255,255,255,.16)', 'line-2': 'rgba(255,255,255,.28)', glass: 'rgba(16,14,22,.52)', 'glass-2': 'rgba(20,18,26,.74)',
         violet: '#7A5CFF', 'violet-2': '#A08CFF', pink: '#ff7ac8', cyan: '#6fd8ff', amber: '#ffbe55', green: '#62e6a8', red: '#ff6b86',
         'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(11,10,16,.62)', 'sk-dock-line': 'rgba(255,255,255,.10)', 'sk-ddot': 'rgba(255,255,255,.6)', 'sk-tour': 'rgba(11,10,16,.80)', 'sk-dim': 'rgba(11,10,16,.70)', 'sk-win': 'rgba(16,14,22,.72)' }) },
   ];
+  // Each skin's own display face (the one its Home clock wears; fonts self-hosted in skins.css), for the preview cards
+  // in the skin picker. Kept outside the entries so each skin definition stays as its author made it.
+  const FACES = {
+    nebula: { family: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif', weight: 600 },
+    grove: { family: '"Sk Fraunces", Georgia, serif', weight: 600 },
+    tide: { family: '"Sk Jost", ui-sans-serif, sans-serif', weight: 400 },
+    ember: { family: '"Sk Cormorant", Georgia, serif', weight: 500, style: 'italic' },
+    signal: { family: '"Sk Mono", ui-monospace, monospace', weight: 500 },
+    sepia: { family: '"Sk Fraunces", Georgia, serif', weight: 600 },
+  };
+  const FAMS = (() => { // resolved once: every skin entry gets .family, every family its palettes in SKINS order
+    const out = [];
+    for (const s of SKINS) {
+      let f = FAMILIES.find(x => x.palettes.includes(s.id)) || out.find(x => x.id === s.id);
+      if (!f) f = { id: s.id, name: s.name, who: s.who, palettes: [s.id] };
+      if (!out.includes(f)) out.push(f);
+      s.family = f.id;
+    }
+    return out.map(f => Object.freeze({ id: f.id, name: f.name, who: f.who, ...(f.recommends ? { recommends: Object.freeze({ ...f.recommends }) } : {}), palettes: Object.freeze(SKINS.filter(s => s.family === f.id).map(s => s.id)) }));
+  })();
   const N = SKINS.length;
   const idxOf = id => Math.max(0, SKINS.findIndex(s => s.id === id));
   const stored = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
@@ -87,7 +126,7 @@
     // space layers belong to Nebula only
     const space = a === 0 ? 1 - f : 0; st.setProperty('--sk-space', space.toFixed(3));
     const near = Math.round(p);
-    if (near !== shown) { shown = near; root.dataset.skin = SKINS[near].id; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = SKINS[near].t.bg; }
+    if (near !== shown) { shown = near; root.dataset.skin = SKINS[near].id; window.WosSkinHost?.preview(SKINS[near].id); const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = SKINS[near].t.bg; }
     applyFrame(SKINS[near]);
     BGL.a = a; BGL.b = b; BGL.f = f; wake();
   }
@@ -186,25 +225,67 @@
         }
       }
     },
+    // Novairecito: the existing night-sky language, pared back into a noir violet command deck.
+    // It keeps the shell geometry untouched and uses only two inexpensive gradients over a solid field.
+    novairecito: {
+      init() {},
+      draw(c, s, t, dt, W, H) {
+        c.fillStyle = '#05030a'; c.fillRect(0, 0, W, H);
+        const x = W * (.28 + .04 * Math.sin(t * .05)), y = H * (.18 + .03 * Math.cos(t * .04));
+        const glow = c.createRadialGradient(x, y, 0, x, y, Math.max(W, H) * .72);
+        glow.addColorStop(0, 'rgba(148,108,255,.16)'); glow.addColorStop(.46, 'rgba(79,48,145,.06)'); glow.addColorStop(1, 'rgba(5,3,10,0)');
+        c.fillStyle = glow; c.fillRect(0, 0, W, H);
+        const edge = c.createLinearGradient(0, 0, W, H);
+        edge.addColorStop(0, 'rgba(255,255,255,.018)'); edge.addColorStop(.55, 'rgba(255,255,255,0)'); edge.addColorStop(1, 'rgba(0,0,0,.24)');
+        c.fillStyle = edge; c.fillRect(0, 0, W, H);
+      },
+    },
     // Obsidian: still film grain plus one slow, soft light drifting across. Pre-rendered noise tiles, so a frame is
     // two drawImage calls and a gradient; frozen by the scenery gate whenever Home is not live.
     obsidian: {
-      init(s, W, H) { this.prep(s, W, H, '#000000', 255); },
+      init(s, W, H) { this.prep(s, W, H, '#09090b', 255); },
       prep(s, W, H, base, ink) {
         s.base = base; s.ink = ink;
         s.tiles = [0, 1, 2].map(() => { const n = mk(160, 160), x = n.getContext('2d'), d = x.createImageData(160, 160);
           for (let i = 0; i < d.data.length; i += 4) { const v = Math.random() < .5 ? 0 : 1; d.data[i] = d.data[i + 1] = d.data[i + 2] = ink; d.data[i + 3] = v ? (Math.random() * 22) | 0 : 0; }
           x.putImageData(d, 0, 0); return n; });
       },
+      // Opinionated (owner, 21 Oct): clean and modern, no film grain. A flat base with one very soft, near-still light
+      // from the top so the surface reads as depth, not texture.
       draw(c, s, t, dt, W, H) {
         c.fillStyle = s.base; c.fillRect(0, 0, W, H);
-        const lx = W * (.5 + .42 * Math.sin(t * .05)), ly = H * (.35 + .22 * Math.sin(t * .037 + 1.3)), R = Math.max(W, H) * .75;
-        const g = c.createRadialGradient(lx, ly, 0, lx, ly, R); g.addColorStop(0, `rgba(${s.ink},${s.ink},${s.ink},.07)`); g.addColorStop(1, `rgba(${s.ink},${s.ink},${s.ink},0)`);
+        const k = s.ink ? '255,255,255' : '40,36,60', a = s.ink ? .055 : .05;
+        const lx = W * (.5 + .12 * Math.sin(t * .02)), g = c.createRadialGradient(lx, -H * .1, 0, lx, -H * .1, Math.max(W, H) * .95);
+        g.addColorStop(0, `rgba(${k},${a})`); g.addColorStop(1, `rgba(${k},0)`);
         c.fillStyle = g; c.fillRect(0, 0, W, H);
-        c.fillStyle = c.createPattern(s.tiles[((t * 8) | 0) % 3], 'repeat'); c.fillRect(0, 0, W, H);
       },
     },
     'obsidian-light': { init(s, W, H) { BG.obsidian.prep(s, W, H, '#ffffff', 0); }, draw(c, s, t, dt, W, H) { BG.obsidian.draw(c, s, t, dt, W, H); } },
+    // Sepia: a softly mottled vintage paper field. The texture is pre-rendered once; drawing it is one fill, one
+    // gradient and one pattern pass, and the shared scenery gate freezes it whenever Home is not being viewed.
+    sepia: {
+      init(s) {
+        const n = mk(192, 192), x = n.getContext('2d');
+        x.clearRect(0, 0, 192, 192);
+        for (let i = 0; i < 900; i++) {
+          const a = rnd(.008, .035), warm = Math.random() < .72;
+          x.fillStyle = warm ? `rgba(91,65,36,${a})` : `rgba(255,251,235,${a})`;
+          x.fillRect(rnd(0, 192), rnd(0, 192), rnd(.4, 1.8), rnd(.4, 1.8));
+        }
+        for (let i = 0; i < 18; i++) {
+          x.strokeStyle = `rgba(103,76,43,${rnd(.012, .028)})`; x.lineWidth = rnd(.3, .8); x.beginPath();
+          const y = rnd(0, 192); x.moveTo(-8, y); x.bezierCurveTo(42, y + rnd(-3, 3), 132, y + rnd(-3, 3), 200, y + rnd(-2, 2)); x.stroke();
+        }
+        s.paper = n;
+      },
+      draw(c, s, t, dt, W, H) {
+        c.fillStyle = '#f3ead2'; c.fillRect(0, 0, W, H);
+        const g = c.createRadialGradient(W * .48, H * .38, 0, W * .48, H * .38, Math.max(W, H) * .78);
+        g.addColorStop(0, 'rgba(255,252,237,.34)'); g.addColorStop(.68, 'rgba(137,99,55,.025)'); g.addColorStop(1, 'rgba(92,63,32,.10)');
+        c.fillStyle = g; c.fillRect(0, 0, W, H);
+        c.fillStyle = c.createPattern(s.paper, 'repeat'); c.fillRect(0, 0, W, H);
+      },
+    },
     // Landscapes: one wallpaper at a time, cover-fitted once into an offscreen canvas (a frame is one or two drawImage
     // calls). Each app load starts on the next one, and every minute on Home moves on with a 2.5 s crossfade; only the current and next
     // files are fetched. Frozen with the scenery gate like every other skin.
@@ -286,13 +367,21 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 
   window.WosSkin = {
-    list: SKINS.map(s => ({ id: s.id, name: s.name, who: s.who, bg: s.t.bg, accent: s.t.violet })),
+    list: SKINS.map(s => ({ id: s.id, family: s.family, name: s.name, who: s.who, bg: s.t.bg, accent: s.t.violet, face: FACES[s.id] || null, t: { ...s.t } })),
+    // Skins (families) with their palettes, in list order. Picking a skin puts on the palette last worn in it.
+    families: FAMS,
+    familyOf(id) { return (SKINS.find(s => s.id === id) || SKINS[0]).family; },
+    get family() { return SKINS[Math.round(pos)].family; },
+    lastIn(fid) { const ids = SKINS.filter(s => s.family === fid).map(s => s.id); let v = null; try { v = localStorage.getItem(LAST + fid); } catch (e) {} return ids.includes(v) ? v : ids[0] || null; },
+    setFamily(fid) { const id = this.lastIn(fid); return id ? this.set(id) : this.current; },
     get current() { return SKINS[Math.round(pos)].id; },
     get pos() { return pos; },
     get chosen() { return stored(); },
     index: idxOf,
+    // Skin packages (core/skin-host.js): a collaborator skin's own folder web/skins/<dir>/ (skin.css, skin.js).
+    pkgOf(id) { const s = SKINS.find(x => x.id === id); return s && s.pkg ? Object.freeze({ ...s.pkg }) : null; },
     preview(p) { paint(p); },
-    set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); } catch (e) {} return SKINS[i].id; },
+    set(id) { const i = idxOf(id); if (composition) { composition.extends = SKINS[i].id; saveComposition(); } paint(i); try { localStorage.setItem(KEY, SKINS[i].id); localStorage.setItem(LAST + SKINS[i].family, SKINS[i].id); } catch (e) {} window.WosSkinHost?.commit(SKINS[i].id); return SKINS[i].id; },
     get frame() { return F ? F.frame(frameOf(SKINS[Math.round(pos)])) : { foundation: 'framed' }; },
     get frameAdjustable() { return PHONE; },
     get composition() { return { version: 1, extends: this.current, frame: this.frame }; },

@@ -1,6 +1,9 @@
 /* One local command grammar; explicit command misses NEVER fall through to an agent. */
 (() => {
  'use strict';
+ // Tap = message to the agent, never a command (James, 21 Oct 2026).
+ // Typed command surfaces retain their existing grammar; long press = command.
+ const isMessageTake = (kind, typed = false) => !typed && kind !== 'command';
  function create({ CHATS, APP, appByName, findApp, quickSearch, sendSnap }) {
  const norm = window.WizCore.norm;
  const { TODAY, YESTERDAY } = window.WosViews;
@@ -16,12 +19,13 @@
       if (/^(?:filter|filtered)/.test(s)) return { action: 'chats_search', q: want };
       return null; // "show me …" with no filter match is not ours
     }
-    // A tap keeps "find me a …" for the agent; only "search …" searches the list. A held orb takes both.
+    // Only a held orb reaches voice command parsing; typed search keeps its grammar.
     m = s.match(kind === 'command' ? /^(?:search|find|look for)(?: (?:my |the )?(?:chats|threads|messages))?(?: for)? (.+)$/ : /^search(?: (?:my |the )?(?:chats|threads|messages))?(?: for)? (.+)$/);
     if (m) return { action: 'chats_search', q: m[1] };
     return null;
   }
-  function localParse(t, snap, kind) {
+  function localParse(t, snap, kind, typed = false) {
+    if (isMessageTake(kind, typed)) return null;
     const explicit = norm(window.WizConfig.stripAddress(t)).replace(/ please$/, '');
     if (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread') {
     if (/^(help|show help|open help|gestures|keyboard shortcuts)$/.test(explicit)) return { action:'open_view', view:'help' };
@@ -35,6 +39,9 @@
     }
     // The music search spell ("music search Home Tides") wins everywhere, even over the Chats list's "search …".
     { const ms = window.WosMusic?.available() && window.WosMusic.parse(t, false, false); if (ms && ms.op === 'search') return { action: 'music', cmd: ms }; }
+    // The strong quick-search spells ("ask AI …", "image search …", "find images of …") win everywhere too: on the
+    // Chats list a held "find images of cats" used to filter the list instead of opening Search.
+    { const q0 = quickSearch(t); if (q0?.strong) return { action: 'quick_search', query: q0.query, tab: q0.tab }; }
     { const cv = chatsVoice(t, snap || sendSnap(), kind); if (cv) return cv; }
     // Food spells (James, 12 Oct): "order food" / "order grab" / "order lunch" open Grab for a new order; "order kra pao"
     // or "order my usual kra pao" runs a saved one; "food" on its own opens the Food app. All on the phone, nothing to Wizard.
@@ -45,19 +52,19 @@
       if (fs === 'open' && (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread')) return { action: 'open_app', app: (APP.usuals || {}).name || 'Food' };
     }
     // A bare app name opens that app, no "open" needed (James, 12 Oct: "If I say the name of an app, it should just
-    // open that app"). Held: anywhere, even over Wizard Music or a thread. Tapped: off a thread, so a one-word reply
-    // inside a thread stays a reply. Exact names and aliases only (appByName), never a fuzzy guess.
+    // open that app"). Held: anywhere, even over Wizard Music or a thread. Taps never enter this grammar.
+    // Exact names and aliases only (appByName), never a fuzzy guess.
     if (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread') { const an = appByName(t); if (an) return { action: 'open_app', app: an.name }; }
     // Music (play …, pause, next, louder, I like this): on-device, straight to Wizard Music. A held orb takes any
-    // music phrase; a tap only the unmistakable ones ("play …", "pause the music"), so chat words stay chat.
+    // music phrase; typed surfaces retain their existing matching rules. Taps are messages.
     // In front of Wizard Music a held orb is always for the player ("Guy Barato Trap" = play it).
     if (window.WosMusic?.available()) {
       const front = (snap || sendSnap()).view?.appId === 'wizard-music';
       const inMusic = kind === 'command' && front;
       const mc = window.WosMusic.parse(t, inMusic, front);
       const v0 = (snap || sendSnap()).view;
-      const tapOk = mc && (mc.strong || (mc.op === 'play' && v0?.kind !== 'chat thread' && norm(t).split(' ').length <= 8));
-      if (mc && (kind === 'command' || tapOk)) return { action: 'music', cmd: mc };
+      const typedOk = mc && (mc.strong || (mc.op === 'play' && v0?.kind !== 'chat thread' && norm(t).split(' ').length <= 8));
+      if (mc && (kind === 'command' || typedOk)) return { action: 'music', cmd: mc };
     }
     // The quick-search spell ("image search …", "search …") opens the search sheet on-device, even over a thread.
     // A held orb is always a command, so there even the plain "search for …" form is the search app's.
@@ -126,5 +133,5 @@
    return !!ok && !c?.then_agent && ['open_app','open','launch','app','open_view','view','show',
      'chats_filter','chats_search','desk','clear_desk','close_window','fullscreen','move_window'].includes(c?.action);
  }
- window.WosCommands = { create, execute, completedLocally };
+ window.WosCommands = { create, execute, completedLocally, isMessageTake };
 })();

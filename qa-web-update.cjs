@@ -4,11 +4,11 @@
 // the shell stays, Reload is held while recording, Reload swaps in the new version. Phone: same component.
 // Usage: node tools/qa-origin.cjs 9391 <worktree>/web & node qa-web-update.cjs http://127.0.0.1:9391/wizard-os-home/
 // Negative control: point it at an origin serving daily before this change; the desktop checks must FAIL.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs');
 const BASE = process.argv[2] || 'http://127.0.0.1:9391/wizard-os-home/';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wux-web-update-qa';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath('wux-web-update-qa');
+const EXEC = process.env.QA_CHROME || (process.env.QA_CHROME || undefined);
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };

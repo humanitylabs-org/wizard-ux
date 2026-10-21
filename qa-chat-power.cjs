@@ -18,12 +18,12 @@
 // Usage: node tools/qa-origin.cjs 9475 <worktree>/web &  then  QA_WEB_DIR=<worktree> node qa-chat-power.cjs [url]
 //   url defaults to http://127.0.0.1:9475/wizard-os-home/ . QA_OUT=<dir> for screenshots.
 // Negative control: QA_WEB_DIR=<release/parity-0.7 checkout> node qa-chat-power.cjs must FAIL.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9475/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/chat-power';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath('wizard-audit/shots/chat-power');
+const EXEC = process.env.QA_CHROME || (process.env.QA_CHROME || undefined);
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra === '' ? '' : typeof extra === 'string' ? extra : JSON.stringify(extra).slice(0, 600)); } };
@@ -392,13 +392,24 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     for (let k = 0; k < 3; k++) { await p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); __wos.renderChats(w); }); await sleep(120); }
     const again = await p.evaluate(sel => { const nb = document.querySelector(sel); const a = [...nb.querySelectorAll('.msg.a')].pop(); return { top: Math.round(a.getBoundingClientRect().top - nb.getBoundingClientRect().top), st: Math.round(nb.scrollTop) }; }, await S('.ch-msgs'));
     ok(again.st > 0 && again.top >= 0 && again.top < 40, '#18 phone: live re-renders keep the thread at the start of the latest reply (never jumps to the top)', again);
-    const mid = await p.evaluate(sel => { const nb = document.querySelector(sel); nb.scrollTop = Math.round(nb.scrollHeight * 0.4); nb.dispatchEvent(new Event('scroll')); return nb.scrollTop; }, await S('.ch-msgs'));
+    const mid = await p.evaluate(sel => { const nb = document.querySelector(sel); nb.dispatchEvent(new WheelEvent('wheel', { bubbles: true })); nb.scrollTop = Math.round(nb.scrollHeight * 0.4); nb.dispatchEvent(new Event('scroll')); return nb.scrollTop; }, await S('.ch-msgs'));
     await sleep(600);
     const lat = await p.evaluate(sel => { const b = document.querySelector(sel); return b && !b.hidden && b.offsetParent !== null; }, await S('[data-chlatest]'));
     ok(lat, '#18 phone: scrolled up, “↓ Latest” appears');
     await p.screenshot({ path: `${OUT}/phone-08-latest-button.png` });
     const saved = await p.evaluate(k => JSON.parse(localStorage.getItem(k) || '{}').qa_pw_long || null, RP);
     ok(saved && Math.abs(saved.scrollTop - mid) < 4 && saved.messageId, '#18 phone: the reading place is saved (legacy key, per thread)', { saved, mid });
+    // Update reload (James, 20 Oct: "an update reloads me to the very top of the chat"). The shell boots with the
+    // thread already open before it has a size; the place must land once it does. Reload straight after the scroll
+    // also proves the place is flushed before the page goes (inside the 200 ms save debounce).
+    const mid2 = await p.evaluate(sel => { const nb = document.querySelector(sel); nb.dispatchEvent(new WheelEvent('wheel', { bubbles: true })); nb.scrollTop = Math.round(nb.scrollHeight * 0.33); nb.dispatchEvent(new Event('scroll')); return nb.scrollTop; }, await S('.ch-msgs'));
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await until(async () => p.evaluate(() => { const nb = [...document.querySelectorAll('.ch-msgs')].find(e => e.clientHeight); return !!nb && nb.scrollTop > 0; }), 15000);
+    await sleep(1500);
+    const afterReload = await p.evaluate(() => { const nb = [...document.querySelectorAll('.ch-msgs')].find(e => e.clientHeight); return nb ? Math.round(nb.scrollTop) : -1; });
+    ok(Math.abs(afterReload - mid2) < 30, '#18 phone: a reload with the thread open returns to the same place (never the top)', { afterReload, mid2 });
+    await p.evaluate(sel => { const nb = document.querySelector(sel); nb.dispatchEvent(new WheelEvent('wheel', { bubbles: true })); nb.scrollTop = Math.round(nb.scrollHeight * 0.4); nb.dispatchEvent(new Event('scroll')); }, await S('.ch-msgs'));
+    await sleep(600);
     await back();
     await openThread('qa_pw_long');
     for (let k = 0; k < 2; k++) { await p.evaluate(() => { const w = Object.values(__wos.wins).find(x => x.app === 'chats'); __wos.renderChats(w); }); await sleep(120); }
@@ -410,7 +421,7 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
     const end = await p.evaluate(sel => { const nb = document.querySelector(sel); return { gap: nb.scrollHeight - nb.scrollTop - nb.clientHeight, hidden: document.querySelector(sel.replace('.ch-msgs', '[data-chlatest]')).hidden }; }, await S('.ch-msgs'));
     ok(end.gap < 10 && end.hidden, '#18 phone: “↓ Latest” jumps to the bottom and hides', end);
     // Older than an hour: forgotten.
-    await p.evaluate(sel => { const nb = document.querySelector(sel); nb.scrollTop = Math.round(nb.scrollHeight * 0.3); nb.dispatchEvent(new Event('scroll')); }, await S('.ch-msgs'));
+    await p.evaluate(sel => { const nb = document.querySelector(sel); nb.dispatchEvent(new WheelEvent('wheel', { bubbles: true })); nb.scrollTop = Math.round(nb.scrollHeight * 0.3); nb.dispatchEvent(new Event('scroll')); }, await S('.ch-msgs'));
     await sleep(600);
     await back();
     await p.evaluate(k => { const all = JSON.parse(localStorage.getItem(k) || '{}'); if (all.qa_pw_long) all.qa_pw_long.savedAt = Date.now() - 61 * 60e3; localStorage.setItem(k, JSON.stringify(all)); }, RP);
@@ -547,10 +558,17 @@ async function until(fn, ms = 8000, step = 100) { const t = Date.now() + ms; whi
 
     // Reading position on desktop
     await dOpen('qa_pw_long');
-    await d.evaluate(() => { const nb = document.querySelector('.pane-main .ch-msgs'); nb.scrollTop = Math.round(nb.scrollHeight * 0.4); nb.dispatchEvent(new Event('scroll')); });
+    await d.evaluate(() => { const nb = document.querySelector('.pane-main .ch-msgs'); nb.dispatchEvent(new WheelEvent('wheel', { bubbles: true })); nb.scrollTop = Math.round(nb.scrollHeight * 0.4); nb.dispatchEvent(new Event('scroll')); });
     await sleep(600);
     ok(await d.evaluate(() => { const b = document.querySelector('.pane-main [data-chlatest]'); return !!b && !b.hidden; }), '#18 desktop: “↓ Latest” appears when scrolled up');
     await d.screenshot({ path: `${OUT}/desktop-06-latest.png` });
+    // Update reload on desktop: the pane slides in narrow and short after a reload; the place must survive that.
+    const dmid = await d.evaluate(() => Math.round(document.querySelector('.pane-main .ch-msgs').scrollTop));
+    await d.reload({ waitUntil: 'domcontentloaded' });
+    await d.waitForFunction(() => { const nb = document.querySelector('.pane-main .ch-msgs'); return !!nb && nb.clientHeight > 100 && !!nb.querySelector('.msg.a'); }, null, { timeout: 20000 }).catch(() => {});
+    await sleep(3500);
+    const dafter = await d.evaluate(() => { const nb = document.querySelector('.pane-main .ch-msgs'); return nb ? Math.round(nb.scrollTop) : -1; });
+    ok(Math.abs(dafter - dmid) < 30, '#18 desktop: a reload with the thread open returns to the same place', { dafter, dmid });
     // Failed thread on desktop
     await dOpen('qa_pw_fail3');
     await d.evaluate(() => { const f = document.querySelector('.pane-main .ch-fail'), nb = document.querySelector('.pane-main .ch-msgs'); if (f && nb) nb.scrollTop = nb.scrollHeight; });

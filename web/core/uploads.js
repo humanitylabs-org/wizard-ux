@@ -36,17 +36,28 @@
   }
   const base = () => (window.WizConfig && window.WizConfig.endpoint('uploads')) || '/wizard/v1/uploads';
 
+  /* Control calls (create, where-did-I-get-to, complete) are tiny: one that hangs (a busy or restarting Wizard,
+   * a half-dead mobile connection) is abandoned after CALL_MS and retried with backoff, never waited on forever.
+   * 19 Oct 2026: a create sat unanswered while the Agent Service stalled and the chip stayed at 0% with no retry. */
+  const CALL_MS = 15000;
   async function call(method, url, body, signal) {
-    let r;
+    const ctl = new AbortController(), stop = () => ctl.abort();
+    if (signal?.aborted) throw signal.reason || abortErr();
+    signal?.addEventListener('abort', stop, { once: true });
+    const timer = setTimeout(stop, CALL_MS);
     try {
-      r = await fetch(url, { method, credentials: 'same-origin', cache: 'no-store', signal,
-        headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
-    } catch (e) {
+      let r;
+      try {
+        r = await fetch(url, { method, credentials: 'same-origin', cache: 'no-store', signal: ctl.signal,
+          headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+      } catch (e) {
+        if (signal?.aborted) throw signal.reason || abortErr();
+        return { status: 0, j: {} };
+      }
+      const j = await r.json().catch(() => ({}));
       if (signal?.aborted) throw signal.reason || abortErr();
-      return { status: 0, j: {} };
-    }
-    const j = await r.json().catch(() => ({}));
-    return { status: r.status, j };
+      return { status: ctl.signal.aborted ? 0 : r.status, j };
+    } finally { clearTimeout(timer); signal?.removeEventListener('abort', stop); }
   }
 
   /* One chunk. XHR rather than fetch: only XHR reports upload progress inside a chunk. Never rejects for HTTP
@@ -170,5 +181,75 @@
     return { id: String(receipt.id), name: String(receipt.filename || name), mime: String(receipt.mime || mime), bytes: Number(receipt.bytes) || total };
   }
 
-  window.WizUploads = { supported, upload, NO_SPACE };
+  /* Send now, upload behind (James, 19 Oct 2026: "Don't block the user from being able to send their message
+   * because an attachment is still uploading. Send the message and process it in the background.")
+   * A tray/take row still uploading at the send tap becomes a placeholder file ref { id: 'pending:<key>' } that
+   * rides every existing files path unchanged. The registry keeps the original bytes and the running upload; the
+   * outbox stores the bytes with the message (IndexedDB) and, just before delivery, swaps each placeholder for the
+   * real Wizard Files receipt: the running upload if it is still alive, else a fresh resumable upload of the bytes. */
+  const PENDING = new Map(); // key → { row, blob, done }
+  const PFX = 'pending:';
+  const isPending = id => typeof id === 'string' && id.startsWith(PFX);
+  /* A promise the row's uploader settles; attach before the upload starts. Non-enumerable: rows are spread/cloned.
+   * A row reserved before its bytes exist (a screenshot being captured) is tracked at once with blob = null; the
+   * capture's upload then settles that same promise. A retry after a failure gets a fresh one. */
+  function track(row, blob) {
+    const cur = row.upSettle;
+    if (cur && !cur.settled) { if (blob) Object.defineProperty(row, 'upBlob', { value: blob, configurable: true, writable: true }); return cur; }
+    let res, rej; const done = new Promise((a, b) => { res = a; rej = b; }); done.catch(() => {});
+    const settle = { settled: false, ok: f => { settle.settled = true; res(f); }, fail: e => { settle.settled = true; rej(e); } };
+    Object.defineProperty(row, 'upSettle', { value: settle, configurable: true, writable: true });
+    Object.defineProperty(row, 'upDone', { value: done, configurable: true, writable: true });
+    Object.defineProperty(row, 'upBlob', { value: blob || null, configurable: true, writable: true });
+    return settle;
+  }
+  /* The ref a send takes for this row: the receipt when uploaded, a pending placeholder while it uploads (or
+   * failed with its bytes still here), nothing when there is nothing to send. */
+  function ref(row) {
+    if (!row) return null;
+    if (row.id && !row.uploading && !isPending(row.id)) return { id: row.id, name: row.name, mime: row.mime, bytes: row.bytes };
+    if (isPending(row.id)) return { id: row.id, name: row.name, mime: row.mime, bytes: row.bytes };
+    const blob = row.upBlob || row.local || row.file || null;
+    const live = row.uploading && (row.upDone || blob instanceof Blob), retryable = row.error && blob instanceof Blob;
+    if (!live && !retryable) return null;
+    if (!row.pendingKey) Object.defineProperty(row, 'pendingKey', { value: (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)).replaceAll('-', ''), configurable: true });
+    row.handedOff = true; // its own failure toast is moot now: the outbox owns retrying it
+    PENDING.set(row.pendingKey, { row });
+    return { id: PFX + row.pendingKey, name: row.name || blob?.name || 'file', mime: row.mime || blob?.type || '', bytes: row.bytes || blob?.size || 0 };
+  }
+  const blobOfRow = r => { const b = r && (r.upBlob || r.local || r.file); return b instanceof Blob ? b : null; };
+  const blobOf = id => blobOfRow(PENDING.get(String(id).slice(PFX.length))?.row);
+  const rowOf = id => PENDING.get(String(id).slice(PFX.length))?.row || null;
+  async function uploadOnce(file) {
+    const r = await fetch('/wizard/files/upload', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': file.name || 'upload', 'X-Wizard-Mime': file.type || 'application/octet-stream' }, body: file });
+    if (!r.ok) throw Object.assign(new Error(r.status === 413 ? TOO_LARGE : `Upload failed (${r.status}).`), { status: r.status, user: r.status !== 429 && r.status < 500 });
+    const f = (await r.json()).file || {};
+    if (!f.id) throw Object.assign(new Error('Wizard Files returned an invalid upload receipt.'), { status: 502 });
+    return { id: String(f.id), name: String(f.filename || file.name), mime: String(f.mime || file.type || ''), bytes: Number(f.bytes) || file.size };
+  }
+  /* The receipt for a placeholder. stored: the bytes the outbox kept (after a reload the registry is empty).
+   * Throws { permanent: true } when it can never upload (refused, too big, bytes gone). */
+  async function settle(fileRef, stored) {
+    const key = String(fileRef.id).slice(PFX.length), p = PENDING.get(key), row = p?.row;
+    // The running upload first (read at settle time: a retry may have replaced it), then the kept bytes.
+    if (row?.upDone && !(row.upSettle?.settled && row.error)) { try { const f = await row.upDone; if (f?.id) return f; } catch (_) { /* fall through to the bytes */ } }
+    if (row?.id && !row.uploading && !isPending(row.id)) return { id: row.id, name: row.name, mime: row.mime, bytes: row.bytes };
+    const blob = blobOfRow(row) || stored;
+    if (!(blob instanceof Blob)) throw Object.assign(new Error('the file was lost before it uploaded'), { permanent: true });
+    const file = blob instanceof File ? blob : new File([blob], fileRef.name || 'file', { type: fileRef.mime || blob.type || '' });
+    try {
+      const f = supported() ? await upload(file) : await uploadOnce(file);
+      return f;
+    } catch (e) {
+      const s = Number(e.status) || 0;
+      if (e.name === 'AbortError') throw e;
+      if (s === 507 || (s >= 400 && s < 500 && s !== 408 && s !== 425 && s !== 429) ) throw Object.assign(e, { permanent: true });
+      throw e;
+    }
+  }
+  const forget = id => PENDING.delete(String(id).slice(PFX.length));
+  const pending = { PFX, isPending, track, ref, blobOf, rowOf, settle, forget, _map: PENDING };
+
+  window.WizUploads = { supported, upload, NO_SPACE, pending };
 })();

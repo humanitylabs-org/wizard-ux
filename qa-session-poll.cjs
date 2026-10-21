@@ -4,7 +4,7 @@
 // still runs and catches an edit deep in history; no writes escape.
 // Usage: QA_TREE=<repo> node qa-session-poll.cjs
 const fs = require('fs'), path = require('path');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || '/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const TREE = process.env.QA_TREE || __dirname;
 let pass = 0, fail = 0;
 const ok = (c, n, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${n}${d !== '' ? ' ' + JSON.stringify(d) : ''}`); };
@@ -30,7 +30,7 @@ const log = [];
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m) {
       const rel = m[1] || 'index.html'; let f = path.join(TREE, 'web', rel);
-      if (!fs.existsSync(f)) f = path.join('/home/telos/apps/wizard-os-home/web', rel);
+      if (!fs.existsSync(f)) f = path.join(require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'web'), rel);
       if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
       const ct = rel.endsWith('.css') ? 'text/css' : rel.endsWith('.html') ? 'text/html' : rel.endsWith('.png') ? 'image/png' : rel.endsWith('.json') ? 'application/json' : 'application/javascript';
       return r.fulfill({ status: 200, contentType: ct, body: fs.readFileSync(f) });

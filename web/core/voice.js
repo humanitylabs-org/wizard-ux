@@ -5,7 +5,7 @@
  *   v.start()          → begins recording ('listen')
  *   v.finish()         → Promise<{ text, blob, ms }>: stops and transcribes via api/transcribe
  *                        (on failure: { text: '', blob, error }, so the caller can send the recording itself)
- *   v.cancel()         → keeps takes ≥15 s in the shared cancelled-recordings store
+ *   v.cancel()         → deletes short takes; keeps ≥20 s ones in the shared cancelled-recordings store (returns true)
  *   v.state            → 'idle' | 'listen' | 'think'
  *   v.elapsed()        → ms recorded so far
  */
@@ -74,17 +74,22 @@
       } catch (e) { stop(); set('idle'); throw e; }
     }
     function cancel() {
-      V.cancelled = true; const id = V.captureId; if (id) window.WosOutbox?.transition(id, 'held', 'Cancelled recording · original kept');
+      // A quick cancel is a decision: the take is deleted, not parked for recovery (James, 19 Oct). Only a long
+      // take (≥ WosCancelled.KEEP_FROM_MS, 20 s) survives as a possible accident.
+      V.cancelled = true; const id = V.captureId; V.captureId = null;
       const rec = V.rec, chunks = V.chunks, ms = (V.pauseAt || performance.now()) - V.t0 - (V.pausedMs || 0);
+      const long = ms >= (window.WosCancelled?.KEEP_FROM_MS || 20000);
+      if (id) { if (long) window.WosOutbox?.transition(id, 'held', 'Cancelled recording · original kept'); else Promise.resolve(window.WosOutbox?.get?.(id)?.captureWrite).catch(() => {}).then(() => window.WosOutbox?.remove(id)); }
       const keep = () => {
-        if (!chunks.length) return;
+        if (!long || !chunks.length) return;
         const blob = new Blob(chunks, { type: rec?.mimeType || 'audio/webm' });
         if (id) Promise.resolve(window.WosOutbox?.capture(blob, id)).then(() => window.WosOutbox?.transition(id, 'held', 'Cancelled recording · original kept'));
-        if (ms >= 15000) window.WosCancelled?.keepWeb(blob, ms, false, '', 'desktop');
+        window.WosCancelled?.keepWeb(blob, ms, false, '', 'desktop');
       };
       // Capture this take before another recorder can replace V; onstop includes the final chunk.
       try { if (rec && rec.state !== 'inactive') { rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); }; rec.onstop = keep; rec.stop(); } else keep(); } catch (_) { keep(); }
       V.rec = null; stop(); set('idle');
+      return long;
     }
     function finish(o = {}) {
       if (!['listen', 'paused'].includes(V.state)) return Promise.resolve(null);

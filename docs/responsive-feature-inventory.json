@@ -51,11 +51,6 @@
       "classification": "native",
       "reason": "Origin-scoped Android Media3 transport through wizardAudioPort; hosted Music retains shared browser playback without this native port."
     },
-    "core/carry-in.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android origin migration custody handoff; not desktop storage migration."
-    },
     "device.js": {
       "shell": "phone",
       "classification": "native",
@@ -100,6 +95,26 @@
       "shell": "phone",
       "classification": "preview",
       "reason": "Opt-in Live Mode motion styles."
+    },
+    "core/home-screen-policy.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android launcher-shortcut task policy; desktop has no home-screen pinning."
+    },
+    "core/home-screen-apps.css": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android Add to home screen sheet styling; native ShortcutManager only."
+    },
+    "core/home-screen-apps.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android Add to home screen via ShortcutManager pin request; no desktop equivalent."
+    },
+    "core/single-app-session.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android pinned-shortcut app-only task (AppSessionActivity); desktop windows already isolate apps."
     }
   },
   "sharedAssets": [
@@ -110,6 +125,7 @@
     "core/app-route.css",
     "core/app-route.js",
     "core/app-services.js",
+    "core/app-versions.js",
     "core/appearance-host.css",
     "core/appearance-host.js",
     "core/apps.js",
@@ -127,6 +143,8 @@
     "core/chat-power.js",
     "core/chat-search.js",
     "core/chat-work.js",
+    "core/chats-view.css",
+    "core/chats-view.js",
     "core/chats.css",
     "core/chats.js",
     "core/commands.js",
@@ -138,9 +156,15 @@
     "core/focused-field.js",
     "core/links.css",
     "core/links.js",
+    "core/mic.js",
     "core/music-voice.js",
+    "core/my-skin.js",
     "core/notif-bell.js",
+    "core/os-updates.js",
+    "core/own-views.css",
+    "core/own-views.js",
     "core/polish.css",
+    "core/reach.js",
     "core/resources.css",
     "core/resources.js",
     "core/scenery.js",
@@ -150,11 +174,13 @@
     "core/sel-menu.js",
     "core/settings.css",
     "core/settings.js",
+    "core/setup-launch.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
     "core/skin-frame.css",
     "core/skin-frame.js",
+    "core/skin-host.js",
     "core/skins.css",
     "core/skins.js",
     "core/status.js",
@@ -234,6 +260,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/app-versions.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
     "core/appearance-host.js": {
       "loadedBy": [
         "phone",
@@ -268,16 +301,6 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
-    },
-    "core/carry-in.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Direct entrypoint import"
-    },
-    "core/carry-out.js": {
-      "loadedBy": [],
-      "note": "Support/client/export module; not directly mounted by either shell"
     },
     "core/chat-errors.js": {
       "loadedBy": [
@@ -320,6 +343,14 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/chats-fixture-view.js": {
+      "loadedBy": [],
+      "note": "Dev-only Chats slot module, dynamically loaded only with explicit fixture opt-in"
+    },
+    "core/chats-view.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Versioned in-document Chats provider admission and lifecycle"
     },
     "core/chats.js": {
       "loadedBy": [
@@ -370,6 +401,24 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/mic.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
+    },
+    "core/os-updates.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
+    },
+    "core/own-views.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
+    },
     "core/music-voice.js": {
       "loadedBy": [
         "phone",
@@ -413,8 +462,18 @@
       "note": "Direct entrypoint import"
     },
     "core/skin-frame.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared validated skin frame foundations, loaded before skin composition"
+    },
+    "core/skin-host.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Skin packages: loads only the active skin's own folder (web/skins/<dir>/) and gives its script a small API; desktop gets stylesheets"
     },
     "core/settings.js": {
       "loadedBy": [
@@ -422,6 +481,10 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/setup-launch.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Shared first-run Setup admission; adapters supply only open/home callbacks."
     },
     "core/shell.js": {
       "loadedBy": [
@@ -445,6 +508,13 @@
       "note": "Direct entrypoint import"
     },
     "core/status.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/reach.js": {
       "loadedBy": [
         "phone",
         "desktop"
@@ -546,6 +616,31 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
+    },
+    "core/home-screen-policy.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Android pinned app-only task policy (home-screen shortcut sessions)"
+    },
+    "core/home-screen-apps.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
+    },
+    "core/single-app-session.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Pinned home-screen app task: one app full screen with its own Back history"
+    },
+    "core/my-skin.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "My skin: the owner's own CSS (Skins/My skin.css in Files, served by the Agent Service at /wizard/v1/my-skin) applied last, on top of the picked skin"
     }
   }
 }

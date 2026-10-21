@@ -1,14 +1,14 @@
 // QA (Android Apps, James 10 Oct): the Android Apps view inside the Wizard OS phone shell, with a FAKE native port.
-// Checks: list renders with badges, system apps hidden, search, launch goes through relay→port, row menu actions,
+// Checks: list renders with source badges, source chips (Play/System off by default, remembered, search spans all), search, launch goes through relay→port, row menu actions,
 // Back closes the menu then stays in Wizard OS (never exits), queue "Ready to install" + Install call carries the pinned
 // sha256/package/signer, Play hand-off, relay refuses other frames / other paths / unknown methods / top-window calls,
 // and an older Wizard OS (no port) shows "Update Wizard OS to use Android Apps".
 // Usage: QA_WEB_DIR=<wizard-ux worktree> QA_APP_DIR=<android-apps repo> [QA_SHOTS=dir] node qa-android-apps.cjs
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = 'https://wizard.tailc0f369.ts.net/wizard-os-home/?open=android-apps';
+const URL_ = (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/?open=android-apps');
 const W = process.env.QA_WEB_DIR || __dirname;
-const A = process.env.QA_APP_DIR || '/home/telos/apps/android-apps';
+const A = process.env.QA_APP_DIR || require('node:path').resolve(require('./tools/qa-paths.cjs').repoRoot, '..', 'android-apps');
 const SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
@@ -38,15 +38,15 @@ const FAKE_PORT = (apps) => {
 };
 
 async function boot(b, { bridge = true } = {}) {
-  const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, userAgent: 'Mozilla/5.0 (Linux; Android 16; SM-S938B Build/BP4A.251205.006; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/154.0.0.0 Mobile Safari/537.36' });
   const writes = [];
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (!/wizard\.tailc0f369\.ts\.net$/.test(u.hostname)) return r.abort();
+    if (!(u.origin === require('./tools/qa-paths.cjs').origin())) return r.abort();
     let m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET') {
       const f = m[1] || 'index.html';
-      let p = path.join(W, 'web', f); if (!fs.existsSync(p) && /^(data|summaries)\.js$/.test(f)) p = path.join('/home/telos/apps/wizard-os-home/web', f);
+      let p = path.join(W, 'web', f); if (!fs.existsSync(p) && /^(data|summaries)\.js$/.test(f)) p = path.join(require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'web'), f);
       if (!fs.existsSync(p)) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
       const ct = f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : f.endsWith('.png') ? 'image/png' : 'application/javascript';
       return r.fulfill({ status: 200, contentType: ct, body: fs.readFileSync(p) });
@@ -60,6 +60,7 @@ async function boot(b, { bridge = true } = {}) {
       if (q.method() !== 'GET') writes.push(m[1] + ' ' + (q.postData() || ''));
       if (m[1] === 'api/queue') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: QUEUE }) });
       if (m[1] === 'api/updates') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: UPDATES }) });
+      if (m[1] === 'api/inventory' && q.method() === 'POST') { try { __lastInvNode = JSON.parse(q.postData() || '{}'); } catch (e) { /* */ } }
       if (m[1] === 'api/inventory') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(q.method() === 'GET' ? { at: 1791600000, apps: APPS } : { ok: true }) });
       return r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
     }
@@ -82,6 +83,7 @@ async function boot(b, { bridge = true } = {}) {
   await p.waitForTimeout(1500);
   return { ctx, p, errs, writes };
 }
+let __lastInvNode = null;
 const frame = p => p.frames().find(f => /\/android-apps\//.test(f.url()));
 const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(SHOTS, n + '.png') }); };
 const calls = p => p.evaluate(() => (window.__portCalls || []).map(c => ({ method: c.method, params: c.params })));
@@ -97,12 +99,28 @@ const shellState = p => p.evaluate(() => ({ app: (__wos.wins[__wos.desks[__wos.i
     ok(!!f, '?open=android-apps opens Android Apps in the shell', p.frames().map(x => x.url()).join(' '));
     await f.waitForSelector('#installed .row', { timeout: 8000 }).catch(() => {});
     const rows = await f.$$eval('#installed .row', r => r.map(e => e.innerText.replace(/\s+/g, ' ')));
-    ok(rows.length === 3, 'installed list renders (system app hidden by default)', JSON.stringify(rows));
-    ok(rows.some(t => /Telegram.*Obtainium/.test(t)) && rows.some(t => /Slack.*Play/.test(t)) && rows.some(t => /Aegis.*Wizard/.test(t)), 'source badges: Obtainium / Play / Wizard', JSON.stringify(rows));
-    ok(!rows.some(t => /Settings/.test(t)), 'System apps hidden by default');
-    await f.check('#sys'); await p.waitForTimeout(150);
-    ok((await f.$$('#installed .row')).length === 4, 'System toggle shows system apps');
-    await f.uncheck('#sys');
+    ok(rows.length === 2, 'installed list renders (Play and System hidden by default)', JSON.stringify(rows));
+    ok(rows.some(t => /Telegram.*Obtainium/.test(t)) && rows.some(t => /Aegis.*Wizard/.test(t)), 'source badges name the store (Obtainium) / Wizard', JSON.stringify(rows));
+    ok(!rows.some(t => /Settings|Slack/.test(t)), 'Play and System apps hidden by default');
+    const chips = await f.$$eval('#chips .chip', r => r.map(e => e.innerText.replace(/\s+/g, ' ') + (e.classList.contains('on') ? '*' : '')));
+    ok(chips.join('|') === 'Wizard 1*|Other stores 1*|Play 1|System 1', 'source chips with counts, Play/System off', JSON.stringify(chips));
+    await f.click('[data-src="Play"]'); await p.waitForTimeout(150);
+    let r2 = await f.$$eval('#installed .row', r => r.map(e => e.innerText.replace(/\s+/g, ' ')));
+    ok(r2.length === 3 && r2.some(t => /Slack.*Play/.test(t)), 'Play chip shows Play apps', JSON.stringify(r2));
+    await f.click('[data-src="System"]'); await p.waitForTimeout(150);
+    ok((await f.$$('#installed .row')).length === 4, 'System chip shows system apps');
+    await f.click('[data-src="Wizard"]'); await p.waitForTimeout(150);
+    r2 = await f.$$eval('#installed .row', r => r.map(e => e.dataset.pkg));
+    ok(r2.length === 3 && !r2.includes('com.beemdevelopment.aegis'), 'Wizard chip off hides Wizard apps', JSON.stringify(r2));
+    const saved = await f.evaluate(() => JSON.parse(localStorage.getItem('aa.src')));
+    ok(saved.includes('Play') && saved.includes('System') && !saved.includes('Wizard'), 'chip choice is remembered', JSON.stringify(saved));
+    await f.click('[data-src="Wizard"]'); await f.click('[data-src="Play"]'); await f.click('[data-src="System"]'); await p.waitForTimeout(150);
+    ok((await f.$$('#installed .row')).length === 2, 'back to default after toggling off');
+    await f.fill('#q', 'sla'); await p.waitForTimeout(150);
+    r2 = await f.$$eval('#installed .row', r => r.map(e => e.dataset.pkg));
+    ok(r2.length === 1 && r2[0] === 'com.Slack', 'search finds a Play app even with Play filtered out', JSON.stringify(r2));
+    await f.fill('#q', ''); await p.waitForTimeout(150);
+    ok((await shellState(p)).app === 'android-apps', 'chip taps keep Android Apps open');
     await f.fill('#q', 'tele'); await p.waitForTimeout(150);
     const hit = await f.$$eval('#installed .row', r => r.map(e => e.dataset.pkg));
     ok(hit.length === 1 && hit[0] === 'org.telegram.messenger.web', 'search filters the list', JSON.stringify(hit));
@@ -130,7 +148,12 @@ const shellState = p => p.evaluate(() => ({ app: (__wos.wins[__wos.desks[__wos.i
     c = await calls(p);
     ok(c.some(x => x.method === 'install' && x.params.package === 'com.beemdevelopment.aegis' && x.params.sha256 === 'ef'.repeat(32)), 'Update → install with the pinned update');
     ok(writes.some(w => /^api\/inventory/.test(w)), 'view posts the inventory to the server', JSON.stringify(writes));
-    // Row menu + Back
+    const devId = await f.evaluate(() => localStorage.getItem('aa.device'));
+    ok(/^[A-Za-z0-9_-]{6,64}$/.test(devId || ''), 'phone has a stable device id', devId);
+    const inv = __lastInvNode;
+    ok(inv && inv.id === devId && inv.model === 'Galaxy S25 Ultra (SM-S938B)', 'inventory is sent with this phone\'s id + model (Galaxy S25 Ultra)', JSON.stringify(inv && { id: inv.id, model: inv.model }));
+    // Row menu + Back (Slack is a Play app: show Play first)
+    await f.click('[data-src="Play"]'); await p.waitForTimeout(150);
     await f.click('[data-menu="com.Slack"]'); await p.waitForTimeout(250);
     const menu = await f.$eval('#menu', e => ({ hidden: e.hidden, txt: e.innerText }));
     ok(!menu.hidden && /Open in Play/.test(menu.txt) && /App info/.test(menu.txt) && /Uninstall/.test(menu.txt), 'row menu: Open in Play / App info / Uninstall', JSON.stringify(menu));
@@ -197,7 +220,7 @@ const shellState = p => p.evaluate(() => ({ app: (__wos.wins[__wos.desks[__wos.i
     const t = await f.$eval('#banner', e => ({ hidden: e.hidden, txt: e.innerText }));
     ok(!t.hidden && /Update Wizard OS to use Android Apps/.test(t.txt), 'older Wizard OS: "Update Wizard OS to use Android Apps"', JSON.stringify(t));
     const rows = await f.$$eval('#installed .row', r => r.length);
-    ok(rows === 3, 'older Wizard OS: shows the list the phone last sent', String(rows));
+    ok(rows === 2, 'older Wizard OS: shows the list the phone last sent (default sources)', String(rows));
     const dis = await f.$eval('[data-install="aaaaaaaaaaaa"]', e => e.disabled).catch(() => null);
     ok(dis === true, 'older Wizard OS: Install disabled');
     await shot(p, 'aa-old-apk');

@@ -9,7 +9,7 @@ public final class TakeRecovery {
 
     public static boolean worthSending(long bytes) { return bytes >= MIN_BYTES; }
 
-    /** ".aac" (ADTS, crash-proof side-button takes) or ".m4a" (MPEG-4: floating orb, older takes). */
+    /** ".aac" (ADTS, crash-proof note takes) or ".m4a" (MPEG-4: legacy/staged takes). */
     public static String ext(String path) {
         return path != null && path.toLowerCase(java.util.Locale.ROOT).endsWith(".aac") ? ".aac" : ".m4a";
     }
@@ -17,5 +17,6 @@ public final class TakeRecovery {
     public static String mime(String path) { return ".aac".equals(ext(path)) ? "audio/aac" : "audio/mp4"; }
 
     /** Boot / app-updated receiver: send any side-button take the previous process was cut off in the middle of. */
+    public static boolean captureAlive() { return VoiceCapture.captureAlive(); }
     public static void recoverAfterRestart(android.content.Context c) { VoiceCapture.recoverAfterRestart(c); }
 }
