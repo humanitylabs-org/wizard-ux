@@ -147,7 +147,7 @@
   /* ---------------- Chats ----------------
    * The Chats client (list, thread, composer, attachments, voice notes, unsent bubbles) is shared with
    * the desktop shell: web/core/chats.js. The phone hands it windows on desks. */
-  const CHATS = window.WizCore.chats({
+  const CHATS = window.WizChatsHost.create({
     win: id => W[id],
     root: () => track,
     save: () => save(),
@@ -172,6 +172,7 @@
     overlay: open => { if (open) { closeMenu(); armBack(); } },
     vib: ms => vib(ms),
     threadShown: (wid, el) => threadShown(wid, el),
+    openThread: (sid, options) => openWizardThread(sid, options),
   });
   const { CH, ch, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, sendChat, refreshCompose, toggleVoice, markVisibleThreadsSeen, MIC_SVG } = CHATS;
   const CHATS_APP = { id: 'wizard', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'] };
@@ -181,7 +182,7 @@
   let tileN = 0;
   /* Agents MVP: a Chats window pinned to an agent (w.agent) wears that agent's sigil and name. */
   const agentWin = w => !!(w && w.app === 'chats' && w.agent);
-  const mainChats = w => !!(w && w.app === 'chats' && !w.agent);
+  const mainChats = w => !!(w && w.app === 'chats' && !w.agent && CHATS.views.providerFor(w) === CHATS.views.defaultId());
   function agentApp(w) {
     const AG = window.WosAgents, a = AG?.get(w.agent) || { id: w.agent, label: w.agent, appearance: {}, privacy: 'standard' };
     const g = AG ? AG.glyph(a) : '', c = AG ? AG.colour(a) : '#b99bff';
@@ -670,6 +671,7 @@
   // app open on the desk right next to Home; Chats just moves one to the right).
   function insertPos() { return idx + 1; }
   function openWin(obj, opts = {}) {
+    if (obj.app === 'chats' && !obj.agent && !obj.chatsProvider) obj = { ...obj, chatsProvider: CHATS.views.defaultId() };
     const w = { id: newId(), ...obj }; W[w.id] = w;
     let t = opts.desk != null ? Math.max(0, Math.min(desks.length - 1, opts.desk)) : opts.here ? idx : -1;
     if (t >= 0 && (desks[t].home || desks[t].wins.length >= MAXW)) t = -1;
@@ -1068,7 +1070,12 @@
     }
     if (a.id === 'usuals') { openUsuals(opts); return true; }
     if (a.id === 'maps') { openMaps(extra.query ? 'search' : 'home', extra.query || '', opts); return true; }
-    if (a.kind === 'chats') { if (a.agent) return openAgentChats(a.agent); placeApp(mainChats, { app: 'chats', thread: null }, opts); return true; }
+    if (a.kind === 'chats') {
+      if (a.agent) return openAgentChats(a.agent);
+      const chatsProvider = a.chatsProvider || CHATS.views.defaultId();
+      placeApp(w => w.app === 'chats' && !w.agent && CHATS.views.providerFor(w) === chatsProvider, { app: 'chats', thread: null, chatsProvider }, opts);
+      return true;
+    }
     if (a.kind === 'wizard' && a.url && opts.from) {
       // Opened from a link in a thread (James, 12 Oct 2026): Back closes it and lands on that thread again,
       // exactly like any other link. A copy already opened from a link is reused; a normal desk of the app is left alone.
@@ -1465,7 +1472,7 @@
     if (!id) return;
     // A thread opens in the Chats of the agent it is pinned to (main Chats for the main agent's threads).
     const ag = LIVE?.agentOf?.(id) || '';
-    const mine = x => W[x] && W[x].app === 'chats' && (W[x].agent || '') === ag;
+    const mine = x => W[x] && W[x].app === 'chats' && (W[x].agent || '') === ag && (ag || CHATS.views.providerFor(W[x]) === CHATS.views.defaultId());
     let wid = desks[idx].wins.find(mine);
     if (!wid) { const d = desks.findIndex(dd => dd.wins.some(mine)); if (d >= 0) { wid = desks[d].wins.find(mine); goDesk(d, true); } }
     if (!wid) { const w = openWin({ app: 'chats', thread: null, ...(ag ? { agent: ag } : {}) }, opts); if (!w) return; wid = w.id; }
