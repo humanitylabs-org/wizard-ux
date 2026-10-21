@@ -38,7 +38,11 @@
     if (!['auto','scroll'].includes(s.overflowY)) return reject('not-scroll-container');
     if (e.scrollHeight <= e.clientHeight + 2) return reject('not-overflowing');
     // Exclude covered/background desks and overlays, not merely display:none nodes.
-    for (const x of [.1,.5,.9]) for (const y of [.1,.5,.9]) {
+    // A paused (hidden) page has no fresh hit-test frame; keep only the scroller that
+    // was already confirmed uncovered while the window was live.
+    if (document.hidden && allowHidden) {
+      if (e !== proxyNode) return reject('hidden-unconfirmed');
+    } else for (const x of [.1,.5,.9]) for (const y of [.1,.5,.9]) {
       const hit = document.elementFromPoint(r.left + r.width*x, r.top + r.height*y);
       if (!hit || !(e.contains(hit) || docked(hit, e))) return reject('occluded');
     }
