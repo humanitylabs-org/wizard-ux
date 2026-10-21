@@ -9,7 +9,7 @@
  *     last 45 s; otherwise frozen on the last frame (James, 12 Oct: no battery drain when not viewed).
  *   - the orb's colour, through a CSS filter; orb.js stays byte-identical with the Android copy
  * Nebula is the original look and sets nothing. Choice persists per device in localStorage 'wos.skin'
- * (box-level theme.json sync comes later). Nine skins: Nebula, Grove, Tide, Ember, Signal, Novairecito, Dark, Light, Landscapes (Paper retired 12 Oct).
+ * (box-level theme.json sync comes later). Ten skins: Nebula, Grove, Tide, Ember, Signal, Novairecito, Sepia, Dark, Light, Landscapes (Paper retired 12 Oct).
  * API: WosSkin.list, .current, .set(id), .preview(pos), .commit(i), .index(id), .pkgOf(id),
  *      .families, .family, .familyOf(id), .lastIn(family), .setFamily(family) (skins and their palettes).
  * Collaborator skins keep their look and behaviour in web/skins/<dir>/ (see web/skins/README.md), declared with pkg. */
@@ -51,6 +51,10 @@
       t: T({ bg: '#05030a', ink: '#f4f0ff', 'ink-2': '#c2b8da', 'ink-3': '#81769a', line: 'rgba(197,174,255,.14)', 'line-2': 'rgba(197,174,255,.28)', glass: 'rgba(13,9,24,.66)', 'glass-2': 'rgba(22,14,40,.82)',
         violet: '#946cff', 'violet-2': '#c3aaff', pink: '#d96fc7', cyan: '#75cfe8', amber: '#d8ad63', green: '#70d4a2', red: '#ef718a',
         'sk-time-a': '#ffffff', 'sk-time-b': '#a98bff', 'sk-dock': 'rgba(6,4,12,.96)', 'sk-dock-line': 'rgba(197,174,255,.12)', 'sk-ddot': 'rgba(197,174,255,.5)', 'sk-tour': 'rgba(8,5,16,.86)', 'sk-dim': 'rgba(2,1,6,.78)', 'sk-win': 'rgba(9,6,18,.9)' }) },
+    { id: 'sepia', pkg: { css: true, dir: 'sepia' }, name: 'Sepia', who: 'For long reads. Warm vintage paper with soft, readable ink.', orb: [18, .38, .82],
+      t: T({ bg: '#f3ead2', ink: '#332b22', 'ink-2': '#5f5243', 'ink-3': '#786651', line: 'rgba(86,65,40,.16)', 'line-2': 'rgba(86,65,40,.30)', glass: 'rgba(236,222,190,.76)', 'glass-2': 'rgba(247,239,219,.92)',
+        violet: '#76533d', 'violet-2': '#684733', pink: '#9a5c56', cyan: '#557878', amber: '#94691d', green: '#57704d', red: '#a34236',
+        'sk-time-a': '#3a3026', 'sk-time-b': '#735b43', 'sk-dock': 'rgba(238,225,197,.96)', 'sk-dock-line': 'rgba(86,65,40,.16)', 'sk-ddot': 'rgba(86,65,40,.52)', 'sk-tour': 'rgba(247,239,219,.94)', 'sk-dim': 'rgba(75,55,32,.24)', 'sk-win': 'rgba(247,239,219,.94)' }) },
     { id: 'obsidian', pkg: { css: true, js: true, when: 'always', dir: 'obsidian' }, name: 'Dark', who: 'Miguel’s dark skin. Black, white and nothing else.', orb: [0, 0, 1.15],
       t: T({ bg: '#000000', ink: '#f7f7f7', 'ink-2': '#c4c4c4', 'ink-3': '#8a8a8a', line: 'rgba(255,255,255,.12)', 'line-2': 'rgba(255,255,255,.26)', glass: 'rgba(20,20,20,.62)', 'glass-2': 'rgba(24,24,24,.86)',
         violet: '#ffffff', 'violet-2': '#e8e8e8', pink: '#bdbdbd', cyan: '#d6d6d6', amber: '#e6b15c', green: '#9fd8a8', red: '#ff6b6b',
@@ -244,6 +248,31 @@
       },
     },
     'obsidian-light': { init(s, W, H) { BG.obsidian.prep(s, W, H, '#ffffff', 0); }, draw(c, s, t, dt, W, H) { BG.obsidian.draw(c, s, t, dt, W, H); } },
+    // Sepia: a softly mottled vintage paper field. The texture is pre-rendered once; drawing it is one fill, one
+    // gradient and one pattern pass, and the shared scenery gate freezes it whenever Home is not being viewed.
+    sepia: {
+      init(s) {
+        const n = mk(192, 192), x = n.getContext('2d');
+        x.clearRect(0, 0, 192, 192);
+        for (let i = 0; i < 900; i++) {
+          const a = rnd(.008, .035), warm = Math.random() < .72;
+          x.fillStyle = warm ? `rgba(91,65,36,${a})` : `rgba(255,251,235,${a})`;
+          x.fillRect(rnd(0, 192), rnd(0, 192), rnd(.4, 1.8), rnd(.4, 1.8));
+        }
+        for (let i = 0; i < 18; i++) {
+          x.strokeStyle = `rgba(103,76,43,${rnd(.012, .028)})`; x.lineWidth = rnd(.3, .8); x.beginPath();
+          const y = rnd(0, 192); x.moveTo(-8, y); x.bezierCurveTo(42, y + rnd(-3, 3), 132, y + rnd(-3, 3), 200, y + rnd(-2, 2)); x.stroke();
+        }
+        s.paper = n;
+      },
+      draw(c, s, t, dt, W, H) {
+        c.fillStyle = '#f3ead2'; c.fillRect(0, 0, W, H);
+        const g = c.createRadialGradient(W * .48, H * .38, 0, W * .48, H * .38, Math.max(W, H) * .78);
+        g.addColorStop(0, 'rgba(255,252,237,.34)'); g.addColorStop(.68, 'rgba(137,99,55,.025)'); g.addColorStop(1, 'rgba(92,63,32,.10)');
+        c.fillStyle = g; c.fillRect(0, 0, W, H);
+        c.fillStyle = c.createPattern(s.paper, 'repeat'); c.fillRect(0, 0, W, H);
+      },
+    },
     // Landscapes: one wallpaper at a time, cover-fitted once into an offscreen canvas (a frame is one or two drawImage
     // calls). Each app load starts on the next one, and every minute on Home moves on with a 2.5 s crossfade; only the current and next
     // files are fetched. Frozen with the scenery gate like every other skin.
