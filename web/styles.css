@@ -698,6 +698,11 @@ body {
 .dv-sheet { position: absolute; left: 8px; right: 8px; bottom: calc(var(--safe-b) + 8px); max-height: 78%; overflow-y: auto; padding: 16px 14px 14px; border-radius: 26px;
   background: rgba(14, 8, 34, .96); border: 1px solid var(--line-2); box-shadow: 0 -10px 50px rgba(0, 0, 0, .5); transform: translateY(110%); transition: transform 260ms var(--ease); scrollbar-width: none; }
 .dv-wrap.open .dv-sheet { transform: none; }
+/* Share to Wizard keeps voice typing (James, 21 Oct): the orb stays above the sheet and its scrim, so a focused
+ * note turns it blue and a tap dictates into the note. The sheet stops above the dock; desk dots step aside. */
+.device.dv-share-open .dock, .device.dv-share-open .voice { z-index: 82; }
+.device.dv-share-open .desk-dots { visibility: hidden; }
+.device.dv-share-open .dv-sheet { bottom: calc(var(--safe-b) + var(--dock-h) + 4px); max-height: calc(100% - var(--safe-b) - var(--dock-h) - 40px); }
 .dv-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
 .dv-head b { display: block; font-size: 17px; font-weight: 650; }
 .dv-head small { display: block; font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }

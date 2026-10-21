@@ -291,3 +291,14 @@ html[data-skin^="obsidian"] .launcher .lapp .nm { color: var(--ink); font-size: 
 html[data-skin^="obsidian"] .launcher .lgroup h4 { color: var(--ink-2); font-size: 12px; letter-spacing: .1em; }
 html[data-skin^="obsidian"] .launcher .lgroup h4 span { color: var(--ink-2); font-size: 12px; }
 html[data-skin^="obsidian"] .launcher .lapp[data-app="app-store"] .ic { background: color-mix(in srgb, var(--ink) 7%, transparent); border: 1px solid var(--line-2); box-shadow: none; color: var(--ink); }
+
+/* Reply to a notification (Miguel's look): one quiet quote line, no box. A hairline rule on the left, the title in ink,
+ * one or two lines in ink-2, and a bare × (44px target). The sent message shows the same quote above his words. */
+html[data-skin^="obsidian"] .ch-compose .ch-reply { padding: 2px 0 0 12px; margin: 0 2px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
+html[data-skin^="obsidian"] .ch-compose button.ch-reply-x { width: 44px; height: 44px; margin: -6px -4px -6px 0; background: none !important; border: 0 !important; box-shadow: none !important; color: var(--ink-2); font-size: 22px; font-weight: 300; }
+html[data-skin^="obsidian"] .ch-compose button.ch-reply-x:hover { color: var(--ink); }
+html[data-skin^="obsidian"] .ch-reply-t b, html[data-skin^="obsidian"] .ch-rq b { font-weight: 600; color: var(--ink); letter-spacing: 0; }
+html[data-skin^="obsidian"] .ch-reply-t span, html[data-skin^="obsidian"] .ch-rq span { color: var(--ink-2); }
+html[data-skin^="obsidian"] .msg.u .bub .ch-rq { margin: 0 0 8px; padding: 0 0 0 10px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
+html[data-skin^="obsidian"] .ch-compose.has-reply { padding-top: 12px !important; }
+html[data-skin^="obsidian"] .ch-compose button.ch-reply-x { color: color-mix(in srgb, var(--ink) 78%, transparent); }

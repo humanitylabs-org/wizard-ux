@@ -390,7 +390,7 @@ window.WosChatPower = function chatPower(A) {
     let it;
     try {
       it = await OUTBOX.enqueue({ captureId, custodyId, sealKey: sealed.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text: transcript ? [sealed.text, transcript].filter(Boolean).join('\n\n') : '', typed: sealed.text, audio: blob,
-        instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })),
+        instructions, files: all.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(sealed.reply ? { reply: sealed.reply } : {}),
         wid: isNew ? wid : (wasHere ? wid : ''), how: 'voice reply in this thread', source: 'chat', ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(isNew && (nm?.agent || w?.agent) ? { agent: nm?.agent || w.agent } : {}) });
     } catch (e) { // not saved anywhere: the words and attachments go back, and so does James if he is still on the list
       if (hold) LIVE.releaseSend?.(hold);
