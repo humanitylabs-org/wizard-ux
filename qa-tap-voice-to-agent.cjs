@@ -3,7 +3,7 @@
 // Transcription and all writes are intercepted fixtures; installed apps/session reads are real.
 // Music execution is acknowledged locally to avoid playing production audio.
 // Usage: QA_WEB_DIR=<repo> node qa-tap-voice-to-agent.cjs [url]. QA_SERVED=1 disables asset overlay.
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+const {chromium} = require(process.env.QA_PLAYWRIGHT || 'playwright');
 const URL_ = process.argv[2] || 'http://127.0.0.1:8923/wizard-os-home/';
 const W = process.env.QA_WEB_DIR || '';
 let pass = 0, fail = 0;
@@ -78,7 +78,7 @@ const phrases = [SAID, 'Search for flights to Bangkok and book the cheapest', 'M
    const ex=WosCommands.execute;WosCommands.execute=(c,...args)=>{__qaActions.push(c.action);return ex(c,...args);};
    if(window.WosMusic) WosMusic.run=(c,done)=>{done?.(true);return true;};
   });
-  for(const where of (process.env.QA_RECEIVER_ONLY?[]:['home','list'])) for(const phrase of phrases) {
+  for(const where of (process.env.QA_RECEIVER_ONLY?[]:['home','list'])) for(const phrase of phrases.slice(0,Number(process.env.QA_LIMIT)||phrases.length)) {
    R.words=phrase;
    await p.waitForFunction(d => (d ? __wux.voice : __wos.voice) === 'idle', desktop, {timeout:20000});
    await p.evaluate(({desktop,where})=>{
@@ -86,11 +86,13 @@ const phrases = [SAID, 'Search for flights to Bangkok and book the cheapest', 'M
     if(!desktop)x.closeSheets(true);else x.closePalette();
     while(x.links?.isOpen())x.links.close();
     for(const id of Object.keys(x.wins)) if(x.wins[id].app!=='chats') x.closeWin(id);
-    if(desktop){ if(where==='home')x.goHome();else {x.openThread(x.live.sessions[0].id);x.escStep();} }
-    else {if(where==='home')x.goDesk(x.HOME,true);else {x.openWizardThread(x.live.sessions[0].id);x.onBack();}}
+    const chat=Object.values(x.wins).find(w=>w.app==='chats');
+    if(desktop){ if(where==='home')x.goHome();else {x.goWs(x.ws.findIndex(d=>d.wins.includes(chat.id)));chat.thread=null;x.chats.openChat(chat.id,null);x.focusWin(chat.id);} }
+    else {if(where==='home')x.goDesk(x.HOME,true);else {x.goDesk(x.desks.findIndex(d=>d.wins.includes(chat.id)),true);x.openChat(chat.id,null);x.focusWin(chat.id);}}
     document.activeElement?.blur();window.__qaActions=[];
    },{desktop,where});
    await sleep(450);writes.length=0;
+   ok(await p.evaluate(({desktop,where})=>{const x=desktop?__wux:__wos;if(where==='home')return desktop?x.homeOpen:x.idx===x.HOME;const d=(desktop?x.ws:x.desks)[desktop?x.cur:x.idx],w=x.wins[d.focus];return (!desktop||!x.homeOpen)&&w?.app==='chats'&&!w.thread;},{desktop,where}),`${desktop?'desktop':'phone'} capture starts on ${where}`);
    if(desktop)await p.keyboard.press('MetaRight');else await tapOrb(p);
    await p.waitForFunction(d=>(d?__wux.voice:__wos.voice)==='listen',desktop,{timeout:20000});
    await sleep(1500);
@@ -100,7 +102,7 @@ const phrases = [SAID, 'Search for flights to Bangkok and book the cheapest', 'M
    const actions=await p.evaluate(()=>__qaActions);
    ok(actions.length===0,label+' zero local actions',actions);
    ok(routes(writes).length===0,label+' zero router calls',routes(writes));
-   const all=sends(writes);ok(all.length===1&&(all[0].input||'').includes(phrase),label+' exactly one agent write with transcript',all);
+   const all=sends(writes);ok(all.length===1&&(all[0].input||'').includes(phrase),label+' exactly one agent write with transcript',all.length?all:await p.evaluate(d=>({voice:(d?__wux:__wos).voice,tx:document.querySelector('#txText')?.textContent,unsent:(d?__wux:__wos).outbox.unsent().map(x=>({state:x.state,error:x.error,text:x.text}))}),desktop));
    if(!desktop)ok(await p.locator('#txChips [data-hold]').count()===0,label+' no hold card');
    await p.evaluate(async desktop=>{const x=desktop?__wux:__wos;for(const it of x.outbox.unsent())await x.outbox.remove(it.id);},desktop);
   }

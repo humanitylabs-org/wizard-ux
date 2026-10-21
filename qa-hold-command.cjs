@@ -190,7 +190,8 @@ const outboxN = p => p.evaluate(() => (window.__wos.outbox?.unsent?.() || []).le
   await sleep(2600);
   await p.evaluate(async () => { for(const it of __wos.outbox.unsent()) await __wos.outbox.remove(it.id); });
   await closeSheet(p);
-  // STT writes the spell with a colon ("Search: is milk bad for gout?"); that used to miss and go to the router.
+  // STT writes the spell with a colon. Re-establish the thread after the preceding tap's refused-send fixture.
+  await p.evaluate(() => __wos.openWizardThread('qa-0')); await sleep(900);
   writes.length = 0; routes.length = 0;
   await hold(p, 'Search: is milk bad for gout?'); await sleep(900);
   s = await sheetState(p);

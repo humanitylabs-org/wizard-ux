@@ -15,9 +15,9 @@ const SAID = 'Which of these blueprints should we bake into Wizard OS';
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 
 async function boot(b, desktop = false) {
-  const ctx = await b.newContext(desktop ? { viewport: { width: 1440, height: 900 }, ignoreHTTPSErrors: true, permissions: ['microphone'] }
-    : { viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone'] });
-  const writes = []; const R = { sttDelay: 0, words: SAID, up: 0 };
+  const ctx = await b.newContext(desktop ? { viewport: { width: 1440, height: 900 }, serviceWorkers: 'block', ignoreHTTPSErrors: true, permissions: ['microphone'] }
+    : { viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, serviceWorkers: 'block', ignoreHTTPSErrors: true, permissions: ['microphone'] });
+  const writes = []; const R = { sttDelay: 0, words: SAID, up: 0 }; const uploads = new Map();
   await ctx.route('**/*', async r => {
     const q = r.request(), u = q.url();
     const m = u.match(/\/wizard-os-home\/((?:desktop\/|core\/)?[a-z-]+\.(?:js|css|html)|)(\?|$)/);
@@ -27,6 +27,17 @@ async function boot(b, desktop = false) {
     }
     if (/\/transcribe$/.test(u) && q.method() === 'POST') { await sleep(R.sttDelay); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: R.words, ms: 5 }) }).catch(() => {}); }
     if (/\/api\/route$|\/wizard\/v1\/route$/.test(u)) { writes.push({ u: '/route', body: q.postData() || '' }); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cmd: { route: 'agent' }, ms: 5 }) }); }
+    // Images use the resumable upload API; voice below still uses the legacy endpoint.
+    const uploadPath = new URL(u).pathname.match(/^\/wizard\/v1\/uploads(?:\/([^/]+)(\/complete)?)?$/);
+    if(uploadPath){
+      const json=(o)=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(o)});
+      if(!uploadPath[1] && q.method()==='POST') { const meta=q.postDataJSON(), id='qa-image-'+(++R.up);uploads.set(id,{...meta,id:'drop_qaimg'+R.up,offset:0});return json({upload_id:id,offset:0,chunk_bytes:65536,status:'uploading'}); }
+      const meta=uploads.get(uploadPath[1]);
+      if(meta && q.method()==='PATCH'){meta.offset=meta.bytes;return r.fulfill({status:204,headers:{'Upload-Offset':String(meta.offset)}});}
+      if(meta && uploadPath[2])return json({file:meta});
+      if(meta)return json({...meta,status:'uploading'});
+      return json({error:'qa unknown upload'});
+    }
     if (q.method() !== 'GET' && /\/wizard\/(hermes|thread-seen|files)/.test(u)) {
       writes.push({ u: u.replace(/^https?:\/\/[^/]+/, ''), body: q.postData() || '', h: q.headers() });
       if (/\/files\/upload$/.test(u)) {
@@ -38,6 +49,7 @@ async function boot(b, desktop = false) {
       if (/\/api\/sessions$/.test(u)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ session: { id: 'qa-fake-session' } }) });
       return r.fulfill({ status: 200, contentType: 'application/json', body: '{"accepted":true}' });
     }
+    if (!['GET','HEAD'].includes(q.method())) return r.fulfill({status:403,contentType:'application/json',body:'{"error":"QA refuses every other write"}'});
     return r.continue();
   });
   const p = await ctx.newPage();
@@ -63,8 +75,9 @@ const sealedKeys = p => p.evaluate(() => Object.keys(JSON.parse(localStorage.get
 const compose = wid => `[data-chats="${wid}"] .ch-compose`;
 // Focused-field tap is now dictation (qa-in-app-dictation.cjs). This suite explicitly tests AGENT voice.
 async function tapOrb(p) {
-  await p.evaluate(() => { if (__wos.voice === 'idle') document.activeElement?.blur(); });
+  const starting = await p.evaluate(() => { if (__wos.voice === 'idle') {document.activeElement?.blur();return true;}return false; });
   const o = await p.locator('#orbWrap').boundingBox(); await p.touchscreen.tap(o.x + o.width / 2, o.y + o.height / 2);
+  if(starting)await p.waitForFunction(()=>__wos.voice==='listen',null,{timeout:20000});
 }
 async function openIdle(p, wid, X) {
   await p.evaluate(([w, x]) => { __wos.openChat(w, x); const s = __wos.live.session(x); if (s) Object.assign(s, { status: 'completed', runId: '' }); }, [wid, X]);
