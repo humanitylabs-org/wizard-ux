@@ -74,7 +74,7 @@ Dependencies on the base: `core/app-client.js` (WizardApp v1 Back/appearance), `
 `node tools/fake-setup-api.cjs 9473 & node qa-setup-app.cjs http://127.0.0.1:9473/wizard-os-home/`
 (`QA_JSQR` = path to `jsqr`, `QA_PLAYWRIGHT` = Playwright module path; on Thales use
 `tools/qa-setup-app-thales.sh <label>`). The runner stages a frozen source snapshot below
-`/Volumes/ThalesMedia/QA/phone-setup`, runs browser-only QA without the Android/VM worker lock,
+`$WIZARD_WORK_ROOT/QA/phone-setup`, runs browser-only QA without the Android/VM worker lock,
 and writes `out/qa-setup-app.{log,json}` and `out/shots/`. Source-only Android files are copied for
 the portable `npm test` inventory checks; no Gradle/build tasks run. The browser suite uses a mobile
 UA + touch context and a desktop context, exercises the visible Skin controls, preserves an open

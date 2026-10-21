@@ -1,6 +1,6 @@
 // QA: desktop voice records from the built-in mic, so Bluetooth headphones stay in music mode (no HFP switch).
 // Usage: (setsid node tools/qa-origin.cjs 9381 &) ; node qa-voice-mic.cjs
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const URL_ = process.argv[2] || "http://127.0.0.1:9381/wizard-os-home/?shell=desktop";
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, x); } };

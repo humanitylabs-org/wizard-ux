@@ -3,10 +3,11 @@
 Production sources and built 0.5.1 stay unchanged. Only QAHooks commands are added.
 """
 import hashlib,pathlib,shutil,subprocess,fcntl,json
-BASE=pathlib.Path('/Volumes/ThalesMedia/Projects/wizard-desktop/new-chat-keys')
-SRC=pathlib.Path('/Volumes/ThalesMedia/Projects/wizard-command-w/mac')
+from qa_paths import work_root
+BASE=pathlib.Path(str(work_root() / 'Projects/wizard-desktop/new-chat-keys'))
+SRC=pathlib.Path(str(work_root() / 'Projects/wizard-command-w/mac'))
 DEST=BASE/'qa-host'
-with open('/Volumes/ThalesMedia/AndroidBuilds/worker.lock','a') as lock:
+with open(str(work_root() / 'AndroidBuilds/worker.lock'),'a') as lock:
  fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
  DEST.mkdir(parents=True,exist_ok=True)
  (BASE/'tmp').mkdir(exist_ok=True)

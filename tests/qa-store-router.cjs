@@ -1,7 +1,7 @@
 // Store × Connection Router: install sheet and "Models and connections" against fixture data only.
 // Serves this tree's web/ itself and fulfils every Store data/install/router call; nothing reaches a real Wizard.
 // node tests/qa-store-router.cjs   (QA_WEB_DIR=<tree>  QA_OUT=<dir for screenshots>  QA_CHROME=<binary, optional>)
-let pw; try { pw = require('playwright'); } catch (_) { pw = require('playwright-core'); }
+const pw = require('../tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path'), assert = require('assert/strict');
 const web = path.join(process.env.QA_WEB_DIR || path.join(__dirname, '..'), 'web'), out = process.env.QA_OUT || '';
 const BASE = 'http://store.qa/wizard-os-home/store/index.html';

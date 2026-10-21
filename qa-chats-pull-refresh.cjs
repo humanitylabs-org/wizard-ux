@@ -7,9 +7,9 @@
 // older than a minute says so; a hung read gives up (30 s) and says so; no page errors.
 // Usage: QA_TREE=<repo> [QA_PLAYWRIGHT=<playwright>] [QA_FALLBACK_WEB=<web dir>] [QA_SKIP_HANG=1] node qa-chats-pull-refresh.cjs
 const fs = require('fs'), path = require('path');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || '/home/telos/node_modules/playwright');
-const TREE = process.env.QA_TREE || __dirname, FALLBACK = process.env.QA_FALLBACK_WEB || '/home/telos/apps/wizard-os-home/web';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch';
+const { chromium } = require('./tools/qa-playwright.cjs');
+const TREE = process.env.QA_TREE || __dirname, FALLBACK = process.env.QA_FALLBACK_WEB || require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'web');
+const OUT = process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath('');
 const PAGE_MS = 1200;
 let pass = 0, fail = 0;
 const ok = (c, n, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${n}${d !== '' ? ' ' + JSON.stringify(d) : ''}`); };

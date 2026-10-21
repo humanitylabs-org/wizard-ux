@@ -5,7 +5,7 @@ usage: qa_share_files.py QA_APK UX_DIR JOB_DIR [--big-mb=2048] [--phases=sheet,b
 
   QA_APK   the candidate's debug build (ai.wizards.os.qa)
   UX_DIR   a copy of the wizard-ux checkout (tools/share-fixture.mjs serves the contract + web/)
-  JOB_DIR  evidence: shots/, receipt.json, fixture.log, logcat-*.txt  (under /Volumes/ThalesMedia)
+  JOB_DIR  evidence: shots/, receipt.json, fixture.log, logcat-*.txt  (under $WIZARD_WORK_ROOT)
 
 A fresh API 35 emulator (dark mode, 10 GB data partition) talks to the share fixture on the Thales host over the
 emulator's own network (http://10.0.2.2:PORT, NOT adb reverse), so airplane mode really cuts it. Big test files are
@@ -39,7 +39,7 @@ ORIGIN = 'http://10.0.2.2:%d' % PORT
 JOB.mkdir(parents=True, exist_ok=True)
 OUT = JOB / 'shots'; OUT.mkdir(exist_ok=True)
 FXDATA = JOB / 'fixture-data'
-NODE = '/opt/homebrew/bin/node'
+NODE = 'node'
 res, receipt = [], {'job': str(JOB), 'apk': str(QA_APK), 'checks': [], 'timeline': []}
 
 

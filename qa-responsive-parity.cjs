@@ -1,7 +1,7 @@
 // Run only on Thales. Live GET APIs + source overlay; never forward mutations or beacons.
-const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), crypto = require('node:crypto');
-if (!os.hostname().toLowerCase().includes('thales') || !process.env.QA_OUT?.startsWith('/Volumes/ThalesMedia/') || !process.env.QA_CHROME) throw Error('Thales/external-volume QA only');
+if (!process.env.WIZARD_WORK_ROOT || !require('./tools/qa-paths.cjs').inWorkRoot(process.env.QA_OUT) || !process.env.QA_CHROME) throw Error('Thales/external-volume QA only');
 const BASE = process.argv[2], OUT = process.env.QA_OUT, SOURCE = process.env.QA_SOURCE, baseline = process.env.QA_BASELINE === '1';
 fs.mkdirSync(OUT,{recursive:true});
 process.env.TMPDIR=path.join(OUT,'tmp');fs.mkdirSync(process.env.TMPDIR,{recursive:true});

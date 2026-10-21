@@ -1,7 +1,7 @@
 // Thales only. Real Chrome, live tailnet shell/registry reads + candidate asset overlay.
 // ALL writes and Manager state are fixtures. Fake Chrome microphone; no real agent work.
 const fs=require('fs'),path=require('path'),assert=require('assert/strict');
-const {chromium}=require(process.env.PW);
+const {chromium}=require('./tools/qa-playwright.cjs');
 const ROOT=process.env.QA_WEB_DIR||__dirname, MANAGER=process.env.QA_MANAGER_DIR;
 const BASE=process.env.QA_URL, OUT=process.env.QA_OUT, baseline=process.env.QA_BASELINE==='1';
 const checks=[],receipts=[];fs.mkdirSync(OUT,{recursive:true});

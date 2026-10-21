@@ -1,5 +1,5 @@
 // Run on Thales. Static candidate files + fixture histories; all non-read requests fenced.
-const { chromium } = require(process.env.QA_PLAYWRIGHT || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const base = process.env.QA_URL;
 if (!base) throw Error('Set QA_URL to the private read-only QA origin /wizard-os-home/');

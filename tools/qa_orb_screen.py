@@ -24,14 +24,16 @@ Checks
   no crashes
 """
 import fcntl, http.server, json, os, pathlib, re, shlex, socket, subprocess, sys, threading, time, urllib.parse, urllib.request, uuid
+from qa_paths import work_root
+from qa_paths import android_sdk, java_home
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 apk = P(sys.argv[1]); PKG = sys.argv[2]; WEB = P(sys.argv[3]) if len(sys.argv) > 3 else P(__file__).resolve().parent.parent / 'web'
 job = BASE / 'qa' / ('wos-orb-screen-' + uuid.uuid4().hex[:8]); job.mkdir(parents=True)
 OUT = job / 'shots'; OUT.mkdir()
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir()
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir()
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5696; S = f'emulator-{PORT}'; DEVTOOLS = 9347; FAKE = 18779
 res = []
 def check(n, ok, d=''):

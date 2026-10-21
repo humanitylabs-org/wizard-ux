@@ -5,7 +5,8 @@
 // Usage: node tools/stage-front.cjs <port> <qa-origin-port>
 const http = require('http'), https = require('https');
 const PORT = +process.argv[2] || 9560, QA = +process.argv[3] || 9482;
-const GW = { host: '127.0.0.1', port: 19445, servername: 'wizard.tailc0f369.ts.net' };
+const gatewayOrigin = new URL(require('./qa-paths.cjs').required('WIZARD_ORIGIN'));
+const GW = { host: '127.0.0.1', port: 19445, servername: gatewayOrigin.hostname };
 const SHELL = /^\/(wizard-os-home|wizard|api|__qa)(\/|$)/;
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
@@ -18,7 +19,10 @@ http.createServer((req, res) => {
   const headers = { ...req.headers, host: GW.servername }; delete headers.origin; delete headers.referer;
   const p = https.request({ ...GW, method: req.method, path: req.url, headers, rejectUnauthorized: false }, r => {
     const h = { ...r.headers };
-    if (h.location) h.location = String(h.location).replace(/^https:\/\/(wizard\.tailc0f369\.ts\.net|private\.wizard001\.com)(:\d+)?/, '');
+    if (h.location) {
+      const redirect = new URL(String(h.location), gatewayOrigin);
+      if (redirect.origin === gatewayOrigin.origin || redirect.hostname === 'private.wizard001.com') h.location = redirect.pathname + redirect.search + redirect.hash;
+    }
     res.writeHead(r.statusCode, h); r.pipe(res);
   });
   p.on('error', e => { res.writeHead(502); res.end(String(e)); });

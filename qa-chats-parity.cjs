@@ -3,7 +3,7 @@
 // Runs against the live origin with real Wizard data. Every write (runs, sessions, uploads,
 // seen/disposition) is intercepted; the suite fails if any write reaches Wizard.
 // QA_WEB_DIR=<dir> serves app.js/live.js/styles.css from a worktree instead of the live server.
-const { chromium } = require(process.env.PW || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9440/wizard-os-home/';
 const RESOLVE = process.env.QA_RESOLVE || '';

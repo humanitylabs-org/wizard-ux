@@ -1,10 +1,10 @@
 // Thales browser regression. Real Wizard reads; all writes blocked.
 // QA_STATUS_FILE overlays only the candidate banner script for pre-release QA.
-const { chromium } = require('playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const origin = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const origin = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 (async () => {
   const browser = await chromium.launch({ headless: true, ...(process.env.QA_CHROME ? { executablePath: process.env.QA_CHROME } : {}) });
   try {

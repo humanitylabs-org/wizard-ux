@@ -8,7 +8,7 @@
 //  6 reload keeps Light and the Mizel card pressed; Appearance v1 context carries family=mizel
 //  7 every card and colour is a ≥44 px target; zero writes; no page errors
 // Usage: node qa-skin-palettes.cjs [origin=http://127.0.0.1:9391/wizard-os-home/]  QA_SHOTS=<dir>
-let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('playwright'); }
+const pw = require('./tools/qa-playwright.cjs');
 const fs = require('fs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9391/wizard-os-home/';
 const SHOTS = process.env.QA_SHOTS || require('path').join(require('os').homedir(), '.hermes/cache/scratch/chats-parity', 'qa-skin-palettes'); fs.mkdirSync(SHOTS, { recursive: true });

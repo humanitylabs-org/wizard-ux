@@ -5,7 +5,7 @@
 const { execSync } = require('child_process');
 const ADB = 'export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools; export ANDROID_SERIAL=emulator-5554; adb';
 const PKG = process.env.WOS_PKG || 'ai.wizards.os.qa';
-const sh = c => execSync(`ssh thales '${ADB} ${c}'`, { encoding: 'utf8', timeout: 40000 }).trim();
+const sh = c => execSync(`ssh ${require('./tools/qa-paths.cjs').buildHost()} '${ADB} ${c}'`, { encoding: 'utf8', timeout: 40000 }).trim();
 const top = () => sh('shell dumpsys activity activities | grep -m1 topResumedActivity') || '';
 const results = []; const check = (n, ok, d = '') => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'} ${n}${d ? ' — ' + d : ''}`); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));

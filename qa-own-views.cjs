@@ -6,7 +6,7 @@
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
 const { spawn } = require('node:child_process'), { pathToFileURL } = require('node:url');
 const assert = require('node:assert/strict');
-const { chromium } = require(process.env.PW || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const OUT = process.env.QA_OUT || path.join(os.tmpdir(), 'own-view-qa'); fs.mkdirSync(OUT, { recursive:true });
 const PORT = Number(process.env.QA_PORT || 9398), origin = `http://127.0.0.1:${PORT}`;
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'own-view-fixtures-'));

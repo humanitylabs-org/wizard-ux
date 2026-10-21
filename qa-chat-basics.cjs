@@ -10,7 +10,7 @@
 // Usage: node tools/qa-origin.cjs 9371 &  then  node qa-chat-basics.cjs [url]
 //   url defaults to http://127.0.0.1:9371/wizard-os-home/ ; QA_WEB_DIR=<dir> serves web/ from <dir>
 //   Use a worktree, never a live copy. QA_OUT=<private scratch dir> for screenshots.
-const { chromium } = require(process.env.PW || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9371/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';

@@ -1,7 +1,7 @@
 // Thales-only browser acceptance. Candidate asset interception is NOT deployment evidence.
 // PW=<playwright module> QA_URL=<existing Wizard shell> QA_ROOT=<checkout>
 // QA_SNAPSHOT=<redacted candidate installed endpoint capture> QA_OUT=<external evidence dir>
-const {chromium}=require(process.env.PW),fs=require('fs'),path=require('path'),assert=require('assert/strict');
+const {chromium}=require('../tools/qa-playwright.cjs'),fs=require('fs'),path=require('path'),assert=require('assert/strict');
 const root=process.env.QA_ROOT || process.cwd(),out=process.env.QA_OUT,base=process.env.QA_URL;
 const snapshot=JSON.parse(fs.readFileSync(process.env.QA_SNAPSHOT));
 (async()=>{

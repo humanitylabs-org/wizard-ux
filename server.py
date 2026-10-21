@@ -24,7 +24,8 @@ PORT = int(os.environ.get("WIZARD_OS_HOME_PORT", "9271"))
 STT_URL = os.environ.get("WIZARD_STT_URL", "http://127.0.0.1:8864/v1/audio/transcriptions")
 LLM_URL = os.environ.get("TINFOIL_PROXY_URL", "http://127.0.0.1:3301/v1/chat/completions")
 ROUTER_MODEL = os.environ.get("WIZARD_OS_ROUTER_MODEL", "deepseek-v4-1-flash")
-ALLOWED_ORIGINS = {"https://wizard.tailc0f369.ts.net", "http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT}
+ALLOWED_ORIGINS = {"http://127.0.0.1:%d" % PORT, "http://localhost:%d" % PORT}
+ALLOWED_ORIGINS.update(origin.strip().rstrip("/") for origin in os.environ.get("WIZARD_ORIGIN", "").split(",") if origin.strip())
 MAX_AUDIO = 24 * 1024 * 1024
 
 
@@ -32,7 +33,7 @@ def _tinfoil_key() -> str:
     key = os.environ.get("TINFOIL_API_KEY", "")
     if key:
         return key
-    env = Path.home() / ".hermes" / ".env"
+    env = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes")).expanduser() / ".env"
     try:
         for line in env.read_text().splitlines():
             if line.startswith("TINFOIL_API_KEY="):

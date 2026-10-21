@@ -1,6 +1,6 @@
 // Read-only installed-app acceptance. Run on Thales. Optional candidate asset overrides only.
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const {chromium}=require(process.env.PW||'playwright');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const BASE=process.env.QA_ORIGIN, OUT=process.env.QA_OUT;
 if(!BASE||!OUT)throw Error('Set QA_ORIGIN and QA_OUT');fs.mkdirSync(OUT,{recursive:true});
 const receipt={cases:[],blockedWrites:[],errors:[],assets:[],limitations:['Browser Android hook, not physical handset','All non-GET requests intercepted; local browser storage is disposable']};

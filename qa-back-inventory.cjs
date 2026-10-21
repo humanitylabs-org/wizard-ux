@@ -1,5 +1,5 @@
 // Effective inventory discovery and explicit nested Back probes. No production mutations.
-const fs=require('fs'),path=require('path'),crypto=require('crypto');const {chromium}=require(process.env.PW||'playwright');
+const fs=require('fs'),path=require('path'),crypto=require('crypto');const {chromium}=require('./tools/qa-playwright.cjs');
 const BASE=process.env.QA_ORIGIN,OUT=process.env.QA_OUT;if(!BASE||!OUT)throw Error('Set QA_ORIGIN, QA_OUT');fs.mkdirSync(OUT,{recursive:true});
 const only=process.argv.slice(2),specs=process.env.QA_SPECS?JSON.parse(fs.readFileSync(process.env.QA_SPECS)):{};
 (async()=>{const b=await chromium.launch({executablePath:process.env.QA_CHROME});let inventory;

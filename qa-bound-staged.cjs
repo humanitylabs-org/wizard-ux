@@ -1,14 +1,14 @@
 // Real-data check of the staged bound-views preview, as James gets it (router + boot.js + front + real hosted apps).
 // Every write is refused by the preview; this script also aborts non-GETs itself.
 if (!process.env.QA_ORIGIN) throw new Error('QA_ORIGIN is required: select an isolated tailnet preview');
-let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
+const pw = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const ORIGIN = new URL(process.env.QA_ORIGIN).origin, OUT = '/home/telos/.hermes/cache/scratch/bv-staged';
+const ORIGIN = new URL(process.env.QA_ORIGIN).origin, OUT = require('./tools/qa-paths.cjs').workPath('bv-staged');
 fs.mkdirSync(OUT, { recursive: true });
 const THREADS = (process.argv[2] || '').split(',').filter(Boolean);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
-  const b = await pw.chromium.launch({ executablePath: '/home/telos/.local/bin/google-chrome' });
+  const b = await pw.chromium.launch({ executablePath: (process.env.QA_CHROME || undefined) });
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true,
     userAgent: 'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36 WizardOS-Android/0.9.0' });
   await ctx.route('**/*', r => r.request().method() === 'GET' || r.request().method() === 'HEAD' ? r.continue() : r.fulfill({ status: 403, body: '{}' }));

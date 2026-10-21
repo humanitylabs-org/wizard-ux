@@ -1,9 +1,9 @@
 // Thales-only: a live thread repaint must not move the composer's scroll, caret or focus while the owner types.
 // James, 21 Oct 2026: replying on desktop in a working thread, the reply box kept jumping to the top of the text.
 // Candidate assets at the real origin, SW blocked, every non-GET/HEAD request fulfilled locally (no sends).
-const { chromium } = require(process.env.QA_PLAYWRIGHT || 'playwright-core');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const ORIGIN = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const ORIGIN = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const OUT = process.env.QA_OUT || path.join(__dirname, 'qa-composer-caret');
 const EXEC = process.env.QA_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
