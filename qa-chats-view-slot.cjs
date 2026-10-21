@@ -1,6 +1,6 @@
 // Read-only Chats slot QA. Usage: node qa-chats-view-slot.cjs [qa-origin URL]
 // QA_SHOTS selects private evidence directory. PW selects Playwright on remote workers.
-const { chromium } = require(process.env.PW || require('path').join(require('os').homedir(), 'node_modules/playwright'));
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const BASE = process.argv[2] || 'http://127.0.0.1:19371/wizard-os-home/';
 const OUT = process.env.QA_SHOTS || path.join(require('os').homedir(), '.hermes/cache/scratch/chats-parity/qa-chats-view-slot');

@@ -2,7 +2,7 @@
 // timer; a click-through synthwave edge glow lights the screen. Every backend write is intercepted.
 // Usage: QA_CHROME=<chrome> node qa-desktop-voice-glow.cjs <origin>/wizard-os-home/
 const fs = require('fs');
-let pw; for (const m of [process.env.QA_PLAYWRIGHT, 'playwright', 'playwright-core'].filter(Boolean)) { try { pw = require(m); break; } catch {} }
+const pw = require('./tools/qa-playwright.cjs');
 const BASE = process.argv[2], OUT = process.env.QA_OUT || '.';
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0; const ok = (c, n, x = '') => { console.log(c ? 'PASS' : 'FAIL', n, c ? '' : JSON.stringify(x)); c ? pass++ : fail++; };

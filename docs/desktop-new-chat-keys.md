@@ -23,8 +23,8 @@ All browser/native execution took place on **Thales**, using isolated staging an
 - Native preferences restored with exact semantic readback. Test app stopped afterward.
 - Independent source review: no implementation defects; native evidence gate subsequently cleared by the AppKit/WKWebView run. Its deferred Control-Shift-N and dictation/think coverage was added and passes.
 
-Remote evidence: `/Volumes/ThalesMedia/Projects/wizard-desktop/new-chat-keys/evidence/`.
-Local receipt projection: `/home/telos/.hermes/cache/scratch/new-chat-keys-evidence/`.
+Remote evidence: `$WIZARD_WORK_ROOT/Projects/wizard-desktop/new-chat-keys/evidence/`.
+Local receipt projection: `$HERMES_HOME/cache/scratch/new-chat-keys-evidence/`.
 
 ## Reproduce
 

@@ -3,9 +3,10 @@
 Uses the existing native QA notifier. Restores defaults and leaves any prior app alone.
 """
 import fcntl,json,os,pathlib,subprocess as sp,time
-BASE=pathlib.Path('/Volumes/ThalesMedia/Projects/wizard-command-w')
-APP=pathlib.Path('/Volumes/ThalesMedia/Projects/wizard-desktop/new-chat-keys/qa-host/dist/Wizard.app')
-OUT=pathlib.Path('/Volumes/ThalesMedia/Projects/wizard-desktop/new-chat-keys/evidence/native');OUT.mkdir(parents=True,exist_ok=True)
+from tools.qa_paths import work_root
+BASE=pathlib.Path(str(work_root() / 'Projects/wizard-command-w'))
+APP=pathlib.Path(str(work_root() / 'Projects/wizard-desktop/new-chat-keys/qa-host/dist/Wizard.app'))
+OUT=pathlib.Path(str(work_root() / 'Projects/wizard-desktop/new-chat-keys/evidence/native'));OUT.mkdir(parents=True,exist_ok=True)
 DOMAIN='org.humanitylabs.wizard'
 origin=os.environ.get('QA_ORIGIN', '').rstrip('/')
 if not origin: raise SystemExit('QA_ORIGIN is required: select an isolated tailnet preview')
@@ -30,7 +31,7 @@ def chord(shift=False):
  qa('show-window');time.sleep(.2)
  qa('key-n-shift' if shift else 'key-n')
  time.sleep(.4)
-lock=open('/Volumes/ThalesMedia/AndroidBuilds/worker.lock','a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+lock=open(str(work_root() / 'AndroidBuilds/worker.lock'),'a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
 if run('pgrep','-f','/Wizard.app/Contents/MacOS/Wizard',check=False).stdout.strip():raise SystemExit('Prior native app running; preserve it')
 backup=OUT/'defaults.plist';saved=run('defaults','export',DOMAIN,str(backup),check=False).returncode==0
 proc=None

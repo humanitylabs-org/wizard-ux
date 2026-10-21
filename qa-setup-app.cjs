@@ -8,7 +8,7 @@
 //   every live skin with transparent canvas like Chats, the disconnect menu + sheet, no private strings, no window.open.
 // Usage: node tools/fake-setup-api.cjs 9473 & node qa-setup-app.cjs [http://127.0.0.1:9473/wizard-os-home/]
 //   env: QA_SHOTS=<dir> for screenshots, QA_JSQR=<path to jsqr module>.
-let pw; try { pw = require(process.env.QA_PLAYWRIGHT || 'playwright'); } catch (e) { pw = require('playwright-core'); }
+const pw = require('./tools/qa-playwright.cjs');
 const jsQR = require(process.env.QA_JSQR || 'jsqr');
 const fs = require('fs'), path = require('path');
 const BASE = process.argv[2] || 'http://127.0.0.1:9473/wizard-os-home/';

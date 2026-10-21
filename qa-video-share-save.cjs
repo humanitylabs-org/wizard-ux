@@ -3,9 +3,9 @@
 // 2. Share on the Android app (0.9.22 bridge: void shareFile) answers the tap at once, sends the real bytes once
 //    even on a double tap, and reports "Share sheet opened" instead of a false failure.
 // 3. Save on the Android app hands the attachment URL to the download path and says so.
-// Usage: PW=/home/telos/node_modules/playwright QA_WEB_DIR=<repo> QA_MP4=<file.mp4> node qa-video-share-save.cjs
+// Usage: PW=$QA_PLAYWRIGHT QA_WEB_DIR=<repo> QA_MP4=<file.mp4> node qa-video-share-save.cjs
 const fs = require('fs'), http = require('http'), path = require('path');
-const { chromium } = require(process.env.PW || '/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const WEB = path.join(process.env.QA_WEB_DIR || __dirname, 'web'), MP4 = process.env.QA_MP4;
 const ID = 'cf92adfaa105030615d8f39b0d7386a6';
 const UA = 'Mozilla/5.0 (Linux; Android 15; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/155.0.0.0 Mobile Safari/537.36 WizardOS-Android/0.9.22';

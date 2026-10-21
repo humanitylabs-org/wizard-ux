@@ -1,13 +1,13 @@
 #!/bin/bash
-# Browser-only QA on Thales: no Android/VM worker lock.
-# Usage: tools/qa-setup-app-thales.sh [label]
+# Browser-only QA on the configured worker: no Android/VM worker lock.
+# Usage: WIZARD_BUILD_HOST=worker WIZARD_WORK_ROOT=/worker/work tools/qa-setup-app-thales.sh [label]
 set -euo pipefail
+: "${WIZARD_WORK_ROOT:?Set WIZARD_WORK_ROOT to the remote worker work volume}"
 if [ "${1:-}" = "--remote" ]; then
-  export PATH=/opt/homebrew/bin:$PATH
   cd "$(dirname "$0")/.."
-  export TMPDIR=/Volumes/ThalesMedia/tmp/phone-setup
+  export TMPDIR="$WIZARD_WORK_ROOT/tmp/phone-setup"
   mkdir -p "$TMPDIR" out/shots
-  DEPS=${QA_DEPS:-/Volumes/ThalesMedia/QA/phone-setup/deps}
+  DEPS=${QA_DEPS:-$WIZARD_WORK_ROOT/QA/phone-setup/deps}
   mkdir -p "$DEPS"
   if [ ! -d "$DEPS/node_modules/jsqr" ] || [ "$(node -p "try { require('$DEPS/node_modules/playwright/package.json').version } catch { '' }")" != "1.64.1" ]; then
     npm install --prefix "$DEPS" --no-audit --no-fund playwright@1.64.1 jsqr@1.4.0
@@ -24,11 +24,15 @@ if [ "${1:-}" = "--remote" ]; then
   node qa-setup-app.cjs "http://127.0.0.1:$PORT/wizard-os-home/" >out/qa-setup-app.log 2>&1
   exit
 fi
+: "${WIZARD_BUILD_HOST:?Set WIZARD_BUILD_HOST to the remote SSH worker}"
 LABEL=${1:-run}
+[[ "$LABEL" =~ ^[a-zA-Z0-9_-]+$ ]] || { printf 'Invalid snapshot label\n' >&2; exit 2; }
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SHA=$(git -C "$ROOT" rev-parse HEAD)
-SNAP="/Volumes/ThalesMedia/QA/phone-setup/ux-${SHA:0:12}-$LABEL"
-ssh thales "mkdir -p '$SNAP'"
-rsync -a --delete --exclude .git --exclude android/.gradle --exclude android/app/build --exclude node_modules --exclude out "$ROOT/" "thales:$SNAP/"
-ssh thales "bash '$SNAP/tools/qa-setup-app-thales.sh' --remote"
-printf 'snapshot: thales:%s\n' "$SNAP"
+SNAP="$WIZARD_WORK_ROOT/QA/phone-setup/ux-${SHA:0:12}-$LABEL"
+printf -v QSNAP '%q' "$SNAP"
+printf -v QWORK '%q' "$WIZARD_WORK_ROOT"
+ssh "$WIZARD_BUILD_HOST" "mkdir -p $QSNAP"
+rsync -a --delete --protect-args --exclude .git --exclude android/.gradle --exclude android/app/build --exclude node_modules --exclude out "$ROOT/" "$WIZARD_BUILD_HOST:$SNAP/"
+ssh "$WIZARD_BUILD_HOST" "WIZARD_WORK_ROOT=$QWORK bash $QSNAP/tools/qa-setup-app-thales.sh --remote"
+printf 'snapshot: %s:%s\n' "$WIZARD_BUILD_HOST" "$SNAP"

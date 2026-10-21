@@ -88,8 +88,9 @@ def publish(args):
         if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-candidate\.[0-9]{8})?", args.release):
             raise ValueError("only semantic versions or dated candidate tags are accepted")
     root = Path(os.environ["WIZARD_CI_ROOT"])
-    if not str(root).startswith("/Volumes/ThalesMedia/"):
-        raise RuntimeError("build storage must be on the external worker volume")
+    work_root = os.environ.get('WIZARD_WORK_ROOT')
+    if not work_root or not root.resolve().is_relative_to(Path(work_root).expanduser().resolve()):
+        raise RuntimeError("set WIZARD_WORK_ROOT; build storage must be within that configured worker volume")
     lock_path = Path(os.environ["WIZARD_CI_WORKER_LOCK"])
     print("Waiting for shared heavy-worker lock", flush=True)
     with lock_path.open("a") as lock:

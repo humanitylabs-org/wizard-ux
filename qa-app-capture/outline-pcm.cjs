@@ -2,7 +2,7 @@
  * Localhost only. No Outline backend, Android services or physical microphone claimed. */
 const fs = require('node:fs'), path = require('node:path'), http = require('node:http');
 const assert = require('node:assert/strict'), crypto = require('node:crypto'), os = require('node:os');
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { chromium } = require('../tools/qa-playwright.cjs');
 const { installDeviceMock, installMeetingMock } = require('./native-mocks.cjs');
 const root = path.resolve(__dirname, '..'), evidence = process.env.CAPTURE_EVIDENCE;
 assert.ok(evidence, 'Set CAPTURE_EVIDENCE to an isolated evidence directory');

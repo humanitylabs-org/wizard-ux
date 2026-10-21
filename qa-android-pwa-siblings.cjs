@@ -1,14 +1,14 @@
 // Sibling-app install check on real Android Chrome: each private app gets its OWN install prompt + banner,
-// even after another app on wizard.tailc0f369.ts.net (Wizard OS) has been installed.
-const { chromium } = require('/home/telos/node_modules/playwright');
+// even after another app on wizard.example.ts.net (Wizard OS) has been installed.
+const { chromium } = require('./tools/qa-playwright.cjs');
 const { execSync } = require('child_process');
-const adb = c => execSync(`ssh -o ConnectTimeout=8 thales 'export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools; export ANDROID_SERIAL=emulator-5554; ${c}'`, { encoding: 'utf8' });
+const adb = c => execSync(`ssh -o ConnectTimeout=8 ${require('./tools/qa-paths.cjs').buildHost()} 'export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools; export ANDROID_SERIAL=emulator-5554; ${c}'`, { encoding: 'utf8' });
 const apps = (process.argv[2] || 'idea-queue,cinequeue').split(',');
 let pass = 0, fail = 0;
 const ok = (c, n, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' — ' + d : ''}`); };
 (async () => {
   for (const app of apps) {
-    const url = `https://wizard.tailc0f369.ts.net/${app}/`;
+    const url = `${require('./tools/qa-paths.cjs').origin()}/${app}/`;
     adb(`adb shell am start -a android.intent.action.VIEW -d "${url}" com.android.chrome >/dev/null; sleep 9; adb forward tcp:9333 localabstract:chrome_devtools_remote >/dev/null`);
     const b = await chromium.connectOverCDP('http://127.0.0.1:9333');
     const pages = b.contexts()[0].pages().filter(x => x.url().startsWith(url));

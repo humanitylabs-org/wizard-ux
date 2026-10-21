@@ -1,8 +1,8 @@
 // Shared Chats quote-only Copy/Share, phone + desktop. All writes intercepted.
 // QA_WEB_DIR=checkout (omit for live), QA_OUT=dir, QA_PLAYWRIGHT=module
 const fs=require('fs'),path=require('path');
-const {chromium}=require(process.env.QA_PLAYWRIGHT||'playwright');
-const origin=process.argv[2]||'https://wizard.tailc0f369.ts.net';
+const {chromium}=require('./tools/qa-playwright.cjs');
+const origin=process.argv[2]||require('./tools/qa-paths.cjs').origin();
 const out=process.env.QA_OUT||'quote-evidence';fs.mkdirSync(out,{recursive:true});
 const quote='Hello **Miguel**,\n\n1. Ship it.\n2. Then check.\n\n- Update [App Manager](https://github.com/humanitylabs-org/wizard-app-manager/pull/34).\n- Keep the existing build running.';
 const markdown='Outside introduction.\n\n'+quote.split('\n').map(l=>'> '+l).join('\n')+'\n\nOutside conclusion.\n\n> Second quote.\n>\n> > Nested quote.\n\n```text\n> literal code\n```';

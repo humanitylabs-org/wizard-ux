@@ -3,12 +3,12 @@
 // lists it; Transcribe & copy puts the words on the clipboard. A short cancel is gone. Back closes Settings and the
 // app stays open.
 // Usage: QA_WEB_DIR=<worktree> node qa-cancel-recover.cjs   (self-contained: every request is routed)
-// Negative control: QA_WEB_DIR=/home/telos/apps/wizard-os-home node qa-cancel-recover.cjs must FAIL.
-const { chromium } = require('/home/telos/node_modules/playwright');
+// Negative control: QA_WEB_DIR=$QA_WEB_DIR node qa-cancel-recover.cjs must FAIL.
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_ = (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const WEB = process.env.QA_WEB_DIR || __dirname;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/cancel-recover';
+const SHOTS = process.env.QA_SHOTS || require('./tools/qa-paths.cjs').workPath('wizard-audit/shots/cancel-recover');
 fs.mkdirSync(SHOTS, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
@@ -20,7 +20,7 @@ async function boot(b, { native = false } = {}) {
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone', 'clipboard-read', 'clipboard-write'] });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (u.hostname !== 'wizard.tailc0f369.ts.net') return r.abort();
+    if (u.hostname !== new URL(require('./tools/qa-paths.cjs').origin()).hostname) return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && (q.method() === 'GET' || q.method() === 'HEAD') && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = path.join(WEB, 'web', f);

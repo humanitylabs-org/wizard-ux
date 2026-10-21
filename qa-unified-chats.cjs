@@ -7,7 +7,7 @@
 // (tools/agents-fixture.mjs --main=fixture --seed=private); all other live writes are blocked.
 // QA_AGENTS_FIXTURE_PORT selects its unused loopback port. Phone and desktop; screenshots to QA_OUT.
 // Usage: PW=<playwright> QA_OUT=<dir> node qa-unified-chats.cjs http://127.0.0.1:9741/wizard-os-home/
-const { chromium } = require(process.env.PW || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const BASE = process.argv[2] || 'http://127.0.0.1:9741/wizard-os-home/';
 const ORIGIN = new URL(BASE).origin;

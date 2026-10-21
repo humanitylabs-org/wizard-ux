@@ -1,7 +1,7 @@
 // Fully synthetic desktop/outbox browser acceptance. No real service requests or credentials.
 // QA_PLAYWRIGHT=/path/to/playwright-core QA_CHROME=/path/to/chrome node qa-recording-retention.cjs [webDir] [outDir]
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const ROOT = path.resolve(process.argv[2] || 'web'), OUT = path.resolve(process.argv[3] || 'recording-evidence');
 fs.mkdirSync(OUT, { recursive: true });
 const results = [], writes = [], errors = [];

@@ -90,7 +90,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         check('repeated Android Back at true root never exits Wizard',front())
         sweep();check('emulator contacted only the fake Wizard',not FOREIGN,FOREIGN)
         crash=sx('logcat -d -s AndroidRuntime:E').strip();check('no Android crash',not crash,crash)
-        receipt.update(status='ok' if all(res) else 'failed',host='thales',source_web=str(WEB),apk_sha256=hashlib.sha256(APK.read_bytes()).hexdigest(),passed=sum(res),failed=len(res)-sum(res))
+        receipt.update(status='ok' if all(res) else 'failed',host=__import__('socket').gethostname(),source_web=str(WEB),apk_sha256=hashlib.sha256(APK.read_bytes()).hexdigest(),passed=sum(res),failed=len(res)-sum(res))
     except Exception as e:
         receipt.update(status='failed',error=str(e));print('ERROR',e,flush=True)
     finally:

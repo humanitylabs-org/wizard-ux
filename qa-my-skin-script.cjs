@@ -1,6 +1,6 @@
 // Read-only, isolated My skin script acceptance. Run against: node tools/qa-origin.cjs PORT WORKTREE/web
 // NODE_PATH may supply Playwright on a remote QA host. No live service or owner data is used.
-let pw; try { pw = require('playwright'); } catch (_) { pw = require('playwright-core'); }
+const pw = require('./tools/qa-playwright.cjs');
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), { createHash } = require('node:crypto');
 const ORIGIN = process.argv[2] || 'http://127.0.0.1:9392/wizard-os-home/';
 const SHOTS = process.env.QA_SHOTS || path.join(os.homedir(), '.hermes/cache/scratch/my-skin-script');

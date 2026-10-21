@@ -2,7 +2,7 @@
 // Local fixture server, real shell/client scripts; no production requests, no agent writes.
 // Capture is an explicit contract mock here; capture's own durability tests belong to its slice.
 const fs = require('fs'), path = require('path'), http = require('http'), os = require('os'), assert = require('assert/strict');
-const { chromium } = require(process.env.PW || '/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const ROOT = process.env.QA_WEB_DIR || __dirname, OUT = process.env.QA_OUT || path.join(ROOT, 'evidence/shared-services');
 fs.mkdirSync(OUT, { recursive: true });
 const entries = [

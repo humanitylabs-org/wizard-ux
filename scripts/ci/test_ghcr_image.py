@@ -48,6 +48,21 @@ class ImageContract(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'trusted branch'):
                 ci.publish(self.args())
 
+    def test_publish_requires_configured_work_volume(self):
+        env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push',
+               'WIZARD_CI_ROOT': '/example/worker/ci'}
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaisesRegex(RuntimeError, 'WIZARD_WORK_ROOT'):
+                ci.publish(self.args())
+
+    def test_publish_rejects_sibling_of_work_volume(self):
+        with tempfile.TemporaryDirectory() as temp:
+            env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'push',
+                   'WIZARD_WORK_ROOT': temp + '/work', 'WIZARD_CI_ROOT': temp + '/work-sibling'}
+            with patch.dict(os.environ, env, clear=True):
+                with self.assertRaisesRegex(RuntimeError, 'configured worker volume'):
+                    ci.publish(self.args())
+
     def test_release_requires_confirmation_and_exact_sha(self):
         with patch.dict(os.environ, {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'workflow_dispatch'}):
             for confirm, sha in [('', SHA), ('0.3.0', ''), ('other', SHA)]:
@@ -66,7 +81,7 @@ class ImageContract(unittest.TestCase):
         registry.return_value.manifest.return_value = (DIGEST, {})
         with tempfile.TemporaryDirectory() as temp:
             env = {'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'workflow_dispatch',
-                   'WIZARD_CI_ROOT': '/Volumes/ThalesMedia/Test',
+                   'WIZARD_CI_ROOT': temp, 'WIZARD_WORK_ROOT': temp,
                    'WIZARD_CI_WORKER_LOCK': temp + '/worker.lock',
                    'GITHUB_ACTOR': 'test', 'GHCR_TOKEN': 'unit-test-only'}
             with patch.dict(os.environ, env), patch.object(ci.tempfile, 'TemporaryDirectory') as directory:

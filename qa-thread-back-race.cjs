@@ -1,7 +1,7 @@
 // James's rare thread Back regression. Run the real shell with delayed fixture reads;
 // run exact history bridge source with deferred traversal callbacks (no wall-clock sleeps).
 // All writes intercepted. Browser execution belongs on Thales.
-let pw; try { pw = require('playwright-core'); } catch (_) { pw = require(process.env.PW || 'playwright'); }
+const pw = require('./tools/qa-playwright.cjs');
 const { chromium } = pw, fs = require('fs'), path = require('path'), vm = require('vm');
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const URL_ = process.argv[2] || 'http://127.0.0.1:9440/wizard-os-home/';

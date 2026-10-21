@@ -2,6 +2,10 @@
 
 Wizard UX is the front end of Wizard OS everywhere: the phone web shell and Android app (`ai.wizards.os`), and the desktop shell. It is one codebase with two shells. Shared code lives in `web/core/`. Read the team rules below before you start.
 
+## Machine-specific configuration
+
+Machine-specific paths and hosts come from env vars: `WIZARD_WORK_ROOT`, `WIZARD_BUILD_HOST`, `WIZARD_ORIGIN`, `QA_PLAYWRIGHT`, `HERMES_HOME`, `ANDROID_HOME` / `ANDROID_SDK_ROOT`, and `JAVA_HOME`. Never commit personal paths or tailnet hostnames; `tests/portable-paths.test.mjs` enforces this through `npm test`. QA imports Playwright through `tools/qa-playwright.cjs` only. Keep historical receipts unchanged; temporary native-folder guard exemptions belong to `fix/portable-app-origin`.
+
 ## This repo
 
 - **`main` is what James runs.** Until 19 Oct 2026 it was named `daily`. Older notes, `BRANCHES.md` rows and QA comments that say `daily` mean `main`.
