@@ -38,7 +38,7 @@
 .cx-row .ub-a button[disabled] { opacity: .6; }
 
 
-.st-root { container: settings / inline-size; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 0 calc(24px + env(safe-area-inset-bottom)); }
+.st-root { container: settings / inline-size; color: var(--wz-text); min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 0 calc(24px + env(safe-area-inset-bottom)); }
 .st-inner { max-inline-size: 560px; margin-inline: auto; padding-inline: 16px; }
 .st-root button { cursor: pointer; }
 .st-root button:disabled { cursor: default; }
