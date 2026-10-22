@@ -297,6 +297,14 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/browser-boundary.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Flag-on navigation response injects this before either shell; absent from flag-off HTML."
+    },
+    "core/browser-boundary-client.js": {
+      "loadedBy": ["opaque-app-client"],
+      "note": "Explicit app adoption; not loaded in the owner document."
+    },
     "core/cancelled.js": {
       "loadedBy": [
         "phone",

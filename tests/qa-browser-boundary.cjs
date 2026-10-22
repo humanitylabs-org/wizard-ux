@@ -92,6 +92,7 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     for (const skin of ['nebula', 'sepia']) {
       await page.evaluate(s => { document.documentElement.dataset.skin = s; window.WosSkin?.set?.(s); window.WizAppearance.sync(); }, skin);
       await app.waitForFunction(s => document.documentElement.dataset.skin === s, skin);
+      await page.waitForFunction(() => document.querySelector('iframe[src*="/fixture-app/"]')?.closest('.win')?.classList.contains('wz-themed'));
       const shot = path.join(out, `shell-${skin}.png`); await page.screenshot({ path: shot }); report.screenshots.push(shot);
       check(await app.evaluate(() => document.documentElement.hasAttribute('data-wz-hosted')), `in-shell Appearance v1 ${skin}`);
     }

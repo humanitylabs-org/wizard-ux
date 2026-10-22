@@ -20,7 +20,7 @@
     }
     if (!channel || d.channel !== channel) return;
     const reply = (status, extra = {}) => send({ op: 'reply', id: d.id, status, ...extra });
-    if (d.op === 'theme') { try { applyTheme?.(d.appearance); } catch (_) {} return; }
+    if (d.op === 'theme') { try { if (applyTheme?.(d.appearance) === true) send({ op: 'theme.applied', revision: d.appearance.revision }); } catch (_) {} return; }
     if (d.op === 'back') { try { reply(back?.() === true ? 'handled' : back ? 'atRoot' : 'refused'); } catch (_) { reply('refused'); } return; }
     if (d.op === 'field.pin') {
       const el = document.activeElement;

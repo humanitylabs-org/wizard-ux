@@ -34,6 +34,7 @@
     if (!st) return;
     for (const [id, wait] of pending) if (wait.st === st) { clearTimeout(wait.timer); pending.delete(id); wait.resolve({ status: 'stale' }); }
     st.channel = crypto.randomUUID(); st.ready = false;
+    st.frame.closest('.win')?.classList.remove('wz-themed');
   }
   function ask(st, op, data = {}) {
     if (!connected(st) || !st.ready) return Promise.resolve({ status: 'unavailable' });
@@ -62,6 +63,7 @@
     const st = [...sessions.values()].find(s => s.frame.contentWindow === e.source);
     if (!connected(st) || d.channel !== st.channel) return;
     if (d.op === 'ready') { st.ready = true; if (st.appearance) send(st, 'theme', { appearance: st.appearance }); return; }
+    if (d.op === 'theme.applied' && d.revision === st.appearance?.revision) { const el = st.frame.closest('.win'); if (el && !el.classList.contains('wz-themed')) el.classList.add('wz-themed'); return; }
     if (d.op === 'reply' && typeof d.id === 'string') {
       const wait = pending.get(d.id);
       if (!wait || wait.st !== st) return;
