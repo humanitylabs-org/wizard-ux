@@ -1154,7 +1154,7 @@ window.WizCore.chats = function createChats(H) {
       }
     };
   }
-  const assistantStamp = turns => JSON.stringify((turns || []).filter(t => t.a && t.a.final !== false).map(t => [t.a.at, t.a.text]));
+  const assistantStamp = turns => { const a = (turns || []).findLast(t => t.a && t.a.final !== false)?.a; return a ? JSON.stringify([a.at, a.text]) : ''; };
   function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
   function syncStream(w, c, turns, agent) {
     const sid = w.thread, s = LIVE.session(sid), pendingRun = LIVE.pendingRun?.(sid), rid = pendingRun || s?.runId;
@@ -1168,8 +1168,9 @@ window.WizCore.chats = function createChats(H) {
         renderThreadLive(w);
         if (st.terminal && !st.reconciling) {
           st.reconciling = true;
+          const until = Date.now() + 60000;
           const reconcile = async () => {
-            if (c.stream !== st || w.thread !== sid || st.landed) return;
+            if (c.stream !== st || w.thread !== sid || st.landed || Date.now() > until) return;
             await loadThread(w, true);
             if (c.stream === st && !st.landed) st.retry = setTimeout(reconcile, 500);
           };

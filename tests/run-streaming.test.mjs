@@ -76,4 +76,19 @@ test('hidden raw-session receipt streams without list status; provisional retire
   row.status = 'completed';
   assert.equal(ctx.syncStream(w, c, [{ a: { at: 123, text: '**Words**' } }], 'philosopher'), '');
   assert.equal(closed, 1); assert.equal(c.stream.landed, true);
+  assert.equal(ctx.syncStream(w, c, [{ a: { at: 123, text: '**Words**' } }], 'philosopher'), '');
+  assert.equal(closed, 1, 'transcript replacement retires exactly once');
+});
+test('an early empty stream disconnect retries the same read, bounded to three retries', () => {
+  const h = harness();
+  h.L.openRunStream('sid', '', 'rid', () => {});
+  h.timers.shift(); // leave the independent completion poll out of this test
+  for (let i = 0; i < 4; i++) {
+    h.sources.at(-1).onerror();
+    const retry = h.timers.shift();
+    if (i < 3) { assert.ok(retry); retry(); } else assert.equal(retry, undefined);
+  }
+  assert.equal(h.sources.length, 4);
+  assert.ok(h.sources.every(s => s.url === '/wizard/hermes/v1/runs/rid/events'));
+  assert.equal(h.calls.length, 0, 'no admission or send was made');
 });

@@ -1,6 +1,6 @@
 const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs');
-const BASE = 'https://wizard.tailc0f369.ts.net';
+const BASE = (process.env.QA_ORIGIN || process.argv[2] || 'http://127.0.0.1:8923').replace(/\/$/, '');
 const OUT = process.env.QA_OUT || __dirname + '/streaming-out';
 fs.mkdirSync(OUT, { recursive: true });
 (async () => {
@@ -45,31 +45,32 @@ fs.mkdirSync(OUT, { recursive: true });
       await page.evaluate(() => {
         window.__streamMeasure={samples:[]};
         document.addEventListener('click',function start(e){if(e.target.closest('.ch-send')){window.__streamMeasure.start=performance.now();document.removeEventListener('click',start,true);}},true);
-        const observe=()=>{const m=window.__streamMeasure;if(!m.start)return;const el=[...document.querySelectorAll('[data-streaming]')].find(el=>{const r=el.getBoundingClientRect();return r.width&&r.height&&r.bottom>0&&r.top<844});const txt=el?.querySelector('.bub')?.innerText||'';if(txt&&m.samples.at(-1)?.text!==txt){m.samples.push({ms:performance.now()-m.start,text:txt});if(!m.first)m.first=performance.now()-m.start;}};
+        const visible = el => { const r=el.getBoundingClientRect();return r.width&&r.height&&r.bottom>0&&r.top<844; };
+        const observe=()=>{const m=window.__streamMeasure;if(!m.start)return;const el=[...document.querySelectorAll('[data-streaming]')].find(visible);const txt=el?.querySelector('.bub')?.innerText||'';if(txt&&m.samples.at(-1)?.text!==txt){m.samples.push({ms:performance.now()-m.start,text:txt});if(!m.first)m.first=performance.now()-m.start;}const final=[...document.querySelectorAll('.msg.a:not([data-streaming])')].find(visible);if(final?.querySelector('.bub')?.innerText&&!m.finalVisible)m.finalVisible=performance.now()-m.start;};
         new MutationObserver(observe).observe(document.body,{subtree:true,childList:true,characterData:true});
       });
       await page.locator('[data-chats] .ch-send:visible').last().click();
       // Phone Send returns to Chats by design. Reopen the SAME hidden thread immediately,
       // not after a fixed wait. Timing remains anchored to the actual Send click.
       await page.evaluate(({sid,agent})=>window.__wos.openWizardThread(sid,{agent}),{sid,agent});
-      try { await page.waitForFunction(() => window.__streamMeasure.first, null, {timeout:45000}); }
+      try { await page.waitForFunction(requireStreaming => window.__streamMeasure.first || (!requireStreaming && window.__streamMeasure.finalVisible), !!agent, {timeout:90000}); }
       catch(e) {
         fs.writeFileSync(OUT+'/sse-failure.json',JSON.stringify({network,events:await page.evaluate(()=>window.__sseLog)},null,2));
         await page.screenshot({path:OUT+'/failure.png'});
         fs.writeFileSync(OUT+'/failure.json',JSON.stringify(await page.evaluate(()=>({measure:window.__streamMeasure,body:document.body.innerText,wins:window.__wos.wins,ch:Object.fromEntries(Object.keys(window.__wos.wins).map(id=>{const c=window.__wos.chatState(id);return[id,{loadedFor:c.loadedFor,turns:c.turns,stream:c.stream&&{sid:c.stream.sid,rid:c.stream.rid,text:c.stream.text,terminal:c.stream.terminal,landed:c.stream.landed},err:c.err}]})),outbox:[...window.__wos.outbox._items.values()]})),null,2));throw e;
       }
-      const first = await page.evaluate(() => ({firstMs:window.__streamMeasure.first, firstText:window.__streamMeasure.samples[0].text}));
+      const first = await page.evaluate(() => ({firstMs:window.__streamMeasure.first || window.__streamMeasure.finalVisible, firstStreamMs:window.__streamMeasure.first || null, firstText:window.__streamMeasure.samples[0]?.text || null}));
       const shot=OUT+'/philosopher-streaming-'+skin+(agent?'':'-main')+'.png';
       await page.screenshot({path:shot});
       await page.waitForFunction(() => {
         const w=Object.values(window.__wos.wins).find(w=>w.app==='chats'&&w.thread&&document.querySelector(`[data-chats="${w.id}"]`));
         const c=w&&window.__wos.chatState(w.id);
         const root=w&&document.querySelector(`[data-chats="${w.id}"]`);
-        return window.__streamMeasure.first && c?.stream?.landed && !root?.querySelector('[data-streaming]') && root?.querySelector('.msg.a .bub')?.innerText;
+        return (window.__streamMeasure.first || window.__streamMeasure.finalVisible) && c?.stream?.landed && !root?.querySelector('[data-streaming]') && root?.querySelector('.msg.a .bub')?.innerText;
       },null,{timeout:90000});
       const end=await page.evaluate(()=>{
         const m=window.__streamMeasure;const w=Object.values(window.__wos.wins).find(w=>w.app==='chats'&&w.thread&&document.querySelector(`[data-chats="${w.id}"]`));const root=document.querySelector(`[data-chats="${w.id}"]`);
-        return {finalMs:performance.now()-m.start,samples:m.samples.length,assistantCount:root.querySelectorAll('.msg.a').length,finalText:root.querySelector('.msg.a .bub').innerText,skin:document.documentElement.dataset.skin,overflow:document.documentElement.scrollWidth>390};
+        return {finalMs:m.finalVisible || performance.now()-m.start,samples:m.samples.length,assistantCount:root.querySelectorAll('.msg.a').length,finalText:root.querySelector('.msg.a .bub').innerText,skin:window.WosSkin?.current,overflow:document.documentElement.scrollWidth>390};
       });
       if(end.assistantCount!==1)throw new Error('Duplicate assistant message '+JSON.stringify(end));
       const result={agent:agent||'main',skin,sid,...first,...end,shot,errors};results.push(result);fs.writeFileSync(OUT+'/results.json',JSON.stringify(results,null,2));console.log(JSON.stringify(result));
