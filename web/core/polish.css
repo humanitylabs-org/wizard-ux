@@ -32,27 +32,23 @@ html[data-shell="desktop"] .wx-banners { top: 3px; left: 25%; right: 25%; z-inde
 .wx-banner .wx-x { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; color: var(--ink-3); font-size: 16px; line-height: 1; }
 .wx-banner .wx-x:hover { background: rgba(205, 190, 255, .08); }
 
-/* ---------- fatal card ---------- */
-/* Failure diagnosis stays readable, with real touch targets, in the existing banner. */
-.wx-banner.net:has(.wx-actions) { height: auto; padding: 8px 10px; flex-wrap: wrap; border-radius: 16px; white-space: normal; color: var(--wz-text, var(--ink)); background: var(--wz-base, var(--bg)); border-color: var(--wz-border, var(--line-2)); }
-.wx-banner.net:has(.wx-actions) .wx-m { flex: 1; overflow: visible; line-height: 1.35; }
-.wx-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; justify-content: flex-end; }
-.wx-actions button { min-height: 44px; padding: 4px 10px; border-radius: 99px; color: var(--wz-text, var(--ink)); background: var(--wz-surface, var(--glass)); border: 1px solid var(--wz-border, var(--line-2)); font: inherit; }
+/* Connection pill: the same one-line glass pill as every other notice, in both shells (James, 22 Oct: the phone's
+ * tall card with 44px buttons pushed the whole screen down ~20%). Short line · Retry · Troubleshoot; tapping the
+ * line unfolds the full diagnosis beneath it. */
+.wx-banner.net:has(.wx-actions) { height: auto; min-height: 0; padding: 0 3px 0 10px; flex-direction: column; align-items: stretch; gap: 0; border-radius: 14px; }
+.wx-banner.net .wx-row { display: flex; align-items: center; gap: 8px; height: 26px; min-width: 0; }
+.wx-banner.net .wx-s { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; font-weight: 650; color: inherit; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; }
+.wx-banner.net .wx-m { display: none; }
+.wx-banner.net.open .wx-m { display: block; padding: 2px 8px 8px 22px; white-space: normal; font-weight: 500; font-size: 12.5px; line-height: 1.4; color: var(--wz-text-2, var(--ink-2)); overflow: visible; }
+.wx-actions { display: flex; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }
+.wx-actions button { height: 22px; padding: 0 10px; border-radius: 99px; font-size: 12px; font-weight: 600; color: var(--wz-text, var(--ink)); background: var(--wz-surface, var(--glass)); border: 1px solid var(--wz-border, var(--line-2)); cursor: pointer; position: relative; }
+.wx-actions button::after { content: ''; position: absolute; inset: -8px -2px; } /* comfortable touch area, small visual */
+.wx-actions button:hover { background: var(--wz-surface-hover, rgba(205, 190, 255, .14)); }
 
-/* Phone shows the full message; desktop shows the short line (full text on hover). */
-.wx-banner .wx-s { display: none; }
-
-/* Desktop: one compact pill in the top bar over the clock. It never grows past the bar and never pushes
- * windows down; the Chats list carries the same status, so the bar pill only needs a glance + two taps. */
+/* Desktop: the pill sits in the 34px top bar over the clock and never pushes windows down. */
 html[data-shell="desktop"] .wx-banners { left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: min(560px, 46vw); }
-html[data-shell="desktop"] .wx-banner.net:has(.wx-actions) { height: 28px; padding: 0 3px 0 10px; flex-wrap: nowrap; white-space: nowrap; border-radius: 99px; gap: 8px; }
-html[data-shell="desktop"] .wx-banner.net .wx-m { display: none; }
-html[data-shell="desktop"] .wx-banner.net .wx-s { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 650; }
-html[data-shell="desktop"] .wx-actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }
-html[data-shell="desktop"] .wx-actions button { min-height: 0; height: 22px; padding: 0 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
-html[data-shell="desktop"] .wx-actions button:hover { background: var(--wz-surface-hover, rgba(205, 190, 255, .14)); }
-html[data-shell="desktop"] .wx-actions .wx-long { display: none; }
 
+/* ---------- fatal card ---------- */
 .wx-fatal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: rgba(3, 2, 8, .78); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .wx-fatal[hidden] { display: none; }
 .wx-fcard { width: min(400px, 100%); padding: 22px 20px 16px; border-radius: 22px; text-align: center; background: rgba(16, 10, 34, .98); border: 1px solid rgba(255, 107, 134, .45); color: var(--ink, #f3efff); font: 15px/1.45 system-ui, sans-serif; }
