@@ -1,6 +1,6 @@
 // Run: node tools/qa-origin.cjs 9733 web &  then  ID=<a finished thread id> node qa-reading-place-new-reply.cjs http://127.0.0.1:9733/wizard-os-home/  (writes are fulfilled locally)
 // Repro: a new reply landed while away; the thread's cached paint (old latest reply) must not pin the old place.
-const { chromium } = require('/home/telos/apps/wizard-os-home/tools/qa-playwright.cjs');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const URL_ = process.argv[2]; const sleep = ms => new Promise(r => setTimeout(r, ms));
 const ID = process.env.ID; if (!ID) throw Error('set ID to a finished thread id');
 let trunc = true, slow = 0;
