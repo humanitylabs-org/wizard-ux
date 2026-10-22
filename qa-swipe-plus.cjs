@@ -1,5 +1,5 @@
 // Real-touch regression: one swipe beyond the final occupied desk opens the app picker.
-const { chromium } = require('playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs');
 const url = process.argv[2];
 const out = process.env.QA_OUT || 'qa-swipe-plus'; fs.mkdirSync(out, { recursive: true });

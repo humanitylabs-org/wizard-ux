@@ -1,7 +1,7 @@
 // Live preview assets, isolated browser storage and mocked API: no agent run is created.
 // NODE_PATH=<playwright-core parent> QA_CHROME=/usr/bin/google-chrome node qa-send-working-race.cjs
 // Negative control: QA_CONTROL_REF=80a2cc3 replaces only live.js with pre-fix bytes and must fail.
-const { chromium } = require('playwright-core');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');

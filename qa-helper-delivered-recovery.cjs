@@ -4,7 +4,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), http = require('node:http');
 const {pathToFileURL} = require('node:url');
-const {chromium} = require(process.env.PW_MODULE || '/Users/thales/helper-status-qa/node_modules/playwright-core');
+const {chromium} = require('./tools/qa-playwright.cjs');
 const WAS = path.resolve(process.env.WAS_ROOT || '../was-helper-status-release');
 const WEB = path.resolve(process.env.QA_WEB_DIR || path.join(__dirname, 'web'));
 const OUT = path.resolve(process.env.QA_OUT || '.qa-helper-delivered');

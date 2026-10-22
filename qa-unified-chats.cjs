@@ -3,13 +3,17 @@
 // reads); replies go to that agent. The model picker shows a Private group; a new chat on a Private model is created
 // on the private agent; inside a standard thread a Private pick starts a new private chat with quoted context and the
 // standard thread is untouched; inside a private thread only private models are offered. Back never exits.
-// Runs against tools/agents-fixture.mjs --seed=private. Phone and desktop. Screenshots to QA_OUT.
+// Usage: node qa-unified-chats.cjs <qa-origin URL>. Starts a fresh in-memory fixture sidecar
+// (tools/agents-fixture.mjs --main=fixture --seed=private); all other live writes are blocked.
+// QA_AGENTS_FIXTURE_PORT selects its unused loopback port. Phone and desktop; screenshots to QA_OUT.
 // Usage: PW=<playwright> QA_OUT=<dir> node qa-unified-chats.cjs http://127.0.0.1:9741/wizard-os-home/
-const { chromium } = require(process.env.PW || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const BASE = process.argv[2] || 'http://127.0.0.1:9741/wizard-os-home/';
 const ORIGIN = new URL(BASE).origin;
-const OUT = process.env.QA_OUT || 'qa-unified-chats-out'; fs.mkdirSync(OUT, { recursive: true });
+const fixturePort = Number(process.env.QA_AGENTS_FIXTURE_PORT || 9446);
+const FIXTURE = 'http://127.0.0.1:' + fixturePort;
+const OUT = process.env.QA_OUT || path.join(require('os').homedir(), '.hermes/cache/scratch/chats-parity/qa-unified-chats'); fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0; const cases = [];
 const ok = (v, label, detail = '') => { cases.push({ label, pass: !!v, detail: String(detail).slice(0, 600) }); if (v) { pass++; console.log('PASS', label); } else { fail++; console.log('FAIL', label, detail); } };
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -20,17 +24,23 @@ const MIZEL = 'wizard_app_mizel_fixture1', MIZEL_TITLE = 'Mizel recap · Fixture
 
 async function ctx(b, mobile) {
   const c = await b.newContext(mobile
-    ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, colorScheme: 'dark', userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36' }
+    ? { viewport: { width: 412, height: 892 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, colorScheme: 'dark', userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36' }
     : { viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
   await c.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.done', '1'); } catch (e) {} });
-  await c.route('**/*', r => { const u = r.request().url(); if (!u.startsWith(ORIGIN)) return r.fulfill({ status: 204, body: '' }); return r.continue(); });
+  await c.route('**/*', async r => {
+    const q = r.request(), u = new URL(q.url());
+    if (u.origin !== ORIGIN) return r.fulfill({ status:403, body:'QA refuses external requests' });
+    if (/^\/wizard\/(?:hermes\/|v1\/agents(?:\/|$)|thread-seen$)/.test(u.pathname) || u.pathname.startsWith('/__fixture/') || (q.method() === 'GET' && u.pathname === '/wizard-tinfoil/api/status')) { const response = await r.fetch({ url:FIXTURE + u.pathname + u.search }); return r.fulfill({ response }); }
+    if (!['GET', 'HEAD'].includes(q.method())) return r.fulfill({ status:403, body:'QA refuses live writes' });
+    return r.continue();
+  });
   return c;
 }
 
 async function phone(b) {
   const c = await ctx(b, true), p = await c.newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e)));
-  await p.goto(BASE, { waitUntil: 'load' }); await wait(2500);
+  await p.goto(BASE, { waitUntil: 'domcontentloaded' }); await wait(2500);
   await p.evaluate(() => __wos.openApp(window.WizCore.apps('mobile').APPS.find(a => a.id === 'wizard'))); await wait(2500);
   await p.evaluate(() => __wos.live.refresh(true)); await wait(1500);
   const wid = await p.evaluate(() => Object.values(__wos.wins).find(w => w.app === 'chats' && !w.agent)?.id || '');
@@ -45,7 +55,7 @@ async function phone(b) {
   ok(rows.some(r => r.id === 'wizard_fixture_private_1' && r.priv), 'phone: the other private thread is listed too, with the lock');
   ok(rows.filter(r => !r.priv).every(r => !r.lock), 'phone: standard threads carry no lock');
   const order = rows.filter(r => r.sec === mz?.sec).map(r => r.id);
-  ok(order[0] === MIZEL, 'phone: merged by recency (the newest, the recap, is first in its section)', JSON.stringify(order));
+  ok(order[0] === MIZEL, 'phone: merged by recency (the newest recap is first in its section)', JSON.stringify(order));
   ok(await p.evaluate(id => !__wos.live.sessions.some(s => s.id === id), MIZEL), 'phone: the main agent’s own list data (search, links, status) still holds no private thread');
   const groups = await p.evaluate(() => { const g = __wos.live.groups(''); return [...g.needs, ...g.ready, ...g.working].map(s => s.id); });
   ok(groups.includes(MIZEL) || !(await p.evaluate(id => __wos.live.isNew(__wos.live.session(id)), MIZEL)), 'phone: the recap counts in Ready/unread like other threads when unread', JSON.stringify(groups));
@@ -95,6 +105,19 @@ async function phone(b) {
   ok(privRows.length === 2 && /GLM 5\.3/.test(privRows[0]) && /DeepSeek/.test(privRows[1]), 'phone: Private group lists the private agent’s models', JSON.stringify(privRows));
   const mainRows = await p.locator('.ch-psheet .mrow:not(.more):not(.priv)').allInnerTexts();
   ok(mainRows.some(t => /Opus/.test(t)), 'phone: the main agent’s models are still available beside the Private group', JSON.stringify(mainRows));
+  // James 18 Oct: choosing GLM or DeepSeek means the private agent. The main agent's own Tinfoil route never sits
+  // beside the Private group (it would put a locked GLM into the shared history); on skins that show Tinfoil too.
+  const tin = await p.evaluate(() => { const M = window.WosModels, root = document.documentElement, was = root.dataset.skin;
+    root.dataset.skin = 'obsidian';
+    const rowsOf = h => { const t = document.createElement('div'); t.innerHTML = h; return [...t.querySelectorAll('.mrow:not(.more):not(.priv)')].map(e => e.innerText.trim()); };
+    const priv = M.privateOptions(), cur = { model: 'claude-opus-5-5', provider: 'anthropic' };
+    const r = { base: rowsOf(M.sheetHtml({ mode: 'new', cur, all: true, priv: [] }).html),
+      sheet: rowsOf(M.sheetHtml({ mode: 'new', cur, all: true, priv }).html), pop: rowsOf(M.popHtml({ mode: 'new', cur, all: true, priv }).html),
+      onMainGlm: rowsOf(M.sheetHtml({ mode: 'thread', cur: { model: 'glm-5-3', provider: 'custom:wizard-tinfoil' }, all: true, priv }).html) };
+    root.dataset.skin = was || ''; if (!was) delete root.dataset.skin; return r; });
+  ok(tin.base.some(t => /glm/i.test(t)), 'fixture: without a private agent the main picker still offers its own Tinfoil GLM', JSON.stringify(tin.base));
+  ok(!tin.sheet.some(t => /glm|deepseek|tinfoil/i.test(t)) && !tin.pop.some(t => /glm|deepseek|tinfoil/i.test(t)), 'phone: with a Private group, GLM/DeepSeek appear only there (no shared-Hermes Tinfoil row)', JSON.stringify(tin));
+  ok(tin.onMainGlm.some(t => /glm/i.test(t)), 'phone: a thread already on the main Tinfoil route still shows its current model', JSON.stringify(tin.onMainGlm));
   await shot(p, 'phone-04-picker-private-group');
   await grp.locator('.mrow', { hasText: 'DeepSeek' }).click(); await wait(500);
   const chip = await p.locator(`[data-chats="${wid}"] [data-chmodel]`).evaluate(e => ({ t: e.innerText, priv: e.classList.contains('private'), lock: !!e.querySelector('.ag-lock') }));
@@ -157,7 +180,7 @@ async function phone(b) {
 async function desktop(b) {
   const c = await ctx(b, false), p = await c.newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e)));
-  await p.goto(BASE + 'desktop.html', { waitUntil: 'load' }); await wait(2500);
+  await p.goto(BASE + 'desktop.html', { waitUntil: 'domcontentloaded' }); await wait(2500);
   await p.evaluate(() => __wux.live?.refresh?.(true)); await wait(1500);
   const wid = await p.evaluate(() => Object.values(__wux.wins).find(w => w.app === 'chats' && !w.agent)?.id || '');
   ok(!!wid, 'desktop: main Chats window open', wid);
@@ -190,11 +213,18 @@ async function desktop(b) {
 }
 
 (async () => {
-  const b = await chromium.launch({ channel: process.env.PW_CHANNEL || undefined });
+  // Never point mutation-capable fixture tests at a configurable live origin.
+  const { spawn } = require('node:child_process');
+  const fixture = spawn(process.execPath, [path.join(__dirname, 'tools/agents-fixture.mjs'), String(fixturePort), path.join(__dirname, 'web'), '--main=fixture', '--seed=private'], { stdio:['ignore','pipe','inherit'] });
+  process.on('exit', () => fixture.kill());
+  await new Promise((resolve, reject) => { fixture.stdout.once('data', resolve); fixture.once('error', reject); fixture.once('exit', c => reject(Error('fixture exited ' + c))); });
+  const b = await chromium.launch({ channel: process.env.PW_CHANNEL || undefined, ...(process.env.QA_CHROME ? { executablePath:process.env.QA_CHROME } : {}) });
   try { await phone(b); } catch (e) { ok(false, 'phone run threw', e.stack); }
   try { await desktop(b); } catch (e) { ok(false, 'desktop run threw', e.stack); }
-  await b.close();
+  await b.close(); fixture.kill();
+  const fence = await (await fetch(new URL('/__qa/refused', BASE))).json();
+  ok(fence.refused === 0, 'zero mutations reached the live-read QA origin', JSON.stringify(fence));
   fs.writeFileSync(path.join(OUT, 'receipt.json'), JSON.stringify({ base: BASE, pass, fail, cases, at: new Date().toISOString(), sha: process.env.QA_SHA || '', host: require('os').hostname() }, null, 2));
   console.log(`\n${pass} pass, ${fail} fail`);
   process.exit(fail ? 1 : 0);
-})();
+})().catch(e => { console.error(e); process.exit(2); });

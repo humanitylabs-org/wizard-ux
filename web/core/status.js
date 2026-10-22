@@ -90,7 +90,9 @@
     const waiting = window.WosOutbox?.unsent().some(it => it.state === 'waiting');
     if (net === 'offline' || net === 'reconnecting' || waiting) {
       const diagnosis = window.WizReach?.failure();
-      parts.push(`<div class="wx-banner net ${net === 'offline' ? 'offline' : 'reconnecting'}" role="status" data-wxnet="${net === 'offline' ? 'offline' : 'reconnecting'}"><span class="wx-spin" aria-hidden="true"></span><span class="wx-m">${esc(diagnosis?.message || 'Checking the connection to Wizard. Messages are kept on this device while we retry.')}</span><span class="wx-actions"><button type="button" data-wxretry>Retry now</button><button type="button" data-wxtroubleshoot>Open Troubleshooter</button></span></div>`);
+      const full = diagnosis?.message || 'Checking the connection to Wizard. Messages are kept on this device while we retry.';
+      // Desktop shows one line in the top bar (short text, full message on hover); the phone shows the full card.
+      parts.push(`<div class="wx-banner net ${net === 'offline' ? 'offline' : 'reconnecting'}" role="status" title="${esc(full)}" data-wxnet="${net === 'offline' ? 'offline' : 'reconnecting'}"><span class="wx-spin" aria-hidden="true"></span><span class="wx-m">${esc(full)}</span><span class="wx-s">${esc(diagnosis?.short || 'Reconnecting to Wizard · retrying')}</span><span class="wx-actions"><button type="button" data-wxretry aria-label="Retry now">Retry<span class="wx-long"> now</span></button><button type="button" data-wxtroubleshoot aria-label="Open Troubleshooter"><span class="wx-long">Open </span>Troubleshooter</button></span></div>`);
     }
     else if (net === 'restored') parts.push(`<div class="wx-banner net restored" role="status" data-wxnet="restored"><span class="wx-i">✓</span><span class="wx-m">Back online</span></div>`);
     const crit = criticals(), sig = crit.map(s => s.id).sort().join(',');

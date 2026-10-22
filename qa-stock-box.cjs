@@ -1,6 +1,6 @@
 // Wizard UX on a stock Hermes box: boot, neutral identity, no owner-specific strings, real send + reply.
 // Usage: node qa-stock-box.cjs http://127.0.0.1:18787/wizard-ux/
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const BASE = process.argv[2] || 'http://127.0.0.1:18787/wizard-ux/';
 const BANNED = /Archimedes|James|Bangkok|wizard001/;
 const results = [];
@@ -25,7 +25,7 @@ const ok = (name, pass, detail = '') => { results.push({ name, pass, detail }); 
     const text = await page.evaluate(() => document.body.innerText + ' ' + [...document.querySelectorAll('[placeholder]')].map(e => e.placeholder).join(' '));
     const hit = text.match(BANNED);
     ok('desktop shows no owner-specific names', !hit, hit ? hit[0] : '');
-    await page.screenshot({ path: '/home/telos/.hermes/cache/scratch/stock-desktop.png' });
+    await page.screenshot({ path: require('./tools/qa-paths.cjs').workPath('stock-desktop.png') });
     ok('desktop: no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 
     // ---- phone shell ----
@@ -41,7 +41,7 @@ const ok = (name, pass, detail = '') => { results.push({ name, pass, detail }); 
     ok('phone shows no owner-specific names', !phit, phit ? phit[0] : '');
     const apps = await ph.evaluate(() => window.WizCore.apps('mobile').APPS.filter(a => a.kind === 'wizard' || a.kind === 'chats').map(a => a.id));
     ok('phone launcher has Chats only (no private apps baked in)', apps.length === 1 && apps[0] === 'wizard', apps.join(','));
-    await ph.screenshot({ path: '/home/telos/.hermes/cache/scratch/stock-phone.png' });
+    await ph.screenshot({ path: require('./tools/qa-paths.cjs').workPath('stock-phone.png') });
     ok('phone: no page errors', perr.length === 0, perr.slice(0, 2).join(' | '));
 
     // ---- real send through the UX's own client (live.js → Agent Service → stock Hermes) ----

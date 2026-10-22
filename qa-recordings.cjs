@@ -1,13 +1,13 @@
 // Mizel.ai recordings QA: a "🎙 …" thread shows as Mizel.ai in the shade, appears on the Mizel desk strip,
 // and a tap opens it in the Chats window. Every Hermes/Wizard write is intercepted; the run fails on any real /v1/runs.
-const { chromium } = require('/home/telos/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
-const OUT = process.env.QA_OUT || '/home/telos/apps/wizard-os-home/qa-live';
+const { chromium } = require('./tools/qa-playwright.cjs');
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
+const OUT = process.env.QA_OUT || require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'qa-live');
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 
 (async () => {
-  const b = await chromium.launch({ args: ['--host-resolver-rules=MAP wizard.tailc0f369.ts.net 127.0.0.1:18443'] });
+  const b = await chromium.launch({ args: [...(process.env.QA_RESOLVE ? ['--host-resolver-rules=' + process.env.QA_RESOLVE] : [])] });
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true });
   const writes = [];
   await ctx.route('**/*', r => {

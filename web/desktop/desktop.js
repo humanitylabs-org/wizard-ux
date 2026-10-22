@@ -69,7 +69,7 @@
 
   /* ---------------- chats (shared core) ---------------- */
   const stage = $('#stage');
-  const CHATS = C.chats({
+  const CHATS = window.WizChatsHost.create({
     win: id => W[id] || (/::list$/.test(id) && W[id.slice(0, -6)] ? listWin(id.slice(0, -6)) : undefined),
     root: () => stage,
     save,
@@ -95,6 +95,7 @@
     // A private-origin link in a message opens as a window on this workspace; the shell never navigates away.
     openLink: (url, title) => { const a = appAt(url); return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }); },
     changed: () => { for (const id of Object.keys(W)) if (W[id].app === 'chats') syncChatsPane(id); },
+    openThread: (sid, options) => openThread(sid, options),
   });
 
   function openReview(level, date) {
@@ -156,7 +157,7 @@
   const ico = (tag, cls, a, extra) => window.WizSigil ? window.WizSigil.box(tag, cls, a, extra) : `<${tag} class="${cls}" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}${extra || ''}</${tag}>`;
   /* Agents MVP: a Chats window pinned to a non-default agent (w.agent) wears that agent's sigil and name. */
   const agentWin = w => !!(w && w.app === 'chats' && w.agent);
-  const mainChats = w => !!(w && w.app === 'chats' && !w.agent);
+  const mainChats = w => !!(w && w.app === 'chats' && !w.agent && CHATS.views.providerFor(w) === CHATS.views.defaultId());
   function agentApp(w) {
     const AG = window.WosAgents, a = AG?.get(w.agent) || { id: w.agent, label: w.agent, appearance: {}, privacy: 'standard' };
     const g = AG ? AG.glyph(a) : '', c = AG ? AG.colour(a) : '#b99bff';
@@ -195,6 +196,7 @@
   }
 
   function newWin(obj, opts = {}) {
+    if (obj.app === 'chats' && !obj.agent && !obj.chatsProvider) obj = { ...obj, chatsProvider: CHATS.views.defaultId() };
     leaveHome();
     const t = Number.isInteger(opts.ws) && ws[opts.ws] ? opts.ws : cur;
     const id = uid(); W[id] = { id, ...obj };
@@ -265,11 +267,14 @@
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
   window.WizOpenApp = id => { const x = hostedOpenable(id); return x ? openApp(x) : false; };
-  // Only the App Store and System windows may ask; the sender is checked by its actual frame, not by anything it says.
-  addEventListener('message', e => {
+  // Only trusted system windows may ask; check the actual sender frame, never a claimed app id.
+  addEventListener('message', async e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents'].includes(w.appId)) return;
+    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents', 'setup'].includes(w.appId)) return;
+    // Setup may have just installed it: apps-changed is asynchronous. Wait for the registry, not a guessed delay.
+    if (!hostedOpenable(d.id)) await window.WizCore.refreshApps?.();
+    if (!host.isConnected || W[host.dataset.win] !== w) return;
     const a = hostedOpenable(d.id); if (a) openApp(a);
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
@@ -307,9 +312,10 @@
     if (a.kind === 'view' && a.view === 'inbox') { openInbox(); return true; }
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
-      const ex = !opts.fresh && findWin(mainChats);
+      const chatsProvider = a.chatsProvider || CHATS.views.defaultId();
+      const ex = !opts.fresh && findWin(w => w.app === 'chats' && !w.agent && CHATS.views.providerFor(w) === chatsProvider);
       if (ex) { focusWin(ex.id); return true; }
-      newWin({ app: 'chats', thread: null }, opts); return true;
+      newWin({ app: 'chats', thread: null, chatsProvider }, opts); return true;
     }
     if (a.url) {
       const ex = !opts.fresh && findWin(w => w.app === 'frame' && w.appId === a.id);
@@ -327,7 +333,7 @@
   function openThread(sid, opts = {}) {
     if (!sid) return;
     // A thread opens in the Chats of the agent it is pinned to (main Chats for the main agent's threads).
-    const ag = LIVE?.agentOf?.(sid) || '', mine = x => x.app === 'chats' && (x.agent || '') === ag;
+    const ag = LIVE?.agentOf?.(sid) || '', mine = x => x.app === 'chats' && (x.agent || '') === ag && (ag || CHATS.views.providerFor(x) === CHATS.views.defaultId());
     let w = !opts.fresh && (ws[cur].wins.map(id => W[id]).find(mine) || findWin(mine));
     if (!w) w = newWin({ app: 'chats', thread: null, ...(ag ? { agent: ag } : {}) }, opts);
     focusWin(w.id); CHATS.openChat(w.id, sid);
@@ -364,7 +370,7 @@
   function winHtml(w) {
     const a = appOf(w);
     return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
-      ${window.WosBoundView.badge(w)}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
+      ${window.WosBoundView.badge(w)}${w.app === 'frame' ? window.WosOwnViews?.marker(a) || '' : ''}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
       <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
       <button data-wact="close" title="Close app (${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
@@ -376,8 +382,8 @@
     if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>↑</kbd><kbd>↓</kbd> move through chats · <kbd>/</kbd> search · <kbd>${MOD}Enter</kbd> new chat · <kbd>${CMD}K</kbd> launch · <kbd>${MOD}⇧V</kbd> new voice chat</div></div></div></div>`;
-    const a = appOf(w), url = w.url || a.url || '/';
-    return `<iframe src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
+    const a = appOf(w), url = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
+    return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}" src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
   }
   /* Chats on the desktop: list on the left, thread on the right, both from the shared Chats client.
@@ -956,11 +962,13 @@
   document.body.appendChild(setEl);
   let settingsFocus = null, settingsReturn = '';
   const settingsView = window.WosSettings.mount($('#settingsBody'), {
-    outbox: OUTBOX, live: LIVE, ago, toast, visible: () => !setEl.hidden,
+    shell: 'desktop', outbox: OUTBOX, live: LIVE, ago, toast, visible: () => !setEl.hidden,
     helpSub: 'Keyboard shortcuts, desks and Back',
     openThread: id => { closeSettings(); openThread(id); },
     editUnsent: it => { closeSettings(); editUnsent(it); },
     openLink: (url, title) => { closeSettings(); const a = appAt(url); return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }); },
+    openStore: id => { closeSettings(); newWin({ app: 'frame', appId: 'app-store', url: '/wizard-os-home/store/index.html' + (id ? '?app=' + encodeURIComponent(id) : '') }); },
+    chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; CHATS.renderChats(w); const list = winEl(w.id)?.querySelector(`[data-chats="${w.id}::list"]`); if (list) CHATS.renderChatList(listWin(w.id), list); syncChatsPane(w.id); } save(); },
     openSub: id => {
       closeSettings(); settingsReturn = id;
       if (id === 'files') openFiles();
@@ -1148,7 +1156,7 @@
     try { modelRoute = vRoute; if (!modelRoute) throw Error('Recording-start model unavailable · take kept'); }
     catch (e) { vReply = rp; toast('!', String(e.message || e), 2400); return 'busy'; }
     const t = sealAt ? CHATS.takeComposer(sealAt.wid, sealAt.sid) : null;
-    const sealed = t && (t.text || t.files.length) ? t : false;
+    const sealed = t && (t.text || t.files.length || t.reply) ? t : false;
     dictationFinishing = true;
     try {
     const r = await VOICE.finish({ transcribe: false });
@@ -1158,16 +1166,15 @@
     const extraFiles = (vFiles?.files || []).map(f=>window.WizUploads?.pending?.ref(f) || (f.id && !f.uploading ? {id:f.id,name:f.name,mime:f.mime,bytes:f.bytes} : null)).filter(f=>f&&f.id);
     if (vFeedback) { const staged=await OUTBOX.stage({kind:'reply',sessionId:vFeedback.thread,...vRoute,audio:r.blob,captureId:r.captureId,files:extraFiles}); const item=await window.WosBoundView.feedback(OUTBOX,{...vFeedback,route:vRoute,custodyId:staged.id},'',r.blob,extraFiles); if(!item){await OUTBOX.transition(staged.id,'held','Feedback unavailable · original kept');toast('!','Feedback kept for its original thread',2600);return 'retained';} toast('✦','Feedback kept · waiting to send',1800);return 'sent'; }
     let stagedId = null, transcript = '';
-    if (!strictReply && !forceNew && !vNewChat && !sealed?.text && !sealed?.files?.length && !extraFiles.length) {
+    if (!strictReply && !forceNew && !vNewChat && !sealed?.text && !sealed?.files?.length && !sealed?.reply && !extraFiles.length) {
       // The microphone journal remains until staging owns the final chunk and the frozen destination.
       {
         const staged = await OUTBOX.stage({kind:aimSid && aimSid!=='__new__'?'reply':'new',sessionId:aimSid==='__new__'?'':aimSid||'',steerRunId:rp?.steerRunId || '',...vRoute,audio:r.blob,captureId:r.captureId});
         stagedId=staged.id;
         if(staged.durable) {
           try { transcript=String((await window.WizConfig.transcribe(r.blob,{prompt:window.WizConfig.voicePrompt(),signal:AbortSignal.timeout(45000)})).text||'').trim(); } catch(_) {}
-          const cmd=transcript && LOCAL_COMMANDS.parse(transcript,vSnapshot,'auto');
-          const music=/^(music|play_music)$/.test(cmd?.action||''), sid0=stagedId;
-          if(cmd && executeCommand(cmd,transcript,vSnapshot,music?(done=>{if(done)OUTBOX.completeLocal(sid0);}):undefined)) { staged.text=transcript;if(window.WosCommands.completedLocally(cmd,true)) await OUTBOX.completeLocal(stagedId);else await OUTBOX.transition(stagedId,'held','Command accepted · completion unconfirmed; original recording kept');toast('⚡','Command handled on-device',1800);return 'local'; }
+          // Talk-key/tap takes are messages, even when the transcript resembles a command.
+          // Only commandVoice's explicit commandTake path above invokes the shared grammar.
         }
       }
     }
@@ -1175,7 +1182,7 @@
     if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); return 'sent'; }
     if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles });
     else {
-      const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
+      const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', ...(sealed?.reply ? { reply: sealed.reply } : {}), files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
       sealed?.done?.(item);
     }
     toast('✦', 'Recording kept · waiting to send', 1400);
@@ -1567,6 +1574,7 @@
   C.deeplink.consume();
   window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && keysEl.hidden && ib.hidden && usageEl.hidden && !window.WosResources?.state?.panel });
   new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
+  window.WosSetupLaunch?.boot({ open: id => { const a = APP[id]; if (a) openApp(a); } }); // Setup opens itself on first run
   C.status?.attach({ openInbox, inboxOpen: () => !ib.hidden, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 

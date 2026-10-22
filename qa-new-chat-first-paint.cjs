@@ -2,7 +2,7 @@
 // Run on a peer against the live origin; QA_WEB overlays an exact candidate for A/B.
 // All non-read requests are intercepted. No chat is sent or marked read on the server.
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), crypto = require('node:crypto');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const BASE = process.argv[2];
 if (!BASE) throw new Error('Pass the Wizard /wizard-os-home/ URL');
 const OUT = process.env.QA_OUT || path.join(process.cwd(), 'qa-first-paint');

@@ -6,7 +6,7 @@
 // first run anywhere (no read state) still waits for the whole list; no writes beyond the first-run read state.
 // Usage: QA_TREE=<repo> node qa-chats-first-paint.cjs
 const fs = require('fs'), path = require('path');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || '/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const TREE = process.env.QA_TREE || __dirname;
 const PAGE_MS = +process.env.PAGE_MS || 700, HANG_MS = +process.env.HANG_MS || 6000;
 let pass = 0, fail = 0;
@@ -39,7 +39,7 @@ async function run(b, { seen }) {
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m) {
       const rel = m[1] || 'index.html'; let f = path.join(TREE, 'web', rel);
-      if (!fs.existsSync(f)) f = path.join('/home/telos/apps/wizard-os-home/web', rel);
+      if (!fs.existsSync(f)) f = path.join(require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'web'), rel);
       if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
       const ct = rel.endsWith('.css') ? 'text/css' : rel.endsWith('.html') ? 'text/html' : rel.endsWith('.png') ? 'image/png' : rel.endsWith('.json') ? 'application/json' : 'application/javascript';
       return r.fulfill({ status: 200, contentType: ct, body: fs.readFileSync(f) });
@@ -56,7 +56,7 @@ async function run(b, { seen }) {
   const rowsSel = `[data-chats="${wid}"] .ch-list .ch-row[data-chopen]`;
   // While nothing is listed yet (#95): placeholder rows shaped like real ones, never the boxed "Connecting to Wizard…" text.
   const wait = await p.evaluate(s => ({ rows: document.querySelectorAll(s + ' .ch-row[data-chopen]').length, skel: document.querySelectorAll(s + ' .ch-skel .ch-skel-row').length, box: /Connecting to/.test(document.querySelector(s)?.innerText || '') }), `[data-chats="${wid}"]`);
-  if (!seen) await p.screenshot({ path: path.join(process.env.QA_OUT || '/home/telos/.hermes/cache/scratch', 'chats-skeleton-firstrun.png') });
+  if (!seen) await p.screenshot({ path: path.join(process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath(''), 'chats-skeleton-firstrun.png') });
   await p.waitForSelector(rowsSel, { timeout: 30000 });
   const tRows = Date.now() - t0, pagesAtRows = log.length;
   await p.waitForFunction(() => !!WizLive.fullAt, null, { timeout: 30000 });
@@ -64,7 +64,7 @@ async function run(b, { seen }) {
   const listed = await p.evaluate(() => WizLive.sessions.filter(s => /^s\d+$/.test(s.id)).length);
   await p.waitForFunction(() => (WizLive.agentSessions.private || []).length > 0, null, { timeout: HANG_MS + 10000 }).catch(() => {});
   const priv = await p.evaluate(() => WizLive.sessionsFor('').some(s => s.id === 'p0'));
-  const shot = path.join(process.env.QA_OUT || '/home/telos/.hermes/cache/scratch', `chats-first-paint-${seen ? 'seen' : 'firstrun'}.png`);
+  const shot = path.join(process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath(''), `chats-first-paint-${seen ? 'seen' : 'firstrun'}.png`);
   await p.screenshot({ path: shot });
   await ctx.close();
   return { tRows, tWalk, pagesAtRows, listed, priv, writes, errs, shot, wait };

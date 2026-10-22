@@ -2,7 +2,7 @@
 // switches it off/on without rebuilding the app frame and survives reload; desktop always keeps framed windows and
 // shows no switch. Read-only: every non-GET request is aborted.
 // QA_URL=https://… [QA_OUT=dir] [CAND_DIR=web dir to serve /wizard-os-home/ from] node tools/qa-borderless-default.cjs
-const {chromium}=require('playwright'),fs=require('fs'),path=require('path');
+const {chromium}=require('./qa-playwright.cjs'),fs=require('fs'),path=require('path');
 const BASE=process.env.QA_URL,OUT=process.env.QA_OUT||'qa-borderless-default',CAND=process.env.CAND_DIR;let fails=0;const res=[],errs=[];
 const check=(name,ok,detail)=>{res.push({name,ok:!!ok,detail});if(!ok)fails++;console.log((ok?'PASS ':'FAIL ')+name+(ok?'':' '+JSON.stringify(detail)));};
 const TYPES={'.css':'text/css','.html':'text/html','.js':'application/javascript','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.txt':'text/plain'};

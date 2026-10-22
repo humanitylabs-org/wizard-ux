@@ -1,9 +1,11 @@
 """Shared emulator + CDP helpers for tools/qa_android_apps.py (runs on Thales)."""
 import json, os, pathlib, re, socket, subprocess, time, urllib.request
+from qa_paths import work_root
+from qa_paths import android_sdk, java_home
 
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds')
-SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds'))
+SDK = android_sdk()
 ADB = str(SDK / 'platform-tools/adb')
 BT = sorted((SDK / 'build-tools').iterdir())[-1]
 
@@ -13,9 +15,9 @@ class Emu:
         self.job, self.port, self.pkg, self.dns = job, port, pkg, dns
         self.S = 'emulator-%d' % port
         self.env = os.environ.copy()
-        self.env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+        self.env.update(JAVA_HOME=java_home(),
                         ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-        self.env['PATH'] = self.env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + self.env['PATH']
+        self.env['PATH'] = self.env['JAVA_HOME'] + '/bin:' + self.env['PATH']
         (job / 'avd').mkdir(exist_ok=True)
         self.proc = None
 

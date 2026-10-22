@@ -1,5 +1,5 @@
 // Isolated browser fixture: preserve Standard Get while reloading canonical status.
-const {chromium}=require(process.env.PW),fs=require('fs'),path=require('path'),assert=require('assert/strict');
+const {chromium}=require('../tools/qa-playwright.cjs'),fs=require('fs'),path=require('path'),assert=require('assert/strict');
 (async()=>{const b=await chromium.launch({headless:true});try{const c=await b.newContext({serviceWorkers:'block'});let installed=false,posts=0;const root=process.env.QA_ROOT;
 await c.route('**/wizard-os-home/store/*',async r=>{const f=path.basename(new URL(r.request().url()).pathname);if(!['index.html','store.js','store.css','store-status.js'].includes(f))return r.continue();await r.fulfill({contentType:f.endsWith('.html')?'text/html':f.endsWith('.css')?'text/css':'text/javascript',body:fs.readFileSync(path.join(root,'web/store',f))});});
 await c.route('**/store-data/wizard/v1/index/search?*',r=>r.fulfill({json:{apps:[{id:'fixture-public',name:'Fixture Public',repo:'example/fixture-public',type:'view',category:'app',version:'1.0.0',source:'standard',channel:'standard'}],sources:[],total:1}}));

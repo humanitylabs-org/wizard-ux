@@ -1,8 +1,8 @@
 // QA (James, 20 Oct 2026): pause the orb, then tap the orb -> it RESUMES recording and sends nothing.
 // The next tap (while recording) sends. Also: Pause button still toggles, the paused pill says 'tap orb to resume'.
 // Usage: QA_WEB_DIR=<repo> node qa-orb-tap-resume.cjs [url]. Every Hermes/Wizard write is intercepted.
-const { chromium } = require(process.env.PLAYWRIGHT_PATH || '/home/telos/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const { chromium } = require('./tools/qa-playwright.cjs');
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 
 const W = process.env.QA_WEB_DIR || __dirname;
 let pass = 0, fail = 0;
@@ -14,7 +14,7 @@ async function boot(b, native) {
   // Self-contained: the shell comes from the working tree, the Wizard API is faked, nothing leaves the box.
   await ctx.route('**/*', r => {
     const q = r.request(), u = new URL(q.url());
-    if (!/wizard\.tailc0f369\.ts\.net$/.test(u.hostname)) return r.abort();
+    if (!(u.origin === require('./tools/qa-paths.cjs').origin())) return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET' && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = require('path').join(W, 'web', f);

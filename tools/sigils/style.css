@@ -67,20 +67,19 @@
 :is(.wbar .ic, .wic, .app-chip i, .pal-it .ic, .ag-sig.xs, .ch-agent.thread .ag-sig).sgt > .sg-agents::after { -webkit-mask-size: auto 80%; mask-size: auto 80%; }
 .dsg { --c: #C9BEFF; position: relative; width: 21px; height: 21px; display: grid; place-items: center; opacity: .78; transition: opacity 160ms; }
 .dsg .sgi { width: 100%; height: 100%; filter: drop-shadow(0 0 5px color-mix(in oklab, var(--c) 45%, transparent)); }
-.dsg .sgi.sgl { font-size: 15px; }
 .dsg.empty { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid rgba(205, 190, 255, .4); opacity: 1; }
 .dsg .dn { position: absolute; right: -7px; bottom: -5px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px;
   font: 700 9px/13px system-ui, sans-serif; text-align: center; color: #0c0814; background: var(--c); }
 /* App count badge, pinned to the app's mark (top right); the orb mirrors the desk in view. */
 .dsg .dbg { position: absolute; right: -9px; top: -7px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 99px;
   font: 800 9.5px/15px system-ui, sans-serif; text-align: center; color: #160b05; background: var(--amber); box-shadow: 0 0 0 1.5px rgba(5, 3, 12, .9); pointer-events: none; }
-/* App with no sigil yet: its initial, set in the app's colour. */
-.sgi.sgl {
-  -webkit-mask: none; mask: none; background: none;
-  display: grid; place-items: center; width: auto; height: auto;
-  font: 800 1em/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: -.02em;
-  color: color-mix(in oklab, var(--c) 82%, #fff);
-}
+/* App with no sigil yet: a disc with its initial cut out (or its own icon file), drawn as a mask exactly like a
+ * designed sigil: same box, same lit gradient, same skin overrides. The letter text stays in the DOM for search
+ * and tests but is never painted, so no skin rule can turn it into an opaque square. */
+.sgi.sgl { font-size: 0 !important; color: transparent; overflow: hidden; }
+/* An app's own icon file is its silhouette, at 78% of the box with rounded corners, so even an opaque square icon
+ * lands as a soft lit shape no bigger than a sigil. */
+.sgi.sgimg { -webkit-mask-size: 78%; mask-size: 78%; border-radius: 30%; }
 
 /* ---------- where icons show ---------- */
 /* Launcher tiles: a squircle, a little larger than before, and a pressed state that dims the glow. */

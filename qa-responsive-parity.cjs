@@ -1,7 +1,7 @@
 // Run only on Thales. Live GET APIs + source overlay; never forward mutations or beacons.
-const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), crypto = require('node:crypto');
-if (!os.hostname().toLowerCase().includes('thales') || !process.env.QA_OUT?.startsWith('/Volumes/ThalesMedia/') || !process.env.QA_CHROME) throw Error('Thales/external-volume QA only');
+if (!process.env.WIZARD_WORK_ROOT || !require('./tools/qa-paths.cjs').inWorkRoot(process.env.QA_OUT) || !process.env.QA_CHROME) throw Error('Thales/external-volume QA only');
 const BASE = process.argv[2], OUT = process.env.QA_OUT, SOURCE = process.env.QA_SOURCE, baseline = process.env.QA_BASELINE === '1';
 fs.mkdirSync(OUT,{recursive:true});
 process.env.TMPDIR=path.join(OUT,'tmp');fs.mkdirSync(process.env.TMPDIR,{recursive:true});
@@ -14,10 +14,11 @@ async function boot(phone) {
  await ctx.route('**/*',async route=>{
   const q=route.request(),url=new URL(q.url());
   if(!['GET','HEAD'].includes(q.method())) { writes.push({method:q.method(),url:q.url()}); return route.fulfill({status:403,body:'{}'}); }
+  if (url.pathname === '/wizard/v1/agents') { const response=await route.fetch(), data=await response.json(); if(!(data.agents||[]).some(a=>a.id==='private')) data.agents=[...(data.agents||[]),{id:'private',label:'QA private',privacy:'private',status:'running'}]; return route.fulfill({json:data}); }
   if(SOURCE && url.pathname.startsWith('/wizard-os-home/')) { const rel=url.pathname.slice('/wizard-os-home/'.length)||'index.html',f=path.resolve(SOURCE,'web',rel); if(f.startsWith(path.resolve(SOURCE,'web')+path.sep) && fs.existsSync(f) && fs.statSync(f).isFile()) { const body=fs.readFileSync(f);hashes[rel]=crypto.createHash('sha256').update(body).digest('hex'); const ext=path.extname(f),type={'.html':'text/html','.js':'application/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.woff2':'font/woff2','.svg':'image/svg+xml'}[ext]||'application/octet-stream'; return route.fulfill({body,contentType:type}); } }
   if(/\/wizard\//.test(url.pathname)) reads.push(q.url()); return route.continue();
  });
- await ctx.addInitScript(()=>{localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.done','1'); navigator.sendBeacon=(url)=>{(window.__qaBeacons ||= []).push(String(url));return false;};});
+ await ctx.addInitScript(()=>{try {localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.done','1');} catch (_) {} navigator.sendBeacon=(url)=>{(window.__qaBeacons ||= []).push(String(url));return false;};});
  const p=await ctx.newPage();p.on('pageerror',e=>errors.push(String(e)));
  await p.goto(BASE+'?view=skin');await p.waitForFunction(m=>m?window.__wos?.live?.ok:window.__wux?.live?.ok,phone,{timeout:60000});await nap(500);
  return {p,ctx};
@@ -31,9 +32,11 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   ok(await p.locator(selector).isVisible(),kind+' skin deep link opens Settings');
   ok(await p.locator('[data-skinpick]').count()===5,kind+' same five approved skins');
   ok(await p.evaluate(()=>!!WosSettings && !!WosSkin),kind+' shared modules mounted');
+  await open(p,phone,'updates');
   ok(await p.locator('[data-st=web-update]').count()===1,kind+' common web update check is reachable');
-  const features=await p.locator('[data-settings-feature]').evaluateAll(es=>es.map(e=>e.dataset.settingsFeature));
+  const features=[]; for(const view of ['unsent','skin','mic','usage','updates']) { await open(p,phone,view); features.push(...await p.locator('[data-settings-feature]').evaluateAll(es=>es.map(e=>e.dataset.settingsFeature))); }
   ok(['unsent','look','voice','cancelled','wizard','usage'].every(x=>features.includes(x)),kind+' all common settings features',features);
+  await open(p,phone,'settings');if(phone) await p.locator('[data-st-page=phone]').click();
   ok(phone?await p.locator('[data-st=everywhere][disabled]').count()===1:await p.locator('[data-st=everywhere]').count()===0,kind+' honest Android capability gate');
   for (const level of ['day','week','month']) {
     await open(p,phone,level);await p.waitForSelector('.review .summary');
@@ -69,16 +72,16 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   await open(p,phone,'qa-feature');await p.click('[data-qa-feature]');
   ok(await p.evaluate(()=>__qaFeatureWorked===1),kind+' synthetic feature added once is reachable and works');
   // Focus survives polling re-render and remains in the settings dialog.
-  await p.locator('[data-skinpick=ember]').focus();await p.evaluate(()=>WosSettings.register({id:'qa-refresh',html:()=>''})); // force live-style re-render
+  await open(p,phone,'skin');await p.locator('[data-skinpick=ember]').focus();await p.evaluate(()=>WosSettings.register({id:'qa-refresh',html:()=>''})); // force live-style re-render
   await p.keyboard.press('Tab');ok(await p.evaluate(()=>!!document.activeElement.closest('[data-settings-root]')),kind+' keyboard focus stays in Settings');
-  await p.keyboard.press('Escape');await nap(250);ok(!await p.locator(selector).isVisible(),kind+' Escape closes Settings');
-  await open(p,phone,'settings');await p.click('[data-st=help]');await nap(300);await p.evaluate(()=>history.back());await nap(350);
+  await p.keyboard.press('Escape');await nap(200);if(phone) { ok(await p.locator(selector).isVisible() && await p.locator('#settingsBody').getAttribute('data-settings-page') === '',kind+' Escape returns page to root');await p.keyboard.press('Escape');await nap(200); }ok(await p.locator(selector).count()===0,kind+' Escape closes root Settings');
+  await open(p,phone,'updates');await p.click('[data-st=help]');await nap(300);await p.evaluate(()=>history.back());await nap(350);
   ok(await p.locator(selector).isVisible(),kind+' nested Help Back returns to Settings');
   await p.evaluate(()=>history.back());await nap(250);ok(!p.isClosed() && p.url().includes('/wizard-os-home/'),kind+' Settings Back retains app');
   await open(p,phone,'settings');await p.click('[data-st=files]');await nap(650);await p.evaluate(()=>history.back());await nap(350);
   ok(await p.locator(selector).isVisible(),kind+' nested Files Back returns to Settings');
   await p.keyboard.press('Escape');
-  // Actual live private-agent rows, without messages or API writes.
+  // Private-agent fixture when this installation only has the main agent; no private messages or writes.
   await p.evaluate(()=>WosAgents.load());await p.evaluate(()=>WizOpenAgentChats('private'));await nap(600);
   ok(await p.locator('[data-agent-titlebar=private]').count()>0,kind+' private Chats scope still reachable');
   // State-changing actions are isolated local fixtures, never real chats/runs/transcription.
@@ -102,13 +105,13 @@ async function open(p,phone,view='skin') { await p.evaluate(v=>WizCore.deeplink.
   await p.evaluate(()=>WosOutbox._items.set('wos-qa-edit',{id:'wos-qa-edit',state:'failed',kind:'new',agent:'',sessionId:'qa-not-a-real-session-2',text:'QA successful retained edit',files:[],createdAt:Date.now(),durable:true,attempts:99}));
   await open(p,phone,'unsent');await p.click('[data-ubid=wos-qa-edit] [data-ub=edit]');await nap(250);
   ok(await p.evaluate(()=>WosOutbox.get('wos-qa-edit')?.state==='sent' && WosOutbox.get('wos-qa-edit')?.durable && !WosOutbox.unsent().some(it=>it.id==='wos-qa-edit')&&WosChat.drafts.get('new').text==='QA successful retained edit'&&WosChat.drafts.get('agentnew:private').text==='QA existing private draft'),kind+' successful Edit saves words before consuming unsent and preserves other agent draft');
-  await open(p,phone,'settings');
-  await p.evaluate(async()=>{await WosCancelled.keepWeb(new Blob([new Uint8Array(4096)],{type:'audio/webm'}),16000);WizConfig.transcribe=async()=>({text:'QA cancelled fixture transcript'});WosChat.copyText=async text=>{window.__qaClipboard=text;return true;};});
+  await open(p,phone,'unsent');
+  await p.evaluate(async()=>{await WosCancelled.keepWeb(new Blob([new Uint8Array(4096)],{type:'audio/webm'}),21000);WizConfig.transcribe=async()=>({text:'QA cancelled fixture transcript'});WosChat.copyText=async text=>{window.__qaClipboard=text;return true;};});
   await p.click('[data-cx=copy]');await nap(250);
   ok(await p.evaluate(()=>__qaClipboard==='QA cancelled fixture transcript' && WosCancelled.list().length===1),kind+' cancelled fixture transcribes and copies via shared module');
   await p.click('[data-cx=show]');await p.click('[data-cx=show]');
   ok(await p.locator('[data-cxtext]').innerText()==='QA cancelled fixture transcript',kind+' cancelled words hide/show');
-  await p.reload();await p.waitForFunction(m=>m?window.__wos:window.__wux,phone);await open(p,phone,'settings');
+  await p.reload();await p.waitForFunction(m=>m?window.__wos:window.__wux,phone);await open(p,phone,'unsent');
   ok(await p.evaluate(()=>WosChat.drafts.get('agentnew:private')?.text==='QA existing private draft' && WosOutbox.get('wos-qa-private')?.state==='sent' && WosOutbox.get('wos-qa-private')?.durable && !WosOutbox.unsent().some(it=>it.id==='wos-qa-private') && WosCancelled.list().length===1),kind+' reload retains draft/cancelled record and durable delete');
   await p.click('[data-cx=delete]');await nap(250);ok(await p.evaluate(()=>WosCancelled.list().length===0),kind+' explicit cancelled fixture delete');
   await open(p,phone);await p.setViewportSize({width:360,height:800});await shot(p,kind+'-360');

@@ -11,7 +11,7 @@
 // the stored bytes match the source · removing a chip cancels its upload · a full Wizard (507) says “Not enough space
 // on your Wizard” and attaches nothing · a box without resumable_uploads uses the old POST /wizard/files/upload ·
 // Back from the thread keeps the app open.
-const { chromium } = require(process.env.QA_PLAYWRIGHT || '/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path'), crypto = require('crypto'), http = require('http');
 const { spawn } = require('child_process');
 const PORT = Number(process.env.QA_PORT || 9652);
