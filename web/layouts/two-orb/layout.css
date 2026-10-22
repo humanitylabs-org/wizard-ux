@@ -1,7 +1,7 @@
 /* Two orbs layout. Every rule is scoped to html[data-layout="two-orb"]; colours come from the skin's tokens. */
 
 /* ---------- white orb: the system (dock centre) ---------- */
-html[data-layout="two-orb"] #device:not(.orb-corner) #orb { filter: saturate(0) brightness(1.55) contrast(.92); transform: scale(.84); }
+html[data-layout="two-orb"] #device:not(.orb-corner) #orb { filter: saturate(0) brightness(1.55) contrast(.92); transform: scale(.66); }
 html[data-layout="two-orb"] #device:not(.orb-corner) .orb-halo { filter: saturate(0); opacity: .55; }
 html[data-layout="two-orb"] #device:not(.orb-corner) #orbWrap[data-mode="typing"] #orb,
 html[data-layout="two-orb"] #device:not(.orb-corner)[data-voice="listen"] #orb { filter: saturate(.15) brightness(1.5); }
@@ -9,8 +9,8 @@ html[data-layout="two-orb"] #device:not(.orb-corner)[data-voice="listen"] #orb {
 /* ---------- agent orb (bottom right, in the dock bar) ---------- */
 html[data-layout="two-orb"] .to-orb {
   --c: var(--wz-accent, #8f63ff);
-  position: absolute; z-index: 151; right: 14px; bottom: calc(var(--safe-b) + 16px + 3px);
-  width: 46px; height: 46px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center;
+  position: absolute; z-index: 151; right: 16px; bottom: calc(var(--safe-b) + var(--dock-h) + 16px);
+  width: 54px; height: 54px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center;
   background: radial-gradient(circle at 34% 30%, color-mix(in srgb, var(--c) 45%, white) 0%, var(--c) 50%, color-mix(in srgb, var(--c) 70%, black) 100%);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent), 0 6px 22px color-mix(in srgb, var(--c) 45%, transparent);
   color: white; touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
@@ -19,7 +19,7 @@ html[data-layout="two-orb"] .to-orb {
 html[data-layout="two-orb"] .to-orb[hidden] { display: none; }
 html[data-layout="two-orb"] .to-orb.press { transform: scale(.92); }
 html[data-layout="two-orb"] .to-orb.picking { transform: scale(1.08); }
-html[data-layout="two-orb"] .to-face { width: 26px; height: 26px; display: grid; place-items: center; pointer-events: none; }
+html[data-layout="two-orb"] .to-face { width: 30px; height: 30px; display: grid; place-items: center; pointer-events: none; }
 html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgt { width: 100%; height: 100%; border-radius: 0; background: none !important; box-shadow: none !important; border: 0 !important; --c: #fff; color: #fff; font-size: 18px; }
 html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgt::before,
 html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgt::after { display: none !important; }
@@ -41,14 +41,14 @@ html[data-layout="two-orb"] .to-orb.picking .to-name { display: none; }
 /* The classic corner orb (full-screen Chats, a focused field) already sits bottom right: the agent orb steps aside. */
 html[data-layout="two-orb"] #device.orb-corner .to-orb { display: none; }
 /* Full-screen apps hide the dock: the agent orb stays, a little lower. */
-html[data-layout="two-orb"] #device.immersive:not(.orb-corner) .to-orb { bottom: calc(var(--safe-b) + 12px); right: 12px; }
+html[data-layout="two-orb"] #device.immersive:not(.orb-corner) .to-orb { bottom: calc(var(--safe-b) + 16px); }
 html[data-layout="two-orb"] #device.capturing-screen .to-orb { display: none; }
 /* Chats' new-chat button moves left of the agent orb. */
-html[data-layout="two-orb"] .ch-fab { right: 76px; }
+html[data-layout="two-orb"] #device:not(.orb-corner) .ch-fab { right: 84px; width: 46px; height: 46px; bottom: 20px; border-radius: 15px; }
 
 /* ---------- the agent arc ---------- */
 html[data-layout="two-orb"] .to-arc { position: absolute; inset: 0; z-index: 160; pointer-events: none; }
-html[data-layout="two-orb"] .to-arc::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at calc(100% - 37px) calc(100% - 42px), rgba(0,0,0,.55), rgba(0,0,0,.25) 60%, transparent); opacity: 0; transition: opacity 160ms ease; }
+html[data-layout="two-orb"] .to-arc::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at calc(100% - 43px) calc(100% - 109px), rgba(0,0,0,.55), rgba(0,0,0,.25) 60%, transparent); opacity: 0; transition: opacity 160ms ease; }
 html[data-layout="two-orb"] .to-arc.on::before { opacity: 1; }
 html[data-layout="two-orb"] .to-chip {
   --c: var(--wz-accent, #8f63ff);
@@ -68,3 +68,23 @@ html[data-layout="two-orb"] .to-chip.sel .to-chip-name { background: var(--c); c
 html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgt > * { --c: #fff; color: #fff; }
 /* The agent's hat in white on its own colour. */
 html[data-layout="two-orb"] :is(.to-face, .to-chip-sig) .sgi { width: 82%; height: 82%; filter: brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+
+/* ---------- an agent take runs on the agent orb, not the dock ----------
+ * Centre: the white system button stays small and quiet (no listening animation, no timer).
+ * Controls (cancel, pause, screenshot, attach) fan out around the agent orb; transcript and "To …" sit above them. */
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) #orbWrap { opacity: .35; pointer-events: none; }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) :is(.orb-halo, .orb-ring, .orb-shock, #moons, #timer, #holdHint, #dictationStatus) { visibility: hidden; }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice .arc {
+  left: auto; right: 43px; bottom: calc(var(--safe-b) + var(--dock-h) + 43px); width: 46px; height: 46px; margin: 0 -23px -23px 0;
+  background: rgba(22, 14, 40, .92); color: #fff;
+}
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice .arc svg { stroke: #fff; color: #fff; }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-left   { transform: translate(-100px, 0) scale(1); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-mid    { transform: translate(-87px, -50px) scale(1); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-screen { transform: translate(-50px, -87px) scale(1); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .arc-right  { transform: translate(0, -100px) scale(1); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice .transcript { left: 16px; right: 16px; bottom: calc(var(--safe-b) + var(--dock-h) + 222px); }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) .voice.on .transcript.brief.tip { display: none; }
+html[data-layout="two-orb"][data-to-take] #device:not(.orb-corner) > :is(#voiceDestination, #generalVoice) { left: auto; right: 12px; transform: none; bottom: calc(var(--safe-b) + var(--dock-h) + 186px); }
+html[data-layout="two-orb"][data-to-take] #device.immersive:not(.orb-corner) .voice .arc { bottom: calc(var(--safe-b) + 43px); visibility: visible; }
+html[data-layout="two-orb"][data-to-take] .to-name { display: none; }
