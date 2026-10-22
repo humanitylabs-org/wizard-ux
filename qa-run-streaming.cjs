@@ -22,7 +22,7 @@ fs.mkdirSync(OUT, { recursive: true });
         };
         window.EventSource.prototype = Native.prototype;
       });
-      page.on('response', async r => { if(r.url().includes('/events'))network.push({url:r.url(),status:r.status()}); });
+      page.on('response', async r => { if(r.url().includes('/events')) { const row={url:r.url(),status:r.status()}; network.push(row); if(r.status()>=400)row.body=await r.text().catch(()=> 'unreadable'); } });
       page.on('pageerror', e => errors.push(String(e)));
       await page.goto(BASE + '/wizard-os-home/', { waitUntil: 'load' });
       await page.waitForFunction(() => window.__wos?.live?.ok && window.WosAgents?.get('philosopher'), null, {timeout:60000});

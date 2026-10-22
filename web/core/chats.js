@@ -1168,6 +1168,16 @@ window.WizCore.chats = function createChats(H) {
     };
   }
   const assistantStamp = turns => { const a = (turns || []).findLast(t => t.a && t.a.final !== false)?.a; return a ? JSON.stringify([a.at, a.text]) : ''; };
+  // Hide protocol trailers even when their opening marker spans token chunks.
+  const streamAnswer = value => {
+    let s = String(value || '');
+    const markers = ['[WIZARD_STATUS_V1]', '[WIZARD_CLOSE_AND_FILE_V1]', '[WIZARD_FILES_V1]', '[WIZARD_FILE_CHIPS_V1]', '[WIZARD_IMAGE_INTENT_V1]', '<helm_attachments>'];
+    for (const marker of markers) {
+      const at = s.indexOf(marker); if (at >= 0) s = s.slice(0, at);
+      for (let n = 1; n < marker.length; n++) if (s.endsWith(marker.slice(0, n))) { s = s.slice(0, -n); break; }
+    }
+    return s.trimEnd();
+  };
   function closeStream(c) { c.stream?.handle?.close(); clearTimeout(c.stream?.retry); c.stream = null; }
   function syncStream(w, c, turns, agent) {
     const sid = w.thread, s = LIVE.session(sid), pendingRun = LIVE.pendingRun?.(sid), rid = pendingRun || s?.runId;
@@ -1198,7 +1208,8 @@ window.WizCore.chats = function createChats(H) {
     if (st && !st.landed && turns && assistantStamp(turns) !== st.baseline) {
       st.landed = true; st.handle?.close(); clearTimeout(st.retry);
     }
-    return st && !st.landed && st.text ? `<div class="msg a" data-streaming="${esc(st.rid)}"><div class="bub">${md(st.text)}</div><div class="mmeta">${st.terminal ? 'Finishing…' : 'Replying…'}</div></div>` : '';
+    const visible = st && !st.landed ? streamAnswer(st.text) : '';
+    return visible ? `<div class="msg a" data-streaming="${esc(st.rid)}"><div class="bub">${md(visible)}</div><div class="mmeta">${st.terminal ? 'Finishing…' : 'Replying…'}</div></div>` : '';
   }
   function renderThread(w, el, keep) {
     if (H.renderView?.(w, el, () => renderThread(w, el, keep), 'thread')) return;

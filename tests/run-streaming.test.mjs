@@ -79,6 +79,14 @@ test('hidden raw-session receipt streams without list status; provisional retire
   assert.equal(ctx.syncStream(w, c, [{ a: { at: 123, text: '**Words**' } }], 'philosopher'), '');
   assert.equal(closed, 1, 'transcript replacement retires exactly once');
 });
+test('protocol trailers and every partial status-marker prefix stay out of streamed answer HTML', () => {
+  const ctx = {};
+  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function closeStream(c)')) + '\nglobalThis.cleanStream = streamAnswer;', ctx);
+  const marker = '[WIZARD_STATUS_V1]';
+  for (let n = 1; n <= marker.length; n++) assert.equal(ctx.cleanStream('Answer\n\n'+marker.slice(0,n)), 'Answer');
+  assert.equal(ctx.cleanStream('Answer\n\n'+marker+'{"ask":"not answer"}[/WIZARD_STATUS_V1]'), 'Answer');
+  assert.equal(ctx.cleanStream('**Answer** with [a link](https://example.org)'), '**Answer** with [a link](https://example.org)');
+});
 test('an early empty stream disconnect retries the same read, bounded to three retries', () => {
   const h = harness();
   h.L.openRunStream('sid', '', 'rid', () => {});
