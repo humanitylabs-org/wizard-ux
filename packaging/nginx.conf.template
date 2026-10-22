@@ -33,6 +33,9 @@ http {
     server_name _;
     set $wizard_api "${WIZARD_AGENT_SERVICE_ORIGIN}";
 
+    # Empty when the browser boundary is off. Exact navigation-only shell documents
+    # override the legacy static prefix only for the flagged preview.
+    include /tmp/wizard-boundary-locations.conf;
     location = /shell-health { default_type application/json; return 200 '{"ok":true,"component":"wizard-shell"}'; }
     location = / { return 302 /wizard-os-home/$is_args$args; }
     location = /wizard-os-home { return 302 /wizard-os-home/$is_args$args; }
