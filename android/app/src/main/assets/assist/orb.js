@@ -1,10 +1,11 @@
 /* Wizard OS orb — a WebGL glass sphere with a living galaxy inside.
    Exposes window.Orb with setMode(mode) and setLevel(0..1). Falls back to the PNG orb.
+   Orb.create(canvas, fallback, { R }) draws another of the same orb (Two orbs' agent orb) with its own state.
    Shared by every Wizard surface: the in-app dock, the side button (android/app/src/main/assets/assist/) and the
    Wizard Everywhere floating orb. The Android copy is checked byte-for-byte by SharedOrbTest. */
 (function () {
-  const canvas = document.getElementById('orb');
-  const fallback = document.getElementById('orbFallback');
+  function create(canvas, fallback, opts) {
+  opts = opts || {};
   const MODES = {
     idle:     { a: [0.05, 0.02, 0.16], b: [0.42, 0.22, 1.00], c: [1.00, 0.30, 0.82], energy: 0.18, spin: 0.22, ring: 0.0, core: 0.55 },
     listen:   { a: [0.06, 0.02, 0.20], b: [0.55, 0.30, 1.00], c: [1.00, 0.36, 0.86], energy: 0.85, spin: 0.85, ring: 1.0, core: 1.00 },
@@ -159,7 +160,7 @@ void main(){
       gl.uniform1f(U.t, (now - t0) / 1000);
       gl.uniform1f(U.lvl, levelS); gl.uniform1f(U.energy, cur.energy);
       gl.uniform1f(U.spin, cur.spin); gl.uniform1f(U.ring, cur.ring);
-      gl.uniform1f(U.core, cur.core); gl.uniform1f(U.press, press); gl.uniform1f(U.R, window.ORB_R || .5);
+      gl.uniform1f(U.core, cur.core); gl.uniform1f(U.press, press); gl.uniform1f(U.R, opts.R || window.ORB_R || .5);
       gl.uniform3fv(U.cA, cur.a); gl.uniform3fv(U.cB, cur.b); gl.uniform3fv(U.cC, cur.c);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       frames++;
@@ -179,7 +180,7 @@ void main(){
   canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); gl = null; canvas.hidden = true; fallback.hidden = false; });
   wake();
 
-  window.Orb = {
+  const api = {
     webgl: ok,
     setMode(m) {
       mode = m; target = MODES[m] || MODES.idle;
@@ -195,4 +196,9 @@ void main(){
     sleep(on) { asleep = !!on; if (asleep) { cancelAnimationFrame(raf); raf = 0; clearTimeout(timer); timer = 0; } else { last = performance.now(); wake(); } },
     get frames() { return frames; },
   };
+  return api;
+  }
+  const main = create(document.getElementById('orb'), document.getElementById('orbFallback'));
+  main.create = create;
+  window.Orb = main;
 })();
