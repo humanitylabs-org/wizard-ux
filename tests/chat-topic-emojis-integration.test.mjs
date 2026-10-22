@@ -61,3 +61,13 @@ test('emoji picker has an accessible non-autofocused search, clear action, and e
 test('typing in emoji search is isolated from global chat keyboard shortcuts', () => {
   assert.match(chats, /matches\('\[data-chemosearch\]'\)[^}]*stopPropagation/);
 });
+
+test('topic emojis are a Novairecito skin feature; every other skin keeps stock status icons', () => {
+  assert.match(chats, /const TOPIC_SKINS = \['novairecito', 'sepia'\]/);
+  assert.match(chats, /const topic = topicOn\(\) && TOPIC\.get\(`thread:/);
+  assert.match(chats, /const mark = !topic \? stock :/);
+  assert.match(chats, /const topic = topicOn\(\) && TOPIC\.get\(`draft:/);
+  assert.match(chats, /\$\{topicOn\(\) \? `<button type="button" data-rsemo>/);
+  assert.match(chats, /const pick = topicOn\(\) && e\.target\.closest\('\[data-chpick\]'\)/);
+  assert.match(chats, /attributeFilter: \['data-skin'\]/);
+});

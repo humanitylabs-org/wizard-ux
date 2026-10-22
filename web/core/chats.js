@@ -79,6 +79,10 @@ window.WizCore.chats = function createChats(H) {
   // Parsing, Markdown, Bangkok time, drafts, copy/share and the media viewer live in chat-kit.js.
   const KIT = window.WosChat;
   const TOPIC = window.WosTopicEmoji;
+  // Topic emojis on Chats rows are a Novairecito skin feature (Noir + Sepia palettes; James, 22 Oct 2026).
+  // Every other skin keeps the stock status icon, draft pencil and row sheet exactly as before.
+  const TOPIC_SKINS = ['novairecito', 'sepia'];
+  const topicOn = () => !!TOPIC && TOPIC_SKINS.includes(document.documentElement.dataset.skin || '');
   const toTurns = KIT.parseRows, md = KIT.md;
   const WORKING_ST = new Set(['submitting', 'queued', 'running', 'stopping']);
   // Same sections, order and day boundaries as Wizard's Work view.
@@ -237,8 +241,9 @@ window.WizCore.chats = function createChats(H) {
       : at ? lab + esc(clip(at.ask, 140))
       : esc(clip(s.preview || '', 110));
     const priv = privRow(s), plock = priv ? `<i class="ch-plock" title="Private agent" aria-label="Private">${AGS()?.lock?.() || ''}</i>` : '';
-    const topic = TOPIC.get(`thread:${s.id}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '));
-    const mark = `<span class="ch-topic-mark" data-chpick="thread:${esc(s.id)}" title="Choose topic emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="emo sti ${kind} ch-topic-status" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span></span>`;
+    const stock = `<span class="emo sti ${kind}" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span>`;
+    const topic = topicOn() && TOPIC.get(`thread:${s.id}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '));
+    const mark = !topic ? stock : `<span class="ch-topic-mark" data-chpick="thread:${esc(s.id)}" title="Choose topic emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="emo sti ${kind} ch-topic-status" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span></span>`;
     return `<button class="ch-row${isNew ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
       <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b><time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span></button>`;
@@ -258,6 +263,12 @@ window.WizCore.chats = function createChats(H) {
     try { const v = localStorage.getItem(READY_ORDER_KEY); if (READY_ORDERS.includes(v) || v === 'oldest') readyOrder = v; } catch (e) {}
     for (const id of Object.keys(CH)) if (W[id]) renderChats(W[id]);
   });
+  // Switching to or from Novairecito swaps topic emojis and status icons without a reload.
+  if (typeof MutationObserver === 'function') {
+    let wasTopic = topicOn();
+    new MutationObserver(() => { const on = topicOn(); if (on === wasTopic) return; wasTopic = on; for (const id of Object.keys(CH)) if (W[id] && !W[id].thread) renderChats(W[id]); })
+      .observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] });
+  }
   window.addEventListener('wos:prefs-error', () => toast('!', 'Saved on this device only — box preferences unavailable', 4000));
   const waitsOn = s => ['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && ['needs_you', 'check'].includes(attOf(s)?.state));
   // Newest keeps groupWork's recency order; Priority and By subject put what waits on James first.
@@ -322,8 +333,8 @@ window.WizCore.chats = function createChats(H) {
     const t = d.text.trim().replace(/\s+/g, ' ');
     const what = t ? clip(t, 100) : d.reply ? `Reply · ${clip(d.reply.title || KIT.reply.preview(d.reply, 80) || 'Notification', 90)}` : `Unsent attachment${d.files.length === 1 ? '' : 's'}`;
     const files = d.files.length ? ` · ${d.files.length} file${d.files.length === 1 ? '' : 's'}` : '';
-    const topic = TOPIC.get(`draft:${d.key}`, [d.text, ...d.files.map(f => f.name || '')].join(' '), '📝');
-    return `<div class="ch-draft${cur ? ' cur' : ''}"><button class="ch-row draft" data-chdraft="${esc(d.key)}"><span class="ch-topic-mark" data-chpick="draft:${esc(d.key)}" title="Choose draft emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="ch-topic-status draft-status" aria-label="Draft">✎</span></span>
+    const topic = topicOn() && TOPIC.get(`draft:${d.key}`, [d.text, ...d.files.map(f => f.name || '')].join(' '), '📝');
+    return `<div class="ch-draft${cur ? ' cur' : ''}"><button class="ch-row draft" data-chdraft="${esc(d.key)}">${topic ? `<span class="ch-topic-mark" data-chpick="draft:${esc(d.key)}" title="Choose draft emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="ch-topic-status draft-status" aria-label="Draft">✎</span></span>` : '<span class="emo">✎</span>'}
       <span class="bd"><span class="tp"><b>${esc(what)}</b><time>${esc(ago(new Date(d.at).toISOString()))}</time></span>
       <span class="pv">Draft · saved on this device${files}</span></span></button><button class="ch-draft-x" data-chdraftx="${esc(d.key)}" aria-label="Discard draft" title="Discard draft">×</button></div>`;
   }
@@ -860,7 +871,7 @@ window.WizCore.chats = function createChats(H) {
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Thread actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(s.title)}</div>
       <button type="button" data-rsopen>${'<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'}Open</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
-      <button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>
+      ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
     rowSheet = { wid, sid }; vib(10);
@@ -1815,7 +1826,7 @@ window.WizCore.chats = function createChats(H) {
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;
     if (justPressed() && e.target.closest('[data-chopen]')) return true; // a long-press/swipe just opened the actions sheet
-    const pick = e.target.closest('[data-chpick]'); if (pick) { const key = pick.dataset.chpick, sid = key.startsWith('thread:') ? key.slice(7) : '', s = sid && LIVE.session(sid); openEmojiSheet(id, key, s?.title || 'Draft emoji'); return true; }
+    const pick = topicOn() && e.target.closest('[data-chpick]'); if (pick) { const key = pick.dataset.chpick, sid = key.startsWith('thread:') ? key.slice(7) : '', s = sid && LIVE.session(sid); openEmojiSheet(id, key, s?.title || 'Draft emoji'); return true; }
     const o = e.target.closest('[data-chopen]'); if (o) { openChat(id, o.dataset.chopen); return true; }
     if (e.target.closest('[data-chback]')) { threadBack(w); return true; }
     if (e.target.closest('[data-chretry]')) { const c = ch(id); clearTimeout(c.retryT); c.failN = 1; renderThreadLive(w); loadThread(w, true); return true; }
