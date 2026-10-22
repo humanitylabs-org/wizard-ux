@@ -7,10 +7,22 @@ fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch({ headless: true });
   const results = [], sessions = [];
   try {
-    for (const [agent, skin] of [['philosopher','nebula'], ['philosopher','grove'], ['', 'nebula']]) {
+    for (const [agent, skin] of (process.env.QA_MAIN_ONLY ? [['','nebula']] : [['philosopher','nebula'], ['philosopher','grove'], ['', 'nebula']])) {
       const context = await browser.newContext({ viewport: { width:390, height:844 }, deviceScaleFactor:1, isMobile:true, hasTouch:true, ignoreHTTPSErrors:true });
       await context.addInitScript(skin => { localStorage.setItem('wos.coached','true'); localStorage.setItem('wos.voiceTipSeen','true'); localStorage.setItem('wos.skin',skin); }, skin);
-      const page = await context.newPage(); const errors = [];
+      const page = await context.newPage(); const errors = [], network = [];
+      await page.addInitScript(() => {
+        window.__sseLog = [];
+        const Native = window.EventSource;
+        window.EventSource = function(url,options) {
+          const source = new Native(url,options);
+          window.__sseLog.push({kind:'create',url,at:performance.now()});
+          for(const type of ['open','message','error'])source.addEventListener(type,e=>window.__sseLog.push({kind:type,url,at:performance.now(),data:e.data}));
+          return source;
+        };
+        window.EventSource.prototype = Native.prototype;
+      });
+      page.on('response', async r => { if(r.url().includes('/events'))network.push({url:r.url(),status:r.status()}); });
       page.on('pageerror', e => errors.push(String(e)));
       await page.goto(BASE + '/wizard-os-home/', { waitUntil: 'load' });
       await page.waitForFunction(() => window.__wos?.live?.ok && window.WosAgents?.get('philosopher'), null, {timeout:60000});
@@ -42,6 +54,7 @@ fs.mkdirSync(OUT, { recursive: true });
       await page.evaluate(({sid,agent})=>window.__wos.openWizardThread(sid,{agent}),{sid,agent});
       try { await page.waitForFunction(() => window.__streamMeasure.first, null, {timeout:45000}); }
       catch(e) {
+        fs.writeFileSync(OUT+'/sse-failure.json',JSON.stringify({network,events:await page.evaluate(()=>window.__sseLog)},null,2));
         await page.screenshot({path:OUT+'/failure.png'});
         fs.writeFileSync(OUT+'/failure.json',JSON.stringify(await page.evaluate(()=>({measure:window.__streamMeasure,body:document.body.innerText,wins:window.__wos.wins,ch:Object.fromEntries(Object.keys(window.__wos.wins).map(id=>{const c=window.__wos.chatState(id);return[id,{loadedFor:c.loadedFor,turns:c.turns,stream:c.stream&&{sid:c.stream.sid,rid:c.stream.rid,text:c.stream.text,terminal:c.stream.terminal,landed:c.stream.landed},err:c.err}]})),outbox:[...window.__wos.outbox._items.values()]})),null,2));throw e;
       }
