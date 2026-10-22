@@ -4,9 +4,7 @@
 // intercepted in the browser and never reach Wizard.
 // Usage: node tools/qa-origin.cjs 9475 <worktree>/web &
 //        QA_OUT=<dir> node qa-new-chat-default-model.cjs [url]
-let chromium;
-try { ({ chromium } = require('playwright-core')); }
-catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9475/wizard-os-home/';
 const OUT = process.env.QA_OUT || (process.env.TMPDIR || '/tmp') + '/qa-new-chat-default-model';

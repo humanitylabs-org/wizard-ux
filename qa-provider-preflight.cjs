@@ -1,8 +1,8 @@
 // Synthetic provider-preflight receipt; all writes intercepted. Tests both real shell renderers.
-const { chromium } = require(process.env.QA_PW || '/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const WEB = process.env.QA_WEB_DIR || __dirname;
-const BASE = process.env.QA_BASE || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const BASE = process.env.QA_BASE || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const OUT = process.env.QA_OUT || path.join(__dirname, 'qa-preflight');
 let pass=0,fail=0; const check=(v,n)=>{ console.log(v?'PASS':'FAIL',n);v?pass++:fail++; };
 (async()=>{

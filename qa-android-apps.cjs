@@ -4,11 +4,11 @@
 // sha256/package/signer, Play hand-off, relay refuses other frames / other paths / unknown methods / top-window calls,
 // and an older Wizard OS (no port) shows "Update Wizard OS to use Android Apps".
 // Usage: QA_WEB_DIR=<wizard-ux worktree> QA_APP_DIR=<android-apps repo> [QA_SHOTS=dir] node qa-android-apps.cjs
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = 'https://wizard.tailc0f369.ts.net/wizard-os-home/?open=android-apps';
+const URL_ = (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/?open=android-apps');
 const W = process.env.QA_WEB_DIR || __dirname;
-const A = process.env.QA_APP_DIR || '/home/telos/apps/android-apps';
+const A = process.env.QA_APP_DIR || require('node:path').resolve(require('./tools/qa-paths.cjs').repoRoot, '..', 'android-apps');
 const SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
@@ -42,11 +42,11 @@ async function boot(b, { bridge = true } = {}) {
   const writes = [];
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (!/wizard\.tailc0f369\.ts\.net$/.test(u.hostname)) return r.abort();
+    if (!(u.origin === require('./tools/qa-paths.cjs').origin())) return r.abort();
     let m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET') {
       const f = m[1] || 'index.html';
-      let p = path.join(W, 'web', f); if (!fs.existsSync(p) && /^(data|summaries)\.js$/.test(f)) p = path.join('/home/telos/apps/wizard-os-home/web', f);
+      let p = path.join(W, 'web', f); if (!fs.existsSync(p) && /^(data|summaries)\.js$/.test(f)) p = path.join(require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'web'), f);
       if (!fs.existsSync(p)) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
       const ct = f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : f.endsWith('.png') ? 'image/png' : 'application/javascript';
       return r.fulfill({ status: 200, contentType: ct, body: fs.readFileSync(p) });

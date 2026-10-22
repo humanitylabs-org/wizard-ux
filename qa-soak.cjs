@@ -4,13 +4,13 @@
 // → forced GC + sample JS heap, DOM nodes, listeners, documents, frames after every round.
 // Fails if the post-warmup trend grows past budget. Real Wizard READS; every write is intercepted.
 // Usage: node qa-soak.cjs [baseUrl] [rounds=12] [roundSeconds=45] [timeScale=6]
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs');
 const BASE = process.argv[2] || 'http://127.0.0.1:9371/wizard-os-home/';
 const ROUNDS = +(process.argv[3] || 12), ROUND_S = +(process.argv[4] || 45), SCALE = +(process.argv[5] || 6);
 const ONLY = process.env.SOAK_SHELL || '';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wux-soak';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath('wux-soak');
+const EXEC = process.env.QA_CHROME || (process.env.QA_CHROME || undefined);
 // Budgets: growth from the first post-warmup sample to the median of the last three.
 const BUDGET = { heapMB: 6, nodes: 1500, listeners: 300, documents: 2 };
 fs.mkdirSync(OUT, { recursive: true });

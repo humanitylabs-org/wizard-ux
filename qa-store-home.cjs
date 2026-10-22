@@ -1,5 +1,5 @@
 // Presentation-only acceptance; real reads, every mutation fenced.
-const { chromium } = require(process.env.PW || '/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const BASE = process.argv[2]; const OUT = process.env.QA_OUT || 'evidence-home'; fs.mkdirSync(OUT, { recursive: true });
 const cases = [], unsafe = [];

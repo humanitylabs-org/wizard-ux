@@ -2,7 +2,7 @@
  * Run on the QA host: PLAYWRIGHT_MODULE=... CHROMIUM=... QA_OUT=... node qa-voice-custody-callers.cjs
  * No live service requests or real messages. Native bridge assertions are not device acceptance. */
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const root=process.env.QA_SOURCE||__dirname,out=process.env.QA_OUT||'qa-live/voice-custody-callers';fs.mkdirSync(out,{recursive:true});
 const results=[],sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const sid='custody-original',typed='Typed context https://example.test/original',words='spoken original words';

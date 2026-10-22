@@ -14,12 +14,12 @@
 //   4. A cross-thread steer renders as an agent note, not as a James steer bubble with "Read by".
 //   5. Zero writes reach the real Wizard.
 // Usage: node tools/qa-origin.cjs 9371 <webdir> &  then  QA_WEB_DIR=<worktree> node qa-agent-notes.cjs [url]
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9371/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/feature-agent-notes';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath('wizard-audit/shots/feature-agent-notes');
+const EXEC = process.env.QA_CHROME || (process.env.QA_CHROME || undefined);
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, typeof extra === 'string' ? extra : JSON.stringify(extra)); } };

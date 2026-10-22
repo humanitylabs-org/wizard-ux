@@ -1,6 +1,6 @@
 // Everywhere floating-orb page: idle draws vs live draws, before/after. Browser-level (exact asset bytes).
 // Usage: node qa-everywhere-rest.cjs <assist dir>
-const { chromium } = require(process.env.QA_PLAYWRIGHT);
+const { chromium } = require('./tools/qa-playwright.cjs');
 const path = require('path'), DIR = process.argv[2];
 (async () => {
   const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });

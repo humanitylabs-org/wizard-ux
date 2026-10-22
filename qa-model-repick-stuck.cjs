@@ -1,9 +1,9 @@
 // Regression: an old thread whose voice take pinned an incomplete model route (catalogue not loaded yet)
 // must send once the owner picks a model; re-picking must never leave "Choose a model before sending" stuck.
 // Real catalogue shape: default anthropic/claude-opus-5-5, thread on the subscription route claude-opus-5-5[1m].
-const {chromium}=require(process.env.PW || 'playwright-core');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const fs=require('fs'),path=require('path');
-const WEB=process.env.QA_WEB_DIR||__dirname,URL_='https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const WEB=process.env.QA_WEB_DIR||__dirname,URL_=(require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const W={uploads:[],sessions:new Set(),runs:[],keys:new Map(),transcribes:0,assetVer:1,foreign:[]};
 const src=fs.readFileSync(path.join(__dirname,'qa-device.cjs'),'utf8');
 eval(src.slice(src.indexOf('async function boot('),src.indexOf('// addInitScript')).replace('async function boot(','global.boot=async function boot('));

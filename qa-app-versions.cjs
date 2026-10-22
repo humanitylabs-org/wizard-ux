@@ -2,7 +2,7 @@
 // QA_WEB_DIR/web, fixture apps using the real app client. No production requests, no writes.
 // Usage: QA_WEB_DIR=<worktree> PW=<playwright> QA_OUT=<dir> node qa-app-versions.cjs
 const fs = require('fs'), path = require('path'), http = require('http'), os = require('os'), assert = require('assert/strict');
-const { chromium } = require(process.env.PW || '/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const ROOT = process.env.QA_WEB_DIR || __dirname, OUT = process.env.QA_OUT || path.join(ROOT, 'evidence/app-versions');
 fs.mkdirSync(OUT, { recursive: true });
 const apps = [{ id: 'wisdom', url: '/wisdom/', name: 'Wisdom', colors: ['#777777', '#888888'] }, { id: 'meditation', url: '/meditation/', name: 'Meditate', colors: ['#777777', '#888888'] }];

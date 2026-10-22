@@ -1,9 +1,9 @@
 // Share to Wizard keeps voice typing: orb above the share sheet dictates into the note, sends nothing.
 // Thales: QA_WEB_DIR=<exact source tree> QA_EVIDENCE=<json> node qa-in-app-dictation.cjs
-const { chromium } = require('playwright-core');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const WEB = process.env.QA_WEB_DIR || __dirname;
-const ORIGIN = 'https://wizard.tailc0f369.ts.net', HOME = ORIGIN + '/wizard-os-home/';
+const ORIGIN = require('./tools/qa-paths.cjs').origin(), HOME = ORIGIN + '/wizard-os-home/';
 const checks = [], contexts = [], TEXT = 'spoken words';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function ok(value, name, extra) { checks.push({ pass: !!value, name, extra }); console.log(value ? 'PASS' : 'FAIL', name, extra === undefined ? '' : JSON.stringify(extra)); }

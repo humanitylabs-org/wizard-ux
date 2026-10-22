@@ -1,7 +1,7 @@
 // Focused shared-client Back gate. Run on Thales; no live services or writes.
 // PLAYWRIGHT_DIR=<module> QA_WEB_DIR=<repo> QA_OUT=<evidence> node qa-app-standalone-back.cjs
 const fs=require('fs'), path=require('path'), http=require('http'), assert=require('assert/strict');
-const {chromium}=require(process.env.PLAYWRIGHT_DIR||'playwright');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const root=process.env.QA_WEB_DIR||__dirname, out=process.env.QA_OUT||path.join(__dirname,'evidence/standalone-back');
 const client=fs.readFileSync(path.join(root,'web/core/app-client.js'));
 const receipt={core_sha256:require('crypto').createHash('sha256').update(client).digest('hex'),checks:[],limitations:['Installed display mode and native bridge presence are simulated in desktop Chrome; not physical-device acceptance.']};

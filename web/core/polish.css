@@ -39,7 +39,19 @@ html[data-shell="desktop"] .wx-banners { top: 3px; left: 25%; right: 25%; z-inde
 .wx-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; justify-content: flex-end; }
 .wx-actions button { min-height: 44px; padding: 4px 10px; border-radius: 99px; color: var(--wz-text, var(--ink)); background: var(--wz-surface, var(--glass)); border: 1px solid var(--wz-border, var(--line-2)); font: inherit; }
 
-html[data-shell="desktop"].wx-banner-on .stage { top: max(var(--bar-h, 34px), var(--wx-banner-height, 44px)); }
+/* Phone shows the full message; desktop shows the short line (full text on hover). */
+.wx-banner .wx-s { display: none; }
+
+/* Desktop: one compact pill in the top bar over the clock. It never grows past the bar and never pushes
+ * windows down; the Chats list carries the same status, so the bar pill only needs a glance + two taps. */
+html[data-shell="desktop"] .wx-banners { left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: min(560px, 46vw); }
+html[data-shell="desktop"] .wx-banner.net:has(.wx-actions) { height: 28px; padding: 0 3px 0 10px; flex-wrap: nowrap; white-space: nowrap; border-radius: 99px; gap: 8px; }
+html[data-shell="desktop"] .wx-banner.net .wx-m { display: none; }
+html[data-shell="desktop"] .wx-banner.net .wx-s { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 650; }
+html[data-shell="desktop"] .wx-actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }
+html[data-shell="desktop"] .wx-actions button { min-height: 0; height: 22px; padding: 0 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+html[data-shell="desktop"] .wx-actions button:hover { background: var(--wz-surface-hover, rgba(205, 190, 255, .14)); }
+html[data-shell="desktop"] .wx-actions .wx-long { display: none; }
 
 .wx-fatal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: rgba(3, 2, 8, .78); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .wx-fatal[hidden] { display: none; }

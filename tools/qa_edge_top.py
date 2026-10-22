@@ -8,14 +8,16 @@ A fake Wizard on the emulator host serves this branch's web/ and stubs every API
 """
 import fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid, mimetypes
 import urllib.request
+from qa_paths import work_root
+from qa_paths import android_sdk, java_home
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 apk = P(sys.argv[1]); PKG = sys.argv[2]; WEB = P(sys.argv[3])
 job = BASE / 'qa' / ('wos-edge-top-' + uuid.uuid4().hex[:8]); job.mkdir(parents=True)
 OUT = job / 'shots'; OUT.mkdir()
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir()
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir()
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5696; S = f'emulator-{PORT}'; DEVTOOLS = 9347; FAKE = 18781
 res = []
 def check(n, ok, d=''):

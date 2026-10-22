@@ -5,7 +5,7 @@
 // with a part open collapses it (app step), and only Back at the app's root leaves full screen. Never exits.
 // Usage: QA_WEB_DIR=$PWD node qa-frame-history.cjs  (serves the tree's web/ files; real reads; every write intercepted)
 const http = require('http'), fs = require('fs'), path = require('path'), os = require('os');
-let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright-core'); }
+const pw = require('./tools/qa-playwright.cjs');
 const CHROME = process.env.QA_CHROME || fs.readdirSync(os.homedir() + '/.cache/ms-playwright').filter(d => d.startsWith('chromium-')).sort().map(d => os.homedir() + '/.cache/ms-playwright/' + d + '/chrome-linux64/chrome').pop();
 const W = process.env.QA_WEB_DIR || path.join(os.homedir(), 'apps/wizard-os-home');
 const MAIN = path.join(os.homedir(), 'apps/wizard-os-home/web');

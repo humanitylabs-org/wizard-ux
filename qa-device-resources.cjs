@@ -1,7 +1,7 @@
 // Devices in Resources (wizard-os spec/DEVICES.md). Phone shell, every write refused.
 // argv[2] = qa-origin serving the tree (e.g. http://127.0.0.1:9483/wizard-os-home/).
 // QA_DEVICES_URL = optional live adapter base (real readings); otherwise the fixture below is used for every case.
-let pw;try{pw=require('playwright');}catch{pw=require('playwright-core');}
+const pw = require('./tools/qa-playwright.cjs');
 const URL_=process.argv[2]||'http://127.0.0.1:9483/wizard-os-home/',OUT=process.env.QA_OUT||process.cwd(),REAL=process.env.QA_DEVICES_URL;
 let pass=0,fail=0,writes=0;const ok=(v,n,x='')=>{console.log(v?'PASS':'FAIL',n,x);v?pass++:fail++;};
 const now=new Date().toISOString(),hrAgo=new Date(Date.now()-3*3600e3).toISOString();

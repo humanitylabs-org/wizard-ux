@@ -2,9 +2,9 @@
 // ?view=inbox and the old Inbox entry points open the Chats list (Working + Ready) instead; the phone launcher has no
 // Inbox tile; voice takes still on the phone show as one row at the top of Chats that opens Settings → Unsent.
 // Usage: QA_WEB_DIR=<repo> node qa-notifications.cjs
-const { chromium } = (() => { try { return require('playwright'); } catch (e) { return require('/home/telos/node_modules/playwright'); } })();
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const W = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;
@@ -16,12 +16,12 @@ async function boot(b, initUrl) {
   const ctx = await b.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone'] });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (!/wizard\.tailc0f369\.ts\.net$/.test(u.hostname)) return r.abort();
+    if (!(u.origin === require('./tools/qa-paths.cjs').origin())) return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET' && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html';
       // data.js / summaries.js are untracked build outputs: fall back to the live tree's copy (same as tools/qa-origin.cjs).
-      let p = path.join(W, 'web', f); if (!fs.existsSync(p) && /^(data|summaries)\.js$/.test(f)) p = path.join('/home/telos/apps/wizard-os-home/web', f);
+      let p = path.join(W, 'web', f); if (!fs.existsSync(p) && /^(data|summaries)\.js$/.test(f)) p = path.join(require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'web'), f);
       if (!fs.existsSync(p)) return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
       const ct = f.endsWith('.css') ? 'text/css' : f.endsWith('.html') ? 'text/html' : f.endsWith('.png') ? 'image/png' : f.endsWith('.webmanifest') ? 'application/manifest+json' : 'application/javascript';
       return r.fulfill({ status: 200, contentType: ct, body: fs.readFileSync(p) });

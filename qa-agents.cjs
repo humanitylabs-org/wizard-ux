@@ -3,7 +3,7 @@
 // model picker limited to the agent's allowed models; Back never exits (nested view → list → root, still open).
 // Runs against tools/agents-fixture.mjs (exact brief contract). Phone and desktop. Screenshots to QA_OUT.
 // Usage: PW=<playwright> QA_OUT=<dir> node qa-agents.cjs http://127.0.0.1:9741/wizard-os-home/
-const { chromium } = require(process.env.PW || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const BASE = process.argv[2] || 'http://127.0.0.1:9741/wizard-os-home/';
 const ORIGIN = new URL(BASE).origin;
