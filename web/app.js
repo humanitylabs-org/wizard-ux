@@ -421,6 +421,21 @@
     if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
     paintOrbApp();
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
+    /* Miguel's skins: a symmetric dock. Exactly three fixed slots each side of the orb (which is the current desk):
+     * the three desks to the left, the three to the right; New desk (an empty-desk outline, not a plus, so it never
+     * reads as New chat) takes the first free slot on the right; unused slots stay as blanks so nothing shifts. */
+    if (['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '')) {
+      const NEWD = '<button class="ddot sig dplus dnew" data-plus aria-label="New desk: pick an app"><span class="dsg"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3.2" stroke-dasharray="3.1 2.6"/></svg></span></button>';
+      const gap = '<span class="dslot" aria-hidden="true"></span>';
+      const near = (h, k) => h.replace('class="ddot', `class="ddot ${k}`);
+      const Ls = [idx - 3, idx - 2, idx - 1].map((i, n) => i >= 0 ? near(mk(i), 'd' + (3 - n)) : gap);
+      let plus = !atPickerEnd();
+      const Rs = [idx + 1, idx + 2, idx + 3].map((i, n) => i < desks.length ? near(mk(i), 'd' + (n + 1)) : plus ? (plus = false, near(NEWD, 'd' + (n + 1))) : gap);
+      $('#dotsL').className = 'desk-dots left sym'; $('#dotsR').className = 'desk-dots right sym';
+      $('#dotsL').innerHTML = Ls.join(''); $('#dotsR').innerHTML = Rs.join('');
+      return;
+    }
+    $('#dotsL').className = 'desk-dots left'; $('#dotsR').className = 'desk-dots right';
     const L = []; for (let i = Math.max(0, idx - 3); i < idx; i++) L.push(i);
     const R = []; for (let i = idx + 1; i <= Math.min(desks.length - 1, idx + 3); i++) R.push(i);
     const homeExtra = L.length && L[0] > 0;
@@ -1805,7 +1820,7 @@
     if (which === 'inbox') return openChatsList();
     closeSheets(true); closeMenu();
     if (which === 'settings' && stDesk) dropParkedSettings(); // Settings opened on this desk moves here
-    sheet = which; device.classList.add('sheet-open'); tourEv('sheet', { which });
+    sheet = which; device.classList.add('sheet-open'); device.dataset.sheet = which; tourEv('sheet', { which });
     window.WosResources?.back(); window.WosResources?.sync();
     if (which === 'launcher') { forAgOpen = false; renderLauncher(q || ''); launcher.classList.add('open'); const s = $('#search'); s.value = q || ''; }
     else if (which === 'settings') { settingsFocus = document.activeElement; renderSettings(); settingsEl.classList.add('open'); $('#settingsBody').scrollTop = 0; settingsView?.focus(); }
@@ -1816,7 +1831,7 @@
   }
   function closeSheets(quiet) {
     if (!sheet && quiet) return;
-    const was = sheet; sheet = null; if (was) tourEv('sheet-closed', { which: was }); device.classList.remove('sheet-open');
+    const was = sheet; sheet = null; if (was) tourEv('sheet-closed', { which: was }); device.classList.remove('sheet-open'); delete device.dataset.sheet;
     launcher.classList.remove('open'); inboxEl.classList.remove('open'); if (!stDesk) settingsEl.classList.remove('open');
     [launcher, inboxEl, settingsEl].forEach(el => { if (el === settingsEl && stDesk) return; el.style.transform = ''; el.style.opacity = ''; });
     if (was === 'settings') settingsEl.style.transition = '';
