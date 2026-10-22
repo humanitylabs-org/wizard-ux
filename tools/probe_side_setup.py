@@ -2,13 +2,15 @@
 """Probe (runs on Thales): which settings pages and state Wizard OS can reach for side-button setup.
 Boots a throwaway API35 emulator, installs the given APK, inspects intents/settings, always stops."""
 import fcntl, os, pathlib, subprocess, sys, time, uuid
+from qa_paths import work_root
+from qa_paths import android_sdk, java_home
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 apk = P(sys.argv[1]); PKG = sys.argv[2] if len(sys.argv) > 2 else 'ai.wizards.os'
 job = BASE / 'qa' / ('wos-probe-' + uuid.uuid4().hex[:8]); job.mkdir(parents=True)
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir()
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir()
 ADB = str(SDK / 'platform-tools/adb'); S = 'emulator-5688'
 def sh(*a, stdin=None): return subprocess.run([str(x) for x in a], env=env, capture_output=True, text=True, input=stdin).stdout
 def sx(c): return sh(ADB, '-s', S, 'shell', c)

@@ -7,9 +7,9 @@
 //   #22 the native update banner shows/acts; the web hot-reload swaps in new code and keeps chat drafts.
 // Usage: QA_WEB_DIR=<worktree> node qa-device.cjs  (self-contained: every request is routed; nothing leaves the box)
 // Negative control: set QA_WEB_DIR to the pre-fix daily tree; the new updater assertions must FAIL.
-const { chromium } = require(process.env.PW || (() => { try { return require.resolve('playwright'); } catch (_) { return require.resolve('playwright-core'); } })());
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_ = (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || process.env.QA_OUT || path.join(process.env.TMPDIR || require('os').tmpdir(), 'qa-device');
 let pass = 0, fail = 0;
@@ -22,7 +22,7 @@ async function boot(b, { native = true } = {}) {
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone'] });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (u.hostname !== 'wizard.tailc0f369.ts.net') { W.foreign.push(u.href); return r.abort(); }
+    if (u.hostname !== new URL(require('./tools/qa-paths.cjs').origin()).hostname) { W.foreign.push(u.href); return r.abort(); }
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && (q.method() === 'GET' || q.method() === 'HEAD') && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = path.join(WEB, 'web', f);

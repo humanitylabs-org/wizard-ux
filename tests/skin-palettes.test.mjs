@@ -9,6 +9,7 @@ test('the two skins hold the right palettes, and an unlisted skin becomes its ow
   const s = read('web/core/skins.js');
   assert.match(s, /\{ id: 'wizard', name: 'Wizard', [^\n]*palettes: \['nebula', 'grove', 'tide', 'ember', 'signal'\] \}/);
   assert.match(s, /\{ id: 'mizel', name: 'Mizel', [^\n]*palettes: \['obsidian', 'obsidian-light', 'landscapes'\] \}/);
+  assert.match(s, /\{ id: 'novairecito', name: 'Novairecito', [^\n]*palettes: \['novairecito', 'sepia'\] \}/, 'Novaire’s looks are colours of one skin');
   assert.match(s, /if \(!f\) f = \{ id: s\.id, name: s\.name, who: s\.who, palettes: \[s\.id\] \};/);
   assert.match(s, /families: FAMS,/);
 });
@@ -20,12 +21,12 @@ test('the saved choice stays the palette id; the last palette per skin is rememb
   assert.match(s, /return ids\.includes\(v\) \? v : ids\[0\]/, 'a stale or foreign saved palette falls back to the skin\'s first');
 });
 
-test('Settings › Look shows skin cards, then only the worn skin\'s colours', () => {
+test('Settings › Look shows every colour as a preview card, grouped under its skin', () => {
   const s = read('web/core/settings.js');
-  assert.match(s, /data-skinfamily="\$\{esc\(f\.id\)\}"/);
-  assert.match(s, /S\.list\.filter\(k => f\.palettes\.includes\(k\.id\)\)/);
-  assert.match(s, /aria-label="Colours"/);
-  assert.match(s, /S\.setFamily\(fb\.dataset\.skinfamily\)/);
+  assert.match(s, /<div class="skp-fam">\$\{esc\(f\.name\)\}<\/div>/);
+  assert.match(s, /f\.palettes\.map\(id => S\.list\.find\(k => k\.id === id\)\)/);
+  assert.match(s, /aria-label="\$\{esc\(f\.name \|\| 'Skin'\)\} colours"/);
+  assert.match(s, /pals\.map\(k => skinCard\(k, cur\)\)/);
 });
 
 test('Appearance v1 adds the skin family without changing the palette field', () => {

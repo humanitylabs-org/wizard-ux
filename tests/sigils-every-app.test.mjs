@@ -48,8 +48,8 @@ test('real products carry their brand mark; a skin opts in, every other skin kee
   // every mark has a recorded source
   const readme = read('tools/sigils/README.md');
   for (const mark of new Set(Object.values(S.brand))) assert.match(readme, new RegExp(`\\| \x60${mark}\x60 \\|`), `README source row for ${mark}`);
-  // only skins that opt in style brand marks: James's skins (core/skins.css) stay on house glyphs
-  assert.doesNotMatch(read('web/core/skins.css'), /sgb/);
+  // every skin shows them: the brand rules live in the generated sigils.css
+  assert.match(read('web/core/sigils.css'), /\.sgi\.sgb-cloudflare/);
 });
 
 test('an app with no sigil gets a masked disc with its initial cut out, never painted text', () => {

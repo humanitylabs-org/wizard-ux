@@ -6,7 +6,7 @@ phone shell from the iPhone user agent; the app adds `WizardOS-iOS/<version>` to
 
 | What | How |
 |---|---|
-| Wizard address | Built in from the `WIZARD_ORIGIN` build setting (default `https://wizard.tailc0f369.ts.net`). With no address, or when the Wizard can't be reached, the bundled `www/index.html` shows the connect screen: **Scan QR code**, or type the address; Try again |
+| Wizard address | Built in from the `WIZARD_ORIGIN` build setting (empty by default). With no address, or when the Wizard can't be reached, the bundled `www/index.html` shows the connect screen: **Scan QR code**, or type the address; Try again |
 | Connect rules | Same as Android (`../android/CONNECT.md`): an https origin only, fail-closed (`WizardOrigin.swift`). An address is saved only after it serves the Wizard shell, with no redirects and no TLS bypass (`WizardProbe`). A scanned code or link connects at once, with no confirmation; a failed check keeps the current Wizard |
 | Pairing links | `wizard://connect?origin=<percent-encoded https origin>` (the Setup QR code). The iPhone Camera app or any link opens the app on the connect screen |
 | Change Wizard | `Capacitor.Plugins.WizardShell.changeWizard()` from the Wizard's pages shows the connect screen; the current Wizard stays until a new one passes the check |
@@ -47,6 +47,23 @@ npx cap run ios          # pick a Simulator or a connected iPhone
 ```
 
 Compile check without signing: `fastlane sim`.
+
+### Build-time server address
+
+The committed Xcode project deliberately has no owner address. Set the `WIZARD_ORIGIN` user-defined build
+setting locally in Xcode, or pass it explicitly to `xcodebuild`:
+
+```sh
+export WIZARD_ORIGIN=https://wizard.example.ts.net
+xcodebuild -project native/App/App.xcodeproj -scheme App -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData \
+  CODE_SIGNING_ALLOWED=NO "WIZARD_ORIGIN=$WIZARD_ORIGIN" build
+```
+
+Fastlane reads `WIZARD_ORIGIN` from the environment or ignored `fastlane/.env` for both `sim` and `beta`.
+An environment variable alone does not override the Xcode project when calling `xcodebuild` directly: pass
+the build-setting argument as shown. No address is required: iOS already has Connect / Change Address,
+and a saved address still takes precedence over the bundled default. Never commit a personal hostname.
 
 ## TestFlight
 

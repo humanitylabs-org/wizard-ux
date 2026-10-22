@@ -11,9 +11,12 @@ A wrong-signer copy of NEW_APK is made here with a throwaway key. The real Wizar
 dead; the fake answers on localhost). Always stops the emulator.
 """
 import fcntl, hashlib, http.server, json, os, pathlib, re, subprocess, sys, threading, time, uuid
+from qa_paths import origin_host
+from qa_paths import java_home
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from qa_aa_lib import ADB, BASE, BT, Emu, Page, wait  # noqa: E402
 
+QA_ORIGIN_HOST = origin_host()
 P = pathlib.Path
 QA_APK, WEB, AA, OLD, NEW = (P(x) for x in sys.argv[1:6])
 job = P(sys.argv[6]) if len(sys.argv) > 6 else BASE / 'qa' / ('wos-aa-' + uuid.uuid4().hex[:8])
@@ -40,7 +43,7 @@ def signer(p):
 
 # ---- fixtures: a wrong-signer copy of NEW (same package + versionCode, different key)
 ks = job / 'wrong.jks'; WRONG = job / 'aegis-wrong-signer.apk'
-JH = '/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home'; JENV = dict(os.environ, JAVA_HOME=JH, PATH=JH + '/bin:' + os.environ['PATH'])
+JH = java_home(); JENV = dict(os.environ, JAVA_HOME=JH, PATH=JH + '/bin:' + os.environ['PATH'])
 subprocess.run([JH + '/bin/keytool', '-genkeypair', '-keystore', str(ks), '-storepass', 'qaqaqa', '-keypass', 'qaqaqa', '-alias', 'qa',
                 '-keyalg', 'RSA', '-keysize', '2048', '-validity', '2', '-dname', 'CN=Wrong Signer QA'], capture_output=True, env=JENV)
 r = subprocess.run([str(BT / 'apksigner'), 'sign', '--ks', str(ks), '--ks-pass', 'pass:qaqaqa', '--out', str(WRONG), str(NEW)], capture_output=True, text=True, env=JENV)
@@ -190,7 +193,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         out = em.sh(ADB, '-s', em.S, 'install', '-r', QA_APK).strip().splitlines()[-1]
         check('install the candidate QA build', out == 'Success', out)
         em.sx('svc data disable'); time.sleep(2)
-        resolv = em.sx('ping -c 1 -W 2 wizard.tailc0f369.ts.net 2>&1 | head -2')
+        resolv = em.sx(f'ping -c 1 -W 2 {QA_ORIGIN_HOST} 2>&1 | head -2')
         check('the real Wizard is unreachable from the emulator', not re.search(r'\(\d+\.\d+\.\d+\.\d+\)', resolv), resolv.strip()[:120])
         em.sh(ADB, '-s', em.S, 'reverse', 'tcp:%d' % FAKE, 'tcp:%d' % FAKE)
         em.runas('mkdir -p files && echo %s > files/qa_home.txt && echo %s > files/qa_origin.txt' % (ORIGIN, ORIGIN))

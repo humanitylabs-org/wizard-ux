@@ -1,5 +1,5 @@
 if (!process.env.QA_ORIGIN) throw new Error('QA_ORIGIN is required: select an isolated tailnet preview');
-const {chromium}=require(process.env.PW_MODULE || '/Volumes/ThalesMedia/wizard-stockint-20261012/qa/node_modules/playwright');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const fs=require('fs');
 const ROOT=process.env.QA_OUT||process.cwd();
 const ORIGIN=new URL(process.env.QA_ORIGIN).origin;

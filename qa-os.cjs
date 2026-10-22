@@ -1,9 +1,9 @@
 // QA for the rebuilt shell: Back never exits, windows tile/move/close, Chats native, view-aware voice.
 // Runs against the live origin through the Thales tunnel. Every Hermes/Wizard write is intercepted.
-const { chromium } = require('/home/telos/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
-const OUT = process.env.QA_OUT || '/home/telos/apps/wizard-os-home/qa-live';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
+const { chromium } = require('./tools/qa-playwright.cjs');
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
+const OUT = process.env.QA_OUT || require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'qa-live');
+const RESOLVE = process.env.QA_RESOLVE || '';
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 

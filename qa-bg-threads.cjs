@@ -3,9 +3,9 @@
 // James (9 Oct 2026): "when I hit the button and give you a new thread, I do not want you to automatically
 // open a chat and go to that thread. Just delegate it in the background."
 // Usage: QA_WEB_DIR=<repo> node qa-bg-threads.cjs [url]. Real Wizard reads; every write is intercepted.
-const { chromium } = require('/home/telos/node_modules/playwright');
-const BASE = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
+const { chromium } = require('./tools/qa-playwright.cjs');
+const BASE = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
+const RESOLVE = process.env.QA_RESOLVE || '';
 const WD = process.env.QA_WEB_DIR || '';
 const fs = require('fs'), path = require('path');
 let pass = 0, fail = 0;

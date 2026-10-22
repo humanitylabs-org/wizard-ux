@@ -1,6 +1,6 @@
 // Run ONLY on Thales, under /usr/bin/lockf worker.lock. All suites use intercepted APIs.
 const fs=require('fs'),path=require('path'),os=require('os'),crypto=require('crypto'),{spawnSync}=require('child_process');
-if(!os.hostname().startsWith('thales'))throw Error('Remote Thales-only QA');
+if(!process.env.WIZARD_WORK_ROOT)throw Error('Remote Thales-only QA');
 const root=__dirname,base=path.dirname(root),evidence=path.join(base,'evidence');
 const suites=['qa-microphone-lock.cjs','qa-awake.cjs','qa-device.cjs','qa-dock-morph.cjs','qa-hold-command.cjs','qa-voice-nav.cjs','qa-model-route-contract.cjs','qa-cancel-recover.cjs','qa-app-capture/run.cjs'];
 const results=fs.existsSync(path.join(evidence,'regressions.json'))?JSON.parse(fs.readFileSync(path.join(evidence,'regressions.json'))).results:[];

@@ -1,6 +1,6 @@
 // Phone viewport regression: staging focus must never scroll hidden shell ancestors.
 if (!process.env.QA_ORIGIN) throw new Error('QA_ORIGIN is required: select an isolated tailnet preview');
-const {chromium}=require('/Users/thales/helper-status-qa/node_modules/playwright-core');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const assert=require('node:assert/strict');
 const ORIGIN=new URL(process.env.QA_ORIGIN).origin;
 let pass=0;const ok=(v,label)=>{assert.ok(v,label);console.log('PASS',label);pass++};
@@ -23,7 +23,7 @@ let pass=0;const ok=(v,label)=>{assert.ok(v,label);console.log('PASS',label);pas
  await p.setViewportSize({width:412,height:760});await p.locator('.ch-compose textarea').focus();await p.setViewportSize({width:412,height:520});await p.waitForTimeout(500);m=await geometry();ok(m.device.scrollTop===0,'composer focus and keyboard-sized resize do not scroll shell');
  await p.locator('.ch-compose textarea').evaluate(e=>e.blur());await p.setViewportSize({width:412,height:760});await p.waitForTimeout(500);m=await geometry();ok(m.head.top>=0&&m.button.top>=0&&m.button.bottom<=760,'restoring browser viewport keeps header and Continue visible');
  await p.waitForTimeout(16000);ok(await p.locator('[data-helper-continue]').isVisible(),'Working expansion survives the 15-second refresh');
- await p.screenshot({path:'/Users/thales/helper-status-qa/viewport-fixed.png'});
+ await p.screenshot({path:require('./tools/qa-paths.cjs').workPath('helper-status-qa/viewport-fixed.png')});
  await p.locator('[data-helper-continue]').click();await p.waitForFunction(()=>window.WizLive.session('wizard_preview_helpers_stalled')?.helperStatus?.phase==='integrating');ok(true,'Continue works without relocating the shell');await p.waitForTimeout(3500);await p.evaluate(()=>WizLive.refresh());await p.waitForFunction(()=>WizLive.session('wizard_preview_helpers_stalled')?.status==='completed');ok(true,'Continue still settles the example');
  await p.locator('[data-chback]').click();await p.waitForTimeout(500);ok(await p.locator('[data-chats]').count()>0,'Back returns to list and keeps Chats open');ok(errors.length===0,'no browser runtime errors');
  console.log(JSON.stringify({passed:pass,host:require('os').hostname(),errors}));await c.close();await b.close();

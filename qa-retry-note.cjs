@@ -4,12 +4,12 @@
 // Every write is intercepted (same fence as qa-chat-power.cjs); nothing reaches Wizard.
 // Usage: node tools/qa-origin.cjs 9475 <worktree>/web &  then  QA_WEB_DIR=<worktree> node qa-retry-note.cjs [url]
 // Negative control: run it against a checkout without the fix; the note cases must FAIL.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9475/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wizard-audit/shots/retry-note';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath('wizard-audit/shots/retry-note');
+const EXEC = process.env.QA_CHROME || (process.env.QA_CHROME || undefined);
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra === '' ? '' : typeof extra === 'string' ? extra : JSON.stringify(extra).slice(0, 600)); } };

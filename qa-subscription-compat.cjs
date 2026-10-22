@@ -1,5 +1,5 @@
 // Real loopback HTTP + shipped shared Home modules. Synthetic data only.
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.join(__dirname,'web/core');
 const providers=['CODEX','CODEX-2','CODEX-3','claude'].map((id,i)=>({id,name:id,status:'ok',fetchedAt:new Date().toISOString(),limits:[{id:'week',label:'Weekly',usedPercent:[11,42,73,5][i]}]}));

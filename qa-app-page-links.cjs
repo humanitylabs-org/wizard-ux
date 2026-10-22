@@ -3,10 +3,9 @@
 // chat link said "This link is not connected to Wizard's shared microphone."
 // Runs the real live origin with this tree's shell JS substituted; every non-GET write is refused.
 // Usage: QA_WEB_DIR=<tree> PW=<playwright module dir> node qa-app-page-links.cjs [origin]
-const { createRequire } = require('module');
-const pw = createRequire((process.env.PW || '/home/telos/node_modules') + '/')('playwright');
+const pw = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const ORIGIN = process.argv[2] || 'https://wizard.tailc0f369.ts.net', WEB = process.env.QA_WEB_DIR, OUT = process.env.QA_OUT || './evidence';
+const ORIGIN = process.argv[2] || require('./tools/qa-paths.cjs').origin(), WEB = process.env.QA_WEB_DIR, OUT = process.env.QA_OUT || './evidence';
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0; const ok = (c, n, x = '') => { c ? pass++ : fail++; console.log(c ? 'PASS' : 'FAIL', n, c ? '' : JSON.stringify(x).slice(0, 400)); };
 const sleep = ms => new Promise(r => setTimeout(r, ms));

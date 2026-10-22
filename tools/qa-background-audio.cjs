@@ -1,4 +1,4 @@
-const { chromium } = require('/Volumes/ThalesMedia/WizardMusic/background-audio/toolchain/node_modules/playwright');
+const { chromium } = require('./qa-playwright.cjs');
 const fs = require('fs'),path=require('path');
 const cdp=process.argv[2], http=process.argv[3], out=process.argv[4], PKG='ai.wizards.os.musicpreview';
 const rows=[];const check=(name,ok,detail)=>{rows.push({name,ok:!!ok,detail});console.log(ok?'PASS':'FAIL',name,JSON.stringify(detail||''));};

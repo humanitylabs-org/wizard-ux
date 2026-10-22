@@ -1,7 +1,7 @@
 // Desktop/mobile Home parity. Run on Thales; real reads, every external write fenced.
-const {chromium}=require(process.env.PLAYWRIGHT_PATH||'playwright');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const fs=require('fs'),path=require('path'),os=require('os');
-if(!os.hostname().toLowerCase().includes('thales')||!process.env.QA_OUT?.startsWith('/Volumes/ThalesMedia/'))throw Error('Run browser QA on ThalesMedia');
+if(!process.env.WIZARD_WORK_ROOT||!require('./tools/qa-paths.cjs').inWorkRoot(process.env.QA_OUT))throw Error('Run browser QA on ThalesMedia');
 const BASE=process.argv[2],OUT=process.env.QA_OUT;fs.mkdirSync(OUT,{recursive:true});
 const checks=[],errors=[],writes=[],reads=[];let browser;
 function ok(pass,name,detail){checks.push({name,pass:!!pass,detail});console.log(pass?'PASS':'FAIL',name,detail===undefined?'':JSON.stringify(detail));}

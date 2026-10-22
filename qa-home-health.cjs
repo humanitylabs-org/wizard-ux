@@ -2,7 +2,7 @@
 // health checks from VPS console into our resources view accessed from the home screen").
 // Usage: QA_WEB_DIR=<repo> node qa-home-health.cjs <origin>/wizard-os-home/   Real Wizard reads; every write refused.
 // Fixtures are explicitly marked; the first page reads the real /api/system/health.
-let pw;try{pw=require('playwright');}catch{pw=require('playwright-core');}
+const pw = require('./tools/qa-playwright.cjs');
 const fs=require('fs'),path=require('path');
 const URL_=process.argv[2]||'http://127.0.0.1:8923/wizard-os-home/',W=process.env.QA_WEB_DIR||'',OUT=process.env.QA_OUT||'';
 let pass=0,fail=0,writes=0;const ok=(v,n,x='')=>{console.log(v?'PASS':'FAIL',n,v?'':x);v?pass++:fail++;};

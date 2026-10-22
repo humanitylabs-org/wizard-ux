@@ -1,8 +1,8 @@
 // Read-only foreground work probe. Run Chromium on Thales, never Telos.
 // Real session reads; all non-GET/HEAD requests refused. QA_TREE swaps only static UX files.
 const fs = require('fs'), path = require('path');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || '/home/telos/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/?open=chats';
+const { chromium } = require('./tools/qa-playwright.cjs');
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/?open=chats');
 const TREE = process.env.QA_TREE, SECONDS = +(process.env.QA_SECONDS || 15);
 (async () => {
  const b = await chromium.launch({args:['--enable-webgl','--use-angle=swiftshader','--enable-unsafe-swiftshader']});

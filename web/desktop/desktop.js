@@ -69,7 +69,7 @@
 
   /* ---------------- chats (shared core) ---------------- */
   const stage = $('#stage');
-  const CHATS = C.chats({
+  const CHATS = window.WizChatsHost.create({
     win: id => W[id] || (/::list$/.test(id) && W[id.slice(0, -6)] ? listWin(id.slice(0, -6)) : undefined),
     root: () => stage,
     save,
@@ -95,6 +95,7 @@
     // A private-origin link in a message opens as a window on this workspace; the shell never navigates away.
     openLink: (url, title) => { const a = appAt(url); return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }); },
     changed: () => { for (const id of Object.keys(W)) if (W[id].app === 'chats') syncChatsPane(id); },
+    openThread: (sid, options) => openThread(sid, options),
   });
 
   function openReview(level, date) {
@@ -156,7 +157,7 @@
   const ico = (tag, cls, a, extra) => window.WizSigil ? window.WizSigil.box(tag, cls, a, extra) : `<${tag} class="${cls}" style="--g1:${a.g?.[0]};--g2:${a.g?.[1]}">${a.icon || '◇'}${extra || ''}</${tag}>`;
   /* Agents MVP: a Chats window pinned to a non-default agent (w.agent) wears that agent's sigil and name. */
   const agentWin = w => !!(w && w.app === 'chats' && w.agent);
-  const mainChats = w => !!(w && w.app === 'chats' && !w.agent);
+  const mainChats = w => !!(w && w.app === 'chats' && !w.agent && CHATS.views.providerFor(w) === CHATS.views.defaultId());
   function agentApp(w) {
     const AG = window.WosAgents, a = AG?.get(w.agent) || { id: w.agent, label: w.agent, appearance: {}, privacy: 'standard' };
     const g = AG ? AG.glyph(a) : '', c = AG ? AG.colour(a) : '#b99bff';
@@ -195,6 +196,7 @@
   }
 
   function newWin(obj, opts = {}) {
+    if (obj.app === 'chats' && !obj.agent && !obj.chatsProvider) obj = { ...obj, chatsProvider: CHATS.views.defaultId() };
     leaveHome();
     const t = Number.isInteger(opts.ws) && ws[opts.ws] ? opts.ws : cur;
     const id = uid(); W[id] = { id, ...obj };
@@ -264,12 +266,16 @@
   // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
+  window.WizAppOpen = id => Object.values(W).some(w => w && w.appId === id);
   window.WizOpenApp = id => { const x = hostedOpenable(id); return x ? openApp(x) : false; };
-  // Only the App Store and System windows may ask; the sender is checked by its actual frame, not by anything it says.
-  addEventListener('message', e => {
+  // Only trusted system windows may ask; check the actual sender frame, never a claimed app id.
+  addEventListener('message', async e => {
     const d = e.data; if (e.origin !== location.origin || !d || d.type !== 'wizard:open-app' || typeof d.id !== 'string') return;
     const host = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === e.source)?.closest('[data-win]');
-    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents'].includes(w.appId)) return;
+    const w = host && W[host.dataset.win]; if (!w || !['app-store', 'system', 'agents', 'setup'].includes(w.appId)) return;
+    // Setup may have just installed it: apps-changed is asynchronous. Wait for the registry, not a guessed delay.
+    if (!hostedOpenable(d.id)) await window.WizCore.refreshApps?.();
+    if (!host.isConnected || W[host.dataset.win] !== w) return;
     const a = hostedOpenable(d.id); if (a) openApp(a);
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
@@ -307,9 +313,10 @@
     if (a.kind === 'view' && a.view === 'inbox') { openInbox(); return true; }
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
-      const ex = !opts.fresh && findWin(mainChats);
+      const chatsProvider = a.chatsProvider || CHATS.views.defaultId();
+      const ex = !opts.fresh && findWin(w => w.app === 'chats' && !w.agent && CHATS.views.providerFor(w) === chatsProvider);
       if (ex) { focusWin(ex.id); return true; }
-      newWin({ app: 'chats', thread: null }, opts); return true;
+      newWin({ app: 'chats', thread: null, chatsProvider }, opts); return true;
     }
     if (a.url) {
       const ex = !opts.fresh && findWin(w => w.app === 'frame' && w.appId === a.id);
@@ -327,7 +334,7 @@
   function openThread(sid, opts = {}) {
     if (!sid) return;
     // A thread opens in the Chats of the agent it is pinned to (main Chats for the main agent's threads).
-    const ag = LIVE?.agentOf?.(sid) || '', mine = x => x.app === 'chats' && (x.agent || '') === ag;
+    const ag = LIVE?.agentOf?.(sid) || '', mine = x => x.app === 'chats' && (x.agent || '') === ag && (ag || CHATS.views.providerFor(x) === CHATS.views.defaultId());
     let w = !opts.fresh && (ws[cur].wins.map(id => W[id]).find(mine) || findWin(mine));
     if (!w) w = newWin({ app: 'chats', thread: null, ...(ag ? { agent: ag } : {}) }, opts);
     focusWin(w.id); CHATS.openChat(w.id, sid);
@@ -364,7 +371,7 @@
   function winHtml(w) {
     const a = appOf(w);
     return `<div class="wbar" data-drag>${w.app === 'chats' ? window.WosAgents.titlebar(w.agent || '', 'ic', 't') : `${ico('span', 'ic', a)}<span class="t">${esc(winTitle(w))}</span>`}
-      ${window.WosBoundView.badge(w)}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
+      ${window.WosBoundView.badge(w)}${w.app === 'frame' ? window.WosOwnViews?.marker(a) || '' : ''}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${a.url ? `<button data-wact="pop" title="Open in a browser tab" aria-label="Open in a browser tab">↗</button>` : ''}
       <button data-wact="mono" title="Full screen (${MOD}F)" aria-label="Full screen">⤢</button>
       <button data-wact="close" title="Close app (${MOD}W)" aria-label="Close window">✕</button></div>
       <div class="wbody">${bodyHtml(w)}</div>`;
@@ -376,8 +383,8 @@
     if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>↑</kbd><kbd>↓</kbd> move through chats · <kbd>/</kbd> search · <kbd>${MOD}Enter</kbd> new chat · <kbd>${CMD}K</kbd> launch · <kbd>${MOD}⇧V</kbd> new voice chat</div></div></div></div>`;
-    const a = appOf(w), url = w.url || a.url || '/';
-    return `<iframe src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
+    const a = appOf(w), url = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
+    return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}" src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
   }
   /* Chats on the desktop: list on the left, thread on the right, both from the shared Chats client.
@@ -572,6 +579,7 @@
   /* ---------------- top bar ---------------- */
   addEventListener('wizard:app-counts', () => paintBar());
   function paintBar() {
+    window.WosBell?.paint();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     C.workspaceNav.setCount(APP.wizard?.id || 'wizard', LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0);
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
@@ -654,6 +662,8 @@
     if (act === 'mono') return toggleMono();
     if (act === 'pop') { const a = appOf(w); let href = a.url; try { href = el.querySelector('iframe').contentWindow.location.href; } catch (err) {} return window.open(href, '_blank', 'noopener'); }
     if (w?.app === 'chats' || CHATS.isHosted(id)) {
+      // Topic emoji taps belong to shared Chats; do not let the desktop pane adapter open the row first.
+      if (e.target.closest('[data-chpick]')) { const cid = e.target.closest('[data-chats]')?.dataset.chats; if (cid && CHATS.click(e, cid)) { e.stopPropagation(); syncChatsPane(id); return; } }
       // Rows in the list pane open in this window's thread pane.
       const row = e.target.closest('[data-chopen]');
       if (row && e.target.closest('.pane-list') && CHATS.justPressed()) { e.stopPropagation(); return; } // a long-press/right-click just opened the actions sheet
@@ -956,11 +966,13 @@
   document.body.appendChild(setEl);
   let settingsFocus = null, settingsReturn = '';
   const settingsView = window.WosSettings.mount($('#settingsBody'), {
-    outbox: OUTBOX, live: LIVE, ago, toast, visible: () => !setEl.hidden,
+    shell: 'desktop', outbox: OUTBOX, live: LIVE, ago, toast, visible: () => !setEl.hidden,
     helpSub: 'Keyboard shortcuts, desks and Back',
     openThread: id => { closeSettings(); openThread(id); },
     editUnsent: it => { closeSettings(); editUnsent(it); },
     openLink: (url, title) => { closeSettings(); const a = appAt(url); return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }); },
+    openStore: id => { closeSettings(); newWin({ app: 'frame', appId: 'app-store', url: '/wizard-os-home/store/index.html' + (id ? '?app=' + encodeURIComponent(id) : '') }); },
+    chatsChanged: id => { for (const w of Object.values(W)) if (w.app === 'chats' && !w.agent) { w.chatsProvider = id; CHATS.renderChats(w); const list = winEl(w.id)?.querySelector(`[data-chats="${w.id}::list"]`); if (list) CHATS.renderChatList(listWin(w.id), list); syncChatsPane(w.id); } save(); },
     openSub: id => {
       closeSettings(); settingsReturn = id;
       if (id === 'files') openFiles();
@@ -1566,6 +1578,7 @@
   C.deeplink.consume();
   window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && keysEl.hidden && ib.hidden && usageEl.hidden && !window.WosResources?.state?.panel });
   new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
+  window.WosSetupLaunch?.boot({ open: id => { const a = APP[id]; if (a) openApp(a); } }); // Setup opens itself on first run
   C.status?.attach({ openInbox, inboxOpen: () => !ib.hidden, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
   const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 

@@ -1,17 +1,17 @@
 // Real served assets/catalogue; synthetic Telegram metadata and admission/STT stand-ins. No live writes.
-const {chromium}=require(process.env.PW||'playwright-core');const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const WEB=__dirname,HOST='wizard.tailc0f369.ts.net',URL_=`https://${HOST}/wizard-os-home/`;
+const {chromium}=require('./tools/qa-playwright.cjs');const fs=require('fs'),path=require('path'),crypto=require('crypto');
+const WEB=__dirname,HOST=new URL(require('./tools/qa-paths.cjs').origin()).hostname,URL_=`${require('./tools/qa-paths.cjs').origin()}/wizard-os-home/`;
 const W={uploads:[],sessions:new Set(),runs:[],keys:new Map(),transcribes:0,assetVer:1,foreign:[]};
 const src=fs.readFileSync(path.join(__dirname,'qa-device.cjs'),'utf8');
-eval(src.slice(src.indexOf('async function boot('),src.indexOf('// addInitScript')).replace('async function boot(','global.boot=async function boot(').replaceAll('wizard.tailc0f369.ts.net',HOST));
+eval(src.slice(src.indexOf('async function boot('),src.indexOf('// addInitScript')).replace('async function boot(','global.boot=async function boot(').replaceAll(new URL(require('./tools/qa-paths.cjs').origin()).hostname,HOST));
 (async()=>{const b=await chromium.launch({executablePath:process.env.QA_CHROME,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});let n=0;
 for(const shell of ['phone','desktop']){
  const {ctx,p,errs}=await boot(b);if(shell==='desktop')await p.setViewportSize({width:1440,height:960});
  p.on('request',r=>{if(r.method()!=='GET')console.log('REQUEST',r.method(),r.url());});p.on('console',m=>{if(m.type()==='error')console.log('CONSOLE',m.text());});
- const models=await (await ctx.request.get(`https://${HOST}/wizard/hermes/api/model/options`)).json();
+ const models=await (await ctx.request.get(`${require('./tools/qa-paths.cjs').origin()}/wizard/hermes/api/model/options`)).json();
  if(!models.model||!models.provider)throw Error('Live default unavailable');
  const json=(r,d)=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(d)});
- await ctx.route(`https://${HOST}/wizard-os-home/**`,r=>r.request().method()==='GET'?r.continue():r.fallback());
+ await ctx.route(`${require('./tools/qa-paths.cjs').origin()}/wizard-os-home/**`,r=>r.request().method()==='GET'?r.continue():r.fallback());
  await ctx.route('**/api/transcribe',r=>{W.transcribes++;return json(r,{text:'Synthetic live-asset voice reply',ms:1200});});
  await ctx.route('**/api/model/options',r=>r.continue());
  await ctx.route('**/wizard/hermes/api/sessions?*',r=>json(r,{data:[{id:'qa_old_thread',title:'Synthetic Telegram routing canary',source:'telegram',model:models.model,provider:null,status:'completed',message_count:2,updated_at:new Date().toISOString()}],has_more:false}));

@@ -16,6 +16,8 @@
     { id: 'v-week', kind: 'view', name: 'Week in review', icon: '◐', g: ['#8f63ff', '#ff5ccf'], view: 'week', desc: 'Seven days, one compression level up' },
     { id: 'v-month', kind: 'view', name: 'Month in review', icon: '◯', g: ['#3f6bff', '#8f63ff'], view: 'month', desc: 'The arc of the last four weeks' },
     { id: 'v-inbox', kind: 'view', name: 'Inbox', icon: '⬇', g: ['#ffbe55', '#ff6b86'], view: 'inbox', desc: 'Needs you, ready for review, working' },
+    // Setup: built-in system app (web/setup/), beside Chats. Opens by itself on first launch (core/setup-launch.js).
+    { id: 'setup', kind: 'wizard', name: 'Setup', icon: 'S', colors: ['#4ff0b0'], g: ['#4ff0b0', '#3fe0ff'], url: '/wizard-os-home/setup/index.html', desc: 'Get Wizard ready · use it on your phone' },
     // Chats: the one built-in Wizard app. Everything else comes from the box (GET /wizard/v1/apps).
     { id: 'wizard', kind: 'chats', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'], desc: 'Your threads with your Wizard' },
     // Android natives (real intents on Android Chrome)
@@ -68,12 +70,23 @@
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const toTile = (a, trusted = false) => ({
     id: String(a.id), kind: 'wizard', name: String(a.name || a.id), icon: a.icon || String(a.name || a.id).trim().charAt(0).toUpperCase(),
-    g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id), url: a.url || '', desc: a.desc || '',
+    g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id),
+    originalUrl: a.url || '',
+    view: a.source === 'apps.json' && ['original', 'overlay', 'own'].includes(a.view?.mode) &&
+      (a.view.mode !== 'own' || a.view.url === `/wizard/views/${a.id}/`) ? a.view : { mode: 'original', url: a.url || '' },
+    url: a.source === 'apps.json' && a.view?.mode === 'own' && a.view.url === `/wizard/views/${a.id}/` ? a.view.url : a.url || '', desc: a.desc || '',
     ...(a.desktop_only ? { desktopOnly: true } : {}), source: a.source || '', system: a.system === true,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
+  // The Agent Service is Wizard itself, not an app the owner manages.
+  const BACK_KEY = 'wux.apps.backend.v1', BACK_HIDDEN = new Set(['wizard-agent-service']);
+  let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).map(a => toTile(a)); } catch (e) { return []; } })();
+  window.WizCore.backendApps = () => BACK.map(a => {
+    if (!a.sgh && window.WizSigil) { const g = window.WizSigil.of(a.sigil || a); a.sgc = g.color; a.sgh = window.WizSigil.html(a.sigil || a); }
+    return a;
+  });
   const listeners = new Set();
   async function loadRemote() {
     try {
@@ -82,16 +95,28 @@
       if (!url) return;
       const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
       if (!r.ok) return;
-      const list = ((await r.json()).apps || []).filter(a => a && a.id && a.url && a.id !== 'wizard');
-      try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); } catch (e) {}
+      const snapshot = await r.json();
+      window.WizChatsHost?.configure(snapshot);
+      const all = (snapshot.apps || []).filter(a => a && a.id && a.id !== 'wizard');
+      const list = all.filter(a => a.url);
+      // Backend-only apps (no page of their own): listed only by skins that show them (Miguel's skins, app.js).
+      const back = all.filter(a => !a.url && !BACK_HIDDEN.has(a.id) && !window.WizCore.isMaintenanceApp?.(a));
+      try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); localStorage.setItem(BACK_KEY, JSON.stringify(back)); } catch (e) {}
       REMOTE = list.map(a => toTile(a, true));
+      BACK = back.map(a => toTile(a));
       listeners.forEach(fn => fn());
     } catch (e) {}
   }
   const firstLoad = loadRemote();
+  window.WizCore.refreshApps = loadRemote;
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
   window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load()]);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });
+  // A Store Get (or another same-origin Wizard window) says the box's apps changed: read the list again now, so
+  // the new app can be opened (Store "Open") without reloading the shell. Refetching is all it can trigger.
+  addEventListener('message', e => {
+    if (e.origin === location.origin && e.data && e.data.type === 'wizard:apps-changed') loadRemote();
+  });
 
   function registry(shell) {
     // One live array per shell, updated in place, so existing references stay valid.
@@ -111,7 +136,8 @@
       const main = AG?.list.find(a => a.is_default);
       const agents = (AG?.list || []).filter(a => !a.is_default).map(agentTile);
       // Reserve the agent namespace even after deletion: a stale remote app must never impersonate it.
-      const merged = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
+      const views = window.WizChatsHost?.tiles() || [];
+      const merged = [...ALL.slice(0, chats), main ? agentTile(main) : ALL[chats], ...agents, ...views, ...REMOTE.filter(r => !r.id.startsWith('agent:') && !ALL.some(a => a.id === r.id) && !views.some(a => a.id === r.id)), ...ALL.slice(chats + 1)];
       const list = appsFor(shell, merged);
       // Every app wears its sigil (core/sigils.js): sgc = its one colour, sgh = the glyph markup.
       if (window.WizSigil) for (const a of list) if (!a.sgh) { const s = window.WizSigil.of(a.sigil || a); a.sgc = s.color; a.sgh = window.WizSigil.html(a.sigil || a); }
