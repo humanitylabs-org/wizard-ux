@@ -26,7 +26,7 @@ The candidate integrates daily e7a4ec7, including other owners' microphone recov
 
 ## Evidence — Thales only
 
-Exact served staging origin: https://desktop-keys.staging.wizard001.com/wizard-os-home/desktop.html
+Historical staging entry: `/wizard-os-home/desktop.html` on the retired custom domain.
 
 - On-demand desktop lifecycle and added navigation keys: 40 passed.
 - New-chat/new-voice regression: 26 passed.
@@ -35,6 +35,6 @@ Exact served staging origin: https://desktop-keys.staging.wizard001.com/wizard-o
 - Paused PWA Right Option/system-tool ownership regression: 7 passed, zero writes.
 - Wizard for Mac 0.5.2 actual AppKit event loop/native menu acceptance: 22 passed, including first-open preview destination and preservation of saved Wizards. Covers all requested keys, empty/root close behavior, autorepeat, new voice audio enqueued once. Generated test tone through actual MediaRecorder; hardware microphone/keyboard testing is not claimed. Native defaults restored with exact semantic readback.
 
-All QA writes were intercepted/refused or mocked at the outbox. Four `/wizard/thread-seen` attempts were blocked in lifecycle QA; no live messages were sent. Scripts/receipts and built DMG live under `/Volumes/ThalesMedia/Projects/wizard-desktop/dynamic-keys/` on Thales. The current DMG SHA is recorded in the release receipt, not duplicated here before final publication.
+All QA writes were intercepted/refused or mocked at the outbox. Four `/wizard/thread-seen` attempts were blocked in lifecycle QA; no live messages were sent. Scripts/receipts and built DMG live under `$WIZARD_WORK_ROOT/Projects/wizard-desktop/dynamic-keys/` on Thales. The current DMG SHA is recorded in the release receipt, not duplicated here before final publication.
 
 User-requested scope, integration gate, independent review and publication state are tracked in https://github.com/humanitylabs-org/wizard-ux/issues/9. Preserve daily/main and original release authority; tracker bookkeeping is not deployment approval. The Mac artifact is the route for familiar reserved browser chords; do not send a Brave page as proof that those chords work.

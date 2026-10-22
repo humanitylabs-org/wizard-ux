@@ -4,7 +4,7 @@
 
 The normal Wizard launcher and workspace remain on `MainActivity` (`singleTask`). Installed frontend app tiles/rows in mobile Apps gain a 450 ms hold; moving >8 px, scrolling, a second pointer, cancellation or an early lift prevents the action. The opening lift cannot activate the action under the finger. The existing sigil and a single small Add to home screen action are reused; no launcher/window restyle. Ordinary taps retain existing `launch()` placement.
 
-The bounded product direction was obtained **before** UX edits from first-party Claude Fable with tools empty; transcript at `/home/telos/context/sources/projects/wizard-os/claude-transcripts/20261014-home-screen-interaction-response.json` (`claude-fable-5-1`, success, no permission denials).
+The bounded product direction was obtained **before** UX edits from first-party Claude Fable with tools empty; transcript at `$HOME/context/sources/projects/wizard-os/claude-transcripts/20261014-home-screen-interaction-response.json` (`claude-fable-5-1`, success, no permission denials).
 
 `wizardHomeScreenPort` is an exact-primary-origin WebView message listener. It rejects subframes, non-shell paths, pinned-session callers, malformed IDs/request IDs, oversized messages/icons, and pin requests without a recent native touch and current main-document user activation. Its only operations are status and pin. The payload never includes a launch URL. A stable shortcut ID is SHA-256(box primary origin + newline + app ID). Status reads `ShortcutManager.getPinnedShortcuts`; dispatch acceptance is only pending. The OS-confirmation receiver checks an opaque request token and the actual pinned state. Resume checks pinned status before showing success; canceled OS sheets close silently. Unsupported launchers/browsers say they cannot add on this device.
 
@@ -18,8 +18,8 @@ Sessions do not take ownership of Wizard's global voice/recorder/updater callbac
 
 ## Candidate release boundaries
 
-- Default production package/version/origin remain `ai.wizards.os`, `0.9.12` / 36, `https://wizard.tailc0f369.ts.net`.
-- Preview: `ai.wizards.os.preview`, code 1001, `0.9.12-homescreen.1-preview`; compiled ordinary-launch home/origin `https://home-screen-apps.staging.wizard001.com/wizard-os-home/`.
+- Default production package/version/origin remain `ai.wizards.os`, `0.9.12` / 36, `https://wizard.example.ts.net`.
+- Preview: `ai.wizards.os.preview`, code 1001, `0.9.12-homescreen.1-preview`; its ordinary-launch home was `/wizard-os-home/` on the retired custom domain.
 - Preview updater does not read/install the production feed; preview cannot fall back to the production legacy origin.
 - Music production37 and Shared Services38 remain outside this branch; no merge, live service/feed write, publication or physical-phone install.
 
@@ -27,7 +27,7 @@ Sessions do not take ownership of Wizard's global voice/recorder/updater callbac
 
 Lightweight source/unit checks: `node --test tests/*.test.mjs`, `git diff --check`, manifest XML parse. `tests/home-screen-apps.test.mjs` exercises identity/route boundaries, no workspace boot/global shell preference mutation, durable presentation isolation, movement/cancellation/release guards, pending-vs-confirmed pin UI and root/overlay/in-app Back. These use explicit VM/DOM/port fixtures; **they are not real Android, real browser gesture, launcher or signing proof**.
 
-Native rules: `HomeScreenPolicyTest` under the normal JUnit runner. Gradle test/lint/build/signing **only** through `android-build-thales --wait-for-lock --java 17 --gradle-dir android`, expected signer `3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd`, Thales private signing env `/Users/thales/.hermes/secure/wizard-os/signing.env`. Signed preview tasks `:app:testPreviewUnitTest :app:lintPreview :app:assemblePreview`; debug signing is a separate job.
+Native rules: `HomeScreenPolicyTest` under the normal JUnit runner. Gradle test/lint/build/signing **only** through `android-build-thales --wait-for-lock --java 17 --gradle-dir android`, expected signer `3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd`, Thales private signing env `$HOME/.hermes/secure/wizard-os/signing.env`. Signed preview tasks `:app:testPreviewUnitTest :app:lintPreview :app:assemblePreview`; debug signing is a separate job.
 
 `qa-home-screen-apps.cjs` is a Thales-only focused browser suite against real staging GET data (optional exact candidate/baseline **shell-only** overlay, no app fixtures). All non-GET/HEAD requests are aborted and recorded, never accepted as fabricated write successes. It records session/fullscreen/root/nested Back, registered routes, shell-refresh route restore, original workspace isolation, trusted hold/release/unsupported-OS behavior, screenshots and errors. Run candidate and daily negative control, then affected `qa-immersive.cjs`, `qa-launcher-still.cjs`, `qa-hosted-back.cjs`, `qa-app-reading-position.cjs` regressions under the shared Thales lease.
 
@@ -62,4 +62,4 @@ Browser position checks now run with `QA_NATIVE_DOCUMENT_START=0`: the scoped sh
 - Native proof scripts use real launcher/search/row roles, cancel and repeat OS pin requests, dismiss actual Android immersive education, and wait for hydrated frontend content. Signal content proof compares actual source IDs/names and positive scroll; elapsed backend health text remains raw evidence, not a presentation invariant.
 - Scope is isolated source + preview package(s), remote emulators and read-only staging GETs. No daily/production/feed/shared frontend checkout/physical-phone changes.
 
-Actual independent-review lightweight results: **26 tests passed, 0 failed**; all **48 ordinary-entry script syntax checks**, focused QA JavaScript syntax, Python QA AST, manifest XML and `git diff --check` passed. Against exact input `baa5a20` source, the updated VM tests produce **9 expected repair failures / 12 passes** (21 tests), including screenshot crop, Signal refresh, Wisdom rerender, missing utilities and the synchronous checkpoint race. This is an input-source **VM** negative control, not the still-unexecuted daily baseline real-browser negative control. Receipts: `/home/telos/.hermes/state/home-screen-apps-20261014-evidence/independent-review/`.
+Actual independent-review lightweight results: **26 tests passed, 0 failed**; all **48 ordinary-entry script syntax checks**, focused QA JavaScript syntax, Python QA AST, manifest XML and `git diff --check` passed. Against exact input `baa5a20` source, the updated VM tests produce **9 expected repair failures / 12 passes** (21 tests), including screenshot crop, Signal refresh, Wisdom rerender, missing utilities and the synchronous checkpoint race. This is an input-source **VM** negative control, not the still-unexecuted daily baseline real-browser negative control. Receipts: `$HERMES_HOME/state/home-screen-apps-20261014-evidence/independent-review/`.

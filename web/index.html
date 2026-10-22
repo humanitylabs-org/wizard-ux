@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <script src="core/home-screen-policy.js"></script>
   <link rel="stylesheet" href="core/home-screen-apps.css">
-  <script src="core/carry-in.js"></script>
   <script src="core/shell.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="robots" content="noindex, nofollow">
@@ -24,12 +23,14 @@
   <script src="core/brand.js"></script>
   <link rel="stylesheet" href="motion/wizard-motion.css">
   <link rel="stylesheet" href="core/chats.css">
+  <link rel="stylesheet" href="core/chats-view.css">
   <link rel="stylesheet" href="core/sel-menu.css">
   <link rel="stylesheet" href="core/chat-power.css">
   <link rel="stylesheet" href="core/polish.css">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="core/views.css">
   <link rel="stylesheet" href="core/settings.css">
+  <link rel="stylesheet" href="core/own-views.css">
   <link rel="stylesheet" href="core/update-banner.css">
   <link rel="stylesheet" href="core/links.css">
   <link rel="stylesheet" href="core/appearance-host.css">
@@ -41,7 +42,9 @@
   <link rel="stylesheet" href="core/desks.css">
   <link rel="stylesheet" href="core/tour.css">
   <link rel="stylesheet" href="core/skins.css">
+  <script src="core/skin-host.js"></script>
   <link rel="stylesheet" href="core/skin-frame.css">
+  <script src="core/my-skin.js"></script>
 </head>
 <body>
   <div id="device" class="device">
@@ -79,7 +82,7 @@
     </div>
 
     <!-- Dock -->
-    <div id="dock" class="dock">
+    <div id="dock" data-part="dock" class="dock">
       <div id="dotsL" class="desk-dots left"></div>
       <div id="orbWrap" class="orb-wrap">
         <div class="orb-halo"></div>
@@ -127,9 +130,11 @@
 
   <script src="core/core.js"></script>
   <script src="core/config.js"></script>
+  <script src="core/reach.js"></script>
   <script src="core/status.js"></script>
   <script src="core/sigils.js"></script>
   <script src="core/workspace-navigation.js"></script>
+  <script src="core/chats-view.js"></script>
   <script src="core/apps.js"></script>
   <script src="core/appearance-host.js"></script>
   <script src="core/app-capture.js"></script>
@@ -161,6 +166,8 @@
   <script src="core/settings.js"></script>
   <script src="core/cancelled.js"></script>
   <script src="core/mic.js"></script>
+  <script src="core/os-updates.js"></script>
+  <script src="core/own-views.js"></script>
   <script src="core/screen-text.js"></script>
   <script src="core/screen-capture.js"></script>
   <script src="core/sel-menu.js"></script>
@@ -180,6 +187,7 @@
   <script src="core/bound-view.js"></script>
   <script src="core/home-screen-apps.js"></script>
   <script src="core/single-app-session.js"></script>
+  <script src="core/setup-launch.js"></script>
   <script src="app.js"></script>
   <script src="core/web-update.js"></script>
   <script src="device.js"></script>

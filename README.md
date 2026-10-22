@@ -4,6 +4,29 @@
 
 It is the active Wizard front end. The older React client in [`wizard-mobile`](https://github.com/humanitylabs-org/wizard-mobile) is now **legacy Wizard Mobile**. It's kept as a reference while its features are ported here.
 
+## Portable development and QA
+
+```sh
+npm test
+npm install --no-save playwright  # or playwright-core + an installed browser
+# Browser installation/extended QA belongs on the configured build worker.
+node tools/qa-origin.cjs         # local /wizard-os-home/ on port 9371
+# In another terminal:
+WIZARD_ORIGIN=http://127.0.0.1:9371 node qa-brand.cjs
+# Standalone prototype (served at / rather than /wizard-os-home/):
+python3 server.py                # http://127.0.0.1:9271/
+node qa.cjs http://127.0.0.1:9271/
+```
+
+- `WIZARD_ORIGIN`: QA defaults to `http://127.0.0.1:9371` (the local QA origin). Live QA selects an owner's origin explicitly, e.g. `https://wizard.example.ts.net`. Preview suites retain their existing required `QA_ORIGIN` admission; this variable does not bypass isolation. `server.py` keeps localhost origins and reads additional allowed POST origins from comma-separated `WIZARD_ORIGIN`; configure it in the launching service **before adopting this change**. QA expects one origin, not a comma-separated list.
+- `QA_PLAYWRIGHT`: optional installed module name or absolute module path. The shared resolver otherwise tries `playwright`, then `playwright-core`. Legacy `PLAYWRIGHT_PATH`, `PW`, `PW_MODULE`, `PLAYWRIGHT_MODULE`, `PLAYWRIGHT_DIR`, and `QA_PW` remain aliases. A broken explicit override fails clearly. `QA_CHROME` selects a browser executable for suites/loaders that support it.
+- `WIZARD_WORK_ROOT`: work/evidence storage; defaults to `${TMPDIR:-/tmp}/wizard-work` and is created on use. Worker-only suites require an explicit root, preserve their macOS/lease fences, and reject output outside it. Set this to the worker's large work volume; do not move heavy work onto a small control-plane disk.
+- `WIZARD_BUILD_HOST`: SSH worker host; no default. Remote orchestration requires it. Set `WIZARD_WORK_ROOT` to the **remote** work volume for those commands.
+- `HERMES_HOME`: defaults to `~/.hermes`; controls owner state and prototype API-key lookup. Other checkouts are derived from this repository's parent, not a named user's home. `QA_HELPER_STATUS_MODULE` is the absolute path to the Agent Service helper-status module when using `tools/helper-preview-origin.cjs`'s helper endpoint.
+- Device QA uses standard `ANDROID_HOME` / `ANDROID_SDK_ROOT` and `JAVA_HOME`; install the SDK and suite-appropriate JDK on the worker and put `node`, `python3`, and CLI helpers on `PATH`. Snapshot-based QA must include `tools/qa-playwright.cjs`, `tools/qa-paths.cjs`, and (for Python) `tools/qa_paths.py` alongside the suite.
+
+The normal `npm test` command includes a tracked-file portability guard. Only explicit evidence/receipt paths are exempt. Native `android/` and `ios/` are temporarily excluded pending the separate `fix/portable-app-origin` migration.
+
 ## Where it sits in Wizard OS
 
 **Wizard OS** is the whole system: the agent, the services, the apps and the UX. Wizard UX is one View in it.
@@ -98,7 +121,7 @@ On its own, the shell runs with empty data. For live use it's served under one o
 - `/wizard-os-home/` → `server.py` (port 9271)
 - `/wizard/` → Wizard Agent Service (Chats calls `/wizard/hermes/...`, `/wizard/files/...`, `/wizard/thread-seen`, `/wizard/thread-dispositions`)
 
-Both sit behind the private gateway on Tailscale (`https://private.wizard001.com/wizard-os-home/`).
+Both sit behind the private gateway on Tailscale (`https://wizard.example.ts.net/wizard-os-home/`).
 
 `server.py` reads these environment variables:
 

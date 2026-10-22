@@ -20,7 +20,7 @@ Recording-start destination/model/provider/agent are not read again from the new
 
 `responsive-capability-coverage.json` preserves all **73** canonical capabilities and the complete **163-row** legacy crosswalk. Its statuses distinguish current implementation, the already-live Settings slice, inherited shared features, platform adapters and the excluded preview. Reviews and local Maps are also recorded as supplemental browser views from the previous source inventory. This is an implementation delta against that finite audit, not another historical re-audit or a claim that all inherited features were exhaustively re-tested.
 
-Native adapters remain native: Android Everywhere, physical side key, external-app accessibility, background recorder/reply watcher, Share intents, APK updater and Grab automation; native Mac key hooks remain their own input adapter. Android origin carry-in applies only to that migration. Browser push would require its own subscription/service-worker transport; it is not a fake desktop checkbox or an automatically ported Android background service. Browser screen capture requires `getDisplayMedia` or the native screen port, installation requires `beforeinstallprompt`, and wake lock is best effort where supported. Live Mode remains opt-in **simulated preview**, not production functionality.
+Native adapters remain native: Android Everywhere, physical side key, external-app accessibility, background recorder/reply watcher, Share intents, APK updater and Grab automation; native Mac key hooks remain their own input adapter. Browser push would require its own subscription/service-worker transport; it is not a fake desktop checkbox or an automatically ported Android background service. Browser screen capture requires `getDisplayMedia` or the native screen port, installation requires `beforeinstallprompt`, and wake lock is best effort where supported. Live Mode remains opt-in **simulated preview**, not production functionality.
 
 ## Verification boundary
 
@@ -38,7 +38,7 @@ Tested executable commit: `e32ee97cb98c1907cb8f160edfe7bced4401da87`. Exact web 
 
 `docs/responsive-remainder-verification.json` is the read-back Thales receipt. It verifies SHA-256 equality for **286** tracked source/test files against the pushed commit, with zero mismatches. Subsequent documentation-only commits retain this executable tree.
 
-Evidence root on `thales.local`: `/Volumes/ThalesMedia/QA/responsive-parity-remainder-20261015`.
+Evidence root on `thales.local`: `$WIZARD_WORK_ROOT/QA/responsive-parity-remainder-20261015`.
 
 | Gate | Passed | Failed | Receipt under evidence root |
 |---|---:|---:|---|

@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """Thales API35 signed-preview pin/task probe. Real launcher/UI, no CDP or app doubles.
-Usage on Thales: QA_SHA=<exact candidate SHA> python3 tools/qa_home_screen_apps.py /Volumes/ThalesMedia/AndroidBuilds/jobs/JOB/receipt.json
+Usage on Thales: QA_SHA=<exact candidate SHA> python3 tools/qa_home_screen_apps.py $WIZARD_WORK_ROOT/AndroidBuilds/jobs/JOB/receipt.json
 The build must have come from android-build-thales --wait-for-lock. Never runs on VPS/physical phones.
 """
 import fcntl, hashlib, json, os, pathlib, re, socket, subprocess, sys, time, urllib.request, urllib.parse
+from qa_paths import java_home
 P = pathlib.Path
-if sys.platform != 'darwin' or 'thales' not in socket.gethostname().lower():
+if sys.platform != 'darwin' or not os.environ.get('WIZARD_WORK_ROOT'):
     raise SystemExit('Thales-only emulator QA')
 from qa_aa_lib import Emu, wait, BASE
 receipt_path = P(sys.argv[1]).resolve()
 if not receipt_path.is_relative_to(BASE) or receipt_path.name != 'receipt.json':
     raise SystemExit('Require canonical remote build receipt under AndroidBuilds')
 build = json.loads(receipt_path.read_text())
-if build.get('status') != 'ok' or build.get('host') != 'thales':
+if build.get('status') != 'ok' or build.get('host') != os.environ.get('WIZARD_BUILD_HOST', socket.gethostname()):
     raise SystemExit('Build receipt is not successful Thales output')
 if not re.fullmatch(r'[a-f0-9]{40}',os.environ.get('QA_SHA','')) or build.get('source_revision') != os.environ['QA_SHA']:
     raise SystemExit('QA_SHA must match exact remote candidate source revision')
@@ -30,7 +31,8 @@ if not apk.resolve().is_relative_to(P(build['job']) / 'source'):
 if hashlib.sha256(apk.read_bytes()).hexdigest() != a['sha256']:
     raise SystemExit('Exact artifact SHA mismatch')
 checks=[]
-origin='https://home-screen-apps.staging.wizard001.com'
+origin=os.environ.get('QA_ORIGIN', '').rstrip('/')
+if not origin: raise SystemExit('QA_ORIGIN is required: select an isolated tailnet preview')
 incomplete=['signed WebView exact inner URL/iframe-refresh and per-instance storage readback (debug companion required)',
             'camera/IME/sigil pixel acceptance and selection/share/capture device interactions',
             'invalid-native-intent and network/Tailscale recovery device gates',
@@ -80,7 +82,7 @@ def get_json(url):
 if True:  # caller holds the canonical lease via lockf -k -t 1500 worker.lock
     out = P(os.environ['QA_OUT'])
     out.mkdir(parents=True,exist_ok=True);emu=Emu(out,5596,'ai.wizards.os.preview',dns=os.environ.get('QA_DNS','192.168.1.1'));failure=None
-    emu.env['JAVA_HOME']='/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'
+    emu.env['JAVA_HOME']=java_home()
     emu.env['PATH']=emu.env['JAVA_HOME']+'/bin:'+emu.env['PATH']
     def capture(name):
         emu.shot(out,name);(out/(name+'.xml')).write_text(emu.ui());(out/(name+'-activities.txt')).write_text(emu.sx('dumpsys activity activities'))

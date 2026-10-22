@@ -14,11 +14,11 @@
 // Usage: node qa-skins-live.cjs [origin=http://127.0.0.1:9381/wizard-os-home/]   (QA_WEB_DIR=<repo> serves that tree's shell over the origin)
 //   QA_APP=wisdom,wizard-music,… hosted app to open (first one with a URL in the live registry)
 //   QA_CHROME=<chrome binary>  QA_SHOTS=<dir>  QA_REQUIRE_HOSTED=1 (Wisdom must re-dress)  QA_REAL_IDLE=1 (also wait the real 45 s)
-let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
+const pw = require('./tools/qa-playwright.cjs');
 const fs = require('fs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
 const ORIGIN = new URL(URL_).origin;
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/skins-live'; fs.mkdirSync(SHOTS, { recursive: true });
+const SHOTS = process.env.QA_SHOTS || require('./tools/qa-paths.cjs').workPath('skins-live'); fs.mkdirSync(SHOTS, { recursive: true });
 const UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36';
 const WEB = process.env.QA_WEB_DIR || '';
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.json': 'application/json', '.woff2': 'font/woff2', '.txt': 'text/plain', '.webmanifest': 'application/manifest+json' };
@@ -86,7 +86,7 @@ const DECOR = () => document.getAnimations().filter(a => { const t = a.effect &&
 
   // ---------- Paper is gone ----------
   const list = await p.evaluate(() => WosSkin.list.map(s => s.id));
-  ok(JSON.stringify(list) === JSON.stringify(SKINS), 'WosSkin.list = five skins, no Paper', list.join(','));
+  ok(JSON.stringify(list.slice(0, 5)) === JSON.stringify(SKINS) && !list.includes('paper'), 'WosSkin.list starts with the five Wizard palettes, no Paper (Mizel palettes follow)', list.join(','));
   ok(await p.evaluate(() => document.documentElement.dataset.skin === 'nebula' && !document.documentElement.style.getPropertyValue('--ink')), 'default is Nebula with no inline tokens');
 
   // ---------- per skin ----------

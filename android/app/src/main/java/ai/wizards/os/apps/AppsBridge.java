@@ -61,7 +61,6 @@ public final class AppsBridge implements AppsInstaller.Listener {
         AppsBridge b = new AppsBridge(a, web);
         try {
             java.util.Set<String> allow = new java.util.HashSet<>(Collections.singleton(AppState.primaryOrigin(a)));
-            if (BuildConfig.ORIGIN.equals(AppState.primaryOrigin(a))) allow.add(AppState.LEGACY_ORIGIN);
             WebViewCompat.addWebMessageListener(web, NAME, allow, b::onMessage);
         } catch (RuntimeException e) {
             Log.w(AppsInstaller.TAG, "addWebMessageListener failed: no Android Apps bridge", e);
@@ -107,7 +106,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
         boolean shellPath = path.equals("/wizard-os-home") || path.startsWith("/wizard-os-home/");
         if (BuildConfig.DEBUG && AppState.isQaPage(activity, x)) return shellPath;
         String host = "https://" + x.getHost();
-        return "https".equals(x.getScheme()) && (BuildConfig.ORIGIN.equals(host) || AppState.LEGACY_ORIGIN.equals(host)) && (x.getPort() == -1 || x.getPort() == 443) && shellPath;
+        return "https".equals(x.getScheme()) && BuildConfig.ORIGIN.equals(host) && (x.getPort() == -1 || x.getPort() == 443) && shellPath;
     }
 
     private void onMessage(WebView view, WebMessageCompat message, Uri sourceOrigin, boolean isMainFrame, JavaScriptReplyProxy reply) {

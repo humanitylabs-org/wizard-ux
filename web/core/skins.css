@@ -82,62 +82,77 @@ html:not([data-skin="nebula"]) .device { background: var(--bg); }
   box-shadow: inset 0 0 0 7px var(--sk-bg), inset 0 0 0 20px var(--sk-ac); }
 .sk-opt[aria-pressed="true"] .sk-dot::after { content: "✓"; position: absolute; right: -5px; bottom: -4px; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center;
   background: var(--violet-2); color: var(--bg); font-size: 10px; font-weight: 900; line-height: 1; }
+/* Skin cards (one per skin, its palettes as a dot strip), then the Colours row for the worn skin. */
+.sk-fam { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; margin: 0 0 10px; }
+.sk-famopt { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 10px; border-radius: 14px; border: 1px solid var(--line);
+  background: none; color: var(--ink-2); font: inherit; text-align: left; cursor: pointer; }
+.sk-famopt[aria-pressed="true"] { border-color: transparent; background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ink) 60%, transparent); }
+.sk-famopt[aria-pressed="true"] .sk-ftx b::after { content: " ✓"; font-weight: 700; }
+.sk-fdots { display: flex; flex: none; }
+.sk-fdots i { width: 18px; height: 18px; border-radius: 50%; margin-left: -6px; background: var(--sk-bg); border: 1px solid rgba(255, 255, 255, .18);
+  box-shadow: inset 0 0 0 3px var(--sk-bg), inset 0 0 0 9px var(--sk-ac); }
+.sk-fdots i:first-child { margin-left: 0; }
+.sk-ftx { display: flex; flex-direction: column; min-width: 0; }
+.sk-ftx b { font-size: 14px; font-weight: 650; }
+.sk-ftx small { font-size: 12px; color: var(--ink-2); }
+.sk-sub { padding: 0 2px 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+/* My skin row (Settings › Look): Edit opens skin.css in Files, Reset empties it. Optional script approval is device-local. Skin tokens only. */
+.my-skin-row { margin: 8px 0 0; }
+.my-skin-row .st-tx { min-width: 0; overflow-wrap: anywhere; }
+.my-skin-row .ms-acts button:disabled { opacity: .5; cursor: wait; }
+.my-skin-row .ms-acts { display: flex; gap: 6px; flex: none; }
+.my-skin-row .ms-acts button { min-height: 44px; padding: 6px 14px; border-radius: 99px; background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); font-size: 13px; font-weight: 650; }
+.my-skin-row .ms-acts button.ghost { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
 
-/* Obsidian (Oscar's monochrome palette): flat surfaces, no glow, system sans clock. Light variant flips the scheme. */
-html[data-skin^="obsidian"] .home-time { font-weight: 250; letter-spacing: -.05em; }
-html[data-skin^="obsidian"] .now-card { box-shadow: none; border-color: var(--line-2); }
-html[data-skin="obsidian-light"] { color-scheme: light; }
-html[data-skin="obsidian-light"] .sk-dot { border-color: rgba(0, 0, 0, .25); }
-
-/* Obsidian: hard-coded violet accents in chats/desktop become monochrome. --ob-fill is the primary action fill,
-   --ob-on its text; --ob-tint a neutral selection wash. Scoped to Obsidian only; other skins are untouched. */
-html[data-skin="obsidian"] { --ob-fill: #ffffff; --ob-on: #000000; --ob-tint: rgba(255, 255, 255, .10); --ob-edge: rgba(255, 255, 255, .34); }
-html[data-skin="obsidian-light"] { --ob-fill: #000000; --ob-on: #ffffff; --ob-tint: rgba(0, 0, 0, .07); --ob-edge: rgba(0, 0, 0, .34); }
-html[data-skin^="obsidian"] :is(.ch-new, .ch-compose button, .ch-fab, .ch-compose button.ch-mic.on, .tr-type button, .tr-cmd, .side-card .side-go) {
-  background: var(--ob-fill); color: var(--ob-on); box-shadow: none; border-color: transparent; }
-html[data-skin^="obsidian"] :is(.ch-new, .ch-compose button, .ch-fab) svg { stroke: var(--ob-on); }
-html[data-skin^="obsidian"] .msg.u .bub { background: var(--ob-tint); border-color: var(--ob-edge); }
-html[data-skin^="obsidian"] :is(.ws.cur, .dchats .pane-newchat, .dchats .ch-row.cur, .ch-rdy-bar button.on, .ch-fopt.on, .mrow.on, .fi-row.on, .ch-chip, .bub a.wsl, .ch-earlier, .msg.u.pending .pbtn, .ch-pill .pbtn, .logo[aria-current="page"]) {
-  background: var(--ob-tint); border-color: var(--ob-edge); color: var(--ink); }
-html[data-skin^="obsidian"] .ws.cur::after { background: var(--ink); }
-html[data-skin^="obsidian"] :is(.win.focus) { border-color: var(--ob-edge); box-shadow: 0 14px 50px rgba(0, 0, 0, .35); }
-html[data-skin^="obsidian"] :is(.ch-compose textarea:focus) { border-color: var(--ob-edge); }
-html[data-skin^="obsidian"] :is(.bub blockquote, .msg.agentnote .an-body, .rc-body) { border-left-color: var(--ob-edge); }
-html[data-skin^="obsidian"] :is(.us-bar i, .ls-load) { background: var(--ink); }
-html[data-skin^="obsidian"] .pal-card { background: var(--glass-2); }
-html[data-skin="obsidian-light"] :is(.msg.agentnote > summary, .laterrun, .msg.agentnote .an-body, .rc-body) { color: var(--ink-2); }
-
-/* Obsidian strictness: buttons painted with var(--violet) hard-code white text; under Obsidian --violet IS white
-   (or black in Light), so their text follows the background instead. */
-html[data-skin^="obsidian"] :is(.sw.on, .dv-update button, .ch-sec-h b:not(.wait), .bub .tick.on, .dv-btn.primary, .get.open, .get.big) { color: var(--bg); }
-html[data-skin^="obsidian"] #device > #generalVoice.selected { color: var(--bg); }
-/* Status icons and labels: shape carries meaning, not colour. Needs-you / failed keep full ink, the rest step down. */
-/* Status icons keep a faint hue so categories stay learnable: muted colour, neutral tile. */
-html[data-skin^="obsidian"] .ch-row .emo.sti { background: var(--ob-tint); box-shadow: inset 0 0 0 1px var(--ob-edge); }
-html[data-skin="obsidian"] .ch-row .emo.sti:is(.needs, .approval, .offline) { color: #d9b98a; }
-html[data-skin="obsidian"] .ch-row .emo.sti.check { color: #9cc4d1; }
-html[data-skin="obsidian"] .ch-row .emo.sti.done { color: #9cc7a8; }
-html[data-skin="obsidian"] .ch-row .emo.sti.fyi { color: #d6cc9a; }
-html[data-skin="obsidian"] .ch-row .emo.sti.failed { color: #d99a9a; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti:is(.needs, .approval, .offline) { color: #8a6430; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.check { color: #3f6f80; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.done { color: #3d6e4b; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.fyi { color: #7a6d2c; }
-html[data-skin="obsidian-light"] .ch-row .emo.sti.failed { color: #8f3a3a; }
-html[data-skin^="obsidian"] .ch-row .emo.sti.deferred { color: var(--ink-2); }
-html[data-skin^="obsidian"] .ch-row .emo.sti.working { background: var(--ob-tint); }
-html[data-skin^="obsidian"] .ch-row .emo.sti .spin { border-color: var(--ob-edge); border-top-color: var(--ink); }
-html[data-skin^="obsidian"] .ch-row .emo.sti svg .k { stroke: var(--bg); }
-html[data-skin^="obsidian"] .ch-row .emo.sti svg .kd { fill: var(--bg); }
-html[data-skin^="obsidian"] .ch-row .pv em.att { color: var(--ink); font-weight: 700; }
-html[data-skin^="obsidian"] .ch-sec-h b.wait { background: var(--ob-tint); color: var(--ink); }
-/* App sigils and the brand mark go grey; each app keeps its silhouette. */
-html[data-skin^="obsidian"] :is(.sgi, .logo, .wic) { filter: grayscale(1); }
-html[data-skin="obsidian-light"] .sgi { filter: grayscale(1) brightness(.35); }
-
-/* Landscapes (rotating macOS wallpapers): frosted glass over the photo, white type with a soft shadow, Sora clock. */
-html[data-skin="landscapes"] .home-time { font-family: var(--font-display, ui-sans-serif); font-weight: 300; letter-spacing: -.05em; text-shadow: none; filter: drop-shadow(0 2px 14px rgba(0, 0, 0, .35)); }
-html[data-skin="landscapes"] :is(.home-date, .home-line) { text-shadow: 0 1px 8px rgba(0, 0, 0, .45); }
-html[data-skin="landscapes"] :is(.now-card, .side-card, .win, .launcher, .inbox, .dock) { -webkit-backdrop-filter: blur(22px) saturate(1.25); backdrop-filter: blur(22px) saturate(1.25); }
-html[data-skin="landscapes"] .now-card { background: rgba(16, 14, 22, .42); border-color: rgba(255, 255, 255, .14); box-shadow: none; }
-html[data-skin="landscapes"] .dock { border-top-color: transparent; }
+/* Skin picker (Settings › Look): small preview cards, one per colour, grouped under each skin's name.
+ * Each card is a miniature of its look drawn from that look's own tokens (--p-*): background, two reply lines, a sent
+ * bubble, the dock and its orb. The name below is set in the look's own face (inline, from WosSkin.list face).
+ * Selected = a ring with a gap plus a small check. */
+.st-root .skp-all { margin: 2px 0 4px; }
+.st-root .skp-fam { padding: 14px 2px 0; font-size: 12px; font-weight: 650; color: var(--ink-2); }
+.st-root .skp-fam:first-child { padding-top: 0; }
+.st-root .skp { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px clamp(10px, 3.6vw, 16px); margin: 10px 0 0; padding: 4px; }
+html[data-shell="desktop"] .st-root .skp { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+.st-root .skp-card { position: relative; container-type: inline-size; display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.st-root .skp-mini { position: relative; display: block; aspect-ratio: 4 / 5; border-radius: 14px; overflow: hidden; background: var(--p-bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 18%, transparent); transition: box-shadow .18s ease, transform .18s ease; }
+.st-root .skp-card:active .skp-mini { transform: scale(.97); }
+.st-root .skp-mini i { position: absolute; display: block; }
+.st-root .skp-a { left: 12%; top: 16%; width: 56%; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--p-ink) 70%, transparent); }
+.st-root .skp-a2 { top: 24%; width: 38%; background: color-mix(in srgb, var(--p-ink) 42%, transparent); }
+.st-root .skp-u { right: 11%; top: 38%; width: 46%; height: 15px; border-radius: 9px 9px 3px 9px; background: color-mix(in srgb, var(--p-ac) 42%, var(--p-bg)); }
+.st-root .skp-dock { left: 0; right: 0; bottom: 0; height: 21%; background: var(--p-dock, var(--p-bg)); border-top: 1px solid var(--p-dl, transparent); }
+.st-root .skp-orb { left: 50%; top: 50%; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--p-ac2, var(--p-ac)) 70%, #fff), var(--p-ac) 55%, var(--p-pk, var(--p-ac))); box-shadow: 0 0 10px color-mix(in srgb, var(--p-ac) 50%, transparent); }
+.st-root .skp-nm { display: block; padding: 0; font-size: min(14px, 15.2cqi); line-height: 18px; height: 18px; letter-spacing: -.005em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); transition: color .18s ease; }
+/* optical match: each face at the size where it reads like the others */
+.st-root .skp-card[data-skinpick="tide"] .skp-nm { font-size: min(14.5px, 16cqi); }
+.st-root .skp-card[data-skinpick="ember"] .skp-nm { font-size: min(17px, 19cqi); }
+.st-root .skp-card[data-skinpick="signal"] .skp-nm { font-size: min(13px, 14.5cqi); letter-spacing: -.02em; }
+.st-root .skp-wait .skp-nm { visibility: hidden; }
+.st-root .skp-card[aria-pressed="true"] .skp-mini { box-shadow: 0 0 0 2.5px var(--bg), 0 0 0 4px var(--ink); }
+.st-root .skp-card[aria-pressed="true"] .skp-nm { color: var(--ink); }
+.st-root .skp-card[aria-pressed="true"]::after { content: "✓"; position: absolute; top: 7px; right: 7px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--ink); color: var(--bg); font-size: 11px; font-weight: 900; line-height: 1; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+.st-root .skp-card:focus-visible { outline: none; }
+.st-root .skp-card:focus-visible .skp-mini { box-shadow: 0 0 0 2.5px var(--bg), 0 0 0 4px color-mix(in srgb, var(--ink) 55%, transparent); }
+/* Living-background colours per look (the canvas scenes, reduced to a few CSS layers). */
+.st-root .skp-mini[data-skp="nebula"] { background: radial-gradient(70% 50% at 25% 30%, rgba(143,99,255,.55), transparent 70%), radial-gradient(60% 45% at 80% 60%, rgba(255,92,207,.32), transparent 70%), radial-gradient(50% 40% at 60% 15%, rgba(63,224,255,.22), transparent 70%), #05030c; }
+.st-root .skp-mini[data-skp="grove"] { background: radial-gradient(60% 45% at 72% 20%, rgba(255,226,140,.24), transparent 70%), radial-gradient(70% 40% at 20% 75%, rgba(79,138,82,.28), transparent 70%), linear-gradient(160deg, #13281d, #08130c 55%, #040906); }
+.st-root .skp-mini[data-skp="tide"] { background: radial-gradient(70% 35% at 50% 0%, rgba(255,214,150,.22), transparent 75%), linear-gradient(180deg, #0d5466, #073746 45%, #021219); }
+.st-root .skp-mini[data-skp="ember"] { background: radial-gradient(90% 60% at 50% 105%, rgba(255,110,30,.55), rgba(180,50,10,.18) 45%, transparent 75%), #0d0705; }
+.st-root .skp-mini[data-skp="signal"] { background: radial-gradient(circle, rgba(57,255,140,.16) .7px, transparent 1.1px) 0 0 / 7px 7px, #000; }
+.st-root .skp-mini[data-skp="novairecito"] { background: radial-gradient(75% 50% at 30% 20%, rgba(148,108,255,.30), transparent 70%), #05030a; }
+.st-root .skp-mini[data-skp="sepia"] { background: radial-gradient(80% 60% at 30% 20%, rgba(255,250,232,.6), transparent 70%), #f3ead2; }
+.st-root .skp-mini[data-skp="obsidian"] { background: radial-gradient(80% 55% at 30% 25%, rgba(255,255,255,.12), transparent 70%), #000; }
+.st-root .skp-mini[data-skp="obsidian-light"] { background: #fff; }
+.st-root .skp-mini[data-skp="obsidian-light"] .skp-u { background: #ececec; }
+.st-root .skp-mini[data-skp="obsidian"] .skp-u { background: #2f2f2f; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+.st-root .skp-mini[data-skp="landscapes"] { background: linear-gradient(180deg, rgba(11,10,16,.42), transparent 34%, transparent 66%, rgba(11,10,16,.5)), url(../skins/landscapes/preview.webp) center / cover, #4d8da3; }
+.st-root .skp-mini[data-skp="landscapes"] .skp-a { background: rgba(255,255,255,.92); }
+.st-root .skp-mini[data-skp="landscapes"] .skp-a2 { background: rgba(255,255,255,.62); }
+.st-root .skp-mini[data-skp="landscapes"] .skp-u { background: rgba(255,255,255,.8); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); box-shadow: 0 1px 6px rgba(0,0,0,.18); }
+.st-root .skp-mini[data-skp="landscapes"] .skp-dock { border-radius: 0 0 14px 14px; background: rgba(11,10,16,.5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.st-root .skp-mini[data-skp^="obsidian"] .skp-orb { background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--p-ink) 35%, var(--p-bg)), var(--p-ink) 80%); box-shadow: none; }
+.st-root .skp-mini[data-skp="landscapes"] .skp-orb { background: radial-gradient(circle at 35% 30%, #fff, #d8e9ee 55%, #6fb3c4); box-shadow: 0 0 8px rgba(255,255,255,.45); }

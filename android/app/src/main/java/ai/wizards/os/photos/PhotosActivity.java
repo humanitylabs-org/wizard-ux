@@ -28,6 +28,7 @@ public final class PhotosActivity extends Activity implements SharedPreferences.
     private LinearLayout body;
     private TextView status;
     private boolean albums=false,busy=false;
+    private boolean quiet;
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private final android.os.Handler handler=new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable clock=new Runnable() { public void run() { refreshStatus(); handler.postDelayed(this,30000); } };
@@ -43,7 +44,9 @@ public final class PhotosActivity extends Activity implements SharedPreferences.
         Uri uri=intent.getData(); if(uri==null) return;
         // Never use untrusted deep-link parameters to change the server or choose credentials.
         String url=uri.toString(); intent.setData(null);
-        task(()->new PhotoAuth(this).finish(url),"Sign-in failed or expired · try Wizard Sign-in again");
+        task(()-> { new PhotoAuth(this).finish(url);
+                if(settings.enabled()) { BackupScheduler.cancel(this); BackupScheduler.schedule(this); BackupScheduler.enqueue(this); runOnUiThread(this::permissions); } },
+            "Sign-in failed or expired · try Wizard Sign-in again");
     }
     @Override protected void onResume() { super.onResume(); settings.prefs.registerOnSharedPreferenceChangeListener(this); clock.run(); }
     @Override protected void onPause() { handler.removeCallbacks(clock); settings.prefs.unregisterOnSharedPreferenceChangeListener(this); super.onPause(); }
@@ -60,9 +63,13 @@ public final class PhotosActivity extends Activity implements SharedPreferences.
     private void toggle(String text,String key,boolean initial) {
         Switch v=new Switch(this); v.setText(text); v.setTextSize(16); v.setPadding(0,dp(14),0,dp(14)); v.setChecked(settings.prefs.getBoolean(key,initial)); body.addView(v);
         v.setOnCheckedChangeListener((b,on)-> {
-            if(key.equals("enabled") && on) {
-                try { if(!settings.secret("credentials").has("key")) { v.setChecked(false); settings.status("Connect your photo server first"); return; } }
-                catch(Exception e) { v.setChecked(false); settings.status("Sign in again · secure key unavailable"); return; }
+            if(quiet) return;
+            if(key.equals("enabled") && on && !settings.connected()) {
+                // Not signed in yet: the switch itself starts Wizard Sign-in and turns backup on when it returns.
+                quiet=true; v.setChecked(false); quiet=false;
+                settings.prefs.edit().putBoolean("enable_after_signin",true).commit();
+                signIn(); // With no build-time server, ask for one before starting OAuth.
+                return;
             }
             settings.change(); settings.prefs.edit().putBoolean(key,on).commit();
             BackupScheduler.cancel(this); BackupScheduler.schedule(this); if(settings.enabled()) BackupScheduler.enqueue(this);
@@ -71,9 +78,12 @@ public final class PhotosActivity extends Activity implements SharedPreferences.
     }
     private void show() {
         albums=false; page("Photos backup");
+        // 0.9.32 left this dead-end message behind when the switch was tapped before sign-in.
+        if(!settings.connected() && "Connect your photo server first".equals(settings.prefs.getString("status",""))) settings.prefs.edit().remove("status").commit();
         status=text("",16); refreshStatus();
         text("Original photos and videos go directly to your photo server. Nothing is deleted from this phone.",15);
-        toggle("Back up selected albums","enabled",false);
+        toggle("Back up photos","enabled",false);
+        if(!settings.connected()) text("Turning this on asks for your fingerprint once (Wizard Sign-in).",14);
         button("Albums · Camera & Screenshots by default",this::showAlbums);
         toggle("Wi-Fi only (unmetered)","wifi",true);
         toggle("First full backup only while charging","charge",true);
@@ -81,7 +91,7 @@ public final class PhotosActivity extends Activity implements SharedPreferences.
         button("Photo permissions",this::permissions);
         button("Retry / Back up now",()-> { BackupScheduler.schedule(this); BackupScheduler.enqueue(this); refreshStatus(); });
         String server=settings.server(); text(server.isEmpty()?"No photo server connected":server,14);
-        button("Wizard Sign-in",this::signIn);
+        button(settings.connected()?"Sign in again":"Wizard Sign-in",()-> { settings.prefs.edit().remove("enable_after_signin").commit(); signIn(); });
         button("Advanced · server and API key",this::advanced);
         button("Disconnect",()->new AlertDialog.Builder(this).setMessage("Stop backup and remove this device's saved key? Originals on the server stay. Revoke the device key in Immich Account settings if needed.")
                 .setNegativeButton("Keep connected",null).setPositiveButton("Disconnect",(d,w)-> { settings.disconnect(); show(); }).show());
@@ -90,7 +100,7 @@ public final class PhotosActivity extends Activity implements SharedPreferences.
         if(status==null || settings==null) return;
         long last=settings.prefs.getLong("last_sync",0);
         String when=last==0?"not synced yet":"last sync "+Math.max(0,(System.currentTimeMillis()-last)/60000)+" min ago";
-        status.setText("Backed up "+settings.prefs.getInt("done",0)+" of "+settings.prefs.getInt("total",0)+" · "+when+"\n"+settings.prefs.getString("status","Connect your photo server")
+        status.setText("Backed up "+settings.prefs.getInt("done",0)+" of "+settings.prefs.getInt("total",0)+" · "+when+"\n"+settings.prefs.getString("status","Turn on backup to sign in with your fingerprint")
                 +(new PhotoLibrary(this).limited()?"\nLimited access: only Android-selected photos are visible.":""));
     }
     private void showAlbums() {
@@ -128,13 +138,22 @@ public final class PhotosActivity extends Activity implements SharedPreferences.
     }
     private LinearLayout form() { LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(dp(20),dp(8),dp(20),0); return box; }
     private void signIn() {
-        if(busy) return; LinearLayout box=form(); EditText url=input(box,settings.server(),"https://your-photo-server",false);
+        if(busy) return;
+        if(!settings.server().isEmpty()) { startSignIn(settings.server()); return; }
+        LinearLayout box=form(); EditText url=input(box,settings.server(),"https://your-photo-server",false);
         new AlertDialog.Builder(this).setTitle("Wizard Sign-in").setView(box).setNegativeButton("Cancel",null).setPositiveButton("Continue",(d,w)-> {
             try {
-                String server=BackupPolicy.server(url.getText().toString(),false);
-                task(()-> { String auth=new PhotoAuth(this).start(server); runOnUiThread(()-> { if(!isDestroyed()) new CustomTabsIntent.Builder().build().launchUrl(this,Uri.parse(auth)); }); },"Sign-in unavailable · check the server and Wizard Sign-in configuration");
+                startSignIn(BackupPolicy.server(url.getText().toString(),false));
             } catch(Exception e) { settings.status("Enter an HTTPS server origin"); }
         }).show();
+    }
+    private void startSignIn(String input) {
+        if(busy) return;
+        final String server;
+        try { server=BackupPolicy.server(input,false); } catch(Exception e) { settings.status("Enter an HTTPS server origin"); return; }
+        task(()-> { String auth=new PhotoAuth(this).start(server);
+                runOnUiThread(()-> { if(isDestroyed()) return; settings.status("Confirm with your fingerprint in Wizard Sign-in"); new CustomTabsIntent.Builder().build().launchUrl(this,Uri.parse(auth)); }); },
+            "Sign-in unavailable · check the server and Wizard Sign-in configuration");
     }
     private void advanced() {
         if(busy) return; LinearLayout box=form(); EditText url=input(box,settings.server(),"Server URL",false),key=input(box,"","Scoped API key",true);

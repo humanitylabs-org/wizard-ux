@@ -10,7 +10,7 @@ WEB_DIR  the worktree's web/ (served as /wizard-os-home/ by the fake Wizard)
 
 Nothing can reach the real Wizard: the app is pointed (debug-only files/qa_home.txt + qa_origin.txt) at a fake
 Wizard on this Mac, reached from the emulator as http://localhost:PORT through `adb reverse`; the emulator runs
-with a dead DNS server so private.wizard001.com cannot even resolve; and the WebView's resource log is checked
+with a dead DNS server so the retired custom domain cannot even resolve; and the WebView's resource log is checked
 for any wizard001 request at the end.
 
 Checks
@@ -26,17 +26,20 @@ Checks
 """
 import fcntl, hashlib, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
 import urllib.request
+from qa_paths import origin_host, work_root
+from qa_paths import android_sdk, java_home
+QA_ORIGIN_HOST = origin_host()
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 APK = P(sys.argv[1]); NEXT = P(sys.argv[2]); WEB = P(sys.argv[3])
 UXV = WEB / 'ux-version.txt'; UXV0 = [None]  # web build id the banner watches (#22b)
 PKG = 'ai.wizards.os.qa'
 job = P(sys.argv[4]) if len(sys.argv) > 4 else BASE / 'qa' / ('wos-native-' + uuid.uuid4().hex[:8])
 job.mkdir(parents=True, exist_ok=True)
 OUT = job / 'shots'; OUT.mkdir(exist_ok=True)
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5702; S = 'emulator-%d' % PORT; DEVTOOLS = 9353; FAKE = 18787
 FAKE = int(os.environ.get('WOS_QA_FAKE_PORT') or FAKE)  # move the fake Wizard off a port the Mac already holds
 ORIGIN = 'http://localhost:%d' % FAKE
@@ -347,7 +350,7 @@ with (BASE / 'worker.lock').open('a') as lock:
         VN = (re.search(r'versionName=(\S+)', sx('dumpsys package %s' % PKG)) or [None, '0-qa'])[1]
         NEXT_VN = re.sub(r'-qa$', '', VN) + '-qanext'
         check('install the QA build', out == 'Success', out + ' ' + (ver.group(0) if ver else ''))
-        resolv = sx('ping -c 1 -W 2 wizard.tailc0f369.ts.net 2>&1 | head -2')
+        resolv = sx(f'ping -c 1 -W 2 {QA_ORIGIN_HOST} 2>&1 | head -2')
         check('the real Wizard is unreachable from the emulator (DNS dead)', 'unknown host' in resolv.lower() or 'bad address' in resolv.lower() or not re.search(r'\d+\.\d+\.\d+\.\d+', resolv), resolv.strip())
         sh(ADB, '-s', S, 'reverse', 'tcp:%d' % FAKE, 'tcp:%d' % FAKE)
         # QA hooks (debug build only): fake origin for the page + native HTTP, canned microphone.

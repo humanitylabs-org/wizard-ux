@@ -28,7 +28,7 @@ public final class MicLoan {
 
     public final String who, eventId, takeId, meetingId;
     public final boolean borrowed;
-    private boolean ended;
+    private boolean ended, micReleased;
     private String meetingAfter;
 
     private static String refusal = "";
@@ -76,9 +76,16 @@ public final class MicLoan {
     public synchronized String release(Meeting m, String outcome) {
         if (ended) return meetingAfter;
         ended = true;
-        MicOwner.release(who);
+        releaseMic();
         if (borrowed && m != null) meetingAfter = m.end(eventId, outcome);
         return meetingAfter;
+    }
+
+    /** The note engine closes the mic before the controller returns the meeting loan. Exactly once. */
+    public synchronized void releaseMic() {
+        if (micReleased) return;
+        micReleased = true;
+        MicOwner.release(who);
     }
 
     public synchronized boolean ended() { return ended; }

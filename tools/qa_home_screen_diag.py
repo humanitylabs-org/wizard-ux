@@ -2,12 +2,13 @@
 """Thales API35 diagnosis: why a native long-press on an Apps row does not open the Add to home screen sheet.
 Debug (inspectable) APK against the live Wizard, read-only. Logs pointer/contextmenu/scroll events over CDP
 during a real `input swipe` hold, then repeats the hold with a CDP touch for comparison.
-Usage on Thales: QA_OUT=/Volumes/ThalesMedia/... python3 tools/qa_home_screen_diag.py <AndroidBuilds/jobs/JOB/receipt.json>
+Usage on Thales: QA_OUT=$WIZARD_WORK_ROOT/... python3 tools/qa_home_screen_diag.py <AndroidBuilds/jobs/JOB/receipt.json>
 """
 import json, os, pathlib, re, socket, sys, time
 import xml.etree.ElementTree as E
+from qa_paths import java_home
 P = pathlib.Path
-if sys.platform != 'darwin' or 'thales' not in socket.gethostname().lower():
+if sys.platform != 'darwin' or not os.environ.get('WIZARD_WORK_ROOT'):
     raise SystemExit('Thales-only emulator QA')
 sys.path.insert(0, str(P(__file__).resolve().parent))
 from qa_aa_lib import Emu, Page, wait, BASE, ADB
@@ -18,7 +19,7 @@ a = next(x for x in build['artifacts'] if x.get('aapt2', {}).get('package') == P
 apk = P(build['job']) / 'source' / a['path']
 out = P(os.environ['QA_OUT']); out.mkdir(parents=True, exist_ok=True)
 emu = Emu(out, 5600, PKG, dns=os.environ.get('QA_DNS', '100.100.100.100'))
-emu.env['JAVA_HOME'] = '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'
+emu.env['JAVA_HOME'] = java_home()
 emu.env['PATH'] = emu.env['JAVA_HOME'] + '/bin:' + emu.env['PATH']
 def labels(xml):
     try: return [n.get('text') or n.get('content-desc') or '' for n in E.fromstring(xml).iter('node')]

@@ -25,7 +25,7 @@ def main():
     out = root / ('receipt-' + time.strftime('%Y%m%dT%H%M%S'))
     out.mkdir()
     env = os.environ.copy()
-    env['PATH'] = '/opt/homebrew/bin:' + env.get('PATH', '')
+    env['PATH'] = env.get('PATH', '')
     assert args.photos_server.startswith('https://') and '\n' not in args.photos_server
     env['ORG_GRADLE_PROJECT_photosServer'] = args.photos_server
     result = {'status': 'running', 'privacy': 'generated/disposable only', 'evidence': str(out)}
@@ -69,7 +69,7 @@ def main():
         # These jobs were prepared from the exact pushed revision, before entering this lane.
         job = P(args.debug_job)
         with (out / 'debug-build.log').open('w') as log:
-            run(['/opt/homebrew/bin/python3', job / 'worker.py', '--worker', job / 'job.json'], stdout=log, stderr=subprocess.STDOUT, pass_fds=(fd,), timeout=2400)
+            run([sys.executable, job / 'worker.py', '--worker', job / 'job.json'], stdout=log, stderr=subprocess.STDOUT, pass_fds=(fd,), timeout=2400)
         debug = json.loads((job / 'receipt.json').read_text())
         assert debug['status'] == 'ok'
         result['debug_build'] = debug
@@ -158,6 +158,8 @@ def main():
         assert 'FATAL EXCEPTION' not in crash
         acceptance=json.loads((out/'receipt.json').read_text()); result['acceptance']=acceptance; save()
         assert acceptance.get('status')=='pass' and 'OK (1 test)' in test
+        for k in ('switch_starts_signin','enable_after_signin'):
+            assert str(acceptance.get(k,'')).startswith('pass'), (k, acceptance.get(k))
         # Native child-only QA is not enough: tap the shared registration in the actual candidate shell.
         from qa_aa_lib import Page, wait
         import socket
@@ -208,7 +210,7 @@ def main():
         # Release has a separate signed job: never compare debug/test certificates against the owner signer.
         release_job=P(args.release_job)
         with (out/'release-build.log').open('w') as log:
-            run(['/opt/homebrew/bin/python3',release_job/'worker.py','--worker',release_job/'job.json'],stdout=log,stderr=subprocess.STDOUT,pass_fds=(fd,),timeout=2400)
+            run([sys.executable,release_job/'worker.py','--worker',release_job/'job.json'],stdout=log,stderr=subprocess.STDOUT,pass_fds=(fd,),timeout=2400)
         release=json.loads((release_job/'receipt.json').read_text()); assert release['status']=='ok'
         result['release_build']=release
         result['status']='pass'

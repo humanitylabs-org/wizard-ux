@@ -1,7 +1,8 @@
-const {chromium}=require(process.env.PW_MODULE || '/Volumes/ThalesMedia/wizard-stockint-20261012/qa/node_modules/playwright');
+if (!process.env.QA_ORIGIN) throw new Error('QA_ORIGIN is required: select an isolated tailnet preview');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const fs=require('fs');
 const ROOT=process.env.QA_OUT||process.cwd();
-const ORIGIN=process.env.QA_ORIGIN || 'https://helper-status.staging.wizard001.com';
+const ORIGIN=new URL(process.env.QA_ORIGIN).origin;
 let passed=0; const errors=[];
 const ok=(c,name)=>{if(!c)throw new Error(name);console.log('PASS',name);passed++;};
 (async()=>{

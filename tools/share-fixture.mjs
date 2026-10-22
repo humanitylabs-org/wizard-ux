@@ -10,6 +10,7 @@
 //        [--throttle=<MB/s>]   cap PATCH intake speed so QA can interrupt an upload mid-way
 //        [--max=<bytes>]       box cap (WIZARD_UPLOAD_MAX_BYTES); a bigger upload → 507 insufficient_storage
 //        [--chunk=<bytes>]     suggested chunk_bytes (default 8 MiB)
+//        [--hang-create=<n>]   never answer the first n POST /wizard/v1/uploads (a stalled Wizard)
 //
 // Contract (Agent Service v1):
 //   GET  /wizard/v1/bootstrap                → capabilities.resumable_uploads, endpoints.uploads/shares
@@ -44,6 +45,7 @@ const RESUMABLE = flag('resumable', '1') !== '0';
 const THROTTLE = Number(flag('throttle', '0')) * 1024 * 1024; // bytes per second, 0 = unthrottled
 const MAX = Number(flag('max', '0'));
 const CHUNK = Number(flag('chunk', String(8 * 1024 * 1024)));
+let HANG_CREATE = Number(flag('hang-create', '0')); // the first N upload creates are never answered (a stalled Wizard)
 const MAX_CHUNK = 64 * 1024 * 1024;
 const OLD_LIMIT = 64 * 1024 * 1024;
 const DIRS = { up: path.join(DATA, 'uploads'), files: path.join(DATA, 'files'), shares: path.join(DATA, 'shares') };
@@ -322,7 +324,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/__fixture/state') return send(res, 200, {
       shares: Object.values(S.shares).map(sh => ({ ...pubShare(sh), note: sh.note, uploads: sh.uploads.map(id => ({ id, offset: S.uploads[id].offset, bytes: S.uploads[id].bytes, status: S.uploads[id].status, patches: S.uploads[id].patches, conflicts: S.uploads[id].conflicts })) })),
       uploads: Object.values(S.uploads).map(u => ({ id: u.id, client: u.client, filename: u.filename, bytes: u.bytes, offset: u.offset, status: u.status, share: u.share, patches: u.patches, conflicts: u.conflicts, file: u.file || '' })),
-      deliveries: S.deliveries, runs: Object.values(S.runs), oldUploads: S.oldUploads || 0,
+      deliveries: S.deliveries, runs: Object.values(S.runs), oldUploads: S.oldUploads || 0, hungCreates: S.hungCreates || 0,
       sessions: Object.values(S.sessions).map(s => ({ id: s.id, agent: s.agent, title: s.title, messages: s.messages.length, user_messages: s.messages.filter(x => x.role === 'user').map(x => String(x.content).slice(0, 400)) })),
     });
     if (p === '/__fixture/reset' && m === 'POST') { fs.rmSync(DATA, { recursive: true, force: true }); for (const d of Object.values(DIRS)) fs.mkdirSync(d, { recursive: true }); S = load(); seed(); return send(res, 200, { ok: true }); }
@@ -334,6 +336,7 @@ const server = http.createServer(async (req, res) => {
     });
     if (p === '/wizard/v1/agents' && m === 'GET') return AGENTS_N ? send(res, 200, { agents: AGENTS }) : send(res, 404, { error: 'not_found' });
     if (RESUMABLE) {
+      if (p === '/wizard/v1/uploads' && m === 'POST' && HANG_CREATE > 0) { HANG_CREATE--; S.hungCreates = (S.hungCreates || 0) + 1; log('hanging upload create'); req.resume(); return; }
       if (p === '/wizard/v1/uploads' && m === 'POST') { const [c, j] = createUpload(await readJson(req)); return send(res, c, j); }
       let mm = p.match(/^\/wizard\/v1\/uploads\/(up_[0-9a-f]{32})(\/complete)?$/);
       if (mm) {

@@ -82,5 +82,5 @@
     ctx?.haptic?.(8); ctx?.render?.(); return true;
   }
 
-  window.WosMic = { html, act, available: () => !!DEV(), read, same };
+  window.WosMic = { html, act, summary: () => { const p = read()?.policy; return !p || p.mode === 'phone' ? 'default' : p.mode === 'any' ? 'any connected' : label(p.prefer[0] || {}); }, available: () => !!DEV(), read, same };
 })();

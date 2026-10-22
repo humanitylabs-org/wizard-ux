@@ -11,7 +11,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
-import android.media.MediaRecorder;
+import ai.wizards.os.audio.NoteRecorder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -62,7 +62,8 @@ public class RecorderService extends Service {
 
     public interface Listener { void onRecorderEvent(String type, String id); }
 
-    private MediaRecorder rec;
+    private NoteRecorder.Take rec;
+    private static NoteRecorder.Reservation reservation;
     private String holding; // a stopped take the app is still sending
     private Thread canned; // debug builds only: the emulator has no microphone
     private volatile boolean cannedRun;
@@ -104,32 +105,42 @@ public class RecorderService extends Service {
         if (eventId != null && !borrowed) return "";
         if (!borrowed && ai.wizards.os.mizel.MeetingRecorderService.live() != null) return "";
         if (activeId != null) return activeId;
-        if (!ai.wizards.os.MicOwner.tryAcquire(ai.wizards.os.MicOwner.ORB)) return "";
-        String id = RecordingStore.get(c).create(kind);
-        if (borrowed && !ai.wizards.os.mizel.MeetingRecorderService.bindBorrow(eventId, id)) {
-            ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);
-            new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
-            RecordingStore.get(c).delete(id); return "";
-        }
-        borrowEvent = borrowed ? eventId : null;
-        if (borrowed) RecordingStore.get(c).set(id, "meetingHandoffId", eventId);
-        JSONObject saved = RecordingStore.get(c).read(id);
-        if (saved == null || (borrowed && !eventId.equals(saved.optString("meetingHandoffId")))) {
-            ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);
-            borrowEvent = null;
+        try { reservation = NoteRecorder.reserve(ai.wizards.os.MicOwner.ORB); }
+        catch (IOException e) { return ""; }
+        try {
+            String id = RecordingStore.get(c).create(kind);
+            if (borrowed && !ai.wizards.os.mizel.MeetingRecorderService.bindBorrow(eventId, id)) {
+                closeReservation();
+                new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
+                RecordingStore.get(c).delete(id); return "";
+            }
+            borrowEvent = borrowed ? eventId : null;
+            if (borrowed) RecordingStore.get(c).set(id, "meetingHandoffId", eventId);
+            JSONObject saved = RecordingStore.get(c).read(id);
+            if (saved == null || (borrowed && !eventId.equals(saved.optString("meetingHandoffId")))) {
+                closeReservation();
+                borrowEvent = null;
+                if (borrowed) new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
+                return "";
+            }
+            activeId = id; stopWanted = null; paused = false; pausedMs = 0; level = 0; source = "";
+            ai.wizards.os.audio.AudioRecordingGate.set("recorder", true);
+            startedAt = SystemClock.elapsedRealtime();
+            Intent i = new Intent(c, RecorderService.class).setAction(ACTION_START).putExtra(EXTRA_ID, id);
+            try { c.startForegroundService(i); }
+            catch (RuntimeException e) { Log.w(TAG, "start: " + e); activeId = null; ai.wizards.os.audio.AudioRecordingGate.set("recorder", false);
+                closeReservation();
+                if (borrowed) new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
+                RecordingStore.get(c).delete(id); return ""; }
+            return id;
+        } catch (RuntimeException e) {
+            closeReservation();
+            activeId = null; borrowEvent = null;
+            ai.wizards.os.audio.AudioRecordingGate.set("recorder", false);
             if (borrowed) new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
+            Log.w(TAG, "recording metadata failed", e);
             return "";
         }
-        activeId = id; stopWanted = null; paused = false; pausedMs = 0; level = 0; source = "";
-        ai.wizards.os.audio.AudioRecordingGate.set("recorder", true);
-        startedAt = SystemClock.elapsedRealtime();
-        Intent i = new Intent(c, RecorderService.class).setAction(ACTION_START).putExtra(EXTRA_ID, id);
-        try { c.startForegroundService(i); }
-        catch (RuntimeException e) { Log.w(TAG, "start: " + e); activeId = null; ai.wizards.os.audio.AudioRecordingGate.set("recorder", false);
-            ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);
-            if (borrowed) new Handler(Looper.getMainLooper()).post(() -> ai.wizards.os.mizel.MeetingRecorderService.endBorrow(eventId, "start_failed"));
-            RecordingStore.get(c).delete(id); return ""; }
-        return id;
     }
 
     public static void pause(Context c, boolean on) { command(c, on ? ACTION_PAUSE : ACTION_RESUME); }
@@ -216,8 +227,7 @@ public class RecorderService extends Service {
                     // A meeting-linked loan keeps its original even when short/cancelled.
                     // Normal recovery/explicit acknowledgement owns eventual deletion.
                     if (m != null && m.has("meetingHandoffId")) break;
-                    CancelledTakes.keep(this, st.audio(take), m == null ? 0 : m.optLong("ms"), "app", RecordingStore.MIME);
-                    st.delete(take);
+                    st.delete(take); // finishTake applied the engine's explicit Cancel policy.
                 }
                 break;
             default:
@@ -230,35 +240,30 @@ public class RecorderService extends Service {
         if (id == null || !id.equals(activeId)) { stopSelf(); return; }
         File out = RecordingStore.get(this).audio(id);
         File qa = new File(getFilesDir(), "qa_mic.aac");
-        if (BuildConfig.DEBUG && qa.isFile()) {
-            startCanned(qa, out);
-        } else {
-            try {
-                // The phone's mic, never a Bluetooth speaker's: MicRoute refuses a take Android puts elsewhere.
-                MediaRecorder r = ai.wizards.os.audio.MicRoute.start(this,
-                        () -> Build.VERSION.SDK_INT >= 31 ? new MediaRecorder(this) : legacyRecorder(),
-                        (m, src) -> {
-                            m.setAudioSource(src);
-                            m.setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS);
-                            m.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-                            m.setAudioChannels(1);
-                            m.setAudioSamplingRate(44100);
-                            m.setAudioEncodingBitRate(64000);
-                            m.setOutputFile(out.getAbsolutePath());
-                        });
-                rec = r;
+        try {
+            if (BuildConfig.DEBUG && qa.isFile()) {
+                rec = NoteRecorder.staged(this, reservation, id, "app", out);
+                startCanned(qa, out);
+            } else {
+                rec = NoteRecorder.start(this, reservation, id, "app", out.getParentFile(),
+                        (take, what) -> main.post(() -> {
+                            if (rec != take || !id.equals(activeId)) return;
+                            finishTake("stopped", "mic-lost");
+                            Listener l = listener;
+                            if (l != null) l.onRecorderEvent("stopped", id);
+                        }));
                 source = "mic";
-                RecordingStore.get(this).set(id, "route", ai.wizards.os.audio.MicRoute.routed(r));
-            } catch (Exception e) {
-                Log.w(TAG, "recorder failed: " + e);
-                RecordingStore.get(this).set(id, "error", ai.wizards.os.audio.MicRoute.why(e, String.valueOf(e.getMessage())));
-                finishTake("failed", "error");
-                RecordingStore.get(this).delete(id);
-                Listener l = listener;
-                if (l != null) l.onRecorderEvent("error", id);
-                return;
+                RecordingStore.get(this).set(id, "route", rec.routed());
+                main.post(meter);
             }
-            main.post(meter);
+        } catch (Exception e) {
+            Log.w(TAG, "recorder failed: " + e);
+            RecordingStore.get(this).set(id, "error", ai.wizards.os.audio.MicRoute.why(e, String.valueOf(e.getMessage())));
+            finishTake("failed", "error");
+            RecordingStore.get(this).delete(id);
+            Listener l = listener;
+            if (l != null) l.onRecorderEvent("error", id);
+            return;
         }
         PowerManager pm = getSystemService(PowerManager.class);
         cpu = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "WizardOS:recording");
@@ -294,21 +299,27 @@ public class RecorderService extends Service {
         canned.start();
     }
 
-    @SuppressWarnings("deprecation")
-    private static MediaRecorder legacyRecorder() { return new MediaRecorder(); }
+    private static void closeReservation() {
+        NoteRecorder.Reservation r = reservation;
+        reservation = null;
+        if (r != null) r.close();
+    }
 
     /** Stops the recorder and the service; the file stays for the app to collect. Main thread. */
     private void finishTake(String state, String via) {
         String id = activeId;
-        if (rec != null) {
-            try { rec.stop(); } catch (RuntimeException ignored) { } // too short: the file may be empty
-            try { rec.release(); } catch (RuntimeException ignored) { }
-            rec = null;
-        }
         if (canned != null) {
             cannedRun = false;
             try { canned.join(1500); } catch (InterruptedException ignored) { }
             canned = null;
+        }
+        NoteRecorder.Take take = rec;
+        rec = null;
+        if (take != null) {
+            try {
+                if ("cancelled".equals(state) && borrowEvent == null) take.cancel(elapsedMs());
+                else take.stop(); // A meeting-linked Cancel retains the original for the meeting handoff.
+            } catch (RuntimeException e) { Log.w(TAG, "take custody update failed; original retained", e); }
         }
         main.removeCallbacks(meter);
         if (cpu != null && cpu.isHeld()) cpu.release();
@@ -321,13 +332,17 @@ public class RecorderService extends Service {
             st.set(id, "state", state);
         }
         activeId = null; stopWanted = null; paused = false; level = 0;
-        ai.wizards.os.MicOwner.release(ai.wizards.os.MicOwner.ORB);
+        closeReservation();
         // Native file closure is durable custody. Keep it until the normal outbox acknowledges it.
         String event = borrowEvent; borrowEvent = null;
         if (event != null) {
             boolean durable = false;
-            try (java.io.RandomAccessFile file = new java.io.RandomAccessFile(RecordingStore.get(this).audio(id), "rw")) {
-                file.getFD().sync();
+            try {
+                File audio = RecordingStore.get(this).audio(id);
+                // The engine may have released a header-only take. Never recreate it after that decision.
+                if (audio.isFile()) try (java.io.RandomAccessFile file = new java.io.RandomAccessFile(audio, "r")) {
+                    file.getFD().sync();
+                }
                 JSONObject saved = RecordingStore.get(this).read(id);
                 durable = saved != null && state.equals(saved.optString("state"));
             } catch (IOException e) { Log.w(TAG, "handoff custody not confirmed", e); }
@@ -373,7 +388,7 @@ public class RecorderService extends Service {
 
     @Override
     public void onDestroy() {
-        if (rec != null || canned != null) finishTake("interrupted", "destroyed");
+        if (activeId != null || rec != null || canned != null) finishTake("interrupted", "destroyed");
         if (live == this) live = null;
         super.onDestroy();
     }

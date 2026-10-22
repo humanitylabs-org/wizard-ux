@@ -4,7 +4,7 @@ James approved building the preview in `wizard_1791823363261_4e06432460cb` after
 
 ## Open and judge
 
-https://helper-status.staging.wizard001.com/
+The original preview used the retired custom domain. For a new run, set `QA_ORIGIN` to an isolated tailnet preview hosting these fixtures and open its `/` entry.
 
 Opens directly on **Preview · Stalled helpers**, phone shell. Tap the existing Working row to expand it; **Try Continue · example only** resumes the illustrative request and moves it to Ready after completion. Browser-cookie-isolated examples also cover helper batches still awaited and the main agent finishing its answer. Real thread status is read from the live database; real writes are refused by the preview origin.
 
@@ -21,8 +21,8 @@ Opens directly on **Preview · Stalled helpers**, phone shell. Tap the existing 
 
 - `qa-helper-status.cjs` ran on **Thales**, installed Google Chrome, against the exact HTTPS destination: **31/31 browser assertions**, phone and desktop, zero runtime errors. Deep link, partial sibling result, resumed example, Ready transition, touch target, both status displays, Back staying in Chats, and refusal of live continuation/run writes.
 - `tests/helper-status.node.test.mjs`: **14/14** lightweight backend assertions. Real HTTP handler/access/body validation and session-list projection with explicit test fixtures; active lease/admission, pending siblings, owner gate, stale receipts, later requests/steering, final completion, and premature Done.
-- Parent inspected phone stalled and list screenshots. Screenshots: `~/.hermes/cache/scratch/helper-status-shots/` and Thales `/Users/thales/helper-status-qa/`.
-- Small remote browser QA used `/Users/thales/helper-status-qa` after the external ThalesMedia disk disconnected; it installed only playwright-core and reused installed Chrome. No sustained build or media staging on VPS.
+- Parent inspected phone stalled and list screenshots. Screenshots: `~/.hermes/cache/scratch/helper-status-shots/` and Thales `$HOME/helper-status-qa/`.
+- Small remote browser QA used `$HOME/helper-status-qa` after the external ThalesMedia disk disconnected; it installed only playwright-core and reused installed Chrome. No sustained build or media staging on VPS.
 
 ## Viewport repair verification
 
@@ -33,8 +33,8 @@ Opens directly on **Preview · Stalled helpers**, phone shell. Tap the existing 
 
 ## Delivery checkpoint
 
-UX source: `/home/telos/worktrees/wos-helper-status`, branch `feature/helper-status-preview` from `daily`.
-Agent Service: `/home/telos/work/was-helper-status`, same branch name from live `99051325`.
+UX source: `$HOME/worktrees/wos-helper-status`, branch `feature/helper-status-preview` from `daily`.
+Agent Service: `$HOME/work/was-helper-status`, same branch name from live `99051325`.
 Preview unit: `wizard-stage-helper-status`, port 9506; custom origin `tools/helper-preview-origin.cjs`.
 
 Before live integration, reconcile with the separate Stock integration manual-Continue lane, preserve its approved downtime policy, review candidate execution race/idempotency and list-read cost, perform baseline/candidate regressions on Thales, then serialize daily/backend delivery under existing release policy. Preview approval is not live-release approval.

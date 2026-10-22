@@ -9,14 +9,16 @@ runs JS in the app's WebView over DevTools, then records: did the top page stay 
 the file (request log + User-Agent), and did a file land in /sdcard/Download.
 """
 import fcntl, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid, urllib.request, struct, zlib
+from qa_paths import work_root
+from qa_paths import android_sdk, java_home
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 APK = P(sys.argv[1]); PKG = 'ai.wizards.os.qa'
 job = P(sys.argv[2]) if len(sys.argv) > 2 else BASE / 'qa' / ('wos-dlprobe-' + uuid.uuid4().hex[:6])
 job.mkdir(parents=True, exist_ok=True)
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5712; S = 'emulator-%d' % PORT; DEVTOOLS = 9363; FAKE = 18797
 ORIGIN = 'http://localhost:%d' % FAKE
 

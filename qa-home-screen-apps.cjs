@@ -1,12 +1,13 @@
 // Thales-only, real GET data. Run baseline and candidate with the SAME staging origin.
-// QA_SHA=<git SHA> QA_WEB_DIR=<exact checkout> QA_MODE=candidate|baseline QA_OUT=/Volumes/ThalesMedia/... node qa-home-screen-apps.cjs
+// QA_SHA=<git SHA> QA_WEB_DIR=<exact checkout> QA_MODE=candidate|baseline QA_OUT=$WIZARD_WORK_ROOT/... node qa-home-screen-apps.cjs
 // QA_NATIVE_DOCUMENT_START=1 emulates ONLY the native early storage hook; not device proof.
+if (!process.env.QA_ORIGIN) throw new Error('QA_ORIGIN is required: select an isolated tailnet preview');
 const os=require('os'),fs=require('fs'),path=require('path'),crypto=require('crypto'),cp=require('child_process');
-if(process.platform!=='darwin'||!os.hostname().toLowerCase().includes('thales'))throw Error('Thales-only browser QA');
-const {chromium}=require(process.env.PW||'/Users/thales/workspace/wizard-mobile-link-candidate/node_modules/playwright');
-const origin=new URL(process.env.QA_ORIGIN||'https://home-screen-apps.staging.wizard001.com').origin;
+if(process.platform!=='darwin'||!process.env.WIZARD_WORK_ROOT)throw Error('Thales-only browser QA');
+const {chromium}=require('./tools/qa-playwright.cjs');
+const origin=new URL(process.env.QA_ORIGIN).origin;
 const out=process.env.QA_OUT,source=process.env.QA_WEB_DIR,mode=process.env.QA_MODE||'candidate';
-if(!out||!out.startsWith('/Volumes/ThalesMedia/')||!source||!['candidate','baseline'].includes(mode))throw Error('Exact source, mode and ThalesMedia output required');
+if(!out||!require('./tools/qa-paths.cjs').inWorkRoot(out)||!source||!['candidate','baseline'].includes(mode))throw Error('Exact source, mode and ThalesMedia output required');
 const sha=cp.execFileSync('git',['rev-parse','HEAD'],{cwd:source,encoding:'utf8'}).trim();
 if(sha!==process.env.QA_SHA||cp.execFileSync('git',['status','--porcelain'],{cwd:source,encoding:'utf8'}).trim())throw Error('QA_SHA must identify clean exact source');
 fs.mkdirSync(out,{recursive:true});const checks=[],blocked=[],errors=[],network=[],assets=[];

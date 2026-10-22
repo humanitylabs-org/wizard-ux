@@ -31,7 +31,7 @@ import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
 /**
- * Wizard OS: a native home for James's private Wizard OS shell (wizard.tailc0f369.ts.net/wizard-os-home/; the retired private.wizard001.com still opens).
+ * Wizard OS: a native home for the owner's private shell (BuildConfig.HOME_URL).
  *
  * Rules this activity enforces:
  *  - Back never exits. Every Back is handed to the shell (window.__wosNativeBack), which closes the top
@@ -90,7 +90,6 @@ public class MainActivity extends Activity {
         if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER)) return;
         java.util.Set<String> origins = new java.util.HashSet<>();
         origins.add(ai.wizards.os.device.AppState.primaryOrigin(this));
-        if (BuildConfig.ORIGIN.equals(ai.wizards.os.device.AppState.primaryOrigin(this))) origins.add(ai.wizards.os.device.AppState.LEGACY_ORIGIN);
         androidx.webkit.WebViewCompat.addWebMessageListener(target, "wizardScreenPort", origins,
                 (view, message, sourceOrigin, isMainFrame, reply) -> {
                     if (!isMainFrame || web != target || sourceOrigin == null) return;
@@ -221,9 +220,6 @@ public class MainActivity extends Activity {
                     Toast.makeText(MainActivity.this,"Use Android Home to switch apps",Toast.LENGTH_SHORT).show();
                     return true;
                 }
-                // A main-frame hop to the retired private.wizard001.com lands on the same page under this Wizard's own name.
-                if (req.isForMainFrame() && Origin.isLegacy(u) && !carrying) { go(Origin.toHome(u.toString())); return true; }
-                if (carrying && Carry.isPage(MainActivity.this, u.toString())) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
                 if (Origin.isPrivate(u) || ai.wizards.os.device.AppState.isQaPage(MainActivity.this, u)) { if (req.isForMainFrame()) navStarted(u.toString()); return false; }
                 if (!req.isForMainFrame()) return false; // hosted app frames stay inside their window
                 openOutside(u);
@@ -234,7 +230,6 @@ public class MainActivity extends Activity {
             public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
                 // A load replaced by a newer one (Try again over a hanging attempt) is not a failure of the new one.
                 if (req.isForMainFrame() && err.getErrorCode() == ERROR_UNKNOWN && String.valueOf(err.getDescription()).contains("ERR_ABORTED")) return;
-                if (req.isForMainFrame() && carrying) { endCarry("unreachable"); return; } // old name gone: just go home
                 // Unreachable: stay on this Wizard's own name and show the Retry screen (never the retired name).
                 if (req.isForMainFrame()) { mainFailed = true; showOffline(String.valueOf(err.getDescription())); }
             }
@@ -284,8 +279,6 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                // Back must never land on the one-time carry page: drop it from history once the shell is up.
-                if (clearAfterCarry && !carrying && !Carry.isPage(MainActivity.this, url)) { clearAfterCarry = false; view.clearHistory(); }
                 topSent = -1; cutoutSent = -1; reportTop(topPx); reportCutout(cutoutPx); // a reload starts fresh: push both again
             }
 
@@ -357,41 +350,16 @@ public class MainActivity extends Activity {
     String startUrl(Intent intent) {
         Uri data = intent == null ? null : intent.getData();
         String target = data != null && Origin.isInApp(data) ? inAppUrl(data.toString()) : null;
-        // First launch after the move to the tailnet name: bring the phone's drafts/unsent/seen state across, then go on.
-        if (Carry.pending(this)) {
-            Carry.attempt(this);
-            carrying = true;
-            carryNext = target;
-            main.postDelayed(carryTimeout, Carry.TIMEOUT_MS);
-            return Carry.pageUrl(this);
-        }
         if (target != null) return target;
         return ai.wizards.os.device.AppState.homeUrl(this); // HOME_URL; QA builds may point at a fake Wizard
     }
 
-    /** An in-app link, always on this Wizard's own name (old-name links are translated, never followed). */
+    /** An in-app link (already checked by Origin.isInApp: this Wizard's own name). */
     static String inAppUrl(String url) {
-        return Origin.toHome(url);
+        return url;
     }
 
-    /* ---------------- Carry: move local state off the retired private.wizard001.com (see Carry) ---------------- */
-
-    private volatile boolean carrying;
     private volatile String pageUrl;
-    private String carryNext;
-    private boolean clearAfterCarry;
-    private final Runnable carryTimeout = () -> endCarry("timeout");
-
-    void endCarry(String why) {
-        if (!carrying) return;
-        carrying = false;
-        main.removeCallbacks(carryTimeout);
-        android.util.Log.i("WizardOSCarry", "carry " + why);
-        String next = carryNext != null ? carryNext : ai.wizards.os.device.AppState.homeUrl(this);
-        carryNext = null;
-        clearAfterCarry = true;
-        if (web != null) go(next);
-    }
 
     @Override
     protected void onNewIntent(Intent intent) {
@@ -400,8 +368,7 @@ public class MainActivity extends Activity {
         setIntent(intent);
         Uri data = intent.getData();
         if (data != null && Origin.isInApp(data)) {
-            if (carrying) carryNext = inAppUrl(data.toString());
-            else go(inAppUrl(data.toString()));
+            go(inAppUrl(data.toString()));
         }
         if (ACTION_ACCESSIBILITY.equals(intent.getAction())) { intent.setAction(Intent.ACTION_MAIN); main.post(() -> offerAccessibility(true)); return; }
         queueHandoff(intent);
@@ -495,11 +462,11 @@ public class MainActivity extends Activity {
     private final Runnable reachMark = () -> {
         if (reach == null) return;
         boolean[] n = ReachScreen.net(this);
-        if (!carrying && ReachPolicy.failNow(n[0], n[1])) showOffline(null);
+        if (ReachPolicy.failNow(n[0], n[1])) showOffline(null);
         else reach.connecting();
     };
 
-    private final Runnable reachGiveUp = () -> { if (!carrying) showOffline(null); };
+    private final Runnable reachGiveUp = () -> showOffline(null);
 
     private final Runnable reachRetry = new Runnable() {
         @Override
@@ -559,8 +526,7 @@ public class MainActivity extends Activity {
         if (web == null || reach == null) return;
         reach.trying();
         String u = wantUrl;
-        if (!isWeb(u) || Carry.isPage(this, u)) u = ai.wizards.os.device.AppState.homeUrl(this);
-        else if (Origin.isLegacy(Uri.parse(u))) u = Origin.toHome(u);
+        if (!isWeb(u)) u = ai.wizards.os.device.AppState.homeUrl(this);
         android.util.Log.i("WizardOSReach", "retry " + u);
         go(u);
         main.removeCallbacks(reachRetry);
@@ -943,29 +909,6 @@ public class MainActivity extends Activity {
     final class Bridge {
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }
-
-        /* ---- Carry (one time): the old name's page hands its local state over; the new name's shell takes it. ---- */
-        @JavascriptInterface
-        public boolean carryOut(String json) {
-            if (!carrying || !Carry.isPage(MainActivity.this, pageUrl)) return false;
-            boolean ok = Carry.save(MainActivity.this, json);
-            if (ok) Carry.finished(MainActivity.this);
-            main.post(() -> endCarry(ok ? "saved" : "refused"));
-            return ok;
-        }
-
-        @JavascriptInterface
-        public String carryIn() {
-            String u = pageUrl;
-            if (u == null || !u.startsWith(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this) + "/")) return "";
-            return Carry.load(MainActivity.this);
-        }
-
-        @JavascriptInterface
-        public void carryDone() {
-            String u = pageUrl;
-            if (u != null && u.startsWith(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this) + "/")) Carry.clear(MainActivity.this);
-        }
 
         /* ---- Usuals: James's regular Grab orders (usuals/*). Nothing here can place an order. ---- */
         @JavascriptInterface

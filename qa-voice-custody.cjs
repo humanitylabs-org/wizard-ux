@@ -1,6 +1,6 @@
 // Fault injection for the shipped outbox in a real browser; never contacts Wizard.
 // Thales only. Each case owns an isolated browser context and fixture upload/run ledger.
-const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { chromium, webkit } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const ROOT = process.env.QA_WEB_DIR || __dirname;
 const OUT = process.env.QA_OUT || path.join(ROOT, 'qa-live', 'voice-custody');

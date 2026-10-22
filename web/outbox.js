@@ -11,7 +11,7 @@
   const TRANSCRIBE_TIMEOUT_MS = 195000;
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
-  const conversationWork = new Map(), transcriptWork = new Map();
+  const conversationWork = new Map(), transcriptWork = new Map(), removeErrors = new Map();
   // One authority check for explicit retry and automatic delivery. Terminal/ambiguous
   // custody is not a queue. Empty speech requires a per-recording choice, never bulk.
   function eligible(it, states) {
@@ -97,6 +97,9 @@
   }
   async function persist(it) {
     if (quarantine.has(it.id)) return it;
+    // A live recording rewrites its audio every second. Once it is safely stored, those rewrites change nothing
+    // anyone shows, so they must not repaint every open chat (the screen looked like it kept refreshing).
+    const quiet = it.state === 'capturing' && it.durable === true && !it.storageError;
     const copy = { ...it }; delete copy.durable; delete copy.storageError;
     try {
       await open(); await tx('readwrite', s => s.put(copy));
@@ -105,14 +108,15 @@
     } catch (e) {
       it.storageError = String(e.message || 'Device storage unavailable'); it.durable = false;
       try {
-        const { audio, ...x } = copy;
+        const { audio, pendingBlobs, ...x } = copy; // file bytes still uploading stay in RAM (the page's own upload)
         if (audio) x.audio64 = await encode(audio);
         if(copy.parkedDraft?.parts){x.parkedDraft={...copy.parkedDraft,parts:undefined,parts64:await Promise.all(copy.parkedDraft.parts.map(async part=>({type:part.type,data:await encode(part)})))};}
         localStorage.setItem(PREFIX + it.id, JSON.stringify(x));
         it.durable = true;
       } catch (_) { /* Keep the entire item and Blob in RAM; the notice stays until custody is durable. */ }
     }
-    emit(); return it;
+    if (!(quiet && it.durable === true && !it.storageError)) emit();
+    return it;
   }
   const localCompletions = new Set();
   function put(it) {
@@ -131,7 +135,7 @@
     const it = items.get(id); if (!it) return;
     // A tombstone survives an interrupted delete, preventing stale IDB/fallback rows from replaying.
     Object.assign(it, { state: 'sent', sentAt: now(), audio: null, error: '' });
-    delete it.parkedDraft; // a deletion tombstone must not retain hidden audio parts
+    delete it.parkedDraft; delete it.pendingBlobs; // a deletion tombstone must not retain hidden audio parts
     await put(it);
     // Never erase the durable terminal marker: an inaccessible legacy/fallback store may
     // still contain an older sendable copy. A small marker wins on every future recovery.
@@ -194,6 +198,13 @@
     if (it.state === 'capturing') { it.state = 'held'; it.error = 'Interrupted recording · original bytes kept'; }
     if (it.steerDispatch === 'started' && it.state !== 'sent') { it.state = 'unconfirmed'; it.error = unconfirmed; }
     if (it.state === 'sending') it.state = 'waiting';
+    // Older builds exhausted durable retries. Revive only identifiable transport
+    // failures with delivery authority; an ambiguous steer remains unconfirmed.
+    if (it.state === 'failed' && eligible(it, ['failed']) &&
+        (/Couldn[’']t reach Wizard|Wizard was unavailable|Request timed out|HTTP (408|425|429)\b/.test(it.error || '') ||
+         [408, 425, 429].includes(it.errorStatus) || it.errorStatus >= 500)) {
+      it.state = 'waiting'; it.nextAt = 0;
+    }
     if (it.state === 'processing' || it.state === 'preparing') { it.state = it.intent === 'command' ? 'held' : 'failed'; it.error = it.intent === 'command' ? 'Interrupted command · original recording kept; not queued to an agent' : 'Interrupted before sending · recording kept. Retry sends to its original destination.'; }
     it.durable = durable;
     const old = items.get(it.id);
@@ -221,12 +232,6 @@
         for (const x of JSON.parse(localStorage.getItem(LS) || '[]')) { const it = items.get(x.id); if (it && (quarantine.has(it.id) || !(await put(it)).durable)) migrated = false; }
         if (migrated) { try { localStorage.removeItem(LS); } catch (_) {} }
       } catch (_) { recovered = false; for (const id of recoveredIds) quarantine.add(id); }
-      const C = window.WosCarry;
-      if (C && Array.isArray(C.outbox)) {
-        let safe = true;
-        for (const x of C.outbox) { if (!items.has(x.id)) recover(decode(x), false); const it = items.get(x.id); if (!(await put(it)).durable) safe = false; }
-        if (safe) { window.WosCarry = null; try { C.done(); } catch (_) {} }
-      }
       // Only this version's explicit completion receipt qualifies. Old generic
       // 'handled' labels also covered pending music/app work, so keep those.
       for (const it of [...items.values()]) {
@@ -237,12 +242,12 @@
     })().finally(() => { if (!recovered) ready = null; });
     return ready;
   }
-  class HttpError extends Error { constructor(status, msg) { super(msg || 'HTTP ' + status); this.status = status; } }
+  class HttpError extends Error { constructor(status, msg, code = '') { super(msg || 'HTTP ' + status); this.status = status; this.code = code; } }
   async function call(path, init = {}) {
     let r;
     try { r = await fetch(path, { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(45000), ...init }); }
     catch (_) { throw new HttpError(0, 'Couldn’t reach Wizard'); }
-    if (!r.ok) { let m = ''; try { m = (await r.json()).error || ''; } catch (_) {} throw new HttpError(r.status, typeof m === 'string' ? m : m.message || ''); }
+    if (!r.ok) { let m = ''; try { m = (await r.json()).error || ''; } catch (_) {} throw new HttpError(r.status, typeof m === 'string' ? m : m.message || '', typeof m === 'object' ? m.code || '' : ''); }
     return r;
   }
   const transient = e => !e.status || [408, 425, 429].includes(e.status) || e.status >= 500;
@@ -276,6 +281,46 @@
       it.audioFile = await uploadAudio(it); it.files = [...(it.files || []).filter(f => f.id !== it.audioFile.id), it.audioFile]; await put(it);
     }
   }
+  /* Attachments sent while still uploading (James, 19 Oct 2026: "Send the message and process it in the
+   * background"). The message carries placeholders { id: 'pending:<key>' } (core/uploads.js WizUploads.pending);
+   * their bytes are kept with the message (up to PENDING_KEEP_BYTES; bigger ones live with the page's running
+   * upload), and delivery swaps each placeholder for its Wizard Files receipt first. A file that can never upload
+   * (refused, too large, bytes lost with a closed page) is dropped with a note to the agent, so the words still go. */
+  const PENDING_KEEP_BYTES = 25 * 1048576;
+  const PEND = () => window.WizUploads?.pending || null;
+  const isPendingId = id => typeof id === 'string' && id.startsWith('pending:');
+  function keepPending(files) {
+    const out = {}; let room = PENDING_KEEP_BYTES;
+    for (const f of files || []) {
+      if (!isPendingId(f?.id)) continue;
+      const b = PEND()?.blobOf(f.id);
+      if (b instanceof Blob && b.size <= room) { out[f.id] = b; room -= b.size; }
+    }
+    return out;
+  }
+  async function settlePending(it) {
+    const list = (it.files || []).filter(f => isPendingId(f?.id));
+    if (!list.length) return;
+    const P = PEND(); if (!P) throw new HttpError(0, 'Attachments still uploading');
+    const missing = [];
+    for (const f of list) {
+      let got = null;
+      try { got = await P.settle(f, it.pendingBlobs?.[f.id]); }
+      catch (e) {
+        if (!e.permanent) throw new HttpError(Number(e.status) >= 500 ? Number(e.status) : 0, `Attachment still uploading · ${e.message || 'retrying'}`);
+        missing.push(`${f.name || 'a file'} (${String(e.message || 'upload refused').replace(/\.$/, '')})`);
+      }
+      const ref = got?.id ? { id: String(got.id), name: got.name || f.name, mime: got.mime || f.mime, bytes: Number(got.bytes) || f.bytes } : null;
+      it.files = (it.files || []).map(x => x.id === f.id ? ref : x).filter((x, i, all) => x && all.findIndex(y => y && y.id === x.id) === i);
+      if (it.pendingBlobs) delete it.pendingBlobs[f.id];
+      P.forget(f.id);
+      await put(it);
+    }
+    if (missing.length) {
+      it.instructions = [`Note from Wizard: ${missing.length === 1 ? 'an attachment' : `${missing.length} attachments`} sent with this message could not be uploaded from the device and ${missing.length === 1 ? 'is' : 'are'} missing: ${missing.join('; ')}. Tell the user so they can attach ${missing.length === 1 ? 'it' : 'them'} again.`, it.instructions].filter(Boolean).join('\n').slice(0, 2000);
+      await put(it);
+    }
+  }
   async function deliver(it) {
     if (it.kind === 'conversation') throw new HttpError(409, 'App voice input messages use explicit conversation delivery only');
     if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model before retrying');
@@ -292,10 +337,12 @@
       it.text = [typed, text].filter(Boolean).join('\n\n').slice(0, 64000); await put(it);
     }
     await keepAudio(it);
+    await settlePending(it); // attachments sent while still uploading: their receipts, before the run is admitted
     const fileIds = [...new Set((it.files || []).map(f => f.id).filter(Boolean))];
     if (fileIds.length > 8) throw new HttpError(409, 'Too many attachments including the recording · originals kept');
     const aq = it.agent ? `?agent=${encodeURIComponent(it.agent)}` : '';
-    const input = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
+    const words = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
+    const input = it.reply && window.WosChat?.reply ? window.WosChat.reply.attach(words, it.reply) : words;
     // Freeze an exact-run steer separately from new-run admission. This endpoint has NO
     // durable idempotency ledger: persist intent before dispatch and never replay ambiguity.
     if (it.steerRunId) {
@@ -319,15 +366,39 @@
         receipt = await r.json();
         if (receipt?.accepted !== true || ('run_id' in receipt && receipt.run_id !== it.steerTarget)) throw new Error('Invalid steer receipt');
       } catch (e) {
-        // Explicit client rejection is retryable against the SAME run. Timeout/server/JSON
-        // failure is ambiguous, not evidence of rejection, and cannot fall back to admission.
-        if (e.status >= 400 && e.status < 500 && e.status !== 408) {
-          it.steerDispatch = 'rejected'; it.state = 'failed'; it.error = reason(e);
-        } else { it.state = 'unconfirmed'; it.error = unconfirmed; }
-        it.attempts = (it.attempts || 0) + 1; it.lastAttemptAt = now();
-        it.nextAt = 0; await put(it); return;
+        // A typed rejection proves this dispatch was NOT accepted. Only a matching
+        // terminal run permits replacing the stale steer with a same-thread turn.
+        // Status alone (or missing transcript text) never proves non-acceptance.
+        const rejected = e.status >= 400 && e.status < 500 && e.status !== 408;
+        it.steerDispatch = rejected ? 'rejected' : 'started';
+        await put(it); // crash before reconciliation must never replay ambiguity
+        let terminal = false;
+        // Hermes forgets a finished run after a while and answers 404 run_not_found; the run lookup below
+        // still proves it terminal in this thread, so the message becomes a same-thread turn instead of failing.
+        if ((e.status === 409 && e.code === 'run_not_accepting_steer') || (e.status === 404 && e.code === 'run_not_found')) {
+          try {
+            const r = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerTarget)}` + aq);
+            const run = await r.json();
+            terminal = (run.run_id || run.id) === it.steerTarget && run.session_id === it.sessionId &&
+              ['completed', 'failed', 'cancelled', 'interrupted', 'expired'].includes(run.status);
+          } catch (_) { /* unknown status: keep the rejected message for explicit Retry */ }
+        }
+        if (terminal) {
+          // Freeze from the dispatched envelope, not the current composer/route.
+          // Persist the handoff BEFORE admission; a lost receipt now replays only
+          // this byte-identical, idempotent new turn, never the rejected steer.
+          it.body = JSON.stringify({ ...frozen, session_id: it.sessionId,
+            ...(it.instructions ? { instructions: String(it.instructions).slice(0, 2000) } : {}) });
+          it.rejectedSteerRunId = it.steerTarget;
+          it.steerRunId = ''; delete it.steerBody; delete it.steerTarget;
+          await put(it);
+        } else {
+          it.state = rejected ? 'failed' : 'unconfirmed'; it.error = rejected ? reason(e) : unconfirmed;
+          it.attempts = (it.attempts || 0) + 1; it.lastAttemptAt = now();
+          it.nextAt = 0; await put(it); return;
+        }
       }
-      return done(it, { steered: true, steerQueued: receipt.status === 'queued', runId: it.steerTarget });
+      if (receipt) return done(it, { steered: true, steerQueued: receipt.status === 'queued', runId: it.steerTarget });
     }
     if (it.kind === 'new' && !it.sessionReady) {
       try { await call('/wizard/hermes/api/sessions' + aq, { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id: it.sessionId, model: it.model, provider: it.provider, ...(it.agent ? { agent: it.agent } : {}) }) }); }
@@ -351,7 +422,7 @@
   async function done(it, res) {
     if (it.audio && !it.audioFile?.id) throw new HttpError(502, 'No recording upload receipt · original kept');
     Object.assign(it, { state: 'sent', sentAt: now(), runId: res.runId, userMessageId: res.userMessageId || null, steered: !!res.steered, steerQueued: !!res.steerQueued, error: '' });
-    delete it.audio;
+    delete it.audio; delete it.pendingBlobs;
     await put(it);
     for (const fn of sentHooks) try { fn(it, res); } catch (e) { console.error(e); }
   }
@@ -359,9 +430,9 @@
     it.state = 'sending'; await put(it);
     try { await deliver(it); }
     catch (e) {
-      it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.lastAttemptAt = now();
-      // RAM-only submissions keep retrying for as long as this tab is alive.
-      if (transient(e) && (!it.durable || it.attempts < AUTO_TRIES)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
+      it.attempts = (it.attempts || 0) + 1; it.error = reason(e); it.errorStatus = e.status || 0; it.lastAttemptAt = now();
+      // Never silently abandon a transient failure, even with durable custody.
+      if (transient(e)) { it.state = 'waiting'; it.nextAt = now() + BACKOFF[Math.min(it.attempts - 1, BACKOFF.length - 1)]; }
       else { it.state = 'failed'; it.nextAt = 0; }
       await put(it);
     }
@@ -390,6 +461,7 @@
     }
     timer = setTimeout(pump, ms);
   }
+  const replyOf = o => window.WosChat?.reply?.clean(o?.reply) || null;
   const newSessionId = () => `wizard_${now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
   function make(o) {
     return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
@@ -397,7 +469,9 @@
       kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
-      sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false };
+      pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false,
+      // A Notifications Reply: the item, framed after his words only in the message that is delivered (deliver()).
+      ...(replyOf(o) ? { reply: replyOf(o) } : {}) };
   }
   function notice() {
     const troubled = [...items.values()].filter(it => !quarantine.has(it.id) && it.state !== 'sent' && (it.storageError || !it.durable));
@@ -545,7 +619,8 @@
         if (localCompletions.has(held.id) || held.localCompleted || held.state === 'sent' || held.body || held.steerBody || quarantine.has(held.id)) return held;
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
-        Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid });
+        Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),
+          pendingBlobs: { ...(it.pendingBlobs || {}), ...keepPending(o.files) } });
       }
       // Only the delivery caller (including an explicit Send-to-agent choice) may
       // promote a command. Recovery and reconnect never create this authorization.
@@ -577,7 +652,47 @@
     },
     get(id) { return items.get(id) || null; },
     landed(id) { const it = items.get(id); if (it?.state === 'sent') del(id); },
-    async remove(id) { const it = items.get(id); if (!it || quarantine.has(id) || ['sending', 'transcribing', 'processing'].includes(it.state)) return false; await del(id); return !!items.get(id)?.durable; },
+    async remove(id) {
+      // Re-check device storage first: a recovery that clears quarantine makes this an ordinary delete.
+      if (quarantine.has(id) && !recovered) await load().catch(() => {});
+      const it = items.get(id); removeErrors.delete(id);
+      if (!it) { removeErrors.set(id, 'not a recording this page holds'); return false; } // never claim an unknown id
+      // A recording with nothing left to deliver: a sent message's leftover audio, or a take with no delivery intent.
+      const inert = it.state === 'sent' || (['capture', 'dictation'].includes(it.kind) && !it.deliveryRequested && !it.body && !it.steerBody && !it.steerDispatch);
+      // Busy states only block while work is really running in this page; a state left over from an interrupted
+      // transcription or send (nothing running) must not make an inert take undeletable.
+      const active = transcriptWork.has(id) || conversationWork.has(id);
+      if (['sending', 'transcribing', 'processing'].includes(it.state) && (!inert || active)) { removeErrors.set(id, 'it is still being ' + (it.state === 'transcribing' ? 'transcribed' : 'sent')); return false; }
+      if (quarantine.has(id) && !inert) { removeErrors.set(id, 'device storage isn’t answering yet'); return false; }
+      if (quarantine.has(id)) {
+        // Quarantine stops a fallback copy from replaying or overwriting an unreadable primary receipt. The owner's
+        // explicit Delete of a recording that never had delivery intent (cancelled/interrupted take, dictation) can
+        // do neither: it writes a terminal tombstone, which wins over every other copy on every future recovery.
+        // Messages with delivery intent stay quarantined until storage is verified (James, 21 Oct 2026: ten
+        // recovered takes refused Delete with "Deletion not saved" while the phone's IndexedDB was unavailable).
+        quarantine.delete(id);
+      }
+      try { await del(id); } catch (e) { removeErrors.set(id, String(e?.message || e)); }
+      if (items.get(id)?.durable && !items.get(id)?.storageError) return true;
+      if (!inert) { removeErrors.set(id, items.get(id)?.storageError || removeErrors.get(id) || 'device storage refused the write'); return !!items.get(id)?.durable; }
+      // Writes are failing (full or broken device storage, 21 Oct 2026: Delete still refused after the quarantine fix).
+      // Erase every stored copy instead: deleting frees space where a write cannot. The in-memory tombstone keeps the
+      // take from being re-imported this session; with no stored copy left, nothing can bring it back after a reload.
+      let erased = false;
+      try { await open(); await tx('readwrite', s => s.delete(id)); erased = true; } catch (e) { removeErrors.set(id, String(e?.message || e)); }
+      let fallbackClear = true;
+      try {
+        localStorage.removeItem(PREFIX + id);
+        const legacy = JSON.parse(localStorage.getItem(LS) || '[]');
+        if (legacy.some(x => x?.id === id)) localStorage.setItem(LS, JSON.stringify(legacy.filter(x => x?.id !== id)));
+      } catch (_) { fallbackClear = false; }
+      const marker = items.get(id); if (marker) await put(marker).catch(() => {}); // space was just freed: retry the tombstone
+      emit();
+      if ((erased && fallbackClear) || (items.get(id)?.durable && !items.get(id)?.storageError)) { removeErrors.delete(id); return true; }
+      if (!removeErrors.has(id)) removeErrors.set(id, items.get(id)?.storageError || 'device storage refused the delete');
+      return false;
+    },
+    removeError(id) { return removeErrors.get(id) || ''; },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     onSent(fn) { sentHooks.add(fn); return () => sentHooks.delete(fn); },
     notice, paintNotice, pump, load, bounded, TRANSCRIBE_TIMEOUT_MS, _items: items, AUTO_TRIES, BACKOFF,

@@ -24,7 +24,7 @@ Integration: `web/app.js`, `web/device.js`, `web/core/cancelled.js`, `web/core/c
 
 All browser runs were on Thales. No Android builds, deployment, remote push, daily-worktree modification or real Hermes write occurred.
 
-Root: `/Volumes/ThalesMedia/wizard-ux/in-app-dictation/`
+Root: `$WIZARD_WORK_ROOT/wizard-ux/in-app-dictation/`
 
 - `base/`: untouched archived baseline web source.
 - `candidate/`: candidate source and identical test scripts used for both asset trees.
@@ -45,8 +45,8 @@ The fixtures are explicitly **synthetic STT/native ABI/model/API**. The browser 
 ## Re-run commands (Thales)
 
 ```sh
-cd /Volumes/ThalesMedia/wizard-ux/in-app-dictation/candidate
-export NODE_PATH=/Users/thales/workspace/wizard-mobile-link-candidate/node_modules
+cd $WIZARD_WORK_ROOT/wizard-ux/in-app-dictation/candidate
+export NODE_PATH=$HOME/workspace/wizard-mobile-link-candidate/node_modules
 
 # Run the SAME suite against baseline and candidate. Preserve each exit separately.
 for label in base candidate; do
@@ -60,7 +60,7 @@ done
 # Additional suites: synthetic authority fills older missing model/read fixtures.
 QA_SYNTHETIC_REGRESSION=1 QA_EVIDENCE_TAG=final \
   /opt/homebrew/bin/node tools/qa-dictation-ab.cjs \
-  /Volumes/ThalesMedia/wizard-ux/in-app-dictation
+  $WIZARD_WORK_ROOT/wizard-ux/in-app-dictation
 # Exit 1 is retained for the matching baseline/candidate immersive fixture gap.
 ```
 
@@ -75,8 +75,8 @@ Final expanded suite on Thales:
 - Repaired candidate: **95 passed, 0 failed**, exit 0. Evidence: `evidence/recovery-final-{reviewed,candidate}.{json,log,exit}`. Covers kind-bearing native recreation, failed first/later/truncated/looping audio read, claimed-file discovery after page reload, repaired explicit retry, explicit Delete, native persistence outage, actual IndexedDB write failure and successful browser save/reload.
 - Voice seal 45/0, held commands 29/0, awake 11/0 remain unchanged in `review-fixed-regression-ab.json`; immersive remains the same 26/1 baseline fixture gap.
 
-Functional human preview: https://in-app-dictation.staging.wizard001.com/wizard-os-home/?shell=phone&open=iching
+Historical functional preview: `/wizard-os-home/?shell=phone&open=iching` on the retired custom domain.
 
 The parent opened that exact HTTPS deep link on Thales at phone dimensions and used the actual registered I Ching, the user's approval audio as Chromium's fake microphone input, the real browser MediaRecorder, and the selected system STT endpoint. **11 checks passed:** blue orb focus, recording, START-selection insertion, editable unsubmitted question, exactly one real STT request, zero agent/app writes, true-fullscreen keyboard-sized orb hit testing, Back staying in Wizard and zero page errors. This proves the real hosted app/provider integration, not physical-handset capture. The functional preview permits only POST `/wizard/voice/transcribe`; all app/agent mutations return 403.
 
-Preview source lives in a detached durable clone, `/home/telos/.local/share/wizard-stage/in-app-dictation/source/`, behind an enabled restartable `wizard-stage-in-app-dictation.service`. Original live shell and daily remain unchanged. Final candidate source hashes and parent evidence are retained there and on Thales at `release-qa/`. Physical phone feel and release approval remain James's gate.
+Preview source lives in a detached durable clone, `$HOME/.local/share/wizard-stage/in-app-dictation/source/`, behind an enabled restartable `wizard-stage-in-app-dictation.service`. Original live shell and daily remain unchanged. Final candidate source hashes and parent evidence are retained there and on Thales at `release-qa/`. Physical phone feel and release approval remain James's gate.

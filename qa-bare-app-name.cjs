@@ -1,10 +1,10 @@
 // QA (bare app name, James 12 Oct): saying just an app's name ("Calendar.") opens that app, no "open" needed.
-// Held orb: anywhere, on-device, no router call, nothing sent. Tap: off a thread; inside a thread a one-word tap
-// stays a reply. Sentences that merely mention an app ("what's on my calendar today") never open it.
+// Held orb: anywhere, on-device, no router call, nothing sent. Tap: always a message, never opens an app.
+// Sentences that merely mention an app ("what's on my calendar today") never open it.
 // Usage: QA_WEB_DIR=<tree> node qa-bare-app-name.cjs. Every Hermes/Wizard write is refused and recorded.
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const ORIGIN = 'https://wizard.tailc0f369.ts.net', URL_ = ORIGIN + '/wizard-os-home/';
+const ORIGIN = require('./tools/qa-paths.cjs').origin(), URL_ = ORIGIN + '/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 let pass = 0, fail = 0;
@@ -22,7 +22,7 @@ async function boot(b) {
   const json = (r, o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), m = q.method();
-    if (u.hostname !== 'wizard.tailc0f369.ts.net') {
+    if (u.hostname !== new URL(require('./tools/qa-paths.cjs').origin()).hostname) {
       // Image hosts the search page may touch directly (favicons): allow, they are read-only.
       return m === 'GET' ? r.continue() : r.abort();
     }
@@ -92,12 +92,12 @@ const home = async p => { await p.evaluate(() => { for (const id of Object.keys(
     ok(f === 'calendar' && routes.length === 0 && agentWrites(writes).length === 0, `held "${t}" opens Calendar on-device`, JSON.stringify({ f, routes, writes }));
   }
   await shot(p, '1-held-calendar');
-  // 2. Tapped on the Chats list / home: same.
+  // 2. Tapped on the Chats list / home: a message, not an app command.
   await home(p); await p.evaluate(() => window.__wos.openApp && window.__wos.openApp('wizard')); await sleep(800);
   writes.length = 0; routes.length = 0;
   await say(p, 'Calendar', 'auto'); await sleep(900);
   let f = await front(p);
-  ok(f === 'calendar' && routes.length === 0 && agentWrites(writes).length === 0, 'tapped "Calendar" from the chat list opens Calendar', JSON.stringify({ f, routes, writes }));
+  ok(f !== 'calendar' && routes.length === 0 && (agentWrites(writes).length > 0 || await outboxN(p) > 0), 'tapped "Calendar" from the chat list goes to the agent without routing', JSON.stringify({ f, routes, writes }));
   // 3. "Signal" opens Wizard Signal (name without its Wizard prefix), "search" opens Search app untouched by fuzzy guesses.
   await home(p); routes.length = 0;
   await say(p, 'Signal', 'command'); await sleep(900);

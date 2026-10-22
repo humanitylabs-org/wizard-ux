@@ -1,19 +1,20 @@
 // Real-data check of the staged bound-views preview, as James gets it (router + boot.js + front + real hosted apps).
 // Every write is refused by the preview; this script also aborts non-GETs itself.
-let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
+if (!process.env.QA_ORIGIN) throw new Error('QA_ORIGIN is required: select an isolated tailnet preview');
+const pw = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const HOST = 'bound-views.staging.wizard001.com', OUT = '/home/telos/.hermes/cache/scratch/bv-staged';
+const ORIGIN = new URL(process.env.QA_ORIGIN).origin, OUT = require('./tools/qa-paths.cjs').workPath('bv-staged');
 fs.mkdirSync(OUT, { recursive: true });
 const THREADS = (process.argv[2] || '').split(',').filter(Boolean);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
-  const b = await pw.chromium.launch({ executablePath: '/home/telos/.local/bin/google-chrome', args: [`--host-resolver-rules=MAP ${HOST} 127.0.0.1:9399`] });
+  const b = await pw.chromium.launch({ executablePath: (process.env.QA_CHROME || undefined) });
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true,
     userAgent: 'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36 WizardOS-Android/0.9.0' });
   await ctx.route('**/*', r => r.request().method() === 'GET' || r.request().method() === 'HEAD' ? r.continue() : r.fulfill({ status: 403, body: '{}' }));
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e)));
   await p.addInitScript(() => { try { localStorage.setItem('wos.rvCoached', 'true'); } catch (e) {} });
-  await p.goto(`http://${HOST}/wizard-os-home/?open=chats`, { waitUntil: 'domcontentloaded' });
+  await p.goto(`${ORIGIN}/wizard-os-home/?open=chats`, { waitUntil: 'domcontentloaded' });
   await p.waitForFunction(() => window.__wos?.live?.ok, null, { timeout: 60000 }); await sleep(2500);
   for (const [k, sid] of THREADS.entries()) {
     await p.evaluate(id => __wos.openWizardThread(id), sid);

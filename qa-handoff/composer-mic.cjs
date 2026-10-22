@@ -2,12 +2,12 @@
  * not the orb, it still blocks it. The orb works."). Real shell, real WebAudio/MediaRecorder, real IndexedDB outbox,
  * real orb handoff journal; synthetic network/STT only. Proves the thread mic borrows the meeting's microphone through
  * the orb's own pathway, sends the reply to the thread it was started in, and hands the microphone back.
- * Thales only: HOST_EVIDENCE=/Volumes/ThalesMedia/... PLAYWRIGHT_MODULE=... CHROMIUM=... node qa-handoff/composer-mic.cjs
+ * Thales only: HOST_EVIDENCE=$WIZARD_WORK_ROOT/... PLAYWRIGHT_MODULE=... CHROMIUM=... node qa-handoff/composer-mic.cjs
  * Negative control: the same script against daily before this fix fails case 1 ("Microphone held by another app"). */
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {chromium}=require('../tools/qa-playwright.cjs');
 const evidence=process.env.HOST_EVIDENCE,root=path.resolve(process.env.QA_WEB_ROOT||path.join(__dirname,'..'));
-if(!evidence?.startsWith('/Volumes/ThalesMedia/')||!os.hostname().startsWith('thales'))throw Error('Thales external QA only');
+if(!require('../tools/qa-paths.cjs').inWorkRoot(evidence)||!process.env.WIZARD_WORK_ROOT)throw Error('Thales external QA only');
 fs.mkdirSync(evidence,{recursive:true});process.env.QA_WEB_DIR=root;
 let boot,select,tap,contexts;
 const server=require('node:http').createServer((req,res)=>{const file=path.join(root,'web',decodeURIComponent(req.url.split('?')[0]).replace(/^\/wizard-os-home\//,''));if(!file.startsWith(root+'/web/')||!fs.existsSync(file)){res.writeHead(404);return res.end();}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':'text/html');res.end(fs.readFileSync(file));});
@@ -16,8 +16,9 @@ async function test(name,fn){try{await fn();checks.push({name,passed:true});cons
 async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];navigator.mediaDevices.getUserMedia=async()=>{const ctx=new AudioContext(),o=ctx.createOscillator(),d=ctx.createMediaStreamDestination();o.frequency.value=tone;o.connect(d);o.start();await ctx.resume();graphs.push({ctx,o,stream:d.stream});return d.stream;};});}
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const fixture=fs.readFileSync(path.join(__dirname,'..','qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replace('?.slice(0, 500)','').replaceAll('https://private.wizard001.com','http://127.0.0.1:'+server.address().port);
- ({boot,select,tap,contexts}=new Function('require','__dirname','process',fixture+'\nreturn {boot,select,tap,contexts};')((name)=>name==='playwright-core'?{chromium}:require(name),root,process));
+ process.env.WIZARD_ORIGIN='http://127.0.0.1:'+server.address().port;
+ const fixture=fs.readFileSync(path.join(__dirname,'..','qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replace('?.slice(0, 500)','');
+ ({boot,select,tap,contexts}=new Function('require','__dirname','process',fixture+'\nreturn {boot,select,tap,contexts};')(require('node:module').createRequire(path.join(root,'package.json')),root,process));
  browser=await chromium.launch({executablePath:process.env.CHROMIUM,headless:true,args:['--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  const f=await boot(browser,false),p=f.p;await tones(p);const events=[];
  await f.context.route('**/mizel-live/orb-events**',async r=>{if(r.request().method()==='PUT'){const ev=r.request().postDataJSON();const i=events.findIndex(e=>e.id===ev.id);if(i>=0)events[i]=ev;else events.push(ev);return r.fulfill({json:{event:ev}});}return r.fulfill({json:{events:events.filter(e=>e.meetingId===new URL(r.request().url()).searchParams.get('meetingId'))}});});

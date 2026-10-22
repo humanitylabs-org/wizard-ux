@@ -6,8 +6,8 @@
 // the middle of the screen hit-tests to the app, not the voice layer; a touch scroll moves the
 // content; a tap on a thread opens it; and recording carries on through all of it.
 // Usage: QA_WEB_DIR=<repo> node qa-voice-nodim.cjs [url]. Every Hermes/Wizard write is intercepted.
-const { chromium } = require('/home/telos/node_modules/playwright');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const { chromium } = require('./tools/qa-playwright.cjs');
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const W = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 const LONG = 'Okay so here is a long message for Archimedes about the wizard orb and the multiple threads going on here, please fix the overlay so that after I send it only shows a small confirmation and then disappears';
@@ -22,7 +22,7 @@ async function boot(b) {
   let slowSend = null;
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (!/wizard\.tailc0f369\.ts\.net$/.test(u.hostname)) return r.abort();
+    if (!(u.origin === require('./tools/qa-paths.cjs').origin())) return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET' && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = require('path').join(W, 'web', f);
@@ -31,6 +31,10 @@ async function boot(b) {
       return r.fulfill({ status: 200, contentType: ct, body: require('fs').readFileSync(p) });
     }
     if (q.method() !== 'GET') writes.push(u.pathname);
+    // Authoritative synthetic model and custody receipts required by the current send contract.
+    if (/\/hermes\/api\/model\/options$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ model: 'qa-model', provider: 'qa-provider', providers: [{ slug: 'qa-provider', authenticated: true, is_current: true, models: ['qa-model'] }] }) });
+    if (/\/files\/upload$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ file: { id: 'qa-audio', filename: 'take.webm', mime: 'audio/webm', bytes: 10 } }) });
+    if (/\/hermes\/v1\/runs$/.test(u.pathname) && q.method() === 'POST') return r.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ run_id: 'qa-run' }) });
     if (/\/api\/transcribe$/.test(u.pathname)) { await new Promise(res => { slowSend = res; setTimeout(res, 600); }); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: LONG, ms: 300 }) }).catch(() => {}); }
     if (/\/api\/route$/.test(u.pathname)) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ms: 5, cmd: { route: 'agent' } }) });
     if (/\/hermes\/api\/sessions$/.test(u.pathname) && q.method() === 'GET') return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: THREADS, has_more: false }) });
@@ -64,10 +68,11 @@ const pill = p => p.evaluate(() => { const v = document.querySelector('#voice'),
   ok(s.brief && s.shown && /Sending/.test(s.label), 'send: one-line "Sending…" pill', JSON.stringify(s));
   ok(!s.textVisible && s.h < 50 && s.w < 300, 'send: no transcript text, pill is small', JSON.stringify(s));
   let seen = null, peak = 0;
-  // The agent's name comes from the bootstrap (portable Wizard UX); this fixture has none, so it is the default.
+  // Current custody flow says "Waiting to send"; only the outbox receipt proves acceptance.
   const AGENT = await p.evaluate(() => window.WizConfig.agent()), SENT = new RegExp('Sent to ' + AGENT);
-  for (let k = 0; k < 20; k++) { await p.waitForTimeout(100); const x = await pill(p); if (SENT.test(x.label) && x.shown) { seen = x; } peak = Math.max(peak, x.h); }
-  ok(!!seen, `pill reads "Sent to ${AGENT}"`, JSON.stringify(seen));
+  for (let k = 0; k < 20; k++) { await p.waitForTimeout(100); const x = await pill(p); if (x.label === 'Waiting to send' && x.shown) { seen = x; } peak = Math.max(peak, x.h); }
+  const accepted = await p.evaluate(() => [...WosOutbox._items.values()].some(x => x.state === 'sent' && x.runId === 'qa-run'));
+  ok(!!seen && accepted, 'one-line waiting feedback followed by proven sent receipt', JSON.stringify({ seen, accepted }));
   ok(peak < 50 && seen && !seen.textVisible, 'the sent words never cover the screen', String(peak));
   await p.waitForTimeout(1500);
   s = await pill(p);

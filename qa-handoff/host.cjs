@@ -1,8 +1,8 @@
 /* Full actual shell + real WebAudio/IDB + adopted event store. Synthetic network/STT only. */
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {chromium}=require('../tools/qa-playwright.cjs');
 const evidence=process.env.HOST_EVIDENCE,root=path.resolve(__dirname,'..');
-if(!evidence?.startsWith('/Volumes/ThalesMedia/')||!os.hostname().startsWith('thales'))throw Error('Thales external QA only');
+if(!require('../tools/qa-paths.cjs').inWorkRoot(evidence)||!process.env.WIZARD_WORK_ROOT)throw Error('Thales external QA only');
 fs.mkdirSync(evidence,{recursive:true});process.env.QA_WEB_DIR=root;
 // Reuse the maintained synthetic host fixture without executing its suite.
 let boot,app,select,tap,contexts;
@@ -13,8 +13,9 @@ async function tones(p){await p.evaluate(()=>{window.tone=440;window.graphs=[];n
 (async()=>{
  const {OrbEvents}=await import(process.env.MIZEL_ADOPTION+'/orb-events.mjs');
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const fixture=fs.readFileSync(path.join(root,'qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replace('?.slice(0, 500)','').replaceAll('https://private.wizard001.com','http://127.0.0.1:'+server.address().port);
- ({boot,app,select,tap,contexts}=new Function('require','__dirname','process',fixture+'\nreturn {boot,app,select,tap,contexts};')((name)=>name==='playwright-core'?{chromium}:require(name),root,process));
+ process.env.WIZARD_ORIGIN='http://127.0.0.1:'+server.address().port;
+ const fixture=fs.readFileSync(path.join(root,'qa-in-app-dictation.cjs'),'utf8').split('async function cases(browser)')[0].replace('?.slice(0, 500)','');
+ ({boot,app,select,tap,contexts}=new Function('require','__dirname','process',fixture+'\nreturn {boot,app,select,tap,contexts};')(require('node:module').createRequire(path.join(root,'package.json')),root,process));
  browser=await chromium.launch({executablePath:process.env.CHROMIUM,headless:true,args:['--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
  let f=await boot(browser,false),p=f.p;await tones(p);const store=new OrbEvents(path.join(evidence,'events.json'));
  await p.evaluate(()=>Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false}));

@@ -10,12 +10,12 @@
 //  7 Selection colour is Wizard violet
 // Fixture thread merged into real Wizard reads; EVERY non-GET request is intercepted, nothing reaches Wizard.
 // Usage: node tools/qa-origin.cjs 9475 <worktree>/web &  then  QA_WEB_DIR=<worktree> node qa-share-select.cjs [url]
-let chromium; try { ({ chromium } = require('playwright-core')); } catch (e) { ({ chromium } = require('/home/telos/node_modules/playwright')); }
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9475/wizard-os-home/';
 const WEB = process.env.QA_WEB_DIR || '';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
-const SHOTS = process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch/wos097';
+const EXEC = process.env.QA_CHROME || (process.env.QA_CHROME || undefined);
+const SHOTS = process.env.QA_SHOTS || require('./tools/qa-paths.cjs').workPath('wos097');
 fs.mkdirSync(SHOTS, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, typeof extra === 'string' ? extra : JSON.stringify(extra).slice(0, 500)); } };

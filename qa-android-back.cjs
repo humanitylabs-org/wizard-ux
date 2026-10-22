@@ -1,12 +1,12 @@
 // Real Android Back on a real Chrome (Thales emulator): CDP for state + trusted taps, adb KEYCODE_BACK for Back.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const { execSync } = require('child_process');
-const OUT = '/home/telos/apps/wizard-os-home/qa-live/android';
+const OUT = require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'qa-live/android');
 require('fs').mkdirSync(OUT, { recursive: true });
-const adb = c => execSync(`ssh -o ConnectTimeout=8 thales 'export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools; export ANDROID_SERIAL=emulator-5554; ${c}'`, { encoding: 'utf8' });
+const adb = c => execSync(`ssh -o ConnectTimeout=8 ${require('./tools/qa-paths.cjs').buildHost()} 'export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools; export ANDROID_SERIAL=emulator-5554; ${c}'`, { encoding: 'utf8' });
 const back = () => adb('adb shell input keyevent 4');
 const top = () => (adb('adb shell dumpsys activity activities | grep -m1 topResumedActivity') || '').trim();
-const shot = n => { adb(`adb exec-out screencap -p > /tmp/wos-${n}.png`); execSync(`scp -q thales:/tmp/wos-${n}.png ${OUT}/${n}.png`); };
+const shot = n => { adb(`adb exec-out screencap -p > /tmp/wos-${n}.png`); execSync(`scp -q ${require('./tools/qa-paths.cjs').buildHost()}:/tmp/wos-${n}.png ${OUT}/${n}.png`); };
 let pass = 0, fail = 0;
 const ok = (c, name, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${name}${d ? ' — ' + d : ''}`); };
 (async () => {
