@@ -8,14 +8,18 @@
  * native pushes (install status, resume) go to every Android Apps frame as {type:'wizard-os:android-push', ...}.
  * Without the port (older Wizard OS, a browser), every call answers {ok:false, error:'no-bridge'} so the view can say
  * "Update Wizard OS to use Android Apps".
+ *
+ * Message v1 (web/core/android-apps-policy.js): every call to native carries v:1. Native list rows are device facts;
+ * the source badge is added here, and the relay asks native to scheduleUpdates after the first good list.
  */
 (() => {
   'use strict';
   const T = 'wizard-os:android', PUSH = 'wizard-os:android-push';
-  const METHODS = new Set(['list', 'icon', 'launch', 'openPlay', 'appInfo', 'uninstall', 'install', 'status']);
+  const POL = window.WizAndroidAppsPolicy;
+  const METHODS = new Set(POL.VIEW_METHODS);
   const PATH = /^\/android-apps(\/|$)/;
   const pending = new Map(); // native id → {win, id}
-  let seq = 0, listening = false;
+  let seq = 0, listening = false, scheduled = false;
   const log = m => { window.__androidRelayLog = (window.__androidRelayLog || []).concat(m).slice(-40); };
 
   const port = () => window.wizardAppsPort && typeof window.wizardAppsPort.postMessage === 'function' ? window.wizardAppsPort : null;
@@ -38,7 +42,9 @@
     if (m.type) { frames().forEach(w => { try { w.postMessage({ type: PUSH, push: m }, location.origin); } catch (e) {} }); return; }
     const p = pending.get(m.id); if (!p) return;
     pending.delete(m.id);
-    reply(p.win, p.id, !!m.ok, m.ok ? m.result : (m.error || 'failed'));
+    if (!p.win) return; // the relay's own call (scheduleUpdates)
+    if (p.method === 'list' && POL.shouldSchedule('list', !!m.ok, scheduled)) { scheduled = true; send('scheduleUpdates', {}, null, ''); }
+    reply(p.win, p.id, !!m.ok, m.ok ? (p.method === 'list' ? POL.decorate(m.result) : m.result) : (m.error || 'failed'));
   }
   function listen(pt) {
     if (listening) return;
@@ -55,14 +61,18 @@
     if (!METHODS.has(d.method)) { log('refused:method:' + d.method); return reply(ev.source, id, false, 'unknown method'); }
     const pt = port();
     if (!pt) { log('no-bridge:' + d.method); return reply(ev.source, id, false, 'no-bridge'); }
+    const params = d.params && typeof d.params === 'object' ? d.params : {};
+    send(d.method, params, ev.source, id);
+  });
+  function send(method, params, win, id) {
+    const pt = port(); if (!pt) return;
     listen(pt);
     const nid = 'r' + (++seq);
-    pending.set(nid, { win: ev.source, id });
-    setTimeout(() => { if (pending.delete(nid)) reply(ev.source, id, false, 'timeout'); }, 20000);
-    const params = d.params && typeof d.params === 'object' ? d.params : {};
-    log('call:' + d.method);
-    try { pt.postMessage(JSON.stringify({ id: nid, method: d.method, params })); }
-    catch (e) { pending.delete(nid); reply(ev.source, id, false, 'no-bridge'); }
-  });
+    pending.set(nid, { win, id, method });
+    setTimeout(() => { if (pending.delete(nid) && win) reply(win, id, false, 'timeout'); }, 20000);
+    log('call:' + method);
+    try { pt.postMessage(JSON.stringify({ v: POL.V, id: nid, method, params })); }
+    catch (e) { pending.delete(nid); if (win) reply(win, id, false, 'no-bridge'); }
+  }
   window.WizAndroidRelay = { METHODS, frameOk, available: () => !!port() };
 })();

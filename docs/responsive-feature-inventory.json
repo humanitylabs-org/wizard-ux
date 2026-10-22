@@ -41,6 +41,11 @@
       "classification": "adapter",
       "reason": "Phone orb renderer; desktop microphone/chords remain the input adapter."
     },
+    "core/android-apps-policy.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android Apps rules (badges, update scheduling) for the Android-only relay; loaded with core/android-relay.js."
+    },
     "core/android-relay.js": {
       "shell": "phone",
       "classification": "native",
@@ -209,6 +214,12 @@
       "loadedBy": [
         "phone",
         "desktop"
+      ],
+      "note": "Direct entrypoint import"
+    },
+    "core/android-apps-policy.js": {
+      "loadedBy": [
+        "phone"
       ],
       "note": "Direct entrypoint import"
     },

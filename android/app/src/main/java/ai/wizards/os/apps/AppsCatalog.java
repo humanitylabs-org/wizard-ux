@@ -37,7 +37,10 @@ public final class AppsCatalog {
     private AppsCatalog() {}
 
     /** Every launchable app plus the ones Wizard OS installed, as JSON rows for the view and the server. */
-    public static JSONArray list(Context c) {
+    public static JSONArray list(Context c) { return list(c, 1); }
+
+    /** v &lt; 1: a shell relay older than message v1, whose view still reads badge == "Wizard" (System falls back to the system flag). */
+    public static JSONArray list(Context c, int v) {
         PackageManager pm = c.getPackageManager();
         Map<String, JSONObject> out = new LinkedHashMap<>();
         Intent main = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
@@ -49,7 +52,9 @@ public final class AppsCatalog {
         for (String p : pkgs) {
             if (p.equals(c.getPackageName())) continue;
             JSONObject row = row(c, p);
-            if (row != null) out.put(p, row);
+            if (row == null) continue;
+            if (v < 1 && row.optBoolean("owned")) { try { row.put("badge", "Wizard"); } catch (JSONException ignored) { } }
+            out.put(p, row);
         }
         JSONArray a = new JSONArray();
         for (JSONObject o : out.values()) a.put(o);
@@ -77,7 +82,6 @@ public final class AppsCatalog {
                     .put("launchable", pm.getLaunchIntentForPackage(p) != null)
                     .put("firstInstall", pi.firstInstallTime)
                     .put("lastUpdate", pi.lastUpdateTime)
-                    .put("badge", AppsPolicy.badge(system, src[0], src[1], c.getPackageName()))
                     .put("owned", AppsPolicy.owned(src[0], src[1], c.getPackageName()));
             if (src[0] != null) o.put("installer", src[0]);
             if (src[1] != null) o.put("owner", src[1]);

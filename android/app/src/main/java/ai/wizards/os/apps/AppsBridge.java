@@ -37,7 +37,9 @@ import ai.wizards.os.device.AppState;
  * never talk to native directly: the shell relay (web/core/android-relay.js) forwards messages from the Android Apps
  * frame (/android-apps/) only, and only for {@link AppsPolicy#METHODS}. Every method re-validates its arguments here.
  *
- * Protocol (JSON strings): page → {id, method, params}; native → {id, ok, result | error}; pushes → {type:'status'|'resume', ...}.
+ * Protocol (JSON strings): page → {v, id, method, params}; native → {id, ok, result | error}; pushes → {type:'status'|'resume', ...}.
+ * Rows from list are raw device facts; labels like the source badge are the web's (web/core/android-apps-policy.js).
+ * v absent (relay before v1): list also schedules the update job, as it always did. v1: the web asks with scheduleUpdates.
  */
 public final class AppsBridge implements AppsInstaller.Listener {
     public static final String NAME = "wizardAppsPort";
@@ -118,6 +120,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
         try { m = new JSONObject(data == null ? "" : data); } catch (JSONException e) { return; }
         final String id = m.optString("id", "");
         final String method = m.optString("method", "");
+        final int v = m.optInt("v", 0);
         final JSONObject params = m.optJSONObject("params") == null ? new JSONObject() : m.optJSONObject("params");
         frames.remove(reply);
         frames.add(reply);
@@ -125,7 +128,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
         if (!AppsPolicy.method(method)) { answer(reply, id, null, "unknown method"); return; }
         bg.execute(() -> {
             Object result = null; String err = null;
-            try { result = call(method, params); }
+            try { result = call(method, params, v); }
             catch (Refusal e) { err = e.getMessage(); }
             catch (JSONException | RuntimeException e) { Log.w(AppsInstaller.TAG, method + ": " + e); err = "Something went wrong"; }
             final Object r = result; final String er = err;
@@ -160,7 +163,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
         return s;
     }
 
-    private Object call(String method, JSONObject p) throws Refusal, JSONException {
+    private Object call(String method, JSONObject p, int v) throws Refusal, JSONException {
         switch (method) {
             case "status":
                 return new JSONObject().put("bridge", VERSION).put("app", activity.getPackageName())
@@ -168,8 +171,11 @@ public final class AppsBridge implements AppsInstaller.Listener {
                         .put("sdk", Build.VERSION.SDK_INT).put("canInstall", activity.getPackageManager().canRequestPackageInstalls())
                         .put("installs", AppsInstaller.status());
             case "list":
-                AppsUpdateJob.schedule(activity); // the add-on is in use: keep its apps updated from now on
-                return new JSONObject().put("apps", AppsCatalog.list(activity)).put("self", activity.getPackageName()).put("sdk", Build.VERSION.SDK_INT);
+                if (AppsPolicy.scheduleOnList(v)) AppsUpdateJob.schedule(activity);
+                return new JSONObject().put("apps", AppsCatalog.list(activity, v)).put("self", activity.getPackageName()).put("sdk", Build.VERSION.SDK_INT);
+            case "scheduleUpdates":
+                AppsUpdateJob.schedule(activity);
+                return true;
             case "icon": {
                 String s = installed(p);
                 return new JSONObject().put("package", s).put("data", AppsCatalog.icon(activity, s, p.optInt("px", 96)));
