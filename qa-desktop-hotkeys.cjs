@@ -1,6 +1,6 @@
 // Scoped desktop hotkey acceptance. Every backend write is intercepted.
 const fs = require('fs');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const BASE = process.argv[2];
 const OUT = process.env.QA_OUT || '.';
 fs.mkdirSync(OUT, { recursive: true });

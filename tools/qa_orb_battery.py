@@ -12,15 +12,17 @@ Phases: idle orb over the dialer; screen off (orb attached, display off).
 James, 10 Oct 2026: Device care showed Wizard OS at 38.5% of a day's battery with the orb in the corner.
 """
 import fcntl, json, os, pathlib, re, subprocess, sys, time, uuid
+from qa_paths import work_root
+from qa_paths import android_sdk, java_home
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 new = P(sys.argv[1]); PKG = sys.argv[2]
 base = P(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] not in ('', '-') else None
 SECS = int(sys.argv[4]) if len(sys.argv) > 4 else 60
 job = BASE / 'qa' / ('wos-orb-battery-' + uuid.uuid4().hex[:8]); job.mkdir(parents=True)
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir()
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir()
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5694; S = f'emulator-{PORT}'
 res = []; metrics = {}
 

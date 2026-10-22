@@ -1,6 +1,6 @@
 // Settings never blocks desk swipes (James, 21 Oct 2026): with Settings open on Home, a dock or orb swipe (or a dot
 // tap) moves to the next desk; Settings stays open on Home and is there again, scroll kept, on the way back.
-let chromium; try { ({ chromium } = require('playwright')); } catch (_) { ({ chromium } = require('playwright-core')); }
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs');
 const url = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
 const out = process.env.QA_OUT || 'qa-settings-desk-swipe'; fs.mkdirSync(out, { recursive: true });

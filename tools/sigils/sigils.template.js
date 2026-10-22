@@ -16,6 +16,7 @@
   'use strict';
   const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents']);
   const HOUSE = /*HOUSE*/;
+  const BRAND = /*BRAND*/;
   const FALLBACK = /*FALLBACK*/;
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
   // An app's own icon file: same-origin path only (no tracking pixels, nothing that can break out of url('…')).
@@ -42,8 +43,13 @@
     const ch = String(glyph || '?');
     return `<i class="sgi sgl" aria-hidden="true" style="--sg:${esc(LETTER(ch))}">${esc(ch)}</i>`;
   }
+  // A real product (Cloudflare, Claude, ChatGPT…) also carries `sgb sgb-<mark>`: skins that show brand marks paint
+  // web/brand/apps/<mark>.svg in the same box; every other skin ignores the class and keeps the house glyph.
+  const brand = a => (Object.prototype.hasOwnProperty.call(BRAND, a.id) ? ` sgb sgb-${BRAND[a.id]}` : '');
   function html(a) {
-    const s = of(a);
+    a = a || {};
+    const s = of(a), b = brand(a);
+    if (b) return (s.glyph ? named(s.glyph) : named(s.letter)).replace('class="sgi', `class="sgi${b}`);
     if (s.glyph) return named(s.glyph);
     if (s.img) return `<i class="sgi sgl sgimg" aria-hidden="true" style="--sg:url('${esc(s.img)}')">${esc(s.letter)}</i>`;
     return named(s.letter);
@@ -58,5 +64,5 @@
   // A sigil that isn't an app (search rows, the command row): glyph name + colour.
   function chip(tag, cls, glyph, color) { return `<${tag} class="${cls ? cls + ' ' : ''}sgt" style="--c:${color}">${named(glyph)}</${tag}>`; }
 
-  window.WizSigil = { of, html, named, box, chip, has: g => NAMES.has(g), house: HOUSE };
+  window.WizSigil = { of, html, named, box, chip, has: g => NAMES.has(g), house: HOUSE, brand: BRAND };
 })();

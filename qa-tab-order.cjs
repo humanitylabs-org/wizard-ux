@@ -1,7 +1,7 @@
 // Phone tab ordering: actual touch input, isolated workspace, no agent writes.
 // QA_PW=<playwright> QA_WEB_DIR=<repo> node qa-tab-order.cjs
 // QA_LIVE=1 uses served shell assets, with app bodies/API isolated.
-const { chromium } = require(process.env.QA_PW || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
 const root = process.env.QA_WEB_DIR || __dirname;
 const origin = process.env.QA_ORIGIN || 'http://127.0.0.1:9371';

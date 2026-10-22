@@ -1,17 +1,17 @@
 // Live Mode on real Android Chrome (Thales emulator): a real tap on the mockup print signs (no WebAuthn,
 // no fingerprint sheet), the action becomes a moon, Back still never exits, and QA makes zero real Archimedes writes.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const OUT = __dirname + '/qa-live/android';
 fs.mkdirSync(OUT, { recursive: true });
-const adb = c => execSync(`ssh thales 'export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools; export ANDROID_SERIAL=emulator-5554; ${c}'`, { encoding: 'utf8', timeout: 60000 });
-const shot = n => { try { adb('adb exec-out screencap -p > /tmp/lm.png'); execSync(`scp -q thales:/tmp/lm.png ${OUT}/${n}.png`); } catch (e) {} };
+const adb = c => execSync(`ssh ${require('./tools/qa-paths.cjs').buildHost()} 'export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools; export ANDROID_SERIAL=emulator-5554; ${c}'`, { encoding: 'utf8', timeout: 60000 });
+const shot = n => { try { adb('adb exec-out screencap -p > /tmp/lm.png'); execSync(`scp -q ${require('./tools/qa-paths.cjs').buildHost()}:/tmp/lm.png ${OUT}/${n}.png`); } catch (e) {} };
 const top = () => adb('adb shell dumpsys activity activities | grep -m1 topResumedActivity');
 let pass = 0, fail = 0;
 const ok = (c, m, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${m}${d ? ' — ' + String(d).slice(0, 220) : ''}`); };
 (async () => {
-  adb('adb shell am force-stop com.android.chrome; adb shell input keyevent KEYCODE_WAKEUP; adb shell wm dismiss-keyguard; sleep 1; adb shell am start -a android.intent.action.VIEW -d "https://wizard.tailc0f369.ts.net/wizard-os-home-preview/?demo=1" com.android.chrome >/dev/null; sleep 7; adb forward tcp:9333 localabstract:chrome_devtools_remote >/dev/null');
+  adb(('adb shell am force-stop com.android.chrome; adb shell input keyevent KEYCODE_WAKEUP; adb shell wm dismiss-keyguard; sleep 1; adb shell am start -a android.intent.action.VIEW -d "' + require('./tools/qa-paths.cjs').origin() + '/wizard-os-home-preview/?demo=1" com.android.chrome >/dev/null; sleep 7; adb forward tcp:9333 localabstract:chrome_devtools_remote >/dev/null'));
   const b = await chromium.connectOverCDP('http://127.0.0.1:9333');
   const pages = b.contexts()[0].pages();
   let p = null;

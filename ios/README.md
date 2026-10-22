@@ -6,7 +6,7 @@ phone shell from the iPhone user agent; the app adds `WizardOS-iOS/<version>` to
 
 | What | How |
 |---|---|
-| Wizard address | Built in from the `WIZARD_ORIGIN` build setting (default `https://wizard.tailc0f369.ts.net`). With no address, or when the Wizard can't be reached, the bundled `www/index.html` shows Connect / Try again |
+| Wizard address | Built in from the `WIZARD_ORIGIN` build setting (empty by default). With no address, or when the Wizard can't be reached, the bundled `www/index.html` shows Connect / Try again |
 | Navigation | Pages of the Wizard's host stay in the app; other sites open in Safari |
 | Microphone / camera | The page's `getUserMedia` + `MediaRecorder` and file inputs. Capture is granted only to the Wizard's https pages (`MediaGate`), after iOS's own prompt |
 | Native features | Capacitor plugins, callable from the Wizard's pages as `window.Capacitor.Plugins.*`: App, Camera, Haptics, LocalNotifications, Preferences, PushNotifications, Share, SplashScreen, StatusBar |
@@ -41,6 +41,23 @@ npx cap run ios          # pick a Simulator or a connected iPhone
 ```
 
 Compile check without signing: `fastlane sim`.
+
+### Build-time server address
+
+The committed Xcode project deliberately has no owner address. Set the `WIZARD_ORIGIN` user-defined build
+setting locally in Xcode, or pass it explicitly to `xcodebuild`:
+
+```sh
+export WIZARD_ORIGIN=https://wizard.example.ts.net
+xcodebuild -project native/App/App.xcodeproj -scheme App -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' -derivedDataPath build/DerivedData \
+  CODE_SIGNING_ALLOWED=NO "WIZARD_ORIGIN=$WIZARD_ORIGIN" build
+```
+
+Fastlane reads `WIZARD_ORIGIN` from the environment or ignored `fastlane/.env` for both `sim` and `beta`.
+An environment variable alone does not override the Xcode project when calling `xcodebuild` directly: pass
+the build-setting argument as shown. No address is required: iOS already has Connect / Change Address,
+and a saved address still takes precedence over the bundled default. Never commit a personal hostname.
 
 ## TestFlight
 

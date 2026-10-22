@@ -6,10 +6,10 @@
  * whose page hides its own "back to Wizard" link. Fixture reads only; every write is dropped as a network error, so the real outbox parks the send as waiting.
  * QA_WEB_DIR=<repo> QA_TS_PAGE=<troubleshooter index.html> QA_OUT=<evidence> PLAYWRIGHT_MODULE=<module> node qa-troubleshooter-window.cjs */
 const fs = require('node:fs'), path = require('node:path');
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const root = process.env.QA_WEB_DIR || __dirname, out = process.env.QA_OUT || 'qa-live/troubleshooter-window';
-const fallback = process.env.QA_FALLBACK_WEB || '/home/telos/apps/wizard-os-home/web';
-const tsPage = process.env.QA_TS_PAGE || '/home/telos/apps/wizard-troubleshooter/web/index.html';
+const fallback = process.env.QA_FALLBACK_WEB || require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'web');
+const tsPage = process.env.QA_TS_PAGE || require('node:path').resolve(require('./tools/qa-paths.cjs').repoRoot, '..', 'wizard-troubleshooter/web/index.html');
 const origin = 'http://localhost:9481/wizard-os-home/';
 const sid = 'ts-fixture';
 const sessions = Array.from({ length: 24 }, (_, i) => ({ id: i ? 'ts-' + i : sid, title: i ? 'Sample conversation ' + i : 'Design review', source: 'wizard-mobile', model: 'qa', provider: 'qa', message_count: 2, last_active: Date.now() / 1000 - i * 600, preview: 'A sample preview line ' + i }));

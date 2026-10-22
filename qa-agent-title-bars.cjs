@@ -1,8 +1,8 @@
 // Run on Thales. Optional QA_SOURCE tests exact candidate files over read-only live APIs.
-const {chromium}=require(process.env.PW);
+const {chromium}=require('./tools/qa-playwright.cjs');
 const fs=require('fs'),path=require('path'),os=require('os');
 const BASE=process.argv[2],OUT=process.env.QA_OUT,SOURCE=process.env.QA_SOURCE;
-if(!OUT?.startsWith('/Volumes/ThalesMedia/')||!os.hostname().toLowerCase().includes('thales'))throw Error('Thales evidence required');
+if(!require('./tools/qa-paths.cjs').inWorkRoot(OUT)||!process.env.WIZARD_WORK_ROOT)throw Error('Thales evidence required');
 fs.mkdirSync(OUT,{recursive:true});
 const cases=[],errors=[],writes=[];
 function check(v,name,detail){cases.push({pass:!!v,name,detail});console.log(v?'PASS':'FAIL',name,detail||'');}

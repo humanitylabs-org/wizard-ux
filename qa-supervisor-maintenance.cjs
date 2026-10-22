@@ -1,6 +1,6 @@
 // Focused read-only Thales QA. Candidate: QA_WEB_DIR=<repo>; live: omit it.
 // QA_ORIGIN must be the real private ingress; all non-GET/HEAD requests are blocked.
-const { chromium } = require(process.env.PW || 'playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path'), assert = require('node:assert/strict');
 const BASE = process.env.QA_ORIGIN;
 if (!BASE) throw new Error('QA_ORIGIN required');

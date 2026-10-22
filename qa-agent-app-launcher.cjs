@@ -1,9 +1,9 @@
 // Thales-only, production-origin assets (or QA_SOURCE overlay), read-only live APIs.
 // Fixture lifecycle changes exist only in this browser; never create/rename real agents.
-const { chromium } = require(process.env.PW);
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path'), os = require('os'), crypto = require('crypto');
 const BASE = process.argv[2], OUT = process.env.QA_OUT, SOURCE = process.env.QA_SOURCE;
-if (!OUT?.startsWith('/Volumes/ThalesMedia/') || !os.hostname().toLowerCase().includes('thales')) throw Error('Thales evidence required');
+if (!require('./tools/qa-paths.cjs').inWorkRoot(OUT) || !process.env.WIZARD_WORK_ROOT) throw Error('Thales evidence required');
 fs.mkdirSync(OUT, { recursive: true });
 const cases = [], errors = [], writes = [], assets = {}, reads = [];
 const check = (pass, name, detail) => { cases.push({ pass: !!pass, name, detail }); console.log(pass ? 'PASS' : 'FAIL', name, detail || ''); };

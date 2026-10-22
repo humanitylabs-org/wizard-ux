@@ -6,8 +6,8 @@
 // the middle of the screen hit-tests to the app, not the voice layer; a touch scroll moves the
 // content; a tap on a thread opens it; and recording carries on through all of it.
 // Usage: QA_WEB_DIR=<repo> node qa-voice-nodim.cjs [url]. Every Hermes/Wizard write is intercepted.
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const { chromium } = require('./tools/qa-playwright.cjs');
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const W = process.env.QA_WEB_DIR || __dirname;
 const SHOTS = process.env.QA_SHOTS || '';
 const LONG = 'Okay so here is a long message for Archimedes about the wizard orb and the multiple threads going on here, please fix the overlay so that after I send it only shows a small confirmation and then disappears';
@@ -22,7 +22,7 @@ async function boot(b) {
   let slowSend = null;
   await ctx.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
-    if (!/wizard\.tailc0f369\.ts\.net$/.test(u.hostname)) return r.abort();
+    if (!(u.origin === require('./tools/qa-paths.cjs').origin())) return r.abort();
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m && q.method() === 'GET' && !m[1].startsWith('api/')) {
       const f = m[1] || 'index.html', p = require('path').join(W, 'web', f);

@@ -5,9 +5,9 @@
 // Retry now reads at once; leaving the thread stops the retries; a 403 still says sign-in and does not loop.
 // Usage: QA_TREE=<repo> node qa-thread-read-retry.cjs
 const fs = require('fs'), path = require('path');
-const { chromium } = require(process.env.QA_PLAYWRIGHT || '/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const TREE = process.env.QA_TREE || __dirname;
-const FALLBACK = process.env.QA_FALLBACK_WEB || '/home/telos/apps/wizard-os-home/web';
+const FALLBACK = process.env.QA_FALLBACK_WEB || require('node:path').join(require('./tools/qa-paths.cjs').repoRoot, 'web');
 let pass = 0, fail = 0;
 const ok = (c, n, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${n}${d !== '' ? ' ' + JSON.stringify(d) : ''}`); };
 const now = Date.now() / 1000, sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -84,7 +84,7 @@ const reads = {};
   await open('t_many');
   const shown = await until(s => !!s.err, 6000);
   ok(/Couldn’t load this thread/.test(shown.s.err) && /Retrying automatically/.test(shown.s.err) && /HTTP 502/.test(shown.s.err) && shown.s.retry, 'repeated failures name the error, say it is retrying and offer Retry now', shown.s);
-  await p.screenshot({ path: path.join(process.env.QA_OUT || '/home/telos/.hermes/cache/scratch', 'thread-read-retry-error.png') });
+  await p.screenshot({ path: path.join(process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath(''), 'thread-read-retry-error.png') });
   const healed = await until(s => s.answer, 12000);
   ok(healed.s.answer && !healed.s.err, 'it recovers on its own once Wizard answers', { ms: healed.ms, reads: reads.t_many?.length });
   await back();

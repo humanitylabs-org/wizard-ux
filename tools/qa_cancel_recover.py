@@ -15,16 +15,18 @@ Checks (fake Wizard on this Mac; nothing reaches the real one):
 """
 import fcntl, hashlib, http.server, json, os, pathlib, re, socket, subprocess, sys, threading, time, uuid
 import urllib.request
+from qa_paths import work_root
+from qa_paths import android_sdk, java_home
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds'); SDK = P('/opt/homebrew/share/android-commandlinetools')
+BASE = P(str(work_root() / 'AndroidBuilds')); SDK = android_sdk()
 APK = P(sys.argv[1]); NEXT = APK; WEB = P(sys.argv[2])
 PKG = 'ai.wizards.os.qa'
 job = P(sys.argv[3]) if len(sys.argv) > 3 else BASE / 'qa' / ('wos-cancel-' + uuid.uuid4().hex[:8])
 job.mkdir(parents=True, exist_ok=True)
 OUT = job / 'shots'; OUT.mkdir(exist_ok=True)
-env = os.environ.copy(); env.update(JAVA_HOME='/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home',
+env = os.environ.copy(); env.update(JAVA_HOME=java_home(),
     ANDROID_HOME=str(SDK), ANDROID_SDK_ROOT=str(SDK), ANDROID_AVD_HOME=str(job / 'avd'))
-env['PATH'] = env['JAVA_HOME'] + '/bin:/opt/homebrew/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
+env['PATH'] = env['JAVA_HOME'] + '/bin:' + env['PATH']; (job / 'avd').mkdir(exist_ok=True)
 ADB = str(SDK / 'platform-tools/adb'); PORT = 5712; S = 'emulator-%d' % PORT; DEVTOOLS = 9363; FAKE = 18797
 ORIGIN = 'http://localhost:%d' % FAKE
 res = []; receipt = {'checks': [], 'job': str(job)}

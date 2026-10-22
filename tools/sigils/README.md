@@ -42,3 +42,19 @@ npm test
 | `sigils.template.js` | `WizSigil` API template → `web/core/sigils.js` |
 | `agent_hats.py`, `private_hat.py` | brand-mask hats (Chats, private agent, Agents) |
 | `showcase.py` | preview sheet of all glyphs |
+
+## Brand marks
+
+Apps that connect to a real product show that product's own logo, so the tile is a visual cue: the Cloudflare cloud means Cloudflare. They connect to and name that service, so showing its mark is nominative use. Only real products get one; Wizard's own apps (Files, Notifications, Calendar…) keep their house glyphs.
+
+`BRAND` in `build.py` maps an app id to a file in `web/brand/apps/`. The app's markup then carries `sgb sgb-<mark>` next to its house glyph. A skin opts in by styling `.sgb-<mark>` (Miguel's Dark, Light and Landscapes skins do, in `web/skins/*/skin.css`); every other skin ignores the class and shows the house glyph unchanged. The mark stays a mask in the same box at the same optical size (the shared `normalise` size, 318 on the 512 grid), so it can't come out bigger or overflow the selected ring. Two-colour marks (Cloudflare, Claude) paint the logo file inside the mask in the brand's colours; one-colour marks (ChatGPT, Tinfoil, Hermes) are painted in the skin's ink, the way those companies show them on dark and light pages.
+
+Each file is the company's own vector, only scaled and centred onto the 512 grid (no redraw):
+
+| Mark | Apps | Source |
+|---|---|---|
+| `cloudflare` | wizard-cloudflare | Cloudflare logo, `https://www.cloudflare.com/img/logo-cloudflare-dark.svg` (cloud paths only, #F48120 / #FAAD3F). Logo page: https://www.cloudflare.com/logo/ |
+| `claude` | wizard-claude | Claude spark from Simple Icons 16.35.0 (`icons/claude.svg`, source https://claude.ai), Claude terracotta #D97757 |
+| `chatgpt` | wizard-chatgpt | OpenAI blossom from Simple Icons 16.35.0 (`icons/openai.svg`, source https://openai.com/brand) |
+| `tinfoil` | wizard-tinfoil | Tinfoil mark, `https://tinfoil.sh/brand-assets/logo-green.svg` (the triangle path, without the wordmark) |
+| `hermes` | hermes-agent, hermes-frontend-3 | Nous Research's Hermes Agent icon, `https://github.com/NousResearch/hermes-agent/blob/main/website/static/img/favicon.svg` (the portrait path, without its white tile) |

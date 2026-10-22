@@ -96,6 +96,17 @@ HOUSE = {
 #   hat-private  tools/sigils/private_hat.py: the hat with a keyhole for its door
 #   agents       tools/sigils/agent_hats.py: two layered hats, private green behind main purple
 MASKS = ('hat', 'hat-private', 'agents')
+# Real products wear their own brand mark (web/brand/apps/<mark>.svg; sources in tools/sigils/README.md, "Brand marks").
+# html() adds `sgb sgb-<mark>` next to the house glyph; a skin opts in by styling .sgb-<mark> (Miguel's skins do, in
+# web/skins/*/skin.css), so any other skin still shows the house glyph unchanged.
+BRAND = {
+    'wizard-cloudflare': 'cloudflare',
+    'wizard-claude':     'claude',
+    'wizard-chatgpt':    'chatgpt',
+    'wizard-tinfoil':    'tinfoil',
+    'hermes-agent':      'hermes',
+    'hermes-frontend-3': 'hermes',
+}
 # Apps with no sigil yet get their initial on a hue picked from their id.
 FALLBACK_HUES = [20, 66, 112, 158, 196, 230, 268, 300, 334]
 
@@ -118,6 +129,9 @@ def main():
     js = open(os.path.join(HERE, 'sigils.template.js')).read()
     js = js.replace('/*NAMES*/', json.dumps(sorted(lib.keys())))
     js = js.replace('/*HOUSE*/', json.dumps(house, separators=(',', ':')))
+    js = js.replace('/*BRAND*/', json.dumps(BRAND, separators=(',', ':')))
+    for k, m in BRAND.items():
+        assert os.path.exists(os.path.join(ROOT, 'web', 'brand', 'apps', m + '.svg')), (k, m)
     js = js.replace('/*FALLBACK*/', json.dumps([tone(h) for h in FALLBACK_HUES]))
     open(os.path.join(ROOT, 'web', 'core', 'sigils.js'), 'w').write(js)
     json.dump({k: dict(d=v['d'], desc=v['desc']) for k, v in lib.items()},

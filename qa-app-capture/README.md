@@ -42,10 +42,10 @@ An actual destroyed/reloaded browser shell cannot keep a web microphone physical
 
 ## Execution
 
-Source edits and syntax checks only on Telos. Copy these owned files to `/Volumes/ThalesMedia/WizardApps/shared-services/capture/source` on Thales; pass exact committed SHA and git tree SHA:
+Source edits and syntax checks only on Telos. Copy these owned files to `$WIZARD_WORK_ROOT/WizardApps/shared-services/capture/source` on Thales; pass exact committed SHA and git tree SHA:
 
 ```sh
-ssh thales 'bash /Volumes/ThalesMedia/WizardApps/shared-services/capture/source/qa-app-capture/run-thales.sh SOURCE_SHA SOURCE_TREE'
+ssh "$WIZARD_BUILD_HOST" 'bash $WIZARD_WORK_ROOT/WizardApps/shared-services/capture/source/qa-app-capture/run-thales.sh SOURCE_SHA SOURCE_TREE'
 ```
 
-Runner takes `/Volumes/ThalesMedia/AndroidBuilds/worker.lock` (shared heavy/browser lock), localhost test server only, no production task URLs or writes. Receipt/command log/screenshot/source manifest at `/Volumes/ThalesMedia/WizardApps/shared-services/capture/evidence`. Playwright and Chromium paths are explicitly overrideable; no new dependencies needed. Capture suite exercises Chromium's real getUserMedia/MediaRecorder/AudioWorklet with fake audio plus permission/storage injection, frame/Back/background events, reload recovery, busy across tabs, owner checks, delayed-commit partial races, concurrent stop flush, bounded pieces, ack concurrent with next take, and existing native signatures through mocks. Native hardware/permission dialogs/background-service OS survival and real backend durability are **not** claimed. Headless page background/visibility checks are not mobile OS process suspension testing.
+Runner takes `$WIZARD_WORK_ROOT/AndroidBuilds/worker.lock` (shared heavy/browser lock), localhost test server only, no production task URLs or writes. Receipt/command log/screenshot/source manifest at `$WIZARD_WORK_ROOT/WizardApps/shared-services/capture/evidence`. Playwright and Chromium paths are explicitly overrideable; no new dependencies needed. Capture suite exercises Chromium's real getUserMedia/MediaRecorder/AudioWorklet with fake audio plus permission/storage injection, frame/Back/background events, reload recovery, busy across tabs, owner checks, delayed-commit partial races, concurrent stop flush, bounded pieces, ack concurrent with next take, and existing native signatures through mocks. Native hardware/permission dialogs/background-service OS survival and real backend durability are **not** claimed. Headless page background/visibility checks are not mobile OS process suspension testing.

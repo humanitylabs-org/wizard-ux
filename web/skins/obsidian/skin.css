@@ -257,33 +257,6 @@ html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .w
 html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .wbar .wtool-pick { height: 28px; font-size: 12.5px; }
 html[data-skin^="obsidian"][data-shell="phone"][data-skin-frame="borderless"] .shield { top: 36px; }
 
-/* Miguel's skins: the "Update" tap explodes over the screen, then holds "Updating Wizard OS..." until the new build
- * paints (core/web-update.js adds .wos-burst). Over the top on purpose. */
-html[data-skin^="obsidian"] .wos-burst { position: fixed; inset: 0; z-index: 2147483000; display: grid; place-items: center; overflow: hidden; pointer-events: all;
-  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--ink, #fff) 18%, transparent) 0, color-mix(in srgb, var(--bg, #000) 88%, transparent) 55%);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4); backdrop-filter: blur(14px) saturate(1.4); animation: wb-dim 380ms ease-out both; }
-html[data-skin^="obsidian"] .wos-burst > * { position: absolute; left: 50%; top: 50%; }
-html[data-skin^="obsidian"] .wos-burst .wb-flash { width: 10px; height: 10px; margin: -5px; border-radius: 50%; background: var(--ink, #fff);
-  box-shadow: 0 0 120px 70px var(--violet-2, var(--ink, #fff)); animation: wb-flash 700ms cubic-bezier(.15,.8,.2,1) both; }
-html[data-skin^="obsidian"] .wos-burst .wb-ring { width: 20px; height: 20px; margin: -10px; border-radius: 50%; border: 5px solid var(--ink, #fff); box-shadow: 0 0 30px var(--violet-2, var(--ink, #fff));
-  animation: wb-ring 900ms cubic-bezier(.12,.75,.25,1) both; }
-html[data-skin^="obsidian"] .wos-burst .wb-ring.two { border-color: var(--violet-2, var(--ink)); animation-delay: 120ms; border-width: 2px; }
-html[data-skin^="obsidian"] .wos-burst .wb-ring.three { animation-delay: 240ms; border-width: 1px; opacity: .7; }
-html[data-skin^="obsidian"] .wos-burst .wb-sparks i { position: absolute; width: var(--w, 4px); height: var(--h, 26px); margin: calc(var(--h, 26px) / -2) calc(var(--w, 4px) / -2); box-shadow: 0 0 10px var(--violet-2, var(--ink, #fff)); border-radius: 4px; background: linear-gradient(var(--ink, #fff), transparent);
-  transform: rotate(var(--a)) translateY(0); animation: wb-spark 820ms cubic-bezier(.1,.7,.2,1) var(--t) both; }
-html[data-skin^="obsidian"] .wos-burst .wb-core { width: 64px; height: 64px; margin: -32px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--ink, #fff) 25%, transparent);
-  border-top-color: var(--ink, #fff); animation: wb-in 260ms 160ms both, wb-spin 800ms linear 160ms infinite; }
-html[data-skin^="obsidian"] .wos-burst .wb-text { transform: translate(-50%, 54px); white-space: nowrap; font: 750 22px/1.2 inherit; letter-spacing: .01em; color: var(--ink, #fff);
-  text-shadow: 0 0 18px var(--violet-2, var(--ink, #fff)), 0 2px 10px color-mix(in srgb, var(--bg, #000) 70%, transparent); animation: wb-in 280ms 180ms both; }
-html[data-skin^="obsidian"] .wos-burst .wb-text em { font-style: normal; animation: wb-dot 1.1s infinite; }
-html[data-skin^="obsidian"] .wos-burst .wb-text em:nth-child(2) { animation-delay: .18s; } html[data-skin^="obsidian"] .wos-burst .wb-text em:nth-child(3) { animation-delay: .36s; }
-@keyframes wb-dim { from { opacity: 0; } to { opacity: 1; } }
-@keyframes wb-flash { 0% { transform: scale(0); opacity: 1; } 45% { transform: scale(24); opacity: .95; } 100% { transform: scale(60); opacity: 0; } }
-@keyframes wb-ring { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(90); opacity: 0; } }
-@keyframes wb-spark { 0% { transform: rotate(var(--a)) translateY(0) scaleY(.3); opacity: 1; } 70% { opacity: 1; } 100% { transform: rotate(var(--a)) translateY(calc(var(--d) * -1)) scaleY(1.6); opacity: 0; } }
-@keyframes wb-in { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
-@keyframes wb-spin { to { rotate: 360deg; } }
-@keyframes wb-dot { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
 
 /* App selector, Miguel's look: names in full ink at a readable size, section titles one step brighter, Get apps
  * drawn as a tile like its neighbours (hairline edge) instead of an unbordered box. */
@@ -304,3 +277,221 @@ html[data-skin^="obsidian"] .ch-compose.has-reply { padding-top: 12px !important
 /* The skin's :is(.ch-compose button…) fill rule out-ranks a plain selector, so the × colour must win explicitly (Light drew it white on white). */
 html[data-skin^="obsidian"] .ch-compose button.ch-reply-x, html[data-skin^="obsidian"] .ch-compose button.ch-reply-x svg { color: color-mix(in srgb, var(--ink) 78%, transparent) !important; stroke: currentColor !important; }
 html[data-skin^="obsidian"] .ch-compose.has-reply .ch-reply { margin-bottom: 4px; }
+
+/* Brand marks (Miguel's skins): real products wear their own logo, in their own colours, so the tile is a visual cue
+ * (see the Cloudflare cloud, go to Cloudflare). Same box and size as every sigil: the mark is still a mask, and the
+ * multi-colour ones also paint the logo file inside it. Sources: tools/sigils/README.md, "Brand marks". */
+html[data-skin^="obsidian"] .sgi.sgb { filter: none !important; -webkit-mask: var(--sgb) center / contain no-repeat !important; mask: var(--sgb) center / contain no-repeat !important; }
+html[data-skin^="obsidian"] .sgi.sgb-cloudflare { --sgb: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22%3E%3Cg transform=%22translate(-353.709 144.091) scale(7.717842)%22%3E%3Cpath d=%22M88.1 24c.3-1 .2-2-.3-2.6-.5-.6-1.2-1-2.1-1.1l-17.4-.2c-.1 0-.2-.1-.3-.1-.1-.1-.1-.2 0-.3.1-.2.2-.3.4-.3l17.5-.2c2.1-.1 4.3-1.8 5.1-3.8l1-2.6c0-.1.1-.2 0-.3-1.1-5.1-5.7-8.9-11.1-8.9-5 0-9.3 3.2-10.8 7.7-1-.7-2.2-1.1-3.6-1-2.4.2-4.3 2.2-4.6 4.6-.1.6 0 1.2.1 1.8-3.9.1-7.1 3.3-7.1 7.3 0 .4 0 .7.1 1.1 0 .2.2.3.3.3h32.1c.2 0 .4-.1.4-.3l.3-1.1z%22 fill=%22%23F48120%22/%3E%3Cpath d=%22M93.6 12.8h-.5c-.1 0-.2.1-.3.2l-.7 2.4c-.3 1-.2 2 .3 2.6.5.6 1.2 1 2.1 1.1l3.7.2c.1 0 .2.1.3.1.1.1.1.2 0 .3-.1.2-.2.3-.4.3l-3.8.2c-2.1.1-4.3 1.8-5.1 3.8l-.2.9c-.1.1 0 .3.2.3h13.2c.2 0 .3-.1.3-.3.2-.8.4-1.7.4-2.6 0-5.2-4.3-9.5-9.5-9.5%22 fill=%22%23FAAD3F%22/%3E%3C/g%3E%3C/svg%3E"); }
+html[data-skin^="obsidian"] .sgi.sgb-claude { --sgb: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22%3E%3Cg transform=%22translate(96.940 96.940) scale(13.255026)%22%3E%3Cpath d=%22m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z%22 fill=%22%23D97757%22/%3E%3C/g%3E%3C/svg%3E"); }
+html[data-skin^="obsidian"] .sgi.sgb-chatgpt { --sgb: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22%3E%3Cg transform=%22translate(95.909 95.908) scale(13.340931)%22%3E%3Cpath d=%22M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z%22 fill=%22%23000%22/%3E%3C/g%3E%3C/svg%3E"); }
+html[data-skin^="obsidian"] .sgi.sgb-tinfoil { --sgb: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 512 512%22%3E%3Cg transform=%22translate(87.534 92.679) scale(0.403216)%22%3E%3Cpath d=%22M825.24,610.01l-579.29,176.68L10.37,602.06,235.81,23.4l589.43,586.61ZM146.55,564.75l122.82,96.26,341.7-104.2L278.57,225.89l-132.02,338.86Z%22 fill=%22%23000%22 fill-rule=%22evenodd%22/%3E%3C/g%3E%3C/svg%3E"); }
+html[data-skin^="obsidian"] .sgi.sgb-hermes { --sgb: url("/wizard-os-home/brand/apps/hermes.svg"); }
+html[data-skin^="obsidian"] .sgi:is(.sgb-cloudflare, .sgb-claude) { background: var(--sgb) center / contain no-repeat !important; }
+html[data-skin^="obsidian"] .sgi:is(.sgb-chatgpt, .sgb-tinfoil, .sgb-hermes) { background: var(--ink) !important; }
+
+/* Dock fit (Miguel, 21 Oct): with many desks open, each side holds at most Home + two neighbours on the left and two
+ * neighbours + New on the right, so nothing squeezes under the orb or past the pill's ends. A dot marks hidden desks. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { gap: 12px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots { gap: 8px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.left { padding-left: 8px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.right { padding-right: 8px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot { width: 32px; height: 32px; flex: 0 0 32px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot .dsg { width: 30px; height: 30px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL > .ddot[data-goto]:not(.dhome):nth-last-child(n+3) { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR > .ddot[data-goto]:nth-child(n+3) { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL > .dhome { order: -1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR > .dplus { order: 1; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3)), #dotsR:has(> .ddot[data-goto]:nth-child(3))) > .dmore { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3))::before,
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR:has(> .ddot[data-goto]:nth-child(3))::after { content: ""; flex: 0 0 auto; width: 3px; height: 3px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 40%, transparent); }
+
+/* App kinds on New desk (Apps · Wizard apps · Connectors): the last group scrolls clear of the floating pill dock. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .new-desk.kinds { padding-bottom: calc(var(--pill-top, 90px) + 24px); }
+
+/* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .launcher { top: calc(30px + var(--safe-t)); bottom: calc(var(--pill-top, 90px) + 8px); }
+
+/* System apps (fill a Wizard OS parking spot): first in their group, with a second ring around the icon. */
+
+/* Opinionated (Miguel's skins): Home resources as the most compact readout: two rows (Server, then AI accounts) of
+   small ring + label cells on one shared 3-column grid, no headings, warnings or freshness text; one settings gear.
+   resources.js renders .rs-dialed only for these skins. */
+html[data-skin^="obsidian"] [data-home-resources] { margin-top: 0; }
+html[data-skin^="obsidian"] .rs-dialed { padding: 10px 14px; }
+html[data-skin^="obsidian"] .rs-dials { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 6px; }
+html[data-skin^="obsidian"] .rs-dials + .rs-dials { margin-top: 8px; }
+html[data-skin^="obsidian"] .rs-dial { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; font-variant-numeric: tabular-nums; -webkit-tap-highlight-color: transparent; }
+html[data-skin^="obsidian"] .rs-rw { position: relative; flex: none; width: 30px; height: 30px; }
+html[data-skin^="obsidian"] .rs-rw svg { width: 30px; height: 30px; transform: rotate(-90deg); display: block; }
+html[data-skin^="obsidian"] .rs-dial circle { fill: none; stroke-width: 2.4; }
+html[data-skin^="obsidian"] .rs-ring { stroke: var(--line-2, var(--line)); }
+html[data-skin^="obsidian"] .rs-arc { stroke: var(--ink-2); stroke-linecap: round; transition: stroke-dasharray .5s ease; }
+html[data-skin^="obsidian"] .rs-rw b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10.5px; font-weight: 550; letter-spacing: -.02em; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-dial-off .rs-ring { stroke-dasharray: 2 3; }
+html[data-skin^="obsidian"] .rs-dl { min-width: 0; display: flex; flex-direction: column; font-size: 11.5px; line-height: 1.2; color: var(--wz-text-secondary, var(--ink-2)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-skin^="obsidian"] .rs-dl small { font-size: 10px; color: var(--wz-text, var(--ink)); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-2, var(--line)); }
+html[data-skin^="obsidian"] .rs-dial:active { opacity: .7; }
+html[data-skin^="obsidian"] .rs-dial:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; border-radius: 8px; }
+html[data-skin^="obsidian"] .rs-dial-empty { grid-column: 1 / -1; min-height: 30px; display: flex; align-items: center; font-size: 11.5px; color: var(--wz-text-muted, var(--ink-3)); }
+html[data-skin^="obsidian"] .home-tools .home-system { display: none; }
+
+/* Opinionated (Miguel's skins): Ready / Working as two squarish tiles: the count large at the top, the label with its
+   dot underneath. Same surface, radius and edges as the resources card below so Home reads as one set. Landscapes gets
+   a frosted dark panel so both stay legible over bright photos. */
+html[data-skin^="obsidian"] .home .constellation { gap: 10px; margin-bottom: 10px; }
+html[data-skin^="obsidian"] .home .constellation .now-card {
+  flex: 1 1 0; min-height: 0; height: 84px; padding: 12px 14px; border-radius: var(--wz-home-widget-radius, 20px);
+  display: grid; grid-template: "n n" 1fr "p k" auto / auto 1fr; align-items: center; column-gap: 7px; row-gap: 0; text-align: left;
+  background: var(--wz-home-widget-surface); border: 1px solid var(--wz-home-widget-border); box-shadow: none; }
+html[data-skin^="obsidian"] .home .constellation .now-card .n { grid-area: n; align-self: start; }
+html[data-skin^="obsidian"] .home .constellation .now-card .pip { grid-area: p; width: 6px; height: 6px; flex: none; margin: 0; }
+html[data-skin^="obsidian"] .home .constellation .now-card .meta { grid-area: k; display: block; }
+html[data-skin^="obsidian"] .home .constellation .now-card .k { font-size: 12.5px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"] .home .constellation .now-card .n { padding: 0; font-size: 30px; line-height: 1; font-weight: 420; letter-spacing: -.03em; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .home .constellation .now-card:active { transform: scale(.97); }
+  background: linear-gradient(180deg, rgba(22, 20, 30, .74), rgba(12, 11, 18, .82)); border-color: rgba(255, 255, 255, .12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); }
+/* Dark / Light: clean, modern surfaces (no grain): a flat raised card with a crisp hairline. */
+html[data-skin="obsidian"] :is(.home .constellation .now-card, .rs-dialed) { background: rgba(255, 255, 255, .045); border-color: rgba(255, 255, 255, .08); -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin="obsidian-light"] :is(.home .constellation .now-card, .rs-dialed) { background: #ffffff; border-color: rgba(0, 0, 0, .07); box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 4px 16px rgba(0, 0, 0, .04); -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* Opinionated (Miguel's skins, 21 Oct): everything on Home centred and shrink-wrapped so the background shows as much
+   as possible. Date and clock centred; Ready / Working as two small centred tiles; resources as ONE centred row of tiny
+   ring dials (Server | AI) with the label under each ring. No panel is wider or taller than its content. */
+html[data-skin^="obsidian"] .home .home-top { text-align: center; padding-left: 0; padding-right: 0; }
+html[data-skin^="obsidian"] .home .home-attn { align-items: center; }
+html[data-skin^="obsidian"] .home .constellation { justify-content: center; gap: 8px; margin-bottom: 8px; }
+html[data-skin^="obsidian"] .home .constellation .now-card {
+  flex: 0 0 82px; width: 82px; min-width: 0; height: auto; padding: 8px 12px 7px; border-radius: 16px;
+  grid-template: "n n" auto "p k" auto / auto auto; justify-content: center; justify-items: center; row-gap: 3px; column-gap: 5px; }
+html[data-skin^="obsidian"] .home .constellation .now-card .n { align-self: center; font-size: 22px; }
+html[data-skin^="obsidian"] .home .constellation .now-card .k { font-size: 11px; }
+html[data-skin^="obsidian"] .home .constellation .now-card .pip { width: 5px; height: 5px; }
+html[data-skin^="obsidian"] [data-home-resources] { display: flex; justify-content: center; }
+html[data-skin^="obsidian"] .rs-dialed { display: flex; flex-wrap: nowrap; justify-content: center; align-items: flex-start; width: fit-content; max-width: 100%; padding: 8px 8px 7px; border-radius: 16px; }
+html[data-skin^="obsidian"] .rs-dials { display: flex; gap: 0; }
+html[data-skin^="obsidian"] .rs-dials + .rs-dials { margin: 0 0 0 6px; padding: 0 0 0 6px; border-left: 1px solid var(--line); }
+html[data-skin^="obsidian"] .rs-dial { flex-direction: column; gap: 3px; width: 42px; text-align: center; }
+html[data-skin^="obsidian"] .rs-rw, html[data-skin^="obsidian"] .rs-rw svg { width: 28px; height: 28px; }
+html[data-skin^="obsidian"] .rs-rw b { font-size: 10px; }
+html[data-skin^="obsidian"] .rs-dl { align-items: center; max-width: 42px; font-size: 9.5px; line-height: 1.15; }
+html[data-skin^="obsidian"] .rs-dl small { font-size: 9px; }
+html[data-skin^="obsidian"] .rs-arc { stroke: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .home-time { font-variant-numeric: normal; }
+/* System apps: one purple border (it replaces the tile's own colour border, never adds a second) and a purple tint. */
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .lapp.lapp-sys .ic { border: 2.5px solid #8f63ff; background: linear-gradient(160deg, rgba(143, 99, 255, .34), rgba(143, 99, 255, .14)), #0f0c17; box-shadow: 0 4px 14px rgba(143, 99, 255, .28); outline: none; }
+
+/* "For agents" (Wizard apps, Agents, Connectors): one quiet folded row under Apps. */
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag { margin: 14px 0 4px; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--line-2); color: var(--ink-2); font-size: 13.5px; font-weight: 600; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row small { color: var(--ink-3); font-size: 12.5px; font-weight: 500; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .fa-row svg { margin-left: auto; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 200ms; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag.open .fa-row svg { transform: rotate(180deg); }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag:not(.open) .fa-body { display: none; }
+html[data-skin^="obsidian"] :is(.launcher, .new-desk) .forag .fa-body { padding-top: 6px; }
+
+/* Home without date and clock (Miguel, 21 Oct): the device already shows the time. */
+html[data-skin^="obsidian"] :is(.home-date, .home-time) { display: none; }
+
+/* Home Ready/Working: colour the word and number instead of a dot (Miguel, 21 Oct). */
+html[data-skin^="obsidian"] .home .constellation .now-card .pip { display: none; }
+html[data-skin^="obsidian"] .home .constellation .now-card :is(.k, .n) { color: var(--c); }
+html[data-skin^="obsidian"] .home .constellation .now-card { grid-template: "n" auto "k" auto / auto; column-gap: 0; }
+
+/* Speedometer dials (Miguel's skins, 22 Oct): each reading is a small 240° car gauge (ticks, arc, needle, digital
+   readout). Needles start at zero and sweep up on first load, staggered, like a car cluster on start; later readings
+   glide. No panel: the dials sit straight on the background. On phone they live at the top (rarely touched), leaving
+   the thumb zone to Ready / Working. resources.js sets --a (needle angle) and --o (arc offset) per dial. */
+html[data-skin^="obsidian"] [data-home-resources] .rs-dialed.rs-widget.wz-home-widget { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; border-radius: 0; gap: 0; }
+html[data-skin^="obsidian"] .rs-dials + .rs-dials { margin: 0 0 0 4px; padding: 0 0 0 4px; border-left: 1px solid color-mix(in srgb, var(--ink) 14%, transparent); }
+html[data-skin^="obsidian"] .rs-dial { --g: clamp(44px, 13.4vw, 56px); width: calc(var(--g) + 2px); gap: 1px; }
+html[data-skin^="obsidian"] .rs-gauge { position: relative; display: block; width: var(--g); height: calc(var(--g) * .8333); }
+html[data-skin^="obsidian"] .rs-gauge svg { display: block; width: 100%; height: 100%; overflow: visible; }
+html[data-skin^="obsidian"] .rs-gauge path { fill: none; stroke-linecap: butt; }
+html[data-skin^="obsidian"] .rs-gauge .rs-track { stroke: color-mix(in srgb, var(--ink) 20%, transparent); stroke-width: 2.6; }
+html[data-skin^="obsidian"] .rs-gauge .rs-arc { stroke: var(--wz-text, var(--ink)); stroke-width: 2.6; stroke-dasharray: 100 200; stroke-dashoffset: var(--o, 100); transition: stroke-dashoffset var(--d, 0ms) cubic-bezier(.33, 1, .68, 1) var(--w, 0ms); }
+html[data-skin^="obsidian"] .rs-gauge .rs-tick { stroke: color-mix(in srgb, var(--ink) 48%, transparent); stroke-width: .9; stroke-linecap: round; }
+html[data-skin^="obsidian"] .rs-gauge .rs-tick.rs-major { stroke: color-mix(in srgb, var(--ink) 62%, transparent); stroke-width: 1.2; }
+html[data-skin^="obsidian"] .rs-gauge .rs-ndl path { fill: var(--wz-text, var(--ink)); stroke: none; }
+html[data-skin^="obsidian"] .rs-gauge .rs-ndl { transform-box: view-box; transform-origin: 30px 30px; transform: var(--a, rotate(-120deg)); transition: transform var(--d, 0ms) cubic-bezier(.3, 1.18, .5, 1) var(--w, 0ms); }
+html[data-skin^="obsidian"] .rs-gauge .rs-hub { fill: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-gauge b { position: absolute; left: 0; right: 0; bottom: 0; display: block; text-align: center; font-size: calc(var(--g) * .2); line-height: 1; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .rs-dial-off .rs-track { stroke-dasharray: 2 3; }
+html[data-skin^="obsidian"] .rs-dial-off :is(.rs-arc, .rs-ndl) { opacity: 0; }
+html[data-skin^="obsidian"] .rs-dialed .rs-dl { max-width: none; font-size: 9.5px; color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="obsidian"][data-shell="phone"] .home [data-home-resources] { order: -1; margin: 0 0 6px; }
+html[data-skin^="obsidian"][data-shell="phone"] .home .home-top { order: -2; }
+
+/* Blend into the background (Miguel's skins, 22 Oct): no dark chips behind Home controls. The Settings gear is a bare
+   icon, Ready / Working are round outlined buttons in their own colour, and the phone pill dock is a light frosted glass
+   that lets the background through while the icons stay clear. */
+html[data-skin^="obsidian"] .home-tools .gear, html[data-skin^="obsidian"] .gear { background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; color: var(--wz-text, var(--ink)); }
+html[data-skin^="obsidian"] .gear svg { width: 24px; height: 24px; stroke-width: 1.7; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--bg) 70%, transparent)); }
+html[data-skin^="obsidian"] .home .constellation { gap: 18px; }
+html[data-skin^="obsidian"] .home .constellation .now-card.wz-home-widget { flex: 0 0 74px; width: 74px; height: 74px; padding: 0; border-radius: 50%; place-content: center; row-gap: 1px; background: color-mix(in srgb, var(--c) 9%, transparent); border: 1.5px solid color-mix(in srgb, var(--c) 60%, transparent); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin^="obsidian"] .home .constellation .now-card .n { font-size: 24px; line-height: 1; }
+html[data-skin^="obsidian"] .home .constellation .now-card .k { font-size: 10.5px; line-height: 1.1; }
+html[data-skin^="obsidian"] .home .constellation .now-card:active { transform: scale(.94); background: color-mix(in srgb, var(--c) 18%, transparent); }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, var(--bg) 46%, transparent); border-color: color-mix(in srgb, var(--ink) 10%, transparent); box-shadow: 0 6px 22px rgba(0, 0, 0, .14); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); }
+html[data-skin="obsidian-light"] .home .constellation .now-card.wz-home-widget { background: color-mix(in srgb, var(--c) 7%, #fff 40%); }
+html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { background: color-mix(in srgb, #fff 58%, transparent); box-shadow: 0 4px 18px rgba(0, 0, 0, .07); }
+/* Symmetric dock (Miguel, 22 Oct): two fixed slots each side of the orb, mirrored, so the bar balances at every desk.
+ * The orb is the current desk and the biggest thing on the bar; the nearest neighbours sit a touch larger and brighter
+ * than the outer pair. Empty slots keep their space. New desk is a dashed empty-desk outline, never a plus. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym { flex: 1 1 0; display: grid; grid-template-columns: 1fr 1fr; justify-items: center; align-items: center; gap: 0; padding: 0 6px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL, #dotsR).sym > * { order: 0; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .dslot { width: 32px; height: 32px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 36px; height: 36px; flex: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 30px; height: 30px; transition: transform 200ms, opacity 200ms; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d2 .dsg { transform: scale(.84); opacity: .62; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d1 .dsg { opacity: .92; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym::before, html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym::after { display: none; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg { color: color-mix(in srgb, var(--ink) 82%, transparent); opacity: .92; transform: none; }
+
+/* Swipe-up Apps sheet open: the orb turns into a plain X, since tapping it closes the sheet (the only time it changes). */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-wrap :is(.orb, .orb-fallback, .orb-app, .orb-badge, .moons) { opacity: 0 !important; transition: opacity 160ms; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .orb-wrap::before { content: ""; position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; z-index: 3;
+  background: color-mix(in srgb, var(--ink) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  -webkit-mask: none; box-shadow: inset 0 0 0 0 transparent;
+  background-image: linear-gradient(45deg, transparent calc(50% - 1.3px), var(--ink) calc(50% - 1.3px), var(--ink) calc(50% + 1.3px), transparent calc(50% + 1.3px)), linear-gradient(-45deg, transparent calc(50% - 1.3px), var(--ink) calc(50% - 1.3px), var(--ink) calc(50% + 1.3px), transparent calc(50% + 1.3px));
+  background-size: 22px 22px; background-position: center; background-repeat: no-repeat; animation: wosOrbX 180ms ease-out; }
+@keyframes wosOrbX { from { transform: translate(-50%, -50%) rotate(-90deg) scale(.6); opacity: 0; } to { transform: translate(-50%, -50%) rotate(0) scale(1); opacity: 1; } }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner)[data-sheet="launcher"] .dock .desk-dots { opacity: .35; pointer-events: none; }
+html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg { opacity: 1; color: #1b1b1f; }
+html[data-skin="obsidian-light"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg svg { stroke: currentColor; }
+
+/* Three a side (Miguel, 22 Oct): bigger icons, the orb biggest, little dead space. Near > middle > far, all mirrored. */
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 66px; gap: 2px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym { grid-template-columns: repeat(3, 1fr); padding: 0 4px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 46px; height: 46px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .dslot { width: 36px; height: 36px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 42px; height: 42px; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d1 .dsg { transform: none; opacity: .95; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d2 .dsg { transform: scale(.88); opacity: .78; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot.d3 .dsg { transform: scale(.76); opacity: .6; }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .ddot.dnew .dsg svg { width: 38px; height: 38px; }
+@media (max-width: 360px) { html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot { width: 38px; height: 38px; } html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock .desk-dots.sym .ddot .dsg { width: 32px; height: 32px; } html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .dock { --orb: 60px; } }
+html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) :is(#dotsL, #dotsR).sym > .ddot { display: grid !important; place-items: center; order: 0 !important; }
+
+/* Instant icons: the app selector shows every icon at once (no staggered fade-in that read as icons loading late),
+ * and the brand marks above are inlined (web/brand/apps/*.svg, same bytes) so they never wait on a request. */
+html[data-skin^="obsidian"] .launcher.open .lgrid .lapp { animation: none; }
+
+/* Ready / Working as glyph + dots (Miguel's skins, 22 Oct): no tile, no number; two quiet rows sitting on the
+   background, one dot per chat. app.js homeDots() renders .nc-vis only for these skins. */
+html[data-skin^="obsidian"] .home .constellation { flex-direction: row; justify-content: center; align-items: center; flex-wrap: wrap; gap: 0 18px; max-width: 100%; margin-bottom: 12px; }
+html[data-skin^="obsidian"] .home .constellation .now-card.wz-home-widget { flex: none; width: auto; height: auto; min-height: 0; padding: 8px 6px; display: flex; border-radius: 12px; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin^="obsidian"] .home .constellation .now-card :is(.pip, .meta, .n) { display: none; }
+html[data-skin^="obsidian"] .nc-vis { display: flex; align-items: center; gap: 7px; color: var(--c); }
+html[data-skin^="obsidian"] .nc-vis .nc-ic { width: 19px; height: 19px; margin-right: 3px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+html[data-skin^="obsidian"] .nc-vis i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+html[data-skin^="obsidian"] .nc-vis em { font-style: normal; font-size: 14px; font-weight: 700; line-height: 1; }
+html[data-skin^="obsidian"] .nc-vis.nc-zero { opacity: .45; }
+html[data-skin^="obsidian"] [data-act="working"] .nc-vis:not(.nc-zero) .nc-ic { animation: nc-spin 1.6s linear infinite; }
+html[data-skin^="obsidian"] [data-act="working"] .nc-vis i { animation: nc-pulse 1.5s ease-in-out infinite; animation-delay: calc(var(--n) * 160ms); }
+html[data-skin^="obsidian"] .home .constellation .now-card:active { transform: scale(.96); background: color-mix(in srgb, var(--c) 12%, transparent); }
+@keyframes nc-spin { to { transform: rotate(360deg); } }
+@keyframes nc-pulse { 0%, 100% { opacity: .55; transform: scale(.78); } 50% { opacity: 1; transform: scale(1); } }
+html[data-skin="obsidian-light"] .home .constellation .now-card[data-act="ready"] { --c: #14935a; }

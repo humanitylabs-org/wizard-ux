@@ -1,9 +1,9 @@
 // Read-only Thales browser regression. Local assets, real target transcript GETs; every write intercepted.
 // QA_WEB_DIR=<tree> QA_OUT=<evidence> QA_PLAYWRIGHT=<module> node qa-thread-link-compat.cjs [origin]
 const fs=require('fs'),path=require('path');
-const {chromium}=require(process.env.QA_PLAYWRIGHT||'playwright');
+const {chromium}=require('./tools/qa-playwright.cjs');
 const ROOT=process.env.QA_WEB_DIR||__dirname, OUT=process.env.QA_OUT||path.join(__dirname,'qa-thread-link-evidence');
-const origin=process.argv[2]||'https://wizard.tailc0f369.ts.net';
+const origin=process.argv[2]||require('./tools/qa-paths.cjs').origin();
 const ids=JSON.parse(fs.readFileSync(path.join(__dirname,'tests/roundup-thread-ids.json')));
 const source='qa_thread_link_roundup', realSource='wizard_1792060331687_4812ce96c5c5';
 fs.mkdirSync(OUT,{recursive:true});

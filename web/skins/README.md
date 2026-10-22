@@ -28,7 +28,7 @@ James's skins (Nebula, Grove, Tide, Ember, Signal) have no package and load noth
 Every box also has one personal skin, **My skin**: plain CSS the owner (or their agent) writes, layered on top of
 whichever skin is picked. It starts empty, and empty means the picked skin exactly as its author made it.
 
-- **Where it lives:** `Skins/My skin.css` in the owner's Files (Runtipi `media/` on a box), outside this image.
+- **Where it lives:** `Skins/My skin/skin.css` (legacy `Skins/My skin.css` is used when it is absent) in the owner's Files (Runtipi `media/` on a box), outside this image.
   Shell, skin and Agent Service updates never touch it. The Agent Service creates the commented, empty file at
   start and serves it at `GET /wizard/v1/my-skin` (text/css, at most 64 KB, sanitised: no `@import`, no URL to
   another origin, no script hooks); `PUT` (text/css) and `DELETE` (reset) are owner-only and same-origin.
@@ -36,8 +36,14 @@ whichever skin is picked. It starts empty, and empty means the picked skin exact
   desktop, after `core/skins.css`, the skin package's `skin.css` and `skin-frame.css`. Same specificity wins later
   in the cascade, so its rules sit on top of every skin. The last good copy is cached for the first frame.
 - **Targeting:** `html[data-skin] …` for every skin, `html[data-skin="grove"] …` for one.
-- **Safety:** CSS only (no script). A box without the route (404), an error or a non-CSS answer shows the base
-  skin; a bad rule only drops that rule. `?myskin=off` skips the layer for one load.
+- **Optional behaviour:** `Skins/My skin/skin.js` uses the hook API below, after the selected package script.
+  It runs only after the owner taps **Turn on** in Settings › Look for its exact SHA-256, saved in
+  `wos.myskin.js.ok` on this device. Every edit needs a new owner tap; agents cannot approve it.
+  The shell hashes the fetched bytes and imports those same bytes as a Blob module (no URL re-fetch).
+  No imports/dependencies or banned APIs; the package host handles guards and cleanup, with a toast naming
+  `Skins/My skin/skin.js` after three errors a minute. **Turn off** revokes approval. Never runs in previews.
+- **Safety:** A box without the route (404), an error or a non-CSS answer shows the base
+  skin; a bad rule only drops that rule. `?myskin=off` skips CSS and JS for one load. The shell CSP allows `script-src blob:` for verified modules, not inline scripts or eval.
 - **Settings › Look:** a "My skin" row says what it sits on, with Edit (opens the file in Files) and Reset.
 - **Agents:** asked to "change my skin", an agent edits My skin only, never a skin in this folder
   (Agent Service run instructions and skill say so).
