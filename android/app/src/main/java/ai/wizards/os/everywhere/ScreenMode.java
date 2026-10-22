@@ -126,7 +126,11 @@ final class ScreenMode {
         // The Wizard's screen page, or the bundled copy offline; only that one origin is reachable (OverlayPage).
         OverlayPage screenPage = new OverlayPage("screen.html", true) {
             @Override
-            protected void ready(WebView v, String url) { pageReady = true; sendOpen(); }
+            protected void ready(WebView v, String url) {
+                pageReady = true;
+                sent = false; // a recovered bundled document needs the native screen snapshot again
+                sendOpen();
+            }
         };
         page.setWebViewClient(screenPage);
         root.addView(page, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));

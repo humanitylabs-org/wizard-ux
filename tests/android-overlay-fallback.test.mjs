@@ -51,6 +51,15 @@ test('bundled asset documents embed the native CSP before any executable markup'
   }
 });
 
+test('recovered native hosts replay the active recording and screen snapshot', () => {
+  const screen = readFileSync(join(root, 'android/app/src/main/java/ai/wizards/os/everywhere/ScreenMode.java'), 'utf8');
+  assert.match(screen, /protected void ready[\s\S]*?sent = false;[\s\S]*?sendOpen\(\)/);
+  const side = readFileSync(join(root, 'android/app/src/main/java/ai/wizards/os/assist/WizardSession.java'), 'utf8');
+  assert.match(side, /else if \(capture.listening\(\)\)/);
+  assert.ok(side.includes('W.begin();W.onPaused('));
+  assert.ok(side.includes("W.onSending('recovery')"));
+});
+
 test('real native hosts retain the production deadline and bundled-only lock policy', () => {
   const java = readFileSync(join(root, 'android/app/src/main/java/ai/wizards/os/OverlayPage.java'), 'utf8');
   assert.match(java, /TIMEOUT_MS = 1500/);

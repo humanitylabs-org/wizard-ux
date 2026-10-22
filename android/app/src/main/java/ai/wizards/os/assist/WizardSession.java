@@ -54,6 +54,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
     private WebView web;
     private boolean pageReady;
     private Runnable pending;
+    private boolean capturePaused;
     private boolean wide;
     private int navInset;
     private String heard = "";
@@ -103,6 +104,11 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
                 Runnable p = pending;
                 pending = null;
                 if (p != null) p.run();
+                else if (capture.listening()) {
+                    // Recovery can replace an already-ready remote document mid-recording.
+                    js("W.begin();W.onPaused(" + capturePaused + ")");
+                    if (capture.shotCount() > 0) js("W.onShot(" + capture.shotCount() + ")");
+                } else if (capture.sending()) js("W.onSending('recovery')");
             }
         };
         web.setWebViewClient(surface);
@@ -272,7 +278,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         }
     }
 
-    @Override public void onBegin() { main.removeCallbacks(closeAfterSend); syncAwake(); js("W.begin()"); }
+    @Override public void onBegin() { capturePaused = false; main.removeCallbacks(closeAfterSend); syncAwake(); js("W.begin()"); }
 
     @Override public void onLevel(float level) { js("W.level(" + level + ")"); }
 
@@ -307,7 +313,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
 
     @Override public void onQueued(String why) { js("W.onQueued(" + JSONObject.quote(why) + ")"); }
 
-    @Override public void onPaused(boolean p) { syncAwake(); js("W.onPaused(" + p + ")"); }
+    @Override public void onPaused(boolean p) { capturePaused = p; syncAwake(); js("W.onPaused(" + p + ")"); }
 
     private String delivered;
 
