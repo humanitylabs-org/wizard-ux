@@ -19,8 +19,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        // A `wizard://connect` link while the app runs: show it on the connect screen. Nothing switches until the owner
-        // confirms and the address passes the Wizard check.
+        // A `wizard://connect` link while the app runs: the connect screen connects to it at once. Nothing is saved
+        // unless the address passes the Wizard check.
         if let url = URLContexts.first?.url, WizardAddress.receive(url) {
             WizardViewController.restart(in: window)
             return
