@@ -6,14 +6,22 @@ import vm from 'node:vm'
 const root=new URL('../',import.meta.url)
 const read=p=>readFileSync(new URL(p,root),'utf8')
 
-test('Boomerang is one shared core feature loaded by phone and desktop',()=>{
+test('Boomerang uses one ad-block-safe shared asset in phone and desktop',()=>{
  const phone=read('web/index.html'),desktop=read('web/desktop.html')
- assert.equal((phone.match(/core\/boomerang\.js/g)||[]).length,1)
- assert.equal((desktop.match(/core\/boomerang\.js/g)||[]).length,1)
- assert.match(phone,/core\/boomerang\.css/);assert.match(desktop,/core\/boomerang\.css/)
+ assert.equal((phone.match(/core\/scheduled-reminders\.js/g)||[]).length,1)
+ assert.equal((desktop.match(/core\/scheduled-reminders\.js/g)||[]).length,1)
+ assert.match(phone,/core\/scheduled-reminders\.css/);assert.match(desktop,/core\/scheduled-reminders\.css/)
+ assert.doesNotMatch(phone,/core\/boomerang\.(?:js|css)/)
+ assert.doesNotMatch(desktop,/core\/boomerang\.(?:js|css)/)
+})
+test('selected pin is symmetric on its local axis before one whole-pin rotation',()=>{
+ const chats=read('web/core/chats.js')
+ assert.match(chats,/class="ch-pin-shape" transform="rotate\(45 12 12\)"/)
+ assert.match(chats,/class="ch-pin-head" d="M8 3\.5H16V6\.5H13\.75L12\.75 9\.25H11\.25L10\.25 6\.5H8Z"/)
+ assert.match(chats,/class="ch-pin-shaft" d="M11\.25 8\.75H12\.75L12\.35 18H11\.65Z M11\.65 18H12\.35L12 21Z"/)
 })
 test('picker uses native date/time controls, visible selectable timezone and quick presets',()=>{
- const js=read('web/core/boomerang.js')
+ const js=read('web/core/scheduled-reminders.js')
  assert.match(js,/type="date"/);assert.match(js,/type="time"/);assert.match(js,/data-boom-preset="today"/)
  assert.match(js,/data-boom-preset="tomorrow"/);assert.match(js,/data-boom-preset="week"/)
  assert.match(js,/<select[^>]+name="timezone"/);assert.match(js,/Asia\/Bangkok/)
@@ -21,14 +29,14 @@ test('picker uses native date/time controls, visible selectable timezone and qui
 })
 test('selected wall timezone is persisted as the correct UTC instant',()=>{
  const sandbox={Intl,Date,crypto,document:{addEventListener(){}},fetch:async()=>({ok:true,json:async()=>({reminders:[]})}),setInterval:()=>1};sandbox.window=sandbox
- sandbox.WizConfig={timeZone:()=> 'UTC'};vm.runInNewContext(read('web/core/boomerang.js'),sandbox)
+ sandbox.WizConfig={timeZone:()=> 'UTC'};vm.runInNewContext(read('web/core/scheduled-reminders.js'),sandbox)
  assert.equal(sandbox.WosBoomerang._wallToUtc('2026-10-22','09:00','Asia/Bangkok'),'2026-10-22T02:00:00.000Z')
  assert.equal(sandbox.WosBoomerang._wallToUtc('2026-11-01','09:00','America/New_York'),'2026-11-01T14:00:00.000Z')
 })
 test('shared chats offers whole-thread and exact-message reminders without submitting a run',()=>{
  const js=read('web/core/chats.js')
  assert.match(js,/WosBoomerang/);assert.match(js,/targetKind: 'message'/);assert.match(js,/targetKind: 'thread'/)
- assert.match(js,/data-boom-remind/);assert.doesNotMatch(read('web/core/boomerang.js'),/\/v1\/runs|OUTBOX\.send/)
+ assert.match(js,/data-boom-remind/);assert.doesNotMatch(read('web/core/scheduled-reminders.js'),/\/v1\/runs|OUTBOX\.send/)
 })
 test('thread menu exposes Boomerang separately and leaves Defer unchanged',()=>{
  const js=read('web/core/chats.js')
@@ -43,7 +51,7 @@ test('selected-pin markup exposes an integrated head and shaft instead of a floa
  assert.match(js,/class="ch-pin-shaft"/)
 })
 test('due reminder supports exact context, change, cancel and canonical deep-link restoration',()=>{
- const js=read('web/core/boomerang.js'),links=read('web/core/deeplink.js')
+ const js=read('web/core/scheduled-reminders.js'),links=read('web/core/deeplink.js')
  assert.match(js,/data-boom-open/);assert.match(js,/data-boom-change/);assert.match(js,/data-boom-cancel/)
  assert.match(js,/anchor_at/);assert.match(js,/acknowledge/);assert.match(js,/pendingFor/)
  assert.match(links,/boomerang/);assert.match(links,/WosBoomerang\?\.consume/)
@@ -51,3 +59,4 @@ test('due reminder supports exact context, change, cancel and canonical deep-lin
  assert.doesNotMatch(js,/boomerang-preview|wizard_boomerang_preview/)
  assert.doesNotMatch(js,/openContext\?\.\(r\);await opened/)
 })
+

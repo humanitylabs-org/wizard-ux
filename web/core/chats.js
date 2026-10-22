@@ -197,7 +197,9 @@ window.WizCore.chats = function createChats(H) {
   };
   const STI_LAB = { needs: 'Needs you', check: 'Your call', done: 'Done', fyi: 'FYI', deferred: 'Deferred', approval: 'Needs approval', failed: 'Error' };
   const STI_TIP = { deferred: 'Deferred', needs: 'Needs you', check: 'Your call: see if it is what you meant', done: 'Done', fyi: 'FYI', approval: 'Approval needed', failed: 'Stopped with an error', working: 'Working', offline: 'Offline · will retry', none: 'No status' };
-  const PIN_SVG = '<svg class="ch-pin-svg" viewBox="0 0 24 24" aria-hidden="true"><path class="ch-pin-head" d="M15 3.5 20.5 9l-4.2 1.4-2.1 3.6-4.2-4.2 3.6-2.1L15 3.5Z"/><path class="ch-pin-shaft" d="m11.3 12.6 2.1 2.1-2.4 1.1-4.8 4.8-1.4-1.4 4.8-4.8 1.7-1.8Z"/></svg>';
+  // Draw on a vertical centreline first, then rotate the complete pin once. This keeps the red head
+  // perfectly symmetric and connected while the black needle stays narrow and tapered.
+  const PIN_SVG = '<svg class="ch-pin-svg" viewBox="0 0 24 24" aria-hidden="true"><g class="ch-pin-shape" transform="rotate(45 12 12)"><path class="ch-pin-head" d="M8 3.5H16V6.5H13.75L12.75 9.25H11.25L10.25 6.5H8Z"/><path class="ch-pin-shaft" d="M11.25 8.75H12.75L12.35 18H11.65Z M11.65 18H12.35L12 21Z"/></g></svg>';
   // Loading placeholders: quiet rows/bubbles shaped like the real ones, with a soft shimmer.
   function skelRows(label) {
     const row = (w1, w2) => `<div class="ch-skel-row"><i class="ch-sk av"></i><span class="bd"><i class="ch-sk" style="width:${w1}%"></i><i class="ch-sk sm" style="width:${w2}%"></i></span></div>`;
