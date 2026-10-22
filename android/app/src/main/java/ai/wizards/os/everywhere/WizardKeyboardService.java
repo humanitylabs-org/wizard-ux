@@ -261,20 +261,49 @@ public class WizardKeyboardService extends AccessibilityService {
         if (target == null) return false;
         android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
                 getSystemService(CLIPBOARD_SERVICE);
+        cancelClipRestore();
         android.content.ClipData oldClip = clipboard.getPrimaryClip();
         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Wizard", text));
         boolean pasted = target.performAction(AccessibilityNodeInfo.ACTION_PASTE);
-        if (oldClip != null) {
+        // A failed paste leaves the words on the clipboard as the newest entry. Restoring the old clip
+        // afterwards buried the transcript under it in the keyboard's clipboard history.
+        if (ClipRestore.shouldRestore(pasted, oldClip != null)) {
             final android.content.ClipData saved = oldClip;
-            main.postDelayed(() -> {
-                try { clipboard.setPrimaryClip(saved); } catch (Exception ignored) {}
-            }, 500);
-        } else {
-            main.postDelayed(() -> {
-                try { clipboard.setPrimaryClip(android.content.ClipData.newPlainText("", "")); } catch (Exception ignored) {}
-            }, 500);
+            final String ours = text;
+            pendingRestore = () -> {
+                pendingRestore = null;
+                try {
+                    if (ClipRestore.stillOurs(primaryText(clipboard), ours)) clipboard.setPrimaryClip(saved);
+                } catch (Exception ignored) {}
+            };
+            main.postDelayed(pendingRestore, 500);
         }
         return pasted;
+    }
+
+    private volatile Runnable pendingRestore;
+
+    private void cancelClipRestore() {
+        Runnable r = pendingRestore;
+        pendingRestore = null;
+        if (r != null) main.removeCallbacks(r);
+    }
+
+    private static String primaryText(android.content.ClipboardManager cb) {
+        android.content.ClipData c = cb.getPrimaryClip();
+        if (c == null || c.getItemCount() == 0 || c.getItemAt(0).getText() == null) return null;
+        return c.getItemAt(0).getText().toString();
+    }
+
+    /**
+     * Puts dictated words on the clipboard as the newest entry, cancelling any pending restore of an older clip
+     * so nothing lands on top of them.
+     */
+    public static void copyAsLatest(android.content.Context ctx, String text) {
+        WizardKeyboardService k = get();
+        if (k != null) k.cancelClipRestore(); // Handler.removeCallbacks is safe from any thread
+        android.content.ClipboardManager cb = ctx.getSystemService(android.content.ClipboardManager.class);
+        cb.setPrimaryClip(android.content.ClipData.newPlainText("Wizard", text));
     }
 
     /**
