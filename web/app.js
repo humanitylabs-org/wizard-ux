@@ -1492,7 +1492,7 @@
   }
   function renderFrameCore(w, a) {
     const frameUrl = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
-    return `<div class="frame-wrap">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
+    return `<div class="frame-wrap">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe"${window.WizBrowserBoundary?.enabled ? ' ' + window.WizBrowserBoundary.frameAttributes() : ''} ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
       <div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
   }
   // A refused frame lands on an unreadable error document: show the fallback card.
@@ -1553,6 +1553,7 @@
   function watchFrames(root) {
     $$('iframe.appframe', root).forEach(f => {
       if (f._watched) return; f._watched = true;
+      if (window.WizBrowserBoundary?.enabled) { f._appDetach = window.WizBrowserBoundary.attach(f); return; }
       const audioId=f.closest('.win')?.dataset.win;
       if(W[audioId]?.appId === 'wizard-music') audioFrames.add(f);
       // servicesAs: a second view of an installed app (Video Editor's Feedback) gets that app's Back/services.
@@ -3611,6 +3612,10 @@
   const watchers = new Set();
   function hostedBack(f) {
     const frame = winEl(f.id)?.querySelector('iframe');
+    if (window.WizBrowserBoundary?.enabled) {
+      window.WizBrowserBoundary.back(frame, () => backStep(f.id));
+      return 'pending';
+    }
     const result = window.WizAppServices?.back(frame);
     return result || 'notReady';
   }

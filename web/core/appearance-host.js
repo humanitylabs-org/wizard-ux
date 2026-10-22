@@ -75,6 +75,10 @@
   }
   function forget(f) { frames.delete(f); f.closest('.win')?.classList.remove('wz-themed'); }
   function sync() {
+    if (window.WizBrowserBoundary?.enabled) {
+      for (const f of winFrames()) window.WizBrowserBoundary.theme(f, { ...context(f), revision: ++revision });
+      return;
+    }
     for (const f of [...frames.keys()]) {
       if (!f.isConnected) { frames.delete(f); continue; }
       let doc = null; try { doc = f.contentDocument; } catch (e) {}
@@ -84,7 +88,7 @@
   }
   function queue(resetTokens) {
     if (resetTokens) tokensCache = null;
-    if (scheduled || !frames.size) return; scheduled = true;
+    if (scheduled || (!frames.size && !window.WizBrowserBoundary?.enabled)) return; scheduled = true;
     queueMicrotask(() => { scheduled = false; sync(); });
   }
 
@@ -111,6 +115,7 @@
     // Skin package CSS may arrive after data-skin changed. Its color-scheme must
     // invalidate the cached context too, or light apps receive dark UA canvases.
     if (f?.tagName === 'LINK' && f.rel === 'stylesheet') { queue(true); return; }
+    if (f?.tagName === 'IFRAME' && window.WizBrowserBoundary?.enabled) { queue(true); return; }
     if (f && f.tagName === 'IFRAME' && frames.has(f)) { let doc = null; try { doc = f.contentDocument; } catch (er) {} if (doc !== frames.get(f).doc) forget(f); }
   }, true);
 
