@@ -1,3 +1,4 @@
+// Run via QA_EMPTY_ONLY=1 QA_OUT=<private dir> node qa-voice-custody-callers.cjs (not directly).
 const path=require('node:path');
 module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
  for(const desktop of [false,true]){
@@ -31,7 +32,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
  // The screenshot's held state is created by local/interrupt recovery, not empty STT.
  for(const desktop of [false,true]){
   const label=desktop?'desktop':'phone',f=await boot(desktop);
-  const open=async sessionId=>{await f.p.evaluate(({wid,sessionId})=>{const A=window.__wos||window.__wux;A.chats.openChat(wid,sessionId);A.focusWin?.(wid);},{wid:f.wid,sessionId});await sleep(300);};
+  const open=async sessionId=>{await f.p.evaluate(({wid,sessionId})=>{const A=window.__wos||window.__wux;A.chats.openChat(wid,sessionId);A.focusWin?.(wid);if(A.goDesk)A.goDesk(A.desks.findIndex(d=>d.wins.includes(wid)),true);},{wid:f.wid,sessionId});await sleep(300);};
   const add=async(sessionId,intent='auto')=>f.p.evaluate(async({sessionId,intent,model,provider})=>{
    const it=await WosOutbox.stage({kind:'reply',sessionId,intent,model,provider,audio:new Blob(['held original audio'],{type:'audio/webm'})});
    if(intent!=='command')await WosOutbox.transition(it.id,'held','Original kept after local routing');return it.id;

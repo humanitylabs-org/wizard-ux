@@ -90,8 +90,10 @@ test('Reset empties My skin through the Agent Service and removes the layer', as
   assert.equal(b.style(), null);
 });
 
-test('My skin is CSS only, loads last in both shells, and is listed as a shared module', () => {
+test('CSS stays non-executable, loads last in both shells, and scripts use the shared host', () => {
   assert.doesNotMatch(SRC, /\bimport\(|\beval\(|new Function|innerHTML|createElement\('script'\)/);
+  assert.match(SRC, /crypto\.subtle\.digest\('SHA-256', bytes\)/);
+  assert.match(SRC, /host\.loadPersonal\(v\.bytes/);
   for (const f of ['web/index.html', 'web/desktop.html']) {
     const head = read(f).split('</head>')[0];
     const at = head.indexOf('core/my-skin.js');
@@ -104,7 +106,7 @@ test('My skin is CSS only, loads last in both shells, and is listed as a shared 
 
 test('Settings › Look offers My skin with Edit and Reset', () => {
   const s = read('web/core/settings.js');
-  assert.match(s, /<b>My skin<\/b>/);
+  assert.match(s, /<b>My custom skin<\/b>/);
   assert.match(s, /data-myskin="edit"/);
   assert.match(s, /data-myskin="reset"/);
   assert.match(s, /On top of \$\{base\}/);

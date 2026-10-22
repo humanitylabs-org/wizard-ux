@@ -7,7 +7,7 @@ The Live Mode feel (approved by James, 9 Oct 2026) as one small, dependency-free
 - `/wizard-os-home/motion/wizard-motion.css`
 - Live demo of every primitive: `/wizard-os-home/motion/`
 
-**Source:** `/home/telos/apps/wizard-os-home/web/motion/` (git: `/home/telos/apps/wizard-os-home`). Same-origin Wizard PWAs can load it by URL; other surfaces (a native lock screen, WebView) copy the two files and keep the version in sync.
+**Source:** `$PWD/web/motion/` (git: `$PWD`). Same-origin Wizard PWAs can load it by URL; other surfaces (a native lock screen, WebView) copy the two files and keep the version in sync.
 
 ```html
 <link rel="stylesheet" href="/wizard-os-home/motion/wizard-motion.css">

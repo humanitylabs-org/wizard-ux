@@ -1,5 +1,5 @@
 // Read-only browser regression: actual catalog, service workers off, all writes intercepted.
-const {chromium}=require('playwright-core');
+const {chromium}=require('./qa-playwright.cjs');
 const fs=require('node:fs'), path=require('node:path'), assert=require('node:assert/strict');
 const {execFileSync}=require('node:child_process');
 (async()=>{

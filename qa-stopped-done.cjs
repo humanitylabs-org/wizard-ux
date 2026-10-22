@@ -4,12 +4,12 @@
 //
 // Fixture threads merged into the real session list; EVERY write is intercepted (zero reach Archimedes).
 // Usage: node tools/qa-origin.cjs 9484 <tree>/web &  then  node qa-orb-done.cjs [url]
-let pw; try { pw = require('playwright-core'); } catch (e) { pw = require('/home/telos/node_modules/playwright'); }
+const pw = require('./tools/qa-playwright.cjs');
 const { chromium } = pw;
 const fs = require('fs'), path = require('path');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9484/wizard-os-home/';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/wos-done-stopped-shots';
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const OUT = process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath('wos-done-stopped-shots');
+const EXEC = process.env.QA_CHROME || (process.env.QA_CHROME || undefined);
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra === '' ? '' : JSON.stringify(extra).slice(0, 500)); } };

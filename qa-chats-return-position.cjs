@@ -1,7 +1,7 @@
 // Real-origin browser regression; all mutations fulfilled locally, SW blocked.
-const { chromium } = require('playwright-core');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const OUT = process.env.QA_OUT || path.join(__dirname, 'qa-return-position');
 const EXEC = process.env.QA_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';

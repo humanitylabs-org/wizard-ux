@@ -4,24 +4,25 @@ Real native input throughout (adb `input swipe/tap`, OS confirmation, launcher i
 the Wisdom row and the Add button really are, because the WebView accessibility tree reports stale bounds after the
 launcher re-lays out (release smoke r5-r7: tree said y=1027 or 205, screenshot showed y~1850).
 Read-only on the live Wizard: opens Wisdom's home view only.
-Usage on Thales: QA_OUT=/Volumes/ThalesMedia/... python3 tools/qa_home_screen_pin_debug.py <AndroidBuilds/jobs/JOB/receipt.json>
+Usage on Thales: QA_OUT=$WIZARD_WORK_ROOT/... python3 tools/qa_home_screen_pin_debug.py <AndroidBuilds/jobs/JOB/receipt.json>
 """
 import json, os, pathlib, re, socket, sys, time
 import xml.etree.ElementTree as E
+from qa_paths import java_home
 P = pathlib.Path
-if sys.platform != 'darwin' or 'thales' not in socket.gethostname().lower():
+if sys.platform != 'darwin' or not os.environ.get('WIZARD_WORK_ROOT'):
     raise SystemExit('Thales-only emulator QA')
 sys.path.insert(0, str(P(__file__).resolve().parent))
 from qa_aa_lib import Emu, Page, wait, ADB
 
 PKG = 'ai.wizards.os.qa'
 build = json.loads(P(sys.argv[1]).read_text())
-if build.get('status') != 'ok' or build.get('host') != 'thales': raise SystemExit('bad receipt')
+if build.get('status') != 'ok' or build.get('host') != os.environ.get('WIZARD_BUILD_HOST', socket.gethostname()): raise SystemExit('bad receipt')
 a = next(x for x in build['artifacts'] if x.get('aapt2', {}).get('package') == PKG)
 apk = P(build['job']) / 'source' / a['path']
 out = P(os.environ['QA_OUT']); out.mkdir(parents=True, exist_ok=True)
 emu = Emu(out, 5602, PKG, dns=os.environ.get('QA_DNS', '100.100.100.100'))
-emu.env['JAVA_HOME'] = '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home'
+emu.env['JAVA_HOME'] = java_home()
 emu.env['PATH'] = emu.env['JAVA_HOME'] + '/bin:' + emu.env['PATH']
 checks = []
 def check(name, cond, detail=None):

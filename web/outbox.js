@@ -11,7 +11,7 @@
   const TRANSCRIBE_TIMEOUT_MS = 195000;
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
-  const conversationWork = new Map(), transcriptWork = new Map();
+  const conversationWork = new Map(), transcriptWork = new Map(), removeErrors = new Map();
   // One authority check for explicit retry and automatic delivery. Terminal/ambiguous
   // custody is not a queue. Empty speech requires a per-recording choice, never bulk.
   function eligible(it, states) {
@@ -97,6 +97,9 @@
   }
   async function persist(it) {
     if (quarantine.has(it.id)) return it;
+    // A live recording rewrites its audio every second. Once it is safely stored, those rewrites change nothing
+    // anyone shows, so they must not repaint every open chat (the screen looked like it kept refreshing).
+    const quiet = it.state === 'capturing' && it.durable === true && !it.storageError;
     const copy = { ...it }; delete copy.durable; delete copy.storageError;
     try {
       await open(); await tx('readwrite', s => s.put(copy));
@@ -112,7 +115,8 @@
         it.durable = true;
       } catch (_) { /* Keep the entire item and Blob in RAM; the notice stays until custody is durable. */ }
     }
-    emit(); return it;
+    if (!(quiet && it.durable === true && !it.storageError)) emit();
+    return it;
   }
   const localCompletions = new Set();
   function put(it) {
@@ -337,7 +341,8 @@
     const fileIds = [...new Set((it.files || []).map(f => f.id).filter(Boolean))];
     if (fileIds.length > 8) throw new HttpError(409, 'Too many attachments including the recording · originals kept');
     const aq = it.agent ? `?agent=${encodeURIComponent(it.agent)}` : '';
-    const input = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
+    const words = it.text || `Please use the attached ${fileIds.length === 1 ? 'file' : 'files'}.`;
+    const input = it.reply && window.WosChat?.reply ? window.WosChat.reply.attach(words, it.reply) : words;
     // Freeze an exact-run steer separately from new-run admission. This endpoint has NO
     // durable idempotency ledger: persist intent before dispatch and never replay ambiguity.
     if (it.steerRunId) {
@@ -368,7 +373,9 @@
         it.steerDispatch = rejected ? 'rejected' : 'started';
         await put(it); // crash before reconciliation must never replay ambiguity
         let terminal = false;
-        if (e.status === 409 && e.code === 'run_not_accepting_steer') {
+        // Hermes forgets a finished run after a while and answers 404 run_not_found; the run lookup below
+        // still proves it terminal in this thread, so the message becomes a same-thread turn instead of failing.
+        if ((e.status === 409 && e.code === 'run_not_accepting_steer') || (e.status === 404 && e.code === 'run_not_found')) {
           try {
             const r = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerTarget)}` + aq);
             const run = await r.json();
@@ -454,6 +461,7 @@
     }
     timer = setTimeout(pump, ms);
   }
+  const replyOf = o => window.WosChat?.reply?.clean(o?.reply) || null;
   const newSessionId = () => `wizard_${now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
   function make(o) {
     return { id: o.nativeId ? 'wos-native-' + o.nativeId : 'wos-' + crypto.randomUUID(), createdAt: now(), attempts: 0, state: 'preparing',
@@ -461,7 +469,9 @@
       kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
       audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
-      pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false };
+      pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false,
+      // A Notifications Reply: the item, framed after his words only in the message that is delivered (deliver()).
+      ...(replyOf(o) ? { reply: replyOf(o) } : {}) };
   }
   function notice() {
     const troubled = [...items.values()].filter(it => !quarantine.has(it.id) && it.state !== 'sent' && (it.storageError || !it.durable));
@@ -609,7 +619,7 @@
         if (localCompletions.has(held.id) || held.localCompleted || held.state === 'sent' || held.body || held.steerBody || quarantine.has(held.id)) return held;
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
-        Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid,
+        Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),
           pendingBlobs: { ...(it.pendingBlobs || {}), ...keepPending(o.files) } });
       }
       // Only the delivery caller (including an explicit Send-to-agent choice) may
@@ -642,7 +652,47 @@
     },
     get(id) { return items.get(id) || null; },
     landed(id) { const it = items.get(id); if (it?.state === 'sent') del(id); },
-    async remove(id) { const it = items.get(id); if (!it || quarantine.has(id) || ['sending', 'transcribing', 'processing'].includes(it.state)) return false; await del(id); return !!items.get(id)?.durable; },
+    async remove(id) {
+      // Re-check device storage first: a recovery that clears quarantine makes this an ordinary delete.
+      if (quarantine.has(id) && !recovered) await load().catch(() => {});
+      const it = items.get(id); removeErrors.delete(id);
+      if (!it) { removeErrors.set(id, 'not a recording this page holds'); return false; } // never claim an unknown id
+      // A recording with nothing left to deliver: a sent message's leftover audio, or a take with no delivery intent.
+      const inert = it.state === 'sent' || (['capture', 'dictation'].includes(it.kind) && !it.deliveryRequested && !it.body && !it.steerBody && !it.steerDispatch);
+      // Busy states only block while work is really running in this page; a state left over from an interrupted
+      // transcription or send (nothing running) must not make an inert take undeletable.
+      const active = transcriptWork.has(id) || conversationWork.has(id);
+      if (['sending', 'transcribing', 'processing'].includes(it.state) && (!inert || active)) { removeErrors.set(id, 'it is still being ' + (it.state === 'transcribing' ? 'transcribed' : 'sent')); return false; }
+      if (quarantine.has(id) && !inert) { removeErrors.set(id, 'device storage isn’t answering yet'); return false; }
+      if (quarantine.has(id)) {
+        // Quarantine stops a fallback copy from replaying or overwriting an unreadable primary receipt. The owner's
+        // explicit Delete of a recording that never had delivery intent (cancelled/interrupted take, dictation) can
+        // do neither: it writes a terminal tombstone, which wins over every other copy on every future recovery.
+        // Messages with delivery intent stay quarantined until storage is verified (James, 21 Oct 2026: ten
+        // recovered takes refused Delete with "Deletion not saved" while the phone's IndexedDB was unavailable).
+        quarantine.delete(id);
+      }
+      try { await del(id); } catch (e) { removeErrors.set(id, String(e?.message || e)); }
+      if (items.get(id)?.durable && !items.get(id)?.storageError) return true;
+      if (!inert) { removeErrors.set(id, items.get(id)?.storageError || removeErrors.get(id) || 'device storage refused the write'); return !!items.get(id)?.durable; }
+      // Writes are failing (full or broken device storage, 21 Oct 2026: Delete still refused after the quarantine fix).
+      // Erase every stored copy instead: deleting frees space where a write cannot. The in-memory tombstone keeps the
+      // take from being re-imported this session; with no stored copy left, nothing can bring it back after a reload.
+      let erased = false;
+      try { await open(); await tx('readwrite', s => s.delete(id)); erased = true; } catch (e) { removeErrors.set(id, String(e?.message || e)); }
+      let fallbackClear = true;
+      try {
+        localStorage.removeItem(PREFIX + id);
+        const legacy = JSON.parse(localStorage.getItem(LS) || '[]');
+        if (legacy.some(x => x?.id === id)) localStorage.setItem(LS, JSON.stringify(legacy.filter(x => x?.id !== id)));
+      } catch (_) { fallbackClear = false; }
+      const marker = items.get(id); if (marker) await put(marker).catch(() => {}); // space was just freed: retry the tombstone
+      emit();
+      if ((erased && fallbackClear) || (items.get(id)?.durable && !items.get(id)?.storageError)) { removeErrors.delete(id); return true; }
+      if (!removeErrors.has(id)) removeErrors.set(id, items.get(id)?.storageError || 'device storage refused the delete');
+      return false;
+    },
+    removeError(id) { return removeErrors.get(id) || ''; },
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     onSent(fn) { sentHooks.add(fn); return () => sentHooks.delete(fn); },
     notice, paintNotice, pump, load, bounded, TRANSCRIBE_TIMEOUT_MS, _items: items, AUTO_TRIES, BACKOFF,

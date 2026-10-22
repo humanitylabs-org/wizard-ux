@@ -1,6 +1,6 @@
 // QA: desk sigils in the dock + the ＋ new desk (James, 12 Oct 2026).
 // Usage: node qa-desk-sigils.cjs [origin=http://127.0.0.1:9381/wizard-os-home/]   (every write is intercepted)
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:9381/wizard-os-home/';
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });

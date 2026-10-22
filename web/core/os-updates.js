@@ -6,8 +6,13 @@
  *
  * Same path as the Store's Get: `../store-install/_updates` is the App Manager's owner-only listener behind
  * Tailscale Serve (owner login, the shell's own Origin, JSON + X-Wizard-Store). No token reaches the browser.
- *   GET                       {mode, chosen, installed, latest, update_available, unpinned, checked, installing}
+ *   GET                       {mode, chosen, installed, latest, update_available, unpinned, checked, installing,
+ *                              interrupted (the last update was cut short, e.g. by a reboot; it is retried)}
  *   POST {"mode":"auto"|"ask"} the owner's choice (kept across installer reruns)
+ *   POST {"channel":"stable"|"latest"} release channel (DECISIONS #75): stable = promoted releases (default),
+ *                              latest = every release, for testers. GET then also returns {channel, stable};
+ *                              `latest` is this box's channel release. Automatic installs stable only, either way.
+ *                              An App Manager without channels returns no `channel`, so the picker stays hidden.
  *   POST {"action":"apply"}    start the update now
  * A box whose App Manager has no such route (older, or no Serve mount) shows nothing.
  *
@@ -51,6 +56,10 @@
     if (s.installing) return ['Updating…', 'Takes 10–20 minutes · Wizard reconnects by itself'];
     if (s.unpinned) return ['Updated by hand', 'This Wizard isn’t on a release, so updates leave it alone'];
     const have = s.installed ? `Wizard OS ${s.installed}` : 'Wizard OS';
+    // The last update was cut short (the box restarted mid-update): the App Manager has cleared it so it can rerun.
+    if (s.interrupted && s.update_available) return s.mode === 'auto'
+      ? ['Update interrupted · retrying', `${have} → ${s.latest} · tries again tonight, or tap Update now`]
+      : ['Update interrupted', `${have} → ${s.latest} · tap Update now to try again`];
     if (s.update_available) return ['Update available', `${have} → ${s.latest}`];
     if (!s.checked) return [have, 'Couldn’t check for updates · trying again later'];
     return [have, 'Up to date'];
@@ -60,13 +69,28 @@
     if (Date.now() - at > FRESH) load();
     const [title, sub] = summary(st), auto = st.mode === 'auto';
     const opt = (key, title, sub, on) => `<button class="st-row" data-osu="${key}" role="radio" aria-checked="${on}" ${busy ? 'disabled' : ''}><span class="st-ic">${key === 'auto' ? '↻' : '?'}</span><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span><span class="st-go">${on ? '●' : '○'}</span></button>`;
+    const ch = ['stable', 'latest'].includes(st.channel) ? st.channel : '';
+    const copt = (key, title, sub) => `<button class="st-row" data-osu="ch-${key}" role="radio" aria-checked="${ch === key}" ${busy ? 'disabled' : ''}><span class="st-ic">${key === 'stable' ? '◆' : '◇'}</span><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span><span class="st-go">${ch === key ? '●' : '○'}</span></button>`;
+    const channel = ch ? `<div role="radiogroup" aria-label="Release channel" style="margin-top:8px">${copt('stable', 'Stable (recommended)', 'Tested releases only')}${copt('latest', 'Latest (every release, for testers)', auto ? 'Automatic installs stable only · Update now takes the newest' : 'Update now takes the newest release')}</div>` : '';
     const now = st.update_available && !st.installing && !st.unpinned
       ? `<button class="st-wide" data-osu="apply" ${busy ? 'disabled' : ''}>${busy === 'apply' ? 'Starting…' : 'Update now'}</button>` : '';
-    return `<div class="st-group" data-osu-group><h4>Updates</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b data-osu-title>${esc(title)}</b><small>${esc(sub)}</small></span></div>${now ? `<div style="margin:0 0 8px">${now}</div>` : ''}<div role="radiogroup" aria-label="Updates">${opt('auto', 'Automatic', 'New releases install overnight, never during a chat', auto)}${opt('ask', 'Ask me', 'Shows Update here · nothing installs by itself', !auto)}</div></div>`;
+    return `<div class="st-group" data-osu-group><h4>Updates</h4><div class="st-row static"><span class="st-ic">◇</span><span class="st-tx"><b data-osu-title>${esc(title)}</b><small>${esc(sub)}</small></span></div>${now ? `<div style="margin:0 0 8px">${now}</div>` : ''}<div role="radiogroup" aria-label="Updates">${opt('auto', 'Automatic', 'New releases install overnight, never during a chat', auto)}${opt('ask', 'Ask me', 'Shows Update here · nothing installs by itself', !auto)}</div>${channel}</div>`;
+  }
+  function pick(chan, ctx) {
+    if (!['stable', 'latest'].includes(chan) || chan === st.channel) return true;
+    busy = 'ch'; ctx?.render?.(); ctx?.haptic?.(8);
+    post({ channel: chan }).then(d => {
+      st = valid(d) ? d : { ...st, channel: chan };
+      ctx?.toast?.('✓', chan === 'latest' ? 'Channel: Latest · Automatic still installs stable only' : 'Channel: Stable', 2200);
+      at = Date.now();
+    }).catch(e => ctx?.toast?.('!', e.message || 'Couldn’t reach the App Manager', 2600))
+      .finally(() => { busy = ''; changed(); });
+    return true;
   }
   function act(el, ctx) {
     const b = el.closest('[data-osu]'); if (!b || busy || !st) return !!b;
     const what = b.dataset.osu;
+    if (what.startsWith('ch-')) return pick(what.slice(3), ctx);
     if ((what === 'auto' || what === 'ask') && what === st.mode && st.chosen) return true;
     busy = what; ctx?.render?.(); ctx?.haptic?.(8);
     const body = what === 'apply' ? { action: 'apply' } : { mode: what };

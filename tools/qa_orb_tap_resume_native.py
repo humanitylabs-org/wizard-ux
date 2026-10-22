@@ -2,7 +2,7 @@
 """Thales-only native orb tap/resume acceptance against an ALREADY BUILT debug APK.
 
 Usage: python3 tools/qa_orb_tap_resume_native.py DEBUG_RECEIPT OUT
-OUT must be a new directory under /Volumes/ThalesMedia/AndroidBuilds.
+OUT must be a new directory under the worker build root ($ANDROID_BUILDS_ROOT).
 Uses the inherited WIZARD_HEAVY_LOCK_FD or acquires worker.lock itself. No build.
 All traffic goes to a loopback fake; no owner configuration or private audio.
 
@@ -34,7 +34,7 @@ import urllib.request
 import uuid
 
 P = pathlib.Path
-BASE = P('/Volumes/ThalesMedia/AndroidBuilds')
+BASE = P(os.environ.get('ANDROID_BUILDS_ROOT') or P.home() / 'AndroidBuilds')  # worker-local build root
 SDK = P('/opt/homebrew/share/android-commandlinetools')
 PKG = 'ai.wizards.os.qa'
 HELPERS = {'Fake', 'Page', 'top', 'shot', 'ui', 'tap_text', 'bubble', 'controls',
@@ -178,11 +178,23 @@ class Suite:
     def tap(self, point):
         self.sx('input tap %d %d' % tuple(point))
 
+    def settled(self, read):
+        # A window's frame is reported before it is laid out and animated in; tapping that first
+        # frame lands on whatever is underneath (r6 opened the launcher's YouTube icon). Tap only a
+        # non-empty frame that reads the same twice, 300 ms apart.
+        def stable():
+            a = read()
+            if not a or a[2] - a[0] < 8 or a[3] - a[1] < 8:
+                return None
+            time.sleep(.3)
+            return a if read() == a else None
+        return self.wait(stable)
+
     def orb(self):
-        self.tap(self.h['mid'](self.wait(self.h['bubble'])))
+        self.tap(self.h['mid'](self.settled(self.h['bubble'])))
 
     def control(self, name):
-        self.tap(self.h['mid'](self.wait(lambda: self.h['controls']().get(name))))
+        self.tap(self.h['mid'](self.settled(lambda: self.h['controls']().get(name))))
 
     def page(self, match):
         pg = self.h['Page'](match=match, fetch=False)
@@ -255,6 +267,10 @@ class Suite:
         self.sh('say', '-o', self.out / 'speech.aiff', 'This is a synthetic Wizard orb resume test.')
         self.sh('afconvert', '-f', 'm4af', '-d', 'aac', self.out / 'speech.aiff', self.out / 'speech.m4a')
         self.sh(self.adb, '-s', self.serial, 'push', self.out / 'speech.m4a', '/data/local/tmp/qa_voice.m4a')
+        # A fresh Google image's preinstalled apps raise permission dialogs over the overlay; the
+        # suite's taps must reach Wizard's windows, so keep them out of this throwaway guest.
+        for noisy in ('com.google.android.youtube', 'com.google.android.apps.youtube.music'):
+            self.sx(f'pm disable-user --user 0 {noisy} >/dev/null 2>&1; true')
         self.sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity')
         self.home = self.page('wizard-os-home')
         self.wait(lambda: self.home.ev('!!window.__wos'))
@@ -343,9 +359,20 @@ class Suite:
         self.sx('am start -W -a android.intent.action.INSERT -t vnd.android.cursor.dir/contact')
         self.wait(lambda: self.h['tap_text']('^(First name|Name)$'))
         self.wait(lambda: 'mInputShown=true' in self.sx('dumpsys input_method'))
-        # UIAutomator temporarily suspends accessibility; wait for it to rebind.
-        self.wait(lambda: 'WizardKeyboardService' in '\n'.join(
-            l for l in self.sx('dumpsys accessibility').splitlines() if 'Bound services' in l), 20)
+        # UIAutomator temporarily suspends accessibility and does not always rebind it; re-enable the
+        # service (the same settings an owner toggles) until Android reports it bound again.
+        def bound():
+            return 'WizardKeyboardService' in '\n'.join(
+                l for l in self.sx('dumpsys accessibility').splitlines() if 'Bound services' in l)
+        for _ in range(4):
+            try:
+                self.wait(bound, 6)
+                break
+            except AssertionError:
+                self.sx('settings put secure enabled_accessibility_services ""')
+                time.sleep(.5)
+                self.sx(f'settings put secure enabled_accessibility_services {PKG}/ai.wizards.os.everywhere.WizardKeyboardService')
+        self.wait(bound, 6)
         self.wait(lambda: self.floating.ev("S.mode==='type'"))
         self.stage()
         before, runs, transcribes = self.submissions(), len(self.state['runs']), self.state['transcribe']

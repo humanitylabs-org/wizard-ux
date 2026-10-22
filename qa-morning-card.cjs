@@ -2,9 +2,9 @@
 // Usage: node qa-morning-card.cjs [origin=http://127.0.0.1:18878/wizard-os-home/]
 // Needs an origin that serves the shell plus /morning/ (Morning app). /wizard/* writes are fulfilled 403 here.
 // Morning step writes are intercepted and answered from a local model, so James's real day is untouched.
-const { chromium } = require('playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const URL_ = process.argv[2] || 'http://127.0.0.1:18878/wizard-os-home/';
-const OUT = process.env.QA_OUT || '/home/telos/.hermes/cache/scratch/morning-stack/qa';
+const OUT = process.env.QA_OUT || require('./tools/qa-paths.cjs').workPath('morning-stack/qa');
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('PASS', m); } else { fail++; console.log('FAIL', m); } };
 (async () => {

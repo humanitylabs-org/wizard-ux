@@ -9,13 +9,13 @@
 //   6. a voice recording whose transcription fails is kept and sent (transcribed) later;
 //   7. zero writes reach the real Wizard.
 // QA_WEB_DIR=<worktree> (default: this dir).
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
+const RESOLVE = process.env.QA_RESOLVE || '';
 const WEB = process.env.QA_WEB_DIR || __dirname;
 const OUT = process.env.QA_OUT || path.join(__dirname, 'qa-live');
-const EXEC = process.env.QA_CHROME || '/home/telos/.local/bin/google-chrome';
+const EXEC = process.env.QA_CHROME || (process.env.QA_CHROME || undefined);
 let pass = 0, fail = 0;
 const ok = (c, name, extra = '') => { if (c) { pass++; console.log('PASS', name); } else { fail++; console.log('FAIL', name, extra); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));

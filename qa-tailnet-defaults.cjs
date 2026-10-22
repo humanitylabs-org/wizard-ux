@@ -37,5 +37,5 @@ for (const [name, variable] of [
   ok(text.includes(variable+' is required'),name+': missing origin has an explicit error');
 }
 const parity=fs.readFileSync(path.join(__dirname,'tools/qa_native_parity.py'),'utf8');
-ok(parity.includes('ping -c 1 -W 2 wizard.tailc0f369.ts.net'),'native parity reachability probe uses tailnet host');
+ok(parity.includes('ping -c 1 -W 2 {QA_ORIGIN_HOST}'), 'native parity reachability probe uses configured origin host');
 console.log(`${pass} passed, ${fail} failed`);process.exit(fail?1:0);

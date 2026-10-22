@@ -1,10 +1,10 @@
-// Home hat regression. Run only on Thales /Volumes/ThalesMedia, under worker.lock.
+// Home hat regression. Run only on Thales $WIZARD_WORK_ROOT, under worker.lock.
 // No shell asset overrides; real GETs, every browser write rejected. Outbox observations
 // are explicit test sinks, never agent admissions. Baseline mode proves new expectations red.
 const fs=require('fs'),path=require('path'),os=require('os'),crypto=require('crypto');
-const {chromium}=require(process.env.PLAYWRIGHT_PATH);
+const {chromium}=require('./tools/qa-playwright.cjs');
 const BASE=process.argv[2],OUT=process.env.QA_OUT;
-if(!BASE||!OUT||!OUT.startsWith('/Volumes/ThalesMedia/')||os.hostname().toLowerCase().indexOf('thales')<0)throw Error('Thales evidence placement required');
+if(!BASE||!OUT||!require('./tools/qa-paths.cjs').inWorkRoot(OUT)||!process.env.WIZARD_WORK_ROOT)throw Error('Thales evidence placement required');
 fs.mkdirSync(OUT,{recursive:true});
 const cases=[],errors=[],writes=[],assets={},screenshots=[],networkFailures=[];let lastPage;
 const check=(value,name,detail)=>{cases.push({name,pass:!!value,...(detail===undefined?{}:{detail})});console.log(value?'PASS':'FAIL',name,detail===undefined?'':JSON.stringify(detail));};

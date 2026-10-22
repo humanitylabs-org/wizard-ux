@@ -15,7 +15,7 @@ import time
 import xml.etree.ElementTree as ET
 
 SDK = Path('/opt/homebrew/share/android-commandlinetools')
-BASE = Path('/Volumes/ThalesMedia/AndroidBuilds')
+BASE = Path(os.environ.get('ANDROID_BUILDS_ROOT') or Path.home() / 'AndroidBuilds')  # worker-local build root
 
 def main():
     if sys.platform != 'darwin':

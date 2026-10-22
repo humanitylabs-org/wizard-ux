@@ -2,10 +2,10 @@
 // Back in a Legacy thread must return to its thread list, and only a Back at the app's own root may take the
 // shell step (full screen → tile → Home). Before the fix every press said "You're home" and nothing moved.
 // Usage: QA_WEB_DIR=$PWD node qa-hosted-back.cjs [origin]. Every Hermes/Wizard write is intercepted.
-const { chromium } = require('/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const URL_ = process.argv[2] || 'https://wizard.tailc0f369.ts.net/wizard-os-home/';
-const RESOLVE = process.env.QA_RESOLVE || 'MAP wizard.tailc0f369.ts.net 127.0.0.1:18443';
+const URL_ = process.argv[2] || (require('./tools/qa-paths.cjs').origin() + '/wizard-os-home/');
+const RESOLVE = process.env.QA_RESOLVE || '';
 const W = process.env.QA_WEB_DIR;
 let pass = 0, fail = 0;
 const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else { fail++; console.log('FAIL', n, x); } };
@@ -41,7 +41,7 @@ const ok = (c, n, x = '') => { if (c) { pass++; console.log('PASS', n); } else {
   ok(await openThread(), 'tap a Legacy thread opens it');
   const r1 = await back(); let s = await shell();
   ok(!(await panel()) && r1 === 'hosted' && !/home/i.test(s.toast) && s.open, 'Back in a Legacy thread → its thread list (no "You\'re home")', JSON.stringify({ r1, s }));
-  await p.screenshot({ path: (process.env.QA_SHOTS || '/home/telos/.hermes/cache/scratch') + '/hosted-back-list.png' });
+  await p.screenshot({ path: (process.env.QA_SHOTS || require('./tools/qa-paths.cjs').workPath('')) + '/hosted-back-list.png' });
   ok(await openThread(), 'reopen a Legacy thread');
   await back(); ok(!(await panel()), 'Back again lands on the list (repeatable)');
 

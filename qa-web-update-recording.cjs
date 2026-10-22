@@ -10,9 +10,9 @@
 // Self-contained: every request is routed; no real Wizard, Mizel, provider or microphone is touched.
 // Usage: QA_WEB_DIR=<wizard-ux worktree> MIZEL_WEB=<mizel-live web dir> node qa-web-update-recording.cjs
 // Negative control: QA_WEB_DIR=<daily checkout> must FAIL phase A (Reload is refused while recording).
-const { chromium } = require(process.env.PW || '/home/telos/node_modules/playwright');
+const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const ORIGIN = 'https://wizard.tailc0f369.ts.net', BASE = ORIGIN + '/wizard-os-home/';
+const ORIGIN = require('./tools/qa-paths.cjs').origin(), BASE = ORIGIN + '/wizard-os-home/';
 const WEB = path.join(process.env.QA_WEB_DIR || __dirname, 'web');
 const MIZEL = process.env.MIZEL_WEB;
 const OUT = process.env.QA_OUT || path.join(process.env.TMPDIR || '/tmp', 'qa-web-update-recording');

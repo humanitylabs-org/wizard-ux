@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
 function feature(native) {
-  const sandbox = { WizardOSNative: native, WizCore: {}, WizBrand: { html: 'W' }, location: { host: 'fixture.invalid' }, navigator: { userAgent: 'Android' }, document: {}, requestAnimationFrame() {} };
+  const sandbox = { CSS: { escape: s => String(s) }, WizardOSNative: native, WizCore: {}, WizBrand: { html: 'W' }, location: { host: 'fixture.invalid' }, navigator: { userAgent: 'Android' }, document: {}, requestAnimationFrame() {} };
   sandbox.window = sandbox;
   vm.runInNewContext(source, sandbox);
   // Exercise the real settings mount/feature filtering, not a different Android-only settings implementation.
@@ -15,12 +15,17 @@ function feature(native) {
   return { root, view, handlers };
 }
 test('Change Wizard is absent in browsers and older native clients', () => {
-  assert.doesNotMatch(feature(undefined).root.innerHTML, /Change Wizard/);
-  assert.doesNotMatch(feature({ platform() { return 'android:old'; } }).root.innerHTML, /Change Wizard/);
+  for (const native of [undefined, { platform() { return 'android:old'; } }]) {
+    const { root, view } = feature(native);
+    view.focus('server');
+    assert.doesNotMatch(root.innerHTML, /Change Wizard/);
+  }
 });
 test('Change Wizard uses shared settings and only invokes native navigation', () => {
   let calls = 0;
   const { root, view } = feature({ platform() { return 'android:test'; }, changeServer() { calls++; } });
+  view.focus('server'); // Settings > About & updates, beside the connected Wizard's status
+  assert.equal(view.page, 'about');
   assert.match(root.innerHTML, /Change Wizard/);
   const element = { closest(selector) { if (selector === '[data-settings-feature]') return { dataset: { settingsFeature: 'server' } }; if (selector === '[data-st]') return { dataset: { st: 'change-server' } }; return null; } };
   assert.equal(view.dispatch(element), true);

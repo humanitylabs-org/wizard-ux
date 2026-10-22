@@ -7,11 +7,31 @@ plugins {
 def wosKeystore = System.getenv('WOS_KEYSTORE')
 def wosSigningReady = wosKeystore && new File(wosKeystore).isFile()
 
-// Owner defaults are private build configuration. Generic APKs open Connect.
-def defaultOrigin = (project.findProperty('wizardOrigin') ?: System.getenv('WIZARD_DEFAULT_ORIGIN') ?: '').toString()
-def photosServer = (project.findProperty('photosServer') ?: System.getenv('WIZARD_PHOTOS_SERVER') ?: '').toString()
-def javaString = { value -> groovy.json.JsonOutput.toJson(value) }
-def deepLinkHost = (project.findProperty('wizardDeepLinkHost') ?: (defaultOrigin ? new URI(defaultOrigin).host : 'unconfigured.invalid')).toString()
+// Owner defaults are private build configuration (Gradle property `wizardOrigin` or WIZARD_ORIGIN /
+// WIZARD_DEFAULT_ORIGIN in the worker environment), never source. With none, the APK opens Connect:
+// the owner scans Setup's QR code or pastes their Wizard's HTTPS address at first launch.
+def configuredOrigin = providers.gradleProperty('wizardOrigin')
+        .orElse(providers.environmentVariable('WIZARD_ORIGIN'))
+        .orElse(providers.environmentVariable('WIZARD_DEFAULT_ORIGIN')).getOrElse('').trim()
+def defaultOrigin = configuredOrigin ? configuredOrigin.replaceAll('/+$', '') : ''
+def originUri = null
+if (defaultOrigin) {
+    try {
+        originUri = new URI(defaultOrigin)
+    } catch (Exception ignored) {
+        throw new GradleException('wizardOrigin / WIZARD_ORIGIN must be an HTTPS origin (for example https://wizard.example.ts.net)')
+    }
+    // The native trust policy pins HTTPS port 443; paths, credentials and custom ports are not supported.
+    if (originUri.scheme != 'https' || !originUri.host || originUri.port != -1 ||
+            originUri.rawUserInfo != null || originUri.rawQuery != null || originUri.rawFragment != null ||
+            (originUri.rawPath && originUri.rawPath != '')) {
+        throw new GradleException('wizardOrigin / WIZARD_ORIGIN must be an HTTPS origin without a path, credentials or port')
+    }
+}
+def photosServer = providers.gradleProperty('photosServer')
+        .orElse(providers.environmentVariable('WIZARD_PHOTOS_SERVER')).getOrElse('').trim()
+def javaString = { String value -> groovy.json.JsonOutput.toJson(value) }
+def deepLinkHost = (project.findProperty('wizardDeepLinkHost') ?: (originUri ? originUri.host : 'unconfigured.invalid')).toString()
 
 android {
     namespace 'ai.wizards.os'
@@ -22,8 +42,9 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         minSdk 28
         targetSdk 35
-        versionCode 60
+        versionCode 61
         versionName '0.10.0'
+        // Empty default leaves backup unconfigured; the native Photos screen can connect a server.
         buildConfigField 'String', 'PHOTOS_SERVER', javaString(photosServer)
         buildConfigField 'String', 'HOME_URL', javaString(defaultOrigin ? defaultOrigin + '/wizard-os-home/' : '')
         buildConfigField 'String', 'ORIGIN', javaString(defaultOrigin)

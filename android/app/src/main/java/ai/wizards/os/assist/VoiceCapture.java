@@ -310,7 +310,8 @@ final class VoiceCapture {
         try {
             if (!event.isEmpty()) ai.wizards.os.mizel.MeetingLoans.note(app, event, ai.wizards.os.mizel.MeetingLoans.obj(
                     "event", "queued", "voiceTakeId", take, "deliveryKey", take));
-            it = outbox().enqueueRecording(audio, EverywhereOutbox.SRC_SIDE, shots.isEmpty() ? null : new ArrayList<>(shots), locked, take, event);
+            // Debug QA audio is a different file from the take the journal registered; it gets its own id.
+            it = outbox().enqueueRecording(audio, EverywhereOutbox.SRC_SIDE, shots.isEmpty() ? null : new ArrayList<>(shots), locked, qa != null ? null : take, event);
             endLoan("stopped", null, null);
         } catch (Exception e) {
             endLoan("save_failed", "failed", "The recording could not be saved on the phone");
