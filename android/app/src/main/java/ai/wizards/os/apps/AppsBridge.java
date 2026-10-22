@@ -105,8 +105,7 @@ public final class AppsBridge implements AppsInstaller.Listener {
         String path = x.getPath() == null ? "" : x.getPath();
         boolean shellPath = path.equals("/wizard-os-home") || path.startsWith("/wizard-os-home/");
         if (BuildConfig.DEBUG && AppState.isQaPage(activity, x)) return shellPath;
-        String host = "https://" + x.getHost();
-        return "https".equals(x.getScheme()) && BuildConfig.ORIGIN.equals(host) && (x.getPort() == -1 || x.getPort() == 443) && shellPath;
+        return ai.wizards.os.ServerOrigin.matches(AppState.primaryOrigin(activity), u) && shellPath;
     }
 
     private void onMessage(WebView view, WebMessageCompat message, Uri sourceOrigin, boolean isMainFrame, JavaScriptReplyProxy reply) {

@@ -1,8 +1,7 @@
 name: Android emulator
 # On-device smoke for every Android change: boots an API 34 x86_64 emulator (KVM), installs the debug APK and proves
-# MainActivity launches, stays alive without a crash, and shows the native reach screen. Debug build only: no
-# signing secrets and no owner origin (debug falls back to https://wizard.invalid, which never resolves, so the
-# "can't reach your Wizard" screen is the expected result). Signed releases and physical phones stay on Thales.
+# MainActivity launches, stays alive without a crash, and hands off to the native Connect screen. Debug build only:
+# no signing secrets and no owner origin, so Connect ("scan Setup's QR or paste the address") is the expected result. Signed releases and physical phones stay on Thales.
 on:
   pull_request:
     paths: ['android/**', '.github/workflows/android-emulator.yml', 'tools/android_emulator_smoke.sh']

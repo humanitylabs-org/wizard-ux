@@ -7,9 +7,11 @@ Source: `android/app/src/main/java/ai/wizards/os/mizel/` · `MicOwner.java` · Q
 
 ## Page ⇄ native protocol (`window.wizardMizelPort`)
 
-Installed with AndroidX `WebViewCompat.addWebMessageListener(web, "wizardMizelPort", {BuildConfig.ORIGIN}, …)`.
+All example hosts below are synthetic. In the app the origin is the persisted owner selection (`AppState.origin` / `MizelConfig.origin`), not a compiled host.
 
-- Present in **every frame whose origin is exactly `BuildConfig.ORIGIN`** — the Wizard OS shell, its
+Installed with AndroidX `WebViewCompat.addWebMessageListener(web, "wizardMizelPort", {"https://box.example.ts.net"}, …)`.
+
+- Present in **every frame whose origin is exactly `https://box.example.ts.net`** — the Wizard OS shell, its
   `/meetings/` iframe, `/mizel-live/` (main frame or iframe). Absent everywhere else (other origins, http, other
   ports). If the WebView lacks `WEB_MESSAGE_LISTENER`, no port is installed at all (feature-detect
   `window.wizardMizelPort`).
@@ -17,7 +19,7 @@ Installed with AndroidX `WebViewCompat.addWebMessageListener(web, "wizardMizelPo
   `port.onmessage = e => JSON.parse(e.data)` (or `addEventListener('message', …)`).
 - A frame starts receiving pushes after it has sent at least one message (send `status` on load). Up to 8 frames
   are remembered, most recent first.
-- The page never passes a URL or token. Native uses `BuildConfig.ORIGIN + "/meetings/api/…"` itself.
+- The page never passes a URL or token. Native uses `https://box.example.ts.net/meetings/api/…` itself.
 
 ### Page → native
 
@@ -106,8 +108,7 @@ if (port) {
 
 ## Server contract used by native
 
-Base: `BuildConfig.ORIGIN`, supplied by the `wizardOrigin` Gradle property or `WIZARD_ORIGIN` environment
-(see [build configuration](README.md)); debug `.qa` builds may be pointed at a fake by `files/qa_origin.txt`.
+Base: `https://box.example.ts.net` (release; debug `.qa` builds may be pointed at a fake by `files/qa_origin.txt`).
 
 | call | when |
 | --- | --- |
@@ -115,7 +116,7 @@ Base: `BuildConfig.ORIGIN`, supplied by the `wizardOrigin` Gradle property or `W
 | `POST /meetings/api/meetings/{id}/stop`, `Content-Type: application/json`, body `{"final_seq":{"me":N},"reason":"user"\|"pause_timeout"\|"process_death"}` | once every chunk ≤ N is acknowledged |
 | `GET /meetings/api/meetings/{id}` → `status` | after the stop, for local-file pruning only |
 
-- Headers: `Origin: <BuildConfig.ORIGIN>`, `Accept: application/json` — no cookie or token. This is
+- Headers: `Origin: https://box.example.ts.net`, `Accept: application/json` — no cookie or token. This is
   exactly the mechanism `EverywhereOutbox` uses for the same private origin (Tailscale-only reachability is the
   access control; the meetings service checks `Origin` on writes).
 - `final_seq.me` is `-1` if nothing was recorded.
@@ -147,7 +148,7 @@ Base: `BuildConfig.ORIGIN`, supplied by the `wizardOrigin` Gradle property or `W
 - **One mic owner:** `MicOwner` (in-process lock). A meeting start while the Everywhere orb or the side button
   is listening → `mic_busy` + toast; an orb/side-button start while a meeting records (not paused) → refused
   with a toast ("A meeting is recording. Pause or stop it first."). Paused meetings do not hold the mic.
-- **Notification:** tap → Wizard OS opens `<BuildConfig.ORIGIN>/mizel-live/#/m/<meetingId>` inside its
+- **Notification:** tap → Wizard OS opens `https://box.example.ts.net/mizel-live/#/m/<meetingId>` inside its
   WebView (`/mizel-live/` is now an in-app private path, also as a VIEW link). Actions Pause/Resume/Stop.
 - **Local files:** kept after acknowledgement until the meeting reports `status: "ready"` (or 404) plus one day,
   then deleted (checked by the uploader while alive and at every service/app start).

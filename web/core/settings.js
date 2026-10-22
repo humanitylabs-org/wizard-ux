@@ -239,6 +239,12 @@
     if (el.closest('[data-st]')?.dataset.st !== 'photos-backup') return false;
     window.wizardPhotosPort.postMessage('open'); return true;
   } });
+  register({ id: 'server', available: () => typeof native()?.changeServer === 'function', html() {
+    return `<div class="st-group"><h4>Connection</h4>${row('change-server', '◇', 'Change Wizard', 'Scan another box QR or enter its address')}</div>`;
+  }, act(ctx, el) {
+    if (el.closest('[data-st]')?.dataset.st !== 'change-server') return false;
+    native().changeServer(); return true;
+  } });
   register({ id: 'voice', html: () => window.WizCore.voiceStatus?.card() || '' });
   register({ id: 'microphone', aliases: ['mic'], available: () => !!window.WosMic?.available(), html: () => window.WosMic?.html() || '', act: (ctx, el) => window.WosMic?.act(el, ctx) });
   register({ id: 'cancelled', html: () => window.WosCancelled?.html() || '', act: (ctx, el) => window.WosCancelled?.act(el) });

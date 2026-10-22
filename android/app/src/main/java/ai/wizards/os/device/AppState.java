@@ -26,13 +26,13 @@ public final class AppState {
      */
     public static String origin(Context c) {
         String qa = qaOrigin(c);
-        return qa != null ? qa : BuildConfig.ORIGIN;
+        return qa != null ? qa : ai.wizards.os.ServerSettings.origin(c);
     }
 
     /** This Wizard's own address (or the QA fake), ignoring any fallback: where carried state must land. */
     public static String primaryOrigin(Context c) {
         String qa = qaOrigin(c);
-        return qa != null ? qa : BuildConfig.ORIGIN;
+        return qa != null ? qa : ai.wizards.os.ServerSettings.origin(c);
     }
 
     /** The Wizard OS shell URL: the private origin, or the QA fake (debug builds with files/qa_home.txt only). */

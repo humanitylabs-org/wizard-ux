@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Android emulator smoke (CI): install the debug APK, launch MainActivity, prove it runs without crashing and that
-# the native "can't reach your Wizard" screen takes over. The debug build's origin is https://wizard.invalid, which
-# never resolves, so the reach screen (ReachScreen/ReachPolicy) is the expected outcome on a CI emulator.
+# a native first screen takes over. CI builds carry no owner origin, so MainActivity hands off to Connect
+# ("Connect to your Wizard": scan Setup's QR or paste the address). A build with an origin that does not
+# resolve shows the native reach screen instead; both are accepted.
 # Usage: tools/android_emulator_smoke.sh <apk> <out-dir>
 set -euo pipefail
 APK="$1"; OUT="$2"
@@ -22,9 +23,12 @@ echo "== launch"
 adb shell am start -W -n "$PKG/ai.wizards.os.MainActivity" | tee "$OUT/am-start.txt"
 grep -q 'Status: ok' "$OUT/am-start.txt" || fail "am start did not report Status: ok"
 
-# Wait for the reach screen (or a painted page) to be logged; ReachPolicy gives up at 10s.
+# Wait for Connect (no origin) or the reach screen (or a painted page); ReachPolicy gives up at 10s.
 state=""
 for _ in $(seq 1 45); do
+  if adb shell dumpsys activity activities | grep -E 'topResumedActivity' | grep -q "$PKG/ai.wizards.os.ConnectActivity"; then
+    state="connect"; break
+  fi
   line="$(adb logcat -d -s WizardOSReach:I | grep -E 'WizardOSReach.*(offline|reached)' | tail -1 || true)"
   if [ -n "$line" ]; then state="$line"; break; fi
   sleep 1
@@ -49,8 +53,16 @@ fi
 grep -q "ANR in $PKG" "$OUT/logcat.txt" && fail "ANR in $PKG"
 adb shell pidof "$PKG" >/dev/null || fail "$PKG process is not running after launch"
 adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | tee "$OUT/resumed.txt"
+[ -n "$state" ] || fail "neither Connect nor a WizardOSReach offline/reached log within 45s"
+if [ "$state" = connect ]; then
+  grep -q "$PKG/ai.wizards.os.ConnectActivity" "$OUT/resumed.txt" || fail "Connect is not the resumed activity"
+  grep -q 'Connect to your Wizard' "$OUT/ui.xml" || fail "Connect screen title is not on screen (see ui.xml)"
+  grep -q 'Scan QR code' "$OUT/ui.xml" || fail "Connect screen has no Scan QR code button"
+  echo "native Connect screen is showing"
+  echo "SMOKE OK: installed, launched, alive, no crash; no origin -> Connect" | tee "$OUT/result.txt"
+  exit 0
+fi
 grep -q "$PKG/ai.wizards.os.MainActivity" "$OUT/resumed.txt" || fail "MainActivity is not the resumed activity"
-[ -n "$state" ] || fail "no WizardOSReach offline/reached log within 45s"
 echo "reach log: $state"
 if echo "$state" | grep -q offline; then
   grep -qE "Tailscale is off|Can&apos;t reach your Wizard|Can't reach your Wizard|You&apos;re offline|You're offline" "$OUT/ui.xml" \
