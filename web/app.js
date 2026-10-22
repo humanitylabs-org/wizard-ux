@@ -1289,6 +1289,14 @@
   window.__wosEverywhere = () => { if (sheet === 'settings') renderSettings(); return true; };
 
   /* ---------------- home desk ---------------- */
+  /* Miguel's skins (22 Oct): Ready / Working as a glyph plus one dot per chat, so the count reads at a glance without a
+   * number (check = ready, spinning arc = working, whose dots pulse in turn). More than 12 shows 12 dots and a small +. */
+  function homeDots(kind, n) {
+    if (!['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '')) return '';
+    const icon = kind === 'ready' ? '<path d="M5 12.5l4.5 4.5L19 7"/>' : '<path d="M12 3a9 9 0 1 0 9 9"/>';
+    const shown = Math.min(n, 12), dots = Array.from({ length: shown }, (_, i) => `<i style="--n:${i}"></i>`).join('');
+    return `<span class="nc-vis${n ? '' : ' nc-zero'}" aria-hidden="true"><svg class="nc-ic" viewBox="0 0 24 24">${icon}</svg>${dots}${n > shown ? '<em>+</em>' : ''}</span>`;
+  }
   function renderHome() {
     const L = live(), needs = L.needs.length;
     // Opinionated: Ready = everything not working (read or not); unread is not a useful count.
@@ -1306,8 +1314,8 @@
       <div class="home-gap home-gap-a"></div>
       <div class="home-attn">
       <div class="constellation">
-        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span></button>
-        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span></button>
+        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready ${ready}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span>${homeDots('ready', ready)}</button>
+        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working" aria-label="Working ${working}"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span>${homeDots('working', working)}</button>
       </div>
       ${unsentCard()}
       ${sideCard()}

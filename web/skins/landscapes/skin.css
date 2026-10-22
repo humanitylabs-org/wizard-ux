@@ -457,3 +457,20 @@ html[data-skin="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner
 /* Instant icons: the app selector shows every icon at once (no staggered fade-in that read as icons loading late),
  * and the brand marks above are inlined (web/brand/apps/*.svg, same bytes) so they never wait on a request. */
 html[data-skin="landscapes"] .launcher.open .lgrid .lapp { animation: none; }
+
+/* Ready / Working as glyph + dots (Miguel's skins, 22 Oct): no tile, no number; two quiet rows sitting on the
+   background, one dot per chat. app.js homeDots() renders .nc-vis only for these skins. */
+html[data-skin="landscapes"] .home .constellation { flex-direction: row; justify-content: center; align-items: center; flex-wrap: wrap; gap: 0 18px; max-width: 100%; margin-bottom: 12px; }
+html[data-skin="landscapes"] .home .constellation .now-card.wz-home-widget { flex: none; width: auto; height: auto; min-height: 0; padding: 8px 6px; display: flex; border-radius: 12px; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-skin="landscapes"] .home .constellation .now-card :is(.pip, .meta, .n) { display: none; }
+html[data-skin="landscapes"] .nc-vis { display: flex; align-items: center; gap: 7px; color: var(--c); }
+html[data-skin="landscapes"] .nc-vis .nc-ic { width: 19px; height: 19px; margin-right: 3px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+html[data-skin="landscapes"] .nc-vis i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+html[data-skin="landscapes"] .nc-vis em { font-style: normal; font-size: 14px; font-weight: 700; line-height: 1; }
+html[data-skin="landscapes"] .nc-vis.nc-zero { opacity: .45; }
+html[data-skin="landscapes"] [data-act="working"] .nc-vis:not(.nc-zero) .nc-ic { animation: nc-spin 1.6s linear infinite; }
+html[data-skin="landscapes"] [data-act="working"] .nc-vis i { animation: nc-pulse 1.5s ease-in-out infinite; animation-delay: calc(var(--n) * 160ms); }
+html[data-skin="landscapes"] .home .constellation .now-card:active { transform: scale(.96); background: color-mix(in srgb, var(--c) 12%, transparent); }
+@keyframes nc-spin { to { transform: rotate(360deg); } }
+@keyframes nc-pulse { 0%, 100% { opacity: .55; transform: scale(.78); } 50% { opacity: 1; transform: scale(1); } }
+html[data-skin="landscapes"] .nc-vis { color: color-mix(in srgb, var(--c) 70%, #fff); filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .6)) drop-shadow(0 0 6px rgba(0, 0, 0, .3)); }

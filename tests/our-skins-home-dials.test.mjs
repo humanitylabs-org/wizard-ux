@@ -48,3 +48,14 @@ test('Miguel skins: bare gear, round Ready/Working, see-through dock', () => {
     assert.match(css, /\.now-card\.wz-home-widget \{[^}]*border-radius: 50%/, `${f}: round tiles`);
   }
 });
+
+test('Ready / Working show glyph + one dot per chat only on Miguel skins', () => {
+  const app = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const body = app.slice(app.indexOf('function homeDots('), app.indexOf('function renderHome('));
+  const run = skin => new Function('document', `${body}; return homeDots;`)({ documentElement: { dataset: { skin } } });
+  for (const s of ['obsidian', 'obsidian-light', 'landscapes']) {
+    const h = run(s)('working', 3); assert.equal((h.match(/<i /g) || []).length, 3, s);
+    assert.match(run(s)('ready', 20), /<em>\+<\/em>/, `${s}: capped with +`);
+  }
+  for (const s of ['nebula', 'grove', 'tide', 'ember', 'signal']) assert.equal(run(s)('ready', 3), '', s);
+});
