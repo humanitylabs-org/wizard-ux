@@ -636,6 +636,8 @@
       const it = held || make({ ...o, agent, ...(snapshot || {}) });
       if (held) {
         if (localCompletions.has(held.id) || held.localCompleted || held.state === 'sent' || held.body || held.steerBody || quarantine.has(held.id)) return held;
+        // The delivery caller names the agent (an orb pick); a staged take that lost it must not fall back to the main agent.
+        if (agent && !it.agent) { it.agent = agent; if (snapshot) Object.assign(it, snapshot); }
         // Preserve the original route/destination/id. Routing is allowed to choose a local command;
         // message delivery always retains the send-time thread and selected provider.
         Object.assign(it, { text: String(o.text || '').trim(), typed: o.typed || it.typed, files: [...(it.files || []), ...(o.files || [])].filter((f, i, all) => all.findIndex(x => x.id === f.id) === i), instructions: o.instructions || it.instructions, wid: o.wid || it.wid, ...(replyOf(o) || it.reply ? { reply: replyOf(o) || it.reply } : {}),
