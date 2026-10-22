@@ -418,6 +418,7 @@
     const h = deskSigil(idx); if (h !== orbAppHtml) { orbAppHtml = h; el.innerHTML = h; }
   }
   function renderDots() {
+    window.WosBell?.paint();
     if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
     paintOrbApp();
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
@@ -1043,6 +1044,7 @@
   // Hosted Wizard apps (App Store, System) ask the shell to open another installed app in its own window.
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
+  window.WizAppOpen = id => Object.values(W).some(w => w && w.appId === id);
   window.WizOpenApp = id => { const x = hostedOpenable(id); return x ? openApp(x) : false; };
   // Only trusted system windows may ask; check the actual sender frame, never a claimed app id.
   addEventListener('message', async e => {
