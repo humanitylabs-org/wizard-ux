@@ -8,13 +8,13 @@ import org.json.JSONObject;
 import org.junit.Test;
 
 public class PhotosBridgePolicyTest {
-    @Test public void onlyAllowlistedMethods() {
+    @Test public void onlyAllowlistedMethods() throws Exception {
         for (String m : new String[]{"status", "setEnabled", "setOption", "connect", "runNow", "permissions", "albums", "setAlbums", "disconnect"}) assertTrue(m, PhotosBridgePolicy.method(m));
         // API-key entry and the native screen stay off the bridge: credentials never reach the page.
         for (String m : new String[]{"", "open", "openNative", "apiKey", "secret", "credentials", "STATUS", "eval", null}) assertFalse(String.valueOf(m), PhotosBridgePolicy.method(m));
     }
 
-    @Test public void requestsMustBeVersionedAndWellFormed() {
+    @Test public void requestsMustBeVersionedAndWellFormed() throws Exception {
         JSONObject ok = PhotosBridgePolicy.request("{\"v\":1,\"id\":\"p1\",\"method\":\"status\"}");
         assertNotNull(ok); assertEquals(0, ok.getJSONObject("params").length());
         assertNotNull(PhotosBridgePolicy.request("{\"v\":1,\"id\":\"p2\",\"method\":\"setEnabled\",\"params\":{\"on\":true}}"));
@@ -28,13 +28,13 @@ public class PhotosBridgePolicyTest {
         assertNull(PhotosBridgePolicy.request("[]"));
     }
 
-    @Test public void onlyTwoOptionsAreWritable() {
+    @Test public void onlyTwoOptionsAreWritable() throws Exception {
         assertEquals("wifi", PhotosBridgePolicy.option("wifi"));
         assertEquals("charge", PhotosBridgePolicy.option("charge"));
         for (String k : new String[]{"enabled", "server", "credentials", "initial_done", "albums", "", null}) assertNull(PhotosBridgePolicy.option(k));
     }
 
-    @Test public void albumIdsAreBucketNumbersOnly() {
+    @Test public void albumIdsAreBucketNumbersOnly() throws Exception {
         assertEquals(2, PhotosBridgePolicy.albums(new JSONArray().put("-1739773001").put("540528482")).size());
         for (String bad : new String[]{"camera", "1;DROP", "", "12345678901234567890123"}) {
             try { PhotosBridgePolicy.albums(new JSONArray().put(bad)); fail(bad); } catch (IllegalArgumentException expected) {}
@@ -43,7 +43,7 @@ public class PhotosBridgePolicyTest {
         try { PhotosBridgePolicy.albums(many); fail(); } catch (IllegalArgumentException expected) {}
     }
 
-    @Test public void onlyTheShellPathDrivesBackup() {
+    @Test public void onlyTheShellPathDrivesBackup() throws Exception {
         assertTrue(PhotosBridgePolicy.shellPath("/wizard-os-home"));
         assertTrue(PhotosBridgePolicy.shellPath("/wizard-os-home/index.html"));
         assertFalse(PhotosBridgePolicy.shellPath("/wizard-os-homeevil"));
