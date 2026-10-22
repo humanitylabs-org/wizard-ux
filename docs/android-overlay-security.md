@@ -17,9 +17,13 @@ Existing words, layout, and native capability bridges are unchanged.
 - **Bridge exposure to frames:** `addJavascriptInterface` exposes a bridge to
   every frame, not merely same-origin documents. A network allowlist alone
   does not block `srcdoc`/`data:`/`about:blank` frames. A native-supplied CSP
-  denies frames, workers, objects, forms and connections for both remote and
-  bundled responses; HTML subframe interception is denied too. The allowlist
-  is the explicit overlay file set, not the full authenticated shell directory.
+  denies network/data frames, workers, objects, forms and connections for both
+  remote and bundled responses; HTML subframe interception is denied too.
+  Chromium may still instantiate a `srcdoc`/`about:blank` document: its inherited
+  `script-src 'self'` denies injected inline/eval scripts, while external
+  resources remain confined to the explicit trusted asset set. This is not
+  origin-scoping the Java bridge. The allowlist is the explicit overlay file
+  set, not the full authenticated shell directory.
 - **False readiness:** `onPageFinished` is not script execution success. The
   actual W/E/S API (and shared Orb where used) must exist before native ready
   callbacks run or the timeout is cancelled. Missing/failed scripts and HTTP
