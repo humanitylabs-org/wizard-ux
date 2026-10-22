@@ -1,7 +1,7 @@
 /* Wizard OS orb — a WebGL glass sphere with a living galaxy inside.
    Exposes window.Orb with setMode(mode) and setLevel(0..1). Falls back to the PNG orb.
-   Shared by every Wizard surface: the in-app dock, the side button (android/app/src/main/assets/assist/) and the
-   Wizard Everywhere floating orb. The Android copy is checked byte-for-byte by SharedOrbTest. */
+   Shared by every Wizard surface: the in-app dock, the side button and the Wizard Everywhere floating orb (web/assist/,
+   bundled as an offline fallback in android/app/src/main/assets/wizard-os-home/, checked byte-for-byte by npm test). */
 (function () {
   const canvas = document.getElementById('orb');
   const fallback = document.getElementById('orbFallback');
@@ -183,7 +183,8 @@ void main(){
     webgl: ok,
     setMode(m) {
       mode = m; target = MODES[m] || MODES.idle;
-      fallback.src = (m === 'idle' || m === 'type') ? 'robert-thread-orb.png' : 'robert-listening-galaxy.png';
+      // Beside the page's own fallback image, so pages one folder down (assist/) find it too.
+      fallback.src = new URL((m === 'idle' || m === 'type') ? 'robert-thread-orb.png' : 'robert-listening-galaxy.png', fallback.src).href;
       canvas.parentElement.dataset.mode = m;
       wake();
     },

@@ -1,5 +1,6 @@
 package ai.wizards.os.assist;
 
+import ai.wizards.os.OverlayPage;
 import android.annotation.SuppressLint;
 import android.app.KeyguardManager;
 import android.content.Context;
@@ -20,16 +21,12 @@ import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
 import org.json.JSONObject;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 
 /**
@@ -95,22 +92,11 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowContentAccess(false);
-        s.setAllowFileAccess(true); // only file:///android_asset/assist/ is served; everything else is blocked
-        s.setBlockNetworkLoads(true);
         web.addJavascriptInterface(new Bridge(), "WizardNative");
-        web.setWebViewClient(new WebViewClient() {
+        // The Wizard's surface page, or the bundled copy offline; only that one origin is reachable (OverlayPage).
+        OverlayPage surface = new OverlayPage("surface.html#corner", true) {
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return true; }
-
-            @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                if (request.getUrl().toString().startsWith("file:///android_asset/assist/")) return null;
-                return new WebResourceResponse("text/plain", "utf-8", 403, "Blocked", null,
-                        new ByteArrayInputStream(new byte[0]));
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
+            protected void ready(WebView view, String url) {
                 pageReady = true;
                 js("W.setMode('corner')");
                 js("W.lockState(false)");
@@ -118,7 +104,8 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
                 pending = null;
                 if (p != null) p.run();
             }
-        });
+        };
+        web.setWebViewClient(surface);
         web.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onConsoleMessage(ConsoleMessage m) {
@@ -133,7 +120,7 @@ final class WizardSession extends VoiceInteractionSession implements VoiceCaptur
             Log.i(TAG, "orb frame " + at[0] + "," + at[1] + "," + (r - l) + "," + (b - t));
         });
         layoutOrb();
-        web.loadUrl("file:///android_asset/assist/surface.html#corner");
+        surface.load(web);
         return root;
     }
 

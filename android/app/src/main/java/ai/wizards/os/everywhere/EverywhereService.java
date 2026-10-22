@@ -1,5 +1,6 @@
 package ai.wizards.os.everywhere;
 
+import ai.wizards.os.OverlayPage;
 import ai.wizards.os.audio.CaptureJournal;
 
 import android.Manifest;
@@ -38,16 +39,12 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import org.json.JSONObject;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -497,20 +494,15 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             web.setContentDescription("Wizard Everywhere. Tap to talk, hold for Select text, Translate and Hide, drag to move.");
             WebSettings s = web.getSettings();
             s.setJavaScriptEnabled(true);
-            s.setAllowFileAccess(true); // only file:///android_asset/assist/ is served; everything else is blocked
-            s.setBlockNetworkLoads(true);
             s.setMediaPlaybackRequiresUserGesture(false);
             web.addJavascriptInterface(new Bridge(), "EverywhereNative");
-            web.setWebViewClient(new WebViewClient() {
-                @Override
-                public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
-                    if (r.getUrl().toString().startsWith("file:///android_asset/assist/")) return null;
-                    return new WebResourceResponse("text/plain", "utf-8", 403, "Blocked", null, new ByteArrayInputStream(new byte[0]));
-                }
-                @Override public void onPageFinished(WebView v, String url) { pageReady = true; place(); lastState = ""; pushState(); orbAsleep = null; syncOrbSleep(); }
-            });
+            // The Wizard's orb page, or the bundled copy offline; only that one origin is reachable (OverlayPage).
+            OverlayPage orbPage = new OverlayPage("everywhere.html", true) {
+                @Override protected void ready(WebView v, String url) { pageReady = true; place(); lastState = ""; pushState(); orbAsleep = null; syncOrbSleep(); }
+            };
+            web.setWebViewClient(orbPage);
             web.setOnTouchListener(new Touch());
-            web.loadUrl("file:///android_asset/assist/everywhere.html");
+            orbPage.load(web);
         }
         lp = new WindowManager.LayoutParams(size, size,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
