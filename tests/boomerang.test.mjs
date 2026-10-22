@@ -58,7 +58,7 @@ test('Boomerang glyph is a pointed theme-aware SVG, not a font emoji',()=>{
  const js=read('web/core/chats.js'),css=read('web/core/chats.css')
  assert.match(js,/ch-boomerang-glyph[\s\S]{0,240}<path d="M4 4L12 6L20 3L16 11L21 17L13 15L8 21L7 13Z"/)
  assert.match(css,/\.ch-boomerang-glyph\s*\{[^}]*color:\s*var\(--violet-2\)/)
- assert.match(css,/\.ch-boomerang-glyph svg\s*\{[^}]*fill:\s*currentColor[^}]*stroke:\s*currentColor/)
+ assert.match(css,/\.ch-sheet-b \.ch-boomerang-glyph svg\s*\{[^}]*fill:\s*currentColor[^}]*stroke:\s*currentColor/)
 })
 test('selected-pin markup exposes an integrated head and shaft instead of a floating dot',()=>{
  const js=read('web/core/chats.js')

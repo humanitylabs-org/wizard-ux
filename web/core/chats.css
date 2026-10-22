@@ -265,7 +265,7 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-sheet-b button:active { background: rgba(205, 190, 255, .1); }
 .ch-sheet-b button svg { width: 20px; height: 20px; fill: none; stroke: var(--ink-2); stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .ch-boomerang-glyph { color: var(--violet-2); }
-.ch-boomerang-glyph svg { width: 22px; height: 22px; fill: currentColor; stroke: currentColor; stroke-width: .7; stroke-linejoin: miter; }
+.ch-sheet-b .ch-boomerang-glyph svg { width: 22px; height: 22px; fill: currentColor; stroke: currentColor; stroke-width: .7; stroke-linejoin: miter; }
 .ch-sheet-n { margin: 4px 12px 8px; font-size: 13px; color: var(--ink-3); }
 /* Approval card */
 .appr { align-self: stretch; padding: 12px; border-radius: 16px; background: rgba(255, 190, 85, .08); border: 1px solid rgba(255, 190, 85, .35); display: flex; flex-direction: column; gap: 8px; }
