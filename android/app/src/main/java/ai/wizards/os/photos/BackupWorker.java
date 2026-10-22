@@ -37,7 +37,10 @@ public final class BackupWorker extends Worker {
     private ForegroundInfo foreground(int done,int total) {
         Context c=getApplicationContext(); NotificationManager nm=c.getSystemService(NotificationManager.class);
         nm.createNotificationChannel(new NotificationChannel("photos-backup","Photos backup",NotificationManager.IMPORTANCE_LOW));
-        PendingIntent open=PendingIntent.getActivity(c,NOTIFICATION,new Intent(c,PhotosActivity.class),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        // Opens Settings › Photos backup in the web shell (older web just opens Settings, whose Photos row opens the native screen).
+        Intent page=new Intent(c,ai.wizards.os.MainActivity.class).setAction(ai.wizards.os.MainActivity.ACTION_SETTINGS)
+                .putExtra(ai.wizards.os.MainActivity.EXTRA_SETTINGS_FOCUS,"photos-backup").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent open=PendingIntent.getActivity(c,NOTIFICATION,page,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification n=new Notification.Builder(c,"photos-backup").setSmallIcon(android.R.drawable.stat_sys_upload)
                 .setContentTitle("Photos backup").setContentText("Backed up "+done+" of "+total)
                 .setProgress(Math.max(1,total),done,total==0).setOnlyAlertOnce(true).setOngoing(true).setContentIntent(open).build();
