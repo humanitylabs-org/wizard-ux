@@ -26,6 +26,11 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     browserBoundary: { enabled: true, token }, wizardOsHome: home,
     appsJsonPath: path.join(home, 'apps.json'), settingsPath: path.join(home, 'settings.json'),
     launcherPath: path.join(home, 'launcher.json'), agentBridge: false, followThrough: false, joinedDelegation: 'off' });
+  const serviceTrace = [];
+  service.on('request', (request, response) => response.on('finish', () => serviceTrace.push({
+    method: request.method, path: new URL(request.url, 'http://fixture').pathname, status: response.statusCode,
+    origin: request.headers.origin || '', hasShellToken: typeof request.headers['x-wizard-shell-token'] === 'string',
+  })));
   const sp = await listen(service);
   const fixture = http.createServer((req, res) => {
     if (req.url === '/fixture-app/app.js') { res.setHeader('Content-Type', 'text/javascript'); return res.end(`
@@ -39,6 +44,7 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
         try { p.chats = await (await fetch('/wizard/hermes/api/sessions')).text(); } catch (_) { p.chatsDenied = true; }
         try { p.html = await (await fetch('/wizard-os-home/desktop.html')).text(); } catch (_) { p.htmlDenied = true; }
         try { await fetch('/wizard/v1/setup/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (_) { p.mutationDenied = true; }
+        try { await fetch('/wizard/v1/setup/seen', { method: 'POST', body: '{}', mode: 'no-cors' }); p.simplePostAttempted = true; } catch (_) { p.simplePostAttempted = true; }
         p.nativeAbsent = !window.WizardOSNative && !window.WizardOSDevice && !window.WizardNative && !window.webkit?.messageHandlers?.wizardNative;
         return p;
       };
@@ -76,6 +82,11 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     const probe = await app.evaluate(() => window.probe());
     report.hostileProbe = probe;
     for (const field of ['parentDenied', 'storageDenied', 'chatsDenied', 'htmlDenied', 'mutationDenied', 'nativeAbsent']) check(probe[field] === true, `hostile frame: ${field}`);
+    // CORS exceptions alone do not prove refusal: a server can mutate and then
+    // return an unreadable 200. Confirm the real server's completed responses.
+    report.hostileServiceTrace = serviceTrace.filter(r => r.origin === 'null');
+    check(report.hostileServiceTrace.some(r => r.method === 'GET' && r.path === '/wizard/hermes/api/sessions' && r.status === 401 && !r.hasShellToken), 'server-side 401 proves hostile chat read refusal, not merely CORS');
+    check(report.hostileServiceTrace.some(r => r.method === 'POST' && r.path === '/wizard/v1/setup/seen' && r.status === 401 && !r.hasShellToken), 'server-side 401 proves simple hostile mutation refused before route');
     await app.locator('button').click();
     check(await app.locator('#state').textContent() === 'Nested', 'nested app view opened');
     await page.evaluate(() => dispatchEvent(new CustomEvent('wizard:back')));
