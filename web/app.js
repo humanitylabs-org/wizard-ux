@@ -1860,7 +1860,6 @@
       const top = body.scrollTop; body.innerHTML = html; body.__lhtml = html;
       body.scrollTop = live ? top : body.scrollHeight;
     };
-    if (oursSkin() && !launcher.querySelector('.lclose')) launcher.insertAdjacentHTML('afterbegin', '<button type="button" class="lclose" data-lclose aria-label="Close apps"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>');
     if (!q && oursSkin()) { paint(kindGroups(['apps', 'wiz', 'agents', 'conns'])); if (!live) body.scrollTop = 0; return; } // same order as New desk, read from the top
     if (!q) {
       const recentIds = store.get('recent', ['wizard', 'wizard-signal', 'wisdom', 'shopping']).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
@@ -1904,7 +1903,6 @@
   }
   window.WizHomeScreenApps?.attach(launcher, id => APP[id]);
   launcher.addEventListener('click', e => {
-    if (e.target.closest('[data-lclose]')) return closeSheets();
     const a = e.target.closest('[data-app]'); if (a) return launch(APP[a.dataset.app]);
     const bi = e.target.closest('[data-appinfo]'); if (bi) { closeSheets(); return openAppInfo(bi); }
     const t = e.target.closest('[data-thread]'); if (t) { closeSheets(); return openWizardThread(t.dataset.thread); }

@@ -313,10 +313,6 @@ html[data-skin^="obsidian"]:not([data-shell="desktop"]) .new-desk.kinds { paddin
 html[data-skin^="obsidian"]:not([data-shell="desktop"]) .device:not(.orb-corner) .launcher { top: calc(30px + var(--safe-t)); bottom: calc(var(--pill-top, 90px) + 8px); }
 
 /* System apps (fill a Wizard OS parking spot): first in their group, with a second ring around the icon. */
-/* The Apps sheet's close X, top right (the orb also closes it, but nobody sees that). */
-html[data-skin^="obsidian"] .launcher .lclose { position: absolute; top: 8px; right: 10px; z-index: 3; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--ink) 10%, transparent); border: 1px solid var(--line-2); color: var(--ink); }
-html[data-skin^="obsidian"] .launcher .lclose svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
-html[data-skin^="obsidian"] .launcher .launcher-body { padding-top: 34px; }
 
 /* Opinionated (Miguel's skins): Home resources as the most compact readout: two rows (Server, then AI accounts) of
    small ring + label cells on one shared 3-column grid, no headings, warnings or freshness text; one settings gear.
