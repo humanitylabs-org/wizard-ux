@@ -15,11 +15,21 @@ function harness() {
   }
   const L = {}, c = { L, window: { EventSource: ES, WosAgents: { defaultId: () => 'hermes', get: id => ({ id, privacy: id === 'private' ? 'private' : 'standard' }) } },
     requestAnimationFrame: fn => (frames.push(fn), frames.length), cancelAnimationFrame: () => {},
-    setTimeout: fn => (timers.push(fn), timers.length), clearTimeout: () => {}, PEND: new Map(),
+    setTimeout: fn => (timers.push(fn), timers.length), clearTimeout: () => {}, PEND: new Map(), PEND_MAX: 120000, Date,
     req: async url => { calls.push(url); return { json: async () => c.receipt }; } };
   vm.runInNewContext(live.slice(live.indexOf('  const RUN_STREAMS ='), live.indexOf('  function attachOutbox() {')), c);
   return { c, L, sources, frames, timers, calls, paint: () => { for (const fn of frames.splice(0)) fn(); } };
 }
+test('hidden main thread retains its accepted outbox run when absent from session lists', () => {
+  const h = harness(), now = Date.now();
+  h.c.window.WosOutbox = { forThread: sid => sid === 'sid' ? [
+    {state:'sent',runId:'old',createdAt:now-1000,sentAt:now-1000},
+    {state:'sent',runId:'new',createdAt:now,sentAt:now},
+    {state:'sending',runId:'not-accepted',createdAt:now+1}
+  ] : [] };
+  assert.equal(h.L.pendingRun('sid'), 'new');
+  assert.equal(h.L.pendingRun('other'), '');
+});
 test('scoped unnamed Hermes deltas coalesce per frame; never expose reasoning', () => {
   const h = harness(), paints = [];
   h.L.openRunStream('sid', 'philosopher', 'rid', r => paints.push(r.text));
