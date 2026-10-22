@@ -41,6 +41,7 @@ export default function setup(api) {
     if (!who) { orb.hidden = true; return; }
     orb.hidden = false;
     orb.style.setProperty('--c', who.colour);
+    const hue = /hsl\((\d+)/.exec(who.colour || ''); if (hue) orb.style.setProperty('--h', hue[1]);
     sigil(face, who.id);
     // The whole recording lives on this orb: the shell's controls and transcript gather around it (layout.css).
     const rootEl = doc.documentElement;
