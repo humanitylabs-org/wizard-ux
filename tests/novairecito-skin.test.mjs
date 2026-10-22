@@ -43,11 +43,10 @@ test('Novairecito is selectable, persisted and leaves the established skin order
   assert.equal(reloaded.documentElement.dataset.skin, 'novairecito');
 });
 
-test('Novairecito is a visual-only package scoped to its own skin', () => {
+test('Novairecito is a package scoped to its own skin', () => {
   const js = read('web/core/skins.js');
   const css = read('web/skins/novairecito/skin.css');
-  assert.match(js, /id: 'novairecito', pkg: \{ css: true, dir: 'novairecito' \}/);
-  assert.doesNotMatch(js, /id: 'novairecito', pkg: \{[^}]*js:/);
+  assert.match(js, /id: 'novairecito', pkg: \{ css: true, js: true, when: 'always', dir: 'novairecito' \}/);
   assert.match(css, /html\[data-skin="novairecito"\] \.ch-pin-toggle\[aria-pressed="true"\]/, 'selected pin styling stays in Novairecito');
   assert.match(css, /color:\s*#7f1d1d/, 'selected pin bodies are visibly darker');
   assert.match(css, /fill-opacity:\s*1/, 'selected pin bodies are a solid silhouette');
@@ -56,4 +55,13 @@ test('Novairecito is a visual-only package scoped to its own skin', () => {
   for (const match of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{/g)) {
     assert.match(match[1].trim(), /^html\[data-skin="novairecito"\]/);
   }
+});
+test('Novairecito opens with the expanding orb loading screen on phone and desktop', () => {
+  const src = read('web/skins/novairecito/skin.js');
+  assert.match(src, /orb-portrait\.mp4/); assert.match(src, /orb-landscape\.mp4/);
+  assert.match(src, /export default function setup\(api\)/);
+  assert.match(src, /SAFETY_MS = \d+/, 'the loader can never trap the shell');
+  assert.match(src, /'ended', exit/); assert.match(src, /'error', exit/);
+  for (const f of ['orb-portrait.mp4', 'orb-landscape.mp4', 'orb-portrait.jpg', 'orb-landscape.jpg'])
+    assert.ok(readFileSync(new URL(`web/skins/novairecito/${f}`, root)).length > 10000, f);
 });
