@@ -51,6 +51,8 @@ public class MainActivity extends Activity {
     public static final String ACTION_SIDE_BUTTON = "ai.wizards.os.action.SIDE_BUTTON";
     /** Notifications and the Everywhere button open Wizard OS on Settings / the Unsent list / a thread. */
     public static final String ACTION_SETTINGS = "ai.wizards.os.action.SETTINGS";
+    /** With ACTION_SETTINGS: the Settings feature to open on (e.g. "photos-backup"). Older web ignores it. */
+    public static final String EXTRA_SETTINGS_FOCUS = "ai.wizards.os.extra.SETTINGS_FOCUS";
     public static final String ACTION_UNSENT = "ai.wizards.os.action.UNSENT";
     public static final String ACTION_THREAD = "ai.wizards.os.action.THREAD";
     /** The floating orb's Screen button (voice typing / screenshots not set up yet) opens the setup dialog. */
@@ -82,6 +84,7 @@ public class MainActivity extends Activity {
     private ai.wizards.os.mizel.MizelBridge mizel; // window.wizardMizelPort, private origin only
     private ai.wizards.os.audio.BackgroundAudioBridge audio;
     private ai.wizards.os.apps.AppsBridge apps; // window.wizardAppsPort: the shell only (Android Apps relay)
+    private ai.wizards.os.photos.PhotosBridge photos; // window.wizardPhotosPort: Settings › Photos backup (web page)
 
     private String screenCaptureId;
 
@@ -103,18 +106,6 @@ public class MainActivity extends Activity {
                         return;
                     }
                     new Bridge().captureScreen(data);
-                });
-    }
-
-    /** Main-frame settings navigation only; no media or credential bridge. */
-    private void installPhotosPort(WebView target) {
-        if (!androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER)) return;
-        java.util.Set<String> origins = java.util.Collections.singleton(ai.wizards.os.device.AppState.primaryOrigin(this));
-        androidx.webkit.WebViewCompat.addWebMessageListener(target, "wizardPhotosPort", origins,
-                (view, message, sourceOrigin, isMainFrame, reply) -> {
-                    if (!isMainFrame || web != target || sourceOrigin == null || !origins.contains(sourceOrigin.toString())) return;
-                    if (message != null && "open".equals(message.getData()))
-                        startActivity(new Intent(this, ai.wizards.os.photos.PhotosActivity.class));
                 });
     }
 
@@ -192,7 +183,8 @@ public class MainActivity extends Activity {
         }
         installScreenPort(web);
         if (!(this instanceof AppSessionActivity)) HomeScreenShortcuts.attach(this, web);
-        installPhotosPort(web);
+        if (photos != null) photos.detach();
+        photos = ai.wizards.os.photos.PhotosBridge.install(this, web); // status/settings only; no media or credentials
         ai.wizards.os.photos.BackupScheduler.schedule(this);
         device = new ai.wizards.os.device.DeviceBridge(this, web);
         web.addJavascriptInterface(device, "WizardOSDevice");
@@ -385,7 +377,7 @@ public class MainActivity extends Activity {
         if (intent == null) return;
         String act = intent.getAction();
         String json = ACTION_SIDE_BUTTON.equals(act) ? "{\"action\":\"side-button\"}"
-                : ACTION_SETTINGS.equals(act) ? "{\"action\":\"settings\"}"
+                : ACTION_SETTINGS.equals(act) ? Handoff.settings(intent.getStringExtra(EXTRA_SETTINGS_FOCUS))
                 : ACTION_UNSENT.equals(act) ? "{\"action\":\"unsent\"}"
                 : ACTION_USUALS.equals(act) ? "{\"action\":\"usuals\"}"
                 : ACTION_THREAD.equals(act) && intent.getStringExtra(EXTRA_THREAD) != null
@@ -603,6 +595,7 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
         super.onRequestPermissionsResult(code, perms, results);
         if (code == REQ_EVERYWHERE) { continueEverywhere(); return; }
+        if (code == ai.wizards.os.photos.PhotosBridge.REQ_PERMISSIONS) { if (photos != null) photos.onPermissions(); return; }
         if (code == REQ_SIDE_MIC) {
             boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
             if (ok) continueSideButton();
@@ -741,6 +734,7 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("(window.__wosUsuals && window.__wosUsuals())", null);
         device.onResume();
         if (apps != null) apps.onResume();
+        if (photos != null) photos.onResume();
         if (sideSetupActive) {
             sideSetupActive = false;
             if (SideButton.assistant(this)) Toast.makeText(this, "Side button is on. Hold it to talk.", Toast.LENGTH_SHORT).show();
@@ -914,6 +908,7 @@ public class MainActivity extends Activity {
         }
         if (mizel != null) { mizel.detach(); mizel = null; }
         if (apps != null) { apps.detach(); apps = null; }
+        if (photos != null) { photos.detach(); photos = null; }
         if (audio != null) { audio.detach(); audio = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();

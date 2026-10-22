@@ -165,6 +165,7 @@
     "core/os-updates.js",
     "core/own-views.css",
     "core/own-views.js",
+    "core/photos-settings.js",
     "core/polish.css",
     "core/reach.js",
     "core/resources.css",
@@ -434,6 +435,13 @@
     "core/own-views.js": {
       "loadedBy": ["phone", "desktop"],
       "note": "Shared own-screen fallback and shell-only Settings confirmation; same App Manager owner listener as Updates"
+    },
+    "core/photos-settings.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import after settings.js; Settings › Photos backup shows only where the Android app's window.wizardPhotosPort exists"
     },
     "core/music-voice.js": {
       "loadedBy": [

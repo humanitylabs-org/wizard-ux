@@ -145,7 +145,7 @@ def main():
             run(['ffmpeg','-hide_banner','-loglevel','error','-f','lavfi','-i',f'color=c={color}:s=96x64:d=1:r=10','-c:v','libx264','-pix_fmt','yuv420p',video],capture_output=True,timeout=40)
             private_file(video.name,video.read_bytes())
         em.sh(ADB,'-s',em.S,'logcat','-c')
-        test = em.sh(ADB,'-s',em.S,'shell','am','instrument','-w','-r','-e','class','ai.wizards.os.photos.BackupE2eTest','ai.wizards.os.qa.test/androidx.test.runner.AndroidJUnitRunner',timeout=1100)
+        test = em.sh(ADB,'-s',em.S,'shell','am','instrument','-w','-r','-e','class','ai.wizards.os.photos.BackupE2eTest#generatedMediaThroughRealSchedulerAndDisposableImmich','ai.wizards.os.qa.test/androidx.test.runner.AndroidJUnitRunner',timeout=1100)
         (out/'instrumentation.txt').write_text(test)
         (out/'logcat-photos.txt').write_text(em.sh(ADB,'-s',em.S,'logcat','-d','-s','WizardPhotos:V','WM-WorkerWrapper:V','WM-Processor:V','WM-GreedyScheduler:V','WM-ConstraintTracker:V','JobScheduler:V','AndroidRuntime:E'))
         (out/'jobscheduler.txt').write_text(em.sx(f'dumpsys jobscheduler {em.pkg}'))
@@ -160,50 +160,38 @@ def main():
         assert acceptance.get('status')=='pass' and 'OK (1 test)' in test
         for k in ('switch_starts_signin','enable_after_signin'):
             assert str(acceptance.get(k,'')).startswith('pass'), (k, acceptance.get(k))
-        # Native child-only QA is not enough: tap the shared registration in the actual candidate shell.
+        # Compile/tests alone do not prove the new screen: real web form → bridge → worker.
+        prep = em.sh(ADB,'-s',em.S,'shell','am','instrument','-w','-r','-e','class',
+                     'ai.wizards.os.photos.BackupE2eTest#prepareWebSettingsFixture',
+                     'ai.wizards.os.qa.test/androidx.test.runner.AndroidJUnitRunner',timeout=120)
+        (out/'web-fixture-instrumentation.txt').write_text(prep)
+        assert 'OK (1 test)' in prep, prep
         from qa_aa_lib import Page, wait
         import socket
         with socket.socket() as free:
             free.bind(('127.0.0.1',0)); devtools=free.getsockname()[1]
-        # `am instrument` kills the app process when the test ends; relaunch the real shell before driving its WebView.
-        em.sx('svc wifi enable'); em.sx('svc data enable')
+        em.sx('svc wifi enable'); em.sx('svc data disable')
+        em.sx('cmd wifi connect-network AndroidWifi open')
         for port in (2286,2290): run([ADB,'-s',em.S,'reverse',f'tcp:{port}',f'tcp:{port}'],capture_output=True)
         em.sx('input keyevent KEYCODE_WAKEUP'); em.sx('wm dismiss-keyguard')
         em.sx(f'am start -W -n {em.pkg}/ai.wizards.os.MainActivity')
         assert wait(lambda: '.MainActivity' in em.top(),30), 'Wizard shell did not relaunch after instrumentation'
-        em.shot(out,'shell-relaunched')
         page=Page(em,devtools)
         try:
-            # A fresh install shows the first-run tour/coach over the shell; a returning user has dismissed it.
-            page.ev("(() => { try { localStorage.setItem('wos.coached','true'); localStorage.setItem('wos.tour.v1','true'); localStorage.setItem('wos.voiceTipSeen','true'); } catch (e) {} location.reload(); return 1; })()")
+            page.ev("(() => { localStorage.setItem('wos.coached','true'); localStorage.setItem('wos.tour.v1','true'); localStorage.setItem('wos.voiceTipSeen','true'); location.reload(); return 1; })()")
             time.sleep(4); page.close(); page=Page(em,devtools)
-            page.ev("(() => { const c = document.querySelector('#coach'); if (c && !c.hidden) document.querySelector('#coachGo')?.click(); return 1; })()"); time.sleep(0.8)
-            page.ev("window.__wosHandoff({action:'settings'})")
-            visible="(() => { const e=document.querySelector('[data-settings-feature=\"photos-backup\"] button'); if(!e) return false; e.scrollIntoView({block:'center'}); const b=e.getBoundingClientRect(); const h=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2); return b.height>0 && b.y>=0 && b.bottom<=innerHeight && !!h && e.contains(h); })()"
-            assert wait(lambda: page.ev(visible),20), 'Photos backup row not visible and hittable in the Settings sheet'
-            assert wait(lambda: page.ev("!!document.querySelector('[data-settings-feature=\"photos-backup\"] button')"),20)
-            em.sh(ADB,'-s',em.S,'shell','input','keyevent','KEYCODE_WAKEUP')
-            em.sh(ADB,'-s',em.S,'shell','wm','dismiss-keyguard')
-            sel='[data-settings-feature="photos-backup"] button'
-            time.sleep(1.5); em.shot(out,'settings-before-tap')
-            assert page.tap(sel)
-            if wait(lambda: '.photos.PhotosActivity' in em.top(),10):
-                result['settings_entry']='pass: touch on candidate shared Settings row → native Photos'
-            else:
-                # Record what the synthetic touch hit, then drive the same row's real click handler and native port.
-                result['settings_touch_target']=page.ev("(() => { const e=document.querySelector(%s); const b=e.getBoundingClientRect(); const h=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2); return {hit: h ? (h.outerHTML||'').slice(0,160) : null, inside: !!(h && e.contains(h)), rect:[b.x,b.y,b.width,b.height], vw: innerWidth, vh: innerHeight}; })()" % json.dumps(sel))
-                em.shot(out,'settings-after-touch')
-                raise AssertionError('Visible Settings row was touched but native Photos did not open')
-            em.shot(out,'photos-from-settings')
-            em.sh(ADB,'-s',em.S,'shell','input','keyevent','KEYCODE_BACK')
-            assert wait(lambda: '.MainActivity' in em.top(),15)
+            page.ev("(() => { const c = document.querySelector('#coach'); if (c && !c.hidden) document.querySelector('#coachGo')?.click(); return 1; })()")
+            from qa_photos_web_settings import exercise
+            result['web_settings'] = exercise(em,page,out,api,token)
+            result['settings_entry'] = 'pass: real web form; native settings activity never opened'
         finally:
             page.close(); em.sh(ADB,'-s',em.S,'forward','--remove',f'tcp:{devtools}')
         inventory=api('/search/metadata',{'size':100,'page':1},token)
         (out/'disposable-inventory.json').write_text(json.dumps(inventory,indent=2))
         items=inventory['assets']['items']
-        # 50 unique initial + 1 auto-detected; the photo taken off Wi-Fi only counts when Wi-Fi resume was testable.
-        expected=51+(1 if str(acceptance.get('wifi_resume','')).startswith('pass') else 0)
+        # 50 unique initial + auto-detected + web-selected. Count the waiting photo only if native QA uploaded it.
+        waiting_uploaded = str(acceptance.get('wifi_resume','')).startswith('pass') or 'resumes over cellular' in str(acceptance.get('wifi_toggle',''))
+        expected=52+int(waiting_uploaded)
         assert len(items)==expected, f'Expected {expected} unique generated assets, got {len(items)}'
         assert len({i['originalFileName'] for i in items})==len(items), 'duplicate asset on server'
         result['server_unique_assets']=len(items)

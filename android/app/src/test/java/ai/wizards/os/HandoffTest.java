@@ -19,6 +19,14 @@ public class HandoffTest {
     }
 
     @Test
+    public void settingsFocusIsAShortFeatureIdOnly() {
+        assertEquals("{\"action\":\"settings\"}", Handoff.settings(null));
+        assertEquals("{\"action\":\"settings\",\"focus\":\"photos-backup\"}", Handoff.settings("photos-backup"));
+        for (String bad : new String[]{"", "Photos", "x\"};alert(1)//", "photos backup", "-x", "a123456789012345678901234567890123456789x"})
+            assertEquals(bad, "{\"action\":\"settings\"}", Handoff.settings(bad));
+    }
+
+    @Test
     public void ignoresEverythingElse() {
         assertNull(Handoff.json(MainActivity.ACTION_SAY, "   "));
         assertNull(Handoff.json(MainActivity.ACTION_SAY, null));
