@@ -20,13 +20,46 @@ test('selected pin is symmetric on its local axis before one whole-pin rotation'
  assert.match(chats,/class="ch-pin-head" d="M8 3\.5H16V6\.5H13\.75L12\.75 9\.25H11\.25L10\.25 6\.5H8Z"/)
  assert.match(chats,/class="ch-pin-shaft" d="M11\.25 8\.75H12\.75L12\.35 18H11\.65Z M11\.65 18H12\.35L12 21Z"/)
 })
-test('picker uses native date/time controls, visible selectable timezone and quick presets',()=>{
- const js=read('web/core/scheduled-reminders.js')
- assert.match(js,/type="date"/);assert.match(js,/type="time"/);assert.match(js,/data-boom-preset="today"/)
- assert.match(js,/data-boom-preset="tomorrow"/);assert.match(js,/data-boom-preset="week"/)
+test('picker exposes compact quick choices, exact-minute controls and an expandable calendar',()=>{
+ const js=read('web/core/scheduled-reminders.js'),css=read('web/core/scheduled-reminders.css')
+ for(const id of ['1h','2h','4h','tomorrow-am','tomorrow-pm','2d','4d','1w','2w','1m']) assert.match(js,new RegExp(`\\['${id.replace('-','\\-')}'`))
+ assert.match(js,/type="time"[^>]+step="60"/)
+ assert.match(js,/data-boom-calendar-toggle/);assert.match(js,/data-boom-calendar[^>]+hidden/)
+ assert.match(js,/name="cal-month"/);assert.match(js,/name="cal-year"/)
+ assert.match(js,/role="grid"/);assert.match(js,/role="gridcell"/)
  assert.match(js,/<select[^>]+name="timezone"/);assert.match(js,/Asia\/Bangkok/)
- assert.match(js,/due_at/);assert.match(js,/toISOString\(\)/)
+ assert.match(js,/data-boom-note-toggle/);assert.match(css,/width:min\(360px/)
 })
+
+test('calendar arithmetic handles month ends and leap days without date overflow',()=>{
+ const sandbox={Intl,Date,crypto,document:{addEventListener(){}},fetch:async()=>({ok:true,json:async()=>({reminders:[]})}),setInterval:()=>1};sandbox.window=sandbox
+ vm.runInNewContext(read('web/core/scheduled-reminders.js'),sandbox)
+ assert.equal(sandbox.WosBoomerang._addWallDays('2027-01-30',2),'2027-02-01')
+ assert.equal(sandbox.WosBoomerang._addWallMonths('2027-01-31',1),'2027-02-28')
+ assert.equal(sandbox.WosBoomerang._addWallMonths('2028-01-31',1),'2028-02-29')
+ assert.equal(sandbox.WosBoomerang._daysInMonth(2028,2),29)
+})
+
+test('preset copy states the computed date and exact local time',()=>{
+ const js=read('web/core/scheduled-reminders.js')
+ assert.match(js,/Tomorrow morning/);assert.match(js,/09:00/)
+ assert.match(js,/Tomorrow afternoon/);assert.match(js,/14:00/)
+ assert.match(js,/formatPreset/);assert.doesNotMatch(js,/>Later today</)
+})
+
+test('dialog supports Escape, focus containment and preserves notes while editing',()=>{
+ const js=read('web/core/scheduled-reminders.js')
+ assert.match(js,/e\.key==='Escape'/);assert.match(js,/e\.key==='Tab'/)
+ assert.match(js,/role="dialog"/);assert.match(js,/aria-modal="true"/)
+ assert.match(js,/const body=\{due_at,timezone,note:form\.note\.value\}/)
+ assert.match(js,/existing\?\.note/)
+})
+test('shell Back closes the Boomerang dialog before leaving Chats',()=>{
+ const phone=read('web/app.js'),desktop=read('web/desktop/desktop.js')
+ assert.match(phone,/WosBoomerang\?\.back\(\)/)
+ assert.match(desktop,/WosBoomerang\?\.back\(\)/)
+})
+
 test('selected wall timezone is persisted as the correct UTC instant',()=>{
  const sandbox={Intl,Date,crypto,document:{addEventListener(){}},fetch:async()=>({ok:true,json:async()=>({reminders:[]})}),setInterval:()=>1};sandbox.window=sandbox
  sandbox.WizConfig={timeZone:()=> 'UTC'};vm.runInNewContext(read('web/core/scheduled-reminders.js'),sandbox)
