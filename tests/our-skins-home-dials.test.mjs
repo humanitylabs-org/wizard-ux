@@ -59,3 +59,15 @@ test('Ready / Working show glyph + one dot per chat only on Miguel skins', () =>
   }
   for (const s of ['nebula', 'grove', 'tide', 'ember', 'signal']) assert.equal(run(s)('ready', 3), '', s);
 });
+
+test('a credit account renders as a fuel gauge with dollars left', () => {
+  const injected = src.replace("ai:null,aiAt:0", "ai:{providers:[{id:'tinfoil',provider:'tinfoil',providerName:'Tinfoil',status:'ok',limits:[],paid:{type:'credits',enabled:true,currency:'USD',exponent:2,balanceMinor:450,limitMinor:2000}}]},aiAt:0");
+  assert.notEqual(injected, src, 'state literal found');
+  const ctx = { window: {}, document: { documentElement: { dataset: { skin: 'obsidian' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
+    localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), AbortController };
+  ctx.window = ctx; ctx.window.addEventListener = () => {};
+  vm.runInNewContext(injected, ctx);
+  const h = ctx.WosResources.home();
+  assert.match(h, /rs-dial  rs-fuel rs-empty|rs-dial rs-fuel rs-empty/);
+  assert.match(h, /data-money="\$4\.50"/); assert.match(h, /class="rs-e">E</); assert.match(h, /Tinfoil \$4\.50 credit left/);
+});
