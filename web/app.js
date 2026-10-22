@@ -372,6 +372,8 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) undoLastMove(); });
   addEventListener('pagehide', undoLastMove);
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
+  // A link or view opened from a chat keeps that chat where it was: swiping back lands on the same thread.
+  const openedFrom = (desk, chatId) => !!desk && desk.wins.some(x => W[x]?.from?.win === chatId || W[x]?.bound === chatId);
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
@@ -385,7 +387,7 @@
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
     // Miguel's skins (Dark, Light, Landscapes): Chats you leave go back to the session list, so coming back to Chats
     // always starts on the list and it is clear where you are.
-    if (moved && from && ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '')) for (const id of from.wins) { const w = W[id]; if (w?.app === 'chats' && w.thread && !to.wins.includes(id)) chatsBack(w); }
+    if (moved && from && ['obsidian', 'obsidian-light', 'landscapes'].includes(document.documentElement.dataset.skin || '')) for (const id of from.wins) { const w = W[id]; if (w?.app === 'chats' && w.thread && !to.wins.includes(id) && !openedFrom(to, id)) chatsBack(w); }
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
     placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip(); syncBound();
     window.WosScenery?.[idx === HOME ? 'poke' : 'update'](); // scenery hook: Home animates, any other desk freezes it
