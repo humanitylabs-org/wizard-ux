@@ -81,7 +81,7 @@
     if (s.enabled && s.message && !st.error) parts.push(`<p class="ph-note">${esc(s.message)}</p>`);
     if (s.needsAccess) parts.push(`<button type="button" class="ph-btn primary" data-ph="permissions">Allow photo access</button>`);
     if (s.limited) parts.push(`<p class="ph-note">Only the photos you picked in Android are visible. <button type="button" class="ph-link" data-ph="permissions">Allow all photos</button></p>`);
-    parts.push(sw('data-ph="wifi"', s.wifi, 'Wi-Fi only', 'Mobile data is never used', busy));
+    parts.push(sw('data-ph="wifi"', s.wifi, 'Wi-Fi only', s.wifi ? 'Mobile data is never used' : 'Mobile data may be used', busy));
     parts.push(sw('data-ph="charge"', s.charge, 'First backup only while charging', null, busy));
     parts.push(`<button type="button" class="ph-row" data-ph="albums" aria-expanded="${!!st.albumsOpen}"><span class="ph-tx"><b>Albums</b><small>${esc(albumSub(st))}</small></span><span class="st-go">${st.albumsOpen ? '⌄' : '›'}</span></button>`);
     if (st.albumsOpen) parts.push(albumsHtml(st));

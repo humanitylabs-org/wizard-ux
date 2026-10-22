@@ -91,6 +91,8 @@ test('page: one flat form, plain-case heading, server field only when nothing is
   const on = H({ mode: 'v1', status: { connected: true, enabled: true, wifi: false, charge: true, server: 'https://photos.example.org', needsAccess: true, done: 1, total: 2 } });
   assert.match(on, /Allow photo access/);
   assert.match(on, /data-ph="wifi" role="switch" aria-checked="false"/);
+  assert.match(on, /Mobile data may be used/); assert.doesNotMatch(on, /Mobile data is never used/);
+  assert.match(H({ mode: 'v1', status: { enabled: false, wifi: true } }), /Mobile data is never used/);
   assert.match(on, /Back up now/); assert.match(on, /data-ph="disconnect"/);
   assert.doesNotMatch(on, /class="[^"]*card/);
   assert.match(H({ mode: 'v1', status: { connected: true, enabled: true }, confirmDisconnect: true }), /Disconnect this phone/);
@@ -163,6 +165,21 @@ test('native: bridge keeps credentials and sign-in on the device; legacy open an
   assert.match(activity, /if\(web\) \{ backToWeb\(\); return; \}/);
   assert.match(activity, /putExtra\(MainActivity\.EXTRA_SETTINGS_FOCUS,"photos-backup"\)/);
   assert.match(read('web/app.js'), /openSettings\(h\.action === 'unsent' \|\| \(typeof h\.focus === 'string' && window\.WosSettings\?\.features\.some\(f => f\.id === h\.focus\)/);
+});
+
+test('web Photos Back returns to the Settings index before the shell handles root Back', async () => {
+  const { port } = fakeNative({ connected: true, enabled: false, server: 'https://photos.example.org' });
+  const { ctx } = sandbox(port);
+  await ctx.WosPhotos.detect(); await flush();
+  const root = { innerHTML: '', scrollTop: 0, classList: { add() {} }, dataset: {}, contains: () => false, querySelector: () => null, addEventListener() {}, removeEventListener() {} };
+  const view = ctx.WosSettings.mount(root, { shell: 'phone' });
+  view.focus('photos-backup');
+  assert.equal(view.page, 'phone'); assert.match(root.innerHTML, /data-ph="enabled"/);
+  assert.equal(view.back(), true, 'nested Back consumed by shared Settings');
+  assert.equal(view.page, ''); assert.equal(root.dataset.settingsPage, '');
+  assert.match(root.innerHTML, /data-st-page="phone"/, 'Phone remains reachable in Settings');
+  assert.equal(view.back(), false, 'only the shell owns Settings/root Back');
+  view.destroy();
 });
 
 test('Photos child Back explicitly restores the Wizard parent, album Back stays nested', () => {
