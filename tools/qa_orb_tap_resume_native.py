@@ -361,9 +361,13 @@ class Suite:
         self.wait(lambda: 'mInputShown=true' in self.sx('dumpsys input_method'))
         # UIAutomator temporarily suspends accessibility and does not always rebind it; re-enable the
         # service (the same settings an owner toggles) until Android reports it bound again.
+        # dumpsys lists bound services by label ("Service[label=Wizard OS voice typing, ...]"), not by
+        # class name, so match either; r6/r7 waited on the class name and could never see it bound.
         def bound():
-            return 'WizardKeyboardService' in '\n'.join(
-                l for l in self.sx('dumpsys accessibility').splitlines() if 'Bound services' in l)
+            dump = self.sx('dumpsys accessibility').splitlines()
+            rows = [l for i, l in enumerate(dump) if 'Bound services' in l
+                    or (i and 'Bound services' in dump[i - 1] and l.startswith(' '))]
+            return any(k in r for r in rows for k in ('WizardKeyboardService', 'Wizard OS voice typing'))
         for _ in range(4):
             try:
                 self.wait(bound, 6)
