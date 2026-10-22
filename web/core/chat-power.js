@@ -55,9 +55,6 @@ window.WosChatPower = function chatPower(A) {
     const b = el.querySelector('[data-chlatest]'); if (!b || !nb) return;
     b.hidden = bottomGap(nb) < 160;
   }
-  // Threads already placed in this page. The first placement after a page load is a restore (a reload, an
-  // update, the app coming back): the saved place wins even in a Working thread, as long as it is for the same reply.
-  const placedThisPage = new Set();
   /* Called by renderThread after the new DOM is in. Returns true when it placed the scroll itself. */
   function position(w, el, nb, o) {
     const c = ch(w.id), sid = w.thread;
@@ -81,10 +78,12 @@ window.WosChatPower = function chatPower(A) {
         return true;
       }
       c.posFor = sid;
-      const restore = !placedThisPage.has(sid); placedThisPage.add(sid);
       const saved = RP.read(sid), reply = lastReply(nb);
       let apply = null;
-      if (o.working && !(restore && saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
+      // A Working thread follows the live reply, unless you had scrolled up in it: your place wins whenever it is
+      // for the same latest reply, on a reload and on every reopen alike (James, 22 Oct: leaving the slow
+      // Philosopher thread mid-run and coming back threw him to the bottom).
+      if (o.working && !(saved && !saved.atBottom && c.lid && saved.messageId === c.lid)) { c.follow = true; toBottom(nb); }
       else if (saved && c.lid && saved.messageId === c.lid) {
         // Back where you were: anchored to the latest reply, so layout changes don't shift it.
         apply = saved.atBottom ? toBottom : box => { const r = lastReply(box); box.scrollTop = r && isFinite(saved.anchorOffset) ? box.scrollTop + relTop(box, r) - saved.anchorOffset : saved.scrollTop; };
