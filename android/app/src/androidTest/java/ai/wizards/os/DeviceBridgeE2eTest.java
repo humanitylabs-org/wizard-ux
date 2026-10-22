@@ -30,6 +30,8 @@ public class DeviceBridgeE2eTest {
             device.findObject(By.text("Connect")).click();
             assertNotNull("Real WebView generic request/reply or legacy compatibility failed", device.wait(Until.findObject(By.text("Device bridge verified")), 30000));
             assertEquals(c.getPackageName(), device.getCurrentPackageName());
+            device.findObject(By.text("Check wrong path")).click();
+            assertNotNull("Top-level non-shell path reached native", device.wait(Until.findObject(By.text("Wrong path refused")), 15000));
         }
     }
 
@@ -47,7 +49,7 @@ public class DeviceBridgeE2eTest {
                 String request = in.readLine(); if (request == null) return;
                 String header; while ((header = in.readLine()) != null && !header.isEmpty()) { }
                 String html = "<!doctype html><title>Wizard OS</title><!-- core/ synthetic fixture -->"
-                    + "<meta name='viewport' content='width=device-width,initial-scale=1'><body style='padding-top:120px'><p id='status'>Checking device bridge</p>"
+                    + "<meta name='viewport' content='width=device-width,initial-scale=1'><body style='padding-top:120px'><p id='status'>Checking device bridge</p><button onclick=\"location.href='/not-shell'\">Check wrong path</button>"
                     + "<script>const pending=new Map();let seq=0;"
                     + "function rpc(port,method,v=1,params={}){return new Promise((resolve,reject)=>{const id='t'+(++seq);pending.set(id,resolve);setTimeout(()=>reject(Error('timeout '+method)),10000);port.postMessage(JSON.stringify({v,id,method,params}));});}"
                     + "function receive(e){const m=JSON.parse(e.data);const done=pending.get(m.id);if(done){pending.delete(m.id);done(m);}}"
@@ -63,7 +65,8 @@ public class DeviceBridgeE2eTest {
                     + "document.getElementById('status').textContent='Device bridge verified';}"
                     + "main().catch(e=>document.getElementById('status').textContent='FAILED '+e.message);</script>";
                 String child = "<!doctype html><script>if(window.wizardDevicePort){wizardDevicePort.onmessage=()=>parent.postMessage('child-replied',location.origin);wizardDevicePort.postMessage(JSON.stringify({v:1,id:'child',method:'device.packages.status',params:{}}));}setTimeout(()=>parent.postMessage('child-refused',location.origin),1500);</script>";
-                byte[] bytes = (request.startsWith("GET /wizard-os-home/") ? html : request.startsWith("GET /probe ") ? child : "{}").getBytes(StandardCharsets.UTF_8);
+                String wrongPath = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='padding-top:120px'><p id='status'>Checking wrong path</p><script>let replied=false;wizardDevicePort.onmessage=()=>{replied=true;document.getElementById('status').textContent='FAILED native reply';};wizardDevicePort.postMessage(JSON.stringify({v:1,id:'wrong',method:'device.packages.status',params:{}}));setTimeout(()=>{if(!replied)document.getElementById('status').textContent='Wrong path refused';},1500);</script>";
+                byte[] bytes = (request.startsWith("GET /wizard-os-home/") ? html : request.startsWith("GET /probe ") ? child : request.startsWith("GET /not-shell ") ? wrongPath : "{}").getBytes(StandardCharsets.UTF_8);
                 OutputStream out = client.getOutputStream();
                 out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: " + bytes.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8));
                 out.write(bytes); out.flush();
