@@ -914,7 +914,7 @@
           for (const name of ['message.delta', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
           r.source.onerror = () => {
             close();
-            // A queued main run can close before its upstream event endpoint is ready.
+            // Some queued main sends close before yielding any answer bytes.
             // Retry only before ANY answer bytes: no duplicated/replayed text. This is
             // another read of the same run, never another admission/send.
             if (!r.stopped && !r.terminal && !r.text && retries++ < 3) r.reconnect = setTimeout(connect, 500);
