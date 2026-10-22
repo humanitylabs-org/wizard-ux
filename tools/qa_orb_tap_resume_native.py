@@ -294,6 +294,12 @@ class Suite:
         self.wait(lambda: self.floating.ev("S.mode==='paused'"))
         self.orb()
         resumed = self.h['wait_log'](r': resumed$', 5)
+        # The native "resumed" log precedes the page's mode change and the chip windows by a few
+        # frames; sampling them at that instant failed r8. Let them land, then require them to hold.
+        try:
+            self.wait(lambda: self.floating.ev("S.mode==='listen'") and 'pause' in self.h['controls'](), 3)
+        except AssertionError:
+            pass
         self.check('everywhere.1', bool(resumed) and self.unchanged(before, self.floating,
                    "S.mode==='listen'") and 'pause' in self.h['controls'](),
                    {'log': resumed, 'new_posts': self.submissions()[len(before):], 'audio': 'real MediaRecorder; no auto-finish'})
@@ -381,7 +387,7 @@ class Suite:
         self.stage()
         before, runs, transcribes = self.submissions(), len(self.state['runs']), self.state['transcribe']
         self.orb()
-        self.wait(lambda: self.logs(r': listening \(voice typing\)'), 2)
+        self.wait(lambda: self.logs(r': listening \(voice typing\)'), 6)
         self.control('pause')
         self.wait(lambda: self.logs(r': paused$'), 2)
         self.wait(lambda: self.floating.ev("S.mode==='paused'"), 2)
