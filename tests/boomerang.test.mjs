@@ -29,6 +29,8 @@ test('picker exposes compact quick choices, exact-minute controls and an expanda
  assert.match(js,/role="grid"/);assert.match(js,/role="gridcell"/)
  assert.match(js,/<select[^>]+name="timezone"/);assert.match(js,/Asia\/Bangkok/)
  assert.match(js,/data-boom-note-toggle/);assert.match(css,/width:min\(360px/)
+ assert.match(css,/var\(--glass-2/);assert.match(css,/var\(--ink/);assert.match(css,/var\(--violet/)
+ assert.doesNotMatch(css,/--wz-(?:panel|ink|soft|muted|accent|line)/)
 })
 
 test('calendar arithmetic handles month ends and leap days without date overflow',()=>{
