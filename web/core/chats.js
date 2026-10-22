@@ -198,7 +198,7 @@ window.WizCore.chats = function createChats(H) {
   };
   const STI_LAB = { needs: 'Needs you', check: 'Your call', done: 'Done', fyi: 'FYI', deferred: 'Deferred', approval: 'Needs approval', failed: 'Error' };
   const STI_TIP = { deferred: 'Deferred', needs: 'Needs you', check: 'Your call: see if it is what you meant', done: 'Done', fyi: 'FYI', approval: 'Approval needed', failed: 'Stopped with an error', working: 'Working', offline: 'Offline · will retry', none: 'No status' };
-  const PIN_SVG = '<svg class="ch-pin-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4 5 5-4 2-3 5-2-2-5 5-1-1 5-5-2-2 5-3 2-4Z"/></svg>';
+  const PIN_SVG = '<svg class="ch-pin-svg" viewBox="0 0 24 24" aria-hidden="true"><path class="ch-pin-head" d="M15 3.5 20.5 9l-4.2 1.4-2.1 3.6-4.2-4.2 3.6-2.1L15 3.5Z"/><path class="ch-pin-shaft" d="m11.3 12.6 2.1 2.1-2.4 1.1-4.8 4.8-1.4-1.4 4.8-4.8 1.7-1.8Z"/></svg>';
   // Loading placeholders: quiet rows/bubbles shaped like the real ones, with a soft shimmer.
   function skelRows(label) {
     const row = (w1, w2) => `<div class="ch-skel-row"><i class="ch-sk av"></i><span class="bd"><i class="ch-sk" style="width:${w1}%"></i><i class="ch-sk sm" style="width:${w2}%"></i></span></div>`;
@@ -867,7 +867,7 @@ window.WizCore.chats = function createChats(H) {
       <button type="button" data-rspin>${'<svg viewBox="0 0 24 24"><path d="m15 4 5 5-4 2-3 5-2-2-5 5-1-1 5-5-2-2 5-3 2-4Z"/></svg>'}${pinned ? 'Unpin' : 'Pin'}</button>
       <button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       <button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>
-      ${BOOM ? `<button type="button" data-rsboom><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 8.2A7 7 0 0 1 18.8 7M17.9 15.8A7 7 0 0 1 5.2 17"/></svg>Boomerang</button>` : ''}
+      ${BOOM ? `<button type="button" data-rsboom><span class="ch-sheet-emoji" aria-hidden="true">🪃</span>Boomerang</button>` : ''}
       ${acts.map(a => `<button type="button" data-rsact="${a}">${ACT[a].icon}${ACT[a].label}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${WORKING_ST.has(s.status) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
     rowSheet = { wid, sid }; vib(10);
