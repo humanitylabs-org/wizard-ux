@@ -40,7 +40,11 @@ fs.mkdirSync(OUT, { recursive: true });
       // Phone Send returns to Chats by design. Reopen the SAME hidden thread immediately,
       // not after a fixed wait. Timing remains anchored to the actual Send click.
       await page.evaluate(({sid,agent})=>window.__wos.openWizardThread(sid,{agent}),{sid,agent});
-      await page.waitForFunction(() => window.__streamMeasure.first, null, {timeout:45000});
+      try { await page.waitForFunction(() => window.__streamMeasure.first, null, {timeout:45000}); }
+      catch(e) {
+        await page.screenshot({path:OUT+'/failure.png'});
+        fs.writeFileSync(OUT+'/failure.json',JSON.stringify(await page.evaluate(()=>({measure:window.__streamMeasure,body:document.body.innerText,wins:window.__wos.wins,ch:Object.fromEntries(Object.keys(window.__wos.wins).map(id=>{const c=window.__wos.chatState(id);return[id,{loadedFor:c.loadedFor,turns:c.turns,stream:c.stream&&{sid:c.stream.sid,rid:c.stream.rid,text:c.stream.text,terminal:c.stream.terminal,landed:c.stream.landed},err:c.err}]})),outbox:[...window.__wos.outbox._items.values()]})),null,2));throw e;
+      }
       const first = await page.evaluate(() => ({firstMs:window.__streamMeasure.first, firstText:window.__streamMeasure.samples[0].text}));
       const shot=OUT+'/philosopher-streaming-'+skin+(agent?'':'-main')+'.png';
       await page.screenshot({path:shot});

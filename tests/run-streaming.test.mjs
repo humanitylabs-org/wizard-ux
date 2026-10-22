@@ -61,10 +61,10 @@ test('shared subscriber closes only after final watcher leaves; queued paints ca
   h.sources[0].emit({ event: 'message.delta', delta: 'x' }); b.close(); h.paint();
   assert.equal(painted, 0); assert.equal(h.sources[0].closed, true);
 });
-test('provisional uses Markdown and survives terminal-to-transcript race without duplicate or blank', async () => {
-  const w = { id: 'w', thread: 'sid' }, c = {}, row = { runId: 'rid', status: 'running' };
+test('hidden raw-session receipt streams without list status; provisional retires atomically on transcript', async () => {
+  const w = { id: 'w', thread: 'sid' }, c = {}, row = {};
   let callback, closed = 0, loads = 0;
-  const ctx = { LIVE: { session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
+  const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
     WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }),
     esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => loads++, setTimeout: () => 1, clearTimeout: () => {} };
   vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
