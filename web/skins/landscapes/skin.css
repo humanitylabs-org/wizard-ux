@@ -223,12 +223,12 @@ html[data-skin="landscapes"] .launcher :is(.lapp .nm, .lgroup h4) { text-shadow:
 
 /* Reply to a notification (Miguel's look): one quiet quote line, no box. A hairline rule on the left, the title in ink,
  * one or two lines in ink-2, and a bare × (44px target). The sent message shows the same quote above his words. */
-html[data-skin="landscapes"] .ch-compose .ch-reply { padding: 2px 0 0 12px; margin: 0 2px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
+html[data-skin="landscapes"] .ch-compose .ch-reply { padding: 2px 0 0 12px; margin: 0 2px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; border-radius: 0; }
 html[data-skin="landscapes"] .ch-compose button.ch-reply-x { width: 44px; height: 44px; margin: -6px -4px -6px 0; background: none !important; border: 0 !important; box-shadow: none !important; color: var(--ink-2); font-size: 22px; font-weight: 300; }
 html[data-skin="landscapes"] .ch-compose button.ch-reply-x:hover { color: var(--ink); }
 html[data-skin="landscapes"] .ch-reply-t b, html[data-skin="landscapes"] .ch-rq b { font-weight: 600; color: var(--ink); letter-spacing: 0; }
 html[data-skin="landscapes"] .ch-reply-t span, html[data-skin="landscapes"] .ch-rq span { color: var(--ink-2); }
-html[data-skin="landscapes"] .msg.u .bub .ch-rq { margin: 0 0 8px; padding: 0 0 0 10px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; }
+html[data-skin="landscapes"] .msg.u .bub .ch-rq { margin: 0 0 8px; padding: 0 0 0 10px; border-left: 2px solid color-mix(in srgb, var(--ink) 38%, transparent); background: none; border-radius: 0; }
 html[data-skin="landscapes"] .ch-compose.has-reply { padding-top: 12px !important; }
 /* The skin's :is(.ch-compose button…) fill rule out-ranks a plain selector, so the × colour must win explicitly (Light drew it white on white). */
 html[data-skin="landscapes"] .ch-compose button.ch-reply-x, html[data-skin="landscapes"] .ch-compose button.ch-reply-x svg { color: color-mix(in srgb, var(--ink) 78%, transparent) !important; stroke: currentColor !important; }
