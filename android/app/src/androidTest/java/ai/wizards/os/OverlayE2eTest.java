@@ -60,7 +60,17 @@ public class OverlayE2eTest {
                 }
                 @Override protected void ready(WebView v, String u) { loaded.set(u); ready.countDown(); }
             };
-            web.setWebViewClient(client); client.load(web);
+            if (remote) {
+                // Warm this renderer using the actual bundled page. Cold emulator shader/renderer
+                // startup may legitimately exceed the production 1.5 s deadline and recover offline;
+                // do not relax that deadline merely to force the remote-success fixture green.
+                OverlayPage warm = new OverlayPage(page, false) {
+                    @Override protected void ready(WebView v, String u) {
+                        web.setWebViewClient(client); client.load(web);
+                    }
+                };
+                web.setWebViewClient(warm); warm.load(web);
+            } else { web.setWebViewClient(client); client.load(web); }
         });
         assertTrue("overlay ready: " + page + "/" + failure, ready.await(12, TimeUnit.SECONDS));
         return loaded.get();

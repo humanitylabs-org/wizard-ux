@@ -114,7 +114,7 @@ public class OverlayPage extends WebViewClient {
         c.setConnectTimeout(1000);
         c.setReadTimeout(1000);
         c.setUseCaches(false);
-        String cookies = origin == null ? null : CookieManager.getInstance().getCookie(origin);
+        String cookies = origin == null ? null : CookieManager.getInstance().getCookie(url);
         if (cookies != null) c.setRequestProperty("Cookie", cookies);
         try {
             if (c.getResponseCode() != 200) throw new java.io.IOException("HTTP " + c.getResponseCode());

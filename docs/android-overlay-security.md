@@ -52,7 +52,11 @@ origin exception, or exported fixture activity is added to release builds.
 
 `OverlayPolicyTest` covers exact origins, ports, static paths and traversal.
 `OverlayE2eTest` runs the actual bundled HTML/JS in an Android WebView, using
-synthetic HTTPS responses at fixture.invalid. It covers all three APIs in
+synthetic HTTPS responses at fixture.invalid. Remote-success fixtures warm
+that renderer with the real bundle first: cold emulator renderer/shader
+startup exceeded the unmodified 1.5-second deadline and correctly recovered
+to the bundle in the initial run. The test does not lengthen that deadline.
+It covers all three APIs in
 remote/bundled modes, native state updates, offline/timeout/script failure,
 HTTP-200 login recovery, late failure, origin switching, frame isolation,
 and native transport redirect rejection against a local HTTP fixture.
