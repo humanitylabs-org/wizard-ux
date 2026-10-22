@@ -73,8 +73,16 @@
       const was = drag; drag = null;
       if (was.on) { dragged = true; el.classList.remove('drag'); return; } // the drop is not a tap
       const b = up && document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.selmenu [data-sm]');
-      if (b) { dragged = true; run(b.dataset.sm); }
+      if (b) { swallowClick(); run(b.dataset.sm); }
     };
+    // The tap already ran on release, and the menu hides at once. The click that follows the same touch would land on
+    // whatever the action just opened (Search's sheet scrim closed it at once: "it just refreshes"), so eat it anywhere.
+    function swallowClick() {
+      const eat = e => { off(); e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); };
+      const off = () => { clearTimeout(t); document.removeEventListener('click', eat, true); };
+      document.addEventListener('click', eat, true);
+      const t = setTimeout(off, 700);
+    }
     el.addEventListener('pointerup', e => end(e, true)); el.addEventListener('pointercancel', e => end(e, false));
     el.addEventListener('click', e => {
       if (dragged) { dragged = false; e.preventDefault(); e.stopPropagation(); return; } // already handled on release
