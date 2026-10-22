@@ -239,7 +239,10 @@ test('the API hands a skin no shell internals', async () => {
   let seen = null;
   P.host._test.setImporter(async () => ({ default: api => { seen = api; } }));
   P.host.attach(P.adapter); P.host.commit('fixture'); await settle();
-  assert.deepEqual(Object.keys(seen).sort(), ['env', 'frame', 'gesture', 'listen', 'nav', 'on', 'part', 'route', 'storage', 'toast']);
+  // Layout hooks (22 Oct 2026): timers, own controls, agents, the orb's recorder and its idle tap. Still no internals.
+  assert.deepEqual(Object.keys(seen).sort(), ['after', 'agents', 'env', 'frame', 'gesture', 'listen', 'mount', 'nav', 'on', 'orb', 'part', 'route', 'storage', 'toast', 'voice']);
+  assert.ok(Object.isFrozen(seen.agents) && Object.isFrozen(seen.voice) && Object.isFrozen(seen.orb));
+  assert.deepEqual(Object.keys(seen.voice).sort(), ['cancel', 'dictate', 'state', 'talk', 'tap']);
   assert.ok(Object.isFrozen(seen) && Object.isFrozen(seen.nav));
   assert.deepEqual(Object.keys(seen.nav).sort(), ['back', 'deskCount', 'goDesk', 'openList', 'openThread']);
   seen.storage.set('x', { a: 1 });
