@@ -54,6 +54,8 @@ function session(i) { return { id: i === 0 ? SID : 'qa_caret_' + i, source: 'wiz
     await p.keyboard.insertText(lines); await p.keyboard.type(' still typing');
     await sleep(300);
     const read = () => p.evaluate(sel => { const t = document.querySelector(sel); window.__taNode ||= t; return { same: t === window.__taNode, focused: document.activeElement === t, top: t.scrollTop, max: t.scrollHeight - t.clientHeight, s: t.selectionStart, e: t.selectionEnd, len: t.value.length }; }, TA);
+    // iPhone Safari drops the keyboard when a focused field leaves the page, even if it is put straight back.
+    await p.evaluate(sel => { const t = document.querySelector(sel); window.__detached = 0; new MutationObserver(ms => { for (const m of ms) for (const n of m.removedNodes) if (n === t || (n.contains && n.contains(t))) window.__detached++; }).observe(document.body, { childList: true, subtree: true }); }, TA);
     const before = await read();
     ok(before.max > 40 && before.top >= before.max - 2 && before.focused, 'setup: long reply scrolls and the view sits at the bottom where the caret is', before);
     const repaint = async () => { revision++; await p.evaluate(() => __wux.live.refresh()); await p.waitForFunction(rev => document.querySelector('.pane-main .ch-msgs')?.textContent.includes('Launch step ' + rev), revision, { timeout: 8000 }); await sleep(250); };
@@ -67,6 +69,7 @@ function session(i) { return { id: i === 0 ? SID : 'qa_caret_' + i, source: 'wiz
       const t = await read();
       ok(t.top >= t.max - 2 && t.s === t.len, `repaint ${k + 1}: typing right after still lands at the bottom`, t);
     }
+    ok(await p.evaluate(() => window.__detached === 0), 'focused composer never leaves the page during repaints (iPhone keyboard stays up)', { detached: await p.evaluate(() => window.__detached) });
     // Editing in the middle: caret, selection and scroll stay where the owner put them.
     await p.evaluate(sel => { const t = document.querySelector(sel); const i = t.value.indexOf('Line 6'); t.setSelectionRange(i, i + 4); t.scrollTop = 40; }, TA);
     await sleep(200);
