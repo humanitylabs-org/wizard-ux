@@ -1457,6 +1457,7 @@ window.WizCore.chats = function createChats(H) {
       }
     }
     if (fresh && !force) {
+      c.loadedNav = nav; // still current for this open: the reading place can trust it
       // Reopening a cached quiet transcript still refreshes rename/retry metadata,
       // once per navigation, without throwing away its 60-second history cache.
       if (s?.listVersion === 1 && c.detailNav !== nav && c.detailLoadingNav !== nav) {
@@ -1480,7 +1481,7 @@ window.WizCore.chats = function createChats(H) {
       const turns = toTurns(rows);
       const sig = JSON.stringify(turns.slice(-3));
       let changed = c.loadedFor !== w.thread || sig !== c.sig;
-      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
+      Object.assign(c, { turns, cachedFor: '', loadedFor: w.thread, loadedNav: nav, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       const sent = OUTBOX ? OUTBOX.forThread(w.thread).filter(p => p.state === 'sent') : [];
       if (sent.length) {
