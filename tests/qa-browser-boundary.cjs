@@ -47,7 +47,8 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
   });
   const fp = await listen(fixture);
   const socket = http.createServer(); const np = await listen(socket); await close(socket);
-  const doc = fs.readFileSync(path.join(root, 'packaging/browser-boundary-document.conf.template'), 'utf8').replace('${WIZARD_SHELL_TOKEN}', token);
+  let doc = fs.readFileSync(path.join(root, 'packaging/browser-boundary-document.conf.template'), 'utf8').replace('${WIZARD_SHELL_TOKEN}', token);
+  if (process.env.QA_COOP_NEGATIVE_CONTROL === '1') doc = doc.replace('add_header Cross-Origin-Opener-Policy "noopener-allow-popups" always;', '');
   const docPath = path.join(out, 'document.conf'); fs.writeFileSync(docPath, doc);
   let exact = '';
   for (const prefix of ['wizard-os-home', 'wizard-ux']) for (const page of ['', 'index.html', 'desktop.html']) exact += `location = /${prefix}/${page} { root ${web}; try_files /${page || 'index.html'} =404; include ${docPath}; }\n`;
@@ -100,6 +101,16 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     // A frame cannot self-grant an API/native/install operation via this bridge.
     await app.evaluate(() => parent.postMessage({ type: 'wizard:app:request', version: 1, op: 'fetch', args: { path: '/wizard/v1/settings' } }, '*'));
     check(await page.evaluate(() => typeof WizBrowserBoundary.fetch === 'undefined'), 'no generic privileged app fetch RPC');
+    const topApp = await context.newPage();
+    await topApp.goto(`http://127.0.0.1:${np}/fixture-app/`);
+    const popupReady = topApp.waitForEvent('popup');
+    await topApp.evaluate(() => { window.shellPopup = open('/wizard-os-home/desktop.html', '_blank'); });
+    const popup = await popupReady; await popup.waitForLoadState('load');
+    const openerAccess = await topApp.evaluate(() => { try { return !!window.shellPopup?.document?.documentElement; } catch (_) { return false; } });
+    const negative = process.env.QA_COOP_NEGATIVE_CONTROL === '1';
+    report.openerNegativeControl = negative;
+    check(openerAccess === negative, negative ? 'negative control reproduces same-origin app popup access without COOP' : 'same-origin top-level app cannot access owner shell popup');
+    await topApp.close(); await popup.close();
     await context.close();
     fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report, null, 2));
