@@ -877,6 +877,70 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) L.refresh(); });
   setInterval(() => { if (!document.hidden) L.refresh(); }, 15000);
   // outbox.js loads after this file: follow it once every script has run.
+  /* Open-thread delta subscriptions. Read-only: a failed stream never replays a send.
+   * Hermes uses unnamed SSE data frames with data.event; other runtimes name events. */
+  const RUN_STREAMS = new Map();
+  L.openRunStream = function (sid, agent, runId, paint) {
+    const registry = window.WosAgents;
+    const rec = registry?.get(agent || registry.defaultId());
+    if ((agent && !rec) || rec?.privacy === 'private' || !window.EventSource || !runId) return null;
+    const key = JSON.stringify([agent, sid, runId]);
+    let r = RUN_STREAMS.get(key);
+    if (!r) {
+      r = { text: '', terminal: false, listeners: new Set(), frame: null, stopped: false };
+      RUN_STREAMS.set(key, r);
+      const url = `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
+      const notify = () => {
+        if (r.frame != null || r.stopped) return;
+        r.frame = requestAnimationFrame(() => { r.frame = null; for (const fn of r.listeners) fn(r); });
+      };
+      const close = () => { r.source?.close(); r.source = null; };
+      const terminal = () => { if (!r.terminal) { r.terminal = true; close(); notify(); } };
+      let retries = 0;
+      const event = e => {
+        if (r.stopped || r.terminal) return;
+        let d; try { d = JSON.parse(e.data); } catch (_) { return; }
+        if ((d.session_id && d.session_id !== sid) || (d.run_id && d.run_id !== runId)) return;
+        const type = d.event || e.type;
+        if (type === 'message.delta' && typeof d.delta === 'string') { r.text += d.delta; notify(); }
+        // reasoning.available is deliberately not answer text.
+        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
+      };
+      const connect = () => {
+        if (r.stopped || r.terminal) return;
+        try {
+          r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
+          r.source.onmessage = event;
+          for (const name of ['message.delta', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted']) r.source.addEventListener(name, event);
+          r.source.onerror = () => {
+            close();
+            // Some queued main sends close before yielding any answer bytes.
+            // Retry only before ANY answer bytes: no duplicated/replayed text. This is
+            // another read of the same run, never another admission/send.
+            if (!r.stopped && !r.terminal && !r.text && retries++ < 3) r.reconnect = setTimeout(connect, 500);
+          };
+        } catch (_) { close(); }
+      };
+      connect();
+      const poll = async () => {
+        if (r.stopped || r.terminal) return;
+        try {
+          const d = await (await req(url)).json();
+          if (r.stopped) return;
+          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
+        } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
+        if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, 500);
+      };
+      r.dispose = () => { r.stopped = true; close(); clearTimeout(r.timer); clearTimeout(r.reconnect); if (r.frame != null) cancelAnimationFrame(r.frame); RUN_STREAMS.delete(key); };
+      r.timer = setTimeout(poll, 500);
+    }
+    r.listeners.add(paint);
+    return { snapshot: r, close() { r.listeners.delete(paint); if (!r.listeners.size) r.dispose(); } };
+  };
+  L.pendingRun = sid => PEND.get(sid)?.runId || (window.WosOutbox?.forThread(sid) || [])
+    .filter(it => it.state === 'sent' && it.runId && Date.now() - (it.sentAt || it.createdAt) < PEND_MAX)
+    .sort((a, b) => b.createdAt - a.createdAt)[0]?.runId || '';
+
   function attachOutbox() {
     const OB = window.WosOutbox; if (!OB || L._outbox) return; L._outbox = true;
     const sync = () => { if (syncPending(OB)) L.emit(); };

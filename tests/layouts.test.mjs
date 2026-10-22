@@ -143,3 +143,19 @@ test('a ?layout= link turns a layout on or off and remembers it', async () => {
   assert.equal(off.ctx.localStorage._['wos.layout'], undefined);
   const junk = page({ search: '?layout=../x' }); assert.equal(junk.ctx.localStorage._['wos.layout'], undefined);
 });
+
+// James, 22 Oct 2026: "Can we please just use the floating orb?" The agent orb reuses the polished Wizard Everywhere
+// orb (the shared orb.js and Everywhere's mask, size and resting motion), not a stand-in drawn from scratch.
+test('the agent orb is the Wizard Everywhere floating orb', () => {
+  const ev = read('android/app/src/main/assets/assist/everywhere.html');
+  assert.equal(read('web/orb.js'), read('android/app/src/main/assets/assist/orb.js'), 'one orb engine, shared');
+  assert.match(read('web/orb.js'), /main\.create = create;/);
+  const js = read('web/layouts/two-orb/layout.js'), css = read('web/layouts/two-orb/layout.css');
+  assert.match(js, /api\.orb\.create\(cv, fb, \{ R: \.64 \}\)/);
+  assert.ok(ev.includes('window.ORB_R = .64'), 'Everywhere draws the sphere at .64');
+  assert.match(js, /setRestingMotion\?\.\(false\)/); assert.ok(ev.includes('Orb.setRestingMotion(false)'));
+  const mask = 'radial-gradient(circle closest-side,#000 72%,transparent 100%)';
+  assert.ok(ev.includes(mask) && css.includes(mask), 'Everywhere mask');
+  assert.match(js, /api\.orb\.onLevel\(/);
+  assert.doesNotMatch(css, /robert-(thread-orb|listening-galaxy)\.png/, 'no static PNG stand-in');
+});

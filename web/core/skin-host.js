@@ -29,6 +29,7 @@
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
   let layoutId = 'classic', layoutRec = null, layoutSeq = 0;
   const taps = new Set();           // orb tap interceptors (layout first-wins); each returns true when handled
+  const levels = new Set();         // microphone level listeners (0..1) during a take
   const isDoc = typeof document !== 'undefined';
   let shell = null;                 // adapter from app.js: route/back/openList/openThread/goDesk/deskCount/root/dock/toast
   let active = null;                // { id, dir, teardown, offs:Set, frames:Set, on:{route:Set,render:Set}, errs:[], dead }
@@ -40,7 +41,7 @@
   let importer = url => import(url);
   let committedId = null, loadSeq = 0;
   let personal = null, personalSeq = 0, packageReady = Promise.resolve();
-  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), on: { route: new Set(), render: new Set(), voice: new Set() }, errs: [], dead: false, teardown: null });
+  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), levels: new Set(), orbs: new Set(), on: { route: new Set(), render: new Set(), voice: new Set() }, errs: [], dead: false, teardown: null });
 
   const skinOf = id => (typeof window !== 'undefined' && window.WosSkin && window.WosSkin.pkgOf) ? window.WosSkin.pkgOf(id) : null;
   const dirOf = (id, pkg) => (pkg && pkg.dir) || id;
@@ -128,6 +129,9 @@
         claim: pointerId => { if (shell && shell.locked && shell.locked(pointerId)) return false; claims.add(pointerId); a.claims.add(pointerId); return true; },
       }),
       toast: msg => { try { need().toast(String(msg).slice(0, 140)); } catch (e) { fault(a, 'toast', e); } },
+      /* A file shipped in the layout's own folder (e.g. an orb page); null for skins. */
+      asset: name => String(a.id).startsWith('layout:') && /^[a-z0-9][a-z0-9._-]*$/i.test(String(name)) && !String(name).includes('..')
+        ? layoutUrl(String(a.id).slice(7), String(name)) : null,
       /* A timer that dies with the layer. */
       after(ms, fn) {
         const g = guard(a, 'after', fn); const h = { id: 0 };
@@ -165,6 +169,14 @@
       orb: Object.freeze({
         /* The dock orb's idle tap: fn() returns true to replace the shell's own talk. */
         onTap(fn) { const g = guard(a, 'orb.onTap', fn); a.taps.add(g); taps.add(g); return () => { a.taps.delete(g); taps.delete(g); }; },
+        /* The microphone level the dock orb shows (0..1), for a layout drawing its own orb. */
+        /* Draw another of the shell's own orb (the Wizard Everywhere orb, orb.js) on a layout's canvas. */
+        create(canvas, fallback, opts) {
+          if (!canvas || canvas.tagName !== 'CANVAS' || typeof window.Orb?.create !== 'function') return null;
+          const o = window.Orb.create(canvas, fallback || document.createElement('img'), { R: Number(opts?.R) || .64 });
+          a.orbs.add(o); return o;
+        },
+        onLevel(fn) { const g = guard(a, 'orb.onLevel', fn); a.levels.add(g); levels.add(g); return () => { a.levels.delete(g); levels.delete(g); }; },
       }),
       storage: Object.freeze({
         get(key) { try { const v = localStorage.getItem(`wos.skin.${a.id}.${key}`); return v == null ? null : JSON.parse(v); } catch (_) { return null; } },
@@ -189,6 +201,8 @@
     for (const h of [...a.frames]) { try { h.clear ? h.clear() : cancelAnimationFrame(h.id); } catch (_) {} }
     for (const n of [...a.mounts]) { try { n.remove(); } catch (_) {} }
     for (const g of a.taps) taps.delete(g);
+    for (const g of a.levels) levels.delete(g); a.levels.clear();
+    for (const o of a.orbs) { try { o.sleep(true); } catch (_) {} } a.orbs.clear();
     if (layoutRec === a) layoutRec = null;
     a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear();
     for (const id of a.claims) { if (!(active?.claims.has(id) || personal?.claims.has(id))) claims.delete(id); }
@@ -308,6 +322,7 @@
     get layoutState() { return { id: layoutId, active: !!layoutRec, disabled: disabled.has('layout:' + layoutId), mounts: layoutRec?.mounts.size || 0 }; },
     /* app.js: the dock orb was tapped while idle. True when a layout handled it. */
     orbTap() { for (const fn of [...taps]) { if (fn() === true) return true; } return false; },
+    level(v) { if (levels.size) for (const fn of [...levels]) fn(v); },
     /* app.js: the orb's voice state changed. */
     voice(state) { if (layers().length) emit('voice', Object.freeze({ ...(shell?.voiceState ? shell.voiceState() : { state }) })); },
     loadPersonal, scriptProblem,
