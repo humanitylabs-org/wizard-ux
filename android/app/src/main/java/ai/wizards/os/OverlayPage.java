@@ -73,7 +73,8 @@ public class OverlayPage extends WebViewClient {
         remote = fromWizard;
         current = url;
         done = false;
-        // Interception serves even assets. Never permit a default-network or content/file bypass.
+        // Disable default network/private file/content access. android_asset loads are special:
+        // Android bypasses interception for them, so their HTML embeds its own tested CSP.
         web.getSettings().setBlockNetworkLoads(true);
         web.getSettings().setAllowFileAccess(false);
         web.getSettings().setAllowContentAccess(false);
@@ -106,9 +107,8 @@ public class OverlayPage extends WebViewClient {
             String path = r.getUrl().getPath();
             String mime = path.endsWith(".html") ? "text/html" : path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : "image/png";
             if (path.endsWith(".html")) {
-                // Android WebView ignores CSP response headers on file: interception responses.
-                // Install the same policy before ANY supplied markup, with an initial standards
-                // doctype so the extra metadata does not switch the existing pages to quirks mode.
+                // Install policy before ANY supplied remote markup, independently of server headers.
+                // The APK HTML embeds this same metadata: android_asset bypasses interception.
                 String prefix = "<!doctype html><meta http-equiv=\"Content-Security-Policy\" content=\"" + OverlayPolicy.CSP + "\">";
                 byte[] head = prefix.getBytes(java.nio.charset.StandardCharsets.UTF_8);
                 byte[] secured = new byte[head.length + bytes.length];

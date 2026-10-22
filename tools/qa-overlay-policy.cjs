@@ -8,7 +8,7 @@ const csp = java.match(/static final String CSP = ([\s\S]*?);\n/)[1].match(/"[^"
 (async () => {
   const browser = await chromium.launch();
   try {
-    for (const mode of ['header', 'meta']) for (const name of ['surface', 'everywhere', 'screen']) {
+    for (const mode of ['header', 'meta', 'file']) for (const name of ['surface', 'everywhere', 'screen']) {
       const page = await browser.newPage({viewport: {width: 411, height: 914}});
       const errors = [];
       page.on('pageerror', e => errors.push(e.message));
@@ -24,7 +24,9 @@ const csp = java.match(/static final String CSP = ([\s\S]*?);\n/)[1].match(/"[^"
           ...(mode === 'header' ? {'content-security-policy': csp} : {}),
         }});
       });
-      await page.goto('https://fixture.invalid/wizard-os-home/assist/' + name + '.html');
+      await page.goto(mode === 'file'
+        ? require('url').pathToFileURL(path.join(root, 'android/app/src/main/assets/wizard-os-home/assist', name + '.html')).href
+        : 'https://fixture.invalid/wizard-os-home/assist/' + name + '.html');
       const api = name === 'surface' ? 'W' : name === 'screen' ? 'S' : 'E';
       assert(await page.evaluate(api => !!window[api], api));
       if (name === 'surface') assert(await page.evaluate(() => {

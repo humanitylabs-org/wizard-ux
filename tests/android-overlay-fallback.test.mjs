@@ -41,6 +41,16 @@ test('overlay pages run under the shell CSP: no inline script, nothing off-origi
   }
 });
 
+test('bundled asset documents embed the native CSP before any executable markup', () => {
+  const java = readFileSync(join(root, 'android/app/src/main/java/ai/wizards/os/OverlayPolicy.java'), 'utf8');
+  const csp = java.match(/static final String CSP = ([\s\S]*?);\n/)[1].match(/"[^"\n]*"/g).map(s => JSON.parse(s)).join('');
+  for (const p of ['surface', 'everywhere', 'screen']) {
+    const html = readFileSync(join(bundle, 'assist', p + '.html'), 'utf8');
+    assert.equal(html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)[1], csp);
+    assert.ok(html.indexOf('http-equiv="Content-Security-Policy"') < html.indexOf('<script'));
+  }
+});
+
 test('real native hosts retain the production deadline and bundled-only lock policy', () => {
   const java = readFileSync(join(root, 'android/app/src/main/java/ai/wizards/os/OverlayPage.java'), 'utf8');
   assert.match(java, /TIMEOUT_MS = 1500/);

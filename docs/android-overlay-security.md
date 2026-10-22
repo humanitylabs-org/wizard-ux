@@ -21,16 +21,20 @@ Existing words, layout, and native capability bridges are unchanged.
   remote and bundled responses; HTML subframe interception is denied too.
   Chromium may still instantiate a `srcdoc`/`about:blank` document: its inherited
   `script-src 'self'` denies injected inline/eval scripts, while external
-  resources remain confined to the explicit trusted asset set. This is not
-  origin-scoping the Java bridge. The allowlist is the explicit overlay file
-  set, not the full authenticated shell directory.
-- **File-scheme CSP header gap (emulator-proven):** the first instrumentation
-  run recovered to the bundle, then an injected srcdoc called the probe bridge
-  once despite the response CSP header. API 34 WebView ignored the CSP header
-  on the intercepted file response. Native HTML responses now also prepend
-  the policy as CSP metadata before supplied markup, retaining a standards
-  doctype. Frame probes run on remote AND bundled copies, with a top-level
-  bridge positive control and standards-mode assertions.
+  resources remain confined to trusted remote assets or packaged APK bytes.
+  This is not origin-scoping the Java bridge. The remote allowlist is the
+  explicit overlay file set, not the full authenticated shell directory.
+- **Android-asset CSP gap (emulator-proven):** early instrumentation recovered
+  to the bundle, then an injected srcdoc called the probe bridge once despite
+  response-header and native-prefix attempts. Android does not invoke request
+  interception for `file:///android_asset/` resources: neither policy reached
+  that document. All three shipped HTML files now embed the same CSP before
+  scripts, in both web and APK copies; parity/policy tests prevent drift.
+  Remote HTML still receives native headers and a policy prefix, independently
+  of its server version. Frame probes cover remote AND bundled copies with
+  a top-level bridge positive control and standards-mode assertions.
+  Packaged resources are trusted APK bytes; do not claim the interceptor
+  restricts android_asset loads to a subdirectory.
 - **False readiness:** `onPageFinished` is not script execution success. The
   actual W/E/S API (and shared Orb where used) must exist before native ready
   callbacks run or the timeout is cancelled. Missing/failed scripts and HTTP
